@@ -10,7 +10,8 @@
  * are handled by deterministic code after validation.
  */
 
-import { App } from '@slack/bolt';
+import pkg from '@slack/bolt';
+const { App } = pkg;
 import express, { Request, Response } from 'express';
 import { config, logger, asyncHandler, validate, validators } from '@kenchi/shared';
 
