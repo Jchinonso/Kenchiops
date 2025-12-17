@@ -6,10 +6,12 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 COPY packages/shared/package.json ./packages/shared/
-COPY services/*/package.json ./services/*/
+COPY services/api/package.json ./services/api/
+COPY services/slack-bot/package.json ./services/slack-bot/
+COPY services/github-app/package.json ./services/github-app/
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (use npm install for workspaces compatibility)
+RUN npm install
 
 # Copy source files
 COPY . .
@@ -25,18 +27,24 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 COPY packages/shared/package.json ./packages/shared/
-COPY services/*/package.json ./services/*/
+COPY services/api/package.json ./services/api/
+COPY services/slack-bot/package.json ./services/slack-bot/
+COPY services/github-app/package.json ./services/github-app/
 
-# Install production dependencies only
-RUN npm ci --only=production
+# Install production dependencies only (use npm install for workspaces)
+RUN npm install --omit=dev
 
 # Copy built files from builder
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/services/*/dist ./services/*/dist
+COPY --from=builder /app/services/api/dist ./services/api/dist
+COPY --from=builder /app/services/slack-bot/dist ./services/slack-bot/dist
+COPY --from=builder /app/services/github-app/dist ./services/github-app/dist
 
 # Copy necessary files
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
-COPY --from=builder /app/services/*/package.json ./services/*/
+COPY --from=builder /app/services/api/package.json ./services/api/
+COPY --from=builder /app/services/slack-bot/package.json ./services/slack-bot/
+COPY --from=builder /app/services/github-app/package.json ./services/github-app/
 
 # Default to API service, can be overridden
 ENV SERVICE=api

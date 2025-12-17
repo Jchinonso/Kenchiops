@@ -1,126 +1,158 @@
 # Quick Start Guide
 
-Get up and running with Kenchi in minutes!
+Get Kenchi up and running in minutes!
 
-## Prerequisites Check
+## Prerequisites
 
-- ✅ Node.js 18+ installed
-- ✅ npm installed
-- ✅ Git (optional, for cloning)
+- Docker and Docker Compose installed
+- Git (to clone the repository)
 
 ## Step-by-Step Setup
 
-### 1. Install Dependencies
+### 1. Clone and Navigate
 
 ```bash
-npm install
+git clone <repository-url>
+cd kenchi
 ```
 
-This will install all dependencies for all packages in the monorepo.
-
-### 2. Set Up Environment Variables
+### 2. Configure Environment
 
 ```bash
+# Copy environment template
 cp .env.example .env
+
+# Edit .env file with your credentials
+# At minimum, you'll need placeholder values for:
+# - OPENAI_API_KEY
+# - SLACK_BOT_TOKEN
+# - SLACK_SIGNING_SECRET
+# - GITHUB_APP_ID
+# - GITHUB_APP_PRIVATE_KEY
 ```
 
-Then edit `.env` and add your credentials:
-- `OPENAI_API_KEY` (required)
-- `SLACK_BOT_TOKEN` (optional, if using Slack bot)
-- `SLACK_SIGNING_SECRET` (optional, if using Slack bot)
-- `GITHUB_APP_ID` (optional, if using GitHub App)
-- `GITHUB_APP_PRIVATE_KEY` (optional, if using GitHub App)
-
-### 3. Validate Environment
+### 3. Start All Services
 
 ```bash
-npm run validate
+docker compose up -d
 ```
 
-This checks that your environment variables are set correctly.
+This starts:
+- API Service (port 3000)
+- Slack Bot Service (port 3001)
+- GitHub App Service (port 3002)
+- n8n (port 5678)
 
-### 4. Build the Shared Package
-
-The shared package must be built before any service can run:
+### 4. Verify Services
 
 ```bash
-npm run build:shared
+# Check status
+docker compose ps
+
+# Check logs
+docker compose logs -f
+
+# Test endpoints
+curl http://localhost:3000/health
+curl http://localhost:3001/health
+curl http://localhost:3002/health
+curl http://localhost:5678/healthz
 ```
 
-### 5. Build Services (Optional)
+### 5. Setup n8n Workflow
 
-Build all services:
+1. Open n8n UI: http://localhost:5678
+2. Login: `admin` / `admin123`
+3. Go to "Workflows" → "Import from File"
+4. Select: `n8n/workflows/ci-failure-analysis.json`
+5. Activate the workflow (toggle switch ON)
+
+### 6. Test the Workflow
+
+Get the webhook URL from the "Webhook - CI Failure" node and test:
+
 ```bash
-npm run build
+curl -X POST "http://localhost:5678/webhook-test/ci-failure" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "log": "Error: Unit tests failed",
+    "repository": "kenchi",
+    "branch": "main",
+    "commit": "test123"
+  }'
 ```
 
-Or build individual services:
+## Service URLs
+
+- **API Service**: http://localhost:3000
+- **Slack Bot Service**: http://localhost:3001
+- **GitHub App Service**: http://localhost:3002
+- **n8n**: http://localhost:5678
+
+## Service Communication
+
+All services run in the same Docker network. They communicate using service names:
+
+- `http://api:3000` - API service
+- `http://slack-bot:3001` - Slack bot service
+- `http://github-app:3002` - GitHub app service
+
+n8n workflows use these service names to call the services.
+
+## Common Commands
+
 ```bash
-npm run build:api
-npm run build:slack-bot
-npm run build:github-app
+# Start all services
+docker compose up -d
+
+# Stop all services
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Restart a service
+docker compose restart api
+
+# Rebuild and restart
+docker compose up -d --build
 ```
 
-### 6. Verify Builds
+## Troubleshooting
 
+### Port Already in Use
+
+If you get port conflicts:
 ```bash
-npm run check-build
+# Stop conflicting services
+docker compose down
+
+# Or change ports in docker-compose.yml
 ```
 
-### 7. Run Services
+### Services Can't Connect
 
-**Development mode** (with hot reload):
+Ensure all services are running:
 ```bash
-npm run dev:api          # API service on port 3000
-npm run dev:slack-bot    # Slack bot on port 3001
-npm run dev:github-app   # GitHub App on port 3002
+docker compose ps
 ```
 
-**Production mode**:
+All services should show "Up" status.
+
+### n8n Can't Reach Services
+
+Verify n8n is in the same network:
 ```bash
-cd services/api && npm start
-cd services/slack-bot && npm start
-cd services/github-app && npm start
+docker inspect kenchi-n8n --format='{{range $net, $conf := .NetworkSettings.Networks}}{{$net}} {{end}}'
 ```
 
-## Common Issues
-
-### "Cannot find module '@kenchi/shared'"
-**Solution**: Build the shared package first:
-```bash
-npm run build:shared
-```
-
-### "Cannot find module 'express'"
-**Solution**: Install dependencies:
-```bash
-npm install
-```
-
-### TypeScript errors about missing types
-**Solution**: All `@types/*` packages are included. Make sure you ran `npm install`.
-
-### Environment variables not loading
-**Solution**: 
-1. Make sure `.env` file exists in the root directory
-2. Run `npm run validate` to check
+Should show `kenchi_default`.
 
 ## Next Steps
 
-- Read the main [README.md](./README.md) for detailed documentation
-- Check [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines
-- Explore the service-specific READMEs in each service directory
+- Implement real OpenAI API integration
+- Configure Slack credentials for actual message posting
+- Add more workflows
+- Set up database integration
 
-## Development Workflow
-
-1. Make changes to TypeScript files
-2. TypeScript will auto-compile in dev mode (`npm run dev:*`)
-3. For production, run `npm run build` before `npm start`
-4. Use `npm run type-check` to verify types across all packages
-
-## Need Help?
-
-- Check the service-specific READMEs
-- Review the TypeScript configuration in `tsconfig.json`
-- Ensure all dependencies are installed with `npm install`
-
+See [README.md](./README.md) for more details.

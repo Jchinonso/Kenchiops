@@ -2,7 +2,8 @@
 
 A TypeScript monorepo for an AI-driven DevOps assistant that integrates with Slack, GitHub, and n8n workflows.
 
-> **Quick Start**: See [QUICKSTART.md](./QUICKSTART.md) for a step-by-step setup guide.
+> **Quick Start**: See [QUICKSTART.md](./QUICKSTART.md) for a step-by-step setup guide.  
+> **Architecture**: See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed system architecture and design.
 
 ## 🏗️ Project Structure
 
@@ -23,31 +24,27 @@ kenchi/
 
 ### Prerequisites
 
-- Node.js 18+ and npm
+- Docker and Docker Compose
+- Node.js 18+ and npm (for local development)
 - TypeScript 5.3+ (installed as dev dependency)
-- n8n instance (for workflows)
 - Slack App credentials
 - GitHub App credentials
 - OpenAI API key
 
-### Installation
+### Quick Start with Docker (Recommended)
 
-1. Clone the repository and install dependencies:
+1. Clone the repository:
    ```bash
-   npm install
+   git clone <repository-url>
+   cd kenchi
    ```
 
-2. Build the shared package (required for other services):
-   ```bash
-   npm run build:shared
-   ```
-
-3. Copy the environment template:
+2. Copy the environment template:
    ```bash
    cp .env.example .env
    ```
 
-4. Fill in your environment variables in `.env`:
+3. Fill in your environment variables in `.env`:
    - `OPENAI_API_KEY` - Your OpenAI API key
    - `SLACK_BOT_TOKEN` - Slack bot token
    - `SLACK_SIGNING_SECRET` - Slack app signing secret
@@ -56,48 +53,47 @@ kenchi/
    - `DATABASE_URL` - Database connection string (if using)
    - `VECTOR_DB_URL` - Vector database connection (if using)
 
-5. Validate environment variables:
+4. Start all services with Docker Compose:
    ```bash
-   npm run validate
+   docker compose up -d
    ```
 
-6. Build all services:
+5. Access services:
+   - API Service: http://localhost:3000
+   - Slack Bot Service: http://localhost:3001
+   - GitHub App Service: http://localhost:3002
+   - n8n: http://localhost:5678 (admin/admin123)
+
+6. Import workflow in n8n:
+   - Open http://localhost:5678
+   - Go to "Workflows" → "Import from File"
+   - Select: `n8n/workflows/ci-failure-analysis.json`
+   - Activate the workflow
+
+### Local Development (Without Docker)
+
+For local development with hot reload:
+
+1. Install dependencies:
    ```bash
-   npm run build
+   npm install
    ```
 
-   Or build individually:
+2. Build the shared package:
    ```bash
-   npm run build:shared  # Must be built first
-   npm run build:api
-   npm run build:slack-bot
-   npm run build:github-app
+   npm run build:shared
    ```
 
-7. Verify builds:
+3. Copy and configure `.env` file (see above)
+
+4. Start services in development mode:
    ```bash
-   npm run check-build
-   ```
-
-8. Start services individually:
-   ```bash
-   # API service
-   cd services/api && npm start
-
-   # Slack bot service
-   cd services/slack-bot && npm start
-
-   # GitHub App service
-   cd services/github-app && npm start
-   ```
-
-   Or use development mode with hot reload:
-   ```bash
-   # From root directory
    npm run dev:api
    npm run dev:slack-bot
    npm run dev:github-app
    ```
+
+**Note**: For n8n workflows, you'll still need n8n running (via Docker Compose).
 
 ## 🛠️ Development Scripts
 
@@ -169,55 +165,67 @@ This separation ensures that the AI assistant is safe and predictable, with all 
 
 ## 🐳 Docker
 
-> **When to use Docker**: See [DOCKER.md](./DOCKER.md) for detailed guidance on when to use Docker vs local development.
+All services run in Docker Compose for easy setup and consistent environments.
 
-Docker is used for:
-- **Production deployments** - Containerized services for production
-- **n8n workflows** - n8n runs in Docker (see `../n8n/docker-compose.yml`)
-- **CI/CD pipelines** - Automated builds and deployments
+### Docker Compose Services
 
-For **local development**, use `npm run dev:*` instead (faster, hot reload).
+The `docker-compose.yml` includes:
+- **API Service** - Port 3000
+- **Slack Bot Service** - Port 3001
+- **GitHub App Service** - Port 3002
+- **n8n** - Port 5678 (workflow automation)
 
-### Build and Run with Docker
+### Docker Commands
 
-Build all services:
+**Start all services:**
 ```bash
-docker-compose build
+docker compose up -d
 ```
 
-Run all services:
+**Stop all services:**
 ```bash
-docker-compose up
+docker compose down
 ```
 
-Run a specific service:
+**View logs:**
 ```bash
-docker-compose up api
-docker-compose up slack-bot
-docker-compose up github-app
+docker compose logs -f
+docker compose logs -f api        # Specific service
+docker compose logs -f slack-bot
+docker compose logs -f n8n
 ```
 
-### Build Individual Service Image
-
+**Restart a service:**
 ```bash
-# Build for API service
-docker build -t kenchi-api --build-arg SERVICE=api .
-
-# Run the container
-docker run -p 3000:3000 --env-file .env kenchi-api
+docker compose restart api
 ```
 
-### n8n Docker Setup
-
-n8n (workflow automation) runs separately in Docker:
-
+**Rebuild and restart:**
 ```bash
-# Start n8n
-docker-compose -f ../n8n/docker-compose.yml up
-
-# Access n8n UI
-# http://localhost:5678 (admin/admin123)
+docker compose up -d --build
 ```
+
+**Check service status:**
+```bash
+docker compose ps
+```
+
+### Service Communication
+
+All services run in the same Docker network (`kenchi_default`). Services communicate using Docker service names:
+
+- `http://api:3000` - API service
+- `http://slack-bot:3001` - Slack bot service
+- `http://github-app:3002` - GitHub app service
+
+This allows n8n workflows to call services using these service names (e.g., `http://api:3000/api/analyze`).
+
+### Local Development vs Docker
+
+- **Docker Compose**: Use for production, testing workflows, or when you want everything running together
+- **Local Development**: Use `npm run dev:*` for faster iteration with hot reload
+
+See [DOCKER.md](./DOCKER.md) for detailed guidance.
 
 ## 📝 TODO
 

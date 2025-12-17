@@ -20,12 +20,13 @@ Use Docker for:
 - ❌ **Testing** - Use local services for unit/integration tests
 - ❌ **Quick prototyping** - Direct npm commands are faster
 
-### 2. **n8n Workflow Automation** (External Service)
+### 2. **n8n Workflow Automation** (Included in docker-compose.yml)
 
 Use Docker for:
-- ✅ **Running n8n** - n8n is run as a Docker container
+- ✅ **Running n8n** - n8n runs in Docker Compose alongside other services
 - ✅ **Workflow testing** - Testing n8n workflows requires n8n to be running
 - ✅ **Workflow management** - Managing and executing automation workflows
+- ✅ **Service communication** - n8n can communicate with services using Docker service names
 
 ## Docker Usage Scenarios
 
@@ -74,17 +75,18 @@ docker-compose up -d
 
 ### Scenario 4: n8n Workflow Testing
 
-**Use Docker** - n8n runs in Docker:
+**Use Docker** - All services run together:
 
 ```bash
-# Start n8n
-docker-compose -f ../n8n/docker-compose.yml up
+# Start all services (including n8n)
+docker compose up -d
 
 # Then test workflows
-npm run test:workflow-e2e
+# Access n8n at http://localhost:5678
+# Import workflow and test
 ```
 
-**Why?** n8n is designed to run in containers, easier to manage.
+**Why?** All services run in the same Docker network, enabling seamless communication via service names.
 
 ### Scenario 5: CI/CD Pipeline
 
@@ -108,32 +110,30 @@ npm run test:workflow-e2e
 - **Purpose**: Builds production images for API, Slack bot, and GitHub app services
 - **Usage**: `docker build` or `docker-compose build`
 
-### 2. `docker-compose.yml` (Kenchi Services)
+### 2. `docker-compose.yml` (All Services)
 - **Location**: `/kenchi/docker-compose.yml`
-- **Purpose**: Orchestrates all three services together
-- **Usage**: `docker-compose up`
-
-### 3. `../n8n/docker-compose.yml` (n8n Service)
-- **Location**: `/n8n/docker-compose.yml` (outside kenchi folder)
-- **Purpose**: Runs n8n workflow automation service
-- **Usage**: `docker-compose -f ../n8n/docker-compose.yml up`
+- **Purpose**: Orchestrates all services together (API, Slack Bot, GitHub App, and n8n)
+- **Usage**: `docker compose up -d`
+- **Services**: All run in the same Docker network (`kenchi_default`) for seamless communication
 
 ## Quick Reference
 
 ### Development Workflow
 
 ```bash
-# 1. Local development (NO Docker)
+# 1. Local development (NO Docker for services, YES for n8n)
 npm run dev:api
 npm run dev:slack-bot
+# Note: n8n still needs Docker for workflow testing
 
-# 2. Testing (NO Docker for services, YES for n8n)
-npm test
-docker-compose -f ../n8n/docker-compose.yml up  # Only for n8n
+# 2. Testing with Docker Compose (Recommended)
+docker compose up -d          # Start all services
+npm test                      # Run tests
+# Access n8n at http://localhost:5678
 
 # 3. Production (YES Docker)
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 ```
 
 ### When Each Approach is Best
@@ -143,23 +143,28 @@ docker-compose up -d
 | Local development | ❌ No | `npm run dev:*` |
 | Running unit tests | ❌ No | `npm test` |
 | Running integration tests | ❌ No | `npm run test:*` |
-| Testing n8n workflows | ✅ Yes (n8n only) | `docker-compose -f ../n8n/docker-compose.yml up` |
-| Production deployment | ✅ Yes | `docker-compose up -d` |
-| CI/CD builds | ✅ Yes | `docker-compose build` |
-| Staging environment | ✅ Yes | `docker-compose up` |
+| Testing n8n workflows | ✅ Yes | `docker compose up -d` (all services) |
+| Production deployment | ✅ Yes | `docker compose up -d` |
+| CI/CD builds | ✅ Yes | `docker compose build` |
+| Staging environment | ✅ Yes | `docker compose up -d` |
+| Full stack testing | ✅ Yes | `docker compose up -d` |
 
 ## Summary
 
-**Docker is used for:**
-1. **Production deployments** of Kenchi services
-2. **Running n8n** workflow automation service
-3. **CI/CD pipelines** and automated testing
-4. **Consistent environments** across different machines
+**Docker Compose is used for:**
+1. **Production deployments** - All services containerized
+2. **n8n workflows** - n8n runs alongside other services in docker-compose.yml
+3. **Service communication** - Services communicate via Docker service names (api, slack-bot, etc.)
+4. **CI/CD pipelines** - Automated builds and deployments
+5. **Consistent environments** - Same setup across different machines
+6. **Full stack testing** - Test complete workflow with all services
 
 **Docker is NOT used for:**
-1. **Local development** (use `npm run dev:*`)
-2. **Unit/integration testing** (use local services)
+1. **Local development** (use `npm run dev:*` for faster iteration)
+2. **Unit/integration testing** (use local services for faster tests)
 3. **Quick prototyping** (use npm directly)
 
-The project supports both approaches - use what's most appropriate for your workflow!
+**Key Benefit**: All services run in the same Docker network, enabling seamless communication using service names (e.g., `http://api:3000`, `http://slack-bot:3001`). This eliminates connection issues and makes the setup production-ready.
+
+The project supports both approaches - use Docker Compose for production/workflow testing, and local development for faster iteration!
 

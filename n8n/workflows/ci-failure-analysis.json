@@ -18,7 +18,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:3000/api/analyze",
+        "url": "http://api:3000/api/analyze",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -43,7 +43,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:3001/slack/message",
+        "url": "http://slack-bot:3001/slack/message",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
