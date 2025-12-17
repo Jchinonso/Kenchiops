@@ -19,6 +19,7 @@
       "parameters": {
         "method": "POST",
         "url": "http://api:3000/api/analyze",
+        "authentication": "none",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -37,19 +38,21 @@
       "id": "http-request-openai",
       "name": "HTTP Request - OpenAI Analysis",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "typeVersion": 4.2,
       "position": [450, 300]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://slack-bot:3001/slack/message",
+        "authentication": "none",
         "sendBody": true,
+        "contentType": "json",
         "bodyParameters": {
           "parameters": [
             {
               "name": "channel",
-              "value": "={{ $json.body.channel || '#devops' }}"
+              "value": "={{ $('Webhook - CI Failure').item.json.body.channel || '#devops' }}"
             },
             {
               "name": "message",
@@ -62,7 +65,7 @@
       "id": "http-request-slack",
       "name": "HTTP Request - Post to Slack",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "typeVersion": 4.2,
       "position": [650, 300]
     },
     {
