@@ -4,33 +4,11 @@
  */
 
 import type { LLMAnalysisResult, Evidence } from '../types.js';
-
-/**
- * Evidence alignment adjustment values.
- */
-const ALIGNMENT_ADJUSTMENTS = {
-  LOG_REFERENCE: 0.15,
-  COMMIT_REFERENCE: 0.1,
-  HIGH_SIMILARITY_INCIDENT: 0.15,
-  METRICS_REFERENCE: 0.05,
-  NO_ALIGNMENT_PENALTY: -0.15,
-  MAX: 0.2,
-} as const;
-
-/**
- * High similarity threshold for past incidents.
- */
-const HIGH_SIMILARITY_THRESHOLD = 0.85;
-
-/**
- * Commit SHA prefix length for matching.
- */
-const COMMIT_PREFIX_LENGTH = 7;
-
-/**
- * Log message prefix length for matching.
- */
-const LOG_PREFIX_LENGTH = 50;
+import {
+  ALIGNMENT_ADJUSTMENTS,
+  SIMILARITY_THRESHOLDS,
+  MATCHING_CONFIG,
+} from '../constants.js';
 
 /**
  * Metric keywords to detect in reasoning.
@@ -69,7 +47,7 @@ export const calculateEvidenceAlignment = (
   if (analysis.identifiedCause && evidence.logs?.length) {
     const cause = analysis.identifiedCause.toLowerCase();
     const hasLogReference = evidence.logs.some((log) =>
-      cause.includes(log.message.toLowerCase().substring(0, LOG_PREFIX_LENGTH))
+      cause.includes(log.message.toLowerCase().substring(0, MATCHING_CONFIG.LOG_PREFIX_LENGTH))
     );
     if (hasLogReference) {
       adjustment += ALIGNMENT_ADJUSTMENTS.LOG_REFERENCE;
@@ -80,7 +58,7 @@ export const calculateEvidenceAlignment = (
   if (analysis.reasoning && evidence.gitHistory?.length) {
     const reasoning = analysis.reasoning.toLowerCase();
     const hasCommitReference = evidence.gitHistory.some((commit) =>
-      reasoning.includes(commit.sha.substring(0, COMMIT_PREFIX_LENGTH))
+      reasoning.includes(commit.sha.substring(0, MATCHING_CONFIG.COMMIT_PREFIX_LENGTH))
     );
     if (hasCommitReference) {
       adjustment += ALIGNMENT_ADJUSTMENTS.COMMIT_REFERENCE;
@@ -92,7 +70,7 @@ export const calculateEvidenceAlignment = (
     const highSimilarityIncident = evidence.relatedDocs.some(
       (doc) =>
         doc.type === 'past_incident' &&
-        doc.similarity > HIGH_SIMILARITY_THRESHOLD
+        doc.similarity > SIMILARITY_THRESHOLDS.STRONG
     );
     if (highSimilarityIncident) {
       adjustment += ALIGNMENT_ADJUSTMENTS.HIGH_SIMILARITY_INCIDENT;
@@ -115,30 +93,11 @@ export const calculateEvidenceAlignment = (
   return Math.min(adjustment, ALIGNMENT_ADJUSTMENTS.MAX);
 };
 
-/**
- * Completeness adjustment values.
- */
-const COMPLETENESS_ADJUSTMENTS = {
-  CAUSE_IDENTIFIED: 0.03,
-  SUBSTANTIAL_REASONING: 0.03,
-  MULTIPLE_ACTIONS: 0.02,
-  IMPACT_ASSESSMENT: 0.02,
-  UNCERTAINTIES_LISTED: 0.03,
-  MINIMAL_ANALYSIS_PENALTY: -0.15,
-} as const;
-
-/**
- * Minimum lengths for completeness checks.
- */
-const MIN_LENGTHS = {
-  CAUSE: 20,
-  REASONING: 100,
-} as const;
-
-/**
- * Minimum number of actions for bonus.
- */
-const MIN_ACTIONS_FOR_BONUS = 2;
+import {
+  COMPLETENESS_ADJUSTMENTS,
+  MIN_LENGTHS,
+  MIN_ACTIONS_FOR_BONUS,
+} from '../constants.js';
 
 /**
  * Invalid cause keywords.

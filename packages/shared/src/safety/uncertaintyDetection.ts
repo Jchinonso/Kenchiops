@@ -3,6 +3,8 @@
  * Detects hedging language and uncertainty markers in LLM outputs.
  */
 
+import { UNCERTAINTY_PENALTIES } from '../constants.js';
+
 /**
  * Uncertainty pattern configuration.
  */
@@ -18,22 +20,17 @@ type UncertaintyPattern = {
 const UNCERTAINTY_PATTERNS: Readonly<UncertaintyPattern[]> = [
   {
     pattern: /\b(not sure|unclear|cannot determine|insufficient information|unable to identify|unknown)\b/gi,
-    penalty: -0.15,
+    penalty: UNCERTAINTY_PENALTIES.STRONG,
   },
   {
     pattern: /\b(possibly|might be|could be|may be|potentially|perhaps)\b/gi,
-    penalty: -0.1,
+    penalty: UNCERTAINTY_PENALTIES.MODERATE,
   },
   {
     pattern: /\b(appears to|seems like|suggests that|probably)\b/gi,
-    penalty: -0.05,
+    penalty: UNCERTAINTY_PENALTIES.MILD,
   },
 ] as const;
-
-/**
- * Maximum uncertainty penalty cap.
- */
-const MAX_UNCERTAINTY_PENALTY = -0.3;
 
 /**
  * Detects hedging language and uncertainty markers in text.
@@ -60,7 +57,7 @@ export const detectUncertainty = (text: string): number => {
   }
 
   // Cap total uncertainty penalty
-  return Math.max(totalPenalty, MAX_UNCERTAINTY_PENALTY);
+  return Math.max(totalPenalty, UNCERTAINTY_PENALTIES.MAX);
 };
 
 /**

@@ -19,6 +19,9 @@ import {
   defaultRateLimiter,
   validate,
   validators,
+  PLACEHOLDER_CONFIDENCE_SCORE,
+  HTTP_STATUS,
+  SERVICE_PORTS,
 } from '@kenchi/shared';
 
 const app = express();
@@ -47,7 +50,7 @@ app.post('/webhook/:source', asyncHandler(async (req, res) => {
   // TODO: Validate payload
   // TODO: Trigger appropriate workflow or service
   
-  res.status(200).json({ 
+  res.status(HTTP_STATUS.OK).json({ 
     status: 'received',
     source,
     message: 'TODO: Implement webhook processing logic'
@@ -58,7 +61,7 @@ app.post('/webhook/:source', asyncHandler(async (req, res) => {
  * Health check endpoint with detailed status
  */
 app.get('/health', (_req: Request, res: Response) => {
-  res.status(200).json({ 
+  res.status(HTTP_STATUS.OK).json({ 
     status: 'ok', 
     service: 'api',
     timestamp: new Date().toISOString(),
@@ -93,7 +96,7 @@ app.post(
     // TODO: Store in database/vector store
     // TODO: Trigger appropriate analysis workflow
     
-    res.status(200).json({ 
+    res.status(HTTP_STATUS.OK).json({ 
       status: 'accepted',
       message: 'TODO: Implement event processing and storage'
     });
@@ -121,10 +124,10 @@ app.post(
     // For now, return a placeholder analysis
     const analysis = `Analysis for ${repository}:\n\nFailure log indicates a test error. TODO: Implement OpenAI analysis.`;
     
-    res.status(200).json({ 
+    res.status(HTTP_STATUS.OK).json({ 
       analysis,
       repository,
-      confidence: 0.5, // Placeholder
+      confidence: PLACEHOLDER_CONFIDENCE_SCORE,
     });
   })
 );
@@ -132,7 +135,7 @@ app.post(
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-const PORT = config.PORT || 3000;
+const PORT = config.PORT || SERVICE_PORTS.API;
 app.listen(PORT, () => {
   logger.info(`API service started`, { port: PORT, environment: config.NODE_ENV });
 });

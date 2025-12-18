@@ -11,6 +11,11 @@
 import OpenAI from 'openai';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
+import { 
+  OPENAI_DEFAULTS,
+  OPENAI_CONSTANTS,
+  TIME_CONSTANTS,
+} from '../constants.js';
 import type {
   Event,
   Evidence,
@@ -35,14 +40,14 @@ export class OpenAIClient {
   constructor() {
     this.client = new OpenAI({
       apiKey: config.OPENAI_API_KEY,
-      timeout: config.OPENAI_TIMEOUT_MS || 30000,
+      timeout: config.OPENAI_TIMEOUT_MS || OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
     });
 
     this.clientConfig = {
       model: config.OPENAI_MODEL || 'gpt-4-turbo-2024-04-09',
       maxTokens: config.OPENAI_MAX_TOKENS || 4096,
-      temperature: config.OPENAI_TEMPERATURE || 0.1,
-      timeout: config.OPENAI_TIMEOUT_MS || 30000,
+      temperature: config.OPENAI_TEMPERATURE || OPENAI_DEFAULTS.TEMPERATURE,
+      timeout: config.OPENAI_TIMEOUT_MS || OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
     };
   }
 
@@ -62,8 +67,7 @@ export class OpenAIClient {
 
     try {
       // 1. Manage token budget - truncate evidence if needed
-      const maxPromptTokens = 8000; // Leave room for response
-      const truncatedEvidence = manageTokenBudget(event, evidence, maxPromptTokens);
+      const truncatedEvidence = manageTokenBudget(event, evidence, OPENAI_CONSTANTS.MAX_PROMPT_TOKENS);
 
       // 2. Build prompt
       const prompt = buildAnalysisPrompt(event, truncatedEvidence);
@@ -92,7 +96,7 @@ export class OpenAIClient {
       }
 
       // 6. Add metadata
-      const processingTime = (Date.now() - startTime) / 1000;
+      const processingTime = (Date.now() - startTime) / TIME_CONSTANTS.MILLISECONDS_PER_SECOND;
       analysis.processingTime = processingTime;
       analysis.llmModel = this.clientConfig.model;
       analysis.analyzedAt = new Date().toISOString();
@@ -108,7 +112,7 @@ export class OpenAIClient {
    */
   private async callOpenAIWithRetry(
     prompt: string,
-    maxRetries: number = 3
+    maxRetries: number = OPENAI_CONSTANTS.MAX_RETRIES
   ): Promise<string> {
     let lastError: Error | null = null;
 
@@ -137,11 +141,11 @@ export class OpenAIClient {
         const err = error instanceof Error ? error : new Error(String(error));
         lastError = err;
 
-        // Check if it's a rate limit error (429)
+        // Check if it's a rate limit error
         const statusCode = (error as { status?: number }).status;
-        if (statusCode === 429 && attempt < maxRetries) {
-          // Exponential backoff: 2^attempt seconds
-          const delayMs = Math.pow(2, attempt) * 1000;
+        if (statusCode === OPENAI_CONSTANTS.RATE_LIMIT_STATUS_CODE && attempt < maxRetries) {
+          // Exponential backoff: base^attempt seconds
+          const delayMs = Math.pow(OPENAI_CONSTANTS.EXPONENTIAL_BACKOFF_BASE, attempt) * TIME_CONSTANTS.MILLISECONDS_PER_SECOND;
           logger.warn('OpenAI rate limit hit, retrying with exponential backoff', {
             attempt,
             maxRetries,

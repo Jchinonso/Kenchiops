@@ -4,23 +4,7 @@
  */
 
 import type { LLMAnalysisResult, Evidence } from '../types.js';
-
-/**
- * Similarity thresholds for validation adjustments.
- */
-const SIMILARITY_THRESHOLDS = {
-  STRONG: 0.85,
-  MODERATE: 0.7,
-} as const;
-
-/**
- * Knowledge base validation adjustments based on similarity and reference.
- */
-const VALIDATION_ADJUSTMENTS = {
-  STRONG: 0.1,
-  MODERATE: 0.05,
-  NONE: 0,
-} as const;
+import { SIMILARITY_THRESHOLDS, VALIDATION_ADJUSTMENTS } from '../constants.js';
 
 /**
  * Finds the best matching incident by similarity.

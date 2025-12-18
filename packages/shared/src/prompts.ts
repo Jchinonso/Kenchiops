@@ -12,6 +12,11 @@ import type {
   MetricsSummary,
   SystemState,
 } from './types.js';
+import {
+  SIMILARITY_THRESHOLDS,
+  EVIDENCE_TRUNCATION,
+  UI_CONSTANTS,
+} from './constants.js';
 
 /**
  * Builds the system context prompt that establishes the LLM's role and constraints.
@@ -395,7 +400,7 @@ function formatSystemState(systemState: SystemState): string {
 export function formatKnowledgeDocs(docs: KnowledgeDocument[]): string {
   return docs
     .map((doc) => {
-      const similarity = (doc.similarity * 100).toFixed(0);
+      const similarity = (doc.similarity * UI_CONSTANTS.PERCENTAGE_MULTIPLIER).toFixed(0);
       let formatted = `**[${doc.type}] ${doc.title}** (Similarity: ${similarity}%)\n`;
 
       if (doc.excerpt) {
@@ -430,7 +435,7 @@ export function truncateEvidence(evidence: Evidence, maxTokens: number): Evidenc
   // Priority order:
   // 1. Critical error logs (ERROR level) - top 10
   // 2. Recent commits - last 5
-  // 3. High-similarity knowledge docs - top 3 with similarity > 0.7
+  // 3. High-similarity knowledge docs - top 3 with similarity > threshold
   // 4. Metrics summary
   // 5. Additional logs (INFO/WARN) - as many as budget allows
 
@@ -445,7 +450,9 @@ export function truncateEvidence(evidence: Evidence, maxTokens: number): Evidenc
 
   // 1. Critical error logs
   if (evidence.logs) {
-    const errorLogs = evidence.logs.filter((log) => log.level === 'ERROR').slice(0, 10);
+    const errorLogs = evidence.logs
+      .filter((log) => log.level === 'ERROR')
+      .slice(0, EVIDENCE_TRUNCATION.MAX_ERROR_LOGS);
     const logSection = formatLogs(errorLogs);
     const logTokens = estimateTokens(logSection);
 
@@ -469,8 +476,8 @@ export function truncateEvidence(evidence: Evidence, maxTokens: number): Evidenc
   }
 
   // 2. Recent commits
-  if (evidence.gitHistory && remainingTokens > 500) {
-    const recentCommits = evidence.gitHistory.slice(0, 5);
+  if (evidence.gitHistory && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_COMMITS) {
+    const recentCommits = evidence.gitHistory.slice(0, EVIDENCE_TRUNCATION.MAX_RECENT_COMMITS);
     const commitSection = formatGitHistory(recentCommits);
     const commitTokens = estimateTokens(commitSection);
 
@@ -481,8 +488,10 @@ export function truncateEvidence(evidence: Evidence, maxTokens: number): Evidenc
   }
 
   // 3. High-similarity knowledge docs
-  if (evidence.relatedDocs && remainingTokens > 1000) {
-    const topDocs = evidence.relatedDocs.filter((doc) => doc.similarity > 0.7).slice(0, 3);
+  if (evidence.relatedDocs && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_DOCS) {
+    const topDocs = evidence.relatedDocs
+      .filter((doc) => doc.similarity > SIMILARITY_THRESHOLDS.MINIMUM_FOR_FILTERING)
+      .slice(0, EVIDENCE_TRUNCATION.MAX_HIGH_SIMILARITY_DOCS);
     const docSection = formatKnowledgeDocs(topDocs);
     const docTokens = estimateTokens(docSection);
 
@@ -496,7 +505,7 @@ export function truncateEvidence(evidence: Evidence, maxTokens: number): Evidenc
   truncated.metrics = evidence.metrics;
 
   // 5. Additional logs if budget allows
-  if (evidence.logs && remainingTokens > 500) {
+  if (evidence.logs && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_COMMITS) {
     const additionalLogs = evidence.logs
       .filter((log) => log.level !== 'ERROR')
       .slice(0, 20);

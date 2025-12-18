@@ -4,6 +4,7 @@
  */
 
 import type { LLMAnalysisResult } from '../types.js';
+import { CONSISTENCY_ADJUSTMENTS, RELEVANCE_THRESHOLDS } from '../constants.js';
 
 /**
  * Cause-action relevance mapping configuration.
@@ -38,20 +39,6 @@ const RELEVANCE_RULES: Readonly<RelevanceRule[]> = [
     actionKeywords: ['rerun', 'pipeline'],
   },
 ] as const;
-
-/**
- * Consistency adjustment values.
- */
-const CONSISTENCY_ADJUSTMENTS = {
-  HIGH_RELEVANCE: 0.05, // At least 50% actions relevant
-  NO_RELEVANCE: -0.1,   // No actions relevant
-  DEFAULT: 0,
-} as const;
-
-/**
- * Minimum relevance ratio for positive score.
- */
-const MIN_RELEVANCE_RATIO = 0.5;
 
 /**
  * Checks if action matches cause based on relevance rules.
@@ -102,7 +89,7 @@ export const checkConsistency = (analysis: LLMAnalysisResult): number => {
 
   const relevanceRatio = relevantActions / actions.length;
 
-  if (relevanceRatio >= MIN_RELEVANCE_RATIO) {
+  if (relevanceRatio >= RELEVANCE_THRESHOLDS.MIN_FOR_POSITIVE) {
     return CONSISTENCY_ADJUSTMENTS.HIGH_RELEVANCE;
   }
   

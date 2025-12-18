@@ -1,9 +1,11 @@
 /**
  * OpenAI Error Handling Module
- * 
+ *
  * Provides error handling utilities for OpenAI API interactions,
  * including error enrichment and retry delay utilities.
  */
+
+import { HTTP_STATUS, OPENAI_CONSTANTS } from '../constants.js';
 
 /**
  * Type definition for OpenAI API error responses.
@@ -30,9 +32,9 @@ type ErrorMessageFactory = (message?: string) => string;
  * Error message factories for HTTP status codes.
  */
 const STATUS_ERROR_MESSAGES: Readonly<Map<number, ErrorMessageFactory>> = new Map([
-  [400, (message?: string) => `OpenAI request invalid: ${message || 'Bad request'}`],
-  [401, () => 'OpenAI authentication failed. Check OPENAI_API_KEY configuration.'],
-  [429, () => 'OpenAI rate limit exceeded after retries. Please try again later.'],
+  [HTTP_STATUS.BAD_REQUEST, (message?: string) => `OpenAI request invalid: ${message || 'Bad request'}`],
+  [HTTP_STATUS.UNAUTHORIZED, () => 'OpenAI authentication failed. Check OPENAI_API_KEY configuration.'],
+  [OPENAI_CONSTANTS.RATE_LIMIT_STATUS_CODE, () => 'OpenAI rate limit exceeded after retries. Please try again later.'],
 ]);
 
 /**
