@@ -1,0 +1,209 @@
+/**
+ * Evidence validation module for confidence scoring.
+ * Validates that LLM analysis aligns with provided evidence and assesses completeness.
+ */
+
+import type { LLMAnalysisResult, Evidence } from '../types.js';
+
+/**
+ * Evidence alignment adjustment values.
+ */
+const ALIGNMENT_ADJUSTMENTS = {
+  LOG_REFERENCE: 0.15,
+  COMMIT_REFERENCE: 0.1,
+  HIGH_SIMILARITY_INCIDENT: 0.15,
+  METRICS_REFERENCE: 0.05,
+  NO_ALIGNMENT_PENALTY: -0.15,
+  MAX: 0.2,
+} as const;
+
+/**
+ * High similarity threshold for past incidents.
+ */
+const HIGH_SIMILARITY_THRESHOLD = 0.85;
+
+/**
+ * Commit SHA prefix length for matching.
+ */
+const COMMIT_PREFIX_LENGTH = 7;
+
+/**
+ * Log message prefix length for matching.
+ */
+const LOG_PREFIX_LENGTH = 50;
+
+/**
+ * Metric keywords to detect in reasoning.
+ */
+const METRIC_KEYWORDS: Readonly<Set<string>> = new Set([
+  'cpu',
+  'memory',
+  'error rate',
+  'latency',
+]);
+
+/**
+ * Checks if reasoning contains metric keywords.
+ */
+const hasMetricsReference = (reasoning: string): boolean => {
+  const normalized = reasoning.toLowerCase();
+  return Array.from(METRIC_KEYWORDS).some((keyword) =>
+    normalized.includes(keyword)
+  );
+};
+
+/**
+ * Calculates evidence alignment adjustment between analysis and provided evidence.
+ * 
+ * @param analysis - LLM analysis result
+ * @param evidence - Evidence provided to LLM
+ * @returns Alignment adjustment (-0.15 to 0.2)
+ */
+export const calculateEvidenceAlignment = (
+  analysis: LLMAnalysisResult,
+  evidence: Evidence
+): number => {
+  let adjustment = 0;
+
+  // Check 1: Does identified cause contain text from error logs?
+  if (analysis.identifiedCause && evidence.logs?.length) {
+    const cause = analysis.identifiedCause.toLowerCase();
+    const hasLogReference = evidence.logs.some((log) =>
+      cause.includes(log.message.toLowerCase().substring(0, LOG_PREFIX_LENGTH))
+    );
+    if (hasLogReference) {
+      adjustment += ALIGNMENT_ADJUSTMENTS.LOG_REFERENCE;
+    }
+  }
+
+  // Check 2: Does analysis reference specific commits?
+  if (analysis.reasoning && evidence.gitHistory?.length) {
+    const reasoning = analysis.reasoning.toLowerCase();
+    const hasCommitReference = evidence.gitHistory.some((commit) =>
+      reasoning.includes(commit.sha.substring(0, COMMIT_PREFIX_LENGTH))
+    );
+    if (hasCommitReference) {
+      adjustment += ALIGNMENT_ADJUSTMENTS.COMMIT_REFERENCE;
+    }
+  }
+
+  // Check 3: Is there a high-similarity past incident?
+  if (evidence.relatedDocs?.length) {
+    const highSimilarityIncident = evidence.relatedDocs.some(
+      (doc) =>
+        doc.type === 'past_incident' &&
+        doc.similarity > HIGH_SIMILARITY_THRESHOLD
+    );
+    if (highSimilarityIncident) {
+      adjustment += ALIGNMENT_ADJUSTMENTS.HIGH_SIMILARITY_INCIDENT;
+    }
+  }
+
+  // Check 4: Does analysis mention metrics?
+  if (analysis.reasoning && evidence.metrics?.summary) {
+    if (hasMetricsReference(analysis.reasoning)) {
+      adjustment += ALIGNMENT_ADJUSTMENTS.METRICS_REFERENCE;
+    }
+  }
+
+  // If NO alignment checks passed but cause was identified, apply penalty
+  if (adjustment === 0 && analysis.identifiedCause) {
+    adjustment = ALIGNMENT_ADJUSTMENTS.NO_ALIGNMENT_PENALTY;
+  }
+
+  // Cap at maximum adjustment
+  return Math.min(adjustment, ALIGNMENT_ADJUSTMENTS.MAX);
+};
+
+/**
+ * Completeness adjustment values.
+ */
+const COMPLETENESS_ADJUSTMENTS = {
+  CAUSE_IDENTIFIED: 0.03,
+  SUBSTANTIAL_REASONING: 0.03,
+  MULTIPLE_ACTIONS: 0.02,
+  IMPACT_ASSESSMENT: 0.02,
+  UNCERTAINTIES_LISTED: 0.03,
+  MINIMAL_ANALYSIS_PENALTY: -0.15,
+} as const;
+
+/**
+ * Minimum lengths for completeness checks.
+ */
+const MIN_LENGTHS = {
+  CAUSE: 20,
+  REASONING: 100,
+} as const;
+
+/**
+ * Minimum number of actions for bonus.
+ */
+const MIN_ACTIONS_FOR_BONUS = 2;
+
+/**
+ * Invalid cause keywords.
+ */
+const INVALID_CAUSE_KEYWORDS: Readonly<Set<string>> = new Set(['unknown']);
+
+/**
+ * Checks if cause is valid (not "unknown" or too short).
+ */
+const isValidCause = (cause?: string): boolean => {
+  if (!cause || cause.length <= MIN_LENGTHS.CAUSE) {
+    return false;
+  }
+  
+  const normalized = cause.toLowerCase();
+  return !Array.from(INVALID_CAUSE_KEYWORDS).some((keyword) =>
+    normalized.includes(keyword)
+  );
+};
+
+/**
+ * Assesses completeness of the analysis.
+ * 
+ * @param analysis - LLM analysis result
+ * @returns Completeness adjustment (-0.15 to 0.13)
+ */
+export const assessCompleteness = (analysis: LLMAnalysisResult): number => {
+  let adjustment = 0;
+
+  // Check if root cause identified (not just "unknown" or empty)
+  if (isValidCause(analysis.identifiedCause)) {
+    adjustment += COMPLETENESS_ADJUSTMENTS.CAUSE_IDENTIFIED;
+  }
+
+  // Check if reasoning is substantial
+  if (analysis.reasoning && analysis.reasoning.length > MIN_LENGTHS.REASONING) {
+    adjustment += COMPLETENESS_ADJUSTMENTS.SUBSTANTIAL_REASONING;
+  }
+
+  // Check if multiple actions recommended
+  if (
+    analysis.recommendedActions &&
+    analysis.recommendedActions.length >= MIN_ACTIONS_FOR_BONUS
+  ) {
+    adjustment += COMPLETENESS_ADJUSTMENTS.MULTIPLE_ACTIONS;
+  }
+
+  // Check if impact assessment provided
+  if (analysis.impactAssessment) {
+    adjustment += COMPLETENESS_ADJUSTMENTS.IMPACT_ASSESSMENT;
+  }
+
+  // Check if uncertainties are explicitly listed (transparency bonus)
+  if (analysis.uncertainties && analysis.uncertainties.length > 0) {
+    adjustment += COMPLETENESS_ADJUSTMENTS.UNCERTAINTIES_LISTED;
+  }
+
+  // Penalty for minimal analysis
+  if (!analysis.identifiedCause && !analysis.reasoning) {
+    adjustment += COMPLETENESS_ADJUSTMENTS.MINIMAL_ANALYSIS_PENALTY;
+  }
+
+  return adjustment;
+};
+
+/**
+ * Factor 4: Validates analysis against knowledge base.
+ */

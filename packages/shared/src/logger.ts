@@ -1,13 +1,30 @@
 /**
  * Simple structured logger utility.
- * 
+ *
  * In production, this could be replaced with a more robust solution like Winston or Pino.
  */
 
+/**
+ * Log severity levels in ascending order of importance.
+ *
+ * Levels are numeric to allow easy comparison (e.g., `level >= LogLevel.WARN`).
+ *
+ * @example
+ * ```typescript
+ * const logger = createLogger('my-service', LogLevel.INFO);
+ * logger.debug('This will not be logged'); // Below INFO level
+ * logger.info('This will be logged');       // At INFO level
+ * logger.warn('This will be logged');       // Above INFO level
+ * ```
+ */
 export enum LogLevel {
+  /** Detailed debugging information (most verbose) */
   DEBUG = 0,
+  /** General informational messages */
   INFO = 1,
+  /** Warning messages for potentially harmful situations */
   WARN = 2,
+  /** Error messages for serious problems */
   ERROR = 3,
 }
 

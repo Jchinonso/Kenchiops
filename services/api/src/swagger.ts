@@ -7,6 +7,7 @@
  */
 
 import { Express } from "express";
+import { logger } from "@kenchi/shared";
 
 /**
  * Basic OpenAPI 3.0 specification.
@@ -152,6 +153,6 @@ export const openApiSpec = {
  */
 export function setupSwagger(_app: Express): void {
   // TODO: Implement when swagger-ui-express is installed
-  console.log("Swagger documentation available at /api-docs (when implemented)");
+  logger.info("Swagger documentation available at /api-docs (when implemented)");
 }
 
