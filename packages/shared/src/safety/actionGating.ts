@@ -5,7 +5,13 @@
 
 import type { ActionProposal, SafetyLevel } from '../types.js';
 import { clampConfidenceScore } from './confidenceUtils.js';
-import { CONFIDENCE_THRESHOLDS } from '../constants.js';
+import {
+  CONFIDENCE_THRESHOLDS,
+  AUTO_APPROVABLE_SAFETY_LEVELS,
+  VALID_SAFETY_LEVELS,
+  CONFIDENCE_MESSAGES,
+  type ConfidenceRange,
+} from '../constants.js';
 
 /**
  * Gating decision type.
@@ -20,27 +26,6 @@ export type ActionGatingResult = {
   readonly autoExecutable: boolean;
   readonly message: string;
 };
-
-/**
- * Confidence range type for decision matrix.
- */
-type ConfidenceRange = 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
-
-/**
- * Safety levels that allow auto-approval with high confidence.
- */
-const AUTO_APPROVABLE_SAFETY_LEVELS: Readonly<Set<SafetyLevel>> = new Set(['safe', 'low_risk']);
-
-/**
- * Valid safety levels for runtime validation.
- */
-const VALID_SAFETY_LEVELS: Readonly<Set<SafetyLevel>> = new Set([
-  'safe',
-  'low_risk',
-  'medium_risk',
-  'high_risk',
-  'dangerous',
-]);
 
 /**
  * Validates that action has required properties.
@@ -61,7 +46,7 @@ const isValidAction = (action: unknown): action is ActionProposal => {
   }
   
   // Validate safetyLevel is a known value
-  return VALID_SAFETY_LEVELS.has(act.safetyLevel as SafetyLevel);
+  return VALID_SAFETY_LEVELS.has(act.safetyLevel as string);
 };
 
 /**
@@ -91,16 +76,7 @@ const createGatingResult = (
   message,
 });
 
-/**
- * Message templates for different confidence ranges.
- */
-const CONFIDENCE_MESSAGES: Readonly<Record<ConfidenceRange, string>> = {
-  very_low: 'Very low confidence. Manual review required before any action.',
-  low: 'Low confidence. Careful review recommended.',
-  medium: 'Medium confidence. Approval required.',
-  high: 'High confidence',
-  very_high: 'Very high confidence',
-} as const;
+// CONFIDENCE_MESSAGES imported from constants.ts
 
 /**
  * Determines basic gating decision based on confidence score.
@@ -196,8 +172,9 @@ export const determineActionGating = (
 
   // High/Very high confidence: check safety level
   // Defensive: if safetyLevel is somehow invalid, treat as high risk
-  const canAutoApprove = VALID_SAFETY_LEVELS.has(safetyLevel) 
-    && AUTO_APPROVABLE_SAFETY_LEVELS.has(safetyLevel);
+  const canAutoApprove =
+    VALID_SAFETY_LEVELS.has(safetyLevel) &&
+    AUTO_APPROVABLE_SAFETY_LEVELS.has(safetyLevel);
   
   return createGatingResult(
     !canAutoApprove,

@@ -19,6 +19,7 @@ import type {
   ValidationResult,
   EvidenceReference,
 } from '../types.js';
+import { DANGEROUS_KEYWORDS_PATTERN } from '../constants.js';
 
 /**
  * Validates LLM response against anti-hallucination checks.
@@ -195,29 +196,7 @@ const extractQuotedText = (text: string): string[] => {
   return quoted;
 };
 
-// Constants for dangerous keyword validation (compiled once)
-const DANGEROUS_KEYWORDS = [
-  'delete',
-  'drop',
-  'truncate',
-  'force',
-  'disable',
-  'remove all',
-  'destroy',
-  '--force',
-  'rm -rf',
-] as const;
-
-// Memoized regex pattern for dangerous keywords
-const DANGEROUS_KEYWORDS_PATTERN = ((): RegExp => {
-  const escapedKeywords = DANGEROUS_KEYWORDS.map((k) =>
-    k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  );
-  return new RegExp(
-    `\\b(${escapedKeywords.join('|')})\\b`,
-    'i'
-  );
-})();
+// Dangerous keywords pattern imported from constants.ts
 
 /**
  * Validates dangerous keywords in recommended actions using compiled regex pattern.

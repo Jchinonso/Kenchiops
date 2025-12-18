@@ -2,6 +2,13 @@
  * Custom error classes for better error handling and type safety.
  */
 
+import {
+  ERROR_CODES,
+  HTTP_STATUS,
+  DEFAULT_ERROR_MESSAGES,
+  SERVICE_NAMES,
+} from './constants.js';
+
 /**
  * Base error class for application-specific errors.
  */
@@ -14,7 +21,7 @@ export class AppError extends Error {
   constructor(
     message: string,
     code: string,
-    statusCode: number = 500,
+    statusCode: number = HTTP_STATUS.INTERNAL_SERVER_ERROR,
     isOperational: boolean = true,
     metadata?: Record<string, unknown>
   ) {
@@ -34,7 +41,7 @@ export class AppError extends Error {
  */
 export class ValidationError extends AppError {
   constructor(message: string, metadata?: Record<string, unknown>) {
-    super(message, "VALIDATION_ERROR", 400, true, metadata);
+    super(message, ERROR_CODES.VALIDATION_ERROR, HTTP_STATUS.BAD_REQUEST, true, metadata);
   }
 }
 
@@ -42,8 +49,11 @@ export class ValidationError extends AppError {
  * Error for authentication/authorization failures.
  */
 export class AuthenticationError extends AppError {
-  constructor(message: string = "Authentication required", metadata?: Record<string, unknown>) {
-    super(message, "AUTHENTICATION_ERROR", 401, true, metadata);
+  constructor(
+    message: string = DEFAULT_ERROR_MESSAGES.AUTHENTICATION_REQUIRED,
+    metadata?: Record<string, unknown>
+  ) {
+    super(message, ERROR_CODES.AUTHENTICATION_ERROR, HTTP_STATUS.UNAUTHORIZED, true, metadata);
   }
 }
 
@@ -51,8 +61,11 @@ export class AuthenticationError extends AppError {
  * Error for authorization failures.
  */
 export class AuthorizationError extends AppError {
-  constructor(message: string = "Insufficient permissions", metadata?: Record<string, unknown>) {
-    super(message, "AUTHORIZATION_ERROR", 403, true, metadata);
+  constructor(
+    message: string = DEFAULT_ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS,
+    metadata?: Record<string, unknown>
+  ) {
+    super(message, ERROR_CODES.AUTHORIZATION_ERROR, HTTP_STATUS.FORBIDDEN, true, metadata);
   }
 }
 
@@ -60,8 +73,11 @@ export class AuthorizationError extends AppError {
  * Error for resource not found.
  */
 export class NotFoundError extends AppError {
-  constructor(message: string = "Resource not found", metadata?: Record<string, unknown>) {
-    super(message, "NOT_FOUND", 404, true, metadata);
+  constructor(
+    message: string = DEFAULT_ERROR_MESSAGES.RESOURCE_NOT_FOUND,
+    metadata?: Record<string, unknown>
+  ) {
+    super(message, ERROR_CODES.NOT_FOUND, HTTP_STATUS.NOT_FOUND, true, metadata);
   }
 }
 
@@ -76,8 +92,8 @@ export class ExternalServiceError extends AppError {
   ) {
     super(
       `External service error (${service}): ${message}`,
-      "EXTERNAL_SERVICE_ERROR",
-      502,
+      ERROR_CODES.EXTERNAL_SERVICE_ERROR,
+      HTTP_STATUS.BAD_GATEWAY,
       true,
       { service, ...metadata }
     );
@@ -89,14 +105,14 @@ export class ExternalServiceError extends AppError {
  */
 export class LLMError extends ExternalServiceError {
   constructor(message: string, metadata?: Record<string, unknown>) {
-    super("OpenAI", message, metadata);
+    super(SERVICE_NAMES.OPENAI, message, metadata);
   }
 }
 
 /**
- * Error handler utility for Express.
+ * Type guard to check if error is an AppError instance.
  */
-export function isAppError(error: unknown): error is AppError {
+export const isAppError = (error: unknown): error is AppError => {
   return error instanceof AppError;
-}
+};
 

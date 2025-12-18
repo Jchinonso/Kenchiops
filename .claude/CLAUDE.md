@@ -29,13 +29,19 @@ kenchi/
 
 ### 2. Zero Duplication Policy
 
-**NEVER duplicate code. ALWAYS use `@kenchi/shared`.**
+**No duplication of reusable domain logic, shared utilities, or cross-service types. Service-local glue/adapters are allowed.**
 
 **Before writing ANY code:**
 1. Check `packages/shared/src/index.ts` for existing exports
 2. Search codebase for similar functionality
 3. If it exists, import from `@kenchi/shared`
 4. If it doesn't exist and is shared, add to shared package first
+
+**Practical Heuristics:**
+- **If used in 2+ services** → shared
+- **If it's domain invariant** (logger, errors, config, schemas) → shared
+- **If it's integration adapter** (Slack/GitHub-specific glue) → keep in service
+- **Tiny one-off helpers** truly local to one service → keep in service
 
 ### 3. Available Shared Utilities
 
@@ -63,35 +69,49 @@ kenchi/
 
 **Example:**
 ```typescript
-// ✅ CORRECT
-import { logger, config, errorHandler } from '@kenchi/shared';
+// ✅ CORRECT - Use shared utilities
+import { createLogger, config, errorHandler } from '@kenchi/shared';
+const logger = createLogger('api'); // Service-scoped logger
 
-// ❌ WRONG - Don't create local logger
-const logger = createLogger('service');
+// ✅ CORRECT - Service-local glue code is allowed
+// services/slack-bot/src/adapters/slackAdapter.ts
+const adaptSlackPayload = (payload: SlackPayload): WebhookEvent => {
+  // Service-specific adapter logic
+};
 
-// ❌ WRONG - Don't duplicate types
-interface Config { ... }
+// ❌ WRONG - Don't duplicate reusable utilities
+const logger = { info: () => {}, error: () => {} }; // Hand-rolled logger
+
+// ❌ WRONG - Don't duplicate cross-service types
+interface WebhookEvent { ... } // Should be in shared
 ```
 
 ### 5. File Organization
 
 **Shared Package (`packages/shared/src/`):**
 - All utilities, helpers, formatters
-- All types and interfaces
+- Cross-service contract types (events, core domain, public DTOs)
 - All middleware
 - All clients (OpenAI, Vector DB, etc.)
-- All constants and enums
+- **ALL constants and enums** - Must be in `constants.ts`, never scattered across files
 
 **Services (`services/*/src/`):**
 - Service entry point (`index.ts`)
 - Service-specific routes/handlers
 - Service-specific business logic
 - Service-specific integrations (Slack Bolt, GitHub Octokit)
+- Integration-specific types (Slack payload quirks, Octokit shapes, internal DB models)
+- Service-private types
+
+**Shared vs Service Types Rule:**
+- **Shared** = cross-service contracts + core domain types
+- **Service** = integration-specific + internal-only types
 
 **NEVER:**
-- Put utilities in services
-- Duplicate types across services
+- Put reusable utilities in services
+- Duplicate cross-service types across services
 - Create local helpers that should be shared
+- Put service-specific logic in shared package
 
 ### 6. Adding New Features
 
@@ -109,12 +129,13 @@ interface Config { ... }
 import type { WebhookEvent, LLMAnalysisResult } from '@kenchi/shared';
 
 // Value imports
-import { logger, config, errorHandler } from '@kenchi/shared';
+import { createLogger, config, errorHandler } from '@kenchi/shared';
 
 // Service code
 import express from 'express';
-import { logger, errorHandler, asyncHandler } from '@kenchi/shared';
+import { createLogger, errorHandler, asyncHandler } from '@kenchi/shared';
 
+const logger = createLogger('api'); // Service-scoped logger
 const app = express();
 app.use(errorHandler);
 
@@ -141,18 +162,62 @@ Before generating code, verify:
 - [ ] Following service structure (minimal service-specific code)?
 - [ ] Updated shared package exports if adding new shared code?
 
-### 10. Common Mistakes to Avoid
+### 10. Constants Organization Rule
 
-❌ **Creating local logger in service**
+**CRITICAL: ALL constants must be in `packages/shared/src/constants.ts`**
+
+**Rules:**
+1. **No constants scattered across files** - All numeric thresholds, regex patterns, arrays, Sets, Maps, and configuration values must be in `constants.ts`
+2. **Import from constants** - Always import constants from `@kenchi/shared` or `./constants.js`
+3. **Group by domain** - Organize constants by domain (validation, safety, OpenAI, etc.) with clear section headers
+4. **Export everything** - All constants should be exported so they can be reused
+5. **Use const assertions** - Use `as const` for immutable constant objects/arrays
+
+**Examples:**
 ```typescript
-// WRONG
-const logger = createLogger('api');
+// ✅ CORRECT - Constants in constants.ts
+// packages/shared/src/constants.ts
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const DANGEROUS_KEYWORDS = ['delete', 'drop', ...] as const;
+
+// packages/shared/src/validation.ts
+import { EMAIL_REGEX } from './constants.js';
+
+// ❌ WRONG - Constants scattered in files
+// packages/shared/src/validation.ts
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Should be in constants.ts
+
+// packages/shared/src/openaiClient/validation.ts
+const DANGEROUS_KEYWORDS = ['delete', ...]; // Should be in constants.ts
 ```
 
-✅ **Using shared logger**
+**What counts as a constant:**
+- Regex patterns (`EMAIL_REGEX`, `SHA_PATTERN`)
+- Arrays of strings/numbers (`DANGEROUS_KEYWORDS`, `VALID_STATUSES`)
+- Sets and Maps (`METRIC_KEYWORDS`, `VALID_SAFETY_LEVELS`)
+- Numeric thresholds (`MAX_RETRIES`, `TIMEOUT_MS`)
+- String constants (`DEFAULT_ERROR_MESSAGE`)
+- Configuration objects (`MATCHING_CONFIG`, `OPENAI_DEFAULTS`)
+- Type definitions for constants (`UncertaintyPattern`, `RelevanceRule`)
+
+**What doesn't need to be in constants:**
+- Local variables in functions
+- Computed values based on function parameters
+- Module-level variables that are implementation details (not reusable)
+
+### 11. Common Mistakes to Avoid
+
+❌ **Hand-rolling logger implementation**
 ```typescript
-// CORRECT
-import { logger } from '@kenchi/shared';
+// WRONG - Don't implement logging locally
+const logger = { info: () => {}, error: () => {} };
+```
+
+✅ **Using shared logger factory**
+```typescript
+// CORRECT - Create service-scoped logger from shared
+import { createLogger } from '@kenchi/shared';
+const logger = createLogger('api'); // Service name in every log line
 ```
 
 ❌ **Duplicating error classes**
@@ -179,9 +244,45 @@ interface Config { ... }
 import type { Config } from '@kenchi/shared';
 ```
 
+❌ **Scattering constants across files**
+```typescript
+// WRONG - Constants in multiple files
+// validation.ts
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// openaiClient/validation.ts
+const DANGEROUS_KEYWORDS = ['delete', ...];
+```
+
+✅ **Centralizing constants**
+```typescript
+// CORRECT - All constants in constants.ts
+// constants.ts
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const DANGEROUS_KEYWORDS = ['delete', ...] as const;
+
+// validation.ts
+import { EMAIL_REGEX } from './constants.js';
+```
+
+### 12. Shared Package Rules
+
+**Keep shared package clean and stable:**
+
+- **Shared must be dependency-light and stable** - No service-specific dependencies
+- **No importing service code from shared** - Shared should not depend on services
+- **No Slack/GitHub-specific logic inside shared** - Only generic clients/interfaces
+- **Shared is for reusable domain logic** - Not a dumping ground for everything
+
+**Decision Process:**
+1. Is it used by 2+ services? → Shared
+2. Is it domain-invariant (config, errors, logger)? → Shared
+3. Is it integration-specific glue? → Service
+4. Is it a tiny one-off helper? → Service
+
 ## Remember
 
-**The folder structure is a guide, not a constraint. The shared package is the single source of truth for all common functionality. Always check it first, always use it, never duplicate.**
+**The folder structure is a guide, not a constraint. The shared package is the single source of truth for reusable functionality. Always check it first, always use it for reusable code, but allow service-local glue code.**
 
 ---
 
@@ -230,21 +331,22 @@ type EventHandler<T extends WebhookEvent> = (event: T) => Promise<void>;
 function handle(event: { type: string; payload: Record<string, unknown> }) {}
 ```
 
-#### ✅ DO: Use Interfaces for Object Shapes
+#### ✅ DO: Use Interfaces for Public/Extensible Object Shapes
 
 ```typescript
-// ✅ Good - Interface for object shape
+// ✅ Good - Interface for public/extensible object shape
 interface ServiceConfig {
   readonly host: string;
   readonly port: number;
   readonly timeout: number;
 }
 
-// ❌ Bad - Type alias for object (use interface instead)
-type ServiceConfig = {
-  host: string;
-  port: number;
-};
+// ✅ Good - Type alias for unions, mapped types, intersections
+type WebhookEvent = CIFailureEvent | GitHubPREvent | SlackMessageEvent;
+type PartialConfig = Partial<ServiceConfig>;
+type ConfigKeys = keyof ServiceConfig;
+
+// Both interfaces and type aliases are fine - choose based on use case
 ```
 
 #### ✅ DO: Use `readonly` for Immutability
@@ -377,23 +479,27 @@ type DeepReadonly<T> = {
 
 ```typescript
 // ✅ Good - ES modules
-import { logger, config } from '@kenchi/shared';
+import { createLogger, config } from '@kenchi/shared';
 import type { WebhookEvent } from '@kenchi/shared';
 
-export function processEvent(event: WebhookEvent): Promise<void> {
+const logger = createLogger('service'); // Service-scoped logger
+
+export const processEvent = async (event: WebhookEvent): Promise<void> => {
   // Implementation
-}
+};
 ```
 
 #### ✅ DO: Separate Type and Value Imports
 
 ```typescript
 // ✅ Good - Separate type imports
-import { logger, config } from '@kenchi/shared';
+import { createLogger, config } from '@kenchi/shared';
 import type { WebhookEvent, LLMAnalysisResult } from '@kenchi/shared';
 
+const logger = createLogger('service'); // Service-scoped logger
+
 // ❌ Bad - Mixed imports (though TypeScript allows this)
-import { logger, type WebhookEvent } from '@kenchi/shared';
+import { createLogger, type WebhookEvent } from '@kenchi/shared';
 ```
 
 ### Error Handling
@@ -458,10 +564,10 @@ async function processRequest(req: Request): Promise<Response> {
 }
 ```
 
-#### ✅ DO: Use Map and Set for Elegant Error Handling
+#### ✅ DO: Prefer the Clearest Approach for Error Handling
 
 ```typescript
-// ✅ Good - Elegant error handling with Map and Set
+// ✅ Good - Use Map/Set when you have a real lookup table
 interface ErrorLike {
   readonly status?: number;
   readonly code?: string;
@@ -530,9 +636,13 @@ const handleErrorBad = (error: unknown, timeout: number): Error => {
 - **Readonly constants** - prevents mutations
 - **Cleaner code** - Map/Set initialization is declarative
 
+**Note:** Sometimes a plain `switch` statement is clearer and faster to read. Use Map/Set when you have a real lookup table or membership test, not as a blanket rule.
+
 ### Function Declarations vs Arrow Functions
 
-#### ✅ DO: Use Arrow Functions for Callbacks and Short Functions
+**Default to arrow functions. Use function declarations when required (overloads, generators) or when it improves API ergonomics.**
+
+#### ✅ DO: Default to Arrow Functions
 
 ```typescript
 // ✅ Good - Arrow functions for callbacks
@@ -553,17 +663,22 @@ class EventProcessor {
 }
 ```
 
-#### ✅ DO: Use Function Declarations for Named Functions and Hoisting
+#### ✅ DO: Use Function Declarations When Required
 
 ```typescript
-// ✅ Good - Function declaration for named, reusable functions
-async function fetchUserData(userId: string): Promise<UserData> {
-  const user = await userRepository.findById(userId);
-  const profile = await profileRepository.findByUserId(userId);
-  return { user, profile };
+// ✅ Good - Function declaration for overloads (required by TypeScript)
+function processEvent(event: CIFailureEvent): Promise<CIFailureResult>;
+function processEvent(event: GitHubPREvent): Promise<GitHubPRResult>;
+function processEvent(event: WebhookEvent): Promise<ProcessResult> {
+  // Implementation
 }
 
-// ✅ Good - Function declaration for hoisting (if needed)
+// ✅ Good - Generator functions must use function declarations
+async function* processStream(stream: ReadableStream): AsyncGenerator<Chunk> {
+  // Implementation
+}
+
+// ✅ Good - Function declaration when it improves API ergonomics
 function validateInput(input: unknown): input is UserInput {
   return typeof input === 'object' && input !== null && 'email' in input;
 }
@@ -594,7 +709,7 @@ document.addEventListener('click', handler.handleEvent); // ✅ Works
 document.addEventListener('click', handler.handleEventBad); // ❌ 'this' is lost
 ```
 
-#### ❌ DON'T: Use Arrow Functions for Methods That Need `this` Binding
+#### ❌ DON'T: Use Arrow Functions When Overriding is Needed
 
 ```typescript
 // ❌ Bad - Arrow function in class method can't be overridden properly
@@ -1562,7 +1677,8 @@ import type { EventRequest } from '../types/eventTypes.js';
 
 // ❌ Bad - Too many dependencies
 // services/api/src/routes/events.ts
-import { asyncHandler, validate, logger, config, errorHandler } from '@kenchi/shared';
+import { asyncHandler, validate, createLogger, config, errorHandler } from '@kenchi/shared';
+const logger = createLogger('api');
 import { eventHandler } from '../handlers/eventHandler.js';
 import { eventValidator } from '../validators/eventValidator.js';
 import { eventRepository } from '../repositories/eventRepository.js';
@@ -1622,7 +1738,9 @@ export const createEvent = asyncHandler(async (req, res) => {
 // Layer 2: Business Logic Layer
 // services/api/src/services/eventService.ts
 import { eventRepository } from '../repositories/eventRepository.js';
-import { logger } from '@kenchi/shared';
+import { createLogger } from '@kenchi/shared';
+
+const logger = createLogger('event-service'); // Service-scoped logger
 
 export const eventService = {
   createEvent: async (data: EventData): Promise<Event> => {
@@ -1767,10 +1885,13 @@ export class UserRepository {
 
 // ✅ Good - Service uses repository, not direct DB access
 // services/api/src/services/userService.ts
+import { createLogger } from '@kenchi/shared';
+
+const logger = createLogger('user-service'); // Service-scoped logger
+
 export class UserService {
   constructor(
-    private readonly userRepository: UserRepository,
-    private readonly logger: Logger
+    private readonly userRepository: UserRepository
   ) {}
   
   async getUserById(id: string): Promise<User> {
@@ -1778,6 +1899,7 @@ export class UserService {
     if (!user) {
       throw new NotFoundError(`User ${id} not found`);
     }
+    logger.info('User retrieved', { userId: id });
     return user;
   }
 }
@@ -2450,8 +2572,9 @@ private validateKeywords(actions: Action[]): void {
 #### ✅ DO: Use Proper Logger Instead of console
 
 ```typescript
-// ✅ Good - Use shared logger
-import { logger } from '@kenchi/shared';
+// ✅ Good - Use service-scoped logger from shared
+import { createLogger } from '@kenchi/shared';
+const logger = createLogger('api'); // Service name in every log line
 
 logger.warn('Validation failed', { eventId, errors });
 logger.error('API call failed', { error, attempt });
@@ -2459,6 +2582,9 @@ logger.error('API call failed', { error, attempt });
 // ❌ Bad - Direct console usage
 console.warn('[Service] Validation failed:', errors);
 console.error('[Service] Error:', error);
+
+// ❌ Bad - Hand-rolled logger implementation
+const logger = { info: () => {}, error: () => {} };
 ```
 
 #### ✅ DO: Avoid Array.from().some() When Iterating Sets/Maps

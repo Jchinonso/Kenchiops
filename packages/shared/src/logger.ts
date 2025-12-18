@@ -36,20 +36,34 @@ interface LogEntry {
   metadata?: Record<string, unknown>;
 }
 
-class Logger {
-  private serviceName: string;
-  private minLevel: LogLevel;
+/**
+ * Logger interface for structured logging.
+ */
+export interface Logger {
+  readonly debug: (message: string, metadata?: Record<string, unknown>) => void;
+  readonly info: (message: string, metadata?: Record<string, unknown>) => void;
+  readonly warn: (message: string, metadata?: Record<string, unknown>) => void;
+  readonly error: (message: string, metadata?: Record<string, unknown>) => void;
+}
 
-  constructor(serviceName: string = "kenchi", minLevel: LogLevel = LogLevel.INFO) {
+class LoggerImpl implements Logger {
+  private readonly serviceName: string;
+  private readonly minLevel: LogLevel;
+
+  constructor(serviceName: string = 'kenchi', minLevel: LogLevel = LogLevel.INFO) {
     this.serviceName = serviceName;
     this.minLevel = minLevel;
   }
 
-  private shouldLog(level: LogLevel): boolean {
+  private readonly shouldLog = (level: LogLevel): boolean => {
     return level >= this.minLevel;
-  }
+  };
 
-  private formatMessage(level: LogLevel, message: string, metadata?: Record<string, unknown>): string {
+  private readonly formatMessage = (
+    level: LogLevel,
+    message: string,
+    metadata?: Record<string, unknown>
+  ): string => {
     const timestamp = new Date().toISOString();
     const levelName = LogLevel[level];
     const entry: LogEntry = {
@@ -61,15 +75,19 @@ class Logger {
     };
 
     return JSON.stringify(entry);
-  }
+  };
 
-  private log(level: LogLevel, message: string, metadata?: Record<string, unknown>): void {
+  private readonly log = (
+    level: LogLevel,
+    message: string,
+    metadata?: Record<string, unknown>
+  ): void => {
     if (!this.shouldLog(level)) {
       return;
     }
 
     const formatted = this.formatMessage(level, message, metadata);
-    
+
     switch (level) {
       case LogLevel.DEBUG:
       case LogLevel.INFO:
@@ -82,34 +100,37 @@ class Logger {
         console.error(formatted);
         break;
     }
-  }
+  };
 
-  debug(message: string, metadata?: Record<string, unknown>): void {
+  readonly debug = (message: string, metadata?: Record<string, unknown>): void => {
     this.log(LogLevel.DEBUG, message, metadata);
-  }
+  };
 
-  info(message: string, metadata?: Record<string, unknown>): void {
+  readonly info = (message: string, metadata?: Record<string, unknown>): void => {
     this.log(LogLevel.INFO, message, metadata);
-  }
+  };
 
-  warn(message: string, metadata?: Record<string, unknown>): void {
+  readonly warn = (message: string, metadata?: Record<string, unknown>): void => {
     this.log(LogLevel.WARN, message, metadata);
-  }
+  };
 
-  error(message: string, metadata?: Record<string, unknown>): void {
+  readonly error = (message: string, metadata?: Record<string, unknown>): void => {
     this.log(LogLevel.ERROR, message, metadata);
-  }
+  };
 }
 
 /**
  * Create a logger instance for a specific service.
  */
-export function createLogger(serviceName: string, minLevel: LogLevel = LogLevel.INFO): Logger {
-  return new Logger(serviceName, minLevel);
-}
+export const createLogger = (
+  serviceName: string,
+  minLevel: LogLevel = LogLevel.INFO
+): Logger => {
+  return new LoggerImpl(serviceName, minLevel);
+};
 
 /**
  * Default logger instance.
  */
-export const logger = createLogger("kenchi");
+export const logger = createLogger('kenchi');
 

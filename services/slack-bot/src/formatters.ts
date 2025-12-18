@@ -8,10 +8,11 @@ import type {
   ActionProposal,
   ConfidenceScoreResult,
 } from '@kenchi/shared';
-import { 
+import {
   UI_CONFIDENCE_THRESHOLDS,
   UI_CONSTANTS,
 } from '@kenchi/shared';
+import type { SlackBlock } from './types/slackTypes.js';
 
 /**
  * Formats an LLM analysis result as a Slack Block Kit message.
@@ -23,8 +24,8 @@ import {
 export function formatAnalysisMessage(
   analysis: LLMAnalysisResult,
   confidence: ConfidenceScoreResult
-): any[] {
-  const blocks: Array<Record<string, unknown>> = [];
+): readonly SlackBlock[] {
+  const blocks: SlackBlock[] = [];
 
   // Header with confidence indicator
   const confidenceEmoji = getConfidenceEmoji(confidence.finalScore);
@@ -152,14 +153,14 @@ export function formatAnalysisMessage(
  * @returns Slack Block Kit blocks with action buttons
  */
 export function formatActionButtons(
-  actions: ActionProposal[],
+  actions: readonly ActionProposal[],
   eventId: string
-): any[] {
+): readonly SlackBlock[] {
   if (actions.length === 0) {
     return [];
   }
 
-  const blocks: Array<Record<string, unknown>> = [];
+  const blocks: SlackBlock[] = [];
 
   blocks.push({ type: 'divider' });
   blocks.push({
@@ -212,7 +213,7 @@ export function formatActionButtons(
  * @param error - The error object
  * @returns Slack Block Kit blocks
  */
-export function formatErrorMessage(error: Error): any[] {
+export function formatErrorMessage(error: Error): readonly SlackBlock[] {
   return [
     {
       type: 'section',
@@ -252,7 +253,7 @@ export function formatProgressUpdate(
   actionId: string,
   status: 'pending' | 'in_progress' | 'completed' | 'failed',
   message: string
-): any[] {
+): readonly SlackBlock[] {
   const statusEmoji = {
     pending: ':hourglass_flowing_sand:',
     in_progress: ':gear:',

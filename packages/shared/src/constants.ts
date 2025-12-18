@@ -160,8 +160,41 @@ export const HTTP_STATUS = {
   OK: 200,
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
   NOT_FOUND: 404,
   INTERNAL_SERVER_ERROR: 500,
+  BAD_GATEWAY: 502,
+} as const;
+
+// ==================== Error Constants ====================
+
+/**
+ * Error codes for application errors.
+ */
+export const ERROR_CODES = {
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  AUTHENTICATION_ERROR: 'AUTHENTICATION_ERROR',
+  AUTHORIZATION_ERROR: 'AUTHORIZATION_ERROR',
+  NOT_FOUND: 'NOT_FOUND',
+  EXTERNAL_SERVICE_ERROR: 'EXTERNAL_SERVICE_ERROR',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+/**
+ * Default error messages for common error types.
+ */
+export const DEFAULT_ERROR_MESSAGES = {
+  AUTHENTICATION_REQUIRED: 'Authentication required',
+  INSUFFICIENT_PERMISSIONS: 'Insufficient permissions',
+  RESOURCE_NOT_FOUND: 'Resource not found',
+  UNEXPECTED_ERROR: 'An unexpected error occurred',
+} as const;
+
+/**
+ * External service names.
+ */
+export const SERVICE_NAMES = {
+  OPENAI: 'OpenAI',
 } as const;
 
 /**
@@ -222,5 +255,158 @@ export const RATE_LIMIT_CONSTANTS = {
   DEFAULT_MAX_REQUESTS: 100,
   CLEANUP_PROBABILITY: 0.01, // 1% chance to cleanup on each request
   RATE_LIMIT_STATUS_CODE: 429,
+} as const;
+
+// ==================== Validation Constants ====================
+
+/**
+ * Email validation regex pattern.
+ */
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Default error message for validation failures.
+ */
+export const DEFAULT_VALIDATION_ERROR_MESSAGE = 'validation failed' as const;
+
+// ==================== OpenAI Validation Constants ====================
+
+/**
+ * Dangerous keywords that should not appear in LLM-recommended actions.
+ */
+export const DANGEROUS_KEYWORDS = [
+  'delete',
+  'drop',
+  'truncate',
+  'force',
+  'disable',
+  'remove all',
+  'destroy',
+  '--force',
+  'rm -rf',
+] as const;
+
+/**
+ * Compiled regex pattern for dangerous keywords (memoized).
+ * Created once at module load time for performance.
+ */
+export const DANGEROUS_KEYWORDS_PATTERN = ((): RegExp => {
+  const escapedKeywords = DANGEROUS_KEYWORDS.map((k) =>
+    k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  );
+  return new RegExp(`\\b(${escapedKeywords.join('|')})\\b`, 'i');
+})();
+
+// ==================== Safety Constants ====================
+
+/**
+ * Uncertainty pattern configuration type.
+ */
+export type UncertaintyPattern = {
+  readonly pattern: RegExp;
+  readonly penalty: number;
+};
+
+/**
+ * Compiled uncertainty patterns with penalties.
+ * Ordered by severity (strongest first).
+ */
+export const UNCERTAINTY_PATTERNS: Readonly<UncertaintyPattern[]> = [
+  {
+    pattern: /\b(not sure|unclear|cannot determine|insufficient information|unable to identify|unknown)\b/gi,
+    penalty: UNCERTAINTY_PENALTIES.STRONG,
+  },
+  {
+    pattern: /\b(possibly|might be|could be|may be|potentially|perhaps)\b/gi,
+    penalty: UNCERTAINTY_PENALTIES.MODERATE,
+  },
+  {
+    pattern: /\b(appears to|seems like|suggests that|probably)\b/gi,
+    penalty: UNCERTAINTY_PENALTIES.MILD,
+  },
+] as const;
+
+/**
+ * Metric keywords to detect in reasoning.
+ */
+export const METRIC_KEYWORDS: Readonly<Set<string>> = new Set([
+  'cpu',
+  'memory',
+  'error rate',
+  'latency',
+]);
+
+/**
+ * Invalid cause keywords that indicate an invalid root cause identification.
+ */
+export const INVALID_CAUSE_KEYWORDS: Readonly<Set<string>> = new Set(['unknown']);
+
+/**
+ * Cause-action relevance mapping configuration type.
+ */
+export type RelevanceRule = {
+  readonly causeKeywords: readonly string[];
+  readonly actionKeywords: readonly string[];
+};
+
+/**
+ * Relevance rules for matching causes to actions.
+ */
+export const RELEVANCE_RULES: Readonly<RelevanceRule[]> = [
+  {
+    causeKeywords: ['secret', 'env'],
+    actionKeywords: ['environment'],
+  },
+  {
+    causeKeywords: ['deploy'],
+    actionKeywords: ['rollback'],
+  },
+  {
+    causeKeywords: ['config'],
+    actionKeywords: ['configuration'],
+  },
+  {
+    causeKeywords: ['test'],
+    actionKeywords: ['rerun', 'test'],
+  },
+  {
+    causeKeywords: ['pipeline'],
+    actionKeywords: ['rerun', 'pipeline'],
+  },
+] as const;
+
+/**
+ * Safety levels that allow auto-approval with high confidence.
+ */
+export const AUTO_APPROVABLE_SAFETY_LEVELS: Readonly<Set<string>> = new Set([
+  'safe',
+  'low_risk',
+]);
+
+/**
+ * Valid safety levels for runtime validation.
+ */
+export const VALID_SAFETY_LEVELS: Readonly<Set<string>> = new Set([
+  'safe',
+  'low_risk',
+  'medium_risk',
+  'high_risk',
+  'dangerous',
+]);
+
+/**
+ * Confidence range type for decision matrix.
+ */
+export type ConfidenceRange = 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
+
+/**
+ * Message templates for different confidence ranges.
+ */
+export const CONFIDENCE_MESSAGES: Readonly<Record<ConfidenceRange, string>> = {
+  very_low: 'Very low confidence. Manual review required before any action.',
+  low: 'Low confidence. Careful review recommended.',
+  medium: 'Medium confidence. Approval required.',
+  high: 'High confidence',
+  very_high: 'Very high confidence',
 } as const;
 
