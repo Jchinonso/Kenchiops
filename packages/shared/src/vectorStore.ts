@@ -30,8 +30,31 @@ export abstract class VectorStore {
 }
 
 /**
- * Very naive in-memory implementation for local development and tests.
- * Stores raw content strings keyed by ID and returns all IDs on query.
+ * In-memory implementation of vector store for development and testing.
+ *
+ * **WARNING**: This implementation is NOT suitable for production use.
+ * It does not perform actual vector similarity search - it simply stores
+ * raw text and returns all document IDs on any query.
+ *
+ * **For Production**: Use a real vector database such as:
+ * - Postgres with pgvector extension
+ * - Chroma
+ * - Pinecone
+ * - Weaviate
+ * - Qdrant
+ *
+ * @example
+ * ```typescript
+ * const store = new InMemoryVectorStore();
+ *
+ * // Store documents
+ * await store.upsertDocumentEmbedding('doc-1', 'Database connection error');
+ * await store.upsertDocumentEmbedding('doc-2', 'API timeout issue');
+ *
+ * // Query (returns all document IDs in development)
+ * const similar = await store.querySimilar('connection problem');
+ * console.log(similar); // ['doc-1', 'doc-2']
+ * ```
  */
 export class InMemoryVectorStore extends VectorStore {
   private docs: Map<string, string>;
