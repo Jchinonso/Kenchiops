@@ -4,41 +4,11 @@
  */
 
 import type { LLMAnalysisResult } from '../types.js';
-import { CONSISTENCY_ADJUSTMENTS, RELEVANCE_THRESHOLDS } from '../constants.js';
-
-/**
- * Cause-action relevance mapping configuration.
- */
-type RelevanceRule = {
-  readonly causeKeywords: readonly string[];
-  readonly actionKeywords: readonly string[];
-};
-
-/**
- * Relevance rules for matching causes to actions.
- */
-const RELEVANCE_RULES: Readonly<RelevanceRule[]> = [
-  {
-    causeKeywords: ['secret', 'env'],
-    actionKeywords: ['environment'],
-  },
-  {
-    causeKeywords: ['deploy'],
-    actionKeywords: ['rollback'],
-  },
-  {
-    causeKeywords: ['config'],
-    actionKeywords: ['configuration'],
-  },
-  {
-    causeKeywords: ['test'],
-    actionKeywords: ['rerun', 'test'],
-  },
-  {
-    causeKeywords: ['pipeline'],
-    actionKeywords: ['rerun', 'pipeline'],
-  },
-] as const;
+import {
+  CONSISTENCY_ADJUSTMENTS,
+  RELEVANCE_THRESHOLDS,
+  RELEVANCE_RULES,
+} from '../constants.js';
 
 /**
  * Checks if action matches cause based on relevance rules.

@@ -22,7 +22,7 @@ import {
  * Builds the system context prompt that establishes the LLM's role and constraints.
  * This remains mostly constant across all prompts.
  */
-export function buildSystemPrompt(): string {
+export const buildSystemPrompt = (): string => {
   return `You are an expert DevOps incident analysis assistant. Your role is to analyze DevOps events (CI/CD failures, monitoring alerts, deployment issues) and provide helpful insights to engineering teams.
 
 ## Your Capabilities
@@ -59,12 +59,12 @@ export function buildSystemPrompt(): string {
 - Use clear, concise language
 - Be specific (cite line numbers, commit SHAs, exact error messages)
 - Prioritize accuracy over speed`;
-}
+};
 
 /**
  * Builds the complete analysis prompt including task, context, and output format.
  */
-export function buildAnalysisPrompt(event: Event, evidence: Evidence): string {
+export const buildAnalysisPrompt = (event: Event, evidence: Evidence): string => {
   const systemPrompt = buildSystemPrompt();
   const eventSection = formatEvent(event);
   const evidenceSection = formatEvidence(evidence);
@@ -85,12 +85,12 @@ ${safetyConstraintsSection}
 ${outputFormatSection}
 
 Now, analyze the event and provide your structured response.`;
-}
+};
 
 /**
  * Builds the task specification section.
  */
-function buildTaskSection(): string {
+const buildTaskSection = (): string => {
   return `## TASK
 Analyze the following DevOps event and provide:
 1. A concise summary of what happened
@@ -105,12 +105,12 @@ Analyze the following DevOps event and provide:
 - Do NOT speculate about information not present in the context
 - If evidence is insufficient, state this explicitly in the "uncertainties" field
 - Cite specific evidence (e.g., "According to log entry at 10:30:45: 'AUTH_SECRET is not defined'")`;
-}
+};
 
 /**
  * Builds the safety constraints section.
  */
-function buildSafetyConstraintsSection(): string {
+const buildSafetyConstraintsSection = (): string => {
   return `## SAFETY CONSTRAINTS FOR RECOMMENDATIONS
 Your recommended actions MUST follow these rules:
 
@@ -137,12 +137,12 @@ Your recommended actions MUST follow these rules:
 - Actions that could cause outages or data loss
 
 If the appropriate fix would involve a dangerous action, suggest "manual_investigation" with details of what to check, rather than suggesting the dangerous action directly.`;
-}
+};
 
 /**
  * Builds the output format specification section.
  */
-function buildOutputFormatSection(): string {
+const buildOutputFormatSection = (): string => {
   return `## OUTPUT FORMAT
 Respond with ONLY a JSON object matching this structure (no additional text before or after):
 
@@ -189,7 +189,7 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
 /**
  * Formats event details for inclusion in the prompt.
  */
-export function formatEvent(event: Event): string {
+export const formatEvent = (event: Event): string => {
   const payload = JSON.stringify(event.payload, null, 2);
 
   return `## EVENT DETAILS
@@ -204,12 +204,12 @@ ${event.title ? `\n**Title**: ${event.title}` : ''}
 \`\`\`json
 ${payload}
 \`\`\``;
-}
+};
 
 /**
  * Formats all evidence sections for inclusion in the prompt.
  */
-export function formatEvidence(evidence: Evidence): string {
+export const formatEvidence = (evidence: Evidence): string => {
   const sections: string[] = ['## COLLECTED EVIDENCE'];
 
   // 1. Logs
@@ -251,7 +251,7 @@ export function formatEvidence(evidence: Evidence): string {
   }
 
   return sections.join('\n\n');
-}
+};
 
 /**
  * Formats log entries for inclusion in LLM prompts.
@@ -281,7 +281,7 @@ export function formatEvidence(evidence: Evidence): string {
  * // ---
  * ```
  */
-export function formatLogs(logs: LogEntry[]): string {
+export const formatLogs = (logs: LogEntry[]): string => {
   return logs
     .map((log) => {
       const timestamp = log.timestamp || 'unknown time';
@@ -296,7 +296,7 @@ export function formatLogs(logs: LogEntry[]): string {
 /**
  * Formats metrics summary.
  */
-export function formatMetrics(summary: MetricsSummary): string {
+export const formatMetrics = (summary: MetricsSummary): string => {
   const lines: string[] = [];
 
   if (summary.errorRate !== undefined) {
@@ -330,12 +330,12 @@ export function formatMetrics(summary: MetricsSummary): string {
   }
 
   return lines.join('\n');
-}
+};
 
 /**
  * Formats git commit history.
  */
-export function formatGitHistory(commits: GitCommit[]): string {
+export const formatGitHistory = (commits: GitCommit[]): string => {
   return commits
     .map((commit) => {
       const lines = [
@@ -360,12 +360,12 @@ export function formatGitHistory(commits: GitCommit[]): string {
       return lines.join('\n');
     })
     .join('\n\n');
-}
+};
 
 /**
  * Formats system state information.
  */
-function formatSystemState(systemState: SystemState): string {
+const formatSystemState = (systemState: SystemState): string => {
   const sections: string[] = [];
 
   if (systemState.deploymentStatus) {
@@ -392,12 +392,12 @@ function formatSystemState(systemState: SystemState): string {
   }
 
   return sections.join('\n');
-}
+};
 
 /**
  * Formats knowledge base documents.
  */
-export function formatKnowledgeDocs(docs: KnowledgeDocument[]): string {
+export const formatKnowledgeDocs = (docs: KnowledgeDocument[]): string => {
   return docs
     .map((doc) => {
       const similarity = (doc.similarity * UI_CONSTANTS.PERCENTAGE_MULTIPLIER).toFixed(0);
@@ -424,14 +424,17 @@ export function formatKnowledgeDocs(docs: KnowledgeDocument[]): string {
  * Estimates token count for text (rough approximation).
  * 1 token ≈ 4 characters for English text.
  */
-export function estimateTokens(text: string): number {
+export const estimateTokens = (text: string): number => {
   return Math.ceil(text.length / 4);
-}
+};
 
 /**
  * Truncates evidence to fit within token budget while prioritizing important information.
  */
-export function truncateEvidence(evidence: Evidence, maxTokens: number): Evidence {
+export const truncateEvidence = (
+  evidence: Evidence,
+  maxTokens: number
+): Evidence => {
   // Priority order:
   // 1. Critical error logs (ERROR level) - top 10
   // 2. Recent commits - last 5
@@ -528,4 +531,4 @@ export function truncateEvidence(evidence: Evidence, maxTokens: number): Evidenc
   truncated.relatedEvents = evidence.relatedEvents;
 
   return truncated;
-}
+};

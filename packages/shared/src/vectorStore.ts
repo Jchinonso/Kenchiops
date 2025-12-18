@@ -64,15 +64,18 @@ export class InMemoryVectorStore extends VectorStore {
     this.docs = new Map();
   }
 
-  async upsertDocumentEmbedding(id: string, content: string): Promise<void> {
+  readonly upsertDocumentEmbedding = async (
+    id: string,
+    content: string
+  ): Promise<void> => {
     // TODO: Replace with real embedding generation + vector DB upsert.
     this.docs.set(id, content);
-  }
+  };
 
-  async querySimilar(text: string): Promise<string[]> {
+  readonly querySimilar = async (text: string): Promise<string[]> => {
     // TODO: Replace with real similarity search against a vector DB.
     // For now, we just return all IDs deterministically.
     return Array.from(this.docs.keys());
-  }
+  };
 }
 

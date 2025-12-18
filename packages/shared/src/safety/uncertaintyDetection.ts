@@ -3,34 +3,7 @@
  * Detects hedging language and uncertainty markers in LLM outputs.
  */
 
-import { UNCERTAINTY_PENALTIES } from '../constants.js';
-
-/**
- * Uncertainty pattern configuration.
- */
-type UncertaintyPattern = {
-  readonly pattern: RegExp;
-  readonly penalty: number;
-};
-
-/**
- * Compiled uncertainty patterns with penalties.
- * Ordered by severity (strongest first).
- */
-const UNCERTAINTY_PATTERNS: Readonly<UncertaintyPattern[]> = [
-  {
-    pattern: /\b(not sure|unclear|cannot determine|insufficient information|unable to identify|unknown)\b/gi,
-    penalty: UNCERTAINTY_PENALTIES.STRONG,
-  },
-  {
-    pattern: /\b(possibly|might be|could be|may be|potentially|perhaps)\b/gi,
-    penalty: UNCERTAINTY_PENALTIES.MODERATE,
-  },
-  {
-    pattern: /\b(appears to|seems like|suggests that|probably)\b/gi,
-    penalty: UNCERTAINTY_PENALTIES.MILD,
-  },
-] as const;
+import { UNCERTAINTY_PENALTIES, UNCERTAINTY_PATTERNS } from '../constants.js';
 
 /**
  * Detects hedging language and uncertainty markers in text.

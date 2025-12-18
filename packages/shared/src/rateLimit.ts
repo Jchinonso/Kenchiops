@@ -5,12 +5,9 @@
  * with Redis for distributed rate limiting.
  */
 
-import { Request, Response, NextFunction } from "express";
-import { AppError } from "./errors.js";
-import { 
-  RATE_LIMIT_CONSTANTS,
-  TIME_CONSTANTS,
-} from "./constants.js";
+import type { Request, Response, NextFunction } from 'express';
+import { AppError } from './errors.js';
+import { RATE_LIMIT_CONSTANTS, TIME_CONSTANTS } from './constants.js';
 
 interface RateLimitStore {
   [key: string]: {
@@ -40,7 +37,7 @@ class RateLimiter {
     this.keyGenerator = options.keyGenerator || ((req) => req.ip || "unknown");
   }
 
-  middleware() {
+  readonly middleware = () => {
     return (req: Request, _res: Response, next: NextFunction): void => {
       const key = this.keyGenerator(req);
       const now = Date.now();
@@ -77,7 +74,7 @@ class RateLimiter {
     };
   }
 
-  private cleanup(now: number): void {
+  private readonly cleanup = (now: number): void => {
     for (const key in this.store) {
       if (this.store[key].resetTime < now) {
         delete this.store[key];
@@ -85,7 +82,7 @@ class RateLimiter {
     }
   }
 
-  reset(): void {
+  readonly reset = (): void => {
     this.store = {};
   }
 }
@@ -97,9 +94,9 @@ class RateLimiter {
  * const limiter = createRateLimiter({ windowMs: 60000, max: 100 });
  * app.use('/api/', limiter.middleware());
  */
-export function createRateLimiter(options: RateLimitOptions): RateLimiter {
+export const createRateLimiter = (options: RateLimitOptions): RateLimiter => {
   return new RateLimiter(options);
-}
+};
 
 /**
  * Default rate limiter: 100 requests per minute per IP.
@@ -107,6 +104,6 @@ export function createRateLimiter(options: RateLimitOptions): RateLimiter {
 export const defaultRateLimiter = createRateLimiter({
   windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
   max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
-  message: "Too many requests, please try again later",
+  message: 'Too many requests, please try again later',
 });
 

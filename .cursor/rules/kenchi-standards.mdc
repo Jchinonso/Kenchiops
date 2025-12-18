@@ -1,3 +1,7 @@
+---
+alwaysApply: true
+---
+
 # Cursor ai configuration for kenchi
 
 ## Project Context
@@ -29,13 +33,19 @@ kenchi/
 
 ### 2. Zero Duplication Policy
 
-**NEVER duplicate code. ALWAYS use `@kenchi/shared`.**
+**No duplication of reusable domain logic, shared utilities, or cross-service types. Service-local glue/adapters are allowed.**
 
 **Before writing ANY code:**
 1. Check `packages/shared/src/index.ts` for existing exports
 2. Search codebase for similar functionality
 3. If it exists, import from `@kenchi/shared`
 4. If it doesn't exist and is shared, add to shared package first
+
+**Practical Heuristics:**
+- **If used in 2+ services** → shared
+- **If it's domain invariant** (logger, errors, config, schemas) → shared
+- **If it's integration adapter** (Slack/GitHub-specific glue) → keep in service
+- **Tiny one-off helpers** truly local to one service → keep in service
 
 ### 3. Available Shared Utilities
 
@@ -63,35 +73,49 @@ kenchi/
 
 **Example:**
 ```typescript
-// ✅ CORRECT
-import { logger, config, errorHandler } from '@kenchi/shared';
+// ✅ CORRECT - Use shared utilities
+import { createLogger, config, errorHandler } from '@kenchi/shared';
+const logger = createLogger('api'); // Service-scoped logger
 
-// ❌ WRONG - Don't create local logger
-const logger = createLogger('service');
+// ✅ CORRECT - Service-local glue code is allowed
+// services/slack-bot/src/adapters/slackAdapter.ts
+const adaptSlackPayload = (payload: SlackPayload): WebhookEvent => {
+  // Service-specific adapter logic
+};
 
-// ❌ WRONG - Don't duplicate types
-interface Config { ... }
+// ❌ WRONG - Don't duplicate reusable utilities
+const logger = { info: () => {}, error: () => {} }; // Hand-rolled logger
+
+// ❌ WRONG - Don't duplicate cross-service types
+interface WebhookEvent { ... } // Should be in shared
 ```
 
 ### 5. File Organization
 
 **Shared Package (`packages/shared/src/`):**
 - All utilities, helpers, formatters
-- All types and interfaces
+- Cross-service contract types (events, core domain, public DTOs)
 - All middleware
 - All clients (OpenAI, Vector DB, etc.)
-- All constants and enums
+- **ALL constants and enums** - Must be in `constants.ts`, never scattered across files
 
 **Services (`services/*/src/`):**
 - Service entry point (`index.ts`)
 - Service-specific routes/handlers
 - Service-specific business logic
 - Service-specific integrations (Slack Bolt, GitHub Octokit)
+- Integration-specific types (Slack payload quirks, Octokit shapes, internal DB models)
+- Service-private types
+
+**Shared vs Service Types Rule:**
+- **Shared** = cross-service contracts + core domain types
+- **Service** = integration-specific + internal-only types
 
 **NEVER:**
-- Put utilities in services
-- Duplicate types across services
+- Put reusable utilities in services
+- Duplicate cross-service types across services
 - Create local helpers that should be shared
+- Put service-specific logic in shared package
 
 ### 6. Adding New Features
 
@@ -109,12 +133,13 @@ interface Config { ... }
 import type { WebhookEvent, LLMAnalysisResult } from '@kenchi/shared';
 
 // Value imports
-import { logger, config, errorHandler } from '@kenchi/shared';
+import { createLogger, config, errorHandler } from '@kenchi/shared';
 
 // Service code
 import express from 'express';
-import { logger, errorHandler, asyncHandler } from '@kenchi/shared';
+import { createLogger, errorHandler, asyncHandler } from '@kenchi/shared';
 
+const logger = createLogger('api'); // Service-scoped logger
 const app = express();
 app.use(errorHandler);
 
@@ -141,18 +166,62 @@ Before generating code, verify:
 - [ ] Following service structure (minimal service-specific code)?
 - [ ] Updated shared package exports if adding new shared code?
 
-### 10. Common Mistakes to Avoid
+### 10. Constants Organization Rule
 
-❌ **Creating local logger in service**
+**CRITICAL: ALL constants must be in `packages/shared/src/constants.ts`**
+
+**Rules:**
+1. **No constants scattered across files** - All numeric thresholds, regex patterns, arrays, Sets, Maps, and configuration values must be in `constants.ts`
+2. **Import from constants** - Always import constants from `@kenchi/shared` or `./constants.js`
+3. **Group by domain** - Organize constants by domain (validation, safety, OpenAI, etc.) with clear section headers
+4. **Export everything** - All constants should be exported so they can be reused
+5. **Use const assertions** - Use `as const` for immutable constant objects/arrays
+
+**Examples:**
 ```typescript
-// WRONG
-const logger = createLogger('api');
+// ✅ CORRECT - Constants in constants.ts
+// packages/shared/src/constants.ts
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const DANGEROUS_KEYWORDS = ['delete', 'drop', ...] as const;
+
+// packages/shared/src/validation.ts
+import { EMAIL_REGEX } from './constants.js';
+
+// ❌ WRONG - Constants scattered in files
+// packages/shared/src/validation.ts
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Should be in constants.ts
+
+// packages/shared/src/openaiClient/validation.ts
+const DANGEROUS_KEYWORDS = ['delete', ...]; // Should be in constants.ts
 ```
 
-✅ **Using shared logger**
+**What counts as a constant:**
+- Regex patterns (`EMAIL_REGEX`, `SHA_PATTERN`)
+- Arrays of strings/numbers (`DANGEROUS_KEYWORDS`, `VALID_STATUSES`)
+- Sets and Maps (`METRIC_KEYWORDS`, `VALID_SAFETY_LEVELS`)
+- Numeric thresholds (`MAX_RETRIES`, `TIMEOUT_MS`)
+- String constants (`DEFAULT_ERROR_MESSAGE`)
+- Configuration objects (`MATCHING_CONFIG`, `OPENAI_DEFAULTS`)
+- Type definitions for constants (`UncertaintyPattern`, `RelevanceRule`)
+
+**What doesn't need to be in constants:**
+- Local variables in functions
+- Computed values based on function parameters
+- Module-level variables that are implementation details (not reusable)
+
+### 11. Common Mistakes to Avoid
+
+❌ **Hand-rolling logger implementation**
 ```typescript
-// CORRECT
-import { logger } from '@kenchi/shared';
+// WRONG - Don't implement logging locally
+const logger = { info: () => {}, error: () => {} };
+```
+
+✅ **Using shared logger factory**
+```typescript
+// CORRECT - Create service-scoped logger from shared
+import { createLogger } from '@kenchi/shared';
+const logger = createLogger('api'); // Service name in every log line
 ```
 
 ❌ **Duplicating error classes**
@@ -179,9 +248,45 @@ interface Config { ... }
 import type { Config } from '@kenchi/shared';
 ```
 
+❌ **Scattering constants across files**
+```typescript
+// WRONG - Constants in multiple files
+// validation.ts
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// openaiClient/validation.ts
+const DANGEROUS_KEYWORDS = ['delete', ...];
+```
+
+✅ **Centralizing constants**
+```typescript
+// CORRECT - All constants in constants.ts
+// constants.ts
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const DANGEROUS_KEYWORDS = ['delete', ...] as const;
+
+// validation.ts
+import { EMAIL_REGEX } from './constants.js';
+```
+
+### 12. Shared Package Rules
+
+**Keep shared package clean and stable:**
+
+- **Shared must be dependency-light and stable** - No service-specific dependencies
+- **No importing service code from shared** - Shared should not depend on services
+- **No Slack/GitHub-specific logic inside shared** - Only generic clients/interfaces
+- **Shared is for reusable domain logic** - Not a dumping ground for everything
+
+**Decision Process:**
+1. Is it used by 2+ services? → Shared
+2. Is it domain-invariant (config, errors, logger)? → Shared
+3. Is it integration-specific glue? → Service
+4. Is it a tiny one-off helper? → Service
+
 ## Remember
 
-**The folder structure is a guide, not a constraint. The shared package is the single source of truth for all common functionality. Always check it first, always use it, never duplicate.**
+**The folder structure is a guide, not a constraint. The shared package is the single source of truth for reusable functionality. Always check it first, always use it for reusable code, but allow service-local glue code.**
 
 ---
 
@@ -209,15 +314,15 @@ This section defines senior-level coding standards for the Kenchi project, follo
 #### ✅ DO: Use Explicit Types
 
 ```typescript
-// ✅ Good - Explicit types
-function processEvent(event: WebhookEvent): Promise<LLMAnalysisResult> {
+// ✅ Good - Explicit types with arrow function
+const processEvent = (event: WebhookEvent): Promise<LLMAnalysisResult> => {
   // Implementation
-}
+};
 
 // ❌ Bad - Implicit any
-function processEvent(event) {
+const processEvent = (event) => {
   // Implementation
-}
+};
 ```
 
 #### ✅ DO: Use Type Aliases for Complex Types
@@ -227,24 +332,25 @@ function processEvent(event) {
 type EventHandler<T extends WebhookEvent> = (event: T) => Promise<void>;
 
 // ❌ Bad - Inline complex types
-function handle(event: { type: string; payload: Record<string, unknown> }) {}
+const handle = (event: { type: string; payload: Record<string, unknown> }) => {};
 ```
 
-#### ✅ DO: Use Interfaces for Object Shapes
+#### ✅ DO: Use Interfaces for Public/Extensible Object Shapes
 
 ```typescript
-// ✅ Good - Interface for object shape
+// ✅ Good - Interface for public/extensible object shape
 interface ServiceConfig {
   readonly host: string;
   readonly port: number;
   readonly timeout: number;
 }
 
-// ❌ Bad - Type alias for object (use interface instead)
-type ServiceConfig = {
-  host: string;
-  port: number;
-};
+// ✅ Good - Type alias for unions, mapped types, intersections
+type WebhookEvent = CIFailureEvent | GitHubPREvent | SlackMessageEvent;
+type PartialConfig = Partial<ServiceConfig>;
+type ConfigKeys = keyof ServiceConfig;
+
+// Both interfaces and type aliases are fine - choose based on use case
 ```
 
 #### ✅ DO: Use `readonly` for Immutability
@@ -267,7 +373,7 @@ type WebhookEvent =
   | { type: 'pr_opened'; prNumber: number; repository: string }
   | { type: 'deployment'; environment: string; version: string };
 
-function handleEvent(event: WebhookEvent) {
+const handleEvent = (event: WebhookEvent) => {
   switch (event.type) {
     case 'ci_failure':
       // TypeScript knows event.log exists
@@ -276,7 +382,7 @@ function handleEvent(event: WebhookEvent) {
       // TypeScript knows event.prNumber exists
       return processPR(event.prNumber);
   }
-}
+};
 ```
 
 #### ✅ DO: Use Generic Types Appropriately
@@ -302,13 +408,13 @@ function process(data: any): any {
   return data.processed;
 }
 
-// ✅ Good - Use unknown and type guards
-function process(data: unknown): ProcessedData {
+// ✅ Good - Use unknown and type guards with arrow function
+const process = (data: unknown): ProcessedData => {
   if (isValidData(data)) {
     return transform(data);
   }
   throw new ValidationError('Invalid data');
-}
+};
 ```
 
 #### ❌ DON'T: Use Type Assertions Unnecessarily
@@ -317,10 +423,10 @@ function process(data: unknown): ProcessedData {
 // ❌ Bad - Unsafe type assertion
 const result = data as Result;
 
-// ✅ Good - Type guard
-function isResult(data: unknown): data is Result {
+// ✅ Good - Type guard with arrow function
+const isResult = (data: unknown): data is Result => {
   return typeof data === 'object' && data !== null && 'success' in data;
-}
+};
 
 if (isResult(data)) {
   // TypeScript knows data is Result
@@ -332,8 +438,8 @@ if (isResult(data)) {
 #### ✅ DO: Create Type Guards for Runtime Validation
 
 ```typescript
-// ✅ Good - Type guard function
-function isWebhookEvent(data: unknown): data is WebhookEvent {
+// ✅ Good - Type guard with arrow function
+const isWebhookEvent = (data: unknown): data is WebhookEvent => {
   return (
     typeof data === 'object' &&
     data !== null &&
@@ -341,7 +447,7 @@ function isWebhookEvent(data: unknown): data is WebhookEvent {
     'timestamp' in data &&
     typeof (data as WebhookEvent).type === 'string'
   );
-}
+};
 
 // Usage
 if (isWebhookEvent(req.body)) {
@@ -376,13 +482,13 @@ type DeepReadonly<T> = {
 #### ✅ DO: Use ES Modules
 
 ```typescript
-// ✅ Good - ES modules
+// ✅ Good - ES modules with arrow functions
 import { logger, config } from '@kenchi/shared';
 import type { WebhookEvent } from '@kenchi/shared';
 
-export function processEvent(event: WebhookEvent): Promise<void> {
+export const processEvent = async (event: WebhookEvent): Promise<void> => {
   // Implementation
-}
+};
 ```
 
 #### ✅ DO: Separate Type and Value Imports
@@ -420,12 +526,12 @@ throw new ValidationError('Invalid email format', 'email', userInput);
 #### ✅ DO: Use Result Types for Expected Errors
 
 ```typescript
-// ✅ Good - Result type pattern
+// ✅ Good - Result type pattern with arrow function
 type Result<T, E = Error> = 
   | { success: true; data: T }
   | { success: false; error: E };
 
-async function fetchData(id: string): Promise<Result<Data, NotFoundError>> {
+const fetchData = async (id: string): Promise<Result<Data, NotFoundError>> => {
   try {
     const data = await repository.findById(id);
     if (!data) {
@@ -435,7 +541,7 @@ async function fetchData(id: string): Promise<Result<Data, NotFoundError>> {
   } catch (error) {
     return { success: false, error: error as Error };
   }
-}
+};
 ```
 
 #### ✅ DO: Handle Errors at Appropriate Levels
@@ -444,8 +550,8 @@ async function fetchData(id: string): Promise<Result<Data, NotFoundError>> {
 // ✅ Good - Error handling middleware
 app.use(errorHandler);
 
-// ✅ Good - Service-level error handling
-async function processRequest(req: Request): Promise<Response> {
+// ✅ Good - Service-level error handling with arrow function
+const processRequest = async (req: Request): Promise<Response> => {
   try {
     const result = await service.process(req.body);
     return Response.json(result);
@@ -455,13 +561,13 @@ async function processRequest(req: Request): Promise<Response> {
     }
     throw error; // Let middleware handle unexpected errors
   }
-}
+};
 ```
 
-#### ✅ DO: Use Map and Set for Elegant Error Handling
+#### ✅ DO: Prefer the Clearest Approach for Error Handling
 
 ```typescript
-// ✅ Good - Elegant error handling with Map and Set
+// ✅ Good - Use Map/Set when you have a real lookup table
 interface ErrorLike {
   readonly status?: number;
   readonly code?: string;
@@ -530,11 +636,22 @@ const handleErrorBad = (error: unknown, timeout: number): Error => {
 - **Readonly constants** - prevents mutations
 - **Cleaner code** - Map/Set initialization is declarative
 
+**Note:** Sometimes a plain `switch` statement is clearer and faster to read. Use Map/Set when you have a real lookup table or membership test, not as a blanket rule.
+
 ### Function Declarations vs Arrow Functions
 
-#### ✅ DO: Use Arrow Functions for Callbacks and Short Functions
+**Default to arrow functions. Use function declarations when required (overloads, generators) or when it improves API ergonomics.**
+
+**All examples in this document use arrow functions by default. Function declarations are used when required by TypeScript syntax or when they improve API ergonomics.**
+
+#### ✅ DO: Always Use Arrow Functions
 
 ```typescript
+// ✅ Good - Arrow functions for all functions
+const processEvent = (event: WebhookEvent): Promise<LLMAnalysisResult> => {
+  // Implementation
+};
+
 // ✅ Good - Arrow functions for callbacks
 const users = data.map(user => transformUser(user));
 const filtered = items.filter(item => item.active);
@@ -545,34 +662,26 @@ const formatDate = (date: Date): string => date.toISOString();
 const calculateTotal = (items: Item[]): number => 
   items.reduce((sum, item) => sum + item.price, 0);
 
+// ✅ Good - Arrow functions for async functions
+const fetchUserData = async (userId: string): Promise<UserData> => {
+  const user = await userRepository.findById(userId);
+  const profile = await profileRepository.findByUserId(userId);
+  return { user, profile };
+};
+
+// ✅ Good - Arrow functions for type guards
+const validateInput = (input: unknown): input is UserInput => {
+  return typeof input === 'object' && input !== null && 'email' in input;
+};
+
 // ✅ Good - Arrow functions in class methods (when appropriate)
 class EventProcessor {
   private processEvent = async (event: WebhookEvent): Promise<void> => {
     await this.repository.save(event);
   };
 }
-```
 
-#### ✅ DO: Use Function Declarations for Named Functions and Hoisting
-
-```typescript
-// ✅ Good - Function declaration for named, reusable functions
-async function fetchUserData(userId: string): Promise<UserData> {
-  const user = await userRepository.findById(userId);
-  const profile = await profileRepository.findByUserId(userId);
-  return { user, profile };
-}
-
-// ✅ Good - Function declaration for hoisting (if needed)
-function validateInput(input: unknown): input is UserInput {
-  return typeof input === 'object' && input !== null && 'email' in input;
-}
-```
-
-#### ✅ DO: Use Arrow Functions for Preserving `this` Context
-
-```typescript
-// ✅ Good - Arrow function preserves 'this'
+// ✅ Good - Arrow function preserves 'this' context
 class EventHandler {
   private events: Event[] = [];
   
@@ -581,35 +690,49 @@ class EventHandler {
     this.events.push(event);
     this.processEvent(event);
   };
-  
-  // ❌ Bad - Regular method loses 'this' when passed as callback
-  handleEventBad(event: Event): void {
-    this.events.push(event); // 'this' might be undefined
-  }
 }
 
 // Usage
 const handler = new EventHandler();
 document.addEventListener('click', handler.handleEvent); // ✅ Works
-document.addEventListener('click', handler.handleEventBad); // ❌ 'this' is lost
 ```
 
-#### ❌ DON'T: Use Arrow Functions for Methods That Need `this` Binding
+#### ✅ DO: Use Function Declarations When Required
 
 ```typescript
-// ❌ Bad - Arrow function in class method can't be overridden properly
-class BaseProcessor {
-  process = (data: unknown): void => {
-    // Can't be properly overridden in subclasses
-  };
-}
-
-// ✅ Good - Regular method can be overridden
-class BaseProcessor {
-  process(data: unknown): void {
-    // Can be properly overridden in subclasses
+// ✅ Good - Function declaration for overloads (required by TypeScript)
+function processEvent(event: CIFailureEvent): Promise<CIFailureResult>;
+function processEvent(event: GitHubPREvent): Promise<GitHubPRResult>;
+function processEvent(event: WebhookEvent): Promise<ProcessResult> {
+  switch (event.type) {
+    case 'ci_failure':
+      return processCIFailure(event);
+    case 'pr_opened':
+      return processPR(event);
   }
 }
+
+// ✅ Good - Generator functions must use function declarations
+async function* processStream(stream: ReadableStream): AsyncGenerator<Chunk> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      yield processChunk(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// ✅ Good - Function declaration when it improves API ergonomics
+function validateInput(input: unknown): input is UserInput {
+  return typeof input === 'object' && input !== null && 'email' in input;
+}
+
+// Note: Generator functions cannot use arrow function syntax
+// ❌ const processStream = async function* (...) => { ... } // Invalid syntax
 ```
 
 ### Async/Await Patterns
@@ -624,7 +747,7 @@ const fetchUserData = async (userId: string): Promise<UserData> => {
   return { user, profile };
 };
 
-// ✅ Good - Async/await with function declaration
+// ❌ Bad - Function declaration
 async function fetchUserData(userId: string): Promise<UserData> {
   const user = await userRepository.findById(userId);
   const profile = await profileRepository.findByUserId(userId);
@@ -642,18 +765,18 @@ const fetchUserData = (userId: string): Promise<UserData> => {
 #### ✅ DO: Handle Concurrent Operations
 
 ```typescript
-// ✅ Good - Parallel execution
-async function fetchAllData(userId: string): Promise<AllData> {
+// ✅ Good - Parallel execution with arrow function
+const fetchAllData = async (userId: string): Promise<AllData> => {
   const [user, profile, settings] = await Promise.all([
     userRepository.findById(userId),
     profileRepository.findByUserId(userId),
     settingsRepository.findByUserId(userId),
   ]);
   return { user, profile, settings };
-}
+};
 
 // ✅ Good - With error handling
-async function fetchAllData(userId: string): Promise<Result<AllData>> {
+const fetchAllData = async (userId: string): Promise<Result<AllData>> => {
   try {
     const [user, profile, settings] = await Promise.allSettled([
       userRepository.findById(userId),
@@ -669,7 +792,7 @@ async function fetchAllData(userId: string): Promise<Result<AllData>> {
   } catch (error) {
     return { success: false, error: error as Error };
   }
-}
+};
 ```
 
 #### ✅ DO: Use Async Iterators for Streams
@@ -697,8 +820,8 @@ async function* processStream(stream: ReadableStream): AsyncGenerator<Chunk> {
 #### ✅ DO: Use Try-Finally for Cleanup
 
 ```typescript
-// ✅ Good - Resource cleanup
-async function processFile(filePath: string): Promise<void> {
+// ✅ Good - Resource cleanup with arrow function
+const processFile = async (filePath: string): Promise<void> => {
   const fileHandle = await fs.open(filePath, 'r');
   try {
     const content = await fileHandle.readFile();
@@ -706,7 +829,7 @@ async function processFile(filePath: string): Promise<void> {
   } finally {
     await fileHandle.close();
   }
-}
+};
 ```
 
 #### ✅ DO: Use AbortController for Cancellation
@@ -727,22 +850,6 @@ const fetchWithTimeout = async (
     clearTimeout(timeoutId);
   }
 };
-
-// ✅ Good - Alternative with function declaration
-async function fetchWithTimeout(
-  url: string,
-  timeout: number
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    return response;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 ```
 
 ## Code Organization
@@ -769,23 +876,6 @@ const validateUserInput = async (input: UserInput): Promise<ValidationResult> =>
     : { valid: false, errors };
 };
 
-// ✅ Good - Single responsibility with function declaration
-async function validateUserInput(input: UserInput): Promise<ValidationResult> {
-  const errors: ValidationError[] = [];
-  
-  if (!input.email || !isValidEmail(input.email)) {
-    errors.push(new ValidationError('Invalid email', 'email', input.email));
-  }
-  
-  if (!input.password || input.password.length < 8) {
-    errors.push(new ValidationError('Password too short', 'password'));
-  }
-  
-  return errors.length === 0 
-    ? { valid: true }
-    : { valid: false, errors };
-}
-
 // ❌ Bad - Multiple responsibilities
 const processUser = async (input: unknown): Promise<User> => {
   // Validation, transformation, persistence all mixed together
@@ -799,11 +889,6 @@ const processUser = async (input: unknown): Promise<User> => {
 const calculateTotal = (items: Item[]): number => 
   items.reduce((sum, item) => sum + item.price, 0);
 
-// ✅ Good - Pure function with function declaration
-function calculateTotal(items: Item[]): number {
-  return items.reduce((sum, item) => sum + item.price, 0);
-}
-
 // ❌ Bad - Side effects
 let total = 0;
 const calculateTotal = (items: Item[]): void => {
@@ -811,22 +896,32 @@ const calculateTotal = (items: Item[]): void => {
 };
 ```
 
-#### ✅ DO: Use Function Overloading for Type Safety
+#### ✅ DO: Use Type Guards and Union Types Instead of Overloading
 
 ```typescript
-// ✅ Good - Function overloading (must use function declaration)
-function processEvent(event: CIFailureEvent): Promise<CIFailureResult>;
-function processEvent(event: GitHubPREvent): Promise<GitHubPRResult>;
-function processEvent(event: WebhookEvent): Promise<ProcessResult> {
+// ✅ Good - Use discriminated unions and type guards with arrow functions
+const processEvent = async (event: WebhookEvent): Promise<ProcessResult> => {
   switch (event.type) {
     case 'ci_failure':
       return processCIFailure(event);
     case 'pr_opened':
       return processPR(event);
+    default:
+      throw new Error(`Unknown event type: ${(event as WebhookEvent).type}`);
   }
-}
+};
 
-// Note: Arrow functions don't support overloading, use function declarations
+// ✅ Good - Alternative: Use separate functions with arrow functions
+const processCIFailureEvent = async (event: CIFailureEvent): Promise<CIFailureResult> => {
+  // Implementation
+};
+
+const processGitHubPREvent = async (event: GitHubPREvent): Promise<GitHubPRResult> => {
+  // Implementation
+};
+
+// Note: Function overloading requires function declarations, but we prefer arrow functions
+// Use discriminated unions and type guards instead
 ```
 
 ### Class Design
@@ -967,23 +1062,6 @@ class LazyValue<T> {
     return this.value;
   };
 }
-
-// ✅ Good - Alternative with regular method
-class LazyValue<T> {
-  private value: T | null = null;
-  private factory: () => T;
-  
-  constructor(factory: () => T) {
-    this.factory = factory;
-  }
-  
-  get(): T {
-    if (this.value === null) {
-      this.value = this.factory();
-    }
-    return this.value;
-  }
-}
 ```
 
 #### ✅ DO: Debounce/Throttle Expensive Operations
@@ -1031,13 +1109,6 @@ const validateEmail = (email: unknown): email is string => {
   return emailRegex.test(email) && email.length <= 254;
 };
 
-// ✅ Good - Input validation with function declaration (type guard)
-function validateEmail(email: unknown): email is string {
-  if (typeof email !== 'string') return false;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) && email.length <= 254;
-}
-
 // ✅ Good - Complex validation with arrow function
 const validateUserInput = (input: unknown): input is UserInput => {
   if (typeof input !== 'object' || input === null) return false;
@@ -1059,14 +1130,6 @@ const sanitizeString = (input: string): string =>
     .trim()
     .replace(/[<>]/g, '') // Remove potential HTML
     .slice(0, 1000); // Limit length
-
-// ✅ Good - Alternative with function declaration
-function sanitizeString(input: string): string {
-  return input
-    .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML
-    .slice(0, 1000); // Limit length
-}
 ```
 
 ### Secrets Management
@@ -1089,7 +1152,7 @@ if (!config.apiKey) {
 #### ✅ DO: Use Type-Safe Configuration
 
 ```typescript
-// ✅ Good - Type-safe config
+// ✅ Good - Type-safe config with arrow function
 interface Config {
   readonly apiKey: string;
   readonly databaseUrl: string;
@@ -1097,7 +1160,7 @@ interface Config {
   readonly nodeEnv: 'development' | 'production' | 'test';
 }
 
-function loadConfig(): Config {
+const loadConfig = (): Config => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY required');
   
@@ -1107,7 +1170,7 @@ function loadConfig(): Config {
     port: parseInt(process.env.PORT ?? '3000', 10),
     nodeEnv: (process.env.NODE_ENV as Config['nodeEnv']) ?? 'development',
   };
-}
+};
 ```
 
 ## Testing
@@ -1188,9 +1251,9 @@ expect(mockLogger.info).toHaveBeenCalledWith('Event processed', expect.any(Objec
  * const result = await processEvent(event);
  * ```
  */
-async function processEvent(event: WebhookEvent): Promise<LLMAnalysisResult> {
+const processEvent = async (event: WebhookEvent): Promise<LLMAnalysisResult> => {
   // Implementation
-}
+};
 ```
 
 #### ✅ DO: Use JSDoc for Complex Types
@@ -1562,7 +1625,8 @@ import type { EventRequest } from '../types/eventTypes.js';
 
 // ❌ Bad - Too many dependencies
 // services/api/src/routes/events.ts
-import { asyncHandler, validate, logger, config, errorHandler } from '@kenchi/shared';
+import { asyncHandler, validate, createLogger, config, errorHandler } from '@kenchi/shared';
+const logger = createLogger('api');
 import { eventHandler } from '../handlers/eventHandler.js';
 import { eventValidator } from '../validators/eventValidator.js';
 import { eventRepository } from '../repositories/eventRepository.js';
@@ -1622,7 +1686,9 @@ export const createEvent = asyncHandler(async (req, res) => {
 // Layer 2: Business Logic Layer
 // services/api/src/services/eventService.ts
 import { eventRepository } from '../repositories/eventRepository.js';
-import { logger } from '@kenchi/shared';
+import { createLogger } from '@kenchi/shared';
+
+const logger = createLogger('event-service'); // Service-scoped logger
 
 export const eventService = {
   createEvent: async (data: EventData): Promise<Event> => {
@@ -2255,8 +2321,8 @@ function validateUser(user: User): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
-// ✅ Good - Early exit
-function validateUser(user: User): ValidationResult {
+// ✅ Good - Early exit with arrow function
+const validateUser = (user: User): ValidationResult => {
   if (!user.email) {
     return { valid: false, errors: ['Email required'] };
   }
@@ -2268,35 +2334,35 @@ function validateUser(user: User): ValidationResult {
   }
   
   return { valid: true, errors: [] };
-}
+};
 ```
 
 #### ✅ DO: Batch Operations and Avoid N+1 Queries
 
 ```typescript
 // ❌ Bad - N+1 query problem
-async function processUsers(userIds: string[]): Promise<User[]> {
+const processUsers = async (userIds: string[]): Promise<User[]> => {
   const users: User[] = [];
   for (const id of userIds) {
     const user = await userRepository.findById(id); // N queries
     if (user) users.push(user);
   }
   return users;
-}
+};
 
-// ✅ Good - Single batch query
-async function processUsers(userIds: string[]): Promise<User[]> {
+// ✅ Good - Single batch query with arrow function
+const processUsers = async (userIds: string[]): Promise<User[]> => {
   return userRepository.findByIds(userIds); // 1 query
-}
+};
 ```
 
 #### ✅ DO: Use Lazy Evaluation and Memoization
 
 ```typescript
 // ❌ Bad - Eager evaluation, recomputed every time
-function getExpensiveData(): ExpensiveData {
+const getExpensiveData = (): ExpensiveData => {
   return performExpensiveComputation();
-}
+};
 
 // ✅ Good - Lazy evaluation with memoization
 class DataCache {
@@ -2339,17 +2405,17 @@ const result = parts.join(', ');
 
 ```typescript
 // ❌ Bad - Load all data into memory
-async function processLargeFile(filePath: string): Promise<void> {
+const processLargeFile = async (filePath: string): Promise<void> => {
   const content = await fs.readFile(filePath, 'utf-8'); // Loads entire file
   const processed = processContent(content);
   await fs.writeFile(outputPath, processed);
-}
+};
 
-// ✅ Good - Stream processing
+// ✅ Good - Stream processing with arrow function
 import { pipeline } from 'stream/promises';
 import { createReadStream, createWriteStream } from 'fs';
 
-async function processLargeFile(filePath: string): Promise<void> {
+const processLargeFile = async (filePath: string): Promise<void> => {
   const readStream = createReadStream(filePath);
   const transformStream = new Transform({
     transform(chunk, encoding, callback) {
@@ -2360,29 +2426,29 @@ async function processLargeFile(filePath: string): Promise<void> {
   const writeStream = createWriteStream(outputPath);
   
   await pipeline(readStream, transformStream, writeStream);
-}
+};
 ```
 
 #### ✅ DO: Parallelize Independent Operations
 
 ```typescript
 // ❌ Bad - Sequential execution
-async function fetchAllData(): Promise<AllData> {
+const fetchAllData = async (): Promise<AllData> => {
   const user = await fetchUser();
   const profile = await fetchProfile();
   const settings = await fetchSettings();
   return { user, profile, settings };
-}
+};
 
-// ✅ Good - Parallel execution
-async function fetchAllData(): Promise<AllData> {
+// ✅ Good - Parallel execution with arrow function
+const fetchAllData = async (): Promise<AllData> => {
   const [user, profile, settings] = await Promise.all([
     fetchUser(),
     fetchProfile(),
     fetchSettings(),
   ]);
   return { user, profile, settings };
-}
+};
 ```
 
 ### Performance Checklist
@@ -2450,8 +2516,9 @@ private validateKeywords(actions: Action[]): void {
 #### ✅ DO: Use Proper Logger Instead of console
 
 ```typescript
-// ✅ Good - Use shared logger
-import { logger } from '@kenchi/shared';
+// ✅ Good - Use service-scoped logger from shared
+import { createLogger } from '@kenchi/shared';
+const logger = createLogger('api'); // Service name in every log line
 
 logger.warn('Validation failed', { eventId, errors });
 logger.error('API call failed', { error, attempt });
@@ -2459,6 +2526,9 @@ logger.error('API call failed', { error, attempt });
 // ❌ Bad - Direct console usage
 console.warn('[Service] Validation failed:', errors);
 console.error('[Service] Error:', error);
+
+// ❌ Bad - Hand-rolled logger implementation
+const logger = { info: () => {}, error: () => {} };
 ```
 
 #### ✅ DO: Avoid Array.from().some() When Iterating Sets/Maps

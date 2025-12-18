@@ -8,17 +8,9 @@ import {
   ALIGNMENT_ADJUSTMENTS,
   SIMILARITY_THRESHOLDS,
   MATCHING_CONFIG,
+  METRIC_KEYWORDS,
+  INVALID_CAUSE_KEYWORDS,
 } from '../constants.js';
-
-/**
- * Metric keywords to detect in reasoning.
- */
-const METRIC_KEYWORDS: Readonly<Set<string>> = new Set([
-  'cpu',
-  'memory',
-  'error rate',
-  'latency',
-]);
 
 /**
  * Checks if reasoning contains metric keywords.
@@ -99,10 +91,7 @@ import {
   MIN_ACTIONS_FOR_BONUS,
 } from '../constants.js';
 
-/**
- * Invalid cause keywords.
- */
-const INVALID_CAUSE_KEYWORDS: Readonly<Set<string>> = new Set(['unknown']);
+// INVALID_CAUSE_KEYWORDS imported from constants.ts
 
 /**
  * Checks if cause is valid (not "unknown" or too short).
