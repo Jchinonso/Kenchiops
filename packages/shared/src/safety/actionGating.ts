@@ -5,16 +5,7 @@
 
 import type { ActionProposal, SafetyLevel } from '../types.js';
 import { clampConfidenceScore } from './confidenceUtils.js';
-
-/**
- * Confidence score thresholds for gating decisions.
- */
-const CONFIDENCE_THRESHOLDS = {
-  VERY_LOW: 0.3,
-  LOW: 0.5,
-  MEDIUM: 0.7,
-  HIGH: 0.85,
-} as const;
+import { CONFIDENCE_THRESHOLDS } from '../constants.js';
 
 /**
  * Gating decision type.

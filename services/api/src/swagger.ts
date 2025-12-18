@@ -7,7 +7,7 @@
  */
 
 import { Express } from "express";
-import { logger } from "@kenchi/shared";
+import { logger, SERVICE_PORTS, HTTP_STATUS } from "@kenchi/shared";
 
 /**
  * Basic OpenAPI 3.0 specification.
@@ -22,7 +22,7 @@ export const openApiSpec = {
   },
   servers: [
     {
-      url: "http://localhost:3000",
+      url: `http://localhost:${SERVICE_PORTS.API}`,
       description: "Development server",
     },
   ],
@@ -32,7 +32,7 @@ export const openApiSpec = {
         summary: "Health check",
         description: "Returns the health status of the API service",
         responses: {
-          "200": {
+          [String(HTTP_STATUS.OK)]: {
             description: "Service is healthy",
             content: {
               "application/json": {
@@ -77,7 +77,7 @@ export const openApiSpec = {
           },
         },
         responses: {
-          "200": {
+          [String(HTTP_STATUS.OK)]: {
             description: "Webhook received",
             content: {
               "application/json": {
@@ -117,7 +117,7 @@ export const openApiSpec = {
           },
         },
         responses: {
-          "200": {
+          [String(HTTP_STATUS.OK)]: {
             description: "Event accepted",
             content: {
               "application/json": {
@@ -131,7 +131,7 @@ export const openApiSpec = {
               },
             },
           },
-          "400": {
+          [String(HTTP_STATUS.BAD_REQUEST)]: {
             description: "Validation error",
           },
         },

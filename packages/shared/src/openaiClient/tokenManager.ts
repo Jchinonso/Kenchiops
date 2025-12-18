@@ -6,6 +6,7 @@
  */
 
 import type { Event, Evidence } from '../types.js';
+import { OPENAI_CONSTANTS } from '../constants.js';
 import {
   buildAnalysisPrompt,
   estimateTokens,
@@ -24,7 +25,7 @@ export const manageTokenBudget = (
   // Quick estimate: if evidence is small, likely no truncation needed
   // This avoids building the full prompt unnecessarily
   const evidenceSize = estimateEvidenceSize(evidence);
-  const estimatedTokens = evidenceSize + 1000; // Add buffer for event/instructions
+  const estimatedTokens = evidenceSize + OPENAI_CONSTANTS.TOKEN_BUFFER;
 
   if (estimatedTokens <= maxTokens) {
     // Verify with actual prompt (only if estimate suggests it might fit)
@@ -37,7 +38,7 @@ export const manageTokenBudget = (
   }
 
   // Truncate evidence to fit budget
-  const evidenceTokenBudget = maxTokens - 1000; // Reserve 1000 for event and instructions
+  const evidenceTokenBudget = maxTokens - OPENAI_CONSTANTS.TOKEN_BUFFER;
   return truncateEvidence(evidence, evidenceTokenBudget);
 };
 
@@ -50,18 +51,18 @@ const estimateEvidenceSize = (evidence: Evidence): number => {
   
   // Rough token estimate: ~4 chars per token
   if (evidence.logs) {
-    size += evidence.logs.reduce((sum, log) => sum + log.message.length, 0) / 4;
+    size += evidence.logs.reduce((sum, log) => sum + log.message.length, 0) / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
   }
   if (evidence.gitHistory) {
     size += evidence.gitHistory.reduce((sum, commit) => 
-      sum + (commit.message?.length || 0) + commit.sha.length, 0) / 4;
+      sum + (commit.message?.length || 0) + commit.sha.length, 0) / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
   }
   if (evidence.relatedDocs) {
     size += evidence.relatedDocs.reduce((sum, doc) => 
-      sum + (doc.title?.length || 0) + (doc.excerpt?.length || 0), 0) / 4;
+      sum + (doc.title?.length || 0) + (doc.excerpt?.length || 0), 0) / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
   }
   if (evidence.metrics) {
-    size += JSON.stringify(evidence.metrics).length / 4;
+    size += JSON.stringify(evidence.metrics).length / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
   }
   
   return Math.ceil(size);

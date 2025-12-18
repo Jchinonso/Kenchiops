@@ -17,7 +17,9 @@ import {
   logger, 
   errorHandler, 
   asyncHandler, 
-  requestLogger 
+  requestLogger,
+  HTTP_STATUS,
+  SERVICE_PORTS,
 } from '@kenchi/shared';
 
 const app = express();
@@ -69,7 +71,7 @@ app.post('/webhook/pull_request', asyncHandler(async (req: Request<unknown, unkn
   const { action, pull_request, repository } = req.body;
   
   if (action !== 'opened') {
-    return res.status(200).send('Event not handled');
+    return res.status(HTTP_STATUS.OK).send('Event not handled');
   }
   
   logger.info('PR opened', { 
@@ -100,7 +102,7 @@ app.post('/webhook/pull_request', asyncHandler(async (req: Request<unknown, unkn
     logger.error('Error posting comment', { error: String(error) });
   }
   
-  res.status(200).send('Webhook received');
+  res.status(HTTP_STATUS.OK).send('Webhook received');
 }));
 
 /**
@@ -112,7 +114,7 @@ app.post('/webhook/check_run', asyncHandler(async (req: Request<unknown, unknown
   const { action, check_run, repository } = req.body;
   
   if (action !== 'completed' || check_run.conclusion === 'success') {
-    return res.status(200).send('Event not handled');
+    return res.status(HTTP_STATUS.OK).send('Event not handled');
   }
   
   logger.warn('CI check failed', { 
@@ -125,14 +127,14 @@ app.post('/webhook/check_run', asyncHandler(async (req: Request<unknown, unknown
   // TODO: Check confidence before posting suggestions
   // TODO: Post comment or create issue with suggestions
   
-  res.status(200).send('Webhook received');
+  res.status(HTTP_STATUS.OK).send('Webhook received');
 }));
 
 /**
  * Health check endpoint
  */
 app.get('/health', (_req: Request, res: Response) => {
-  res.status(200).json({ 
+  res.status(HTTP_STATUS.OK).json({ 
     status: 'ok', 
     service: 'github-app',
     timestamp: new Date().toISOString(),
@@ -144,7 +146,7 @@ app.get('/health', (_req: Request, res: Response) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-const PORT = config.PORT || 3002;
+const PORT = config.PORT || SERVICE_PORTS.GITHUB_APP;
 app.listen(PORT, () => {
   logger.info('GitHub App service started', { port: PORT, environment: config.NODE_ENV });
 });

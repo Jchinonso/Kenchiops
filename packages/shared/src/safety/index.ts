@@ -21,11 +21,10 @@ export { checkConsistency } from './consistency.js';
 // Backward compatibility functions
 import type { LLMAnalysisResult, Evidence } from '../types.js';
 import { calculateConfidenceScore } from './confidenceScoring.js';
-
-/**
- * Default confidence threshold for action decisions.
- */
-const DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
+import {
+  DEFAULT_CONFIDENCE_THRESHOLD,
+  PLACEHOLDER_CONFIDENCE_SCORE,
+} from '../constants.js';
 
 /**
  * Calculate confidence score for a result (backward compatible).
@@ -38,7 +37,7 @@ export const confidenceScore = (result: unknown): number => {
     return 0;
   }
   // TODO: Implement proper validation and scoring
-  return 0.5;
+  return PLACEHOLDER_CONFIDENCE_SCORE;
 };
 
 /**

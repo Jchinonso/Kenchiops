@@ -14,22 +14,18 @@ import { validateAgainstKnowledgeBase } from './knowledgeValidation.js';
 import { checkConsistency } from './consistency.js';
 import { determineGatingDecision } from './actionGating.js';
 import { clampConfidenceScore } from './confidenceUtils.js';
+import { BASE_CONFIDENCE_SCORES } from '../constants.js';
 
 /**
  * LLM confidence level to base score mapping.
  */
 const CONFIDENCE_LEVEL_MAP: Readonly<Map<string, number>> = new Map([
-  ['very_high', 0.85],
-  ['high', 0.75],
-  ['medium', 0.60],
-  ['low', 0.40],
-  ['very_low', 0.20],
+  ['very_high', BASE_CONFIDENCE_SCORES.VERY_HIGH],
+  ['high', BASE_CONFIDENCE_SCORES.HIGH],
+  ['medium', BASE_CONFIDENCE_SCORES.MEDIUM],
+  ['low', BASE_CONFIDENCE_SCORES.LOW],
+  ['very_low', BASE_CONFIDENCE_SCORES.VERY_LOW],
 ]);
-
-/**
- * Default base score when confidence level is not specified.
- */
-const DEFAULT_BASE_SCORE = 0.5;
 
 /**
  * Determines base score from LLM's stated confidence level.
@@ -39,10 +35,10 @@ const DEFAULT_BASE_SCORE = 0.5;
  */
 export const getBaseScore = (llmConfidence?: string): number => {
   if (!llmConfidence) {
-    return DEFAULT_BASE_SCORE;
+    return BASE_CONFIDENCE_SCORES.DEFAULT;
   }
   
-  return CONFIDENCE_LEVEL_MAP.get(llmConfidence) ?? DEFAULT_BASE_SCORE;
+  return CONFIDENCE_LEVEL_MAP.get(llmConfidence) ?? BASE_CONFIDENCE_SCORES.DEFAULT;
 };
 
 /**
