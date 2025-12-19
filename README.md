@@ -1,5 +1,11 @@
 # Kenchi - AI-Driven DevOps Assistant
 
+[![CI](https://github.com/kenchiops/Kenchiops/actions/workflows/ci.yml/badge.svg)](https://github.com/kenchiops/Kenchiops/actions/workflows/ci.yml)
+[![Security](https://github.com/kenchiops/Kenchiops/actions/workflows/security.yml/badge.svg)](https://github.com/kenchiops/Kenchiops/actions/workflows/security.yml)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/typescript-5.3+-blue)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+
 A TypeScript monorepo for an AI-driven DevOps assistant that integrates with Slack, GitHub, and n8n workflows.
 
 > **Quick Start**: See [QUICKSTART.md](./QUICKSTART.md) for a step-by-step setup guide.  
