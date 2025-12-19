@@ -14,10 +14,10 @@ import {
   type LLMAnalysisResult,
   type ConfidenceScoreResult,
   LLMError,
-} from '@kenchi/shared';
-import type { SlackCommandPayload, SlackMentionPayload } from '../types/slackTypes.js';
+} from "@kenchi/shared";
+import type { SlackCommandPayload, SlackMentionPayload } from "../types/slackTypes.js";
 
-const logger = createLogger('slack-bot');
+const logger = createLogger("slack-bot");
 
 /**
  * Singleton OpenAI client instance
@@ -30,7 +30,7 @@ let openaiClientInstance: OpenAIClient | null = null;
 export const getOpenAIClient = (): OpenAIClient => {
   if (!openaiClientInstance) {
     openaiClientInstance = new OpenAIClient();
-    logger.info('OpenAI client initialized');
+    logger.info("OpenAI client initialized");
   }
   return openaiClientInstance;
 };
@@ -47,17 +47,13 @@ export interface AnalysisResult {
 /**
  * Creates an Event from a Slack command
  */
-export const createEventFromCommand = (
-  userId: string,
-  channelId: string,
-  text: string
-): Event => ({
+export const createEventFromCommand = (userId: string, channelId: string, text: string): Event => ({
   id: `evt_${Date.now()}_${userId}`,
-  type: 'MANUAL_TRIGGER',
-  source: 'slack',
+  type: "MANUAL_TRIGGER",
+  source: "slack",
   timestamp: new Date().toISOString(),
-  severity: 'medium',
-  title: 'Slack Command Analysis',
+  severity: "medium",
+  title: "Slack Command Analysis",
   payload: {
     command: text,
     user_id: userId,
@@ -78,11 +74,11 @@ export const createEventFromMention = (
   threadTs?: string
 ): Event => ({
   id: `evt_${Date.now()}_${userId}`,
-  type: 'MANUAL_TRIGGER',
-  source: 'slack',
+  type: "MANUAL_TRIGGER",
+  source: "slack",
   timestamp: new Date().toISOString(),
-  severity: 'medium',
-  title: 'Slack Mention Analysis',
+  severity: "medium",
+  title: "Slack Mention Analysis",
   payload: {
     query,
     channel: channelId,
@@ -110,7 +106,7 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
   const evidence = createMinimalEvidence(event.id);
   const openaiClient = getOpenAIClient();
 
-  logger.info('Starting analysis', {
+  logger.info("Starting analysis", {
     eventId: event.id,
     type: event.type,
   });
@@ -119,7 +115,7 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
     const analysis = await openaiClient.analyzeIncident(event, evidence);
     const confidence = calculateConfidenceScore(analysis, evidence);
 
-    logger.info('Analysis completed', {
+    logger.info("Analysis completed", {
       eventId: event.id,
       confidence: confidence.finalScore,
       gating: confidence.gatingDecision,
@@ -127,13 +123,13 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
 
     return { analysis, confidence, event };
   } catch (error) {
-    logger.error('Analysis failed', {
+    logger.error("Analysis failed", {
       eventId: event.id,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     });
 
     throw new LLMError(
-      `Failed to analyze: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to analyze: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
 };

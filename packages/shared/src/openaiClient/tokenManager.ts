@@ -1,17 +1,13 @@
 /**
  * OpenAI Token Budget Management Module
- * 
+ *
  * Handles token budget estimation and evidence truncation to ensure
  * prompts fit within model token limits.
  */
 
-import type { Event, Evidence } from '../types.js';
-import { OPENAI_CONSTANTS } from '../constants.js';
-import {
-  buildAnalysisPrompt,
-  estimateTokens,
-  truncateEvidence,
-} from '../prompts.js';
+import type { Event, Evidence } from "../types.js";
+import { OPENAI_CONSTANTS } from "../constants.js";
+import { buildAnalysisPrompt, estimateTokens, truncateEvidence } from "../prompts.js";
 
 /**
  * Manages token budget by truncating evidence if necessary.
@@ -48,23 +44,30 @@ export const manageTokenBudget = (
  */
 const estimateEvidenceSize = (evidence: Evidence): number => {
   let size = 0;
-  
+
   // Rough token estimate: ~4 chars per token
   if (evidence.logs) {
-    size += evidence.logs.reduce((sum, log) => sum + log.message.length, 0) / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
+    size +=
+      evidence.logs.reduce((sum, log) => sum + log.message.length, 0) /
+      OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
   }
   if (evidence.gitHistory) {
-    size += evidence.gitHistory.reduce((sum, commit) => 
-      sum + (commit.message?.length || 0) + commit.sha.length, 0) / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
+    size +=
+      evidence.gitHistory.reduce(
+        (sum, commit) => sum + (commit.message?.length || 0) + commit.sha.length,
+        0
+      ) / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
   }
   if (evidence.relatedDocs) {
-    size += evidence.relatedDocs.reduce((sum, doc) => 
-      sum + (doc.title?.length || 0) + (doc.excerpt?.length || 0), 0) / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
+    size +=
+      evidence.relatedDocs.reduce(
+        (sum, doc) => sum + (doc.title?.length || 0) + (doc.excerpt?.length || 0),
+        0
+      ) / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
   }
   if (evidence.metrics) {
     size += JSON.stringify(evidence.metrics).length / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE;
   }
-  
+
   return Math.ceil(size);
 };
-

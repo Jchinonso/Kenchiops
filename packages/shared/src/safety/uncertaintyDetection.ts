@@ -3,12 +3,12 @@
  * Detects hedging language and uncertainty markers in LLM outputs.
  */
 
-import { UNCERTAINTY_PENALTIES, UNCERTAINTY_PATTERNS } from '../constants.js';
+import { UNCERTAINTY_PENALTIES, UNCERTAINTY_PATTERNS } from "../constants.js";
 
 /**
  * Detects hedging language and uncertainty markers in text.
  * Returns penalty value (negative number) based on detected uncertainty.
- * 
+ *
  * @param text - Text to analyze for uncertainty markers
  * @returns Penalty value (0 to -0.3)
  */

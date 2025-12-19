@@ -8,10 +8,10 @@
  * GitHub webhook actions for pull requests
  */
 export const GITHUB_PR_ACTIONS = {
-  OPENED: 'opened',
-  CLOSED: 'closed',
-  REOPENED: 'reopened',
-  SYNCHRONIZE: 'synchronize',
+  OPENED: "opened",
+  CLOSED: "closed",
+  REOPENED: "reopened",
+  SYNCHRONIZE: "synchronize",
 } as const;
 
 export type GitHubPRAction = (typeof GITHUB_PR_ACTIONS)[keyof typeof GITHUB_PR_ACTIONS];
@@ -20,25 +20,24 @@ export type GitHubPRAction = (typeof GITHUB_PR_ACTIONS)[keyof typeof GITHUB_PR_A
  * GitHub webhook actions for check runs
  */
 export const GITHUB_CHECK_ACTIONS = {
-  COMPLETED: 'completed',
-  CREATED: 'created',
-  REREQUESTED: 'rerequested',
+  COMPLETED: "completed",
+  CREATED: "created",
+  REREQUESTED: "rerequested",
 } as const;
 
-export type GitHubCheckAction =
-  (typeof GITHUB_CHECK_ACTIONS)[keyof typeof GITHUB_CHECK_ACTIONS];
+export type GitHubCheckAction = (typeof GITHUB_CHECK_ACTIONS)[keyof typeof GITHUB_CHECK_ACTIONS];
 
 /**
  * GitHub check run conclusions
  */
 export const GITHUB_CHECK_CONCLUSIONS = {
-  SUCCESS: 'success',
-  FAILURE: 'failure',
-  NEUTRAL: 'neutral',
-  CANCELLED: 'cancelled',
-  SKIPPED: 'skipped',
-  TIMED_OUT: 'timed_out',
-  ACTION_REQUIRED: 'action_required',
+  SUCCESS: "success",
+  FAILURE: "failure",
+  NEUTRAL: "neutral",
+  CANCELLED: "cancelled",
+  SKIPPED: "skipped",
+  TIMED_OUT: "timed_out",
+  ACTION_REQUIRED: "action_required",
 } as const;
 
 export type GitHubCheckConclusion =
@@ -117,7 +116,7 @@ export interface GitHubInstallation {
  * Health check response
  */
 export interface HealthResponse {
-  readonly status: 'ok' | 'error';
+  readonly status: "ok" | "error";
   readonly service: string;
   readonly timestamp: string;
   readonly uptime: number;

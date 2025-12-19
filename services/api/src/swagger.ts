@@ -1,6 +1,6 @@
 /**
  * OpenAPI/Swagger documentation setup.
- * 
+ *
  * TODO: Install swagger-ui-express and swagger-jsdoc for full functionality
  * npm install swagger-ui-express swagger-jsdoc
  * npm install --save-dev @types/swagger-ui-express @types/swagger-jsdoc
@@ -142,11 +142,11 @@ export const openApiSpec = {
 
 /**
  * Setup Swagger UI (placeholder - requires swagger-ui-express).
- * 
+ *
  * TODO: Uncomment and install dependencies:
- * 
+ *
  * import swaggerUi from 'swagger-ui-express';
- * 
+ *
  * export function setupSwagger(app: Express): void {
  *   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
  * }
@@ -155,4 +155,3 @@ export function setupSwagger(_app: Express): void {
   // TODO: Implement when swagger-ui-express is installed
   logger.info("Swagger documentation available at /api-docs (when implemented)");
 }
-

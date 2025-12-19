@@ -6,17 +6,17 @@
 // ==================== Event Types ====================
 
 export type EventType =
-  | 'CICD_FAILURE'
-  | 'DEPLOYMENT_FAILURE'
-  | 'MONITORING_ALERT'
-  | 'PERFORMANCE_DEGRADATION'
-  | 'ERROR_SPIKE'
-  | 'SECURITY_ALERT'
-  | 'MANUAL_TRIGGER'
-  | 'SERVICE_DOWN'
-  | 'TEST_FAILURE';
+  | "CICD_FAILURE"
+  | "DEPLOYMENT_FAILURE"
+  | "MONITORING_ALERT"
+  | "PERFORMANCE_DEGRADATION"
+  | "ERROR_SPIKE"
+  | "SECURITY_ALERT"
+  | "MANUAL_TRIGGER"
+  | "SERVICE_DOWN"
+  | "TEST_FAILURE";
 
-export type EventSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+export type EventSeverity = "critical" | "high" | "medium" | "low" | "info";
 
 export interface EventPayload {
   // CI/CD fields
@@ -44,7 +44,7 @@ export interface EventPayload {
 }
 
 export interface EventMetadata {
-  environment?: 'production' | 'staging' | 'development' | 'test';
+  environment?: "production" | "staging" | "development" | "test";
   service?: string;
   team?: string;
   tags?: string[];
@@ -76,7 +76,7 @@ export interface Event {
 export interface LogEntry {
   source?: string;
   timestamp?: string;
-  level?: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
+  level?: "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
   message: string;
   stackTrace?: string;
   metadata?: Record<string, any>;
@@ -129,17 +129,17 @@ export interface SystemState {
     deployedAt?: string;
     deployedBy?: string;
   };
-  serviceHealth?: Record<string, 'healthy' | 'degraded' | 'down' | 'unknown'>;
+  serviceHealth?: Record<string, "healthy" | "degraded" | "down" | "unknown">;
   dependencies?: Array<{
     name: string;
-    status: 'up' | 'down' | 'degraded';
+    status: "up" | "down" | "degraded";
     responseTime?: number;
   }>;
 }
 
 export interface KnowledgeDocument {
   id: string;
-  type: 'runbook' | 'past_incident' | 'documentation' | 'best_practice' | 'playbook';
+  type: "runbook" | "past_incident" | "documentation" | "best_practice" | "playbook";
   title: string;
   excerpt?: string;
   similarity: number;
@@ -155,7 +155,7 @@ export interface RelatedEvent {
   eventId: string;
   type: string;
   timestamp: string;
-  correlation: 'before' | 'after' | 'concurrent';
+  correlation: "before" | "after" | "concurrent";
 }
 
 export interface Evidence {
@@ -173,9 +173,9 @@ export interface Evidence {
 // ==================== LLM Analysis Result Types ====================
 
 export interface ImpactAssessment {
-  scope?: 'isolated' | 'service' | 'system' | 'organization';
-  affectedUsers?: 'none' | 'few' | 'some' | 'many' | 'all';
-  businessImpact?: 'none' | 'low' | 'medium' | 'high' | 'critical';
+  scope?: "isolated" | "service" | "system" | "organization";
+  affectedUsers?: "none" | "few" | "some" | "many" | "all";
+  businessImpact?: "none" | "low" | "medium" | "high" | "critical";
   description?: string;
 }
 
@@ -183,11 +183,11 @@ export interface LLMRecommendedAction {
   actionType: string;
   description: string;
   reasoning?: string;
-  priority?: 'immediate' | 'high' | 'medium' | 'low';
+  priority?: "immediate" | "high" | "medium" | "low";
 }
 
 export interface EvidenceReference {
-  type: 'log' | 'metric' | 'commit' | 'document' | 'related_incident';
+  type: "log" | "metric" | "commit" | "document" | "related_incident";
   reference: string;
   relevance?: string;
 }
@@ -197,7 +197,7 @@ export interface LLMAnalysisResult {
   summary: string;
   identifiedCause?: string;
   impactAssessment?: ImpactAssessment;
-  confidence?: 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
+  confidence?: "very_low" | "low" | "medium" | "high" | "very_high";
   confidenceScore?: number;
   reasoning?: string;
   recommendedActions?: LLMRecommendedAction[];
@@ -213,37 +213,37 @@ export interface LLMAnalysisResult {
 // ==================== Action Proposal Types ====================
 
 export type ActionType =
-  | 'rollback_deployment'
-  | 'restart_service'
-  | 'scale_service'
-  | 'add_environment_variable'
-  | 'update_configuration'
-  | 'rerun_pipeline'
-  | 'notify_team'
-  | 'run_diagnostic'
-  | 'update_documentation'
-  | 'create_ticket'
-  | 'post_comment'
-  | 'execute_runbook'
-  | 'manual_investigation';
+  | "rollback_deployment"
+  | "restart_service"
+  | "scale_service"
+  | "add_environment_variable"
+  | "update_configuration"
+  | "rerun_pipeline"
+  | "notify_team"
+  | "run_diagnostic"
+  | "update_documentation"
+  | "create_ticket"
+  | "post_comment"
+  | "execute_runbook"
+  | "manual_investigation";
 
-export type ActionPriority = 'immediate' | 'high' | 'medium' | 'low';
+export type ActionPriority = "immediate" | "high" | "medium" | "low";
 
-export type SafetyLevel = 'safe' | 'low_risk' | 'medium_risk' | 'high_risk' | 'dangerous';
+export type SafetyLevel = "safe" | "low_risk" | "medium_risk" | "high_risk" | "dangerous";
 
 export type ActionStatus =
-  | 'proposed'
-  | 'approved'
-  | 'rejected'
-  | 'executing'
-  | 'completed'
-  | 'failed'
-  | 'rolled_back';
+  | "proposed"
+  | "approved"
+  | "rejected"
+  | "executing"
+  | "completed"
+  | "failed"
+  | "rolled_back";
 
 export interface ExecutionDetails {
   api?: string;
   endpoint?: string;
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   parameters?: Record<string, any>;
   command?: string;
   script?: string;
@@ -305,7 +305,7 @@ export interface ConfidenceScoreResult {
   finalScore: number;
   breakdown: ConfidenceScoreBreakdown;
   reasoning: string[];
-  gatingDecision: 'auto_approve' | 'require_approval' | 'block';
+  gatingDecision: "auto_approve" | "require_approval" | "block";
 }
 
 // ==================== Validation Types ====================

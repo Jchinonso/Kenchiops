@@ -3,20 +3,20 @@
  * Determines whether actions should be auto-approved, require approval, or be blocked.
  */
 
-import type { ActionProposal, SafetyLevel } from '../types.js';
-import { clampConfidenceScore } from './confidenceUtils.js';
+import type { ActionProposal, SafetyLevel } from "../types.js";
+import { clampConfidenceScore } from "./confidenceUtils.js";
 import {
   CONFIDENCE_THRESHOLDS,
   AUTO_APPROVABLE_SAFETY_LEVELS,
   VALID_SAFETY_LEVELS,
   CONFIDENCE_MESSAGES,
   type ConfidenceRange,
-} from '../constants.js';
+} from "../constants.js";
 
 /**
  * Gating decision type.
  */
-type GatingDecision = 'auto_approve' | 'require_approval' | 'block';
+type GatingDecision = "auto_approve" | "require_approval" | "block";
 
 /**
  * Action gating result type.
@@ -29,38 +29,38 @@ export type ActionGatingResult = {
 
 /**
  * Validates that action has required properties.
- * 
+ *
  * @param action - Action proposal to validate
  * @returns True if action is valid
  */
 const isValidAction = (action: unknown): action is ActionProposal => {
-  if (!action || typeof action !== 'object') {
+  if (!action || typeof action !== "object") {
     return false;
   }
-  
+
   const act = action as Record<string, unknown>;
-  
+
   // Check required properties exist
-  if (typeof act.safetyLevel !== 'string') {
+  if (typeof act.safetyLevel !== "string") {
     return false;
   }
-  
+
   // Validate safetyLevel is a known value
   return VALID_SAFETY_LEVELS.has(act.safetyLevel as string);
 };
 
 /**
  * Determines confidence range from score.
- * 
+ *
  * @param score - Confidence score (already validated/clamped)
  * @returns Confidence range category
  */
 const getConfidenceRange = (score: number): ConfidenceRange => {
-  if (score < CONFIDENCE_THRESHOLDS.VERY_LOW) return 'very_low';
-  if (score < CONFIDENCE_THRESHOLDS.LOW) return 'low';
-  if (score < CONFIDENCE_THRESHOLDS.MEDIUM) return 'medium';
-  if (score < CONFIDENCE_THRESHOLDS.HIGH) return 'high';
-  return 'very_high';
+  if (score < CONFIDENCE_THRESHOLDS.VERY_LOW) return "very_low";
+  if (score < CONFIDENCE_THRESHOLDS.LOW) return "low";
+  if (score < CONFIDENCE_THRESHOLDS.MEDIUM) return "medium";
+  if (score < CONFIDENCE_THRESHOLDS.HIGH) return "high";
+  return "very_high";
 };
 
 /**
@@ -81,45 +81,45 @@ const createGatingResult = (
 /**
  * Determines basic gating decision based on confidence score.
  * Robust: Validates and clamps input to handle edge cases.
- * 
+ *
  * @param confidenceScore - Confidence score from analysis (0-1, will be clamped if invalid)
  * @returns Basic gating decision
  */
 export const determineGatingDecision = (confidenceScore: number): GatingDecision => {
   const clampedScore = clampConfidenceScore(confidenceScore);
-  
+
   if (clampedScore < CONFIDENCE_THRESHOLDS.VERY_LOW) {
-    return 'block';
+    return "block";
   }
-  
+
   if (clampedScore < CONFIDENCE_THRESHOLDS.MEDIUM) {
-    return 'require_approval';
+    return "require_approval";
   }
-  
+
   // High confidence can auto-approve safe actions
   // But this is further refined by determineActionGating()
-  return 'auto_approve';
+  return "auto_approve";
 };
 
 /**
  * Message factory for high confidence ranges with safety level context.
  */
 const createHighConfidenceMessage = (
-  range: 'high' | 'very_high',
+  range: "high" | "very_high",
   safetyLevel: SafetyLevel,
   canAutoApprove: boolean
 ): string => {
   const baseMessage = CONFIDENCE_MESSAGES[range];
-  
+
   if (canAutoApprove) {
     return `${baseMessage} with safe/low-risk action. Auto-approved.`;
   }
-  
-  if (safetyLevel === 'medium_risk') {
+
+  if (safetyLevel === "medium_risk") {
     return `${baseMessage} but medium risk. Approval required.`;
   }
-  
-  return 'High/dangerous risk. Always requires approval.';
+
+  return "High/dangerous risk. Always requires approval.";
 };
 
 /**
@@ -140,11 +140,7 @@ export const determineActionGating = (
   // Validate action
   if (!isValidAction(action)) {
     // Defensive: treat invalid action as highest risk, lowest confidence
-    return createGatingResult(
-      true,
-      false,
-      'Invalid action proposal. Manual review required.'
-    );
+    return createGatingResult(true, false, "Invalid action proposal. Manual review required.");
   }
 
   // Validate and clamp confidence score
@@ -153,33 +149,23 @@ export const determineActionGating = (
   const range = getConfidenceRange(clampedScore);
 
   // Very low confidence: block everything
-  if (range === 'very_low') {
-    return createGatingResult(
-      true,
-      false,
-      CONFIDENCE_MESSAGES.very_low
-    );
+  if (range === "very_low") {
+    return createGatingResult(true, false, CONFIDENCE_MESSAGES.very_low);
   }
 
   // Low/Medium confidence: always require approval
-  if (range === 'low' || range === 'medium') {
-    return createGatingResult(
-      true,
-      true,
-      CONFIDENCE_MESSAGES[range]
-    );
+  if (range === "low" || range === "medium") {
+    return createGatingResult(true, true, CONFIDENCE_MESSAGES[range]);
   }
 
   // High/Very high confidence: check safety level
   // Defensive: if safetyLevel is somehow invalid, treat as high risk
   const canAutoApprove =
-    VALID_SAFETY_LEVELS.has(safetyLevel) &&
-    AUTO_APPROVABLE_SAFETY_LEVELS.has(safetyLevel);
-  
+    VALID_SAFETY_LEVELS.has(safetyLevel) && AUTO_APPROVABLE_SAFETY_LEVELS.has(safetyLevel);
+
   return createGatingResult(
     !canAutoApprove,
     true,
     createHighConfidenceMessage(range, safetyLevel, canAutoApprove)
   );
 };
-

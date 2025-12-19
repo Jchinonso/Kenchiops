@@ -4,18 +4,18 @@
  * Handles GitHub pull request webhook events
  */
 
-import { createLogger } from '@kenchi/shared';
-import type { PullRequestWebhook } from '../types/githubTypes.js';
-import { GITHUB_PR_ACTIONS } from '../types/githubTypes.js';
+import { createLogger } from "@kenchi/shared";
+import type { PullRequestWebhook } from "../types/githubTypes.js";
+import { GITHUB_PR_ACTIONS } from "../types/githubTypes.js";
 import {
   createEventFromPR,
   performAnalysis,
   postPRComment,
   formatAnalysisComment,
-} from '../services/githubService.js';
-import { appConfig } from '../config/appConfig.js';
+} from "../services/githubService.js";
+import { appConfig } from "../config/appConfig.js";
 
-const logger = createLogger('github-app');
+const logger = createLogger("github-app");
 
 /**
  * Result of handling a PR webhook
@@ -34,7 +34,7 @@ export const handlePullRequestOpened = async (
 ): Promise<PRHandlerResult> => {
   const { pull_request, repository } = webhook;
 
-  logger.info('PR opened', {
+  logger.info("PR opened", {
     title: pull_request.title,
     repository: repository.full_name,
     number: pull_request.number,
@@ -42,17 +42,16 @@ export const handlePullRequestOpened = async (
   });
 
   // Get installation ID from webhook or config
-  const installationId =
-    webhook.installation?.id ?? appConfig.github.installationId;
+  const installationId = webhook.installation?.id ?? appConfig.github.installationId;
 
   if (!installationId) {
-    logger.warn('No installation ID available for PR', {
+    logger.warn("No installation ID available for PR", {
       repository: repository.full_name,
       prNumber: pull_request.number,
     });
     return {
       handled: false,
-      message: 'No GitHub installation ID configured',
+      message: "No GitHub installation ID configured",
     };
   }
 
@@ -62,7 +61,7 @@ export const handlePullRequestOpened = async (
     const result = await performAnalysis(event);
 
     // Only post comment if confidence is sufficient
-    if (result.confidence.gatingDecision !== 'block') {
+    if (result.confidence.gatingDecision !== "block") {
       const comment = formatAnalysisComment(result);
       await postPRComment(
         installationId,
@@ -74,12 +73,12 @@ export const handlePullRequestOpened = async (
 
       return {
         handled: true,
-        message: 'PR analyzed and comment posted',
+        message: "PR analyzed and comment posted",
         eventId: event.id,
       };
     }
 
-    logger.info('Skipped posting comment due to low confidence', {
+    logger.info("Skipped posting comment due to low confidence", {
       eventId: event.id,
       confidence: result.confidence.finalScore,
       gating: result.confidence.gatingDecision,
@@ -87,19 +86,19 @@ export const handlePullRequestOpened = async (
 
     return {
       handled: true,
-      message: 'PR analyzed but comment skipped due to low confidence',
+      message: "PR analyzed but comment skipped due to low confidence",
       eventId: event.id,
     };
   } catch (error) {
-    logger.error('Error handling PR opened', {
+    logger.error("Error handling PR opened", {
       repository: repository.full_name,
       prNumber: pull_request.number,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     });
 
     return {
       handled: false,
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: error instanceof Error ? error.message : "Unknown error",
     };
   }
 };
@@ -107,9 +106,7 @@ export const handlePullRequestOpened = async (
 /**
  * Handle pull request webhook
  */
-export const handlePullRequest = async (
-  webhook: PullRequestWebhook
-): Promise<PRHandlerResult> => {
+export const handlePullRequest = async (webhook: PullRequestWebhook): Promise<PRHandlerResult> => {
   const { action } = webhook;
 
   // Only handle opened PRs for now
@@ -117,7 +114,7 @@ export const handlePullRequest = async (
     return handlePullRequestOpened(webhook);
   }
 
-  logger.info('PR event not handled', {
+  logger.info("PR event not handled", {
     action,
     repository: webhook.repository.full_name,
     prNumber: webhook.pull_request.number,

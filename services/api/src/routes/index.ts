@@ -4,11 +4,11 @@
  * Centralizes all route registration for the API service
  */
 
-import type { Express } from 'express';
-import { healthRoutes } from './healthRoutes.js';
-import { webhookRoutes } from './webhookRoutes.js';
-import { eventRoutes } from './eventRoutes.js';
-import { analysisRoutes } from './analysisRoutes.js';
+import type { Express } from "express";
+import { healthRoutes } from "./healthRoutes.js";
+import { webhookRoutes } from "./webhookRoutes.js";
+import { eventRoutes } from "./eventRoutes.js";
+import { analysisRoutes } from "./analysisRoutes.js";
 
 /**
  * Register all routes on the Express app

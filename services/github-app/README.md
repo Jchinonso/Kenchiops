@@ -11,6 +11,7 @@ This service handles GitHub webhook events for PRs, CI checks, and other reposit
 ## Setup
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -40,4 +41,3 @@ This service handles GitHub webhook events for PRs, CI checks, and other reposit
 ## Safety Notes
 
 **IMPORTANT**: The LLM provides analysis and suggestions only. All actual decisions and side-effects (like posting comments or creating issues) are handled by deterministic code after validation. Never execute LLM outputs directly.
-

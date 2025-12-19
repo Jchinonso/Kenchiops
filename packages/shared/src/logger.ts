@@ -50,7 +50,7 @@ class LoggerImpl implements Logger {
   private readonly serviceName: string;
   private readonly minLevel: LogLevel;
 
-  constructor(serviceName: string = 'kenchi', minLevel: LogLevel = LogLevel.INFO) {
+  constructor(serviceName: string = "kenchi", minLevel: LogLevel = LogLevel.INFO) {
     this.serviceName = serviceName;
     this.minLevel = minLevel;
   }
@@ -122,15 +122,11 @@ class LoggerImpl implements Logger {
 /**
  * Create a logger instance for a specific service.
  */
-export const createLogger = (
-  serviceName: string,
-  minLevel: LogLevel = LogLevel.INFO
-): Logger => {
+export const createLogger = (serviceName: string, minLevel: LogLevel = LogLevel.INFO): Logger => {
   return new LoggerImpl(serviceName, minLevel);
 };
 
 /**
  * Default logger instance.
  */
-export const logger = createLogger('kenchi');
-
+export const logger = createLogger("kenchi");

@@ -4,10 +4,10 @@
  * Handles CI failure analysis endpoints
  */
 
-import { Router } from 'express';
-import { asyncHandler, validate, validators, HTTP_STATUS } from '@kenchi/shared';
-import { performAnalysis } from '../services/analysisService.js';
-import type { AnalyzeRequest } from '../types/apiTypes.js';
+import { Router } from "express";
+import { asyncHandler, validate, validators, HTTP_STATUS } from "@kenchi/shared";
+import { performAnalysis } from "../services/analysisService.js";
+import type { AnalyzeRequest } from "../types/apiTypes.js";
 
 const router = Router();
 
@@ -19,7 +19,7 @@ const router = Router();
  * structured analysis with recommendations
  */
 router.post(
-  '/api/analyze',
+  "/api/analyze",
   validate({
     body: {
       failure_log: (v) => validators.required(v) && validators.string(v),

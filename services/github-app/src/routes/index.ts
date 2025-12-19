@@ -4,9 +4,9 @@
  * Centralizes all route registration for the GitHub App service
  */
 
-import type { Express } from 'express';
-import { healthRoutes } from './healthRoutes.js';
-import { webhookRoutes } from './webhookRoutes.js';
+import type { Express } from "express";
+import { healthRoutes } from "./healthRoutes.js";
+import { webhookRoutes } from "./webhookRoutes.js";
 
 /**
  * Register all routes on the Express app

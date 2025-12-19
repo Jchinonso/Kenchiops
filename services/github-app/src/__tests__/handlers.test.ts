@@ -2,74 +2,78 @@
  * Unit tests for GitHub App Handlers
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import type { PullRequestWebhook, CheckRunWebhook } from '../types/githubTypes.js';
-import { GITHUB_PR_ACTIONS, GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from '../types/githubTypes.js';
+import { describe, it, expect, beforeEach, jest } from "@jest/globals";
+import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
+import {
+  GITHUB_PR_ACTIONS,
+  GITHUB_CHECK_ACTIONS,
+  GITHUB_CHECK_CONCLUSIONS,
+} from "../types/githubTypes.js";
 
 // Mock the service module before importing handlers
-jest.mock('../services/githubService.js', () => ({
+jest.mock("../services/githubService.js", () => ({
   createEventFromPR: jest.fn(() => ({
-    id: 'pr_test_123',
-    type: 'MANUAL_TRIGGER',
-    source: 'github',
+    id: "pr_test_123",
+    type: "MANUAL_TRIGGER",
+    source: "github",
   })),
   createEventFromCheckRun: jest.fn(() => ({
-    id: 'check_test_123',
-    type: 'CICD_FAILURE',
-    source: 'github',
+    id: "check_test_123",
+    type: "CICD_FAILURE",
+    source: "github",
   })),
   performAnalysis: jest.fn(() =>
     Promise.resolve({
       analysis: {
-        eventId: 'test',
-        summary: 'Test summary',
-        confidence: 'high',
+        eventId: "test",
+        summary: "Test summary",
+        confidence: "high",
         analyzedAt: new Date().toISOString(),
       },
       confidence: {
         finalScore: 0.85,
-        gatingDecision: 'auto_approve',
+        gatingDecision: "auto_approve",
         breakdown: {},
         reasoning: [],
       },
-      event: { id: 'test' },
+      event: { id: "test" },
     })
   ),
   postPRComment: jest.fn(() => Promise.resolve()),
-  formatAnalysisComment: jest.fn(() => '## AI Analysis\n\nTest comment'),
+  formatAnalysisComment: jest.fn(() => "## AI Analysis\n\nTest comment"),
 }));
 
-describe('GitHub App Handlers', () => {
-  describe('Pull Request Handler', () => {
+describe("GitHub App Handlers", () => {
+  describe("Pull Request Handler", () => {
     const mockPRWebhook: PullRequestWebhook = {
       action: GITHUB_PR_ACTIONS.OPENED,
       pull_request: {
         number: 123,
-        title: 'Test PR',
-        body: 'Test body',
-        head: { sha: 'abc123', ref: 'feature' },
-        base: { sha: 'def456', ref: 'main' },
-        user: { login: 'testuser' },
+        title: "Test PR",
+        body: "Test body",
+        head: { sha: "abc123", ref: "feature" },
+        base: { sha: "def456", ref: "main" },
+        user: { login: "testuser" },
       },
       repository: {
-        full_name: 'owner/repo',
-        owner: { login: 'owner' },
-        name: 'repo',
+        full_name: "owner/repo",
+        owner: { login: "owner" },
+        name: "repo",
       },
       installation: { id: 12345 },
     };
 
-    it('should have correct webhook structure for opened PR', () => {
-      expect(mockPRWebhook.action).toBe('opened');
+    it("should have correct webhook structure for opened PR", () => {
+      expect(mockPRWebhook.action).toBe("opened");
       expect(mockPRWebhook.pull_request.number).toBe(123);
-      expect(mockPRWebhook.repository.full_name).toBe('owner/repo');
+      expect(mockPRWebhook.repository.full_name).toBe("owner/repo");
     });
 
-    it('should extract installation ID from webhook', () => {
+    it("should extract installation ID from webhook", () => {
       expect(mockPRWebhook.installation?.id).toBe(12345);
     });
 
-    it('should have all required PR fields', () => {
+    it("should have all required PR fields", () => {
       const { pull_request } = mockPRWebhook;
       expect(pull_request.title).toBeDefined();
       expect(pull_request.head.sha).toBeDefined();
@@ -78,39 +82,39 @@ describe('GitHub App Handlers', () => {
     });
   });
 
-  describe('Check Run Handler', () => {
+  describe("Check Run Handler", () => {
     const mockCheckRunWebhook: CheckRunWebhook = {
       action: GITHUB_CHECK_ACTIONS.COMPLETED,
       check_run: {
         id: 456,
-        name: 'CI Build',
+        name: "CI Build",
         conclusion: GITHUB_CHECK_CONCLUSIONS.FAILURE,
         output: {
-          title: 'Build Failed',
-          summary: 'Build failed due to errors',
-          text: 'Error details here',
+          title: "Build Failed",
+          summary: "Build failed due to errors",
+          text: "Error details here",
         },
       },
       repository: {
-        full_name: 'owner/repo',
-        owner: { login: 'owner' },
-        name: 'repo',
+        full_name: "owner/repo",
+        owner: { login: "owner" },
+        name: "repo",
       },
       installation: { id: 12345 },
     };
 
-    it('should have correct webhook structure for failed check', () => {
-      expect(mockCheckRunWebhook.action).toBe('completed');
-      expect(mockCheckRunWebhook.check_run.conclusion).toBe('failure');
+    it("should have correct webhook structure for failed check", () => {
+      expect(mockCheckRunWebhook.action).toBe("completed");
+      expect(mockCheckRunWebhook.check_run.conclusion).toBe("failure");
     });
 
-    it('should include check run output', () => {
+    it("should include check run output", () => {
       const { output } = mockCheckRunWebhook.check_run;
-      expect(output.title).toBe('Build Failed');
+      expect(output.title).toBe("Build Failed");
       expect(output.summary).toBeDefined();
     });
 
-    it('should correctly identify failure vs success', () => {
+    it("should correctly identify failure vs success", () => {
       const failedCheck = { ...mockCheckRunWebhook };
       const successCheck = {
         ...mockCheckRunWebhook,
@@ -120,27 +124,27 @@ describe('GitHub App Handlers', () => {
         },
       };
 
-      expect(failedCheck.check_run.conclusion).not.toBe('success');
-      expect(successCheck.check_run.conclusion).toBe('success');
+      expect(failedCheck.check_run.conclusion).not.toBe("success");
+      expect(successCheck.check_run.conclusion).toBe("success");
     });
   });
 
-  describe('Type Definitions', () => {
-    it('should have correct PR actions', () => {
-      expect(GITHUB_PR_ACTIONS.OPENED).toBe('opened');
-      expect(GITHUB_PR_ACTIONS.CLOSED).toBe('closed');
-      expect(GITHUB_PR_ACTIONS.SYNCHRONIZE).toBe('synchronize');
+  describe("Type Definitions", () => {
+    it("should have correct PR actions", () => {
+      expect(GITHUB_PR_ACTIONS.OPENED).toBe("opened");
+      expect(GITHUB_PR_ACTIONS.CLOSED).toBe("closed");
+      expect(GITHUB_PR_ACTIONS.SYNCHRONIZE).toBe("synchronize");
     });
 
-    it('should have correct check actions', () => {
-      expect(GITHUB_CHECK_ACTIONS.COMPLETED).toBe('completed');
-      expect(GITHUB_CHECK_ACTIONS.CREATED).toBe('created');
+    it("should have correct check actions", () => {
+      expect(GITHUB_CHECK_ACTIONS.COMPLETED).toBe("completed");
+      expect(GITHUB_CHECK_ACTIONS.CREATED).toBe("created");
     });
 
-    it('should have correct check conclusions', () => {
-      expect(GITHUB_CHECK_CONCLUSIONS.SUCCESS).toBe('success');
-      expect(GITHUB_CHECK_CONCLUSIONS.FAILURE).toBe('failure');
-      expect(GITHUB_CHECK_CONCLUSIONS.CANCELLED).toBe('cancelled');
+    it("should have correct check conclusions", () => {
+      expect(GITHUB_CHECK_CONCLUSIONS.SUCCESS).toBe("success");
+      expect(GITHUB_CHECK_CONCLUSIONS.FAILURE).toBe("failure");
+      expect(GITHUB_CHECK_CONCLUSIONS.CANCELLED).toBe("cancelled");
     });
   });
 });

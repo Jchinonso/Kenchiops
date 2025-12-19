@@ -8,17 +8,12 @@
  * All actual decisions and side-effects are handled by deterministic code after validation.
  */
 
-import express from 'express';
-import {
-  createLogger,
-  errorHandler,
-  requestLogger,
-  defaultRateLimiter,
-} from '@kenchi/shared';
-import { registerRoutes } from './routes/index.js';
-import { appConfig } from './config/appConfig.js';
+import express from "express";
+import { createLogger, errorHandler, requestLogger, defaultRateLimiter } from "@kenchi/shared";
+import { registerRoutes } from "./routes/index.js";
+import { appConfig } from "./config/appConfig.js";
 
-const logger = createLogger('api');
+const logger = createLogger("api");
 
 /**
  * Create and configure Express application
@@ -47,7 +42,7 @@ const startServer = (): void => {
   const app = createApp();
 
   app.listen(appConfig.port, () => {
-    logger.info('API service started', {
+    logger.info("API service started", {
       port: appConfig.port,
       environment: appConfig.environment,
     });

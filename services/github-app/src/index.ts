@@ -9,16 +9,12 @@
  * are handled by deterministic code after validation.
  */
 
-import express from 'express';
-import {
-  createLogger,
-  errorHandler,
-  requestLogger,
-} from '@kenchi/shared';
-import { registerRoutes } from './routes/index.js';
-import { appConfig } from './config/appConfig.js';
+import express from "express";
+import { createLogger, errorHandler, requestLogger } from "@kenchi/shared";
+import { registerRoutes } from "./routes/index.js";
+import { appConfig } from "./config/appConfig.js";
 
-const logger = createLogger('github-app');
+const logger = createLogger("github-app");
 
 /**
  * Create and configure Express application
@@ -46,7 +42,7 @@ const startServer = (): void => {
   const app = createApp();
 
   app.listen(appConfig.port, () => {
-    logger.info('GitHub App service started', {
+    logger.info("GitHub App service started", {
       port: appConfig.port,
       environment: appConfig.environment,
     });

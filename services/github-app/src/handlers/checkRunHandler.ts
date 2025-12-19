@@ -4,19 +4,16 @@
  * Handles GitHub check run webhook events (CI failures)
  */
 
-import { createLogger } from '@kenchi/shared';
-import type { CheckRunWebhook } from '../types/githubTypes.js';
-import {
-  GITHUB_CHECK_ACTIONS,
-  GITHUB_CHECK_CONCLUSIONS,
-} from '../types/githubTypes.js';
+import { createLogger } from "@kenchi/shared";
+import type { CheckRunWebhook } from "../types/githubTypes.js";
+import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
 import {
   createEventFromCheckRun,
   performAnalysis,
   formatAnalysisComment,
-} from '../services/githubService.js';
+} from "../services/githubService.js";
 
-const logger = createLogger('github-app');
+const logger = createLogger("github-app");
 
 /**
  * Result of handling a check run webhook
@@ -36,7 +33,7 @@ export const handleCheckRunFailure = async (
 ): Promise<CheckRunHandlerResult> => {
   const { check_run, repository } = webhook;
 
-  logger.warn('CI check failed', {
+  logger.warn("CI check failed", {
     name: check_run.name,
     repository: repository.full_name,
     conclusion: check_run.conclusion,
@@ -50,7 +47,7 @@ export const handleCheckRunFailure = async (
     // Format the analysis for logging/returning
     const analysisComment = formatAnalysisComment(result);
 
-    logger.info('Check run failure analyzed', {
+    logger.info("Check run failure analyzed", {
       eventId: event.id,
       confidence: result.confidence.finalScore,
       gating: result.confidence.gatingDecision,
@@ -61,20 +58,20 @@ export const handleCheckRunFailure = async (
 
     return {
       handled: true,
-      message: 'Check run failure analyzed',
+      message: "Check run failure analyzed",
       eventId: event.id,
       analysis: analysisComment,
     };
   } catch (error) {
-    logger.error('Error handling check run failure', {
+    logger.error("Error handling check run failure", {
       checkName: check_run.name,
       repository: repository.full_name,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     });
 
     return {
       handled: false,
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: error instanceof Error ? error.message : "Unknown error",
     };
   }
 };
@@ -101,11 +98,9 @@ const shouldAnalyzeCheckRun = (webhook: CheckRunWebhook): boolean => {
 /**
  * Handle check run webhook
  */
-export const handleCheckRun = async (
-  webhook: CheckRunWebhook
-): Promise<CheckRunHandlerResult> => {
+export const handleCheckRun = async (webhook: CheckRunWebhook): Promise<CheckRunHandlerResult> => {
   if (!shouldAnalyzeCheckRun(webhook)) {
-    logger.info('Check run event not analyzed', {
+    logger.info("Check run event not analyzed", {
       action: webhook.action,
       conclusion: webhook.check_run.conclusion,
       repository: webhook.repository.full_name,
@@ -113,7 +108,7 @@ export const handleCheckRun = async (
 
     return {
       handled: false,
-      message: 'Check run event not analyzed (not a failure)',
+      message: "Check run event not analyzed (not a failure)",
     };
   }
 

@@ -3,44 +3,33 @@
  * Ensures recommended actions address the identified root cause.
  */
 
-import type { LLMAnalysisResult } from '../types.js';
-import {
-  CONSISTENCY_ADJUSTMENTS,
-  RELEVANCE_THRESHOLDS,
-  RELEVANCE_RULES,
-} from '../constants.js';
+import type { LLMAnalysisResult } from "../types.js";
+import { CONSISTENCY_ADJUSTMENTS, RELEVANCE_THRESHOLDS, RELEVANCE_RULES } from "../constants.js";
 
 /**
  * Checks if action matches cause based on relevance rules.
  */
-const isActionRelevant = (
-  cause: string,
-  actionDesc: string,
-  actionType: string
-): boolean => {
+const isActionRelevant = (cause: string, actionDesc: string, actionType: string): boolean => {
   const normalizedCause = cause.toLowerCase();
   const normalizedDesc = actionDesc.toLowerCase();
   const normalizedType = actionType.toLowerCase();
 
   return RELEVANCE_RULES.some((rule) => {
-    const causeMatches = rule.causeKeywords.some((keyword) =>
-      normalizedCause.includes(keyword)
-    );
-    
+    const causeMatches = rule.causeKeywords.some((keyword) => normalizedCause.includes(keyword));
+
     if (!causeMatches) {
       return false;
     }
 
     return rule.actionKeywords.some(
-      (keyword) =>
-        normalizedType.includes(keyword) || normalizedDesc.includes(keyword)
+      (keyword) => normalizedType.includes(keyword) || normalizedDesc.includes(keyword)
     );
   });
 };
 
 /**
  * Checks consistency between identified cause and recommended actions.
- * 
+ *
  * @param analysis - LLM analysis result
  * @returns Consistency adjustment (-0.1 to 0.05)
  */
@@ -62,7 +51,7 @@ export const checkConsistency = (analysis: LLMAnalysisResult): number => {
   if (relevanceRatio >= RELEVANCE_THRESHOLDS.MIN_FOR_POSITIVE) {
     return CONSISTENCY_ADJUSTMENTS.HIGH_RELEVANCE;
   }
-  
+
   if (relevanceRatio === 0) {
     return CONSISTENCY_ADJUSTMENTS.NO_RELEVANCE;
   }

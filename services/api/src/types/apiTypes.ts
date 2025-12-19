@@ -4,7 +4,7 @@
  * Types specific to the API service
  */
 
-import type { Event, Evidence, LLMAnalysisResult } from '@kenchi/shared';
+import type { Event, Evidence, LLMAnalysisResult } from "@kenchi/shared";
 
 /**
  * CI failure analysis request payload
@@ -22,7 +22,7 @@ export interface AnalyzeResponse {
   readonly analysis: string;
   readonly identified_cause: string | undefined;
   readonly confidence: number;
-  readonly recommended_actions: LLMAnalysisResult['recommendedActions'];
+  readonly recommended_actions: LLMAnalysisResult["recommendedActions"];
   readonly full_analysis: LLMAnalysisResult;
   readonly repository: string;
 }
@@ -46,7 +46,7 @@ export interface AnalysisContext {
  * Health check response
  */
 export interface HealthResponse {
-  readonly status: 'ok' | 'error';
+  readonly status: "ok" | "error";
   readonly service: string;
   readonly timestamp: string;
   readonly uptime: number;

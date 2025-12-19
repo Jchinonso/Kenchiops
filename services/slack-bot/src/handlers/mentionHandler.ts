@@ -3,53 +3,49 @@
  * Processes @kenchi mentions and returns AI analysis.
  */
 
-import type { AppMentionEvent, SayFn, SayArguments } from '@slack/bolt';
-import { createLogger, TIME_CONSTANTS } from '@kenchi/shared';
-import { formatAnalysisMessage, formatErrorMessage } from '../formatters.js';
-import {
-  createEventFromMention,
-  performAnalysis,
-} from '../services/analysisService.js';
-import type { SlackBlock } from '../types/slackTypes.js';
+import type { AppMentionEvent, SayFn, SayArguments } from "@slack/bolt";
+import { createLogger, TIME_CONSTANTS } from "@kenchi/shared";
+import { formatAnalysisMessage, formatErrorMessage } from "../formatters.js";
+import { createEventFromMention, performAnalysis } from "../services/analysisService.js";
+import type { SlackBlock } from "../types/slackTypes.js";
 
 // Type for Slack blocks compatible with Bolt
-type SlackBlocks = NonNullable<SayArguments['blocks']>;
+type SlackBlocks = NonNullable<SayArguments["blocks"]>;
 
-const logger = createLogger('slack-bot');
+const logger = createLogger("slack-bot");
 
 /**
  * Extracts query from mention text by removing bot mentions.
  */
-const extractQueryFromMention = (text: string): string =>
-  text.replace(/<@[^>]+>/g, '').trim();
+const extractQueryFromMention = (text: string): string => text.replace(/<@[^>]+>/g, "").trim();
 
 /**
  * Creates feedback buttons for the analysis response.
  */
 const createFeedbackButtons = (eventId: string): SlackBlock[] => [
   {
-    type: 'actions',
+    type: "actions",
     elements: [
       {
-        type: 'button',
+        type: "button",
         text: {
-          type: 'plain_text',
-          text: '👍 Helpful',
+          type: "plain_text",
+          text: "👍 Helpful",
           emoji: true,
         },
-        style: 'primary',
+        style: "primary",
         value: eventId,
-        action_id: 'feedback_helpful',
+        action_id: "feedback_helpful",
       },
       {
-        type: 'button',
+        type: "button",
         text: {
-          type: 'plain_text',
-          text: '👎 Not helpful',
+          type: "plain_text",
+          text: "👎 Not helpful",
           emoji: true,
         },
         value: eventId,
-        action_id: 'feedback_not_helpful',
+        action_id: "feedback_not_helpful",
       },
     ],
   },
@@ -61,11 +57,8 @@ const createFeedbackButtons = (eventId: string): SlackBlock[] => [
  * @param event - Slack app mention event
  * @param say - Function to send messages
  */
-export const handleAppMention = async (
-  event: AppMentionEvent,
-  say: SayFn
-): Promise<void> => {
-  logger.info('Bot mentioned', {
+export const handleAppMention = async (event: AppMentionEvent, say: SayFn): Promise<void> => {
+  logger.info("Bot mentioned", {
     text: event.text,
     user: event.user,
     channel: event.channel,
@@ -78,7 +71,7 @@ export const handleAppMention = async (
     ).toISOString();
 
     // Ensure user is defined (required for analysis)
-    const userId = event.user ?? 'unknown';
+    const userId = event.user ?? "unknown";
 
     const analysisEvent = createEventFromMention(
       userId,
@@ -95,7 +88,7 @@ export const handleAppMention = async (
 
     const { analysis, confidence } = await performAnalysis(eventWithCorrectTime);
 
-    logger.info('Mention analysis completed', {
+    logger.info("Mention analysis completed", {
       eventId: analysisEvent.id,
       confidence: confidence.finalScore,
     });
@@ -113,13 +106,13 @@ export const handleAppMention = async (
       thread_ts: event.ts,
     });
   } catch (error) {
-    logger.error('Error processing app mention', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    logger.error("Error processing app mention", {
+      error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
     });
 
     const errorBlocks = formatErrorMessage(
-      error instanceof Error ? error : new Error('Unknown error')
+      error instanceof Error ? error : new Error("Unknown error")
     );
 
     await say({

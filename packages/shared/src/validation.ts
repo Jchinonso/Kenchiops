@@ -2,9 +2,9 @@
  * Request validation utilities.
  */
 
-import type { Request, Response, NextFunction } from 'express';
-import { ValidationError } from './errors.js';
-import { EMAIL_REGEX, DEFAULT_VALIDATION_ERROR_MESSAGE } from './constants.js';
+import type { Request, Response, NextFunction } from "express";
+import { ValidationError } from "./errors.js";
+import { EMAIL_REGEX, DEFAULT_VALIDATION_ERROR_MESSAGE } from "./constants.js";
 
 /**
  * Validator function type.
@@ -23,7 +23,7 @@ export interface ValidationSchema {
 
 /**
  * Validates a data source against its schema.
- * 
+ *
  * @param source - The data source to validate (req.body, req.params, etc.)
  * @param schema - The validation schema to apply
  * @param prefix - Prefix for error messages (e.g., "body", "params")
@@ -39,7 +39,7 @@ const validateSource = (
     const value = source[key];
     const result = validator(value);
     if (result !== true) {
-      const message = typeof result === 'string' ? result : DEFAULT_VALIDATION_ERROR_MESSAGE;
+      const message = typeof result === "string" ? result : DEFAULT_VALIDATION_ERROR_MESSAGE;
       errors.push(`${prefix}.${key}: ${message}`);
     }
   }
@@ -54,11 +54,11 @@ type ValidationSource = {
 /**
  * Validation middleware factory.
  * Creates Express middleware that validates request data against a schema.
- * 
+ *
  * @param schema - The validation schema to apply
  * @returns Express middleware function
  * @throws {ValidationError} If validation fails
- * 
+ *
  * @example
  * ```typescript
  * const validateRequest = validate({
@@ -67,7 +67,7 @@ type ValidationSource = {
  *     name: (v) => validators.required(v) && validators.string(v),
  *   },
  * });
- * 
+ *
  * app.post('/users', validateRequest, handler);
  * ```
  */
@@ -92,7 +92,7 @@ export const validate = (schema: ValidationSchema) => {
     }
 
     if (errors.length > 0) {
-      throw new ValidationError('Validation failed', { errors });
+      throw new ValidationError("Validation failed", { errors });
     }
 
     next();
@@ -101,7 +101,7 @@ export const validate = (schema: ValidationSchema) => {
 
 /**
  * Common validators for request validation.
- * 
+ *
  * @example
  * ```typescript
  * const schema = {
@@ -118,8 +118,8 @@ export const validators = {
    * Validates that a value is required (not undefined, null, or empty string).
    */
   required: (value: unknown): boolean | string => {
-    if (value === undefined || value === null || value === '') {
-      return 'is required';
+    if (value === undefined || value === null || value === "") {
+      return "is required";
     }
     return true;
   },
@@ -128,8 +128,8 @@ export const validators = {
    * Validates that a value is a string.
    */
   string: (value: unknown): boolean | string => {
-    if (typeof value !== 'string') {
-      return 'must be a string';
+    if (typeof value !== "string") {
+      return "must be a string";
     }
     return true;
   },
@@ -138,8 +138,8 @@ export const validators = {
    * Validates that a value is a number.
    */
   number: (value: unknown): boolean | string => {
-    if (typeof value !== 'number' || Number.isNaN(value)) {
-      return 'must be a number';
+    if (typeof value !== "number" || Number.isNaN(value)) {
+      return "must be a number";
     }
     return true;
   },
@@ -153,60 +153,66 @@ export const validators = {
       return stringResult;
     }
     if (!EMAIL_REGEX.test(value as string)) {
-      return 'must be a valid email';
+      return "must be a valid email";
     }
     return true;
   },
 
   /**
    * Creates a validator that checks minimum string length.
-   * 
+   *
    * @param min - Minimum required length
    * @returns Validator function
    */
-  minLength: (min: number) => (value: unknown): boolean | string => {
-    const stringResult = validators.string(value);
-    if (stringResult !== true) {
-      return stringResult;
-    }
-    if ((value as string).length < min) {
-      return `must be at least ${min} characters`;
-    }
-    return true;
-  },
+  minLength:
+    (min: number) =>
+    (value: unknown): boolean | string => {
+      const stringResult = validators.string(value);
+      if (stringResult !== true) {
+        return stringResult;
+      }
+      if ((value as string).length < min) {
+        return `must be at least ${min} characters`;
+      }
+      return true;
+    },
 
   /**
    * Creates a validator that checks maximum string length.
-   * 
+   *
    * @param max - Maximum allowed length
    * @returns Validator function
    */
-  maxLength: (max: number) => (value: unknown): boolean | string => {
-    const stringResult = validators.string(value);
-    if (stringResult !== true) {
-      return stringResult;
-    }
-    if ((value as string).length > max) {
-      return `must be at most ${max} characters`;
-    }
-    return true;
-  },
+  maxLength:
+    (max: number) =>
+    (value: unknown): boolean | string => {
+      const stringResult = validators.string(value);
+      if (stringResult !== true) {
+        return stringResult;
+      }
+      if ((value as string).length > max) {
+        return `must be at most ${max} characters`;
+      }
+      return true;
+    },
 
   /**
    * Creates a validator that checks if value is one of the allowed values.
-   * 
+   *
    * @param allowed - Array of allowed values
    * @returns Validator function
-   * 
+   *
    * @example
    * ```typescript
    * const statusValidator = validators.oneOf(['active', 'inactive', 'pending']);
    * ```
    */
-  oneOf: <T>(allowed: readonly T[]) => (value: unknown): boolean | string => {
-    if (!allowed.includes(value as T)) {
-      return `must be one of: ${allowed.join(', ')}`;
-    }
-    return true;
-  },
+  oneOf:
+    <T>(allowed: readonly T[]) =>
+    (value: unknown): boolean | string => {
+      if (!allowed.includes(value as T)) {
+        return `must be one of: ${allowed.join(", ")}`;
+      }
+      return true;
+    },
 } as const;

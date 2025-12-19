@@ -19,9 +19,9 @@ export const CONFIDENCE_THRESHOLDS = {
 export const BASE_CONFIDENCE_SCORES = {
   VERY_HIGH: 0.85,
   HIGH: 0.75,
-  MEDIUM: 0.60,
-  LOW: 0.40,
-  VERY_LOW: 0.20,
+  MEDIUM: 0.6,
+  LOW: 0.4,
+  VERY_LOW: 0.2,
   DEFAULT: 0.5, // Default when confidence level is not specified
 } as const;
 
@@ -172,29 +172,29 @@ export const HTTP_STATUS = {
  * Error codes for application errors.
  */
 export const ERROR_CODES = {
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  AUTHENTICATION_ERROR: 'AUTHENTICATION_ERROR',
-  AUTHORIZATION_ERROR: 'AUTHORIZATION_ERROR',
-  NOT_FOUND: 'NOT_FOUND',
-  EXTERNAL_SERVICE_ERROR: 'EXTERNAL_SERVICE_ERROR',
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  VALIDATION_ERROR: "VALIDATION_ERROR",
+  AUTHENTICATION_ERROR: "AUTHENTICATION_ERROR",
+  AUTHORIZATION_ERROR: "AUTHORIZATION_ERROR",
+  NOT_FOUND: "NOT_FOUND",
+  EXTERNAL_SERVICE_ERROR: "EXTERNAL_SERVICE_ERROR",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
 } as const;
 
 /**
  * Default error messages for common error types.
  */
 export const DEFAULT_ERROR_MESSAGES = {
-  AUTHENTICATION_REQUIRED: 'Authentication required',
-  INSUFFICIENT_PERMISSIONS: 'Insufficient permissions',
-  RESOURCE_NOT_FOUND: 'Resource not found',
-  UNEXPECTED_ERROR: 'An unexpected error occurred',
+  AUTHENTICATION_REQUIRED: "Authentication required",
+  INSUFFICIENT_PERMISSIONS: "Insufficient permissions",
+  RESOURCE_NOT_FOUND: "Resource not found",
+  UNEXPECTED_ERROR: "An unexpected error occurred",
 } as const;
 
 /**
  * External service names.
  */
 export const SERVICE_NAMES = {
-  OPENAI: 'OpenAI',
+  OPENAI: "OpenAI",
 } as const;
 
 /**
@@ -210,9 +210,10 @@ export const TIME_CONSTANTS = {
  * Slack signature verification constants.
  */
 export const SLACK_VERIFICATION = {
-  SIGNATURE_PREFIX: 'v0',
+  SIGNATURE_PREFIX: "v0",
   LOG_SUBSTRING_LENGTH: 20,
-  TIMESTAMP_WINDOW_SECONDS: TIME_CONSTANTS.SECONDS_PER_MINUTE * TIME_CONSTANTS.SLACK_TIMESTAMP_WINDOW_MINUTES,
+  TIMESTAMP_WINDOW_SECONDS:
+    TIME_CONSTANTS.SECONDS_PER_MINUTE * TIME_CONSTANTS.SLACK_TIMESTAMP_WINDOW_MINUTES,
 } as const;
 
 /**
@@ -276,7 +277,7 @@ export const SLACK_CHANNEL_ID_PATTERN = /^[CDG][A-Z0-9]+$/;
 /**
  * Default error message for validation failures.
  */
-export const DEFAULT_VALIDATION_ERROR_MESSAGE = 'validation failed' as const;
+export const DEFAULT_VALIDATION_ERROR_MESSAGE = "validation failed" as const;
 
 // ==================== OpenAI Validation Constants ====================
 
@@ -284,15 +285,15 @@ export const DEFAULT_VALIDATION_ERROR_MESSAGE = 'validation failed' as const;
  * Dangerous keywords that should not appear in LLM-recommended actions.
  */
 export const DANGEROUS_KEYWORDS = [
-  'delete',
-  'drop',
-  'truncate',
-  'force',
-  'disable',
-  'remove all',
-  'destroy',
-  '--force',
-  'rm -rf',
+  "delete",
+  "drop",
+  "truncate",
+  "force",
+  "disable",
+  "remove all",
+  "destroy",
+  "--force",
+  "rm -rf",
 ] as const;
 
 /**
@@ -300,10 +301,8 @@ export const DANGEROUS_KEYWORDS = [
  * Created once at module load time for performance.
  */
 export const DANGEROUS_KEYWORDS_PATTERN = ((): RegExp => {
-  const escapedKeywords = DANGEROUS_KEYWORDS.map((k) =>
-    k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  );
-  return new RegExp(`\\b(${escapedKeywords.join('|')})\\b`, 'i');
+  const escapedKeywords = DANGEROUS_KEYWORDS.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return new RegExp(`\\b(${escapedKeywords.join("|")})\\b`, "i");
 })();
 
 // ==================== Safety Constants ====================
@@ -322,7 +321,8 @@ export type UncertaintyPattern = {
  */
 export const UNCERTAINTY_PATTERNS: Readonly<UncertaintyPattern[]> = [
   {
-    pattern: /\b(not sure|unclear|cannot determine|insufficient information|unable to identify|unknown)\b/gi,
+    pattern:
+      /\b(not sure|unclear|cannot determine|insufficient information|unable to identify|unknown)\b/gi,
     penalty: UNCERTAINTY_PENALTIES.STRONG,
   },
   {
@@ -339,16 +339,16 @@ export const UNCERTAINTY_PATTERNS: Readonly<UncertaintyPattern[]> = [
  * Metric keywords to detect in reasoning.
  */
 export const METRIC_KEYWORDS: Readonly<Set<string>> = new Set([
-  'cpu',
-  'memory',
-  'error rate',
-  'latency',
+  "cpu",
+  "memory",
+  "error rate",
+  "latency",
 ]);
 
 /**
  * Invalid cause keywords that indicate an invalid root cause identification.
  */
-export const INVALID_CAUSE_KEYWORDS: Readonly<Set<string>> = new Set(['unknown']);
+export const INVALID_CAUSE_KEYWORDS: Readonly<Set<string>> = new Set(["unknown"]);
 
 /**
  * Cause-action relevance mapping configuration type.
@@ -363,59 +363,55 @@ export type RelevanceRule = {
  */
 export const RELEVANCE_RULES: Readonly<RelevanceRule[]> = [
   {
-    causeKeywords: ['secret', 'env'],
-    actionKeywords: ['environment'],
+    causeKeywords: ["secret", "env"],
+    actionKeywords: ["environment"],
   },
   {
-    causeKeywords: ['deploy'],
-    actionKeywords: ['rollback'],
+    causeKeywords: ["deploy"],
+    actionKeywords: ["rollback"],
   },
   {
-    causeKeywords: ['config'],
-    actionKeywords: ['configuration'],
+    causeKeywords: ["config"],
+    actionKeywords: ["configuration"],
   },
   {
-    causeKeywords: ['test'],
-    actionKeywords: ['rerun', 'test'],
+    causeKeywords: ["test"],
+    actionKeywords: ["rerun", "test"],
   },
   {
-    causeKeywords: ['pipeline'],
-    actionKeywords: ['rerun', 'pipeline'],
+    causeKeywords: ["pipeline"],
+    actionKeywords: ["rerun", "pipeline"],
   },
 ] as const;
 
 /**
  * Safety levels that allow auto-approval with high confidence.
  */
-export const AUTO_APPROVABLE_SAFETY_LEVELS: Readonly<Set<string>> = new Set([
-  'safe',
-  'low_risk',
-]);
+export const AUTO_APPROVABLE_SAFETY_LEVELS: Readonly<Set<string>> = new Set(["safe", "low_risk"]);
 
 /**
  * Valid safety levels for runtime validation.
  */
 export const VALID_SAFETY_LEVELS: Readonly<Set<string>> = new Set([
-  'safe',
-  'low_risk',
-  'medium_risk',
-  'high_risk',
-  'dangerous',
+  "safe",
+  "low_risk",
+  "medium_risk",
+  "high_risk",
+  "dangerous",
 ]);
 
 /**
  * Confidence range type for decision matrix.
  */
-export type ConfidenceRange = 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
+export type ConfidenceRange = "very_low" | "low" | "medium" | "high" | "very_high";
 
 /**
  * Message templates for different confidence ranges.
  */
 export const CONFIDENCE_MESSAGES: Readonly<Record<ConfidenceRange, string>> = {
-  very_low: 'Very low confidence. Manual review required before any action.',
-  low: 'Low confidence. Careful review recommended.',
-  medium: 'Medium confidence. Approval required.',
-  high: 'High confidence',
-  very_high: 'Very high confidence',
+  very_low: "Very low confidence. Manual review required before any action.",
+  low: "Low confidence. Careful review recommended.",
+  medium: "Medium confidence. Approval required.",
+  high: "High confidence",
+  very_high: "Very high confidence",
 } as const;
-

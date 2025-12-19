@@ -11,6 +11,7 @@ This service handles Slack interactions for the AI-driven DevOps assistant.
 ## Setup
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -36,4 +37,3 @@ This service handles Slack interactions for the AI-driven DevOps assistant.
 ## Safety Notes
 
 **IMPORTANT**: The LLM provides analysis and suggestions only. All actual decisions and side-effects (like running commands or altering state) are handled by deterministic code after validation. Never execute LLM outputs directly.
-

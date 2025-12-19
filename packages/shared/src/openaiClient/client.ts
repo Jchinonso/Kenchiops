@@ -8,23 +8,15 @@
  *   whether to act on any suggestion.
  */
 
-import OpenAI from 'openai';
-import { config } from '../config.js';
-import { logger } from '../logger.js';
-import { 
-  OPENAI_DEFAULTS,
-  OPENAI_CONSTANTS,
-  TIME_CONSTANTS,
-} from '../constants.js';
-import type {
-  Event,
-  Evidence,
-  LLMAnalysisResult,
-} from '../types.js';
-import { buildAnalysisPrompt } from '../prompts.js';
-import { validateResponse } from './validation.js';
-import { manageTokenBudget } from './tokenManager.js';
-import { handleOpenAIError, sleep } from './errors.js';
+import OpenAI from "openai";
+import { config } from "../config.js";
+import { logger } from "../logger.js";
+import { OPENAI_DEFAULTS, OPENAI_CONSTANTS, TIME_CONSTANTS } from "../constants.js";
+import type { Event, Evidence, LLMAnalysisResult } from "../types.js";
+import { buildAnalysisPrompt } from "../prompts.js";
+import { validateResponse } from "./validation.js";
+import { manageTokenBudget } from "./tokenManager.js";
+import { handleOpenAIError, sleep } from "./errors.js";
 
 interface OpenAIConfig {
   model: string;
@@ -44,7 +36,7 @@ export class OpenAIClient {
     });
 
     this.clientConfig = {
-      model: config.OPENAI_MODEL || 'gpt-4-turbo-2024-04-09',
+      model: config.OPENAI_MODEL || "gpt-4-turbo-2024-04-09",
       maxTokens: config.OPENAI_MAX_TOKENS || 4096,
       temperature: config.OPENAI_TEMPERATURE || OPENAI_DEFAULTS.TEMPERATURE,
       timeout: config.OPENAI_TIMEOUT_MS || OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
@@ -59,15 +51,16 @@ export class OpenAIClient {
    * @param evidence - Collected evidence about the incident
    * @returns Structured analysis result with confidence score
    */
-  async analyzeIncident(
-    event: Event,
-    evidence: Evidence
-  ): Promise<LLMAnalysisResult> {
+  async analyzeIncident(event: Event, evidence: Evidence): Promise<LLMAnalysisResult> {
     const startTime = Date.now();
 
     try {
       // 1. Manage token budget - truncate evidence if needed
-      const truncatedEvidence = manageTokenBudget(event, evidence, OPENAI_CONSTANTS.MAX_PROMPT_TOKENS);
+      const truncatedEvidence = manageTokenBudget(
+        event,
+        evidence,
+        OPENAI_CONSTANTS.MAX_PROMPT_TOKENS
+      );
 
       // 2. Build prompt
       const prompt = buildAnalysisPrompt(event, truncatedEvidence);
@@ -82,14 +75,14 @@ export class OpenAIClient {
       const validation = validateResponse(analysis, { event, evidence });
 
       if (!validation.valid) {
-        logger.warn('OpenAI response validation failed', {
+        logger.warn("OpenAI response validation failed", {
           eventId: event.id,
           errors: validation.errors,
         });
       }
 
       if (validation.warnings.length > 0) {
-        logger.warn('OpenAI response validation warnings', {
+        logger.warn("OpenAI response validation warnings", {
           eventId: event.id,
           warnings: validation.warnings,
         });
@@ -122,18 +115,18 @@ export class OpenAIClient {
           model: this.clientConfig.model,
           messages: [
             {
-              role: 'user',
+              role: "user",
               content: prompt,
             },
           ],
           max_tokens: this.clientConfig.maxTokens,
           temperature: this.clientConfig.temperature,
-          response_format: { type: 'json_object' }, // Request JSON response
+          response_format: { type: "json_object" }, // Request JSON response
         });
 
         const content = completion.choices[0]?.message?.content;
         if (!content) {
-          throw new Error('No content in OpenAI response');
+          throw new Error("No content in OpenAI response");
         }
 
         return content;
@@ -145,8 +138,10 @@ export class OpenAIClient {
         const statusCode = (error as { status?: number }).status;
         if (statusCode === OPENAI_CONSTANTS.RATE_LIMIT_STATUS_CODE && attempt < maxRetries) {
           // Exponential backoff: base^attempt seconds
-          const delayMs = Math.pow(OPENAI_CONSTANTS.EXPONENTIAL_BACKOFF_BASE, attempt) * TIME_CONSTANTS.MILLISECONDS_PER_SECOND;
-          logger.warn('OpenAI rate limit hit, retrying with exponential backoff', {
+          const delayMs =
+            Math.pow(OPENAI_CONSTANTS.EXPONENTIAL_BACKOFF_BASE, attempt) *
+            TIME_CONSTANTS.MILLISECONDS_PER_SECOND;
+          logger.warn("OpenAI rate limit hit, retrying with exponential backoff", {
             attempt,
             maxRetries,
             delayMs,
@@ -166,15 +161,12 @@ export class OpenAIClient {
   /**
    * Parses OpenAI response and validates JSON structure.
    */
-  private parseResponse(
-    responseContent: string,
-    eventId: string
-  ): LLMAnalysisResult {
+  private parseResponse(responseContent: string, eventId: string): LLMAnalysisResult {
     try {
       // Extract JSON from response (sometimes wrapped in markdown)
       const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('No JSON found in response');
+        throw new Error("No JSON found in response");
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
@@ -182,12 +174,12 @@ export class OpenAIClient {
       // Ensure required fields are present
       const analysis: LLMAnalysisResult = {
         eventId,
-        summary: parsed.summary || 'No summary provided',
+        summary: parsed.summary || "No summary provided",
         identifiedCause: parsed.identifiedCause || undefined,
         impactAssessment: parsed.impactAssessment || undefined,
-        confidence: parsed.confidence || 'medium',
+        confidence: parsed.confidence || "medium",
         confidenceScore: undefined, // Will be calculated by safety.ts
-        reasoning: parsed.reasoning || '',
+        reasoning: parsed.reasoning || "",
         recommendedActions: parsed.recommendedActions || [],
         uncertainties: parsed.uncertainties || [],
         evidenceUsed: parsed.evidenceUsed || [],
@@ -198,7 +190,9 @@ export class OpenAIClient {
 
       return analysis;
     } catch (error) {
-      throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to parse OpenAI response: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 }

@@ -64,4 +64,3 @@ Can you confirm:
 3. What should I do before creating a new utility? (Check packages/shared/src/index.ts)
 4. What's the zero-duplication policy? (Always import from @kenchi/shared)
 ```
-

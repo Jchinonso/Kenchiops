@@ -2,12 +2,7 @@
  * Custom error classes for better error handling and type safety.
  */
 
-import {
-  ERROR_CODES,
-  HTTP_STATUS,
-  DEFAULT_ERROR_MESSAGES,
-  SERVICE_NAMES,
-} from './constants.js';
+import { ERROR_CODES, HTTP_STATUS, DEFAULT_ERROR_MESSAGES, SERVICE_NAMES } from "./constants.js";
 
 /**
  * Base error class for application-specific errors.
@@ -85,11 +80,7 @@ export class NotFoundError extends AppError {
  * Error for external service failures (e.g., OpenAI API, Slack API).
  */
 export class ExternalServiceError extends AppError {
-  constructor(
-    service: string,
-    message: string,
-    metadata?: Record<string, unknown>
-  ) {
+  constructor(service: string, message: string, metadata?: Record<string, unknown>) {
     super(
       `External service error (${service}): ${message}`,
       ERROR_CODES.EXTERNAL_SERVICE_ERROR,
@@ -115,4 +106,3 @@ export class LLMError extends ExternalServiceError {
 export const isAppError = (error: unknown): error is AppError => {
   return error instanceof AppError;
 };
-

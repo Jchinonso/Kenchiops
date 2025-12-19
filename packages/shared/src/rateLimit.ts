@@ -1,13 +1,13 @@
 /**
  * Simple in-memory rate limiting middleware.
- * 
+ *
  * NOTE: For production, consider using a more robust solution like express-rate-limit
  * with Redis for distributed rate limiting.
  */
 
-import type { Request, Response, NextFunction } from 'express';
-import { AppError } from './errors.js';
-import { RATE_LIMIT_CONSTANTS, TIME_CONSTANTS } from './constants.js';
+import type { Request, Response, NextFunction } from "express";
+import { AppError } from "./errors.js";
+import { RATE_LIMIT_CONSTANTS, TIME_CONSTANTS } from "./constants.js";
 
 interface RateLimitStore {
   [key: string]: {
@@ -64,7 +64,9 @@ class RateLimiter {
           RATE_LIMIT_CONSTANTS.RATE_LIMIT_STATUS_CODE,
           true,
           {
-            retryAfter: Math.ceil((record.resetTime - now) / TIME_CONSTANTS.MILLISECONDS_PER_SECOND),
+            retryAfter: Math.ceil(
+              (record.resetTime - now) / TIME_CONSTANTS.MILLISECONDS_PER_SECOND
+            ),
           }
         );
       }
@@ -72,7 +74,7 @@ class RateLimiter {
       record.count++;
       next();
     };
-  }
+  };
 
   private readonly cleanup = (now: number): void => {
     for (const key in this.store) {
@@ -80,16 +82,16 @@ class RateLimiter {
         delete this.store[key];
       }
     }
-  }
+  };
 
   readonly reset = (): void => {
     this.store = {};
-  }
+  };
 }
 
 /**
  * Create a rate limiter middleware.
- * 
+ *
  * @example
  * const limiter = createRateLimiter({ windowMs: 60000, max: 100 });
  * app.use('/api/', limiter.middleware());
@@ -104,6 +106,5 @@ export const createRateLimiter = (options: RateLimitOptions): RateLimiter => {
 export const defaultRateLimiter = createRateLimiter({
   windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
   max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
-  message: 'Too many requests, please try again later',
+  message: "Too many requests, please try again later",
 });
-

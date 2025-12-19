@@ -32,12 +32,14 @@ kenchi/
 **No duplication of reusable domain logic, shared utilities, or cross-service types. Service-local glue/adapters are allowed.**
 
 **Before writing ANY code:**
+
 1. Check `packages/shared/src/index.ts` for existing exports
 2. Search codebase for similar functionality
 3. If it exists, import from `@kenchi/shared`
 4. If it doesn't exist and is shared, add to shared package first
 
 **Practical Heuristics:**
+
 - **If used in 2+ services** → shared
 - **If it's domain invariant** (logger, errors, config, schemas) → shared
 - **If it's integration adapter** (Slack/GitHub-specific glue) → keep in service
@@ -68,6 +70,7 @@ kenchi/
 5. **Update exports**: When adding to shared package, update `packages/shared/src/index.ts`
 
 **Example:**
+
 ```typescript
 // ✅ CORRECT - Use shared utilities
 import { createLogger, config, errorHandler } from '@kenchi/shared';
@@ -89,6 +92,7 @@ interface WebhookEvent { ... } // Should be in shared
 ### 5. File Organization
 
 **Shared Package (`packages/shared/src/`):**
+
 - All utilities, helpers, formatters
 - Cross-service contract types (events, core domain, public DTOs)
 - All middleware
@@ -96,6 +100,7 @@ interface WebhookEvent { ... } // Should be in shared
 - **ALL constants and enums** - Must be in `constants.ts`, never scattered across files
 
 **Services (`services/*/src/`):**
+
 - Service entry point (`index.ts`)
 - Service-specific routes/handlers
 - Service-specific business logic
@@ -104,10 +109,12 @@ interface WebhookEvent { ... } // Should be in shared
 - Service-private types
 
 **Shared vs Service Types Rule:**
+
 - **Shared** = cross-service contracts + core domain types
 - **Service** = integration-specific + internal-only types
 
 **NEVER:**
+
 - Put reusable utilities in services
 - Duplicate cross-service types across services
 - Create local helpers that should be shared
@@ -126,28 +133,32 @@ interface WebhookEvent { ... } // Should be in shared
 
 ```typescript
 // Type imports
-import type { WebhookEvent, LLMAnalysisResult } from '@kenchi/shared';
+import type { WebhookEvent, LLMAnalysisResult } from "@kenchi/shared";
 
 // Value imports
-import { createLogger, config, errorHandler } from '@kenchi/shared';
+import { createLogger, config, errorHandler } from "@kenchi/shared";
 
 // Service code
-import express from 'express';
-import { createLogger, errorHandler, asyncHandler } from '@kenchi/shared';
+import express from "express";
+import { createLogger, errorHandler, asyncHandler } from "@kenchi/shared";
 
-const logger = createLogger('api'); // Service-scoped logger
+const logger = createLogger("api"); // Service-scoped logger
 const app = express();
 app.use(errorHandler);
 
-app.post('/endpoint', asyncHandler(async (req, res) => {
-  logger.info('Processing request');
-  // Service logic
-}));
+app.post(
+  "/endpoint",
+  asyncHandler(async (req, res) => {
+    logger.info("Processing request");
+    // Service logic
+  })
+);
 ```
 
 ### 8. Documentation References
 
 Before making architectural decisions, read:
+
 - `docs/ARCHITECTURE.md` - System architecture
 - `docs/SYSTEM_ARCHITECTURE.md` - Detailed design
 - `docs/DATA_MODELS.md` - Data structures
@@ -156,6 +167,7 @@ Before making architectural decisions, read:
 ### 9. Code Generation Checklist
 
 Before generating code, verify:
+
 - [ ] Checked `packages/shared/src/index.ts` for existing utilities?
 - [ ] Using imports from `@kenchi/shared`?
 - [ ] Not duplicating existing functionality?
@@ -167,6 +179,7 @@ Before generating code, verify:
 **CRITICAL: ALL constants must be in `packages/shared/src/constants.ts`**
 
 **Rules:**
+
 1. **No constants scattered across files** - All numeric thresholds, regex patterns, arrays, Sets, Maps, and configuration values must be in `constants.ts`
 2. **Import from constants** - Always import constants from `@kenchi/shared` or `./constants.js`
 3. **Group by domain** - Organize constants by domain (validation, safety, OpenAI, etc.) with clear section headers
@@ -174,6 +187,7 @@ Before generating code, verify:
 5. **Use const assertions** - Use `as const` for immutable constant objects/arrays
 
 **Examples:**
+
 ```typescript
 // ✅ CORRECT - Constants in constants.ts
 // packages/shared/src/constants.ts
@@ -192,6 +206,7 @@ const DANGEROUS_KEYWORDS = ['delete', ...]; // Should be in constants.ts
 ```
 
 **What counts as a constant:**
+
 - Regex patterns (`EMAIL_REGEX`, `SHA_PATTERN`)
 - Arrays of strings/numbers (`DANGEROUS_KEYWORDS`, `VALID_STATUSES`)
 - Sets and Maps (`METRIC_KEYWORDS`, `VALID_SAFETY_LEVELS`)
@@ -201,6 +216,7 @@ const DANGEROUS_KEYWORDS = ['delete', ...]; // Should be in constants.ts
 - Type definitions for constants (`UncertaintyPattern`, `RelevanceRule`)
 
 **What doesn't need to be in constants:**
+
 - Local variables in functions
 - Computed values based on function parameters
 - Module-level variables that are implementation details (not reusable)
@@ -208,43 +224,50 @@ const DANGEROUS_KEYWORDS = ['delete', ...]; // Should be in constants.ts
 ### 11. Common Mistakes to Avoid
 
 ❌ **Hand-rolling logger implementation**
+
 ```typescript
 // WRONG - Don't implement logging locally
 const logger = { info: () => {}, error: () => {} };
 ```
 
 ✅ **Using shared logger factory**
+
 ```typescript
 // CORRECT - Create service-scoped logger from shared
-import { createLogger } from '@kenchi/shared';
-const logger = createLogger('api'); // Service name in every log line
+import { createLogger } from "@kenchi/shared";
+const logger = createLogger("api"); // Service name in every log line
 ```
 
 ❌ **Duplicating error classes**
+
 ```typescript
 // WRONG
 class ValidationError extends Error { ... }
 ```
 
 ✅ **Using shared errors**
+
 ```typescript
 // CORRECT
-import { ValidationError } from '@kenchi/shared';
+import { ValidationError } from "@kenchi/shared";
 ```
 
 ❌ **Creating local types**
+
 ```typescript
 // WRONG
 interface Config { ... }
 ```
 
 ✅ **Using shared types**
+
 ```typescript
 // CORRECT
-import type { Config } from '@kenchi/shared';
+import type { Config } from "@kenchi/shared";
 ```
 
 ❌ **Scattering constants across files**
+
 ```typescript
 // WRONG - Constants in multiple files
 // validation.ts
@@ -255,6 +278,7 @@ const DANGEROUS_KEYWORDS = ['delete', ...];
 ```
 
 ✅ **Centralizing constants**
+
 ```typescript
 // CORRECT - All constants in constants.ts
 // constants.ts
@@ -275,6 +299,7 @@ import { EMAIL_REGEX } from './constants.js';
 - **Shared is for reusable domain logic** - Not a dumping ground for everything
 
 **Decision Process:**
+
 1. Is it used by 2+ services? → Shared
 2. Is it domain-invariant (config, errors, logger)? → Shared
 3. Is it integration-specific glue? → Service
@@ -365,16 +390,16 @@ interface Config {
 ```typescript
 // ✅ Good - Discriminated union
 type WebhookEvent =
-  | { type: 'ci_failure'; log: string; repository: string }
-  | { type: 'pr_opened'; prNumber: number; repository: string }
-  | { type: 'deployment'; environment: string; version: string };
+  | { type: "ci_failure"; log: string; repository: string }
+  | { type: "pr_opened"; prNumber: number; repository: string }
+  | { type: "deployment"; environment: string; version: string };
 
 function handleEvent(event: WebhookEvent) {
   switch (event.type) {
-    case 'ci_failure':
+    case "ci_failure":
       // TypeScript knows event.log exists
       return processFailure(event.log);
-    case 'pr_opened':
+    case "pr_opened":
       // TypeScript knows event.prNumber exists
       return processPR(event.prNumber);
   }
@@ -391,9 +416,7 @@ interface Repository<T extends { id: string }> {
 }
 
 // ✅ Good - Generic utility type
-type Result<T, E = Error> = 
-  | { success: true; data: T }
-  | { success: false; error: E };
+type Result<T, E = Error> = { success: true; data: T } | { success: false; error: E };
 ```
 
 #### ❌ DON'T: Use `any` Type
@@ -409,7 +432,7 @@ function process(data: unknown): ProcessedData {
   if (isValidData(data)) {
     return transform(data);
   }
-  throw new ValidationError('Invalid data');
+  throw new ValidationError("Invalid data");
 }
 ```
 
@@ -421,7 +444,7 @@ const result = data as Result;
 
 // ✅ Good - Type guard
 function isResult(data: unknown): data is Result {
-  return typeof data === 'object' && data !== null && 'success' in data;
+  return typeof data === "object" && data !== null && "success" in data;
 }
 
 if (isResult(data)) {
@@ -437,11 +460,11 @@ if (isResult(data)) {
 // ✅ Good - Type guard function
 function isWebhookEvent(data: unknown): data is WebhookEvent {
   return (
-    typeof data === 'object' &&
+    typeof data === "object" &&
     data !== null &&
-    'type' in data &&
-    'timestamp' in data &&
-    typeof (data as WebhookEvent).type === 'string'
+    "type" in data &&
+    "timestamp" in data &&
+    typeof (data as WebhookEvent).type === "string"
   );
 }
 
@@ -479,10 +502,10 @@ type DeepReadonly<T> = {
 
 ```typescript
 // ✅ Good - ES modules
-import { createLogger, config } from '@kenchi/shared';
-import type { WebhookEvent } from '@kenchi/shared';
+import { createLogger, config } from "@kenchi/shared";
+import type { WebhookEvent } from "@kenchi/shared";
 
-const logger = createLogger('service'); // Service-scoped logger
+const logger = createLogger("service"); // Service-scoped logger
 
 export const processEvent = async (event: WebhookEvent): Promise<void> => {
   // Implementation
@@ -493,13 +516,13 @@ export const processEvent = async (event: WebhookEvent): Promise<void> => {
 
 ```typescript
 // ✅ Good - Separate type imports
-import { createLogger, config } from '@kenchi/shared';
-import type { WebhookEvent, LLMAnalysisResult } from '@kenchi/shared';
+import { createLogger, config } from "@kenchi/shared";
+import type { WebhookEvent, LLMAnalysisResult } from "@kenchi/shared";
 
-const logger = createLogger('service'); // Service-scoped logger
+const logger = createLogger("service"); // Service-scoped logger
 
 // ❌ Bad - Mixed imports (though TypeScript allows this)
-import { createLogger, type WebhookEvent } from '@kenchi/shared';
+import { createLogger, type WebhookEvent } from "@kenchi/shared";
 ```
 
 ### Error Handling
@@ -514,22 +537,20 @@ class ValidationError extends AppError {
     public readonly field: string,
     public readonly value: unknown
   ) {
-    super(message, 'VALIDATION_ERROR');
-    this.name = 'ValidationError';
+    super(message, "VALIDATION_ERROR");
+    this.name = "ValidationError";
   }
 }
 
 // Usage
-throw new ValidationError('Invalid email format', 'email', userInput);
+throw new ValidationError("Invalid email format", "email", userInput);
 ```
 
 #### ✅ DO: Use Result Types for Expected Errors
 
 ```typescript
 // ✅ Good - Result type pattern
-type Result<T, E = Error> = 
-  | { success: true; data: T }
-  | { success: false; error: E };
+type Result<T, E = Error> = { success: true; data: T } | { success: false; error: E };
 
 async function fetchData(id: string): Promise<Result<Data, NotFoundError>> {
   try {
@@ -578,17 +599,17 @@ type ErrorMessageFactory = (message?: string) => string;
 
 // Use Map for O(1) status code lookups
 const STATUS_ERROR_MESSAGES: Readonly<Map<number, ErrorMessageFactory>> = new Map([
-  [400, (message?: string) => `Request invalid: ${message || 'Bad request'}`],
-  [401, () => 'Authentication failed. Check API key configuration.'],
-  [429, () => 'Rate limit exceeded after retries. Please try again later.'],
+  [400, (message?: string) => `Request invalid: ${message || "Bad request"}`],
+  [401, () => "Authentication failed. Check API key configuration."],
+  [429, () => "Rate limit exceeded after retries. Please try again later."],
 ]);
 
 // Use Set for O(1) error code lookups
-const TIMEOUT_ERROR_CODES: Readonly<Set<string>> = new Set(['ECONNABORTED', 'ETIMEDOUT']);
+const TIMEOUT_ERROR_CODES: Readonly<Set<string>> = new Set(["ECONNABORTED", "ETIMEDOUT"]);
 
 const handleError = (error: unknown, timeout: number): Error => {
   if (!isErrorLike(error)) {
-    return new Error('Unknown error occurred');
+    return new Error("Unknown error occurred");
   }
 
   // O(1) lookup instead of if-else chain
@@ -608,28 +629,29 @@ const handleError = (error: unknown, timeout: number): Error => {
     return new Error(`Error: ${error.message}`);
   }
 
-  return new Error('Unknown error occurred');
+  return new Error("Unknown error occurred");
 };
 
 // ❌ Bad - If-else chain with repeated conditions
 const handleErrorBad = (error: unknown, timeout: number): Error => {
   if (error.status === 400) {
-    return new Error(`Request invalid: ${error.message || 'Bad request'}`);
+    return new Error(`Request invalid: ${error.message || "Bad request"}`);
   }
   if (error.status === 401) {
-    return new Error('Authentication failed. Check API key configuration.');
+    return new Error("Authentication failed. Check API key configuration.");
   }
   if (error.status === 429) {
-    return new Error('Rate limit exceeded after retries. Please try again later.');
+    return new Error("Rate limit exceeded after retries. Please try again later.");
   }
-  if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+  if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
     return new Error(`Request timed out after ${timeout}ms`);
   }
   // ... more if-else statements
-}
+};
 ```
 
 **Benefits:**
+
 - **O(1) lookups** instead of O(n) if-else chains
 - **More maintainable** - easy to add new status codes
 - **Type-safe** - proper interfaces and type guards
@@ -646,14 +668,13 @@ const handleErrorBad = (error: unknown, timeout: number): Error => {
 
 ```typescript
 // ✅ Good - Arrow functions for callbacks
-const users = data.map(user => transformUser(user));
-const filtered = items.filter(item => item.active);
+const users = data.map((user) => transformUser(user));
+const filtered = items.filter((item) => item.active);
 const sorted = items.sort((a, b) => a.priority - b.priority);
 
 // ✅ Good - Arrow functions for short, single-purpose functions
 const formatDate = (date: Date): string => date.toISOString();
-const calculateTotal = (items: Item[]): number => 
-  items.reduce((sum, item) => sum + item.price, 0);
+const calculateTotal = (items: Item[]): number => items.reduce((sum, item) => sum + item.price, 0);
 
 // ✅ Good - Arrow functions in class methods (when appropriate)
 class EventProcessor {
@@ -680,7 +701,7 @@ async function* processStream(stream: ReadableStream): AsyncGenerator<Chunk> {
 
 // ✅ Good - Function declaration when it improves API ergonomics
 function validateInput(input: unknown): input is UserInput {
-  return typeof input === 'object' && input !== null && 'email' in input;
+  return typeof input === "object" && input !== null && "email" in input;
 }
 ```
 
@@ -690,13 +711,13 @@ function validateInput(input: unknown): input is UserInput {
 // ✅ Good - Arrow function preserves 'this'
 class EventHandler {
   private events: Event[] = [];
-  
+
   // Arrow function preserves 'this' context
   handleEvent = (event: Event): void => {
     this.events.push(event);
     this.processEvent(event);
   };
-  
+
   // ❌ Bad - Regular method loses 'this' when passed as callback
   handleEventBad(event: Event): void {
     this.events.push(event); // 'this' might be undefined
@@ -705,8 +726,8 @@ class EventHandler {
 
 // Usage
 const handler = new EventHandler();
-document.addEventListener('click', handler.handleEvent); // ✅ Works
-document.addEventListener('click', handler.handleEventBad); // ❌ 'this' is lost
+document.addEventListener("click", handler.handleEvent); // ✅ Works
+document.addEventListener("click", handler.handleEventBad); // ❌ 'this' is lost
 ```
 
 #### ❌ DON'T: Use Arrow Functions When Overriding is Needed
@@ -748,9 +769,9 @@ async function fetchUserData(userId: string): Promise<UserData> {
 
 // ❌ Bad - Promise chains
 const fetchUserData = (userId: string): Promise<UserData> => {
-  return userRepository.findById(userId)
-    .then(user => profileRepository.findByUserId(userId)
-      .then(profile => ({ user, profile })));
+  return userRepository
+    .findById(userId)
+    .then((user) => profileRepository.findByUserId(userId).then((profile) => ({ user, profile })));
 };
 ```
 
@@ -775,11 +796,11 @@ async function fetchAllData(userId: string): Promise<Result<AllData>> {
       profileRepository.findByUserId(userId),
       settingsRepository.findByUserId(userId),
     ]);
-    
-    if (user.status === 'rejected' || profile.status === 'rejected') {
-      return { success: false, error: new Error('Failed to fetch data') };
+
+    if (user.status === "rejected" || profile.status === "rejected") {
+      return { success: false, error: new Error("Failed to fetch data") };
     }
-    
+
     return { success: true, data: { user: user.value, profile: profile.value } };
   } catch (error) {
     return { success: false, error: error as Error };
@@ -814,7 +835,7 @@ async function* processStream(stream: ReadableStream): AsyncGenerator<Chunk> {
 ```typescript
 // ✅ Good - Resource cleanup
 async function processFile(filePath: string): Promise<void> {
-  const fileHandle = await fs.open(filePath, 'r');
+  const fileHandle = await fs.open(filePath, "r");
   try {
     const content = await fileHandle.readFile();
     await processContent(content);
@@ -828,13 +849,10 @@ async function processFile(filePath: string): Promise<void> {
 
 ```typescript
 // ✅ Good - Cancellable operations with arrow function
-const fetchWithTimeout = async (
-  url: string,
-  timeout: number
-): Promise<Response> => {
+const fetchWithTimeout = async (url: string, timeout: number): Promise<Response> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(url, { signal: controller.signal });
     return response;
@@ -844,13 +862,10 @@ const fetchWithTimeout = async (
 };
 
 // ✅ Good - Alternative with function declaration
-async function fetchWithTimeout(
-  url: string,
-  timeout: number
-): Promise<Response> {
+async function fetchWithTimeout(url: string, timeout: number): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(url, { signal: controller.signal });
     return response;
@@ -870,35 +885,31 @@ async function fetchWithTimeout(
 // ✅ Good - Single responsibility with arrow function
 const validateUserInput = async (input: UserInput): Promise<ValidationResult> => {
   const errors: ValidationError[] = [];
-  
+
   if (!input.email || !isValidEmail(input.email)) {
-    errors.push(new ValidationError('Invalid email', 'email', input.email));
+    errors.push(new ValidationError("Invalid email", "email", input.email));
   }
-  
+
   if (!input.password || input.password.length < 8) {
-    errors.push(new ValidationError('Password too short', 'password'));
+    errors.push(new ValidationError("Password too short", "password"));
   }
-  
-  return errors.length === 0 
-    ? { valid: true }
-    : { valid: false, errors };
+
+  return errors.length === 0 ? { valid: true } : { valid: false, errors };
 };
 
 // ✅ Good - Single responsibility with function declaration
 async function validateUserInput(input: UserInput): Promise<ValidationResult> {
   const errors: ValidationError[] = [];
-  
+
   if (!input.email || !isValidEmail(input.email)) {
-    errors.push(new ValidationError('Invalid email', 'email', input.email));
+    errors.push(new ValidationError("Invalid email", "email", input.email));
   }
-  
+
   if (!input.password || input.password.length < 8) {
-    errors.push(new ValidationError('Password too short', 'password'));
+    errors.push(new ValidationError("Password too short", "password"));
   }
-  
-  return errors.length === 0 
-    ? { valid: true }
-    : { valid: false, errors };
+
+  return errors.length === 0 ? { valid: true } : { valid: false, errors };
 }
 
 // ❌ Bad - Multiple responsibilities
@@ -911,8 +922,7 @@ const processUser = async (input: unknown): Promise<User> => {
 
 ```typescript
 // ✅ Good - Pure function with arrow function
-const calculateTotal = (items: Item[]): number => 
-  items.reduce((sum, item) => sum + item.price, 0);
+const calculateTotal = (items: Item[]): number => items.reduce((sum, item) => sum + item.price, 0);
 
 // ✅ Good - Pure function with function declaration
 function calculateTotal(items: Item[]): number {
@@ -922,7 +932,9 @@ function calculateTotal(items: Item[]): number {
 // ❌ Bad - Side effects
 let total = 0;
 const calculateTotal = (items: Item[]): void => {
-  items.forEach(item => { total += item.price; });
+  items.forEach((item) => {
+    total += item.price;
+  });
 };
 ```
 
@@ -934,9 +946,9 @@ function processEvent(event: CIFailureEvent): Promise<CIFailureResult>;
 function processEvent(event: GitHubPREvent): Promise<GitHubPRResult>;
 function processEvent(event: WebhookEvent): Promise<ProcessResult> {
   switch (event.type) {
-    case 'ci_failure':
+    case "ci_failure":
       return processCIFailure(event);
-    case 'pr_opened':
+    case "pr_opened":
       return processPR(event);
   }
 }
@@ -956,11 +968,11 @@ class EventProcessor {
     private readonly validator: Validator,
     private readonly repository: Repository
   ) {}
-  
+
   async process(event: WebhookEvent): Promise<void> {
     this.validator.validate(event);
     await this.repository.save(event);
-    this.logger.info('Event processed', { eventId: event.id });
+    this.logger.info("Event processed", { eventId: event.id });
   }
 }
 
@@ -980,7 +992,7 @@ class AnalysisService {
     private readonly vectorStore: VectorStore,
     private readonly logger: Logger
   ) {}
-  
+
   async analyze(failureLog: string): Promise<AnalysisResult> {
     // Use injected dependencies
   }
@@ -994,12 +1006,12 @@ class AnalysisService {
 ```typescript
 // ✅ Good - Const assertion
 const API_ENDPOINTS = {
-  ANALYZE: '/api/analyze',
-  WEBHOOK: '/webhook',
-  HEALTH: '/health',
+  ANALYZE: "/api/analyze",
+  WEBHOOK: "/webhook",
+  HEALTH: "/health",
 } as const;
 
-type ApiEndpoint = typeof API_ENDPOINTS[keyof typeof API_ENDPOINTS];
+type ApiEndpoint = (typeof API_ENDPOINTS)[keyof typeof API_ENDPOINTS];
 
 // ✅ Good - Readonly configuration
 const DEFAULT_CONFIG = {
@@ -1019,18 +1031,18 @@ const DEFAULT_CONFIG = {
 // ✅ Good - Clean up event listeners
 class EventEmitter {
   private listeners = new Map<string, Set<Function>>();
-  
+
   on(event: string, listener: Function): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
     this.listeners.get(event)!.add(listener);
   }
-  
+
   off(event: string, listener: Function): void {
     this.listeners.get(event)?.delete(listener);
   }
-  
+
   removeAllListeners(event?: string): void {
     if (event) {
       this.listeners.delete(event);
@@ -1045,7 +1057,7 @@ class EventEmitter {
 
 ```typescript
 // ✅ Good - Streaming
-import { pipeline } from 'stream/promises';
+import { pipeline } from "stream/promises";
 
 async function processLargeFile(inputPath: string, outputPath: string): Promise<void> {
   const readStream = createReadStream(inputPath);
@@ -1056,7 +1068,7 @@ async function processLargeFile(inputPath: string, outputPath: string): Promise<
     },
   });
   const writeStream = createWriteStream(outputPath);
-  
+
   await pipeline(readStream, transformStream, writeStream);
 }
 ```
@@ -1070,11 +1082,11 @@ async function processLargeFile(inputPath: string, outputPath: string): Promise<
 class LazyValue<T> {
   private value: T | null = null;
   private factory: () => T;
-  
+
   constructor(factory: () => T) {
     this.factory = factory;
   }
-  
+
   get = (): T => {
     if (this.value === null) {
       this.value = this.factory();
@@ -1087,11 +1099,11 @@ class LazyValue<T> {
 class LazyValue<T> {
   private value: T | null = null;
   private factory: () => T;
-  
+
   constructor(factory: () => T) {
     this.factory = factory;
   }
-  
+
   get(): T {
     if (this.value === null) {
       this.value = this.factory();
@@ -1141,27 +1153,23 @@ const throttle = <T extends (...args: unknown[]) => unknown>(
 ```typescript
 // ✅ Good - Input validation with arrow function (type guard)
 const validateEmail = (email: unknown): email is string => {
-  if (typeof email !== 'string') return false;
+  if (typeof email !== "string") return false;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email) && email.length <= 254;
 };
 
 // ✅ Good - Input validation with function declaration (type guard)
 function validateEmail(email: unknown): email is string {
-  if (typeof email !== 'string') return false;
+  if (typeof email !== "string") return false;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email) && email.length <= 254;
 }
 
 // ✅ Good - Complex validation with arrow function
 const validateUserInput = (input: unknown): input is UserInput => {
-  if (typeof input !== 'object' || input === null) return false;
+  if (typeof input !== "object" || input === null) return false;
   const obj = input as Record<string, unknown>;
-  return (
-    validateEmail(obj.email) &&
-    typeof obj.password === 'string' &&
-    obj.password.length >= 8
-  );
+  return validateEmail(obj.email) && typeof obj.password === "string" && obj.password.length >= 8;
 };
 ```
 
@@ -1169,17 +1177,17 @@ const validateUserInput = (input: unknown): input is UserInput => {
 
 ```typescript
 // ✅ Good - Sanitization with arrow function
-const sanitizeString = (input: string): string => 
+const sanitizeString = (input: string): string =>
   input
     .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML
+    .replace(/[<>]/g, "") // Remove potential HTML
     .slice(0, 1000); // Limit length
 
 // ✅ Good - Alternative with function declaration
 function sanitizeString(input: string): string {
   return input
     .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML
+    .replace(/[<>]/g, "") // Remove potential HTML
     .slice(0, 1000); // Limit length
 }
 ```
@@ -1197,7 +1205,7 @@ const config = {
 
 // Validate required env vars
 if (!config.apiKey) {
-  throw new Error('OPENAI_API_KEY is required');
+  throw new Error("OPENAI_API_KEY is required");
 }
 ```
 
@@ -1209,18 +1217,18 @@ interface Config {
   readonly apiKey: string;
   readonly databaseUrl: string;
   readonly port: number;
-  readonly nodeEnv: 'development' | 'production' | 'test';
+  readonly nodeEnv: "development" | "production" | "test";
 }
 
 function loadConfig(): Config {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY required');
-  
+  if (!apiKey) throw new Error("OPENAI_API_KEY required");
+
   return {
     apiKey,
-    databaseUrl: process.env.DATABASE_URL ?? 'postgres://localhost',
-    port: parseInt(process.env.PORT ?? '3000', 10),
-    nodeEnv: (process.env.NODE_ENV as Config['nodeEnv']) ?? 'development',
+    databaseUrl: process.env.DATABASE_URL ?? "postgres://localhost",
+    port: parseInt(process.env.PORT ?? "3000", 10),
+    nodeEnv: (process.env.NODE_ENV as Config["nodeEnv"]) ?? "development",
   };
 }
 ```
@@ -1233,12 +1241,12 @@ function loadConfig(): Config {
 
 ```typescript
 // ✅ Good - Descriptive test names
-describe('EventProcessor', () => {
-  it('should validate event before processing', async () => {
+describe("EventProcessor", () => {
+  it("should validate event before processing", async () => {
     // Test implementation
   });
-  
-  it('should throw ValidationError for invalid event type', async () => {
+
+  it("should throw ValidationError for invalid event type", async () => {
     // Test implementation
   });
 });
@@ -1248,18 +1256,18 @@ describe('EventProcessor', () => {
 
 ```typescript
 // ✅ Good - AAA pattern
-it('should process valid event', async () => {
+it("should process valid event", async () => {
   // Arrange
   const processor = new EventProcessor(mockLogger, mockValidator, mockRepo);
   const event: WebhookEvent = {
-    type: 'ci_failure',
+    type: "ci_failure",
     timestamp: new Date(),
-    payload: { log: 'error' },
+    payload: { log: "error" },
   };
-  
+
   // Act
   const result = await processor.process(event);
-  
+
   // Assert
   expect(result.success).toBe(true);
   expect(mockRepo.save).toHaveBeenCalledWith(event);
@@ -1279,7 +1287,7 @@ const mockLogger: jest.Mocked<Logger> = {
 } as jest.Mocked<Logger>;
 
 // Usage
-expect(mockLogger.info).toHaveBeenCalledWith('Event processed', expect.any(Object));
+expect(mockLogger.info).toHaveBeenCalledWith("Event processed", expect.any(Object));
 ```
 
 ## Documentation
@@ -1288,15 +1296,15 @@ expect(mockLogger.info).toHaveBeenCalledWith('Event processed', expect.any(Objec
 
 #### ✅ DO: Document Public APIs
 
-```typescript
+````typescript
 /**
  * Processes a webhook event and returns analysis results.
- * 
+ *
  * @param event - The webhook event to process
  * @returns Promise resolving to analysis result
  * @throws {ValidationError} If event is invalid
  * @throws {ExternalServiceError} If external service fails
- * 
+ *
  * @example
  * ```typescript
  * const event: CIFailureEvent = { type: 'ci_failure', log: '...' };
@@ -1306,14 +1314,14 @@ expect(mockLogger.info).toHaveBeenCalledWith('Event processed', expect.any(Objec
 async function processEvent(event: WebhookEvent): Promise<LLMAnalysisResult> {
   // Implementation
 }
-```
+````
 
 #### ✅ DO: Use JSDoc for Complex Types
 
 ```typescript
 /**
  * Configuration for the analysis service.
- * 
+ *
  * @interface AnalysisConfig
  * @property {number} timeout - Request timeout in milliseconds
  * @property {number} maxRetries - Maximum number of retry attempts
@@ -1349,6 +1357,7 @@ export const eventRoutes = {
 ```
 
 **Module Size Guidelines:**
+
 - **Small modules**: 50-150 lines (utilities, helpers, types)
 - **Medium modules**: 150-300 lines (services, handlers, controllers)
 - **Large modules**: 300-500 lines (complex services, main entry points)
@@ -1393,16 +1402,32 @@ const to = 5000;
 
 ```typescript
 // ✅ Good - Verb-based, descriptive
-const validateUserEmail = (email: string): boolean => { /* ... */ };
-const calculateTotalPrice = (items: Item[]): number => { /* ... */ };
-const fetchUserProfileById = async (userId: string): Promise<Profile> => { /* ... */ };
-const transformEventToWebhookPayload = (event: Event): WebhookPayload => { /* ... */ };
+const validateUserEmail = (email: string): boolean => {
+  /* ... */
+};
+const calculateTotalPrice = (items: Item[]): number => {
+  /* ... */
+};
+const fetchUserProfileById = async (userId: string): Promise<Profile> => {
+  /* ... */
+};
+const transformEventToWebhookPayload = (event: Event): WebhookPayload => {
+  /* ... */
+};
 
 // ❌ Bad - Unclear or abbreviated
-const validate = (e: string): boolean => { /* ... */ };
-const calc = (i: Item[]): number => { /* ... */ };
-const get = async (id: string): Promise<Profile> => { /* ... */ };
-const xform = (e: Event): WebhookPayload => { /* ... */ };
+const validate = (e: string): boolean => {
+  /* ... */
+};
+const calc = (i: Item[]): number => {
+  /* ... */
+};
+const get = async (id: string): Promise<Profile> => {
+  /* ... */
+};
+const xform = (e: Event): WebhookPayload => {
+  /* ... */
+};
 ```
 
 #### ✅ DO: Use Consistent Naming Patterns
@@ -1411,23 +1436,33 @@ const xform = (e: Event): WebhookPayload => { /* ... */ };
 // ✅ Good - Consistent patterns
 // Boolean variables: is/has/should/can prefix
 const isAuthenticated = checkAuth(user);
-const hasPermission = user.permissions.includes('admin');
+const hasPermission = user.permissions.includes("admin");
 const shouldRetry = attemptCount < maxRetries;
-const canEdit = user.role === 'editor';
+const canEdit = user.role === "editor";
 
 // Functions: verb + noun
-const createUser = (data: UserData): User => { /* ... */ };
-const updateUser = (id: string, data: Partial<User>): User => { /* ... */ };
-const deleteUser = (id: string): void => { /* ... */ };
-const getUserById = (id: string): User | null => { /* ... */ };
+const createUser = (data: UserData): User => {
+  /* ... */
+};
+const updateUser = (id: string, data: Partial<User>): User => {
+  /* ... */
+};
+const deleteUser = (id: string): void => {
+  /* ... */
+};
+const getUserById = (id: string): User | null => {
+  /* ... */
+};
 
 // Constants: UPPER_SNAKE_CASE
 const MAX_RETRY_ATTEMPTS = 3;
-const API_BASE_URL = 'https://api.example.com';
+const API_BASE_URL = "https://api.example.com";
 const DEFAULT_TIMEOUT_MS = 5000;
 
 // Types/Interfaces: PascalCase
-interface UserProfile { /* ... */ }
+interface UserProfile {
+  /* ... */
+}
 type EventHandler = (event: Event) => Promise<void>;
 ```
 
@@ -1475,10 +1510,18 @@ export class ValidationError extends AppError {
 
 // ❌ Bad - Multiple concepts in one file
 // packages/shared/src/errors.ts
-export class AppError extends Error { /* ... */ }
-export class ValidationError extends AppError { /* ... */ }
-export class NotFoundError extends AppError { /* ... */ }
-export class AuthenticationError extends AppError { /* ... */ }
+export class AppError extends Error {
+  /* ... */
+}
+export class ValidationError extends AppError {
+  /* ... */
+}
+export class NotFoundError extends AppError {
+  /* ... */
+}
+export class AuthenticationError extends AppError {
+  /* ... */
+}
 // Too many concepts in one file
 ```
 
@@ -1487,15 +1530,15 @@ export class AuthenticationError extends AppError { /* ... */ }
 ```typescript
 // ✅ Good - Index file for clean imports
 // packages/shared/src/errors/index.ts
-export { AppError } from './appError.js';
-export { ValidationError } from './validationError.js';
-export { NotFoundError } from './notFoundError.js';
+export { AppError } from "./appError.js";
+export { ValidationError } from "./validationError.js";
+export { NotFoundError } from "./notFoundError.js";
 
 // Usage
-import { AppError, ValidationError } from '@kenchi/shared/errors';
+import { AppError, ValidationError } from "@kenchi/shared/errors";
 
 // ❌ Bad - Deep imports
-import { ValidationError } from '@kenchi/shared/src/errors/validationError';
+import { ValidationError } from "@kenchi/shared/src/errors/validationError";
 ```
 
 #### ✅ DO: Group Related Functionality
@@ -1536,8 +1579,12 @@ services/api/src/
 // ✅ Good - Each module has one responsibility
 // packages/shared/src/validation/validators.ts - Only validation logic
 export const validators = {
-  email: (value: unknown): value is string => { /* ... */ },
-  required: (value: unknown): boolean => { /* ... */ },
+  email: (value: unknown): value is string => {
+    /* ... */
+  },
+  required: (value: unknown): boolean => {
+    /* ... */
+  },
 };
 
 // packages/shared/src/validation/schemas.ts - Only schema definitions
@@ -1548,10 +1595,18 @@ export const userSchema = {
 
 // ❌ Bad - Multiple responsibilities
 // packages/shared/src/validation.ts
-export const validators = { /* ... */ };
-export const schemas = { /* ... */ };
-export const validate = (data: unknown) => { /* ... */ };
-export class ValidationError extends Error { /* ... */ };
+export const validators = {
+  /* ... */
+};
+export const schemas = {
+  /* ... */
+};
+export const validate = (data: unknown) => {
+  /* ... */
+};
+export class ValidationError extends Error {
+  /* ... */
+}
 // Too many responsibilities
 ```
 
@@ -1566,19 +1621,33 @@ export interface Logger {
 }
 
 export const logger: Logger = {
-  info: (message, metadata) => { /* ... */ },
-  error: (message, error) => { /* ... */ },
+  info: (message, metadata) => {
+    /* ... */
+  },
+  error: (message, error) => {
+    /* ... */
+  },
 };
 
 // Only exports what's needed, clear interface
 
 // ❌ Bad - Unclear boundaries, exports everything
 // packages/shared/src/logger.ts
-export const logger = { /* ... */ };
-export const createLogger = () => { /* ... */ };
-export const logLevels = { /* ... */ };
-export const formatLog = () => { /* ... */ };
-export const parseLog = () => { /* ... */ };
+export const logger = {
+  /* ... */
+};
+export const createLogger = () => {
+  /* ... */
+};
+export const logLevels = {
+  /* ... */
+};
+export const formatLog = () => {
+  /* ... */
+};
+export const parseLog = () => {
+  /* ... */
+};
 // Too many exports, unclear what's public API
 ```
 
@@ -1669,21 +1738,21 @@ src/
 ```typescript
 // ✅ Good - Minimal, clear dependencies
 // services/api/src/routes/events.ts
-import { asyncHandler, validate } from '@kenchi/shared';
-import { eventHandler } from '../handlers/eventHandler.js';
-import type { EventRequest } from '../types/eventTypes.js';
+import { asyncHandler, validate } from "@kenchi/shared";
+import { eventHandler } from "../handlers/eventHandler.js";
+import type { EventRequest } from "../types/eventTypes.js";
 
 // Clear, minimal dependencies
 
 // ❌ Bad - Too many dependencies
 // services/api/src/routes/events.ts
-import { asyncHandler, validate, createLogger, config, errorHandler } from '@kenchi/shared';
-const logger = createLogger('api');
-import { eventHandler } from '../handlers/eventHandler.js';
-import { eventValidator } from '../validators/eventValidator.js';
-import { eventRepository } from '../repositories/eventRepository.js';
-import { eventService } from '../services/eventService.js';
-import type { EventRequest, EventResponse, EventType } from '../types/eventTypes.js';
+import { asyncHandler, validate, createLogger, config, errorHandler } from "@kenchi/shared";
+const logger = createLogger("api");
+import { eventHandler } from "../handlers/eventHandler.js";
+import { eventValidator } from "../validators/eventValidator.js";
+import { eventRepository } from "../repositories/eventRepository.js";
+import { eventService } from "../services/eventService.js";
+import type { EventRequest, EventResponse, EventType } from "../types/eventTypes.js";
 // Too many dependencies, tight coupling
 ```
 
@@ -1691,14 +1760,14 @@ import type { EventRequest, EventResponse, EventType } from '../types/eventTypes
 
 #### Module Size Guidelines
 
-| Module Type | Recommended Lines | Maximum Lines | Action if Exceeded |
-|------------|-------------------|---------------|-------------------|
-| Utility/Helper | 50-150 | 200 | Split into smaller utilities |
-| Service/Handler | 150-300 | 400 | Extract sub-services or handlers |
-| Controller/Route | 100-250 | 350 | Split routes by resource |
-| Main Entry Point | 50-200 | 300 | Move logic to separate modules |
-| Type Definitions | 100-300 | 500 | Split by domain/feature |
-| Test Files | 100-300 | 500 | Split test suites |
+| Module Type      | Recommended Lines | Maximum Lines | Action if Exceeded               |
+| ---------------- | ----------------- | ------------- | -------------------------------- |
+| Utility/Helper   | 50-150            | 200           | Split into smaller utilities     |
+| Service/Handler  | 150-300           | 400           | Extract sub-services or handlers |
+| Controller/Route | 100-250           | 350           | Split routes by resource         |
+| Main Entry Point | 50-200            | 300           | Move logic to separate modules   |
+| Type Definitions | 100-300           | 500           | Split by domain/feature          |
+| Test Files       | 100-300           | 500           | Split test suites                |
 
 #### ✅ DO: Monitor and Refactor Large Modules
 
@@ -1726,8 +1795,8 @@ import type { EventRequest, EventResponse, EventType } from '../types/eventTypes
 // ✅ Good - Clear layer separation
 // Layer 1: Presentation/API Layer
 // services/api/src/routes/events.ts
-import { asyncHandler, validate } from '@kenchi/shared';
-import { eventService } from '../services/eventService.js';
+import { asyncHandler, validate } from "@kenchi/shared";
+import { eventService } from "../services/eventService.js";
 
 export const createEvent = asyncHandler(async (req, res) => {
   const validatedData = validate(eventSchema, req.body);
@@ -1737,19 +1806,19 @@ export const createEvent = asyncHandler(async (req, res) => {
 
 // Layer 2: Business Logic Layer
 // services/api/src/services/eventService.ts
-import { eventRepository } from '../repositories/eventRepository.js';
-import { createLogger } from '@kenchi/shared';
+import { eventRepository } from "../repositories/eventRepository.js";
+import { createLogger } from "@kenchi/shared";
 
-const logger = createLogger('event-service'); // Service-scoped logger
+const logger = createLogger("event-service"); // Service-scoped logger
 
 export const eventService = {
   createEvent: async (data: EventData): Promise<Event> => {
-    logger.info('Creating event', { eventType: data.type });
+    logger.info("Creating event", { eventType: data.type });
     const event = await eventRepository.save(data);
     await eventService.notifySubscribers(event);
     return event;
   },
-  
+
   notifySubscribers: async (event: Event): Promise<void> => {
     // Business logic for notifications
   },
@@ -1757,13 +1826,13 @@ export const eventService = {
 
 // Layer 3: Data Access Layer
 // services/api/src/repositories/eventRepository.ts
-import { db } from '../database/connection.js';
+import { db } from "../database/connection.js";
 
 export const eventRepository = {
   save: async (data: EventData): Promise<Event> => {
     return db.events.create(data);
   },
-  
+
   findById: async (id: string): Promise<Event | null> => {
     return db.events.findById(id);
   },
@@ -1774,9 +1843,9 @@ export const eventRepository = {
 export const createEvent = asyncHandler(async (req, res) => {
   // Validation mixed with route handler
   if (!req.body.type || !req.body.payload) {
-    return res.status(400).json({ error: 'Invalid data' });
+    return res.status(400).json({ error: "Invalid data" });
   }
-  
+
   // Business logic mixed with route handler
   const event = {
     id: generateId(),
@@ -1784,15 +1853,18 @@ export const createEvent = asyncHandler(async (req, res) => {
     payload: req.body.payload,
     timestamp: new Date(),
   };
-  
+
   // Data access mixed with route handler
-  await db.query('INSERT INTO events VALUES (?, ?, ?, ?)', [
-    event.id, event.type, event.payload, event.timestamp
+  await db.query("INSERT INTO events VALUES (?, ?, ?, ?)", [
+    event.id,
+    event.type,
+    event.payload,
+    event.timestamp,
   ]);
-  
+
   // Notification logic mixed with route handler
   await sendNotification(event);
-  
+
   res.status(201).json(event);
 });
 ```
@@ -1810,18 +1882,18 @@ export class AnalysisService {
     private readonly vectorStore: VectorStore,
     private readonly logger: Logger
   ) {}
-  
+
   async analyzeFailure(failureLog: string, repository: string): Promise<AnalysisResult> {
     // Business logic only - no HTTP concerns
-    this.logger.info('Starting analysis', { repository });
-    
+    this.logger.info("Starting analysis", { repository });
+
     const context = await this.vectorStore.querySimilar(failureLog);
     const analysis = await this.openaiClient.analyze({
       failureLog,
       repository,
       context,
     });
-    
+
     return {
       analysis: analysis.content,
       confidence: analysis.confidence,
@@ -1832,7 +1904,7 @@ export class AnalysisService {
 
 // ✅ Good - Route handler delegates to service
 // services/api/src/routes/analysis.ts
-import { analysisService } from '../services/analysisService.js';
+import { analysisService } from "../services/analysisService.js";
 
 export const analyzeFailure = asyncHandler(async (req, res) => {
   const { failure_log, repository } = validate(analysisSchema, req.body);
@@ -1844,7 +1916,7 @@ export const analyzeFailure = asyncHandler(async (req, res) => {
 // services/api/src/routes/analysis.ts
 export const analyzeFailure = asyncHandler(async (req, res) => {
   const { failure_log, repository } = req.body;
-  
+
   // Business logic should not be here
   const context = await vectorStore.querySimilar(failureLog);
   const analysis = await openaiClient.analyze({
@@ -1852,7 +1924,7 @@ export const analyzeFailure = asyncHandler(async (req, res) => {
     repository,
     context,
   });
-  
+
   res.json({
     analysis: analysis.content,
     confidence: analysis.confidence,
@@ -1869,15 +1941,15 @@ export const analyzeFailure = asyncHandler(async (req, res) => {
 // services/api/src/repositories/userRepository.ts
 export class UserRepository {
   constructor(private readonly db: Database) {}
-  
+
   async findById(id: string): Promise<User | null> {
     return this.db.users.findById(id);
   }
-  
+
   async save(user: User): Promise<User> {
     return this.db.users.save(user);
   }
-  
+
   async findByEmail(email: string): Promise<User | null> {
     return this.db.users.findOne({ email });
   }
@@ -1885,21 +1957,19 @@ export class UserRepository {
 
 // ✅ Good - Service uses repository, not direct DB access
 // services/api/src/services/userService.ts
-import { createLogger } from '@kenchi/shared';
+import { createLogger } from "@kenchi/shared";
 
-const logger = createLogger('user-service'); // Service-scoped logger
+const logger = createLogger("user-service"); // Service-scoped logger
 
 export class UserService {
-  constructor(
-    private readonly userRepository: UserRepository
-  ) {}
-  
+  constructor(private readonly userRepository: UserRepository) {}
+
   async getUserById(id: string): Promise<User> {
     const user = await this.userRepository.findById(id);
     if (!user) {
       throw new NotFoundError(`User ${id} not found`);
     }
-    logger.info('User retrieved', { userId: id });
+    logger.info("User retrieved", { userId: id });
     return user;
   }
 }
@@ -1909,7 +1979,7 @@ export class UserService {
 export class UserService {
   async getUserById(id: string): Promise<User> {
     // Direct DB access - violates separation
-    const user = await db.query('SELECT * FROM users WHERE id = ?', [id]);
+    const user = await db.query("SELECT * FROM users WHERE id = ?", [id]);
     if (!user) {
       throw new NotFoundError(`User ${id} not found`);
     }
@@ -1925,7 +1995,7 @@ export class UserService {
 ```typescript
 // ✅ Good - Validation in separate layer
 // services/api/src/validators/eventValidator.ts
-import { validate, validators } from '@kenchi/shared';
+import { validate, validators } from "@kenchi/shared";
 
 export const eventSchema = {
   type: (v: unknown) => validators.required(v) && validators.string(v),
@@ -1939,7 +2009,7 @@ export const validateEvent = (data: unknown): EventData => {
 
 // ✅ Good - Route uses validator
 // services/api/src/routes/events.ts
-import { validateEvent } from '../validators/eventValidator.js';
+import { validateEvent } from "../validators/eventValidator.js";
 
 export const createEvent = asyncHandler(async (req, res) => {
   const eventData = validateEvent(req.body);
@@ -1951,13 +2021,13 @@ export const createEvent = asyncHandler(async (req, res) => {
 // services/api/src/routes/events.ts
 export const createEvent = asyncHandler(async (req, res) => {
   // Validation logic mixed with route handler
-  if (typeof req.body.type !== 'string') {
-    return res.status(400).json({ error: 'Type is required' });
+  if (typeof req.body.type !== "string") {
+    return res.status(400).json({ error: "Type is required" });
   }
-  if (typeof req.body.payload !== 'object') {
-    return res.status(400).json({ error: 'Payload is required' });
+  if (typeof req.body.payload !== "object") {
+    return res.status(400).json({ error: "Payload is required" });
   }
-  
+
   const event = await eventService.createEvent(req.body);
   res.status(201).json(event);
 });
@@ -1970,7 +2040,7 @@ export const createEvent = asyncHandler(async (req, res) => {
 ```typescript
 // ✅ Good - Error handling middleware
 // services/api/src/middleware/errorHandler.ts
-import { errorHandler } from '@kenchi/shared';
+import { errorHandler } from "@kenchi/shared";
 
 export const apiErrorHandler = errorHandler;
 
@@ -1979,13 +2049,13 @@ export const apiErrorHandler = errorHandler;
 export class EventService {
   async createEvent(data: EventData): Promise<Event> {
     if (await this.eventExists(data.id)) {
-      throw new ValidationError('Event already exists', 'id', data.id);
+      throw new ValidationError("Event already exists", "id", data.id);
     }
-    
+
     try {
       return await this.repository.save(data);
     } catch (error) {
-      throw new ExternalServiceError('Failed to save event', error);
+      throw new ExternalServiceError("Failed to save event", error);
     }
   }
 }
@@ -2014,7 +2084,7 @@ export const createEvent = asyncHandler(async (req, res) => {
     if (error instanceof NotFoundError) {
       return res.status(404).json({ error: error.message });
     }
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 ```
@@ -2026,7 +2096,7 @@ export const createEvent = asyncHandler(async (req, res) => {
 ```typescript
 // ✅ Good - Configuration in separate module
 // services/api/src/config/appConfig.ts
-import { config } from '@kenchi/shared';
+import { config } from "@kenchi/shared";
 
 export const appConfig = {
   port: config.PORT || 3000,
@@ -2036,13 +2106,13 @@ export const appConfig = {
   },
   database: {
     url: config.DATABASE_URL,
-    poolSize: parseInt(config.DB_POOL_SIZE || '10', 10),
+    poolSize: parseInt(config.DB_POOL_SIZE || "10", 10),
   },
 } as const;
 
 // ✅ Good - Application uses config, doesn't access env directly
 // services/api/src/index.ts
-import { appConfig } from './config/appConfig.js';
+import { appConfig } from "./config/appConfig.js";
 
 const app = express();
 app.listen(appConfig.port, () => {
@@ -2065,13 +2135,13 @@ app.listen(process.env.PORT || 3000, () => {
 ```typescript
 // ✅ Good - Unit tests for business logic
 // services/api/src/services/__tests__/eventService.test.ts
-describe('EventService', () => {
-  it('should create event', async () => {
+describe("EventService", () => {
+  it("should create event", async () => {
     const mockRepository = createMockRepository();
     const service = new EventService(mockRepository);
-    
+
     const result = await service.createEvent(mockEventData);
-    
+
     expect(result).toBeDefined();
     expect(mockRepository.save).toHaveBeenCalled();
   });
@@ -2079,25 +2149,23 @@ describe('EventService', () => {
 
 // ✅ Good - Integration tests for routes
 // services/api/src/routes/__tests__/events.integration.test.ts
-describe('Event Routes', () => {
-  it('should create event via API', async () => {
-    const response = await request(app)
-      .post('/api/events')
-      .send(validEventData);
-    
+describe("Event Routes", () => {
+  it("should create event via API", async () => {
+    const response = await request(app).post("/api/events").send(validEventData);
+
     expect(response.status).toBe(201);
-    expect(response.body).toHaveProperty('id');
+    expect(response.body).toHaveProperty("id");
   });
 });
 
 // ❌ Bad - Testing concerns mixed
 // services/api/src/__tests__/everything.test.ts
-describe('Everything', () => {
-  it('should do everything', async () => {
+describe("Everything", () => {
+  it("should do everything", async () => {
     // Unit test, integration test, and e2e test all mixed
     const service = new EventService(mockRepo);
     const result = await service.createEvent(data);
-    const response = await request(app).post('/api/events').send(data);
+    const response = await request(app).post("/api/events").send(data);
     // Too many concerns in one test
   });
 });
@@ -2146,21 +2214,21 @@ services/api/src/
 // ✅ Good - Dependencies flow inward
 // Presentation Layer (outermost)
 // services/api/src/routes/events.ts
-import { eventService } from '../services/eventService.js'; // Depends on service
+import { eventService } from "../services/eventService.js"; // Depends on service
 
 // Business Logic Layer (middle)
 // services/api/src/services/eventService.ts
-import { eventRepository } from '../repositories/eventRepository.js'; // Depends on repository
+import { eventRepository } from "../repositories/eventRepository.js"; // Depends on repository
 
 // Data Access Layer (innermost)
 // services/api/src/repositories/eventRepository.ts
-import { db } from '../database/connection.js'; // Depends on database
+import { db } from "../database/connection.js"; // Depends on database
 
 // Inner layers don't know about outer layers
 
 // ❌ Bad - Circular or wrong-direction dependencies
 // services/api/src/repositories/eventRepository.ts
-import { eventService } from '../services/eventService.js'; // ❌ Repository depends on service
+import { eventService } from "../services/eventService.js"; // ❌ Repository depends on service
 // This creates circular dependency and violates SoC
 ```
 
@@ -2181,7 +2249,7 @@ import { eventService } from '../services/eventService.js'; // ❌ Repository de
 
 // ❌ Bad - Services depend on each other
 // services/api/src/index.ts
-import { slackBot } from '../slack-bot/src/index.js'; // ❌ Service depends on another service
+import { slackBot } from "../slack-bot/src/index.js"; // ❌ Service depends on another service
 // Should use shared package or message queue instead
 ```
 
@@ -2192,25 +2260,41 @@ import { slackBot } from '../slack-bot/src/index.js'; // ❌ Service depends on 
 ```typescript
 // ❌ Bad - One class does everything
 class EventManager {
-  validate(data: unknown) { /* ... */ }
-  save(data: EventData) { /* ... */ }
-  sendNotification(event: Event) { /* ... */ }
-  formatResponse(event: Event) { /* ... */ }
-  logEvent(event: Event) { /* ... */ }
+  validate(data: unknown) {
+    /* ... */
+  }
+  save(data: EventData) {
+    /* ... */
+  }
+  sendNotification(event: Event) {
+    /* ... */
+  }
+  formatResponse(event: Event) {
+    /* ... */
+  }
+  logEvent(event: Event) {
+    /* ... */
+  }
   // Too many responsibilities
 }
 
 // ✅ Good - Separate concerns
 class EventValidator {
-  validate(data: unknown): EventData { /* ... */ }
+  validate(data: unknown): EventData {
+    /* ... */
+  }
 }
 
 class EventRepository {
-  save(data: EventData): Promise<Event> { /* ... */ }
+  save(data: EventData): Promise<Event> {
+    /* ... */
+  }
 }
 
 class NotificationService {
-  send(event: Event): Promise<void> { /* ... */ }
+  send(event: Event): Promise<void> {
+    /* ... */
+  }
 }
 ```
 
@@ -2253,19 +2337,18 @@ class EventFormatter {
 // ❌ Bad - O(n*m) complexity, toLowerCase() called repeatedly
 for (const action of response.recommendedActions || []) {
   const actionText = action.description.toLowerCase();
-  
+
   for (const keyword of dangerousKeywords) {
     if (actionText.includes(keyword)) {
-      errors.push(
-        `Action contains dangerous keyword "${keyword}": ${action.description}`
-      );
+      errors.push(`Action contains dangerous keyword "${keyword}": ${action.description}`);
     }
   }
 }
 ```
 
 **Problems:**
-- Nested loops create O(n*m) complexity
+
+- Nested loops create O(n\*m) complexity
 - `toLowerCase()` called for every action (even if no keywords match)
 - `includes()` is less efficient for multiple keyword matching
 - No early exit when keyword is found
@@ -2274,22 +2357,18 @@ for (const action of response.recommendedActions || []) {
 
 ```typescript
 // ✅ Good - O(n) complexity, Set for O(1) lookups, early exit
-const dangerousKeywordsSet = new Set(
-  dangerousKeywords.map(keyword => keyword.toLowerCase())
-);
+const dangerousKeywordsSet = new Set(dangerousKeywords.map((keyword) => keyword.toLowerCase()));
 
 for (const action of response.recommendedActions || []) {
   const actionText = action.description.toLowerCase();
-  
+
   // Use Set for O(1) lookup instead of array iteration
-  const foundKeyword = dangerousKeywordsSet.has(actionText) 
-    ? actionText 
-    : Array.from(dangerousKeywordsSet).find(keyword => actionText.includes(keyword));
-  
+  const foundKeyword = dangerousKeywordsSet.has(actionText)
+    ? actionText
+    : Array.from(dangerousKeywordsSet).find((keyword) => actionText.includes(keyword));
+
   if (foundKeyword) {
-    errors.push(
-      `Action contains dangerous keyword "${foundKeyword}": ${action.description}`
-    );
+    errors.push(`Action contains dangerous keyword "${foundKeyword}": ${action.description}`);
     // Early exit if you only need to find one match
     continue;
   }
@@ -2301,16 +2380,14 @@ for (const action of response.recommendedActions || []) {
 ```typescript
 // ✅ Better - Single pass, compiled regex pattern
 const dangerousKeywordsPattern = new RegExp(
-  dangerousKeywords.map(k => k.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
-  'i'
+  dangerousKeywords.map((k) => k.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
+  "i"
 );
 
 for (const action of response.recommendedActions || []) {
   const match = action.description.match(dangerousKeywordsPattern);
   if (match) {
-    errors.push(
-      `Action contains dangerous keyword "${match[0]}": ${action.description}`
-    );
+    errors.push(`Action contains dangerous keyword "${match[0]}": ${action.description}`);
   }
 }
 ```
@@ -2343,9 +2420,15 @@ if (userIds.includes(newUserId)) {
 // ❌ Bad - Repeated computation
 for (const item of items) {
   const processed = expensiveOperation(item);
-  if (condition1(processed)) { /* ... */ }
-  if (condition2(processed)) { /* ... */ }
-  if (condition3(processed)) { /* ... */ }
+  if (condition1(processed)) {
+    /* ... */
+  }
+  if (condition2(processed)) {
+    /* ... */
+  }
+  if (condition3(processed)) {
+    /* ... */
+  }
 }
 
 // ✅ Good - Compute once, reuse
@@ -2363,32 +2446,32 @@ for (const item of items) {
 // ❌ Bad - Unnecessary processing
 function validateUser(user: User): ValidationResult {
   const errors: string[] = [];
-  
+
   if (!user.email) {
-    errors.push('Email required');
+    errors.push("Email required");
   }
   if (!user.name) {
-    errors.push('Name required');
+    errors.push("Name required");
   }
   if (!user.password) {
-    errors.push('Password required');
+    errors.push("Password required");
   }
-  
+
   return { valid: errors.length === 0, errors };
 }
 
 // ✅ Good - Early exit
 function validateUser(user: User): ValidationResult {
   if (!user.email) {
-    return { valid: false, errors: ['Email required'] };
+    return { valid: false, errors: ["Email required"] };
   }
   if (!user.name) {
-    return { valid: false, errors: ['Name required'] };
+    return { valid: false, errors: ["Name required"] };
   }
   if (!user.password) {
-    return { valid: false, errors: ['Password required'] };
+    return { valid: false, errors: ["Password required"] };
   }
-  
+
   return { valid: true, errors: [] };
 }
 ```
@@ -2423,14 +2506,14 @@ function getExpensiveData(): ExpensiveData {
 // ✅ Good - Lazy evaluation with memoization
 class DataCache {
   private cachedData: ExpensiveData | null = null;
-  
+
   getData(): ExpensiveData {
     if (this.cachedData === null) {
       this.cachedData = performExpensiveComputation();
     }
     return this.cachedData;
   }
-  
+
   invalidate(): void {
     this.cachedData = null;
   }
@@ -2441,20 +2524,20 @@ class DataCache {
 
 ```typescript
 // ❌ Bad - String concatenation in loop
-let result = '';
+let result = "";
 for (const item of items) {
-  result += item.toString() + ', ';
+  result += item.toString() + ", ";
 }
 
 // ✅ Good - Array join
-const result = items.map(item => item.toString()).join(', ');
+const result = items.map((item) => item.toString()).join(", ");
 
 // ✅ Better - For very large arrays, use StringBuilder pattern
 const parts: string[] = [];
 for (const item of items) {
   parts.push(item.toString());
 }
-const result = parts.join(', ');
+const result = parts.join(", ");
 ```
 
 #### ✅ DO: Use Streaming for Large Data
@@ -2462,14 +2545,14 @@ const result = parts.join(', ');
 ```typescript
 // ❌ Bad - Load all data into memory
 async function processLargeFile(filePath: string): Promise<void> {
-  const content = await fs.readFile(filePath, 'utf-8'); // Loads entire file
+  const content = await fs.readFile(filePath, "utf-8"); // Loads entire file
   const processed = processContent(content);
   await fs.writeFile(outputPath, processed);
 }
 
 // ✅ Good - Stream processing
-import { pipeline } from 'stream/promises';
-import { createReadStream, createWriteStream } from 'fs';
+import { pipeline } from "stream/promises";
+import { createReadStream, createWriteStream } from "fs";
 
 async function processLargeFile(filePath: string): Promise<void> {
   const readStream = createReadStream(filePath);
@@ -2480,7 +2563,7 @@ async function processLargeFile(filePath: string): Promise<void> {
     },
   });
   const writeStream = createWriteStream(outputPath);
-  
+
   await pipeline(readStream, transformStream, writeStream);
 }
 ```
@@ -2548,14 +2631,14 @@ export class OpenAIClient {
     'truncate',
     // ...
   ] as const;
-  
+
   private static readonly DANGEROUS_KEYWORDS_PATTERN = ((): RegExp => {
     const escaped = OpenAIClient.DANGEROUS_KEYWORDS.map(k =>
       k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     );
     return new RegExp(`\\b(${escaped.join('|')})\\b`, 'i');
   })();
-  
+
   private validateKeywords(actions: Action[]): void {
     // Use pre-compiled pattern - no recreation
     const match = action.description.match(OpenAIClient.DANGEROUS_KEYWORDS_PATTERN);
@@ -2573,15 +2656,15 @@ private validateKeywords(actions: Action[]): void {
 
 ```typescript
 // ✅ Good - Use service-scoped logger from shared
-import { createLogger } from '@kenchi/shared';
-const logger = createLogger('api'); // Service name in every log line
+import { createLogger } from "@kenchi/shared";
+const logger = createLogger("api"); // Service name in every log line
 
-logger.warn('Validation failed', { eventId, errors });
-logger.error('API call failed', { error, attempt });
+logger.warn("Validation failed", { eventId, errors });
+logger.error("API call failed", { error, attempt });
 
 // ❌ Bad - Direct console usage
-console.warn('[Service] Validation failed:', errors);
-console.error('[Service] Error:', error);
+console.warn("[Service] Validation failed:", errors);
+console.error("[Service] Error:", error);
 
 // ❌ Bad - Hand-rolled logger implementation
 const logger = { info: () => {}, error: () => {} };
@@ -2600,7 +2683,7 @@ private isCommitValid(sha: string, commitSet: Set<string>): boolean {
 // ✅ Good - Direct Set iteration
 private isCommitValid(sha: string, commitSet: Set<string>): boolean {
   if (commitSet.has(sha)) return true; // O(1) check first
-  
+
   // Only iterate if needed
   for (const provided of commitSet) {
     if (provided.startsWith(sha)) return true;
@@ -2618,7 +2701,7 @@ private validateResponse(response: LLMAnalysisResult, context: Context): Validat
   const commitsSet = this.buildCommitPrefixSet(context.evidence.gitHistory);
   const incidentsSet = new Set(context.evidence.relatedDocs?.map(d => d.id) || []);
   const logsMap = this.buildLogLookupMap(context.evidence.logs);
-  
+
   // Use pre-computed structures in all validations
   this.validateCommits(response, commitsSet);
   this.validateIncidents(response, incidentsSet);
@@ -2691,7 +2774,7 @@ private validateEvidenceReference(
 private isQuotedTextValid(quoted: string, logsMap: Map<string, string>): boolean {
   const prefix = quoted.substring(0, 50);
   if (logsMap.has(prefix)) return true; // Early exit
-  
+
   for (const log of logsMap.values()) {
     if (log.includes(quoted)) return true; // Early exit
   }

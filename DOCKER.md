@@ -9,6 +9,7 @@ Docker is used in **two different contexts** in this project:
 ### 1. **Production Deployment** (Kenchi Services)
 
 Use Docker for:
+
 - ✅ **Production deployments** - Running services in production environments
 - ✅ **Consistent environments** - Ensuring all services run in the same environment
 - ✅ **Container orchestration** - Managing multiple services together
@@ -16,6 +17,7 @@ Use Docker for:
 - ✅ **Isolation** - Running services in isolated containers
 
 **When NOT to use Docker:**
+
 - ❌ **Local development** - Use `npm run dev:*` for faster iteration
 - ❌ **Testing** - Use local services for unit/integration tests
 - ❌ **Quick prototyping** - Direct npm commands are faster
@@ -23,6 +25,7 @@ Use Docker for:
 ### 2. **n8n Workflow Automation** (Included in docker-compose.yml)
 
 Use Docker for:
+
 - ✅ **Running n8n** - n8n runs in Docker Compose alongside other services
 - ✅ **Workflow testing** - Testing n8n workflows requires n8n to be running
 - ✅ **Workflow management** - Managing and executing automation workflows
@@ -106,11 +109,13 @@ docker compose up -d
 ## Docker Files in Project
 
 ### 1. `Dockerfile` (Kenchi Services)
+
 - **Location**: `/kenchi/Dockerfile`
 - **Purpose**: Builds production images for API, Slack bot, and GitHub app services
 - **Usage**: `docker build` or `docker-compose build`
 
 ### 2. `docker-compose.yml` (All Services)
+
 - **Location**: `/kenchi/docker-compose.yml`
 - **Purpose**: Orchestrates all services together (API, Slack Bot, GitHub App, and n8n)
 - **Usage**: `docker compose up -d`
@@ -138,20 +143,21 @@ docker compose up -d
 
 ### When Each Approach is Best
 
-| Task | Use Docker? | Command |
-|------|-------------|---------|
-| Local development | ❌ No | `npm run dev:*` |
-| Running unit tests | ❌ No | `npm test` |
-| Running integration tests | ❌ No | `npm run test:*` |
-| Testing n8n workflows | ✅ Yes | `docker compose up -d` (all services) |
-| Production deployment | ✅ Yes | `docker compose up -d` |
-| CI/CD builds | ✅ Yes | `docker compose build` |
-| Staging environment | ✅ Yes | `docker compose up -d` |
-| Full stack testing | ✅ Yes | `docker compose up -d` |
+| Task                      | Use Docker? | Command                               |
+| ------------------------- | ----------- | ------------------------------------- |
+| Local development         | ❌ No       | `npm run dev:*`                       |
+| Running unit tests        | ❌ No       | `npm test`                            |
+| Running integration tests | ❌ No       | `npm run test:*`                      |
+| Testing n8n workflows     | ✅ Yes      | `docker compose up -d` (all services) |
+| Production deployment     | ✅ Yes      | `docker compose up -d`                |
+| CI/CD builds              | ✅ Yes      | `docker compose build`                |
+| Staging environment       | ✅ Yes      | `docker compose up -d`                |
+| Full stack testing        | ✅ Yes      | `docker compose up -d`                |
 
 ## Summary
 
 **Docker Compose is used for:**
+
 1. **Production deployments** - All services containerized
 2. **n8n workflows** - n8n runs alongside other services in docker-compose.yml
 3. **Service communication** - Services communicate via Docker service names (api, slack-bot, etc.)
@@ -160,6 +166,7 @@ docker compose up -d
 6. **Full stack testing** - Test complete workflow with all services
 
 **Docker is NOT used for:**
+
 1. **Local development** (use `npm run dev:*` for faster iteration)
 2. **Unit/integration testing** (use local services for faster tests)
 3. **Quick prototyping** (use npm directly)
@@ -167,4 +174,3 @@ docker compose up -d
 **Key Benefit**: All services run in the same Docker network, enabling seamless communication using service names (e.g., `http://api:3000`, `http://slack-bot:3001`). This eliminates connection issues and makes the setup production-ready.
 
 The project supports both approaches - use Docker Compose for production/workflow testing, and local development for faster iteration!
-

@@ -5,6 +5,7 @@ This document provides guidelines for AI tools (Cursor AI, Claude, GitHub Copilo
 ## Quick Reference
 
 **Before writing ANY code:**
+
 1. ✅ Check `packages/shared/src/index.ts` for existing utilities
 2. ✅ Search codebase for similar functionality
 3. ✅ Import from `@kenchi/shared` instead of creating new code
@@ -83,6 +84,7 @@ npm run check:duplication
 ```
 
 This script detects:
+
 - Duplicate logger creation
 - Duplicate type definitions
 - Duplicate error classes
@@ -107,18 +109,15 @@ find services -type d -name "utils" -o -name "helpers"
 ### ✅ Correct Pattern
 
 ```typescript
-import { 
-  logger, 
-  config, 
-  errorHandler, 
-  asyncHandler,
-  type WebhookEvent 
-} from '@kenchi/shared';
+import { logger, config, errorHandler, asyncHandler, type WebhookEvent } from "@kenchi/shared";
 
-app.post('/endpoint', asyncHandler(async (req, res) => {
-  logger.info('Processing request');
-  // Service logic
-}));
+app.post(
+  "/endpoint",
+  asyncHandler(async (req, res) => {
+    logger.info("Processing request");
+    // Service logic
+  })
+);
 ```
 
 ### ❌ Incorrect Pattern
@@ -168,4 +167,3 @@ Need to add functionality?
 5. **Update Exports**: Always update `packages/shared/src/index.ts` when adding shared code
 
 **Remember**: The folder structure is a guide, but the shared package is the constraint. Always check it first, always use it, never duplicate.
-

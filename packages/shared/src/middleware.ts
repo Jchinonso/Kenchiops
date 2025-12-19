@@ -2,10 +2,10 @@
  * Express middleware utilities.
  */
 
-import type { Request, Response, NextFunction } from 'express';
-import { isAppError } from './errors.js';
-import { logger } from './logger.js';
-import { ERROR_CODES, HTTP_STATUS, DEFAULT_ERROR_MESSAGES } from './constants.js';
+import type { Request, Response, NextFunction } from "express";
+import { isAppError } from "./errors.js";
+import { logger } from "./logger.js";
+import { ERROR_CODES, HTTP_STATUS, DEFAULT_ERROR_MESSAGES } from "./constants.js";
 
 /**
  * Error handling middleware for Express.
@@ -18,7 +18,7 @@ export const errorHandler = (
   _next: NextFunction
 ): void => {
   if (isAppError(error)) {
-    logger.error('Application error', {
+    logger.error("Application error", {
       code: error.code,
       message: error.message,
       statusCode: error.statusCode,
@@ -36,7 +36,7 @@ export const errorHandler = (
   }
 
   // Handle unexpected errors
-  logger.error('Unexpected error', { error: String(error) });
+  logger.error("Unexpected error", { error: String(error) });
 
   res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
     error: {
@@ -60,16 +60,12 @@ export const asyncHandler = (
 /**
  * Request logging middleware.
  */
-export const requestLogger = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
+export const requestLogger = (req: Request, res: Response, next: NextFunction): void => {
   const start = Date.now();
 
-  res.on('finish', () => {
+  res.on("finish", () => {
     const duration = Date.now() - start;
-    logger.info('HTTP request', {
+    logger.info("HTTP request", {
       method: req.method,
       path: req.path,
       statusCode: res.statusCode,
@@ -80,4 +76,3 @@ export const requestLogger = (
 
   next();
 };
-

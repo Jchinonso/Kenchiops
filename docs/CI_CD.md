@@ -16,6 +16,7 @@ The CI/CD pipeline is built using GitHub Actions and includes:
 ### 1. CI Workflow (`.github/workflows/ci.yml`)
 
 **Triggers:**
+
 - Push to `main` or `develop` branches
 - Pull requests to `main` or `develop`
 - Manual workflow dispatch
@@ -23,36 +24,43 @@ The CI/CD pipeline is built using GitHub Actions and includes:
 **Jobs:**
 
 #### Lint and Type Check
+
 - Runs ESLint
 - Checks code formatting (Prettier)
 - Performs TypeScript type checking
 - Checks for code duplication
 
 #### Test
+
 - Builds shared package
 - Runs all tests
 - Generates coverage reports
 - Uploads coverage to Codecov
 
 #### Build
+
 - Builds all packages and services
 - Verifies build artifacts
 - Uploads build artifacts for deployment
 
 #### Validate
+
 - Validates environment configuration
 - Validates n8n workflows
 
 #### Security Audit
+
 - Runs `npm audit` for vulnerability scanning
 
 #### CI Status
+
 - Aggregates results from all jobs
 - Fails if any job fails
 
 ### 2. CD Workflow (`.github/workflows/cd.yml`)
 
 **Triggers:**
+
 - Push to `main` branch
 - Tags starting with `v*`
 - Manual workflow dispatch with environment selection
@@ -60,25 +68,30 @@ The CI/CD pipeline is built using GitHub Actions and includes:
 **Jobs:**
 
 #### Build and Push Docker Image
+
 - Builds multi-platform Docker images (amd64, arm64)
 - Pushes to GitHub Container Registry (GHCR)
 - Uses Docker layer caching for faster builds
 - Tags images with branch, SHA, and semantic versioning
 
 #### Deploy to Staging
+
 - Automatically deploys on push to `main`
 - Uses staging environment configuration
 
 #### Deploy to Production
+
 - Deploys on version tags (`v*`)
 - Can be manually triggered with production environment
 
 ### 3. Dependency Review (`.github/workflows/dependency-review.yml`)
 
 **Triggers:**
+
 - Pull requests to `main` or `develop`
 
 **Purpose:**
+
 - Reviews dependency changes in PRs
 - Flags security vulnerabilities
 - Blocks PRs with moderate+ severity issues
@@ -87,11 +100,13 @@ The CI/CD pipeline is built using GitHub Actions and includes:
 ### 4. CodeQL Analysis (`.github/workflows/codeql.yml`)
 
 **Triggers:**
+
 - Push to `main` or `develop`
 - Pull requests to `main` or `develop`
 - Weekly schedule (Sundays)
 
 **Purpose:**
+
 - Static code analysis for security vulnerabilities
 - Analyzes JavaScript and TypeScript code
 - Uses security and quality queries
@@ -99,6 +114,7 @@ The CI/CD pipeline is built using GitHub Actions and includes:
 ### 5. Dependabot (`.github/dependabot.yml`)
 
 **Configuration:**
+
 - Weekly updates on Mondays at 9:00 AM
 - Updates npm dependencies (production and development)
 - Updates GitHub Actions
@@ -126,10 +142,12 @@ Docker images are built and pushed to GitHub Container Registry:
 ## Deployment
 
 ### Staging
+
 - Automatically deploys on push to `main`
 - Environment URL: `https://staging.kenchi.example.com` (update in workflow)
 
 ### Production
+
 - Deploys on version tags (e.g., `v1.0.0`)
 - Can be manually triggered via workflow dispatch
 - Environment URL: `https://kenchi.example.com` (update in workflow)
@@ -160,6 +178,7 @@ act -j test
 ## Best Practices
 
 1. **Always run CI locally before pushing:**
+
    ```bash
    npm run lint
    npm run format:check
@@ -187,24 +206,29 @@ act -j test
 ## Troubleshooting
 
 ### CI Fails on Lint
+
 - Run `npm run lint:fix` locally
 - Fix remaining issues manually
 
 ### CI Fails on Type Check
+
 - Run `npm run type-check` locally
 - Fix TypeScript errors
 
 ### CI Fails on Tests
+
 - Run `npm test` locally
 - Check test output for failures
 - Ensure all tests pass before pushing
 
 ### Build Fails
+
 - Run `npm run build` locally
 - Check for compilation errors
 - Verify all dependencies are installed
 
 ### Docker Build Fails
+
 - Check Dockerfile syntax
 - Verify all required files are present
 - Check build context
@@ -215,4 +239,3 @@ act -j test
 - [Docker Documentation](https://docs.docker.com/)
 - [CodeQL Documentation](https://codeql.github.com/docs/)
 - [Dependabot Documentation](https://docs.github.com/en/code-security/dependabot)
-

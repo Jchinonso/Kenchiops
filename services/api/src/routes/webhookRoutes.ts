@@ -4,12 +4,12 @@
  * Handles incoming webhooks from various sources
  */
 
-import { Router } from 'express';
-import { asyncHandler, createLogger, HTTP_STATUS } from '@kenchi/shared';
-import type { WebhookPayload } from '../types/apiTypes.js';
+import { Router } from "express";
+import { asyncHandler, createLogger, HTTP_STATUS } from "@kenchi/shared";
+import type { WebhookPayload } from "../types/apiTypes.js";
 
 const router = Router();
-const logger = createLogger('api');
+const logger = createLogger("api");
 
 /**
  * Generic webhook endpoint
@@ -19,12 +19,12 @@ const logger = createLogger('api');
  * TODO: Add authentication/authorization
  */
 router.post(
-  '/webhook/:source',
+  "/webhook/:source",
   asyncHandler(async (req, res) => {
     const { source } = req.params as { source: string };
     const payload = req.body as WebhookPayload;
 
-    logger.info('Webhook received', {
+    logger.info("Webhook received", {
       source,
       payloadKeys: Object.keys(payload),
     });
@@ -34,9 +34,9 @@ router.post(
     // TODO: Trigger appropriate workflow or service
 
     res.status(HTTP_STATUS.OK).json({
-      status: 'received',
+      status: "received",
       source,
-      message: 'TODO: Implement webhook processing logic',
+      message: "TODO: Implement webhook processing logic",
     });
   })
 );

@@ -37,10 +37,10 @@ This document outlines the code organization principles and strategies to preven
 
 ```typescript
 // ✅ CORRECT
-import { logger, config, errorHandler } from '@kenchi/shared';
+import { logger, config, errorHandler } from "@kenchi/shared";
 
 // ❌ WRONG
-const logger = createLogger('service');
+const logger = createLogger("service");
 ```
 
 ## Shared Package Strategy
@@ -176,18 +176,18 @@ jscpd packages/shared/src services/*/src --min-lines 5 --min-tokens 50
 
 ```typescript
 // ✅ CORRECT - Import from shared
-import { 
-  logger, 
-  config, 
-  errorHandler, 
+import {
+  logger,
+  config,
+  errorHandler,
   asyncHandler,
   validate,
-  type WebhookEvent 
-} from '@kenchi/shared';
+  type WebhookEvent,
+} from "@kenchi/shared";
 
 // ❌ WRONG - Local implementation
-import { logger } from './utils/logger';
-import type { WebhookEvent } from './types';
+import { logger } from "./utils/logger";
+import type { WebhookEvent } from "./types";
 ```
 
 ## Code Location Guidelines
@@ -213,9 +213,10 @@ Is the code used by multiple services?
 **Reason**: All services need logging.
 
 **Usage**:
+
 ```typescript
 // In any service
-import { logger } from '@kenchi/shared';
+import { logger } from "@kenchi/shared";
 ```
 
 #### Example 2: Slack Bot Command Handler
@@ -249,6 +250,7 @@ import { logger } from '@kenchi/shared';
 **See `.cursorrules` file for Cursor-specific guidelines.**
 
 **Key points:**
+
 - Always check `packages/shared/src/index.ts` first
 - Never duplicate code
 - Always import from `@kenchi/shared`
@@ -259,6 +261,7 @@ import { logger } from '@kenchi/shared';
 **See `.claude-config.md` file for Claude-specific guidelines.**
 
 **Key points:**
+
 - Understand the shared package is the single source of truth
 - Check existing exports before creating new code
 - Follow the zero-duplication policy
@@ -281,11 +284,13 @@ import { logger } from '@kenchi/shared';
 **Regular code review checklist:**
 
 1. **Check for duplicate utilities:**
+
    ```bash
    find services -name "*.ts" -exec grep -l "function.*logger\|createLogger" {} \;
    ```
 
 2. **Check for duplicate types:**
+
    ```bash
    find services -name "*.ts" -exec grep -l "interface.*Config\|type.*Config" {} \;
    ```
@@ -369,4 +374,3 @@ import { logger } from '@kenchi/shared';
 5. **Update Exports**: Always update `packages/shared/src/index.ts` when adding shared code
 
 **Remember**: The folder structure is a guide, but the shared package is the constraint. Always check it first, always use it, never duplicate.
-

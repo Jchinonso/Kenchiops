@@ -24,6 +24,7 @@ CI Failure Event → Webhook → OpenAI Analysis → Slack Message → Response
 All services run in Docker Compose, so n8n can communicate with services using Docker service names:
 
 1. Start all services:
+
    ```bash
    docker compose up -d
    ```
@@ -47,6 +48,7 @@ All services run in Docker Compose, so n8n can communicate with services using D
 ### Workflow URLs
 
 When running in Docker Compose, workflows use Docker service names:
+
 - **API Service**: `http://api:3000/api/analyze`
 - **Slack Bot Service**: `http://slack-bot:3001/slack/message`
 
@@ -96,4 +98,3 @@ The following endpoints are implemented and available:
 ## Safety Notes
 
 **IMPORTANT**: The LLM provides analysis and suggestions only. All actual decisions and side-effects are handled by deterministic code after validation. Never execute LLM outputs directly.
-

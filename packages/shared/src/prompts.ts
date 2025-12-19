@@ -11,12 +11,8 @@ import type {
   KnowledgeDocument,
   MetricsSummary,
   SystemState,
-} from './types.js';
-import {
-  SIMILARITY_THRESHOLDS,
-  EVIDENCE_TRUNCATION,
-  UI_CONSTANTS,
-} from './constants.js';
+} from "./types.js";
+import { SIMILARITY_THRESHOLDS, EVIDENCE_TRUNCATION, UI_CONSTANTS } from "./constants.js";
 
 /**
  * Builds the system context prompt that establishes the LLM's role and constraints.
@@ -184,7 +180,7 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
   ]
 }
 \`\`\``;
-}
+};
 
 /**
  * Formats event details for inclusion in the prompt.
@@ -197,8 +193,8 @@ export const formatEvent = (event: Event): string => {
 **Type**: ${event.type}
 **Source**: ${event.source}
 **Timestamp**: ${event.timestamp}
-**Severity**: ${event.severity || 'medium'}
-${event.title ? `\n**Title**: ${event.title}` : ''}
+**Severity**: ${event.severity || "medium"}
+${event.title ? `\n**Title**: ${event.title}` : ""}
 
 **Event Payload**:
 \`\`\`json
@@ -210,47 +206,49 @@ ${payload}
  * Formats all evidence sections for inclusion in the prompt.
  */
 export const formatEvidence = (evidence: Evidence): string => {
-  const sections: string[] = ['## COLLECTED EVIDENCE'];
+  const sections: string[] = ["## COLLECTED EVIDENCE"];
 
   // 1. Logs
   if (evidence.logs && evidence.logs.length > 0) {
-    sections.push('### Error Logs');
+    sections.push("### Error Logs");
     sections.push(formatLogs(evidence.logs));
   } else {
-    sections.push('### Error Logs\nNo error logs available.');
+    sections.push("### Error Logs\nNo error logs available.");
   }
 
   // 2. Metrics
   if (evidence.metrics?.summary) {
-    sections.push('### System Metrics (at time of event)');
+    sections.push("### System Metrics (at time of event)");
     sections.push(formatMetrics(evidence.metrics.summary));
   } else {
-    sections.push('### System Metrics (at time of event)\nNo metrics available.');
+    sections.push("### System Metrics (at time of event)\nNo metrics available.");
   }
 
   // 3. Git History
   if (evidence.gitHistory && evidence.gitHistory.length > 0) {
-    sections.push('### Recent Git History');
+    sections.push("### Recent Git History");
     sections.push(formatGitHistory(evidence.gitHistory));
   } else {
-    sections.push('### Recent Git History\nNo recent commits available.');
+    sections.push("### Recent Git History\nNo recent commits available.");
   }
 
   // 4. System State
   if (evidence.systemState) {
-    sections.push('### System State');
+    sections.push("### System State");
     sections.push(formatSystemState(evidence.systemState));
   }
 
   // 5. Related Knowledge Base Documents
   if (evidence.relatedDocs && evidence.relatedDocs.length > 0) {
-    sections.push('### Related Knowledge Base Documents');
+    sections.push("### Related Knowledge Base Documents");
     sections.push(formatKnowledgeDocs(evidence.relatedDocs));
   } else {
-    sections.push('### Related Knowledge Base Documents\nNo related documents found in knowledge base.');
+    sections.push(
+      "### Related Knowledge Base Documents\nNo related documents found in knowledge base."
+    );
   }
 
-  return sections.join('\n\n');
+  return sections.join("\n\n");
 };
 
 /**
@@ -284,14 +282,14 @@ export const formatEvidence = (evidence: Evidence): string => {
 export const formatLogs = (logs: LogEntry[]): string => {
   return logs
     .map((log) => {
-      const timestamp = log.timestamp || 'unknown time';
-      const level = log.level || 'INFO';
-      const source = log.source || 'unknown';
-      const stack = log.stackTrace ? `\n${log.stackTrace}` : '';
+      const timestamp = log.timestamp || "unknown time";
+      const level = log.level || "INFO";
+      const source = log.source || "unknown";
+      const stack = log.stackTrace ? `\n${log.stackTrace}` : "";
       return `[${timestamp}] [${level}] ${source}\n${log.message}${stack}\n---`;
     })
-    .join('\n');
-}
+    .join("\n");
+};
 
 /**
  * Formats metrics summary.
@@ -322,14 +320,22 @@ export const formatMetrics = (summary: MetricsSummary): string => {
   }
 
   // Include any custom metrics
-  const standardMetrics = ['errorRate', 'requestRate', 'cpuUsage', 'memoryUsage', 'latencyP50', 'latencyP95', 'latencyP99'];
+  const standardMetrics = [
+    "errorRate",
+    "requestRate",
+    "cpuUsage",
+    "memoryUsage",
+    "latencyP50",
+    "latencyP95",
+    "latencyP99",
+  ];
   for (const [key, value] of Object.entries(summary)) {
     if (!standardMetrics.includes(key)) {
       lines.push(`- ${key}: ${value}`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 };
 
 /**
@@ -346,7 +352,7 @@ export const formatGitHistory = (commits: GitCommit[]): string => {
       ];
 
       if (commit.filesChanged && commit.filesChanged.length > 0) {
-        lines.push(`  Files Changed: ${commit.filesChanged.join(', ')}`);
+        lines.push(`  Files Changed: ${commit.filesChanged.join(", ")}`);
       }
 
       if (commit.additions !== undefined && commit.deletions !== undefined) {
@@ -357,9 +363,9 @@ export const formatGitHistory = (commits: GitCommit[]): string => {
         lines.push(`  URL: ${commit.url}`);
       }
 
-      return lines.join('\n');
+      return lines.join("\n");
     })
-    .join('\n\n');
+    .join("\n\n");
 };
 
 /**
@@ -370,7 +376,7 @@ const formatSystemState = (systemState: SystemState): string => {
 
   if (systemState.deploymentStatus) {
     const ds = systemState.deploymentStatus;
-    sections.push('**Deployment**:');
+    sections.push("**Deployment**:");
     if (ds.currentVersion) sections.push(`- Current Version: ${ds.currentVersion}`);
     if (ds.previousVersion) sections.push(`- Previous Version: ${ds.previousVersion}`);
     if (ds.deployedAt) sections.push(`- Deployed At: ${ds.deployedAt}`);
@@ -378,20 +384,22 @@ const formatSystemState = (systemState: SystemState): string => {
   }
 
   if (systemState.serviceHealth) {
-    sections.push('\n**Service Health**:');
+    sections.push("\n**Service Health**:");
     for (const [service, status] of Object.entries(systemState.serviceHealth)) {
       sections.push(`- ${service}: ${status}`);
     }
   }
 
   if (systemState.dependencies && systemState.dependencies.length > 0) {
-    sections.push('\n**Dependencies**:');
+    sections.push("\n**Dependencies**:");
     for (const dep of systemState.dependencies) {
-      sections.push(`- ${dep.name}: ${dep.status}${dep.responseTime ? ` (${dep.responseTime}ms)` : ''}`);
+      sections.push(
+        `- ${dep.name}: ${dep.status}${dep.responseTime ? ` (${dep.responseTime}ms)` : ""}`
+      );
     }
   }
 
-  return sections.join('\n');
+  return sections.join("\n");
 };
 
 /**
@@ -412,13 +420,13 @@ export const formatKnowledgeDocs = (docs: KnowledgeDocument[]): string => {
       }
 
       if (doc.metadata?.tags && doc.metadata.tags.length > 0) {
-        formatted += `Tags: ${doc.metadata.tags.join(', ')}\n`;
+        formatted += `Tags: ${doc.metadata.tags.join(", ")}\n`;
       }
 
-      return formatted + '---';
+      return formatted + "---";
     })
-    .join('\n');
-}
+    .join("\n");
+};
 
 /**
  * Estimates token count for text (rough approximation).
@@ -431,10 +439,7 @@ export const estimateTokens = (text: string): number => {
 /**
  * Truncates evidence to fit within token budget while prioritizing important information.
  */
-export const truncateEvidence = (
-  evidence: Evidence,
-  maxTokens: number
-): Evidence => {
+export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidence => {
   // Priority order:
   // 1. Critical error logs (ERROR level) - top 10
   // 2. Recent commits - last 5
@@ -454,7 +459,7 @@ export const truncateEvidence = (
   // 1. Critical error logs
   if (evidence.logs) {
     const errorLogs = evidence.logs
-      .filter((log) => log.level === 'ERROR')
+      .filter((log) => log.level === "ERROR")
       .slice(0, EVIDENCE_TRUNCATION.MAX_ERROR_LOGS);
     const logSection = formatLogs(errorLogs);
     const logTokens = estimateTokens(logSection);
@@ -509,9 +514,7 @@ export const truncateEvidence = (
 
   // 5. Additional logs if budget allows
   if (evidence.logs && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_COMMITS) {
-    const additionalLogs = evidence.logs
-      .filter((log) => log.level !== 'ERROR')
-      .slice(0, 20);
+    const additionalLogs = evidence.logs.filter((log) => log.level !== "ERROR").slice(0, 20);
 
     const currentLogs = truncated.logs || [];
     for (const log of additionalLogs) {

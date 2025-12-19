@@ -1,6 +1,7 @@
 # Data Models & JSON Schemas
 
 ## Table of Contents
+
 1. [Overview](#overview)
 2. [Event Schema](#event-schema)
 3. [Evidence Schema](#evidence-schema)
@@ -15,6 +16,7 @@
 ## Overview
 
 This document defines the core data structures used throughout the AI-Driven DevOps Incident Assistant. Each data type is specified with:
+
 - **JSON Schema**: Formal schema definition for validation
 - **TypeScript Interface**: Type-safe interface for implementation
 - **Field Descriptions**: Detailed explanation of each field
@@ -22,6 +24,7 @@ This document defines the core data structures used throughout the AI-Driven Dev
 - **Examples**: Real-world usage examples
 
 ### Data Flow
+
 ```
 Event → Evidence → LLMAnalysisResult → ActionProposal(s) → Execution Results
 ```
@@ -31,6 +34,7 @@ Event → Evidence → LLMAnalysisResult → ActionProposal(s) → Execution Res
 ## Event Schema
 
 ### Description
+
 Represents an incoming event from any source (CI/CD failure, monitoring alert, manual trigger). This is the entry point for all incident analysis.
 
 ### JSON Schema
@@ -205,17 +209,17 @@ interface Event {
 }
 
 type EventType =
-  | 'CICD_FAILURE'
-  | 'DEPLOYMENT_FAILURE'
-  | 'MONITORING_ALERT'
-  | 'PERFORMANCE_DEGRADATION'
-  | 'ERROR_SPIKE'
-  | 'SECURITY_ALERT'
-  | 'MANUAL_TRIGGER'
-  | 'SERVICE_DOWN'
-  | 'TEST_FAILURE';
+  | "CICD_FAILURE"
+  | "DEPLOYMENT_FAILURE"
+  | "MONITORING_ALERT"
+  | "PERFORMANCE_DEGRADATION"
+  | "ERROR_SPIKE"
+  | "SECURITY_ALERT"
+  | "MANUAL_TRIGGER"
+  | "SERVICE_DOWN"
+  | "TEST_FAILURE";
 
-type EventSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+type EventSeverity = "critical" | "high" | "medium" | "low" | "info";
 
 interface EventPayload {
   // CI/CD fields
@@ -243,7 +247,7 @@ interface EventPayload {
 }
 
 interface EventMetadata {
-  environment?: 'production' | 'staging' | 'development' | 'test';
+  environment?: "production" | "staging" | "development" | "test";
   service?: string;
   team?: string;
   tags?: string[];
@@ -286,6 +290,7 @@ interface EventMetadata {
 ## Evidence Schema
 
 ### Description
+
 Represents all contextual information collected about an Event. This includes logs, metrics, git history, related incidents, and retrieved documentation. This is the comprehensive data package that gets sent to the LLM for analysis.
 
 ### JSON Schema
@@ -628,7 +633,7 @@ interface Evidence {
 interface LogEntry {
   source?: string;
   timestamp?: string;
-  level?: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
+  level?: "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
   message: string;
   stackTrace?: string;
   metadata?: Record<string, any>;
@@ -681,17 +686,17 @@ interface SystemState {
     deployedAt?: string;
     deployedBy?: string;
   };
-  serviceHealth?: Record<string, 'healthy' | 'degraded' | 'down' | 'unknown'>;
+  serviceHealth?: Record<string, "healthy" | "degraded" | "down" | "unknown">;
   dependencies?: Array<{
     name: string;
-    status: 'up' | 'down' | 'degraded';
+    status: "up" | "down" | "degraded";
     responseTime?: number;
   }>;
 }
 
 interface KnowledgeDocument {
   id: string;
-  type: 'runbook' | 'past_incident' | 'documentation' | 'best_practice' | 'playbook';
+  type: "runbook" | "past_incident" | "documentation" | "best_practice" | "playbook";
   title: string;
   excerpt?: string;
   similarity: number;
@@ -707,7 +712,7 @@ interface RelatedEvent {
   eventId: string;
   type: string;
   timestamp: string;
-  correlation: 'before' | 'after' | 'concurrent';
+  correlation: "before" | "after" | "concurrent";
 }
 ```
 
@@ -800,6 +805,7 @@ interface RelatedEvent {
 ## LLMAnalysisResult Schema
 
 ### Description
+
 Represents the output from the LLM's analysis of an Event and its Evidence. This is the AI's interpretation, including root cause identification, impact assessment, and recommended actions.
 
 ### JSON Schema
@@ -965,7 +971,7 @@ interface LLMAnalysisResult {
   summary: string;
   identifiedCause?: string;
   impactAssessment?: ImpactAssessment;
-  confidence?: 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
+  confidence?: "very_low" | "low" | "medium" | "high" | "very_high";
   confidenceScore?: number;
   reasoning?: string;
   recommendedActions?: LLMRecommendedAction[];
@@ -979,9 +985,9 @@ interface LLMAnalysisResult {
 }
 
 interface ImpactAssessment {
-  scope?: 'isolated' | 'service' | 'system' | 'organization';
-  affectedUsers?: 'none' | 'few' | 'some' | 'many' | 'all';
-  businessImpact?: 'none' | 'low' | 'medium' | 'high' | 'critical';
+  scope?: "isolated" | "service" | "system" | "organization";
+  affectedUsers?: "none" | "few" | "some" | "many" | "all";
+  businessImpact?: "none" | "low" | "medium" | "high" | "critical";
   description?: string;
 }
 
@@ -989,11 +995,11 @@ interface LLMRecommendedAction {
   actionType: string;
   description: string;
   reasoning?: string;
-  priority?: 'immediate' | 'high' | 'medium' | 'low';
+  priority?: "immediate" | "high" | "medium" | "low";
 }
 
 interface EvidenceReference {
-  type: 'log' | 'metric' | 'commit' | 'document' | 'related_incident';
+  type: "log" | "metric" | "commit" | "document" | "related_incident";
   reference: string;
   relevance?: string;
 }
@@ -1070,6 +1076,7 @@ interface EvidenceReference {
 ## ActionProposal Schema
 
 ### Description
+
 Represents a single actionable recommendation that has been validated and prepared for execution. Derived from LLMAnalysisResult, but structured for deterministic processing and approval workflows.
 
 ### JSON Schema
@@ -1080,7 +1087,15 @@ Represents a single actionable recommendation that has been validated and prepar
   "type": "object",
   "title": "ActionProposal",
   "description": "A validated, actionable recommendation ready for execution",
-  "required": ["id", "eventId", "actionType", "description", "confidence", "requiresApproval", "safetyLevel"],
+  "required": [
+    "id",
+    "eventId",
+    "actionType",
+    "description",
+    "confidence",
+    "requiresApproval",
+    "safetyLevel"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -1200,7 +1215,15 @@ Represents a single actionable recommendation that has been validated and prepar
     },
     "status": {
       "type": "string",
-      "enum": ["proposed", "approved", "rejected", "executing", "completed", "failed", "rolled_back"],
+      "enum": [
+        "proposed",
+        "approved",
+        "rejected",
+        "executing",
+        "completed",
+        "failed",
+        "rolled_back"
+      ],
       "description": "Current status of this action",
       "default": "proposed"
     },
@@ -1288,37 +1311,37 @@ interface ActionProposal {
 }
 
 type ActionType =
-  | 'rollback_deployment'
-  | 'restart_service'
-  | 'scale_service'
-  | 'add_environment_variable'
-  | 'update_configuration'
-  | 'rerun_pipeline'
-  | 'notify_team'
-  | 'run_diagnostic'
-  | 'update_documentation'
-  | 'create_ticket'
-  | 'post_comment'
-  | 'execute_runbook'
-  | 'manual_investigation';
+  | "rollback_deployment"
+  | "restart_service"
+  | "scale_service"
+  | "add_environment_variable"
+  | "update_configuration"
+  | "rerun_pipeline"
+  | "notify_team"
+  | "run_diagnostic"
+  | "update_documentation"
+  | "create_ticket"
+  | "post_comment"
+  | "execute_runbook"
+  | "manual_investigation";
 
-type ActionPriority = 'immediate' | 'high' | 'medium' | 'low';
+type ActionPriority = "immediate" | "high" | "medium" | "low";
 
-type SafetyLevel = 'safe' | 'low_risk' | 'medium_risk' | 'high_risk' | 'dangerous';
+type SafetyLevel = "safe" | "low_risk" | "medium_risk" | "high_risk" | "dangerous";
 
 type ActionStatus =
-  | 'proposed'
-  | 'approved'
-  | 'rejected'
-  | 'executing'
-  | 'completed'
-  | 'failed'
-  | 'rolled_back';
+  | "proposed"
+  | "approved"
+  | "rejected"
+  | "executing"
+  | "completed"
+  | "failed"
+  | "rolled_back";
 
 interface ExecutionDetails {
   api?: string;
   endpoint?: string;
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   parameters?: Record<string, any>;
   command?: string;
   script?: string;
@@ -1369,39 +1392,42 @@ interface ExecutionResult {
 ## Supporting Types
 
 ### EventType Enum
+
 ```typescript
 enum EventType {
-  CICD_FAILURE = 'CICD_FAILURE',
-  DEPLOYMENT_FAILURE = 'DEPLOYMENT_FAILURE',
-  MONITORING_ALERT = 'MONITORING_ALERT',
-  PERFORMANCE_DEGRADATION = 'PERFORMANCE_DEGRADATION',
-  ERROR_SPIKE = 'ERROR_SPIKE',
-  SECURITY_ALERT = 'SECURITY_ALERT',
-  MANUAL_TRIGGER = 'MANUAL_TRIGGER',
-  SERVICE_DOWN = 'SERVICE_DOWN',
-  TEST_FAILURE = 'TEST_FAILURE'
+  CICD_FAILURE = "CICD_FAILURE",
+  DEPLOYMENT_FAILURE = "DEPLOYMENT_FAILURE",
+  MONITORING_ALERT = "MONITORING_ALERT",
+  PERFORMANCE_DEGRADATION = "PERFORMANCE_DEGRADATION",
+  ERROR_SPIKE = "ERROR_SPIKE",
+  SECURITY_ALERT = "SECURITY_ALERT",
+  MANUAL_TRIGGER = "MANUAL_TRIGGER",
+  SERVICE_DOWN = "SERVICE_DOWN",
+  TEST_FAILURE = "TEST_FAILURE",
 }
 ```
 
 ### EventSeverity Enum
+
 ```typescript
 enum EventSeverity {
-  CRITICAL = 'critical',
-  HIGH = 'high',
-  MEDIUM = 'medium',
-  LOW = 'low',
-  INFO = 'info'
+  CRITICAL = "critical",
+  HIGH = "high",
+  MEDIUM = "medium",
+  LOW = "low",
+  INFO = "info",
 }
 ```
 
 ### ConfidenceLevel Enum
+
 ```typescript
 enum ConfidenceLevel {
-  VERY_LOW = 'very_low',
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  VERY_HIGH = 'very_high'
+  VERY_LOW = "very_low",
+  LOW = "low",
+  MEDIUM = "medium",
+  HIGH = "high",
+  VERY_HIGH = "very_high",
 }
 ```
 
@@ -1410,6 +1436,7 @@ enum ConfidenceLevel {
 ## Validation Rules
 
 ### Event Validation
+
 - `id` must match pattern `evt_[a-zA-Z0-9]+`
 - `timestamp` must be valid ISO 8601 format
 - `type` must be one of the defined EventType values
@@ -1418,6 +1445,7 @@ enum ConfidenceLevel {
 - `payload.url` must be valid URI if present
 
 ### Evidence Validation
+
 - `eventId` must reference an existing Event
 - `logs[].timestamp` must be valid ISO 8601
 - `metrics.summary` numeric fields must be >= 0
@@ -1425,6 +1453,7 @@ enum ConfidenceLevel {
 - `collectionDuration` must be positive number
 
 ### LLMAnalysisResult Validation
+
 - `summary` length: 10-500 characters
 - `identifiedCause` max length: 1000 characters
 - `confidenceScore` must be between 0 and 1
@@ -1432,6 +1461,7 @@ enum ConfidenceLevel {
 - `analyzedAt` must be valid ISO 8601
 
 ### ActionProposal Validation
+
 - `id` must match pattern `act_[a-zA-Z0-9]+`
 - `confidence` must be between 0 and 1
 - `requiresApproval` must be true for safetyLevel 'high_risk' or 'dangerous'
@@ -1509,6 +1539,7 @@ See individual schema sections above for detailed examples of each data type.
 **Document Version**: 1.0
 **Last Updated**: 2025-12-17
 **Related Documents**:
+
 - [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md) - System architecture overview
 - [CONFIDENCE_SCORING.md](./CONFIDENCE_SCORING.md) - Confidence scoring details
 - [PROMPT_TEMPLATES.md](./PROMPT_TEMPLATES.md) - LLM prompt templates

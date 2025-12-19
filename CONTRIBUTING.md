@@ -5,6 +5,7 @@ Thank you for your interest in contributing to Kenchi! This document provides gu
 ## Development Setup
 
 1. **Clone and Install**
+
    ```bash
    git clone <repository-url>
    cd kenchi
@@ -12,6 +13,7 @@ Thank you for your interest in contributing to Kenchi! This document provides gu
    ```
 
 2. **Set Up Environment**
+
    ```bash
    cp .env.example .env
    # Edit .env with your credentials
@@ -19,6 +21,7 @@ Thank you for your interest in contributing to Kenchi! This document provides gu
    ```
 
 3. **Build Shared Package**
+
    ```bash
    npm run build:shared
    ```
@@ -110,4 +113,3 @@ npm run build:api
 ## Questions?
 
 Feel free to open an issue for questions or clarifications.
-

@@ -25,6 +25,7 @@ Different AI tools have different mechanisms for discovering project context:
 ### What Gets Included
 
 The `.cursorrules` file is **always included in the AI context** when:
+
 - You use Cursor's chat feature
 - You use Cursor's Composer (code generation)
 - You use inline code suggestions
@@ -40,7 +41,8 @@ The `.cursorrules` file is **always included in the AI context** when:
 ### Example from Our Project
 
 Our `.cursorrules` file:
-- ✅ References `docs/CODE_ORGANIZATION.md` 
+
+- ✅ References `docs/CODE_ORGANIZATION.md`
 - ✅ References `packages/shared/src/index.ts`
 - ✅ Lists all available shared exports
 - ✅ Provides code examples
@@ -59,6 +61,7 @@ Our `.cursorrules` file:
 ### Methods to Use Documentation with Claude
 
 #### Method 1: Direct Reference
+
 ```
 "Before coding, please read:
 - docs/CODE_ORGANIZATION.md
@@ -67,13 +70,17 @@ Our `.cursorrules` file:
 ```
 
 #### Method 2: Copy Documentation
+
 Copy relevant sections from:
+
 - `docs/CODE_ORGANIZATION.md`
 - `docs/AI_TOOL_GUIDELINES.md`
 - `.claude-config.md`
 
 #### Method 3: Use Claude's File Reading
+
 If Claude has file access:
+
 ```
 "Please read the .claude-config.md file in the project root"
 ```
@@ -109,7 +116,7 @@ If Claude has file access:
 // IMPORTANT: Always import from @kenchi/shared
 // See docs/CODE_ORGANIZATION.md for rules
 // Available exports: packages/shared/src/index.ts
-import { logger, config } from '@kenchi/shared';
+import { logger, config } from "@kenchi/shared";
 ```
 
 ## Other AI Tools
@@ -140,6 +147,7 @@ Since Cursor automatically reads this, put the most important rules here:
 # .cursorrules
 
 ## MANDATORY: Read These First
+
 1. packages/shared/src/index.ts - Available exports
 2. docs/CODE_ORGANIZATION.md - Code organization rules
 3. docs/AI_TOOL_GUIDELINES.md - Quick reference
@@ -154,7 +162,7 @@ Add comments that reference documentation:
  * IMPORTANT: Before modifying this file, read:
  * - docs/CODE_ORGANIZATION.md
  * - packages/shared/src/index.ts
- * 
+ *
  * Always import from @kenchi/shared, never duplicate code.
  */
 ```
@@ -167,11 +175,13 @@ Create `AI_README.md` in the root that AI tools might discover:
 # AI Assistant Instructions
 
 Before writing code, read:
+
 1. docs/CODE_ORGANIZATION.md
 2. packages/shared/src/index.ts
 3. .cursorrules
 
 Rules:
+
 - Always import from @kenchi/shared
 - Never duplicate code
 - Check shared package first
@@ -211,12 +221,12 @@ When starting a conversation with an AI tool, provide this prompt:
 
 ### How Each Tool Uses Them
 
-| Tool | .cursorrules | .claude-config.md | docs/ | Auto-Read? |
-|------|--------------|-------------------|-------|------------|
-| Cursor AI | ✅ Yes | ❌ No | ✅ Referenced | ✅ Yes |
-| Claude | ⚠️ Maybe | ✅ Reference | ⚠️ Manual | ❌ No |
-| Copilot | ⚠️ Maybe | ❌ No | ❌ No | ⚠️ Partial |
-| Others | ⚠️ Maybe | ❌ No | ❌ No | ❌ No |
+| Tool      | .cursorrules | .claude-config.md | docs/         | Auto-Read? |
+| --------- | ------------ | ----------------- | ------------- | ---------- |
+| Cursor AI | ✅ Yes       | ❌ No             | ✅ Referenced | ✅ Yes     |
+| Claude    | ⚠️ Maybe     | ✅ Reference      | ⚠️ Manual     | ❌ No      |
+| Copilot   | ⚠️ Maybe     | ❌ No             | ❌ No         | ⚠️ Partial |
+| Others    | ⚠️ Maybe     | ❌ No             | ❌ No         | ❌ No      |
 
 ## Recommendations
 
@@ -227,6 +237,7 @@ When starting a conversation with an AI tool, provide this prompt:
 ### For Claude Users
 
 1. **Start conversations with context:**
+
    ```
    "I'm working on the Kenchi project. Please read:
    - .claude-config.md
@@ -252,4 +263,3 @@ When starting a conversation with an AI tool, provide this prompt:
 - **Other tools**: ⚠️ Need manual context or configuration
 
 **Best practice**: Always start AI conversations with a reference to the relevant documentation, even if the tool claims to auto-read files.
-

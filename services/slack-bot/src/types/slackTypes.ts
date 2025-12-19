@@ -3,7 +3,7 @@
  * These types extend the shared Event types with Slack-specific structures.
  */
 
-import type { Event, EventType, EventSeverity, EventPayload } from '@kenchi/shared';
+import type { Event, EventType, EventSeverity, EventPayload } from "@kenchi/shared";
 
 /**
  * Slack command payload structure
@@ -37,12 +37,12 @@ export interface SlackActionValue {
 /**
  * Slack event types
  */
-export type SlackEventType = 'SLACK_COMMAND' | 'SLACK_MENTION';
+export type SlackEventType = "SLACK_COMMAND" | "SLACK_MENTION";
 
 /**
  * Extended Event type for Slack events
  */
-export interface SlackEvent extends Omit<Event, 'type' | 'payload'> {
+export interface SlackEvent extends Omit<Event, "type" | "payload"> {
   readonly type: EventType | SlackEventType;
   readonly payload: EventPayload | SlackCommandPayload | SlackMentionPayload;
 }
@@ -58,7 +58,7 @@ export interface SlackBlock {
 /**
  * Slack action status types
  */
-export type SlackActionStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+export type SlackActionStatus = "pending" | "in_progress" | "completed" | "failed";
 
 // ==================== HTTP Endpoint Types ====================
 
@@ -113,7 +113,7 @@ export interface SlackMessageRequest {
  * Response structure for POST /slack/message endpoint.
  */
 export interface SlackMessagePostResponse {
-  readonly status: 'sent' | 'error';
+  readonly status: "sent" | "error";
   readonly channel?: string;
   readonly timestamp?: string;
   readonly thread_ts?: string;
@@ -134,7 +134,7 @@ export interface SlackBroadcastRequest {
 export interface SlackBroadcastChannelResult {
   readonly name: string;
   readonly id: string;
-  readonly status: 'sent' | 'failed';
+  readonly status: "sent" | "failed";
   readonly error?: string;
 }
 
@@ -142,11 +142,10 @@ export interface SlackBroadcastChannelResult {
  * Response structure for POST /slack/broadcast endpoint.
  */
 export interface SlackBroadcastResponse {
-  readonly status: 'sent' | 'partial' | 'error';
+  readonly status: "sent" | "partial" | "error";
   readonly channelsCount: number;
   readonly successCount: number;
   readonly failedCount: number;
   readonly channels?: readonly SlackBroadcastChannelResult[];
   readonly error?: string;
 }
-

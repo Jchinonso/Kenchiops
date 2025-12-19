@@ -64,10 +64,7 @@ export class InMemoryVectorStore extends VectorStore {
     this.docs = new Map();
   }
 
-  readonly upsertDocumentEmbedding = async (
-    id: string,
-    content: string
-  ): Promise<void> => {
+  readonly upsertDocumentEmbedding = async (id: string, content: string): Promise<void> => {
     // TODO: Replace with real embedding generation + vector DB upsert.
     this.docs.set(id, content);
   };
@@ -78,4 +75,3 @@ export class InMemoryVectorStore extends VectorStore {
     return Array.from(this.docs.keys());
   };
 }
-

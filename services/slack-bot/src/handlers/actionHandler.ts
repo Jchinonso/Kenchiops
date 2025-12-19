@@ -3,28 +3,28 @@
  * Processes approve/reject actions and feedback buttons.
  */
 
-import type { ButtonAction, SayFn, SayArguments } from '@slack/bolt';
-import { createLogger, UI_CONSTANTS } from '@kenchi/shared';
-import { formatProgressUpdate } from '../formatters.js';
-import type { SlackActionValue } from '../types/slackTypes.js';
+import type { ButtonAction, SayFn, SayArguments } from "@slack/bolt";
+import { createLogger, UI_CONSTANTS } from "@kenchi/shared";
+import { formatProgressUpdate } from "../formatters.js";
+import type { SlackActionValue } from "../types/slackTypes.js";
 
 // Type for Slack blocks compatible with Bolt
-type SlackBlocks = NonNullable<SayArguments['blocks']>;
+type SlackBlocks = NonNullable<SayArguments["blocks"]>;
 
-const logger = createLogger('slack-bot');
+const logger = createLogger("slack-bot");
 
 /**
  * Parses action value from Slack button action.
  */
 const parseActionValue = (action: ButtonAction): SlackActionValue => {
   if (!action.value) {
-    throw new Error('Action value is missing');
+    throw new Error("Action value is missing");
   }
   try {
     return JSON.parse(action.value) as SlackActionValue;
   } catch (error) {
     throw new Error(
-      `Failed to parse action value: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to parse action value: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
 };
@@ -41,20 +41,20 @@ export const handleActionApproval = async (
   await ack();
 
   const actionId = action.action_id;
-  logger.info('Action approved', { action_id: actionId });
+  logger.info("Action approved", { action_id: actionId });
 
   try {
     const value = parseActionValue(action);
 
     if (!say) {
-      logger.warn('Say function not available for action approval');
+      logger.warn("Say function not available for action approval");
       return;
     }
 
     const inProgressBlocks = formatProgressUpdate(
       value.actionId,
-      'in_progress',
-      'Action approved and executing...'
+      "in_progress",
+      "Action approved and executing..."
     );
 
     await say({
@@ -68,8 +68,8 @@ export const handleActionApproval = async (
       if (say) {
         const completedBlocks = formatProgressUpdate(
           value.actionId,
-          'completed',
-          'Action completed successfully'
+          "completed",
+          "Action completed successfully"
         );
 
         await say({
@@ -79,8 +79,8 @@ export const handleActionApproval = async (
       }
     }, UI_CONSTANTS.ACTION_TIMEOUT_MS);
   } catch (error) {
-    logger.error('Error handling action approval', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    logger.error("Error handling action approval", {
+      error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
@@ -98,20 +98,20 @@ export const handleActionRejection = async (
   await ack();
 
   const actionId = action.action_id;
-  logger.info('Action rejected', { action_id: actionId });
+  logger.info("Action rejected", { action_id: actionId });
 
   try {
     const value = parseActionValue(action);
 
     if (!say) {
-      logger.warn('Say function not available for action rejection');
+      logger.warn("Say function not available for action rejection");
       return;
     }
 
     const rejectedBlocks = formatProgressUpdate(
       value.actionId,
-      'failed',
-      'Action rejected by user'
+      "failed",
+      "Action rejected by user"
     );
 
     await say({
@@ -119,8 +119,8 @@ export const handleActionRejection = async (
       ...(messageTs && { thread_ts: messageTs }),
     });
   } catch (error) {
-    logger.error('Error handling action rejection', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    logger.error("Error handling action rejection", {
+      error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
@@ -136,7 +136,7 @@ export const handlePositiveFeedback = async (
   await ack();
 
   const eventId = action.value;
-  logger.info('Positive feedback received', { event_id: eventId });
+  logger.info("Positive feedback received", { event_id: eventId });
 
   // TODO: Store feedback in database/metrics
 };
@@ -151,7 +151,7 @@ export const handleNegativeFeedback = async (
   await ack();
 
   const eventId = action.value;
-  logger.info('Negative feedback received', { event_id: eventId });
+  logger.info("Negative feedback received", { event_id: eventId });
 
   // TODO: Store feedback in database/metrics
 };

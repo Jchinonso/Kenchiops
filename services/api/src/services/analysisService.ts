@@ -13,10 +13,10 @@ import {
   type Evidence,
   type LLMAnalysisResult,
   LLMError,
-} from '@kenchi/shared';
-import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from '../types/apiTypes.js';
+} from "@kenchi/shared";
+import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
-const logger = createLogger('api');
+const logger = createLogger("api");
 
 /**
  * Singleton OpenAI client instance
@@ -29,7 +29,7 @@ let openaiClientInstance: OpenAIClient | null = null;
 const getOpenAIClient = (): OpenAIClient => {
   if (!openaiClientInstance) {
     openaiClientInstance = new OpenAIClient();
-    logger.info('OpenAI client initialized');
+    logger.info("OpenAI client initialized");
   }
   return openaiClientInstance;
 };
@@ -51,15 +51,15 @@ export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext 
 
   const event: Event = {
     id: eventId,
-    type: 'CICD_FAILURE',
-    source: 'n8n',
+    type: "CICD_FAILURE",
+    source: "n8n",
     timestamp: new Date().toISOString(),
-    severity: 'high',
+    severity: "high",
     title: `CI Failure in ${request.repository}`,
     payload: {
       repository: request.repository,
       failureLog: request.failure_log,
-      commit: request.commit || 'unknown',
+      commit: request.commit || "unknown",
     },
   };
 
@@ -67,10 +67,10 @@ export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext 
     eventId,
     logs: [
       {
-        level: 'ERROR',
+        level: "ERROR",
         message: request.failure_log,
         timestamp: new Date().toISOString(),
-        source: 'ci',
+        source: "ci",
       },
     ],
     collectedAt: new Date().toISOString(),
@@ -92,12 +92,12 @@ export const analyzeFailure = async (
     const result = await openaiClient.analyzeIncident(event, evidence);
     return result;
   } catch (error) {
-    logger.error('OpenAI analysis failed', {
+    logger.error("OpenAI analysis failed", {
       eventId: event.id,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     });
     throw new LLMError(
-      `Failed to analyze CI failure: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to analyze CI failure: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
 };
@@ -128,14 +128,14 @@ export const formatAnalysisResponse = (
 export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeResponse> => {
   const { event, evidence } = createAnalysisContext(request);
 
-  logger.info('CI failure analysis requested', {
+  logger.info("CI failure analysis requested", {
     eventId: event.id,
     repository: request.repository,
   });
 
   const analysisResult = await analyzeFailure(event, evidence);
 
-  logger.info('Analysis completed', {
+  logger.info("Analysis completed", {
     eventId: event.id,
     confidence: calculateConfidenceScore(analysisResult, evidence).finalScore,
     hasActions: (analysisResult.recommendedActions?.length ?? 0) > 0,

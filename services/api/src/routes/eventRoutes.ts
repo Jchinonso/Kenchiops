@@ -4,7 +4,7 @@
  * Handles event ingestion and processing
  */
 
-import { Router } from 'express';
+import { Router } from "express";
 import {
   asyncHandler,
   createLogger,
@@ -12,10 +12,10 @@ import {
   validators,
   HTTP_STATUS,
   type WebhookEvent,
-} from '@kenchi/shared';
+} from "@kenchi/shared";
 
 const router = Router();
-const logger = createLogger('api');
+const logger = createLogger("api");
 
 /**
  * Event ingestion endpoint
@@ -25,7 +25,7 @@ const logger = createLogger('api');
  * TODO: Trigger analysis workflows
  */
 router.post(
-  '/events',
+  "/events",
   validate({
     body: {
       source: (v) => validators.required(v) && validators.string(v),
@@ -35,7 +35,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const event = req.body as WebhookEvent;
 
-    logger.info('Event received', {
+    logger.info("Event received", {
       source: event.source,
       type: event.type,
       timestamp: event.timestamp,
@@ -46,8 +46,8 @@ router.post(
     // TODO: Trigger appropriate analysis workflow
 
     res.status(HTTP_STATUS.OK).json({
-      status: 'accepted',
-      message: 'TODO: Implement event processing and storage',
+      status: "accepted",
+      message: "TODO: Implement event processing and storage",
     });
   })
 );

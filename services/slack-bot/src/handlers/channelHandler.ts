@@ -3,8 +3,8 @@
  * Handles channel resolution, messaging, broadcasting, and member events.
  */
 
-import { logger, SLACK_CHANNEL_ID_PATTERN, UI_CONSTANTS } from '@kenchi/shared';
-import type Bolt from '@slack/bolt';
+import { logger, SLACK_CHANNEL_ID_PATTERN, UI_CONSTANTS } from "@kenchi/shared";
+import type Bolt from "@slack/bolt";
 import type {
   SlackMessageRequest,
   SlackMessagePostResponse,
@@ -13,17 +13,17 @@ import type {
   SlackBroadcastChannelResult,
   SlackBlock,
   CIFailureAnalysis,
-} from '../types/slackTypes.js';
+} from "../types/slackTypes.js";
 
 /**
  * Color codes for Slack attachments based on severity/confidence.
  */
 const SLACK_COLORS = {
-  DANGER: '#E01E5A',      // Red - critical/low confidence
-  WARNING: '#ECB22E',     // Yellow - medium confidence
-  SUCCESS: '#2EB67D',     // Green - high confidence
-  INFO: '#36C5F0',        // Blue - informational
-  PURPLE: '#4A154B',      // Purple - Slack brand color
+  DANGER: "#E01E5A", // Red - critical/low confidence
+  WARNING: "#ECB22E", // Yellow - medium confidence
+  SUCCESS: "#2EB67D", // Green - high confidence
+  INFO: "#36C5F0", // Blue - informational
+  PURPLE: "#4A154B", // Purple - Slack brand color
 } as const;
 
 /**
@@ -39,9 +39,9 @@ const getConfidenceColor = (confidence: number): string => {
  * Gets confidence level label.
  */
 const getConfidenceLabel = (confidence: number): string => {
-  if (confidence >= 0.8) return 'High';
-  if (confidence >= 0.5) return 'Medium';
-  return 'Low';
+  if (confidence >= 0.8) return "High";
+  if (confidence >= 0.5) return "Medium";
+  return "Low";
 };
 
 /**
@@ -49,9 +49,9 @@ const getConfidenceLabel = (confidence: number): string => {
  */
 const getPriorityEmoji = (priority: string): string => {
   const p = priority.toLowerCase();
-  if (p === 'critical' || p === 'high') return ':red_circle:';
-  if (p === 'medium') return ':large_orange_circle:';
-  return ':white_circle:';
+  if (p === "critical" || p === "high") return ":red_circle:";
+  if (p === "medium") return ":large_orange_circle:";
+  return ":white_circle:";
 };
 
 /**
@@ -65,33 +65,33 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
   const blocks: SlackBlock[] = [
     // Header
     {
-      type: 'header',
+      type: "header",
       text: {
-        type: 'plain_text',
-        text: ':rotating_light: CI Failure Analysis',
+        type: "plain_text",
+        text: ":rotating_light: CI Failure Analysis",
         emoji: true,
       },
     },
     // Repository and Confidence
     {
-      type: 'section',
+      type: "section",
       fields: [
         {
-          type: 'mrkdwn',
+          type: "mrkdwn",
           text: `:package: *Repository*\n\`${analysis.repository}\``,
         },
         {
-          type: 'mrkdwn',
+          type: "mrkdwn",
           text: `:bar_chart: *Confidence*\n${confidenceLabel} (${confidencePercent}%)`,
         },
       ],
     },
-    { type: 'divider' },
+    { type: "divider" },
     // Summary
     {
-      type: 'section',
+      type: "section",
       text: {
-        type: 'mrkdwn',
+        type: "mrkdwn",
         text: `:mag: *Summary*\n${analysis.analysis}`,
       },
     },
@@ -100,11 +100,11 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
   // Identified Cause (if available)
   if (analysis.identified_cause) {
     blocks.push(
-      { type: 'divider' },
+      { type: "divider" },
       {
-        type: 'section',
+        type: "section",
         text: {
-          type: 'mrkdwn',
+          type: "mrkdwn",
           text: `:dart: *Root Cause*\n${analysis.identified_cause}`,
         },
       }
@@ -114,12 +114,12 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
   // Recommended Actions (if available)
   if (analysis.recommended_actions && analysis.recommended_actions.length > 0) {
     blocks.push(
-      { type: 'divider' },
+      { type: "divider" },
       {
-        type: 'section',
+        type: "section",
         text: {
-          type: 'mrkdwn',
-          text: ':hammer_and_wrench: *Recommended Actions*',
+          type: "mrkdwn",
+          text: ":hammer_and_wrench: *Recommended Actions*",
         },
       }
     );
@@ -131,12 +131,12 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
         const priorityLabel = action.priority.charAt(0).toUpperCase() + action.priority.slice(1);
         return `${emoji} *${priorityLabel}:* ${action.description}`;
       })
-      .join('\n');
+      .join("\n");
 
     blocks.push({
-      type: 'section',
+      type: "section",
       text: {
-        type: 'mrkdwn',
+        type: "mrkdwn",
         text: actionsText,
       },
     });
@@ -144,12 +144,12 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
 
   // Footer with timestamp
   blocks.push(
-    { type: 'divider' },
+    { type: "divider" },
     {
-      type: 'context',
+      type: "context",
       elements: [
         {
-          type: 'mrkdwn',
+          type: "mrkdwn",
           text: `:clock1: Analyzed at ${new Date().toISOString()} | :robot_face: Kenchi DevOps Assistant`,
         },
       ],
@@ -183,7 +183,7 @@ export const createAnalysisAttachments = (analysis: CIFailureAnalysis): MessageA
 };
 
 type SlackApp = InstanceType<typeof Bolt.App>;
-type SlackClient = SlackApp['client'];
+type SlackClient = SlackApp["client"];
 
 /**
  * Channel information from Slack API.
@@ -212,32 +212,30 @@ export const resolveChannelId = async (
     return channelNameOrId;
   }
 
-  const channelName = channelNameOrId.replace(/^#/, '');
+  const channelName = channelNameOrId.replace(/^#/, "");
 
   try {
     const result = await client.conversations.list({
-      types: 'public_channel,private_channel',
+      types: "public_channel,private_channel",
       limit: 1000,
     });
 
-    const channel = result.channels?.find(
-      (c: SlackChannel) => c.name === channelName
-    );
+    const channel = result.channels?.find((c: SlackChannel) => c.name === channelName);
 
     if (!channel?.id) {
       throw new Error(`Channel "${channelName}" not found`);
     }
 
-    logger.info('Resolved channel name to ID', {
+    logger.info("Resolved channel name to ID", {
       channelName,
       channelId: channel.id,
     });
 
     return channel.id;
   } catch (error) {
-    logger.error('Failed to resolve channel name', {
+    logger.error("Failed to resolve channel name", {
       channelName,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     });
     throw error;
   }
@@ -249,17 +247,13 @@ export const resolveChannelId = async (
  * @param client - Slack client instance
  * @returns Array of channels where bot is a member
  */
-export const getBotMemberChannels = async (
-  client: SlackClient
-): Promise<SlackChannel[]> => {
+export const getBotMemberChannels = async (client: SlackClient): Promise<SlackChannel[]> => {
   const result = await client.conversations.list({
-    types: 'public_channel,private_channel',
+    types: "public_channel,private_channel",
     limit: 1000,
   });
 
-  return (result.channels || []).filter(
-    (channel: SlackChannel) => channel.is_member === true
-  );
+  return (result.channels || []).filter((channel: SlackChannel) => channel.is_member === true);
 };
 
 /**
@@ -276,7 +270,7 @@ export const postMessage = async (
 ): Promise<SlackMessagePostResponse> => {
   const { channel, message, thread_ts, blocks, attachments, analysis } = request;
 
-  logger.info('Slack message request received', {
+  logger.info("Slack message request received", {
     channel,
     hasThread: !!thread_ts,
     hasBlocks: !!blocks,
@@ -290,7 +284,7 @@ export const postMessage = async (
     // Build message payload
     let messageBlocks: SlackBlock[] | undefined;
     let messageAttachments: MessageAttachment[] | undefined;
-    let fallbackText = message || 'CI Failure Analysis';
+    let fallbackText = message || "CI Failure Analysis";
 
     // If analysis data is provided, format it into beautiful blocks
     if (analysis) {
@@ -300,10 +294,10 @@ export const postMessage = async (
       messageBlocks = [...blocks] as SlackBlock[];
     } else if (attachments) {
       // Convert readonly attachments to mutable
-      messageAttachments = attachments.map(a => ({
-        color: a.color || '',
-        fallback: a.fallback || '',
-        blocks: a.blocks ? [...a.blocks] as SlackBlock[] : [],
+      messageAttachments = attachments.map((a) => ({
+        color: a.color || "",
+        fallback: a.fallback || "",
+        blocks: a.blocks ? ([...a.blocks] as SlackBlock[]) : [],
       }));
     }
 
@@ -315,7 +309,7 @@ export const postMessage = async (
       ...(thread_ts && { thread_ts }),
     });
 
-    logger.info('Message posted to Slack', {
+    logger.info("Message posted to Slack", {
       channel,
       channelId,
       timestamp: result.ts,
@@ -324,20 +318,20 @@ export const postMessage = async (
     });
 
     return {
-      status: 'sent',
+      status: "sent",
       channel: channelId,
       timestamp: result.ts,
       thread_ts: result.ts,
     };
   } catch (error) {
-    logger.error('Failed to post message to Slack', {
+    logger.error("Failed to post message to Slack", {
       channel,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     });
 
     return {
-      status: 'error',
-      error: error instanceof Error ? error.message : 'Failed to post message',
+      status: "error",
+      error: error instanceof Error ? error.message : "Failed to post message",
     };
   }
 };
@@ -355,18 +349,18 @@ export const broadcastMessage = async (
 ): Promise<SlackBroadcastResponse> => {
   const { message } = request;
 
-  logger.info('Slack broadcast request received');
+  logger.info("Slack broadcast request received");
 
   try {
     const channels = await getBotMemberChannels(client);
-    logger.info('Broadcasting to channels where bot is a member', {
+    logger.info("Broadcasting to channels where bot is a member", {
       count: channels.length,
     });
 
     const results = await Promise.allSettled(
       channels.map(async (channel): Promise<SlackBroadcastChannelResult> => {
         if (!channel.id || !channel.name) {
-          throw new Error('Invalid channel data');
+          throw new Error("Invalid channel data");
         }
 
         try {
@@ -375,7 +369,7 @@ export const broadcastMessage = async (
             text: message,
           });
 
-          logger.info('Message posted to channel', {
+          logger.info("Message posted to channel", {
             channelName: channel.name,
             channelId: channel.id,
             timestamp: postResult.ts,
@@ -384,37 +378,36 @@ export const broadcastMessage = async (
           return {
             name: channel.name,
             id: channel.id,
-            status: 'sent',
+            status: "sent",
           };
         } catch (error) {
-          logger.error('Failed to post to channel', {
+          logger.error("Failed to post to channel", {
             channelName: channel.name,
             channelId: channel.id,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: error instanceof Error ? error.message : "Unknown error",
           });
 
           return {
             name: channel.name,
             id: channel.id,
-            status: 'failed',
-            error: error instanceof Error ? error.message : 'Unknown error',
+            status: "failed",
+            error: error instanceof Error ? error.message : "Unknown error",
           };
         }
       })
     );
 
     const channelResults = results.map((r) =>
-      r.status === 'fulfilled'
+      r.status === "fulfilled"
         ? r.value
-        : { name: 'unknown', id: 'unknown', status: 'failed' as const }
+        : { name: "unknown", id: "unknown", status: "failed" as const }
     );
-    const successCount = channelResults.filter((r) => r.status === 'sent').length;
-    const failedCount = channelResults.filter((r) => r.status === 'failed').length;
+    const successCount = channelResults.filter((r) => r.status === "sent").length;
+    const failedCount = channelResults.filter((r) => r.status === "failed").length;
 
-    const status =
-      failedCount === 0 ? 'sent' : successCount > 0 ? 'partial' : 'error';
+    const status = failedCount === 0 ? "sent" : successCount > 0 ? "partial" : "error";
 
-    logger.info('Broadcast completed', {
+    logger.info("Broadcast completed", {
       total: channels.length,
       success: successCount,
       failed: failedCount,
@@ -428,16 +421,16 @@ export const broadcastMessage = async (
       channels: channelResults,
     };
   } catch (error) {
-    logger.error('Failed to broadcast message', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    logger.error("Failed to broadcast message", {
+      error: error instanceof Error ? error.message : "Unknown error",
     });
 
     return {
-      status: 'error',
+      status: "error",
       channelsCount: 0,
       successCount: 0,
       failedCount: 0,
-      error: error instanceof Error ? error.message : 'Failed to broadcast',
+      error: error instanceof Error ? error.message : "Failed to broadcast",
     };
   }
 };
@@ -458,7 +451,7 @@ export const handleBotJoinedChannel = async (
   try {
     const memberChannels = await getBotMemberChannels(client);
 
-    logger.info('Bot joined channel', {
+    logger.info("Bot joined channel", {
       channel: channelId,
       totalMemberChannels: memberChannels.length,
     });
@@ -468,18 +461,16 @@ export const handleBotJoinedChannel = async (
 
       await client.chat.postMessage({
         channel: channelId,
-        text: `⚠️ **Single Channel Policy**\n\nI'm already active in <#${firstChannel?.id || 'another channel'}>.\n\nI can only be in ONE channel at a time. Please remove me from the other channel first if you want me here.\n\n_Leaving this channel now..._`,
+        text: `⚠️ **Single Channel Policy**\n\nI'm already active in <#${firstChannel?.id || "another channel"}>.\n\nI can only be in ONE channel at a time. Please remove me from the other channel first if you want me here.\n\n_Leaving this channel now..._`,
       });
 
-      await new Promise((resolve) =>
-        setTimeout(resolve, UI_CONSTANTS.ACTION_TIMEOUT_MS)
-      );
+      await new Promise((resolve) => setTimeout(resolve, UI_CONSTANTS.ACTION_TIMEOUT_MS));
 
       await client.conversations.leave({
         channel: channelId,
       });
 
-      logger.info('Bot left channel due to single-channel policy', {
+      logger.info("Bot left channel due to single-channel policy", {
         leftChannel: channelId,
         activeChannel: firstChannel?.id,
       });
@@ -489,15 +480,15 @@ export const handleBotJoinedChannel = async (
         text: `👋 **Hello! I'm the Kenchi DevOps Assistant**\n\n✅ I'm now active in this channel.\n\nI'll broadcast CI failure analysis and other DevOps alerts here.\n\n_Note: I can only be in ONE channel at a time._`,
       });
 
-      logger.info('Bot successfully joined first channel', {
+      logger.info("Bot successfully joined first channel", {
         channel: channelId,
       });
     }
   } catch (error) {
     // Log full error details for debugging
     const errorDetails = error as { data?: { needed?: string; provided?: string } };
-    logger.error('Failed to handle member_joined_channel event', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    logger.error("Failed to handle member_joined_channel event", {
+      error: error instanceof Error ? error.message : "Unknown error",
       channel: channelId,
       needed: errorDetails?.data?.needed,
       provided: errorDetails?.data?.provided,

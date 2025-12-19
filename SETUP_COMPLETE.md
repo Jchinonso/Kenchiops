@@ -12,6 +12,7 @@ All services are running and configured:
 ## Workflow Configuration
 
 The workflow file (`n8n/workflows/ci-failure-analysis.json`) is configured with:
+
 - API endpoint: `http://api:3000/api/analyze`
 - Slack endpoint: `http://slack-bot:3001/slack/message`
 
@@ -50,4 +51,3 @@ docker compose down
 # Start all
 docker compose up -d
 ```
-

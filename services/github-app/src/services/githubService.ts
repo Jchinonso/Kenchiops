@@ -5,8 +5,8 @@
  * Uses caching for Octokit instances per installation.
  */
 
-import { createAppAuth } from '@octokit/auth-app';
-import { Octokit } from '@octokit/rest';
+import { createAppAuth } from "@octokit/auth-app";
+import { Octokit } from "@octokit/rest";
 import {
   createLogger,
   OpenAIClient,
@@ -17,11 +17,11 @@ import {
   type ConfidenceScoreResult,
   LLMError,
   ExternalServiceError,
-} from '@kenchi/shared';
-import { appConfig } from '../config/appConfig.js';
-import type { PullRequestWebhook, CheckRunWebhook } from '../types/githubTypes.js';
+} from "@kenchi/shared";
+import { appConfig } from "../config/appConfig.js";
+import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
 
-const logger = createLogger('github-app');
+const logger = createLogger("github-app");
 
 /**
  * Cached Octokit instances per installation
@@ -39,7 +39,7 @@ let openaiClientInstance: OpenAIClient | null = null;
 export const getOpenAIClient = (): OpenAIClient => {
   if (!openaiClientInstance) {
     openaiClientInstance = new OpenAIClient();
-    logger.info('OpenAI client initialized');
+    logger.info("OpenAI client initialized");
   }
   return openaiClientInstance;
 };
@@ -54,7 +54,7 @@ export const getOctokit = async (installationId: number): Promise<Octokit> => {
     return cached;
   }
 
-  logger.info('Creating new Octokit instance', { installationId });
+  logger.info("Creating new Octokit instance", { installationId });
 
   const auth = createAppAuth({
     appId: appConfig.github.appId,
@@ -99,17 +99,17 @@ const generateEventId = (prefix: string): string => {
  * Create an Event from a pull request webhook
  */
 export const createEventFromPR = (webhook: PullRequestWebhook): Event => ({
-  id: generateEventId('pr'),
-  type: 'MANUAL_TRIGGER',
-  source: 'github',
+  id: generateEventId("pr"),
+  type: "MANUAL_TRIGGER",
+  source: "github",
   timestamp: new Date().toISOString(),
-  severity: 'medium',
+  severity: "medium",
   title: `PR #${webhook.pull_request.number}: ${webhook.pull_request.title}`,
   payload: {
     action: webhook.action,
     prNumber: webhook.pull_request.number,
     title: webhook.pull_request.title,
-    body: webhook.pull_request.body || '',
+    body: webhook.pull_request.body || "",
     repository: webhook.repository.full_name,
     author: webhook.pull_request.user.login,
     headSha: webhook.pull_request.head.sha,
@@ -127,11 +127,11 @@ export const createEventFromPR = (webhook: PullRequestWebhook): Event => ({
  * Create an Event from a check run webhook
  */
 export const createEventFromCheckRun = (webhook: CheckRunWebhook): Event => ({
-  id: generateEventId('check'),
-  type: 'CICD_FAILURE',
-  source: 'github',
+  id: generateEventId("check"),
+  type: "CICD_FAILURE",
+  source: "github",
   timestamp: new Date().toISOString(),
-  severity: 'high',
+  severity: "high",
   title: `CI Failure: ${webhook.check_run.name}`,
   payload: {
     action: webhook.action,
@@ -164,7 +164,7 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
   const evidence = createMinimalEvidence(event.id);
   const openaiClient = getOpenAIClient();
 
-  logger.info('Starting analysis', {
+  logger.info("Starting analysis", {
     eventId: event.id,
     type: event.type,
   });
@@ -173,7 +173,7 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
     const analysis = await openaiClient.analyzeIncident(event, evidence);
     const confidence = calculateConfidenceScore(analysis, evidence);
 
-    logger.info('Analysis completed', {
+    logger.info("Analysis completed", {
       eventId: event.id,
       confidence: confidence.finalScore,
       gating: confidence.gatingDecision,
@@ -181,13 +181,13 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
 
     return { analysis, confidence, event };
   } catch (error) {
-    logger.error('Analysis failed', {
+    logger.error("Analysis failed", {
       eventId: event.id,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     });
 
     throw new LLMError(
-      `Failed to analyze: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to analyze: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
 };
@@ -212,22 +212,22 @@ export const postPRComment = async (
       body,
     });
 
-    logger.info('Posted PR comment', {
+    logger.info("Posted PR comment", {
       owner,
       repo,
       prNumber,
     });
   } catch (error) {
-    logger.error('Failed to post PR comment', {
+    logger.error("Failed to post PR comment", {
       owner,
       repo,
       prNumber,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     });
 
     throw new ExternalServiceError(
-      'GitHub',
-      `Failed to post comment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      "GitHub",
+      `Failed to post comment: ${error instanceof Error ? error.message : "Unknown error"}`,
       { owner, repo, prNumber }
     );
   }
@@ -241,7 +241,7 @@ export const formatAnalysisComment = (result: AnalysisResult): string => {
   const confidencePercent = Math.round(confidence.finalScore * 100);
 
   let comment = `## AI Analysis\n\n`;
-  comment += `**Confidence:** ${confidencePercent}% (${confidence.gatingDecision.replace('_', ' ')})\n\n`;
+  comment += `**Confidence:** ${confidencePercent}% (${confidence.gatingDecision.replace("_", " ")})\n\n`;
   comment += `### Summary\n${analysis.summary}\n\n`;
 
   if (analysis.identifiedCause) {
@@ -253,7 +253,7 @@ export const formatAnalysisComment = (result: AnalysisResult): string => {
     for (const action of analysis.recommendedActions) {
       comment += `- **${action.priority}:** ${action.description}\n`;
     }
-    comment += '\n';
+    comment += "\n";
   }
 
   if (analysis.uncertainties && analysis.uncertainties.length > 0) {
@@ -261,7 +261,7 @@ export const formatAnalysisComment = (result: AnalysisResult): string => {
     for (const uncertainty of analysis.uncertainties) {
       comment += `- ${uncertainty}\n`;
     }
-    comment += '\n';
+    comment += "\n";
   }
 
   comment += `---\n*Generated by Kenchi DevOps Assistant*`;

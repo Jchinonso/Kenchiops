@@ -38,6 +38,7 @@ docker compose up -d
 ```
 
 This starts:
+
 - API Service (port 3000)
 - Slack Bot Service (port 3001)
 - GitHub App Service (port 3002)
@@ -123,6 +124,7 @@ docker compose up -d --build
 ### Port Already in Use
 
 If you get port conflicts:
+
 ```bash
 # Stop conflicting services
 docker compose down
@@ -133,6 +135,7 @@ docker compose down
 ### Services Can't Connect
 
 Ensure all services are running:
+
 ```bash
 docker compose ps
 ```
@@ -142,6 +145,7 @@ All services should show "Up" status.
 ### n8n Can't Reach Services
 
 Verify n8n is in the same network:
+
 ```bash
 docker inspect kenchi-n8n --format='{{range $net, $conf := .NetworkSettings.Networks}}{{$net}} {{end}}'
 ```

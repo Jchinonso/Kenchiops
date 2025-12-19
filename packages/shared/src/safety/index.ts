@@ -9,31 +9,28 @@
  */
 
 // Main exports
-export { calculateConfidenceScore } from './confidenceScoring.js';
-export { determineActionGating } from './actionGating.js';
+export { calculateConfidenceScore } from "./confidenceScoring.js";
+export { determineActionGating } from "./actionGating.js";
 
 // Re-exports for internal use (if needed by other safety modules)
-export { detectUncertainty } from './uncertaintyDetection.js';
-export { calculateEvidenceAlignment, assessCompleteness } from './evidenceValidation.js';
-export { validateAgainstKnowledgeBase } from './knowledgeValidation.js';
-export { checkConsistency } from './consistency.js';
+export { detectUncertainty } from "./uncertaintyDetection.js";
+export { calculateEvidenceAlignment, assessCompleteness } from "./evidenceValidation.js";
+export { validateAgainstKnowledgeBase } from "./knowledgeValidation.js";
+export { checkConsistency } from "./consistency.js";
 
 // Backward compatibility functions
-import type { LLMAnalysisResult, Evidence } from '../types.js';
-import { calculateConfidenceScore } from './confidenceScoring.js';
-import {
-  DEFAULT_CONFIDENCE_THRESHOLD,
-  PLACEHOLDER_CONFIDENCE_SCORE,
-} from '../constants.js';
+import type { LLMAnalysisResult, Evidence } from "../types.js";
+import { calculateConfidenceScore } from "./confidenceScoring.js";
+import { DEFAULT_CONFIDENCE_THRESHOLD, PLACEHOLDER_CONFIDENCE_SCORE } from "../constants.js";
 
 /**
  * Calculate confidence score for a result (backward compatible).
- * 
+ *
  * @param result - LLM analysis result or any object
  * @returns Confidence score between 0 and 1, or 0 if invalid
  */
 export const confidenceScore = (result: unknown): number => {
-  if (!result || typeof result !== 'object') {
+  if (!result || typeof result !== "object") {
     return 0;
   }
   // TODO: Implement proper validation and scoring
@@ -42,7 +39,7 @@ export const confidenceScore = (result: unknown): number => {
 
 /**
  * Determine if we should act on a result based on confidence threshold (backward compatible).
- * 
+ *
  * @param result - LLM analysis result
  * @param threshold - Minimum confidence threshold (default: 0.7)
  * @returns True if confidence meets threshold
@@ -56,7 +53,7 @@ export const shouldActOnResult = (
     eventId: result.eventId,
     collectedAt: new Date().toISOString(),
   };
-  
+
   const scoreResult = calculateConfidenceScore(result, minimalEvidence);
   return scoreResult.finalScore >= threshold;
 };

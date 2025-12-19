@@ -3,28 +3,26 @@
  * Validates that LLM analysis aligns with provided evidence and assesses completeness.
  */
 
-import type { LLMAnalysisResult, Evidence } from '../types.js';
+import type { LLMAnalysisResult, Evidence } from "../types.js";
 import {
   ALIGNMENT_ADJUSTMENTS,
   SIMILARITY_THRESHOLDS,
   MATCHING_CONFIG,
   METRIC_KEYWORDS,
   INVALID_CAUSE_KEYWORDS,
-} from '../constants.js';
+} from "../constants.js";
 
 /**
  * Checks if reasoning contains metric keywords.
  */
 const hasMetricsReference = (reasoning: string): boolean => {
   const normalized = reasoning.toLowerCase();
-  return Array.from(METRIC_KEYWORDS).some((keyword) =>
-    normalized.includes(keyword)
-  );
+  return Array.from(METRIC_KEYWORDS).some((keyword) => normalized.includes(keyword));
 };
 
 /**
  * Calculates evidence alignment adjustment between analysis and provided evidence.
- * 
+ *
  * @param analysis - LLM analysis result
  * @param evidence - Evidence provided to LLM
  * @returns Alignment adjustment (-0.15 to 0.2)
@@ -60,9 +58,7 @@ export const calculateEvidenceAlignment = (
   // Check 3: Is there a high-similarity past incident?
   if (evidence.relatedDocs?.length) {
     const highSimilarityIncident = evidence.relatedDocs.some(
-      (doc) =>
-        doc.type === 'past_incident' &&
-        doc.similarity > SIMILARITY_THRESHOLDS.STRONG
+      (doc) => doc.type === "past_incident" && doc.similarity > SIMILARITY_THRESHOLDS.STRONG
     );
     if (highSimilarityIncident) {
       adjustment += ALIGNMENT_ADJUSTMENTS.HIGH_SIMILARITY_INCIDENT;
@@ -85,11 +81,7 @@ export const calculateEvidenceAlignment = (
   return Math.min(adjustment, ALIGNMENT_ADJUSTMENTS.MAX);
 };
 
-import {
-  COMPLETENESS_ADJUSTMENTS,
-  MIN_LENGTHS,
-  MIN_ACTIONS_FOR_BONUS,
-} from '../constants.js';
+import { COMPLETENESS_ADJUSTMENTS, MIN_LENGTHS, MIN_ACTIONS_FOR_BONUS } from "../constants.js";
 
 // INVALID_CAUSE_KEYWORDS imported from constants.ts
 
@@ -100,16 +92,14 @@ const isValidCause = (cause?: string): boolean => {
   if (!cause || cause.length <= MIN_LENGTHS.CAUSE) {
     return false;
   }
-  
+
   const normalized = cause.toLowerCase();
-  return !Array.from(INVALID_CAUSE_KEYWORDS).some((keyword) =>
-    normalized.includes(keyword)
-  );
+  return !Array.from(INVALID_CAUSE_KEYWORDS).some((keyword) => normalized.includes(keyword));
 };
 
 /**
  * Assesses completeness of the analysis.
- * 
+ *
  * @param analysis - LLM analysis result
  * @returns Completeness adjustment (-0.15 to 0.13)
  */
@@ -127,10 +117,7 @@ export const assessCompleteness = (analysis: LLMAnalysisResult): number => {
   }
 
   // Check if multiple actions recommended
-  if (
-    analysis.recommendedActions &&
-    analysis.recommendedActions.length >= MIN_ACTIONS_FOR_BONUS
-  ) {
+  if (analysis.recommendedActions && analysis.recommendedActions.length >= MIN_ACTIONS_FOR_BONUS) {
     adjustment += COMPLETENESS_ADJUSTMENTS.MULTIPLE_ACTIONS;
   }
 

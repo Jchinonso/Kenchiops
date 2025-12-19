@@ -1,13 +1,13 @@
 /**
  * OpenAI Response Validation Module
- * 
+ *
  * Handles all validation logic for LLM responses, including:
  * - Anti-hallucination checks
  * - Evidence reference validation
  * - Dangerous keyword detection
  * - Commit SHA validation
  * - Log message validation
- * 
+ *
  * IMPORTANT: This module treats LLM outputs as untrusted and validates
  * all references against provided evidence.
  */
@@ -18,8 +18,8 @@ import type {
   LLMAnalysisResult,
   ValidationResult,
   EvidenceReference,
-} from '../types.js';
-import { DANGEROUS_KEYWORDS_PATTERN } from '../constants.js';
+} from "../types.js";
+import { DANGEROUS_KEYWORDS_PATTERN } from "../constants.js";
 
 /**
  * Validates LLM response against anti-hallucination checks.
@@ -32,15 +32,11 @@ export const validateResponse = (
   const warnings: string[] = [];
 
   // Pre-compute lookup structures for O(1) access
-  const providedCommitsSet = buildCommitPrefixSet(
-    providedContext.evidence.gitHistory
-  );
+  const providedCommitsSet = buildCommitPrefixSet(providedContext.evidence.gitHistory);
   const providedIncidentsSet = new Set(
     providedContext.evidence.relatedDocs?.map((d) => d.id) || []
   );
-  const providedLogsLower = buildLogLookupMap(
-    providedContext.evidence.logs
-  );
+  const providedLogsLower = buildLogLookupMap(providedContext.evidence.logs);
 
   // 1. Check for dangerous keywords in recommendations (optimized with regex)
   validateDangerousKeywords(response.recommendedActions, errors);
@@ -56,9 +52,7 @@ export const validateResponse = (
         providedLogsLower
       );
       if (!isValid) {
-        warnings.push(
-          `LLM cited evidence that was not provided: ${evidence.reference}`
-        );
+        warnings.push(`LLM cited evidence that was not provided: ${evidence.reference}`);
       }
     }
   }
@@ -115,50 +109,47 @@ const validateEvidenceReference = (
   providedLogsMap?: Map<string, string>
 ): boolean => {
   switch (evidence.type) {
-    case 'log': {
+    case "log": {
       if (!providedLogsMap) {
         // Fallback if log map not provided
         const logPrefix = evidence.reference.substring(0, 30).toLowerCase();
         return (
-          context.evidence.logs?.some((log) =>
-            log.message.toLowerCase().startsWith(logPrefix)
-          ) || false
+          context.evidence.logs?.some((log) => log.message.toLowerCase().startsWith(logPrefix)) ||
+          false
         );
       }
-      
+
       // Use pre-computed log map for O(1) lookup
       const logPrefix = evidence.reference.substring(0, 50).toLowerCase();
-      return providedLogsMap.has(logPrefix) ||
-        Array.from(providedLogsMap.values()).some((log) =>
-          log.startsWith(logPrefix) || logPrefix.startsWith(log.substring(0, 30))
-        );
+      return (
+        providedLogsMap.has(logPrefix) ||
+        Array.from(providedLogsMap.values()).some(
+          (log) => log.startsWith(logPrefix) || logPrefix.startsWith(log.substring(0, 30))
+        )
+      );
     }
 
-    case 'commit': {
+    case "commit": {
       const sha = extractSHA(evidence.reference);
       return isCommitValid(sha, providedCommitsSet);
     }
 
-    case 'related_incident': {
+    case "related_incident": {
       // Check Set first (O(1)), then fallback to includes check
       if (providedIncidentsSet.has(evidence.reference)) {
         return true;
       }
       // Only check includes if Set lookup failed
-      return context.evidence.relatedDocs?.some((d) =>
-        evidence.reference.includes(d.id)
-      ) || false;
+      return context.evidence.relatedDocs?.some((d) => evidence.reference.includes(d.id)) || false;
     }
 
-    case 'metric':
+    case "metric":
       return context.evidence.metrics !== undefined;
 
-    case 'document': {
+    case "document": {
       // Could be optimized further with a pre-computed title map if needed
       return (
-        context.evidence.relatedDocs?.some((d) =>
-          evidence.reference.includes(d.title)
-        ) || false
+        context.evidence.relatedDocs?.some((d) => evidence.reference.includes(d.title)) || false
       );
     }
 
@@ -204,7 +195,7 @@ const extractQuotedText = (text: string): string[] => {
  * Uses memoized regex pattern compiled once at module level.
  */
 const validateDangerousKeywords = (
-  actions: LLMAnalysisResult['recommendedActions'],
+  actions: LLMAnalysisResult["recommendedActions"],
   errors: string[]
 ): void => {
   if (!actions || actions.length === 0) {
@@ -216,9 +207,7 @@ const validateDangerousKeywords = (
   for (const action of actions) {
     const match = action.description.match(DANGEROUS_KEYWORDS_PATTERN);
     if (match) {
-      errors.push(
-        `Action contains dangerous keyword "${match[1]}": ${action.description}`
-      );
+      errors.push(`Action contains dangerous keyword "${match[1]}": ${action.description}`);
     }
   }
 };
@@ -227,9 +216,7 @@ const validateDangerousKeywords = (
  * Builds a Set of commit SHA prefixes for O(1) lookup.
  * Handles both full SHAs and short prefixes (6-40 chars).
  */
-const buildCommitPrefixSet = (
-  gitHistory: Evidence['gitHistory']
-): Set<string> => {
+const buildCommitPrefixSet = (gitHistory: Evidence["gitHistory"]): Set<string> => {
   const commitSet = new Set<string>();
   if (!gitHistory) {
     return commitSet;
@@ -254,12 +241,12 @@ const buildCommitPrefixSet = (
  */
 const isCommitValid = (citedSha: string, providedCommitsSet: Set<string>): boolean => {
   const normalized = citedSha.toLowerCase();
-  
+
   // Check exact match first (O(1))
   if (providedCommitsSet.has(normalized)) {
     return true;
   }
-  
+
   // Check if any provided commit starts with the cited SHA (for partial matches)
   // Only iterate if exact match failed
   for (const provided of providedCommitsSet) {
@@ -267,7 +254,7 @@ const isCommitValid = (citedSha: string, providedCommitsSet: Set<string>): boole
       return true;
     }
   }
-  
+
   return false;
 };
 
@@ -276,7 +263,7 @@ const isCommitValid = (citedSha: string, providedCommitsSet: Set<string>): boole
  * Returns a Map with normalized keys for O(1) lookups.
  * Keys are prefixes (first 50 chars), values are full normalized messages.
  */
-const buildLogLookupMap = (logs: Evidence['logs']): Map<string, string> => {
+const buildLogLookupMap = (logs: Evidence["logs"]): Map<string, string> => {
   const logMap = new Map<string, string>();
   if (!logs) {
     return logMap;
@@ -298,10 +285,7 @@ const buildLogLookupMap = (logs: Evidence['logs']): Map<string, string> => {
  * Checks if quoted text matches any provided log message.
  * Optimized with pre-computed lookup map and early exit.
  */
-const isQuotedTextValid = (
-  quoted: string,
-  providedLogsMap: Map<string, string>
-): boolean => {
+const isQuotedTextValid = (quoted: string, providedLogsMap: Map<string, string>): boolean => {
   if (providedLogsMap.size === 0) {
     return false;
   }
@@ -321,10 +305,7 @@ const isQuotedTextValid = (
   // Check if any log contains the quoted text or vice versa
   // Early exit on first match
   for (const logMessage of providedLogsMap.values()) {
-    if (
-      logMessage.includes(quotedLower) ||
-      quotedLower.includes(logMessage.substring(0, 30))
-    ) {
+    if (logMessage.includes(quotedLower) || quotedLower.includes(logMessage.substring(0, 30))) {
       return true;
     }
   }
@@ -337,6 +318,5 @@ const isQuotedTextValid = (
  */
 const extractSHA = (reference: string): string => {
   const shaMatch = reference.match(/\b[0-9a-f]{6,40}\b/i);
-  return shaMatch ? shaMatch[0] : '';
+  return shaMatch ? shaMatch[0] : "";
 };
-

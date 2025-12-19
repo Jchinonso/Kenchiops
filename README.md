@@ -36,12 +36,14 @@ kenchi/
 ### Quick Start with Docker (Recommended)
 
 1. Clone the repository:
+
    ```bash
    git clone <repository-url>
    cd kenchi
    ```
 
 2. Copy the environment template:
+
    ```bash
    cp .env.example .env
    ```
@@ -56,6 +58,7 @@ kenchi/
    - `VECTOR_DB_URL` - Vector database connection (if using)
 
 4. Start all services with Docker Compose:
+
    ```bash
    docker compose up -d
    ```
@@ -77,11 +80,13 @@ kenchi/
 For local development with hot reload:
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
 
 2. Build the shared package:
+
    ```bash
    npm run build:shared
    ```
@@ -122,16 +127,19 @@ For local development with hot reload:
 ## 📦 Services
 
 ### API Service (`/services/api`)
+
 Handles incoming webhooks and events from various sources. Provides endpoints for event ingestion and webhook routing.
 
 **Port**: 3000 (default)
 
 ### Slack Bot Service (`/services/slack-bot`)
+
 Slack bot using the Bolt framework. Handles slash commands (`/kenchi`), message events, and app mentions.
 
 **Port**: 3001 (default)
 
 ### GitHub App Service (`/services/github-app`)
+
 GitHub App service that handles webhook events for pull requests, CI checks, and other repository events.
 
 **Port**: 3002 (default)
@@ -139,6 +147,7 @@ GitHub App service that handles webhook events for pull requests, CI checks, and
 ## 📚 Shared Package (`/packages/shared`)
 
 Contains shared utilities used across all services:
+
 - **Config**: Centralized environment variable management
 - **OpenAI Client**: Stub for OpenAI API integration
 - **Vector Store**: Interface and placeholder for vector database operations
@@ -172,6 +181,7 @@ All services run in Docker Compose for easy setup and consistent environments.
 ### Docker Compose Services
 
 The `docker-compose.yml` includes:
+
 - **API Service** - Port 3000
 - **Slack Bot Service** - Port 3001
 - **GitHub App Service** - Port 3002
@@ -180,16 +190,19 @@ The `docker-compose.yml` includes:
 ### Docker Commands
 
 **Start all services:**
+
 ```bash
 docker compose up -d
 ```
 
 **Stop all services:**
+
 ```bash
 docker compose down
 ```
 
 **View logs:**
+
 ```bash
 docker compose logs -f
 docker compose logs -f api        # Specific service
@@ -198,16 +211,19 @@ docker compose logs -f n8n
 ```
 
 **Restart a service:**
+
 ```bash
 docker compose restart api
 ```
 
 **Rebuild and restart:**
+
 ```bash
 docker compose up -d --build
 ```
 
 **Check service status:**
+
 ```bash
 docker compose ps
 ```
@@ -232,6 +248,7 @@ See [DOCKER.md](./DOCKER.md) for detailed guidance.
 ## 📝 TODO
 
 ### Immediate Next Steps
+
 - [ ] Implement actual OpenAI API calls in `OpenAIClient`
 - [ ] Replace dummy vector store with real database integration (Postgres + pgvector or Chroma)
 - [ ] Implement real confidence scoring logic
@@ -241,6 +258,7 @@ See [DOCKER.md](./DOCKER.md) for detailed guidance.
 - [ ] Set up database schema and migrations
 
 ### Future Enhancements
+
 - [x] Implement comprehensive error handling and retry logic
 - [x] Add logging and monitoring utilities
 - [x] Create Docker containers for each service
@@ -261,4 +279,3 @@ MIT
 ## 🤝 Contributing
 
 This is a scaffolded project. See individual service READMEs for specific implementation details and TODOs.
-
