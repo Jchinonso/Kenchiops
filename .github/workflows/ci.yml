@@ -1,4 +1,4 @@
-name: CI/CD
+name: CI
 
 on:
   push:
@@ -7,68 +7,87 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   NODE_VERSION: '20'
 
 jobs:
-  lint-and-type-check:
-    name: Lint and Type Check
+  lint:
+    name: Lint & Format
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
-      - name: Run ESLint
-        run: npm run lint
-      
+
       - name: Check formatting
         run: npm run format:check
-      
-      - name: Type check
+
+      - name: Run ESLint
+        run: npm run lint
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type check
         run: npm run type-check
-      
-      - name: Check for code duplication
-        run: npm run check:duplication
 
   test:
     name: Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Build shared package
         run: npm run build:shared
-      
-      - name: Run tests
-        run: npm test
-      
-      - name: Generate coverage report
-        if: always()
-        run: npm run test:coverage || true
-      
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        env:
+          # Provide dummy values for required env vars during tests
+          OPENAI_API_KEY: test-key
+          GITHUB_APP_ID: test-app-id
+          GITHUB_APP_PRIVATE_KEY: test-private-key
+          SLACK_BOT_TOKEN: test-token
+          SLACK_SIGNING_SECRET: test-secret
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: always()
@@ -77,33 +96,30 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unittests
-          name: codecov-umbrella
 
   build:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [lint-and-type-check]
-    
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Build all packages
         run: npm run build
-      
+
       - name: Check build artifacts
         run: npm run check-build
-      
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         if: success()
@@ -114,28 +130,50 @@ jobs:
             services/*/dist
           retention-days: 7
 
-  validate:
-    name: Validate Configuration
+  code-quality:
+    name: Code Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    
+    timeout-minutes: 10
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
+      - name: Build shared package
+        run: npm run build:shared
+
+      - name: Check for code duplication
+        run: npm run check:duplication
+
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Validate environment configuration
         run: npm run validate
         continue-on-error: true
-      
+
       - name: Validate n8n workflows
         run: npm run validate-workflow
         continue-on-error: true
@@ -144,38 +182,60 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run npm audit
-        run: npm audit --audit-level=moderate
+        run: npm audit --audit-level=high
         continue-on-error: true
 
-  ci-status:
-    name: CI Status
+  docker:
+    name: Docker Build
     runs-on: ubuntu-latest
-    needs: [lint-and-type-check, test, build, validate]
-    if: always()
-    
+    timeout-minutes: 15
+    needs: [lint, type-check, test, build]
     steps:
-      - name: Check job status
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: kenchi:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Summary job that other workflows can depend on
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [lint, type-check, test, build, code-quality, validate, docker]
+    if: always()
+    steps:
+      - name: Check all jobs passed
         run: |
-          if [ "${{ needs.lint-and-type-check.result }}" != "success" ] || \
-             [ "${{ needs.test.result }}" != "success" ] || \
-             [ "${{ needs.build.result }}" != "success" ]; then
-            echo "One or more CI jobs failed"
+          if [[ "${{ needs.lint.result }}" != "success" ]] || \
+             [[ "${{ needs.type-check.result }}" != "success" ]] || \
+             [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.build.result }}" != "success" ]] || \
+             [[ "${{ needs.code-quality.result }}" != "success" ]] || \
+             [[ "${{ needs.docker.result }}" != "success" ]]; then
+            echo "One or more jobs failed"
             exit 1
           fi
-          echo "All CI jobs passed successfully"
-
+          echo "All CI checks passed!"

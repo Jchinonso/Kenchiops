@@ -1,38 +1,80 @@
 version: 2
 updates:
-  # Enable version updates for npm
+  # NPM dependencies
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+      timezone: "UTC"
     open-pull-requests-limit: 10
-    reviewers:
-      - "kenchiops"
+    groups:
+      # Group minor and patch updates together
+      dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@types/*"
+          - "typescript"
+          - "eslint*"
+          - "prettier"
+          - "jest*"
+          - "@jest/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group dev dependencies separately
+      dev-dependencies:
+        patterns:
+          - "@types/*"
+          - "typescript"
+          - "eslint*"
+          - "prettier"
+          - "jest*"
+          - "@jest/*"
+          - "ts-jest"
+          - "tsx"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
     labels:
       - "dependencies"
-      - "npm"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-    groups:
-      production-dependencies:
-        dependency-type: "production"
-      development-dependencies:
-        dependency-type: "development"
-  
-  # Enable version updates for GitHub Actions
+      - "automated"
+    reviewers:
+      - "chinonso" # Update with your GitHub username
+
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+      timezone: "UTC"
     open-pull-requests-limit: 5
-    reviewers:
-      - "kenchiops"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
     labels:
-      - "dependencies"
-      - "github-actions"
+      - "ci/cd"
+      - "automated"
 
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    labels:
+      - "docker"
+      - "automated"

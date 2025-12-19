@@ -1,54 +1,38 @@
-## Description
+## Summary
 
-<!-- Provide a brief description of the changes in this PR -->
+<!-- Brief description of what this PR does -->
 
 ## Type of Change
 
-<!-- Mark the relevant option with an 'x' -->
+- [ ] Bug fix (non-breaking change that fixes an issue)
+- [ ] New feature (non-breaking change that adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
+- [ ] Refactoring (no functional changes)
+- [ ] CI/CD changes
 
-- [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
-- [ ] ✨ New feature (non-breaking change which adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] 📚 Documentation update
-- [ ] 🔧 Refactoring (no functional changes)
-- [ ] ⚡ Performance improvement
-- [ ] ✅ Test update
-- [ ] 🔒 Security fix
+## Changes Made
 
-## Checklist
+<!-- List the specific changes made -->
 
-<!-- Mark completed items with an 'x' -->
-
-- [ ] My code follows the project's coding standards
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published
-- [ ] I have checked that constants are in `constants.ts` (not scattered)
-- [ ] I have checked that shared code is in `packages/shared/` (not duplicated)
+-
 
 ## Testing
 
-<!-- Describe the tests you ran and provide instructions so reviewers can reproduce -->
+<!-- Describe how you tested these changes -->
 
-- [ ] Unit tests pass
-- [ ] Integration tests pass
-- [ ] Manual testing completed
+- [ ] Unit tests added/updated
+- [ ] Manual testing performed
+- [ ] All existing tests pass
+
+## Checklist
+
+- [ ] My code follows the project's coding standards (see CLAUDE.md)
+- [ ] I have checked for code duplication (`npm run check:duplication`)
+- [ ] I have added/updated types as needed
+- [ ] I have updated documentation if needed
+- [ ] My changes don't introduce new warnings or errors
 
 ## Related Issues
 
-<!-- Link related issues using #issue_number -->
-
-Closes #
-
-## Screenshots (if applicable)
-
-<!-- Add screenshots to help explain your changes -->
-
-## Additional Notes
-
-<!-- Any additional information that reviewers should know -->
-
+<!-- Link any related issues: Fixes #123, Relates to #456 -->

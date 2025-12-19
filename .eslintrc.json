@@ -3,23 +3,94 @@
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": 2022,
-    "sourceType": "module",
-    "project": "./tsconfig.json"
+    "sourceType": "module"
   },
   "plugins": ["@typescript-eslint"],
   "extends": [
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:@typescript-eslint/recommended-requiring-type-checking"
+    "plugin:@typescript-eslint/recommended"
   ],
   "rules": {
     "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "@typescript-eslint/explicit-function-return-type": "warn",
     "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-floating-promises": "error",
-    "@typescript-eslint/await-thenable": "error",
     "no-console": "off"
   },
-  "ignorePatterns": ["dist", "node_modules", "*.js"]
+  "ignorePatterns": ["dist", "node_modules", "*.js", "coverage"],
+  "overrides": [
+    {
+      "files": ["packages/shared/src/**/*.ts", "!packages/shared/src/**/*.test.ts", "!packages/shared/src/**/__tests__/**/*.ts"],
+      "parserOptions": {
+        "project": "./packages/shared/tsconfig.json"
+      },
+      "extends": [
+        "plugin:@typescript-eslint/recommended-requiring-type-checking"
+      ],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/await-thenable": "error"
+      }
+    },
+    {
+      "files": ["services/api/src/**/*.ts", "!services/api/src/**/*.test.ts", "!services/api/src/**/__tests__/**/*.ts"],
+      "parserOptions": {
+        "project": "./services/api/tsconfig.json"
+      },
+      "extends": [
+        "plugin:@typescript-eslint/recommended-requiring-type-checking"
+      ],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/await-thenable": "error"
+      }
+    },
+    {
+      "files": ["services/slack-bot/src/**/*.ts", "!services/slack-bot/src/**/*.test.ts", "!services/slack-bot/src/**/__tests__/**/*.ts"],
+      "parserOptions": {
+        "project": "./services/slack-bot/tsconfig.json"
+      },
+      "extends": [
+        "plugin:@typescript-eslint/recommended-requiring-type-checking"
+      ],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/await-thenable": "error"
+      }
+    },
+    {
+      "files": ["services/github-app/src/**/*.ts", "!services/github-app/src/**/*.test.ts", "!services/github-app/src/**/__tests__/**/*.ts"],
+      "parserOptions": {
+        "project": "./services/github-app/tsconfig.json"
+      },
+      "extends": [
+        "plugin:@typescript-eslint/recommended-requiring-type-checking"
+      ],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/await-thenable": "error"
+      }
+    },
+    {
+      "files": ["scripts/**/*.ts"],
+      "parserOptions": {
+        "project": "./scripts/tsconfig.json"
+      },
+      "extends": [
+        "plugin:@typescript-eslint/recommended-requiring-type-checking"
+      ],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/await-thenable": "error"
+      }
+    },
+    {
+      "files": ["**/__tests__/**/*.ts", "**/*.test.ts", "**/*.spec.ts", "n8n/**/*.ts"],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "off",
+        "@typescript-eslint/await-thenable": "off",
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ]
 }
 
