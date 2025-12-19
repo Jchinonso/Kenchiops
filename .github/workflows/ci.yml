@@ -1,23 +1,29 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
 
 jobs:
   lint-and-type-check:
     name: Lint and Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       
       - name: Install dependencies
@@ -31,18 +37,23 @@ jobs:
       
       - name: Type check
         run: npm run type-check
+      
+      - name: Check for code duplication
+        run: npm run check:duplication
 
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       
       - name: Install dependencies
@@ -54,24 +65,34 @@ jobs:
       - name: Run tests
         run: npm test
       
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
+      - name: Generate coverage report
+        if: always()
+        run: npm run test:coverage || true
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
         if: always()
         with:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unittests
+          name: codecov-umbrella
 
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [lint-and-type-check]
     
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       
       - name: Install dependencies
@@ -82,4 +103,79 @@ jobs:
       
       - name: Check build artifacts
         run: npm run check-build
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: build-artifacts
+          path: |
+            packages/shared/dist
+            services/*/dist
+          retention-days: 7
+
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Validate environment configuration
+        run: npm run validate
+        continue-on-error: true
+      
+      - name: Validate n8n workflows
+        run: npm run validate-workflow
+        continue-on-error: true
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check, test, build, validate]
+    if: always()
+    
+    steps:
+      - name: Check job status
+        run: |
+          if [ "${{ needs.lint-and-type-check.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ]; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi
+          echo "All CI jobs passed successfully"
 
