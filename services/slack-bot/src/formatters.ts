@@ -19,12 +19,12 @@ import type { SlackBlock } from './types/slackTypes.js';
  *
  * @param analysis - The LLM analysis result
  * @param confidence - The confidence score result
- * @returns Slack Block Kit blocks array
+ * @returns Slack Block Kit blocks array (mutable for Slack Bolt compatibility)
  */
 export function formatAnalysisMessage(
   analysis: LLMAnalysisResult,
   confidence: ConfidenceScoreResult
-): readonly SlackBlock[] {
+): SlackBlock[] {
   const blocks: SlackBlock[] = [];
 
   // Header with confidence indicator
@@ -150,12 +150,12 @@ export function formatAnalysisMessage(
  *
  * @param actions - Array of action proposals
  * @param eventId - Event ID for tracking
- * @returns Slack Block Kit blocks with action buttons
+ * @returns Slack Block Kit blocks with action buttons (mutable for Slack Bolt compatibility)
  */
 export function formatActionButtons(
   actions: readonly ActionProposal[],
   eventId: string
-): readonly SlackBlock[] {
+): SlackBlock[] {
   if (actions.length === 0) {
     return [];
   }
@@ -211,9 +211,9 @@ export function formatActionButtons(
  * Formats an error message for Slack.
  *
  * @param error - The error object
- * @returns Slack Block Kit blocks
+ * @returns Slack Block Kit blocks (mutable for Slack Bolt compatibility)
  */
-export function formatErrorMessage(error: Error): readonly SlackBlock[] {
+export function formatErrorMessage(error: Error): SlackBlock[] {
   return [
     {
       type: 'section',
@@ -247,13 +247,13 @@ export function formatErrorMessage(error: Error): readonly SlackBlock[] {
  * @param actionId - Action identifier
  * @param status - Current status
  * @param message - Status message
- * @returns Slack Block Kit blocks
+ * @returns Slack Block Kit blocks (mutable for Slack Bolt compatibility)
  */
 export function formatProgressUpdate(
   actionId: string,
   status: 'pending' | 'in_progress' | 'completed' | 'failed',
   message: string
-): readonly SlackBlock[] {
+): SlackBlock[] {
   const statusEmoji = {
     pending: ':hourglass_flowing_sand:',
     in_progress: ':gear:',

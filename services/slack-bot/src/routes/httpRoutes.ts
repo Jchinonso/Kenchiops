@@ -1,94 +1,85 @@
 /**
  * HTTP routes for n8n integration.
  * Provides endpoints for posting messages to Slack without going through Slack events.
+ *
+ * This is a thin routing layer that delegates business logic to handlers.
  */
 
 import express, { type Request, type Response } from 'express';
-import { logger, validate, validators, HTTP_STATUS } from '@kenchi/shared';
-import { asyncHandler } from '@kenchi/shared';
-import type { App } from '@slack/bolt';
+import { validate, validators, HTTP_STATUS, asyncHandler } from '@kenchi/shared';
+import type Bolt from '@slack/bolt';
+import { postMessage, broadcastMessage } from '../handlers/channelHandler.js';
+import type {
+  SlackMessageRequest,
+  SlackBroadcastRequest,
+} from '../types/slackTypes.js';
 
-/**
- * Request body structure for message endpoint
- */
-interface MessageRequest {
-  readonly channel: string;
-  readonly message: string;
-  readonly thread_ts?: string;
-}
-
-/**
- * Response structure for message endpoint
- */
-interface MessageResponse {
-  readonly status: 'sent' | 'error';
-  readonly channel?: string;
-  readonly timestamp?: string;
-  readonly thread_ts?: string;
-  readonly error?: string;
-}
+type SlackApp = InstanceType<typeof Bolt.App>;
 
 /**
  * Creates HTTP routes for the Slack bot service.
- * 
+ *
  * @param app - Slack Bolt app instance
  * @returns Express router with routes
  */
-export function createHttpRoutes(app: App): express.Router {
+export const createHttpRoutes = (app: SlackApp): express.Router => {
   const router = express.Router();
 
   /**
    * POST /slack/message
    * Post a message to Slack (for n8n workflow integration)
+   * Supports plain text messages OR structured analysis data
    */
   router.post(
     '/slack/message',
     validate({
       body: {
         channel: (v) => validators.required(v) && validators.string(v),
-        message: (v) => validators.required(v) && validators.string(v),
+        // message is optional if analysis is provided
+        message: (v) => !v || validators.string(v),
         thread_ts: (v) => !v || validators.string(v),
+        // analysis object for rich formatting
+        analysis: (v) => !v || (typeof v === 'object' && v !== null),
       },
     }),
     asyncHandler(async (req: Request, res: Response) => {
-      const { channel, message, thread_ts } = req.body as MessageRequest;
+      const request = req.body as SlackMessageRequest;
 
-      logger.info('Slack message request received', { channel, hasThread: !!thread_ts });
-
-      try {
-        const result = await app.client.chat.postMessage({
-          channel,
-          text: message,
-          ...(thread_ts && { thread_ts }),
+      // Validate that either message or analysis is provided
+      if (!request.message && !request.analysis) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          error: 'Either message or analysis must be provided',
         });
-
-        logger.info('Message posted to Slack', {
-          channel,
-          timestamp: result.ts,
-          thread: thread_ts,
-        });
-
-        const response: MessageResponse = {
-          status: 'sent',
-          channel,
-          timestamp: result.ts,
-          thread_ts: result.ts,
-        };
-
-        res.status(HTTP_STATUS.OK).json(response);
-      } catch (error) {
-        logger.error('Failed to post message to Slack', {
-          channel,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-
-        const response: MessageResponse = {
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Failed to post message',
-        };
-
-        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(response);
+        return;
       }
+
+      const response = await postMessage(app.client, request);
+
+      const statusCode =
+        response.status === 'sent'
+          ? HTTP_STATUS.OK
+          : HTTP_STATUS.INTERNAL_SERVER_ERROR;
+
+      res.status(statusCode).json(response);
+    })
+  );
+
+  /**
+   * POST /slack/broadcast
+   * Broadcast a message to ALL channels the bot is a member of
+   */
+  router.post(
+    '/slack/broadcast',
+    validate({
+      body: {
+        message: (v) => validators.required(v) && validators.string(v),
+      },
+    }),
+    asyncHandler(async (req: Request, res: Response) => {
+      const request = req.body as SlackBroadcastRequest;
+      const response = await broadcastMessage(app.client, request);
+
+      res.status(HTTP_STATUS.OK).json(response);
     })
   );
 
@@ -107,5 +98,4 @@ export function createHttpRoutes(app: App): express.Router {
   });
 
   return router;
-}
-
+};

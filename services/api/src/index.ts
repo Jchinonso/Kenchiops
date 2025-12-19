@@ -1,142 +1,58 @@
 /**
- * API Service
- * 
+ * API Service Entry Point
+ *
  * This service handles incoming webhooks and events from various sources.
  * It can trigger workflows, store events, and coordinate with other services.
- * 
+ *
  * SAFETY NOTE: The LLM (OpenAI) provides analysis and suggestions only.
  * All actual decisions and side-effects are handled by deterministic code after validation.
  */
 
-import express, { Request, Response } from 'express';
-import { 
-  config, 
-  type WebhookEvent,
-  logger,
+import express from 'express';
+import {
+  createLogger,
   errorHandler,
-  asyncHandler,
   requestLogger,
   defaultRateLimiter,
-  validate,
-  validators,
-  PLACEHOLDER_CONFIDENCE_SCORE,
-  HTTP_STATUS,
-  SERVICE_PORTS,
 } from '@kenchi/shared';
+import { registerRoutes } from './routes/index.js';
+import { appConfig } from './config/appConfig.js';
 
-const app = express();
-app.use(express.json());
-app.use(requestLogger);
-
-// Apply rate limiting to all routes
-app.use(defaultRateLimiter.middleware());
-
-interface WebhookPayload {
-  [key: string]: unknown;
-}
+const logger = createLogger('api');
 
 /**
- * Generic webhook endpoint
- * TODO: Implement routing to appropriate handlers based on event type
- * TODO: Add authentication/authorization
+ * Create and configure Express application
  */
-app.post('/webhook/:source', asyncHandler(async (req, res) => {
-  const { source } = req.params as { source: string };
-  const payload = req.body as WebhookPayload;
-  
-  logger.info('Webhook received', { source, payloadKeys: Object.keys(payload) });
-  
-  // TODO: Route to appropriate handler based on source
-  // TODO: Validate payload
-  // TODO: Trigger appropriate workflow or service
-  
-  res.status(HTTP_STATUS.OK).json({ 
-    status: 'received',
-    source,
-    message: 'TODO: Implement webhook processing logic'
+const createApp = (): express.Express => {
+  const app = express();
+
+  // Middleware
+  app.use(express.json());
+  app.use(requestLogger);
+  app.use(defaultRateLimiter.middleware());
+
+  // Register all routes
+  registerRoutes(app);
+
+  // Error handling middleware (must be last)
+  app.use(errorHandler);
+
+  return app;
+};
+
+/**
+ * Start the API service
+ */
+const startServer = (): void => {
+  const app = createApp();
+
+  app.listen(appConfig.port, () => {
+    logger.info('API service started', {
+      port: appConfig.port,
+      environment: appConfig.environment,
+    });
   });
-}));
+};
 
-/**
- * Health check endpoint with detailed status
- */
-app.get('/health', (_req: Request, res: Response) => {
-  res.status(HTTP_STATUS.OK).json({ 
-    status: 'ok', 
-    service: 'api',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: config.NODE_ENV,
-  });
-});
-
-/**
- * Event ingestion endpoint
- * TODO: Store events in database or queue
- * TODO: Trigger analysis workflows
- */
-app.post(
-  '/events',
-  validate({
-    body: {
-      source: (v) => validators.required(v) && validators.string(v),
-      type: (v) => validators.required(v) && validators.string(v),
-    },
-  }),
-  asyncHandler(async (req, res) => {
-    const event = req.body as WebhookEvent;
-    
-    logger.info('Event received', { 
-      source: event.source, 
-      type: event.type,
-      timestamp: event.timestamp,
-    });
-    
-    // TODO: Validate event schema
-    // TODO: Store in database/vector store
-    // TODO: Trigger appropriate analysis workflow
-    
-    res.status(HTTP_STATUS.OK).json({ 
-      status: 'accepted',
-      message: 'TODO: Implement event processing and storage'
-    });
-  })
-);
-
-/**
- * CI Failure Analysis endpoint (for n8n workflow)
- * Analyzes CI failure logs using OpenAI
- */
-app.post(
-  '/api/analyze',
-  validate({
-    body: {
-      failure_log: (v) => validators.required(v) && validators.string(v),
-      repository: (v) => validators.required(v) && validators.string(v),
-    },
-  }),
-  asyncHandler(async (req, res) => {
-    const { failure_log, repository } = req.body as { failure_log: string; repository: string };
-    
-    logger.info('CI failure analysis requested', { repository });
-    
-    // TODO: Use OpenAI client to analyze the failure
-    // For now, return a placeholder analysis
-    const analysis = `Analysis for ${repository}:\n\nFailure log indicates a test error. TODO: Implement OpenAI analysis.`;
-    
-    res.status(HTTP_STATUS.OK).json({ 
-      analysis,
-      repository,
-      confidence: PLACEHOLDER_CONFIDENCE_SCORE,
-    });
-  })
-);
-
-// Error handling middleware (must be last)
-app.use(errorHandler);
-
-const PORT = config.PORT || SERVICE_PORTS.API;
-app.listen(PORT, () => {
-  logger.info(`API service started`, { port: PORT, environment: config.NODE_ENV });
-});
-
+// Start the server
+startServer();

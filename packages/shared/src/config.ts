@@ -8,8 +8,8 @@ dotenv.config();
  * All services should import from this module instead of reading process.env directly.
  */
 export interface Config {
-  readonly // OpenAI Configuration
-  OPENAI_API_KEY: string;
+  // OpenAI Configuration
+  readonly OPENAI_API_KEY: string;
   readonly OPENAI_MODEL?: string;
   readonly OPENAI_MAX_TOKENS?: number;
   readonly OPENAI_TEMPERATURE?: number;

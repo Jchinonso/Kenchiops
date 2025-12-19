@@ -264,6 +264,15 @@ export const RATE_LIMIT_CONSTANTS = {
  */
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// ==================== Slack Constants ====================
+
+/**
+ * Slack channel ID regex pattern.
+ * Matches channel IDs that start with C (public), D (DM), or G (private/group).
+ * Example: C0A4FFS1086, D01234567, G0ABCDEFG
+ */
+export const SLACK_CHANNEL_ID_PATTERN = /^[CDG][A-Z0-9]+$/;
+
 /**
  * Default error message for validation failures.
  */

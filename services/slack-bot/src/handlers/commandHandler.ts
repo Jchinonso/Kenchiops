@@ -3,63 +3,32 @@
  * Processes /kenchi commands and returns AI analysis.
  */
 
-import type { SlashCommand, RespondFn } from '@slack/bolt';
-import { logger, OpenAIClient, calculateConfidenceScore } from '@kenchi/shared';
-import type { Event, Evidence, ActionProposal, ActionType } from '@kenchi/shared';
+import type { SlashCommand, RespondFn, RespondArguments } from '@slack/bolt';
+import { createLogger, type ActionProposal, type ActionType } from '@kenchi/shared';
 import { formatAnalysisMessage, formatActionButtons, formatErrorMessage } from '../formatters.js';
-import type { SlackCommandPayload } from '../types/slackTypes.js';
+import {
+  createEventFromCommand,
+  performAnalysis,
+} from '../services/analysisService.js';
+import type { SlackBlock } from '../types/slackTypes.js';
 
-/**
- * Creates an Event from a Slack command.
- * 
- * @param command - Slack command object
- * @returns Event object
- */
-function createEventFromCommand(command: SlashCommand): Event {
-  return {
-    id: `evt_${Date.now()}_${command.user_id}`,
-    type: 'MANUAL_TRIGGER',
-    source: 'slack',
-    timestamp: new Date().toISOString(),
-    severity: 'medium',
-    title: 'Slack Command Analysis',
-    payload: {
-      command: command.text,
-      user_id: command.user_id,
-      channel_id: command.channel_id,
-    } as SlackCommandPayload,
-    metadata: {
-      triggeredBy: command.user_id,
-    },
-  };
-}
+// Type for Slack blocks compatible with Bolt
+type SlackBlocks = NonNullable<RespondArguments['blocks']>;
 
-/**
- * Creates minimal evidence for command analysis.
- * 
- * @param eventId - Event ID
- * @returns Evidence object
- */
-function createMinimalEvidence(eventId: string): Evidence {
-  return {
-    eventId,
-    collectedAt: new Date().toISOString(),
-    logs: [],
-  };
-}
+const logger = createLogger('slack-bot');
 
 /**
  * Handles /kenchi slash command.
- * 
+ *
  * @param command - Slack command object
  * @param ack - Acknowledge function
  * @param respond - Respond function
  */
-export async function handleKenchiCommand(
+export const handleKenchiCommand = async (
   command: SlashCommand,
   ack: () => Promise<void>,
   respond: RespondFn
-): Promise<void> {
+): Promise<void> => {
   await ack();
 
   logger.info('Slack command received', {
@@ -69,54 +38,54 @@ export async function handleKenchiCommand(
   });
 
   try {
-    const event = createEventFromCommand(command);
-    const evidence = createMinimalEvidence(event.id);
+    const event = createEventFromCommand(
+      command.user_id,
+      command.channel_id,
+      command.text
+    );
 
-    const openaiClient = new OpenAIClient();
-    const analysis = await openaiClient.analyzeIncident(event, evidence);
-    const confidenceResult = calculateConfidenceScore(analysis, evidence);
+    const { analysis, confidence } = await performAnalysis(event);
 
-    logger.info('Analysis completed', {
-      eventId: event.id,
-      confidence: confidenceResult.finalScore,
-      gating: confidenceResult.gatingDecision,
-    });
-
-    const blocks: unknown[] = [...formatAnalysisMessage(analysis, confidenceResult)];
+    const blocks: SlackBlock[] = [...formatAnalysisMessage(analysis, confidence)];
 
     if (analysis.recommendedActions && analysis.recommendedActions.length > 0) {
-      const actionButtons = formatActionButtons(
-        analysis.recommendedActions.map((action, idx): ActionProposal => ({
+      const actionProposals: ActionProposal[] = analysis.recommendedActions.map(
+        (action, idx): ActionProposal => ({
           id: `action_${idx}`,
           eventId: event.id,
           actionType: action.actionType as ActionType,
           description: action.description,
-          safetyLevel: 'medium_risk' as const,
-          status: 'proposed' as const,
+          safetyLevel: 'medium_risk',
+          status: 'proposed',
           priority: action.priority,
           reasoning: action.reasoning || '',
-          confidence: confidenceResult.finalScore,
+          confidence: confidence.finalScore,
           requiresApproval: true,
           createdAt: new Date().toISOString(),
-        })),
-        event.id
+        })
       );
+
+      const actionButtons = formatActionButtons(actionProposals, event.id);
       blocks.push(...actionButtons);
     }
 
     await respond({
-      blocks: blocks as never,
+      blocks: blocks as SlackBlocks,
       response_type: 'ephemeral',
     });
   } catch (error) {
     logger.error('Error processing Slack command', {
       error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
     });
 
+    const errorBlocks = formatErrorMessage(
+      error instanceof Error ? error : new Error('Unknown error')
+    );
+
     await respond({
-      blocks: formatErrorMessage(error instanceof Error ? error : new Error('Unknown error')) as never,
+      blocks: errorBlocks as SlackBlocks,
       response_type: 'ephemeral',
     });
   }
-}
-
+};

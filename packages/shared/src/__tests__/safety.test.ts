@@ -4,7 +4,7 @@ import {
   determineActionGating,
   confidenceScore,
   shouldActOnResult,
-} from '../safety.js';
+} from '../safety/index.js';
 import type {
   LLMAnalysisResult,
   Evidence,
@@ -435,7 +435,8 @@ describe('Safety - Confidence Scoring', () => {
 
       expect(result.requiresApproval).toBe(false);
       expect(result.autoExecutable).toBe(true);
-      expect(result.message).toContain('High confidence with safe action');
+      expect(result.message).toContain('High confidence');
+      expect(result.message).toContain('Auto-approved');
     });
 
     it('should require approval for risky actions even with high confidence', () => {
@@ -453,7 +454,8 @@ describe('Safety - Confidence Scoring', () => {
 
       expect(result.requiresApproval).toBe(true);
       expect(result.autoExecutable).toBe(true);
-      expect(result.message).toContain('risky action');
+      expect(result.message).toContain('medium risk');
+      expect(result.message).toContain('Approval required');
     });
 
     it('should auto-approve safe/low-risk actions with very high confidence (0.85+)', () => {
@@ -526,24 +528,31 @@ describe('Safety - Confidence Scoring', () => {
   describe('Legacy functions', () => {
     describe('confidenceScore', () => {
       it('should return 0.5 as placeholder value', () => {
-        const score = confidenceScore({ analysis: 'test' });
+        const score = confidenceScore({ test: 'value' });
         expect(score).toBe(0.5);
       });
     });
 
     describe('shouldActOnResult', () => {
+      const mockAnalysis: LLMAnalysisResult = {
+        eventId: 'evt_legacy',
+        summary: 'Test summary',
+        confidence: 'low',
+        analyzedAt: new Date().toISOString(),
+      };
+
       it('should return false when confidence is below threshold', () => {
-        const result = shouldActOnResult({ analysis: 'test' }, 0.8);
+        const result = shouldActOnResult(mockAnalysis, 0.8);
         expect(result).toBe(false);
       });
 
       it('should return true when confidence meets threshold', () => {
-        const result = shouldActOnResult({ analysis: 'test' }, 0.4);
+        const result = shouldActOnResult(mockAnalysis, 0.2);
         expect(result).toBe(true);
       });
 
-      it('should use default threshold of 0.8', () => {
-        const result = shouldActOnResult({ analysis: 'test' });
+      it('should use default threshold of 0.7', () => {
+        const result = shouldActOnResult(mockAnalysis);
         expect(result).toBe(false);
       });
     });
