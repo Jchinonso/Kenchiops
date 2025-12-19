@@ -21,8 +21,15 @@ interface DuplicationIssue {
 
 const DUPLICATION_PATTERNS = [
   {
-    pattern: /(function\s+)?createLogger|const\s+logger\s*=\s*createLogger/,
-    message: 'Local logger creation - use logger from @kenchi/shared',
+    // Only flag if someone DEFINES their own createLogger function (not imports/uses it)
+    pattern: /function\s+createLogger\s*\(|const\s+createLogger\s*=\s*\(/,
+    message: 'Local createLogger definition - use createLogger from @kenchi/shared',
+    exclude: ['packages/shared'],
+  },
+  {
+    // Flag hand-rolled logger objects (not using createLogger)
+    pattern: /const\s+logger\s*=\s*\{\s*(info|error|warn|debug)\s*:/,
+    message: 'Hand-rolled logger object - use createLogger from @kenchi/shared',
     exclude: ['packages/shared'],
   },
   {
