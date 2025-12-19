@@ -3,112 +3,68 @@
  * Processes @kenchi mentions and returns AI analysis.
  */
 
-import type { AppMentionEvent, SayFn } from '@slack/bolt';
-import { logger, OpenAIClient, calculateConfidenceScore, TIME_CONSTANTS } from '@kenchi/shared';
-import type { Event, Evidence } from '@kenchi/shared';
+import type { AppMentionEvent, SayFn, SayArguments } from '@slack/bolt';
+import { createLogger, TIME_CONSTANTS } from '@kenchi/shared';
 import { formatAnalysisMessage, formatErrorMessage } from '../formatters.js';
-import type { SlackMentionPayload } from '../types/slackTypes.js';
+import {
+  createEventFromMention,
+  performAnalysis,
+} from '../services/analysisService.js';
+import type { SlackBlock } from '../types/slackTypes.js';
+
+// Type for Slack blocks compatible with Bolt
+type SlackBlocks = NonNullable<SayArguments['blocks']>;
+
+const logger = createLogger('slack-bot');
 
 /**
  * Extracts query from mention text by removing bot mentions.
- * 
- * @param text - Full mention text
- * @returns Extracted query string
  */
-function extractQueryFromMention(text: string): string {
-  return text.replace(/<@[^>]+>/g, '').trim();
-}
-
-/**
- * Creates an Event from a Slack mention.
- * 
- * @param event - Slack app mention event
- * @returns Event object
- */
-function createEventFromMention(event: AppMentionEvent): Event {
-  const query = extractQueryFromMention(event.text);
-
-  return {
-    id: `evt_mention_${Date.now()}_${event.user}`,
-    type: 'MANUAL_TRIGGER',
-    source: 'slack',
-    timestamp: new Date(parseFloat(event.ts) * TIME_CONSTANTS.MILLISECONDS_PER_SECOND).toISOString(),
-    severity: 'medium',
-    title: 'Slack Mention Analysis',
-    payload: {
-      query,
-      channel: event.channel,
-      user: event.user,
-      thread_ts: event.thread_ts,
-    } as SlackMentionPayload,
-    metadata: {
-      triggeredBy: event.user,
-    },
-  };
-}
-
-/**
- * Creates minimal evidence for mention analysis.
- * 
- * @param eventId - Event ID
- * @returns Evidence object
- */
-function createMinimalEvidence(eventId: string): Evidence {
-  return {
-    eventId,
-    collectedAt: new Date().toISOString(),
-    logs: [],
-  };
-}
+const extractQueryFromMention = (text: string): string =>
+  text.replace(/<@[^>]+>/g, '').trim();
 
 /**
  * Creates feedback buttons for the analysis response.
- * 
- * @param eventId - Event ID for tracking
- * @param threadTs - Thread timestamp
- * @returns Slack Block Kit blocks
  */
-function createFeedbackButtons(eventId: string, threadTs: string): unknown[] {
-  return [
-    {
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: '👍 Helpful',
-            emoji: true,
-          },
-          style: 'primary',
-          value: eventId,
-          action_id: 'feedback_helpful',
+const createFeedbackButtons = (eventId: string): SlackBlock[] => [
+  {
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: {
+          type: 'plain_text',
+          text: '👍 Helpful',
+          emoji: true,
         },
-        {
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: '👎 Not helpful',
-            emoji: true,
-          },
-          value: eventId,
-          action_id: 'feedback_not_helpful',
+        style: 'primary',
+        value: eventId,
+        action_id: 'feedback_helpful',
+      },
+      {
+        type: 'button',
+        text: {
+          type: 'plain_text',
+          text: '👎 Not helpful',
+          emoji: true,
         },
-      ],
-    },
-  ];
-}
+        value: eventId,
+        action_id: 'feedback_not_helpful',
+      },
+    ],
+  },
+];
 
 /**
  * Handles app mention events.
- * 
+ *
  * @param event - Slack app mention event
  * @param say - Function to send messages
  */
-export async function handleAppMention(
+export const handleAppMention = async (
   event: AppMentionEvent,
   say: SayFn
-): Promise<void> {
+): Promise<void> => {
   logger.info('Bot mentioned', {
     text: event.text,
     user: event.user,
@@ -116,39 +72,59 @@ export async function handleAppMention(
   });
 
   try {
-    const analysisEvent = createEventFromMention(event);
-    const evidence = createMinimalEvidence(analysisEvent.id);
+    const query = extractQueryFromMention(event.text);
+    const timestamp = new Date(
+      parseFloat(event.ts) * TIME_CONSTANTS.MILLISECONDS_PER_SECOND
+    ).toISOString();
 
-    const openaiClient = new OpenAIClient();
-    const analysis = await openaiClient.analyzeIncident(analysisEvent, evidence);
-    const confidenceResult = calculateConfidenceScore(analysis, evidence);
+    // Ensure user is defined (required for analysis)
+    const userId = event.user ?? 'unknown';
+
+    const analysisEvent = createEventFromMention(
+      userId,
+      event.channel,
+      query,
+      event.thread_ts ?? event.ts
+    );
+
+    // Override timestamp with actual event timestamp
+    const eventWithCorrectTime = {
+      ...analysisEvent,
+      timestamp,
+    };
+
+    const { analysis, confidence } = await performAnalysis(eventWithCorrectTime);
 
     logger.info('Mention analysis completed', {
       eventId: analysisEvent.id,
-      confidence: confidenceResult.finalScore,
+      confidence: confidence.finalScore,
     });
 
-    const blocks = formatAnalysisMessage(analysis, confidenceResult);
+    const blocks = formatAnalysisMessage(analysis, confidence);
 
     await say({
-      blocks: blocks as never,
+      blocks: blocks as SlackBlocks,
       thread_ts: event.ts,
     });
 
-    const feedbackBlocks = createFeedbackButtons(analysisEvent.id, event.ts);
+    const feedbackBlocks = createFeedbackButtons(analysisEvent.id);
     await say({
-      blocks: feedbackBlocks as never,
+      blocks: feedbackBlocks as SlackBlocks,
       thread_ts: event.ts,
     });
   } catch (error) {
     logger.error('Error processing app mention', {
       error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
     });
 
+    const errorBlocks = formatErrorMessage(
+      error instanceof Error ? error : new Error('Unknown error')
+    );
+
     await say({
-      blocks: formatErrorMessage(error instanceof Error ? error : new Error('Unknown error')) as never,
+      blocks: errorBlocks as SlackBlocks,
       thread_ts: event.ts,
     });
   }
-}
-
+};

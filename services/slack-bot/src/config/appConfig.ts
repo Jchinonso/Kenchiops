@@ -13,6 +13,7 @@ export interface AppConfig {
   readonly slackWebhookPort: number;
   readonly slackBotToken: string;
   readonly slackSigningSecret: string;
+  readonly slackAppToken: string;
   readonly nodeEnv: string;
 }
 
@@ -25,6 +26,7 @@ export interface AppConfig {
 export function loadAppConfig(): AppConfig {
   const slackBotToken = config.SLACK_BOT_TOKEN;
   const slackSigningSecret = config.SLACK_SIGNING_SECRET;
+  const slackAppToken = config.SLACK_APP_LEVEL_TOKEN;
 
   if (!slackBotToken) {
     throw new Error('SLACK_BOT_TOKEN is required');
@@ -32,6 +34,10 @@ export function loadAppConfig(): AppConfig {
 
   if (!slackSigningSecret) {
     throw new Error('SLACK_SIGNING_SECRET is required');
+  }
+
+  if (!slackAppToken) {
+    throw new Error('SLACK_APP_LEVEL_TOKEN is required for Socket Mode');
   }
 
   return {
@@ -42,6 +48,7 @@ export function loadAppConfig(): AppConfig {
     ),
     slackBotToken,
     slackSigningSecret,
+    slackAppToken,
     nodeEnv: config.NODE_ENV || 'development',
   };
 }

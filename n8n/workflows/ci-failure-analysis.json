@@ -47,19 +47,8 @@
         "url": "http://slack-bot:3001/slack/message",
         "authentication": "none",
         "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "channel",
-              "value": "={{ $('Webhook - CI Failure').item.json.body.channel || '#devops' }}"
-            },
-            {
-              "name": "message",
-              "value": "={{ $json.analysis }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"devops-alert\",\n  \"analysis\": {\n    \"repository\": \"{{ $json.repository }}\",\n    \"confidence\": {{ $json.confidence }},\n    \"analysis\": {{ JSON.stringify($json.analysis) }},\n    \"identified_cause\": {{ JSON.stringify($json.identified_cause || '') }},\n    \"recommended_actions\": {{ JSON.stringify($json.recommended_actions || []) }}\n  }\n}",
         "options": {}
       },
       "id": "http-request-slack",

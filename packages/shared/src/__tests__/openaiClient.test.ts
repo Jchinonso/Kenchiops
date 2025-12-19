@@ -218,11 +218,12 @@ describe('OpenAIClient', () => {
 
       const result = await client.analyzeIncident(mockEvent, mockEvidence);
 
+      // Logger now outputs JSON format
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        '[OpenAIClient] Validation errors:',
-        expect.arrayContaining([
-          expect.stringContaining('dangerous keyword "drop"'),
-        ])
+        expect.stringContaining('"message":"OpenAI response validation failed"')
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('dangerous keyword')
       );
 
       consoleWarnSpy.mockRestore();

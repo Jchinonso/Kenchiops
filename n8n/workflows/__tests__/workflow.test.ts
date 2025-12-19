@@ -50,9 +50,10 @@ describe('n8n Workflow Validation', () => {
       const openaiNode = workflow.nodes.find(
         (node: any) => node.name === 'HTTP Request - OpenAI Analysis'
       );
-      
+
       expect(openaiNode).toBeDefined();
-      expect(openaiNode.parameters.url).toBe('http://localhost:3000/api/analyze');
+      // Uses Docker service name for container-to-container communication
+      expect(openaiNode.parameters.url).toBe('http://api:3000/api/analyze');
       expect(openaiNode.parameters.method).toBe('POST');
       expect(openaiNode.parameters.sendBody).toBe(true);
     });
@@ -61,9 +62,10 @@ describe('n8n Workflow Validation', () => {
       const slackNode = workflow.nodes.find(
         (node: any) => node.name === 'HTTP Request - Post to Slack'
       );
-      
+
       expect(slackNode).toBeDefined();
-      expect(slackNode.parameters.url).toBe('http://localhost:3001/slack/message');
+      // Uses Docker service name for container-to-container communication
+      expect(slackNode.parameters.url).toBe('http://slack-bot:3001/slack/message');
       expect(slackNode.parameters.method).toBe('POST');
     });
 
@@ -129,13 +131,17 @@ describe('n8n Workflow Validation', () => {
       const slackNode = workflow.nodes.find(
         (node: any) => node.name === 'HTTP Request - Post to Slack'
       );
-      
+
       const messageParam = slackNode.parameters.bodyParameters.parameters.find(
         (p: any) => p.name === 'message'
       );
-      
+
       expect(messageParam).toBeDefined();
-      expect(messageParam.value).toBe('={{ $json.analysis }}');
+      // The message includes formatted analysis with summary, cause, and actions
+      expect(messageParam.value).toContain('CI Failure Analysis');
+      expect(messageParam.value).toContain('$json.analysis');
+      expect(messageParam.value).toContain('$json.repository');
+      expect(messageParam.value).toContain('$json.confidence');
     });
   });
 });
