@@ -2,7 +2,7 @@
  * Unit tests for GitHub App Handlers
  */
 
-import { describe, it, expect, beforeEach, jest } from "@jest/globals";
+import { describe, it, expect, jest } from "@jest/globals";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
 import {
   GITHUB_PR_ACTIONS,

@@ -59,7 +59,6 @@ const getPriorityEmoji = (priority: string): string => {
  */
 export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[] => {
   const confidencePercent = Math.round(analysis.confidence * 100);
-  const confidenceColor = getConfidenceColor(analysis.confidence);
   const confidenceLabel = getConfidenceLabel(analysis.confidence);
 
   const blocks: SlackBlock[] = [
@@ -126,7 +125,7 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
 
     // Format each action
     const actionsText = analysis.recommended_actions
-      .map((action, index) => {
+      .map((action) => {
         const emoji = getPriorityEmoji(action.priority);
         const priorityLabel = action.priority.charAt(0).toUpperCase() + action.priority.slice(1);
         return `${emoji} *${priorityLabel}:* ${action.description}`;
@@ -446,7 +445,7 @@ export const broadcastMessage = async (
 export const handleBotJoinedChannel = async (
   client: SlackClient,
   channelId: string,
-  botId: string
+  _botId: string
 ): Promise<void> => {
   try {
     const memberChannels = await getBotMemberChannels(client);

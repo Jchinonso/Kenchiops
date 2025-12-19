@@ -214,7 +214,7 @@ describe("OpenAIClient", () => {
       // Spy on console.warn to check if validation warnings are logged
       const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-      const result = await client.analyzeIncident(mockEvent, mockEvidence);
+      await client.analyzeIncident(mockEvent, mockEvidence);
 
       // Logger now outputs JSON format
       expect(consoleWarnSpy).toHaveBeenCalledWith(

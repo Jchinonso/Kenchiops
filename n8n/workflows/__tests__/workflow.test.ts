@@ -130,16 +130,16 @@ describe("n8n Workflow Validation", () => {
         (node: any) => node.name === "HTTP Request - Post to Slack"
       );
 
-      const messageParam = slackNode.parameters.bodyParameters.parameters.find(
-        (p: any) => p.name === "message"
-      );
+      expect(slackNode).toBeDefined();
+      // The Slack node uses JSON body with analysis data
+      expect(slackNode.parameters.specifyBody).toBe("json");
+      expect(slackNode.parameters.jsonBody).toBeDefined();
 
-      expect(messageParam).toBeDefined();
-      // The message includes formatted analysis with summary, cause, and actions
-      expect(messageParam.value).toContain("CI Failure Analysis");
-      expect(messageParam.value).toContain("$json.analysis");
-      expect(messageParam.value).toContain("$json.repository");
-      expect(messageParam.value).toContain("$json.confidence");
+      // The JSON body includes analysis data
+      const jsonBody = slackNode.parameters.jsonBody;
+      expect(jsonBody).toContain("$json.repository");
+      expect(jsonBody).toContain("$json.confidence");
+      expect(jsonBody).toContain("$json.analysis");
     });
   });
 });

@@ -52,10 +52,6 @@ function validateWorkflow(workflowPath: string): boolean {
     console.log(`   Nodes: ${workflow.nodes.length}`);
     console.log("");
 
-    // Check for required nodes
-    const nodeTypes = new Set(workflow.nodes.map((n) => n.type));
-    const nodeNames = workflow.nodes.map((n) => n.name);
-
     console.log("📋 Workflow Nodes:");
     workflow.nodes.forEach((node) => {
       console.log(`   - ${node.name} (${node.type})`);

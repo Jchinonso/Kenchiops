@@ -65,7 +65,6 @@ class LoggerImpl implements Logger {
     metadata?: Record<string, unknown>
   ): string => {
     const timestamp = new Date().toISOString();
-    const levelName = LogLevel[level];
     const entry: LogEntry = {
       level,
       message,

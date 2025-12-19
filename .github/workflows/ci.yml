@@ -82,11 +82,17 @@ jobs:
         run: npm run test:coverage
         env:
           # Provide dummy values for required env vars during tests
+          NODE_ENV: test
           OPENAI_API_KEY: test-key
           GITHUB_APP_ID: test-app-id
           GITHUB_APP_PRIVATE_KEY: test-private-key
+          GITHUB_INSTALLATION_ID: "12345"
+          GITHUB_WEBHOOK_SECRET: test-webhook-secret
           SLACK_BOT_TOKEN: test-token
           SLACK_SIGNING_SECRET: test-secret
+          SLACK_APP_LEVEL_TOKEN: test-app-token
+          DATABASE_URL: postgres://test:test@localhost:5432/test
+          VECTOR_DB_URL: postgres://test:test@localhost:5432/test_vector
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

@@ -56,12 +56,6 @@ export const getOctokit = async (installationId: number): Promise<Octokit> => {
 
   logger.info("Creating new Octokit instance", { installationId });
 
-  const auth = createAppAuth({
-    appId: appConfig.github.appId,
-    privateKey: appConfig.github.privateKey,
-    installationId,
-  });
-
   const octokit = new Octokit({
     authStrategy: createAppAuth,
     auth: {

@@ -2,7 +2,7 @@
  * Unit tests for API Analysis Service
  */
 
-import { describe, it, expect, beforeEach, jest } from "@jest/globals";
+import { describe, it, expect } from "@jest/globals";
 import { createAnalysisContext, formatAnalysisResponse } from "../services/analysisService.js";
 import type { LLMAnalysisResult, Evidence } from "@kenchi/shared";
 

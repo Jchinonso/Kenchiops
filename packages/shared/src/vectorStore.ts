@@ -69,7 +69,7 @@ export class InMemoryVectorStore extends VectorStore {
     this.docs.set(id, content);
   };
 
-  readonly querySimilar = async (text: string): Promise<string[]> => {
+  readonly querySimilar = async (_text: string): Promise<string[]> => {
     // TODO: Replace with real similarity search against a vector DB.
     // For now, we just return all IDs deterministically.
     return Array.from(this.docs.keys());

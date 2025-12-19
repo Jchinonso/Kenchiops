@@ -3,7 +3,7 @@
  * These types extend the shared Event types with Slack-specific structures.
  */
 
-import type { Event, EventType, EventSeverity, EventPayload } from "@kenchi/shared";
+import type { Event, EventType, EventPayload } from "@kenchi/shared";
 
 /**
  * Slack command payload structure
