@@ -1,5 +1,7 @@
 {
+  "id": "x4XJGy1RtcBwjeSc",
   "name": "CI Failure Analysis Workflow",
+  "active": true,
   "nodes": [
     {
       "parameters": {

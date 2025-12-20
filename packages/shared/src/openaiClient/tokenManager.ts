@@ -164,10 +164,7 @@ const evidenceEstimators: ReadonlyArray<{
 const estimateEvidenceSize = (evidence: Evidence): number => {
   const { CHARS_PER_TOKEN_ESTIMATE } = OPENAI_CONSTANTS;
 
-  const totalChars = evidenceEstimators.reduce(
-    (sum, { estimate }) => sum + estimate(evidence),
-    0
-  );
+  const totalChars = evidenceEstimators.reduce((sum, { estimate }) => sum + estimate(evidence), 0);
 
   return Math.ceil(totalChars / CHARS_PER_TOKEN_ESTIMATE);
 };

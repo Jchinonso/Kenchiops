@@ -150,11 +150,12 @@ const buildEvidenceSection = (analysis: AnalysisData): string => {
     const displayDeps = analysis.dependencyChanges.slice(0, 3);
     displayDeps.forEach((dep) => {
       const icon = dep.type === "added" ? "➕" : dep.type === "removed" ? "➖" : "🔄";
-      const version = dep.oldVersion && dep.newVersion
-        ? ` (${dep.oldVersion} → ${dep.newVersion})`
-        : dep.newVersion
-          ? ` (${dep.newVersion})`
-          : "";
+      const version =
+        dep.oldVersion && dep.newVersion
+          ? ` (${dep.oldVersion} → ${dep.newVersion})`
+          : dep.newVersion
+            ? ` (${dep.newVersion})`
+            : "";
       lines.push(`- ${icon} \`${dep.name}\`${version}`);
     });
     if (analysis.dependencyChanges.length > 3) {
@@ -176,12 +177,16 @@ const buildImpactSection = (analysis: AnalysisData): string => {
 
   // Determine impact based on available data
   if (analysis.testFailures && analysis.testFailures.length > 0) {
-    impacts.push(`${analysis.testFailures.length} test${analysis.testFailures.length > 1 ? "s" : ""} failing`);
+    impacts.push(
+      `${analysis.testFailures.length} test${analysis.testFailures.length > 1 ? "s" : ""} failing`
+    );
   }
 
   const failureAnnotations = analysis.annotations?.filter((a) => a.level === "failure") || [];
   if (failureAnnotations.length > 0) {
-    impacts.push(`${failureAnnotations.length} error${failureAnnotations.length > 1 ? "s" : ""} detected`);
+    impacts.push(
+      `${failureAnnotations.length} error${failureAnnotations.length > 1 ? "s" : ""} detected`
+    );
   }
 
   if (analysis.checkName) {

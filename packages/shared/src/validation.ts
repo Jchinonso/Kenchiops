@@ -105,8 +105,7 @@ export const validate = (schema: ValidationSchema) => {
  * Type guard helper for string validation.
  * Returns the value as string if valid, or null if invalid.
  */
-const asString = (value: unknown): string | null =>
-  typeof value === "string" ? value : null;
+const asString = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
 /**
  * Creates a string-based validator with a custom check.
@@ -172,9 +171,7 @@ export const validators = {
   /**
    * Validates that a value is a valid email address.
    */
-  email: createStringValidator((str) =>
-    EMAIL_REGEX.test(str) ? true : "must be a valid email"
-  ),
+  email: createStringValidator((str) => (EMAIL_REGEX.test(str) ? true : "must be a valid email")),
 
   /**
    * Creates a validator that checks minimum string length.

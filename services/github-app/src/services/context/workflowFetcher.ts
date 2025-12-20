@@ -50,7 +50,7 @@ export const fetchWorkflowLogs = async (
       repo,
       headSha,
       runCount: workflowRuns.workflow_runs.length,
-      runIds: workflowRuns.workflow_runs.slice(0, 3).map(r => r.id),
+      runIds: workflowRuns.workflow_runs.slice(0, 3).map((r) => r.id),
     });
 
     // Get the first (most recent) failed workflow run

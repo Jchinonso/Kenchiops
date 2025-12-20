@@ -138,7 +138,10 @@ const HIGH_CONFIDENCE_MESSAGE_TEMPLATES: Readonly<
 /**
  * Determines message context key based on safety level and auto-approval status.
  */
-const getMessageContext = (safetyLevel: SafetyLevel, canAutoApprove: boolean): keyof typeof HIGH_CONFIDENCE_MESSAGE_TEMPLATES => {
+const getMessageContext = (
+  safetyLevel: SafetyLevel,
+  canAutoApprove: boolean
+): keyof typeof HIGH_CONFIDENCE_MESSAGE_TEMPLATES => {
   return canAutoApprove
     ? "auto_approve"
     : safetyLevel === "medium_risk"
@@ -168,7 +171,11 @@ const createHighConfidenceMessage = (
  * Range-based gating handlers.
  * Each handler processes a specific confidence range and returns a gating result.
  */
-type RangeHandler = (range: ConfidenceRange, safetyLevel: SafetyLevel, clampedScore: number) => ActionGatingResult;
+type RangeHandler = (
+  range: ConfidenceRange,
+  safetyLevel: SafetyLevel,
+  clampedScore: number
+) => ActionGatingResult;
 
 /**
  * Handles very low confidence range - blocks all actions.

@@ -76,11 +76,18 @@ router.post(
       // Also create check run with annotations if we have any
       if (analysis.annotations && analysis.annotations.length > 0 && analysis.headSha) {
         const checkAnnotations: CheckAnnotation[] = analysis.annotations.map(
-          (ann: { path: string; startLine: number; level: string; message: string; title?: string }) => ({
+          (ann: {
+            path: string;
+            startLine: number;
+            level: string;
+            message: string;
+            title?: string;
+          }) => ({
             path: ann.path,
             start_line: ann.startLine,
             end_line: ann.startLine,
-            annotation_level: ann.level === "failure" ? "failure" : ann.level === "warning" ? "warning" : "notice",
+            annotation_level:
+              ann.level === "failure" ? "failure" : ann.level === "warning" ? "warning" : "notice",
             message: ann.message,
             title: ann.title,
           })
@@ -166,7 +173,8 @@ router.post(
         path: ann.path,
         start_line: ann.line,
         end_line: ann.line,
-        annotation_level: ann.level === "failure" ? "failure" : ann.level === "warning" ? "warning" : "notice",
+        annotation_level:
+          ann.level === "failure" ? "failure" : ann.level === "warning" ? "warning" : "notice",
         message: ann.message,
         title: ann.title,
       })

@@ -222,11 +222,11 @@ export const postPRComment = async (
       error: getErrorMessage(error),
     });
 
-    throw new ExternalServiceError(
-      "GitHub",
-      wrapError("Failed to post comment", error),
-      { owner, repo, prNumber }
-    );
+    throw new ExternalServiceError("GitHub", wrapError("Failed to post comment", error), {
+      owner,
+      repo,
+      prNumber,
+    });
   }
 };
 
@@ -310,11 +310,10 @@ export const createCheckRunWithAnnotations = async (
       error: getErrorMessage(error),
     });
 
-    throw new ExternalServiceError(
-      "GitHub",
-      wrapError("Failed to create check run", error),
-      { owner, repo, headSha }
-    );
+    throw new ExternalServiceError("GitHub", wrapError("Failed to create check run", error), {
+      owner,
+      repo,
+      headSha,
+    });
   }
 };
-

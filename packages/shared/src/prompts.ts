@@ -348,9 +348,7 @@ const STANDARD_METRICS: readonly MetricField[] = [
 /**
  * Set of standard metric keys for efficient lookup.
  */
-const STANDARD_METRIC_KEYS = new Set<string>(
-  STANDARD_METRICS.map((m) => m.key as string)
-);
+const STANDARD_METRIC_KEYS = new Set<string>(STANDARD_METRICS.map((m) => m.key as string));
 
 /**
  * Formats metrics summary using data-driven approach.
@@ -409,7 +407,10 @@ export const formatGitHistory = (commits: GitCommit[]): string => {
 /**
  * Deployment status field configuration.
  */
-const DEPLOYMENT_FIELDS: readonly { key: keyof NonNullable<SystemState["deploymentStatus"]>; label: string }[] = [
+const DEPLOYMENT_FIELDS: readonly {
+  key: keyof NonNullable<SystemState["deploymentStatus"]>;
+  label: string;
+}[] = [
   { key: "currentVersion", label: "Current Version" },
   { key: "previousVersion", label: "Previous Version" },
   { key: "deployedAt", label: "Deployed At" },

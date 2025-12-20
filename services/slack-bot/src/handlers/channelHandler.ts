@@ -6,12 +6,19 @@
  */
 
 import { logger, UI_CONSTANTS } from "@kenchi/shared";
-import { getBotMemberChannels, type SlackClient, type SlackChannel } from "../services/channelService.js";
+import {
+  getBotMemberChannels,
+  type SlackClient,
+  type SlackChannel,
+} from "../services/channelService.js";
 
 // Re-export commonly used functions for backward compatibility
 export { resolveChannelId, getBotMemberChannels } from "../services/channelService.js";
 export { postMessage, broadcastMessage } from "../services/messageService.js";
-export { formatCIFailureBlocks, createAnalysisAttachments } from "../formatters/ciFailureFormatter.js";
+export {
+  formatCIFailureBlocks,
+  createAnalysisAttachments,
+} from "../formatters/ciFailureFormatter.js";
 
 // ==================== Message Templates ====================
 
@@ -32,10 +39,7 @@ const WELCOME_MESSAGE =
 /**
  * Sends welcome message to the first channel the bot joins.
  */
-const sendWelcomeMessage = async (
-  client: SlackClient,
-  channelId: string
-): Promise<void> => {
+const sendWelcomeMessage = async (client: SlackClient, channelId: string): Promise<void> => {
   await client.chat.postMessage({
     channel: channelId,
     text: WELCOME_MESSAGE,

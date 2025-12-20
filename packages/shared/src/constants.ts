@@ -549,24 +549,12 @@ export const LOG_PARSING_LIMITS = {
 /**
  * Paths to exclude when extracting file references from logs.
  */
-export const EXCLUDED_PATH_PATTERNS = [
-  "node_modules",
-  ".test.",
-  ".spec.",
-  "internal/",
-] as const;
+export const EXCLUDED_PATH_PATTERNS = ["node_modules", ".test.", ".spec.", "internal/"] as const;
 
 /**
  * Error indicators for context-preserving log truncation.
  */
-export const ERROR_INDICATORS = [
-  "error",
-  "Error",
-  "ERROR",
-  "failed",
-  "Failed",
-  "FAILED",
-] as const;
+export const ERROR_INDICATORS = ["error", "Error", "ERROR", "failed", "Failed", "FAILED"] as const;
 
 /**
  * Regex patterns for extracting file references from logs.
