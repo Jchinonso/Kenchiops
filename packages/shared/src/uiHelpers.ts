@@ -30,10 +30,11 @@ const CONFIDENCE_LABELS: readonly ThresholdEntry<string>[] = [
 
 /**
  * Confidence color lookup table.
+ * Uses UI_CONFIDENCE_THRESHOLDS for consistency.
  */
 const CONFIDENCE_COLORS: readonly ThresholdEntry<string>[] = [
-  { threshold: 0.8, value: SLACK_COLORS.SUCCESS },
-  { threshold: 0.5, value: SLACK_COLORS.WARNING },
+  { threshold: UI_CONFIDENCE_THRESHOLDS.HIGH, value: SLACK_COLORS.SUCCESS },
+  { threshold: UI_CONFIDENCE_THRESHOLDS.MEDIUM, value: SLACK_COLORS.WARNING },
 ] as const;
 
 /**

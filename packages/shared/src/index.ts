@@ -91,6 +91,7 @@ export type {
   RelatedEvent,
   // LLM Analysis Types
   LLMAnalysisResult,
+  LLMCodeAnnotation,
   ImpactAssessment,
   LLMRecommendedAction,
   EvidenceReference,

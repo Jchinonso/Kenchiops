@@ -41,9 +41,17 @@ export const fetchWorkflowLogs = async (
     });
 
     if (workflowRuns.workflow_runs.length === 0) {
-      logger.info("No workflow runs found for commit", { headSha });
+      logger.warn("No workflow runs found for commit", { owner, repo, headSha });
       return null;
     }
+
+    logger.info("Found workflow runs for commit", {
+      owner,
+      repo,
+      headSha,
+      runCount: workflowRuns.workflow_runs.length,
+      runIds: workflowRuns.workflow_runs.slice(0, 3).map(r => r.id),
+    });
 
     // Get the first (most recent) failed workflow run
     const failedRun =
