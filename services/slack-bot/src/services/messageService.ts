@@ -17,7 +17,10 @@ import type {
 } from "../types/slackTypes.js";
 import { resolveChannelId, getBotMemberChannels, type SlackClient } from "./channelService.js";
 import { getChannelForRepository, isMultiTenantMode } from "./orgChannelMapping.js";
-import { createAnalysisAttachments, type MessageAttachment } from "../formatters/ciFailureFormatter.js";
+import {
+  createAnalysisAttachments,
+  type MessageAttachment,
+} from "../formatters/ciFailureFormatter.js";
 
 /**
  * Message payload for Slack API

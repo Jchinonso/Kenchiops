@@ -98,7 +98,7 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
   }
 
   // Add annotation context
-  const failureAnnotations = analysis.annotations?.filter(a => a.level === "failure") || [];
+  const failureAnnotations = analysis.annotations?.filter((a) => a.level === "failure") || [];
   if (failureAnnotations.length > 0 && reasons.length < 3) {
     const firstAnn = failureAnnotations[0];
     reasons.push(`Error in \`${firstAnn.path}:${firstAnn.startLine}\``);
@@ -115,7 +115,7 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
     reasons.push("CI pipeline execution failed");
   }
 
-  const reasonsList = reasons.map(r => `• ${r}`).join("\n");
+  const reasonsList = reasons.map((r) => `• ${r}`).join("\n");
 
   return {
     type: "section",
@@ -165,7 +165,7 @@ const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
   const displayErrors = errors.slice(0, 5);
   const hasMore = errors.length > 5;
 
-  let errorText = displayErrors.map(e => `\`\`\`${truncateText(e, 100)}\`\`\``).join("\n");
+  let errorText = displayErrors.map((e) => `\`\`\`${truncateText(e, 100)}\`\`\``).join("\n");
   if (hasMore) {
     errorText += `\n_...and ${errors.length - 5} more errors_`;
   }
@@ -315,11 +315,9 @@ const createActionsBlock = (analysis: CIFailureAnalysis): SlackBlock | null => {
  */
 export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[] => {
   // Collect errors using shared utility
-  const errors = collectCIErrors(
-    analysis.annotations,
-    analysis.testFailures,
-    { includeEmoji: false }
-  );
+  const errors = collectCIErrors(analysis.annotations, analysis.testFailures, {
+    includeEmoji: false,
+  });
 
   // Build blocks array, filtering out nulls
   const blocks: SlackBlock[] = [

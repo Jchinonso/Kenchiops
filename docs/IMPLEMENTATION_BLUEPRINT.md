@@ -5,6 +5,7 @@
 This blueprint maps the vision outlined in the AI-Powered DevOps Co-Pilot concept document to the current Kenchi implementation, identifying what has been accomplished, what remains to be built, and the roadmap for achieving full capability.
 
 **Key Design Principles**:
+
 - **Data Minimization**: Only send what's necessary to the LLM
 - **Security First**: Never send secrets, tokens, or sensitive data to AI
 - **Two-Stage Pipeline**: Deterministic filtering before LLM reasoning
@@ -34,14 +35,14 @@ This blueprint maps the vision outlined in the AI-Powered DevOps Co-Pilot concep
 
 ### The Six Key Features from Concept Document
 
-| Feature | Concept Goal | Current Status | Completion |
-|---------|--------------|----------------|------------|
-| **1. Smart CI/CD Failure Assistant** | Analyze CI failures, explain in plain English, suggest fixes | **IMPLEMENTED** - Core functionality complete | 85% |
-| **2. Infrastructure-as-Code Copilot** | Explain IaC, suggest improvements, generate configs | **NOT STARTED** | 0% |
-| **3. Deployment Risk Analyzer** | Predict deployment risk, gate deployments | **NOT STARTED** | 0% |
-| **4. Incident Triage & Auto-Remediation** | 24/7 SRE assistant with auto-remediation | **PARTIAL** - Analysis only, no auto-remediation | 25% |
-| **5. Configuration Drift Detection** | Compare live vs. Git, detect drift | **NOT STARTED** | 0% |
-| **6. Documentation & Knowledge Assistant** | Smart knowledge base Q&A | **PARTIAL** - Vector store infrastructure ready | 15% |
+| Feature                                    | Concept Goal                                                 | Current Status                                   | Completion |
+| ------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------ | ---------- |
+| **1. Smart CI/CD Failure Assistant**       | Analyze CI failures, explain in plain English, suggest fixes | **IMPLEMENTED** - Core functionality complete    | 85%        |
+| **2. Infrastructure-as-Code Copilot**      | Explain IaC, suggest improvements, generate configs          | **NOT STARTED**                                  | 0%         |
+| **3. Deployment Risk Analyzer**            | Predict deployment risk, gate deployments                    | **NOT STARTED**                                  | 0%         |
+| **4. Incident Triage & Auto-Remediation**  | 24/7 SRE assistant with auto-remediation                     | **PARTIAL** - Analysis only, no auto-remediation | 25%        |
+| **5. Configuration Drift Detection**       | Compare live vs. Git, detect drift                           | **NOT STARTED**                                  | 0%         |
+| **6. Documentation & Knowledge Assistant** | Smart knowledge base Q&A                                     | **PARTIAL** - Vector store infrastructure ready  | 15%        |
 
 ---
 
@@ -50,6 +51,7 @@ This blueprint maps the vision outlined in the AI-Powered DevOps Co-Pilot concep
 ### Core Infrastructure (Fully Implemented)
 
 #### 1. Monorepo Architecture
+
 ```
 kenchi/
 ├── packages/shared/          # ✅ Comprehensive shared utilities
@@ -62,6 +64,7 @@ kenchi/
 ```
 
 #### 2. Shared Package (`@kenchi/shared`) - Complete
+
 - **Configuration**: Environment-based config management
 - **Logging**: Structured JSON logging with service scoping
 - **Error Handling**: Custom error classes (ValidationError, LLMError, etc.)
@@ -70,6 +73,7 @@ kenchi/
 - **Rate Limiting**: Configurable rate limiter
 
 #### 3. OpenAI Integration - Production Ready
+
 - **OpenAI Client** (`packages/shared/src/openaiClient/`)
   - Token budget management
   - Retry logic with exponential backoff
@@ -81,6 +85,7 @@ kenchi/
   - Token estimation and truncation
 
 #### 4. Safety & Confidence Scoring - Complete
+
 - **Confidence Scoring** (`packages/shared/src/safety/`)
   - Base score from LLM confidence
   - Uncertainty detection (hedging language)
@@ -94,6 +99,7 @@ kenchi/
   - Dangerous action blocking
 
 #### 5. Type System - Comprehensive
+
 - **Event Types**: Event, EventType, EventPayload, EventMetadata
 - **Evidence Types**: Evidence, LogEntry, Metrics, GitCommit, SystemState
 - **Analysis Types**: LLMAnalysisResult, ActionProposal, ActionType
@@ -102,6 +108,7 @@ kenchi/
 ### Services Implementation
 
 #### API Service (services/api/) - Functional
+
 - `/webhook/:source` - Generic webhook receiver
 - `/events` - Event ingestion
 - `/api/analyze` - CI failure analysis endpoint
@@ -109,6 +116,7 @@ kenchi/
 - **Analysis Service**: Complete CI failure analysis pipeline
 
 #### Slack Bot Service (services/slack-bot/) - Functional
+
 - `/kenchi` slash command handling
 - Message event handling
 - App mention handling
@@ -116,6 +124,7 @@ kenchi/
 - Rich message formatting
 
 #### GitHub App Service (services/github-app/) - Advanced
+
 - **Check Run Handler**: Enriched CI failure context gathering
   - Workflow logs extraction
   - PR diff retrieval
@@ -127,6 +136,7 @@ kenchi/
 - n8n forwarding pipeline
 
 ### Documentation - Excellent
+
 - `ARCHITECTURE.md` - Complete system architecture
 - `SYSTEM_ARCHITECTURE.md` - Detailed component design
 - `DATA_MODELS.md` - JSON schemas and TypeScript interfaces
@@ -140,16 +150,16 @@ kenchi/
 
 ### What's Missing vs. Concept Document
 
-| Gap | Severity | Current State | Required |
-|-----|----------|---------------|----------|
-| **Secret Redaction** | **CRITICAL** | Not implemented | Pattern-based redaction before LLM |
-| **Persistence Layer** | **CRITICAL** | In-memory only | PostgreSQL + pgvector |
-| **Knowledge Base / RAG** | Major | Interface only | Full implementation |
-| **Action Execution** | Major | Analysis only | GitHub API integration |
-| **Human-in-the-Loop** | Major | No interactivity | Slack Block Kit buttons |
-| **Flakiness Detection** | Medium | Not implemented | Fingerprinting + tracking |
-| **Customer Toggles** | Medium | Not implemented | Per-installation settings |
-| **Monitoring Integration** | Low (Phase 2) | Not started | Datadog/Prometheus webhooks |
+| Gap                        | Severity      | Current State    | Required                           |
+| -------------------------- | ------------- | ---------------- | ---------------------------------- |
+| **Secret Redaction**       | **CRITICAL**  | Not implemented  | Pattern-based redaction before LLM |
+| **Persistence Layer**      | **CRITICAL**  | In-memory only   | PostgreSQL + pgvector              |
+| **Knowledge Base / RAG**   | Major         | Interface only   | Full implementation                |
+| **Action Execution**       | Major         | Analysis only    | GitHub API integration             |
+| **Human-in-the-Loop**      | Major         | No interactivity | Slack Block Kit buttons            |
+| **Flakiness Detection**    | Medium        | Not implemented  | Fingerprinting + tracking          |
+| **Customer Toggles**       | Medium        | Not implemented  | Per-installation settings          |
+| **Monitoring Integration** | Low (Phase 2) | Not started      | Datadog/Prometheus webhooks        |
 
 ---
 
@@ -207,25 +217,25 @@ kenchi/
  */
 export const SECRET_PATTERNS: readonly RegExp[] = [
   // AWS
-  /\bAKIA[0-9A-Z]{16}\b/g,                              // AWS Access Key ID
-  /\b[A-Za-z0-9/+=]{40}\b(?=.*aws)/gi,                  // AWS Secret Key (contextual)
+  /\bAKIA[0-9A-Z]{16}\b/g, // AWS Access Key ID
+  /\b[A-Za-z0-9/+=]{40}\b(?=.*aws)/gi, // AWS Secret Key (contextual)
 
   // GitHub
-  /\bghp_[a-zA-Z0-9]{36}\b/g,                           // GitHub PAT
-  /\bghr_[a-zA-Z0-9]{36}\b/g,                           // GitHub refresh token
-  /\bghu_[a-zA-Z0-9]{36}\b/g,                           // GitHub user token
-  /\bghs_[a-zA-Z0-9]{36}\b/g,                           // GitHub server token
-  /\bgho_[a-zA-Z0-9]{36}\b/g,                           // GitHub OAuth token
+  /\bghp_[a-zA-Z0-9]{36}\b/g, // GitHub PAT
+  /\bghr_[a-zA-Z0-9]{36}\b/g, // GitHub refresh token
+  /\bghu_[a-zA-Z0-9]{36}\b/g, // GitHub user token
+  /\bghs_[a-zA-Z0-9]{36}\b/g, // GitHub server token
+  /\bgho_[a-zA-Z0-9]{36}\b/g, // GitHub OAuth token
 
   // OpenAI
-  /\bsk-[a-zA-Z0-9]{32,}\b/g,                           // OpenAI API key
+  /\bsk-[a-zA-Z0-9]{32,}\b/g, // OpenAI API key
 
   // Slack
-  /\bxox[baprs]-[\w-]+/g,                               // Slack tokens
+  /\bxox[baprs]-[\w-]+/g, // Slack tokens
 
   // Generic patterns
   /-----BEGIN\s+(?:RSA|EC|DSA|OPENSSH|PGP|ENCRYPTED)?\s*PRIVATE\s+KEY-----[\s\S]*?-----END/g,
-  /\beyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g,  // JWT tokens
+  /\beyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g, // JWT tokens
 
   // Environment variable patterns
   /(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|AUTH|API_KEY)[_-]?[\w]*\s*[:=]\s*['"]?[^\s'"]{8,}['"]?/gi,
@@ -241,21 +251,21 @@ export const SECRET_PATTERNS: readonly RegExp[] = [
  * Fields that should NEVER be included in LLM context
  */
 export const FORBIDDEN_FIELDS: readonly string[] = [
-  'authorization',
-  'x-api-key',
-  'x-auth-token',
-  'cookie',
-  'set-cookie',
-  'x-csrf-token',
-  'private_key',
-  'secret_key',
-  'access_token',
-  'refresh_token',
-  'id_token',
-  'session_id',
-  'password',
-  'passwd',
-  'credential',
+  "authorization",
+  "x-api-key",
+  "x-auth-token",
+  "cookie",
+  "set-cookie",
+  "x-csrf-token",
+  "private_key",
+  "secret_key",
+  "access_token",
+  "refresh_token",
+  "id_token",
+  "session_id",
+  "password",
+  "passwd",
+  "credential",
 ] as const;
 
 /**
@@ -266,7 +276,7 @@ export const redactSecrets = (text: string): string => {
   for (const pattern of SECRET_PATTERNS) {
     // Reset lastIndex for global patterns
     pattern.lastIndex = 0;
-    redacted = redacted.replace(pattern, '[REDACTED]');
+    redacted = redacted.replace(pattern, "[REDACTED]");
   }
   return redacted;
 };
@@ -281,15 +291,15 @@ export const redactObject = <T extends Record<string, unknown>>(obj: T): T => {
     const lowerKey = key.toLowerCase();
 
     // Check if key is forbidden
-    if (FORBIDDEN_FIELDS.some(f => lowerKey.includes(f))) {
-      (result as Record<string, unknown>)[key] = '[REDACTED]';
+    if (FORBIDDEN_FIELDS.some((f) => lowerKey.includes(f))) {
+      (result as Record<string, unknown>)[key] = "[REDACTED]";
       continue;
     }
 
     // Recursively handle nested objects
-    if (typeof value === 'object' && value !== null) {
+    if (typeof value === "object" && value !== null) {
       (result as Record<string, unknown>)[key] = redactObject(value as Record<string, unknown>);
-    } else if (typeof value === 'string') {
+    } else if (typeof value === "string") {
       (result as Record<string, unknown>)[key] = redactSecrets(value);
     }
   }
@@ -334,10 +344,10 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   allowLogUpload: true,
   allowCodeSnippets: true,
   allowDiffHunks: true,
-  allowFeedbackTraining: false,  // Opt-in by default
+  allowFeedbackTraining: false, // Opt-in by default
   hashIdentifiers: false,
   logRetentionHours: 24,
-  allowedFileExtensions: ['.ts', '.js', '.tsx', '.jsx', '.py', '.go', '.yml', '.yaml', '.json'],
+  allowedFileExtensions: [".ts", ".js", ".tsx", ".jsx", ".py", ".go", ".yml", ".yaml", ".json"],
 } as const;
 ```
 
@@ -378,8 +388,8 @@ export interface TokenPolicy {
 }
 
 export const DEFAULT_TOKEN_POLICY: TokenPolicy = {
-  maxCacheDuration: 3000,  // 50 minutes (tokens last 60)
-  refreshBuffer: 600,      // Refresh 10 minutes before expiry
+  maxCacheDuration: 3000, // 50 minutes (tokens last 60)
+  refreshBuffer: 600, // Refresh 10 minutes before expiry
 } as const;
 ```
 
@@ -398,24 +408,34 @@ export const DEFAULT_TOKEN_POLICY: TokenPolicy = {
  */
 export const EMBEDDABLE_FILE_TYPES: readonly string[] = [
   // TypeScript/JavaScript
-  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
 
   // Configuration
-  '.yml', '.yaml', '.json', '.toml',
+  ".yml",
+  ".yaml",
+  ".json",
+  ".toml",
 
   // Infrastructure
-  '.tf', '.tfvars',           // Terraform
-  '.helm',                     // Helm charts
-  '.dockerfile', 'Dockerfile',
+  ".tf",
+  ".tfvars", // Terraform
+  ".helm", // Helm charts
+  ".dockerfile",
+  "Dockerfile",
 
   // Python
-  '.py',
+  ".py",
 
   // Go
-  '.go',
+  ".go",
 
   // Documentation
-  '.md',
+  ".md",
 ] as const;
 
 /**
@@ -467,8 +487,8 @@ export interface DiffChunkMetadata {
   readonly prNumber?: number;
   readonly commitSha: string;
   readonly language: string;
-  readonly changeType: 'add' | 'remove' | 'modify';
-  readonly symbolName?: string;  // Function/class name if extractable
+  readonly changeType: "add" | "remove" | "modify";
+  readonly symbolName?: string; // Function/class name if extractable
   readonly isTestFile: boolean;
   readonly isConfigFile: boolean;
 }
@@ -495,7 +515,7 @@ export const CHUNK_CONFIG = {
  */
 export const chunkDiff = (
   diff: string,
-  metadata: Omit<DiffChunkMetadata, 'changeType'>
+  metadata: Omit<DiffChunkMetadata, "changeType">
 ): DiffChunk[] => {
   const chunks: DiffChunk[] = [];
   const files = parseDiffByFile(diff);
@@ -537,11 +557,11 @@ export const createEmbeddingHeader = (chunk: DiffChunk): string => {
     `path: ${chunk.path}`,
     chunk.metadata.symbolName ? `symbol: ${chunk.metadata.symbolName}` : null,
     `change: ${chunk.metadata.changeType}`,
-    chunk.metadata.isTestFile ? 'type: test' : null,
-    chunk.metadata.isConfigFile ? 'type: config' : null,
+    chunk.metadata.isTestFile ? "type: test" : null,
+    chunk.metadata.isConfigFile ? "type: config" : null,
   ].filter(Boolean);
 
-  return parts.join(' | ');
+  return parts.join(" | ");
 };
 ```
 
@@ -560,7 +580,7 @@ export interface EmbeddingService {
 
 export class OpenAIEmbeddingService implements EmbeddingService {
   private readonly client: OpenAI;
-  private readonly model = 'text-embedding-3-small';
+  private readonly model = "text-embedding-3-small";
 
   constructor(client: OpenAI) {
     this.client = client;
@@ -579,7 +599,7 @@ export class OpenAIEmbeddingService implements EmbeddingService {
       model: this.model,
       input: texts,
     });
-    return response.data.map(d => d.embedding);
+    return response.data.map((d) => d.embedding);
   }
 }
 
@@ -624,7 +644,7 @@ export interface RetrievalQuery {
 export interface RetrievalResult {
   readonly chunk: DiffChunk;
   readonly similarity: number;
-  readonly matchType: 'vector' | 'keyword' | 'hybrid';
+  readonly matchType: "vector" | "keyword" | "hybrid";
 }
 
 /**
@@ -654,7 +674,7 @@ export const retrieveRelevantChunks = async (
   const results = await vectorStore.querySimilarWithFilters(
     queryEmbedding,
     filters,
-    query.limit * 2  // Over-fetch for re-ranking
+    query.limit * 2 // Over-fetch for re-ranking
   );
 
   // 4. Re-rank with keyword boosting
@@ -764,12 +784,12 @@ export interface ActionRiskFactors {
  * These should be tuned based on historical accuracy data
  */
 export const DIAGNOSIS_WEIGHTS = {
-  w0: -0.5,    // Bias term (starts pessimistic)
-  w1: 1.2,     // Log evidence (strong positive signal)
-  w2: 0.8,     // Historical match (good signal)
-  w3: 0.6,     // Diff relevance (moderate signal)
-  w4: 0.4,     // CI context quality
-  w5: 0.9,     // Flakiness penalty (strong negative)
+  w0: -0.5, // Bias term (starts pessimistic)
+  w1: 1.2, // Log evidence (strong positive signal)
+  w2: 0.8, // Historical match (good signal)
+  w3: 0.6, // Diff relevance (moderate signal)
+  w4: 0.4, // CI context quality
+  w5: 0.9, // Flakiness penalty (strong negative)
 } as const;
 
 /**
@@ -783,12 +803,13 @@ const sigmoid = (x: number): number => 1 / (1 + Math.exp(-x));
 export const calculateDiagnosisConfidence = (signals: ConfidenceSignals): number => {
   const { w0, w1, w2, w3, w4, w5 } = DIAGNOSIS_WEIGHTS;
 
-  const logit = w0
-    + w1 * signals.s_log
-    + w2 * signals.s_hist
-    + w3 * signals.s_diff
-    + w4 * signals.s_ci
-    - w5 * signals.s_flake;
+  const logit =
+    w0 +
+    w1 * signals.s_log +
+    w2 * signals.s_hist +
+    w3 * signals.s_diff +
+    w4 * signals.s_ci -
+    w5 * signals.s_flake;
 
   return sigmoid(logit);
 };
@@ -827,10 +848,9 @@ export const calculateActionConfidence = (
   diagnosisConfidence: number,
   risks: ActionRiskFactors
 ): number => {
-  return diagnosisConfidence
-    * (1 - risks.r_blast)
-    * (1 - risks.r_priv)
-    * (1 - risks.r_irreversible);
+  return (
+    diagnosisConfidence * (1 - risks.r_blast) * (1 - risks.r_priv) * (1 - risks.r_irreversible)
+  );
 };
 
 /**
@@ -851,12 +871,12 @@ export const assessActionRisks = (
  * Assess blast radius risk
  */
 const assessBlastRadius = (action: ActionProposal, context: ActionContext): number => {
-  const criticalPaths = ['auth', 'payment', 'database', 'core', 'security'];
+  const criticalPaths = ["auth", "payment", "database", "core", "security"];
 
   // Check if action affects critical paths
   const affectedPaths = context.affectedFiles || [];
-  const touchesCritical = affectedPaths.some(path =>
-    criticalPaths.some(critical => path.toLowerCase().includes(critical))
+  const touchesCritical = affectedPaths.some((path) =>
+    criticalPaths.some((critical) => path.toLowerCase().includes(critical))
   );
 
   if (touchesCritical) return 0.8;
@@ -872,15 +892,15 @@ const assessBlastRadius = (action: ActionProposal, context: ActionContext): numb
  */
 const assessPrivilegeLevel = (action: ActionProposal): number => {
   const privilegeMap: Record<string, number> = {
-    'post_comment': 0.0,
-    'add_label': 0.1,
-    'create_issue': 0.1,
-    'rerun_workflow': 0.2,
-    'add_environment_variable': 0.4,
-    'update_configuration': 0.5,
-    'rollback_deployment': 0.7,
-    'scale_service': 0.6,
-    'modify_infrastructure': 0.8,
+    post_comment: 0.0,
+    add_label: 0.1,
+    create_issue: 0.1,
+    rerun_workflow: 0.2,
+    add_environment_variable: 0.4,
+    update_configuration: 0.5,
+    rollback_deployment: 0.7,
+    scale_service: 0.6,
+    modify_infrastructure: 0.8,
   };
 
   return privilegeMap[action.actionType] ?? 0.5;
@@ -891,16 +911,16 @@ const assessPrivilegeLevel = (action: ActionProposal): number => {
  */
 const assessIrreversibility = (action: ActionProposal): number => {
   const irreversibilityMap: Record<string, number> = {
-    'post_comment': 0.0,      // Can delete
-    'add_label': 0.0,         // Can remove
-    'create_issue': 0.1,      // Can close
-    'rerun_workflow': 0.1,    // Just re-runs
-    'add_environment_variable': 0.2,  // Can remove
-    'rollback_deployment': 0.3,       // Can re-deploy
-    'update_configuration': 0.4,      // Can revert
-    'scale_service': 0.2,             // Can scale back
-    'delete_resource': 0.9,           // Very hard to undo
-    'data_migration': 0.95,           // Extremely hard to undo
+    post_comment: 0.0, // Can delete
+    add_label: 0.0, // Can remove
+    create_issue: 0.1, // Can close
+    rerun_workflow: 0.1, // Just re-runs
+    add_environment_variable: 0.2, // Can remove
+    rollback_deployment: 0.3, // Can re-deploy
+    update_configuration: 0.4, // Can revert
+    scale_service: 0.2, // Can scale back
+    delete_resource: 0.9, // Very hard to undo
+    data_migration: 0.95, // Extremely hard to undo
   };
 
   return irreversibilityMap[action.actionType] ?? 0.5;
@@ -913,33 +933,33 @@ const assessIrreversibility = (action: ActionProposal): number => {
 // packages/shared/src/safety/decisionPolicy.ts
 
 export type Decision =
-  | { type: 'ask_question'; reason: string }
-  | { type: 'recommend'; requiresApproval: true; reason: string }
-  | { type: 'auto_act'; reason: string }
-  | { type: 'block'; reason: string };
+  | { type: "ask_question"; reason: string }
+  | { type: "recommend"; requiresApproval: true; reason: string }
+  | { type: "auto_act"; reason: string }
+  | { type: "block"; reason: string };
 
 /**
  * Decision thresholds
  */
 export const DECISION_THRESHOLDS = {
   /** Minimum diagnosis confidence to proceed */
-  MIN_DIAGNOSIS: 0.70,
+  MIN_DIAGNOSIS: 0.7,
 
   /** Minimum action confidence for auto-execution */
   MIN_AUTO_ACT: 0.85,
 
   /** Minimum confidence to make any recommendation */
-  MIN_RECOMMEND: 0.50,
+  MIN_RECOMMEND: 0.5,
 } as const;
 
 /**
  * Actions that can be auto-executed when confidence is high
  */
 export const SAFE_AUTO_ACTIONS: readonly string[] = [
-  'rerun_workflow',
-  'add_label',
-  'post_comment',
-  'create_issue',
+  "rerun_workflow",
+  "add_label",
+  "post_comment",
+  "create_issue",
 ] as const;
 
 /**
@@ -953,7 +973,7 @@ export const makeDecision = (
   // Block if diagnosis confidence is too low
   if (diagnosisConfidence < DECISION_THRESHOLDS.MIN_RECOMMEND) {
     return {
-      type: 'block',
+      type: "block",
       reason: `Diagnosis confidence (${(diagnosisConfidence * 100).toFixed(0)}%) is below minimum threshold`,
     };
   }
@@ -961,7 +981,7 @@ export const makeDecision = (
   // Ask for more info if diagnosis is uncertain
   if (diagnosisConfidence < DECISION_THRESHOLDS.MIN_DIAGNOSIS) {
     return {
-      type: 'ask_question',
+      type: "ask_question",
       reason: `Need more information. Current diagnosis confidence: ${(diagnosisConfidence * 100).toFixed(0)}%`,
     };
   }
@@ -972,14 +992,14 @@ export const makeDecision = (
 
   if (isSafeAction && highActionConfidence) {
     return {
-      type: 'auto_act',
+      type: "auto_act",
       reason: `High confidence (${(actionConfidence * 100).toFixed(0)}%) safe action`,
     };
   }
 
   // Recommend with approval required
   return {
-    type: 'recommend',
+    type: "recommend",
     requiresApproval: true,
     reason: `Action confidence: ${(actionConfidence * 100).toFixed(0)}%. Requires human approval.`,
   };
@@ -1019,14 +1039,14 @@ export const createFingerprint = (failure: TestFailure): TestFingerprint => {
   const testName = normalizeTestName(failure.testName);
   const exceptionType = extractExceptionType(failure.error);
   const stackFrames = extractTopStackFrames(failure.error, 3);
-  const stepName = failure.stepName || 'unknown';
+  const stepName = failure.stepName || "unknown";
 
   const fingerprint: TestFingerprint = {
     testName,
     exceptionType,
     stackFrames,
     stepName,
-    hash: '', // Will be computed
+    hash: "", // Will be computed
   };
 
   // Create deterministic hash
@@ -1039,7 +1059,7 @@ export const createFingerprint = (failure: TestFailure): TestFingerprint => {
 
   return {
     ...fingerprint,
-    hash: createHash('sha256').update(hashInput).digest('hex').slice(0, 16),
+    hash: createHash("sha256").update(hashInput).digest("hex").slice(0, 16),
   };
 };
 ```
@@ -1136,12 +1156,10 @@ export const checkSelfConsistency = async (
     buildAnalysisPromptAlternate2(event, evidence),
   ];
 
-  const results = await Promise.all(
-    prompts.map(prompt => client.analyzeWithPrompt(prompt))
-  );
+  const results = await Promise.all(prompts.map((prompt) => client.analyzeWithPrompt(prompt)));
 
   // Extract identified causes
-  const causes = results.map(r => r.identifiedCause?.toLowerCase() || '');
+  const causes = results.map((r) => r.identifiedCause?.toLowerCase() || "");
 
   // Check if causes are semantically similar
   const similarities = calculatePairwiseSimilarity(causes);
@@ -1150,7 +1168,7 @@ export const checkSelfConsistency = async (
   return {
     consistent: avgSimilarity > 0.7,
     confidence: avgSimilarity,
-    explanations: results.map(r => r.identifiedCause || 'Unknown'),
+    explanations: results.map((r) => r.identifiedCause || "Unknown"),
   };
 };
 ```
@@ -1208,7 +1226,7 @@ export const handleRerunAwareAnalysis = (
 
   return {
     shouldAnalyze: true,
-    reason: 'Proceeding with analysis',
+    reason: "Proceeding with analysis",
     confidence: 1.0,
   };
 };
@@ -1233,14 +1251,16 @@ export interface EvidenceQuality {
  */
 export const assessEvidenceQuality = (evidence: Evidence): EvidenceQuality => {
   const hasLogs = (evidence.logs?.length ?? 0) > 0;
-  const logsComplete = !evidence.logs?.some(log =>
-    log.message.includes('[truncated]') || log.message.includes('...')
+  const logsComplete = !evidence.logs?.some(
+    (log) => log.message.includes("[truncated]") || log.message.includes("...")
   );
   const hasDiff = !!evidence.gitHistory?.length;
-  const hasCommitInfo = evidence.gitHistory?.some(c => c.message && c.filesChanged?.length) ?? false;
-  const hasTestOutput = evidence.logs?.some(log =>
-    log.source === 'test' || log.message.includes('FAIL') || log.message.includes('PASS')
-  ) ?? false;
+  const hasCommitInfo =
+    evidence.gitHistory?.some((c) => c.message && c.filesChanged?.length) ?? false;
+  const hasTestOutput =
+    evidence.logs?.some(
+      (log) => log.source === "test" || log.message.includes("FAIL") || log.message.includes("PASS")
+    ) ?? false;
 
   let qualityScore = 0;
   if (hasLogs) qualityScore += 0.3;
@@ -1269,7 +1289,7 @@ export const meetsEvidenceThreshold = (
   if (!quality.hasLogs) {
     return {
       meets: false,
-      reason: 'Insufficient evidence: No logs available. Request rerun or manual investigation.',
+      reason: "Insufficient evidence: No logs available. Request rerun or manual investigation.",
     };
   }
 
@@ -1289,7 +1309,7 @@ export const meetsEvidenceThreshold = (
 ```typescript
 // packages/shared/src/feedback/feedbackTypes.ts
 
-export type FeedbackType = 'correct' | 'incorrect' | 'flaky' | 'needs_more_context';
+export type FeedbackType = "correct" | "incorrect" | "flaky" | "needs_more_context";
 
 export interface AnalysisFeedback {
   /** Analysis ID being rated */
@@ -1319,16 +1339,16 @@ export const processFeedback = (
   // In practice, you'd accumulate feedback and retrain periodically
 
   switch (feedback.feedback) {
-    case 'correct':
+    case "correct":
       // Reinforce current weights slightly
       return currentWeights;
 
-    case 'incorrect':
+    case "incorrect":
       // Log for later analysis and weight adjustment
       logFeedbackForRetraining(feedback);
       return currentWeights;
 
-    case 'flaky':
+    case "flaky":
       // Update flake database
       updateFlakeFromFeedback(feedback);
       return currentWeights;
@@ -1349,33 +1369,33 @@ export const processFeedback = (
  * These are reversible and low-risk
  */
 export type SafeAction =
-  | { readonly type: 'rerun_workflow'; readonly workflowId: number; readonly runId: number }
-  | { readonly type: 'add_label'; readonly label: string }
-  | { readonly type: 'post_comment'; readonly body: string }
-  | { readonly type: 'create_issue'; readonly title: string; readonly body: string };
+  | { readonly type: "rerun_workflow"; readonly workflowId: number; readonly runId: number }
+  | { readonly type: "add_label"; readonly label: string }
+  | { readonly type: "post_comment"; readonly body: string }
+  | { readonly type: "create_issue"; readonly title: string; readonly body: string };
 
 /**
  * Actions that require human approval
  * These have moderate risk or privilege requirements
  */
 export type ApprovalRequiredAction =
-  | { readonly type: 'add_secret'; readonly name: string; readonly description: string }
-  | { readonly type: 'rollback_deployment'; readonly targetVersion: string }
-  | { readonly type: 'scale_service'; readonly service: string; readonly replicas: number }
-  | { readonly type: 'update_configuration'; readonly file: string; readonly changes: string };
+  | { readonly type: "add_secret"; readonly name: string; readonly description: string }
+  | { readonly type: "rollback_deployment"; readonly targetVersion: string }
+  | { readonly type: "scale_service"; readonly service: string; readonly replicas: number }
+  | { readonly type: "update_configuration"; readonly file: string; readonly changes: string };
 
 /**
  * Actions that should NEVER be automated
  * These are destructive or irreversible
  */
 export type ForbiddenAction =
-  | { readonly type: 'force_merge' }
-  | { readonly type: 'delete_branch'; readonly branch: string }
-  | { readonly type: 'delete_resource'; readonly resource: string }
-  | { readonly type: 'force_push' }
-  | { readonly type: 'disable_protection' }
-  | { readonly type: 'drop_database' }
-  | { readonly type: 'execute_arbitrary_code'; readonly code: string };
+  | { readonly type: "force_merge" }
+  | { readonly type: "delete_branch"; readonly branch: string }
+  | { readonly type: "delete_resource"; readonly resource: string }
+  | { readonly type: "force_push" }
+  | { readonly type: "disable_protection" }
+  | { readonly type: "drop_database" }
+  | { readonly type: "execute_arbitrary_code"; readonly code: string };
 
 /**
  * Union of actions that can be proposed by the system
@@ -1387,7 +1407,12 @@ export type ProposableAction = SafeAction | ApprovalRequiredAction;
  * Type guard to check if an action is safe for auto-execution
  */
 export const isSafeAction = (action: ProposableAction): action is SafeAction => {
-  const safeTypes: readonly string[] = ['rerun_workflow', 'add_label', 'post_comment', 'create_issue'];
+  const safeTypes: readonly string[] = [
+    "rerun_workflow",
+    "add_label",
+    "post_comment",
+    "create_issue",
+  ];
   return safeTypes.includes(action.type);
 };
 
@@ -1407,19 +1432,19 @@ A critical capability for the AI DevOps Co-Pilot is the ability to not just **di
 
 ### Current Capability Gap
 
-| Capability | Status | Notes |
-|------------|--------|-------|
-| Explain why CI failed | ✅ Yes | Summary + identified cause |
-| Show which files/lines failed | ✅ Yes | Annotations from GitHub |
-| Retrieve source code context | ✅ Partial | Gets files around annotations |
-| Suggest high-level actions | ✅ Yes | "Re-run", "Add env var", etc. |
-| **Suggest specific code fixes** | ❌ No | Missing |
-| **Generate code patches** | ❌ No | Missing |
-| **Post fix as PR suggestion** | ❌ No | Missing |
+| Capability                      | Status     | Notes                         |
+| ------------------------------- | ---------- | ----------------------------- |
+| Explain why CI failed           | ✅ Yes     | Summary + identified cause    |
+| Show which files/lines failed   | ✅ Yes     | Annotations from GitHub       |
+| Retrieve source code context    | ✅ Partial | Gets files around annotations |
+| Suggest high-level actions      | ✅ Yes     | "Re-run", "Add env var", etc. |
+| **Suggest specific code fixes** | ❌ No      | Missing                       |
+| **Generate code patches**       | ❌ No      | Missing                       |
+| **Post fix as PR suggestion**   | ❌ No      | Missing                       |
 
 ### Code Fix Architecture
 
-```
+````
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        CODE FIX SUGGESTION FLOW                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -1484,7 +1509,7 @@ A critical capability for the AI DevOps Co-Pilot is the ability to not just **di
 │  └──────────────────────────────────────────────────────────┘              │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+````
 
 ### Source Context Collection
 
@@ -1538,8 +1563,8 @@ export const getSourceContextForFix = async (
         ref,
       });
 
-      if ('content' in data) {
-        const content = Buffer.from(data.content, 'base64').toString('utf-8');
+      if ("content" in data) {
+        const content = Buffer.from(data.content, "base64").toString("utf-8");
         const language = detectLanguage(annotation.path);
 
         // Parse for symbols if it's a supported language
@@ -1565,10 +1590,10 @@ export const getSourceContextForFix = async (
       }
     } catch (error) {
       // File might not exist at this ref, skip it
-      logger.warn('Failed to fetch source file for fix context', {
+      logger.warn("Failed to fetch source file for fix context", {
         path: annotation.path,
         ref,
-        error: error instanceof Error ? error.message : 'Unknown',
+        error: error instanceof Error ? error.message : "Unknown",
       });
     }
   }
@@ -1608,10 +1633,10 @@ export interface CodeFix {
   readonly testSuggestion?: string;
 
   /** Confidence in this fix */
-  readonly confidence: 'high' | 'medium' | 'low';
+  readonly confidence: "high" | "medium" | "low";
 
   /** Category of fix */
-  readonly fixType: 'syntax' | 'type' | 'logic' | 'null-safety' | 'import' | 'config' | 'other';
+  readonly fixType: "syntax" | "type" | "logic" | "null-safety" | "import" | "config" | "other";
 }
 
 export interface CodeFixAnalysis {
@@ -1621,8 +1646,8 @@ export interface CodeFixAnalysis {
   /** Overall diagnosis */
   readonly diagnosis: {
     readonly summary: string;
-    readonly errorType: 'syntax' | 'type' | 'logic' | 'dependency' | 'config' | 'test' | 'other';
-    readonly confidence: 'high' | 'medium' | 'low';
+    readonly errorType: "syntax" | "type" | "logic" | "dependency" | "config" | "test" | "other";
+    readonly confidence: "high" | "medium" | "low";
     readonly rootCause: string;
   };
 
@@ -1665,7 +1690,7 @@ export const buildCodeFixPrompt = (
 
 ## CI Failure Context
 **Event Type**: ${event.type}
-**Repository**: ${event.payload.repository || 'Unknown'}
+**Repository**: ${event.payload.repository || "Unknown"}
 **Severity**: ${event.severity}
 **Timestamp**: ${event.timestamp}
 
@@ -1732,7 +1757,7 @@ const formatSourceContexts = (contexts: Map<string, SourceFileContext>): string 
   const sections: string[] = [];
 
   for (const [path, context] of contexts) {
-    const lines = context.content.split('\n');
+    const lines = context.content.split("\n");
     const relevantLines = lines.slice(
       Math.max(0, context.contextLines.start - 1),
       context.contextLines.end
@@ -1742,22 +1767,22 @@ const formatSourceContexts = (contexts: Map<string, SourceFileContext>): string 
     const numberedLines = relevantLines.map((line, i) => {
       const lineNum = context.contextLines.start + i;
       const isErrorLine = lineNum >= context.errorLines.start && lineNum <= context.errorLines.end;
-      const prefix = isErrorLine ? '>>> ' : '    ';
+      const prefix = isErrorLine ? ">>> " : "    ";
       return `${prefix}${lineNum.toString().padStart(4)}: ${line}`;
     });
 
     sections.push(`### File: ${path}
 **Language**: ${context.metadata.language}
 **Error at lines**: ${context.errorLines.start}-${context.errorLines.end}
-${context.symbols ? `**Symbols**: ${context.symbols.functions.join(', ')}` : ''}
+${context.symbols ? `**Symbols**: ${context.symbols.functions.join(", ")}` : ""}
 
 \`\`\`${context.metadata.language}
-${numberedLines.join('\n')}
+${numberedLines.join("\n")}
 \`\`\`
 `);
   }
 
-  return sections.join('\n---\n');
+  return sections.join("\n---\n");
 };
 ```
 
@@ -1789,7 +1814,7 @@ export const validateCodeFix = (
     return { valid: false, errors, warnings };
   }
 
-  const lines = sourceContext.content.split('\n');
+  const lines = sourceContext.content.split("\n");
 
   // 2. Check that line numbers are valid
   if (fix.lineStart < 1) {
@@ -1806,30 +1831,41 @@ export const validateCodeFix = (
 
   // 3. Check that currentCode matches actual file content
   if (errors.length === 0) {
-    const actualCode = lines.slice(fix.lineStart - 1, fix.lineEnd).join('\n').trim();
+    const actualCode = lines
+      .slice(fix.lineStart - 1, fix.lineEnd)
+      .join("\n")
+      .trim();
     const expectedCode = fix.currentCode.trim();
 
     // Normalize whitespace for comparison
-    const normalizedActual = actualCode.replace(/\s+/g, ' ');
-    const normalizedExpected = expectedCode.replace(/\s+/g, ' ');
+    const normalizedActual = actualCode.replace(/\s+/g, " ");
+    const normalizedExpected = expectedCode.replace(/\s+/g, " ");
 
-    if (!normalizedActual.includes(normalizedExpected) &&
-        !normalizedExpected.includes(normalizedActual)) {
-      errors.push(`Current code doesn't match file content at lines ${fix.lineStart}-${fix.lineEnd}`);
-      warnings.push(`Expected to find: "${expectedCode.slice(0, 80)}${expectedCode.length > 80 ? '...' : ''}"`);
-      warnings.push(`Actually found: "${actualCode.slice(0, 80)}${actualCode.length > 80 ? '...' : ''}"`);
+    if (
+      !normalizedActual.includes(normalizedExpected) &&
+      !normalizedExpected.includes(normalizedActual)
+    ) {
+      errors.push(
+        `Current code doesn't match file content at lines ${fix.lineStart}-${fix.lineEnd}`
+      );
+      warnings.push(
+        `Expected to find: "${expectedCode.slice(0, 80)}${expectedCode.length > 80 ? "..." : ""}"`
+      );
+      warnings.push(
+        `Actually found: "${actualCode.slice(0, 80)}${actualCode.length > 80 ? "..." : ""}"`
+      );
     }
   }
 
   // 4. Check for dangerous patterns in suggested code
   const dangerousPatterns: Array<{ pattern: RegExp; description: string }> = [
-    { pattern: /\beval\s*\(/, description: 'eval() usage' },
-    { pattern: /\bFunction\s*\(/, description: 'Function constructor' },
-    { pattern: /\brequire\s*\(\s*[^'"]/,  description: 'dynamic require' },
-    { pattern: /process\.exit/, description: 'process.exit' },
-    { pattern: /rm\s+-rf/, description: 'rm -rf command' },
-    { pattern: /DROP\s+TABLE/i, description: 'DROP TABLE statement' },
-    { pattern: /DELETE\s+FROM.*WHERE\s+1\s*=\s*1/i, description: 'DELETE without proper WHERE' },
+    { pattern: /\beval\s*\(/, description: "eval() usage" },
+    { pattern: /\bFunction\s*\(/, description: "Function constructor" },
+    { pattern: /\brequire\s*\(\s*[^'"]/, description: "dynamic require" },
+    { pattern: /process\.exit/, description: "process.exit" },
+    { pattern: /rm\s+-rf/, description: "rm -rf command" },
+    { pattern: /DROP\s+TABLE/i, description: "DROP TABLE statement" },
+    { pattern: /DELETE\s+FROM.*WHERE\s+1\s*=\s*1/i, description: "DELETE without proper WHERE" },
   ];
 
   for (const { pattern, description } of dangerousPatterns) {
@@ -1840,10 +1876,10 @@ export const validateCodeFix = (
 
   // 5. Check for removed safety patterns
   const safetyPatterns: Array<{ pattern: RegExp; description: string }> = [
-    { pattern: /try\s*\{/, description: 'try-catch block' },
-    { pattern: /if\s*\([^)]*null|undefined/, description: 'null/undefined check' },
-    { pattern: /\?\.\s*/, description: 'optional chaining' },
-    { pattern: /\?\?\s*/, description: 'nullish coalescing' },
+    { pattern: /try\s*\{/, description: "try-catch block" },
+    { pattern: /if\s*\([^)]*null|undefined/, description: "null/undefined check" },
+    { pattern: /\?\.\s*/, description: "optional chaining" },
+    { pattern: /\?\?\s*/, description: "nullish coalescing" },
   ];
 
   for (const { pattern, description } of safetyPatterns) {
@@ -1853,13 +1889,13 @@ export const validateCodeFix = (
   }
 
   // 6. Low confidence fixes get extra scrutiny
-  if (fix.confidence === 'low') {
-    warnings.push('Low confidence fix - requires careful manual review');
+  if (fix.confidence === "low") {
+    warnings.push("Low confidence fix - requires careful manual review");
   }
 
   // 7. Check if fix is essentially empty
-  if (fix.suggestedCode.trim() === '') {
-    warnings.push('Suggested fix is empty - this will delete code');
+  if (fix.suggestedCode.trim() === "") {
+    warnings.push("Suggested fix is empty - this will delete code");
   }
 
   // 8. Check for significant size changes
@@ -1868,7 +1904,9 @@ export const validateCodeFix = (
   const sizeDiff = Math.abs(newLength - originalLength) / Math.max(originalLength, 1);
 
   if (sizeDiff > 0.5 && originalLength > 50) {
-    warnings.push(`Fix changes code size by ${(sizeDiff * 100).toFixed(0)}% - verify this is correct`);
+    warnings.push(
+      `Fix changes code size by ${(sizeDiff * 100).toFixed(0)}% - verify this is correct`
+    );
   }
 
   return {
@@ -1901,11 +1939,11 @@ export const validateCodeFixAnalysis = (
 ```typescript
 // services/github-app/src/services/reviewService.ts
 
-import { Octokit } from '@octokit/rest';
-import type { CodeFix, CodeFixAnalysis } from '@kenchi/shared';
-import { createLogger } from '@kenchi/shared';
+import { Octokit } from "@octokit/rest";
+import type { CodeFix, CodeFixAnalysis } from "@kenchi/shared";
+import { createLogger } from "@kenchi/shared";
 
-const logger = createLogger('github-app');
+const logger = createLogger("github-app");
 
 export class GitHubReviewService {
   constructor(private readonly octokit: Octokit) {}
@@ -1924,7 +1962,7 @@ export class GitHubReviewService {
     const { diagnosis, fixes, additionalContext } = analysis;
 
     // Filter to only valid, high/medium confidence fixes
-    const validFixes = fixes.filter(f => f.confidence !== 'low');
+    const validFixes = fixes.filter((f) => f.confidence !== "low");
 
     if (validFixes.length === 0) {
       // Post summary comment without suggestions
@@ -1939,10 +1977,10 @@ export class GitHubReviewService {
     }
 
     // Build review comments with suggestions
-    const comments = validFixes.map(fix => ({
+    const comments = validFixes.map((fix) => ({
       path: fix.file,
       line: fix.lineEnd,
-      side: 'RIGHT' as const,
+      side: "RIGHT" as const,
       body: this.formatFixComment(fix),
     }));
 
@@ -1952,12 +1990,12 @@ export class GitHubReviewService {
       repo,
       pull_number: prNumber,
       commit_id: commitSha,
-      event: 'COMMENT',
+      event: "COMMENT",
       body: this.formatReviewSummary(diagnosis, validFixes, additionalContext),
       comments,
     });
 
-    logger.info('Posted code fix review', {
+    logger.info("Posted code fix review", {
       owner,
       repo,
       prNumber,
@@ -1976,19 +2014,19 @@ export class GitHubReviewService {
    */
   private formatFixComment(fix: CodeFix): string {
     const confidenceEmoji = {
-      high: '🟢',
-      medium: '🟡',
-      low: '🔴',
+      high: "🟢",
+      medium: "🟡",
+      low: "🔴",
     }[fix.confidence];
 
     const fixTypeLabel = {
-      syntax: '📝 Syntax',
-      type: '🔷 Type',
-      logic: '🧠 Logic',
-      'null-safety': '🛡️ Null Safety',
-      import: '📦 Import',
-      config: '⚙️ Config',
-      other: '🔧 Fix',
+      syntax: "📝 Syntax",
+      type: "🔷 Type",
+      logic: "🧠 Logic",
+      "null-safety": "🛡️ Null Safety",
+      import: "📦 Import",
+      config: "⚙️ Config",
+      other: "🔧 Fix",
     }[fix.fixType];
 
     // GitHub suggestion syntax allows one-click apply
@@ -2000,8 +2038,8 @@ ${fix.explanation}
 ${fix.suggestedCode}
 \`\`\`
 
-${fix.isBreakingChange ? '⚠️ **Warning**: This may be a breaking change. Review carefully.' : ''}
-${fix.testSuggestion ? `\n📝 **Suggested test**: ${fix.testSuggestion}` : ''}
+${fix.isBreakingChange ? "⚠️ **Warning**: This may be a breaking change. Review carefully." : ""}
+${fix.testSuggestion ? `\n📝 **Suggested test**: ${fix.testSuggestion}` : ""}
 `;
   }
 
@@ -2009,12 +2047,12 @@ ${fix.testSuggestion ? `\n📝 **Suggested test**: ${fix.testSuggestion}` : ''}
    * Format the overall review summary
    */
   private formatReviewSummary(
-    diagnosis: CodeFixAnalysis['diagnosis'],
+    diagnosis: CodeFixAnalysis["diagnosis"],
     fixes: readonly CodeFix[],
-    context: CodeFixAnalysis['additionalContext']
+    context: CodeFixAnalysis["additionalContext"]
   ): string {
-    const highConfidence = fixes.filter(f => f.confidence === 'high').length;
-    const mediumConfidence = fixes.filter(f => f.confidence === 'medium').length;
+    const highConfidence = fixes.filter((f) => f.confidence === "high").length;
+    const mediumConfidence = fixes.filter((f) => f.confidence === "medium").length;
 
     return `## 🤖 Kenchi CI Failure Analysis
 
@@ -2025,24 +2063,36 @@ ${diagnosis.summary}
 ${diagnosis.rootCause}
 
 ### Suggested Fixes
-- **${fixes.length}** fix${fixes.length !== 1 ? 'es' : ''} suggested
+- **${fixes.length}** fix${fixes.length !== 1 ? "es" : ""} suggested
 - 🟢 ${highConfidence} high confidence
 - 🟡 ${mediumConfidence} medium confidence
 
-${context.potentialSideEffects.length > 0 ? `
+${
+  context.potentialSideEffects.length > 0
+    ? `
 ### ⚠️ Potential Side Effects
-${context.potentialSideEffects.map(s => `- ${s}`).join('\n')}
-` : ''}
+${context.potentialSideEffects.map((s) => `- ${s}`).join("\n")}
+`
+    : ""
+}
 
-${context.relatedFiles.length > 0 ? `
+${
+  context.relatedFiles.length > 0
+    ? `
 ### 📁 Related Files to Review
-${context.relatedFiles.map(f => `- \`${f}\``).join('\n')}
-` : ''}
+${context.relatedFiles.map((f) => `- \`${f}\``).join("\n")}
+`
+    : ""
+}
 
-${context.reviewNotes ? `
+${
+  context.reviewNotes
+    ? `
 ### 📝 Reviewer Notes
 ${context.reviewNotes}
-` : ''}
+`
+    : ""
+}
 
 ---
 *🤖 Generated by [Kenchi](https://github.com/your-org/kenchi) - AI DevOps Co-Pilot*
@@ -2054,8 +2104,8 @@ ${context.reviewNotes}
    * Format comment when no specific fixes can be suggested
    */
   private formatAnalysisOnlyComment(
-    diagnosis: CodeFixAnalysis['diagnosis'],
-    context: CodeFixAnalysis['additionalContext']
+    diagnosis: CodeFixAnalysis["diagnosis"],
+    context: CodeFixAnalysis["additionalContext"]
   ): string {
     return `## 🤖 Kenchi CI Failure Analysis
 
@@ -2066,12 +2116,16 @@ ${diagnosis.summary}
 ${diagnosis.rootCause}
 
 ### Confidence
-${diagnosis.confidence === 'low' ? '🔴 Low' : diagnosis.confidence === 'medium' ? '🟡 Medium' : '🟢 High'}
+${diagnosis.confidence === "low" ? "🔴 Low" : diagnosis.confidence === "medium" ? "🟡 Medium" : "🟢 High"}
 
-${context.reviewNotes ? `
+${
+  context.reviewNotes
+    ? `
 ### Notes
 ${context.reviewNotes}
-` : ''}
+`
+    : ""
+}
 
 *Unable to suggest specific code fixes. Manual investigation required.*
 
@@ -2092,29 +2146,29 @@ ${context.reviewNotes}
  * Including code review posting (safe because it's just comments)
  */
 export type SafeAction =
-  | { readonly type: 'rerun_workflow'; readonly workflowId: number; readonly runId: number }
-  | { readonly type: 'add_label'; readonly label: string }
-  | { readonly type: 'post_comment'; readonly body: string }
-  | { readonly type: 'create_issue'; readonly title: string; readonly body: string }
+  | { readonly type: "rerun_workflow"; readonly workflowId: number; readonly runId: number }
+  | { readonly type: "add_label"; readonly label: string }
+  | { readonly type: "post_comment"; readonly body: string }
+  | { readonly type: "create_issue"; readonly title: string; readonly body: string }
   // NEW: Post code fix suggestions as PR review comments
   | {
-      readonly type: 'post_code_review';
+      readonly type: "post_code_review";
       readonly prNumber: number;
       readonly fixes: readonly CodeFix[];
-      readonly diagnosis: CodeFixAnalysis['diagnosis'];
+      readonly diagnosis: CodeFixAnalysis["diagnosis"];
     };
 
 /**
  * Actions that require human approval
  */
 export type ApprovalRequiredAction =
-  | { readonly type: 'add_secret'; readonly name: string; readonly description: string }
-  | { readonly type: 'rollback_deployment'; readonly targetVersion: string }
-  | { readonly type: 'scale_service'; readonly service: string; readonly replicas: number }
-  | { readonly type: 'update_configuration'; readonly file: string; readonly changes: string }
+  | { readonly type: "add_secret"; readonly name: string; readonly description: string }
+  | { readonly type: "rollback_deployment"; readonly targetVersion: string }
+  | { readonly type: "scale_service"; readonly service: string; readonly replicas: number }
+  | { readonly type: "update_configuration"; readonly file: string; readonly changes: string }
   // NEW: Auto-apply code fixes (creates a commit)
   | {
-      readonly type: 'apply_code_fix';
+      readonly type: "apply_code_fix";
       readonly fix: CodeFix;
       readonly prNumber: number;
       readonly createCommit: boolean;
@@ -2133,11 +2187,11 @@ import {
   type Evidence,
   type CodeFixAnalysis,
   createLogger,
-} from '@kenchi/shared';
-import { buildCodeFixPrompt } from '@kenchi/shared/prompts/codeFixPrompt';
-import { validateCodeFixAnalysis } from '@kenchi/shared/validation/codeFixValidation';
+} from "@kenchi/shared";
+import { buildCodeFixPrompt } from "@kenchi/shared/prompts/codeFixPrompt";
+import { validateCodeFixAnalysis } from "@kenchi/shared/validation/codeFixValidation";
 
-const logger = createLogger('api');
+const logger = createLogger("api");
 
 export class CodeFixService {
   constructor(private readonly openaiClient: OpenAIClient) {}
@@ -2166,7 +2220,7 @@ export class CodeFixService {
     const validatedFixes = analysis.fixes.filter((_, index) => {
       const result = validationResults.get(index);
       if (!result?.valid) {
-        logger.warn('Code fix failed validation', {
+        logger.warn("Code fix failed validation", {
           eventId: event.id,
           fixIndex: index,
           errors: result?.errors,
@@ -2180,7 +2234,7 @@ export class CodeFixService {
     validatedFixes.forEach((fix, index) => {
       const result = validationResults.get(index);
       if (result?.warnings.length) {
-        logger.info('Code fix has warnings', {
+        logger.info("Code fix has warnings", {
           eventId: event.id,
           file: fix.file,
           warnings: result.warnings,
@@ -2207,6 +2261,7 @@ export class CodeFixService {
 ## Feature Roadmap
 
 ### Phase 1: Security & MVP Completion (Smart CI/CD Failure Assistant)
+
 **Goal**: Complete the first feature with proper security to production quality
 
 ```
@@ -2230,6 +2285,7 @@ Current State → Target State
 ```
 
 ### Phase 2: Incident Triage & Auto-Remediation
+
 **Goal**: Extend to production monitoring alerts
 
 ```
@@ -2242,6 +2298,7 @@ Current State → Target State
 ```
 
 ### Phase 3: Documentation & Knowledge Assistant
+
 **Goal**: Internal knowledge Q&A
 
 ```
@@ -2253,6 +2310,7 @@ Current State → Target State
 ```
 
 ### Phase 4-6: Future Phases
+
 - Deployment Risk Analyzer
 - Infrastructure-as-Code Copilot
 - Configuration Drift Detection
@@ -2317,13 +2375,13 @@ Current State → Target State
 
 ```typescript
 // packages/shared/src/security/index.ts
-export { redactSecrets, redactObject, SECRET_PATTERNS, FORBIDDEN_FIELDS } from './redaction.js';
+export { redactSecrets, redactObject, SECRET_PATTERNS, FORBIDDEN_FIELDS } from "./redaction.js";
 ```
 
 **Integration point** in `services/github-app/src/services/contextService.ts`:
 
 ```typescript
-import { redactSecrets } from '@kenchi/shared';
+import { redactSecrets } from "@kenchi/shared";
 
 export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<EnrichedContext> => {
   // ... gather context ...
@@ -2441,10 +2499,10 @@ Update `packages/shared/src/safety/` with the new dual-confidence model:
 
 ```typescript
 // packages/shared/src/safety/index.ts
-export { calculateDiagnosisConfidence, extractConfidenceSignals } from './diagnosisConfidence.js';
-export { calculateActionConfidence, assessActionRisks } from './actionConfidence.js';
-export { makeDecision, DECISION_THRESHOLDS, SAFE_AUTO_ACTIONS } from './decisionPolicy.js';
-export type { ConfidenceSignals, ActionRiskFactors, Decision } from './types.js';
+export { calculateDiagnosisConfidence, extractConfidenceSignals } from "./diagnosisConfidence.js";
+export { calculateActionConfidence, assessActionRisks } from "./actionConfidence.js";
+export { makeDecision, DECISION_THRESHOLDS, SAFE_AUTO_ACTIONS } from "./decisionPolicy.js";
+export type { ConfidenceSignals, ActionRiskFactors, Decision } from "./types.js";
 ```
 
 ### Milestone 3: Fingerprinting & Flakiness (Week 2)
@@ -2453,19 +2511,19 @@ Add new module for failure fingerprinting:
 
 ```typescript
 // packages/shared/src/fingerprinting/index.ts
-export { createFingerprint } from './failureFingerprint.js';
-export { calculateFlakeProbability, updateFlakeRecord } from './flakinessTracker.js';
-export type { TestFingerprint, FlakeRecord } from './types.js';
+export { createFingerprint } from "./failureFingerprint.js";
+export { calculateFlakeProbability, updateFlakeRecord } from "./flakinessTracker.js";
+export type { TestFingerprint, FlakeRecord } from "./types.js";
 ```
 
 ### Milestone 4: RAG Pipeline (Week 3)
 
 ```typescript
 // packages/shared/src/rag/index.ts
-export { chunkDiff, CHUNK_CONFIG } from './diffChunker.js';
-export { OpenAIEmbeddingService, embedChunk } from './embeddingService.js';
-export { retrieveRelevantChunks } from './retrieval.js';
-export { PgVectorStore } from './pgVectorStore.js';
+export { chunkDiff, CHUNK_CONFIG } from "./diffChunker.js";
+export { OpenAIEmbeddingService, embedChunk } from "./embeddingService.js";
+export { retrieveRelevantChunks } from "./retrieval.js";
+export { PgVectorStore } from "./pgVectorStore.js";
 ```
 
 ### Milestone 5: Interactive Slack + Action Execution (Week 4)
@@ -2523,29 +2581,29 @@ CI Failure
 
 ### MVP Milestones (Updated)
 
-| Milestone | Duration | Description |
-|-----------|----------|-------------|
-| **0. Secret Redaction** | Day 1 | Add redaction before any LLM call |
-| **1. PostgreSQL + pgvector** | Week 1 | Database setup, migrations, repository pattern |
-| **2. Enhanced Confidence** | Week 2 | Dual scoring (C_diag + C_act), signals |
-| **3. Fingerprinting + Flakiness** | Week 2 | Failure fingerprints, flake detection |
-| **4. RAG Pipeline** | Week 3 | Diff chunking, embeddings, retrieval |
-| **5. Code Fix Suggestions** | Week 3-4 | Source context, fix prompts, PR review integration |
-| **6. Interactive Slack** | Week 4 | Block Kit, approval buttons, feedback |
-| **7. Action Execution** | Week 5 | GitHub API integration, safe action list |
-| **8. Production Hardening** | Week 6 | Error handling, monitoring, customer toggles |
+| Milestone                         | Duration | Description                                        |
+| --------------------------------- | -------- | -------------------------------------------------- |
+| **0. Secret Redaction**           | Day 1    | Add redaction before any LLM call                  |
+| **1. PostgreSQL + pgvector**      | Week 1   | Database setup, migrations, repository pattern     |
+| **2. Enhanced Confidence**        | Week 2   | Dual scoring (C_diag + C_act), signals             |
+| **3. Fingerprinting + Flakiness** | Week 2   | Failure fingerprints, flake detection              |
+| **4. RAG Pipeline**               | Week 3   | Diff chunking, embeddings, retrieval               |
+| **5. Code Fix Suggestions**       | Week 3-4 | Source context, fix prompts, PR review integration |
+| **6. Interactive Slack**          | Week 4   | Block Kit, approval buttons, feedback              |
+| **7. Action Execution**           | Week 5   | GitHub API integration, safe action list           |
+| **8. Production Hardening**       | Week 6   | Error handling, monitoring, customer toggles       |
 
 ### Code Fix Suggestions - Implementation Details
 
-| Component | File | Effort |
-|-----------|------|--------|
-| Source context collection | `services/github-app/src/services/codeContextService.ts` | 1 day |
-| Code fix types | `packages/shared/src/types/codeFix.ts` | 0.5 day |
-| Code fix prompt template | `packages/shared/src/prompts/codeFixPrompt.ts` | 1 day |
-| Fix validation | `packages/shared/src/validation/codeFixValidation.ts` | 1 day |
-| GitHub PR review service | `services/github-app/src/services/reviewService.ts` | 2 days |
-| Code fix service | `services/api/src/services/codeFixService.ts` | 1 day |
-| Action type updates | `packages/shared/src/actions/actionTypes.ts` | 0.5 day |
+| Component                 | File                                                     | Effort  |
+| ------------------------- | -------------------------------------------------------- | ------- |
+| Source context collection | `services/github-app/src/services/codeContextService.ts` | 1 day   |
+| Code fix types            | `packages/shared/src/types/codeFix.ts`                   | 0.5 day |
+| Code fix prompt template  | `packages/shared/src/prompts/codeFixPrompt.ts`           | 1 day   |
+| Fix validation            | `packages/shared/src/validation/codeFixValidation.ts`    | 1 day   |
+| GitHub PR review service  | `services/github-app/src/services/reviewService.ts`      | 2 days  |
+| Code fix service          | `services/api/src/services/codeFixService.ts`            | 1 day   |
+| Action type updates       | `packages/shared/src/actions/actionTypes.ts`             | 0.5 day |
 
 **Total: ~1 week of focused development**
 
@@ -2556,30 +2614,33 @@ CI Failure
 ### Required Resources
 
 #### Cloud Infrastructure
+
 - **Compute**: 3 small VMs/containers for services + 1 for n8n
 - **Database**: PostgreSQL with pgvector (managed recommended)
 - **Secrets**: GitHub App credentials, OpenAI API key, Slack tokens
 
 #### Third-Party Services
+
 - **OpenAI API**: ~$50-200/month depending on volume
 - **Slack**: Standard plan (or Enterprise Grid for larger orgs)
 - **GitHub**: GitHub App registration (free)
 
 #### Development Effort
-| Phase | Effort | Team Size |
-|-------|--------|-----------|
+
+| Phase                          | Effort    | Team Size      |
+| ------------------------------ | --------- | -------------- |
 | MVP Completion (with security) | 5-6 weeks | 1-2 developers |
-| Incident Triage | 4-6 weeks | 1-2 developers |
-| Knowledge Assistant | 3-4 weeks | 1 developer |
-| Deployment Risk | 4-6 weeks | 1-2 developers |
-| IaC Copilot | 6-8 weeks | 2 developers |
-| Drift Detection | 4-6 weeks | 1-2 developers |
+| Incident Triage                | 4-6 weeks | 1-2 developers |
+| Knowledge Assistant            | 3-4 weeks | 1 developer    |
+| Deployment Risk                | 4-6 weeks | 1-2 developers |
+| IaC Copilot                    | 6-8 weeks | 2 developers   |
+| Drift Detection                | 4-6 weeks | 1-2 developers |
 
 ### Return on Investment
 
 Based on the concept document's ROI arguments:
 
-1. **Reduced MTTR**: Even 15 minutes saved per incident * 50 incidents/month = 12.5 hours saved
+1. **Reduced MTTR**: Even 15 minutes saved per incident \* 50 incidents/month = 12.5 hours saved
 2. **Developer Productivity**: Automated analysis replaces 30-60 minutes of manual log reading
 3. **Reduced Alert Fatigue**: Correlation and smart prioritization reduces noise by 60-80%
 4. **Knowledge Retention**: Institutional knowledge captured and accessible
@@ -2590,13 +2651,16 @@ Based on the concept document's ROI arguments:
 ## Conclusion
 
 ### Current State Summary
+
 Kenchi has a **solid foundation** with:
+
 - Complete shared infrastructure (logging, errors, validation, safety)
 - Working CI failure analysis pipeline
 - OpenAI integration with anti-hallucination measures
 - Comprehensive documentation
 
 ### Critical Path to MVP (Updated)
+
 1. **Add secret redaction immediately** - Zero downside, critical security
 2. **Add persistence** (PostgreSQL + pgvector) - Unlocks everything else
 3. **Implement dual confidence scoring** - Better decision making
@@ -2607,7 +2671,9 @@ Kenchi has a **solid foundation** with:
 8. **Add action execution** - Close the loop
 
 ### Competitive Advantage
+
 The architecture emphasizes **safety-first AI** with:
+
 - **Data minimization**: Only send what's necessary to LLM
 - **Secret redaction**: Never expose sensitive data
 - **Two-stage pipeline**: Deterministic filtering before AI reasoning
@@ -2626,6 +2692,7 @@ This positions Kenchi as a **trustworthy AI DevOps co-pilot** that teams can rel
 **Created**: 2025-12-20
 **Updated**: 2025-12-20
 **Related Documents**:
+
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture
 - [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md) - Detailed design
 - [DATA_MODELS.md](./DATA_MODELS.md) - Data structures

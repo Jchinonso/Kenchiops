@@ -106,7 +106,9 @@ export function formatAnalysisMessage(
     const actionsToShow = analysis.recommendedActions.slice(0, UI_CONSTANTS.MAX_ACTIONS_TO_DISPLAY);
     for (const action of actionsToShow) {
       blocks.push(
-        createSectionBlock(`• *${action.actionType}* (Priority: ${action.priority})\n  ${action.description}`)
+        createSectionBlock(
+          `• *${action.actionType}* (Priority: ${action.priority})\n  ${action.description}`
+        )
       );
     }
   }
@@ -115,7 +117,9 @@ export function formatAnalysisMessage(
   if (analysis.uncertainties && analysis.uncertainties.length > 0) {
     blocks.push(createDividerBlock());
     blocks.push(
-      createSectionBlock(`*Uncertainties*\n${analysis.uncertainties.map((u) => `• ${u}`).join("\n")}`)
+      createSectionBlock(
+        `*Uncertainties*\n${analysis.uncertainties.map((u) => `• ${u}`).join("\n")}`
+      )
     );
   }
 

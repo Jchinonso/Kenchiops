@@ -19,12 +19,12 @@
 
 Kenchi is deployed as a set of microservices that work together to provide AI-driven DevOps assistance. The core services are:
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| API | 3000 | Central webhook and event ingestion |
-| Slack Bot | 3001 | Slack integration and bot interactions |
+| Service    | Port | Purpose                                     |
+| ---------- | ---- | ------------------------------------------- |
+| API        | 3000 | Central webhook and event ingestion         |
+| Slack Bot  | 3001 | Slack integration and bot interactions      |
 | GitHub App | 3002 | GitHub webhook handling and PR interactions |
-| n8n | 5678 | Workflow automation and orchestration |
+| n8n        | 5678 | Workflow automation and orchestration       |
 
 ### User Interaction Flow
 
@@ -64,13 +64,13 @@ Kenchi is deployed as a set of microservices that work together to provide AI-dr
 
 ## Deployment Options
 
-| Scale | Users | Recommended Option |
-|-------|-------|-------------------|
-| Development | 1-10 | Single VM with Docker Compose |
-| Small | 10-50 | Single VM with Docker Compose |
-| Medium | 50-500 | Multi-VM or ECS Fargate |
-| Large | 500-5000 | Kubernetes (EKS/GKE/AKS) |
-| Enterprise | 5000+ | Kubernetes with multi-region |
+| Scale       | Users    | Recommended Option            |
+| ----------- | -------- | ----------------------------- |
+| Development | 1-10     | Single VM with Docker Compose |
+| Small       | 10-50    | Single VM with Docker Compose |
+| Medium      | 50-500   | Multi-VM or ECS Fargate       |
+| Large       | 500-5000 | Kubernetes (EKS/GKE/AKS)      |
+| Enterprise  | 5000+    | Kubernetes with multi-region  |
 
 ---
 
@@ -145,7 +145,7 @@ sudo certbot --nginx -d kenchi.yourdomain.com
 
 ```yaml
 # docker-compose.prod.yml
-version: '3.8'
+version: "3.8"
 
 services:
   api:
@@ -263,21 +263,21 @@ server {
 
 ### Cost Estimate
 
-| Provider | Instance | Monthly Cost |
-|----------|----------|--------------|
-| AWS | t3.xlarge (4 CPU, 16GB) | ~$120 |
-| GCP | e2-standard-4 | ~$100 |
-| Azure | D4s v3 | ~$140 |
-| DigitalOcean | Premium 4vCPU | ~$80 |
+| Provider     | Instance                | Monthly Cost |
+| ------------ | ----------------------- | ------------ |
+| AWS          | t3.xlarge (4 CPU, 16GB) | ~$120        |
+| GCP          | e2-standard-4           | ~$100        |
+| Azure        | D4s v3                  | ~$140        |
+| DigitalOcean | Premium 4vCPU           | ~$80         |
 
 ### Pros & Cons
 
-| Pros | Cons |
-|------|------|
-| Simple setup | Single point of failure |
-| Low cost | No horizontal scaling |
+| Pros           | Cons                               |
+| -------------- | ---------------------------------- |
+| Simple setup   | Single point of failure            |
+| Low cost       | No horizontal scaling              |
 | Easy debugging | Limited to one machine's resources |
-| Full control | Manual updates/maintenance |
+| Full control   | Manual updates/maintenance         |
 
 ### When to Use
 
@@ -455,18 +455,18 @@ resource "aws_elasticache_cluster" "redis" {
 
 ```typescript
 // packages/shared/src/redis.ts
-import { createClient } from 'redis';
-import { config } from './config.js';
-import { createLogger } from './logger.js';
+import { createClient } from "redis";
+import { config } from "./config.js";
+import { createLogger } from "./logger.js";
 
-const logger = createLogger('redis');
+const logger = createLogger("redis");
 
 export const redis = createClient({
   url: config.REDIS_URL,
 });
 
-redis.on('error', (err) => logger.error('Redis error', { error: err }));
-redis.on('connect', () => logger.info('Redis connected'));
+redis.on("error", (err) => logger.error("Redis error", { error: err }));
+redis.on("connect", () => logger.info("Redis connected"));
 
 export const connectRedis = async (): Promise<void> => {
   await redis.connect();
@@ -475,7 +475,7 @@ export const connectRedis = async (): Promise<void> => {
 
 ```typescript
 // packages/shared/src/rateLimit.ts
-import { redis } from './redis.js';
+import { redis } from "./redis.js";
 
 interface RateLimitOptions {
   windowMs: number;
@@ -496,7 +496,7 @@ export const createDistributedRateLimiter = (options: RateLimitOptions) => {
     }
 
     if (current > maxRequests) {
-      return res.status(429).json({ error: 'Too many requests' });
+      return res.status(429).json({ error: "Too many requests" });
     }
 
     next();
@@ -506,23 +506,23 @@ export const createDistributedRateLimiter = (options: RateLimitOptions) => {
 
 ### Cost Estimate
 
-| Component | Spec | Monthly Cost |
-|-----------|------|--------------|
-| 3x EC2 t3.large | 2 CPU, 8GB each | ~$180 |
-| ALB | Application Load Balancer | ~$25 |
-| RDS PostgreSQL | db.t3.medium, Multi-AZ | ~$150 |
-| ElastiCache Redis | cache.t3.medium | ~$50 |
-| 2x n8n VMs | t3.medium | ~$60 |
-| NAT Gateway | Data transfer | ~$45 |
-| **Total** | | **~$510/month** |
+| Component         | Spec                      | Monthly Cost    |
+| ----------------- | ------------------------- | --------------- |
+| 3x EC2 t3.large   | 2 CPU, 8GB each           | ~$180           |
+| ALB               | Application Load Balancer | ~$25            |
+| RDS PostgreSQL    | db.t3.medium, Multi-AZ    | ~$150           |
+| ElastiCache Redis | cache.t3.medium           | ~$50            |
+| 2x n8n VMs        | t3.medium                 | ~$60            |
+| NAT Gateway       | Data transfer             | ~$45            |
+| **Total**         |                           | **~$510/month** |
 
 ### Pros & Cons
 
-| Pros | Cons |
-|------|------|
-| High availability | More complex setup |
-| Auto-scaling | Higher cost |
-| Managed databases | Multiple components to manage |
+| Pros                       | Cons                              |
+| -------------------------- | --------------------------------- |
+| High availability          | More complex setup                |
+| Auto-scaling               | Higher cost                       |
+| Managed databases          | Multiple components to manage     |
 | No single point of failure | Requires infrastructure knowledge |
 
 ### When to Use
@@ -923,11 +923,11 @@ ingress:
 
 ```typescript
 // services/llm-worker/src/index.ts
-import { Queue, Worker } from 'bullmq';
-import { createLogger, config } from '@kenchi/shared';
-import { processAnalysisJob } from './jobs/analysisJob.js';
+import { Queue, Worker } from "bullmq";
+import { createLogger, config } from "@kenchi/shared";
+import { processAnalysisJob } from "./jobs/analysisJob.js";
 
-const logger = createLogger('llm-worker');
+const logger = createLogger("llm-worker");
 
 const connection = {
   host: config.REDIS_HOST,
@@ -935,12 +935,12 @@ const connection = {
 };
 
 const worker = new Worker(
-  'llm-analysis',
+  "llm-analysis",
   async (job) => {
-    logger.info('Processing job', { jobId: job.id, type: job.name });
+    logger.info("Processing job", { jobId: job.id, type: job.name });
 
     switch (job.name) {
-      case 'analyze-incident':
+      case "analyze-incident":
         return processAnalysisJob(job.data);
       default:
         throw new Error(`Unknown job type: ${job.name}`);
@@ -952,40 +952,40 @@ const worker = new Worker(
   }
 );
 
-worker.on('completed', (job) => {
-  logger.info('Job completed', { jobId: job.id });
+worker.on("completed", (job) => {
+  logger.info("Job completed", { jobId: job.id });
 });
 
-worker.on('failed', (job, err) => {
-  logger.error('Job failed', { jobId: job?.id, error: err.message });
+worker.on("failed", (job, err) => {
+  logger.error("Job failed", { jobId: job?.id, error: err.message });
 });
 
-logger.info('LLM Worker started');
+logger.info("LLM Worker started");
 ```
 
 ### Cost Estimate
 
-| Component | Spec | Monthly Cost |
-|-----------|------|--------------|
-| EKS Cluster | Control plane | ~$75 |
-| 3x t3.large nodes (app) | 2 CPU, 8GB each | ~$180 |
-| 3x t3.xlarge nodes (workers) | 4 CPU, 16GB | ~$360 |
-| RDS PostgreSQL | db.r5.large, Multi-AZ | ~$300 |
-| ElastiCache Redis | cache.r5.large | ~$150 |
-| ALB Ingress | Load balancer | ~$25 |
-| ECR | Container registry | ~$10 |
-| CloudWatch | Logs & metrics | ~$50 |
-| **Total** | | **~$1,150/month** |
+| Component                    | Spec                  | Monthly Cost      |
+| ---------------------------- | --------------------- | ----------------- |
+| EKS Cluster                  | Control plane         | ~$75              |
+| 3x t3.large nodes (app)      | 2 CPU, 8GB each       | ~$180             |
+| 3x t3.xlarge nodes (workers) | 4 CPU, 16GB           | ~$360             |
+| RDS PostgreSQL               | db.r5.large, Multi-AZ | ~$300             |
+| ElastiCache Redis            | cache.r5.large        | ~$150             |
+| ALB Ingress                  | Load balancer         | ~$25              |
+| ECR                          | Container registry    | ~$10              |
+| CloudWatch                   | Logs & metrics        | ~$50              |
+| **Total**                    |                       | **~$1,150/month** |
 
 ### Pros & Cons
 
-| Pros | Cons |
-|------|------|
-| Auto-scaling (HPA) | Complex setup |
-| Self-healing pods | Steep learning curve |
-| Rolling deployments | Higher base cost |
-| GitOps ready | Requires K8s expertise |
-| Multi-region capable | Operational overhead |
+| Pros                 | Cons                   |
+| -------------------- | ---------------------- |
+| Auto-scaling (HPA)   | Complex setup          |
+| Self-healing pods    | Steep learning curve   |
+| Rolling deployments  | Higher base cost       |
+| GitOps ready         | Requires K8s expertise |
+| Multi-region capable | Operational overhead   |
 
 ### When to Use
 
@@ -1052,7 +1052,7 @@ logger.info('LLM Worker started');
 
 ```yaml
 # template.yaml
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: Kenchi Serverless
 
@@ -1240,10 +1240,10 @@ Resources:
 import type {
   APIGatewayProxyHandler,
   APIGatewayProxyEvent,
-  APIGatewayProxyResult
-} from 'aws-lambda';
-import { app } from './app.js';
-import serverlessExpress from '@vendia/serverless-express';
+  APIGatewayProxyResult,
+} from "aws-lambda";
+import { app } from "./app.js";
+import serverlessExpress from "@vendia/serverless-express";
 
 const serverlessApp = serverlessExpress({ app });
 
@@ -1257,26 +1257,26 @@ export const handler: APIGatewayProxyHandler = async (
 
 ### Cost Estimate
 
-| Component | Usage Assumption | Monthly Cost |
-|-----------|------------------|--------------|
-| Lambda (API) | 1M requests, 500ms avg | ~$20 |
-| Lambda (LLM Worker) | 100K requests, 30s avg | ~$150 |
-| API Gateway | 1M requests | ~$35 |
-| SQS | 1M messages | ~$1 |
-| DynamoDB | 10GB, on-demand | ~$25 |
-| Aurora Serverless | 10 ACU avg | ~$100 |
-| Step Functions | 100K executions | ~$25 |
-| ElastiCache | cache.t3.small | ~$25 |
-| **Total** | | **~$380/month** |
+| Component           | Usage Assumption       | Monthly Cost    |
+| ------------------- | ---------------------- | --------------- |
+| Lambda (API)        | 1M requests, 500ms avg | ~$20            |
+| Lambda (LLM Worker) | 100K requests, 30s avg | ~$150           |
+| API Gateway         | 1M requests            | ~$35            |
+| SQS                 | 1M messages            | ~$1             |
+| DynamoDB            | 10GB, on-demand        | ~$25            |
+| Aurora Serverless   | 10 ACU avg             | ~$100           |
+| Step Functions      | 100K executions        | ~$25            |
+| ElastiCache         | cache.t3.small         | ~$25            |
+| **Total**           |                        | **~$380/month** |
 
 ### Pros & Cons
 
-| Pros | Cons |
-|------|------|
-| Pay-per-use | Cold start latency |
-| Auto-scales to zero | 15-min Lambda timeout |
-| No server management | Complex debugging |
-| Built-in HA | Vendor lock-in |
+| Pros                  | Cons                     |
+| --------------------- | ------------------------ |
+| Pay-per-use           | Cold start latency       |
+| Auto-scales to zero   | 15-min Lambda timeout    |
+| No server management  | Complex debugging        |
+| Built-in HA           | Vendor lock-in           |
 | Low cost at low scale | Different dev experience |
 
 ### When to Use
@@ -1455,28 +1455,28 @@ resource "aws_appautoscaling_policy" "api_cpu" {
 
 ### Cost Estimate
 
-| Component | Spec | Monthly Cost |
-|-----------|------|--------------|
-| ECS Fargate (API 3x) | 0.5 vCPU, 1GB | ~$75 |
-| ECS Fargate (Slack 3x) | 0.5 vCPU, 1GB | ~$75 |
-| ECS Fargate (GitHub 2x) | 0.25 vCPU, 0.5GB | ~$25 |
-| ECS Fargate (LLM 5x) | 1 vCPU, 2GB | ~$200 |
-| ECS Fargate (n8n 2x) | 1 vCPU, 4GB | ~$120 |
-| ALB | Load balancer | ~$25 |
-| RDS PostgreSQL | db.t3.medium | ~$75 |
-| ElastiCache Redis | cache.t3.small | ~$25 |
-| ECR | Container storage | ~$5 |
-| **Total** | | **~$625/month** |
+| Component               | Spec              | Monthly Cost    |
+| ----------------------- | ----------------- | --------------- |
+| ECS Fargate (API 3x)    | 0.5 vCPU, 1GB     | ~$75            |
+| ECS Fargate (Slack 3x)  | 0.5 vCPU, 1GB     | ~$75            |
+| ECS Fargate (GitHub 2x) | 0.25 vCPU, 0.5GB  | ~$25            |
+| ECS Fargate (LLM 5x)    | 1 vCPU, 2GB       | ~$200           |
+| ECS Fargate (n8n 2x)    | 1 vCPU, 4GB       | ~$120           |
+| ALB                     | Load balancer     | ~$25            |
+| RDS PostgreSQL          | db.t3.medium      | ~$75            |
+| ElastiCache Redis       | cache.t3.small    | ~$25            |
+| ECR                     | Container storage | ~$5             |
+| **Total**               |                   | **~$625/month** |
 
 ### Pros & Cons
 
-| Pros | Cons |
-|------|------|
-| Simpler than K8s | Less flexible than K8s |
-| Managed infrastructure | AWS-specific |
-| Auto-scaling built-in | Limited to container workloads |
-| Good AWS integration | Debugging can be harder |
-| No cluster management | Vendor lock-in |
+| Pros                   | Cons                           |
+| ---------------------- | ------------------------------ |
+| Simpler than K8s       | Less flexible than K8s         |
+| Managed infrastructure | AWS-specific                   |
+| Auto-scaling built-in  | Limited to container workloads |
+| Good AWS integration   | Debugging can be harder        |
+| No cluster management  | Vendor lock-in                 |
 
 ### When to Use
 
@@ -1491,13 +1491,13 @@ resource "aws_appautoscaling_policy" "api_cpu" {
 
 ### Latency Breakdown
 
-| Component | Latency | Scalable? | Solution |
-|-----------|---------|-----------|----------|
-| Webhook ingestion | ~10ms | Yes | Add more instances |
-| Evidence collection | 2-10s | Yes | Parallel fetching |
-| **LLM API call** | **15-25s** | Bottleneck | Queue + async workers |
-| Vector DB query | 50-200ms | Yes | Read replicas |
-| Slack/GitHub API | 100-500ms | Yes | Async posting |
+| Component           | Latency    | Scalable?  | Solution              |
+| ------------------- | ---------- | ---------- | --------------------- |
+| Webhook ingestion   | ~10ms      | Yes        | Add more instances    |
+| Evidence collection | 2-10s      | Yes        | Parallel fetching     |
+| **LLM API call**    | **15-25s** | Bottleneck | Queue + async workers |
+| Vector DB query     | 50-200ms   | Yes        | Read replicas         |
+| Slack/GitHub API    | 100-500ms  | Yes        | Async posting         |
 
 ### The LLM Bottleneck
 
@@ -1543,29 +1543,29 @@ n8n:
 
 ### Alternatives for High Scale
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| **Keep n8n** | Visual workflows, easy to modify | Limited scale |
-| **BullMQ + Redis** | Fast, proven at scale | Code-only, no UI |
-| **Temporal.io** | Enterprise-grade workflows | Complex setup |
-| **AWS Step Functions** | Serverless, auto-scale | Vendor lock-in |
+| Approach               | Pros                             | Cons             |
+| ---------------------- | -------------------------------- | ---------------- |
+| **Keep n8n**           | Visual workflows, easy to modify | Limited scale    |
+| **BullMQ + Redis**     | Fast, proven at scale            | Code-only, no UI |
+| **Temporal.io**        | Enterprise-grade workflows       | Complex setup    |
+| **AWS Step Functions** | Serverless, auto-scale           | Vendor lock-in   |
 
 ---
 
 ## Comparison Matrix
 
-| Aspect | Single VM | Multi-VM | Kubernetes | Serverless | ECS Fargate |
-|--------|-----------|----------|------------|------------|-------------|
-| **Cost (small)** | $120 | $510 | $1,150 | $50 | $400 |
-| **Cost (medium)** | N/A | $800 | $1,500 | $380 | $625 |
-| **Cost (large)** | N/A | N/A | $3,000+ | $1,000+ | $1,500+ |
-| **Complexity** | Low | Medium | High | Medium | Medium |
-| **Scaling** | None | Manual | Auto (HPA) | Auto | Auto |
-| **HA** | None | Yes | Yes | Yes | Yes |
-| **Learning curve** | Low | Low | High | Medium | Medium |
-| **Vendor lock-in** | None | Low | Low | High | Medium |
-| **n8n support** | Native | Native | Queue mode | Replace | Native |
-| **Best for** | Dev/POC | Small prod | Enterprise | Variable load | Mid-size |
+| Aspect             | Single VM | Multi-VM   | Kubernetes | Serverless    | ECS Fargate |
+| ------------------ | --------- | ---------- | ---------- | ------------- | ----------- |
+| **Cost (small)**   | $120      | $510       | $1,150     | $50           | $400        |
+| **Cost (medium)**  | N/A       | $800       | $1,500     | $380          | $625        |
+| **Cost (large)**   | N/A       | N/A        | $3,000+    | $1,000+       | $1,500+     |
+| **Complexity**     | Low       | Medium     | High       | Medium        | Medium      |
+| **Scaling**        | None      | Manual     | Auto (HPA) | Auto          | Auto        |
+| **HA**             | None      | Yes        | Yes        | Yes           | Yes         |
+| **Learning curve** | Low       | Low        | High       | Medium        | Medium      |
+| **Vendor lock-in** | None      | Low        | Low        | High          | Medium      |
+| **n8n support**    | Native    | Native     | Queue mode | Replace       | Native      |
+| **Best for**       | Dev/POC   | Small prod | Enterprise | Variable load | Mid-size    |
 
 ---
 

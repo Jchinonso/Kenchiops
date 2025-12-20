@@ -10,7 +10,11 @@
 import { createLogger } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
-import { gatherEnrichedContext, fetchPRsByCommit, type EnrichedContext } from "../services/context/index.js";
+import {
+  gatherEnrichedContext,
+  fetchPRsByCommit,
+  type EnrichedContext,
+} from "../services/context/index.js";
 import { buildEnrichedLogContent } from "../formatters/checkRunFormatter.js";
 
 /**
@@ -60,8 +64,7 @@ const buildContextMetadata = (context: EnrichedContext): ContextMetadata => ({
  * n8n webhook URL for CI failure events
  * Uses Docker service name when running in Docker, localhost otherwise
  */
-const N8N_WEBHOOK_URL =
-  process.env.N8N_WEBHOOK_URL || "http://n8n:5678/webhook/ci-failure";
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "http://n8n:5678/webhook/ci-failure";
 
 const logger = createLogger("github-app");
 

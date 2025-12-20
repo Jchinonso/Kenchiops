@@ -70,7 +70,8 @@ const DEFAULT_ERROR_MESSAGE = "Unknown OpenAI error occurred";
  * @returns Error instance if status code is handled, null otherwise
  */
 const handleStatusError = (error: OpenAIErrorLike): Error | null => {
-  const messageFactory = error.status !== undefined ? STATUS_ERROR_MESSAGES.get(error.status) : null;
+  const messageFactory =
+    error.status !== undefined ? STATUS_ERROR_MESSAGES.get(error.status) : null;
   return messageFactory ? new Error(messageFactory(error.message)) : null;
 };
 
