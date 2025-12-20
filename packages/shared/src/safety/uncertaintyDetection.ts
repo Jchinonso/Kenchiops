@@ -32,7 +32,3 @@ export const detectUncertainty = (text: string): number => {
   // Cap total uncertainty penalty
   return Math.max(totalPenalty, UNCERTAINTY_PENALTIES.MAX);
 };
-
-/**
- * Factor 2: Checks if analysis aligns with provided evidence.
- */

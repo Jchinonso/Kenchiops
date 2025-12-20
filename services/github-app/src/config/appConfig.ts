@@ -22,6 +22,16 @@ export interface GitHubAppConfig {
 }
 
 /**
+ * Parse private key, converting escaped newlines to actual newlines
+ * Docker env_file doesn't support multi-line values, so we use \n escapes
+ */
+const parsePrivateKey = (key: string | undefined): string => {
+  if (!key) return "";
+  // Remove surrounding quotes if present and convert \n to actual newlines
+  return key.replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
+};
+
+/**
  * Validate required GitHub configuration
  */
 const validateGitHubConfig = (): void => {
@@ -45,7 +55,7 @@ export const appConfig: GitHubAppConfig = {
   serviceName: "github-app",
   github: {
     appId: config.GITHUB_APP_ID || "",
-    privateKey: config.GITHUB_APP_PRIVATE_KEY || "",
+    privateKey: parsePrivateKey(config.GITHUB_APP_PRIVATE_KEY),
     webhookSecret: config.GITHUB_WEBHOOK_SECRET || "",
     installationId: config.GITHUB_INSTALLATION_ID
       ? parseInt(String(config.GITHUB_INSTALLATION_ID), 10)

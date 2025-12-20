@@ -6,26 +6,20 @@
 
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { createLogger } from "@kenchi/shared";
+import { createLogger, GITHUB_SIGNATURE } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 
 const logger = createLogger("github-app");
 
 /**
- * Signature verification constants
- */
-const SIGNATURE_HEADER = "x-hub-signature-256";
-const SIGNATURE_PREFIX = "sha256=";
-
-/**
  * Verifies GitHub webhook signature
  */
 const verifySignature = (payload: string, signature: string, secret: string): boolean => {
-  if (!signature.startsWith(SIGNATURE_PREFIX)) {
+  if (!signature.startsWith(GITHUB_SIGNATURE.PREFIX)) {
     return false;
   }
 
-  const expectedSignature = signature.slice(SIGNATURE_PREFIX.length);
+  const expectedSignature = signature.slice(GITHUB_SIGNATURE.PREFIX.length);
   const computedSignature = crypto
     .createHmac("sha256", secret)
     .update(payload, "utf8")
@@ -57,7 +51,7 @@ export const verifyGitHubWebhook = (req: Request, res: Response, next: NextFunct
     return;
   }
 
-  const signature = req.headers[SIGNATURE_HEADER];
+  const signature = req.headers[GITHUB_SIGNATURE.HEADER];
 
   if (!signature || typeof signature !== "string") {
     logger.warn("Missing GitHub webhook signature", {

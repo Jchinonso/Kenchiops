@@ -46,6 +46,25 @@ export interface Logger {
   readonly error: (message: string, metadata?: Record<string, unknown>) => void;
 }
 
+/**
+ * Console output function that dispatches to the appropriate console method.
+ * Uses direct console access (not .bind()) to allow proper mocking in tests.
+ */
+const logToConsole = (level: LogLevel, message: string): void => {
+  switch (level) {
+    case LogLevel.DEBUG:
+    case LogLevel.INFO:
+      console.log(message);
+      break;
+    case LogLevel.WARN:
+      console.warn(message);
+      break;
+    case LogLevel.ERROR:
+      console.error(message);
+      break;
+  }
+};
+
 class LoggerImpl implements Logger {
   private readonly serviceName: string;
   private readonly minLevel: LogLevel;
@@ -86,19 +105,7 @@ class LoggerImpl implements Logger {
     }
 
     const formatted = this.formatMessage(level, message, metadata);
-
-    switch (level) {
-      case LogLevel.DEBUG:
-      case LogLevel.INFO:
-        console.log(formatted);
-        break;
-      case LogLevel.WARN:
-        console.warn(formatted);
-        break;
-      case LogLevel.ERROR:
-        console.error(formatted);
-        break;
-    }
+    logToConsole(level, formatted);
   };
 
   readonly debug = (message: string, metadata?: Record<string, unknown>): void => {

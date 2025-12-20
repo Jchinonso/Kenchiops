@@ -10,7 +10,51 @@
 import { createLogger } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
-import { gatherEnrichedContext, type EnrichedContext } from "../services/contextService.js";
+import { gatherEnrichedContext, type EnrichedContext } from "../services/context/index.js";
+import { buildEnrichedLogContent } from "../formatters/checkRunFormatter.js";
+
+/**
+ * Context metadata for debugging and tracking
+ */
+interface ContextMetadata {
+  readonly hasWorkflowLogs: boolean;
+  readonly hasPRDiff: boolean;
+  readonly hasCommitInfo: boolean;
+  readonly hasPRMetadata: boolean;
+  readonly hasRepositoryMetadata: boolean;
+  readonly hasWorkflowTiming: boolean;
+  readonly sourceFilesCount: number;
+  readonly annotationsCount: number;
+  readonly dependencyChangesCount: number;
+  readonly buildConfigChangesCount: number;
+  readonly testFailuresCount: number;
+  readonly prLabels: readonly string[];
+  readonly reviewStatus: string | null;
+  readonly isPrivateRepo: boolean | null;
+  readonly workflowDurationMs: number | null;
+}
+
+/**
+ * Build context metadata from enriched context.
+ * Extracts boolean flags and counts for debugging and tracking.
+ */
+const buildContextMetadata = (context: EnrichedContext): ContextMetadata => ({
+  hasWorkflowLogs: !!context.workflowLogs,
+  hasPRDiff: !!context.prDiff,
+  hasCommitInfo: !!context.commitInfo,
+  hasPRMetadata: !!context.prMetadata,
+  hasRepositoryMetadata: !!context.repositoryMetadata,
+  hasWorkflowTiming: !!context.workflowTiming,
+  sourceFilesCount: context.sourceFiles.length,
+  annotationsCount: context.annotations.length,
+  dependencyChangesCount: context.dependencyChanges.length,
+  buildConfigChangesCount: context.buildConfigChanges.length,
+  testFailuresCount: context.testFailures.length,
+  prLabels: context.prMetadata?.labels || [],
+  reviewStatus: context.prMetadata?.reviewStatus || null,
+  isPrivateRepo: context.repositoryMetadata?.isPrivate || null,
+  workflowDurationMs: context.workflowTiming?.durationMs || null,
+});
 
 /**
  * n8n webhook URL for CI failure events
@@ -31,67 +75,6 @@ export interface CheckRunHandlerResult {
 }
 
 /**
- * Build enriched log content with all available context
- */
-const buildEnrichedLogContent = (
-  webhook: CheckRunWebhook,
-  context: EnrichedContext
-): string => {
-  const { check_run } = webhook;
-  const sections: string[] = [];
-
-  // Section 1: Check run output
-  const checkOutput = [
-    check_run.output.title || "",
-    check_run.output.summary || "",
-    check_run.output.text || "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  if (checkOutput) {
-    sections.push(`## CI Check Output\n${checkOutput}`);
-  }
-
-  // Section 2: Workflow logs (if available)
-  if (context.workflowLogs) {
-    sections.push(`## Workflow Logs\n${context.workflowLogs}`);
-  }
-
-  // Section 3: Commit info
-  if (context.commitInfo) {
-    sections.push(
-      `## Commit Info\n` +
-        `SHA: ${context.commitInfo.sha}\n` +
-        `Author: ${context.commitInfo.author}\n` +
-        `Message: ${context.commitInfo.message}\n` +
-        `Changed files:\n${context.commitInfo.changedFiles.map((f) => `  - ${f}`).join("\n")}`
-    );
-  }
-
-  // Section 4: PR diff (if available)
-  if (context.prDiff) {
-    sections.push(`## PR Diff\n\`\`\`diff\n${context.prDiff}\n\`\`\``);
-  }
-
-  // Section 5: Source files (if available)
-  if (context.sourceFiles.length > 0) {
-    const filesSection = context.sourceFiles
-      .map((file) => {
-        const lineInfo =
-          file.startLine && file.endLine
-            ? ` (lines ${file.startLine}-${file.endLine})`
-            : "";
-        return `### ${file.path}${lineInfo}\n\`\`\`\n${file.content}\n\`\`\``;
-      })
-      .join("\n\n");
-    sections.push(`## Relevant Source Files\n${filesSection}`);
-  }
-
-  return sections.join("\n\n---\n\n") || `CI check "${check_run.name}" failed`;
-};
-
-/**
  * Forward CI failure to n8n for orchestration and Slack notification
  * Gathers enriched context before forwarding for better AI analysis
  */
@@ -110,6 +93,8 @@ const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
   // Build enriched log content
   const enrichedLog = buildEnrichedLogContent(webhook, context);
 
+  const contextMetadata = buildContextMetadata(context);
+
   const payload = {
     log: enrichedLog,
     repository: repository.full_name,
@@ -117,13 +102,7 @@ const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
     conclusion: check_run.conclusion,
     headSha: check_run.head_sha,
     pullRequests: check_run.pull_requests.map((pr) => pr.number),
-    // Include context metadata for debugging
-    contextMetadata: {
-      hasWorkflowLogs: !!context.workflowLogs,
-      hasPRDiff: !!context.prDiff,
-      hasCommitInfo: !!context.commitInfo,
-      sourceFilesCount: context.sourceFiles.length,
-    },
+    contextMetadata,
   };
 
   try {

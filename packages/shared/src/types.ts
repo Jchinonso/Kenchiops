@@ -39,8 +39,8 @@ export interface EventPayload {
   // Common fields
   url?: string;
 
-  // Allow additional fields
-  [key: string]: any;
+  // Allow additional fields - use unknown for type safety
+  [key: string]: unknown;
 }
 
 export interface EventMetadata {
@@ -48,7 +48,7 @@ export interface EventMetadata {
   service?: string;
   team?: string;
   tags?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface Event {
@@ -79,7 +79,7 @@ export interface LogEntry {
   level?: "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
   message: string;
   stackTrace?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TimeSeriesMetric {
@@ -99,7 +99,8 @@ export interface MetricsSummary {
   latencyP50?: number;
   latencyP95?: number;
   latencyP99?: number;
-  [key: string]: any;
+  // Custom metrics can have any value type
+  [key: string]: unknown;
 }
 
 export interface Metrics {
@@ -244,7 +245,7 @@ export interface ExecutionDetails {
   api?: string;
   endpoint?: string;
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  parameters?: Record<string, any>;
+  parameters?: Record<string, unknown>;
   command?: string;
   script?: string;
 }

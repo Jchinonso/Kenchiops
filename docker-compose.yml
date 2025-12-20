@@ -1,4 +1,23 @@
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: kenchi-postgres
+    environment:
+      - POSTGRES_USER=kenchi
+      - POSTGRES_PASSWORD=kenchi_dev_password
+      - POSTGRES_DB=kenchi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kenchi -d kenchi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -8,6 +27,7 @@ services:
       - SERVICE=api
       - NODE_ENV=production
       - PORT=3000
+      - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
     env_file:
       - .env
     ports:
@@ -21,6 +41,9 @@ services:
       timeout: 3s
       retries: 3
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   slack-bot:
     build:
@@ -91,4 +114,5 @@ services:
 
 volumes:
   n8n_data:
+  postgres_data:
 

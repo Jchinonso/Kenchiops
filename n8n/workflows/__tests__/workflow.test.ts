@@ -24,7 +24,10 @@ describe("n8n Workflow Validation", () => {
 
       expect(nodeNames).toContain("Webhook - CI Failure");
       expect(nodeNames).toContain("HTTP Request - OpenAI Analysis");
+      expect(nodeNames).toContain("Merge Analysis with Context");
       expect(nodeNames).toContain("HTTP Request - Post to Slack");
+      expect(nodeNames).toContain("Prepare GitHub Comments");
+      expect(nodeNames).toContain("HTTP Request - Post to GitHub");
       expect(nodeNames).toContain("Respond to Webhook");
     });
 
@@ -41,7 +44,10 @@ describe("n8n Workflow Validation", () => {
     it("should have proper node connections", () => {
       expect(workflow.connections["Webhook - CI Failure"]).toBeDefined();
       expect(workflow.connections["HTTP Request - OpenAI Analysis"]).toBeDefined();
+      expect(workflow.connections["Merge Analysis with Context"]).toBeDefined();
       expect(workflow.connections["HTTP Request - Post to Slack"]).toBeDefined();
+      expect(workflow.connections["Prepare GitHub Comments"]).toBeDefined();
+      expect(workflow.connections["HTTP Request - Post to GitHub"]).toBeDefined();
     });
   });
 
@@ -78,7 +84,7 @@ describe("n8n Workflow Validation", () => {
   });
 
   describe("Workflow Flow", () => {
-    it("should have correct flow: Webhook → OpenAI → Slack → Response", () => {
+    it("should have correct flow: Webhook → OpenAI → Merge → Slack/GitHub → Response", () => {
       const connections = workflow.connections;
 
       // Webhook connects to OpenAI
@@ -86,10 +92,16 @@ describe("n8n Workflow Validation", () => {
         "HTTP Request - OpenAI Analysis"
       );
 
-      // OpenAI connects to Slack
+      // OpenAI connects to Merge Analysis with Context
       expect(connections["HTTP Request - OpenAI Analysis"].main[0][0].node).toBe(
-        "HTTP Request - Post to Slack"
+        "Merge Analysis with Context"
       );
+
+      // Merge connects to both Slack and GitHub prep
+      const mergeConnections = connections["Merge Analysis with Context"].main[0];
+      const mergeTargets = mergeConnections.map((c: { node: string }) => c.node);
+      expect(mergeTargets).toContain("HTTP Request - Post to Slack");
+      expect(mergeTargets).toContain("Prepare GitHub Comments");
 
       // Slack connects to Response
       expect(connections["HTTP Request - Post to Slack"].main[0][0].node).toBe(
@@ -99,7 +111,7 @@ describe("n8n Workflow Validation", () => {
   });
 
   describe("Workflow Data Flow", () => {
-    it("should extract failure_log from webhook body", () => {
+    it("should extract failure_log from webhook payload", () => {
       const openaiNode = workflow.nodes.find(
         (node: any) => node.name === "HTTP Request - OpenAI Analysis"
       );
@@ -109,10 +121,10 @@ describe("n8n Workflow Validation", () => {
       );
 
       expect(failureLogParam).toBeDefined();
-      expect(failureLogParam.value).toBe("={{ $json.body.log }}");
+      expect(failureLogParam.value).toBe("={{ $json.log }}");
     });
 
-    it("should extract repository from webhook body", () => {
+    it("should extract repository from webhook payload", () => {
       const openaiNode = workflow.nodes.find(
         (node: any) => node.name === "HTTP Request - OpenAI Analysis"
       );
@@ -122,24 +134,35 @@ describe("n8n Workflow Validation", () => {
       );
 
       expect(repoParam).toBeDefined();
-      expect(repoParam.value).toBe("={{ $json.body.repository }}");
+      expect(repoParam.value).toBe("={{ $json.repository }}");
     });
 
-    it("should pass analysis result to Slack", () => {
+    it("should pass enriched analysis to Slack", () => {
       const slackNode = workflow.nodes.find(
         (node: any) => node.name === "HTTP Request - Post to Slack"
       );
 
       expect(slackNode).toBeDefined();
-      // The Slack node uses JSON body with analysis data
+      // The Slack node uses JSON body with enriched analysis data
       expect(slackNode.parameters.specifyBody).toBe("json");
       expect(slackNode.parameters.jsonBody).toBeDefined();
 
-      // The JSON body includes analysis data
+      // The JSON body includes the analysis object
+      // Channel is not passed - Slack Bot uses its active channel (single-channel policy)
       const jsonBody = slackNode.parameters.jsonBody;
-      expect(jsonBody).toContain("$json.repository");
-      expect(jsonBody).toContain("$json.confidence");
       expect(jsonBody).toContain("$json.analysis");
+    });
+
+    it("should have Merge Analysis node for context enrichment", () => {
+      const mergeNode = workflow.nodes.find(
+        (node: any) => node.name === "Merge Analysis with Context"
+      );
+
+      expect(mergeNode).toBeDefined();
+      expect(mergeNode.type).toBe("n8n-nodes-base.code");
+      // The code should merge analysis with webhook context
+      expect(mergeNode.parameters.jsCode).toContain("enrichedAnalysis");
+      expect(mergeNode.parameters.jsCode).toContain("webhookData");
     });
   });
 });

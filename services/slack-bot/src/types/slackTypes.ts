@@ -6,7 +6,8 @@
 import type { Event, EventType, EventPayload } from "@kenchi/shared";
 
 /**
- * Slack command payload structure
+ * Slack command payload structure.
+ * Extends EventPayload by including index signature for compatibility.
  */
 export interface SlackCommandPayload {
   readonly command: string;
@@ -14,16 +15,19 @@ export interface SlackCommandPayload {
   readonly channel_id: string;
   readonly team_id?: string;
   readonly response_url?: string;
+  readonly [key: string]: unknown;
 }
 
 /**
- * Slack mention payload structure
+ * Slack mention payload structure.
+ * Extends EventPayload by including index signature for compatibility.
  */
 export interface SlackMentionPayload {
   readonly query: string;
   readonly channel: string;
   readonly user: string;
   readonly thread_ts?: string;
+  readonly [key: string]: unknown;
 }
 
 /**
@@ -81,7 +85,52 @@ export interface SlackAttachment {
 }
 
 /**
+ * CI Annotation from GitHub check run.
+ */
+export interface CIAnnotation {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine?: number;
+  readonly level: "notice" | "warning" | "failure";
+  readonly message: string;
+  readonly title?: string;
+}
+
+/**
+ * Test failure parsed from CI logs.
+ */
+export interface TestFailure {
+  readonly testName: string;
+  readonly file?: string;
+  readonly error: string;
+}
+
+/**
+ * PR metadata for context.
+ */
+export interface PRContext {
+  readonly number: number;
+  readonly title: string;
+  readonly author: string;
+  readonly branch: string;
+  readonly baseBranch: string;
+  readonly labels?: readonly string[];
+  readonly isDraft?: boolean;
+}
+
+/**
+ * Workflow timing information.
+ */
+export interface WorkflowContext {
+  readonly name: string;
+  readonly jobName?: string;
+  readonly duration?: string;
+  readonly conclusion?: string;
+}
+
+/**
  * CI Failure analysis data structure from n8n workflow.
+ * Extended to include enriched context for better formatting.
  */
 export interface CIFailureAnalysis {
   readonly repository: string;
@@ -93,15 +142,29 @@ export interface CIFailureAnalysis {
     readonly description: string;
     readonly actionType?: string;
   }[];
+  // Enriched context
+  readonly checkName?: string;
+  readonly headSha?: string;
+  readonly annotations?: readonly CIAnnotation[];
+  readonly testFailures?: readonly TestFailure[];
+  readonly prContext?: PRContext;
+  readonly workflowContext?: WorkflowContext;
+  readonly dependencyChanges?: readonly {
+    readonly type: "added" | "removed" | "updated";
+    readonly name: string;
+    readonly oldVersion?: string;
+    readonly newVersion?: string;
+  }[];
 }
 
 /**
  * Request body structure for POST /slack/message endpoint.
  * Used by n8n workflow to post messages to Slack channels.
  * Supports plain text, Block Kit blocks, and attachments.
+ * Channel is optional - if not provided, uses bot's active channel.
  */
 export interface SlackMessageRequest {
-  readonly channel: string;
+  readonly channel?: string;
   readonly message?: string;
   readonly thread_ts?: string;
   readonly blocks?: readonly SlackBlock[];

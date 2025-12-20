@@ -10,14 +10,23 @@ import {
   MATCHING_CONFIG,
   METRIC_KEYWORDS,
   INVALID_CAUSE_KEYWORDS,
+  COMPLETENESS_ADJUSTMENTS,
+  MIN_LENGTHS,
+  MIN_ACTIONS_FOR_BONUS,
 } from "../constants.js";
 
 /**
  * Checks if reasoning contains metric keywords.
+ * Uses direct Set iteration instead of Array.from() for efficiency.
  */
 const hasMetricsReference = (reasoning: string): boolean => {
   const normalized = reasoning.toLowerCase();
-  return Array.from(METRIC_KEYWORDS).some((keyword) => normalized.includes(keyword));
+  for (const keyword of METRIC_KEYWORDS) {
+    if (normalized.includes(keyword)) {
+      return true;
+    }
+  }
+  return false;
 };
 
 /**
@@ -81,12 +90,9 @@ export const calculateEvidenceAlignment = (
   return Math.min(adjustment, ALIGNMENT_ADJUSTMENTS.MAX);
 };
 
-import { COMPLETENESS_ADJUSTMENTS, MIN_LENGTHS, MIN_ACTIONS_FOR_BONUS } from "../constants.js";
-
-// INVALID_CAUSE_KEYWORDS imported from constants.ts
-
 /**
  * Checks if cause is valid (not "unknown" or too short).
+ * Uses direct Set iteration instead of Array.from() for efficiency.
  */
 const isValidCause = (cause?: string): boolean => {
   if (!cause || cause.length <= MIN_LENGTHS.CAUSE) {
@@ -94,7 +100,12 @@ const isValidCause = (cause?: string): boolean => {
   }
 
   const normalized = cause.toLowerCase();
-  return !Array.from(INVALID_CAUSE_KEYWORDS).some((keyword) => normalized.includes(keyword));
+  for (const keyword of INVALID_CAUSE_KEYWORDS) {
+    if (normalized.includes(keyword)) {
+      return false;
+    }
+  }
+  return true;
 };
 
 /**
@@ -138,7 +149,3 @@ export const assessCompleteness = (analysis: LLMAnalysisResult): number => {
 
   return adjustment;
 };
-
-/**
- * Factor 4: Validates analysis against knowledge base.
- */

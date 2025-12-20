@@ -203,49 +203,64 @@ ${payload}
 };
 
 /**
+ * Evidence section configuration for data-driven formatting.
+ */
+interface EvidenceSectionConfig {
+  readonly title: string;
+  readonly emptyMessage: string;
+  readonly hasData: (evidence: Evidence) => boolean;
+  readonly format: (evidence: Evidence) => string;
+}
+
+/**
+ * Evidence sections configuration - enables easy addition/removal of sections.
+ */
+const EVIDENCE_SECTIONS: readonly EvidenceSectionConfig[] = [
+  {
+    title: "### Error Logs",
+    emptyMessage: "No error logs available.",
+    hasData: (e) => Boolean(e.logs?.length),
+    format: (e) => formatLogs(e.logs!),
+  },
+  {
+    title: "### System Metrics (at time of event)",
+    emptyMessage: "No metrics available.",
+    hasData: (e) => Boolean(e.metrics?.summary),
+    format: (e) => formatMetrics(e.metrics!.summary!),
+  },
+  {
+    title: "### Recent Git History",
+    emptyMessage: "No recent commits available.",
+    hasData: (e) => Boolean(e.gitHistory?.length),
+    format: (e) => formatGitHistory(e.gitHistory!),
+  },
+  {
+    title: "### System State",
+    emptyMessage: "",
+    hasData: (e) => Boolean(e.systemState),
+    format: (e) => formatSystemState(e.systemState!),
+  },
+  {
+    title: "### Related Knowledge Base Documents",
+    emptyMessage: "No related documents found in knowledge base.",
+    hasData: (e) => Boolean(e.relatedDocs?.length),
+    format: (e) => formatKnowledgeDocs(e.relatedDocs!),
+  },
+];
+
+/**
  * Formats all evidence sections for inclusion in the prompt.
+ * Uses data-driven configuration for maintainability.
  */
 export const formatEvidence = (evidence: Evidence): string => {
   const sections: string[] = ["## COLLECTED EVIDENCE"];
 
-  // 1. Logs
-  if (evidence.logs && evidence.logs.length > 0) {
-    sections.push("### Error Logs");
-    sections.push(formatLogs(evidence.logs));
-  } else {
-    sections.push("### Error Logs\nNo error logs available.");
-  }
-
-  // 2. Metrics
-  if (evidence.metrics?.summary) {
-    sections.push("### System Metrics (at time of event)");
-    sections.push(formatMetrics(evidence.metrics.summary));
-  } else {
-    sections.push("### System Metrics (at time of event)\nNo metrics available.");
-  }
-
-  // 3. Git History
-  if (evidence.gitHistory && evidence.gitHistory.length > 0) {
-    sections.push("### Recent Git History");
-    sections.push(formatGitHistory(evidence.gitHistory));
-  } else {
-    sections.push("### Recent Git History\nNo recent commits available.");
-  }
-
-  // 4. System State
-  if (evidence.systemState) {
-    sections.push("### System State");
-    sections.push(formatSystemState(evidence.systemState));
-  }
-
-  // 5. Related Knowledge Base Documents
-  if (evidence.relatedDocs && evidence.relatedDocs.length > 0) {
-    sections.push("### Related Knowledge Base Documents");
-    sections.push(formatKnowledgeDocs(evidence.relatedDocs));
-  } else {
-    sections.push(
-      "### Related Knowledge Base Documents\nNo related documents found in knowledge base."
-    );
+  for (const config of EVIDENCE_SECTIONS) {
+    if (config.hasData(evidence)) {
+      sections.push(config.title, config.format(evidence));
+    } else if (config.emptyMessage) {
+      sections.push(`${config.title}\n${config.emptyMessage}`);
+    }
   }
 
   return sections.join("\n\n");
@@ -292,45 +307,51 @@ export const formatLogs = (logs: LogEntry[]): string => {
 };
 
 /**
- * Formats metrics summary.
+ * Metric field definition for data-driven formatting.
+ */
+interface MetricField {
+  readonly key: keyof MetricsSummary;
+  readonly label: string;
+  readonly suffix?: string;
+}
+
+/**
+ * Standard metrics lookup table for consistent formatting.
+ */
+const STANDARD_METRICS: readonly MetricField[] = [
+  { key: "errorRate", label: "Error Rate" },
+  { key: "requestRate", label: "Request Rate", suffix: " req/s" },
+  { key: "cpuUsage", label: "CPU Usage", suffix: "%" },
+  { key: "memoryUsage", label: "Memory Usage", suffix: "%" },
+  { key: "latencyP50", label: "Latency P50", suffix: "ms" },
+  { key: "latencyP95", label: "Latency P95", suffix: "ms" },
+  { key: "latencyP99", label: "Latency P99", suffix: "ms" },
+] as const;
+
+/**
+ * Set of standard metric keys for efficient lookup.
+ */
+const STANDARD_METRIC_KEYS = new Set<string>(
+  STANDARD_METRICS.map((m) => m.key as string)
+);
+
+/**
+ * Formats metrics summary using data-driven approach.
  */
 export const formatMetrics = (summary: MetricsSummary): string => {
   const lines: string[] = [];
 
-  if (summary.errorRate !== undefined) {
-    lines.push(`- Error Rate: ${summary.errorRate}`);
-  }
-  if (summary.requestRate !== undefined) {
-    lines.push(`- Request Rate: ${summary.requestRate} req/s`);
-  }
-  if (summary.cpuUsage !== undefined) {
-    lines.push(`- CPU Usage: ${summary.cpuUsage}%`);
-  }
-  if (summary.memoryUsage !== undefined) {
-    lines.push(`- Memory Usage: ${summary.memoryUsage}%`);
-  }
-  if (summary.latencyP50 !== undefined) {
-    lines.push(`- Latency P50: ${summary.latencyP50}ms`);
-  }
-  if (summary.latencyP95 !== undefined) {
-    lines.push(`- Latency P95: ${summary.latencyP95}ms`);
-  }
-  if (summary.latencyP99 !== undefined) {
-    lines.push(`- Latency P99: ${summary.latencyP99}ms`);
+  // Format standard metrics using lookup table
+  for (const { key, label, suffix } of STANDARD_METRICS) {
+    const value = summary[key];
+    if (value !== undefined) {
+      lines.push(`- ${label}: ${value}${suffix ?? ""}`);
+    }
   }
 
-  // Include any custom metrics
-  const standardMetrics = [
-    "errorRate",
-    "requestRate",
-    "cpuUsage",
-    "memoryUsage",
-    "latencyP50",
-    "latencyP95",
-    "latencyP99",
-  ];
+  // Include any custom metrics not in standard set
   for (const [key, value] of Object.entries(summary)) {
-    if (!standardMetrics.includes(key)) {
+    if (!STANDARD_METRIC_KEYS.has(key)) {
       lines.push(`- ${key}: ${value}`);
     }
   }
@@ -369,20 +390,32 @@ export const formatGitHistory = (commits: GitCommit[]): string => {
 };
 
 /**
- * Formats system state information.
+ * Deployment status field configuration.
+ */
+const DEPLOYMENT_FIELDS: readonly { key: keyof NonNullable<SystemState["deploymentStatus"]>; label: string }[] = [
+  { key: "currentVersion", label: "Current Version" },
+  { key: "previousVersion", label: "Previous Version" },
+  { key: "deployedAt", label: "Deployed At" },
+  { key: "deployedBy", label: "Deployed By" },
+];
+
+/**
+ * Formats system state information using data-driven approach.
  */
 const formatSystemState = (systemState: SystemState): string => {
   const sections: string[] = [];
 
+  // Deployment status
   if (systemState.deploymentStatus) {
     const ds = systemState.deploymentStatus;
     sections.push("**Deployment**:");
-    if (ds.currentVersion) sections.push(`- Current Version: ${ds.currentVersion}`);
-    if (ds.previousVersion) sections.push(`- Previous Version: ${ds.previousVersion}`);
-    if (ds.deployedAt) sections.push(`- Deployed At: ${ds.deployedAt}`);
-    if (ds.deployedBy) sections.push(`- Deployed By: ${ds.deployedBy}`);
+    for (const { key, label } of DEPLOYMENT_FIELDS) {
+      const value = ds[key];
+      if (value) sections.push(`- ${label}: ${value}`);
+    }
   }
 
+  // Service health
   if (systemState.serviceHealth) {
     sections.push("\n**Service Health**:");
     for (const [service, status] of Object.entries(systemState.serviceHealth)) {
@@ -390,12 +423,12 @@ const formatSystemState = (systemState: SystemState): string => {
     }
   }
 
-  if (systemState.dependencies && systemState.dependencies.length > 0) {
+  // Dependencies
+  if (systemState.dependencies?.length) {
     sections.push("\n**Dependencies**:");
     for (const dep of systemState.dependencies) {
-      sections.push(
-        `- ${dep.name}: ${dep.status}${dep.responseTime ? ` (${dep.responseTime}ms)` : ""}`
-      );
+      const responseTime = dep.responseTime ? ` (${dep.responseTime}ms)` : "";
+      sections.push(`- ${dep.name}: ${dep.status}${responseTime}`);
     }
   }
 

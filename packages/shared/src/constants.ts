@@ -122,7 +122,24 @@ export const MIN_ACTIONS_FOR_BONUS = 2;
 export const MATCHING_CONFIG = {
   COMMIT_PREFIX_LENGTH: 7,
   LOG_PREFIX_LENGTH: 50,
+  LOG_COMPARISON_PREFIX_LENGTH: 30,
+  SHA_PREFIX_MIN_LENGTH: 6,
+  SHA_PREFIX_MAX_LENGTH: 12,
+  QUOTED_TEXT_MIN_LENGTH: 10,
 } as const;
+
+/**
+ * SHA pattern for matching commit hashes (6-40 hex characters).
+ * Pre-compiled for reuse across validation functions.
+ */
+export const SHA_PATTERN = /\b[0-9a-f]{6,40}\b/gi;
+export const SHA_PATTERN_SINGLE = /\b[0-9a-f]{6,40}\b/i;
+
+/**
+ * Combined pattern for extracting quoted text (single and double quotes).
+ * Captures content inside quotes without the quotes themselves.
+ */
+export const QUOTED_TEXT_PATTERN = /["']([^"']+)["']/g;
 
 /**
  * OpenAI API configuration defaults.
@@ -389,6 +406,92 @@ export const RELEVANCE_RULES: Readonly<RelevanceRule[]> = [
  */
 export const AUTO_APPROVABLE_SAFETY_LEVELS: Readonly<Set<string>> = new Set(["safe", "low_risk"]);
 
+// ==================== GitHub Context Constants ====================
+
+/**
+ * Maximum size limits for GitHub context data.
+ */
+export const GITHUB_CONTEXT_LIMITS = {
+  MAX_LOG_SIZE: 50000, // 50KB of logs
+  MAX_DIFF_SIZE: 30000, // 30KB of diff
+  MAX_FILE_SIZE: 10000, // 10KB per file
+  MAX_FILES: 5, // Maximum number of source files to fetch
+  MAX_ANNOTATIONS: 20, // Maximum number of annotations
+} as const;
+
+/**
+ * Build configuration files to check for changes.
+ */
+export const BUILD_CONFIG_FILES = [
+  "tsconfig.json",
+  "tsconfig.build.json",
+  "webpack.config.js",
+  "webpack.config.ts",
+  "vite.config.js",
+  "vite.config.ts",
+  "rollup.config.js",
+  "esbuild.config.js",
+  ".babelrc",
+  "babel.config.js",
+  "jest.config.js",
+  "jest.config.ts",
+  ".eslintrc.js",
+  ".eslintrc.json",
+] as const;
+
+/**
+ * Dependency files to check for changes.
+ */
+export const DEPENDENCY_FILES = [
+  "package.json",
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+] as const;
+
+// ==================== GitHub Webhook Constants ====================
+
+/**
+ * GitHub webhook signature verification constants.
+ */
+export const GITHUB_SIGNATURE = {
+  HEADER: "x-hub-signature-256",
+  PREFIX: "sha256=",
+} as const;
+
+// ==================== Slack UI Constants ====================
+
+/**
+ * Color codes for Slack attachments based on severity/confidence.
+ */
+export const SLACK_COLORS = {
+  DANGER: "#E01E5A", // Red - critical/low confidence
+  WARNING: "#ECB22E", // Yellow - medium confidence
+  SUCCESS: "#2EB67D", // Green - high confidence
+  INFO: "#36C5F0", // Blue - informational
+  PURPLE: "#4A154B", // Purple - Slack brand color
+} as const;
+
+/**
+ * Status emoji for Slack progress updates.
+ */
+export const SLACK_STATUS_EMOJI = {
+  pending: ":hourglass_flowing_sand:",
+  in_progress: ":gear:",
+  completed: ":white_check_mark:",
+  failed: ":x:",
+} as const;
+
+/**
+ * Priority emoji for Slack messages.
+ */
+export const PRIORITY_EMOJI = {
+  critical: ":red_circle:",
+  high: ":red_circle:",
+  medium: ":large_orange_circle:",
+  low: ":white_circle:",
+} as const;
+
 /**
  * Valid safety levels for runtime validation.
  */
@@ -399,6 +502,107 @@ export const VALID_SAFETY_LEVELS: Readonly<Set<string>> = new Set([
   "high_risk",
   "dangerous",
 ]);
+
+// ==================== Git Display Constants ====================
+
+/**
+ * Git-related display constants.
+ */
+export const GIT_DISPLAY = {
+  /** Standard length for displaying truncated commit SHA */
+  SHA_DISPLAY_LENGTH: 7,
+} as const;
+
+// ==================== Slack API Constants ====================
+
+/**
+ * Slack API limits and pagination.
+ */
+export const SLACK_API_LIMITS = {
+  /** Maximum results per page for conversations.list API */
+  CONVERSATIONS_LIST_LIMIT: 1000,
+} as const;
+
+// ==================== CI Failure Display Constants ====================
+
+/**
+ * Display limits for CI failure notifications (Slack and GitHub).
+ */
+export const CI_FAILURE_DISPLAY = {
+  /** Maximum number of errors to display in notifications */
+  MAX_ERRORS_DISPLAYED: 2,
+  /** Maximum length for truncated error messages */
+  MAX_ERROR_MESSAGE_LENGTH: 100,
+} as const;
+
+// ==================== GitHub Log Parsing Constants ====================
+
+/**
+ * Maximum number of test failures to extract from logs.
+ */
+export const LOG_PARSING_LIMITS = {
+  MAX_TEST_FAILURES: 10,
+  /** Maximum size for build config diff in characters */
+  MAX_BUILD_CONFIG_DIFF_SIZE: 5000,
+} as const;
+
+/**
+ * Paths to exclude when extracting file references from logs.
+ */
+export const EXCLUDED_PATH_PATTERNS = [
+  "node_modules",
+  ".test.",
+  ".spec.",
+  "internal/",
+] as const;
+
+/**
+ * Error indicators for context-preserving log truncation.
+ */
+export const ERROR_INDICATORS = [
+  "error",
+  "Error",
+  "ERROR",
+  "failed",
+  "Failed",
+  "FAILED",
+] as const;
+
+/**
+ * Regex patterns for extracting file references from logs.
+ * Pre-compiled at module level for performance.
+ */
+export const FILE_REFERENCE_PATTERNS = [
+  // Pattern 1: file.ts:line or file.ts:line:column
+  /(?:^|[\s(])([a-zA-Z0-9_\-./]+\.[a-zA-Z]+):(\d+)(?::\d+)?/gm,
+  // Pattern 2: file.ts(line,column)
+  /([a-zA-Z0-9_\-./]+\.[a-zA-Z]+)\((\d+),\d+\)/gm,
+  // Pattern 3: at ... (file.ts:line:column)
+  /at\s+.*?\(([a-zA-Z0-9_\-./]+\.[a-zA-Z]+):(\d+):\d+\)/gm,
+] as const;
+
+// ==================== Dependency Parsing Constants ====================
+
+/**
+ * Fields to exclude when parsing package.json dependency changes.
+ */
+export const EXCLUDED_PACKAGE_JSON_FIELDS: Readonly<Set<string>> = new Set([
+  "name",
+  "version",
+  "description",
+  "main",
+  "scripts",
+]);
+
+/**
+ * Regex patterns for parsing dependency changes from git diffs.
+ */
+export const DEPENDENCY_DIFF_PATTERNS = {
+  /** Pattern for added dependencies in package.json diff */
+  ADDED: /^\+\s*"([^"]+)":\s*"([^"]+)"/gm,
+  /** Pattern for removed dependencies in package.json diff */
+  REMOVED: /^-\s*"([^"]+)":\s*"([^"]+)"/gm,
+} as const;
 
 /**
  * Confidence range type for decision matrix.
@@ -415,3 +619,206 @@ export const CONFIDENCE_MESSAGES: Readonly<Record<ConfidenceRange, string>> = {
   high: "High confidence",
   very_high: "Very high confidence",
 } as const;
+
+// ==================== Secret Redaction Constants ====================
+
+/**
+ * Placeholder text used to replace redacted secrets.
+ */
+export const REDACTION_PLACEHOLDER = "[REDACTED]" as const;
+
+/**
+ * Secret pattern configuration type.
+ */
+export type SecretPattern = {
+  readonly name: string;
+  readonly pattern: RegExp;
+};
+
+/**
+ * Compiled regex patterns for detecting secrets in text.
+ * These patterns are designed to catch common secret formats
+ * with high precision to avoid false positives.
+ */
+export const SECRET_PATTERNS: Readonly<SecretPattern[]> = [
+  // AWS Keys
+  {
+    name: "AWS Access Key ID",
+    pattern: /\b(AKIA[0-9A-Z]{16})\b/g,
+  },
+  {
+    name: "AWS Secret Access Key",
+    pattern: /\b([A-Za-z0-9/+=]{40})(?=\s|$|"|')/g,
+  },
+  // GitHub Tokens
+  {
+    name: "GitHub Personal Access Token",
+    pattern: /\b(ghp_[A-Za-z0-9]{36})\b/g,
+  },
+  {
+    name: "GitHub OAuth Token",
+    pattern: /\b(gho_[A-Za-z0-9]{36})\b/g,
+  },
+  {
+    name: "GitHub App Token",
+    pattern: /\b(ghu_[A-Za-z0-9]{36})\b/g,
+  },
+  {
+    name: "GitHub Server Token",
+    pattern: /\b(ghs_[A-Za-z0-9]{36})\b/g,
+  },
+  {
+    name: "GitHub Refresh Token",
+    pattern: /\b(ghr_[A-Za-z0-9]{36})\b/g,
+  },
+  // Slack Tokens
+  {
+    name: "Slack Bot Token",
+    pattern: /\b(xoxb-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24})\b/g,
+  },
+  {
+    name: "Slack User Token",
+    pattern: /\b(xoxp-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24})\b/g,
+  },
+  {
+    name: "Slack App Token",
+    pattern: /\b(xapp-[0-9]-[A-Z0-9]{10,13}-[0-9]{13}-[a-f0-9]{64})\b/g,
+  },
+  // API Keys (generic patterns)
+  {
+    name: "Generic API Key",
+    pattern: /\b(api[_-]?key|apikey)[=:]["']?([A-Za-z0-9_\-]{20,})["']?/gi,
+  },
+  {
+    name: "Generic Secret Key",
+    pattern: /\b(secret[_-]?key|secretkey)[=:]["']?([A-Za-z0-9_\-]{20,})["']?/gi,
+  },
+  {
+    name: "Generic Access Token",
+    pattern: /\b(access[_-]?token|accesstoken)[=:]["']?([A-Za-z0-9_\-]{20,})["']?/gi,
+  },
+  // Private Keys
+  {
+    name: "RSA Private Key",
+    pattern: /-----BEGIN RSA PRIVATE KEY-----[\s\S]*?-----END RSA PRIVATE KEY-----/g,
+  },
+  {
+    name: "Private Key",
+    pattern: /-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g,
+  },
+  {
+    name: "EC Private Key",
+    pattern: /-----BEGIN EC PRIVATE KEY-----[\s\S]*?-----END EC PRIVATE KEY-----/g,
+  },
+  {
+    name: "OpenSSH Private Key",
+    pattern: /-----BEGIN OPENSSH PRIVATE KEY-----[\s\S]*?-----END OPENSSH PRIVATE KEY-----/g,
+  },
+  // Database Connection Strings
+  {
+    name: "PostgreSQL Connection String",
+    pattern: /postgres(?:ql)?:\/\/[^:]+:[^@]+@[^\s]+/gi,
+  },
+  {
+    name: "MySQL Connection String",
+    pattern: /mysql:\/\/[^:]+:[^@]+@[^\s]+/gi,
+  },
+  {
+    name: "MongoDB Connection String",
+    pattern: /mongodb(?:\+srv)?:\/\/[^:]+:[^@]+@[^\s]+/gi,
+  },
+  {
+    name: "Redis Connection String",
+    pattern: /redis:\/\/[^:]*:[^@]+@[^\s]+/gi,
+  },
+  // OpenAI / Anthropic API Keys
+  {
+    name: "OpenAI API Key",
+    pattern: /\b(sk-[A-Za-z0-9]{20,})\b/g,
+  },
+  {
+    name: "OpenAI Project Key",
+    pattern: /\b(sk-proj-[A-Za-z0-9]{20,})\b/g,
+  },
+  {
+    name: "Anthropic API Key",
+    pattern: /\b(sk-ant-[A-Za-z0-9\-]{80,})\b/g,
+  },
+  // JWT Tokens
+  {
+    name: "JWT Token",
+    pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g,
+  },
+  // NPM Tokens
+  {
+    name: "NPM Token",
+    pattern: /\b(npm_[A-Za-z0-9]{36})\b/g,
+  },
+  // Stripe Keys
+  {
+    name: "Stripe Secret Key",
+    pattern: /\b(sk_live_[A-Za-z0-9]{24,})\b/g,
+  },
+  {
+    name: "Stripe Test Key",
+    pattern: /\b(sk_test_[A-Za-z0-9]{24,})\b/g,
+  },
+  // SendGrid
+  {
+    name: "SendGrid API Key",
+    pattern: /\b(SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43})\b/g,
+  },
+  // Twilio
+  {
+    name: "Twilio Auth Token",
+    pattern: /\b(SK[a-f0-9]{32})\b/g,
+  },
+  // Password patterns in config/env files
+  {
+    name: "Password Assignment",
+    pattern: /\b(password|passwd|pwd)[=:]["']?([^\s"']{8,})["']?/gi,
+  },
+  // Bearer tokens in headers
+  {
+    name: "Bearer Token",
+    pattern: /\bBearer\s+([A-Za-z0-9_\-.]{20,})\b/g,
+  },
+  // Basic Auth
+  {
+    name: "Basic Auth",
+    pattern: /\bBasic\s+([A-Za-z0-9+/=]{20,})\b/g,
+  },
+] as const;
+
+/**
+ * Field names that should be completely excluded from any output.
+ * These fields often contain sensitive data regardless of pattern matching.
+ */
+export const FORBIDDEN_FIELDS: Readonly<Set<string>> = new Set([
+  "password",
+  "passwd",
+  "pwd",
+  "secret",
+  "api_key",
+  "apikey",
+  "api-key",
+  "access_token",
+  "accesstoken",
+  "access-token",
+  "auth_token",
+  "authtoken",
+  "auth-token",
+  "private_key",
+  "privatekey",
+  "private-key",
+  "secret_key",
+  "secretkey",
+  "secret-key",
+  "encryption_key",
+  "encryptionkey",
+  "signing_key",
+  "signingkey",
+  "bearer",
+  "authorization",
+  // Note: "credentials" and "token" removed - too aggressive, often used for nested objects
+]);

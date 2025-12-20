@@ -4,8 +4,52 @@
  */
 
 import type { LLMAnalysisResult, ActionProposal, ConfidenceScoreResult } from "@kenchi/shared";
-import { UI_CONFIDENCE_THRESHOLDS, UI_CONSTANTS } from "@kenchi/shared";
+import {
+  UI_CONSTANTS,
+  SLACK_STATUS_EMOJI,
+  getConfidenceEmoji,
+  getConfidenceLabelParenthesized,
+} from "@kenchi/shared";
 import type { SlackBlock } from "./types/slackTypes.js";
+
+// ==================== Block Factory Functions ====================
+
+/**
+ * Create a header block with plain text.
+ */
+const createHeaderBlock = (text: string): SlackBlock => ({
+  type: "header",
+  text: { type: "plain_text", text, emoji: true },
+});
+
+/**
+ * Create a section block with mrkdwn text.
+ */
+const createSectionBlock = (text: string): SlackBlock => ({
+  type: "section",
+  text: { type: "mrkdwn", text },
+});
+
+/**
+ * Create a section block with mrkdwn fields.
+ */
+const createFieldsBlock = (fields: readonly string[]): SlackBlock => ({
+  type: "section",
+  fields: fields.map((text) => ({ type: "mrkdwn" as const, text })),
+});
+
+/**
+ * Create a context block with mrkdwn text.
+ */
+const createContextBlock = (text: string): SlackBlock => ({
+  type: "context",
+  elements: [{ type: "mrkdwn", text }],
+});
+
+/**
+ * Create a divider block.
+ */
+const createDividerBlock = (): SlackBlock => ({ type: "divider" });
 
 /**
  * Formats an LLM analysis result as a Slack Block Kit message.
@@ -18,125 +62,66 @@ export function formatAnalysisMessage(
   analysis: LLMAnalysisResult,
   confidence: ConfidenceScoreResult
 ): SlackBlock[] {
-  const blocks: SlackBlock[] = [];
-
-  // Header with confidence indicator
   const confidenceEmoji = getConfidenceEmoji(confidence.finalScore);
-  blocks.push({
-    type: "header",
-    text: {
-      type: "plain_text",
-      text: `${confidenceEmoji} Incident Analysis`,
-      emoji: true,
-    },
-  });
+  const confidencePercent = (confidence.finalScore * UI_CONSTANTS.PERCENTAGE_MULTIPLIER).toFixed(0);
 
-  // Confidence score section
-  blocks.push({
-    type: "section",
-    fields: [
-      {
-        type: "mrkdwn",
-        text: `*Confidence:* ${(confidence.finalScore * UI_CONSTANTS.PERCENTAGE_MULTIPLIER).toFixed(0)}% ${getConfidenceLabel(confidence.finalScore)}`,
-      },
-      {
-        type: "mrkdwn",
-        text: `*Gating:* ${confidence.gatingDecision.replace("_", " ")}`,
-      },
-    ],
-  });
+  const blocks: SlackBlock[] = [
+    // Header with confidence indicator
+    createHeaderBlock(`${confidenceEmoji} Incident Analysis`),
 
-  blocks.push({ type: "divider" });
+    // Confidence score section
+    createFieldsBlock([
+      `*Confidence:* ${confidencePercent}% ${getConfidenceLabelParenthesized(confidence.finalScore)}`,
+      `*Gating:* ${confidence.gatingDecision.replace("_", " ")}`,
+    ]),
 
-  // Summary section
-  blocks.push({
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text: `*Summary*\n${analysis.summary}`,
-    },
-  });
+    createDividerBlock(),
+
+    // Summary section
+    createSectionBlock(`*Summary*\n${analysis.summary}`),
+  ];
 
   // Identified cause (if available)
   if (analysis.identifiedCause) {
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*Root Cause*\n${analysis.identifiedCause}`,
-      },
-    });
+    blocks.push(createSectionBlock(`*Root Cause*\n${analysis.identifiedCause}`));
   }
 
   // Impact assessment (if available)
   if (analysis.impactAssessment) {
     const impact = analysis.impactAssessment;
-    blocks.push({
-      type: "section",
-      fields: [
-        {
-          type: "mrkdwn",
-          text: `*Scope:* ${impact.scope}`,
-        },
-        {
-          type: "mrkdwn",
-          text: `*Impact:* ${impact.businessImpact}`,
-        },
-        {
-          type: "mrkdwn",
-          text: `*Affected Users:* ${impact.affectedUsers}`,
-        },
-      ],
-    });
+    blocks.push(
+      createFieldsBlock([
+        `*Scope:* ${impact.scope}`,
+        `*Impact:* ${impact.businessImpact}`,
+        `*Affected Users:* ${impact.affectedUsers}`,
+      ])
+    );
   }
 
   // Recommended actions
   if (analysis.recommendedActions && analysis.recommendedActions.length > 0) {
-    blocks.push({ type: "divider" });
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Recommended Actions*",
-      },
-    });
+    blocks.push(createDividerBlock());
+    blocks.push(createSectionBlock("*Recommended Actions*"));
 
-    for (const action of analysis.recommendedActions.slice(
-      0,
-      UI_CONSTANTS.MAX_ACTIONS_TO_DISPLAY
-    )) {
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `• *${action.actionType}* (Priority: ${action.priority})\n  ${action.description}`,
-        },
-      });
+    const actionsToShow = analysis.recommendedActions.slice(0, UI_CONSTANTS.MAX_ACTIONS_TO_DISPLAY);
+    for (const action of actionsToShow) {
+      blocks.push(
+        createSectionBlock(`• *${action.actionType}* (Priority: ${action.priority})\n  ${action.description}`)
+      );
     }
   }
 
   // Uncertainties (if any)
   if (analysis.uncertainties && analysis.uncertainties.length > 0) {
-    blocks.push({ type: "divider" });
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*Uncertainties*\n${analysis.uncertainties.map((u) => `• ${u}`).join("\n")}`,
-      },
-    });
+    blocks.push(createDividerBlock());
+    blocks.push(
+      createSectionBlock(`*Uncertainties*\n${analysis.uncertainties.map((u) => `• ${u}`).join("\n")}`)
+    );
   }
 
   // Footer with metadata
-  blocks.push({
-    type: "context",
-    elements: [
-      {
-        type: "mrkdwn",
-        text: `Analysis by ${analysis.llmModel || "AI"} • ${new Date(analysis.analyzedAt).toLocaleString()} • Event: ${analysis.eventId}`,
-      },
-    ],
-  });
+  const footerText = `Analysis by ${analysis.llmModel || "AI"} • ${new Date(analysis.analyzedAt).toLocaleString()} • Event: ${analysis.eventId}`;
+  blocks.push(createContextBlock(footerText));
 
   return blocks;
 }
@@ -148,6 +133,29 @@ export function formatAnalysisMessage(
  * @param eventId - Event ID for tracking
  * @returns Slack Block Kit blocks with action buttons (mutable for Slack Bolt compatibility)
  */
+/**
+ * Create an action button block.
+ */
+const createActionButtonsBlock = (eventId: string, actionId: string): SlackBlock => ({
+  type: "actions",
+  elements: [
+    {
+      type: "button",
+      text: { type: "plain_text", text: "✓ Approve Action", emoji: true },
+      style: "primary",
+      value: JSON.stringify({ eventId, actionId }),
+      action_id: `approve_action_${actionId}`,
+    },
+    {
+      type: "button",
+      text: { type: "plain_text", text: "✗ Reject", emoji: true },
+      style: "danger",
+      value: JSON.stringify({ eventId, actionId }),
+      action_id: `reject_action_${actionId}`,
+    },
+  ],
+});
+
 export function formatActionButtons(
   actions: readonly ActionProposal[],
   eventId: string
@@ -156,51 +164,18 @@ export function formatActionButtons(
     return [];
   }
 
-  const blocks: SlackBlock[] = [];
+  const actionsToShow = actions.slice(0, UI_CONSTANTS.MAX_ACTIONS_TO_DISPLAY);
+  const approvalActions = actionsToShow.filter((action) => action.safetyLevel !== "safe");
 
-  blocks.push({ type: "divider" });
-  blocks.push({
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text: "*Actions require approval*",
-    },
-  });
-
-  // Add approve/reject buttons for each high-impact action
-  for (const action of actions.slice(0, UI_CONSTANTS.MAX_ACTIONS_TO_DISPLAY)) {
-    if (action.safetyLevel !== "safe") {
-      blocks.push({
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: `✓ Approve Action`,
-              emoji: true,
-            },
-            style: "primary",
-            value: JSON.stringify({ eventId, actionId: action.id }),
-            action_id: `approve_action_${action.id}`,
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "✗ Reject",
-              emoji: true,
-            },
-            style: "danger",
-            value: JSON.stringify({ eventId, actionId: action.id }),
-            action_id: `reject_action_${action.id}`,
-          },
-        ],
-      });
-    }
+  if (approvalActions.length === 0) {
+    return [];
   }
 
-  return blocks;
+  return [
+    createDividerBlock(),
+    createSectionBlock("*Actions require approval*"),
+    ...approvalActions.map((action) => createActionButtonsBlock(eventId, action.id)),
+  ];
 }
 
 /**
@@ -211,29 +186,9 @@ export function formatActionButtons(
  */
 export function formatErrorMessage(error: Error): SlackBlock[] {
   return [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: ":warning: *Error occurred*",
-      },
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `\`\`\`${error.message}\`\`\``,
-      },
-    },
-    {
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: "Please try again or contact support if the issue persists.",
-        },
-      ],
-    },
+    createSectionBlock(":warning: *Error occurred*"),
+    createSectionBlock(`\`\`\`${error.message}\`\`\``),
+    createContextBlock("Please try again or contact support if the issue persists."),
   ];
 }
 
@@ -250,42 +205,5 @@ export function formatProgressUpdate(
   status: "pending" | "in_progress" | "completed" | "failed",
   message: string
 ): SlackBlock[] {
-  const statusEmoji = {
-    pending: ":hourglass_flowing_sand:",
-    in_progress: ":gear:",
-    completed: ":white_check_mark:",
-    failed: ":x:",
-  };
-
-  return [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `${statusEmoji[status]} *Action ${actionId}*\n${message}`,
-      },
-    },
-  ];
-}
-
-/**
- * Helper to get confidence emoji based on score.
- */
-function getConfidenceEmoji(score: number): string {
-  if (score >= UI_CONFIDENCE_THRESHOLDS.VERY_HIGH) return ":large_green_circle:";
-  if (score >= UI_CONFIDENCE_THRESHOLDS.HIGH) return ":large_blue_circle:";
-  if (score >= UI_CONFIDENCE_THRESHOLDS.MEDIUM) return ":large_yellow_circle:";
-  if (score >= UI_CONFIDENCE_THRESHOLDS.LOW) return ":large_orange_circle:";
-  return ":red_circle:";
-}
-
-/**
- * Helper to get confidence label based on score.
- */
-function getConfidenceLabel(score: number): string {
-  if (score >= UI_CONFIDENCE_THRESHOLDS.VERY_HIGH) return "(Very High)";
-  if (score >= UI_CONFIDENCE_THRESHOLDS.HIGH) return "(High)";
-  if (score >= UI_CONFIDENCE_THRESHOLDS.MEDIUM) return "(Medium)";
-  if (score >= UI_CONFIDENCE_THRESHOLDS.LOW) return "(Low)";
-  return "(Very Low)";
+  return [createSectionBlock(`${SLACK_STATUS_EMOJI[status]} *Action ${actionId}*\n${message}`)];
 }

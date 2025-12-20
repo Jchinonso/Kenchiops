@@ -13,6 +13,8 @@ import {
   type Evidence,
   type LLMAnalysisResult,
   LLMError,
+  getErrorMessage,
+  wrapError,
 } from "@kenchi/shared";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
@@ -94,11 +96,9 @@ export const analyzeFailure = async (
   } catch (error) {
     logger.error("OpenAI analysis failed", {
       eventId: event.id,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
-    throw new LLMError(
-      `Failed to analyze CI failure: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
+    throw new LLMError(wrapError("Failed to analyze CI failure", error));
   }
 };
 
