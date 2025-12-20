@@ -40,7 +40,11 @@ jest.mock("../services/githubService.js", () => ({
     })
   ),
   postPRComment: jest.fn(() => Promise.resolve()),
-  formatAnalysisComment: jest.fn(() => "## AI Analysis\n\nTest comment"),
+}));
+
+// Mock the comment formatter
+jest.mock("../formatters/commentFormatter.js", () => ({
+  formatGitHubComment: jest.fn(() => "## ❌ KenchiOps — CI Failure Analysis\n\nTest comment"),
 }));
 
 describe("GitHub App Handlers", () => {

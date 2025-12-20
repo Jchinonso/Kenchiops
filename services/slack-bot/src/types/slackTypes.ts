@@ -161,10 +161,15 @@ export interface CIFailureAnalysis {
  * Request body structure for POST /slack/message endpoint.
  * Used by n8n workflow to post messages to Slack channels.
  * Supports plain text, Block Kit blocks, and attachments.
- * Channel is optional - if not provided, uses bot's active channel.
+ *
+ * Channel resolution priority:
+ * 1. Explicit channel ID/name if provided
+ * 2. Repository-based lookup (multi-tenant mode via ORG_CHANNEL_MAPPING)
+ * 3. Bot's active channel (single-tenant fallback)
  */
 export interface SlackMessageRequest {
   readonly channel?: string;
+  readonly repository?: string; // e.g., "my-org/my-repo" - used for org-based channel routing
   readonly message?: string;
   readonly thread_ts?: string;
   readonly blocks?: readonly SlackBlock[];

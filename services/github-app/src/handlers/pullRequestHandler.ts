@@ -7,13 +7,6 @@
 import { createLogger } from "@kenchi/shared";
 import type { PullRequestWebhook } from "../types/githubTypes.js";
 import { GITHUB_PR_ACTIONS } from "../types/githubTypes.js";
-import {
-  createEventFromPR,
-  performAnalysis,
-  postPRComment,
-  formatAnalysisComment,
-} from "../services/githubService.js";
-import { appConfig } from "../config/appConfig.js";
 
 const logger = createLogger("github-app");
 
@@ -28,79 +21,29 @@ export interface PRHandlerResult {
 
 /**
  * Handle pull request opened event
+ *
+ * NOTE: PR opened comments are DISABLED.
+ * We only post comments for CI failures (handled by checkRunHandler).
+ * This prevents spam when PRs are opened and lets users focus on actual CI issues.
  */
 export const handlePullRequestOpened = async (
   webhook: PullRequestWebhook
 ): Promise<PRHandlerResult> => {
   const { pull_request, repository } = webhook;
 
-  logger.info("PR opened", {
+  // Just log the PR opened event - don't post a comment
+  // CI failure analysis is handled separately by checkRunHandler
+  logger.info("PR opened (no comment posted - waiting for CI results)", {
     title: pull_request.title,
     repository: repository.full_name,
     number: pull_request.number,
     author: pull_request.user.login,
   });
 
-  // Get installation ID from webhook or config
-  const installationId = webhook.installation?.id ?? appConfig.github.installationId;
-
-  if (!installationId) {
-    logger.warn("No installation ID available for PR", {
-      repository: repository.full_name,
-      prNumber: pull_request.number,
-    });
-    return {
-      handled: false,
-      message: "No GitHub installation ID configured",
-    };
-  }
-
-  try {
-    // Create event and perform analysis
-    const event = createEventFromPR(webhook);
-    const result = await performAnalysis(event);
-
-    // Only post comment if confidence is sufficient
-    if (result.confidence.gatingDecision !== "block") {
-      const comment = formatAnalysisComment(result);
-      await postPRComment(
-        installationId,
-        repository.owner.login,
-        repository.name,
-        pull_request.number,
-        comment
-      );
-
-      return {
-        handled: true,
-        message: "PR analyzed and comment posted",
-        eventId: event.id,
-      };
-    }
-
-    logger.info("Skipped posting comment due to low confidence", {
-      eventId: event.id,
-      confidence: result.confidence.finalScore,
-      gating: result.confidence.gatingDecision,
-    });
-
-    return {
-      handled: true,
-      message: "PR analyzed but comment skipped due to low confidence",
-      eventId: event.id,
-    };
-  } catch (error) {
-    logger.error("Error handling PR opened", {
-      repository: repository.full_name,
-      prNumber: pull_request.number,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-
-    return {
-      handled: false,
-      message: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
+  return {
+    handled: true,
+    message: "PR opened event logged (comment will be posted if CI fails)",
+  };
 };
 
 /**
