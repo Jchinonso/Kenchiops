@@ -10,8 +10,7 @@ A TypeScript monorepo for an AI-driven DevOps assistant that integrates with Sla
 
 > **Quick Start**: See [QUICKSTART.md](./QUICKSTART.md) for a step-by-step setup guide.  
 > **Architecture**: See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed system architecture and design.  
-> **Code Organization**: See [docs/CODE_ORGANIZATION.md](./docs/CODE_ORGANIZATION.md) for duplication prevention and code organization guidelines.  
-> **AI Tool Guidelines**: See [docs/AI_TOOL_GUIDELINES.md](./docs/AI_TOOL_GUIDELINES.md) for AI assistant configuration.
+> **Code Organization**: See [docs/CODE_ORGANIZATION.md](./docs/CODE_ORGANIZATION.md) for duplication prevention and code organization guidelines.
 
 ## 🏗️ Project Structure
 

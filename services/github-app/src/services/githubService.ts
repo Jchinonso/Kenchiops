@@ -133,12 +133,15 @@ export const createEventFromCheckRun = (webhook: CheckRunWebhook): Event => ({
     conclusion: webhook.check_run.conclusion,
     repository: webhook.repository.full_name,
     output: webhook.check_run.output,
+    headSha: webhook.check_run.head_sha,
+    pullRequestCount: webhook.check_run.pull_requests.length,
   },
   metadata: {
     owner: webhook.repository.owner.login,
     repo: webhook.repository.name,
     installationId: webhook.installation?.id,
     checkRunId: webhook.check_run.id,
+    headSha: webhook.check_run.head_sha,
   },
 });
 

@@ -45,8 +45,7 @@ const verifySignature = (payload: string, signature: string, secret: string): bo
 /**
  * Express middleware to verify GitHub webhook signatures
  *
- * IMPORTANT: This middleware requires raw body to be available.
- * Make sure to use express.raw() or store raw body before express.json()
+ * Requires raw body to be captured via express.json({ verify: ... }) in index.ts
  */
 export const verifyGitHubWebhook = (req: Request, res: Response, next: NextFunction): void => {
   const secret = appConfig.github.webhookSecret;
@@ -69,9 +68,18 @@ export const verifyGitHubWebhook = (req: Request, res: Response, next: NextFunct
     return;
   }
 
-  // Get raw body - need to reconstruct from parsed JSON
-  // In production, you should use express.raw() and store the raw body
-  const payload = JSON.stringify(req.body);
+  // Get raw body from the request (captured by express.json verify option)
+  const rawBody = req.rawBody;
+
+  if (!rawBody) {
+    logger.error("Raw body not available for signature verification", {
+      path: req.path,
+    });
+    res.status(500).json({ error: "Raw body not available for verification" });
+    return;
+  }
+
+  const payload = rawBody.toString("utf8");
 
   if (!verifySignature(payload, signature, secret)) {
     logger.error("Invalid GitHub webhook signature", {

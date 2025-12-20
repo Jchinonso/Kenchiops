@@ -17,13 +17,29 @@ import { appConfig } from "./config/appConfig.js";
 const logger = createLogger("github-app");
 
 /**
+ * Extend Express Request to include raw body for webhook verification
+ */
+declare module "express-serve-static-core" {
+  interface Request {
+    rawBody?: Buffer;
+  }
+}
+
+/**
  * Create and configure Express application
  */
 const createApp = (): express.Express => {
   const app = express();
 
-  // Middleware
-  app.use(express.json());
+  // Capture raw body for webhook signature verification
+  // This must come before express.json() so we have the original payload
+  app.use(
+    express.json({
+      verify: (req: express.Request, _res, buf) => {
+        req.rawBody = buf;
+      },
+    })
+  );
   app.use(requestLogger);
 
   // Register all routes

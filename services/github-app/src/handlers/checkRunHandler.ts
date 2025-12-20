@@ -11,7 +11,9 @@ import {
   createEventFromCheckRun,
   performAnalysis,
   formatAnalysisComment,
+  postPRComment,
 } from "../services/githubService.js";
+import { appConfig } from "../config/appConfig.js";
 
 const logger = createLogger("github-app");
 
@@ -37,7 +39,22 @@ export const handleCheckRunFailure = async (
     name: check_run.name,
     repository: repository.full_name,
     conclusion: check_run.conclusion,
+    pullRequests: check_run.pull_requests.length,
   });
+
+  // Get installation ID from webhook or config
+  const installationId = webhook.installation?.id ?? appConfig.github.installationId;
+
+  if (!installationId) {
+    logger.warn("No installation ID available for check run", {
+      repository: repository.full_name,
+      checkName: check_run.name,
+    });
+    return {
+      handled: false,
+      message: "No GitHub installation ID configured",
+    };
+  }
 
   try {
     // Create event and perform analysis
@@ -53,12 +70,62 @@ export const handleCheckRunFailure = async (
       gating: result.confidence.gatingDecision,
     });
 
-    // TODO: Post comment to associated PR or create issue
-    // This requires finding the associated PR from the check run
+    // Only post comment if confidence is sufficient
+    if (result.confidence.gatingDecision === "block") {
+      logger.info("Skipped posting comment due to low confidence", {
+        eventId: event.id,
+        confidence: result.confidence.finalScore,
+        gating: result.confidence.gatingDecision,
+      });
+
+      return {
+        handled: true,
+        message: "Check run analyzed but comment skipped due to low confidence",
+        eventId: event.id,
+        analysis: analysisComment,
+      };
+    }
+
+    // Post comment to associated PRs (check runs can be linked to multiple PRs)
+    const associatedPRs = check_run.pull_requests;
+    let commentPosted = false;
+
+    if (associatedPRs.length > 0) {
+      for (const pr of associatedPRs) {
+        try {
+          await postPRComment(
+            installationId,
+            repository.owner.login,
+            repository.name,
+            pr.number,
+            analysisComment
+          );
+          commentPosted = true;
+          logger.info("Posted CI failure analysis to PR", {
+            eventId: event.id,
+            prNumber: pr.number,
+            repository: repository.full_name,
+          });
+        } catch (commentError) {
+          logger.error("Failed to post comment to PR", {
+            prNumber: pr.number,
+            error: commentError instanceof Error ? commentError.message : "Unknown error",
+          });
+        }
+      }
+    } else {
+      logger.info("No associated PRs found for check run", {
+        eventId: event.id,
+        checkName: check_run.name,
+        headSha: check_run.head_sha,
+      });
+    }
 
     return {
       handled: true,
-      message: "Check run failure analyzed",
+      message: commentPosted
+        ? "Check run failure analyzed and comment posted"
+        : "Check run failure analyzed (no associated PRs)",
       eventId: event.id,
       analysis: analysisComment,
     };
