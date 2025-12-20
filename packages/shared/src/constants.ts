@@ -675,15 +675,15 @@ export const SECRET_PATTERNS: Readonly<SecretPattern[]> = [
   // API Keys (generic patterns)
   {
     name: "Generic API Key",
-    pattern: /\b(api[_-]?key|apikey)[=:]["']?([A-Za-z0-9_\-]{20,})["']?/gi,
+    pattern: /\b(api[_-]?key|apikey)[=:]["']?([A-Za-z0-9_-]{20,})["']?/gi,
   },
   {
     name: "Generic Secret Key",
-    pattern: /\b(secret[_-]?key|secretkey)[=:]["']?([A-Za-z0-9_\-]{20,})["']?/gi,
+    pattern: /\b(secret[_-]?key|secretkey)[=:]["']?([A-Za-z0-9_-]{20,})["']?/gi,
   },
   {
     name: "Generic Access Token",
-    pattern: /\b(access[_-]?token|accesstoken)[=:]["']?([A-Za-z0-9_\-]{20,})["']?/gi,
+    pattern: /\b(access[_-]?token|accesstoken)[=:]["']?([A-Za-z0-9_-]{20,})["']?/gi,
   },
   // Private Keys
   {
@@ -730,7 +730,7 @@ export const SECRET_PATTERNS: Readonly<SecretPattern[]> = [
   },
   {
     name: "Anthropic API Key",
-    pattern: /\b(sk-ant-[A-Za-z0-9\-]{80,})\b/g,
+    pattern: /\b(sk-ant-[A-Za-z0-9-]{80,})\b/g,
   },
   // JWT Tokens
   {
