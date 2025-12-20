@@ -14,6 +14,8 @@ import {
   type LLMAnalysisResult,
   type ConfidenceScoreResult,
   LLMError,
+  getErrorMessage,
+  wrapError,
 } from "@kenchi/shared";
 import type { SlackCommandPayload, SlackMentionPayload } from "../types/slackTypes.js";
 
@@ -125,11 +127,9 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
   } catch (error) {
     logger.error("Analysis failed", {
       eventId: event.id,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
 
-    throw new LLMError(
-      `Failed to analyze: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
+    throw new LLMError(wrapError("Failed to analyze", error));
   }
 };

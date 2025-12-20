@@ -29,11 +29,49 @@ export {
   ExternalServiceError,
   LLMError,
   isAppError,
+  getErrorMessage,
+  formatErrorForLog,
+  wrapError,
 } from "./errors.js";
 export { errorHandler, asyncHandler, requestLogger } from "./middleware.js";
 export { validate, validators, type ValidationSchema } from "./validation.js";
 export { createRateLimiter, defaultRateLimiter } from "./rateLimit.js";
 export * from "./constants.js";
+export {
+  redactSecrets,
+  redactSecretsWithStats,
+  redactObject,
+  isForbiddenField,
+  containsSecrets,
+  detectSecretTypes,
+  createCustomRedactor,
+  type RedactionResult,
+} from "./security/index.js";
+export {
+  getConfidenceLabel,
+  getConfidenceLabelParenthesized,
+  getConfidenceColor,
+  getConfidenceEmoji,
+  truncateText,
+} from "./uiHelpers.js";
+export {
+  deduplicateByKey,
+  containsAny,
+  startsWithAny,
+  shouldExcludePath,
+  groupBy,
+  takeMatching,
+} from "./arrayUtils.js";
+export {
+  collectCIErrors,
+  formatDependencyChange,
+  formatDependencyChanges,
+  type CIAnnotation,
+  type CITestFailure,
+  type CollectErrorsOptions,
+  type DependencyChange,
+  type DependencyChangeType,
+} from "./ciFormatters.js";
 export type {
   // Event Types
   Event,

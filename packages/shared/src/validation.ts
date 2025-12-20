@@ -99,6 +99,31 @@ export const validate = (schema: ValidationSchema) => {
   };
 };
 
+// ==================== Validation Helpers ====================
+
+/**
+ * Type guard helper for string validation.
+ * Returns the value as string if valid, or null if invalid.
+ */
+const asString = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+/**
+ * Creates a string-based validator with a custom check.
+ * Handles the common pattern of: validate string -> apply check.
+ */
+const createStringValidator =
+  (check: (str: string) => boolean | string): Validator =>
+  (value: unknown): boolean | string => {
+    const str = asString(value);
+    if (str === null) {
+      return "must be a string";
+    }
+    return check(str);
+  };
+
+// ==================== Common Validators ====================
+
 /**
  * Common validators for request validation.
  *
@@ -147,16 +172,9 @@ export const validators = {
   /**
    * Validates that a value is a valid email address.
    */
-  email: (value: unknown): boolean | string => {
-    const stringResult = validators.string(value);
-    if (stringResult !== true) {
-      return stringResult;
-    }
-    if (!EMAIL_REGEX.test(value as string)) {
-      return "must be a valid email";
-    }
-    return true;
-  },
+  email: createStringValidator((str) =>
+    EMAIL_REGEX.test(str) ? true : "must be a valid email"
+  ),
 
   /**
    * Creates a validator that checks minimum string length.
@@ -164,18 +182,10 @@ export const validators = {
    * @param min - Minimum required length
    * @returns Validator function
    */
-  minLength:
-    (min: number) =>
-    (value: unknown): boolean | string => {
-      const stringResult = validators.string(value);
-      if (stringResult !== true) {
-        return stringResult;
-      }
-      if ((value as string).length < min) {
-        return `must be at least ${min} characters`;
-      }
-      return true;
-    },
+  minLength: (min: number): Validator =>
+    createStringValidator((str) =>
+      str.length >= min ? true : `must be at least ${min} characters`
+    ),
 
   /**
    * Creates a validator that checks maximum string length.
@@ -183,21 +193,14 @@ export const validators = {
    * @param max - Maximum allowed length
    * @returns Validator function
    */
-  maxLength:
-    (max: number) =>
-    (value: unknown): boolean | string => {
-      const stringResult = validators.string(value);
-      if (stringResult !== true) {
-        return stringResult;
-      }
-      if ((value as string).length > max) {
-        return `must be at most ${max} characters`;
-      }
-      return true;
-    },
+  maxLength: (max: number): Validator =>
+    createStringValidator((str) =>
+      str.length <= max ? true : `must be at most ${max} characters`
+    ),
 
   /**
    * Creates a validator that checks if value is one of the allowed values.
+   * Uses Array.includes - O(n) lookup.
    *
    * @param allowed - Array of allowed values
    * @returns Validator function
@@ -212,6 +215,30 @@ export const validators = {
     (value: unknown): boolean | string => {
       if (!allowed.includes(value as T)) {
         return `must be one of: ${allowed.join(", ")}`;
+      }
+      return true;
+    },
+
+  /**
+   * Creates a validator that checks if value is in a Set of allowed values.
+   * Uses Set.has - O(1) lookup. Preferred for large sets of allowed values.
+   *
+   * @param allowedSet - Set of allowed values
+   * @param displayValues - Optional array for error message (defaults to Set values)
+   * @returns Validator function
+   *
+   * @example
+   * ```typescript
+   * const statusSet = new Set(['active', 'inactive', 'pending']);
+   * const statusValidator = validators.oneOfSet(statusSet);
+   * ```
+   */
+  oneOfSet:
+    <T>(allowedSet: ReadonlySet<T>, displayValues?: readonly T[]) =>
+    (value: unknown): boolean | string => {
+      if (!allowedSet.has(value as T)) {
+        const values = displayValues ?? Array.from(allowedSet);
+        return `must be one of: ${values.join(", ")}`;
       }
       return true;
     },
