@@ -72,7 +72,3 @@ export const validateAgainstKnowledgeBase = (
 
   return VALIDATION_ADJUSTMENTS.NONE;
 };
-
-/**
- * Factor 5: Checks consistency between cause and recommended actions.
- */

@@ -77,6 +77,21 @@ export interface PullRequestWebhook {
 }
 
 /**
+ * Pull request reference in check run webhook
+ */
+export interface CheckRunPullRequest {
+  readonly number: number;
+  readonly head: {
+    readonly sha: string;
+    readonly ref: string;
+  };
+  readonly base: {
+    readonly sha: string;
+    readonly ref: string;
+  };
+}
+
+/**
  * Check run webhook payload
  */
 export interface CheckRunWebhook {
@@ -85,11 +100,13 @@ export interface CheckRunWebhook {
     readonly id: number;
     readonly name: string;
     readonly conclusion: string | null;
+    readonly head_sha: string;
     readonly output: {
       readonly title: string | null;
       readonly summary: string | null;
       readonly text: string | null;
     };
+    readonly pull_requests: readonly CheckRunPullRequest[];
   };
   readonly repository: {
     readonly full_name: string;

@@ -106,3 +106,34 @@ export class LLMError extends ExternalServiceError {
 export const isAppError = (error: unknown): error is AppError => {
   return error instanceof AppError;
 };
+
+/**
+ * Extract error message from unknown error.
+ * Safely handles Error instances and unknown types.
+ */
+export const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "Unknown error";
+
+/**
+ * Format error for logging with consistent structure.
+ * Returns an object suitable for structured logging.
+ */
+export const formatErrorForLog = (
+  error: unknown
+): { message: string; name?: string; stack?: string } => {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    };
+  }
+  return { message: String(error) };
+};
+
+/**
+ * Wrap error with context message.
+ * Useful for re-throwing with additional context.
+ */
+export const wrapError = (context: string, error: unknown): string =>
+  `${context}: ${getErrorMessage(error)}`;

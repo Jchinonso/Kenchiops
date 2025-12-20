@@ -89,11 +89,19 @@ describe("GitHub App Handlers", () => {
         id: 456,
         name: "CI Build",
         conclusion: GITHUB_CHECK_CONCLUSIONS.FAILURE,
+        head_sha: "abc123def456",
         output: {
           title: "Build Failed",
           summary: "Build failed due to errors",
           text: "Error details here",
         },
+        pull_requests: [
+          {
+            number: 123,
+            head: { sha: "abc123def456", ref: "feature-branch" },
+            base: { sha: "def789", ref: "main" },
+          },
+        ],
       },
       repository: {
         full_name: "owner/repo",
@@ -126,6 +134,24 @@ describe("GitHub App Handlers", () => {
 
       expect(failedCheck.check_run.conclusion).not.toBe("success");
       expect(successCheck.check_run.conclusion).toBe("success");
+    });
+
+    it("should include head_sha and pull_requests fields", () => {
+      expect(mockCheckRunWebhook.check_run.head_sha).toBe("abc123def456");
+      expect(mockCheckRunWebhook.check_run.pull_requests).toHaveLength(1);
+      expect(mockCheckRunWebhook.check_run.pull_requests[0].number).toBe(123);
+    });
+
+    it("should handle check run with no associated PRs", () => {
+      const noPRsWebhook: CheckRunWebhook = {
+        ...mockCheckRunWebhook,
+        check_run: {
+          ...mockCheckRunWebhook.check_run,
+          pull_requests: [],
+        },
+      };
+
+      expect(noPRsWebhook.check_run.pull_requests).toHaveLength(0);
     });
   });
 

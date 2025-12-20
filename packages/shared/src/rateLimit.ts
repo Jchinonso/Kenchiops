@@ -9,39 +9,44 @@ import type { Request, Response, NextFunction } from "express";
 import { AppError } from "./errors.js";
 import { RATE_LIMIT_CONSTANTS, TIME_CONSTANTS } from "./constants.js";
 
-interface RateLimitStore {
-  [key: string]: {
-    count: number;
-    resetTime: number;
-  };
+/**
+ * Rate limit entry for tracking request counts per client.
+ */
+interface RateLimitEntry {
+  readonly resetTime: number;
+  count: number;
 }
 
 interface RateLimitOptions {
-  windowMs: number; // Time window in milliseconds
-  max: number; // Maximum number of requests per window
-  message?: string;
-  keyGenerator?: (req: Request) => string;
+  readonly windowMs: number; // Time window in milliseconds
+  readonly max: number; // Maximum number of requests per window
+  readonly message?: string;
+  readonly keyGenerator?: (req: Request) => string;
 }
 
+/**
+ * Rate limiter implementation using Map for O(1) operations
+ * and avoiding prototype pollution.
+ */
 class RateLimiter {
-  private store: RateLimitStore = {};
-  private windowMs: number;
-  private max: number;
-  private message: string;
-  private keyGenerator: (req: Request) => string;
+  private store: Map<string, RateLimitEntry> = new Map();
+  private readonly windowMs: number;
+  private readonly max: number;
+  private readonly message: string;
+  private readonly keyGenerator: (req: Request) => string;
 
   constructor(options: RateLimitOptions) {
     this.windowMs = options.windowMs;
     this.max = options.max;
-    this.message = options.message || "Too many requests, please try again later";
-    this.keyGenerator = options.keyGenerator || ((req) => req.ip || "unknown");
+    this.message = options.message ?? "Too many requests, please try again later";
+    this.keyGenerator = options.keyGenerator ?? ((req) => req.ip ?? "unknown");
   }
 
   readonly middleware = () => {
     return (req: Request, _res: Response, next: NextFunction): void => {
       const key = this.keyGenerator(req);
       const now = Date.now();
-      const record = this.store[key];
+      const record = this.store.get(key);
 
       // Clean up expired entries periodically
       if (Math.random() < RATE_LIMIT_CONSTANTS.CLEANUP_PROBABILITY) {
@@ -50,10 +55,10 @@ class RateLimiter {
 
       if (!record || now > record.resetTime) {
         // Create new window
-        this.store[key] = {
+        this.store.set(key, {
           count: 1,
           resetTime: now + this.windowMs,
-        };
+        });
         return next();
       }
 
@@ -77,15 +82,15 @@ class RateLimiter {
   };
 
   private readonly cleanup = (now: number): void => {
-    for (const key in this.store) {
-      if (this.store[key].resetTime < now) {
-        delete this.store[key];
+    for (const [key, entry] of this.store) {
+      if (entry.resetTime < now) {
+        this.store.delete(key);
       }
     }
   };
 
   readonly reset = (): void => {
-    this.store = {};
+    this.store.clear();
   };
 }
 

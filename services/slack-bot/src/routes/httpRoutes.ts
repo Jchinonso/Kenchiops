@@ -26,12 +26,14 @@ export const createHttpRoutes = (app: SlackApp): express.Router => {
    * POST /slack/message
    * Post a message to Slack (for n8n workflow integration)
    * Supports plain text messages OR structured analysis data
+   * Channel is optional - if not provided, uses bot's active channel (single-channel policy)
    */
   router.post(
     "/slack/message",
     validate({
       body: {
-        channel: (v) => validators.required(v) && validators.string(v),
+        // Channel is optional - bot uses its active channel if not specified
+        channel: (v) => !v || validators.string(v),
         // message is optional if analysis is provided
         message: (v) => !v || validators.string(v),
         thread_ts: (v) => !v || validators.string(v),

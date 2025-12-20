@@ -17,6 +17,8 @@ import {
   type ConfidenceScoreResult,
   LLMError,
   ExternalServiceError,
+  getErrorMessage,
+  wrapError,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
@@ -133,12 +135,15 @@ export const createEventFromCheckRun = (webhook: CheckRunWebhook): Event => ({
     conclusion: webhook.check_run.conclusion,
     repository: webhook.repository.full_name,
     output: webhook.check_run.output,
+    headSha: webhook.check_run.head_sha,
+    pullRequestCount: webhook.check_run.pull_requests.length,
   },
   metadata: {
     owner: webhook.repository.owner.login,
     repo: webhook.repository.name,
     installationId: webhook.installation?.id,
     checkRunId: webhook.check_run.id,
+    headSha: webhook.check_run.head_sha,
   },
 });
 
@@ -177,12 +182,10 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
   } catch (error) {
     logger.error("Analysis failed", {
       eventId: event.id,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
 
-    throw new LLMError(
-      `Failed to analyze: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
+    throw new LLMError(wrapError("Failed to analyze", error));
   }
 };
 
@@ -216,12 +219,12 @@ export const postPRComment = async (
       owner,
       repo,
       prNumber,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
 
     throw new ExternalServiceError(
       "GitHub",
-      `Failed to post comment: ${error instanceof Error ? error.message : "Unknown error"}`,
+      wrapError("Failed to post comment", error),
       { owner, repo, prNumber }
     );
   }
