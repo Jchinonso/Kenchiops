@@ -117,6 +117,14 @@ export const handleCheckRunFailure = async (
 };
 
 /**
+ * Conclusions that represent actual CI failures
+ */
+const FAILURE_CONCLUSIONS: ReadonlySet<string> = new Set([
+  GITHUB_CHECK_CONCLUSIONS.FAILURE,
+  GITHUB_CHECK_CONCLUSIONS.TIMED_OUT,
+]);
+
+/**
  * Check if the check run should be processed
  */
 const shouldProcessCheckRun = (webhook: CheckRunWebhook): boolean => {
@@ -127,8 +135,9 @@ const shouldProcessCheckRun = (webhook: CheckRunWebhook): boolean => {
     return false;
   }
 
-  // Only process failures (not success, cancelled, etc.)
-  if (check_run.conclusion === GITHUB_CHECK_CONCLUSIONS.SUCCESS) {
+  // Only process actual failures (failure, timed_out)
+  // Skip: success, neutral, cancelled, skipped, action_required
+  if (!FAILURE_CONCLUSIONS.has(check_run.conclusion || "")) {
     return false;
   }
 

@@ -25,11 +25,11 @@
           "parameters": [
             {
               "name": "failure_log",
-              "value": "={{ $json.body.log }}"
+              "value": "={{ $json.log }}"
             },
             {
               "name": "repository",
-              "value": "={{ $json.body.repository }}"
+              "value": "={{ $json.repository }}"
             }
           ]
         },
@@ -59,7 +59,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Get the analysis from previous node and PR numbers from webhook\nconst analysis = $('HTTP Request - OpenAI Analysis').first().json;\nconst webhookData = $('Webhook - CI Failure').first().json.body;\n\n// Get PR numbers (may be empty array)\nconst pullRequests = webhookData.pullRequests || [];\n\n// If no PRs, return empty array (skip GitHub posting)\nif (pullRequests.length === 0) {\n  return [];\n}\n\n// Return items for each PR to post comment to\nreturn pullRequests.map(prNumber => ({\n  json: {\n    repository: analysis.repository,\n    pr_number: prNumber,\n    analysis: {\n      analysis: analysis.analysis,\n      identified_cause: analysis.identified_cause,\n      confidence: analysis.confidence,\n      recommended_actions: analysis.recommended_actions\n    }\n  }\n}));"
+        "jsCode": "// Get the analysis from previous node and PR numbers from webhook\nconst analysis = $('HTTP Request - OpenAI Analysis').first().json;\nconst webhookData = $('Webhook - CI Failure').first().json;\n\n// Get PR numbers (may be empty array)\nconst pullRequests = webhookData.pullRequests || [];\n\n// If no PRs, return empty array (skip GitHub posting)\nif (pullRequests.length === 0) {\n  return [];\n}\n\n// Return items for each PR to post comment to\nreturn pullRequests.map(prNumber => ({\n  json: {\n    repository: analysis.repository,\n    pr_number: prNumber,\n    analysis: {\n      analysis: analysis.analysis,\n      identified_cause: analysis.identified_cause,\n      confidence: analysis.confidence,\n      recommended_actions: analysis.recommended_actions\n    }\n  }\n}));"
       },
       "id": "code-prepare-github",
       "name": "Prepare GitHub Comments",
