@@ -2,14 +2,15 @@
  * Check Run Handler
  *
  * Handles GitHub check run webhook events (CI failures)
- * Forwards events to n8n for orchestration, analysis, and Slack notifications
+ * Gathers enriched context (logs, diff, source files) and forwards to n8n
  *
- * Flow: GitHub → GitHub App → n8n → API (OpenAI) → Slack
+ * Flow: GitHub → GitHub App (enrich context) → n8n → API (OpenAI) → Slack + GitHub
  */
 
 import { createLogger } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
+import { gatherEnrichedContext, type EnrichedContext } from "../services/contextService.js";
 
 /**
  * n8n webhook URL for CI failure events
@@ -30,14 +31,17 @@ export interface CheckRunHandlerResult {
 }
 
 /**
- * Forward CI failure to n8n for orchestration and Slack notification
- * n8n will call the API service for OpenAI analysis and post to Slack
+ * Build enriched log content with all available context
  */
-const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
-  const { check_run, repository } = webhook;
+const buildEnrichedLogContent = (
+  webhook: CheckRunWebhook,
+  context: EnrichedContext
+): string => {
+  const { check_run } = webhook;
+  const sections: string[] = [];
 
-  // Build the log content from check run output
-  const logContent = [
+  // Section 1: Check run output
+  const checkOutput = [
     check_run.output.title || "",
     check_run.output.summary || "",
     check_run.output.text || "",
@@ -45,13 +49,81 @@ const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
     .filter(Boolean)
     .join("\n\n");
 
+  if (checkOutput) {
+    sections.push(`## CI Check Output\n${checkOutput}`);
+  }
+
+  // Section 2: Workflow logs (if available)
+  if (context.workflowLogs) {
+    sections.push(`## Workflow Logs\n${context.workflowLogs}`);
+  }
+
+  // Section 3: Commit info
+  if (context.commitInfo) {
+    sections.push(
+      `## Commit Info\n` +
+        `SHA: ${context.commitInfo.sha}\n` +
+        `Author: ${context.commitInfo.author}\n` +
+        `Message: ${context.commitInfo.message}\n` +
+        `Changed files:\n${context.commitInfo.changedFiles.map((f) => `  - ${f}`).join("\n")}`
+    );
+  }
+
+  // Section 4: PR diff (if available)
+  if (context.prDiff) {
+    sections.push(`## PR Diff\n\`\`\`diff\n${context.prDiff}\n\`\`\``);
+  }
+
+  // Section 5: Source files (if available)
+  if (context.sourceFiles.length > 0) {
+    const filesSection = context.sourceFiles
+      .map((file) => {
+        const lineInfo =
+          file.startLine && file.endLine
+            ? ` (lines ${file.startLine}-${file.endLine})`
+            : "";
+        return `### ${file.path}${lineInfo}\n\`\`\`\n${file.content}\n\`\`\``;
+      })
+      .join("\n\n");
+    sections.push(`## Relevant Source Files\n${filesSection}`);
+  }
+
+  return sections.join("\n\n---\n\n") || `CI check "${check_run.name}" failed`;
+};
+
+/**
+ * Forward CI failure to n8n for orchestration and Slack notification
+ * Gathers enriched context before forwarding for better AI analysis
+ */
+const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
+  const { check_run, repository } = webhook;
+
+  // Gather enriched context (logs, diff, source files)
+  logger.info("Gathering enriched context for CI failure", {
+    repository: repository.full_name,
+    checkName: check_run.name,
+    headSha: check_run.head_sha,
+  });
+
+  const context = await gatherEnrichedContext(webhook);
+
+  // Build enriched log content
+  const enrichedLog = buildEnrichedLogContent(webhook, context);
+
   const payload = {
-    log: logContent || `CI check "${check_run.name}" failed`,
+    log: enrichedLog,
     repository: repository.full_name,
     checkName: check_run.name,
     conclusion: check_run.conclusion,
     headSha: check_run.head_sha,
     pullRequests: check_run.pull_requests.map((pr) => pr.number),
+    // Include context metadata for debugging
+    contextMetadata: {
+      hasWorkflowLogs: !!context.workflowLogs,
+      hasPRDiff: !!context.prDiff,
+      hasCommitInfo: !!context.commitInfo,
+      sourceFilesCount: context.sourceFiles.length,
+    },
   };
 
   try {
@@ -62,9 +134,10 @@ const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
     });
 
     if (response.ok) {
-      logger.info("Forwarded CI failure to n8n for analysis and Slack notification", {
+      logger.info("Forwarded CI failure to n8n with enriched context", {
         repository: repository.full_name,
         checkName: check_run.name,
+        contextMetadata: payload.contextMetadata,
       });
       return true;
     } else {
