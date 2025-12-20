@@ -14,9 +14,6 @@ import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.j
 const router = Router();
 const logger = createLogger("github-app");
 
-// Apply webhook signature verification to all webhook routes
-router.use(verifyGitHubWebhook);
-
 /**
  * Unified GitHub webhook handler
  * GitHub sends all events to this single endpoint with X-GitHub-Event header
@@ -24,6 +21,7 @@ router.use(verifyGitHubWebhook);
  */
 router.post(
   "/webhook/github",
+  verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
     const eventType = req.headers["x-github-event"] as string;
     const deliveryId = req.headers["x-github-delivery"] as string;
@@ -82,6 +80,7 @@ router.post(
  */
 router.post(
   "/webhook/pull_request",
+  verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
     const webhook = req.body as PullRequestWebhook;
     const result = await handlePullRequest(webhook);
@@ -100,6 +99,7 @@ router.post(
  */
 router.post(
   "/webhook/check_run",
+  verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
     const webhook = req.body as CheckRunWebhook;
     const result = await handleCheckRun(webhook);
