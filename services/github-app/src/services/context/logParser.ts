@@ -73,11 +73,7 @@ export const extractFileReferences = (logs: string): FileReference[] => {
   }
 
   // Deduplicate by path and limit results
-  return deduplicateByKey(
-    allReferences,
-    (ref) => ref.path,
-    GITHUB_CONTEXT_LIMITS.MAX_FILES
-  );
+  return deduplicateByKey(allReferences, (ref) => ref.path, GITHUB_CONTEXT_LIMITS.MAX_FILES);
 };
 
 // ==================== Content Truncation ====================
@@ -196,7 +192,10 @@ export const extractTestFailures = (logs: string): TestFailure[] => {
   for (const pattern of JEST_PATTERNS) {
     const matches = extractPatternMatches(logs, pattern, maxFailures, extractJestMatch);
     if (matches.length > 0) {
-      logger.info("Extracted test failures from logs", { count: matches.length, framework: "jest" });
+      logger.info("Extracted test failures from logs", {
+        count: matches.length,
+        framework: "jest",
+      });
       return matches;
     }
   }
@@ -204,7 +203,10 @@ export const extractTestFailures = (logs: string): TestFailure[] => {
   // Fall back to Mocha pattern
   const mochaMatches = extractPatternMatches(logs, MOCHA_PATTERN, maxFailures, extractMochaMatch);
   if (mochaMatches.length > 0) {
-    logger.info("Extracted test failures from logs", { count: mochaMatches.length, framework: "mocha" });
+    logger.info("Extracted test failures from logs", {
+      count: mochaMatches.length,
+      framework: "mocha",
+    });
     return mochaMatches;
   }
 

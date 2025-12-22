@@ -10,7 +10,11 @@
 import { createLogger } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
-import { gatherEnrichedContext, type EnrichedContext } from "../services/context/index.js";
+import {
+  gatherEnrichedContext,
+  fetchPRsByCommit,
+  type EnrichedContext,
+} from "../services/context/index.js";
 import { buildEnrichedLogContent } from "../formatters/checkRunFormatter.js";
 
 /**
@@ -60,8 +64,7 @@ const buildContextMetadata = (context: EnrichedContext): ContextMetadata => ({
  * n8n webhook URL for CI failure events
  * Uses Docker service name when running in Docker, localhost otherwise
  */
-const N8N_WEBHOOK_URL =
-  process.env.N8N_WEBHOOK_URL || "http://n8n:5678/webhook/ci-failure";
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "http://n8n:5678/webhook/ci-failure";
 
 const logger = createLogger("github-app");
 
@@ -79,7 +82,7 @@ export interface CheckRunHandlerResult {
  * Gathers enriched context before forwarding for better AI analysis
  */
 const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
-  const { check_run, repository } = webhook;
+  const { check_run, repository, installation } = webhook;
 
   // Gather enriched context (logs, diff, source files)
   logger.info("Gathering enriched context for CI failure", {
@@ -95,14 +98,60 @@ const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
 
   const contextMetadata = buildContextMetadata(context);
 
+  // Get PR numbers from webhook or find them from commit SHA
+  let pullRequestNumbers = check_run.pull_requests.map((pr) => pr.number);
+
+  // If no PRs in webhook, try to find them from the commit SHA
+  if (pullRequestNumbers.length === 0 && installation?.id) {
+    logger.info("No PRs in webhook, searching by commit SHA", {
+      commitSha: check_run.head_sha.substring(0, 7),
+    });
+
+    pullRequestNumbers = await fetchPRsByCommit(
+      installation.id,
+      repository.owner.login,
+      repository.name,
+      check_run.head_sha
+    );
+
+    if (pullRequestNumbers.length > 0) {
+      logger.info("Found PRs for commit", {
+        commitSha: check_run.head_sha.substring(0, 7),
+        prNumbers: pullRequestNumbers,
+      });
+    }
+  }
+
+  // Log context gathering results for debugging
+  logger.info("Context gathered for CI failure", {
+    repository: repository.full_name,
+    hasWorkflowLogs: contextMetadata.hasWorkflowLogs,
+    hasPRDiff: contextMetadata.hasPRDiff,
+    hasCommitInfo: contextMetadata.hasCommitInfo,
+    annotationsCount: contextMetadata.annotationsCount,
+    testFailuresCount: contextMetadata.testFailuresCount,
+    sourceFilesCount: contextMetadata.sourceFilesCount,
+    logContentLength: context.workflowLogs?.length || 0,
+    pullRequestCount: pullRequestNumbers.length,
+  });
+
   const payload = {
     log: enrichedLog,
     repository: repository.full_name,
     checkName: check_run.name,
     conclusion: check_run.conclusion,
     headSha: check_run.head_sha,
-    pullRequests: check_run.pull_requests.map((pr) => pr.number),
+    pullRequests: pullRequestNumbers,
     contextMetadata,
+    // Include actual annotations and test failures for GitHub posting
+    annotations: context.annotations,
+    testFailures: context.testFailures,
+    // Include PR metadata if available
+    prMetadata: context.prMetadata,
+    // Include workflow timing
+    workflowTiming: context.workflowTiming,
+    // Include dependency changes
+    dependencyChanges: context.dependencyChanges,
   };
 
   try {

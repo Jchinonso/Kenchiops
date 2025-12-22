@@ -22,12 +22,22 @@ kenchi/
 ## Zero Duplication Policy
 
 **Before writing ANY code:**
+
 1. Check `packages/shared/src/index.ts` for existing exports
 2. Search codebase for similar functionality
 3. If it exists, import from `@kenchi/shared`
 4. If it doesn't exist and is reusable, add to shared package first
 
+**Before creating ANY new file:**
+
+1. Search for existing files with similar purpose
+2. Extend existing files rather than creating new parallel ones
+3. Never create a second file for the same concern (e.g., two formatters, two validators)
+4. If similar file exists, add your function there instead
+5. Consolidate related functionality into single, focused files
+
 **Decision Rules:**
+
 - Used in 2+ services → shared
 - Domain invariant (logger, errors, config) → shared
 - Integration adapter (Slack/GitHub-specific) → service
@@ -36,6 +46,7 @@ kenchi/
 ## Available Shared Utilities
 
 **Always import from `@kenchi/shared`:**
+
 - **Config**: `config`, `Config`
 - **Logging**: `logger`, `createLogger`, `LogLevel`
 - **Errors**: `AppError`, `ValidationError`, `AuthenticationError`, `NotFoundError`, `ExternalServiceError`, `LLMError`, `isAppError`
@@ -64,11 +75,13 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;   // Constants in wrong place
 ## File Organization
 
 **Shared Package** (`packages/shared/src/`):
+
 - All utilities, helpers, formatters, middleware, clients
 - Cross-service types (events, core domain, public DTOs)
 - **ALL constants/enums** in `constants.ts`
 
 **Services** (`services/*/src/`):
+
 - Entry point (`index.ts`), routes, handlers
 - Service-specific business logic and integrations
 - Integration-specific types only
@@ -76,6 +89,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;   // Constants in wrong place
 ## Constants Rule
 
 **ALL constants must be in `packages/shared/src/constants.ts`:**
+
 - Regex patterns, arrays, Sets, Maps, numeric thresholds
 - Configuration objects, string constants
 - Use `as const` for immutability
@@ -85,6 +99,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;   // Constants in wrong place
 ## TypeScript Standards
 
 ### Types
+
 - **Explicit types** on function parameters and returns
 - **Use `unknown`** instead of `any`, with type guards
 - **Use `readonly`** for immutable data
@@ -92,13 +107,15 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;   // Constants in wrong place
 - **Separate imports**: `import type { X }` for types, `import { Y }` for values
 
 ### Type Guards
+
 ```typescript
 function isWebhookEvent(data: unknown): data is WebhookEvent {
-  return typeof data === 'object' && data !== null && 'type' in data;
+  return typeof data === "object" && data !== null && "type" in data;
 }
 ```
 
 ### Avoid
+
 - `any` type - defeats type safety
 - Unnecessary type assertions (`as`)
 - Inline complex types - use type aliases
@@ -146,11 +163,13 @@ const profile = await fetchProfile();
 ## Performance Rules
 
 ### Data Structures
+
 - **Set** for membership testing (O(1) vs O(n) for arrays)
 - **Map** for key-value lookups
 - **Pre-compute** lookup structures once, reuse
 
 ### Optimization
+
 - **Early exits** - return as soon as possible
 - **Batch operations** - avoid N+1 queries
 - **Lazy evaluation** - defer expensive operations
@@ -158,6 +177,7 @@ const profile = await fetchProfile();
 - **Parallelize** independent async operations
 
 ### Avoid
+
 - Nested loops when better data structures work
 - Repeated computations (toLowerCase, regex) in loops
 - `Array.from(set).some()` - iterate Set directly
@@ -223,6 +243,7 @@ return matched?.handler() ?? new Error("Unknown error");
 ```
 
 **Target metrics:**
+
 - **For loops**: 0 (use functional array methods)
 - **If statements**: Minimize (use lookup tables, handler patterns, early returns)
 - **While loops**: 0 (use recursion or functional patterns)
@@ -250,17 +271,20 @@ return matched?.handler() ?? new Error("Unknown error");
 ## Code Organization
 
 ### Module Size
+
 - Utility: 50-150 lines
 - Service/Handler: 150-300 lines
 - **Maximum**: 500 lines - split if larger
 
 ### Naming
+
 - **Variables**: descriptive (`userEmailAddress` not `ue`)
 - **Functions**: verb + noun (`validateUserEmail`, `fetchUserById`)
 - **Booleans**: `is/has/should/can` prefix
 - **Constants**: `UPPER_SNAKE_CASE`
 
 ### Structure
+
 - One concept per file
 - Group related functionality in folders
 - Use index files for clean exports
@@ -271,6 +295,7 @@ return matched?.handler() ?? new Error("Unknown error");
 ## Separation of Concerns
 
 ### Layered Architecture
+
 ```
 Routes (presentation) → Services (business logic) → Repositories (data access)
 ```
@@ -280,6 +305,7 @@ Routes (presentation) → Services (business logic) → Repositories (data acces
 - **Repositories**: Data access only
 
 ### Rules
+
 - Business logic NOT in route handlers
 - Data access NOT in services (use repositories)
 - Validation in separate layer
@@ -302,6 +328,7 @@ Routes (presentation) → Services (business logic) → Repositories (data acces
 ## Checklist
 
 Before committing:
+
 - [ ] Checked `@kenchi/shared` for existing utilities
 - [ ] No code duplication
 - [ ] Types explicit, no `any`

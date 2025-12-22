@@ -32,8 +32,10 @@ export const createHttpRoutes = (app: SlackApp): express.Router => {
     "/slack/message",
     validate({
       body: {
-        // Channel is optional - bot uses its active channel if not specified
+        // Channel is optional - resolved via priority: explicit > org-based > active channel
         channel: (v) => !v || validators.string(v),
+        // Repository for org-based channel routing (multi-tenant mode)
+        repository: (v) => !v || validators.string(v),
         // message is optional if analysis is provided
         message: (v) => !v || validators.string(v),
         thread_ts: (v) => !v || validators.string(v),

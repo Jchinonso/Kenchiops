@@ -31,6 +31,13 @@ kenchi/
 3. If it exists, import from `@kenchi/shared`
 4. If it doesn't exist and is reusable, add to shared package first
 
+**Before creating ANY new file:**
+1. Search for existing files with similar purpose
+2. Extend existing files rather than creating new parallel ones
+3. Never create a second file for the same concern (e.g., two formatters, two validators)
+4. If similar file exists, add your function there instead
+5. Consolidate related functionality into single, focused files
+
 **Decision Rules:**
 - Used in 2+ services → shared
 - Domain invariant (logger, errors, config) → shared

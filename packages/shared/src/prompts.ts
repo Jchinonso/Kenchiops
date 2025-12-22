@@ -154,6 +154,15 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
   },
   "confidence": "very_low|low|medium|high|very_high",
   "reasoning": "Detailed explanation of how you arrived at your conclusion, citing specific evidence",
+  "codeAnnotations": [
+    {
+      "path": "src/path/to/file.ts",
+      "line": 42,
+      "level": "failure|warning|notice",
+      "message": "Specific error message or explanation",
+      "title": "Short title for the annotation (optional)"
+    }
+  ],
   "recommendedActions": [
     {
       "actionType": "add_environment_variable|restart_service|rollback_deployment|notify_team|run_diagnostic|update_documentation|create_ticket|manual_investigation",
@@ -179,7 +188,15 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
     "Suggested next steps for investigation or resolution"
   ]
 }
-\`\`\``;
+\`\`\`
+
+## CODE ANNOTATIONS REQUIREMENTS
+If you identify specific file locations where errors occurred:
+1. Extract the file path and line number from error messages or stack traces
+2. Create a "codeAnnotations" entry for each distinct error location
+3. Use "failure" level for actual errors, "warning" for potential issues, "notice" for informational
+4. The message should explain what went wrong at that specific location
+5. Only include annotations for files that are actually mentioned in the evidence`;
 };
 
 /**
@@ -331,9 +348,7 @@ const STANDARD_METRICS: readonly MetricField[] = [
 /**
  * Set of standard metric keys for efficient lookup.
  */
-const STANDARD_METRIC_KEYS = new Set<string>(
-  STANDARD_METRICS.map((m) => m.key as string)
-);
+const STANDARD_METRIC_KEYS = new Set<string>(STANDARD_METRICS.map((m) => m.key as string));
 
 /**
  * Formats metrics summary using data-driven approach.
@@ -392,7 +407,10 @@ export const formatGitHistory = (commits: GitCommit[]): string => {
 /**
  * Deployment status field configuration.
  */
-const DEPLOYMENT_FIELDS: readonly { key: keyof NonNullable<SystemState["deploymentStatus"]>; label: string }[] = [
+const DEPLOYMENT_FIELDS: readonly {
+  key: keyof NonNullable<SystemState["deploymentStatus"]>;
+  label: string;
+}[] = [
   { key: "currentVersion", label: "Current Version" },
   { key: "previousVersion", label: "Previous Version" },
   { key: "deployedAt", label: "Deployed At" },

@@ -129,11 +129,7 @@ const validateCitedIncidents = (
 /**
  * Validates cited commits in analysis text.
  */
-const validateCitedCommits = (
-  text: string,
-  commitsSet: Set<string>,
-  errors: string[]
-): void => {
+const validateCitedCommits = (text: string, commitsSet: Set<string>, errors: string[]): void => {
   extractCommitSHAs(text).forEach((cited) => {
     !isCommitValid(cited, commitsSet) && errors.push(`LLM cited non-existent commit: ${cited}`);
   });
@@ -142,11 +138,7 @@ const validateCitedCommits = (
 /**
  * Validates quoted text in analysis.
  */
-const validateQuotedText = (
-  text: string,
-  lookups: ValidationLookups,
-  warnings: string[]
-): void => {
+const validateQuotedText = (text: string, lookups: ValidationLookups, warnings: string[]): void => {
   const minLength = MATCHING_CONFIG.QUOTED_TEXT_MIN_LENGTH;
   extractQuotedText(text).forEach((quoted) => {
     quoted.length > minLength &&
@@ -174,7 +166,9 @@ const EVIDENCE_VALIDATORS: Readonly<Record<string, EvidenceValidator>> = {
 
     // Check if any log contains the reference
     return lookups.logValues.some(
-      (log) => log.includes(refLower) || refLower.includes(log.substring(0, MATCHING_CONFIG.LOG_COMPARISON_PREFIX_LENGTH))
+      (log) =>
+        log.includes(refLower) ||
+        refLower.includes(log.substring(0, MATCHING_CONFIG.LOG_COMPARISON_PREFIX_LENGTH))
     );
   },
 
@@ -255,7 +249,11 @@ const validateDangerousKeywords = (
 /**
  * Generates all prefix lengths for a SHA.
  */
-const generatePrefixLengths = (shaLength: number, minLength: number, maxLength: number): readonly number[] => {
+const generatePrefixLengths = (
+  shaLength: number,
+  minLength: number,
+  maxLength: number
+): readonly number[] => {
   const maxLen = Math.min(shaLength, maxLength);
   return Array.from({ length: maxLen - minLength + 1 }, (_, i) => minLength + i);
 };
@@ -275,9 +273,11 @@ const buildCommitPrefixSet = (gitHistory: Evidence["gitHistory"]): Set<string> =
   gitHistory.forEach((commit) => {
     const sha = commit.sha.toLowerCase();
     commitSet.add(sha);
-    generatePrefixLengths(sha.length, SHA_PREFIX_MIN_LENGTH, SHA_PREFIX_MAX_LENGTH).forEach((len) => {
-      commitSet.add(sha.substring(0, len));
-    });
+    generatePrefixLengths(sha.length, SHA_PREFIX_MIN_LENGTH, SHA_PREFIX_MAX_LENGTH).forEach(
+      (len) => {
+        commitSet.add(sha.substring(0, len));
+      }
+    );
   });
 
   return commitSet;

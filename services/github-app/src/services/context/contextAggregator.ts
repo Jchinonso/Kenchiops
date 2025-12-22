@@ -14,7 +14,12 @@ import {
 import type { CheckRunWebhook } from "../../types/githubTypes.js";
 import type { EnrichedContext, FileReference } from "./types.js";
 import { fetchWorkflowLogs, fetchWorkflowTiming } from "./workflowFetcher.js";
-import { fetchPRDiff, fetchPRMetadata, fetchDependencyChanges, fetchBuildConfigChanges } from "./prFetcher.js";
+import {
+  fetchPRDiff,
+  fetchPRMetadata,
+  fetchDependencyChanges,
+  fetchBuildConfigChanges,
+} from "./prFetcher.js";
 import { fetchCommitInfo, fetchSourceFile, fetchRepositoryMetadata } from "./commitFetcher.js";
 import { fetchCheckRunAnnotations } from "./annotationFetcher.js";
 import { extractFileReferences, extractTestFailures } from "./logParser.js";
@@ -114,7 +119,6 @@ const createEmptyContext = (): EnrichedContext => ({
   workflowTiming: null,
 });
 
-
 /**
  * Gather all enriched context for a check run.
  *
@@ -125,9 +129,7 @@ const createEmptyContext = (): EnrichedContext => ({
  * @param webhook - The check run webhook payload
  * @returns Enriched context for AI analysis
  */
-export const gatherEnrichedContext = async (
-  webhook: CheckRunWebhook
-): Promise<EnrichedContext> => {
+export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<EnrichedContext> => {
   const { check_run, repository, installation } = webhook;
   const installationId = installation?.id;
 
@@ -200,9 +202,7 @@ export const gatherEnrichedContext = async (
   );
 
   const sourceFilesResults = await Promise.all(sourceFilePromises);
-  const sourceFiles = sourceFilesResults.filter(
-    (f): f is NonNullable<typeof f> => f !== null
-  );
+  const sourceFiles = sourceFilesResults.filter((f): f is NonNullable<typeof f> => f !== null);
 
   logger.info("Enriched context gathered", {
     hasLogs: !!workflowLogs,

@@ -98,10 +98,7 @@ export const shouldExcludePath = (path: string, patterns: readonly string[]): bo
  * const items = [{ type: 'a', v: 1 }, { type: 'b', v: 2 }, { type: 'a', v: 3 }];
  * groupBy(items, i => i.type); // Map { 'a' => [{...}, {...}], 'b' => [{...}] }
  */
-export const groupBy = <T, K>(
-  items: readonly T[],
-  keyFn: (item: T) => K
-): Map<K, T[]> => {
+export const groupBy = <T, K>(items: readonly T[], keyFn: (item: T) => K): Map<K, T[]> => {
   const groups = new Map<K, T[]>();
 
   for (const item of items) {

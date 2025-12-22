@@ -87,14 +87,18 @@ export class OpenAIClient {
     const startTime = Date.now();
 
     try {
-      const truncatedEvidence = manageTokenBudget(event, evidence, OPENAI_CONSTANTS.MAX_PROMPT_TOKENS);
+      const truncatedEvidence = manageTokenBudget(
+        event,
+        evidence,
+        OPENAI_CONSTANTS.MAX_PROMPT_TOKENS
+      );
       const prompt = buildAnalysisPrompt(event, truncatedEvidence);
       const response = await this.callOpenAIWithRetry(prompt);
       const analysis = this.parseResponse(response, event.id);
       const validation = validateResponse(analysis, { event, evidence });
-      
+
       this.logValidationResults(validation, event.id);
-      
+
       return this.enrichAnalysis(analysis, startTime);
     } catch (error) {
       throw handleOpenAIError(error, this.clientConfig.timeout);
@@ -110,7 +114,7 @@ export class OpenAIClient {
    */
   private enrichAnalysis(analysis: LLMAnalysisResult, startTime: number): LLMAnalysisResult {
     const processingTime = (Date.now() - startTime) / TIME_CONSTANTS.MILLISECONDS_PER_SECOND;
-    
+
     return {
       ...analysis,
       processingTime,
@@ -131,7 +135,10 @@ export class OpenAIClient {
     {
       condition: (validation: { warnings: string[] }) => validation.warnings.length > 0,
       log: (validation: { warnings: string[] }, eventId: string) =>
-        logger.warn("OpenAI response validation warnings", { eventId, warnings: validation.warnings }),
+        logger.warn("OpenAI response validation warnings", {
+          eventId,
+          warnings: validation.warnings,
+        }),
     },
   ] as const;
 
@@ -203,11 +210,7 @@ export class OpenAIClient {
    * @param maxRetries - Maximum number of retries
    * @returns True if error should trigger a retry
    */
-  private shouldRetryRateLimit = (
-    error: unknown,
-    attempt: number,
-    maxRetries: number
-  ): boolean => {
+  private shouldRetryRateLimit = (error: unknown, attempt: number, maxRetries: number): boolean => {
     const statusCode = (error as { status?: number }).status;
     return statusCode === OPENAI_CONSTANTS.RATE_LIMIT_STATUS_CODE && attempt < maxRetries;
   };
@@ -241,7 +244,6 @@ export class OpenAIClient {
     const completion = await this.client.chat.completions.create(requestConfig);
     return this.extractResponseContent(completion);
   };
-
 
   /**
    * Determines if retry should continue based on error and attempt count.
@@ -360,7 +362,10 @@ export class OpenAIClient {
       confidence: string(parsed.confidence, "medium") as LLMAnalysisResult["confidence"],
       confidenceScore: undefined, // Will be calculated by safety.ts
       reasoning: string(parsed.reasoning, ""),
-      recommendedActions: array(parsed.recommendedActions, []) as LLMAnalysisResult["recommendedActions"],
+      recommendedActions: array(
+        parsed.recommendedActions,
+        []
+      ) as LLMAnalysisResult["recommendedActions"],
       uncertainties: array(parsed.uncertainties, []) as string[],
       evidenceUsed: array(parsed.evidenceUsed, []) as LLMAnalysisResult["evidenceUsed"],
       relatedIncidents: array(parsed.relatedIncidents, []) as string[],
