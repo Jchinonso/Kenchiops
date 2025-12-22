@@ -8,8 +8,13 @@ import { Router, type Request, type Response } from "express";
 import { asyncHandler, createLogger, HTTP_STATUS } from "@kenchi/shared";
 import { handlePullRequest } from "../handlers/pullRequestHandler.js";
 import { handleCheckRun } from "../handlers/checkRunHandler.js";
+import { handleInstallation } from "../handlers/installationHandler.js";
 import { verifyGitHubWebhook } from "../middleware/verifyGithub.js";
-import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
+import type {
+  PullRequestWebhook,
+  CheckRunWebhook,
+  InstallationWebhook,
+} from "../types/githubTypes.js";
 
 const router = Router();
 const logger = createLogger("github-app");
@@ -50,6 +55,17 @@ router.post(
           status: result.handled ? "processed" : "skipped",
           message: result.message,
           eventId: result.eventId,
+        });
+        break;
+      }
+
+      case "installation": {
+        const webhook = req.body as InstallationWebhook;
+        const result = await handleInstallation(webhook);
+        res.status(HTTP_STATUS.OK).json({
+          status: result.handled ? "processed" : "skipped",
+          message: result.message,
+          tenantId: result.tenantId,
         });
         break;
       }

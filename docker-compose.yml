@@ -96,6 +96,14 @@ services:
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=UTC
       - NODE_ENV=production
+      - N8N_API_KEY=kenchi-n8n-api-key-2024
+      # PostgreSQL configuration
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=kenchi
+      - DB_POSTGRESDB_PASSWORD=kenchi_dev_password
     ports:
       - "5678:5678"
     volumes:
@@ -109,8 +117,12 @@ services:
       start_period: 30s
     restart: unless-stopped
     depends_on:
-      - api
-      - slack-bot
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+      slack-bot:
+        condition: service_started
 
 volumes:
   n8n_data:

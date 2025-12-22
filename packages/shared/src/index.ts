@@ -1,4 +1,31 @@
 export { config, type Config } from "./config.js";
+export {
+  initDatabase,
+  getPool,
+  query,
+  transaction,
+  closeDatabase,
+  isDatabaseHealthy,
+  type QueryResult,
+} from "./database.js";
+export {
+  findByGitHubInstallation,
+  findByGitHubOrg,
+  findBySlackWorkspace,
+  findById,
+  getActiveTenants,
+  createFromGitHubInstall,
+  linkSlackWorkspace,
+  createFromSlackInstall,
+  activate,
+  suspend,
+  deleteTenant,
+  handleGitHubUninstall,
+  logAuditEvent,
+  getAuditLog,
+  updateSlackToken,
+  getSlackCredentials,
+} from "./tenantService.js";
 export { OpenAIClient } from "./openaiClient/index.js";
 export { VectorStore, InMemoryVectorStore } from "./vectorStore.js";
 export {
@@ -108,6 +135,13 @@ export type {
   ConfidenceScoreResult,
   // Validation Types
   ValidationResult,
+  // Multi-Tenant Types
+  Tenant,
+  TenantStatus,
+  CreateTenantFromGitHub,
+  LinkSlackWorkspace,
+  TenantAuditAction,
+  TenantAuditEntry,
   // Legacy Types (backward compatibility)
   WebhookEvent,
   CIFailureEvent,
