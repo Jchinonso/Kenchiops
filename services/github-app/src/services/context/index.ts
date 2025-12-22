@@ -25,7 +25,13 @@ export { gatherEnrichedContext } from "./contextAggregator.js";
 
 // Re-export individual fetchers for testing and direct use
 export { fetchWorkflowLogs, fetchWorkflowTiming } from "./workflowFetcher.js";
-export { fetchPRDiff, fetchPRMetadata, fetchDependencyChanges, fetchBuildConfigChanges } from "./prFetcher.js";
+export {
+  fetchPRDiff,
+  fetchPRMetadata,
+  fetchDependencyChanges,
+  fetchBuildConfigChanges,
+  fetchPRsByCommit,
+} from "./prFetcher.js";
 export { fetchCommitInfo, fetchSourceFile, fetchRepositoryMetadata } from "./commitFetcher.js";
 export { fetchCheckRunAnnotations } from "./annotationFetcher.js";
 export { extractFileReferences, extractTestFailures, truncateWithContext } from "./logParser.js";

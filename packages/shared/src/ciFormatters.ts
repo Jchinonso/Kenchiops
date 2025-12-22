@@ -45,10 +45,7 @@ export interface CollectErrorsOptions {
  * @param maxMessageLength - Maximum message length
  * @returns Formatted error string
  */
-const formatAnnotationError = (
-  annotation: CIAnnotation,
-  maxMessageLength: number
-): string => {
+const formatAnnotationError = (annotation: CIAnnotation, maxMessageLength: number): string => {
   const truncatedMessage = truncateText(annotation.message, maxMessageLength);
   return `\`${annotation.path}:${annotation.startLine}\` - ${truncatedMessage}`;
 };
@@ -60,10 +57,7 @@ const formatAnnotationError = (
  * @param includeEmoji - Whether to include emoji prefix
  * @returns Formatted error string
  */
-const formatTestFailure = (
-  test: CITestFailure,
-  includeEmoji: boolean
-): string => {
+const formatTestFailure = (test: CITestFailure, includeEmoji: boolean): string => {
   const prefix = includeEmoji ? "\u274C " : ""; // ❌
   const location = test.file ? ` (\`${test.file}\`)` : "";
   return `${prefix}${test.testName}${location}`;
@@ -141,7 +135,8 @@ const DEPENDENCY_FORMATTERS: Readonly<
 > = {
   added: (dep) => `\u2795 Added: \`${dep.name}@${dep.newVersion}\``,
   removed: (dep) => `\u2796 Removed: \`${dep.name}@${dep.oldVersion}\``,
-  updated: (dep) => `\uD83D\uDD04 Updated: \`${dep.name}\` ${dep.oldVersion} \u2192 ${dep.newVersion}`,
+  updated: (dep) =>
+    `\uD83D\uDD04 Updated: \`${dep.name}\` ${dep.oldVersion} \u2192 ${dep.newVersion}`,
 };
 
 /**
@@ -165,8 +160,6 @@ export const formatDependencyChange = (dep: DependencyChange): string => {
  * @param deps - Array of dependency changes
  * @returns Formatted string with all changes
  */
-export const formatDependencyChanges = (
-  deps: readonly DependencyChange[]
-): string => {
+export const formatDependencyChanges = (deps: readonly DependencyChange[]): string => {
   return deps.map(formatDependencyChange).join("\n");
 };

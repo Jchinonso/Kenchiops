@@ -60,10 +60,7 @@ export interface RedactionResult {
  * @param options - Optional configuration
  * @returns The text with secrets replaced by [REDACTED]
  */
-export const redactSecrets = (
-  text: string,
-  options: { logRedactions?: boolean } = {}
-): string => {
+export const redactSecrets = (text: string, options: { logRedactions?: boolean } = {}): string => {
   if (!isValidString(text)) {
     return text;
   }
@@ -253,10 +250,13 @@ export const createCustomRedactor = (
   additionalPatterns: readonly SecretPattern[]
 ): ((text: string) => string) => {
   // Pre-compile additional patterns once at creation time
-  const compiledAdditional = additionalPatterns.map(({ pattern }) =>
-    new RegExp(pattern.source, pattern.flags)
+  const compiledAdditional = additionalPatterns.map(
+    ({ pattern }) => new RegExp(pattern.source, pattern.flags)
   );
-  const allCompiledPatterns = [...COMPILED_PATTERNS.map(({ regex }) => regex), ...compiledAdditional];
+  const allCompiledPatterns = [
+    ...COMPILED_PATTERNS.map(({ regex }) => regex),
+    ...compiledAdditional,
+  ];
 
   return (text: string): string => {
     if (!isValidString(text)) {

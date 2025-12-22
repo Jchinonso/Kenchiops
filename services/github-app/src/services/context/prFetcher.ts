@@ -20,6 +20,52 @@ import type { PRMetadata, DependencyChange, BuildConfigChange } from "./types.js
 const logger = createLogger("github-app");
 
 /**
+ * Find PRs associated with a commit SHA.
+ *
+ * Uses GitHub API to find open pull requests that contain the specified commit.
+ *
+ * @param installationId - GitHub App installation ID
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param commitSha - The commit SHA to search for
+ * @returns Array of PR numbers associated with the commit
+ */
+export const fetchPRsByCommit = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  commitSha: string
+): Promise<number[]> => {
+  try {
+    const octokit = await getOctokit(installationId);
+
+    // GitHub API: List pull requests associated with a commit
+    const { data: prs } = await octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+      owner,
+      repo,
+      commit_sha: commitSha,
+    });
+
+    // Filter to only open PRs
+    const openPRs = prs.filter((pr) => pr.state === "open");
+
+    logger.info("Found PRs for commit", {
+      commitSha: commitSha.substring(0, 7),
+      totalPRs: prs.length,
+      openPRs: openPRs.length,
+    });
+
+    return openPRs.map((pr) => pr.number);
+  } catch (error) {
+    logger.warn("Failed to find PRs for commit", {
+      commitSha: commitSha.substring(0, 7),
+      error: getErrorMessage(error),
+    });
+    return [];
+  }
+};
+
+/**
  * Fetch PR diff.
  *
  * @param installationId - GitHub App installation ID

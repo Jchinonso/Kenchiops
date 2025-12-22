@@ -147,10 +147,10 @@ describe("n8n Workflow Validation", () => {
       expect(slackNode.parameters.specifyBody).toBe("json");
       expect(slackNode.parameters.jsonBody).toBeDefined();
 
-      // The JSON body includes the analysis object
-      // Channel is not passed - Slack Bot uses its active channel (single-channel policy)
+      // The JSON body includes the analysis object and repository for org-based routing
       const jsonBody = slackNode.parameters.jsonBody;
       expect(jsonBody).toContain("$json.analysis");
+      expect(jsonBody).toContain("repository");
     });
 
     it("should have Merge Analysis node for context enrichment", () => {
