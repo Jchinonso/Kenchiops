@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@kenchi/shared": "*",
-    "@octokit/auth-app": "^7.0.0",
+    "@octokit/auth-app": "^8.1.2",
     "@octokit/rest": "^22.0.0",
     "express": "^4.18.2"
   },
