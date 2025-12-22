@@ -130,6 +130,58 @@ export interface GitHubInstallation {
 }
 
 /**
+ * GitHub webhook actions for app installations
+ */
+export const GITHUB_INSTALLATION_ACTIONS = {
+  CREATED: "created",
+  DELETED: "deleted",
+  SUSPEND: "suspend",
+  UNSUSPEND: "unsuspend",
+  NEW_PERMISSIONS_ACCEPTED: "new_permissions_accepted",
+} as const;
+
+export type GitHubInstallationAction =
+  (typeof GITHUB_INSTALLATION_ACTIONS)[keyof typeof GITHUB_INSTALLATION_ACTIONS];
+
+/**
+ * GitHub account type in installation webhook
+ */
+export interface GitHubAccount {
+  readonly login: string;
+  readonly id: number;
+  readonly type: "User" | "Organization";
+  readonly avatar_url?: string;
+  readonly html_url?: string;
+}
+
+/**
+ * Installation webhook payload
+ */
+export interface InstallationWebhook {
+  readonly action: GitHubInstallationAction;
+  readonly installation: {
+    readonly id: number;
+    readonly account: GitHubAccount;
+    readonly app_id: number;
+    readonly app_slug: string;
+    readonly target_type: "User" | "Organization";
+    readonly permissions: Record<string, string>;
+    readonly events: readonly string[];
+    readonly created_at: string;
+    readonly updated_at: string;
+    readonly suspended_at?: string | null;
+    readonly suspended_by?: GitHubAccount | null;
+  };
+  readonly repositories?: readonly {
+    readonly id: number;
+    readonly name: string;
+    readonly full_name: string;
+    readonly private: boolean;
+  }[];
+  readonly sender: GitHubAccount;
+}
+
+/**
  * Health check response
  */
 export interface HealthResponse {

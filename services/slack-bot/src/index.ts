@@ -14,7 +14,12 @@
 import Bolt from "@slack/bolt";
 import type { ButtonAction as BoltButtonAction } from "@slack/bolt";
 import express from "express";
-import { logger } from "@kenchi/shared";
+import {
+  logger,
+  config,
+  initDatabase,
+  closeDatabase,
+} from "@kenchi/shared";
 
 const { App } = Bolt;
 type SlackApp = InstanceType<typeof App>;
@@ -31,6 +36,7 @@ import {
 } from "./handlers/actionHandler.js";
 import { handleBotJoinedChannel } from "./handlers/channelHandler.js";
 import { createHttpRoutes } from "./routes/httpRoutes.js";
+import { oauthRoutes } from "./routes/oauthRoutes.js";
 
 /**
  * Initializes and configures the Slack Bolt app.
@@ -148,12 +154,34 @@ function setupSlackHandlers(app: SlackApp): void {
 }
 
 /**
+ * Initialize database connection for multi-tenant support
+ */
+function initializeDatabase(): void {
+  try {
+    initDatabase({
+      connectionString: config.DATABASE_URL,
+      maxConnections: 10,
+      idleTimeoutMs: 30000,
+    });
+    logger.info("Database connection initialized for multi-tenant support");
+  } catch (error) {
+    logger.error("Failed to initialize database", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw error;
+  }
+}
+
+/**
  * Initializes and starts the Slack bot service.
  * Uses Socket Mode for Slack events (WebSocket connection, no public URL needed).
  */
 async function startService(): Promise<void> {
   try {
     const appConfig = loadAppConfig();
+
+    // Initialize database for multi-tenant support
+    initializeDatabase();
 
     // Initialize Slack app with Socket Mode
     const slackApp = createSlackApp(appConfig);
@@ -162,6 +190,11 @@ async function startService(): Promise<void> {
     // Initialize Express app for HTTP endpoints (n8n integration)
     const expressApp = express();
     expressApp.use(express.json());
+
+    // Add OAuth routes for multi-tenant Slack installation
+    expressApp.use(oauthRoutes);
+
+    // Add message/broadcast routes
     expressApp.use(createHttpRoutes(slackApp));
 
     // Start Slack app in Socket Mode (connects via WebSocket)
@@ -169,15 +202,37 @@ async function startService(): Promise<void> {
     logger.info("Slack bot started in Socket Mode", {
       mode: "socket",
       environment: appConfig.nodeEnv,
+      multiTenantMode: config.MULTI_TENANT_MODE || false,
     });
 
     // Start Express server for n8n integration endpoints
-    expressApp.listen(appConfig.httpPort, () => {
+    const server = expressApp.listen(appConfig.httpPort, () => {
       logger.info("HTTP server started for n8n integration", {
         port: appConfig.httpPort,
         environment: appConfig.nodeEnv,
+        oauthEnabled: !!(config.SLACK_CLIENT_ID && config.SLACK_CLIENT_SECRET),
       });
     });
+
+    // Handle graceful shutdown
+    const shutdown = async (signal: string): Promise<void> => {
+      logger.info(`Received ${signal}, shutting down gracefully`);
+
+      server.close(async () => {
+        await closeDatabase();
+        logger.info("Server closed");
+        process.exit(0);
+      });
+
+      // Force exit after 10 seconds
+      setTimeout(() => {
+        logger.warn("Forced shutdown after timeout");
+        process.exit(1);
+      }, 10000);
+    };
+
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
   } catch (error) {
     logger.error("Failed to start Slack bot", {
       error: error instanceof Error ? error.message : String(error),

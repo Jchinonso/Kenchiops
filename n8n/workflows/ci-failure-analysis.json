@@ -1,21 +1,42 @@
 {
-  "id": "x4XJGy1RtcBwjeSc",
   "name": "CI Failure Analysis Workflow",
-  "active": true,
+  "active": false,
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "ci-failure",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": false
+        }
       },
       "id": "webhook-trigger",
       "name": "Webhook - CI Failure",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [250, 300],
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
       "webhookId": "ci-failure-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare the request body for the API\nconst input = $input.first().json;\n\n// Debug: log the structure\nconsole.log('Input structure:', JSON.stringify(input, null, 2));\n\n// Try different access patterns\nconst log = input.body?.log || input.log || '';\nconst repo = input.body?.repository || input.repository || '';\n\nreturn [{\n  json: {\n    failure_log: log,\n    repository: repo,\n    webhookData: input.body || input\n  }\n}];"
+      },
+      "id": "code-prepare-api-request",
+      "name": "Prepare API Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        350,
+        300
+      ]
     },
     {
       "parameters": {
@@ -23,35 +44,31 @@
         "url": "http://api:3000/api/analyze",
         "authentication": "none",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "failure_log",
-              "value": "={{ $json.log }}"
-            },
-            {
-              "name": "repository",
-              "value": "={{ $json.repository }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ failure_log: $json.failure_log, repository: $json.repository }) }}",
         "options": {}
       },
       "id": "http-request-openai",
       "name": "HTTP Request - OpenAI Analysis",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [450, 300]
+      "position": [
+        550,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Merge analysis results with enriched context from webhook\nconst analysis = $('HTTP Request - OpenAI Analysis').first().json;\nconst webhookData = $('Webhook - CI Failure').first().json;\nconst contextMeta = webhookData.contextMetadata || {};\n\n// Use actual data passed from github-app\nconst existingAnnotations = webhookData.annotations || [];\nconst testFailures = webhookData.testFailures || [];\nconst prMetadata = webhookData.prMetadata;\nconst workflowTiming = webhookData.workflowTiming;\nconst dependencyChanges = webhookData.dependencyChanges || [];\n\n// Get AI-generated code annotations (from the analysis)\nconst aiAnnotations = (analysis.codeAnnotations || []).map(ann => ({\n  path: ann.path,\n  startLine: ann.line,\n  level: ann.level,\n  message: ann.message,\n  title: ann.title || ''\n}));\n\n// Merge existing annotations with AI-generated ones (AI annotations take priority)\nconst allAnnotations = [...aiAnnotations, ...existingAnnotations];\n\n// Build enriched analysis object for Slack and GitHub\nconst enrichedAnalysis = {\n  repository: analysis.repository || webhookData.repository,\n  confidence: analysis.confidence || analysis.confidenceScore || 0.5,\n  analysis: analysis.analysis || analysis.summary || 'Analysis unavailable',\n  identified_cause: analysis.identified_cause || analysis.identifiedCause || '',\n  recommended_actions: analysis.recommended_actions || analysis.recommendedActions || [],\n  // Enriched context from github-app\n  checkName: webhookData.checkName,\n  headSha: webhookData.headSha,\n  // Combined annotations (AI + existing from check run)\n  annotations: allAnnotations,\n  testFailures: testFailures,\n  // PR context from actual PR metadata\n  prContext: prMetadata ? {\n    number: webhookData.pullRequests?.[0] || prMetadata.number || 0,\n    title: prMetadata.title || '',\n    author: prMetadata.author || '',\n    branch: prMetadata.headBranch || '',\n    baseBranch: prMetadata.baseBranch || '',\n    labels: prMetadata.labels || []\n  } : null,\n  // Workflow context from actual timing data\n  workflowContext: workflowTiming ? {\n    name: webhookData.checkName || '',\n    duration: formatDuration(workflowTiming.durationMs)\n  } : null,\n  // Actual dependency changes from github-app\n  dependencyChanges: dependencyChanges\n};\n\n// Helper function for formatting duration\nfunction formatDuration(ms) {\n  if (!ms) return '';\n  const seconds = Math.floor(ms / 1000);\n  const minutes = Math.floor(seconds / 60);\n  const remainingSeconds = seconds % 60;\n  if (minutes > 0) {\n    return `${minutes}m ${remainingSeconds}s`;\n  }\n  return `${seconds}s`;\n}\n\nreturn [{ json: { analysis: enrichedAnalysis, webhookData: webhookData } }];"
+        "jsCode": "// Merge analysis results with enriched context from webhook\nconst analysis = $input.first().json;\nconst preparedData = $('Prepare API Request').first().json;\nconst webhookData = preparedData.webhookData;\nconst contextMeta = webhookData.contextMetadata || {};\n\n// Use actual data passed from github-app\nconst existingAnnotations = webhookData.annotations || [];\nconst testFailures = webhookData.testFailures || [];\nconst prMetadata = webhookData.prMetadata;\nconst workflowTiming = webhookData.workflowTiming;\nconst dependencyChanges = webhookData.dependencyChanges || [];\n\n// Get AI-generated code annotations (from the analysis)\nconst aiAnnotations = (analysis.codeAnnotations || []).map(ann => ({\n  path: ann.path,\n  startLine: ann.line,\n  level: ann.level,\n  message: ann.message,\n  title: ann.title || ''\n}));\n\n// Merge existing annotations with AI-generated ones (AI annotations take priority)\nconst allAnnotations = [...aiAnnotations, ...existingAnnotations];\n\n// Build enriched analysis object for Slack and GitHub\nconst enrichedAnalysis = {\n  repository: analysis.repository || webhookData.repository,\n  confidence: analysis.confidence || analysis.confidenceScore || 0.5,\n  analysis: analysis.analysis || analysis.summary || 'Analysis unavailable',\n  identified_cause: analysis.identified_cause || analysis.identifiedCause || '',\n  recommended_actions: analysis.recommended_actions || analysis.recommendedActions || [],\n  // Enriched context from github-app\n  checkName: webhookData.checkName,\n  headSha: webhookData.headSha,\n  // Combined annotations (AI + existing from check run)\n  annotations: allAnnotations,\n  testFailures: testFailures,\n  // PR context from actual PR metadata\n  prContext: prMetadata ? {\n    number: webhookData.pullRequests?.[0] || prMetadata.number || 0,\n    title: prMetadata.title || '',\n    author: prMetadata.author || '',\n    branch: prMetadata.headBranch || '',\n    baseBranch: prMetadata.baseBranch || '',\n    labels: prMetadata.labels || []\n  } : null,\n  // Workflow context from actual timing data\n  workflowContext: workflowTiming ? {\n    name: webhookData.checkName || '',\n    duration: formatDuration(workflowTiming.durationMs)\n  } : null,\n  // Actual dependency changes from github-app\n  dependencyChanges: dependencyChanges\n};\n\n// Helper function for formatting duration\nfunction formatDuration(ms) {\n  if (!ms) return '';\n  const seconds = Math.floor(ms / 1000);\n  const minutes = Math.floor(seconds / 60);\n  const remainingSeconds = seconds % 60;\n  if (minutes > 0) {\n    return `${minutes}m ${remainingSeconds}s`;\n  }\n  return `${seconds}s`;\n}\n\nreturn [{ json: { analysis: enrichedAnalysis, webhookData: webhookData } }];"
       },
       "id": "code-merge-context",
       "name": "Merge Analysis with Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300]
+      "position": [
+        750,
+        300
+      ]
     },
     {
       "parameters": {
@@ -67,17 +84,23 @@
       "name": "HTTP Request - Post to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [850, 300]
+      "position": [
+        950,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Get the merged data from previous node\nconst data = $('Merge Analysis with Context').first().json;\nconst analysis = data.analysis;\nconst webhookData = data.webhookData;\n\n// Get PR numbers (may be empty array)\nconst pullRequests = webhookData.pullRequests || [];\n\n// If no PRs, return empty array (skip GitHub posting)\nif (pullRequests.length === 0) {\n  return [];\n}\n\n// Return items for each PR to post comment to\nreturn pullRequests.map(prNumber => ({\n  json: {\n    repository: analysis.repository,\n    pr_number: prNumber,\n    analysis: analysis\n  }\n}));"
+        "jsCode": "// Get the merged data from previous node\nconst data = $input.first().json;\nconst analysis = data.analysis;\nconst webhookData = data.webhookData;\n\n// Get PR numbers (may be empty array)\nconst pullRequests = webhookData.pullRequests || [];\n\n// If no PRs, return empty array (skip GitHub posting)\nif (pullRequests.length === 0) {\n  return [];\n}\n\n// Return items for each PR to post comment to\nreturn pullRequests.map(prNumber => ({\n  json: {\n    repository: analysis.repository,\n    pr_number: prNumber,\n    analysis: analysis\n  }\n}));"
       },
       "id": "code-prepare-github",
       "name": "Prepare GitHub Comments",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 500]
+      "position": [
+        950,
+        500
+      ]
     },
     {
       "parameters": {
@@ -93,22 +116,39 @@
       "name": "HTTP Request - Post to GitHub",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1050, 500]
+      "position": [
+        1150,
+        500
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"status\": \"processed\", \"slack_notified\": true, \"github_comments\": $('HTTP Request - Post to GitHub').all().length } }}"
+        "responseBody": "={{ { status: 'processed', slack_notified: true } }}"
       },
       "id": "respond-to-webhook",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1250, 400]
+      "position": [
+        1350,
+        400
+      ]
     }
   ],
   "connections": {
     "Webhook - CI Failure": {
+      "main": [
+        [
+          {
+            "node": "Prepare API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare API Request": {
       "main": [
         [
           {
@@ -186,7 +226,5 @@
   },
   "staticData": null,
   "tags": [],
-  "triggerCount": 0,
-  "updatedAt": "2024-01-01T00:00:00.000Z",
-  "versionId": "3"
+  "triggerCount": 0
 }

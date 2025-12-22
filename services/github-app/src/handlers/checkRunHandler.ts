@@ -138,6 +138,8 @@ const forwardToN8n = async (webhook: CheckRunWebhook): Promise<boolean> => {
   const payload = {
     log: enrichedLog,
     repository: repository.full_name,
+    // Multi-tenant: Pass installation_id for tenant context
+    installation_id: installation?.id ?? null,
     checkName: check_run.name,
     conclusion: check_run.conclusion,
     headSha: check_run.head_sha,
