@@ -82,11 +82,10 @@ class RateLimiter {
   };
 
   private readonly cleanup = (now: number): void => {
-    for (const [key, entry] of this.store) {
-      if (entry.resetTime < now) {
-        this.store.delete(key);
-      }
-    }
+    // Find expired keys and delete them
+    Array.from(this.store.entries())
+      .filter(([, entry]) => entry.resetTime < now)
+      .map(([key]) => this.store.delete(key));
   };
 
   readonly reset = (): void => {

@@ -177,7 +177,10 @@ const handleInstallationSuspend = async (
     if (!lookup.found) return lookup.result;
 
     const { tenant } = lookup;
-    await suspend(tenant.id, `GitHub App suspended by ${installation.suspended_by?.login ?? "unknown"}`);
+    await suspend(
+      tenant.id,
+      `GitHub App suspended by ${installation.suspended_by?.login ?? "unknown"}`
+    );
 
     return successResult(`Tenant suspended for ${orgName}`, tenant.id);
   } catch (error) {
@@ -203,7 +206,10 @@ const unsuspendActions: Record<
   },
   pending: async (tenant, orgName) => {
     logger.info("Tenant unsuspended but Slack not connected", { tenantId: tenant.id });
-    return successResult(`Tenant unsuspended but awaiting Slack connection for ${orgName}`, tenant.id);
+    return successResult(
+      `Tenant unsuspended but awaiting Slack connection for ${orgName}`,
+      tenant.id
+    );
   },
 };
 

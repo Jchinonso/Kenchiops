@@ -13,17 +13,10 @@ import {
   findBySlackWorkspace,
   findByGitHubInstallation,
   linkSlackWorkspace,
-  config,
 } from "@kenchi/shared";
 
 const router = Router();
 const logger = createLogger("github-app");
-
-/**
- * Build the Slack deep link URL for the workspace
- */
-const getSlackDeepLink = (workspaceId: string): string =>
-  `slack://open?team=${workspaceId}`;
 
 /**
  * Build success HTML page
@@ -86,9 +79,10 @@ const buildSuccessHtml = (
       <span><strong>Slack:</strong> ${isLinked ? workspaceName : "Pending connection"}</span>
     </div>
 
-    ${isLinked
-      ? `<p>Kenchi is now active! CI failure alerts will be sent to your Slack workspace.</p>`
-      : `<p>To complete setup, install the Slack app in your workspace.</p>
+    ${
+      isLinked
+        ? `<p>Kenchi is now active! CI failure alerts will be sent to your Slack workspace.</p>`
+        : `<p>To complete setup, install the Slack app in your workspace.</p>
          <a href="/slack/install" class="btn">Install Slack App</a>`
     }
   </div>
@@ -208,7 +202,6 @@ router.get("/github/setup", async (req: Request, res: Response) => {
     // Send success page
     const html = buildSuccessHtml(tenant.githubOrg, slackTeamName || null, isLinked);
     res.status(HTTP_STATUS.OK).send(html);
-
   } catch (error) {
     logger.error("Error processing GitHub setup", {
       error: error instanceof Error ? error.message : "Unknown error",

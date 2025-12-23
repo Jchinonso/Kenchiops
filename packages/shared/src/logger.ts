@@ -47,22 +47,22 @@ export interface Logger {
 }
 
 /**
+ * Console method lookup table for log levels.
+ * Maps LogLevel to the appropriate console method.
+ */
+const CONSOLE_METHODS: Readonly<Record<LogLevel, (message: string) => void>> = {
+  [LogLevel.DEBUG]: (msg) => console.log(msg),
+  [LogLevel.INFO]: (msg) => console.log(msg),
+  [LogLevel.WARN]: (msg) => console.warn(msg),
+  [LogLevel.ERROR]: (msg) => console.error(msg),
+};
+
+/**
  * Console output function that dispatches to the appropriate console method.
- * Uses direct console access (not .bind()) to allow proper mocking in tests.
+ * Uses lookup table for O(1) dispatch instead of switch statement.
  */
 const logToConsole = (level: LogLevel, message: string): void => {
-  switch (level) {
-    case LogLevel.DEBUG:
-    case LogLevel.INFO:
-      console.log(message);
-      break;
-    case LogLevel.WARN:
-      console.warn(message);
-      break;
-    case LogLevel.ERROR:
-      console.error(message);
-      break;
-  }
+  CONSOLE_METHODS[level](message);
 };
 
 class LoggerImpl implements Logger {

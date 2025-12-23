@@ -190,17 +190,88 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
 };
 
 /**
+ * Marker to identify KenchiOps comments
+ */
+const KENCHIOPS_COMMENT_MARKER = "KenchiOps CI Failure Analysis";
+
+/**
+ * Delete existing KenchiOps comments on a PR
+ * This keeps the PR clean by removing outdated analysis comments
+ */
+export const deleteKenchiOpsComments = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<number> => {
+  try {
+    const octokit = await getOctokit(installationId);
+
+    // List all comments on the PR
+    const { data: comments } = await octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    });
+
+    // Find KenchiOps comments (look for our marker in the body)
+    const kenchiOpsComments = comments.filter((comment) =>
+      comment.body?.includes(KENCHIOPS_COMMENT_MARKER)
+    );
+
+    // Delete each KenchiOps comment
+    await Promise.all(
+      kenchiOpsComments.map((comment) =>
+        octokit.rest.issues.deleteComment({
+          owner,
+          repo,
+          comment_id: comment.id,
+        })
+      )
+    );
+
+    if (kenchiOpsComments.length > 0) {
+      logger.info("Deleted old KenchiOps comments", {
+        owner,
+        repo,
+        prNumber,
+        deletedCount: kenchiOpsComments.length,
+      });
+    }
+
+    return kenchiOpsComments.length;
+  } catch (error) {
+    // Log but don't fail - cleanup is best-effort
+    logger.warn("Failed to delete old KenchiOps comments", {
+      owner,
+      repo,
+      prNumber,
+      error: getErrorMessage(error),
+    });
+    return 0;
+  }
+};
+
+/**
  * Post a comment on a pull request
+ * Optionally deletes existing KenchiOps comments first
  */
 export const postPRComment = async (
   installationId: number,
   owner: string,
   repo: string,
   prNumber: number,
-  body: string
+  body: string,
+  deleteOldComments = false
 ): Promise<void> => {
   try {
     const octokit = await getOctokit(installationId);
+
+    // Delete old KenchiOps comments if requested
+    if (deleteOldComments) {
+      await deleteKenchiOpsComments(installationId, owner, repo, prNumber);
+    }
 
     await octokit.rest.issues.createComment({
       owner,
@@ -243,6 +314,21 @@ export interface CheckAnnotation {
 }
 
 /**
+ * GitHub API annotation batch size limit
+ */
+const MAX_ANNOTATIONS_PER_CALL = 50;
+
+/**
+ * Split array into batches of specified size
+ */
+const batchArray = <T>(array: T[], batchSize: number): T[][] => {
+  const batchCount = Math.ceil(array.length / batchSize);
+  return Array.from({ length: batchCount }, (_, i) =>
+    array.slice(i * batchSize, (i + 1) * batchSize)
+  );
+};
+
+/**
  * Create a check run with annotations
  * This posts line-level feedback directly on the PR files
  */
@@ -258,15 +344,10 @@ export const createCheckRunWithAnnotations = async (
   try {
     const octokit = await getOctokit(installationId);
 
-    // GitHub limits annotations to 50 per API call
-    const MAX_ANNOTATIONS_PER_CALL = 50;
-    const annotationBatches: CheckAnnotation[][] = [];
+    // Split annotations into batches (GitHub limits to 50 per API call)
+    const annotationBatches = batchArray(annotations, MAX_ANNOTATIONS_PER_CALL);
 
-    for (let i = 0; i < annotations.length; i += MAX_ANNOTATIONS_PER_CALL) {
-      annotationBatches.push(annotations.slice(i, i + MAX_ANNOTATIONS_PER_CALL));
-    }
-
-    // Create the check run
+    // Create the check run with first batch
     const { data: checkRun } = await octokit.rest.checks.create({
       owner,
       repo,
@@ -281,19 +362,22 @@ export const createCheckRunWithAnnotations = async (
       },
     });
 
-    // If there are more annotations, update the check run with additional batches
-    for (let i = 1; i < annotationBatches.length; i++) {
-      await octokit.rest.checks.update({
-        owner,
-        repo,
-        check_run_id: checkRun.id,
-        output: {
-          title: "KenchiOps CI Analysis",
-          summary,
-          annotations: annotationBatches[i],
-        },
-      });
-    }
+    // Update with remaining batches (if any)
+    const remainingBatches = annotationBatches.slice(1);
+    await Promise.all(
+      remainingBatches.map((batch) =>
+        octokit.rest.checks.update({
+          owner,
+          repo,
+          check_run_id: checkRun.id,
+          output: {
+            title: "KenchiOps CI Analysis",
+            summary,
+            annotations: batch,
+          },
+        })
+      )
+    );
 
     logger.info("Created check run with annotations", {
       owner,

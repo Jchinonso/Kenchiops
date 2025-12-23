@@ -119,10 +119,11 @@ const buildEvidenceSection = (analysis: AnalysisData): string => {
 
     // Show up to 3 test failures
     const displayFailures = analysis.testFailures.slice(0, 3);
-    displayFailures.forEach((failure) => {
+    const failureLines = displayFailures.map((failure) => {
       const location = failure.file ? ` in \`${failure.file}\`` : "";
-      lines.push(`- ❌ \`${truncateText(failure.testName, 60)}\`${location}`);
+      return `- ❌ \`${truncateText(failure.testName, 60)}\`${location}`;
     });
+    lines.push(...failureLines);
 
     if (analysis.testFailures.length > 3) {
       lines.push(`- _...and ${analysis.testFailures.length - 3} more failures_`);
@@ -135,9 +136,10 @@ const buildEvidenceSection = (analysis: AnalysisData): string => {
   if (failureAnnotations.length > 0) {
     lines.push(`**Error Locations:**\n`);
     const displayAnnotations = failureAnnotations.slice(0, 3);
-    displayAnnotations.forEach((ann) => {
-      lines.push(`- 📍 \`${ann.path}:${ann.startLine}\` — ${truncateText(ann.message, 80)}`);
-    });
+    const annotationLines = displayAnnotations.map(
+      (ann) => `- 📍 \`${ann.path}:${ann.startLine}\` — ${truncateText(ann.message, 80)}`
+    );
+    lines.push(...annotationLines);
     if (failureAnnotations.length > 3) {
       lines.push(`- _...and ${failureAnnotations.length - 3} more errors_`);
     }
@@ -148,7 +150,7 @@ const buildEvidenceSection = (analysis: AnalysisData): string => {
   if (analysis.dependencyChanges && analysis.dependencyChanges.length > 0) {
     lines.push(`**Dependency Changes:** ${analysis.dependencyChanges.length} change(s)\n`);
     const displayDeps = analysis.dependencyChanges.slice(0, 3);
-    displayDeps.forEach((dep) => {
+    const depLines = displayDeps.map((dep) => {
       const icon = dep.type === "added" ? "➕" : dep.type === "removed" ? "➖" : "🔄";
       const version =
         dep.oldVersion && dep.newVersion
@@ -156,8 +158,9 @@ const buildEvidenceSection = (analysis: AnalysisData): string => {
           : dep.newVersion
             ? ` (${dep.newVersion})`
             : "";
-      lines.push(`- ${icon} \`${dep.name}\`${version}`);
+      return `- ${icon} \`${dep.name}\`${version}`;
     });
+    lines.push(...depLines);
     if (analysis.dependencyChanges.length > 3) {
       lines.push(`- _...and ${analysis.dependencyChanges.length - 3} more changes_`);
     }
@@ -202,9 +205,8 @@ const buildImpactSection = (analysis: AnalysisData): string => {
     impacts.push("CI pipeline blocked");
   }
 
-  impacts.forEach((impact) => {
-    lines.push(`- ⚠️ ${impact}`);
-  });
+  const impactLines = impacts.map((impact) => `- ⚠️ ${impact}`);
+  lines.push(...impactLines);
   lines.push("");
 
   return lines.join("\n");
@@ -224,11 +226,12 @@ const buildRecommendationSection = (analysis: AnalysisData): string => {
 
   // Take top 3 actions
   const topActions = actions.slice(0, 3);
-  topActions.forEach((action, index) => {
+  const actionLines = topActions.map((action, index) => {
     const emoji = getPriorityEmoji(action.priority);
     const number = index + 1;
-    lines.push(`${number}. ${emoji} ${action.description}`);
+    return `${number}. ${emoji} ${action.description}`;
   });
+  lines.push(...actionLines);
 
   if (actions.length > 3) {
     lines.push(`\n_${actions.length - 3} more recommendations available_`);
@@ -253,9 +256,8 @@ const buildErrorsSection = (analysis: AnalysisData): string => {
 
   // Limit to 5 errors, truncate each
   const displayErrors = errors.slice(0, 5);
-  displayErrors.forEach((err) => {
-    lines.push(truncateText(err, 120));
-  });
+  const errorLines = displayErrors.map((err) => truncateText(err, 120));
+  lines.push(...errorLines);
 
   lines.push("```");
 

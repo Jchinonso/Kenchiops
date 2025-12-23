@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { ValidationError } from "./errors.js";
 
 // Load environment variables once, at process start.
 dotenv.config();
@@ -67,7 +68,7 @@ const parseFloatEnv = (value: string | undefined): number | undefined => {
  */
 const requireEnv = (key: string, value: string | undefined): string => {
   if (!value || value.trim() === "") {
-    throw new Error(`Required environment variable ${key} is not set`);
+    throw new ValidationError(`Required environment variable ${key} is not set`);
   }
   return value;
 };

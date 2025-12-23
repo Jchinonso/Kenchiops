@@ -7,6 +7,7 @@
 
 import pg from "pg";
 import { createLogger } from "./logger.js";
+import { ValidationError } from "./errors.js";
 
 const { Pool } = pg;
 
@@ -72,9 +73,7 @@ export const initDatabase = (config: DatabaseConfig): void => {
  */
 export const getPool = (): pg.Pool => {
   if (!pool) {
-    throw new Error(
-      "Database pool not initialized. Call initDatabase() first."
-    );
+    throw new ValidationError("Database pool not initialized. Call initDatabase() first.");
   }
   return pool;
 };
@@ -124,9 +123,7 @@ export const query = async <T extends pg.QueryResultRow>(
  * @param fn - Transaction function that receives a client
  * @returns Result of the transaction function
  */
-export const transaction = async <T>(
-  fn: (client: pg.PoolClient) => Promise<T>
-): Promise<T> => {
+export const transaction = async <T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> => {
   const db = getPool();
   const client = await db.connect();
 

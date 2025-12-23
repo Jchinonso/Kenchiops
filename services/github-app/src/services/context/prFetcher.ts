@@ -249,25 +249,30 @@ export const fetchDependencyChanges = async (
     }
 
     // Build changes list: merge added + removed into updates
-    const changes: DependencyChange[] = [];
+    // Find dependencies that are both added and removed (= updates)
+    const updatedDeps = [...addedDeps.entries()]
+      .filter(([name]) => removedDeps.has(name))
+      .map(([name, newVersion]) => ({
+        name,
+        type: "updated" as const,
+        oldVersion: removedDeps.get(name)!,
+        newVersion,
+      }));
 
-    // Process added deps - check if also removed (= update)
-    for (const [name, newVersion] of addedDeps) {
-      const oldVersion = removedDeps.get(name);
-      if (oldVersion) {
-        // Both added and removed = version update
-        changes.push({ name, type: "updated", oldVersion, newVersion });
-        removedDeps.delete(name); // Remove from removed set
-      } else {
-        // Only added = new dependency
-        changes.push({ name, type: "added", newVersion });
-      }
-    }
+    // Get names of updated deps to exclude from added/removed
+    const updatedNames = new Set(updatedDeps.map((d) => d.name));
 
-    // Remaining removed deps = actually removed
-    for (const [name, oldVersion] of removedDeps) {
-      changes.push({ name, type: "removed", oldVersion });
-    }
+    // Remaining added deps (not updated)
+    const addedOnly = [...addedDeps.entries()]
+      .filter(([name]) => !updatedNames.has(name))
+      .map(([name, newVersion]) => ({ name, type: "added" as const, newVersion }));
+
+    // Remaining removed deps (not updated)
+    const removedOnly = [...removedDeps.entries()]
+      .filter(([name]) => !updatedNames.has(name))
+      .map(([name, oldVersion]) => ({ name, type: "removed" as const, oldVersion }));
+
+    const changes: DependencyChange[] = [...updatedDeps, ...addedOnly, ...removedOnly];
 
     logger.info("Parsed dependency changes", {
       prNumber,
@@ -313,17 +318,16 @@ export const fetchBuildConfigChanges = async (
     });
 
     const buildConfigSet = new Set<string>(BUILD_CONFIG_FILES);
-    const changes: BuildConfigChange[] = [];
 
-    for (const file of files) {
-      const filename = file.filename.split("/").pop() || file.filename;
-      if (buildConfigSet.has(filename) && file.patch) {
-        changes.push({
-          file: file.filename,
-          diff: truncateWithContext(file.patch, LOG_PARSING_LIMITS.MAX_BUILD_CONFIG_DIFF_SIZE),
-        });
-      }
-    }
+    const changes: BuildConfigChange[] = files
+      .filter((file) => {
+        const filename = file.filename.split("/").pop() || file.filename;
+        return buildConfigSet.has(filename) && file.patch;
+      })
+      .map((file) => ({
+        file: file.filename,
+        diff: truncateWithContext(file.patch!, LOG_PARSING_LIMITS.MAX_BUILD_CONFIG_DIFF_SIZE),
+      }));
 
     logger.info("Fetched build config changes", {
       prNumber,

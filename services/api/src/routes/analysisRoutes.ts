@@ -28,7 +28,10 @@ router.post(
       bodyKeys: req.body ? Object.keys(req.body) : [],
       hasFailureLog: !!req.body?.failure_log,
       hasRepository: !!req.body?.repository,
-      rawBody: typeof req.body === "string" ? req.body.substring(0, 200) : JSON.stringify(req.body).substring(0, 200),
+      rawBody:
+        typeof req.body === "string"
+          ? req.body.substring(0, 200)
+          : JSON.stringify(req.body).substring(0, 200),
     });
     next();
   },

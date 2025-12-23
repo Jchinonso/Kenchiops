@@ -587,73 +587,73 @@ environment variable `AUTH_SECRET` in CI environment.
 
 ### LLM vs. Deterministic Code Responsibilities
 
-| **Component/Function**                     | **Type**           | **Responsibility**                                  | **Notes**                    |
-| ------------------------------------------ | ------------------ | --------------------------------------------------- | ---------------------------- |
+| **Component/Function**                     | **Type**           | **Responsibility**                                  | **Notes**                        |
+| ------------------------------------------ | ------------------ | --------------------------------------------------- | -------------------------------- |
 | **INGESTION LAYER**                        |
-| Webhook receipt & validation               | Deterministic      | Receive webhooks, validate signatures, parse JSON   | Express.js endpoints         |
-| Event routing                              | Deterministic      | Route events to appropriate handlers                | workflow automation, API routing   |
-| Rate limiting                              | Deterministic      | Apply rate limits per source                        | Redis-based rate limiter     |
-| Event deduplication                        | Deterministic      | Detect duplicate events                             | Hash-based or ID-based       |
-| Initial event logging                      | Deterministic      | Log raw event to database                           | Structured logging           |
+| Webhook receipt & validation               | Deterministic      | Receive webhooks, validate signatures, parse JSON   | Express.js endpoints             |
+| Event routing                              | Deterministic      | Route events to appropriate handlers                | workflow automation, API routing |
+| Rate limiting                              | Deterministic      | Apply rate limits per source                        | Redis-based rate limiter         |
+| Event deduplication                        | Deterministic      | Detect duplicate events                             | Hash-based or ID-based           |
+| Initial event logging                      | Deterministic      | Log raw event to database                           | Structured logging               |
 | **PROCESSING & KNOWLEDGE LAYER**           |
-| Event normalization                        | Deterministic      | Parse diverse formats to standard `Event` schema    | Format converters            |
-| Event validation                           | Deterministic      | Validate event structure, required fields           | JSON schema validation       |
-| Evidence collection - Logs                 | Deterministic      | Query log systems, extract relevant logs            | API calls to ELK, Splunk     |
-| Evidence collection - Metrics              | Deterministic      | Fetch time-series metrics                           | Prometheus, Datadog API      |
-| Evidence collection - Git history          | Deterministic      | Retrieve commits, PRs, file changes                 | GitHub/GitLab API            |
-| Evidence collection - System state         | Deterministic      | Get deployment status, service health               | Kubernetes API, Cloud APIs   |
-| Evidence aggregation                       | Deterministic      | Combine collected data into `Evidence` object       | Data transformation          |
-| Embedding generation                       | Deterministic      | Convert text to vector embedding                    | OpenAI Embeddings API call   |
-| Vector database query                      | Deterministic      | Similarity search for relevant docs                 | pgvector SQL query           |
-| Knowledge retrieval                        | Deterministic      | Fetch top-K similar documents                       | Vector DB operations         |
-| Relevance filtering                        | Deterministic      | Filter results by similarity threshold              | Score comparison             |
+| Event normalization                        | Deterministic      | Parse diverse formats to standard `Event` schema    | Format converters                |
+| Event validation                           | Deterministic      | Validate event structure, required fields           | JSON schema validation           |
+| Evidence collection - Logs                 | Deterministic      | Query log systems, extract relevant logs            | API calls to ELK, Splunk         |
+| Evidence collection - Metrics              | Deterministic      | Fetch time-series metrics                           | Prometheus, Datadog API          |
+| Evidence collection - Git history          | Deterministic      | Retrieve commits, PRs, file changes                 | GitHub/GitLab API                |
+| Evidence collection - System state         | Deterministic      | Get deployment status, service health               | Kubernetes API, Cloud APIs       |
+| Evidence aggregation                       | Deterministic      | Combine collected data into `Evidence` object       | Data transformation              |
+| Embedding generation                       | Deterministic      | Convert text to vector embedding                    | OpenAI Embeddings API call       |
+| Vector database query                      | Deterministic      | Similarity search for relevant docs                 | pgvector SQL query               |
+| Knowledge retrieval                        | Deterministic      | Fetch top-K similar documents                       | Vector DB operations             |
+| Relevance filtering                        | Deterministic      | Filter results by similarity threshold              | Score comparison                 |
 | **LLM ANALYSIS ENGINE**                    |
-| Prompt construction                        | Deterministic      | Assemble system context, event, evidence, knowledge | Template-based formatting    |
-| Prompt safety constraints                  | Deterministic      | Add safety guidelines, constraints to prompt        | Template injection           |
-| LLM API call                               | **LLM**            | Send prompt, receive response                       | OpenAI/Claude API            |
-| **Root cause analysis**                    | **LLM**            | **Analyze evidence to identify likely cause**       | **AI reasoning**             |
-| **Impact assessment**                      | **LLM**            | **Determine severity and scope**                    | **AI judgment**              |
-| **Next steps generation**                  | **LLM**            | **Suggest remedial actions**                        | **AI recommendations**       |
-| **Explanation generation**                 | **LLM**            | **Provide human-readable summary**                  | **AI communication**         |
-| Response parsing                           | Deterministic      | Parse JSON response, validate structure             | JSON parsing                 |
-| Response validation                        | Deterministic      | Check for required fields, format                   | Schema validation            |
-| Malformed response handling                | Deterministic      | Retry or fallback on bad response                   | Error handling               |
+| Prompt construction                        | Deterministic      | Assemble system context, event, evidence, knowledge | Template-based formatting        |
+| Prompt safety constraints                  | Deterministic      | Add safety guidelines, constraints to prompt        | Template injection               |
+| LLM API call                               | **LLM**            | Send prompt, receive response                       | OpenAI/Claude API                |
+| **Root cause analysis**                    | **LLM**            | **Analyze evidence to identify likely cause**       | **AI reasoning**                 |
+| **Impact assessment**                      | **LLM**            | **Determine severity and scope**                    | **AI judgment**                  |
+| **Next steps generation**                  | **LLM**            | **Suggest remedial actions**                        | **AI recommendations**           |
+| **Explanation generation**                 | **LLM**            | **Provide human-readable summary**                  | **AI communication**             |
+| Response parsing                           | Deterministic      | Parse JSON response, validate structure             | JSON parsing                     |
+| Response validation                        | Deterministic      | Check for required fields, format                   | Schema validation                |
+| Malformed response handling                | Deterministic      | Retry or fallback on bad response                   | Error handling                   |
 | **ACTION/RECOMMENDATION LAYER**            |
-| Confidence scoring - Base score            | Deterministic      | Calculate confidence from LLM signals               | Heuristic algorithm          |
-| Confidence scoring - Uncertainty detection | Deterministic      | Detect hedging language, "maybe", etc.              | Regex/NLP patterns           |
-| Confidence scoring - Evidence alignment    | Deterministic      | Check if LLM cause matches evidence                 | Keyword matching             |
-| Confidence scoring - Completeness check    | Deterministic      | Verify all fields present, detailed                 | Field validation             |
-| Final confidence calculation               | Deterministic      | Combine factors into 0-1 score                      | Weighted sum                 |
-| Action proposal parsing                    | Deterministic      | Convert LLM recommendations to `ActionProposal`     | Data transformation          |
-| Action type classification                 | Deterministic      | Categorize actions (rollback, notify, etc.)         | Rule-based classification    |
-| Action confidence assignment               | Deterministic      | Assign confidence to each action                    | Inherit from analysis        |
-| Safety validation - Blocklist check        | Deterministic      | Block dangerous actions                             | Deny list matching           |
-| Safety validation - Approval rules         | Deterministic      | Determine if approval required                      | Rule engine                  |
-| Safety validation - Risk assessment        | Deterministic      | Evaluate action impact level                        | Risk matrix                  |
-| Action filtering                           | Deterministic      | Remove blocked actions, flag for approval           | Filter pipeline              |
-| Approval requirement flagging              | Deterministic      | Set `requiresApproval` based on rules               | Boolean logic                |
+| Confidence scoring - Base score            | Deterministic      | Calculate confidence from LLM signals               | Heuristic algorithm              |
+| Confidence scoring - Uncertainty detection | Deterministic      | Detect hedging language, "maybe", etc.              | Regex/NLP patterns               |
+| Confidence scoring - Evidence alignment    | Deterministic      | Check if LLM cause matches evidence                 | Keyword matching                 |
+| Confidence scoring - Completeness check    | Deterministic      | Verify all fields present, detailed                 | Field validation                 |
+| Final confidence calculation               | Deterministic      | Combine factors into 0-1 score                      | Weighted sum                     |
+| Action proposal parsing                    | Deterministic      | Convert LLM recommendations to `ActionProposal`     | Data transformation              |
+| Action type classification                 | Deterministic      | Categorize actions (rollback, notify, etc.)         | Rule-based classification        |
+| Action confidence assignment               | Deterministic      | Assign confidence to each action                    | Inherit from analysis            |
+| Safety validation - Blocklist check        | Deterministic      | Block dangerous actions                             | Deny list matching               |
+| Safety validation - Approval rules         | Deterministic      | Determine if approval required                      | Rule engine                      |
+| Safety validation - Risk assessment        | Deterministic      | Evaluate action impact level                        | Risk matrix                      |
+| Action filtering                           | Deterministic      | Remove blocked actions, flag for approval           | Filter pipeline                  |
+| Approval requirement flagging              | Deterministic      | Set `requiresApproval` based on rules               | Boolean logic                    |
 | **USER INTERFACE LAYER**                   |
-| Message formatting - Slack                 | Deterministic      | Format rich Slack message with buttons              | Slack Block Kit              |
-| Message formatting - GitHub                | Deterministic      | Format Markdown comment                             | Template rendering           |
-| Interactive button creation                | Deterministic      | Create approval/reject buttons                      | Slack interactive components |
-| Message posting - Slack                    | Deterministic      | Send message via Slack API                          | Slack Web API call           |
-| Comment posting - GitHub                   | Deterministic      | Post comment via GitHub API                         | Octokit API call             |
-| User interaction handling                  | Deterministic      | Process button clicks, collect approvals            | Slack event handlers         |
-| Thread updates                             | Deterministic      | Post execution status in Slack thread               | Slack API calls              |
-| Link generation                            | Deterministic      | Create links to logs, metrics, docs                 | URL construction             |
+| Message formatting - Slack                 | Deterministic      | Format rich Slack message with buttons              | Slack Block Kit                  |
+| Message formatting - GitHub                | Deterministic      | Format Markdown comment                             | Template rendering               |
+| Interactive button creation                | Deterministic      | Create approval/reject buttons                      | Slack interactive components     |
+| Message posting - Slack                    | Deterministic      | Send message via Slack API                          | Slack Web API call               |
+| Comment posting - GitHub                   | Deterministic      | Post comment via GitHub API                         | Octokit API call                 |
+| User interaction handling                  | Deterministic      | Process button clicks, collect approvals            | Slack event handlers             |
+| Thread updates                             | Deterministic      | Post execution status in Slack thread               | Slack API calls                  |
+| Link generation                            | Deterministic      | Create links to logs, metrics, docs                 | URL construction                 |
 | **ACTION EXECUTION**                       |
-| Approval collection                        | Deterministic      | Wait for user approval, enforce timeout             | State machine                |
-| Action execution logic                     | Deterministic      | Call APIs, run scripts to execute actions           | API clients, shell commands  |
-| Execution monitoring                       | Deterministic      | Watch for action completion, handle errors          | Polling, webhooks            |
-| Status updates                             | Deterministic      | Post real-time updates to user interfaces           | Slack/GitHub API calls       |
-| Rollback on failure                        | Deterministic      | Revert actions if execution fails                   | Transaction-like logic       |
-| Audit logging                              | Deterministic      | Log all actions, approvals, results                 | Database writes              |
+| Approval collection                        | Deterministic      | Wait for user approval, enforce timeout             | State machine                    |
+| Action execution logic                     | Deterministic      | Call APIs, run scripts to execute actions           | API clients, shell commands      |
+| Execution monitoring                       | Deterministic      | Watch for action completion, handle errors          | Polling, webhooks                |
+| Status updates                             | Deterministic      | Post real-time updates to user interfaces           | Slack/GitHub API calls           |
+| Rollback on failure                        | Deterministic      | Revert actions if execution fails                   | Transaction-like logic           |
+| Audit logging                              | Deterministic      | Log all actions, approvals, results                 | Database writes                  |
 | **LEARNING & FEEDBACK**                    |
-| Feedback collection                        | Deterministic      | Capture user feedback (helpful/not helpful)         | Slack buttons, API           |
-| Incident storage                           | Deterministic      | Save incident + resolution to knowledge base        | Database writes              |
-| Embedding generation for new incidents     | Deterministic      | Create vector embeddings for retrieval              | OpenAI Embeddings API        |
-| Vector DB update                           | Deterministic      | Store new incident embeddings                       | pgvector insert              |
-| **Analytics evaluation**                   | **LLM** (optional) | **Periodic analysis of system performance**         | **AI insights**              |
+| Feedback collection                        | Deterministic      | Capture user feedback (helpful/not helpful)         | Slack buttons, API               |
+| Incident storage                           | Deterministic      | Save incident + resolution to knowledge base        | Database writes                  |
+| Embedding generation for new incidents     | Deterministic      | Create vector embeddings for retrieval              | OpenAI Embeddings API            |
+| Vector DB update                           | Deterministic      | Store new incident embeddings                       | pgvector insert                  |
+| **Analytics evaluation**                   | **LLM** (optional) | **Periodic analysis of system performance**         | **AI insights**                  |
 
 ### Summary Statistics
 
