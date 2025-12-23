@@ -30,9 +30,9 @@ interface WebhookHandlerResult {
 }
 
 /**
- * Webhook event handler configuration
+ * GitHub event handler configuration
  */
-interface WebhookEventHandler {
+interface GitHubEventHandler {
   readonly handle: (body: unknown) => Promise<WebhookHandlerResult>;
   readonly formatResponse: (result: WebhookHandlerResult) => object;
 }
@@ -58,7 +58,7 @@ const formatInstallationResponse = (result: WebhookHandlerResult): object => ({
 /**
  * Event handler lookup table
  */
-const eventHandlers: Record<string, WebhookEventHandler> = {
+const eventHandlers: Record<string, GitHubEventHandler> = {
   pull_request: {
     handle: (body) => handlePullRequest(body as PullRequestWebhook),
     formatResponse: formatStandardResponse,
