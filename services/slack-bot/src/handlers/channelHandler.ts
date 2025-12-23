@@ -14,7 +14,11 @@ import {
 
 // Re-export commonly used functions for backward compatibility
 export { resolveChannelId, getBotMemberChannels } from "../services/channelService.js";
-export { postMessage, postConsolidatedMessage, broadcastMessage } from "../services/messageService.js";
+export {
+  postMessage,
+  postConsolidatedMessage,
+  broadcastMessage,
+} from "../services/messageService.js";
 export {
   formatCIFailureBlocks,
   createAnalysisAttachments,

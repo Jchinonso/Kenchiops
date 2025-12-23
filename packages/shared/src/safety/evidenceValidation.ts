@@ -69,7 +69,11 @@ const ALIGNMENT_CHECKS: readonly AlignmentCheck[] = [
   {
     // Check 4: Does analysis mention metrics?
     condition: (analysis, evidence) =>
-      !!(analysis.reasoning && evidence.metrics?.summary && hasMetricsReference(analysis.reasoning)),
+      !!(
+        analysis.reasoning &&
+        evidence.metrics?.summary &&
+        hasMetricsReference(analysis.reasoning)
+      ),
     adjustment: ALIGNMENT_ADJUSTMENTS.METRICS_REFERENCE,
   },
 ];
@@ -142,7 +146,9 @@ const COMPLETENESS_CHECKS: readonly CompletenessCheck[] = [
   {
     // Check if multiple actions recommended
     condition: (analysis) =>
-      !!(analysis.recommendedActions && analysis.recommendedActions.length >= MIN_ACTIONS_FOR_BONUS),
+      !!(
+        analysis.recommendedActions && analysis.recommendedActions.length >= MIN_ACTIONS_FOR_BONUS
+      ),
     adjustment: COMPLETENESS_ADJUSTMENTS.MULTIPLE_ACTIONS,
   },
   {

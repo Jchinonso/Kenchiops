@@ -76,9 +76,7 @@ const rowToTenant = (row: TenantRow): Tenant => ({
  * @param installationId - GitHub App installation ID
  * @returns Tenant if found, null otherwise
  */
-export const findByGitHubInstallation = async (
-  installationId: number
-): Promise<Tenant | null> => {
+export const findByGitHubInstallation = async (installationId: number): Promise<Tenant | null> => {
   const result = await query<TenantRow>(
     `SELECT * FROM tenants WHERE github_installation_id = $1 AND status != 'deleted'`,
     [installationId]
@@ -118,9 +116,7 @@ export const findByGitHubOrg = async (org: string): Promise<Tenant | null> => {
  * @param workspaceId - Slack workspace/team ID
  * @returns Tenant if found, null otherwise
  */
-export const findBySlackWorkspace = async (
-  workspaceId: string
-): Promise<Tenant | null> => {
+export const findBySlackWorkspace = async (workspaceId: string): Promise<Tenant | null> => {
   const result = await query<TenantRow>(
     `SELECT * FROM tenants WHERE slack_workspace_id = $1 AND status != 'deleted'`,
     [workspaceId]
@@ -140,10 +136,7 @@ export const findBySlackWorkspace = async (
  * @returns Tenant if found, null otherwise
  */
 export const findById = async (id: string): Promise<Tenant | null> => {
-  const result = await query<TenantRow>(
-    `SELECT * FROM tenants WHERE id = $1`,
-    [id]
-  );
+  const result = await query<TenantRow>(`SELECT * FROM tenants WHERE id = $1`, [id]);
 
   if (result.rows.length === 0) {
     return null;
@@ -174,9 +167,7 @@ export const getActiveTenants = async (): Promise<readonly Tenant[]> => {
  * @param data - GitHub installation data
  * @returns Created tenant
  */
-export const createFromGitHubInstall = async (
-  data: CreateTenantFromGitHub
-): Promise<Tenant> => {
+export const createFromGitHubInstall = async (data: CreateTenantFromGitHub): Promise<Tenant> => {
   const result = await transaction(async (client) => {
     // Check if tenant already exists for this org
     const existing = await client.query<TenantRow>(
@@ -228,10 +219,7 @@ export const createFromGitHubInstall = async (
     await client.query(
       `INSERT INTO tenant_audit_log (tenant_id, action, actor, metadata)
        VALUES ($1, 'github_installed', 'system', $2)`,
-      [
-        created.rows[0].id,
-        JSON.stringify({ installationId: data.githubInstallationId }),
-      ]
+      [created.rows[0].id, JSON.stringify({ installationId: data.githubInstallationId })]
     );
 
     return created.rows[0];
@@ -253,9 +241,7 @@ export const createFromGitHubInstall = async (
  * @param data - Slack workspace data
  * @returns Updated tenant
  */
-export const linkSlackWorkspace = async (
-  data: LinkSlackWorkspace
-): Promise<Tenant> => {
+export const linkSlackWorkspace = async (data: LinkSlackWorkspace): Promise<Tenant> => {
   const result = await transaction(async (client) => {
     const updated = await client.query<TenantRow>(
       `UPDATE tenants
@@ -415,10 +401,7 @@ export const activate = async (tenantId: string): Promise<Tenant> => {
  * @param reason - Reason for suspension
  * @returns Updated tenant
  */
-export const suspend = async (
-  tenantId: string,
-  reason?: string
-): Promise<Tenant> => {
+export const suspend = async (tenantId: string, reason?: string): Promise<Tenant> => {
   const result = await transaction(async (client) => {
     const updated = await client.query<TenantRow>(
       `UPDATE tenants SET status = 'suspended', updated_at = NOW() WHERE id = $1 RETURNING *`,
@@ -449,10 +432,9 @@ export const suspend = async (
  */
 export const deleteTenant = async (tenantId: string): Promise<void> => {
   await transaction(async (client) => {
-    await client.query(
-      `UPDATE tenants SET status = 'deleted', updated_at = NOW() WHERE id = $1`,
-      [tenantId]
-    );
+    await client.query(`UPDATE tenants SET status = 'deleted', updated_at = NOW() WHERE id = $1`, [
+      tenantId,
+    ]);
 
     await client.query(
       `INSERT INTO tenant_audit_log (tenant_id, action, actor, metadata)
@@ -469,9 +451,7 @@ export const deleteTenant = async (tenantId: string): Promise<void> => {
  *
  * @param installationId - GitHub installation ID
  */
-export const handleGitHubUninstall = async (
-  installationId: number
-): Promise<void> => {
+export const handleGitHubUninstall = async (installationId: number): Promise<void> => {
   const tenant = await findByGitHubInstallation(installationId);
 
   if (!tenant) {
@@ -563,14 +543,11 @@ export const getAuditLog = async (
  * @param tenantId - Tenant ID
  * @param newToken - New Slack bot token
  */
-export const updateSlackToken = async (
-  tenantId: string,
-  newToken: string
-): Promise<void> => {
-  await query(
-    `UPDATE tenants SET slack_bot_token = $1, updated_at = NOW() WHERE id = $2`,
-    [newToken, tenantId]
-  );
+export const updateSlackToken = async (tenantId: string, newToken: string): Promise<void> => {
+  await query(`UPDATE tenants SET slack_bot_token = $1, updated_at = NOW() WHERE id = $2`, [
+    newToken,
+    tenantId,
+  ]);
 
   logger.info("Slack token updated", { tenantId });
 };

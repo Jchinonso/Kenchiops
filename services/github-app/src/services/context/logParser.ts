@@ -93,9 +93,9 @@ export const extractFileReferences = (logs: string): FileReference[] => {
  * @returns Starting index for truncation (0 if no indicator found)
  */
 const findErrorPosition = (content: string): number => {
-  const foundIndicator = ERROR_INDICATORS
-    .map((indicator) => content.indexOf(indicator))
-    .find((index) => index !== -1);
+  const foundIndicator = ERROR_INDICATORS.map((indicator) => content.indexOf(indicator)).find(
+    (index) => index !== -1
+  );
   return foundIndicator ?? 0;
 };
 
@@ -234,9 +234,9 @@ export const extractTestFailures = (logs: string): TestFailure[] => {
   const maxFailures = LOG_PARSING_LIMITS.MAX_TEST_FAILURES;
 
   // Try each framework in order, return first match
-  const result = FRAMEWORK_PATTERNS
-    .map((framework) => tryExtractFromFramework(logs, framework, maxFailures))
-    .find((matches) => matches !== null);
+  const result = FRAMEWORK_PATTERNS.map((framework) =>
+    tryExtractFromFramework(logs, framework, maxFailures)
+  ).find((matches) => matches !== null);
 
   if (result) {
     return result;

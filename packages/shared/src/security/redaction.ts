@@ -76,7 +76,8 @@ export const redactSecrets = (text: string, options: { logRedactions?: boolean }
       return REDACTION_PLACEHOLDER;
     });
 
-    matchCount > 0 && options.logRedactions &&
+    matchCount > 0 &&
+      options.logRedactions &&
       logger.info("Redacted secret from text", { type: name, count: matchCount });
 
     return redacted;

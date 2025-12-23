@@ -6,12 +6,7 @@
  */
 
 import { WebClient, LogLevel } from "@slack/web-api";
-import {
-  createLogger,
-  getSlackCredentials,
-  config,
-  NotFoundError,
-} from "@kenchi/shared";
+import { createLogger, getSlackCredentials, config, NotFoundError } from "@kenchi/shared";
 
 const logger = createLogger("tenant-slack-client");
 
@@ -67,7 +62,8 @@ const cleanupExpiredClients = (): void => {
       return installationId;
     });
 
-  expiredIds.length > 0 && logger.debug("Cache cleanup complete", { deletedCount: expiredIds.length });
+  expiredIds.length > 0 &&
+    logger.debug("Cache cleanup complete", { deletedCount: expiredIds.length });
 };
 
 // Clean up expired clients every minute
@@ -88,9 +84,7 @@ const createSlackClient = (token: string): WebClient =>
  * @returns Slack WebClient configured for the tenant's workspace
  * @throws Error if tenant not found or no Slack token available
  */
-export const getSlackClientForTenant = async (
-  installationId: number
-): Promise<WebClient> => {
+export const getSlackClientForTenant = async (installationId: number): Promise<WebClient> => {
   const now = Date.now();
   const cached = clientCache.get(installationId);
 
@@ -175,5 +169,4 @@ export const getCacheStats = (): {
  * In multi-tenant mode, Slack clients are created per-tenant from database credentials.
  * In single-tenant mode, a single client is used from environment variables.
  */
-export const isMultiTenantEnabled = (): boolean =>
-  config.MULTI_TENANT_MODE === true;
+export const isMultiTenantEnabled = (): boolean => config.MULTI_TENANT_MODE === true;

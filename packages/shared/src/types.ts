@@ -383,12 +383,7 @@ export interface GitHubPREvent {
  * - suspended: Temporarily disabled
  * - deleted: Soft deleted
  */
-export type TenantStatus =
-  | "pending_slack"
-  | "pending_github"
-  | "active"
-  | "suspended"
-  | "deleted";
+export type TenantStatus = "pending_slack" | "pending_github" | "active" | "suspended" | "deleted";
 
 /**
  * Tenant entity - represents a customer organization using Kenchi.

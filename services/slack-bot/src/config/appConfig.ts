@@ -21,9 +21,21 @@ export interface AppConfig {
  * Required configuration fields with error messages
  */
 const REQUIRED_CONFIG = [
-  { key: "SLACK_BOT_TOKEN", value: () => config.SLACK_BOT_TOKEN, message: "SLACK_BOT_TOKEN is required" },
-  { key: "SLACK_SIGNING_SECRET", value: () => config.SLACK_SIGNING_SECRET, message: "SLACK_SIGNING_SECRET is required" },
-  { key: "SLACK_APP_LEVEL_TOKEN", value: () => config.SLACK_APP_LEVEL_TOKEN, message: "SLACK_APP_LEVEL_TOKEN is required for Socket Mode" },
+  {
+    key: "SLACK_BOT_TOKEN",
+    value: () => config.SLACK_BOT_TOKEN,
+    message: "SLACK_BOT_TOKEN is required",
+  },
+  {
+    key: "SLACK_SIGNING_SECRET",
+    value: () => config.SLACK_SIGNING_SECRET,
+    message: "SLACK_SIGNING_SECRET is required",
+  },
+  {
+    key: "SLACK_APP_LEVEL_TOKEN",
+    value: () => config.SLACK_APP_LEVEL_TOKEN,
+    message: "SLACK_APP_LEVEL_TOKEN is required for Socket Mode",
+  },
 ] as const;
 
 /**

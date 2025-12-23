@@ -10,9 +10,17 @@ import express, { type Request, type Response } from "express";
 import { validate, validators, HTTP_STATUS, asyncHandler } from "@kenchi/shared";
 import type Bolt from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
-import { postMessage, postConsolidatedMessage, broadcastMessage } from "../handlers/channelHandler.js";
+import {
+  postMessage,
+  postConsolidatedMessage,
+  broadcastMessage,
+} from "../handlers/channelHandler.js";
 import { getSlackClientForTenant, isMultiTenantEnabled } from "../services/tenantSlackClient.js";
-import type { SlackMessageRequest, SlackBroadcastRequest, ConsolidatedMessageRequest } from "../types/slackTypes.js";
+import type {
+  SlackMessageRequest,
+  SlackBroadcastRequest,
+  ConsolidatedMessageRequest,
+} from "../types/slackTypes.js";
 
 type SlackApp = InstanceType<typeof Bolt.App>;
 
@@ -29,15 +37,15 @@ type IncomingMessageRequest = MessageRequestWithTenant | ConsolidatedMessageRequ
 /**
  * Type guard for consolidated message requests
  */
-const isConsolidatedRequest = (request: IncomingMessageRequest): request is ConsolidatedMessageRequest =>
+const isConsolidatedRequest = (
+  request: IncomingMessageRequest
+): request is ConsolidatedMessageRequest =>
   "consolidated" in request && request.consolidated === true;
 
 /**
  * Result of getting a Slack client
  */
-type ClientResult =
-  | { success: true; client: WebClient }
-  | { success: false; error: string };
+type ClientResult = { success: true; client: WebClient } | { success: false; error: string };
 
 /**
  * Get Slack client based on multi-tenant mode

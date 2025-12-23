@@ -104,7 +104,8 @@ const handleStatus: SubcommandHandler = async ({ command, respond }) => {
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `*Kenchi Connection Status*\n\n` +
+              text:
+                `*Kenchi Connection Status*\n\n` +
                 `✅ *Slack:* Connected\n` +
                 `${tenant.githubInstallationId ? "✅" : "⏳"} *GitHub:* ${tenant.githubInstallationId ? `Connected (${tenant.githubOrg})` : "Not connected"}\n` +
                 `📊 *Status:* ${tenant.status}`,
@@ -127,7 +128,8 @@ const handleStatus: SubcommandHandler = async ({ command, respond }) => {
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `*Kenchi Connection Status*\n\n` +
+              text:
+                `*Kenchi Connection Status*\n\n` +
                 `⚠️ No tenant found for this workspace.\n\n` +
                 `<${getGitHubInstallUrl(workspaceId)}|:github: Install GitHub App to get started>`,
             },
@@ -168,7 +170,8 @@ const handleHelp: SubcommandHandler = async ({ respond }) => {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "• `/kenchi connect` - Get the GitHub App install link\n" +
+          text:
+            "• `/kenchi connect` - Get the GitHub App install link\n" +
             "• `/kenchi status` - Check your GitHub connection status\n" +
             "• `/kenchi help` - Show this help message\n" +
             "• `/kenchi <question>` - Ask Kenchi to analyze a CI issue",

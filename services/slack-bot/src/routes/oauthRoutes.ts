@@ -111,7 +111,12 @@ interface SlackOAuthResponse {
 /**
  * Validation error types for OAuth callback
  */
-type ValidationErrorType = "oauth_denied" | "invalid_params" | "invalid_state" | "missing_config" | "token_exchange_failed";
+type ValidationErrorType =
+  | "oauth_denied"
+  | "invalid_params"
+  | "invalid_state"
+  | "missing_config"
+  | "token_exchange_failed";
 
 /**
  * Validation error with type and message
@@ -125,7 +130,10 @@ interface ValidationError {
 /**
  * Error response handlers for each validation error type
  */
-const errorResponseHandlers: Record<ValidationErrorType, (res: Response, error: ValidationError) => void> = {
+const errorResponseHandlers: Record<
+  ValidationErrorType,
+  (res: Response, error: ValidationError) => void
+> = {
   oauth_denied: (res, error) => {
     res.status(HTTP_STATUS.BAD_REQUEST).send(error.htmlResponse);
   },
@@ -149,7 +157,11 @@ const errorResponseHandlers: Record<ValidationErrorType, (res: Response, error: 
 interface TenantLinkStrategy {
   readonly name: string;
   readonly matches: (state: StoredState, teamName: string) => Promise<boolean>;
-  readonly execute: (state: StoredState, slackData: SlackWorkspaceData, teamName: string) => Promise<TenantLinkResult>;
+  readonly execute: (
+    state: StoredState,
+    slackData: SlackWorkspaceData,
+    teamName: string
+  ) => Promise<TenantLinkResult>;
 }
 
 /**
@@ -229,16 +241,15 @@ const findMatchingStrategy = async (
   }
 
   const matches = await strategy.matches(state, teamName);
-  return matches
-    ? strategy
-    : findMatchingStrategy(state, teamName, index + 1);
+  return matches ? strategy : findMatchingStrategy(state, teamName, index + 1);
 };
 
 /**
  * Status message lookup based on tenant state
  */
 const statusMessages: Record<string, (isNewTenant: boolean, status: string) => string> = {
-  new_tenant: () => "Your Slack workspace is connected! Now install the GitHub App to complete setup.",
+  new_tenant: () =>
+    "Your Slack workspace is connected! Now install the GitHub App to complete setup.",
   active: () => "Installation complete! Kenchi is now active in your workspace.",
   default: () => "Slack connected! Waiting for GitHub App installation to complete.",
 };
@@ -254,7 +265,12 @@ const getStatusMessage = (isNewTenant: boolean, status: string): string => {
 /**
  * Build success HTML response
  */
-const buildSuccessHtml = (teamName: string, status: string, statusMessage: string, isNewTenant: boolean): string => `
+const buildSuccessHtml = (
+  teamName: string,
+  status: string,
+  statusMessage: string,
+  isNewTenant: boolean
+): string => `
   <html>
     <head>
       <title>Kenchi Installed</title>
@@ -301,7 +317,8 @@ router.get("/slack/install", (req: Request, res: Response) => {
     tenantId: typeof tenantId === "string" ? tenantId : undefined,
   });
 
-  const redirectUri = config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
+  const redirectUri =
+    config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
   const authUrl = new URL("https://slack.com/oauth/v2/authorize");
   authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("scope", OAUTH_SCOPES);
@@ -323,7 +340,9 @@ const validateOAuthCallback = (
   code: unknown,
   state: unknown,
   error: unknown
-): { valid: true; code: string; state: string; storedState: StoredState } | { valid: false; error: ValidationError } => {
+):
+  | { valid: true; code: string; state: string; storedState: StoredState }
+  | { valid: false; error: ValidationError } => {
   // Check for OAuth denial
   if (error) {
     return {
@@ -392,7 +411,8 @@ router.get("/slack/oauth/callback", async (req: Request, res: Response) => {
   const { storedState } = validation;
 
   try {
-    const redirectUri = config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
+    const redirectUri =
+      config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
     const tokenUrl = new URL("https://slack.com/api/oauth.v2.access");
     tokenUrl.searchParams.set("client_id", config.SLACK_CLIENT_ID!);
     tokenUrl.searchParams.set("client_secret", config.SLACK_CLIENT_SECRET!);
