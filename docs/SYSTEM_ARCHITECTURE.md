@@ -33,7 +33,7 @@ The AI-Driven DevOps Incident Assistant (Kenchi) is designed to intelligently an
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌─────────────┐ │
-│  │   Webhooks   │  │   n8n        │  │  Monitoring  │  │   Manual    │ │
+│  │   Webhooks   │  │   GitHub webhook        │  │  Monitoring  │  │   Manual    │ │
 │  │  (GitHub,    │  │  Triggers    │  │   Alerts     │  │   Triggers  │ │
 │  │   GitLab)    │  │              │  │  (Datadog)   │  │   (Slack)   │ │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬──────┘ │
@@ -186,7 +186,7 @@ The AI-Driven DevOps Incident Assistant (Kenchi) is designed to intelligently an
 **Sub-components**:
 
 - **Webhook Receivers**: Accept HTTP webhooks from GitHub, GitLab, CI/CD systems
-- **n8n Workflow Triggers**: Orchestrated workflows that combine multiple event sources
+- **Workflow Triggers**: Orchestrated workflows that combine multiple event sources
 - **Monitoring Alert Integrations**: Datadog, Prometheus, Grafana alert webhooks
 - **Manual Triggers**: Slack slash commands or API endpoints for manual incident creation
 
@@ -198,7 +198,7 @@ The AI-Driven DevOps Incident Assistant (Kenchi) is designed to intelligently an
 - Rate limiting and deduplication
 - Initial event logging
 
-**Technology**: Express.js webhooks, n8n workflows, Slack Bolt framework
+**Technology**: Express.js webhooks, workflow automation, Slack Bolt framework
 
 ---
 
@@ -401,9 +401,9 @@ environment variable `AUTH_SECRET` in CI environment.
 
 #### Phase 1: Ingestion (0-2 seconds)
 
-1. **GitHub Actions** sends webhook to n8n workflow trigger
-2. **n8n** receives webhook, validates signature
-3. **n8n** forwards to API service `/webhook/github` endpoint
+1. **GitHub Actions** sends webhook to GitHub webhook workflow trigger
+2. **GitHub webhook** receives webhook, validates signature
+3. **GitHub webhook** forwards to API service `/webhook/github` endpoint
 4. **API service** validates payload, creates unique event ID
 5. **API service** normalizes to `Event` schema:
 
@@ -591,7 +591,7 @@ environment variable `AUTH_SECRET` in CI environment.
 | ------------------------------------------ | ------------------ | --------------------------------------------------- | ---------------------------- |
 | **INGESTION LAYER**                        |
 | Webhook receipt & validation               | Deterministic      | Receive webhooks, validate signatures, parse JSON   | Express.js endpoints         |
-| Event routing                              | Deterministic      | Route events to appropriate handlers                | n8n workflows, API routing   |
+| Event routing                              | Deterministic      | Route events to appropriate handlers                | workflow automation, API routing   |
 | Rate limiting                              | Deterministic      | Apply rate limits per source                        | Redis-based rate limiter     |
 | Event deduplication                        | Deterministic      | Detect duplicate events                             | Hash-based or ID-based       |
 | Initial event logging                      | Deterministic      | Log raw event to database                           | Structured logging           |
@@ -691,7 +691,7 @@ All other functions—including all safety checks, action execution, and user in
 - **API Service** ↔ **Slack Bot**: HTTP endpoints for triggering messages
 - **API Service** ↔ **GitHub App**: HTTP endpoints for comment posting
 - **All Services** → **Shared Package**: Common utilities, logging, OpenAI client
-- **n8n** → **All Services**: HTTP requests for workflow orchestration
+- **GitHub webhook** → **All Services**: HTTP requests for workflow orchestration
 
 ### Data Persistence
 

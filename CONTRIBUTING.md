@@ -107,7 +107,7 @@ npm run build:api
 - `/services/api` - API service for webhooks and events
 - `/services/slack-bot` - Slack bot service
 - `/services/github-app` - GitHub App service
-- `/n8n/workflows` - n8n workflow definitions
+- `/docs` - Documentation
 - `/scripts` - Development and utility scripts
 
 ## Questions?

@@ -32,7 +32,6 @@ This service handles incoming webhooks and events from various sources.
 - [ ] Add authentication/authorization middleware
 - [ ] Implement event storage (database/vector store)
 - [ ] Add more comprehensive event validation schemas
-- [ ] Integrate with n8n workflows
 - [ ] Add API documentation (Swagger UI)
 - [ ] Add integration tests
 

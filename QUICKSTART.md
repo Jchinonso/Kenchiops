@@ -42,7 +42,7 @@ This starts:
 - API Service (port 3000)
 - Slack Bot Service (port 3001)
 - GitHub App Service (port 3002)
-- n8n (port 5678)
+- PostgreSQL (port 5433)
 
 ### 4. Verify Services
 
@@ -57,29 +57,30 @@ docker compose logs -f
 curl http://localhost:3000/health
 curl http://localhost:3001/health
 curl http://localhost:3002/health
-curl http://localhost:5678/healthz
 ```
 
-### 5. Setup n8n Workflow
+### 5. Test the CI Failure Flow
 
-1. Open n8n UI: http://localhost:5678
-2. Login: `admin` / `admin123`
-3. Go to "Workflows" → "Import from File"
-4. Select: `n8n/workflows/ci-failure-analysis.json`
-5. Activate the workflow (toggle switch ON)
-
-### 6. Test the Workflow
-
-Get the webhook URL from the "Webhook - CI Failure" node and test:
+Send a test webhook to the GitHub App:
 
 ```bash
-curl -X POST "http://localhost:5678/webhook-test/ci-failure" \
+curl -X POST "http://localhost:3002/webhook/github" \
   -H "Content-Type: application/json" \
+  -H "X-GitHub-Event: check_run" \
   -d '{
-    "log": "Error: Unit tests failed",
-    "repository": "kenchi",
-    "branch": "main",
-    "commit": "test123"
+    "action": "completed",
+    "check_run": {
+      "id": 123,
+      "name": "test",
+      "conclusion": "failure",
+      "output": {
+        "title": "Test Failed",
+        "summary": "Error: Unit tests failed"
+      }
+    },
+    "repository": {
+      "full_name": "test/repo"
+    }
   }'
 ```
 
@@ -88,7 +89,6 @@ curl -X POST "http://localhost:5678/webhook-test/ci-failure" \
 - **API Service**: http://localhost:3000
 - **Slack Bot Service**: http://localhost:3001
 - **GitHub App Service**: http://localhost:3002
-- **n8n**: http://localhost:5678
 
 ## Service Communication
 
@@ -98,7 +98,19 @@ All services run in the same Docker network. They communicate using service name
 - `http://slack-bot:3001` - Slack bot service
 - `http://github-app:3002` - GitHub app service
 
-n8n workflows use these service names to call the services.
+## CI Failure Analysis Flow
+
+```
+GitHub CI Failure (webhook)
+    ↓
+GitHub App (port 3002) - gather context
+    ↓
+API Service (port 3000) - OpenAI analysis
+    ↓
+Slack Bot (port 3001) - send notification
+    ↓
+Slack Workspace
+```
 
 ## Common Commands
 
@@ -142,21 +154,20 @@ docker compose ps
 
 All services should show "Up" status.
 
-### n8n Can't Reach Services
-
-Verify n8n is in the same network:
+### Check Service Logs
 
 ```bash
-docker inspect kenchi-n8n --format='{{range $net, $conf := .NetworkSettings.Networks}}{{$net}} {{end}}'
+# View specific service logs
+docker compose logs -f github-app
+docker compose logs -f api
+docker compose logs -f slack-bot
 ```
-
-Should show `kenchi_default`.
 
 ## Next Steps
 
-- Implement real OpenAI API integration
 - Configure Slack credentials for actual message posting
-- Add more workflows
+- Set up GitHub App webhook URL
+- Configure OpenAI API key for real analysis
 - Set up database integration
 
 See [README.md](./README.md) for more details.

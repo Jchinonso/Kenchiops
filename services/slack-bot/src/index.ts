@@ -14,7 +14,12 @@
 import Bolt from "@slack/bolt";
 import type { ButtonAction as BoltButtonAction } from "@slack/bolt";
 import express from "express";
-import { logger } from "@kenchi/shared";
+import {
+  logger,
+  config,
+  initDatabase,
+  closeDatabase,
+} from "@kenchi/shared";
 
 const { App } = Bolt;
 type SlackApp = InstanceType<typeof App>;
@@ -30,7 +35,13 @@ import {
   handleNegativeFeedback,
 } from "./handlers/actionHandler.js";
 import { handleBotJoinedChannel } from "./handlers/channelHandler.js";
+import {
+  handleAppHomeOpened,
+  handleTestConnection,
+  handleRefreshHome,
+} from "./handlers/appHomeHandler.js";
 import { createHttpRoutes } from "./routes/httpRoutes.js";
+import { oauthRoutes } from "./routes/oauthRoutes.js";
 
 /**
  * Initializes and configures the Slack Bolt app.
@@ -145,6 +156,58 @@ function setupSlackHandlers(app: SlackApp): void {
       await handleNegativeFeedback(action as ButtonAction, ack);
     }
   });
+
+  // Handle App Home opened event
+  app.event("app_home_opened", async ({ event, client }) => {
+    await handleAppHomeOpened(client, event.user);
+  });
+
+  // Handle App Home action buttons
+  app.action("test_connection", async ({ ack, client, body }) => {
+    await ack();
+    const result = await handleTestConnection(client, body.user.id);
+    // Refresh the home view to show the result
+    await handleRefreshHome(client, body.user.id);
+  });
+
+  app.action("refresh_home", async ({ ack, client, body }) => {
+    await ack();
+    await handleRefreshHome(client, body.user.id);
+  });
+
+  // Handle connect_github button (external link, just acknowledge)
+  app.action("connect_github", async ({ ack }) => {
+    await ack();
+  });
+
+  // Handle view_docs button (external link, just acknowledge)
+  app.action("view_docs", async ({ ack }) => {
+    await ack();
+  });
+
+  // Handle get_support button (external link, just acknowledge)
+  app.action("get_support", async ({ ack }) => {
+    await ack();
+  });
+}
+
+/**
+ * Initialize database connection for multi-tenant support
+ */
+function initializeDatabase(): void {
+  try {
+    initDatabase({
+      connectionString: config.DATABASE_URL,
+      maxConnections: 10,
+      idleTimeoutMs: 30000,
+    });
+    logger.info("Database connection initialized for multi-tenant support");
+  } catch (error) {
+    logger.error("Failed to initialize database", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw error;
+  }
 }
 
 /**
@@ -155,13 +218,21 @@ async function startService(): Promise<void> {
   try {
     const appConfig = loadAppConfig();
 
+    // Initialize database for multi-tenant support
+    initializeDatabase();
+
     // Initialize Slack app with Socket Mode
     const slackApp = createSlackApp(appConfig);
     setupSlackHandlers(slackApp);
 
-    // Initialize Express app for HTTP endpoints (n8n integration)
+    // Initialize Express app for HTTP endpoints (CI failure processing)
     const expressApp = express();
     expressApp.use(express.json());
+
+    // Add OAuth routes for multi-tenant Slack installation
+    expressApp.use(oauthRoutes);
+
+    // Add message/broadcast routes
     expressApp.use(createHttpRoutes(slackApp));
 
     // Start Slack app in Socket Mode (connects via WebSocket)
@@ -169,15 +240,37 @@ async function startService(): Promise<void> {
     logger.info("Slack bot started in Socket Mode", {
       mode: "socket",
       environment: appConfig.nodeEnv,
+      multiTenantMode: config.MULTI_TENANT_MODE || false,
     });
 
-    // Start Express server for n8n integration endpoints
-    expressApp.listen(appConfig.httpPort, () => {
-      logger.info("HTTP server started for n8n integration", {
+    // Start Express server for CI failure processing endpoints
+    const server = expressApp.listen(appConfig.httpPort, () => {
+      logger.info("HTTP server started for CI failure processing", {
         port: appConfig.httpPort,
         environment: appConfig.nodeEnv,
+        oauthEnabled: !!(config.SLACK_CLIENT_ID && config.SLACK_CLIENT_SECRET),
       });
     });
+
+    // Handle graceful shutdown
+    const shutdown = async (signal: string): Promise<void> => {
+      logger.info(`Received ${signal}, shutting down gracefully`);
+
+      server.close(async () => {
+        await closeDatabase();
+        logger.info("Server closed");
+        process.exit(0);
+      });
+
+      // Force exit after 10 seconds
+      setTimeout(() => {
+        logger.warn("Forced shutdown after timeout");
+        process.exit(1);
+      }, 10000);
+    };
+
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
   } catch (error) {
     logger.error("Failed to start Slack bot", {
       error: error instanceof Error ? error.message : String(error),
