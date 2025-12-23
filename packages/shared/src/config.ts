@@ -30,6 +30,7 @@ export interface Config {
   readonly GITHUB_APP_PRIVATE_KEY: string;
   readonly GITHUB_INSTALLATION_ID: string;
   readonly GITHUB_WEBHOOK_SECRET: string;
+  readonly GITHUB_APP_SLUG?: string;
 
   // Database Configuration
   readonly DATABASE_URL: string;
@@ -111,6 +112,7 @@ export const config: Config = {
   GITHUB_APP_PRIVATE_KEY: requireEnv("GITHUB_APP_PRIVATE_KEY", process.env.GITHUB_APP_PRIVATE_KEY),
   GITHUB_INSTALLATION_ID: requireEnv("GITHUB_INSTALLATION_ID", process.env.GITHUB_INSTALLATION_ID),
   GITHUB_WEBHOOK_SECRET: requireEnv("GITHUB_WEBHOOK_SECRET", process.env.GITHUB_WEBHOOK_SECRET),
+  GITHUB_APP_SLUG: process.env.GITHUB_APP_SLUG || "kenchi-devops",
 
   // Database Configuration
   DATABASE_URL: requireEnv("DATABASE_URL", process.env.DATABASE_URL),

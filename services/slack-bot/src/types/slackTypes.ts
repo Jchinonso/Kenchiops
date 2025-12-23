@@ -129,7 +129,7 @@ export interface WorkflowContext {
 }
 
 /**
- * CI Failure analysis data structure from n8n workflow.
+ * CI Failure analysis data structure from CI failure.
  * Extended to include enriched context for better formatting.
  */
 export interface CIFailureAnalysis {
@@ -159,7 +159,7 @@ export interface CIFailureAnalysis {
 
 /**
  * Request body structure for POST /slack/message endpoint.
- * Used by n8n workflow to post messages to Slack channels.
+ * Used by CI failure to post messages to Slack channels.
  * Supports plain text, Block Kit blocks, and attachments.
  *
  * Channel resolution:

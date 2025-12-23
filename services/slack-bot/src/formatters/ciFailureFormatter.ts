@@ -28,10 +28,20 @@ export interface MessageAttachment {
 /**
  * Gets priority emoji for action priority.
  *
- * @param priority - Priority level (critical, high, medium, low)
+ * @param priority - Priority level (critical, high, medium, low) or numeric (1=critical, 2=high, 3=medium, 4=low)
  * @returns Emoji string for the priority level
  */
-export const getPriorityEmoji = (priority: string): string => {
+export const getPriorityEmoji = (priority: string | number): string => {
+  // Handle numeric priorities
+  if (typeof priority === "number") {
+    const numericMap: Record<number, keyof typeof PRIORITY_EMOJI> = {
+      1: "critical",
+      2: "high",
+      3: "medium",
+      4: "low",
+    };
+    return PRIORITY_EMOJI[numericMap[priority] || "low"];
+  }
   const p = priority.toLowerCase() as keyof typeof PRIORITY_EMOJI;
   return PRIORITY_EMOJI[p] || PRIORITY_EMOJI.low;
 };

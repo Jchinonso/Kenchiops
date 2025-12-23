@@ -180,10 +180,6 @@ jobs:
         run: npm run validate
         continue-on-error: true
 
-      - name: Validate n8n workflows
-        run: npm run validate-workflow
-        continue-on-error: true
-
   security:
     name: Security Audit
     runs-on: ubuntu-latest

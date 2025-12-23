@@ -2,7 +2,7 @@
 
 ## Project Snapshot
 
-TypeScript monorepo for an AI-driven DevOps assistant. Three services (API, Slack bot, GitHub app) and n8n workflows share one safety-critical package. LLMs only analyze — deterministic gates and humans own execution. See `docs/ARCHITECTURE.md`, `docs/SYSTEM_ARCHITECTURE.md`, and `docs/AI_TOOL_GUIDELINES.md` for context before touching code.
+TypeScript monorepo for an AI-driven DevOps assistant. Three services (API, Slack bot, GitHub app) share one safety-critical package. LLMs only analyze — deterministic gates and humans own execution. See `docs/ARCHITECTURE.md`, `docs/SYSTEM_ARCHITECTURE.md`, and `docs/AI_TOOL_GUIDELINES.md` for context before touching code.
 
 ## Repository Layout
 
@@ -16,7 +16,7 @@ kenchi/
 │   ├── api/
 │   ├── slack-bot/
 │   └── github-app/
-└── n8n/workflows/          # Automation definitions
+└── docs/                   # Documentation
 ```
 
 ## Non‑Negotiable Guardrails
@@ -63,7 +63,6 @@ If you need something absent from this list, add it to `packages/shared/src/` wi
 | Multi-service utility, type, constant, validation, safety logic | `packages/shared/src/` | Update `index.ts` immediately. |
 | API/Slack/GitHub routing, handlers, integration glue | `services/<service>/src/` | Keep files under ~300 lines; delegate shared work. |
 | Prompt/validation/safety heuristics used by multiple components | Shared package | Build deterministic helpers for hallucination detection, evidence alignment, and scoring. |
-| Workflow definitions | `n8n/workflows/` | Interact with services through Docker network names (`http://api:3000`, etc.). |
 
 ## TypeScript & Design Expectations
 
