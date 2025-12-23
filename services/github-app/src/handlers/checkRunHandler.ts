@@ -27,6 +27,7 @@ import {
   type CodeAnnotation,
   type RecommendedAction,
 } from "../services/aggregation/index.js";
+import { deleteKenchiOpsComments } from "../services/githubService.js";
 
 /**
  * Service URL for API analysis
@@ -401,9 +402,65 @@ const shouldProcessCheckRun = (webhook: CheckRunWebhook): boolean => {
 };
 
 /**
+ * Check if this is a successful check run that should trigger comment cleanup
+ */
+const isSuccessfulCheckRun = (webhook: CheckRunWebhook): boolean => {
+  const { action, check_run } = webhook;
+  return (
+    action === GITHUB_CHECK_ACTIONS.COMPLETED &&
+    check_run.conclusion === GITHUB_CHECK_CONCLUSIONS.SUCCESS
+  );
+};
+
+/**
+ * Clean up old KenchiOps comments when CI passes
+ * This removes stale failure analysis comments after issues are fixed
+ */
+const cleanupOnSuccess = async (webhook: CheckRunWebhook): Promise<void> => {
+  const { check_run, repository, installation } = webhook;
+
+  if (!installation?.id) return;
+
+  // Find PRs associated with this check run
+  let prNumbers = check_run.pull_requests.map((pr) => pr.number);
+  if (prNumbers.length === 0) {
+    prNumbers = await fetchPRsByCommit(
+      installation.id,
+      repository.owner.login,
+      repository.name,
+      check_run.head_sha
+    );
+  }
+
+  // Delete old KenchiOps comments on each PR
+  await Promise.all(
+    prNumbers.map((prNumber) =>
+      deleteKenchiOpsComments(installation.id, repository.owner.login, repository.name, prNumber)
+    )
+  );
+};
+
+/**
  * Handle check run webhook
  */
 export const handleCheckRun = async (webhook: CheckRunWebhook): Promise<CheckRunHandlerResult> => {
+  // Handle successful check runs - clean up old failure comments
+  if (isSuccessfulCheckRun(webhook)) {
+    logger.info("Check run succeeded - cleaning up old comments", {
+      action: webhook.action,
+      conclusion: webhook.check_run.conclusion,
+      repository: webhook.repository.full_name,
+    });
+
+    await cleanupOnSuccess(webhook);
+
+    return {
+      handled: true,
+      message: "Check run succeeded - cleaned up old failure comments",
+    };
+  }
+
+  // Skip non-failure check runs
   if (!shouldProcessCheckRun(webhook)) {
     logger.info("Check run event skipped", {
       action: webhook.action,
