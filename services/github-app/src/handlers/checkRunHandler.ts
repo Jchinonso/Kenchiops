@@ -180,10 +180,7 @@ const buildAnalyzedFailure = (
   confidence: analysis.confidence ?? 0.5,
   identifiedCause: analysis.identified_cause || "",
   analysis: analysis.analysis || "Analysis unavailable",
-  annotations: convertAIAnnotations(
-    analysis.full_analysis?.codeAnnotations,
-    context.annotations
-  ),
+  annotations: convertAIAnnotations(analysis.full_analysis?.codeAnnotations, context.annotations),
   recommendedActions: convertRecommendedActions(analysis.recommended_actions),
   timestamp: new Date(),
 });
@@ -191,9 +188,7 @@ const buildAnalyzedFailure = (
 /**
  * Build repository info from webhook
  */
-const buildRepositoryInfo = (
-  repository: CheckRunWebhook["repository"]
-): RepositoryInfo => ({
+const buildRepositoryInfo = (repository: CheckRunWebhook["repository"]): RepositoryInfo => ({
   fullName: repository.full_name,
   owner: repository.owner.login,
   name: repository.name,
@@ -202,10 +197,7 @@ const buildRepositoryInfo = (
 /**
  * Build PR context from enriched context
  */
-const buildPRContext = (
-  context: EnrichedContext,
-  prNumber: number
-): PRContext | null => {
+const buildPRContext = (context: EnrichedContext, prNumber: number): PRContext | null => {
   if (!context.prMetadata) return null;
 
   return {
@@ -324,9 +316,8 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
 
   const analyzedFailure = buildAnalyzedFailure(check_run, analysis, context);
   const repositoryInfo = buildRepositoryInfo(repository);
-  const prContext = pullRequestNumbers.length > 0
-    ? buildPRContext(context, pullRequestNumbers[0])
-    : null;
+  const prContext =
+    pullRequestNumbers.length > 0 ? buildPRContext(context, pullRequestNumbers[0]) : null;
   const workflowContext = buildWorkflowContext(check_run.name, context);
 
   try {
@@ -405,17 +396,14 @@ const shouldProcessCheckRun = (webhook: CheckRunWebhook): boolean => {
 
   // Only process completed check runs with failure conclusions
   return (
-    action === GITHUB_CHECK_ACTIONS.COMPLETED &&
-    FAILURE_CONCLUSIONS.has(check_run.conclusion || "")
+    action === GITHUB_CHECK_ACTIONS.COMPLETED && FAILURE_CONCLUSIONS.has(check_run.conclusion || "")
   );
 };
 
 /**
  * Handle check run webhook
  */
-export const handleCheckRun = async (
-  webhook: CheckRunWebhook
-): Promise<CheckRunHandlerResult> => {
+export const handleCheckRun = async (webhook: CheckRunWebhook): Promise<CheckRunHandlerResult> => {
   if (!shouldProcessCheckRun(webhook)) {
     logger.info("Check run event skipped", {
       action: webhook.action,

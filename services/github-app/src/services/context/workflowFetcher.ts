@@ -30,8 +30,7 @@ const getBackoffDelay = (attempt: number): number => 1000 * Math.pow(2, attempt 
 /**
  * Wait for a specified duration
  */
-const wait = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Fetch workflow run logs for a check run.

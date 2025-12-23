@@ -14,12 +14,7 @@
 import Bolt from "@slack/bolt";
 import type { ButtonAction as BoltButtonAction } from "@slack/bolt";
 import express from "express";
-import {
-  logger,
-  config,
-  initDatabase,
-  closeDatabase,
-} from "@kenchi/shared";
+import { logger, config, initDatabase, closeDatabase } from "@kenchi/shared";
 
 const { App } = Bolt;
 type SlackApp = InstanceType<typeof App>;

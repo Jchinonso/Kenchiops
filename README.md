@@ -95,7 +95,6 @@ For local development with hot reload:
    npm run dev:github-app
    ```
 
-
 ## 🛠️ Development Scripts
 
 - `npm run build` - Build all packages (shared first, then services)
@@ -250,14 +249,14 @@ This codebase follows strict functional programming patterns:
 
 ### Code Quality Metrics
 
-| Metric | Count |
-|--------|-------|
-| `throw new Error` | 0 |
-| `for` loops | 0 |
-| `forEach` | 0 |
-| `switch` statements | 0 |
-| `any` type (source) | 0 |
-| Tests passing | 134 |
+| Metric              | Count |
+| ------------------- | ----- |
+| `throw new Error`   | 0     |
+| `for` loops         | 0     |
+| `forEach`           | 0     |
+| `switch` statements | 0     |
+| `any` type (source) | 0     |
+| Tests passing       | 134   |
 
 ## 📝 TODO
 

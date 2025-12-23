@@ -20,9 +20,7 @@ export const detectUncertainty = (text: string): number => {
   const normalizedText = text.toLowerCase();
 
   // Find first matching pattern (patterns ordered by severity, strongest first)
-  const matchedPattern = UNCERTAINTY_PATTERNS.find(({ pattern }) =>
-    pattern.test(normalizedText)
-  );
+  const matchedPattern = UNCERTAINTY_PATTERNS.find(({ pattern }) => pattern.test(normalizedText));
 
   // Return matched penalty or 0, capped at maximum
   const penalty = matchedPattern?.penalty ?? 0;

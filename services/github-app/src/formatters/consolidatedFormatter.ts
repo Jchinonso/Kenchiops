@@ -70,10 +70,7 @@ const formatAnnotation = (annotation: CodeAnnotation): string => {
 /**
  * Format a recommended action as markdown
  */
-const formatAction = (
-  action: RecommendedAction,
-  index: number
-): string => {
+const formatAction = (action: RecommendedAction, index: number): string => {
   const emoji = getPriorityEmoji(action.priority);
   return `${index + 1}. ${emoji} ${action.description}`;
 };
@@ -90,18 +87,18 @@ const calculateAverageConfidence = (failures: readonly AnalyzedFailure[]): numbe
 /**
  * Deduplicate and merge recommended actions from all failures
  */
-const mergeRecommendedActions = (
-  failures: readonly AnalyzedFailure[]
-): RecommendedAction[] => {
+const mergeRecommendedActions = (failures: readonly AnalyzedFailure[]): RecommendedAction[] => {
   const actionMap = new Map<string, RecommendedAction>();
 
-  failures.flatMap((f) => f.recommendedActions).forEach((action) => {
-    // Use description as key for deduplication
-    const key = action.description.toLowerCase().trim();
-    if (!actionMap.has(key)) {
-      actionMap.set(key, action);
-    }
-  });
+  failures
+    .flatMap((f) => f.recommendedActions)
+    .forEach((action) => {
+      // Use description as key for deduplication
+      const key = action.description.toLowerCase().trim();
+      if (!actionMap.has(key)) {
+        actionMap.set(key, action);
+      }
+    });
 
   // Sort by priority (immediate/high first)
   const priorityOrder: Record<string, number> = {
@@ -113,12 +110,14 @@ const mergeRecommendedActions = (
 
   return Array.from(actionMap.values())
     .sort((a, b) => {
-      const aPriority = typeof a.priority === "string"
-        ? priorityOrder[a.priority.toLowerCase()] ?? 4
-        : a.priority;
-      const bPriority = typeof b.priority === "string"
-        ? priorityOrder[b.priority.toLowerCase()] ?? 4
-        : b.priority;
+      const aPriority =
+        typeof a.priority === "string"
+          ? (priorityOrder[a.priority.toLowerCase()] ?? 4)
+          : a.priority;
+      const bPriority =
+        typeof b.priority === "string"
+          ? (priorityOrder[b.priority.toLowerCase()] ?? 4)
+          : b.priority;
       return (aPriority as number) - (bPriority as number);
     })
     .slice(0, DISPLAY_LIMITS.recommendedActions);
@@ -129,10 +128,7 @@ const mergeRecommendedActions = (
 /**
  * Format a single failure section for PR comment
  */
-const formatFailureSection = (
-  failure: AnalyzedFailure,
-  showAnnotations: boolean
-): string[] => {
+const formatFailureSection = (failure: AnalyzedFailure, showAnnotations: boolean): string[] => {
   const lines: string[] = [
     `### ❌ ${failure.checkName}`,
     "",
@@ -147,7 +143,9 @@ const formatFailureSection = (
     lines.push(...displayAnnotations.map(formatAnnotation));
 
     if (failure.annotations.length > DISPLAY_LIMITS.annotationsPerCheck) {
-      lines.push(`  - ... and ${failure.annotations.length - DISPLAY_LIMITS.annotationsPerCheck} more locations`);
+      lines.push(
+        `  - ... and ${failure.annotations.length - DISPLAY_LIMITS.annotationsPerCheck} more locations`
+      );
     }
     lines.push("");
   }
@@ -158,9 +156,7 @@ const formatFailureSection = (
 /**
  * Build consolidated PR comment body from aggregated failures
  */
-export const buildConsolidatedPRComment = (
-  aggregation: AggregatedFailures
-): string => {
+export const buildConsolidatedPRComment = (aggregation: AggregatedFailures): string => {
   const { failures, commitSha, prContext } = aggregation;
   const avgConfidence = calculateAverageConfidence(failures);
   const mergedActions = mergeRecommendedActions(failures);
@@ -191,10 +187,7 @@ export const buildConsolidatedPRComment = (
   });
 
   if (failures.length > DISPLAY_LIMITS.checksToShow) {
-    lines.push(
-      `*... and ${failures.length - DISPLAY_LIMITS.checksToShow} more failed checks*`,
-      ""
-    );
+    lines.push(`*... and ${failures.length - DISPLAY_LIMITS.checksToShow} more failed checks*`, "");
   }
 
   // Consolidated recommended actions
@@ -249,9 +242,8 @@ const formatFailureForSlack = (failure: AnalyzedFailure): SlackTextBlock[] => {
       .map((a) => `• \`${a.path}:${a.line}\` - ${a.message}`)
       .join("\n");
 
-    const suffix = failure.annotations.length > 5
-      ? `\n_...and ${failure.annotations.length - 5} more_`
-      : "";
+    const suffix =
+      failure.annotations.length > 5 ? `\n_...and ${failure.annotations.length - 5} more_` : "";
 
     blocks.push({
       type: "context",
@@ -299,7 +291,9 @@ export const buildConsolidatedSlackPayload = (
           `*Confidence:* ${Math.round(avgConfidence * 100)}%`,
           prContext ? `*Branch:* \`${prContext.branch}\` → \`${prContext.baseBranch}\`` : "",
           prContext ? `*PR:* #${prContext.number} - ${prContext.title}` : "",
-        ].filter(Boolean).join("\n"),
+        ]
+          .filter(Boolean)
+          .join("\n"),
       },
     },
     { type: "divider" },
@@ -330,7 +324,8 @@ export const buildConsolidatedSlackPayload = (
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*🛠️ Recommended Actions:*\n" +
+        text:
+          "*🛠️ Recommended Actions:*\n" +
           mergedActions
             .slice(0, 5)
             .map((a, i) => `${i + 1}. ${getPriorityEmoji(a.priority)} ${a.description}`)
@@ -405,9 +400,7 @@ export const buildConsolidatedCheckAnnotations = (
 /**
  * Build summary text for GitHub check run
  */
-export const buildConsolidatedCheckSummary = (
-  aggregation: AggregatedFailures
-): string => {
+export const buildConsolidatedCheckSummary = (aggregation: AggregatedFailures): string => {
   const { failures } = aggregation;
   const avgConfidence = calculateAverageConfidence(failures);
 

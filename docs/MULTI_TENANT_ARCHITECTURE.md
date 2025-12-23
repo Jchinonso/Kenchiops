@@ -346,7 +346,7 @@ interface Tenant {
   slackWorkspaceId: string | null;
   slackBotToken: string | null;
   slackTeamName: string | null;
-  status: 'pending' | 'active' | 'suspended' | 'deleted';
+  status: "pending" | "active" | "suspended" | "deleted";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -359,7 +359,12 @@ interface TenantService {
 
   // Creation/Update methods
   createFromGitHubInstall(org: string, installationId: number): Promise<Tenant>;
-  linkSlackWorkspace(tenantId: string, workspaceId: string, token: string, teamName: string): Promise<Tenant>;
+  linkSlackWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    token: string,
+    teamName: string
+  ): Promise<Tenant>;
 
   // Status management
   activate(tenantId: string): Promise<Tenant>;
@@ -374,22 +379,22 @@ interface TenantService {
 
 ```typescript
 // Handle GitHub App installation
-app.webhooks.on('installation.created', async ({ payload }) => {
+app.webhooks.on("installation.created", async ({ payload }) => {
   const { installation, repositories } = payload;
 
   await tenantService.createFromGitHubInstall(
-    installation.account.login,  // github_org
-    installation.id              // installation_id
+    installation.account.login, // github_org
+    installation.id // installation_id
   );
 
-  logger.info('New tenant created from GitHub installation', {
+  logger.info("New tenant created from GitHub installation", {
     org: installation.account.login,
     installationId: installation.id,
   });
 });
 
 // Handle uninstallation
-app.webhooks.on('installation.deleted', async ({ payload }) => {
+app.webhooks.on("installation.deleted", async ({ payload }) => {
   const tenant = await tenantService.findByGitHubInstallation(payload.installation.id);
   if (tenant) {
     await tenantService.delete(tenant.id);
@@ -404,7 +409,7 @@ app.webhooks.on('installation.deleted', async ({ payload }) => {
 const payload = {
   log: enrichedLog,
   repository: repository.full_name,
-  installation_id: webhook.installation.id,  // ◄─── ADD THIS
+  installation_id: webhook.installation.id, // ◄─── ADD THIS
   checkName: check_run.name,
   // ... rest of payload
 };
@@ -416,13 +421,14 @@ const payload = {
 
 ```typescript
 // GET /slack/install - Start OAuth flow
-router.get('/slack/install', (req, res) => {
+router.get("/slack/install", (req, res) => {
   const state = generateState(); // Could include tenant_id if known
-  const scopes = ['chat:write', 'channels:read', 'groups:read'];
+  const scopes = ["chat:write", "channels:read", "groups:read"];
 
-  const url = `https://slack.com/oauth/v2/authorize?` +
+  const url =
+    `https://slack.com/oauth/v2/authorize?` +
     `client_id=${config.SLACK_CLIENT_ID}&` +
-    `scope=${scopes.join(',')}&` +
+    `scope=${scopes.join(",")}&` +
     `state=${state}&` +
     `redirect_uri=${config.SLACK_REDIRECT_URI}`;
 
@@ -430,7 +436,7 @@ router.get('/slack/install', (req, res) => {
 });
 
 // GET /slack/oauth/callback - Handle OAuth callback
-router.get('/slack/oauth/callback', async (req, res) => {
+router.get("/slack/oauth/callback", async (req, res) => {
   const { code, state } = req.query;
 
   // Exchange code for token
@@ -452,7 +458,7 @@ router.get('/slack/oauth/callback', async (req, res) => {
     );
   }
 
-  res.send('Slack connected successfully!');
+  res.send("Slack connected successfully!");
 });
 ```
 
@@ -568,8 +574,8 @@ const rateLimiter = rateLimit({
     // Use tenant's installation_id as rate limit key
     return req.body.installation_id || req.ip;
   },
-  windowMs: 60 * 1000,  // 1 minute
-  max: 100,             // 100 requests per minute per tenant
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute per tenant
 });
 ```
 
@@ -611,21 +617,25 @@ GITHUB_WEBHOOK_SECRET=...
 ## Migration Path
 
 ### Phase 1: Database Setup
+
 1. Set up PostgreSQL database
 2. Create tenants table
 3. Implement TenantService
 
 ### Phase 2: GitHub App Multi-Tenant
+
 1. Add installation.created webhook handler
 2. Store installation_id in tenants table
 3. Pass installation_id through to GitHub App
 
 ### Phase 3: Slack Bot Multi-Tenant
+
 1. Add OAuth installation flow
 2. Store tokens in tenants table
 3. Create dynamic Slack client per tenant
 
 ### Phase 4: Cutover
+
 1. Migrate existing single-tenant config to first tenant row
 2. Test with existing installation
 3. Enable new installations
@@ -701,16 +711,17 @@ Alerts:
 
 ## Summary
 
-| Aspect | Implementation |
-|--------|----------------|
-| **Tenant Identity** | `installation_id` from GitHub webhook |
-| **Token Storage** | PostgreSQL `tenants` table, encrypted |
-| **Slack Client** | Created per-request with tenant's token |
-| **GitHub Client** | Uses installation_id to generate tokens |
-| **Isolation** | Every request validated against tenant context |
-| **Onboarding** | GitHub install → Slack OAuth → Active |
+| Aspect              | Implementation                                 |
+| ------------------- | ---------------------------------------------- |
+| **Tenant Identity** | `installation_id` from GitHub webhook          |
+| **Token Storage**   | PostgreSQL `tenants` table, encrypted          |
+| **Slack Client**    | Created per-request with tenant's token        |
+| **GitHub Client**   | Uses installation_id to generate tokens        |
+| **Isolation**       | Every request validated against tenant context |
+| **Onboarding**      | GitHub install → Slack OAuth → Active          |
 
 This architecture allows Kenchi to:
+
 - Serve unlimited tenants from a single deployment
 - Maintain complete data isolation between tenants
 - Scale horizontally (add more service instances)

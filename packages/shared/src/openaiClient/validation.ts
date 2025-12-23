@@ -227,13 +227,13 @@ const extractQuotedText = (text: string): string[] => {
  * Gets errors for actions containing dangerous keywords.
  * Uses pre-compiled regex pattern for O(n) matching.
  */
-const getDangerousKeywordErrors = (
-  actions: LLMAnalysisResult["recommendedActions"]
-): string[] => {
+const getDangerousKeywordErrors = (actions: LLMAnalysisResult["recommendedActions"]): string[] => {
   return (actions ?? [])
     .map((action) => {
       const match = action.description.match(DANGEROUS_KEYWORDS_PATTERN);
-      return match ? `Action contains dangerous keyword "${match[1]}": ${action.description}` : null;
+      return match
+        ? `Action contains dangerous keyword "${match[1]}": ${action.description}`
+        : null;
     })
     .filter((error): error is string => error !== null);
 };
@@ -255,8 +255,9 @@ const generatePrefixLengths = (
  */
 const generateSHAPrefixes = (sha: string, minLength: number, maxLength: number): string[] => {
   const lowerSha = sha.toLowerCase();
-  const prefixes = generatePrefixLengths(lowerSha.length, minLength, maxLength)
-    .map((len) => lowerSha.substring(0, len));
+  const prefixes = generatePrefixLengths(lowerSha.length, minLength, maxLength).map((len) =>
+    lowerSha.substring(0, len)
+  );
   return [lowerSha, ...prefixes];
 };
 

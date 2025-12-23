@@ -6,20 +6,14 @@
  */
 
 import { createLogger, ExternalServiceError } from "@kenchi/shared";
-import type {
-  AggregatedFailures,
-  ConsolidatedPostResult,
-} from "./types.js";
+import type { AggregatedFailures, ConsolidatedPostResult } from "./types.js";
 import {
   buildConsolidatedPRComment,
   buildConsolidatedSlackPayload,
   buildConsolidatedCheckAnnotations,
   buildConsolidatedCheckSummary,
 } from "../../formatters/consolidatedFormatter.js";
-import {
-  postPRComment,
-  createCheckRunWithAnnotations,
-} from "../githubService.js";
+import { postPRComment, createCheckRunWithAnnotations } from "../githubService.js";
 
 const logger = createLogger("github-app");
 
@@ -78,9 +72,7 @@ const postToGitHub = async (
     prCommentsPosted = results.filter(Boolean).length;
 
     if (prCommentsPosted < pullRequestNumbers.length) {
-      errors.push(
-        `Failed to post to ${pullRequestNumbers.length - prCommentsPosted} PR(s)`
-      );
+      errors.push(`Failed to post to ${pullRequestNumbers.length - prCommentsPosted} PR(s)`);
     }
 
     logger.info("Posted consolidated PR comments", {

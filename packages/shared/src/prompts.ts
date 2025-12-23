@@ -384,9 +384,9 @@ const STANDARD_METRIC_KEYS = new Set<string>(STANDARD_METRICS.map((m) => m.key a
  */
 export const formatMetrics = (summary: MetricsSummary): string => {
   // Format standard metrics using filter and map
-  const standardLines = STANDARD_METRICS
-    .filter(({ key }) => summary[key] !== undefined)
-    .map(({ key, label, suffix }) => `- ${label}: ${summary[key]}${suffix ?? ""}`);
+  const standardLines = STANDARD_METRICS.filter(({ key }) => summary[key] !== undefined).map(
+    ({ key, label, suffix }) => `- ${label}: ${summary[key]}${suffix ?? ""}`
+  );
 
   // Include any custom metrics not in standard set
   const customLines = Object.entries(summary)
@@ -448,16 +448,17 @@ const formatSystemState = (systemState: SystemState): string => {
   // Deployment status
   if (systemState.deploymentStatus) {
     const ds = systemState.deploymentStatus;
-    const deploymentLines = DEPLOYMENT_FIELDS
-      .filter(({ key }) => ds[key])
-      .map(({ key, label }) => `- ${label}: ${ds[key]}`);
+    const deploymentLines = DEPLOYMENT_FIELDS.filter(({ key }) => ds[key]).map(
+      ({ key, label }) => `- ${label}: ${ds[key]}`
+    );
     sections.push("**Deployment**:", ...deploymentLines);
   }
 
   // Service health
   if (systemState.serviceHealth) {
-    const healthLines = Object.entries(systemState.serviceHealth)
-      .map(([service, status]) => `- ${service}: ${status}`);
+    const healthLines = Object.entries(systemState.serviceHealth).map(
+      ([service, status]) => `- ${service}: ${status}`
+    );
     sections.push("\n**Service Health**:", ...healthLines);
   }
 
@@ -557,10 +558,8 @@ export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidenc
       remainingTokens -= logTokens;
     } else {
       // Take as many as fit using functional helper
-      const result = takeWhileTokenBudget(
-        errorLogs,
-        remainingTokens,
-        (log) => estimateTokens(formatLogs([log]))
+      const result = takeWhileTokenBudget(errorLogs, remainingTokens, (log) =>
+        estimateTokens(formatLogs([log]))
       );
       truncated.logs = result.items;
       remainingTokens = result.remainingBudget;
@@ -601,10 +600,8 @@ export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidenc
     const additionalLogs = evidence.logs.filter((log) => log.level !== "ERROR").slice(0, 20);
 
     const currentLogs = truncated.logs || [];
-    const result = takeWhileTokenBudget(
-      additionalLogs,
-      remainingTokens,
-      (log) => estimateTokens(formatLogs([log]))
+    const result = takeWhileTokenBudget(additionalLogs, remainingTokens, (log) =>
+      estimateTokens(formatLogs([log]))
     );
     truncated.logs = [...currentLogs, ...result.items];
   }

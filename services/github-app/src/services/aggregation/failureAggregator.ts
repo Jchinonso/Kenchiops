@@ -20,10 +20,7 @@ import type {
   WorkflowContext,
   ConsolidatedPostResult,
 } from "./types.js";
-import {
-  serializeAggregationKey,
-  DEFAULT_AGGREGATION_CONFIG,
-} from "./types.js";
+import { serializeAggregationKey, DEFAULT_AGGREGATION_CONFIG } from "./types.js";
 
 const logger = createLogger("github-app");
 
@@ -65,9 +62,7 @@ const addFailureToAggregation = (
   maxFailures: number
 ): AggregatedFailures => {
   // Skip if we already have this check run
-  const existingIndex = aggregation.failures.findIndex(
-    (f) => f.checkRunId === failure.checkRunId
-  );
+  const existingIndex = aggregation.failures.findIndex((f) => f.checkRunId === failure.checkRunId);
 
   if (existingIndex >= 0) {
     // Update existing failure
@@ -109,10 +104,7 @@ export class FailureAggregator {
   private readonly onReady: AggregationReadyCallback;
   private cleanupIntervalId: NodeJS.Timeout | null = null;
 
-  constructor(
-    onReady: AggregationReadyCallback,
-    config: Partial<AggregationConfig> = {}
-  ) {
+  constructor(onReady: AggregationReadyCallback, config: Partial<AggregationConfig> = {}) {
     this.config = { ...DEFAULT_AGGREGATION_CONFIG, ...config };
     this.onReady = onReady;
     this.startCleanupInterval();
@@ -171,9 +163,7 @@ export class FailureAggregator {
       count: entries.length,
     });
 
-    await Promise.all(
-      entries.map(([key, pending]) => this.flushAggregation(key, pending))
-    );
+    await Promise.all(entries.map(([key, pending]) => this.flushAggregation(key, pending)));
   }
 
   /**
@@ -222,10 +212,7 @@ export class FailureAggregator {
   /**
    * Updates an existing aggregation with a new failure.
    */
-  private updateExistingAggregation(
-    existing: PendingAggregation,
-    failure: AnalyzedFailure
-  ): void {
+  private updateExistingAggregation(existing: PendingAggregation, failure: AnalyzedFailure): void {
     // Clear existing timer
     if (existing.timerId) {
       clearTimeout(existing.timerId);
@@ -430,9 +417,7 @@ export const initializeAggregator = (
  */
 export const getAggregator = (): FailureAggregator => {
   if (!aggregatorInstance) {
-    throw new Error(
-      "FailureAggregator not initialized. Call initializeAggregator() first."
-    );
+    throw new Error("FailureAggregator not initialized. Call initializeAggregator() first.");
   }
   return aggregatorInstance;
 };

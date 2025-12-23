@@ -36,7 +36,11 @@ const parsePrivateKey = (key: string | undefined): string => {
  */
 const REQUIRED_GITHUB_CONFIG = [
   { key: "GITHUB_APP_ID", value: () => config.GITHUB_APP_ID, message: "GITHUB_APP_ID is required" },
-  { key: "GITHUB_APP_PRIVATE_KEY", value: () => config.GITHUB_APP_PRIVATE_KEY, message: "GITHUB_APP_PRIVATE_KEY is required" },
+  {
+    key: "GITHUB_APP_PRIVATE_KEY",
+    value: () => config.GITHUB_APP_PRIVATE_KEY,
+    message: "GITHUB_APP_PRIVATE_KEY is required",
+  },
 ] as const;
 
 /**
