@@ -1,7 +1,7 @@
 /**
- * API Routes for n8n Integration
+ * API Routes for GitHub Integration
  *
- * Provides endpoints for n8n to interact with GitHub
+ * Provides endpoints for external services to interact with GitHub
  */
 
 import { Router, type Request, type Response } from "express";
@@ -19,7 +19,7 @@ const logger = createLogger("github-app");
 
 /**
  * POST /api/github/comment
- * Post a comment to a GitHub PR (called by n8n after analysis)
+ * Post a comment to a GitHub PR
  */
 router.post(
   "/api/github/comment",
@@ -52,7 +52,7 @@ router.post(
       return;
     }
 
-    // Format the comment with all enriched context from n8n
+    // Format the comment with all enriched context
     const comment = formatGitHubComment({
       summary: analysis.analysis || analysis.summary,
       analysis: analysis.analysis,
@@ -133,7 +133,7 @@ router.post(
 
 /**
  * POST /api/github/annotations
- * Create a check run with annotations (called by n8n for line-level feedback)
+ * Create a check run with annotations for line-level feedback
  */
 router.post(
   "/api/github/annotations",

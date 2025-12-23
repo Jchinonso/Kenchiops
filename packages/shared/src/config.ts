@@ -15,16 +15,22 @@ export interface Config {
   readonly OPENAI_TEMPERATURE?: number;
   readonly OPENAI_TIMEOUT_MS?: number;
 
-  // Slack Configuration
+  // Slack Configuration (single-tenant mode - tokens in env vars)
   readonly SLACK_BOT_TOKEN: string;
   readonly SLACK_SIGNING_SECRET: string;
   readonly SLACK_APP_LEVEL_TOKEN: string;
+
+  // Slack OAuth Configuration (multi-tenant mode - tokens in database)
+  readonly SLACK_CLIENT_ID?: string;
+  readonly SLACK_CLIENT_SECRET?: string;
+  readonly SLACK_REDIRECT_URI?: string;
 
   // GitHub Configuration
   readonly GITHUB_APP_ID: string;
   readonly GITHUB_APP_PRIVATE_KEY: string;
   readonly GITHUB_INSTALLATION_ID: string;
   readonly GITHUB_WEBHOOK_SECRET: string;
+  readonly GITHUB_APP_SLUG?: string;
 
   // Database Configuration
   readonly DATABASE_URL: string;
@@ -33,6 +39,9 @@ export interface Config {
   // General Configuration
   readonly NODE_ENV: "development" | "production" | "test";
   readonly PORT: number;
+
+  // Multi-tenant Configuration
+  readonly MULTI_TENANT_MODE?: boolean;
 }
 
 /**
@@ -88,16 +97,22 @@ export const config: Config = {
     ? parseIntEnv(process.env.OPENAI_TIMEOUT_MS, 30000)
     : undefined,
 
-  // Slack Configuration
+  // Slack Configuration (single-tenant mode)
   SLACK_BOT_TOKEN: requireEnv("SLACK_BOT_TOKEN", process.env.SLACK_BOT_TOKEN),
   SLACK_SIGNING_SECRET: requireEnv("SLACK_SIGNING_SECRET", process.env.SLACK_SIGNING_SECRET),
   SLACK_APP_LEVEL_TOKEN: requireEnv("SLACK_APP_LEVEL_TOKEN", process.env.SLACK_APP_LEVEL_TOKEN),
+
+  // Slack OAuth Configuration (multi-tenant mode)
+  SLACK_CLIENT_ID: process.env.SLACK_CLIENT_ID,
+  SLACK_CLIENT_SECRET: process.env.SLACK_CLIENT_SECRET,
+  SLACK_REDIRECT_URI: process.env.SLACK_REDIRECT_URI,
 
   // GitHub Configuration
   GITHUB_APP_ID: requireEnv("GITHUB_APP_ID", process.env.GITHUB_APP_ID),
   GITHUB_APP_PRIVATE_KEY: requireEnv("GITHUB_APP_PRIVATE_KEY", process.env.GITHUB_APP_PRIVATE_KEY),
   GITHUB_INSTALLATION_ID: requireEnv("GITHUB_INSTALLATION_ID", process.env.GITHUB_INSTALLATION_ID),
   GITHUB_WEBHOOK_SECRET: requireEnv("GITHUB_WEBHOOK_SECRET", process.env.GITHUB_WEBHOOK_SECRET),
+  GITHUB_APP_SLUG: process.env.GITHUB_APP_SLUG || "kenchi-devops",
 
   // Database Configuration
   DATABASE_URL: requireEnv("DATABASE_URL", process.env.DATABASE_URL),
@@ -106,4 +121,7 @@ export const config: Config = {
   // General Configuration
   NODE_ENV: validateNodeEnv(process.env.NODE_ENV),
   PORT: parseIntEnv(process.env.PORT, 3000),
+
+  // Multi-tenant Configuration
+  MULTI_TENANT_MODE: process.env.MULTI_TENANT_MODE === "true",
 } as const;

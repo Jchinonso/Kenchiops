@@ -204,19 +204,65 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
   const sourceFilesResults = await Promise.all(sourceFilePromises);
   const sourceFiles = sourceFilesResults.filter((f): f is NonNullable<typeof f> => f !== null);
 
-  logger.info("Enriched context gathered", {
-    hasLogs: !!workflowLogs,
-    hasDiff: !!prDiff,
-    hasCommitInfo: !!commitInfo,
-    hasPRMetadata: !!prMetadata,
-    hasRepoMetadata: !!repositoryMetadata,
-    hasWorkflowTiming: !!workflowTiming,
-    sourceFilesCount: sourceFiles.length,
-    annotationsCount: annotations.length,
-    dependencyChangesCount: dependencyChanges.length,
-    buildConfigChangesCount: buildConfigChanges.length,
-    testFailuresCount: testFailures.length,
+  // Detailed logging of gathered context for debugging
+  logger.info("=== GATHERED CONTEXT FROM GITHUB ===", {
+    repository: repository.full_name,
+    headSha: headSha.substring(0, 7),
+    prNumber: prNumber ?? "(no PR)",
   });
+
+  logger.info("Context: Workflow Logs", {
+    hasLogs: !!workflowLogs,
+    logLength: workflowLogs?.length ?? 0,
+    logPreview: workflowLogs ? workflowLogs.substring(0, 300) : "(no logs)",
+  });
+
+  logger.info("Context: Annotations from GitHub", {
+    count: annotations.length,
+    annotations: annotations.map((a) => ({
+      path: a.path,
+      line: a.startLine,
+      level: a.level,
+      messagePreview: a.message.substring(0, 80),
+    })),
+  });
+
+  logger.info("Context: Test Failures Parsed from Logs", {
+    count: testFailures.length,
+    failures: testFailures.map((t) => ({
+      name: t.testName,
+      file: t.file ?? "(unknown)",
+    })),
+  });
+
+  logger.info("Context: Source Files Fetched", {
+    count: sourceFiles.length,
+    files: sourceFiles.map((f) => ({
+      path: f.path,
+      lines: f.startLine && f.endLine ? `${f.startLine}-${f.endLine}` : "full",
+      contentLength: f.content.length,
+    })),
+  });
+
+  logger.info("Context: PR & Commit Info", {
+    hasCommitInfo: !!commitInfo,
+    commitMessage: commitInfo?.message?.substring(0, 100),
+    changedFiles: commitInfo?.changedFiles?.length ?? 0,
+    hasPRDiff: !!prDiff,
+    prDiffLength: prDiff?.length ?? 0,
+    hasPRMetadata: !!prMetadata,
+    prTitle: prMetadata?.title,
+  });
+
+  logger.info("Context: Repository & Timing", {
+    repoLanguage: repositoryMetadata?.language,
+    workflowName: workflowTiming?.workflowName,
+    jobName: workflowTiming?.jobName,
+    durationMs: workflowTiming?.durationMs,
+    conclusion: workflowTiming?.conclusion,
+  });
+
+  logger.info("=== END GATHERED CONTEXT ===");
 
   // CRITICAL: Redact secrets before returning context for LLM analysis
   const rawContext: EnrichedContext = {

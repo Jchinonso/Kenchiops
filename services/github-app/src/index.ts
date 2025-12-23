@@ -10,7 +10,14 @@
  */
 
 import express from "express";
-import { createLogger, errorHandler, requestLogger } from "@kenchi/shared";
+import {
+  createLogger,
+  errorHandler,
+  requestLogger,
+  initDatabase,
+  closeDatabase,
+  config,
+} from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 
@@ -52,17 +59,65 @@ const createApp = (): express.Express => {
 };
 
 /**
+ * Initialize database connection
+ */
+const initializeDatabase = (): void => {
+  try {
+    initDatabase({
+      connectionString: config.DATABASE_URL,
+      maxConnections: 10,
+      idleTimeoutMs: 30000,
+    });
+    logger.info("Database connection initialized");
+  } catch (error) {
+    logger.error("Failed to initialize database", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw error;
+  }
+};
+
+/**
+ * Handle graceful shutdown
+ */
+const setupGracefulShutdown = (server: ReturnType<typeof express.application.listen>): void => {
+  const shutdown = async (signal: string): Promise<void> => {
+    logger.info(`Received ${signal}, shutting down gracefully`);
+
+    server.close(async () => {
+      await closeDatabase();
+      logger.info("Server closed");
+      process.exit(0);
+    });
+
+    // Force exit after 10 seconds
+    setTimeout(() => {
+      logger.warn("Forced shutdown after timeout");
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+};
+
+/**
  * Start the GitHub App service
  */
 const startServer = (): void => {
+  // Initialize database for multi-tenant support
+  initializeDatabase();
+
   const app = createApp();
 
-  app.listen(appConfig.port, () => {
+  const server = app.listen(appConfig.port, () => {
     logger.info("GitHub App service started", {
       port: appConfig.port,
       environment: appConfig.environment,
     });
   });
+
+  setupGracefulShutdown(server);
 };
 
 // Start the server

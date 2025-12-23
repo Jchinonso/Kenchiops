@@ -72,31 +72,54 @@ export const fetchWorkflowLogs = async (
       return null;
     }
 
-    // Fetch logs for the first failed job
+    // Fetch logs for the first failed job with retry for DNS issues
     const failedJob = failedJobs[0];
+    const maxRetries = 3;
 
-    try {
-      const { data: logs } = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
-        owner,
-        repo,
-        job_id: failedJob.id,
-      });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data: logs } = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+          owner,
+          repo,
+          job_id: failedJob.id,
+        });
 
-      const logContent = typeof logs === "string" ? logs : String(logs);
-      logger.info("Fetched workflow logs", {
-        jobId: failedJob.id,
-        logSize: logContent.length,
-      });
+        const logContent = typeof logs === "string" ? logs : String(logs);
+        logger.info("Fetched workflow logs", {
+          jobId: failedJob.id,
+          logSize: logContent.length,
+          attempt,
+        });
 
-      return truncateWithContext(logContent, GITHUB_CONTEXT_LIMITS.MAX_LOG_SIZE);
-    } catch (logError) {
-      // Logs might not be available yet or expired
-      logger.warn("Could not fetch job logs", {
-        jobId: failedJob.id,
-        error: logError instanceof Error ? logError.message : "Unknown error",
-      });
-      return null;
+        return truncateWithContext(logContent, GITHUB_CONTEXT_LIMITS.MAX_LOG_SIZE);
+      } catch (logError) {
+        const errorMessage = logError instanceof Error ? logError.message : "Unknown error";
+        const isDnsError = errorMessage.includes("EAI_AGAIN") || errorMessage.includes("ENOTFOUND");
+
+        // Retry on DNS errors
+        if (isDnsError && attempt < maxRetries) {
+          logger.warn("DNS error fetching logs, retrying...", {
+            jobId: failedJob.id,
+            attempt,
+            maxRetries,
+            error: errorMessage,
+          });
+          // Wait before retry (exponential backoff: 1s, 2s, 4s)
+          await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+          continue;
+        }
+
+        // Logs might not be available yet or expired
+        logger.warn("Could not fetch job logs", {
+          jobId: failedJob.id,
+          attempt,
+          error: errorMessage,
+        });
+        return null;
+      }
     }
+
+    return null;
   } catch (error) {
     logger.warn("Failed to fetch workflow logs", {
       headSha,

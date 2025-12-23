@@ -19,7 +19,7 @@ describe("API Analysis Service", () => {
 
       expect(context.event).toBeDefined();
       expect(context.event.type).toBe("CICD_FAILURE");
-      expect(context.event.source).toBe("n8n");
+      expect(context.event.source).toBe("github-app");
       expect(context.event.severity).toBe("high");
       expect(context.event.title).toContain("test-repo");
       expect(context.event.payload).toEqual({

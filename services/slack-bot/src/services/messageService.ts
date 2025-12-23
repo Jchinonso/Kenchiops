@@ -16,7 +16,6 @@ import type {
   CIFailureAnalysis,
 } from "../types/slackTypes.js";
 import { resolveChannelId, getBotMemberChannels, type SlackClient } from "./channelService.js";
-import { getChannelForRepository, isMultiTenantMode } from "./orgChannelMapping.js";
 import {
   createAnalysisAttachments,
   type MessageAttachment,
@@ -91,19 +90,19 @@ const getActiveChannel = async (client: SlackClient): Promise<string | null> => 
  *
  * Priority:
  * 1. Explicit channel ID/name if provided
- * 2. Repository-based lookup (multi-tenant mode via ORG_CHANNEL_MAPPING)
- * 3. Bot's active channel (single-tenant fallback)
+ * 2. Bot's active channel (fallback)
+ *
+ * Note: In multi-tenant mode, the channel should be provided explicitly
+ * or determined by the tenant's configuration.
  *
  * @param client - Slack client instance
  * @param channel - Optional explicit channel
- * @param repository - Optional repository for org-based lookup
  * @returns Resolved channel ID
  * @throws Error if no channel can be determined
  */
 const resolveTargetChannel = async (
   client: SlackClient,
-  channel: string | undefined,
-  repository: string | undefined
+  channel: string | undefined
 ): Promise<string> => {
   // Priority 1: Explicit channel provided
   if (channel) {
@@ -112,27 +111,16 @@ const resolveTargetChannel = async (
     return channelId;
   }
 
-  // Priority 2: Repository-based lookup (multi-tenant mode)
-  if (repository && isMultiTenantMode()) {
-    const channelId = getChannelForRepository(repository);
-    if (channelId) {
-      logger.info("Using org-based channel routing", { repository, channelId });
-      return channelId;
-    }
-    // getChannelForRepository throws if org not found in multi-tenant mode
-  }
-
-  // Priority 3: Bot's active channel (single-tenant mode)
+  // Priority 2: Bot's active channel
   const activeChannel = await getActiveChannel(client);
   if (!activeChannel) {
     throw new Error(
       "Cannot determine target channel. " +
-        "Either provide a channel, configure ORG_CHANNEL_MAPPING, " +
-        "or invite the bot to a channel."
+        "Either provide a channel or invite the bot to a channel."
     );
   }
 
-  logger.info("Using bot's active channel (single-tenant mode)", { channelId: activeChannel });
+  logger.info("Using bot's active channel", { channelId: activeChannel });
   return activeChannel;
 };
 
@@ -143,32 +131,29 @@ const resolveTargetChannel = async (
  *
  * Channel resolution priority:
  * 1. Explicit channel ID/name if provided
- * 2. Repository-based lookup (multi-tenant mode via ORG_CHANNEL_MAPPING)
- * 3. Bot's active channel (single-tenant fallback)
+ * 2. Bot's active channel (fallback)
  *
  * @param client - Slack client instance
- * @param request - Message request with optional channel/repository, message/blocks/analysis, and optional thread_ts
+ * @param request - Message request with optional channel, message/blocks/analysis, and optional thread_ts
  * @returns Message response with status and details
  */
 export const postMessage = async (
   client: SlackClient,
   request: SlackMessageRequest
 ): Promise<SlackMessagePostResponse> => {
-  const { channel, repository, message, thread_ts, blocks, attachments, analysis } = request;
+  const { channel, message, thread_ts, blocks, attachments, analysis } = request;
 
   logger.info("Slack message request received", {
     channel: channel || "(auto-detect)",
-    repository: repository || "(not provided)",
     hasThread: !!thread_ts,
     hasBlocks: !!blocks,
     hasAttachments: !!attachments,
     hasAnalysis: !!analysis,
-    multiTenantMode: isMultiTenantMode(),
   });
 
   try {
     // Resolve target channel using priority-based logic
-    const channelId = await resolveTargetChannel(client, channel, repository);
+    const channelId = await resolveTargetChannel(client, channel);
 
     const payload = buildMessagePayload(message, analysis, blocks, attachments);
 

@@ -372,3 +372,85 @@ export interface GitHubPREvent {
     base: { ref: string };
   };
 }
+
+// ==================== Multi-Tenant Types ====================
+
+/**
+ * Tenant status in the multi-tenant lifecycle.
+ * - pending_slack: GitHub installed, awaiting Slack connection
+ * - pending_github: Slack installed, awaiting GitHub connection
+ * - active: Both installed, ready to use
+ * - suspended: Temporarily disabled
+ * - deleted: Soft deleted
+ */
+export type TenantStatus =
+  | "pending_slack"
+  | "pending_github"
+  | "active"
+  | "suspended"
+  | "deleted";
+
+/**
+ * Tenant entity - represents a customer organization using Kenchi.
+ * Links a GitHub organization to a Slack workspace.
+ */
+export interface Tenant {
+  readonly id: string;
+  readonly githubOrg: string;
+  readonly githubInstallationId: number | null;
+  readonly githubAppInstalledAt: Date | null;
+  readonly slackWorkspaceId: string | null;
+  readonly slackTeamName: string | null;
+  readonly slackBotToken: string | null;
+  readonly slackBotUserId: string | null;
+  readonly slackAppInstalledAt: Date | null;
+  readonly status: TenantStatus;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/**
+ * Data required to create a tenant from GitHub App installation.
+ */
+export interface CreateTenantFromGitHub {
+  readonly githubOrg: string;
+  readonly githubInstallationId: number;
+}
+
+/**
+ * Data required to link a Slack workspace to an existing tenant.
+ */
+export interface LinkSlackWorkspace {
+  readonly tenantId: string;
+  readonly slackWorkspaceId: string;
+  readonly slackTeamName: string;
+  readonly slackBotToken: string;
+  readonly slackBotUserId?: string;
+}
+
+/**
+ * Tenant audit log action types.
+ */
+export type TenantAuditAction =
+  | "github_installed"
+  | "github_uninstalled"
+  | "slack_installed"
+  | "slack_uninstalled"
+  | "activated"
+  | "suspended"
+  | "deleted"
+  | "ci_failure_processed"
+  | "slack_message_sent"
+  | "github_comment_posted";
+
+/**
+ * Tenant audit log entry.
+ */
+export interface TenantAuditEntry {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly action: TenantAuditAction;
+  readonly actor: string | null;
+  readonly metadata: Record<string, unknown>;
+  readonly createdAt: Date;
+}

@@ -22,7 +22,7 @@ kenchi/
 │   ├── api/
 │   ├── slack-bot/
 │   └── github-app/
-└── n8n/workflows/       ← Workflow definitions
+└── docs/                ← Documentation
 ```
 
 ## Zero Duplication Policy
@@ -35,13 +35,19 @@ kenchi/
 
 - **Config**: `config`, `Config`
 - **Logging**: `logger`, `createLogger`, `LogLevel`
-- **Errors**: `AppError`, `ValidationError`, `AuthenticationError`, `NotFoundError`, `ExternalServiceError`, `LLMError`, `isAppError`
+- **Errors**: `AppError`, `ValidationError`, `AuthenticationError`, `AuthorizationError`, `NotFoundError`, `ExternalServiceError`, `LLMError`, `isAppError`, `getErrorMessage`, `formatErrorForLog`, `wrapError`
 - **Middleware**: `errorHandler`, `asyncHandler`, `requestLogger`
 - **Validation**: `validate`, `validators`, `ValidationSchema`
 - **Rate Limiting**: `createRateLimiter`, `defaultRateLimiter`
 - **AI/ML**: `OpenAIClient`, `VectorStore`, `InMemoryVectorStore`
-- **Safety**: `confidenceScore`, `shouldActOnResult`
-- **Types**: `LLMAnalysisResult`, `WebhookEvent`, `CIFailureEvent`, `SlackMessageEvent`, `GitHubPREvent`
+- **Safety**: `calculateConfidenceScore`, `determineActionGating`, `confidenceScore`, `shouldActOnResult`
+- **Security**: `redactSecrets`, `redactSecretsWithStats`, `redactObject`, `isForbiddenField`, `containsSecrets`, `detectSecretTypes`, `createCustomRedactor`, `RedactionResult`
+- **Prompts**: `buildSystemPrompt`, `buildAnalysisPrompt`, `formatEvent`, `formatEvidence`, `formatLogs`, `formatMetrics`, `formatGitHistory`, `formatKnowledgeDocs`, `estimateTokens`, `truncateEvidence`
+- **UI Helpers**: `getConfidenceLabel`, `getConfidenceLabelParenthesized`, `getConfidenceColor`, `getConfidenceEmoji`, `truncateText`
+- **Array Utils**: `deduplicateByKey`, `containsAny`, `startsWithAny`, `shouldExcludePath`, `groupBy`, `takeMatching`
+- **CI Formatters**: `collectCIErrors`, `formatDependencyChange`, `formatDependencyChanges`, `CIAnnotation`, `CITestFailure`, `DependencyChange`
+- **Types**: All event, evidence, LLM analysis, action proposal, and validation types (see `packages/shared/src/index.ts` for complete list)
+- **Constants**: All constants exported from `constants.ts` (error codes, thresholds, patterns, etc.)
 
 ## Code Generation Rules
 
@@ -65,15 +71,19 @@ kenchi/
 
 ### For Cursor AI
 
-**See `.cursorrules` file** - Cursor automatically reads this file.
+**See `.cursor/rules/kenchi-standards.mdc` file** - Cursor automatically reads this file for Kenchi-specific coding standards and rules.
 
 ### For Claude AI
 
-**See `.claude-config.md` file** - Reference this when working with Claude.
+**See `.claude/CLAUDE.md` file** - Reference this when working with Claude for project context and coding standards.
+
+### For Codex AI
+
+**See `.codex/CODEX.md` file** - Codex reads these rules for Kenchi-specific constraints and guidelines.
 
 ### For Other AI Tools
 
-**See `docs/CODE_ORGANIZATION.md`** - Comprehensive code organization guide.
+**See `docs/CODE_ORGANIZATION.md`** - Comprehensive code organization guide for understanding the codebase structure.
 
 ## Detection Tools
 
