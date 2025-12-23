@@ -14,6 +14,7 @@ import type {
   SlackBlock,
   SlackAttachment,
   CIFailureAnalysis,
+  ConsolidatedMessageRequest,
 } from "../types/slackTypes.js";
 import { resolveChannelId, getBotMemberChannels, type SlackClient } from "./channelService.js";
 import {
@@ -182,6 +183,67 @@ export const postMessage = async (
   } catch (error) {
     logger.error("Failed to post message to Slack", {
       channel,
+      error: getErrorMessage(error),
+    });
+
+    return {
+      status: "error",
+      error: getErrorMessage(error),
+    };
+  }
+};
+
+/**
+ * Posts a consolidated CI failure message to Slack.
+ *
+ * Uses pre-built Block Kit payload from the GitHub App's aggregation service.
+ * This creates a single consolidated message for all failures in a commit.
+ *
+ * @param client - Slack client instance
+ * @param request - Consolidated message request with pre-built payload
+ * @returns Message response with status and details
+ */
+export const postConsolidatedMessage = async (
+  client: SlackClient,
+  request: ConsolidatedMessageRequest
+): Promise<SlackMessagePostResponse> => {
+  const { payload, repository, commit_sha, failure_count, channel } = request;
+
+  logger.info("Consolidated Slack message request received", {
+    repository,
+    commitSha: commit_sha.substring(0, 7),
+    failureCount: failure_count,
+    channel: channel || "(auto-detect)",
+    blockCount: payload.blocks.length,
+  });
+
+  try {
+    // Resolve target channel using priority-based logic
+    const channelId = await resolveTargetChannel(client, channel);
+
+    const result = await client.chat.postMessage({
+      channel: channelId,
+      text: payload.text,
+      blocks: [...payload.blocks] as SlackBlock[],
+    });
+
+    logger.info("Consolidated message posted to Slack", {
+      repository,
+      channelId,
+      timestamp: result.ts,
+      failureCount: failure_count,
+    });
+
+    return {
+      status: "sent",
+      channel: channelId,
+      timestamp: result.ts,
+      thread_ts: result.ts,
+    };
+  } catch (error) {
+    logger.error("Failed to post consolidated message to Slack", {
+      repository,
+      failureCount: failure_count,
       error: getErrorMessage(error),
     });
 
