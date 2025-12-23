@@ -7,6 +7,7 @@
 
 import { query, transaction } from "./database.js";
 import { createLogger } from "./logger.js";
+import { NotFoundError } from "./errors.js";
 import type {
   Tenant,
   TenantStatus,
@@ -280,7 +281,7 @@ export const linkSlackWorkspace = async (
     );
 
     if (updated.rows.length === 0) {
-      throw new Error(`Tenant not found: ${data.tenantId}`);
+      throw new NotFoundError(`Tenant not found: ${data.tenantId}`);
     }
 
     // Log audit event
@@ -391,7 +392,7 @@ export const activate = async (tenantId: string): Promise<Tenant> => {
     );
 
     if (updated.rows.length === 0) {
-      throw new Error(`Tenant not found: ${tenantId}`);
+      throw new NotFoundError(`Tenant not found: ${tenantId}`);
     }
 
     await client.query(
@@ -425,7 +426,7 @@ export const suspend = async (
     );
 
     if (updated.rows.length === 0) {
-      throw new Error(`Tenant not found: ${tenantId}`);
+      throw new NotFoundError(`Tenant not found: ${tenantId}`);
     }
 
     await client.query(

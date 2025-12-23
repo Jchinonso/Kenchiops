@@ -63,26 +63,22 @@ export const validateResponse = (
   response: LLMAnalysisResult,
   providedContext: { event: Event; evidence: Evidence }
 ): ValidationResult => {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
   // Pre-compute all lookup structures once
   const lookups = buildLookups(providedContext.evidence);
-
-  // 1. Check for dangerous keywords in recommendations
-  validateDangerousKeywords(response.recommendedActions, errors);
-
-  // 2. Validate evidence references
-  validateEvidenceReferences(response.evidenceUsed, providedContext, lookups, warnings);
-
-  // 3. Validate cited incidents (simple Set lookup)
-  validateCitedIncidents(response.relatedIncidents, lookups.incidents, errors);
-
-  // 4. Single-pass text analysis for commits and quoted text
   const analysisText = buildAnalysisText(response.reasoning, response.identifiedCause);
-  analysisText &&
-    (validateCitedCommits(analysisText, lookups.commits, errors),
-    validateQuotedText(analysisText, lookups, warnings));
+
+  // Collect all errors using functional composition
+  const errors = [
+    ...getDangerousKeywordErrors(response.recommendedActions),
+    ...getCitedIncidentErrors(response.relatedIncidents, lookups.incidents),
+    ...(analysisText ? getCitedCommitErrors(analysisText, lookups.commits) : []),
+  ];
+
+  // Collect all warnings using functional composition
+  const warnings = [
+    ...getEvidenceReferenceWarnings(response.evidenceUsed, providedContext, lookups),
+    ...(analysisText ? getQuotedTextWarnings(analysisText, lookups) : []),
+  ];
 
   return {
     valid: errors.length === 0,
@@ -99,52 +95,47 @@ const buildAnalysisText = (reasoning?: string, identifiedCause?: string): string
 };
 
 /**
- * Validates all evidence references.
+ * Validates all evidence references and returns invalid reference warnings.
  */
-const validateEvidenceReferences = (
+const getEvidenceReferenceWarnings = (
   evidenceUsed: LLMAnalysisResult["evidenceUsed"],
   context: { event: Event; evidence: Evidence },
-  lookups: ValidationLookups,
-  warnings: string[]
-): void => {
-  evidenceUsed?.forEach((evidence) => {
-    !isEvidenceValid(evidence, context, lookups) &&
-      warnings.push(`LLM cited evidence that was not provided: ${evidence.reference}`);
-  });
+  lookups: ValidationLookups
+): string[] => {
+  return (evidenceUsed ?? [])
+    .filter((evidence) => !isEvidenceValid(evidence, context, lookups))
+    .map((evidence) => `LLM cited evidence that was not provided: ${evidence.reference}`);
 };
 
 /**
- * Validates cited incidents against known incidents.
+ * Gets errors for cited incidents not found in known incidents.
  */
-const validateCitedIncidents = (
+const getCitedIncidentErrors = (
   relatedIncidents: string[] | undefined,
-  incidentsSet: Set<string>,
-  errors: string[]
-): void => {
-  relatedIncidents?.forEach((cited) => {
-    !incidentsSet.has(cited) && errors.push(`LLM cited non-existent incident: ${cited}`);
-  });
+  incidentsSet: Set<string>
+): string[] => {
+  return (relatedIncidents ?? [])
+    .filter((cited) => !incidentsSet.has(cited))
+    .map((cited) => `LLM cited non-existent incident: ${cited}`);
 };
 
 /**
- * Validates cited commits in analysis text.
+ * Gets errors for cited commits not found in known commits.
  */
-const validateCitedCommits = (text: string, commitsSet: Set<string>, errors: string[]): void => {
-  extractCommitSHAs(text).forEach((cited) => {
-    !isCommitValid(cited, commitsSet) && errors.push(`LLM cited non-existent commit: ${cited}`);
-  });
+const getCitedCommitErrors = (text: string, commitsSet: Set<string>): string[] => {
+  return extractCommitSHAs(text)
+    .filter((cited) => !isCommitValid(cited, commitsSet))
+    .map((cited) => `LLM cited non-existent commit: ${cited}`);
 };
 
 /**
- * Validates quoted text in analysis.
+ * Gets warnings for quoted text not found in logs.
  */
-const validateQuotedText = (text: string, lookups: ValidationLookups, warnings: string[]): void => {
+const getQuotedTextWarnings = (text: string, lookups: ValidationLookups): string[] => {
   const minLength = MATCHING_CONFIG.QUOTED_TEXT_MIN_LENGTH;
-  extractQuotedText(text).forEach((quoted) => {
-    quoted.length > minLength &&
-      !isQuotedTextValid(quoted, lookups.logValues) &&
-      warnings.push(`LLM may have invented quoted text: "${quoted}"`);
-  });
+  return extractQuotedText(text)
+    .filter((quoted) => quoted.length > minLength && !isQuotedTextValid(quoted, lookups.logValues))
+    .map((quoted) => `LLM may have invented quoted text: "${quoted}"`);
 };
 
 /**
@@ -233,17 +224,18 @@ const extractQuotedText = (text: string): string[] => {
 };
 
 /**
- * Validates dangerous keywords in recommended actions.
+ * Gets errors for actions containing dangerous keywords.
  * Uses pre-compiled regex pattern for O(n) matching.
  */
-const validateDangerousKeywords = (
-  actions: LLMAnalysisResult["recommendedActions"],
-  errors: string[]
-): void => {
-  actions?.forEach((action) => {
-    const match = action.description.match(DANGEROUS_KEYWORDS_PATTERN);
-    match && errors.push(`Action contains dangerous keyword "${match[1]}": ${action.description}`);
-  });
+const getDangerousKeywordErrors = (
+  actions: LLMAnalysisResult["recommendedActions"]
+): string[] => {
+  return (actions ?? [])
+    .map((action) => {
+      const match = action.description.match(DANGEROUS_KEYWORDS_PATTERN);
+      return match ? `Action contains dangerous keyword "${match[1]}": ${action.description}` : null;
+    })
+    .filter((error): error is string => error !== null);
 };
 
 /**
@@ -259,28 +251,31 @@ const generatePrefixLengths = (
 };
 
 /**
+ * Generates all prefixes for a single SHA.
+ */
+const generateSHAPrefixes = (sha: string, minLength: number, maxLength: number): string[] => {
+  const lowerSha = sha.toLowerCase();
+  const prefixes = generatePrefixLengths(lowerSha.length, minLength, maxLength)
+    .map((len) => lowerSha.substring(0, len));
+  return [lowerSha, ...prefixes];
+};
+
+/**
  * Builds a Set of commit SHA prefixes for O(1) lookup.
  * Handles both full SHAs and short prefixes.
  */
 const buildCommitPrefixSet = (gitHistory: Evidence["gitHistory"]): Set<string> => {
-  const commitSet = new Set<string>();
   if (!gitHistory?.length) {
-    return commitSet;
+    return new Set<string>();
   }
 
   const { SHA_PREFIX_MIN_LENGTH, SHA_PREFIX_MAX_LENGTH } = MATCHING_CONFIG;
 
-  gitHistory.forEach((commit) => {
-    const sha = commit.sha.toLowerCase();
-    commitSet.add(sha);
-    generatePrefixLengths(sha.length, SHA_PREFIX_MIN_LENGTH, SHA_PREFIX_MAX_LENGTH).forEach(
-      (len) => {
-        commitSet.add(sha.substring(0, len));
-      }
-    );
-  });
+  const allPrefixes = gitHistory.flatMap((commit) =>
+    generateSHAPrefixes(commit.sha, SHA_PREFIX_MIN_LENGTH, SHA_PREFIX_MAX_LENGTH)
+  );
 
-  return commitSet;
+  return new Set(allPrefixes);
 };
 
 /**
@@ -313,19 +308,18 @@ const isCommitValid = (citedSha: string, providedCommitsSet: Set<string>): boole
  * Keys are prefixes, values are full normalized messages.
  */
 const buildLogLookupMap = (logs: Evidence["logs"]): Map<string, string> => {
-  const logMap = new Map<string, string>();
   if (!logs?.length) {
-    return logMap;
+    return new Map<string, string>();
   }
 
   const prefixLength = MATCHING_CONFIG.LOG_PREFIX_LENGTH;
-  logs.forEach((log) => {
+
+  // Use reduce to build map, keeping first occurrence for each prefix
+  return logs.reduce((map, log) => {
     const normalized = log.message.toLowerCase();
     const key = normalized.substring(0, prefixLength);
-    !logMap.has(key) && logMap.set(key, normalized);
-  });
-
-  return logMap;
+    return map.has(key) ? map : map.set(key, normalized);
+  }, new Map<string, string>());
 };
 
 /**

@@ -61,11 +61,12 @@ const oauthStates = new Map<string, StoredState>();
  */
 const cleanupExpiredStates = (): void => {
   const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-  const expiredKeys = Array.from(oauthStates.entries())
+  Array.from(oauthStates.entries())
     .filter(([, value]) => value.createdAt < tenMinutesAgo)
-    .map(([key]) => key);
-
-  expiredKeys.forEach((key) => oauthStates.delete(key));
+    .map(([key]) => {
+      oauthStates.delete(key);
+      return key;
+    });
 };
 
 // Clean up expired states every 5 minutes

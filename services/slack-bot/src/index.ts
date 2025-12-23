@@ -165,7 +165,7 @@ function setupSlackHandlers(app: SlackApp): void {
   // Handle App Home action buttons
   app.action("test_connection", async ({ ack, client, body }) => {
     await ack();
-    const result = await handleTestConnection(client, body.user.id);
+    await handleTestConnection(client, body.user.id);
     // Refresh the home view to show the result
     await handleRefreshHome(client, body.user.id);
   });

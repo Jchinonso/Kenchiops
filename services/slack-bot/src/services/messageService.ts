@@ -4,7 +4,7 @@
  * Provides message posting and broadcasting functionality for Slack.
  */
 
-import { logger, getErrorMessage } from "@kenchi/shared";
+import { logger, getErrorMessage, ValidationError } from "@kenchi/shared";
 import type {
   SlackMessageRequest,
   SlackMessagePostResponse,
@@ -114,7 +114,7 @@ const resolveTargetChannel = async (
   // Priority 2: Bot's active channel
   const activeChannel = await getActiveChannel(client);
   if (!activeChannel) {
-    throw new Error(
+    throw new ValidationError(
       "Cannot determine target channel. " +
         "Either provide a channel or invite the bot to a channel."
     );
@@ -216,7 +216,7 @@ export const broadcastMessage = async (
     const results = await Promise.allSettled(
       channels.map(async (channel): Promise<SlackBroadcastChannelResult> => {
         if (!channel.id || !channel.name) {
-          throw new Error("Invalid channel data");
+          throw new ValidationError("Invalid channel data");
         }
 
         try {

@@ -20,6 +20,82 @@ const router = Router();
 const logger = createLogger("github-app");
 
 /**
+ * Webhook handler result with optional fields
+ */
+interface WebhookHandlerResult {
+  readonly handled: boolean;
+  readonly message: string;
+  readonly eventId?: string;
+  readonly tenantId?: string;
+}
+
+/**
+ * Webhook event handler configuration
+ */
+interface WebhookEventHandler {
+  readonly handle: (body: unknown) => Promise<WebhookHandlerResult>;
+  readonly formatResponse: (result: WebhookHandlerResult) => object;
+}
+
+/**
+ * Format standard webhook response
+ */
+const formatStandardResponse = (result: WebhookHandlerResult): object => ({
+  status: result.handled ? "processed" : "skipped",
+  message: result.message,
+  eventId: result.eventId,
+});
+
+/**
+ * Format installation webhook response (includes tenantId)
+ */
+const formatInstallationResponse = (result: WebhookHandlerResult): object => ({
+  status: result.handled ? "processed" : "skipped",
+  message: result.message,
+  tenantId: result.tenantId,
+});
+
+/**
+ * Event handler lookup table
+ */
+const eventHandlers: Record<string, WebhookEventHandler> = {
+  pull_request: {
+    handle: (body) => handlePullRequest(body as PullRequestWebhook),
+    formatResponse: formatStandardResponse,
+  },
+  check_run: {
+    handle: (body) => handleCheckRun(body as CheckRunWebhook),
+    formatResponse: formatStandardResponse,
+  },
+  installation: {
+    handle: (body) => handleInstallation(body as InstallationWebhook),
+    formatResponse: formatInstallationResponse,
+  },
+};
+
+/**
+ * Handle ping event
+ */
+const handlePing = (deliveryId: string, res: Response): void => {
+  logger.info("GitHub webhook ping received", { deliveryId });
+  res.status(HTTP_STATUS.OK).json({
+    status: "ok",
+    message: "Webhook configured successfully",
+  });
+};
+
+/**
+ * Handle unknown event type
+ */
+const handleUnknownEvent = (eventType: string, deliveryId: string, res: Response): void => {
+  logger.info("Unhandled GitHub event type", { eventType, deliveryId });
+  res.status(HTTP_STATUS.OK).json({
+    status: "ignored",
+    message: `Event type '${eventType}' not handled`,
+  });
+};
+
+/**
  * Unified GitHub webhook handler
  * GitHub sends all events to this single endpoint with X-GitHub-Event header
  * POST /webhook/github
@@ -36,57 +112,22 @@ router.post(
       deliveryId,
     });
 
-    switch (eventType) {
-      case "pull_request": {
-        const webhook = req.body as PullRequestWebhook;
-        const result = await handlePullRequest(webhook);
-        res.status(HTTP_STATUS.OK).json({
-          status: result.handled ? "processed" : "skipped",
-          message: result.message,
-          eventId: result.eventId,
-        });
-        break;
-      }
-
-      case "check_run": {
-        const webhook = req.body as CheckRunWebhook;
-        const result = await handleCheckRun(webhook);
-        res.status(HTTP_STATUS.OK).json({
-          status: result.handled ? "processed" : "skipped",
-          message: result.message,
-          eventId: result.eventId,
-        });
-        break;
-      }
-
-      case "installation": {
-        const webhook = req.body as InstallationWebhook;
-        const result = await handleInstallation(webhook);
-        res.status(HTTP_STATUS.OK).json({
-          status: result.handled ? "processed" : "skipped",
-          message: result.message,
-          tenantId: result.tenantId,
-        });
-        break;
-      }
-
-      case "ping": {
-        logger.info("GitHub webhook ping received", { deliveryId });
-        res.status(HTTP_STATUS.OK).json({
-          status: "ok",
-          message: "Webhook configured successfully",
-        });
-        break;
-      }
-
-      default: {
-        logger.info("Unhandled GitHub event type", { eventType, deliveryId });
-        res.status(HTTP_STATUS.OK).json({
-          status: "ignored",
-          message: `Event type '${eventType}' not handled`,
-        });
-      }
+    // Handle ping separately (no async processing needed)
+    if (eventType === "ping") {
+      handlePing(deliveryId, res);
+      return;
     }
+
+    // Look up handler in table
+    const handler = eventHandlers[eventType];
+    if (!handler) {
+      handleUnknownEvent(eventType, deliveryId, res);
+      return;
+    }
+
+    // Execute handler and format response
+    const result = await handler.handle(req.body);
+    res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
   })
 );
 

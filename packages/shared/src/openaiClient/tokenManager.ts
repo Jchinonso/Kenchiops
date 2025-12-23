@@ -10,6 +10,7 @@
 
 import type { Event, Evidence } from "../types.js";
 import { OPENAI_CONSTANTS } from "../constants.js";
+import { ValidationError } from "../errors.js";
 import { buildAnalysisPrompt, estimateTokens, truncateEvidence } from "../prompts.js";
 
 /**
@@ -29,7 +30,7 @@ interface TokenEstimate {
  */
 const validateTokenBudget = (maxTokens: number): void => {
   if (maxTokens <= OPENAI_CONSTANTS.TOKEN_BUFFER) {
-    throw new Error(
+    throw new ValidationError(
       `Token budget (${maxTokens}) must be greater than buffer (${OPENAI_CONSTANTS.TOKEN_BUFFER})`
     );
   }

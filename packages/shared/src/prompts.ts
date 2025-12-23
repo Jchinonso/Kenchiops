@@ -190,13 +190,45 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
 }
 \`\`\`
 
-## CODE ANNOTATIONS REQUIREMENTS
-If you identify specific file locations where errors occurred:
-1. Extract the file path and line number from error messages or stack traces
-2. Create a "codeAnnotations" entry for each distinct error location
-3. Use "failure" level for actual errors, "warning" for potential issues, "notice" for informational
-4. The message should explain what went wrong at that specific location
-5. Only include annotations for files that are actually mentioned in the evidence`;
+## CODE ANNOTATIONS REQUIREMENTS - CRITICAL
+You MUST analyze the logs and error output to identify ALL specific file locations where issues occurred.
+
+### Common CI Tool Output Patterns to Parse:
+
+**Prettier/Formatting:**
+- Pattern: \`[warn] path/to/file.ts\` or \`Checking formatting...\` followed by file paths
+- Level: "warning"
+- Message: "Formatting issue - file needs formatting"
+
+**ESLint:**
+- Pattern: \`path/to/file.ts:line:column  error/warning  message  rule-name\`
+- Level: "failure" for errors, "warning" for warnings
+- Include the rule name and specific error message
+
+**TypeScript (tsc):**
+- Pattern: \`path/to/file.ts(line,column): error TSxxxx: message\`
+- Pattern: \`path/to/file.ts:line:column - error TSxxxx: message\`
+- Level: "failure"
+- Include the TypeScript error code and message
+
+**Test Failures (Jest/Vitest/Mocha):**
+- Look for \`FAIL path/to/test.ts\` or stack traces with file:line references
+- Level: "failure"
+- Include test name and assertion error
+
+**Build Errors:**
+- Look for compilation errors with file paths
+- Level: "failure"
+
+### Annotation Rules:
+1. Extract EVERY file with errors from the logs - do not skip any
+2. Use the exact file path as shown in the logs
+3. Extract line numbers when available (default to 1 if not)
+4. Create ONE annotation per distinct error location (same file:line = one annotation)
+5. Aggregate multiple errors at the same location into a single comprehensive message
+6. Prioritize actual errors over warnings
+7. Maximum 50 annotations to keep response manageable
+8. Only include annotations for files actually mentioned in the evidence`;
 };
 
 /**
@@ -267,20 +299,17 @@ const EVIDENCE_SECTIONS: readonly EvidenceSectionConfig[] = [
 
 /**
  * Formats all evidence sections for inclusion in the prompt.
- * Uses data-driven configuration for maintainability.
+ * Uses data-driven configuration with functional patterns.
  */
 export const formatEvidence = (evidence: Evidence): string => {
-  const sections: string[] = ["## COLLECTED EVIDENCE"];
-
-  for (const config of EVIDENCE_SECTIONS) {
+  const evidenceSections = EVIDENCE_SECTIONS.flatMap((config) => {
     if (config.hasData(evidence)) {
-      sections.push(config.title, config.format(evidence));
-    } else if (config.emptyMessage) {
-      sections.push(`${config.title}\n${config.emptyMessage}`);
+      return [config.title, config.format(evidence)];
     }
-  }
+    return config.emptyMessage ? [`${config.title}\n${config.emptyMessage}`] : [];
+  });
 
-  return sections.join("\n\n");
+  return ["## COLLECTED EVIDENCE", ...evidenceSections].join("\n\n");
 };
 
 /**
@@ -351,27 +380,20 @@ const STANDARD_METRICS: readonly MetricField[] = [
 const STANDARD_METRIC_KEYS = new Set<string>(STANDARD_METRICS.map((m) => m.key as string));
 
 /**
- * Formats metrics summary using data-driven approach.
+ * Formats metrics summary using data-driven approach with functional patterns.
  */
 export const formatMetrics = (summary: MetricsSummary): string => {
-  const lines: string[] = [];
-
-  // Format standard metrics using lookup table
-  for (const { key, label, suffix } of STANDARD_METRICS) {
-    const value = summary[key];
-    if (value !== undefined) {
-      lines.push(`- ${label}: ${value}${suffix ?? ""}`);
-    }
-  }
+  // Format standard metrics using filter and map
+  const standardLines = STANDARD_METRICS
+    .filter(({ key }) => summary[key] !== undefined)
+    .map(({ key, label, suffix }) => `- ${label}: ${summary[key]}${suffix ?? ""}`);
 
   // Include any custom metrics not in standard set
-  for (const [key, value] of Object.entries(summary)) {
-    if (!STANDARD_METRIC_KEYS.has(key)) {
-      lines.push(`- ${key}: ${value}`);
-    }
-  }
+  const customLines = Object.entries(summary)
+    .filter(([key]) => !STANDARD_METRIC_KEYS.has(key))
+    .map(([key, value]) => `- ${key}: ${value}`);
 
-  return lines.join("\n");
+  return [...standardLines, ...customLines].join("\n");
 };
 
 /**
@@ -418,7 +440,7 @@ const DEPLOYMENT_FIELDS: readonly {
 ];
 
 /**
- * Formats system state information using data-driven approach.
+ * Formats system state information using data-driven approach with functional patterns.
  */
 const formatSystemState = (systemState: SystemState): string => {
   const sections: string[] = [];
@@ -426,55 +448,46 @@ const formatSystemState = (systemState: SystemState): string => {
   // Deployment status
   if (systemState.deploymentStatus) {
     const ds = systemState.deploymentStatus;
-    sections.push("**Deployment**:");
-    for (const { key, label } of DEPLOYMENT_FIELDS) {
-      const value = ds[key];
-      if (value) sections.push(`- ${label}: ${value}`);
-    }
+    const deploymentLines = DEPLOYMENT_FIELDS
+      .filter(({ key }) => ds[key])
+      .map(({ key, label }) => `- ${label}: ${ds[key]}`);
+    sections.push("**Deployment**:", ...deploymentLines);
   }
 
   // Service health
   if (systemState.serviceHealth) {
-    sections.push("\n**Service Health**:");
-    for (const [service, status] of Object.entries(systemState.serviceHealth)) {
-      sections.push(`- ${service}: ${status}`);
-    }
+    const healthLines = Object.entries(systemState.serviceHealth)
+      .map(([service, status]) => `- ${service}: ${status}`);
+    sections.push("\n**Service Health**:", ...healthLines);
   }
 
   // Dependencies
   if (systemState.dependencies?.length) {
-    sections.push("\n**Dependencies**:");
-    for (const dep of systemState.dependencies) {
+    const depLines = systemState.dependencies.map((dep) => {
       const responseTime = dep.responseTime ? ` (${dep.responseTime}ms)` : "";
-      sections.push(`- ${dep.name}: ${dep.status}${responseTime}`);
-    }
+      return `- ${dep.name}: ${dep.status}${responseTime}`;
+    });
+    sections.push("\n**Dependencies**:", ...depLines);
   }
 
   return sections.join("\n");
 };
 
 /**
- * Formats knowledge base documents.
+ * Formats knowledge base documents using functional array composition.
  */
 export const formatKnowledgeDocs = (docs: KnowledgeDocument[]): string => {
   return docs
     .map((doc) => {
       const similarity = (doc.similarity * UI_CONSTANTS.PERCENTAGE_MULTIPLIER).toFixed(0);
-      let formatted = `**[${doc.type}] ${doc.title}** (Similarity: ${similarity}%)\n`;
-
-      if (doc.excerpt) {
-        formatted += `${doc.excerpt}\n`;
-      }
-
-      if (doc.url) {
-        formatted += `Full document: ${doc.url}\n`;
-      }
-
-      if (doc.metadata?.tags && doc.metadata.tags.length > 0) {
-        formatted += `Tags: ${doc.metadata.tags.join(", ")}\n`;
-      }
-
-      return formatted + "---";
+      const lines = [
+        `**[${doc.type}] ${doc.title}** (Similarity: ${similarity}%)`,
+        doc.excerpt,
+        doc.url && `Full document: ${doc.url}`,
+        doc.metadata?.tags?.length && `Tags: ${doc.metadata.tags.join(", ")}`,
+        "---",
+      ].filter(Boolean);
+      return lines.join("\n");
     })
     .join("\n");
 };
@@ -485,6 +498,30 @@ export const formatKnowledgeDocs = (docs: KnowledgeDocument[]): string => {
  */
 export const estimateTokens = (text: string): number => {
   return Math.ceil(text.length / 4);
+};
+
+/**
+ * Takes items from array while they fit within token budget.
+ * Uses reduce for functional approach with early termination simulation.
+ */
+const takeWhileTokenBudget = <T>(
+  items: readonly T[],
+  tokenBudget: number,
+  getTokens: (item: T) => number
+): { items: T[]; remainingBudget: number } => {
+  return items.reduce<{ items: T[]; remainingBudget: number }>(
+    (acc, item) => {
+      const tokens = getTokens(item);
+      if (acc.remainingBudget >= tokens) {
+        return {
+          items: [...acc.items, item],
+          remainingBudget: acc.remainingBudget - tokens,
+        };
+      }
+      return acc; // Skip item, budget exhausted
+    },
+    { items: [], remainingBudget: tokenBudget }
+  );
 };
 
 /**
@@ -519,18 +556,14 @@ export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidenc
       truncated.logs = errorLogs;
       remainingTokens -= logTokens;
     } else {
-      // Take as many as fit
-      const fitLogs: LogEntry[] = [];
-      for (const log of errorLogs) {
-        const logTokens = estimateTokens(formatLogs([log]));
-        if (remainingTokens >= logTokens) {
-          fitLogs.push(log);
-          remainingTokens -= logTokens;
-        } else {
-          break;
-        }
-      }
-      truncated.logs = fitLogs;
+      // Take as many as fit using functional helper
+      const result = takeWhileTokenBudget(
+        errorLogs,
+        remainingTokens,
+        (log) => estimateTokens(formatLogs([log]))
+      );
+      truncated.logs = result.items;
+      remainingTokens = result.remainingBudget;
     }
   }
 
@@ -568,16 +601,12 @@ export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidenc
     const additionalLogs = evidence.logs.filter((log) => log.level !== "ERROR").slice(0, 20);
 
     const currentLogs = truncated.logs || [];
-    for (const log of additionalLogs) {
-      const logTokens = estimateTokens(formatLogs([log]));
-      if (remainingTokens >= logTokens) {
-        currentLogs.push(log);
-        remainingTokens -= logTokens;
-      } else {
-        break;
-      }
-    }
-    truncated.logs = currentLogs;
+    const result = takeWhileTokenBudget(
+      additionalLogs,
+      remainingTokens,
+      (log) => estimateTokens(formatLogs([log]))
+    );
+    truncated.logs = [...currentLogs, ...result.items];
   }
 
   // Keep system state and related events as-is (typically small)

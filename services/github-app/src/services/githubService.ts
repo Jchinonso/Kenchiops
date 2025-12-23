@@ -243,6 +243,21 @@ export interface CheckAnnotation {
 }
 
 /**
+ * GitHub API annotation batch size limit
+ */
+const MAX_ANNOTATIONS_PER_CALL = 50;
+
+/**
+ * Split array into batches of specified size
+ */
+const batchArray = <T>(array: T[], batchSize: number): T[][] => {
+  const batchCount = Math.ceil(array.length / batchSize);
+  return Array.from({ length: batchCount }, (_, i) =>
+    array.slice(i * batchSize, (i + 1) * batchSize)
+  );
+};
+
+/**
  * Create a check run with annotations
  * This posts line-level feedback directly on the PR files
  */
@@ -258,15 +273,10 @@ export const createCheckRunWithAnnotations = async (
   try {
     const octokit = await getOctokit(installationId);
 
-    // GitHub limits annotations to 50 per API call
-    const MAX_ANNOTATIONS_PER_CALL = 50;
-    const annotationBatches: CheckAnnotation[][] = [];
+    // Split annotations into batches (GitHub limits to 50 per API call)
+    const annotationBatches = batchArray(annotations, MAX_ANNOTATIONS_PER_CALL);
 
-    for (let i = 0; i < annotations.length; i += MAX_ANNOTATIONS_PER_CALL) {
-      annotationBatches.push(annotations.slice(i, i + MAX_ANNOTATIONS_PER_CALL));
-    }
-
-    // Create the check run
+    // Create the check run with first batch
     const { data: checkRun } = await octokit.rest.checks.create({
       owner,
       repo,
@@ -281,19 +291,22 @@ export const createCheckRunWithAnnotations = async (
       },
     });
 
-    // If there are more annotations, update the check run with additional batches
-    for (let i = 1; i < annotationBatches.length; i++) {
-      await octokit.rest.checks.update({
-        owner,
-        repo,
-        check_run_id: checkRun.id,
-        output: {
-          title: "KenchiOps CI Analysis",
-          summary,
-          annotations: annotationBatches[i],
-        },
-      });
-    }
+    // Update with remaining batches (if any)
+    const remainingBatches = annotationBatches.slice(1);
+    await Promise.all(
+      remainingBatches.map((batch) =>
+        octokit.rest.checks.update({
+          owner,
+          repo,
+          check_run_id: checkRun.id,
+          output: {
+            title: "KenchiOps CI Analysis",
+            summary,
+            annotations: batch,
+          },
+        })
+      )
+    );
 
     logger.info("Created check run with annotations", {
       owner,
