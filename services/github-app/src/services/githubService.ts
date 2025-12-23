@@ -190,17 +190,88 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
 };
 
 /**
+ * Marker to identify KenchiOps comments
+ */
+const KENCHIOPS_COMMENT_MARKER = "KenchiOps CI Failure Analysis";
+
+/**
+ * Delete existing KenchiOps comments on a PR
+ * This keeps the PR clean by removing outdated analysis comments
+ */
+export const deleteKenchiOpsComments = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<number> => {
+  try {
+    const octokit = await getOctokit(installationId);
+
+    // List all comments on the PR
+    const { data: comments } = await octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    });
+
+    // Find KenchiOps comments (look for our marker in the body)
+    const kenchiOpsComments = comments.filter(
+      (comment) => comment.body?.includes(KENCHIOPS_COMMENT_MARKER)
+    );
+
+    // Delete each KenchiOps comment
+    await Promise.all(
+      kenchiOpsComments.map((comment) =>
+        octokit.rest.issues.deleteComment({
+          owner,
+          repo,
+          comment_id: comment.id,
+        })
+      )
+    );
+
+    if (kenchiOpsComments.length > 0) {
+      logger.info("Deleted old KenchiOps comments", {
+        owner,
+        repo,
+        prNumber,
+        deletedCount: kenchiOpsComments.length,
+      });
+    }
+
+    return kenchiOpsComments.length;
+  } catch (error) {
+    // Log but don't fail - cleanup is best-effort
+    logger.warn("Failed to delete old KenchiOps comments", {
+      owner,
+      repo,
+      prNumber,
+      error: getErrorMessage(error),
+    });
+    return 0;
+  }
+};
+
+/**
  * Post a comment on a pull request
+ * Optionally deletes existing KenchiOps comments first
  */
 export const postPRComment = async (
   installationId: number,
   owner: string,
   repo: string,
   prNumber: number,
-  body: string
+  body: string,
+  deleteOldComments = false
 ): Promise<void> => {
   try {
     const octokit = await getOctokit(installationId);
+
+    // Delete old KenchiOps comments if requested
+    if (deleteOldComments) {
+      await deleteKenchiOpsComments(installationId, owner, repo, prNumber);
+    }
 
     await octokit.rest.issues.createComment({
       owner,
