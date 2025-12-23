@@ -176,6 +176,41 @@ export interface SlackMessageRequest {
 }
 
 /**
+ * Consolidated CI failure payload metadata
+ */
+export interface ConsolidatedMetadata {
+  readonly repository: string;
+  readonly commitSha: string;
+  readonly failureCount: number;
+  readonly checkNames: readonly string[];
+  readonly avgConfidence: number;
+  readonly isConsolidated: true;
+}
+
+/**
+ * Pre-built consolidated Slack payload from GitHub App
+ */
+export interface ConsolidatedSlackPayload {
+  readonly blocks: readonly SlackBlock[];
+  readonly text: string;
+  readonly metadata: ConsolidatedMetadata;
+}
+
+/**
+ * Request body for consolidated CI failure messages.
+ * Used when GitHub App aggregates multiple failures into one message.
+ */
+export interface ConsolidatedMessageRequest {
+  readonly consolidated: true;
+  readonly payload: ConsolidatedSlackPayload;
+  readonly repository: string;
+  readonly installation_id: number;
+  readonly commit_sha: string;
+  readonly failure_count: number;
+  readonly channel?: string;
+}
+
+/**
  * Response structure for POST /slack/message endpoint.
  */
 export interface SlackMessagePostResponse {

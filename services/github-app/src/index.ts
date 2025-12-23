@@ -20,6 +20,11 @@ import {
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
+import {
+  initializeAggregator,
+  destroyAggregator,
+  postConsolidatedAnalysis,
+} from "./services/aggregation/index.js";
 
 const logger = createLogger("github-app");
 
@@ -78,6 +83,25 @@ const initializeDatabase = (): void => {
 };
 
 /**
+ * Initialize failure aggregator for consolidated CI failure analysis
+ */
+const initializeFailureAggregator = (): void => {
+  // Configure aggregation timing (can be overridden via env)
+  const debounceMs = parseInt(process.env.AGGREGATION_DEBOUNCE_MS || "30000", 10);
+  const maxWaitMs = parseInt(process.env.AGGREGATION_MAX_WAIT_MS || "120000", 10);
+
+  initializeAggregator(postConsolidatedAnalysis, {
+    debounceMs,
+    maxWaitMs,
+  });
+
+  logger.info("Failure aggregator initialized", {
+    debounceMs,
+    maxWaitMs,
+  });
+};
+
+/**
  * Handle graceful shutdown
  */
 const setupGracefulShutdown = (server: ReturnType<typeof express.application.listen>): void => {
@@ -85,16 +109,20 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
     logger.info(`Received ${signal}, shutting down gracefully`);
 
     server.close(async () => {
+      // Flush and destroy the aggregator (posts any pending analyses)
+      logger.info("Flushing failure aggregator...");
+      await destroyAggregator();
+
       await closeDatabase();
       logger.info("Server closed");
       process.exit(0);
     });
 
-    // Force exit after 10 seconds
+    // Force exit after 15 seconds (increased to allow aggregator flush)
     setTimeout(() => {
       logger.warn("Forced shutdown after timeout");
       process.exit(1);
-    }, 10000);
+    }, 15000);
   };
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -107,6 +135,9 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
 const startServer = (): void => {
   // Initialize database for multi-tenant support
   initializeDatabase();
+
+  // Initialize failure aggregator for consolidated CI analysis
+  initializeFailureAggregator();
 
   const app = createApp();
 
