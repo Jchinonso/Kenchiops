@@ -216,8 +216,8 @@ export const deleteKenchiOpsComments = async (
     });
 
     // Find KenchiOps comments (look for our marker in the body)
-    const kenchiOpsComments = comments.filter(
-      (comment) => comment.body?.includes(KENCHIOPS_COMMENT_MARKER)
+    const kenchiOpsComments = comments.filter((comment) =>
+      comment.body?.includes(KENCHIOPS_COMMENT_MARKER)
     );
 
     // Delete each KenchiOps comment
