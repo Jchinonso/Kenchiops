@@ -68,7 +68,6 @@ const buildAppHomeContext = async (
   ]);
 
   const hasActiveChannel = !!activeChannel;
-  const isGitHubConnected = tenant?.githubInstallationId !== undefined;
 
   return {
     botStatus: hasActiveChannel ? "active" : "inactive",
@@ -167,7 +166,7 @@ export const handleAppHomeOpened = async (
 export const handleTestConnection = async (
   client: SlackClient,
   userId: string,
-  responseUrl?: string
+  _responseUrl?: string
 ): Promise<{ success: boolean; message: string }> => {
   try {
     const authResult = await client.auth.test();

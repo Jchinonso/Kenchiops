@@ -7,6 +7,7 @@
 
 /**
  * Deduplicates an array by a key function, returning unique items.
+ * Uses reduce with early termination via slice.
  *
  * @param items - Array of items to deduplicate
  * @param keyFn - Function to extract the unique key from each item
@@ -23,25 +24,22 @@ export const deduplicateByKey = <T, K>(
   maxItems?: number
 ): T[] => {
   const seen = new Set<K>();
-  const result: T[] = [];
 
-  for (const item of items) {
+  const unique = items.reduce<T[]>((result, item) => {
     const key = keyFn(item);
     if (!seen.has(key)) {
       seen.add(key);
       result.push(item);
-      if (maxItems !== undefined && result.length >= maxItems) {
-        break;
-      }
     }
-  }
+    return result;
+  }, []);
 
-  return result;
+  return maxItems !== undefined ? unique.slice(0, maxItems) : unique;
 };
 
 /**
  * Checks if a string contains any of the given patterns.
- * More efficient than array.some() with includes() for repeated checks.
+ * Uses .some() for functional iteration.
  *
  * @param text - The text to check
  * @param patterns - Array of patterns to match against
@@ -50,30 +48,19 @@ export const deduplicateByKey = <T, K>(
  * @example
  * containsAny('node_modules/foo', ['node_modules', '.test.']); // true
  */
-export const containsAny = (text: string, patterns: readonly string[]): boolean => {
-  for (const pattern of patterns) {
-    if (text.includes(pattern)) {
-      return true;
-    }
-  }
-  return false;
-};
+export const containsAny = (text: string, patterns: readonly string[]): boolean =>
+  patterns.some((pattern) => text.includes(pattern));
 
 /**
  * Checks if a string starts with any of the given prefixes.
+ * Uses .some() for functional iteration.
  *
  * @param text - The text to check
  * @param prefixes - Array of prefixes to match against
  * @returns True if text starts with any prefix
  */
-export const startsWithAny = (text: string, prefixes: readonly string[]): boolean => {
-  for (const prefix of prefixes) {
-    if (text.startsWith(prefix)) {
-      return true;
-    }
-  }
-  return false;
-};
+export const startsWithAny = (text: string, prefixes: readonly string[]): boolean =>
+  prefixes.some((prefix) => text.startsWith(prefix));
 
 /**
  * Checks if a path should be excluded based on patterns.
@@ -89,6 +76,7 @@ export const shouldExcludePath = (path: string, patterns: readonly string[]): bo
 
 /**
  * Groups array items by a key function.
+ * Uses reduce for functional iteration.
  *
  * @param items - Array of items to group
  * @param keyFn - Function to extract the group key from each item
@@ -98,24 +86,17 @@ export const shouldExcludePath = (path: string, patterns: readonly string[]): bo
  * const items = [{ type: 'a', v: 1 }, { type: 'b', v: 2 }, { type: 'a', v: 3 }];
  * groupBy(items, i => i.type); // Map { 'a' => [{...}, {...}], 'b' => [{...}] }
  */
-export const groupBy = <T, K>(items: readonly T[], keyFn: (item: T) => K): Map<K, T[]> => {
-  const groups = new Map<K, T[]>();
-
-  for (const item of items) {
+export const groupBy = <T, K>(items: readonly T[], keyFn: (item: T) => K): Map<K, T[]> =>
+  items.reduce((groups, item) => {
     const key = keyFn(item);
     const group = groups.get(key);
-    if (group) {
-      group.push(item);
-    } else {
-      groups.set(key, [item]);
-    }
-  }
-
-  return groups;
-};
+    group ? group.push(item) : groups.set(key, [item]);
+    return groups;
+  }, new Map<K, T[]>());
 
 /**
  * Takes the first N items from an array that match a predicate.
+ * Uses filter with slice for functional approach.
  *
  * @param items - Array of items
  * @param predicate - Filter function
@@ -123,23 +104,10 @@ export const groupBy = <T, K>(items: readonly T[], keyFn: (item: T) => K): Map<K
  * @returns Array of matching items up to limit
  *
  * @example
- * takeWhile([1,2,3,4,5], n => n % 2 === 0, 2); // [2, 4]
+ * takeMatching([1,2,3,4,5], n => n % 2 === 0, 2); // [2, 4]
  */
 export const takeMatching = <T>(
   items: readonly T[],
   predicate: (item: T) => boolean,
   limit: number
-): T[] => {
-  const result: T[] = [];
-
-  for (const item of items) {
-    if (predicate(item)) {
-      result.push(item);
-      if (result.length >= limit) {
-        break;
-      }
-    }
-  }
-
-  return result;
-};
+): T[] => items.filter(predicate).slice(0, limit);

@@ -104,13 +104,12 @@ export function formatAnalysisMessage(
     blocks.push(createSectionBlock("*Recommended Actions*"));
 
     const actionsToShow = analysis.recommendedActions.slice(0, UI_CONSTANTS.MAX_ACTIONS_TO_DISPLAY);
-    for (const action of actionsToShow) {
-      blocks.push(
-        createSectionBlock(
-          `• *${action.actionType}* (Priority: ${action.priority})\n  ${action.description}`
-        )
-      );
-    }
+    const actionBlocks = actionsToShow.map((action) =>
+      createSectionBlock(
+        `• *${action.actionType}* (Priority: ${action.priority})\n  ${action.description}`
+      )
+    );
+    blocks.push(...actionBlocks);
   }
 
   // Uncertainties (if any)

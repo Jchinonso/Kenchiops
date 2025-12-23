@@ -1,7 +1,7 @@
 /**
  * Log parsing utilities.
  *
- * Extracts file references and test failures from CI workflow logs.
+ * Extracts file references, test failures, and linting issues from CI workflow logs.
  */
 
 import {
@@ -43,6 +43,27 @@ const STACK_FILE_PATTERN = /at\s+.*?\(([^)]+\.(?:ts|js|tsx|jsx)):\d+:\d+\)/;
 // ==================== File Reference Extraction ====================
 
 /**
+ * Extract matches from a single regex pattern.
+ */
+const extractMatchesFromPattern = (logs: string, pattern: RegExp): FileReference[] => {
+  const regex = new RegExp(pattern.source, pattern.flags);
+  const references: FileReference[] = [];
+  let match;
+
+  // While loop is required for regex.exec iteration with global flag
+  while ((match = regex.exec(logs)) !== null) {
+    const path = match[1];
+    const line = parseInt(match[2], 10);
+
+    if (!shouldExcludePath(path, EXCLUDED_PATH_PATTERNS)) {
+      references.push({ path, line });
+    }
+  }
+
+  return references;
+};
+
+/**
  * Extract file paths and line numbers from error logs.
  *
  * Matches patterns like:
@@ -55,22 +76,9 @@ const STACK_FILE_PATTERN = /at\s+.*?\(([^)]+\.(?:ts|js|tsx|jsx)):\d+:\d+\)/;
  * @returns Array of unique file references up to MAX_FILES limit
  */
 export const extractFileReferences = (logs: string): FileReference[] => {
-  const allReferences: FileReference[] = [];
-
-  for (const pattern of FILE_REFERENCE_PATTERNS) {
-    // Create new regex instance to reset lastIndex
-    const regex = new RegExp(pattern.source, pattern.flags);
-    let match;
-
-    while ((match = regex.exec(logs)) !== null) {
-      const path = match[1];
-      const line = parseInt(match[2], 10);
-
-      if (!shouldExcludePath(path, EXCLUDED_PATH_PATTERNS)) {
-        allReferences.push({ path, line });
-      }
-    }
-  }
+  const allReferences = FILE_REFERENCE_PATTERNS.flatMap((pattern) =>
+    extractMatchesFromPattern(logs, pattern)
+  );
 
   // Deduplicate by path and limit results
   return deduplicateByKey(allReferences, (ref) => ref.path, GITHUB_CONTEXT_LIMITS.MAX_FILES);
@@ -85,13 +93,10 @@ export const extractFileReferences = (logs: string): FileReference[] => {
  * @returns Starting index for truncation (0 if no indicator found)
  */
 const findErrorPosition = (content: string): number => {
-  for (const indicator of ERROR_INDICATORS) {
-    const index = content.indexOf(indicator);
-    if (index !== -1) {
-      return index;
-    }
-  }
-  return 0;
+  const foundIndicator = ERROR_INDICATORS
+    .map((indicator) => content.indexOf(indicator))
+    .find((index) => index !== -1);
+  return foundIndicator ?? 0;
 };
 
 /**
@@ -178,6 +183,46 @@ const extractMochaMatch = (match: RegExpExecArray): PatternMatch => ({
 });
 
 /**
+ * Test framework pattern configuration.
+ */
+interface FrameworkPattern {
+  readonly patterns: readonly RegExp[];
+  readonly extractor: (match: RegExpExecArray) => PatternMatch;
+  readonly name: string;
+}
+
+/**
+ * Framework patterns in order of precedence.
+ */
+const FRAMEWORK_PATTERNS: readonly FrameworkPattern[] = [
+  { patterns: JEST_PATTERNS, extractor: extractJestMatch, name: "jest" },
+  { patterns: [MOCHA_PATTERN], extractor: extractMochaMatch, name: "mocha" },
+];
+
+/**
+ * Try to extract failures from a framework's patterns.
+ */
+const tryExtractFromFramework = (
+  logs: string,
+  framework: FrameworkPattern,
+  maxFailures: number
+): TestFailure[] | null => {
+  const matches = framework.patterns
+    .map((pattern) => extractPatternMatches(logs, pattern, maxFailures, framework.extractor))
+    .find((m) => m.length > 0);
+
+  if (matches) {
+    logger.info("Extracted test failures from logs", {
+      count: matches.length,
+      framework: framework.name,
+    });
+    return matches;
+  }
+
+  return null;
+};
+
+/**
  * Extract test failures from workflow logs.
  *
  * Supports Jest, Vitest, and Mocha test frameworks.
@@ -188,26 +233,13 @@ const extractMochaMatch = (match: RegExpExecArray): PatternMatch => ({
 export const extractTestFailures = (logs: string): TestFailure[] => {
   const maxFailures = LOG_PARSING_LIMITS.MAX_TEST_FAILURES;
 
-  // Try Jest/Vitest patterns first
-  for (const pattern of JEST_PATTERNS) {
-    const matches = extractPatternMatches(logs, pattern, maxFailures, extractJestMatch);
-    if (matches.length > 0) {
-      logger.info("Extracted test failures from logs", {
-        count: matches.length,
-        framework: "jest",
-      });
-      return matches;
-    }
-  }
+  // Try each framework in order, return first match
+  const result = FRAMEWORK_PATTERNS
+    .map((framework) => tryExtractFromFramework(logs, framework, maxFailures))
+    .find((matches) => matches !== null);
 
-  // Fall back to Mocha pattern
-  const mochaMatches = extractPatternMatches(logs, MOCHA_PATTERN, maxFailures, extractMochaMatch);
-  if (mochaMatches.length > 0) {
-    logger.info("Extracted test failures from logs", {
-      count: mochaMatches.length,
-      framework: "mocha",
-    });
-    return mochaMatches;
+  if (result) {
+    return result;
   }
 
   logger.info("No test failures found in logs");

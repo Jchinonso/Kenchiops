@@ -13,17 +13,10 @@ import {
   findBySlackWorkspace,
   findByGitHubInstallation,
   linkSlackWorkspace,
-  config,
 } from "@kenchi/shared";
 
 const router = Router();
 const logger = createLogger("github-app");
-
-/**
- * Build the Slack deep link URL for the workspace
- */
-const getSlackDeepLink = (workspaceId: string): string =>
-  `slack://open?team=${workspaceId}`;
 
 /**
  * Build success HTML page

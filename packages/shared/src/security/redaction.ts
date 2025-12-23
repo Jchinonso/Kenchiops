@@ -55,6 +55,7 @@ export interface RedactionResult {
 
 /**
  * Redact secrets from a string using predefined patterns.
+ * Uses reduce for functional pattern iteration.
  *
  * @param text - The text to scan and redact
  * @param options - Optional configuration
@@ -65,31 +66,26 @@ export const redactSecrets = (text: string, options: { logRedactions?: boolean }
     return text;
   }
 
-  let result = text;
-
-  // Single pass per pattern using pre-compiled regex
-  for (const { name, regex } of COMPILED_PATTERNS) {
+  // Single pass per pattern using reduce
+  return COMPILED_PATTERNS.reduce((result, { name, regex }) => {
     let matchCount = 0;
 
-    // Use replace callback to count matches in a single pass (instead of match + replace)
-    result = result.replace(regex, () => {
+    // Use replace callback to count matches in a single pass
+    const redacted = result.replace(regex, () => {
       matchCount++;
       return REDACTION_PLACEHOLDER;
     });
 
-    if (matchCount > 0 && options.logRedactions) {
-      logger.info("Redacted secret from text", {
-        type: name,
-        count: matchCount,
-      });
-    }
-  }
+    matchCount > 0 && options.logRedactions &&
+      logger.info("Redacted secret from text", { type: name, count: matchCount });
 
-  return result;
+    return redacted;
+  }, text);
 };
 
 /**
  * Redact secrets from a string and return detailed results.
+ * Uses reduce for functional pattern iteration.
  *
  * @param text - The text to scan and redact
  * @returns Object containing redacted text and statistics
@@ -99,30 +95,31 @@ export const redactSecretsWithStats = (text: string): RedactionResult => {
     return { text, redactedCount: 0, redactedTypes: [] };
   }
 
-  let result = text;
-  let totalRedacted = 0;
-  const redactedTypes: string[] = [];
+  interface AccumulatorState {
+    readonly text: string;
+    readonly redactedCount: number;
+    readonly redactedTypes: string[];
+  }
 
-  // Single pass per pattern using pre-compiled regex
-  for (const { name, regex } of COMPILED_PATTERNS) {
+  const initial: AccumulatorState = { text, redactedCount: 0, redactedTypes: [] };
+
+  // Single pass per pattern using reduce
+  return COMPILED_PATTERNS.reduce<AccumulatorState>((acc, { name, regex }) => {
     let matchCount = 0;
 
-    result = result.replace(regex, () => {
+    const redacted = acc.text.replace(regex, () => {
       matchCount++;
       return REDACTION_PLACEHOLDER;
     });
 
-    if (matchCount > 0) {
-      totalRedacted += matchCount;
-      redactedTypes.push(name);
-    }
-  }
-
-  return {
-    text: result,
-    redactedCount: totalRedacted,
-    redactedTypes,
-  };
+    return matchCount > 0
+      ? {
+          text: redacted,
+          redactedCount: acc.redactedCount + matchCount,
+          redactedTypes: [...acc.redactedTypes, name],
+        }
+      : { ...acc, text: redacted };
+  }, initial);
 };
 
 /**
@@ -174,24 +171,18 @@ export const redactObject = <T extends Record<string, unknown>>(
       return value.map((item) => redactRecursive(item, depth + 1));
     }
 
-    // Handle objects
+    // Handle objects using reduce
     if (typeof value === "object") {
-      const result: Record<string, unknown> = {};
-
-      for (const [key, val] of Object.entries(value)) {
+      return Object.entries(value).reduce<Record<string, unknown>>((result, [key, val]) => {
         // Skip forbidden fields entirely
         if (isForbiddenField(key)) {
+          logRedactions && logger.info("Removed forbidden field", { field: key });
           result[key] = REDACTION_PLACEHOLDER;
-          if (logRedactions) {
-            logger.info("Removed forbidden field", { field: key });
-          }
-          continue;
+        } else {
+          result[key] = redactRecursive(val, depth + 1);
         }
-
-        result[key] = redactRecursive(val, depth + 1);
-      }
-
-      return result;
+        return result;
+      }, {});
     }
 
     // Return primitives as-is
@@ -203,25 +194,13 @@ export const redactObject = <T extends Record<string, unknown>>(
 
 /**
  * Check if text contains any secrets that should be redacted.
- * Useful for validation before sending data externally.
+ * Uses .some() for early exit on first match.
  *
  * @param text - The text to check
  * @returns true if secrets were detected
  */
-export const containsSecrets = (text: string): boolean => {
-  if (!isValidString(text)) {
-    return false;
-  }
-
-  // Early exit on first match using pre-compiled patterns
-  for (const { regex } of COMPILED_PATTERNS) {
-    if (regex.test(text)) {
-      return true;
-    }
-  }
-
-  return false;
-};
+export const containsSecrets = (text: string): boolean =>
+  isValidString(text) && COMPILED_PATTERNS.some(({ regex }) => regex.test(text));
 
 /**
  * Get the types of secrets detected in text.
@@ -263,13 +242,10 @@ export const createCustomRedactor = (
       return text;
     }
 
-    let result = text;
-
-    // Use pre-compiled patterns
-    for (const regex of allCompiledPatterns) {
-      result = result.replace(regex, REDACTION_PLACEHOLDER);
-    }
-
-    return result;
+    // Use reduce with pre-compiled patterns
+    return allCompiledPatterns.reduce(
+      (result, regex) => result.replace(regex, REDACTION_PLACEHOLDER),
+      text
+    );
   };
 };

@@ -7,6 +7,7 @@
 
 import pg from "pg";
 import { createLogger } from "./logger.js";
+import { ValidationError } from "./errors.js";
 
 const { Pool } = pg;
 
@@ -72,7 +73,7 @@ export const initDatabase = (config: DatabaseConfig): void => {
  */
 export const getPool = (): pg.Pool => {
   if (!pool) {
-    throw new Error(
+    throw new ValidationError(
       "Database pool not initialized. Call initDatabase() first."
     );
   }

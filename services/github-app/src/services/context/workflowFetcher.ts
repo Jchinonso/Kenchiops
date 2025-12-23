@@ -12,6 +12,28 @@ import type { WorkflowTiming } from "./types.js";
 const logger = createLogger("github-app");
 
 /**
+ * Retry configuration
+ */
+const MAX_RETRIES = 3;
+
+/**
+ * Check if error is a DNS-related error
+ */
+const isDnsError = (errorMessage: string): boolean =>
+  errorMessage.includes("EAI_AGAIN") || errorMessage.includes("ENOTFOUND");
+
+/**
+ * Calculate exponential backoff delay
+ */
+const getBackoffDelay = (attempt: number): number => 1000 * Math.pow(2, attempt - 1);
+
+/**
+ * Wait for a specified duration
+ */
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
  * Fetch workflow run logs for a check run.
  *
  * Finds the failed workflow run for the given commit SHA and
@@ -74,9 +96,9 @@ export const fetchWorkflowLogs = async (
 
     // Fetch logs for the first failed job with retry for DNS issues
     const failedJob = failedJobs[0];
-    const maxRetries = 3;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Recursive retry function
+    const fetchLogsWithRetry = async (attempt: number): Promise<string | null> => {
       try {
         const { data: logs } = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
           owner,
@@ -94,19 +116,17 @@ export const fetchWorkflowLogs = async (
         return truncateWithContext(logContent, GITHUB_CONTEXT_LIMITS.MAX_LOG_SIZE);
       } catch (logError) {
         const errorMessage = logError instanceof Error ? logError.message : "Unknown error";
-        const isDnsError = errorMessage.includes("EAI_AGAIN") || errorMessage.includes("ENOTFOUND");
+        const shouldRetry = isDnsError(errorMessage) && attempt < MAX_RETRIES;
 
-        // Retry on DNS errors
-        if (isDnsError && attempt < maxRetries) {
+        if (shouldRetry) {
           logger.warn("DNS error fetching logs, retrying...", {
             jobId: failedJob.id,
             attempt,
-            maxRetries,
+            maxRetries: MAX_RETRIES,
             error: errorMessage,
           });
-          // Wait before retry (exponential backoff: 1s, 2s, 4s)
-          await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
-          continue;
+          await wait(getBackoffDelay(attempt));
+          return fetchLogsWithRetry(attempt + 1);
         }
 
         // Logs might not be available yet or expired
@@ -117,9 +137,9 @@ export const fetchWorkflowLogs = async (
         });
         return null;
       }
-    }
+    };
 
-    return null;
+    return fetchLogsWithRetry(1);
   } catch (error) {
     logger.warn("Failed to fetch workflow logs", {
       headSha,

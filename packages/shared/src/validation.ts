@@ -22,27 +22,26 @@ export interface ValidationSchema {
 }
 
 /**
- * Validates a data source against its schema.
+ * Validates a data source against its schema and returns errors.
  *
  * @param source - The data source to validate (req.body, req.params, etc.)
  * @param schema - The validation schema to apply
  * @param prefix - Prefix for error messages (e.g., "body", "params")
- * @param errors - Array to collect validation errors
+ * @returns Array of validation error messages
  */
 const validateSource = (
   source: Readonly<Record<string, unknown>>,
   schema: Readonly<Record<string, Validator>>,
-  prefix: string,
-  errors: string[]
-): void => {
-  for (const [key, validator] of Object.entries(schema)) {
-    const value = source[key];
-    const result = validator(value);
-    if (result !== true) {
+  prefix: string
+): string[] => {
+  return Object.entries(schema)
+    .map(([key, validator]) => {
+      const result = validator(source[key]);
+      if (result === true) return null;
       const message = typeof result === "string" ? result : DEFAULT_VALIDATION_ERROR_MESSAGE;
-      errors.push(`${prefix}.${key}: ${message}`);
-    }
-  }
+      return `${prefix}.${key}: ${message}`;
+    })
+    .filter((error): error is string => error !== null);
 };
 
 type ValidationSource = {
@@ -73,8 +72,6 @@ type ValidationSource = {
  */
 export const validate = (schema: ValidationSchema) => {
   return (req: Request, _res: Response, next: NextFunction): void => {
-    const errors: string[] = [];
-
     // Data-driven validation: build validation sources array
     const validationSources: ValidationSource[] = [
       schema.body && { source: req.body, schema: schema.body, prefix: "body" },
@@ -86,10 +83,10 @@ export const validate = (schema: ValidationSchema) => {
       },
     ].filter((source): source is ValidationSource => source !== undefined);
 
-    // Validate all sources
-    for (const { source, schema: sourceSchema, prefix } of validationSources) {
-      validateSource(source, sourceSchema, prefix, errors);
-    }
+    // Validate all sources using flatMap
+    const errors = validationSources.flatMap(({ source, schema: sourceSchema, prefix }) =>
+      validateSource(source, sourceSchema, prefix)
+    );
 
     if (errors.length > 0) {
       throw new ValidationError("Validation failed", { errors });
