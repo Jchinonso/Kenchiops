@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-5.3+-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-A TypeScript monorepo for an AI-driven DevOps assistant that integrates with Slack, GitHub, and n8n workflows.
+A TypeScript monorepo for an AI-driven DevOps assistant that integrates with Slack and GitHub for real-time CI failure analysis.
 
 > **Quick Start**: See [QUICKSTART.md](./QUICKSTART.md) for a step-by-step setup guide.  
 > **Architecture**: See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed system architecture and design.  
@@ -17,13 +17,11 @@ A TypeScript monorepo for an AI-driven DevOps assistant that integrates with Sla
 ```
 kenchi/
 ├── services/
-│   ├── api/              # Express API service for incoming webhooks/events
+│   ├── api/              # Express API service for AI analysis
 │   ├── slack-bot/        # Slack bot service using Bolt framework
 │   └── github-app/       # GitHub App service for PR comments and CI status
 ├── packages/
 │   └── shared/           # Shared library (config, OpenAI client, vector store, utils)
-├── n8n/
-│   └── workflows/        # n8n workflow definitions for automation
 └── .env.example          # Environment variable template
 ```
 
@@ -72,13 +70,6 @@ kenchi/
    - API Service: http://localhost:3000
    - Slack Bot Service: http://localhost:3001
    - GitHub App Service: http://localhost:3002
-   - n8n: http://localhost:5678 (admin/admin123)
-
-6. Import workflow in n8n:
-   - Open http://localhost:5678
-   - Go to "Workflows" → "Import from File"
-   - Select: `n8n/workflows/ci-failure-analysis.json`
-   - Activate the workflow
 
 ### Local Development (Without Docker)
 
@@ -105,7 +96,6 @@ For local development with hot reload:
    npm run dev:github-app
    ```
 
-**Note**: For n8n workflows, you'll still need n8n running (via Docker Compose).
 
 ## 🛠️ Development Scripts
 
@@ -161,10 +151,6 @@ Contains shared utilities used across all services:
 - **Error Handling**: Custom error classes and Express middleware
 - **Types**: Common TypeScript interfaces and types
 
-## 🔄 n8n Workflows (`/n8n/workflows`)
-
-Contains workflow definitions for automation. Example workflow: CI failure analysis that triggers OpenAI analysis and posts to Slack.
-
 ## 🛡️ Safety & Security
 
 ### Critical Safety Principle
@@ -190,7 +176,7 @@ The `docker-compose.yml` includes:
 - **API Service** - Port 3000
 - **Slack Bot Service** - Port 3001
 - **GitHub App Service** - Port 3002
-- **n8n** - Port 5678 (workflow automation)
+- **PostgreSQL** - Port 5433 (database)
 
 ### Docker Commands
 
@@ -212,7 +198,7 @@ docker compose down
 docker compose logs -f
 docker compose logs -f api        # Specific service
 docker compose logs -f slack-bot
-docker compose logs -f n8n
+docker compose logs -f github-app
 ```
 
 **Restart a service:**
@@ -241,7 +227,7 @@ All services run in the same Docker network (`kenchi_default`). Services communi
 - `http://slack-bot:3001` - Slack bot service
 - `http://github-app:3002` - GitHub app service
 
-This allows n8n workflows to call services using these service names (e.g., `http://api:3000/api/analyze`).
+Services communicate using these Docker service names internally.
 
 ### Local Development vs Docker
 

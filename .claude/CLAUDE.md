@@ -16,7 +16,7 @@ kenchi/
 │   ├── api/
 │   ├── slack-bot/
 │   └── github-app/
-└── n8n/workflows/       # Workflow definitions
+└── docs/                # Documentation
 ```
 
 ## Zero Duplication Policy

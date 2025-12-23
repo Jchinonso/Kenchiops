@@ -35,6 +35,11 @@ import {
   handleNegativeFeedback,
 } from "./handlers/actionHandler.js";
 import { handleBotJoinedChannel } from "./handlers/channelHandler.js";
+import {
+  handleAppHomeOpened,
+  handleTestConnection,
+  handleRefreshHome,
+} from "./handlers/appHomeHandler.js";
 import { createHttpRoutes } from "./routes/httpRoutes.js";
 import { oauthRoutes } from "./routes/oauthRoutes.js";
 
@@ -151,6 +156,39 @@ function setupSlackHandlers(app: SlackApp): void {
       await handleNegativeFeedback(action as ButtonAction, ack);
     }
   });
+
+  // Handle App Home opened event
+  app.event("app_home_opened", async ({ event, client }) => {
+    await handleAppHomeOpened(client, event.user);
+  });
+
+  // Handle App Home action buttons
+  app.action("test_connection", async ({ ack, client, body }) => {
+    await ack();
+    const result = await handleTestConnection(client, body.user.id);
+    // Refresh the home view to show the result
+    await handleRefreshHome(client, body.user.id);
+  });
+
+  app.action("refresh_home", async ({ ack, client, body }) => {
+    await ack();
+    await handleRefreshHome(client, body.user.id);
+  });
+
+  // Handle connect_github button (external link, just acknowledge)
+  app.action("connect_github", async ({ ack }) => {
+    await ack();
+  });
+
+  // Handle view_docs button (external link, just acknowledge)
+  app.action("view_docs", async ({ ack }) => {
+    await ack();
+  });
+
+  // Handle get_support button (external link, just acknowledge)
+  app.action("get_support", async ({ ack }) => {
+    await ack();
+  });
 }
 
 /**
@@ -187,7 +225,7 @@ async function startService(): Promise<void> {
     const slackApp = createSlackApp(appConfig);
     setupSlackHandlers(slackApp);
 
-    // Initialize Express app for HTTP endpoints (n8n integration)
+    // Initialize Express app for HTTP endpoints (CI failure processing)
     const expressApp = express();
     expressApp.use(express.json());
 
@@ -205,9 +243,9 @@ async function startService(): Promise<void> {
       multiTenantMode: config.MULTI_TENANT_MODE || false,
     });
 
-    // Start Express server for n8n integration endpoints
+    // Start Express server for CI failure processing endpoints
     const server = expressApp.listen(appConfig.httpPort, () => {
-      logger.info("HTTP server started for n8n integration", {
+      logger.info("HTTP server started for CI failure processing", {
         port: appConfig.httpPort,
         environment: appConfig.nodeEnv,
         oauthEnabled: !!(config.SLACK_CLIENT_ID && config.SLACK_CLIENT_SECRET),

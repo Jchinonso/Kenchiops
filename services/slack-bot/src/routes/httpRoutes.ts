@@ -1,5 +1,5 @@
 /**
- * HTTP routes for n8n integration.
+ * HTTP routes for CI failure processing.
  * Provides endpoints for posting messages to Slack without going through Slack events.
  *
  * This is a thin routing layer that delegates business logic to handlers.
@@ -84,7 +84,7 @@ export const createHttpRoutes = (app: SlackApp): express.Router => {
 
   /**
    * POST /slack/message
-   * Post a message to Slack (for n8n workflow integration)
+   * Post a message to Slack (for CI failure integration)
    * Supports plain text messages OR structured analysis data
    * Channel is optional - if not provided, uses bot's active channel (single-channel policy)
    *

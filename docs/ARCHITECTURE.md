@@ -2,7 +2,7 @@
 
 ## Overview
 
-Kenchi is an AI-driven DevOps assistant built as a TypeScript monorepo. It integrates with Slack, GitHub, and n8n workflows to provide intelligent automation and analysis capabilities for DevOps tasks.
+Kenchi is an AI-driven DevOps assistant built as a TypeScript monorepo. It integrates with Slack and GitHub to provide intelligent CI failure analysis and real-time notifications.
 
 ## System Architecture
 
@@ -20,12 +20,6 @@ Kenchi is an AI-driven DevOps assistant built as a TypeScript monorepo. It integ
 │  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘     │
 │         │                   │                   │              │
 │         └───────────────────┼───────────────────┘              │
-│                             │                                   │
-│                    ┌────────▼────────┐                         │
-│                    │   n8n Workflow  │                         │
-│                    │   Automation    │                         │
-│                    │   (Port 5678)   │                         │
-│                    └────────┬────────┘                         │
 │                             │                                   │
 │         ┌───────────────────┼───────────────────┐              │
 │         │                   │                   │              │
@@ -57,12 +51,12 @@ Kenchi is an AI-driven DevOps assistant built as a TypeScript monorepo. It integ
 
 #### API Service (`/services/api`)
 
-- **Purpose**: Central webhook and event ingestion point
+- **Purpose**: Central AI analysis service with OpenAI integration
 - **Port**: 3000
 - **Key Endpoints**:
   - `POST /webhook/:source` - Generic webhook receiver
   - `POST /events` - Event ingestion with validation
-  - `POST /api/analyze` - CI failure analysis (for n8n workflows)
+  - `POST /api/analyze` - CI failure analysis with OpenAI
   - `GET /health` - Health check
 - **Features**:
   - Rate limiting (100 req/min per IP)
@@ -78,21 +72,19 @@ Kenchi is an AI-driven DevOps assistant built as a TypeScript monorepo. It integ
   - `/kenchi` slash command handler
   - Message event handling
   - App mention handling
-  - `POST /slack/message` - Endpoint for n8n workflows to post messages
-- **Technology**: Slack Bolt Framework
-- **Dual Server Setup**:
-  - Port 3001: Express server for n8n integration endpoints
-  - Port 3002: Slack Bolt webhook server for Slack events
+  - `POST /slack/message` - Endpoint for posting CI failure notifications
+- **Technology**: Slack Bolt Framework (Socket Mode)
+- **Multi-tenant Support**: Uses `installation_id` to lookup tenant credentials
 
 #### GitHub App Service (`/services/github-app`)
 
-- **Purpose**: GitHub webhook handling and PR interactions
+- **Purpose**: GitHub webhook handling and CI failure processing
 - **Port**: 3002
 - **Key Features**:
   - Pull request webhook handler
-  - CI check run webhook handler
+  - CI check run webhook handler (processes failures)
   - GitHub API integration (Octokit)
-  - Placeholder for comment posting
+  - Enriched context gathering for CI failures
 - **Technology**: Express + Octokit
 
 ### 2. Shared Package (`/packages/shared`)
@@ -108,18 +100,17 @@ Common utilities and types used across all services:
 
 #### OpenAI Client (`openaiClient.ts`)
 
-- Stub for OpenAI API integration
-- `generateAnalysis(prompt: string): Promise<string>`
-- Currently returns placeholder responses
-- TODO: Implement actual OpenAI API calls
+- Full OpenAI API integration
+- `analyzeIncident(event, evidence): Promise<LLMAnalysisResult>`
+- Structured output with confidence scoring
+- Retry logic with exponential backoff
 
 #### Vector Store (`vectorStore.ts`)
 
 - Interface for vector database operations
 - `upsertDocumentEmbedding(id, content)`
 - `querySimilar(text): string[]`
-- `InMemoryVectorStore` placeholder implementation
-- TODO: Integrate with Postgres + pgvector or Chroma
+- PostgreSQL + pgvector integration
 
 #### Safety Helpers (`safety.ts`)
 
@@ -171,19 +162,6 @@ Common utilities and types used across all services:
   - `SlackMessageEvent`
   - `GitHubPREvent`
 
-### 3. n8n Workflows (`/n8n/workflows`)
-
-Workflow automation definitions:
-
-#### CI Failure Analysis Workflow (`ci-failure-analysis.json`)
-
-- **Trigger**: Webhook at `/webhook-test/ci-failure`
-- **Flow**:
-  1. Webhook receives CI failure event
-  2. HTTP Request → `http://api:3000/api/analyze`
-  3. HTTP Request → `http://slack-bot:3001/slack/message`
-  4. Respond to Webhook → Success response
-
 ## Docker Architecture
 
 ### Docker Compose Setup
@@ -195,7 +173,7 @@ services:
   api: # Port 3000
   slack-bot: # Port 3001
   github-app: # Port 3002
-  n8n: # Port 5678
+  postgres: # Port 5433
 ```
 
 ### Network Architecture
@@ -213,8 +191,8 @@ services:
 │       └─────────────┼─────────────┘       │
 │                     │                     │
 │              ┌──────▼──────┐              │
-│              │     n8n     │              │
-│              │   :5678     │              │
+│              │  PostgreSQL │              │
+│              │   :5432     │              │
 │              └─────────────┘              │
 │                                          │
 └──────────────────────────────────────────┘
@@ -237,44 +215,42 @@ Services communicate using **Docker service names** within the `kenchi_default` 
 
 ## Data Flow
 
-### CI Failure Analysis Workflow
+### CI Failure Analysis Flow
 
 ```
-1. CI System
+1. GitHub CI Failure
    │
-   │ POST /webhook-test/ci-failure
-   │ { log, repository, branch, commit }
+   │ POST /webhook/github (check_run event)
+   │ { action: "completed", conclusion: "failure" }
    ▼
-2. n8n Webhook Node
+2. GitHub App Service (port 3002)
    │
-   │ Receives event
+   │ • Receives webhook
+   │ • Gathers enriched context (annotations, logs, PR info)
+   │ • Builds comprehensive failure log
    │
    ▼
-3. HTTP Request Node → API Service
+3. API Service (port 3000)
    │ POST http://api:3000/api/analyze
    │ { failure_log, repository }
    │
    │ API Service:
-   │ • Logs request
-   │ • Calls OpenAI client (placeholder)
-   │ • Returns analysis
+   │ • Calls OpenAI for analysis
+   │ • Returns structured analysis with confidence
    │
    ▼
-4. HTTP Request Node → Slack Bot Service
+4. Slack Bot Service (port 3001)
    │ POST http://slack-bot:3001/slack/message
-   │ { channel, message: analysis }
+   │ { analysis, installation_id }
    │
    │ Slack Bot Service:
-   │ • Logs message request
-   │ • Posts to Slack (placeholder)
-   │ • Returns confirmation
+   │ • Looks up tenant by installation_id
+   │ • Formats rich Block Kit message
+   │ • Posts to appropriate Slack channel
    │
    ▼
-5. Respond to Webhook Node
-   │ Returns: { status: "processed" }
-   │
-   ▼
-6. CI System receives response
+5. Slack Workspace
+   │ User sees formatted CI failure notification
 ```
 
 ### Slack Command Flow
@@ -289,7 +265,7 @@ Services communicate using **Docker service names** within the `kenchi_default` 
    │
    │ • Receives slash command
    │ • Logs command
-   │ • Calls OpenAI client (placeholder)
+   │ • Calls OpenAI for analysis
    │ • Returns response to Slack
    │
    ▼
@@ -309,8 +285,8 @@ Services communicate using **Docker service names** within the `kenchi_default` 
    │
    │ • Receives webhook
    │ • Logs event
-   │ • Analyzes PR (placeholder)
-   │ • Posts comment (placeholder)
+   │ • Analyzes PR
+   │ • Posts comment
    │
    ▼
 3. GitHub PR updated
@@ -327,9 +303,9 @@ Services communicate using **Docker service names** within the `kenchi_default` 
 ### Frameworks & Libraries
 
 - **Express.js** - Web framework for all services
-- **Slack Bolt** - Slack bot framework
+- **Slack Bolt** - Slack bot framework (Socket Mode)
 - **Octokit** - GitHub API client
-- **n8n** - Workflow automation platform
+- **OpenAI SDK** - AI analysis
 
 ### Development Tools
 
@@ -343,6 +319,7 @@ Services communicate using **Docker service names** within the `kenchi_default` 
 - **Docker** - Containerization
 - **Docker Compose** - Service orchestration
 - **npm workspaces** - Monorepo management
+- **PostgreSQL** - Database with pgvector
 
 ### Shared Dependencies
 
@@ -419,8 +396,6 @@ kenchi/
 │       ├── src/
 │       ├── package.json
 │       └── tsconfig.json
-├── n8n/
-│   └── workflows/         # n8n workflow definitions
 ├── scripts/               # Utility scripts
 ├── docs/                  # Documentation
 ├── docker-compose.yml     # Docker orchestration
@@ -468,8 +443,7 @@ All services use the same `.env` file:
 - `SLACK_SIGNING_SECRET` - Slack app signing secret
 - `GITHUB_APP_ID` - GitHub App ID
 - `GITHUB_APP_PRIVATE_KEY` - GitHub App private key
-- `DATABASE_URL` - Database connection (optional)
-- `VECTOR_DB_URL` - Vector database connection (optional)
+- `DATABASE_URL` - Database connection
 - `NODE_ENV` - Environment (development/production)
 - `PORT` - Service port (defaults per service)
 
@@ -482,9 +456,6 @@ All services use the same `.env` file:
 npm run dev:api
 npm run dev:slack-bot
 npm run dev:github-app
-
-# n8n still runs in Docker
-docker compose up n8n
 ```
 
 ### Production
@@ -502,38 +473,21 @@ docker compose up -d
 - `3000:3000` - API Service
 - `3001:3001` - Slack Bot Service
 - `3002:3002` - GitHub App Service
-- `5678:5678` - n8n
+- `5433:5432` - PostgreSQL
 
-## Workflow Integration
+## Real-Time Architecture
 
-### n8n as Orchestration Layer
+### How Real-Time Works
 
-n8n serves as the workflow orchestration layer:
+1. **GitHub Webhooks** - Push-based, instant notifications when CI fails
+2. **Services Always Running** - All Docker services run 24/7
+3. **Slack Socket Mode** - Persistent WebSocket connection for Slack
 
-1. **Receives Events**: Webhooks from external systems
-2. **Orchestrates Flow**: Routes events through services
-3. **Coordinates Actions**: Calls multiple services in sequence
-4. **Handles Responses**: Aggregates and returns results
+### Response Time
 
-### Workflow Patterns
-
-#### Pattern 1: Event-Driven Analysis
-
-```
-External Event → n8n → API Service → Slack Notification
-```
-
-#### Pattern 2: Command Processing
-
-```
-Slack Command → Slack Bot → OpenAI → Response to Slack
-```
-
-#### Pattern 3: GitHub Integration
-
-```
-GitHub Webhook → GitHub App → Analysis → Comment on PR
-```
+- GitHub webhook → Slack notification: **3-8 seconds**
+- Most time spent on OpenAI analysis
+- No polling, all push-based
 
 ## Security Considerations
 
@@ -546,7 +500,7 @@ GitHub Webhook → GitHub App → Analysis → Comment on PR
 
 ### Future Enhancements
 
-- [ ] API key authentication for n8n → services
+- [ ] API key authentication
 - [ ] Webhook signature verification
 - [ ] HTTPS/TLS in production
 - [ ] Secrets management (Vault, AWS Secrets Manager)
@@ -563,7 +517,6 @@ GitHub Webhook → GitHub App → Analysis → Comment on PR
 ### Future Enhancements
 
 - [ ] Distributed rate limiting (Redis)
-- [ ] Database for state persistence
 - [ ] Message queue for async processing
 - [ ] Load balancing configuration
 - [ ] Horizontal scaling support
@@ -608,13 +561,11 @@ GitHub Webhook → GitHub App → Analysis → Comment on PR
 
 - Service-specific tests
 - Shared package tests
-- Workflow structure validation
 
 ### Integration Tests
 
 - Service-to-service communication
-- n8n workflow execution
-- End-to-end workflow tests
+- End-to-end flow tests
 
 ### Test Commands
 
@@ -622,7 +573,6 @@ GitHub Webhook → GitHub App → Analysis → Comment on PR
 npm test                    # Run all tests
 npm run test:watch         # Watch mode
 npm run test:coverage      # Coverage report
-npm run test:workflow-e2e  # End-to-end workflow test
 ```
 
 ## Future Architecture Considerations
@@ -660,8 +610,8 @@ Kenchi is designed as a modular, scalable, and safe AI-driven DevOps assistant. 
 - **Separation of Concerns**: Each service has a clear responsibility
 - **Safety First**: LLM outputs are never executed directly
 - **Docker-First**: Consistent environment across development and production
-- **Workflow-Driven**: n8n orchestrates complex automation flows
+- **Real-Time**: Push-based webhooks for instant notifications
 - **Type Safety**: TypeScript throughout for reliability
 - **Observability**: Structured logging and health checks
 
-The system is production-ready for basic workflows and designed to scale as features are added.
+The system is production-ready for CI failure analysis and designed to scale as features are added.

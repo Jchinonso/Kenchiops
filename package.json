@@ -27,10 +27,6 @@
     "type-check": "tsc --build --force",
     "validate": "tsx scripts/validate-env.ts",
     "check-build": "tsx scripts/check-build.ts",
-    "validate-workflow": "tsx scripts/validate-workflow.ts",
-    "test:workflow-functional": "tsx scripts/test-workflow-functional.ts",
-    "test:workflow-e2e": "tsx scripts/test-workflow-e2e.ts",
-    "setup:n8n": "tsx scripts/setup-n8n-test.ts",
     "check:duplication": "tsx scripts/check-duplication.ts"
   },
   "devDependencies": {

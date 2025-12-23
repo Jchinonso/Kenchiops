@@ -44,7 +44,7 @@ This is how most marketplace apps work (Slack apps, Datadog GitHub integration, 
 │  └─────────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │
-│  │  GitHub App  │  │  Slack Bot   │  │     API      │  │     n8n      │            │
+│  │  GitHub App  │  │  Slack Bot   │  │     API      │  │     GitHub App      │            │
 │  │  (shared)    │  │  (shared)    │  │  (shared)    │  │  (shared)    │            │
 │  │              │  │              │  │              │  │              │            │
 │  │ • Receives   │  │ • OAuth flow │  │ • AI analysis│  │ • Orchestrate│            │
@@ -223,9 +223,9 @@ POST /github/webhook
 ─────────────────────
 • Extracts installation_id: 12345
 • Gathers enriched context (logs, diff, annotations)
-• Forwards to n8n with tenant context:
+• Forwards to GitHub App with tenant context:
 
-POST http://n8n:5678/webhook/ci-failure
+POST http://GitHub App:5678/webhook/ci-failure
 {
   "log": "...",
   "repository": "acme-corp/my-app",
@@ -235,7 +235,7 @@ POST http://n8n:5678/webhook/ci-failure
 }
          │
          ▼
-4. n8n Workflow (Stateless)
+4. GitHub App Workflow (Stateless)
 ───────────────────────────
 • Receives payload with installation_id
 • Calls API for AI analysis (passes context through)
@@ -400,7 +400,7 @@ app.webhooks.on('installation.deleted', async ({ payload }) => {
 **Updated: Check Run Handler**
 
 ```typescript
-// Pass installation_id through to n8n
+// Pass installation_id through to GitHub App
 const payload = {
   log: enrichedLog,
   repository: repository.full_name,
@@ -482,7 +482,7 @@ export const postMessage = async (
 };
 ```
 
-### 4. n8n Workflow Changes
+### 4. GitHub App Workflow Changes
 
 Update workflow to pass `installation_id` through:
 
@@ -618,7 +618,7 @@ GITHUB_WEBHOOK_SECRET=...
 ### Phase 2: GitHub App Multi-Tenant
 1. Add installation.created webhook handler
 2. Store installation_id in tenants table
-3. Pass installation_id through to n8n
+3. Pass installation_id through to GitHub App
 
 ### Phase 3: Slack Bot Multi-Tenant
 1. Add OAuth installation flow

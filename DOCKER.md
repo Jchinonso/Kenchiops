@@ -22,20 +22,19 @@ Use Docker for:
 - ❌ **Testing** - Use local services for unit/integration tests
 - ❌ **Quick prototyping** - Direct npm commands are faster
 
-### 2. **n8n Workflow Automation** (Included in docker-compose.yml)
+### 2. **Database (PostgreSQL with pgvector)**
 
 Use Docker for:
 
-- ✅ **Running n8n** - n8n runs in Docker Compose alongside other services
-- ✅ **Workflow testing** - Testing n8n workflows requires n8n to be running
-- ✅ **Workflow management** - Managing and executing automation workflows
-- ✅ **Service communication** - n8n can communicate with services using Docker service names
+- ✅ **Running PostgreSQL** - PostgreSQL runs in Docker Compose
+- ✅ **Vector embeddings** - pgvector extension for similarity search
+- ✅ **Multi-tenant support** - Tenant data storage
 
 ## Docker Usage Scenarios
 
 ### Scenario 1: Local Development
 
-**Don't use Docker** - Use npm directly:
+**Don't use Docker for services** - Use npm directly:
 
 ```bash
 # Development mode (recommended)
@@ -53,7 +52,6 @@ npm run dev:github-app
 ```bash
 # Run tests
 npm test
-npm run test:workflow-e2e
 
 # Services run locally for testing
 npm run dev:api &
@@ -76,17 +74,18 @@ docker-compose up -d
 
 **Why?** Consistent environment, isolation, scalability, production-ready.
 
-### Scenario 4: n8n Workflow Testing
+### Scenario 4: Full Stack Testing
 
 **Use Docker** - All services run together:
 
 ```bash
-# Start all services (including n8n)
+# Start all services
 docker compose up -d
 
-# Then test workflows
-# Access n8n at http://localhost:5678
-# Import workflow and test
+# Test the complete CI failure flow
+curl http://localhost:3000/health
+curl http://localhost:3001/health
+curl http://localhost:3002/health
 ```
 
 **Why?** All services run in the same Docker network, enabling seamless communication via service names.
@@ -117,7 +116,7 @@ docker compose up -d
 ### 2. `docker-compose.yml` (All Services)
 
 - **Location**: `/kenchi/docker-compose.yml`
-- **Purpose**: Orchestrates all services together (API, Slack Bot, GitHub App, and n8n)
+- **Purpose**: Orchestrates all services together (API, Slack Bot, GitHub App, PostgreSQL)
 - **Usage**: `docker compose up -d`
 - **Services**: All run in the same Docker network (`kenchi_default`) for seamless communication
 
@@ -126,15 +125,14 @@ docker compose up -d
 ### Development Workflow
 
 ```bash
-# 1. Local development (NO Docker for services, YES for n8n)
+# 1. Local development (NO Docker for services)
 npm run dev:api
 npm run dev:slack-bot
-# Note: n8n still needs Docker for workflow testing
+npm run dev:github-app
 
-# 2. Testing with Docker Compose (Recommended)
+# 2. Testing with Docker Compose (Recommended for full stack)
 docker compose up -d          # Start all services
 npm test                      # Run tests
-# Access n8n at http://localhost:5678
 
 # 3. Production (YES Docker)
 docker compose build
@@ -148,18 +146,17 @@ docker compose up -d
 | Local development         | ❌ No       | `npm run dev:*`                       |
 | Running unit tests        | ❌ No       | `npm test`                            |
 | Running integration tests | ❌ No       | `npm run test:*`                      |
-| Testing n8n workflows     | ✅ Yes      | `docker compose up -d` (all services) |
+| Full stack testing        | ✅ Yes      | `docker compose up -d`                |
 | Production deployment     | ✅ Yes      | `docker compose up -d`                |
 | CI/CD builds              | ✅ Yes      | `docker compose build`                |
 | Staging environment       | ✅ Yes      | `docker compose up -d`                |
-| Full stack testing        | ✅ Yes      | `docker compose up -d`                |
 
 ## Summary
 
 **Docker Compose is used for:**
 
 1. **Production deployments** - All services containerized
-2. **n8n workflows** - n8n runs alongside other services in docker-compose.yml
+2. **Database** - PostgreSQL with pgvector runs in Docker
 3. **Service communication** - Services communicate via Docker service names (api, slack-bot, etc.)
 4. **CI/CD pipelines** - Automated builds and deployments
 5. **Consistent environments** - Same setup across different machines
@@ -173,4 +170,4 @@ docker compose up -d
 
 **Key Benefit**: All services run in the same Docker network, enabling seamless communication using service names (e.g., `http://api:3000`, `http://slack-bot:3001`). This eliminates connection issues and makes the setup production-ready.
 
-The project supports both approaches - use Docker Compose for production/workflow testing, and local development for faster iteration!
+The project supports both approaches - use Docker Compose for production/full stack testing, and local development for faster iteration!

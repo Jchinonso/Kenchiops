@@ -13,7 +13,7 @@ const router = Router();
 const logger = createLogger("api");
 
 /**
- * CI Failure Analysis endpoint (for n8n workflow)
+ * CI Failure Analysis endpoint
  * POST /api/analyze
  *
  * Analyzes CI failure logs using OpenAI and returns

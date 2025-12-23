@@ -54,7 +54,7 @@ export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext 
   const event: Event = {
     id: eventId,
     type: "CICD_FAILURE",
-    source: "n8n",
+    source: "github-app",
     timestamp: new Date().toISOString(),
     severity: "high",
     title: `CI Failure in ${request.repository}`,

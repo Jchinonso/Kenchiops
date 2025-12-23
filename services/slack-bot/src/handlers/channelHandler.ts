@@ -5,7 +5,7 @@
  * the bot joins or leaves channels.
  */
 
-import { logger, UI_CONSTANTS } from "@kenchi/shared";
+import { logger, UI_CONSTANTS, config } from "@kenchi/shared";
 import {
   getBotMemberChannels,
   type SlackClient,
@@ -20,6 +20,18 @@ export {
   createAnalysisAttachments,
 } from "../formatters/ciFailureFormatter.js";
 
+// ==================== GitHub Install URL ====================
+
+/**
+ * Build GitHub App install URL with workspace ID for linking.
+ * The workspace ID is passed as a state parameter so we can link
+ * the GitHub installation to the correct Slack workspace after install.
+ */
+export const getGitHubInstallUrl = (workspaceId: string): string => {
+  const appSlug = config.GITHUB_APP_SLUG || "kenchi-devops";
+  return `https://github.com/apps/${appSlug}/installations/new?state=${workspaceId}`;
+};
+
 // ==================== Message Templates ====================
 
 const SINGLE_CHANNEL_POLICY_MESSAGE = (activeChannelId: string): string =>
@@ -28,24 +40,44 @@ const SINGLE_CHANNEL_POLICY_MESSAGE = (activeChannelId: string): string =>
   `I can only be in ONE channel at a time. Please remove me from the other channel first if you want me here.\n\n` +
   `_Leaving this channel now..._`;
 
-const WELCOME_MESSAGE =
-  `\uD83D\uDC4B **Hello! I'm the Kenchi DevOps Assistant**\n\n` +
-  `\u2705 I'm now active in this channel.\n\n` +
-  `I'll broadcast CI failure analysis and other DevOps alerts here.\n\n` +
-  `_Note: I can only be in ONE channel at a time._`;
+/**
+ * Build welcome message with GitHub install link
+ */
+const buildWelcomeMessage = (workspaceId: string): string => {
+  const githubInstallUrl = getGitHubInstallUrl(workspaceId);
+  return (
+    `\uD83D\uDC4B *Hello! I'm the Kenchi DevOps Assistant*\n\n` +
+    `\u2705 I'm now active in this channel.\n\n` +
+    `*Next step:* Connect your GitHub organization to receive CI failure alerts.\n\n` +
+    `<${githubInstallUrl}|:github: Install GitHub App>\n\n` +
+    `Or type \`/kenchi connect\` anytime to get the install link.\n\n` +
+    `_Note: I can only be in ONE channel at a time._`
+  );
+};
 
 // ==================== Helper Functions ====================
 
 /**
  * Sends welcome message to the first channel the bot joins.
+ * Includes GitHub App install link with workspace ID for tenant linking.
  */
 const sendWelcomeMessage = async (client: SlackClient, channelId: string): Promise<void> => {
+  // Get workspace ID for the GitHub install link
+  const authResult = await client.auth.test();
+  const workspaceId = authResult.team_id || "unknown";
+
+  const welcomeMessage = buildWelcomeMessage(workspaceId);
+
   await client.chat.postMessage({
     channel: channelId,
-    text: WELCOME_MESSAGE,
+    text: welcomeMessage,
+    mrkdwn: true,
   });
 
-  logger.info("Bot successfully joined first channel", { channel: channelId });
+  logger.info("Bot successfully joined first channel", {
+    channel: channelId,
+    workspaceId,
+  });
 };
 
 /**
