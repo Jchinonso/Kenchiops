@@ -190,9 +190,19 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
 };
 
 /**
- * Marker to identify KenchiOps comments
+ * Markers to identify KenchiOps comments (supports both old and new formats)
  */
-const KENCHIOPS_COMMENT_MARKER = "KenchiOps CI Failure Analysis";
+const KENCHIOPS_COMMENT_MARKERS: readonly string[] = [
+  "KenchiOps CI Failure Analysis", // New consolidated format
+  "KenchiOps — CI Failure Analysis", // Old format with em-dash
+  "KenchiOps — CI Analysis Complete", // Old success format
+] as const;
+
+/**
+ * Check if a comment body contains any KenchiOps marker
+ */
+const isKenchiOpsComment = (body: string | undefined): boolean =>
+  body !== undefined && KENCHIOPS_COMMENT_MARKERS.some((marker) => body.includes(marker));
 
 /**
  * Delete existing KenchiOps comments on a PR
@@ -215,10 +225,8 @@ export const deleteKenchiOpsComments = async (
       per_page: 100,
     });
 
-    // Find KenchiOps comments (look for our marker in the body)
-    const kenchiOpsComments = comments.filter((comment) =>
-      comment.body?.includes(KENCHIOPS_COMMENT_MARKER)
-    );
+    // Find KenchiOps comments (check all marker formats)
+    const kenchiOpsComments = comments.filter((comment) => isKenchiOpsComment(comment.body));
 
     // Delete each KenchiOps comment
     await Promise.all(
