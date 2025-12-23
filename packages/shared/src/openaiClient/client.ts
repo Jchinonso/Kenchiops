@@ -13,6 +13,7 @@
 import OpenAI from "openai";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
+import { LLMError } from "../errors.js";
 import { OPENAI_DEFAULTS, OPENAI_CONSTANTS, TIME_CONSTANTS } from "../constants.js";
 import type { Event, Evidence, LLMAnalysisResult } from "../types.js";
 import { buildAnalysisPrompt } from "../prompts.js";
@@ -152,9 +153,9 @@ export class OpenAIClient {
     validation: { valid: boolean; errors: string[]; warnings: string[] },
     eventId: string
   ): void => {
-    this.validationLoggers.forEach(({ condition, log }) => {
-      condition(validation) && log(validation, eventId);
-    });
+    this.validationLoggers
+      .filter(({ condition }) => condition(validation))
+      .map(({ log }) => log(validation, eventId));
   };
 
   /**
@@ -184,7 +185,7 @@ export class OpenAIClient {
     return (
       completion.choices[0]?.message?.content ??
       (() => {
-        throw new Error("No content in OpenAI response");
+        throw new LLMError("No content in OpenAI response");
       })()
     );
   };
@@ -316,7 +317,7 @@ export class OpenAIClient {
     return (
       responseContent.match(/\{[\s\S]*\}/)?.[0] ??
       (() => {
-        throw new Error("No JSON found in response");
+        throw new LLMError("No JSON found in response");
       })()
     );
   };
@@ -337,6 +338,54 @@ export class OpenAIClient {
     optional: <T>(value: unknown, defaultValue: T | undefined): T | undefined =>
       value !== null && value !== undefined ? (value as T) : defaultValue,
   } as const;
+
+  /**
+   * Validates and normalizes a code annotation from AI response.
+   *
+   * @param annotation - Raw annotation object from AI
+   * @returns Validated annotation or null if invalid
+   */
+  private validateCodeAnnotation = (
+    annotation: unknown
+  ): LLMAnalysisResult["codeAnnotations"] extends (infer T)[] | undefined ? T | null : never => {
+    if (!annotation || typeof annotation !== "object") return null;
+
+    const ann = annotation as Record<string, unknown>;
+    const path = typeof ann.path === "string" ? ann.path : null;
+    const line = typeof ann.line === "number" ? ann.line : null;
+    const level = typeof ann.level === "string" ? ann.level : "warning";
+    const message = typeof ann.message === "string" ? ann.message : null;
+
+    // Path and message are required
+    if (!path || !message) return null;
+
+    return {
+      path,
+      line: line ?? 1,
+      level: (["failure", "warning", "notice"].includes(level) ? level : "warning") as
+        | "failure"
+        | "warning"
+        | "notice",
+      message,
+      title: typeof ann.title === "string" ? ann.title : undefined,
+    };
+  };
+
+  /**
+   * Parses code annotations array from AI response.
+   *
+   * @param rawAnnotations - Raw annotations array from AI
+   * @returns Validated array of code annotations
+   */
+  private parseCodeAnnotations = (
+    rawAnnotations: unknown
+  ): LLMAnalysisResult["codeAnnotations"] => {
+    if (!Array.isArray(rawAnnotations)) return [];
+
+    return rawAnnotations
+      .map(this.validateCodeAnnotation)
+      .filter((ann): ann is NonNullable<typeof ann> => ann !== null);
+  };
 
   /**
    * Parses JSON string and creates LLM analysis result with defaults.
@@ -362,6 +411,7 @@ export class OpenAIClient {
       confidence: string(parsed.confidence, "medium") as LLMAnalysisResult["confidence"],
       confidenceScore: undefined, // Will be calculated by safety.ts
       reasoning: string(parsed.reasoning, ""),
+      codeAnnotations: this.parseCodeAnnotations(parsed.codeAnnotations),
       recommendedActions: array(
         parsed.recommendedActions,
         []
@@ -389,7 +439,7 @@ export class OpenAIClient {
       return this.createAnalysisFromParsed(parsed, eventId);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      throw new Error(`Failed to parse OpenAI response: ${errorMessage}`);
+      throw new LLMError(`Failed to parse OpenAI response: ${errorMessage}`);
     }
   };
 }

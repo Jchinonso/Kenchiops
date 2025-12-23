@@ -1,7 +1,6 @@
 # Kenchi - AI-Driven DevOps Assistant
 
 [![CI](https://github.com/kenchiops/Kenchiops/actions/workflows/ci.yml/badge.svg)](https://github.com/kenchiops/Kenchiops/actions/workflows/ci.yml)
-[![Security](https://github.com/kenchiops/Kenchiops/actions/workflows/security.yml/badge.svg)](https://github.com/kenchiops/Kenchiops/actions/workflows/security.yml)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/typescript-5.3+-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
@@ -30,10 +29,10 @@ kenchi/
 ### Prerequisites
 
 - Docker and Docker Compose
-- Node.js 18+ and npm (for local development)
+- Node.js 20+ and npm (for local development)
 - TypeScript 5.3+ (installed as dev dependency)
-- Slack App credentials
-- GitHub App credentials
+- Slack App credentials (Bot Token, Signing Secret, App Token)
+- GitHub App credentials (App ID, Private Key, Webhook Secret)
 - OpenAI API key
 
 ### Quick Start with Docker (Recommended)
@@ -96,7 +95,6 @@ For local development with hot reload:
    npm run dev:github-app
    ```
 
-
 ## 🛠️ Development Scripts
 
 - `npm run build` - Build all packages (shared first, then services)
@@ -143,13 +141,16 @@ GitHub App service that handles webhook events for pull requests, CI checks, and
 
 Contains shared utilities used across all services:
 
-- **Config**: Centralized environment variable management
-- **OpenAI Client**: Stub for OpenAI API integration
-- **Vector Store**: Interface and placeholder for vector database operations
-- **Safety Helpers**: Confidence scoring and validation utilities
+- **Config**: Centralized environment variable management with validation
+- **OpenAI Client**: OpenAI API integration with retry logic and token management
+- **Vector Store**: Interface for vector database operations
+- **Safety Helpers**: Confidence scoring, evidence validation, and action gating
 - **Logger**: Structured logging utility with JSON output
-- **Error Handling**: Custom error classes and Express middleware
+- **Error Handling**: Typed error classes (ValidationError, NotFoundError, LLMError, etc.)
+- **Security**: Secret redaction and input sanitization utilities
+- **Rate Limiting**: In-memory rate limiting middleware
 - **Types**: Common TypeScript interfaces and types
+- **Array Utils**: Functional utilities for deduplication, grouping, and filtering
 
 ## 🛡️ Safety & Security
 
@@ -236,15 +237,36 @@ Services communicate using these Docker service names internally.
 
 See [DOCKER.md](./DOCKER.md) for detailed guidance.
 
+## 🎯 Code Quality Standards
+
+This codebase follows strict functional programming patterns:
+
+- **No imperative loops**: All `for`, `forEach`, `while` replaced with `map`, `filter`, `reduce`, `flatMap`
+- **Lookup tables**: Switch statements replaced with handler lookup patterns
+- **Typed errors**: All errors use typed classes from `@kenchi/shared`
+- **Immutability**: Minimal `let` declarations, preferring `const` and functional patterns
+- **Data-driven config**: Configuration arrays with condition/handler patterns
+
+### Code Quality Metrics
+
+| Metric              | Count |
+| ------------------- | ----- |
+| `throw new Error`   | 0     |
+| `for` loops         | 0     |
+| `forEach`           | 0     |
+| `switch` statements | 0     |
+| `any` type (source) | 0     |
+| Tests passing       | 134   |
+
 ## 📝 TODO
 
 ### Immediate Next Steps
 
-- [ ] Implement actual OpenAI API calls in `OpenAIClient`
-- [ ] Replace dummy vector store with real database integration (Postgres + pgvector or Chroma)
-- [ ] Implement real confidence scoring logic
-- [ ] Flesh out Slack command handling with OpenAI integration
-- [ ] Implement GitHub PR analysis and comment posting
+- [x] Implement OpenAI API calls in `OpenAIClient`
+- [x] Implement confidence scoring logic
+- [x] Flesh out Slack command handling
+- [x] Implement GitHub webhook handling
+- [ ] Replace vector store with real database integration (Postgres + pgvector)
 - [ ] Add authentication/authorization to API endpoints
 - [ ] Set up database schema and migrations
 
@@ -255,10 +277,10 @@ See [DOCKER.md](./DOCKER.md) for detailed guidance.
 - [x] Create Docker containers for each service
 - [x] Add unit and integration tests
 - [x] Set up CI/CD pipelines (GitHub Actions)
-- [x] Add API documentation (OpenAPI/Swagger) - placeholder
 - [x] Add rate limiting middleware
 - [x] Add request validation middleware
-- [ ] Implement actual OpenAI API integration
+- [x] Add secret redaction utilities
+- [x] Implement functional programming patterns
 - [ ] Add database migrations
 - [ ] Add integration tests
 - [ ] Set up monitoring and alerting

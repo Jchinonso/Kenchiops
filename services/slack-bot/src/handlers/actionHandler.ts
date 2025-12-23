@@ -4,7 +4,7 @@
  */
 
 import type { ButtonAction, SayFn, SayArguments } from "@slack/bolt";
-import { createLogger, UI_CONSTANTS } from "@kenchi/shared";
+import { createLogger, UI_CONSTANTS, ValidationError } from "@kenchi/shared";
 import { formatProgressUpdate } from "../formatters.js";
 import type { SlackActionValue } from "../types/slackTypes.js";
 
@@ -18,12 +18,12 @@ const logger = createLogger("slack-bot");
  */
 const parseActionValue = (action: ButtonAction): SlackActionValue => {
   if (!action.value) {
-    throw new Error("Action value is missing");
+    throw new ValidationError("Action value is missing");
   }
   try {
     return JSON.parse(action.value) as SlackActionValue;
   } catch (error) {
-    throw new Error(
+    throw new ValidationError(
       `Failed to parse action value: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }

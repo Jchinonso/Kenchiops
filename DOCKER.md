@@ -141,15 +141,15 @@ docker compose up -d
 
 ### When Each Approach is Best
 
-| Task                      | Use Docker? | Command                               |
-| ------------------------- | ----------- | ------------------------------------- |
-| Local development         | ❌ No       | `npm run dev:*`                       |
-| Running unit tests        | ❌ No       | `npm test`                            |
-| Running integration tests | ❌ No       | `npm run test:*`                      |
-| Full stack testing        | ✅ Yes      | `docker compose up -d`                |
-| Production deployment     | ✅ Yes      | `docker compose up -d`                |
-| CI/CD builds              | ✅ Yes      | `docker compose build`                |
-| Staging environment       | ✅ Yes      | `docker compose up -d`                |
+| Task                      | Use Docker? | Command                |
+| ------------------------- | ----------- | ---------------------- |
+| Local development         | ❌ No       | `npm run dev:*`        |
+| Running unit tests        | ❌ No       | `npm test`             |
+| Running integration tests | ❌ No       | `npm run test:*`       |
+| Full stack testing        | ✅ Yes      | `docker compose up -d` |
+| Production deployment     | ✅ Yes      | `docker compose up -d` |
+| CI/CD builds              | ✅ Yes      | `docker compose build` |
+| Staging environment       | ✅ Yes      | `docker compose up -d` |
 
 ## Summary
 

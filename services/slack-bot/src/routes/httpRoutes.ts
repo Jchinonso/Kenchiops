@@ -10,9 +10,17 @@ import express, { type Request, type Response } from "express";
 import { validate, validators, HTTP_STATUS, asyncHandler } from "@kenchi/shared";
 import type Bolt from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
-import { postMessage, broadcastMessage } from "../handlers/channelHandler.js";
+import {
+  postMessage,
+  postConsolidatedMessage,
+  broadcastMessage,
+} from "../handlers/channelHandler.js";
 import { getSlackClientForTenant, isMultiTenantEnabled } from "../services/tenantSlackClient.js";
-import type { SlackMessageRequest, SlackBroadcastRequest } from "../types/slackTypes.js";
+import type {
+  SlackMessageRequest,
+  SlackBroadcastRequest,
+  ConsolidatedMessageRequest,
+} from "../types/slackTypes.js";
 
 type SlackApp = InstanceType<typeof Bolt.App>;
 
@@ -22,11 +30,22 @@ type SlackApp = InstanceType<typeof Bolt.App>;
 type MessageRequestWithTenant = SlackMessageRequest & { readonly installation_id?: number };
 
 /**
+ * Union type for message or consolidated request
+ */
+type IncomingMessageRequest = MessageRequestWithTenant | ConsolidatedMessageRequest;
+
+/**
+ * Type guard for consolidated message requests
+ */
+const isConsolidatedRequest = (
+  request: IncomingMessageRequest
+): request is ConsolidatedMessageRequest =>
+  "consolidated" in request && request.consolidated === true;
+
+/**
  * Result of getting a Slack client
  */
-type ClientResult =
-  | { success: true; client: WebClient }
-  | { success: false; error: string };
+type ClientResult = { success: true; client: WebClient } | { success: false; error: string };
 
 /**
  * Get Slack client based on multi-tenant mode
@@ -55,8 +74,12 @@ const getClientForRequest = async (
 /**
  * Check if message request has valid content
  */
-const hasValidContent = (request: MessageRequestWithTenant): boolean =>
-  !!(request.message || request.analysis);
+const hasValidContent = (request: IncomingMessageRequest): boolean => {
+  if (isConsolidatedRequest(request)) {
+    return !!(request.payload?.blocks && request.payload.blocks.length > 0);
+  }
+  return !!(request.message || request.analysis);
+};
 
 /**
  * Status code lookup based on response status
@@ -85,10 +108,12 @@ export const createHttpRoutes = (app: SlackApp): express.Router => {
   /**
    * POST /slack/message
    * Post a message to Slack (for CI failure integration)
-   * Supports plain text messages OR structured analysis data
+   * Supports plain text messages, structured analysis data, or consolidated CI failures
    * Channel is optional - if not provided, uses bot's active channel (single-channel policy)
    *
    * Multi-tenant mode: Requires installation_id to identify the tenant
+   *
+   * Consolidated mode: When consolidated=true, payload contains pre-built Block Kit message
    */
   router.post(
     "/slack/message",
@@ -99,27 +124,42 @@ export const createHttpRoutes = (app: SlackApp): express.Router => {
         message: (v) => !v || validators.string(v),
         thread_ts: (v) => !v || validators.string(v),
         analysis: (v) => !v || (typeof v === "object" && v !== null),
+        // Consolidated message fields
+        consolidated: (v) => v === undefined || typeof v === "boolean" || "must be a boolean",
+        payload: (v) => !v || (typeof v === "object" && v !== null),
+        repository: (v) => !v || validators.string(v),
+        commit_sha: (v) => !v || validators.string(v),
+        failure_count: (v) => !v || validators.number(v),
       },
     }),
     asyncHandler(async (req: Request, res: Response) => {
-      const request = req.body as MessageRequestWithTenant;
+      const request = req.body as IncomingMessageRequest;
 
       // Validate content presence
       if (!hasValidContent(request)) {
         res.status(HTTP_STATUS.BAD_REQUEST).json({
-          error: "Either message or analysis must be provided",
+          error: "Either message, analysis, or consolidated payload must be provided",
         });
         return;
       }
 
+      // Get installation ID based on request type
+      const installationId = isConsolidatedRequest(request)
+        ? request.installation_id
+        : request.installation_id;
+
       // Get appropriate client
-      const clientResult = await getClientForRequest(app.client, request.installation_id);
+      const clientResult = await getClientForRequest(app.client, installationId);
       if (!clientResult.success) {
         res.status(HTTP_STATUS.BAD_REQUEST).json({ error: clientResult.error });
         return;
       }
 
-      const response = await postMessage(clientResult.client, request);
+      // Handle consolidated vs regular messages
+      const response = isConsolidatedRequest(request)
+        ? await postConsolidatedMessage(clientResult.client, request)
+        : await postMessage(clientResult.client, request);
+
       res.status(getStatusCode(response.status)).json(response);
     })
   );

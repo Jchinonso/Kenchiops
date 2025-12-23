@@ -18,17 +18,11 @@ export const detectUncertainty = (text: string): number => {
   }
 
   const normalizedText = text.toLowerCase();
-  let totalPenalty = 0;
 
-  // Check patterns in order of severity (strongest first)
-  // Early exit on first match to avoid multiple penalties
-  for (const { pattern, penalty } of UNCERTAINTY_PATTERNS) {
-    if (pattern.test(normalizedText)) {
-      totalPenalty = penalty;
-      break;
-    }
-  }
+  // Find first matching pattern (patterns ordered by severity, strongest first)
+  const matchedPattern = UNCERTAINTY_PATTERNS.find(({ pattern }) => pattern.test(normalizedText));
 
-  // Cap total uncertainty penalty
-  return Math.max(totalPenalty, UNCERTAINTY_PENALTIES.MAX);
+  // Return matched penalty or 0, capped at maximum
+  const penalty = matchedPattern?.penalty ?? 0;
+  return Math.max(penalty, UNCERTAINTY_PENALTIES.MAX);
 };

@@ -89,27 +89,21 @@ export const collectCIErrors = (
     includeEmoji = true,
   } = options;
 
-  const errors: string[] = [];
+  // Collect annotation errors (failures only), limited to maxErrors
+  const annotationErrors = (annotations ?? [])
+    .filter((ann) => ann.level === "failure")
+    .slice(0, maxErrors)
+    .map((ann) => formatAnnotationError(ann, maxMessageLength));
 
-  // Collect annotation errors (failures only)
-  if (annotations) {
-    for (const ann of annotations) {
-      if (ann.level === "failure") {
-        errors.push(formatAnnotationError(ann, maxMessageLength));
-        if (errors.length >= maxErrors) break;
-      }
-    }
-  }
+  // Calculate remaining slots for test failures
+  const remainingSlots = Math.max(0, maxErrors - annotationErrors.length);
 
-  // Collect test failures (remaining slots)
-  if (testFailures && errors.length < maxErrors) {
-    const remainingSlots = maxErrors - errors.length;
-    for (let i = 0; i < Math.min(testFailures.length, remainingSlots); i++) {
-      errors.push(formatTestFailure(testFailures[i], includeEmoji));
-    }
-  }
+  // Collect test failures for remaining slots
+  const testErrors = (testFailures ?? [])
+    .slice(0, remainingSlots)
+    .map((test) => formatTestFailure(test, includeEmoji));
 
-  return errors;
+  return [...annotationErrors, ...testErrors];
 };
 
 /**

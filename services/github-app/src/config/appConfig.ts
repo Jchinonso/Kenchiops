@@ -4,7 +4,7 @@
  * Centralized configuration management with validation
  */
 
-import { config, SERVICE_PORTS } from "@kenchi/shared";
+import { config, SERVICE_PORTS, ValidationError } from "@kenchi/shared";
 
 /**
  * GitHub App configuration interface
@@ -32,14 +32,24 @@ const parsePrivateKey = (key: string | undefined): string => {
 };
 
 /**
+ * Required GitHub configuration fields
+ */
+const REQUIRED_GITHUB_CONFIG = [
+  { key: "GITHUB_APP_ID", value: () => config.GITHUB_APP_ID, message: "GITHUB_APP_ID is required" },
+  {
+    key: "GITHUB_APP_PRIVATE_KEY",
+    value: () => config.GITHUB_APP_PRIVATE_KEY,
+    message: "GITHUB_APP_PRIVATE_KEY is required",
+  },
+] as const;
+
+/**
  * Validate required GitHub configuration
  */
 const validateGitHubConfig = (): void => {
-  if (!config.GITHUB_APP_ID) {
-    throw new Error("GITHUB_APP_ID is required");
-  }
-  if (!config.GITHUB_APP_PRIVATE_KEY) {
-    throw new Error("GITHUB_APP_PRIVATE_KEY is required");
+  const missingConfig = REQUIRED_GITHUB_CONFIG.find((c) => !c.value());
+  if (missingConfig) {
+    throw new ValidationError(missingConfig.message);
   }
 };
 

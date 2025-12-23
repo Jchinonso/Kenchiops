@@ -6,11 +6,7 @@
  */
 
 import { WebClient, LogLevel } from "@slack/web-api";
-import {
-  createLogger,
-  getSlackCredentials,
-  config,
-} from "@kenchi/shared";
+import { createLogger, getSlackCredentials, config, NotFoundError } from "@kenchi/shared";
 
 const logger = createLogger("tenant-slack-client");
 
@@ -58,16 +54,16 @@ const isValidCache = (cached: CachedClient | undefined, now: number): cached is 
  */
 const cleanupExpiredClients = (): void => {
   const now = Date.now();
-  const expiredEntries = Array.from(clientCache.entries())
-    .filter(([, cached]) => isExpired(cached, now));
+  const expiredIds = Array.from(clientCache.entries())
+    .filter(([, cached]) => isExpired(cached, now))
+    .map(([installationId]) => {
+      clientCache.delete(installationId);
+      logger.debug("Evicted expired Slack client from cache", { installationId });
+      return installationId;
+    });
 
-  const deletedCount = expiredEntries.length;
-  expiredEntries.forEach(([installationId]) => {
-    clientCache.delete(installationId);
-    logger.debug("Evicted expired Slack client from cache", { installationId });
-  });
-
-  deletedCount > 0 && logger.debug("Cache cleanup complete", { deletedCount });
+  expiredIds.length > 0 &&
+    logger.debug("Cache cleanup complete", { deletedCount: expiredIds.length });
 };
 
 // Clean up expired clients every minute
@@ -88,9 +84,7 @@ const createSlackClient = (token: string): WebClient =>
  * @returns Slack WebClient configured for the tenant's workspace
  * @throws Error if tenant not found or no Slack token available
  */
-export const getSlackClientForTenant = async (
-  installationId: number
-): Promise<WebClient> => {
+export const getSlackClientForTenant = async (installationId: number): Promise<WebClient> => {
   const now = Date.now();
   const cached = clientCache.get(installationId);
 
@@ -105,7 +99,7 @@ export const getSlackClientForTenant = async (
 
   // Credentials are required for multi-tenant operation
   if (!credentials) {
-    throw new Error(
+    throw new NotFoundError(
       `No Slack credentials found for installation ${installationId}. ` +
         "Ensure the tenant has completed Slack OAuth."
     );
@@ -175,5 +169,4 @@ export const getCacheStats = (): {
  * In multi-tenant mode, Slack clients are created per-tenant from database credentials.
  * In single-tenant mode, a single client is used from environment variables.
  */
-export const isMultiTenantEnabled = (): boolean =>
-  config.MULTI_TENANT_MODE === true;
+export const isMultiTenantEnabled = (): boolean => config.MULTI_TENANT_MODE === true;

@@ -14,12 +14,7 @@
 import Bolt from "@slack/bolt";
 import type { ButtonAction as BoltButtonAction } from "@slack/bolt";
 import express from "express";
-import {
-  logger,
-  config,
-  initDatabase,
-  closeDatabase,
-} from "@kenchi/shared";
+import { logger, config, initDatabase, closeDatabase } from "@kenchi/shared";
 
 const { App } = Bolt;
 type SlackApp = InstanceType<typeof App>;
@@ -165,7 +160,7 @@ function setupSlackHandlers(app: SlackApp): void {
   // Handle App Home action buttons
   app.action("test_connection", async ({ ack, client, body }) => {
     await ack();
-    const result = await handleTestConnection(client, body.user.id);
+    await handleTestConnection(client, body.user.id);
     // Refresh the home view to show the result
     await handleRefreshHome(client, body.user.id);
   });

@@ -4,7 +4,7 @@
  * Provides message posting and broadcasting functionality for Slack.
  */
 
-import { logger, getErrorMessage } from "@kenchi/shared";
+import { logger, getErrorMessage, ValidationError } from "@kenchi/shared";
 import type {
   SlackMessageRequest,
   SlackMessagePostResponse,
@@ -14,6 +14,7 @@ import type {
   SlackBlock,
   SlackAttachment,
   CIFailureAnalysis,
+  ConsolidatedMessageRequest,
 } from "../types/slackTypes.js";
 import { resolveChannelId, getBotMemberChannels, type SlackClient } from "./channelService.js";
 import {
@@ -29,6 +30,55 @@ interface MessagePayload {
   readonly blocks?: SlackBlock[];
   readonly attachments?: MessageAttachment[];
 }
+
+/**
+ * Stored message info for update/delete
+ */
+interface StoredMessage {
+  readonly channelId: string;
+  readonly timestamp: string;
+  readonly postedAt: Date;
+}
+
+/**
+ * In-memory store for tracking posted messages by repository + commit
+ * Key format: "repository:commitSha"
+ * Used to update/delete old messages when new analysis arrives
+ */
+const messageStore = new Map<string, StoredMessage>();
+
+/**
+ * Max age for stored messages (1 hour) - cleanup stale entries
+ */
+const MESSAGE_STORE_MAX_AGE_MS = 60 * 60 * 1000;
+
+/**
+ * Build message store key from repository and commit SHA
+ */
+const buildMessageKey = (repository: string, commitSha: string): string =>
+  `${repository}:${commitSha}`;
+
+/**
+ * Cleanup old entries from message store (called periodically)
+ */
+const cleanupMessageStore = (): void => {
+  const now = Date.now();
+  const keysToDelete: string[] = [];
+
+  messageStore.forEach((stored, key) => {
+    if (now - stored.postedAt.getTime() > MESSAGE_STORE_MAX_AGE_MS) {
+      keysToDelete.push(key);
+    }
+  });
+
+  keysToDelete.forEach((key) => messageStore.delete(key));
+
+  if (keysToDelete.length > 0) {
+    logger.info("Cleaned up old message store entries", {
+      deletedCount: keysToDelete.length,
+    });
+  }
+};
 
 /**
  * Build message payload from request options.
@@ -114,7 +164,7 @@ const resolveTargetChannel = async (
   // Priority 2: Bot's active channel
   const activeChannel = await getActiveChannel(client);
   if (!activeChannel) {
-    throw new Error(
+    throw new ValidationError(
       "Cannot determine target channel. " +
         "Either provide a channel or invite the bot to a channel."
     );
@@ -193,6 +243,123 @@ export const postMessage = async (
 };
 
 /**
+ * Delete an existing Slack message
+ */
+const deleteSlackMessage = async (
+  client: SlackClient,
+  channelId: string,
+  timestamp: string
+): Promise<boolean> => {
+  try {
+    await client.chat.delete({
+      channel: channelId,
+      ts: timestamp,
+    });
+    return true;
+  } catch (error) {
+    logger.warn("Failed to delete old Slack message", {
+      channelId,
+      timestamp,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
+};
+
+/**
+ * Posts a consolidated CI failure message to Slack.
+ *
+ * Uses pre-built Block Kit payload from the GitHub App's aggregation service.
+ * This creates a single consolidated message for all failures in a commit.
+ *
+ * If an existing message for the same repository/commit exists, it will be
+ * deleted first to keep the channel clean.
+ *
+ * @param client - Slack client instance
+ * @param request - Consolidated message request with pre-built payload
+ * @returns Message response with status and details
+ */
+export const postConsolidatedMessage = async (
+  client: SlackClient,
+  request: ConsolidatedMessageRequest
+): Promise<SlackMessagePostResponse> => {
+  const { payload, repository, commit_sha, failure_count, channel } = request;
+
+  logger.info("Consolidated Slack message request received", {
+    repository,
+    commitSha: commit_sha.substring(0, 7),
+    failureCount: failure_count,
+    channel: channel || "(auto-detect)",
+    blockCount: payload.blocks.length,
+  });
+
+  // Cleanup old message store entries periodically
+  cleanupMessageStore();
+
+  try {
+    // Resolve target channel using priority-based logic
+    const channelId = await resolveTargetChannel(client, channel);
+
+    // Check for existing message and delete it
+    const messageKey = buildMessageKey(repository, commit_sha);
+    const existingMessage = messageStore.get(messageKey);
+
+    if (existingMessage) {
+      logger.info("Deleting existing Slack message for same commit", {
+        repository,
+        commitSha: commit_sha.substring(0, 7),
+        oldTimestamp: existingMessage.timestamp,
+      });
+
+      await deleteSlackMessage(client, existingMessage.channelId, existingMessage.timestamp);
+      messageStore.delete(messageKey);
+    }
+
+    // Post new message
+    const result = await client.chat.postMessage({
+      channel: channelId,
+      text: payload.text,
+      blocks: [...payload.blocks] as SlackBlock[],
+    });
+
+    // Store message info for future updates
+    if (result.ts) {
+      messageStore.set(messageKey, {
+        channelId,
+        timestamp: result.ts,
+        postedAt: new Date(),
+      });
+    }
+
+    logger.info("Consolidated message posted to Slack", {
+      repository,
+      channelId,
+      timestamp: result.ts,
+      failureCount: failure_count,
+      replacedExisting: !!existingMessage,
+    });
+
+    return {
+      status: "sent",
+      channel: channelId,
+      timestamp: result.ts,
+      thread_ts: result.ts,
+    };
+  } catch (error) {
+    logger.error("Failed to post consolidated message to Slack", {
+      repository,
+      failureCount: failure_count,
+      error: getErrorMessage(error),
+    });
+
+    return {
+      status: "error",
+      error: getErrorMessage(error),
+    };
+  }
+};
+
+/**
  * Broadcasts a message to all channels the bot is a member of.
  *
  * @param client - Slack client instance
@@ -216,7 +383,7 @@ export const broadcastMessage = async (
     const results = await Promise.allSettled(
       channels.map(async (channel): Promise<SlackBroadcastChannelResult> => {
         if (!channel.id || !channel.name) {
-          throw new Error("Invalid channel data");
+          throw new ValidationError("Invalid channel data");
         }
 
         try {

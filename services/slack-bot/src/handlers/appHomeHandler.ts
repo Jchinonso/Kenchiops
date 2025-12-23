@@ -24,9 +24,7 @@ type SlackClient = Pick<WebClient, "views" | "auth" | "conversations">;
 /**
  * Get the bot's active channel (first channel it's a member of)
  */
-const getActiveChannel = async (
-  client: SlackClient
-): Promise<SlackChannel | undefined> => {
+const getActiveChannel = async (client: SlackClient): Promise<SlackChannel | undefined> => {
   try {
     const channels = await getBotMemberChannels(client as WebClient);
     return channels[0];
@@ -68,7 +66,6 @@ const buildAppHomeContext = async (
   ]);
 
   const hasActiveChannel = !!activeChannel;
-  const isGitHubConnected = tenant?.githubInstallationId !== undefined;
 
   return {
     botStatus: hasActiveChannel ? "active" : "inactive",
@@ -102,10 +99,7 @@ const buildAppHomeContext = async (
  * - Recent activity summary
  * - Quick action buttons
  */
-export const handleAppHomeOpened = async (
-  client: SlackClient,
-  userId: string
-): Promise<void> => {
+export const handleAppHomeOpened = async (client: SlackClient, userId: string): Promise<void> => {
   try {
     // Get workspace ID
     const authResult = await client.auth.test();
@@ -146,9 +140,7 @@ export const handleAppHomeOpened = async (
 
     // Try to publish error view
     try {
-      const errorView = buildErrorView(
-        "Failed to load dashboard. Please try again."
-      );
+      const errorView = buildErrorView("Failed to load dashboard. Please try again.");
       await client.views.publish({
         user_id: userId,
         view: errorView,
@@ -167,7 +159,7 @@ export const handleAppHomeOpened = async (
 export const handleTestConnection = async (
   client: SlackClient,
   userId: string,
-  responseUrl?: string
+  _responseUrl?: string
 ): Promise<{ success: boolean; message: string }> => {
   try {
     const authResult = await client.auth.test();
@@ -198,9 +190,6 @@ export const handleTestConnection = async (
 /**
  * Handle the refresh_home action
  */
-export const handleRefreshHome = async (
-  client: SlackClient,
-  userId: string
-): Promise<void> => {
+export const handleRefreshHome = async (client: SlackClient, userId: string): Promise<void> => {
   await handleAppHomeOpened(client, userId);
 };

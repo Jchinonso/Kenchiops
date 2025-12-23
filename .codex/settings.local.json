@@ -1,7 +1,5 @@
 {
-  "rules": [
-    ".codex/CODEX.md"
-  ],
+  "rules": [".codex/CODEX.md"],
   "permissions": {
     "allow": [
       "Bash(docker compose:*)",
