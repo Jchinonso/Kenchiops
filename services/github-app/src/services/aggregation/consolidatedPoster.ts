@@ -24,6 +24,7 @@ const SLACK_URL = process.env.SLACK_URL || "http://slack-bot:3001/slack/message"
 
 /**
  * Post consolidated analysis to a single PR
+ * Deletes old KenchiOps comments first to keep PR clean
  */
 const postToPR = async (
   installationId: number,
@@ -33,7 +34,8 @@ const postToPR = async (
   commentBody: string
 ): Promise<boolean> => {
   try {
-    await postPRComment(installationId, owner, repo, prNumber, commentBody);
+    // Delete old comments and post new one (deleteOldComments = true)
+    await postPRComment(installationId, owner, repo, prNumber, commentBody, true);
     return true;
   } catch (error) {
     logger.error("Failed to post consolidated comment to PR", {
