@@ -2,12 +2,12 @@
  * Unit tests for Analysis Service
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
-import type { Event, Evidence, LLMAnalysisResult, ConfidenceScoreResult } from "@kenchi/shared";
+import { describe, it, expect, jest, beforeEach } from "@jest/globals";
+import type { Event, LLMAnalysisResult, ConfidenceScoreResult } from "@kenchi/shared";
 
 // Mock @kenchi/shared module
 jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared");
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
     OpenAIClient: jest.fn().mockImplementation(() => ({
@@ -25,7 +25,8 @@ jest.mock("@kenchi/shared", () => {
       const message = error instanceof Error ? error.message : String(error);
       return `${prefix}: ${message}`;
     }),
-}));
+  };
+});
 
 // Import after mock
 import {
@@ -34,7 +35,6 @@ import {
   createEventFromMention,
   createMinimalEvidence,
   performAnalysis,
-  type AnalysisResult,
 } from "../services/analysisService.js";
 
 describe("Analysis Service", () => {
@@ -365,7 +365,9 @@ describe("Analysis Service", () => {
       const client = getOpenAIClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(createMockAnalysisResult());
+      (client as any).analyzeIncident = jest
+        .fn<any>()
+        .mockResolvedValue(createMockAnalysisResult());
 
       const result = await performAnalysis(event);
 
@@ -380,7 +382,9 @@ describe("Analysis Service", () => {
       const client = getOpenAIClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(createMockAnalysisResult());
+      (client as any).analyzeIncident = jest
+        .fn<any>()
+        .mockResolvedValue(createMockAnalysisResult());
 
       await performAnalysis(event);
 
@@ -439,7 +443,9 @@ describe("Analysis Service", () => {
       const client = getOpenAIClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(createMockAnalysisResult());
+      (client as any).analyzeIncident = jest
+        .fn<any>()
+        .mockResolvedValue(createMockAnalysisResult());
 
       const result = await performAnalysis(event);
 
@@ -452,7 +458,9 @@ describe("Analysis Service", () => {
       const client = getOpenAIClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(createMockAnalysisResult());
+      (client as any).analyzeIncident = jest
+        .fn<any>()
+        .mockResolvedValue(createMockAnalysisResult());
 
       const result = await performAnalysis(event);
 
@@ -674,7 +682,9 @@ describe("Analysis Service", () => {
       const client = getOpenAIClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(createMockAnalysisResult());
+      (client as any).analyzeIncident = jest
+        .fn<any>()
+        .mockResolvedValue(createMockAnalysisResult());
 
       const result = await performAnalysis(event);
 
@@ -688,7 +698,9 @@ describe("Analysis Service", () => {
       const client = getOpenAIClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(createMockAnalysisResult());
+      (client as any).analyzeIncident = jest
+        .fn<any>()
+        .mockResolvedValue(createMockAnalysisResult());
 
       const result = await performAnalysis(cicdEvent);
 
@@ -701,7 +713,9 @@ describe("Analysis Service", () => {
       const client = getOpenAIClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(createMockAnalysisResult());
+      (client as any).analyzeIncident = jest
+        .fn<any>()
+        .mockResolvedValue(createMockAnalysisResult());
 
       const result = await performAnalysis(criticalEvent);
 

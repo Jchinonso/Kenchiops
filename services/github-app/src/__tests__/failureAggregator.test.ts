@@ -16,12 +16,11 @@ import type {
   RepositoryInfo,
   PRContext,
   WorkflowContext,
-  ConsolidatedPostResult,
 } from "../services/aggregation/types.js";
 
 // Mock logger
 jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared");
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
     createLogger: jest.fn(() => ({
@@ -48,12 +47,8 @@ describe("FailureAggregator", () => {
     analysis: "Test failed due to missing dependency",
     confidence: 0.85,
     identifiedCause: "Missing npm package",
-    recommendedActions: [
-      { description: "Install missing package", priority: "high" },
-    ],
-    annotations: [
-      { path: "src/index.ts", line: 10, message: "Error here", level: "failure" },
-    ],
+    recommendedActions: [{ description: "Install missing package", priority: "high" }],
+    annotations: [{ path: "src/index.ts", line: 10, message: "Error here", level: "failure" }],
     timestamp: new Date("2024-01-01T10:00:00Z"),
     ...overrides,
   });
@@ -235,15 +230,7 @@ describe("FailureAggregator", () => {
       const repoInfo = createMockRepoInfo();
       const prContext = createMockPRContext();
 
-      aggregator.addFailure(
-        key,
-        createMockFailure(),
-        repoInfo,
-        12345,
-        [123],
-        prContext,
-        null
-      );
+      aggregator.addFailure(key, createMockFailure(), repoInfo, 12345, [123], prContext, null);
 
       const status = aggregator.getStatus();
       expect(status.pendingCount).toBe(1);
@@ -584,9 +571,9 @@ describe("FailureAggregator", () => {
 
   describe("callback error handling", () => {
     it("should handle callback errors gracefully", async () => {
-      const errorCallback = jest.fn<AggregationReadyCallback>().mockRejectedValue(
-        new Error("Callback failed")
-      );
+      const errorCallback = jest
+        .fn<AggregationReadyCallback>()
+        .mockRejectedValue(new Error("Callback failed"));
       aggregator = new FailureAggregator(errorCallback, { debounceMs: 100 });
 
       aggregator.addFailure(
