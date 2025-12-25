@@ -1,5 +1,7 @@
 /** @type {import('jest').Config} */
-export default {
+const isCI = process.env.CI === 'true';
+
+const config = {
   preset: 'ts-jest/presets/default-esm',
   extensionsToTreatAsEsm: ['.ts'],
   testEnvironment: 'node',
@@ -63,6 +65,9 @@ export default {
   
   // Detect open handles (helps with the warning about async operations)
   detectOpenHandles: false, // Set to true only when debugging
-  forceExit: process.env.CI === 'true', // Force exit in CI to avoid hanging
+  // Force exit in CI to avoid hanging
+  forceExit: isCI,
 };
+
+export default config;
 
