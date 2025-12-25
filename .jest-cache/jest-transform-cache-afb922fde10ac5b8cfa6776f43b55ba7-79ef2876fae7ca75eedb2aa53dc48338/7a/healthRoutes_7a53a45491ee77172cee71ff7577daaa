@@ -1,0 +1,111 @@
+b951cc8bae94b83be115545be86d58f0
+"use strict";
+/**
+ * Health Check Routes
+ *
+ * Provides health and status endpoints for the GitHub App service
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.healthRoutes = void 0;
+const express_1 = require("express");
+const shared_1 = require("@kenchi/shared");
+const appConfig_js_1 = require("../config/appConfig.js");
+const router = (0, express_1.Router)();
+exports.healthRoutes = router;
+/**
+ * Health check endpoint with detailed status
+ * GET /health
+ */
+router.get("/health", (_req, res) => {
+    const response = {
+        status: "ok",
+        service: appConfig_js_1.appConfig.serviceName,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: shared_1.config.NODE_ENV || "development",
+    };
+    res.status(shared_1.HTTP_STATUS.OK).json(response);
+});
+/**
+ * GitHub App configuration status
+ * GET /health/github
+ */
+router.get("/health/github", (_req, res) => {
+    const privateKey = appConfig_js_1.appConfig.github.privateKey;
+    const hasValidKey = privateKey.startsWith("-----BEGIN RSA PRIVATE KEY-----") &&
+        privateKey.endsWith("-----END RSA PRIVATE KEY-----");
+    res.status(shared_1.HTTP_STATUS.OK).json({
+        appId: appConfig_js_1.appConfig.github.appId,
+        installationId: appConfig_js_1.appConfig.github.installationId || "not configured",
+        webhookSecretConfigured: !!appConfig_js_1.appConfig.github.webhookSecret,
+        privateKeyConfigured: !!privateKey,
+        privateKeyValid: hasValidKey,
+        privateKeyLength: privateKey.length,
+        privateKeyPreview: privateKey.substring(0, 40) + "...",
+    });
+});
+/**
+ * List repositories accessible to the GitHub App installation
+ * GET /health/github/repos
+ */
+router.get("/health/github/repos", async (_req, res) => {
+    const installationId = appConfig_js_1.appConfig.github.installationId;
+    if (!installationId) {
+        res.status(shared_1.HTTP_STATUS.BAD_REQUEST).json({ error: "No installation ID configured" });
+        return;
+    }
+    try {
+        const { getOctokit } = await Promise.resolve().then(() => __importStar(require("../services/githubService.js")));
+        const octokit = await getOctokit(installationId);
+        const { data } = await octokit.rest.apps.listReposAccessibleToInstallation({
+            per_page: 100,
+        });
+        res.status(shared_1.HTTP_STATUS.OK).json({
+            totalCount: data.total_count,
+            repositories: data.repositories.map((repo) => ({
+                fullName: repo.full_name,
+                private: repo.private,
+                openIssuesCount: repo.open_issues_count,
+            })),
+        });
+    }
+    catch (error) {
+        res.status(shared_1.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+            error: error instanceof Error ? error.message : "Failed to list repositories",
+        });
+    }
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL2hvbWUvY2hpbm9uc28vRG9jdW1lbnRzL2tlbmNoaS9zZXJ2aWNlcy9naXRodWItYXBwL3NyYy9yb3V0ZXMvaGVhbHRoUm91dGVzLnRzIiwibWFwcGluZ3MiOiI7QUFBQTs7OztHQUlHOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFFSCxxQ0FBOEQ7QUFDOUQsMkNBQXFEO0FBRXJELHlEQUFtRDtBQUVuRCxNQUFNLE1BQU0sR0FBRyxJQUFBLGdCQUFNLEdBQUUsQ0FBQztBQXdFTCw4QkFBWTtBQXRFL0I7OztHQUdHO0FBQ0gsTUFBTSxDQUFDLEdBQUcsQ0FBQyxTQUFTLEVBQUUsQ0FBQyxJQUFhLEVBQUUsR0FBYSxFQUFFLEVBQUU7SUFDckQsTUFBTSxRQUFRLEdBQW1CO1FBQy9CLE1BQU0sRUFBRSxJQUFJO1FBQ1osT0FBTyxFQUFFLHdCQUFTLENBQUMsV0FBVztRQUM5QixTQUFTLEVBQUUsSUFBSSxJQUFJLEVBQUUsQ0FBQyxXQUFXLEVBQUU7UUFDbkMsTUFBTSxFQUFFLE9BQU8sQ0FBQyxNQUFNLEVBQUU7UUFDeEIsV0FBVyxFQUFFLGVBQU0sQ0FBQyxRQUFRLElBQUksYUFBYTtLQUM5QyxDQUFDO0lBRUYsR0FBRyxDQUFDLE1BQU0sQ0FBQyxvQkFBVyxDQUFDLEVBQUUsQ0FBQyxDQUFDLElBQUksQ0FBQyxRQUFRLENBQUMsQ0FBQztBQUM1QyxDQUFDLENBQUMsQ0FBQztBQUVIOzs7R0FHRztBQUNILE1BQU0sQ0FBQyxHQUFHLENBQUMsZ0JBQWdCLEVBQUUsQ0FBQyxJQUFhLEVBQUUsR0FBYSxFQUFFLEVBQUU7SUFDNUQsTUFBTSxVQUFVLEdBQUcsd0JBQVMsQ0FBQyxNQUFNLENBQUMsVUFBVSxDQUFDO0lBQy9DLE1BQU0sV0FBVyxHQUNmLFVBQVUsQ0FBQyxVQUFVLENBQUMsaUNBQWlDLENBQUM7UUFDeEQsVUFBVSxDQUFDLFFBQVEsQ0FBQywrQkFBK0IsQ0FBQyxDQUFDO0lBRXZELEdBQUcsQ0FBQyxNQUFNLENBQUMsb0JBQVcsQ0FBQyxFQUFFLENBQUMsQ0FBQyxJQUFJLENBQUM7UUFDOUIsS0FBSyxFQUFFLHdCQUFTLENBQUMsTUFBTSxDQUFDLEtBQUs7UUFDN0IsY0FBYyxFQUFFLHdCQUFTLENBQUMsTUFBTSxDQUFDLGNBQWMsSUFBSSxnQkFBZ0I7UUFDbkUsdUJBQXVCLEVBQUUsQ0FBQyxDQUFDLHdCQUFTLENBQUMsTUFBTSxDQUFDLGFBQWE7UUFDekQsb0JBQW9CLEVBQUUsQ0FBQyxDQUFDLFVBQVU7UUFDbEMsZUFBZSxFQUFFLFdBQVc7UUFDNUIsZ0JBQWdCLEVBQUUsVUFBVSxDQUFDLE1BQU07UUFDbkMsaUJBQWlCLEVBQUUsVUFBVSxDQUFDLFNBQVMsQ0FBQyxDQUFDLEVBQUUsRUFBRSxDQUFDLEdBQUcsS0FBSztLQUN2RCxDQUFDLENBQUM7QUFDTCxDQUFDLENBQUMsQ0FBQztBQUVIOzs7R0FHRztBQUNILE1BQU0sQ0FBQyxHQUFHLENBQUMsc0JBQXNCLEVBQUUsS0FBSyxFQUFFLElBQWEsRUFBRSxHQUFhLEVBQUUsRUFBRTtJQUN4RSxNQUFNLGNBQWMsR0FBRyx3QkFBUyxDQUFDLE1BQU0sQ0FBQyxjQUFjLENBQUM7SUFDdkQsSUFBSSxDQUFDLGNBQWMsRUFBRSxDQUFDO1FBQ3BCLEdBQUcsQ0FBQyxNQUFNLENBQUMsb0JBQVcsQ0FBQyxXQUFXLENBQUMsQ0FBQyxJQUFJLENBQUMsRUFBRSxLQUFLLEVBQUUsK0JBQStCLEVBQUUsQ0FBQyxDQUFDO1FBQ3JGLE9BQU87SUFDVCxDQUFDO0lBRUQsSUFBSSxDQUFDO1FBQ0gsTUFBTSxFQUFFLFVBQVUsRUFBRSxHQUFHLHdEQUFhLDhCQUE4QixHQUFDLENBQUM7UUFDcEUsTUFBTSxPQUFPLEdBQUcsTUFBTSxVQUFVLENBQUMsY0FBYyxDQUFDLENBQUM7UUFDakQsTUFBTSxFQUFFLElBQUksRUFBRSxHQUFHLE1BQU0sT0FBTyxDQUFDLElBQUksQ0FBQyxJQUFJLENBQUMsaUNBQWlDLENBQUM7WUFDekUsUUFBUSxFQUFFLEdBQUc7U0FDZCxDQUFDLENBQUM7UUFFSCxHQUFHLENBQUMsTUFBTSxDQUFDLG9CQUFXLENBQUMsRUFBRSxDQUFDLENBQUMsSUFBSSxDQUFDO1lBQzlCLFVBQVUsRUFBRSxJQUFJLENBQUMsV0FBVztZQUM1QixZQUFZLEVBQUUsSUFBSSxDQUFDLFlBQVksQ0FBQyxHQUFHLENBQUMsQ0FBQyxJQUFJLEVBQUUsRUFBRSxDQUFDLENBQUM7Z0JBQzdDLFFBQVEsRUFBRSxJQUFJLENBQUMsU0FBUztnQkFDeEIsT0FBTyxFQUFFLElBQUksQ0FBQyxPQUFPO2dCQUNyQixlQUFlLEVBQUUsSUFBSSxDQUFDLGlCQUFpQjthQUN4QyxDQUFDLENBQUM7U0FDSixDQUFDLENBQUM7SUFDTCxDQUFDO0lBQUMsT0FBTyxLQUFLLEVBQUUsQ0FBQztRQUNmLEdBQUcsQ0FBQyxNQUFNLENBQUMsb0JBQVcsQ0FBQyxxQkFBcUIsQ0FBQyxDQUFDLElBQUksQ0FBQztZQUNqRCxLQUFLLEVBQUUsS0FBSyxZQUFZLEtBQUssQ0FBQyxDQUFDLENBQUMsS0FBSyxDQUFDLE9BQU8sQ0FBQyxDQUFDLENBQUMsNkJBQTZCO1NBQzlFLENBQUMsQ0FBQztJQUNMLENBQUM7QUFDSCxDQUFDLENBQUMsQ0FBQyIsIm5hbWVzIjpbXSwic291cmNlcyI6WyIvaG9tZS9jaGlub25zby9Eb2N1bWVudHMva2VuY2hpL3NlcnZpY2VzL2dpdGh1Yi1hcHAvc3JjL3JvdXRlcy9oZWFsdGhSb3V0ZXMudHMiXSwic291cmNlc0NvbnRlbnQiOlsiLyoqXG4gKiBIZWFsdGggQ2hlY2sgUm91dGVzXG4gKlxuICogUHJvdmlkZXMgaGVhbHRoIGFuZCBzdGF0dXMgZW5kcG9pbnRzIGZvciB0aGUgR2l0SHViIEFwcCBzZXJ2aWNlXG4gKi9cblxuaW1wb3J0IHsgUm91dGVyLCB0eXBlIFJlcXVlc3QsIHR5cGUgUmVzcG9uc2UgfSBmcm9tIFwiZXhwcmVzc1wiO1xuaW1wb3J0IHsgSFRUUF9TVEFUVVMsIGNvbmZpZyB9IGZyb20gXCJAa2VuY2hpL3NoYXJlZFwiO1xuaW1wb3J0IHR5cGUgeyBIZWFsdGhSZXNwb25zZSB9IGZyb20gXCIuLi90eXBlcy9naXRodWJUeXBlcy5qc1wiO1xuaW1wb3J0IHsgYXBwQ29uZmlnIH0gZnJvbSBcIi4uL2NvbmZpZy9hcHBDb25maWcuanNcIjtcblxuY29uc3Qgcm91dGVyID0gUm91dGVyKCk7XG5cbi8qKlxuICogSGVhbHRoIGNoZWNrIGVuZHBvaW50IHdpdGggZGV0YWlsZWQgc3RhdHVzXG4gKiBHRVQgL2hlYWx0aFxuICovXG5yb3V0ZXIuZ2V0KFwiL2hlYWx0aFwiLCAoX3JlcTogUmVxdWVzdCwgcmVzOiBSZXNwb25zZSkgPT4ge1xuICBjb25zdCByZXNwb25zZTogSGVhbHRoUmVzcG9uc2UgPSB7XG4gICAgc3RhdHVzOiBcIm9rXCIsXG4gICAgc2VydmljZTogYXBwQ29uZmlnLnNlcnZpY2VOYW1lLFxuICAgIHRpbWVzdGFtcDogbmV3IERhdGUoKS50b0lTT1N0cmluZygpLFxuICAgIHVwdGltZTogcHJvY2Vzcy51cHRpbWUoKSxcbiAgICBlbnZpcm9ubWVudDogY29uZmlnLk5PREVfRU5WIHx8IFwiZGV2ZWxvcG1lbnRcIixcbiAgfTtcblxuICByZXMuc3RhdHVzKEhUVFBfU1RBVFVTLk9LKS5qc29uKHJlc3BvbnNlKTtcbn0pO1xuXG4vKipcbiAqIEdpdEh1YiBBcHAgY29uZmlndXJhdGlvbiBzdGF0dXNcbiAqIEdFVCAvaGVhbHRoL2dpdGh1YlxuICovXG5yb3V0ZXIuZ2V0KFwiL2hlYWx0aC9naXRodWJcIiwgKF9yZXE6IFJlcXVlc3QsIHJlczogUmVzcG9uc2UpID0+IHtcbiAgY29uc3QgcHJpdmF0ZUtleSA9IGFwcENvbmZpZy5naXRodWIucHJpdmF0ZUtleTtcbiAgY29uc3QgaGFzVmFsaWRLZXkgPVxuICAgIHByaXZhdGVLZXkuc3RhcnRzV2l0aChcIi0tLS0tQkVHSU4gUlNBIFBSSVZBVEUgS0VZLS0tLS1cIikgJiZcbiAgICBwcml2YXRlS2V5LmVuZHNXaXRoKFwiLS0tLS1FTkQgUlNBIFBSSVZBVEUgS0VZLS0tLS1cIik7XG5cbiAgcmVzLnN0YXR1cyhIVFRQX1NUQVRVUy5PSykuanNvbih7XG4gICAgYXBwSWQ6IGFwcENvbmZpZy5naXRodWIuYXBwSWQsXG4gICAgaW5zdGFsbGF0aW9uSWQ6IGFwcENvbmZpZy5naXRodWIuaW5zdGFsbGF0aW9uSWQgfHwgXCJub3QgY29uZmlndXJlZFwiLFxuICAgIHdlYmhvb2tTZWNyZXRDb25maWd1cmVkOiAhIWFwcENvbmZpZy5naXRodWIud2ViaG9va1NlY3JldCxcbiAgICBwcml2YXRlS2V5Q29uZmlndXJlZDogISFwcml2YXRlS2V5LFxuICAgIHByaXZhdGVLZXlWYWxpZDogaGFzVmFsaWRLZXksXG4gICAgcHJpdmF0ZUtleUxlbmd0aDogcHJpdmF0ZUtleS5sZW5ndGgsXG4gICAgcHJpdmF0ZUtleVByZXZpZXc6IHByaXZhdGVLZXkuc3Vic3RyaW5nKDAsIDQwKSArIFwiLi4uXCIsXG4gIH0pO1xufSk7XG5cbi8qKlxuICogTGlzdCByZXBvc2l0b3JpZXMgYWNjZXNzaWJsZSB0byB0aGUgR2l0SHViIEFwcCBpbnN0YWxsYXRpb25cbiAqIEdFVCAvaGVhbHRoL2dpdGh1Yi9yZXBvc1xuICovXG5yb3V0ZXIuZ2V0KFwiL2hlYWx0aC9naXRodWIvcmVwb3NcIiwgYXN5bmMgKF9yZXE6IFJlcXVlc3QsIHJlczogUmVzcG9uc2UpID0+IHtcbiAgY29uc3QgaW5zdGFsbGF0aW9uSWQgPSBhcHBDb25maWcuZ2l0aHViLmluc3RhbGxhdGlvbklkO1xuICBpZiAoIWluc3RhbGxhdGlvbklkKSB7XG4gICAgcmVzLnN0YXR1cyhIVFRQX1NUQVRVUy5CQURfUkVRVUVTVCkuanNvbih7IGVycm9yOiBcIk5vIGluc3RhbGxhdGlvbiBJRCBjb25maWd1cmVkXCIgfSk7XG4gICAgcmV0dXJuO1xuICB9XG5cbiAgdHJ5IHtcbiAgICBjb25zdCB7IGdldE9jdG9raXQgfSA9IGF3YWl0IGltcG9ydChcIi4uL3NlcnZpY2VzL2dpdGh1YlNlcnZpY2UuanNcIik7XG4gICAgY29uc3Qgb2N0b2tpdCA9IGF3YWl0IGdldE9jdG9raXQoaW5zdGFsbGF0aW9uSWQpO1xuICAgIGNvbnN0IHsgZGF0YSB9ID0gYXdhaXQgb2N0b2tpdC5yZXN0LmFwcHMubGlzdFJlcG9zQWNjZXNzaWJsZVRvSW5zdGFsbGF0aW9uKHtcbiAgICAgIHBlcl9wYWdlOiAxMDAsXG4gICAgfSk7XG5cbiAgICByZXMuc3RhdHVzKEhUVFBfU1RBVFVTLk9LKS5qc29uKHtcbiAgICAgIHRvdGFsQ291bnQ6IGRhdGEudG90YWxfY291bnQsXG4gICAgICByZXBvc2l0b3JpZXM6IGRhdGEucmVwb3NpdG9yaWVzLm1hcCgocmVwbykgPT4gKHtcbiAgICAgICAgZnVsbE5hbWU6IHJlcG8uZnVsbF9uYW1lLFxuICAgICAgICBwcml2YXRlOiByZXBvLnByaXZhdGUsXG4gICAgICAgIG9wZW5Jc3N1ZXNDb3VudDogcmVwby5vcGVuX2lzc3Vlc19jb3VudCxcbiAgICAgIH0pKSxcbiAgICB9KTtcbiAgfSBjYXRjaCAoZXJyb3IpIHtcbiAgICByZXMuc3RhdHVzKEhUVFBfU1RBVFVTLklOVEVSTkFMX1NFUlZFUl9FUlJPUikuanNvbih7XG4gICAgICBlcnJvcjogZXJyb3IgaW5zdGFuY2VvZiBFcnJvciA/IGVycm9yLm1lc3NhZ2UgOiBcIkZhaWxlZCB0byBsaXN0IHJlcG9zaXRvcmllc1wiLFxuICAgIH0pO1xuICB9XG59KTtcblxuZXhwb3J0IHsgcm91dGVyIGFzIGhlYWx0aFJvdXRlcyB9O1xuIl0sInZlcnNpb24iOjN9

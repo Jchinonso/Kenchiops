@@ -84,7 +84,9 @@ const mockCreateCheckRunWithAnnotations = createCheckRunWithAnnotations as jest.
 const mockGetInstallationRepositories = getInstallationRepositories as jest.MockedFunction<
   typeof getInstallationRepositories
 >;
-const mockFormatGitHubComment = formatGitHubComment as jest.MockedFunction<typeof formatGitHubComment>;
+const mockFormatGitHubComment = formatGitHubComment as jest.MockedFunction<
+  typeof formatGitHubComment
+>;
 
 describe("API Routes", () => {
   let app: express.Application;
@@ -163,6 +165,7 @@ describe("API Routes", () => {
     });
 
     it("should reject missing repository", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { repository, ...bodyWithoutRepo } = validBody;
       const response = await request(app).post("/api/github/comment").send(bodyWithoutRepo);
 
@@ -311,6 +314,7 @@ describe("API Routes", () => {
     });
 
     it("should use default check name when not provided", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { check_name, ...bodyWithoutCheckName } = validBody;
       await request(app).post("/api/github/annotations").send(bodyWithoutCheckName);
 

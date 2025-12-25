@@ -252,11 +252,7 @@ describe("Slack Bot Formatters", () => {
     it("should handle multiple uncertainties", () => {
       const multipleUncertainties: LLMAnalysisResult = {
         ...mockAnalysis,
-        uncertainties: [
-          "Uncertainty 1",
-          "Uncertainty 2",
-          "Uncertainty 3",
-        ],
+        uncertainties: ["Uncertainty 1", "Uncertainty 2", "Uncertainty 3"],
       };
       const blocks = formatAnalysisMessage(multipleUncertainties, mockConfidence);
       const content = JSON.stringify(blocks);
@@ -577,7 +573,6 @@ describe("Slack Bot Formatters", () => {
 
     it("should handle special characters in message", () => {
       const blocks = formatProgressUpdate("action_1", "completed", "<script>alert('xss')</script>");
-      const content = JSON.stringify(blocks);
 
       expect(blocks.length).toBeGreaterThan(0);
     });

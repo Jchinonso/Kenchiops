@@ -20,7 +20,7 @@ jest.mock("@kenchi/shared", () => ({
   findBySlackWorkspace: jest.fn(),
   findAllMappingsForTenant: jest.fn(),
   getTenantStatistics: jest.fn(),
-  formatRelativeTime: jest.fn((date: Date) => "2 hours ago"),
+  formatRelativeTime: jest.fn((_date: Date) => "2 hours ago"),
 }));
 
 jest.mock("../formatters/appHomeFormatter.js", () => ({
@@ -173,11 +173,8 @@ describe("App Home Handler", () => {
 
     it("should handle case with tenant but no mappings", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
@@ -213,11 +210,8 @@ describe("App Home Handler", () => {
 
     it("should handle case with statistics but no lastAlertTime", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
@@ -325,11 +319,8 @@ describe("App Home Handler", () => {
 
     it("should handle error when getRepositoryMappings fails", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
@@ -356,11 +347,8 @@ describe("App Home Handler", () => {
 
     it("should handle error when getStatistics fails", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
@@ -400,11 +388,7 @@ describe("App Home Handler", () => {
 
     it("should execute findBySlackWorkspace with correct workspace ID", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
 
       mockClient.auth.test.mockResolvedValue({ team_id: "T999999" });
       findBySlackWorkspace.mockResolvedValue(null);
@@ -416,11 +400,8 @@ describe("App Home Handler", () => {
 
     it("should execute findAllMappingsForTenant and getTenantStatistics in parallel", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
 
       const mockTenant = {
         id: "tenant-123",
@@ -552,11 +533,8 @@ describe("App Home Handler", () => {
 
     it("should pass the same client and userId to handleAppHomeOpened", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
 
       const mockTenant = {
         id: "tenant-789",
@@ -582,11 +560,8 @@ describe("App Home Handler", () => {
   describe("edge cases", () => {
     it("should handle very large number of repository mappings", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
@@ -623,11 +598,8 @@ describe("App Home Handler", () => {
 
     it("should handle very large statistics numbers", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
@@ -678,11 +650,8 @@ describe("App Home Handler", () => {
 
     it("should handle null values in tenant object gracefully", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
@@ -714,11 +683,8 @@ describe("App Home Handler", () => {
 
     it("should handle incomplete statistics object", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {
-        findBySlackWorkspace,
-        findAllMappingsForTenant,
-        getTenantStatistics,
-      } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
+        jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 

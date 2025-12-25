@@ -6,7 +6,6 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { gatherEnrichedContext } from "../../services/context/contextAggregator.js";
 import type { CheckRunWebhook } from "../../types/githubTypes.js";
 import type {
-  EnrichedContext,
   WorkflowTiming,
   CommitInfo,
   PRMetadata,
@@ -42,20 +41,18 @@ jest.mock("@kenchi/shared", () => ({
       redactedTypes,
     };
   }),
-  deduplicateByKey: jest.fn(
-    <T>(items: T[], keyFn: (item: T) => string, limit: number): T[] => {
-      const seen = new Set<string>();
-      const result: T[] = [];
-      for (const item of items) {
-        const key = keyFn(item);
-        if (!seen.has(key) && result.length < limit) {
-          seen.add(key);
-          result.push(item);
-        }
+  deduplicateByKey: jest.fn(<T>(items: T[], keyFn: (item: T) => string, limit: number): T[] => {
+    const seen = new Set<string>();
+    const result: T[] = [];
+    for (const item of items) {
+      const key = keyFn(item);
+      if (!seen.has(key) && result.length < limit) {
+        seen.add(key);
+        result.push(item);
       }
-      return result;
     }
-  ),
+    return result;
+  }),
 }));
 
 // Mock workflow fetcher
@@ -652,9 +649,7 @@ describe("Context Aggregator", () => {
       it("should fetch phase 1 data in parallel", async () => {
         const webhook = createMockWebhook();
 
-        const startTime = Date.now();
         await gatherEnrichedContext(webhook);
-        const endTime = Date.now();
 
         // All phase 1 fetchers should be called
         expect(mockFetchWorkflowLogs).toHaveBeenCalled();
@@ -838,7 +833,7 @@ describe("Context Aggregator", () => {
           },
         });
 
-        const result = await gatherEnrichedContext(webhook);
+        await gatherEnrichedContext(webhook);
 
         // Should use the first PR
         expect(mockFetchPRDiff).toHaveBeenCalledWith(12345, "testowner", "testrepo", 123);

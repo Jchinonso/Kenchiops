@@ -1,0 +1,146 @@
+970685186ef4bfa8982202f437bec177
+"use strict";
+/**
+ * Slack webhook signature verification middleware.
+ *
+ * SECURITY CRITICAL: This middleware verifies that incoming requests
+ * are actually from Slack by validating the signature.
+ *
+ * @see https://api.slack.com/authentication/verifying-requests-from-slack
+ */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.verifySlackSignature = verifySlackSignature;
+exports.createSlackVerifier = createSlackVerifier;
+const crypto_1 = __importDefault(require("crypto"));
+const shared_1 = require("@kenchi/shared");
+/**
+ * Verifies Slack request signature using HMAC-SHA256.
+ *
+ * @param slackSignature - X-Slack-Signature header value
+ * @param slackRequestTimestamp - X-Slack-Request-Timestamp header value
+ * @param requestBody - Raw request body as string
+ * @param signingSecret - Slack signing secret
+ * @returns Verification result
+ */
+function verifySignature(slackSignature, slackRequestTimestamp, requestBody, signingSecret) {
+    // Check timestamp freshness (prevent replay attacks)
+    const timestamp = parseInt(slackRequestTimestamp, 10);
+    const currentTime = Math.floor(Date.now() / shared_1.TIME_CONSTANTS.MILLISECONDS_PER_SECOND);
+    const timeDifference = Math.abs(currentTime - timestamp);
+    if (timeDifference > shared_1.SLACK_VERIFICATION.TIMESTAMP_WINDOW_SECONDS) {
+        shared_1.logger.warn("Slack request timestamp too old", {
+            timestamp,
+            currentTime,
+            difference: timeDifference,
+        });
+        return {
+            valid: false,
+            error: "Request timestamp expired",
+        };
+    }
+    // Create signature base string: v0:timestamp:body
+    const signatureBaseString = `${shared_1.SLACK_VERIFICATION.SIGNATURE_PREFIX}:${slackRequestTimestamp}:${requestBody}`;
+    // Compute HMAC-SHA256 signature
+    const hmac = crypto_1.default.createHmac("sha256", signingSecret);
+    hmac.update(signatureBaseString);
+    const computedSignature = `${shared_1.SLACK_VERIFICATION.SIGNATURE_PREFIX}=${hmac.digest("hex")}`;
+    // Use timing-safe comparison to prevent timing attacks
+    try {
+        const isValid = crypto_1.default.timingSafeEqual(Buffer.from(slackSignature), Buffer.from(computedSignature));
+        if (!isValid) {
+            shared_1.logger.warn("Invalid Slack signature", {
+                expected: computedSignature.substring(0, shared_1.SLACK_VERIFICATION.LOG_SUBSTRING_LENGTH) + "...",
+                received: slackSignature.substring(0, shared_1.SLACK_VERIFICATION.LOG_SUBSTRING_LENGTH) + "...",
+            });
+            return {
+                valid: false,
+                error: "Invalid signature",
+            };
+        }
+        return { valid: true };
+    }
+    catch (error) {
+        // timingSafeEqual throws if buffer lengths don't match
+        shared_1.logger.warn("Slack signature verification failed", {
+            error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+            valid: false,
+            error: "Invalid signature",
+        };
+    }
+}
+/**
+ * Verifies Slack request signatures to prevent unauthorized access.
+ *
+ * Slack signs each request with HMAC-SHA256 using your signing secret.
+ * We must verify this signature to ensure the request is legitimate.
+ *
+ * @throws {Error} If signature is invalid or timestamp is stale
+ */
+function verifySlackSignature(req, res, next) {
+    const slackSignature = req.headers["x-slack-signature"];
+    const slackRequestTimestamp = req.headers["x-slack-request-timestamp"];
+    // Check required headers
+    if (!slackSignature || !slackRequestTimestamp) {
+        shared_1.logger.warn("Missing Slack signature headers", {
+            hasSignature: !!slackSignature,
+            hasTimestamp: !!slackRequestTimestamp,
+        });
+        res.status(shared_1.HTTP_STATUS.UNAUTHORIZED).json({ error: "Unauthorized" });
+        return;
+    }
+    // Get signing secret from config
+    const signingSecret = shared_1.config.SLACK_SIGNING_SECRET;
+    if (!signingSecret) {
+        shared_1.logger.error("SLACK_SIGNING_SECRET not configured");
+        res.status(shared_1.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ error: "Server configuration error" });
+        return;
+    }
+    // Reconstruct the request body as a string
+    // Note: We need the raw body for signature verification
+    const requestBody = JSON.stringify(req.body);
+    // Verify signature
+    const result = verifySignature(slackSignature, slackRequestTimestamp, requestBody, signingSecret);
+    if (!result.valid) {
+        res.status(shared_1.HTTP_STATUS.UNAUTHORIZED).json({ error: result.error || "Unauthorized" });
+        return;
+    }
+    // Signature is valid, proceed
+    shared_1.logger.debug("Slack signature verified successfully");
+    next();
+}
+/**
+ * Middleware factory that can be configured with custom signing secret.
+ * Useful for testing with mock secrets.
+ *
+ * @param signingSecret - Custom signing secret (optional, defaults to config)
+ * @returns Express middleware function
+ */
+function createSlackVerifier(signingSecret) {
+    return (req, res, next) => {
+        const secret = signingSecret || shared_1.config.SLACK_SIGNING_SECRET;
+        if (!secret) {
+            shared_1.logger.error("SLACK_SIGNING_SECRET not configured");
+            res.status(shared_1.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ error: "Server configuration error" });
+            return;
+        }
+        const slackSignature = req.headers["x-slack-signature"];
+        const slackRequestTimestamp = req.headers["x-slack-request-timestamp"];
+        if (!slackSignature || !slackRequestTimestamp) {
+            res.status(shared_1.HTTP_STATUS.UNAUTHORIZED).json({ error: "Unauthorized" });
+            return;
+        }
+        const requestBody = JSON.stringify(req.body);
+        const result = verifySignature(slackSignature, slackRequestTimestamp, requestBody, secret);
+        if (!result.valid) {
+            res.status(shared_1.HTTP_STATUS.UNAUTHORIZED).json({ error: result.error || "Unauthorized" });
+            return;
+        }
+        next();
+    };
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL2hvbWUvY2hpbm9uc28vRG9jdW1lbnRzL2tlbmNoaS9zZXJ2aWNlcy9zbGFjay1ib3Qvc3JjL21pZGRsZXdhcmUvdmVyaWZ5U2xhY2sudHMiLCJtYXBwaW5ncyI6IjtBQUFBOzs7Ozs7O0dBT0c7Ozs7O0FBNkZILG9EQXFDQztBQVNELGtEQTZCQztBQXRLRCxvREFBNEI7QUFFNUIsMkNBQWlHO0FBVWpHOzs7Ozs7OztHQVFHO0FBQ0gsU0FBUyxlQUFlLENBQ3RCLGNBQXNCLEVBQ3RCLHFCQUE2QixFQUM3QixXQUFtQixFQUNuQixhQUFxQjtJQUVyQixxREFBcUQ7SUFDckQsTUFBTSxTQUFTLEdBQUcsUUFBUSxDQUFDLHFCQUFxQixFQUFFLEVBQUUsQ0FBQyxDQUFDO0lBQ3RELE1BQU0sV0FBVyxHQUFHLElBQUksQ0FBQyxLQUFLLENBQUMsSUFBSSxDQUFDLEdBQUcsRUFBRSxHQUFHLHVCQUFjLENBQUMsdUJBQXVCLENBQUMsQ0FBQztJQUNwRixNQUFNLGNBQWMsR0FBRyxJQUFJLENBQUMsR0FBRyxDQUFDLFdBQVcsR0FBRyxTQUFTLENBQUMsQ0FBQztJQUV6RCxJQUFJLGNBQWMsR0FBRywyQkFBa0IsQ0FBQyx3QkFBd0IsRUFBRSxDQUFDO1FBQ2pFLGVBQU0sQ0FBQyxJQUFJLENBQUMsaUNBQWlDLEVBQUU7WUFDN0MsU0FBUztZQUNULFdBQVc7WUFDWCxVQUFVLEVBQUUsY0FBYztTQUMzQixDQUFDLENBQUM7UUFDSCxPQUFPO1lBQ0wsS0FBSyxFQUFFLEtBQUs7WUFDWixLQUFLLEVBQUUsMkJBQTJCO1NBQ25DLENBQUM7SUFDSixDQUFDO0lBRUQsa0RBQWtEO0lBQ2xELE1BQU0sbUJBQW1CLEdBQUcsR0FBRywyQkFBa0IsQ0FBQyxnQkFBZ0IsSUFBSSxxQkFBcUIsSUFBSSxXQUFXLEVBQUUsQ0FBQztJQUU3RyxnQ0FBZ0M7SUFDaEMsTUFBTSxJQUFJLEdBQUcsZ0JBQU0sQ0FBQyxVQUFVLENBQUMsUUFBUSxFQUFFLGFBQWEsQ0FBQyxDQUFDO0lBQ3hELElBQUksQ0FBQyxNQUFNLENB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QUVELE1BQU0sV0FBVyxHQUFHLElBQUksQ0FBQyxTQUFTLENBQUMsR0FBRyxDQUFDLElBQUksQ0FBQyxDQUFDO1FBQzdDLE1BQU0sTUFBTSxHQUFHLGVBQWUsQ0FBQyxjQUFjLEVBQUUscUJBQXFCLEVBQUUsV0FBVyxFQUFFLE1BQU0sQ0FBQyxDQUFDO1FBRTNGLElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxFQUFFLENBQUM7WUFDbEIsR0FBRyxDQUFDLE1BQU0sQ0FBQyxvQkFBVyxDQUFDLFlBQVksQ0FBQyxDQUFDLElBQUksQ0FBQyxFQUFFLEtBQUssRUFBRSxNQUFNLENBQUMsS0FBSyxJQUFJLGNBQWMsRUFBRSxDQUFDLENBQUM7WUFDckYsT0FBTztRQUNULENBQUM7UUFFRCxJQUFJLEVBQUUsQ0FBQztJQUNULENBQUMsQ0FBQztBQUNKLENBQUMiLCJuYW1lcyI6W10sInNvdXJjZXMiOlsiL2hvbWUvY2hpbm9uc28vRG9jdW1lbnRzL2tlbmNoaS9zZXJ2aWNlcy9zbGFjay1ib3Qvc3JjL21pZGRsZXdhcmUvdmVyaWZ5U2xhY2sudHMiXSwic291cmNlc0NvbnRlbnQiOlsiLyoqXG4gKiBTbGFjayB3ZWJob29rIHNpZ25hdHVyZSB2ZXJpZmljYXRpb24gbWlkZGxld2FyZS5cbiAqXG4gKiBTRUNVUklUWSBDUklUSUNBTDogVGhpcyBtaWRkbGV3YXJlIHZlcmlmaWVzIHRoYXQgaW5jb21pbmcgcmVxdWVzdHNcbiAqIGFyZSBhY3R1YWxseSBmcm9tIFNsYWNrIGJ5IHZhbGlkYXRpbmcgdGhlIHNpZ25hdHVyZS5cbiAqXG4gKiBAc2VlIGh0dHBzOi8vYXBpLnNsYWNrLmNvbS9hdXRoZW50aWNhdGlvbi92ZXJpZnlpbmctcmVxdWVzdHMtZnJvbS1zbGFja1xuICovXG5cbmltcG9ydCBjcnlwdG8gZnJvbSBcImNyeXB0b1wiO1xuaW1wb3J0IHR5cGUgeyBSZXF1ZXN0LCBSZXNwb25zZSwgTmV4dEZ1bmN0aW9uIH0gZnJvbSBcImV4cHJlc3NcIjtcbmltcG9ydCB7IGNvbmZpZywgbG9nZ2VyLCBIVFRQX1NUQVRVUywgU0xBQ0tfVkVSSUZJQ0FUSU9OLCBUSU1FX0NPTlNUQU5UUyB9IGZyb20gXCJAa2VuY2hpL3NoYXJlZFwiO1xuXG4vKipcbiAqIFZlcmlmaWNhdGlvbiByZXN1bHRcbiAqL1xuaW50ZXJmYWNlIFZlcmlmaWNhdGlvblJlc3VsdCB7XG4gIHJlYWRvbmx5IHZhbGlkOiBib29sZWFuO1xuICByZWFkb25seSBlcnJvcj86IHN0cmluZztcbn1cblxuLyoqXG4gKiBWZXJpZmllcyBTbGFjayByZXF1ZXN0IHNpZ25hdHVyZSB1c2luZyBITUFDLVNIQTI1Ni5cbiAqXG4gKiBAcGFyYW0gc2xhY2tTaWduYXR1cmUgLSBYLVNsYWNrLVNpZ25hdHVyZSBoZWFkZXIgdmFsdWVcbiAqIEBwYXJhbSBzbGFja1JlcXVlc3RUaW1lc3RhbXAgLSBYLVNsYWNrLVJlcXVlc3QtVGltZXN0YW1wIGhlYWRlciB2YWx1ZVxuICogQHBhcmFtIHJlcXVlc3RCb2R5IC0gUmF3IHJlcXVlc3QgYm9keSBhcyBzdHJpbmdcbiAqIEBwYXJhbSBzaWduaW5nU2VjcmV0IC0gU2xhY2sgc2lnbmluZyBzZWNyZXRcbiAqIEByZXR1cm5zIFZlcmlmaWNhdGlvbiByZXN1bHRcbiAqL1xuZnVuY3Rpb24gdmVyaWZ5U2lnbmF0dXJlKFxuICBzbGFja1NpZ25hdHVyZTogc3RyaW5nLFxuICBzbGFja1JlcXVlc3RUaW1lc3RhbXA6IHN0cmluZyxcbiAgcmVxdWVzdEJvZHk6IHN0cmluZyxcbiAgc2lnbmluZ1NlY3JldDogc3RyaW5nXG4pOiBWZXJpZmljYXRpb25SZXN1bHQge1xuICAvLyBDaGVjayB0aW1lc3RhbXAgZnJlc2huZXNzIChwcmV2ZW50IHJlcGxheSBhdHRhY2tzKVxuICBjb25zdCB0aW1lc3RhbXAgPSBwYXJzZUludChzbGFja1JlcXVlc3RUaW1lc3RhbXAsIDEwKTtcbiAgY29uc3QgY3VycmVudFRpbWUgPSBNYXRoLmZsb29yKERhdGUubm93KCkgLyBUSU1FX0NPTlNUQU5UUy5NSUxMSVNFQ09ORFNfUEVSX1NFQ09ORCk7XG4gIGNvbnN0IHRpbWVEaWZmZXJlbmNlID0gTWF0aC5hYnMoY3VycmVudFRpbWUgLSB0aW1lc3RhbXApO1xuXG4gIGlmICh0aW1lRGlmZmVyZW5jZSA+IFNMQUNLX1ZFUklGSUNBVElPTi5USU1FU1RBTVBfV0lORE9XX1NFQ09ORFMpIHtcbiAgICBsb2dnZXIud2FybihcIlNsYWNrIHJlcXVlc3QgdGltZXN0YW1wIHRvbyBvbGRcIiwge1xuICAgICAgdGltZXN0YW1wLFxuICAgICAgY3VycmVudFRpbWUsXG4gICAgICBkaWZmZXJlbmNlOiB0aW1lRGlmZmVyZW5jZSxcbiAgICB9KTtcbiAgICByZXR1cm4ge1xuICAgICAgdmFsaWQ6IGZhbHNlLFxuICAgICAgZXJyb3I6IFwiUmVxdWVzdCB0aW1lc3RhbXAgZXhwaXJlZFwiLFxuICAgIH07XG4gIH1cblxuICAvLyBDcmVhdGUgc2lnbmF0dXJlIGJhc2Ugc3RyaW5nOiB2MDp0aW1lc3RhbXA6Ym9keVxuICBjb25zdCBzaWduYXR1cmVCYXNlU3RyaW5nID0gYCR7U0xBQ0tfVkVSSUZJQ0FUSU9OLlNJR05BVFVSRV9QUkVGSVh9OiR7c2xhY2tSZXF1ZXN0VGltZXN0YW1wfToke3JlcXVlc3RCb2R5fWA7XG5cbiAgLy8gQ29tcHV0ZSBITUFDLVNIQTI1NiBzaWduYXR1cmVcbiAgY29uc3QgaG1hYyA9IGNyeXB0by5jcmVhdGVIbWFjKFwic2hhMjU2XCIsIHNpZ25pbmdTZWNyZXQpO1xuICBobWFjLnVwZGF0ZShzaWduYXR1cmVCYXNlU3RyaW5nKTtcbiAgY29uc3QgY29tcHV0ZWRTaWduYXR1cmUgPSBgJHtTTEFDS19WRVJJRklDQVRJT04uU0lHTkFUVVJFX1BSRUZJWH09JHtobWFjLmRpZ2VzdChcImhleFwiKX1gO1xuXG4gIC8vIFVzZSB0aW1pbmctc2FmZSBjb21wYXJpc29uIHRvIHByZXZlbnQgdGltaW5nIGF0dGFja3NcbiAgdHJ5IHtcbiAgICBjb25zdCBpc1ZhbGlkID0gY3J5cHRvLnRpbWluZ1NhZmVFcXVhbChcbiAgICAgIEJ1ZmZlci5mcm9tKHNsYWNrU2lnbmF0dXJlKSxcbiAgICAgIEJ1ZmZlci5mcm9tKGNvbXB1dGVkU2lnbmF0dXJlKVxuICAgICk7XG5cbiAgICBpZiAoIWlzVmFsaWQpIHtcbiAgICAgIGxvZ2dlci53YXJuKFwiSW52YWxpZCBTbGFjayBzaWduYXR1cmVcIiwge1xuICAgICAgICBleHBlY3RlZDogY29tcHV0ZWRTaWduYXR1cmUuc3Vic3RyaW5nKDAsIFNMQUNLX1ZFUklGSUNBVElPTi5MT0dfU1VCU1RSSU5HX0xFTkdUSCkgKyBcIi4uLlwiLFxuICAgICAgICByZWNlaXZlZDogc2xhY2tTaWduYXR1cmUuc3Vic3RyaW5nKDAsIFNMQUNLX1ZFUklGSUNBVElPTi5MT0dfU1VCU1RSSU5HX0xFTkdUSCkgKyBcIi4uLlwiLFxuICAgICAgfSk7XG4gICAgICByZXR1cm4ge1xuICAgICAgICB2YWxpZDogZmFsc2UsXG4gICAgICAgIGVycm9yOiBcIkludmFsaWQgc2lnbmF0dXJlXCIsXG4gICAgICB9O1xuICAgIH1cblxuICAgIHJldHVybiB7IHZhbGlkOiB0cnVlIH07XG4gIH0gY2F0Y2ggKGVycm9yKSB7XG4gICAgLy8gdGltaW5nU2FmZUVxdWFsIHRocm93cyBpZiBidWZmZXIgbGVuZ3RocyBkb24ndCBtYXRjaFxuICAgIGxvZ2dlci53YXJuKFwiU2xhY2sgc2lnbmF0dXJlIHZlcmlmaWNhdGlvbiBmYWlsZWRcIiwge1xuICAgICAgZXJyb3I6IGVycm9yIGluc3RhbmNlb2YgRXJyb3IgPyBlcnJvci5tZXNzYWdlIDogXCJVbmtub3duIGVycm9yXCIsXG4gICAgfSk7XG4gICAgcmV0dXJuIHtcbiAgICAgIHZhbGlkOiBmYWxzZSxcbiAgICAgIGVycm9yOiBcIkludmFsaWQgc2lnbmF0dXJlXCIsXG4gICAgfTtcbiAgfVxufVxuXG4vKipcbiAqIFZlcmlmaWVzIFNsYWNrIHJlcXVlc3Qgc2lnbmF0dXJlcyB0byBwcmV2ZW50IHVuYXV0aG9yaXplZCBhY2Nlc3MuXG4gKlxuICogU2xhY2sgc2lnbnMgZWFjaCByZXF1ZXN0IHdpdGggSE1BQy1TSEEyNTYgdXNpbmcgeW91ciBzaWduaW5nIHNlY3JldC5cbiAqIFdlIG11c3QgdmVyaWZ5IHRoaXMgc2lnbmF0dXJlIHRvIGVuc3VyZSB0aGUgcmVxdWVzdCBpcyBsZWdpdGltYXRlLlxuICpcbiAqIEB0aHJvd3Mge0Vycm9yfSBJZiBzaWduYXR1cmUgaXMgaW52YWxpZCBvciB0aW1lc3RhbXAgaXMgc3RhbGVcbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHZlcmlmeVNsYWNrU2lnbmF0dXJlKHJlcTogUmVxdWVzdCwgcmVzOiBSZXNwb25zZSwgbmV4dDogTmV4dEZ1bmN0aW9uKTogdm9pZCB7XG4gIGNvbnN0IHNsYWNrU2lnbmF0dXJlID0gcmVxLmhlYWRlcnNbXCJ4LXNsYWNrLXNpZ25hdHVyZVwiXSBhcyBzdHJpbmcgfCB1bmRlZmluZWQ7XG4gIGNvbnN0IHNsYWNrUmVxdWVzdFRpbWVzdGFtcCA9IHJlcS5oZWFkZXJzW1wieC1zbGFjay1yZXF1ZXN0LXRpbWVzdGFtcFwiXSBhcyBzdHJpbmcgfCB1bmRlZmluZWQ7XG5cbiAgLy8gQ2hlY2sgcmVxdWlyZWQgaGVhZGVyc1xuICBpZiAoIXNsYWNrU2lnbmF0dXJlIHx8ICFzbGFja1JlcXVlc3RUaW1lc3RhbXApIHtcbiAgICBsb2dnZXIud2FybihcIk1pc3NpbmcgU2xhY2sgc2lnbmF0dXJlIGhlYWRlcnNcIiwge1xuICAgICAgaGFzU2lnbmF0dXJlOiAhIXNsYWNrU2lnbmF0dXJlLFxuICAgICAgaGFzVGltZXN0YW1wOiAhIXNsYWNrUmVxdWVzdFRpbWVzdGFtcCxcbiAgICB9KTtcbiAgICByZXMuc3RhdHVzKEhUVFBfU1RBVFVTLlVOQVVUSE9SSVpFRCkuanNvbih7IGVycm9yOiBcIlVuYXV0aG9yaXplZFwiIH0pO1xuICAgIHJldHVybjtcbiAgfVxuXG4gIC8vIEdldCBzaWduaW5nIHNlY3JldCBmcm9tIGNvbmZpZ1xuICBjb25zdCBzaWduaW5nU2VjcmV0ID0gY29uZmlnLlNMQUNLX1NJR05JTkdfU0VDUkVUO1xuICBpZiAoIXNpZ25pbmdTZWNyZXQpIHtcbiAgICBsb2dnZXIuZXJyb3IoXCJTTEFDS19TSUdOSU5HX1NFQ1JFVCBub3QgY29uZmlndXJlZFwiKTtcbiAgICByZXMuc3RhdHVzKEhUVFBfU1RBVFVTLklOVEVSTkFMX1NFUlZFUl9FUlJPUikuanNvbih7IGVycm9yOiBcIlNlcnZlciBjb25maWd1cmF0aW9uIGVycm9yXCIgfSk7XG4gICAgcmV0dXJuO1xuICB9XG5cbiAgLy8gUmVjb25zdHJ1Y3QgdGhlIHJlcXVlc3QgYm9keSBhcyBhIHN0cmluZ1xuICAvLyBOb3RlOiBXZSBuZWVkIHRoZSByYXcgYm9keSBmb3Igc2lnbmF0dXJlIHZlcmlmaWNhdGlvblxuICBjb25zdCByZXF1ZXN0Qm9keSA9IEpTT04uc3RyaW5naWZ5KHJlcS5ib2R5KTtcblxuICAvLyBWZXJpZnkgc2lnbmF0dXJlXG4gIGNvbnN0IHJlc3VsdCA9IHZlcmlmeVNpZ25hdHVyZShzbGFja1NpZ25hdHVyZSwgc2xhY2tSZXF1ZXN0VGltZXN0YW1wLCByZXF1ZXN0Qm9keSwgc2lnbmluZ1NlY3JldCk7XG5cbiAgaWYgKCFyZXN1bHQudmFsaWQpIHtcbiAgICByZXMuc3RhdHVzKEhUVFBfU1RBVFVTLlVOQVVUSE9SSVpFRCkuanNvbih7IGVycm9yOiByZXN1bHQuZXJyb3IgfHwgXCJVbmF1dGhvcml6ZWRcIiB9KTtcbiAgICByZXR1cm47XG4gIH1cblxuICAvLyBTaWduYXR1cmUgaXMgdmFsaWQsIHByb2NlZWRcbiAgbG9nZ2VyLmRlYnVnKFwiU2xhY2sgc2lnbmF0dXJlIHZlcmlmaWVkIHN1Y2Nlc3NmdWxseVwiKTtcbiAgbmV4dCgpO1xufVxuXG4vKipcbiAqIE1pZGRsZXdhcmUgZmFjdG9yeSB0aGF0IGNhbiBiZSBjb25maWd1cmVkIHdpdGggY3VzdG9tIHNpZ25pbmcgc2VjcmV0LlxuICogVXNlZnVsIGZvciB0ZXN0aW5nIHdpdGggbW9jayBzZWNyZXRzLlxuICpcbiAqIEBwYXJhbSBzaWduaW5nU2VjcmV0IC0gQ3VzdG9tIHNpZ25pbmcgc2VjcmV0IChvcHRpb25hbCwgZGVmYXVsdHMgdG8gY29uZmlnKVxuICogQHJldHVybnMgRXhwcmVzcyBtaWRkbGV3YXJlIGZ1bmN0aW9uXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBjcmVhdGVTbGFja1ZlcmlmaWVyKFxuICBzaWduaW5nU2VjcmV0Pzogc3RyaW5nXG4pOiAocmVxOiBSZXF1ZXN0LCByZXM6IFJlc3BvbnNlLCBuZXh0OiBOZXh0RnVuY3Rpb24pID0+IHZvaWQge1xuICByZXR1cm4gKHJlcTogUmVxdWVzdCwgcmVzOiBSZXNwb25zZSwgbmV4dDogTmV4dEZ1bmN0aW9uKSA9PiB7XG4gICAgY29uc3Qgc2VjcmV0ID0gc2lnbmluZ1NlY3JldCB8fCBjb25maWcuU0xBQ0tfU0lHTklOR19TRUNSRVQ7XG4gICAgaWYgKCFzZWNyZXQpIHtcbiAgICAgIGxvZ2dlci5lcnJvcihcIlNMQUNLX1NJR05JTkdfU0VDUkVUIG5vdCBjb25maWd1cmVkXCIpO1xuICAgICAgcmVzLnN0YXR1cyhIVFRQX1NUQVRVUy5JTlRFUk5BTF9TRVJWRVJfRVJST1IpLmpzb24oeyBlcnJvcjogXCJTZXJ2ZXIgY29uZmlndXJhdGlvbiBlcnJvclwiIH0pO1xuICAgICAgcmV0dXJuO1xuICAgIH1cblxuICAgIGNvbnN0IHNsYWNrU2lnbmF0dXJlID0gcmVxLmhlYWRlcnNbXCJ4LXNsYWNrLXNpZ25hdHVyZVwiXSBhcyBzdHJpbmcgfCB1bmRlZmluZWQ7XG4gICAgY29uc3Qgc2xhY2tSZXF1ZXN0VGltZXN0YW1wID0gcmVxLmhlYWRlcnNbXCJ4LXNsYWNrLXJlcXVlc3QtdGltZXN0YW1wXCJdIGFzIHN0cmluZyB8IHVuZGVmaW5lZDtcblxuICAgIGlmICghc2xhY2tTaWduYXR1cmUgfHwgIXNsYWNrUmVxdWVzdFRpbWVzdGFtcCkge1xuICAgICAgcmVzLnN0YXR1cyhIVFRQX1NUQVRVUy5VTkFVVEhPUklaRUQpLmpzb24oeyBlcnJvcjogXCJVbmF1dGhvcml6ZWRcIiB9KTtcbiAgICAgIHJldHVybjtcbiAgICB9XG5cbiAgICBjb25zdCByZXF1ZXN0Qm9keSA9IEpTT04uc3RyaW5naWZ5KHJlcS5ib2R5KTtcbiAgICBjb25zdCByZXN1bHQgPSB2ZXJpZnlTaWduYXR1cmUoc2xhY2tTaWduYXR1cmUsIHNsYWNrUmVxdWVzdFRpbWVzdGFtcCwgcmVxdWVzdEJvZHksIHNlY3JldCk7XG5cbiAgICBpZiAoIXJlc3VsdC52YWxpZCkge1xuICAgICAgcmVzLnN0YXR1cyhIVFRQX1NUQVRVUy5VTkFVVEhPUklaRUQpLmpzb24oeyBlcnJvcjogcmVzdWx0LmVycm9yIHx8IFwiVW5hdXRob3JpemVkXCIgfSk7XG4gICAgICByZXR1cm47XG4gICAgfVxuXG4gICAgbmV4dCgpO1xuICB9O1xufVxuIl0sInZlcnNpb24iOjN9

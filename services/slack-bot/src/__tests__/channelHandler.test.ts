@@ -9,7 +9,6 @@ import {
   getGitHubInstallUrl,
   buildRepoConfiguredMessage,
 } from "../handlers/channelHandler.js";
-import type { SlackClient } from "../services/channelService.js";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -139,7 +138,7 @@ describe("Channel Handler", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { fetchInstallationRepositories, getMappedRepositories } = jest.requireMock(
         "@kenchi/shared"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ) as any;
 
       fetchInstallationRepositories.mockResolvedValue([
@@ -235,7 +234,7 @@ describe("Channel Handler", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { findBySlackWorkspace, fetchInstallationRepositories } = jest.requireMock(
         "@kenchi/shared"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ) as any;
 
       findBySlackWorkspace.mockResolvedValue({
@@ -243,9 +242,7 @@ describe("Channel Handler", () => {
         githubInstallationId: 12345,
       });
 
-      fetchInstallationRepositories.mockResolvedValue([
-        { fullName: "owner/repo1", name: "repo1" },
-      ]);
+      fetchInstallationRepositories.mockResolvedValue([{ fullName: "owner/repo1", name: "repo1" }]);
 
       await handleBotJoinedChannel(mockClient, "C123456", "U123456");
 
@@ -282,7 +279,7 @@ describe("Channel Handler", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { findBySlackWorkspace, fetchInstallationRepositories } = jest.requireMock(
         "@kenchi/shared"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ) as any;
 
       findBySlackWorkspace.mockResolvedValue({
@@ -290,9 +287,7 @@ describe("Channel Handler", () => {
         githubInstallationId: 12345,
       });
 
-      fetchInstallationRepositories.mockResolvedValue([
-        { fullName: "owner/repo1", name: "repo1" },
-      ]);
+      fetchInstallationRepositories.mockResolvedValue([{ fullName: "owner/repo1", name: "repo1" }]);
 
       await handleBotJoinedChannel(mockClient, "C123456", "U123456", "trigger-123");
 
@@ -323,9 +318,7 @@ describe("Channel Handler", () => {
     it("should handle errors gracefully", async () => {
       mockClient.auth.test.mockRejectedValue(new Error("Auth failed"));
 
-      await expect(
-        handleBotJoinedChannel(mockClient, "C123456", "U123456")
-      ).resolves.not.toThrow();
+      await expect(handleBotJoinedChannel(mockClient, "C123456", "U123456")).resolves.not.toThrow();
     });
 
     it("should log error when handler fails", async () => {

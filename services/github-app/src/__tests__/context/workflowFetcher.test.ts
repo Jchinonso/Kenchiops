@@ -3,11 +3,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
-import {
-  fetchWorkflowLogs,
-  fetchWorkflowTiming,
-} from "../../services/context/workflowFetcher.js";
-import type { WorkflowTiming } from "../../services/context/types.js";
+import { fetchWorkflowLogs, fetchWorkflowTiming } from "../../services/context/workflowFetcher.js";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -56,7 +52,9 @@ jest.mock("../../services/githubService.js", () => ({
 import { getOctokit } from "../../services/githubService.js";
 import { truncateWithContext } from "../../services/context/logParser.js";
 const mockGetOctokit = getOctokit as jest.MockedFunction<typeof getOctokit>;
-const mockTruncateWithContext = truncateWithContext as jest.MockedFunction<typeof truncateWithContext>;
+const mockTruncateWithContext = truncateWithContext as jest.MockedFunction<
+  typeof truncateWithContext
+>;
 
 describe("Workflow Fetcher Service", () => {
   // Test fixtures
@@ -250,9 +248,7 @@ describe("Workflow Fetcher Service", () => {
     });
 
     it("should return null when log download fails", async () => {
-      mockDownloadJobLogsForWorkflowRun.mockRejectedValue(
-        new Error("Logs not available")
-      );
+      mockDownloadJobLogsForWorkflowRun.mockRejectedValue(new Error("Logs not available"));
 
       const logs = await fetchWorkflowLogs(mockInstallationId, mockOwner, mockRepo, mockHeadSha);
 
@@ -260,9 +256,7 @@ describe("Workflow Fetcher Service", () => {
     });
 
     it("should return null when workflow runs API fails", async () => {
-      mockListWorkflowRunsForRepo.mockRejectedValue(
-        new Error("GitHub API error")
-      );
+      mockListWorkflowRunsForRepo.mockRejectedValue(new Error("GitHub API error"));
 
       const logs = await fetchWorkflowLogs(mockInstallationId, mockOwner, mockRepo, mockHeadSha);
 
@@ -270,9 +264,7 @@ describe("Workflow Fetcher Service", () => {
     });
 
     it("should return null when jobs API fails", async () => {
-      mockListJobsForWorkflowRun.mockRejectedValue(
-        new Error("Jobs API error")
-      );
+      mockListJobsForWorkflowRun.mockRejectedValue(new Error("Jobs API error"));
 
       const logs = await fetchWorkflowLogs(mockInstallationId, mockOwner, mockRepo, mockHeadSha);
 
@@ -285,12 +277,7 @@ describe("Workflow Fetcher Service", () => {
           .mockRejectedValueOnce(new Error("DNS lookup failed: EAI_AGAIN"))
           .mockResolvedValueOnce({ data: "Logs after retry" } as any);
 
-        const promise = fetchWorkflowLogs(
-          mockInstallationId,
-          mockOwner,
-          mockRepo,
-          mockHeadSha
-        );
+        const promise = fetchWorkflowLogs(mockInstallationId, mockOwner, mockRepo, mockHeadSha);
 
         // Run timers for retry delays
         await jest.runAllTimersAsync();
@@ -305,12 +292,7 @@ describe("Workflow Fetcher Service", () => {
           .mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND"))
           .mockResolvedValueOnce({ data: "Logs after retry" } as any);
 
-        const promise = fetchWorkflowLogs(
-          mockInstallationId,
-          mockOwner,
-          mockRepo,
-          mockHeadSha
-        );
+        const promise = fetchWorkflowLogs(mockInstallationId, mockOwner, mockRepo, mockHeadSha);
 
         await jest.runAllTimersAsync();
         const logs = await promise;
@@ -335,9 +317,7 @@ describe("Workflow Fetcher Service", () => {
       });
 
       it("should stop retrying after max retries", async () => {
-        mockDownloadJobLogsForWorkflowRun.mockRejectedValue(
-          new Error("EAI_AGAIN")
-        );
+        mockDownloadJobLogsForWorkflowRun.mockRejectedValue(new Error("EAI_AGAIN"));
 
         const promise = fetchWorkflowLogs(mockInstallationId, mockOwner, mockRepo, mockHeadSha);
 
@@ -349,16 +329,9 @@ describe("Workflow Fetcher Service", () => {
       });
 
       it("should not retry on non-DNS errors", async () => {
-        mockDownloadJobLogsForWorkflowRun.mockRejectedValue(
-          new Error("404 Not Found")
-        );
+        mockDownloadJobLogsForWorkflowRun.mockRejectedValue(new Error("404 Not Found"));
 
-        const logs = await fetchWorkflowLogs(
-          mockInstallationId,
-          mockOwner,
-          mockRepo,
-          mockHeadSha
-        );
+        const logs = await fetchWorkflowLogs(mockInstallationId, mockOwner, mockRepo, mockHeadSha);
 
         expect(mockDownloadJobLogsForWorkflowRun).toHaveBeenCalledTimes(1);
         expect(logs).toBeNull();
@@ -582,9 +555,7 @@ describe("Workflow Fetcher Service", () => {
     });
 
     it("should return null when API call fails", async () => {
-      mockListWorkflowRunsForRepo.mockRejectedValue(
-        new Error("GitHub API error")
-      );
+      mockListWorkflowRunsForRepo.mockRejectedValue(new Error("GitHub API error"));
 
       const timing = await fetchWorkflowTiming(
         mockInstallationId,
@@ -597,9 +568,7 @@ describe("Workflow Fetcher Service", () => {
     });
 
     it("should return null when jobs API fails", async () => {
-      mockListJobsForWorkflowRun.mockRejectedValue(
-        new Error("Jobs API error")
-      );
+      mockListJobsForWorkflowRun.mockRejectedValue(new Error("Jobs API error"));
 
       const timing = await fetchWorkflowTiming(
         mockInstallationId,

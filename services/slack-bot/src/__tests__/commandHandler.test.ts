@@ -4,7 +4,6 @@
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import type { SlashCommand, RespondFn } from "@slack/bolt";
-import type { WebClient } from "@slack/web-api";
 import { handleKenchiCommand } from "../handlers/commandHandler.js";
 
 // Mock dependencies
@@ -69,7 +68,10 @@ jest.mock("../services/analysisService.js", () => ({
 }));
 
 jest.mock("../handlers/channelHandler.js", () => ({
-  getGitHubInstallUrl: jest.fn((workspaceId) => `https://github.com/apps/kenchi-test-app/installations/new?state=${workspaceId}`),
+  getGitHubInstallUrl: jest.fn(
+    (workspaceId) =>
+      `https://github.com/apps/kenchi-test-app/installations/new?state=${workspaceId}`
+  ),
   buildRepoSelectModal: jest.fn(() => ({
     type: "modal",
     callback_id: "repo_select_modal",
@@ -556,7 +558,9 @@ describe("Command Handler", () => {
 
     it("should open modal with configured repositories", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
 
       findBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
@@ -591,7 +595,9 @@ describe("Command Handler", () => {
 
     it("should open no-configured-repos modal when no mappings exist", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant } = jest.requireMock("@kenchi/shared") as any;
+      const { findBySlackWorkspace, findAllMappingsForTenant } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
 
       findBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",

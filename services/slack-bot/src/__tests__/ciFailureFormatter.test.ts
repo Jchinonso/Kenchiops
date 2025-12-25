@@ -301,9 +301,7 @@ describe("CI Failure Formatter", () => {
 
     it("should include errors section when annotations present", () => {
       const analysis = createMockAnalysis({
-        annotations: [
-          { path: "file.ts", startLine: 1, message: "Error 1", level: "failure" },
-        ],
+        annotations: [{ path: "file.ts", startLine: 1, message: "Error 1", level: "failure" }],
       });
       const blocks = formatCIFailureBlocks(analysis);
       const content = JSON.stringify(blocks);
@@ -549,7 +547,6 @@ describe("CI Failure Formatter", () => {
       });
 
       const blocks = formatCIFailureBlocks(analysis);
-      const content = JSON.stringify(blocks);
       // Should still render
       expect(blocks.length).toBeGreaterThan(0);
     });
@@ -643,9 +640,7 @@ describe("CI Failure Formatter", () => {
 
     it("should handle single dependency change", () => {
       const analysis = createMockAnalysis({
-        dependencyChanges: [
-          { name: "lodash", type: "added", newVersion: "4.17.21" },
-        ],
+        dependencyChanges: [{ name: "lodash", type: "added", newVersion: "4.17.21" }],
       });
 
       const blocks = formatCIFailureBlocks(analysis);
@@ -655,9 +650,7 @@ describe("CI Failure Formatter", () => {
 
     it("should handle actions with empty descriptions", () => {
       const analysis = createMockAnalysis({
-        recommended_actions: [
-          { description: "", priority: "high" },
-        ],
+        recommended_actions: [{ description: "", priority: "high" }],
       });
 
       const blocks = formatCIFailureBlocks(analysis);
@@ -666,9 +659,7 @@ describe("CI Failure Formatter", () => {
 
     it("should handle actions with unknown priority", () => {
       const analysis = createMockAnalysis({
-        recommended_actions: [
-          { description: "Do something", priority: "unknown_priority" },
-        ],
+        recommended_actions: [{ description: "Do something", priority: "unknown_priority" }],
       });
 
       const blocks = formatCIFailureBlocks(analysis);

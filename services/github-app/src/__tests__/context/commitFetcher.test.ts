@@ -8,7 +8,6 @@ import {
   fetchCommitInfo,
   fetchRepositoryMetadata,
 } from "../../services/context/commitFetcher.js";
-import type { SourceFile, CommitInfo, RepositoryMetadata } from "../../services/context/types.js";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -55,7 +54,9 @@ jest.mock("../../services/githubService.js", () => ({
 
 // Import the mocked function to access it in tests
 import { truncateWithContext } from "../../services/context/logParser.js";
-const mockTruncateWithContext = truncateWithContext as jest.MockedFunction<typeof truncateWithContext>;
+const mockTruncateWithContext = truncateWithContext as jest.MockedFunction<
+  typeof truncateWithContext
+>;
 
 describe("Commit Fetcher", () => {
   const installationId = 12345;
@@ -415,8 +416,6 @@ line 25`;
     });
 
     it("should handle missing author date (fallback to current time)", async () => {
-      const beforeCall = new Date().toISOString();
-
       mockGetCommit.mockResolvedValue({
         data: {
           sha,
@@ -438,8 +437,6 @@ line 25`;
       });
 
       const result = await fetchCommitInfo(installationId, owner, repo, sha);
-
-      const afterCall = new Date().toISOString();
 
       expect(result?.timestamp).toBeDefined();
       // Timestamp should be between before and after the call

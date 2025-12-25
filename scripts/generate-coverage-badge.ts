@@ -45,9 +45,6 @@ const main = (): void => {
   const { lines, statements, functions, branches } = summary.total;
 
   const coverageBadge = generateBadgeUrl("coverage", lines.pct);
-  const statementsBadge = generateBadgeUrl("statements", statements.pct);
-  const branchesBadge = generateBadgeUrl("branches", branches.pct);
-  const functionsBadge = generateBadgeUrl("functions", functions.pct);
 
   console.log("Coverage Summary:");
   console.log(`  Lines:      ${lines.pct.toFixed(1)}%`);
@@ -67,7 +64,7 @@ const main = (): void => {
   let readme = readFileSync(README_PATH, "utf-8");
 
   // Pattern to match existing coverage badge line
-  const coverageBadgePattern = /\[!\[Coverage\]\([^\)]+\)\]\([^\)]*\)/;
+  const coverageBadgePattern = /\[!\[Coverage\]\([^)]+\)\]\([^)]*\)/;
   const newCoverageBadge = `[![Coverage](${coverageBadge})](./coverage/lcov-report/index.html)`;
 
   if (coverageBadgePattern.test(readme)) {
@@ -76,7 +73,7 @@ const main = (): void => {
     console.log("Updated existing coverage badge in README.");
   } else {
     // Add badge after the first line of badges (after [![CI])
-    const ciPattern = /(\[!\[CI\]\([^\)]+\)\]\([^\)]+\))/;
+    const ciPattern = /(\[!\[CI\]\([^)]+\)\]\([^)]+\))/;
     if (ciPattern.test(readme)) {
       readme = readme.replace(ciPattern, `$1\n${newCoverageBadge}`);
       console.log("Added coverage badge to README.");

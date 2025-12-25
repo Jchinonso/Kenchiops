@@ -1,0 +1,27 @@
+5668f5f18b39ca9d84e54882001b8992
+"use strict";
+/**
+ * Integrations module - external service clients and adapters.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.truncateEvidence = exports.estimateTokens = exports.formatKnowledgeDocs = exports.formatGitHistory = exports.formatMetrics = exports.formatLogs = exports.formatEvidence = exports.formatEvent = exports.buildAnalysisPrompt = exports.buildSystemPrompt = exports.InMemoryVectorStore = exports.VectorStore = exports.fetchInstallationRepositories = void 0;
+// GitHub App client
+var githubAppClient_js_1 = require("./githubAppClient.js");
+Object.defineProperty(exports, "fetchInstallationRepositories", { enumerable: true, get: function () { return githubAppClient_js_1.fetchInstallationRepositories; } });
+// Vector store
+var vectorStore_js_1 = require("./vectorStore.js");
+Object.defineProperty(exports, "VectorStore", { enumerable: true, get: function () { return vectorStore_js_1.VectorStore; } });
+Object.defineProperty(exports, "InMemoryVectorStore", { enumerable: true, get: function () { return vectorStore_js_1.InMemoryVectorStore; } });
+// LLM prompts
+var prompts_js_1 = require("./prompts.js");
+Object.defineProperty(exports, "buildSystemPrompt", { enumerable: true, get: function () { return prompts_js_1.buildSystemPrompt; } });
+Object.defineProperty(exports, "buildAnalysisPrompt", { enumerable: true, get: function () { return prompts_js_1.buildAnalysisPrompt; } });
+Object.defineProperty(exports, "formatEvent", { enumerable: true, get: function () { return prompts_js_1.formatEvent; } });
+Object.defineProperty(exports, "formatEvidence", { enumerable: true, get: function () { return prompts_js_1.formatEvidence; } });
+Object.defineProperty(exports, "formatLogs", { enumerable: true, get: function () { return prompts_js_1.formatLogs; } });
+Object.defineProperty(exports, "formatMetrics", { enumerable: true, get: function () { return prompts_js_1.formatMetrics; } });
+Object.defineProperty(exports, "formatGitHistory", { enumerable: true, get: function () { return prompts_js_1.formatGitHistory; } });
+Object.defineProperty(exports, "formatKnowledgeDocs", { enumerable: true, get: function () { return prompts_js_1.formatKnowledgeDocs; } });
+Object.defineProperty(exports, "estimateTokens", { enumerable: true, get: function () { return prompts_js_1.estimateTokens; } });
+Object.defineProperty(exports, "truncateEvidence", { enumerable: true, get: function () { return prompts_js_1.truncateEvidence; } });
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL2hvbWUvY2hpbm9uc28vRG9jdW1lbnRzL2tlbmNoaS9wYWNrYWdlcy9zaGFyZWQvc3JjL2ludGVncmF0aW9ucy9pbmRleC50cyIsIm1hcHBpbmdzIjoiO0FBQUE7O0dBRUc7OztBQUVILG9CQUFvQjtBQUNwQiwyREFBcUU7QUFBNUQsbUlBQUEsNkJBQTZCLE9BQUE7QUFFdEMsZUFBZTtBQUNmLG1EQUFvRTtBQUEzRCw2R0FBQSxXQUFXLE9BQUE7QUFBRSxxSEFBQSxtQkFBbUIsT0FBQTtBQUV6QyxjQUFjO0FBQ2QsMkNBV3NCO0FBVnBCLCtHQUFBLGlCQUFpQixPQUFBO0FBQ2pCLGlIQUFBLG1CQUFtQixPQUFBO0FBQ25CLHlHQUFBLFdBQVcsT0FBQTtBQUNYLDRHQUFBLGNBQWMsT0FBQTtBQUNkLHdHQUFBLFVBQVUsT0FBQTtBQUNWLDJHQUFBLGFBQWEsT0FBQTtBQUNiLDhHQUFBLGdCQUFnQixPQUFBO0FBQ2hCLGlIQUFBLG1CQUFtQixPQUFBO0FBQ25CLDRHQUFBLGNBQWMsT0FBQTtBQUNkLDhHQUFBLGdCQUFnQixPQUFBIiwibmFtZXMiOltdLCJzb3VyY2VzIjpbIi9ob21lL2NoaW5vbnNvL0RvY3VtZW50cy9rZW5jaGkvcGFja2FnZXMvc2hhcmVkL3NyYy9pbnRlZ3JhdGlvbnMvaW5kZXgudHMiXSwic291cmNlc0NvbnRlbnQiOlsiLyoqXG4gKiBJbnRlZ3JhdGlvbnMgbW9kdWxlIC0gZXh0ZXJuYWwgc2VydmljZSBjbGllbnRzIGFuZCBhZGFwdGVycy5cbiAqL1xuXG4vLyBHaXRIdWIgQXBwIGNsaWVudFxuZXhwb3J0IHsgZmV0Y2hJbnN0YWxsYXRpb25SZXBvc2l0b3JpZXMgfSBmcm9tIFwiLi9naXRodWJBcHBDbGllbnQuanNcIjtcblxuLy8gVmVjdG9yIHN0b3JlXG5leHBvcnQgeyBWZWN0b3JTdG9yZSwgSW5NZW1vcnlWZWN0b3JTdG9yZSB9IGZyb20gXCIuL3ZlY3RvclN0b3JlLmpzXCI7XG5cbi8vIExMTSBwcm9tcHRzXG5leHBvcnQge1xuICBidWlsZFN5c3RlbVByb21wdCxcbiAgYnVpbGRBbmFseXNpc1Byb21wdCxcbiAgZm9ybWF0RXZlbnQsXG4gIGZvcm1hdEV2aWRlbmNlLFxuICBmb3JtYXRMb2dzLFxuICBmb3JtYXRNZXRyaWNzLFxuICBmb3JtYXRHaXRIaXN0b3J5LFxuICBmb3JtYXRLbm93bGVkZ2VEb2NzLFxuICBlc3RpbWF0ZVRva2VucyxcbiAgdHJ1bmNhdGVFdmlkZW5jZSxcbn0gZnJvbSBcIi4vcHJvbXB0cy5qc1wiO1xuIl0sInZlcnNpb24iOjN9

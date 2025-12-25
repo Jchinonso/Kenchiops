@@ -35,19 +35,6 @@ const mockClient = {
   escapeLiteral: jest.fn(),
 } as unknown as pg.PoolClient;
 
-// Mock Pool
-const mockPool = {
-  query: mockFunctions.query,
-  connect: mockFunctions.connect,
-  end: mockFunctions.end,
-  on: mockFunctions.on,
-  removeListener: jest.fn(),
-  totalCount: 0,
-  idleCount: 0,
-  waitingCount: 0,
-  expiredCount: 0,
-} as unknown as pg.Pool;
-
 // Track Pool constructor calls
 const mockPoolCalls: unknown[][] = [];
 
@@ -75,7 +62,7 @@ jest.mock("pg", () => {
 });
 
 // Get the actual mock after module is mocked
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
 const getMockedPg = () => require("pg") as { default: { Pool: jest.Mock } };
 
 // Mock logger
@@ -272,7 +259,9 @@ describe("Database Client", () => {
       const dbError = new Error("Database connection failed");
       mockFunctions.query.mockRejectedValue(dbError);
 
-      await expect(client.query("SELECT * FROM users")).rejects.toThrow("Database connection failed");
+      await expect(client.query("SELECT * FROM users")).rejects.toThrow(
+        "Database connection failed"
+      );
     });
 
     it("should throw ValidationError when pool not initialized", async () => {
@@ -291,7 +280,11 @@ describe("Database Client", () => {
       );
 
       expect(result.rows).toEqual(mockRows);
-      expect(mockFunctions.query).toHaveBeenCalledWith(expect.any(String), ["Test", "test@example.com", 1]);
+      expect(mockFunctions.query).toHaveBeenCalledWith(expect.any(String), [
+        "Test",
+        "test@example.com",
+        1,
+      ]);
     });
   });
 

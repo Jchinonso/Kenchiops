@@ -12,7 +12,13 @@ jest.mock("@kenchi/shared", () => {
   const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
-    asyncHandler: (fn: Function) => fn,
+    asyncHandler: (
+      fn: (
+        req: unknown,
+        res: unknown,
+        next: (error?: unknown) => void
+      ) => Promise<unknown> | unknown
+    ) => fn,
     HTTP_STATUS: {
       OK: 200,
       BAD_REQUEST: 400,
@@ -243,10 +249,12 @@ describe("Webhook Routes", () => {
       const responses = [];
 
       for (let i = 0; i < 5; i++) {
-        const response = await request(app).post("/webhook/github").send({
-          ...validPayload,
-          id: i,
-        });
+        const response = await request(app)
+          .post("/webhook/github")
+          .send({
+            ...validPayload,
+            id: i,
+          });
         responses.push(response);
       }
 

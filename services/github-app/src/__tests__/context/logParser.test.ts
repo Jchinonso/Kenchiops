@@ -4,13 +4,12 @@
  * Tests all log parsing functions with various log formats and edge cases.
  */
 
-import { describe, it, expect, beforeEach, jest } from "@jest/globals";
+import { describe, it, expect } from "@jest/globals";
 import {
   extractFileReferences,
   extractTestFailures,
   truncateWithContext,
 } from "../../services/context/logParser.js";
-import type { FileReference, TestFailure } from "../../services/context/types.js";
 
 describe("Log Parser", () => {
   describe("extractFileReferences", () => {
@@ -277,7 +276,8 @@ src/utils.ts(25,10): error TS2345: Argument of type 'string' is not assignable t
     });
 
     it("should preserve error context when truncating", () => {
-      const content = "Some content " + "X".repeat(500) + " ERROR: critical failure " + "Y".repeat(500);
+      const content =
+        "Some content " + "X".repeat(500) + " ERROR: critical failure " + "Y".repeat(500);
       const result = truncateWithContext(content, 200);
 
       expect(result).toContain("ERROR");
@@ -321,7 +321,8 @@ src/utils.ts(25,10): error TS2345: Argument of type 'string' is not assignable t
     });
 
     it("should handle content with multiple error indicators", () => {
-      const content = "Normal " + "A".repeat(200) + " error " + "B".repeat(200) + " Failed " + "C".repeat(200);
+      const content =
+        "Normal " + "A".repeat(200) + " error " + "B".repeat(200) + " Failed " + "C".repeat(200);
       const result = truncateWithContext(content, 100);
 
       // Should center around first error indicator

@@ -1,0 +1,105 @@
+1a9a8b4d7f1047d92b5adae5bb2123b1
+"use strict";
+/**
+ * Array and Collection Utilities
+ *
+ * Provides reusable functions for array manipulation,
+ * deduplication, and collection operations.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.takeMatching = exports.groupBy = exports.shouldExcludePath = exports.startsWithAny = exports.containsAny = exports.deduplicateByKey = void 0;
+/**
+ * Deduplicates an array by a key function, returning unique items.
+ * Uses reduce with early termination via slice.
+ *
+ * @param items - Array of items to deduplicate
+ * @param keyFn - Function to extract the unique key from each item
+ * @param maxItems - Optional maximum number of items to return
+ * @returns Array of unique items (first occurrence kept)
+ *
+ * @example
+ * const files = [{ path: 'a.ts' }, { path: 'b.ts' }, { path: 'a.ts' }];
+ * deduplicateByKey(files, f => f.path); // [{ path: 'a.ts' }, { path: 'b.ts' }]
+ */
+const deduplicateByKey = (items, keyFn, maxItems) => {
+    const seen = new Set();
+    const unique = items.reduce((result, item) => {
+        const key = keyFn(item);
+        if (!seen.has(key)) {
+            seen.add(key);
+            result.push(item);
+        }
+        return result;
+    }, []);
+    return maxItems !== undefined ? unique.slice(0, maxItems) : unique;
+};
+exports.deduplicateByKey = deduplicateByKey;
+/**
+ * Checks if a string contains any of the given patterns.
+ * Uses .some() for functional iteration.
+ *
+ * @param text - The text to check
+ * @param patterns - Array of patterns to match against
+ * @returns True if any pattern is found in text
+ *
+ * @example
+ * containsAny('node_modules/foo', ['node_modules', '.test.']); // true
+ */
+const containsAny = (text, patterns) => patterns.some((pattern) => text.includes(pattern));
+exports.containsAny = containsAny;
+/**
+ * Checks if a string starts with any of the given prefixes.
+ * Uses .some() for functional iteration.
+ *
+ * @param text - The text to check
+ * @param prefixes - Array of prefixes to match against
+ * @returns True if text starts with any prefix
+ */
+const startsWithAny = (text, prefixes) => prefixes.some((prefix) => text.startsWith(prefix));
+exports.startsWithAny = startsWithAny;
+/**
+ * Checks if a path should be excluded based on patterns.
+ * Matches if path contains OR starts with any pattern.
+ *
+ * @param path - The file path to check
+ * @param patterns - Array of exclusion patterns
+ * @returns True if path should be excluded
+ */
+const shouldExcludePath = (path, patterns) => {
+    return (0, exports.containsAny)(path, patterns) || (0, exports.startsWithAny)(path, patterns);
+};
+exports.shouldExcludePath = shouldExcludePath;
+/**
+ * Groups array items by a key function.
+ * Uses reduce for functional iteration.
+ *
+ * @param items - Array of items to group
+ * @param keyFn - Function to extract the group key from each item
+ * @returns Map of keys to arrays of items
+ *
+ * @example
+ * const items = [{ type: 'a', v: 1 }, { type: 'b', v: 2 }, { type: 'a', v: 3 }];
+ * groupBy(items, i => i.type); // Map { 'a' => [{...}, {...}], 'b' => [{...}] }
+ */
+const groupBy = (items, keyFn) => items.reduce((groups, item) => {
+    const key = keyFn(item);
+    const group = groups.get(key);
+    group ? group.push(item) : groups.set(key, [item]);
+    return groups;
+}, new Map());
+exports.groupBy = groupBy;
+/**
+ * Takes the first N items from an array that match a predicate.
+ * Uses filter with slice for functional approach.
+ *
+ * @param items - Array of items
+ * @param predicate - Filter function
+ * @param limit - Maximum number of items to return
+ * @returns Array of matching items up to limit
+ *
+ * @example
+ * takeMatching([1,2,3,4,5], n => n % 2 === 0, 2); // [2, 4]
+ */
+const takeMatching = (items, predicate, limit) => items.filter(predicate).slice(0, limit);
+exports.takeMatching = takeMatching;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL2hvbWUvY2hpbm9uc28vRG9jdW1lbnRzL2tlbmNoaS9wYWNrYWdlcy9zaGFyZWQvc3JjL2Zvcm1hdHRpbmcvYXJyYXlVdGlscy50cyIsIm1hcHBpbmdzIjoiO0FBQUE7Ozs7O0dBS0c7OztBQUVIOzs7Ozs7Ozs7Ozs7R0FZRztBQUNJLE1BQU0sZ0JBQWdCLEdBQUcsQ0FDOUIsS0FBbUIsRUFDbkIsS0FBcUIsRUFDckIsUUFBaUIsRUFDWixFQUFFO0lBQ1AsTUFBTSxJQUFJLEdBQUcsSUFBSSxHQUFHLEVBQUssQ0FBQztJQUUxQixNQUFNLE1BQU0sR0FBRyxLQUFLLENBQUMsTUFBTSxDQUFNLENBQUMsTUFBTSxFQUFFLElBQUksRUFBRSxFQUFFO1FBQ2hELE1BQU0sR0FBRyxHQUFHLEtBQUssQ0FBQyxJQUFJLENBQUMsQ0FBQztRQUN4QixJQUFJLENBQUMsSUFBSSxDQUFDLEdBQUcsQ0FBQyxHQUFHLENBQUMsRUFBRSxDQUFDO1lBQ25CLElBQUksQ0FBQyxHQUFHLENBQUMsR0FBRyxDQUFDLENBQUM7WUFDZCxNQUFNLENBQUMsSUFBSSxDQUFDLElBQUksQ0FBQyxDQUFDO1FBQ3BCLENBQUM7UUFDRCxPQUFPLE1BQU0sQ0FBQztJQUNoQixDQUFDLEVBQUUsRUFBRSxDQUFDLENBQUM7SUFFUCxPQUFPLFFBQVEsS0FBSyxTQUFTLENBQUMsQ0FBQyxDQUFDLE1BQU0sQ0FBQyxLQUFLLENBQUMsQ0FBQyxFQUFFLFFBQVEsQ0FBQyxDQUFDLENBQUMsQ0FBQyxNQUFNLENBQUM7QUFDckUsQ0FBQyxDQUFDO0FBakJXLFFBQUEsZ0JBQWdCLG9CQWlCM0I7QUFFRjs7Ozs7Ozs7OztHQVVHO0FBQ0ksTUFBTSxXQUFXLEdBQUcsQ0FBQyxJQUFZLEVBQUUsUUFBMkIsRUFBVyxFQUFFLENBQ2hGLFFBQVEsQ0FBQyxJQUFJLENBQUMsQ0FBQyxPQUFPLEVBQUUsRUFBRSxDQUFDLElBQUksQ0FBQyxRQUFRLENBQUMsT0FBTyxDQUFDLENBQUMsQ0FBQztBQUR4QyxRQUFBLFdBQVcsZUFDNkI7QUFFckQ7Ozs7Ozs7R0FPRztBQUNJLE1BQU0sYUFBYSxHQUFHLENBQUMsSUFBWSxFQUFFLFFBQTJCLEVBQVcsRUFBRSxDQUNsRixRQUFRLENBQUMsSUFBSSxDQUFDLENBQUMsTUFBTSxFQUFFLEVBQUUsQ0FBQyxJQUFJLENBQUMsVUFBVSxDQUFDLE1BQU0sQ0FBQyxDQUFDLENBQUM7QUFEeEMsUUFBQSxhQUFhLGlCQUMyQjtBQUVyRDs7Ozs7OztHQU9HO0FBQ0ksTUFBTSxpQkFBaUIsR0FBRyxDQUFDLElBQVksRUFBRSxRQUEyQixFQUFXLEVBQUU7SUFDdEYsT0FBTyxJQUFBLG1CQUFXLEVBQUMsSUFBSSxFQUFFLFFBQVEsQ0FBQyxJQUFJLElBQUEscUJBQWEsRUFBQyxJQUFJLEVBQUUsUUFBUSxDQUFDLENBQUM7QUFDdEUsQ0FBQyxDQUFDO0FBRlcsUUFBQSxpQkFBaUIscUJBRTVCO0FBRUY7Ozs7Ozs7Ozs7O0dBV0c7QUFDSSxNQUFNLE9BQU8sR0FBRyxDQUFPLEtBQW1CLEVBQUUsS0FBcUIsRUFBZSxFQUFFLENBQ3ZGLEtBQUssQ0FBQyxNQUFNLENBQUMsQ0FBQyxNQUFNLEVBQUUsSUFBSSxFQUFFLEVBQUU7SUFDNUIsTUFBTSxHQUFHLEdBQUcsS0FBSyxDQUFDLElBQUksQ0FBQyxDQUFDO0lBQ3hCLE1BQU0sS0FBSyxHQUFHLE1BQU0sQ0FBQyxHQUFHLENBQUMsR0FBRyxDQUFDLENBQUM7SUFDOUIsS0FBSyxDQUFDLENBQUMsQ0FBQyxLQUFLLENBQUMsSUFBSSxDQUFDLElBQUksQ0FBQyxDQUFDLENBQUMsQ0FBQyxNQUFNLENBQUMsR0FBRyxDQUFDLEdBQUcsRUFBRSxDQUFDLElBQUksQ0FBQyxDQUFDLENBQUM7SUFDbkQsT0FBTyxNQUFNLENBQUM7QUFDaEIsQ0FBQyxFQUFFLElBQUksR0FBRyxFQUFVLENBQUMsQ0FBQztBQU5YLFFBQUEsT0FBTyxXQU1JO0FBRXhCOzs7Ozs7Ozs7OztHQVdHO0FBQ0ksTUFBTSxZQUFZLEdBQUcsQ0FDMUIsS0FBbUIsRUFDbkIsU0FBK0IsRUFDL0IsS0FBYSxFQUNSLEVBQUUsQ0FBQyxLQUFLLENBQUMsTUFBTSxDQUFDLFNBQVMsQ0FBQyxDQUFDLEtBQUssQ0FBQyxDQUFDLEVBQUUsS0FBSyxDQUFDLENBQUM7QUFKckMsUUFBQSxZQUFZLGdCQUl5QiIsIm5hbWVzIjpbXSwic291cmNlcyI6WyIvaG9tZS9jaGlub25zby9Eb2N1bWVudHMva2VuY2hpL3BhY2thZ2VzL3NoYXJlZC9zcmMvZm9ybWF0dGluZy9hcnJheVV0aWxzLnRzIl0sInNvdXJjZXNDb250ZW50IjpbIi8qKlxuICogQXJyYXkgYW5kIENvbGxlY3Rpb24gVXRpbGl0aWVzXG4gKlxuICogUHJvdmlkZXMgcmV1c2FibGUgZnVuY3Rpb25zIGZvciBhcnJheSBtYW5pcHVsYXRpb24sXG4gKiBkZWR1cGxpY2F0aW9uLCBhbmQgY29sbGVjdGlvbiBvcGVyYXRpb25zLlxuICovXG5cbi8qKlxuICogRGVkdXBsaWNhdGVzIGFuIGFycmF5IGJ5IGEga2V5IGZ1bmN0aW9uLCByZXR1cm5pbmcgdW5pcXVlIGl0ZW1zLlxuICogVXNlcyByZWR1Y2Ugd2l0aCBlYXJseSB0ZXJtaW5hdGlvbiB2aWEgc2xpY2UuXG4gKlxuICogQHBhcmFtIGl0ZW1zIC0gQXJyYXkgb2YgaXRlbXMgdG8gZGVkdXBsaWNhdGVcbiAqIEBwYXJhbSBrZXlGbiAtIEZ1bmN0aW9uIHRvIGV4dHJhY3QgdGhlIHVuaXF1ZSBrZXkgZnJvbSBlYWNoIGl0ZW1cbiAqIEBwYXJhbSBtYXhJdGVtcyAtIE9wdGlvbmFsIG1heGltdW0gbnVtYmVyIG9mIGl0ZW1zIHRvIHJldHVyblxuICogQHJldHVybnMgQXJyYXkgb2YgdW5pcXVlIGl0ZW1zIChmaXJzdCBvY2N1cnJlbmNlIGtlcHQpXG4gKlxuICogQGV4YW1wbGVcbiAqIGNvbnN0IGZpbGVzID0gW3sgcGF0aDogJ2EudHMnIH0sIHsgcGF0aDogJ2IudHMnIH0sIHsgcGF0aDogJ2EudHMnIH1dO1xuICogZGVkdXBsaWNhdGVCeUtleShmaWxlcywgZiA9PiBmLnBhdGgpOyAvLyBbeyBwYXRoOiAnYS50cycgfSwgeyBwYXRoOiAnYi50cycgfV1cbiAqL1xuZXhwb3J0IGNvbnN0IGRlZHVwbGljYXRlQnlLZXkgPSA8VCwgSz4oXG4gIGl0ZW1zOiByZWFkb25seSBUW10sXG4gIGtleUZuOiAoaXRlbTogVCkgPT4gSyxcbiAgbWF4SXRlbXM/OiBudW1iZXJcbik6IFRbXSA9PiB7XG4gIGNvbnN0IHNlZW4gPSBuZXcgU2V0PEs+KCk7XG5cbiAgY29uc3QgdW5pcXVlID0gaXRlbXMucmVkdWNlPFRbXT4oKHJlc3VsdCwgaXRlbSkgPT4ge1xuICAgIGNvbnN0IGtleSA9IGtleUZuKGl0ZW0pO1xuICAgIGlmICghc2Vlbi5oYXMoa2V5KSkge1xuICAgICAgc2Vlbi5hZGQoa2V5KTtcbiAgICAgIHJlc3VsdC5wdXNoKGl0ZW0pO1xuICAgIH1cbiAgICByZXR1cm4gcmVzdWx0O1xuICB9LCBbXSk7XG5cbiAgcmV0dXJuIG1heEl0ZW1zICE9PSB1bmRlZmluZWQgPyB1bmlxdWUuc2xpY2UoMCwgbWF4SXRlbXMpIDogdW5pcXVlO1xufTtcblxuLyoqXG4gKiBDaGVja3MgaWYgYSBzdHJpbmcgY29udGFpbnMgYW55IG9mIHRoZSBnaXZlbiBwYXR0ZXJucy5cbiAqIFVzZXMgLnNvbWUoKSBmb3IgZnVuY3Rpb25hbCBpdGVyYXRpb24uXG4gKlxuICogQHBhcmFtIHRleHQgLSBUaGUgdGV4dCB0byBjaGVja1xuICogQHBhcmFtIHBhdHRlcm5zIC0gQXJyYXkgb2YgcGF0dGVybnMgdG8gbWF0Y2ggYWdhaW5zdFxuICogQHJldHVybnMgVHJ1ZSBpZiBhbnkgcGF0dGVybiBpcyBmb3VuZCBpbiB0ZXh0XG4gKlxuICogQGV4YW1wbGVcbiAqIGNvbnRhaW5zQW55KCdub2RlX21vZHVsZXMvZm9vJywgWydub2RlX21vZHVsZXMnLCAnLnRlc3QuJ10pOyAvLyB0cnVlXG4gKi9cbmV4cG9ydCBjb25zdCBjb250YWluc0FueSA9ICh0ZXh0OiBzdHJpbmcsIHBhdHRlcm5zOiByZWFkb25seSBzdHJpbmdbXSk6IGJvb2xlYW4gPT5cbiAgcGF0dGVybnMuc29tZSgocGF0dGVybikgPT4gdGV4dC5pbmNsdWRlcyhwYXR0ZXJuKSk7XG5cbi8qKlxuICogQ2hlY2tzIGlmIGEgc3RyaW5nIHN0YXJ0cyB3aXRoIGFueSBvZiB0aGUgZ2l2ZW4gcHJlZml4ZXMuXG4gKiBVc2VzIC5zb21lKCkgZm9yIGZ1bmN0aW9uYWwgaXRlcmF0aW9uLlxuICpcbiAqIEBwYXJhbSB0ZXh0IC0gVGhlIHRleHQgdG8gY2hlY2tcbiAqIEBwYXJhbSBwcmVmaXhlcyAtIEFycmF5IG9mIHByZWZpeGVzIHRvIG1hdGNoIGFnYWluc3RcbiAqIEByZXR1cm5zIFRydWUgaWYgdGV4dCBzdGFydHMgd2l0aCBhbnkgcHJlZml4XG4gKi9cbmV4cG9ydCBjb25zdCBzdGFydHNXaXRoQW55ID0gKHRleHQ6IHN0cmluZywgcHJlZml4ZXM6IHJlYWRvbmx5IHN0cmluZ1tdKTogYm9vbGVhbiA9PlxuICBwcmVmaXhlcy5zb21lKChwcmVmaXgpID0+IHRleHQuc3RhcnRzV2l0aChwcmVmaXgpKTtcblxuLyoqXG4gKiBDaGVja3MgaWYgYSBwYXRoIHNob3VsZCBiZSBleGNsdWRlZCBiYXNlZCBvbiBwYXR0ZXJucy5cbiAqIE1hdGNoZXMgaWYgcGF0aCBjb250YWlucyBPUiBzdGFydHMgd2l0aCBhbnkgcGF0dGVybi5cbiAqXG4gKiBAcGFyYW0gcGF0aCAtIFRoZSBmaWxlIHBhdGggdG8gY2hlY2tcbiAqIEBwYXJhbSBwYXR0ZXJucyAtIEFycmF5IG9mIGV4Y2x1c2lvbiBwYXR0ZXJuc1xuICogQHJldHVybnMgVHJ1ZSBpZiBwYXRoIHNob3VsZCBiZSBleGNsdWRlZFxuICovXG5leHBvcnQgY29uc3Qgc2hvdWxkRXhjbHVkZVBhdGggPSAocGF0aDogc3RyaW5nLCBwYXR0ZXJuczogcmVhZG9ubHkgc3RyaW5nW10pOiBib29sZWFuID0+IHtcbiAgcmV0dXJuIGNvbnRhaW5zQW55KHBhdGgsIHBhdHRlcm5zKSB8fCBzdGFydHNXaXRoQW55KHBhdGgsIHBhdHRlcm5zKTtcbn07XG5cbi8qKlxuICogR3JvdXBzIGFycmF5IGl0ZW1zIGJ5IGEga2V5IGZ1bmN0aW9uLlxuICogVXNlcyByZWR1Y2UgZm9yIGZ1bmN0aW9uYWwgaXRlcmF0aW9uLlxuICpcbiAqIEBwYXJhbSBpdGVtcyAtIEFycmF5IG9mIGl0ZW1zIHRvIGdyb3VwXG4gKiBAcGFyYW0ga2V5Rm4gLSBGdW5jdGlvbiB0byBleHRyYWN0IHRoZSBncm91cCBrZXkgZnJvbSBlYWNoIGl0ZW1cbiAqIEByZXR1cm5zIE1hcCBvZiBrZXlzIHRvIGFycmF5cyBvZiBpdGVtc1xuICpcbiAqIEBleGFtcGxlXG4gKiBjb25zdCBpdGVtcyA9IFt7IHR5cGU6ICdhJywgdjogMSB9LCB7IHR5cGU6ICdiJywgdjogMiB9LCB7IHR5cGU6ICdhJywgdjogMyB9XTtcbiAqIGdyb3VwQnkoaXRlbXMsIGkgPT4gaS50eXBlKTsgLy8gTWFwIHsgJ2EnID0+IFt7Li4ufSwgey4uLn1dLCAnYicgPT4gW3suLi59XSB9XG4gKi9cbmV4cG9ydCBjb25zdCBncm91cEJ5ID0gPFQsIEs+KGl0ZW1zOiByZWFkb25seSBUW10sIGtleUZuOiAoaXRlbTogVCkgPT4gSyk6IE1hcDxLLCBUW10+ID0+XG4gIGl0ZW1zLnJlZHVjZSgoZ3JvdXBzLCBpdGVtKSA9PiB7XG4gICAgY29uc3Qga2V5ID0ga2V5Rm4oaXRlbSk7XG4gICAgY29uc3QgZ3JvdXAgPSBncm91cHMuZ2V0KGtleSk7XG4gICAgZ3JvdXAgPyBncm91cC5wdXNoKGl0ZW0pIDogZ3JvdXBzLnNldChrZXksIFtpdGVtXSk7XG4gICAgcmV0dXJuIGdyb3VwcztcbiAgfSwgbmV3IE1hcDxLLCBUW10+KCkpO1xuXG4vKipcbiAqIFRha2VzIHRoZSBmaXJzdCBOIGl0ZW1zIGZyb20gYW4gYXJyYXkgdGhhdCBtYXRjaCBhIHByZWRpY2F0ZS5cbiAqIFVzZXMgZmlsdGVyIHdpdGggc2xpY2UgZm9yIGZ1bmN0aW9uYWwgYXBwcm9hY2guXG4gKlxuICogQHBhcmFtIGl0ZW1zIC0gQXJyYXkgb2YgaXRlbXNcbiAqIEBwYXJhbSBwcmVkaWNhdGUgLSBGaWx0ZXIgZnVuY3Rpb25cbiAqIEBwYXJhbSBsaW1pdCAtIE1heGltdW0gbnVtYmVyIG9mIGl0ZW1zIHRvIHJldHVyblxuICogQHJldHVybnMgQXJyYXkgb2YgbWF0Y2hpbmcgaXRlbXMgdXAgdG8gbGltaXRcbiAqXG4gKiBAZXhhbXBsZVxuICogdGFrZU1hdGNoaW5nKFsxLDIsMyw0LDVdLCBuID0+IG4gJSAyID09PSAwLCAyKTsgLy8gWzIsIDRdXG4gKi9cbmV4cG9ydCBjb25zdCB0YWtlTWF0Y2hpbmcgPSA8VD4oXG4gIGl0ZW1zOiByZWFkb25seSBUW10sXG4gIHByZWRpY2F0ZTogKGl0ZW06IFQpID0+IGJvb2xlYW4sXG4gIGxpbWl0OiBudW1iZXJcbik6IFRbXSA9PiBpdGVtcy5maWx0ZXIocHJlZGljYXRlKS5zbGljZSgwLCBsaW1pdCk7XG4iXSwidmVyc2lvbiI6M30=
