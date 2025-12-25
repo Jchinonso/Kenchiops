@@ -30,7 +30,17 @@
     "type-check": "tsc --build --force",
     "validate": "tsx scripts/validate-env.ts",
     "check-build": "tsx scripts/check-build.ts",
-    "check:duplication": "tsx scripts/check-duplication.ts"
+    "check:duplication": "tsx scripts/check-duplication.ts",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
@@ -40,7 +50,9 @@
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "eslint": "^8.56.0",
+    "husky": "^9.1.7",
     "jest": "^29.7.0",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.1.1",
     "supertest": "^7.1.4",
     "ts-jest": "^29.1.1",
