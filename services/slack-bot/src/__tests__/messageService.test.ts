@@ -3,8 +3,11 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import { postMessage, postConsolidatedMessage, broadcastMessage } from "../services/messageService.js";
-import type { SlackClient } from "../services/channelService.js";
+import {
+  postMessage,
+  postConsolidatedMessage,
+  broadcastMessage,
+} from "../services/messageService.js";
 import type {
   SlackMessageRequest,
   ConsolidatedMessageRequest,
@@ -13,7 +16,7 @@ import type {
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared");
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
     logger: {
@@ -58,17 +61,15 @@ describe("Message Service", () => {
   const createMockClient = (): any => {
     return {
       chat: {
-        postMessage: jest.fn().mockImplementation(() =>
-          Promise.resolve({ ok: true, ts: "1234567890.123456" })
-        ),
+        postMessage: jest
+          .fn()
+          .mockImplementation(() => Promise.resolve({ ok: true, ts: "1234567890.123456" })),
         update: jest.fn().mockImplementation(() => Promise.resolve({ ok: true })),
         delete: jest.fn().mockImplementation(() => Promise.resolve({ ok: true })),
       },
       conversations: {
         list: jest.fn().mockImplementation(() => Promise.resolve({ channels: [] })),
-        info: jest.fn().mockImplementation(() =>
-          Promise.resolve({ channel: { id: "C123456" } })
-        ),
+        info: jest.fn().mockImplementation(() => Promise.resolve({ channel: { id: "C123456" } })),
       },
     };
   };
@@ -402,9 +403,7 @@ describe("Message Service", () => {
     it("should include channel results in response", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { getBotMemberChannels } = jest.requireMock("../services/channelService.js") as any;
-      getBotMemberChannels.mockResolvedValue([
-        { id: "C111111", name: "general" },
-      ]);
+      getBotMemberChannels.mockResolvedValue([{ id: "C111111", name: "general" }]);
 
       const request: SlackBroadcastRequest = {
         message: "Broadcast message",

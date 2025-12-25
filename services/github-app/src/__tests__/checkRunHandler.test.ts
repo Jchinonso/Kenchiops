@@ -8,7 +8,7 @@ import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubT
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared");
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
     createLogger: jest.fn(() => ({
@@ -89,10 +89,14 @@ import { gatherEnrichedContext, fetchPRsByCommit } from "../services/context/ind
 import { getAggregator } from "../services/aggregation/index.js";
 import { deleteKenchiOpsComments } from "../services/githubService.js";
 
-const mockGatherEnrichedContext = gatherEnrichedContext as jest.MockedFunction<typeof gatherEnrichedContext>;
+const mockGatherEnrichedContext = gatherEnrichedContext as jest.MockedFunction<
+  typeof gatherEnrichedContext
+>;
 const mockFetchPRsByCommit = fetchPRsByCommit as jest.MockedFunction<typeof fetchPRsByCommit>;
 const mockGetAggregator = getAggregator as jest.MockedFunction<typeof getAggregator>;
-const mockDeleteKenchiOpsComments = deleteKenchiOpsComments as jest.MockedFunction<typeof deleteKenchiOpsComments>;
+const mockDeleteKenchiOpsComments = deleteKenchiOpsComments as jest.MockedFunction<
+  typeof deleteKenchiOpsComments
+>;
 
 describe("Check Run Handler", () => {
   // Test fixtures

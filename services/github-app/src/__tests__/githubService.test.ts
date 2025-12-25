@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type { Mock, SpyInstance } from "jest-mock";
+import type { Mock } from "jest-mock";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
 
 // Mock Octokit
@@ -17,7 +17,7 @@ jest.mock("@octokit/auth-app", () => ({
 }));
 
 jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared");
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockResolve = jest.fn() as any;
   mockResolve.mockResolvedValue({
@@ -99,13 +99,6 @@ import {
   createEventFromCheckRun,
   createMinimalEvidence,
   performAnalysis,
-  deleteKenchiOpsComments,
-  postPRComment,
-  getInstallationRepositories,
-  createCheckRunWithAnnotations,
-  type AnalysisResult,
-  type RepositoryInfo,
-  type CheckAnnotation,
 } from "../services/githubService.js";
 
 describe("GitHub Service", () => {
@@ -128,8 +121,12 @@ describe("GitHub Service", () => {
           listReposAccessibleToInstallation: jest.fn(),
         },
         checks: {
-          create: jest.fn<() => Promise<{ data: { id: number } }>>().mockResolvedValue({ data: { id: 99999 } }),
-          update: jest.fn<() => Promise<{ data: { id: number } }>>().mockResolvedValue({ data: { id: 99999 } }),
+          create: jest
+            .fn<() => Promise<{ data: { id: number } }>>()
+            .mockResolvedValue({ data: { id: 99999 } }),
+          update: jest
+            .fn<() => Promise<{ data: { id: number } }>>()
+            .mockResolvedValue({ data: { id: 99999 } }),
         },
       },
     };
@@ -143,7 +140,9 @@ describe("GitHub Service", () => {
   });
 
   // Test fixtures
-  const createMockPRWebhook = (overrides: Partial<PullRequestWebhook> = {}): PullRequestWebhook => ({
+  const createMockPRWebhook = (
+    overrides: Partial<PullRequestWebhook> = {}
+  ): PullRequestWebhook => ({
     action: "opened",
     pull_request: {
       number: 123,
@@ -358,7 +357,9 @@ describe("GitHub Service", () => {
 
       expect(event.payload.output).toBeDefined();
       expect((event.payload.output as { title: string }).title).toBe("Build Failed");
-      expect((event.payload.output as { summary: string }).summary).toBe("The build encountered errors");
+      expect((event.payload.output as { summary: string }).summary).toBe(
+        "The build encountered errors"
+      );
     });
 
     it("should include repository info in metadata", () => {

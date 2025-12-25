@@ -13,7 +13,7 @@ import {
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared");
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   // Create mock logger inside the factory to avoid hoisting issues
   const mockLogger = {
     info: jest.fn(),
@@ -70,10 +70,7 @@ describe("Action Handler", () => {
     jest.useRealTimers();
   });
 
-  const createMockAction = (
-    value: string,
-    actionId: string = "test_action_123"
-  ): ButtonAction => ({
+  const createMockAction = (value: string, actionId: string = "test_action_123"): ButtonAction => ({
     type: "button",
     action_id: actionId,
     block_id: "block_123",
@@ -88,7 +85,9 @@ describe("Action Handler", () => {
 
   describe("handleActionApproval", () => {
     it("should acknowledge the action immediately", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
 
       await handleActionApproval(action, mockAck, mockSay);
 
@@ -110,9 +109,13 @@ describe("Action Handler", () => {
     });
 
     it("should post in_progress message immediately", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
-        formatProgressUpdate: jest.MockedFunction<typeof import("../formatters.js").formatProgressUpdate>;
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
       };
 
       await handleActionApproval(action, mockAck, mockSay);
@@ -130,9 +133,13 @@ describe("Action Handler", () => {
     });
 
     it("should post completed message after timeout", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
-        formatProgressUpdate: jest.MockedFunction<typeof import("../formatters.js").formatProgressUpdate>;
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
       };
 
       await handleActionApproval(action, mockAck, mockSay);
@@ -152,7 +159,9 @@ describe("Action Handler", () => {
     });
 
     it("should include thread_ts when provided", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       const messageTs = "1234567890.123456";
 
       await handleActionApproval(action, mockAck, mockSay, messageTs);
@@ -186,16 +195,22 @@ describe("Action Handler", () => {
     });
 
     it("should warn when say function is not available", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
 
       await handleActionApproval(action, mockAck, undefined);
 
       expect(mockAck).toHaveBeenCalled();
-      expect(mockLogger.warn).toHaveBeenCalledWith("Say function not available for action approval");
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        "Say function not available for action approval"
+      );
     });
 
     it("should handle say function errors gracefully", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       mockSay.mockRejectedValue(new Error("Slack API error"));
 
       await handleActionApproval(action, mockAck, mockSay);
@@ -217,11 +232,15 @@ describe("Action Handler", () => {
 
       await handleActionApproval(action, mockAck, mockSay);
 
-      expect(mockLogger.info).toHaveBeenCalledWith("Action approved", { action_id: "approve_action_456" });
+      expect(mockLogger.info).toHaveBeenCalledWith("Action approved", {
+        action_id: "approve_action_456",
+      });
     });
 
     it("should not post completed message if say is undefined initially", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
 
       // Call with undefined say function
       await handleActionApproval(action, mockAck, undefined);
@@ -237,7 +256,9 @@ describe("Action Handler", () => {
 
   describe("handleActionRejection", () => {
     it("should acknowledge the action immediately", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
 
       await handleActionRejection(action, mockAck, mockSay);
 
@@ -258,9 +279,13 @@ describe("Action Handler", () => {
     });
 
     it("should post failed message", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
-        formatProgressUpdate: jest.MockedFunction<typeof import("../formatters.js").formatProgressUpdate>;
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
       };
 
       await handleActionRejection(action, mockAck, mockSay);
@@ -273,7 +298,9 @@ describe("Action Handler", () => {
     });
 
     it("should include thread_ts when provided", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       const messageTs = "1234567890.123456";
 
       await handleActionRejection(action, mockAck, mockSay, messageTs);
@@ -307,16 +334,22 @@ describe("Action Handler", () => {
     });
 
     it("should warn when say function is not available", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
 
       await handleActionRejection(action, mockAck, undefined);
 
       expect(mockAck).toHaveBeenCalled();
-      expect(mockLogger.warn).toHaveBeenCalledWith("Say function not available for action rejection");
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        "Say function not available for action rejection"
+      );
     });
 
     it("should handle say function errors gracefully", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       mockSay.mockRejectedValue(new Error("Slack API error"));
 
       await handleActionRejection(action, mockAck, mockSay);
@@ -338,7 +371,9 @@ describe("Action Handler", () => {
 
       await handleActionRejection(action, mockAck, mockSay);
 
-      expect(mockLogger.info).toHaveBeenCalledWith("Action rejected", { action_id: "reject_action_456" });
+      expect(mockLogger.info).toHaveBeenCalledWith("Action rejected", {
+        action_id: "reject_action_456",
+      });
     });
   });
 
@@ -356,7 +391,9 @@ describe("Action Handler", () => {
 
       await handlePositiveFeedback(action, mockAck);
 
-      expect(mockLogger.info).toHaveBeenCalledWith("Positive feedback received", { event_id: "event-456" });
+      expect(mockLogger.info).toHaveBeenCalledWith("Positive feedback received", {
+        event_id: "event-456",
+      });
     });
 
     it("should handle empty action value", async () => {
@@ -400,7 +437,9 @@ describe("Action Handler", () => {
 
       await handleNegativeFeedback(action, mockAck);
 
-      expect(mockLogger.info).toHaveBeenCalledWith("Negative feedback received", { event_id: "event-789" });
+      expect(mockLogger.info).toHaveBeenCalledWith("Negative feedback received", {
+        event_id: "event-789",
+      });
     });
 
     it("should handle empty action value", async () => {
@@ -503,8 +542,12 @@ describe("Action Handler", () => {
     });
 
     it("should handle multiple rejections in sequence", async () => {
-      const action1 = createMockAction(JSON.stringify({ eventId: "event-1", actionId: "action-1" }));
-      const action2 = createMockAction(JSON.stringify({ eventId: "event-2", actionId: "action-2" }));
+      const action1 = createMockAction(
+        JSON.stringify({ eventId: "event-1", actionId: "action-1" })
+      );
+      const action2 = createMockAction(
+        JSON.stringify({ eventId: "event-2", actionId: "action-2" })
+      );
 
       await handleActionRejection(action1, mockAck, mockSay);
       await handleActionRejection(action2, mockAck, mockSay);
@@ -564,7 +607,9 @@ describe("Action Handler", () => {
     });
 
     it("should handle non-Error exceptions gracefully", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       mockSay.mockRejectedValue("string error");
 
       await handleActionApproval(action, mockAck, mockSay);
@@ -574,7 +619,9 @@ describe("Action Handler", () => {
     });
 
     it("should continue execution even if logging fails", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       mockLogger.info.mockImplementationOnce(() => {
         throw new Error("Logger failed");
       });
@@ -586,9 +633,13 @@ describe("Action Handler", () => {
 
   describe("timeout behavior", () => {
     it("should complete action after exact timeout duration", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
-        formatProgressUpdate: jest.MockedFunction<typeof import("../formatters.js").formatProgressUpdate>;
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
       };
 
       await handleActionApproval(action, mockAck, mockSay);
@@ -608,9 +659,13 @@ describe("Action Handler", () => {
     });
 
     it("should not complete action before timeout", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" }));
+      const action = createMockAction(
+        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
+      );
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
-        formatProgressUpdate: jest.MockedFunction<typeof import("../formatters.js").formatProgressUpdate>;
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
       };
 
       await handleActionApproval(action, mockAck, mockSay);

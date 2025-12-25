@@ -8,7 +8,7 @@ import type { AggregatedFailures } from "../services/aggregation/types.js";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared");
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
     createLogger: jest.fn(() => ({
@@ -280,9 +280,7 @@ describe("Consolidated Poster Service", () => {
 
     it("should report partial success when some posts fail", async () => {
       // First PR succeeds, second fails
-      mockPostPRComment
-        .mockResolvedValueOnce(undefined)
-        .mockRejectedValueOnce(new Error("Failed"));
+      mockPostPRComment.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Failed"));
 
       const aggregation = createMockAggregation({
         pullRequestNumbers: [123, 456],
