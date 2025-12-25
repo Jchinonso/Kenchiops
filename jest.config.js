@@ -58,11 +58,11 @@ export default {
   },
   
   // Performance: reduce verbosity in CI
-  verbose: !process.env.CI,
+  verbose: process.env.CI !== 'true',
   silent: false,
   
   // Detect open handles (helps with the warning about async operations)
   detectOpenHandles: false, // Set to true only when debugging
-  forceExit: process.env.CI, // Force exit in CI to avoid hanging
+  forceExit: process.env.CI === 'true', // Force exit in CI to avoid hanging
 };
 
