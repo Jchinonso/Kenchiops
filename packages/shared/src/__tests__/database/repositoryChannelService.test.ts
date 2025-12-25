@@ -4,7 +4,7 @@
  * Tests repository-channel mapping CRUD operations.
  */
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type { RepositoryChannelMapping, CreateRepositoryChannelMapping } from "../../core/types.js";
+import type { CreateRepositoryChannelMapping } from "../../core/types.js";
 
 // Mock query function
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,17 +44,6 @@ describe("Repository Channel Service", () => {
     created_by: "U123456",
     created_at: new Date("2024-01-01"),
     updated_at: new Date("2024-01-01"),
-  };
-
-  const mockMapping: RepositoryChannelMapping = {
-    id: "mapping-123",
-    tenantId: "tenant-123",
-    repository: "owner/repo",
-    slackChannelId: "C123456",
-    slackChannelName: "engineering",
-    createdBy: "U123456",
-    createdAt: new Date("2024-01-01"),
-    updatedAt: new Date("2024-01-01"),
   };
 
   describe("findChannelForRepository", () => {
@@ -119,10 +108,10 @@ describe("Repository Channel Service", () => {
 
       const result = await repoChannelService.findMappingsForChannel("tenant-123", "C123456");
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("slack_channel_id = $2"),
-        ["tenant-123", "C123456"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("slack_channel_id = $2"), [
+        "tenant-123",
+        "C123456",
+      ]);
       expect(result).toHaveLength(2);
     });
 
@@ -172,10 +161,9 @@ describe("Repository Channel Service", () => {
 
       const result = await repoChannelService.findAllMappingsForTenant("tenant-123");
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("WHERE tenant_id = $1"),
-        ["tenant-123"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("WHERE tenant_id = $1"), [
+        "tenant-123",
+      ]);
       expect(result).toHaveLength(3);
     });
 
@@ -198,16 +186,19 @@ describe("Repository Channel Service", () => {
 
       await repoChannelService.findAllMappingsForTenant("tenant-123");
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("ORDER BY repository"),
-        ["tenant-123"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("ORDER BY repository"), [
+        "tenant-123",
+      ]);
     });
   });
 
   describe("getMappedRepositories", () => {
     it("should return Set of mapped repository names", async () => {
-      const repos = [{ repository: "owner/repo1" }, { repository: "owner/repo2" }, { repository: "owner/repo3" }];
+      const repos = [
+        { repository: "owner/repo1" },
+        { repository: "owner/repo2" },
+        { repository: "owner/repo3" },
+      ];
 
       mockQuery.mockResolvedValue({
         rows: repos,
@@ -243,10 +234,9 @@ describe("Repository Channel Service", () => {
 
       await repoChannelService.getMappedRepositories("tenant-123");
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("SELECT repository FROM"),
-        ["tenant-123"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("SELECT repository FROM"), [
+        "tenant-123",
+      ]);
     });
   });
 
@@ -334,10 +324,7 @@ describe("Repository Channel Service", () => {
 
       await repoChannelService.createMapping(data);
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.arrayContaining([null])
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.any(String), expect.arrayContaining([null]));
     });
 
     it("should log mapping creation", async () => {
@@ -510,10 +497,10 @@ describe("Repository Channel Service", () => {
 
       const result = await repoChannelService.isMapped("tenant-123", "owner/repo");
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("SELECT COUNT(*) as count"),
-        ["tenant-123", "owner/repo"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("SELECT COUNT(*) as count"), [
+        "tenant-123",
+        "owner/repo",
+      ]);
       expect(result).toBe(true);
     });
 
@@ -547,10 +534,10 @@ describe("Repository Channel Service", () => {
 
       await repoChannelService.isMapped("tenant-123", "owner/repo");
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("COUNT(*)"),
-        ["tenant-123", "owner/repo"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("COUNT(*)"), [
+        "tenant-123",
+        "owner/repo",
+      ]);
     });
   });
 

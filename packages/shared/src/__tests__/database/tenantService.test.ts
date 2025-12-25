@@ -4,12 +4,7 @@
  * Tests tenant CRUD operations, status management, and audit logging.
  */
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type {
-  Tenant,
-  CreateTenantFromGitHub,
-  LinkSlackWorkspace,
-  TenantAuditEntry,
-} from "../../core/types.js";
+import type { CreateTenantFromGitHub, LinkSlackWorkspace } from "../../core/types.js";
 
 // Mock query and transaction functions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,21 +51,6 @@ describe("Tenant Service", () => {
     status: "active" as const,
     created_at: new Date("2024-01-01"),
     updated_at: new Date("2024-01-02"),
-  };
-
-  const mockTenant: Tenant = {
-    id: "tenant-123",
-    githubOrg: "test-org",
-    githubInstallationId: 12345,
-    githubAppInstalledAt: new Date("2024-01-01"),
-    slackWorkspaceId: "T123456",
-    slackTeamName: "Test Team",
-    slackBotToken: "xoxb-test-token",
-    slackBotUserId: "U123456",
-    slackAppInstalledAt: new Date("2024-01-02"),
-    status: "active",
-    createdAt: new Date("2024-01-01"),
-    updatedAt: new Date("2024-01-02"),
   };
 
   describe("findByGitHubInstallation", () => {
@@ -165,10 +145,10 @@ describe("Tenant Service", () => {
 
       const result = await tenantService.findBySlackWorkspace("T123456");
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("slack_workspace_id = $1"),
-        ["T123456", "deleted"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("slack_workspace_id = $1"), [
+        "T123456",
+        "deleted",
+      ]);
       expect(result).toMatchObject({
         slackWorkspaceId: "T123456",
       });
@@ -237,10 +217,7 @@ describe("Tenant Service", () => {
 
       const result = await tenantService.getActiveTenants();
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("status = $1"),
-        ["active"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("status = $1"), ["active"]);
       expect(result).toHaveLength(2);
     });
 
@@ -263,10 +240,9 @@ describe("Tenant Service", () => {
 
       await tenantService.getActiveTenants();
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("ORDER BY created_at DESC"),
-        ["active"]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("ORDER BY created_at DESC"), [
+        "active",
+      ]);
     });
   });
 
@@ -278,7 +254,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // Check existing
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 }) // Insert
         .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // Audit log
@@ -306,7 +283,8 @@ describe("Tenant Service", () => {
       const existingTenant = { ...mockTenantRow, github_installation_id: null };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [existingTenant], rowCount: 1 }) // Check existing
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 }) // Update
         .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // Audit log
@@ -332,7 +310,8 @@ describe("Tenant Service", () => {
       const newTenantRow = { ...mockTenantRow, status: "pending_slack" };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // Check existing
         .mockResolvedValueOnce({ rows: [newTenantRow], rowCount: 1 }) // Insert
         .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // Audit log
@@ -361,7 +340,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [existingWithSlack], rowCount: 1 }) // Check existing
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 }) // Update
         .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // Audit log
@@ -384,7 +364,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [], rowCount: 0 })
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
@@ -414,7 +395,8 @@ describe("Tenant Service", () => {
       const existingTenant = { ...mockTenantRow, slack_workspace_id: null };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [existingTenant], rowCount: 1 }) // Check existing
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 }) // Update
         .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // Audit log
@@ -447,7 +429,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValue({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
 
@@ -471,7 +454,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [existingWithGitHub], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 })
@@ -503,7 +487,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [existingWithGitHub], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 })
@@ -531,7 +516,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -555,7 +541,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -578,7 +565,8 @@ describe("Tenant Service", () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -597,7 +585,8 @@ describe("Tenant Service", () => {
   describe("activate", () => {
     it("should activate tenant", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -615,7 +604,8 @@ describe("Tenant Service", () => {
 
     it("should throw NotFoundError when tenant not found", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValue({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
 
@@ -626,7 +616,8 @@ describe("Tenant Service", () => {
 
     it("should log activation audit event", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -645,7 +636,8 @@ describe("Tenant Service", () => {
   describe("suspend", () => {
     it("should suspend tenant with reason", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -663,7 +655,8 @@ describe("Tenant Service", () => {
 
     it("should use default reason when not provided", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -674,7 +667,12 @@ describe("Tenant Service", () => {
 
       expect(mockClient.query).toHaveBeenCalledWith(
         expect.any(String),
-        expect.arrayContaining(["tenant-123", "suspended", "system", expect.stringContaining("No reason")])
+        expect.arrayContaining([
+          "tenant-123",
+          "suspended",
+          "system",
+          expect.stringContaining("No reason"),
+        ])
       );
     });
   });
@@ -682,7 +680,8 @@ describe("Tenant Service", () => {
   describe("deleteTenant", () => {
     it("should soft delete tenant", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [mockTenantRow], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -706,7 +705,8 @@ describe("Tenant Service", () => {
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClientQuery = jest.fn<(...args: any[]) => Promise<any>>()
+      const mockClientQuery = jest
+        .fn<(...args: any[]) => Promise<any>>()
         .mockResolvedValueOnce({ rows: [], rowCount: 0 })
         .mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
@@ -715,10 +715,10 @@ describe("Tenant Service", () => {
 
       await tenantService.handleGitHubUninstall(12345);
 
-      expect(mockClient.query).toHaveBeenCalledWith(
-        expect.stringContaining("UPDATE tenants"),
-        ["deleted", "tenant-123"]
-      );
+      expect(mockClient.query).toHaveBeenCalledWith(expect.stringContaining("UPDATE tenants"), [
+        "deleted",
+        "tenant-123",
+      ]);
     });
 
     it("should log warning when tenant not found", async () => {
@@ -790,10 +790,10 @@ describe("Tenant Service", () => {
 
       const result = await tenantService.getAuditLog("tenant-123");
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("tenant_audit_log"),
-        ["tenant-123", 100]
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("tenant_audit_log"), [
+        "tenant-123",
+        100,
+      ]);
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
         tenantId: "tenant-123",

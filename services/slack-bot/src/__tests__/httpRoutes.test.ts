@@ -17,27 +17,25 @@ jest.mock("@kenchi/shared", () => ({
     BAD_REQUEST: 400,
     INTERNAL_SERVER_ERROR: 500,
   },
-  validate: jest.fn(
-    (schema) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (req: any, res: any, next: () => void) => {
-        // Simplified validation - just pass through for now
-        // Real validation middleware would check schema
-        next();
-      }
+  validate: jest.fn((_schema) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (req: any, res: any, next: () => void) => {
+      // Simplified validation - just pass through for now
+      // Real validation middleware would check schema
+      next();
+    }
   ),
   validators: {
     string: jest.fn((v) => typeof v === "string"),
     number: jest.fn((v) => typeof v === "number"),
     required: jest.fn((v) => v !== undefined && v !== null),
   },
-  asyncHandler:
-    jest.fn(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (fn: any) => (req: any, res: any, next: any) => {
-        Promise.resolve(fn(req, res, next)).catch(next);
-      }
-    ),
+  asyncHandler: jest.fn(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (fn: any) => (req: any, res: any, next: any) => {
+      Promise.resolve(fn(req, res, next)).catch(next);
+    }
+  ),
 }));
 
 jest.mock("../services/messageService.js", () => ({
@@ -142,13 +140,11 @@ describe("HTTP Routes", () => {
       });
 
       it("should post message with thread_ts", async () => {
-        const response = await request(app)
-          .post("/slack/message")
-          .send({
-            channel: "C123456",
-            message: "Thread reply",
-            thread_ts: "1234567890.000000",
-          });
+        const response = await request(app).post("/slack/message").send({
+          channel: "C123456",
+          message: "Thread reply",
+          thread_ts: "1234567890.000000",
+        });
 
         expect(response.status).toBe(200);
         expect(response.body.status).toBe("sent");
@@ -204,13 +200,11 @@ describe("HTTP Routes", () => {
       });
 
       it("should post message with installation_id", async () => {
-        const response = await request(app)
-          .post("/slack/message")
-          .send({
-            channel: "C123456",
-            message: "Test message",
-            installation_id: 12345,
-          });
+        const response = await request(app).post("/slack/message").send({
+          channel: "C123456",
+          message: "Test message",
+          installation_id: 12345,
+        });
 
         expect(response.status).toBe(200);
         expect(response.body.status).toBe("sent");
@@ -229,15 +223,13 @@ describe("HTTP Routes", () => {
       });
 
       it("should reject consolidated request without payload", async () => {
-        const response = await request(app)
-          .post("/slack/message")
-          .send({
-            consolidated: true,
-            repository: "owner/repo",
-            installation_id: 12345,
-            commit_sha: "abc123",
-            failure_count: 3,
-          });
+        const response = await request(app).post("/slack/message").send({
+          consolidated: true,
+          repository: "owner/repo",
+          installation_id: 12345,
+          commit_sha: "abc123",
+          failure_count: 3,
+        });
 
         expect(response.status).toBe(400);
         expect(response.body).toHaveProperty("error");
@@ -276,16 +268,16 @@ describe("HTTP Routes", () => {
     describe("multi-tenant mode", () => {
       it("should use tenant client when installation_id provided and multi-tenant enabled", async () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { isMultiTenantEnabled } = jest.requireMock("../services/tenantSlackClient.js") as any;
+        const { isMultiTenantEnabled } = jest.requireMock(
+          "../services/tenantSlackClient.js"
+        ) as any;
         isMultiTenantEnabled.mockReturnValue(true);
 
-        const response = await request(app)
-          .post("/slack/message")
-          .send({
-            channel: "C123456",
-            message: "Test message",
-            installation_id: 12345,
-          });
+        const response = await request(app).post("/slack/message").send({
+          channel: "C123456",
+          message: "Test message",
+          installation_id: 12345,
+        });
 
         expect(response.status).toBe(200);
         expect(response.body.status).toBe("sent");
@@ -300,13 +292,11 @@ describe("HTTP Routes", () => {
         isMultiTenantEnabled.mockReturnValue(true);
         getSlackClientForTenant.mockRejectedValueOnce(new Error("Tenant not found"));
 
-        const response = await request(app)
-          .post("/slack/message")
-          .send({
-            channel: "C123456",
-            message: "Test message",
-            installation_id: 99999,
-          });
+        const response = await request(app).post("/slack/message").send({
+          channel: "C123456",
+          message: "Test message",
+          installation_id: 99999,
+        });
 
         expect(response.status).toBe(400);
         expect(response.body).toHaveProperty("error");
@@ -390,24 +380,20 @@ describe("HTTP Routes", () => {
       });
 
       it("should handle message with special characters", async () => {
-        const response = await request(app)
-          .post("/slack/message")
-          .send({
-            channel: "C123456",
-            message: "Test <script>alert('xss')</script>",
-          });
+        const response = await request(app).post("/slack/message").send({
+          channel: "C123456",
+          message: "Test <script>alert('xss')</script>",
+        });
 
         expect(response.status).toBe(200);
         expect(response.body.status).toBe("sent");
       });
 
       it("should handle message with unicode", async () => {
-        const response = await request(app)
-          .post("/slack/message")
-          .send({
-            channel: "C123456",
-            message: "テスト メッセージ 🚀",
-          });
+        const response = await request(app).post("/slack/message").send({
+          channel: "C123456",
+          message: "テスト メッセージ 🚀",
+        });
 
         expect(response.status).toBe(200);
         expect(response.body.status).toBe("sent");
@@ -689,21 +675,17 @@ describe("HTTP Routes", () => {
       });
 
       it("should handle broadcast with special characters", async () => {
-        const response = await request(app)
-          .post("/slack/broadcast")
-          .send({
-            message: "Test <script>alert('xss')</script>",
-          });
+        const response = await request(app).post("/slack/broadcast").send({
+          message: "Test <script>alert('xss')</script>",
+        });
 
         expect(response.status).toBe(200);
       });
 
       it("should handle broadcast with unicode", async () => {
-        const response = await request(app)
-          .post("/slack/broadcast")
-          .send({
-            message: "テスト メッセージ 🚀",
-          });
+        const response = await request(app).post("/slack/broadcast").send({
+          message: "テスト メッセージ 🚀",
+        });
 
         expect(response.status).toBe(200);
       });

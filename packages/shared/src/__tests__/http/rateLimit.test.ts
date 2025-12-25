@@ -178,8 +178,14 @@ describe("Rate Limiting", () => {
         });
         const middleware = limiter.middleware();
 
-        const req1 = { ...createMockRequest(), headers: { userId: "user-123" } } as unknown as Request;
-        const req2 = { ...createMockRequest(), headers: { userId: "user-456" } } as unknown as Request;
+        const req1 = {
+          ...createMockRequest(),
+          headers: { userId: "user-123" },
+        } as unknown as Request;
+        const req2 = {
+          ...createMockRequest(),
+          headers: { userId: "user-456" },
+        } as unknown as Request;
         const res = createMockResponse();
         const next = createMockNext();
 
@@ -253,7 +259,6 @@ describe("Rate Limiting", () => {
         const res = createMockResponse();
         const next = createMockNext();
 
-        const startTime = Date.now();
         middleware(req, res, next);
 
         jest.advanceTimersByTime(15000); // 15 seconds pass

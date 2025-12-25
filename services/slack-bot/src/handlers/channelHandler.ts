@@ -16,11 +16,7 @@ import {
   fetchInstallationRepositories,
 } from "@kenchi/shared";
 import { type SlackClient } from "../services/channelService.js";
-import {
-  buildRepoSelectModal,
-  buildNoReposModal,
-  type RepositoryOption,
-} from "./modalBuilders.js";
+import { buildRepoSelectModal, buildNoReposModal, type RepositoryOption } from "./modalBuilders.js";
 
 // Re-export modal constants and builders for backward compatibility
 export {
@@ -130,7 +126,7 @@ const buildWelcomeBlocks = (
   channelId: string,
   channelName: string,
   messageTs: string
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any[] => [
   {
     type: "section",
@@ -250,9 +246,9 @@ export const handleBotJoinedChannel = async (
         ? buildNoReposModal(channelName)
         : buildRepoSelectModal(channelId, channelName, repositories);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await client.views.open({
       trigger_id: triggerId,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       view: modalView as any,
     });
 

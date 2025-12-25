@@ -242,10 +242,12 @@ describe("Slack Signature Verification", () => {
       it("should reject request with signature for different body", () => {
         const body = { type: "event_callback" };
         const differentBody = { type: "different" };
-        const bodyString = JSON.stringify(body);
         const differentBodyString = JSON.stringify(differentBody);
         const currentTimestamp = Math.floor(Date.now() / 1000).toString();
-        const signatureForDifferentBody = generateValidSignature(currentTimestamp, differentBodyString);
+        const signatureForDifferentBody = generateValidSignature(
+          currentTimestamp,
+          differentBodyString
+        );
 
         const req = createMockRequest(body, {
           "x-slack-signature": signatureForDifferentBody,
@@ -264,7 +266,11 @@ describe("Slack Signature Verification", () => {
         const body = { type: "event_callback" };
         const bodyString = JSON.stringify(body);
         const currentTimestamp = Math.floor(Date.now() / 1000).toString();
-        const wrongSecretSignature = generateValidSignature(currentTimestamp, bodyString, "wrong-secret");
+        const wrongSecretSignature = generateValidSignature(
+          currentTimestamp,
+          bodyString,
+          "wrong-secret"
+        );
 
         const req = createMockRequest(body, {
           "x-slack-signature": wrongSecretSignature,
@@ -785,7 +791,11 @@ describe("Slack Signature Verification", () => {
         const body = { type: "event_callback" };
         const bodyString = JSON.stringify(body);
         const currentTimestamp = Math.floor(Date.now() / 1000).toString();
-        const validSignature = generateValidSignature(currentTimestamp, bodyString, config.SLACK_SIGNING_SECRET);
+        const validSignature = generateValidSignature(
+          currentTimestamp,
+          bodyString,
+          config.SLACK_SIGNING_SECRET
+        );
 
         const req = createMockRequest(body, {
           "x-slack-signature": validSignature,

@@ -1,0 +1,33 @@
+6d2997b13ce01175e2ac248c9588ec75
+"use strict";
+/**
+ * Formatting module - UI helpers and display utilities.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.formatDependencyChanges = exports.formatDependencyChange = exports.collectCIErrors = exports.takeMatching = exports.groupBy = exports.shouldExcludePath = exports.startsWithAny = exports.containsAny = exports.deduplicateByKey = exports.buildTruncatedList = exports.getFirstSentence = exports.getRepoName = exports.pluralize = exports.formatRelativeTime = exports.truncateText = exports.getConfidenceEmoji = exports.getConfidenceColor = exports.getConfidenceLabelParenthesized = exports.getConfidenceLabel = void 0;
+// UI helpers
+var uiHelpers_js_1 = require("./uiHelpers.js");
+Object.defineProperty(exports, "getConfidenceLabel", { enumerable: true, get: function () { return uiHelpers_js_1.getConfidenceLabel; } });
+Object.defineProperty(exports, "getConfidenceLabelParenthesized", { enumerable: true, get: function () { return uiHelpers_js_1.getConfidenceLabelParenthesized; } });
+Object.defineProperty(exports, "getConfidenceColor", { enumerable: true, get: function () { return uiHelpers_js_1.getConfidenceColor; } });
+Object.defineProperty(exports, "getConfidenceEmoji", { enumerable: true, get: function () { return uiHelpers_js_1.getConfidenceEmoji; } });
+Object.defineProperty(exports, "truncateText", { enumerable: true, get: function () { return uiHelpers_js_1.truncateText; } });
+Object.defineProperty(exports, "formatRelativeTime", { enumerable: true, get: function () { return uiHelpers_js_1.formatRelativeTime; } });
+Object.defineProperty(exports, "pluralize", { enumerable: true, get: function () { return uiHelpers_js_1.pluralize; } });
+Object.defineProperty(exports, "getRepoName", { enumerable: true, get: function () { return uiHelpers_js_1.getRepoName; } });
+Object.defineProperty(exports, "getFirstSentence", { enumerable: true, get: function () { return uiHelpers_js_1.getFirstSentence; } });
+Object.defineProperty(exports, "buildTruncatedList", { enumerable: true, get: function () { return uiHelpers_js_1.buildTruncatedList; } });
+// Array utilities
+var arrayUtils_js_1 = require("./arrayUtils.js");
+Object.defineProperty(exports, "deduplicateByKey", { enumerable: true, get: function () { return arrayUtils_js_1.deduplicateByKey; } });
+Object.defineProperty(exports, "containsAny", { enumerable: true, get: function () { return arrayUtils_js_1.containsAny; } });
+Object.defineProperty(exports, "startsWithAny", { enumerable: true, get: function () { return arrayUtils_js_1.startsWithAny; } });
+Object.defineProperty(exports, "shouldExcludePath", { enumerable: true, get: function () { return arrayUtils_js_1.shouldExcludePath; } });
+Object.defineProperty(exports, "groupBy", { enumerable: true, get: function () { return arrayUtils_js_1.groupBy; } });
+Object.defineProperty(exports, "takeMatching", { enumerable: true, get: function () { return arrayUtils_js_1.takeMatching; } });
+// CI formatters
+var ciFormatters_js_1 = require("./ciFormatters.js");
+Object.defineProperty(exports, "collectCIErrors", { enumerable: true, get: function () { return ciFormatters_js_1.collectCIErrors; } });
+Object.defineProperty(exports, "formatDependencyChange", { enumerable: true, get: function () { return ciFormatters_js_1.formatDependencyChange; } });
+Object.defineProperty(exports, "formatDependencyChanges", { enumerable: true, get: function () { return ciFormatters_js_1.formatDependencyChanges; } });
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL2hvbWUvY2hpbm9uc28vRG9jdW1lbnRzL2tlbmNoaS9wYWNrYWdlcy9zaGFyZWQvc3JjL2Zvcm1hdHRpbmcvaW5kZXgudHMiLCJtYXBwaW5ncyI6IjtBQUFBOztHQUVHOzs7QUFFSCxhQUFhO0FBQ2IsK0NBV3dCO0FBVnRCLGtIQUFBLGtCQUFrQixPQUFBO0FBQ2xCLCtIQUFBLCtCQUErQixPQUFBO0FBQy9CLGtIQUFBLGtCQUFrQixPQUFBO0FBQ2xCLGtIQUFBLGtCQUFrQixPQUFBO0FBQ2xCLDRHQUFBLFlBQVksT0FBQTtBQUNaLGtIQUFBLGtCQUFrQixPQUFBO0FBQ2xCLHlHQUFBLFNBQVMsT0FBQTtBQUNULDJHQUFBLFdBQVcsT0FBQTtBQUNYLGdIQUFBLGdCQUFnQixPQUFBO0FBQ2hCLGtIQUFBLGtCQUFrQixPQUFBO0FBR3BCLGtCQUFrQjtBQUNsQixpREFPeUI7QUFOdkIsaUhBQUEsZ0JBQWdCLE9BQUE7QUFDaEIsNEdBQUEsV0FBVyxPQUFBO0FBQ1gsOEdBQUEsYUFBYSxPQUFBO0FBQ2Isa0hBQUEsaUJBQWlCLE9BQUE7QUFDakIsd0dBQUEsT0FBTyxPQUFBO0FBQ1AsNkdBQUEsWUFBWSxPQUFBO0FBR2QsZ0JBQWdCO0FBQ2hCLHFEQVMyQjtBQVJ6QixrSEFBQSxlQUFlLE9BQUE7QUFDZix5SEFBQSxzQkFBc0IsT0FBQTtBQUN0QiwwSEFBQSx1QkFBdUIsT0FBQSIsIm5hbWVzIjpbXSwic291cmNlcyI6WyIvaG9tZS9jaGlub25zby9Eb2N1bWVudHMva2VuY2hpL3BhY2thZ2VzL3NoYXJlZC9zcmMvZm9ybWF0dGluZy9pbmRleC50cyJdLCJzb3VyY2VzQ29udGVudCI6WyIvKipcbiAqIEZvcm1hdHRpbmcgbW9kdWxlIC0gVUkgaGVscGVycyBhbmQgZGlzcGxheSB1dGlsaXRpZXMuXG4gKi9cblxuLy8gVUkgaGVscGVyc1xuZXhwb3J0IHtcbiAgZ2V0Q29uZmlkZW5jZUxhYmVsLFxuICBnZXRDb25maWRlbmNlTGFiZWxQYXJlbnRoZXNpemVkLFxuICBnZXRDb25maWRlbmNlQ29sb3IsXG4gIGdldENvbmZpZGVuY2VFbW9qaSxcbiAgdHJ1bmNhdGVUZXh0LFxuICBmb3JtYXRSZWxhdGl2ZVRpbWUsXG4gIHBsdXJhbGl6ZSxcbiAgZ2V0UmVwb05hbWUsXG4gIGdldEZpcnN0U2VudGVuY2UsXG4gIGJ1aWxkVHJ1bmNhdGVkTGlzdCxcbn0gZnJvbSBcIi4vdWlIZWxwZXJzLmpzXCI7XG5cbi8vIEFycmF5IHV0aWxpdGllc1xuZXhwb3J0IHtcbiAgZGVkdXBsaWNhdGVCeUtleSxcbiAgY29udGFpbnNBbnksXG4gIHN0YXJ0c1dpdGhBbnksXG4gIHNob3VsZEV4Y2x1ZGVQYXRoLFxuICBncm91cEJ5LFxuICB0YWtlTWF0Y2hpbmcsXG59IGZyb20gXCIuL2FycmF5VXRpbHMuanNcIjtcblxuLy8gQ0kgZm9ybWF0dGVyc1xuZXhwb3J0IHtcbiAgY29sbGVjdENJRXJyb3JzLFxuICBmb3JtYXREZXBlbmRlbmN5Q2hhbmdlLFxuICBmb3JtYXREZXBlbmRlbmN5Q2hhbmdlcyxcbiAgdHlwZSBDSUFubm90YXRpb24sXG4gIHR5cGUgQ0lUZXN0RmFpbHVyZSxcbiAgdHlwZSBDb2xsZWN0RXJyb3JzT3B0aW9ucyxcbiAgdHlwZSBEZXBlbmRlbmN5Q2hhbmdlLFxuICB0eXBlIERlcGVuZGVuY3lDaGFuZ2VUeXBlLFxufSBmcm9tIFwiLi9jaUZvcm1hdHRlcnMuanNcIjtcbiJdLCJ2ZXJzaW9uIjozfQ==

@@ -46,8 +46,12 @@ jest.mock("@kenchi/shared", () => ({
 import { setupRoutes } from "../routes/setupRoutes.js";
 import { findBySlackWorkspace, findByGitHubInstallation, linkSlackWorkspace } from "@kenchi/shared";
 
-const mockFindBySlackWorkspace = findBySlackWorkspace as jest.MockedFunction<typeof findBySlackWorkspace>;
-const mockFindByGitHubInstallation = findByGitHubInstallation as jest.MockedFunction<typeof findByGitHubInstallation>;
+const mockFindBySlackWorkspace = findBySlackWorkspace as jest.MockedFunction<
+  typeof findBySlackWorkspace
+>;
+const mockFindByGitHubInstallation = findByGitHubInstallation as jest.MockedFunction<
+  typeof findByGitHubInstallation
+>;
 const mockLinkSlackWorkspace = linkSlackWorkspace as jest.MockedFunction<typeof linkSlackWorkspace>;
 
 describe("Setup Routes", () => {
@@ -151,7 +155,7 @@ describe("Setup Routes", () => {
         slackTeamName: "Test Team",
         slackBotToken: "xoxb-token",
         slackBotUserId: "U123456",
-              githubAppInstalledAt: new Date(),
+        githubAppInstalledAt: new Date(),
         slackAppInstalledAt: new Date(),
         status: "active" as const,
         createdAt: new Date(),
@@ -219,7 +223,7 @@ describe("Setup Routes", () => {
         slackTeamName: "Existing Team",
         slackBotToken: "xoxb-existing",
         slackBotUserId: "U999999",
-              githubAppInstalledAt: new Date(),
+        githubAppInstalledAt: new Date(),
         slackAppInstalledAt: new Date(),
         status: "active" as const,
         createdAt: new Date(),
@@ -270,7 +274,7 @@ describe("Setup Routes", () => {
         slackTeamName: "Test Team",
         slackBotToken: "xoxb-token",
         slackBotUserId: "U123456",
-              githubAppInstalledAt: new Date(),
+        githubAppInstalledAt: new Date(),
         slackAppInstalledAt: new Date(),
         status: "active" as const,
         createdAt: new Date(),
@@ -311,7 +315,7 @@ describe("Setup Routes", () => {
         slackTeamName: "Test Team",
         slackBotToken: null,
         slackBotUserId: null,
-              githubOrg: "testorg",
+        githubOrg: "testorg",
         githubInstallationId: null,
         githubAppInstalledAt: null,
         slackAppInstalledAt: new Date(),
@@ -331,7 +335,7 @@ describe("Setup Routes", () => {
     });
 
     it("should parse large installation IDs", async () => {
-      const response = await request(app).get("/github/setup").query({
+      await request(app).get("/github/setup").query({
         installation_id: "999999999",
         setup_action: "install",
       });

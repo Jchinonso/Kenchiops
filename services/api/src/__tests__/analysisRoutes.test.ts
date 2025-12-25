@@ -15,15 +15,21 @@ jest.mock("@kenchi/shared", () => {
     ...actual,
     // asyncHandler that properly catches errors and passes to next
     asyncHandler:
-      (fn: Function) =>
-      async (req: unknown, res: unknown, next: Function): Promise<void> => {
+      (
+        fn: (
+          req: unknown,
+          res: unknown,
+          next: (error?: unknown) => void
+        ) => Promise<unknown> | unknown
+      ) =>
+      async (req: unknown, res: unknown, next: (error?: unknown) => void): Promise<void> => {
         try {
           await fn(req, res, next);
         } catch (error) {
           next(error);
         }
       },
-    validate: () => (req: unknown, res: unknown, next: Function) => next(),
+    validate: () => (req: unknown, res: unknown, next: (error?: unknown) => void) => next(),
     validators: {
       required: jest.fn(() => true),
       string: jest.fn(() => true),
@@ -61,9 +67,11 @@ describe("Analysis Routes", () => {
     app.use(analysisRoutes);
     // Add error handling middleware
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-      res.status(500).json({ error: err.message });
-    });
+    app.use(
+      (err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+        res.status(500).json({ error: err.message });
+      }
+    );
   });
 
   describe("POST /api/analyze", () => {
@@ -270,7 +278,7 @@ describe("Analysis Routes", () => {
     it("should handle service errors gracefully", async () => {
       mockPerformAnalysis.mockRejectedValue(new Error("Analysis service error"));
 
-      const response = await request(app).post("/api/analyze").send(validRequest);
+      await request(app).post("/api/analyze").send(validRequest);
 
       // Error handling depends on error middleware configuration
       expect(mockPerformAnalysis).toHaveBeenCalled();
@@ -279,7 +287,7 @@ describe("Analysis Routes", () => {
     it("should handle LLM timeout errors", async () => {
       mockPerformAnalysis.mockRejectedValue(new Error("Request timeout"));
 
-      const response = await request(app).post("/api/analyze").send(validRequest);
+      await request(app).post("/api/analyze").send(validRequest);
 
       expect(mockPerformAnalysis).toHaveBeenCalled();
     });
@@ -311,7 +319,7 @@ describe("Analysis Routes", () => {
         repository: "test/repo",
       });
 
-      const response = await request(app).post("/api/analyze").send({
+      await request(app).post("/api/analyze").send({
         failure_log: "Error",
         repository: "test/repo",
         commit: "abc123",
@@ -327,7 +335,7 @@ describe("Analysis Routes", () => {
         repository: "test/repo",
       });
 
-      const response = await request(app).post("/api/analyze").send({
+      await request(app).post("/api/analyze").send({
         failure_log: "Error",
         repository: "test/repo",
       });
@@ -342,7 +350,12 @@ describe("Analysis Routes", () => {
         analysis: "Test",
         confidence: 0.5,
         repository: "test/repo",
-        full_analysis: { eventId: "test", summary: "Test", confidence: "medium", analyzedAt: new Date().toISOString() },
+        full_analysis: {
+          eventId: "test",
+          summary: "Test",
+          confidence: "medium",
+          analyzedAt: new Date().toISOString(),
+        },
       });
 
       const requests = Array.from({ length: 5 }, () =>
@@ -365,13 +378,20 @@ describe("Analysis Routes", () => {
         analysis: "Test",
         confidence: 0.5,
         repository: "org/" + "a".repeat(200),
-        full_analysis: { eventId: "test", summary: "Test", confidence: "medium", analyzedAt: new Date().toISOString() },
+        full_analysis: {
+          eventId: "test",
+          summary: "Test",
+          confidence: "medium",
+          analyzedAt: new Date().toISOString(),
+        },
       });
 
-      const response = await request(app).post("/api/analyze").send({
-        failure_log: "Error",
-        repository: "org/" + "a".repeat(200),
-      });
+      const response = await request(app)
+        .post("/api/analyze")
+        .send({
+          failure_log: "Error",
+          repository: "org/" + "a".repeat(200),
+        });
 
       expect(response.status).toBe(200);
     });

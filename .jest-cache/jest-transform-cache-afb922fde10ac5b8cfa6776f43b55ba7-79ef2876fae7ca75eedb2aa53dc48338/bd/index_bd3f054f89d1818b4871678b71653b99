@@ -1,0 +1,26 @@
+f287b5046f069439be48a1c05f590a8b
+"use strict";
+/**
+ * Security Module
+ *
+ * Provides utilities for handling sensitive data safely:
+ * - Secret redaction from logs and LLM inputs
+ * - Field filtering for forbidden sensitive fields
+ * - Detection utilities for security auditing
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.REDACTION_PLACEHOLDER = exports.FORBIDDEN_FIELDS = exports.SECRET_PATTERNS = exports.createCustomRedactor = exports.detectSecretTypes = exports.containsSecrets = exports.isForbiddenField = exports.redactObject = exports.redactSecretsWithStats = exports.redactSecrets = void 0;
+var redaction_js_1 = require("./redaction.js");
+Object.defineProperty(exports, "redactSecrets", { enumerable: true, get: function () { return redaction_js_1.redactSecrets; } });
+Object.defineProperty(exports, "redactSecretsWithStats", { enumerable: true, get: function () { return redaction_js_1.redactSecretsWithStats; } });
+Object.defineProperty(exports, "redactObject", { enumerable: true, get: function () { return redaction_js_1.redactObject; } });
+Object.defineProperty(exports, "isForbiddenField", { enumerable: true, get: function () { return redaction_js_1.isForbiddenField; } });
+Object.defineProperty(exports, "containsSecrets", { enumerable: true, get: function () { return redaction_js_1.containsSecrets; } });
+Object.defineProperty(exports, "detectSecretTypes", { enumerable: true, get: function () { return redaction_js_1.detectSecretTypes; } });
+Object.defineProperty(exports, "createCustomRedactor", { enumerable: true, get: function () { return redaction_js_1.createCustomRedactor; } });
+// Re-export constants for convenience
+var index_js_1 = require("../constants/index.js");
+Object.defineProperty(exports, "SECRET_PATTERNS", { enumerable: true, get: function () { return index_js_1.SECRET_PATTERNS; } });
+Object.defineProperty(exports, "FORBIDDEN_FIELDS", { enumerable: true, get: function () { return index_js_1.FORBIDDEN_FIELDS; } });
+Object.defineProperty(exports, "REDACTION_PLACEHOLDER", { enumerable: true, get: function () { return index_js_1.REDACTION_PLACEHOLDER; } });
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL2hvbWUvY2hpbm9uc28vRG9jdW1lbnRzL2tlbmNoaS9wYWNrYWdlcy9zaGFyZWQvc3JjL3NlY3VyaXR5L2luZGV4LnRzIiwibWFwcGluZ3MiOiI7QUFBQTs7Ozs7OztHQU9HOzs7QUFFSCwrQ0FTd0I7QUFSdEIsNkdBQUEsYUFBYSxPQUFBO0FBQ2Isc0hBQUEsc0JBQXNCLE9BQUE7QUFDdEIsNEdBQUEsWUFBWSxPQUFBO0FBQ1osZ0hBQUEsZ0JBQWdCLE9BQUE7QUFDaEIsK0dBQUEsZUFBZSxPQUFBO0FBQ2YsaUhBQUEsaUJBQWlCLE9BQUE7QUFDakIsb0hBQUEsb0JBQW9CLE9BQUE7QUFJdEIsc0NBQXNDO0FBQ3RDLGtEQUsrQjtBQUo3QiwyR0FBQSxlQUFlLE9BQUE7QUFDZiw0R0FBQSxnQkFBZ0IsT0FBQTtBQUNoQixpSEFBQSxxQkFBcUIsT0FBQSIsIm5hbWVzIjpbXSwic291cmNlcyI6WyIvaG9tZS9jaGlub25zby9Eb2N1bWVudHMva2VuY2hpL3BhY2thZ2VzL3NoYXJlZC9zcmMvc2VjdXJpdHkvaW5kZXgudHMiXSwic291cmNlc0NvbnRlbnQiOlsiLyoqXG4gKiBTZWN1cml0eSBNb2R1bGVcbiAqXG4gKiBQcm92aWRlcyB1dGlsaXRpZXMgZm9yIGhhbmRsaW5nIHNlbnNpdGl2ZSBkYXRhIHNhZmVseTpcbiAqIC0gU2VjcmV0IHJlZGFjdGlvbiBmcm9tIGxvZ3MgYW5kIExMTSBpbnB1dHNcbiAqIC0gRmllbGQgZmlsdGVyaW5nIGZvciBmb3JiaWRkZW4gc2Vuc2l0aXZlIGZpZWxkc1xuICogLSBEZXRlY3Rpb24gdXRpbGl0aWVzIGZvciBzZWN1cml0eSBhdWRpdGluZ1xuICovXG5cbmV4cG9ydCB7XG4gIHJlZGFjdFNlY3JldHMsXG4gIHJlZGFjdFNlY3JldHNXaXRoU3RhdHMsXG4gIHJlZGFjdE9iamVjdCxcbiAgaXNGb3JiaWRkZW5GaWVsZCxcbiAgY29udGFpbnNTZWNyZXRzLFxuICBkZXRlY3RTZWNyZXRUeXBlcyxcbiAgY3JlYXRlQ3VzdG9tUmVkYWN0b3IsXG4gIHR5cGUgUmVkYWN0aW9uUmVzdWx0LFxufSBmcm9tIFwiLi9yZWRhY3Rpb24uanNcIjtcblxuLy8gUmUtZXhwb3J0IGNvbnN0YW50cyBmb3IgY29udmVuaWVuY2VcbmV4cG9ydCB7XG4gIFNFQ1JFVF9QQVRURVJOUyxcbiAgRk9SQklEREVOX0ZJRUxEUyxcbiAgUkVEQUNUSU9OX1BMQUNFSE9MREVSLFxuICB0eXBlIFNlY3JldFBhdHRlcm4sXG59IGZyb20gXCIuLi9jb25zdGFudHMvaW5kZXguanNcIjtcbiJdLCJ2ZXJzaW9uIjozfQ==

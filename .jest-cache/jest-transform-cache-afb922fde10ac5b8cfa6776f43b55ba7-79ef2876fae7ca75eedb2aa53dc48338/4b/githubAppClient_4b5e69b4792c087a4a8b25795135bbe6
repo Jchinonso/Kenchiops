@@ -1,0 +1,67 @@
+afec71eb0b5023e8e816b68470423b61
+"use strict";
+/**
+ * GitHub App Client
+ *
+ * Client for communicating with the GitHub App service.
+ * Used by other services to fetch GitHub data via the GitHub App API.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.fetchInstallationRepositories = void 0;
+const config_js_1 = require("../core/config.js");
+const logger_js_1 = require("../core/logger.js");
+const errors_js_1 = require("../core/errors.js");
+const logger = (0, logger_js_1.createLogger)("github-app-client");
+/**
+ * Transform API response to GitHubRepository format
+ */
+const transformRepository = (repo) => ({
+    id: repo.id,
+    fullName: repo.fullName,
+    name: repo.name,
+    owner: repo.fullName.split("/")[0],
+    private: repo.private,
+    defaultBranch: repo.defaultBranch,
+});
+/**
+ * Fetch all repositories accessible to a GitHub App installation
+ *
+ * @param installationId - The GitHub App installation ID
+ * @returns Array of repositories accessible to the installation
+ * @throws ExternalServiceError if the request fails
+ */
+const fetchInstallationRepositories = async (installationId) => {
+    const url = `${config_js_1.config.GITHUB_APP_URL}/api/installations/${installationId}/repositories`;
+    logger.info("Fetching installation repositories", {
+        installationId,
+        url,
+    });
+    try {
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        const data = (await response.json());
+        const repositories = data.repositories.map(transformRepository);
+        logger.info("Fetched installation repositories successfully", {
+            installationId,
+            repositoryCount: repositories.length,
+        });
+        return repositories;
+    }
+    catch (error) {
+        logger.error("Failed to fetch installation repositories", {
+            installationId,
+            error: (0, errors_js_1.getErrorMessage)(error),
+        });
+        throw new errors_js_1.ExternalServiceError("GitHubApp", (0, errors_js_1.getErrorMessage)(error), { installationId });
+    }
+};
+exports.fetchInstallationRepositories = fetchInstallationRepositories;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL2hvbWUvY2hpbm9uc28vRG9jdW1lbnRzL2tlbmNoaS9wYWNrYWdlcy9zaGFyZWQvc3JjL2ludGVncmF0aW9ucy9naXRodWJBcHBDbGllbnQudHMiLCJtYXBwaW5ncyI6IjtBQUFBOzs7OztHQUtHOzs7QUFFSCxpREFBMkM7QUFDM0MsaURBQWlEO0FBQ2pELGlEQUEwRTtBQUcxRSxNQUFNLE1BQU0sR0FBRyxJQUFBLHdCQUFZLEVBQUMsbUJBQW1CLENBQUMsQ0FBQztBQWlCakQ7O0dBRUc7QUFDSCxNQUFNLG1CQUFtQixHQUFHLENBQzFCLElBQWtELEVBQ2hDLEVBQUUsQ0FBQyxDQUFDO0lBQ3RCLEVBQUUsRUFBRSxJQUFJLENBQUMsRUFBRTtJQUNYLFFBQVEsRUFBRSxJQUFJLENBQUMsUUFBUTtJQUN2QixJQUFJLEVBQUUsSUFBSSxDQUFDLElBQUk7SUFDZixLQUFLLEVBQUUsSUFBSSxDQUFDLFFBQVEsQ0FBQyxLQUFLLENBQUMsR0FBRyxDQUFDLENBQUMsQ0FBQyxDQUFDO0lBQ2xDLE9BQU8sRUFBRSxJQUFJLENBQUMsT0FBTztJQUNyQixhQUFhLEVBQUUsSUFBSSxDQUFDLGFBQWE7Q0FDbEMsQ0FBQyxDQUFDO0FBRUg7Ozs7OztHQU1HO0FBQ0ksTUFBTSw2QkFBNkIsR0FBRyxLQUFLLEVBQ2hELGNBQXNCLEVBQ08sRUFBRTtJQUMvQixNQUFNLEdBQUcsR0FBRyxHQUFHLGtCQUFNLENBQUMsY0FBYyxzQkFBc0IsY0FBYyxlQUFlLENBQUM7SUFFeEYsTUFBTSxDQUFDLElBQUksQ0FBQyxvQ0FBb0MsRUFBRTtRQUNoRCxjQUFjO1FBQ2QsR0FBRztLQUNKLENBQUMsQ0FBQztJQUVILElBQUksQ0FBQztRQUNILE1BQU0sUUFBUSxHQUFHLE1BQU0sS0FBSyxDQUFDLEdBQUcsRUFBRTtZQUNoQyxNQUFNLEVBQUUsS0FBSztZQUNiLE9BQU8sRUFBRTtnQkFDUCxjQUFjLEVBQUUsa0JBQWtCO2FBQ25DO1NBQ0YsQ0FBQyxDQUFDO1FBRUgsSUFBSSxDQUFDLFFBQVEsQ0FBQyxFQUFFLEVBQUUsQ0FBQztZQUNqQixNQUFNLFNBQVMsR0FBRyxNQUFNLFFBQVEsQ0FBQyxJQUFJLEVBQUUsQ0FBQztZQUN4QyxNQUFNLElBQUksS0FBSyxDQUFDLFFBQVEsUUFBUSxDQUFDLE1BQU0sS0FBSyxTQUFTLEVBQUUsQ0FBQyxDQUFDO1FBQzNELENBQUM7UUFFRCxNQUFNLElBQUksR0FBRyxDQUFDLE1BQU0sUUFBUSxDQUFDLElBQUksRUFBRSxDQUF5QixDQUFDO1FBRTdELE1BQU0sWUFBWSxHQUFHLElBQUksQ0FBQyxZQUFZLENBQUMsR0FBRyxDQUFDLG1CQUFtQixDQUFDLENBQUM7UUFFaEUsTUFBTSxDQUFDLElBQUksQ0FBQyxnREFBZ0QsRUFBRTtZQUM1RCxjQUFjO1lBQ2QsZUFBZSxFQUFFLFlBQVksQ0FBQyxNQUFNO1NBQ3JDLENBQUMsQ0FBQztRQUVILE9BQU8sWUFBWSxDQUFDO0lBQ3RCLENBQUM7SUFBQyxPQUFPLEtBQUssRUFBRSxDQUFDO1FBQ2YsTUFBTSxDQUFDLEtBQUssQ0FBQywyQ0FBMkMsRUFBRTtZQUN4RCxjQUFjO1lBQ2QsS0FBSyxFQUFFLElBQUEsMkJBQWUsRUFBQyxLQUFLLENBQUM7U0FDOUIsQ0FBQyxDQUFDO1FBRUgsTUFBTSxJQUFJLGdDQUFvQixDQUM1QixXQUFXLEVBQ1gsSUFBQSwyQkFBZSxFQUFDLEtBQUssQ0FBQyxFQUN0QixFQUFFLGNBQWMsRUFBRSxDQUNuQixDQUFDO0lBQ0osQ0FBQztBQUNILENBQUMsQ0FBQztBQTdDVyxRQUFBLDZCQUE2QixpQ0E2Q3hDIiwibmFtZXMiOltdLCJzb3VyY2VzIjpbIi9ob21lL2NoaW5vbnNvL0RvY3VtZW50cy9rZW5jaGkvcGFja2FnZXMvc2hhcmVkL3NyYy9pbnRlZ3JhdGlvbnMvZ2l0aHViQXBwQ2xpZW50LnRzIl0sInNvdXJjZXNDb250ZW50IjpbIi8qKlxuICogR2l0SHViIEFwcCBDbGllbnRcbiAqXG4gKiBDbGllbnQgZm9yIGNvbW11bmljYXRpbmcgd2l0aCB0aGUgR2l0SHViIEFwcCBzZXJ2aWNlLlxuICogVXNlZCBieSBvdGhlciBzZXJ2aWNlcyB0byBmZXRjaCBHaXRIdWIgZGF0YSB2aWEgdGhlIEdpdEh1YiBBcHAgQVBJLlxuICovXG5cbmltcG9ydCB7IGNvbmZpZyB9IGZyb20gXCIuLi9jb3JlL2NvbmZpZy5qc1wiO1xuaW1wb3J0IHsgY3JlYXRlTG9nZ2VyIH0gZnJvbSBcIi4uL2NvcmUvbG9nZ2VyLmpzXCI7XG5pbXBvcnQgeyBFeHRlcm5hbFNlcnZpY2VFcnJvciwgZ2V0RXJyb3JNZXNzYWdlIH0gZnJvbSBcIi4uL2NvcmUvZXJyb3JzLmpzXCI7XG5pbXBvcnQgdHlwZSB7IEdpdEh1YlJlcG9zaXRvcnkgfSBmcm9tIFwiLi4vY29yZS90eXBlcy5qc1wiO1xuXG5jb25zdCBsb2dnZXIgPSBjcmVhdGVMb2dnZXIoXCJnaXRodWItYXBwLWNsaWVudFwiKTtcblxuLyoqXG4gKiBBUEkgcmVzcG9uc2UgZm9yIGluc3RhbGxhdGlvbiByZXBvc2l0b3JpZXNcbiAqL1xuaW50ZXJmYWNlIFJlcG9zaXRvcmllc1Jlc3BvbnNlIHtcbiAgcmVhZG9ubHkgaW5zdGFsbGF0aW9uSWQ6IG51bWJlcjtcbiAgcmVhZG9ubHkgcmVwb3NpdG9yaWVzOiBSZWFkb25seUFycmF5PHtcbiAgICByZWFkb25seSBpZDogbnVtYmVyO1xuICAgIHJlYWRvbmx5IG5hbWU6IHN0cmluZztcbiAgICByZWFkb25seSBmdWxsTmFtZTogc3RyaW5nO1xuICAgIHJlYWRvbmx5IHByaXZhdGU6IGJvb2xlYW47XG4gICAgcmVhZG9ubHkgZGVmYXVsdEJyYW5jaDogc3RyaW5nO1xuICB9PjtcbiAgcmVhZG9ubHkgdG90YWw6IG51bWJlcjtcbn1cblxuLyoqXG4gKiBUcmFuc2Zvcm0gQVBJIHJlc3BvbnNlIHRvIEdpdEh1YlJlcG9zaXRvcnkgZm9ybWF0XG4gKi9cbmNvbnN0IHRyYW5zZm9ybVJlcG9zaXRvcnkgPSAoXG4gIHJlcG86IFJlcG9zaXRvcmllc1Jlc3BvbnNlW1wicmVwb3NpdG9yaWVzXCJdW251bWJlcl1cbik6IEdpdEh1YlJlcG9zaXRvcnkgPT4gKHtcbiAgaWQ6IHJlcG8uaWQsXG4gIGZ1bGxOYW1lOiByZXBvLmZ1bGxOYW1lLFxuICBuYW1lOiByZXBvLm5hbWUsXG4gIG93bmVyOiByZXBvLmZ1bGxOYW1lLnNwbGl0KFwiL1wiKVswXSxcbiAgcHJpdmF0ZTogcmVwby5wcml2YXRlLFxuICBkZWZhdWx0QnJhbmNoOiByZXBvLmRlZmF1bHRCcmFuY2gsXG59KTtcblxuLyoqXG4gKiBGZXRjaCBhbGwgcmVwb3NpdG9yaWVzIGFjY2Vzc2libGUgdG8gYSBHaXRIdWIgQXBwIGluc3RhbGxhdGlvblxuICpcbiAqIEBwYXJhbSBpbnN0YWxsYXRpb25JZCAtIFRoZSBHaXRIdWIgQXBwIGluc3RhbGxhdGlvbiBJRFxuICogQHJldHVybnMgQXJyYXkgb2YgcmVwb3NpdG9yaWVzIGFjY2Vzc2libGUgdG8gdGhlIGluc3RhbGxhdGlvblxuICogQHRocm93cyBFeHRlcm5hbFNlcnZpY2VFcnJvciBpZiB0aGUgcmVxdWVzdCBmYWlsc1xuICovXG5leHBvcnQgY29uc3QgZmV0Y2hJbnN0YWxsYXRpb25SZXBvc2l0b3JpZXMgPSBhc3luYyAoXG4gIGluc3RhbGxhdGlvbklkOiBudW1iZXJcbik6IFByb21pc2U8R2l0SHViUmVwb3NpdG9yeVtdPiA9PiB7XG4gIGNvbnN0IHVybCA9IGAke2NvbmZpZy5HSVRIVUJfQVBQX1VSTH0vYXBpL2luc3RhbGxhdGlvbnMvJHtpbnN0YWxsYXRpb25JZH0vcmVwb3NpdG9yaWVzYDtcblxuICBsb2dnZXIuaW5mbyhcIkZldGNoaW5nIGluc3RhbGxhdGlvbiByZXBvc2l0b3JpZXNcIiwge1xuICAgIGluc3RhbGxhdGlvbklkLFxuICAgIHVybCxcbiAgfSk7XG5cbiAgdHJ5IHtcbiAgICBjb25zdCByZXNwb25zZSA9IGF3YWl0IGZldGNoKHVybCwge1xuICAgICAgbWV0aG9kOiBcIkdFVFwiLFxuICAgICAgaGVhZGVyczoge1xuICAgICAgICBcIkNvbnRlbnQtVHlwZVwiOiBcImFwcGxpY2F0aW9uL2pzb25cIixcbiAgICAgIH0sXG4gICAgfSk7XG5cbiAgICBpZiAoIXJlc3BvbnNlLm9rKSB7XG4gICAgICBjb25zdCBlcnJvclRleHQgPSBhd2FpdCByZXNwb25zZS50ZXh0KCk7XG4gICAgICB0aHJvdyBuZXcgRXJyb3IoYEhUVFAgJHtyZXNwb25zZS5zdGF0dXN9OiAke2Vycm9yVGV4dH1gKTtcbiAgICB9XG5cbiAgICBjb25zdCBkYXRhID0gKGF3YWl0IHJlc3BvbnNlLmpzb24oKSkgYXMgUmVwb3NpdG9yaWVzUmVzcG9uc2U7XG5cbiAgICBjb25zdCByZXBvc2l0b3JpZXMgPSBkYXRhLnJlcG9zaXRvcmllcy5tYXAodHJhbnNmb3JtUmVwb3NpdG9yeSk7XG5cbiAgICBsb2dnZXIuaW5mbyhcIkZldGNoZWQgaW5zdGFsbGF0aW9uIHJlcG9zaXRvcmllcyBzdWNjZXNzZnVsbHlcIiwge1xuICAgICAgaW5zdGFsbGF0aW9uSWQsXG4gICAgICByZXBvc2l0b3J5Q291bnQ6IHJlcG9zaXRvcmllcy5sZW5ndGgsXG4gICAgfSk7XG5cbiAgICByZXR1cm4gcmVwb3NpdG9yaWVzO1xuICB9IGNhdGNoIChlcnJvcikge1xuICAgIGxvZ2dlci5lcnJvcihcIkZhaWxlZCB0byBmZXRjaCBpbnN0YWxsYXRpb24gcmVwb3NpdG9yaWVzXCIsIHtcbiAgICAgIGluc3RhbGxhdGlvbklkLFxuICAgICAgZXJyb3I6IGdldEVycm9yTWVzc2FnZShlcnJvciksXG4gICAgfSk7XG5cbiAgICB0aHJvdyBuZXcgRXh0ZXJuYWxTZXJ2aWNlRXJyb3IoXG4gICAgICBcIkdpdEh1YkFwcFwiLFxuICAgICAgZ2V0RXJyb3JNZXNzYWdlKGVycm9yKSxcbiAgICAgIHsgaW5zdGFsbGF0aW9uSWQgfVxuICAgICk7XG4gIH1cbn07XG4iXSwidmVyc2lvbiI6M30=

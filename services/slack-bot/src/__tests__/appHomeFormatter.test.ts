@@ -256,7 +256,6 @@ describe("App Home Formatter", () => {
         },
       });
       const view = buildAppHomeView(context);
-      const content = JSON.stringify(view.blocks);
 
       // Should not have connect button
       const actionBlocks = view.blocks.filter((b) => b.type === "actions");

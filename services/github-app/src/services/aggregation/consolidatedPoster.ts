@@ -61,7 +61,9 @@ const postPRComments = async (
   }
 
   const results = await Promise.all(
-    pullRequestNumbers.map((prNumber) => postToPR(installationId, owner, repo, prNumber, commentBody))
+    pullRequestNumbers.map((prNumber) =>
+      postToPR(installationId, owner, repo, prNumber, commentBody)
+    )
   );
 
   const successCount = results.filter(Boolean).length;
@@ -119,7 +121,7 @@ const createCheckAnnotations = async (
 const postToGitHub = async (
   aggregation: AggregatedFailures
 ): Promise<{ prCommentsPosted: number; checkAnnotationsCreated: boolean; errors: string[] }> => {
-  const { repository, installationId, pullRequestNumbers, commitSha } = aggregation;
+  const { repository, installationId, pullRequestNumbers } = aggregation;
 
   // Build consolidated PR comment
   const commentBody = buildConsolidatedPRComment(aggregation);

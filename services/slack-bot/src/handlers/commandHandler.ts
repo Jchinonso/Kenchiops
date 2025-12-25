@@ -230,19 +230,17 @@ const handleConfigure: SubcommandHandler = async ({ command, respond, client }) 
     }
 
     // Fetch available repositories from GitHub App API
-    const repositories = await getAvailableRepositories(
-      tenant.githubInstallationId,
-      tenant.id
-    );
+    const repositories = await getAvailableRepositories(tenant.githubInstallationId, tenant.id);
 
     // Open the appropriate modal based on available repositories
-    const view = repositories.length > 0
-      ? buildRepoSelectModal(channelId, channelName, repositories)
-      : buildNoReposModal(channelName);
+    const view =
+      repositories.length > 0
+        ? buildRepoSelectModal(channelId, channelName, repositories)
+        : buildNoReposModal(channelName);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await client.views.open({
       trigger_id: command.trigger_id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       view: view as any,
     });
 
@@ -289,17 +287,20 @@ const handleUnconfigure: SubcommandHandler = async ({ command, respond, client }
     const mappings = await findAllMappingsForTenant(tenant.id);
 
     // Open the appropriate modal based on available mappings
-    const view = mappings.length > 0
-      ? buildUnconfigureModal(mappings.map((m) => ({
-          repository: m.repository,
-          channelId: m.slackChannelId,
-          channelName: m.slackChannelName,
-        })))
-      : buildNoConfiguredReposModal();
+    const view =
+      mappings.length > 0
+        ? buildUnconfigureModal(
+            mappings.map((m) => ({
+              repository: m.repository,
+              channelId: m.slackChannelId,
+              channelName: m.slackChannelName,
+            }))
+          )
+        : buildNoConfiguredReposModal();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await client.views.open({
       trigger_id: command.trigger_id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       view: view as any,
     });
 

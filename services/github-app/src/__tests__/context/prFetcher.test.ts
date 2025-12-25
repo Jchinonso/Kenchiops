@@ -10,7 +10,6 @@ import {
   fetchDependencyChanges,
   fetchBuildConfigChanges,
 } from "../../services/context/prFetcher.js";
-import type { PRMetadata, DependencyChange, BuildConfigChange } from "../../services/context/types.js";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -286,9 +285,7 @@ describe("PR Fetcher", () => {
         data: createMockPR(),
       } as never);
       mockListReviews.mockResolvedValue({
-        data: [
-          { state: "APPROVED", user: { login: "reviewer1" } },
-        ],
+        data: [{ state: "APPROVED", user: { login: "reviewer1" } }],
       } as never);
       mockListComments.mockResolvedValue({
         data: [
@@ -374,9 +371,7 @@ describe("PR Fetcher", () => {
         data: createMockPR(),
       } as never);
       mockListReviews.mockResolvedValue({
-        data: [
-          { state: "COMMENTED", user: { login: "reviewer1" } },
-        ],
+        data: [{ state: "COMMENTED", user: { login: "reviewer1" } }],
       } as never);
       mockListComments.mockResolvedValue({ data: [] } as never);
 
@@ -548,9 +543,7 @@ describe("PR Fetcher", () => {
 
     it("should return empty array when no package.json changes", async () => {
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "src/index.ts", patch: "+console.log('test');" },
-        ],
+        data: [{ filename: "src/index.ts", patch: "+console.log('test');" }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -560,9 +553,7 @@ describe("PR Fetcher", () => {
 
     it("should return empty array when package.json has no patch", async () => {
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "package.json", patch: undefined },
-        ],
+        data: [{ filename: "package.json", patch: undefined }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -581,9 +572,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "package.json", patch },
-        ],
+        data: [{ filename: "package.json", patch }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -606,9 +595,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "package.json", patch },
-        ],
+        data: [{ filename: "package.json", patch }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -632,9 +619,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "package.json", patch },
-        ],
+        data: [{ filename: "package.json", patch }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -661,9 +646,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "package.json", patch },
-        ],
+        data: [{ filename: "package.json", patch }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -699,9 +682,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "package.json", patch },
-        ],
+        data: [{ filename: "package.json", patch }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -723,9 +704,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "package.json", patch },
-        ],
+        data: [{ filename: "package.json", patch }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -754,9 +733,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "packages/app/package.json", patch },
-        ],
+        data: [{ filename: "packages/app/package.json", patch }],
       } as never);
 
       const result = await fetchDependencyChanges(installationId, owner, repo, prNumber);
@@ -791,9 +768,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "tsconfig.json", patch: tsconfigPatch },
-        ],
+        data: [{ filename: "tsconfig.json", patch: tsconfigPatch }],
       } as never);
 
       const result = await fetchBuildConfigChanges(installationId, owner, repo, prNumber);
@@ -841,9 +816,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "packages/app/tsconfig.json", patch: tsconfigPatch },
-        ],
+        data: [{ filename: "packages/app/tsconfig.json", patch: tsconfigPatch }],
       } as never);
 
       const result = await fetchBuildConfigChanges(installationId, owner, repo, prNumber);
@@ -869,9 +842,7 @@ describe("PR Fetcher", () => {
       const largePatch = "a".repeat(50000);
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "tsconfig.json", patch: largePatch },
-        ],
+        data: [{ filename: "tsconfig.json", patch: largePatch }],
       } as never);
 
       const result = await fetchBuildConfigChanges(installationId, owner, repo, prNumber);
@@ -890,9 +861,7 @@ describe("PR Fetcher", () => {
  });`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "vite.config.ts", patch: vitePatch },
-        ],
+        data: [{ filename: "vite.config.ts", patch: vitePatch }],
       } as never);
 
       const result = await fetchBuildConfigChanges(installationId, owner, repo, prNumber);
@@ -910,9 +879,7 @@ describe("PR Fetcher", () => {
  };`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: "jest.config.js", patch: jestPatch },
-        ],
+        data: [{ filename: "jest.config.js", patch: jestPatch }],
       } as never);
 
       const result = await fetchBuildConfigChanges(installationId, owner, repo, prNumber);
@@ -930,9 +897,7 @@ describe("PR Fetcher", () => {
  }`;
 
       mockListFiles.mockResolvedValue({
-        data: [
-          { filename: ".eslintrc.json", patch: eslintPatch },
-        ],
+        data: [{ filename: ".eslintrc.json", patch: eslintPatch }],
       } as never);
 
       const result = await fetchBuildConfigChanges(installationId, owner, repo, prNumber);

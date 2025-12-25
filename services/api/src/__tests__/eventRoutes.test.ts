@@ -13,8 +13,14 @@ jest.mock("@kenchi/shared", () => {
   const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
-    asyncHandler: (fn: Function) => fn,
-    validate: () => (req: unknown, res: unknown, next: Function) => next(),
+    asyncHandler: (
+      fn: (
+        req: unknown,
+        res: unknown,
+        next: (error?: unknown) => void
+      ) => Promise<unknown> | unknown
+    ) => fn,
+    validate: () => (req: unknown, res: unknown, next: (error?: unknown) => void) => next(),
     validators: {
       required: jest.fn(() => true),
       string: jest.fn(() => true),
@@ -296,7 +302,7 @@ describe("Event Routes", () => {
     });
 
     it("should handle empty request body", async () => {
-      const response = await request(app).post("/events").send({});
+      await request(app).post("/events").send({});
 
       // Validation middleware should handle this
     });
@@ -397,10 +403,12 @@ describe("Event Routes", () => {
       const responses = [];
 
       for (let i = 0; i < 3; i++) {
-        const response = await request(app).post("/events").send({
-          ...validEvent,
-          payload: { ...validEvent.payload, id: `evt_${i}` },
-        });
+        const response = await request(app)
+          .post("/events")
+          .send({
+            ...validEvent,
+            payload: { ...validEvent.payload, id: `evt_${i}` },
+          });
         responses.push(response);
       }
 
@@ -421,7 +429,7 @@ describe("Event Routes", () => {
       // Remove source using destructuring
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { source: _, ...eventNoSource } = { ...eventWithoutSource, source: "dummy" };
-      const response = await request(app).post("/events").send(eventWithoutSource);
+      await request(app).post("/events").send(eventWithoutSource);
 
       // Validation depends on middleware configuration
     });
@@ -436,7 +444,7 @@ describe("Event Routes", () => {
       // Remove type using destructuring
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { type: _, ...eventNoType } = { ...eventWithoutType, type: "dummy" };
-      const response = await request(app).post("/events").send(eventWithoutType);
+      await request(app).post("/events").send(eventWithoutType);
 
       // Validation depends on middleware configuration
     });
@@ -444,7 +452,7 @@ describe("Event Routes", () => {
 
   describe("edge cases", () => {
     it("should handle event with null timestamp", async () => {
-      const response = await request(app).post("/events").send({
+      await request(app).post("/events").send({
         type: "CICD_FAILURE",
         source: "github",
         timestamp: null,

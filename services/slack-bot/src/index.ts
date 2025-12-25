@@ -272,19 +272,17 @@ function setupSlackHandlers(app: SlackApp): void {
       }
 
       // Fetch available repositories from GitHub App API
-      const repositories = await getAvailableRepositories(
-        tenant.githubInstallationId,
-        tenant.id
-      );
+      const repositories = await getAvailableRepositories(tenant.githubInstallationId, tenant.id);
 
       // Open the appropriate modal based on available repositories
-      const view = repositories.length > 0
-        ? buildRepoSelectModal(channelId, channelName, repositories, messageTs)
-        : buildNoReposModal(channelName);
+      const view =
+        repositories.length > 0
+          ? buildRepoSelectModal(channelId, channelName, repositories, messageTs)
+          : buildNoReposModal(channelName);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await client.views.open({
         trigger_id: body.trigger_id,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         view: view as any,
       });
 

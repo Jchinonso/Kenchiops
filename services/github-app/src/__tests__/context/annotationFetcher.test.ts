@@ -4,7 +4,6 @@
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { fetchCheckRunAnnotations } from "../../services/context/annotationFetcher.js";
-import type { CheckRunAnnotation } from "../../services/context/types.js";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -254,12 +253,7 @@ describe("Annotation Fetcher Service", () => {
     });
 
     it("should respect GITHUB_CONTEXT_LIMITS.MAX_ANNOTATIONS", async () => {
-      await fetchCheckRunAnnotations(
-        mockInstallationId,
-        mockOwner,
-        mockRepo,
-        mockCheckRunId
-      );
+      await fetchCheckRunAnnotations(mockInstallationId, mockOwner, mockRepo, mockCheckRunId);
 
       expect(mockListAnnotations).toHaveBeenCalledWith({
         owner: mockOwner,
