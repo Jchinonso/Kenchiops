@@ -17,6 +17,7 @@ import {
   initDatabase,
   closeDatabase,
   config,
+  EXPRESS_CONFIG,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
@@ -45,8 +46,10 @@ const createApp = (): express.Express => {
 
   // Capture raw body for webhook signature verification
   // This must come before express.json() so we have the original payload
+  // Use configured limit for large CI context payloads
   app.use(
     express.json({
+      limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
       verify: (req: express.Request, _res, buf) => {
         req.rawBody = buf;
       },

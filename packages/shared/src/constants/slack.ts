@@ -21,3 +21,21 @@ export const SLACK_API_LIMITS = {
   /** Maximum results per page for conversations.list API */
   CONVERSATIONS_LIST_LIMIT: 1000,
 } as const;
+
+/**
+ * Patterns to identify transient socket-mode errors that should not crash the app.
+ * These errors occur when Slack disconnects during the connecting state.
+ */
+export const SOCKET_MODE_ERROR_PATTERNS = [
+  "Unhandled event",
+  "server explicit disconnect",
+  "state",
+] as const;
+
+/**
+ * Check if an error is a transient socket-mode disconnect.
+ * Uses functional pattern with every() for pattern matching.
+ */
+export const isSocketModeDisconnectError = (errorMessage: string | undefined): boolean =>
+  errorMessage !== undefined &&
+  SOCKET_MODE_ERROR_PATTERNS.every((pattern) => errorMessage.includes(pattern));
