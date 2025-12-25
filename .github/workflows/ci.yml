@@ -107,14 +107,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v2
         if: always()
         with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-          flags: unittests
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./coverage/lcov.info
 
   build:
     name: Build
