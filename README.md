@@ -1,7 +1,7 @@
 # Kenchi - AI-Driven DevOps Assistant
 
 [![CI](https://github.com/kenchiops/Kenchiops/actions/workflows/ci.yml/badge.svg)](https://github.com/kenchiops/Kenchiops/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](./packages/shared/src/__tests__)
+[![Coverage](https://img.shields.io/badge/coverage-89.4%25-brightgreen)](./coverage/lcov-report/index.html)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/typescript-5.3+-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
