@@ -18,8 +18,11 @@
     "format": "prettier --write \"**/*.{ts,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,json,md}\"",
     "test": "jest",
+    "test:ci": "jest --maxWorkers=2 --forceExit --detectOpenHandles",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:coverage:ci": "jest --coverage --maxWorkers=2 --forceExit",
+    "test:coverage:badge": "jest --coverage && tsx scripts/generate-coverage-badge.ts",
     "dev:api": "npm run build:shared && npm --workspace services/api run dev",
     "dev:slack-bot": "npm run build:shared && npm --workspace services/slack-bot run dev",
     "dev:github-app": "npm run build:shared && npm --workspace services/github-app run dev",
@@ -27,17 +30,31 @@
     "type-check": "tsc --build --force",
     "validate": "tsx scripts/validate-env.ts",
     "check-build": "tsx scripts/check-build.ts",
-    "check:duplication": "tsx scripts/check-duplication.ts"
+    "check:duplication": "tsx scripts/check-duplication.ts",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
     "@types/jest": "^29.5.11",
     "@types/node": "^20.10.6",
+    "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "eslint": "^8.56.0",
+    "husky": "^9.1.7",
     "jest": "^29.7.0",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.1.1",
+    "supertest": "^7.1.4",
     "ts-jest": "^29.1.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"

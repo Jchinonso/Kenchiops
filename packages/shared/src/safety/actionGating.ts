@@ -5,7 +5,7 @@
  * @module safety/actionGating
  */
 
-import type { ActionProposal, SafetyLevel } from "../types.js";
+import type { ActionProposal, SafetyLevel } from "../core/types.js";
 import { clampConfidenceScore } from "./confidenceUtils.js";
 import {
   CONFIDENCE_THRESHOLDS,
@@ -13,7 +13,7 @@ import {
   VALID_SAFETY_LEVELS,
   CONFIDENCE_MESSAGES,
   type ConfidenceRange,
-} from "../constants.js";
+} from "../constants/index.js";
 
 /**
  * Gating decision type.

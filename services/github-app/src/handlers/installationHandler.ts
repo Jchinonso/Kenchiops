@@ -234,7 +234,7 @@ const handleInstallationUnsuspend = async (
 
     const { tenant } = lookup;
     const slackStatus = tenant.slackWorkspaceId ? "connected" : "pending";
-    return unsuspendActions[slackStatus](tenant, orgName);
+    return await unsuspendActions[slackStatus](tenant, orgName);
   } catch (error) {
     logger.error("Failed to reactivate tenant", {
       installationId: installation.id,

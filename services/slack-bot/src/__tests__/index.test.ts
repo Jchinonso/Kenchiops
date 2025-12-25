@@ -1,0 +1,791 @@
+/**
+ * Unit tests for Slack Bot Service Index
+ *
+ * Tests the core service initialization functions:
+ * - createSlackApp: Creates Slack Bolt app with correct config
+ * - setupSlackHandlers: Registers all event handlers
+ * - initializeDatabase: Initializes database connection
+ *
+ * NOTE: Since index.ts auto-starts the service when imported, we mock all
+ * dependencies before importing to prevent actual service initialization.
+ */
+
+import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import type { AppConfig } from "../config/appConfig.js";
+
+// Mock process.exit to prevent actual exit during tests
+const mockExit = jest.spyOn(process, "exit").mockImplementation((() => {
+  // Don't actually exit
+}) as () => never);
+
+// Store mock references that will be used across tests
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockApp: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockAppConstructor: jest.Mock<any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockLogger: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockInitDatabase: jest.Mock<any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockFindBySlackWorkspace: jest.Mock<any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockDeleteMappingsForChannel: jest.Mock<any>;
+
+describe("Slack Bot Service Index", () => {
+  beforeEach(() => {
+    // Reset modules to ensure clean state for each test
+    jest.resetModules();
+    jest.clearAllMocks();
+    mockExit.mockClear();
+
+    // Create fresh mocks for each test
+    mockApp = {
+      use: jest.fn(),
+      command: jest.fn(),
+      message: jest.fn(),
+      event: jest.fn(),
+      action: jest.fn(),
+      start: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    };
+
+    mockAppConstructor = jest.fn<() => typeof mockApp>(() => mockApp);
+
+    mockLogger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    };
+
+    mockInitDatabase = jest.fn();
+    mockFindBySlackWorkspace = jest.fn<() => Promise<null>>().mockResolvedValue(null);
+    mockDeleteMappingsForChannel = jest.fn<() => Promise<number>>().mockResolvedValue(0);
+
+    // Mock @slack/bolt
+    jest.doMock("@slack/bolt", () => ({
+      __esModule: true,
+      default: {
+        App: mockAppConstructor,
+      },
+    }));
+
+    // Mock express
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockExpress: any = jest.fn(() => ({
+      use: jest.fn(),
+      listen: jest.fn((port: number, callback: () => void) => {
+        callback();
+        return {
+          close: jest.fn((cb: () => void) => cb()),
+        };
+      }),
+    }));
+    mockExpress.json = jest.fn();
+
+    jest.doMock("express", () => ({
+      __esModule: true,
+      default: mockExpress,
+    }));
+
+    // Mock @kenchi/shared
+    jest.doMock("@kenchi/shared", () => ({
+      logger: mockLogger,
+      config: {
+        DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+        MULTI_TENANT_MODE: false,
+      },
+      initDatabase: mockInitDatabase,
+      closeDatabase: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      findBySlackWorkspace: mockFindBySlackWorkspace,
+      deleteMappingsForChannel: mockDeleteMappingsForChannel,
+    }));
+
+    // Mock config/appConfig
+    jest.doMock("../config/appConfig.js", () => ({
+      loadAppConfig: jest.fn(
+        (): AppConfig => ({
+          httpPort: 3002,
+          slackWebhookPort: 3003,
+          slackBotToken: "xoxb-test-token",
+          slackSigningSecret: "test-signing-secret",
+          slackAppToken: "xapp-test-app-token",
+          nodeEnv: "test",
+        })
+      ),
+    }));
+
+    // Mock all handler modules
+    jest.doMock("../handlers/commandHandler.js", () => ({
+      handleKenchiCommand: jest.fn(),
+    }));
+
+    jest.doMock("../handlers/mentionHandler.js", () => ({
+      handleAppMention: jest.fn(),
+    }));
+
+    jest.doMock("../handlers/messageHandler.js", () => ({
+      handleMessage: jest.fn(),
+    }));
+
+    jest.doMock("../handlers/actionHandler.js", () => ({
+      handleActionApproval: jest.fn(),
+      handleActionRejection: jest.fn(),
+      handlePositiveFeedback: jest.fn(),
+      handleNegativeFeedback: jest.fn(),
+    }));
+
+    jest.doMock("../handlers/channelHandler.js", () => ({
+      handleBotJoinedChannel: jest.fn(),
+      buildRepoSelectModal: jest.fn(),
+      buildNoReposModal: jest.fn(),
+      getAvailableRepositories: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+    }));
+
+    jest.doMock("../handlers/appHomeHandler.js", () => ({
+      handleAppHomeOpened: jest.fn(),
+      handleTestConnection: jest.fn(),
+      handleRefreshHome: jest.fn(),
+    }));
+
+    jest.doMock("../handlers/repoSelectHandler.js", () => ({
+      registerRepoSelectHandler: jest.fn(),
+    }));
+
+    jest.doMock("../routes/httpRoutes.js", () => ({
+      createHttpRoutes: jest.fn(() => jest.fn()),
+    }));
+
+    jest.doMock("../routes/oauthRoutes.js", () => ({
+      oauthRoutes: jest.fn(),
+    }));
+  });
+
+  afterEach(() => {
+    jest.resetModules();
+  });
+
+  describe("createSlackApp", () => {
+    it("should create Slack app with correct configuration", async () => {
+      await import("../index.js");
+
+      expect(mockAppConstructor).toHaveBeenCalled();
+    });
+
+    it("should configure app with socket mode enabled", async () => {
+      await import("../index.js");
+
+      expect(mockAppConstructor).toHaveBeenCalledWith(
+        expect.objectContaining({
+          socketMode: true,
+        })
+      );
+    });
+
+    it("should configure app with bot token from config", async () => {
+      await import("../index.js");
+
+      expect(mockAppConstructor).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: "xoxb-test-token",
+        })
+      );
+    });
+
+    it("should configure app with signing secret from config", async () => {
+      await import("../index.js");
+
+      expect(mockAppConstructor).toHaveBeenCalledWith(
+        expect.objectContaining({
+          signingSecret: "test-signing-secret",
+        })
+      );
+    });
+
+    it("should configure app with app token from config", async () => {
+      await import("../index.js");
+
+      expect(mockAppConstructor).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appToken: "xapp-test-app-token",
+        })
+      );
+    });
+  });
+
+  describe("setupSlackHandlers", () => {
+    it("should register middleware for logging events", async () => {
+      await import("../index.js");
+
+      expect(mockApp.use).toHaveBeenCalled();
+    });
+
+    it("should register /kenchi command handler", async () => {
+      await import("../index.js");
+
+      expect(mockApp.command).toHaveBeenCalledWith("/kenchi", expect.any(Function));
+    });
+
+    it("should register message event handler", async () => {
+      await import("../index.js");
+
+      expect(mockApp.message).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    it("should register app_mention event handler", async () => {
+      await import("../index.js");
+
+      expect(mockApp.event).toHaveBeenCalledWith("app_mention", expect.any(Function));
+    });
+
+    it("should register member_joined_channel event handler", async () => {
+      await import("../index.js");
+
+      expect(mockApp.event).toHaveBeenCalledWith("member_joined_channel", expect.any(Function));
+    });
+
+    it("should register member_left_channel event handler", async () => {
+      await import("../index.js");
+
+      expect(mockApp.event).toHaveBeenCalledWith("member_left_channel", expect.any(Function));
+    });
+
+    it("should register app_home_opened event handler", async () => {
+      await import("../index.js");
+
+      expect(mockApp.event).toHaveBeenCalledWith("app_home_opened", expect.any(Function));
+    });
+
+    it("should register approve action handler", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actionCalls = mockApp.action.mock.calls as any[];
+      const approveAction = actionCalls.find((call) => String(call[0]).includes("approve_action_"));
+      expect(approveAction).toBeDefined();
+    });
+
+    it("should register reject action handler", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actionCalls = mockApp.action.mock.calls as any[];
+      const rejectAction = actionCalls.find((call) => String(call[0]).includes("reject_action_"));
+      expect(rejectAction).toBeDefined();
+    });
+
+    it("should register feedback action handlers", async () => {
+      await import("../index.js");
+
+      expect(mockApp.action).toHaveBeenCalledWith("feedback_helpful", expect.any(Function));
+      expect(mockApp.action).toHaveBeenCalledWith("feedback_not_helpful", expect.any(Function));
+    });
+
+    it("should register app home action handlers", async () => {
+      await import("../index.js");
+
+      expect(mockApp.action).toHaveBeenCalledWith("test_connection", expect.any(Function));
+      expect(mockApp.action).toHaveBeenCalledWith("refresh_home", expect.any(Function));
+    });
+
+    it("should register external link action handlers", async () => {
+      await import("../index.js");
+
+      expect(mockApp.action).toHaveBeenCalledWith("connect_github", expect.any(Function));
+      expect(mockApp.action).toHaveBeenCalledWith("view_docs", expect.any(Function));
+      expect(mockApp.action).toHaveBeenCalledWith("get_support", expect.any(Function));
+    });
+
+    it("should register select_repository_button action handler", async () => {
+      await import("../index.js");
+
+      expect(mockApp.action).toHaveBeenCalledWith("select_repository_button", expect.any(Function));
+    });
+
+    it("should register repository select modal handler", async () => {
+      await import("../index.js");
+
+      const { registerRepoSelectHandler } = await import("../handlers/repoSelectHandler.js");
+
+      expect(registerRepoSelectHandler).toHaveBeenCalledWith(mockApp);
+    });
+  });
+
+  describe("initializeDatabase", () => {
+    it("should call initDatabase with correct configuration", async () => {
+      await import("../index.js");
+
+      expect(mockInitDatabase).toHaveBeenCalledWith({
+        connectionString: "postgresql://test:test@localhost:5432/test",
+        maxConnections: 10,
+        idleTimeoutMs: 30000,
+      });
+    });
+
+    it("should log success message after database initialization", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const logCalls = mockLogger.info.mock.calls as any[];
+      const dbInitLog = logCalls.find((call) =>
+        String(call[0]).includes("Database connection initialized")
+      );
+
+      expect(dbInitLog).toBeDefined();
+    });
+
+    it("should handle database initialization failure", async () => {
+      mockInitDatabase.mockImplementation(() => {
+        throw new Error("Database connection failed");
+      });
+
+      await import("../index.js");
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        "Failed to start Slack bot",
+        expect.objectContaining({
+          error: expect.stringContaining("Database connection failed"),
+        })
+      );
+    });
+  });
+
+  describe("middleware logging function", () => {
+    it("should log incoming Slack events with type", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const middlewareCalls = mockApp.use.mock.calls as any[];
+      expect(middlewareCalls.length).toBeGreaterThan(0);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const middlewareFunction = middlewareCalls[0][0] as any;
+
+      const mockNext = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      const mockArgs = {
+        payload: {
+          type: "app_mention",
+        },
+        next: mockNext,
+      };
+
+      await middlewareFunction(mockArgs);
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        "Received Slack event",
+        expect.objectContaining({
+          type: "app_mention",
+        })
+      );
+      expect(mockNext).toHaveBeenCalled();
+    });
+
+    it("should call next even if payload has no type", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const middlewareCalls = mockApp.use.mock.calls as any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const middlewareFunction = middlewareCalls[0][0] as any;
+
+      const mockNext = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      const mockArgs = {
+        payload: {},
+        next: mockNext,
+      };
+
+      await middlewareFunction(mockArgs);
+
+      expect(mockNext).toHaveBeenCalled();
+    });
+
+    it("should call next even if no payload", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const middlewareCalls = mockApp.use.mock.calls as any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const middlewareFunction = middlewareCalls[0][0] as any;
+
+      const mockNext = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      const mockArgs = {
+        payload: null,
+        next: mockNext,
+      };
+
+      await middlewareFunction(mockArgs);
+
+      expect(mockNext).toHaveBeenCalled();
+    });
+  });
+
+  describe("member_joined_channel handler", () => {
+    it("should handle bot joining channel", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const eventCalls = mockApp.event.mock.calls as any[];
+      const joinedChannelCall = eventCalls.find((call) => call[0] === "member_joined_channel");
+
+      expect(joinedChannelCall).toBeDefined();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = joinedChannelCall[1] as any;
+
+      const mockClient = {
+        auth: {
+          test: jest.fn<() => Promise<{ bot_id: string; user_id: string }>>().mockResolvedValue({
+            bot_id: "B123",
+            user_id: "U123",
+          }),
+        },
+      };
+
+      const mockEvent = {
+        user: "B123",
+        channel: "C456",
+      };
+
+      const { handleBotJoinedChannel } = await import("../handlers/channelHandler.js");
+
+      await handler({ event: mockEvent, client: mockClient });
+
+      expect(handleBotJoinedChannel).toHaveBeenCalledWith(mockClient, "C456", "B123");
+    });
+
+    it("should ignore when non-bot user joins", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const eventCalls = mockApp.event.mock.calls as any[];
+      const joinedChannelCall = eventCalls.find((call) => call[0] === "member_joined_channel");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = joinedChannelCall[1] as any;
+
+      const mockClient = {
+        auth: {
+          test: jest.fn<() => Promise<{ bot_id: string; user_id: string }>>().mockResolvedValue({
+            bot_id: "B123",
+            user_id: "U123",
+          }),
+        },
+      };
+
+      const mockEvent = {
+        user: "U999",
+        channel: "C456",
+      };
+
+      const { handleBotJoinedChannel } = await import("../handlers/channelHandler.js");
+
+      (handleBotJoinedChannel as jest.Mock).mockClear();
+
+      await handler({ event: mockEvent, client: mockClient });
+
+      expect(handleBotJoinedChannel).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("member_left_channel handler", () => {
+    it("should clean up mappings when bot leaves channel", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const eventCalls = mockApp.event.mock.calls as any[];
+      const leftChannelCall = eventCalls.find((call) => call[0] === "member_left_channel");
+
+      expect(leftChannelCall).toBeDefined();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = leftChannelCall[1] as any;
+
+      const mockClient = {
+        auth: {
+          test: jest
+            .fn<() => Promise<{ bot_id: string; user_id: string; team_id: string }>>()
+            .mockResolvedValue({
+              bot_id: "B123",
+              user_id: "U123",
+              team_id: "T456",
+            }),
+        },
+      };
+
+      const mockEvent = {
+        user: "B123",
+        channel: "C789",
+      };
+
+      mockFindBySlackWorkspace.mockResolvedValue({
+        id: "tenant-123",
+        name: "Test Tenant",
+      });
+
+      mockDeleteMappingsForChannel.mockResolvedValue(2);
+
+      await handler({ event: mockEvent, client: mockClient });
+
+      expect(mockFindBySlackWorkspace).toHaveBeenCalledWith("T456");
+      expect(mockDeleteMappingsForChannel).toHaveBeenCalledWith("tenant-123", "C789");
+    });
+
+    it("should ignore when non-bot user leaves", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const eventCalls = mockApp.event.mock.calls as any[];
+      const leftChannelCall = eventCalls.find((call) => call[0] === "member_left_channel");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = leftChannelCall[1] as any;
+
+      const mockClient = {
+        auth: {
+          test: jest.fn<() => Promise<{ bot_id: string; user_id: string }>>().mockResolvedValue({
+            bot_id: "B123",
+            user_id: "U123",
+          }),
+        },
+      };
+
+      const mockEvent = {
+        user: "U999",
+        channel: "C789",
+      };
+
+      mockFindBySlackWorkspace.mockClear();
+
+      await handler({ event: mockEvent, client: mockClient });
+
+      expect(mockFindBySlackWorkspace).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("action handlers", () => {
+    it("should handle approve action with button type", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actionCalls = mockApp.action.mock.calls as any[];
+      const approveActionCall = actionCalls.find((call) =>
+        String(call[0]).includes("approve_action_")
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = approveActionCall[1] as any;
+
+      const mockAction = {
+        type: "button",
+        action_id: "approve_action_123",
+        value: "test-value",
+      };
+
+      const mockBody = {
+        message: {
+          ts: "1234567890.123456",
+        },
+      };
+
+      const mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      const mockSay = jest.fn();
+
+      const { handleActionApproval } = await import("../handlers/actionHandler.js");
+
+      await handler({
+        action: mockAction,
+        ack: mockAck,
+        say: mockSay,
+        body: mockBody,
+      });
+
+      expect(handleActionApproval).toHaveBeenCalledWith(
+        mockAction,
+        mockAck,
+        mockSay,
+        "1234567890.123456"
+      );
+    });
+
+    it("should handle reject action with button type", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actionCalls = mockApp.action.mock.calls as any[];
+      const rejectActionCall = actionCalls.find((call) =>
+        String(call[0]).includes("reject_action_")
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = rejectActionCall[1] as any;
+
+      const mockAction = {
+        type: "button",
+        action_id: "reject_action_123",
+        value: "test-value",
+      };
+
+      const mockBody = {
+        message: {
+          ts: "1234567890.123456",
+        },
+      };
+
+      const mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      const mockSay = jest.fn();
+
+      const { handleActionRejection } = await import("../handlers/actionHandler.js");
+
+      await handler({
+        action: mockAction,
+        ack: mockAck,
+        say: mockSay,
+        body: mockBody,
+      });
+
+      expect(handleActionRejection).toHaveBeenCalledWith(
+        mockAction,
+        mockAck,
+        mockSay,
+        "1234567890.123456"
+      );
+    });
+  });
+
+  describe("select_repository_button handler", () => {
+    it("should open repository selection modal", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actionCalls = mockApp.action.mock.calls as any[];
+      const selectRepoCall = actionCalls.find((call) => call[0] === "select_repository_button");
+
+      expect(selectRepoCall).toBeDefined();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = selectRepoCall[1] as any;
+
+      const mockClient = {
+        auth: {
+          test: jest.fn<() => Promise<{ team_id: string }>>().mockResolvedValue({
+            team_id: "T123",
+          }),
+        },
+        views: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          open: jest.fn<() => Promise<any>>().mockResolvedValue({}),
+        },
+      };
+
+      const mockAction = {
+        type: "button",
+        value: JSON.stringify({
+          channelId: "C123",
+          channelName: "general",
+        }),
+      };
+
+      const mockBody = {
+        trigger_id: "trigger-123",
+        user: {
+          id: "U123",
+        },
+      };
+
+      const mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+
+      mockFindBySlackWorkspace.mockResolvedValue({
+        id: "tenant-123",
+        githubInstallationId: "12345",
+      });
+
+      const { getAvailableRepositories, buildRepoSelectModal } =
+        await import("../handlers/channelHandler.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (getAvailableRepositories as any).mockResolvedValue([
+        { full_name: "owner/repo1" },
+        { full_name: "owner/repo2" },
+      ]);
+
+      (buildRepoSelectModal as jest.Mock).mockReturnValue({
+        type: "modal",
+        title: { type: "plain_text", text: "Select Repository" },
+      });
+
+      await handler({
+        action: mockAction,
+        body: mockBody,
+        client: mockClient,
+        ack: mockAck,
+      });
+
+      expect(mockAck).toHaveBeenCalled();
+      expect(getAvailableRepositories).toHaveBeenCalledWith("12345", "tenant-123");
+      expect(buildRepoSelectModal).toHaveBeenCalled();
+      expect(mockClient.views.open).toHaveBeenCalledWith({
+        trigger_id: "trigger-123",
+        view: expect.any(Object),
+      });
+    });
+
+    it("should handle missing GitHub installation", async () => {
+      await import("../index.js");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actionCalls = mockApp.action.mock.calls as any[];
+      const selectRepoCall = actionCalls.find((call) => call[0] === "select_repository_button");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = selectRepoCall[1] as any;
+
+      const mockClient = {
+        auth: {
+          test: jest.fn<() => Promise<{ team_id: string }>>().mockResolvedValue({
+            team_id: "T123",
+          }),
+        },
+        views: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          open: jest.fn<() => Promise<any>>().mockResolvedValue({}),
+        },
+      };
+
+      const mockAction = {
+        type: "button",
+        value: JSON.stringify({
+          channelId: "C123",
+          channelName: "general",
+        }),
+      };
+
+      const mockBody = {
+        trigger_id: "trigger-123",
+        user: {
+          id: "U123",
+        },
+      };
+
+      const mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+
+      mockFindBySlackWorkspace.mockResolvedValue({
+        id: "tenant-123",
+        githubInstallationId: null,
+      });
+
+      await handler({
+        action: mockAction,
+        body: mockBody,
+        client: mockClient,
+        ack: mockAck,
+      });
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        "No GitHub installation found for workspace",
+        expect.any(Object)
+      );
+
+      expect(mockClient.views.open).not.toHaveBeenCalled();
+    });
+  });
+});

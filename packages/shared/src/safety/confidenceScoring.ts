@@ -3,14 +3,14 @@
  * Calculates 6-factor confidence scores for LLM analysis results.
  */
 
-import type { LLMAnalysisResult, Evidence, ConfidenceScoreResult } from "../types.js";
+import type { LLMAnalysisResult, Evidence, ConfidenceScoreResult } from "../core/types.js";
 import { detectUncertainty } from "./uncertaintyDetection.js";
 import { calculateEvidenceAlignment, assessCompleteness } from "./evidenceValidation.js";
 import { validateAgainstKnowledgeBase } from "./knowledgeValidation.js";
 import { checkConsistency } from "./consistency.js";
 import { determineGatingDecision } from "./actionGating.js";
 import { clampConfidenceScore } from "./confidenceUtils.js";
-import { BASE_CONFIDENCE_SCORES } from "../constants.js";
+import { BASE_CONFIDENCE_SCORES } from "../constants/index.js";
 
 /**
  * LLM confidence level to base score mapping.

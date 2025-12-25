@@ -250,3 +250,114 @@ export interface SlackBroadcastResponse {
   readonly channels?: readonly SlackBroadcastChannelResult[];
   readonly error?: string;
 }
+
+// ==================== Modal Types ====================
+
+/**
+ * Slack plain text element
+ */
+export interface SlackPlainTextElement {
+  readonly type: "plain_text";
+  readonly text: string;
+  readonly emoji?: boolean;
+}
+
+/**
+ * Slack markdown text element
+ */
+export interface SlackMrkdwnElement {
+  readonly type: "mrkdwn";
+  readonly text: string;
+}
+
+/**
+ * Slack text element (union of plain text and markdown)
+ */
+export type SlackTextElement = SlackPlainTextElement | SlackMrkdwnElement;
+
+/**
+ * Slack select option
+ */
+export interface SlackSelectOption {
+  readonly text: SlackPlainTextElement;
+  readonly value: string;
+}
+
+/**
+ * Slack static select element
+ */
+export interface SlackStaticSelectElement {
+  readonly type: "static_select";
+  readonly action_id: string;
+  readonly placeholder?: SlackPlainTextElement;
+  readonly options: readonly SlackSelectOption[];
+}
+
+/**
+ * Slack section block
+ */
+export interface SlackSectionBlock {
+  readonly type: "section";
+  readonly text?: SlackTextElement;
+  readonly block_id?: string;
+  readonly accessory?: SlackStaticSelectElement | SlackButtonElement;
+}
+
+/**
+ * Slack button element
+ */
+export interface SlackButtonElement {
+  readonly type: "button";
+  readonly text: SlackPlainTextElement;
+  readonly action_id: string;
+  readonly value?: string;
+  readonly style?: "primary" | "danger";
+}
+
+/**
+ * Slack input block
+ */
+export interface SlackInputBlock {
+  readonly type: "input";
+  readonly block_id: string;
+  readonly element: SlackStaticSelectElement;
+  readonly label: SlackPlainTextElement;
+}
+
+/**
+ * Slack divider block
+ */
+export interface SlackDividerBlock {
+  readonly type: "divider";
+}
+
+/**
+ * Slack context block
+ */
+export interface SlackContextBlock {
+  readonly type: "context";
+  readonly elements: readonly SlackTextElement[];
+}
+
+/**
+ * Modal block types
+ */
+export type SlackModalBlock =
+  | SlackSectionBlock
+  | SlackInputBlock
+  | SlackDividerBlock
+  | SlackContextBlock;
+
+/**
+ * Slack modal view structure
+ * Note: blocks is mutable to satisfy Slack SDK types
+ */
+export interface SlackModalView {
+  readonly type: "modal";
+  readonly callback_id: string;
+  readonly private_metadata?: string;
+  readonly title: SlackPlainTextElement;
+  readonly submit?: SlackPlainTextElement;
+  readonly close?: SlackPlainTextElement;
+  readonly blocks: SlackModalBlock[];
+}

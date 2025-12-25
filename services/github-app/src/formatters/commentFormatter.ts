@@ -6,11 +6,22 @@
  */
 
 import {
+  // UI Helpers
   collectCIErrors,
   getConfidenceLabel,
   truncateText,
+  pluralize,
+  getRepoName,
+  getFirstSentence,
+  buildTruncatedList,
+  // Constants
   GIT_DISPLAY,
-  UI_CONFIDENCE_THRESHOLDS,
+  UI_EMOJI,
+  PRIORITY_EMOJI_MAP,
+  DEPENDENCY_EMOJI_MAP,
+  CONFIDENCE_BADGE_THRESHOLDS,
+  GITHUB_COMMENT_DISPLAY,
+  // Types
   type CIAnnotation,
   type CITestFailure,
 } from "@kenchi/shared";
@@ -50,200 +61,188 @@ export interface AnalysisData {
   }>;
 }
 
-/**
- * Priority emoji mapping for actions.
- */
-const PRIORITY_EMOJI: Readonly<Record<string, string>> = {
-  critical: "🔴",
-  high: "🟠",
-  medium: "🟡",
-  low: "🟢",
-};
+// ============================================================================
+// Static Content (uses shared UI_EMOJI)
+// ============================================================================
 
-/**
- * Gets the priority emoji for an action.
- */
+const HEADER = `## ${UI_EMOJI.failure} KenchiOps — CI Failure Analysis\n`;
+const SUCCESS_HEADER = `## ${UI_EMOJI.success} KenchiOps — CI Analysis Complete\n`;
+const FOOTER = `---\n*${UI_EMOJI.robot} Powered by [KenchiOps](https://github.com/kenchi/devops) — AI-driven DevOps Assistant*`;
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+const getFailureAnnotations = (annotations?: ReadonlyArray<CIAnnotation>): CIAnnotation[] =>
+  annotations?.filter((a) => a.level === "failure") ?? [];
+
 const getPriorityEmoji = (priority: string): string =>
-  PRIORITY_EMOJI[priority.toLowerCase()] || "⚪";
+  PRIORITY_EMOJI_MAP[priority.toLowerCase()] ?? UI_EMOJI.priorityDefault;
 
-/**
- * Gets confidence badge emoji based on score.
- * Uses UI_CONFIDENCE_THRESHOLDS for consistency.
- */
-const getConfidenceBadge = (confidence: number): string => {
-  if (confidence >= UI_CONFIDENCE_THRESHOLDS.VERY_HIGH) return "🟢";
-  if (confidence >= UI_CONFIDENCE_THRESHOLDS.HIGH) return "🟡";
-  if (confidence >= UI_CONFIDENCE_THRESHOLDS.MEDIUM) return "🟠";
-  return "🔴";
+const getDependencyEmoji = (type: string): string =>
+  DEPENDENCY_EMOJI_MAP[type] ?? UI_EMOJI.depUpdated;
+
+const getConfidenceBadge = (confidence: number): string =>
+  CONFIDENCE_BADGE_THRESHOLDS.find((t) => confidence >= t.min)?.emoji ?? UI_EMOJI.confidenceVeryLow;
+
+// ============================================================================
+// Item Formatters
+// ============================================================================
+
+const formatTestFailure = (failure: CITestFailure): string => {
+  const location = failure.file ? ` in \`${failure.file}\`` : "";
+  return `- ${UI_EMOJI.failure} \`${truncateText(failure.testName, GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH)}\`${location}`;
 };
 
-/**
- * Builds the branded header section.
- */
-const buildHeader = (): string => `## ❌ KenchiOps — CI Failure Analysis\n`;
+const formatAnnotation = (ann: CIAnnotation): string =>
+  `- ${UI_EMOJI.location} \`${ann.path}:${ann.startLine}\` — ${truncateText(ann.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
 
-/**
- * Builds the summary line showing what failed.
- */
+const formatDependencyChange = (
+  dep: NonNullable<AnalysisData["dependencyChanges"]>[number]
+): string => {
+  const icon = getDependencyEmoji(dep.type);
+  const version =
+    dep.oldVersion && dep.newVersion
+      ? ` (${dep.oldVersion} → ${dep.newVersion})`
+      : dep.newVersion
+        ? ` (${dep.newVersion})`
+        : "";
+  return `- ${icon} \`${dep.name}\`${version}`;
+};
+
+const formatAction = (action: { priority: string; description: string }, index: number): string =>
+  `${index + 1}. ${getPriorityEmoji(action.priority)} ${action.description}`;
+
+const formatError = (err: string): string =>
+  truncateText(err, GITHUB_COMMENT_DISPLAY.MAX_ERROR_LINE_LENGTH);
+
+const formatImpact = (message: string): string => `- ${UI_EMOJI.warning} ${message}`;
+
+// ============================================================================
+// Section Builders
+// ============================================================================
+
 const buildSummaryLine = (analysis: AnalysisData): string => {
-  const repoName = analysis.repository.split("/").pop() || analysis.repository;
-  const checkName = analysis.checkName || "CI";
-
-  // Find first test failure if available
+  const repoName = getRepoName(analysis.repository);
+  const checkName = analysis.checkName ?? "CI";
   const firstTest = analysis.testFailures?.[0]?.testName;
-  const testInfo = firstTest ? ` on test \`${truncateText(firstTest, 40)}\`` : "";
+  const testInfo = firstTest
+    ? ` on test \`${truncateText(firstTest, GITHUB_COMMENT_DISPLAY.MAX_SUMMARY_TEST_LENGTH)}\``
+    : "";
 
-  return `📦 **${repoName}** ${checkName} pipeline failed${testInfo}\n`;
+  return `${UI_EMOJI.package} **${repoName}** ${checkName} pipeline failed${testInfo}\n`;
 };
 
-/**
- * Builds the "Evidence" section with analysis details.
- */
-const buildEvidenceSection = (analysis: AnalysisData): string => {
-  const lines: string[] = ["### 🔍 Evidence\n"];
+const buildCauseQuote = (analysis: AnalysisData): string => {
+  const cause = analysis.identified_cause ?? getFirstSentence(analysis.analysis ?? "");
+  return cause ? `> ${cause}\n` : "";
+};
 
-  // Main identified cause
-  if (analysis.identified_cause) {
-    lines.push(`> ${analysis.identified_cause}\n`);
-  } else if (analysis.analysis) {
-    const firstSentence = analysis.analysis.split(/[.!?]/)[0]?.trim();
-    if (firstSentence) {
-      lines.push(`> ${firstSentence}\n`);
-    }
-  }
+const buildTestFailuresSubsection = (testFailures: ReadonlyArray<CITestFailure>): string[] => {
+  if (testFailures.length === 0) return [];
 
-  // Test failure details
-  if (analysis.testFailures && analysis.testFailures.length > 0) {
-    const failureCount = analysis.testFailures.length;
-    lines.push(`\n**Test Failures:** ${failureCount} test${failureCount > 1 ? "s" : ""} failed\n`);
+  const count = testFailures.length;
+  return [
+    `\n**Test Failures:** ${count} ${pluralize(count, "test")} failed\n`,
+    ...buildTruncatedList(
+      testFailures,
+      formatTestFailure,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "failures"
+    ),
+    "",
+  ];
+};
 
-    // Show up to 3 test failures
-    const displayFailures = analysis.testFailures.slice(0, 3);
-    const failureLines = displayFailures.map((failure) => {
-      const location = failure.file ? ` in \`${failure.file}\`` : "";
-      return `- ❌ \`${truncateText(failure.testName, 60)}\`${location}`;
-    });
-    lines.push(...failureLines);
+const buildAnnotationsSubsection = (failureAnnotations: CIAnnotation[]): string[] => {
+  if (failureAnnotations.length === 0) return [];
 
-    if (analysis.testFailures.length > 3) {
-      lines.push(`- _...and ${analysis.testFailures.length - 3} more failures_`);
-    }
-    lines.push("");
-  }
+  return [
+    `**Error Locations:**\n`,
+    ...buildTruncatedList(
+      failureAnnotations,
+      formatAnnotation,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "errors"
+    ),
+    "",
+  ];
+};
 
-  // Annotation details
-  const failureAnnotations = analysis.annotations?.filter((a) => a.level === "failure") || [];
-  if (failureAnnotations.length > 0) {
-    lines.push(`**Error Locations:**\n`);
-    const displayAnnotations = failureAnnotations.slice(0, 3);
-    const annotationLines = displayAnnotations.map(
-      (ann) => `- 📍 \`${ann.path}:${ann.startLine}\` — ${truncateText(ann.message, 80)}`
-    );
-    lines.push(...annotationLines);
-    if (failureAnnotations.length > 3) {
-      lines.push(`- _...and ${failureAnnotations.length - 3} more errors_`);
-    }
-    lines.push("");
-  }
+const buildDependencySubsection = (
+  deps: NonNullable<AnalysisData["dependencyChanges"]>
+): string[] => {
+  if (deps.length === 0) return [];
 
-  // Dependency changes
-  if (analysis.dependencyChanges && analysis.dependencyChanges.length > 0) {
-    lines.push(`**Dependency Changes:** ${analysis.dependencyChanges.length} change(s)\n`);
-    const displayDeps = analysis.dependencyChanges.slice(0, 3);
-    const depLines = displayDeps.map((dep) => {
-      const icon = dep.type === "added" ? "➕" : dep.type === "removed" ? "➖" : "🔄";
-      const version =
-        dep.oldVersion && dep.newVersion
-          ? ` (${dep.oldVersion} → ${dep.newVersion})`
-          : dep.newVersion
-            ? ` (${dep.newVersion})`
-            : "";
-      return `- ${icon} \`${dep.name}\`${version}`;
-    });
-    lines.push(...depLines);
-    if (analysis.dependencyChanges.length > 3) {
-      lines.push(`- _...and ${analysis.dependencyChanges.length - 3} more changes_`);
-    }
-    lines.push("");
-  }
+  return [
+    `**Dependency Changes:** ${deps.length} change(s)\n`,
+    ...buildTruncatedList(
+      deps,
+      formatDependencyChange,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "changes"
+    ),
+    "",
+  ];
+};
+
+const buildEvidenceSection = (
+  analysis: AnalysisData,
+  failureAnnotations: CIAnnotation[]
+): string => {
+  const lines: string[] = [
+    `### ${UI_EMOJI.search} Evidence\n`,
+    buildCauseQuote(analysis),
+    ...buildTestFailuresSubsection(analysis.testFailures ?? []),
+    ...buildAnnotationsSubsection(failureAnnotations),
+    ...buildDependencySubsection(analysis.dependencyChanges ?? []),
+  ];
 
   return lines.join("\n");
 };
 
-/**
- * Builds the "Impact" section describing the failure impact.
- */
-const buildImpactSection = (analysis: AnalysisData): string => {
-  const lines: string[] = ["### 💥 Impact\n"];
+const buildImpactSection = (analysis: AnalysisData, failureAnnotations: CIAnnotation[]): string => {
+  const testCount = analysis.testFailures?.length ?? 0;
+  const errorCount = failureAnnotations.length;
 
-  const impacts: string[] = [];
+  const impactConditions: Array<{ condition: boolean; message: string }> = [
+    { condition: testCount > 0, message: `${testCount} ${pluralize(testCount, "test")} failing` },
+    {
+      condition: errorCount > 0,
+      message: `${errorCount} ${pluralize(errorCount, "error")} detected`,
+    },
+    { condition: !!analysis.checkName, message: `\`${analysis.checkName}\` workflow blocked` },
+    { condition: !!analysis.prContext, message: "PR cannot be merged until resolved" },
+  ];
 
-  // Determine impact based on available data
-  if (analysis.testFailures && analysis.testFailures.length > 0) {
-    impacts.push(
-      `${analysis.testFailures.length} test${analysis.testFailures.length > 1 ? "s" : ""} failing`
-    );
-  }
+  const impacts = impactConditions
+    .filter(({ condition }) => condition)
+    .map(({ message }) => formatImpact(message));
 
-  const failureAnnotations = analysis.annotations?.filter((a) => a.level === "failure") || [];
-  if (failureAnnotations.length > 0) {
-    impacts.push(
-      `${failureAnnotations.length} error${failureAnnotations.length > 1 ? "s" : ""} detected`
-    );
-  }
+  const finalImpacts = impacts.length > 0 ? impacts : [formatImpact("CI pipeline blocked")];
 
-  if (analysis.checkName) {
-    impacts.push(`\`${analysis.checkName}\` workflow blocked`);
-  }
-
-  // Add PR merge impact
-  if (analysis.prContext) {
-    impacts.push("PR cannot be merged until resolved");
-  }
-
-  if (impacts.length === 0) {
-    impacts.push("CI pipeline blocked");
-  }
-
-  const impactLines = impacts.map((impact) => `- ⚠️ ${impact}`);
-  lines.push(...impactLines);
-  lines.push("");
-
-  return lines.join("\n");
+  return [`### ${UI_EMOJI.impact} Impact\n`, ...finalImpacts, ""].join("\n");
 };
 
-/**
- * Builds the "Recommendation" section with actionable fixes.
- */
 const buildRecommendationSection = (analysis: AnalysisData): string => {
-  const actions = analysis.recommended_actions || [];
+  const actions = analysis.recommended_actions ?? [];
+  if (actions.length === 0) return "";
 
-  if (actions.length === 0) {
-    return "";
-  }
+  const actionLines = buildTruncatedList(
+    actions,
+    formatAction,
+    GITHUB_COMMENT_DISPLAY.MAX_ACTIONS,
+    "recommendations available"
+  );
 
-  const lines: string[] = ["### 🛠️ Recommendation\n"];
+  // Fix overflow format for recommendations (no dash prefix)
+  const fixedLines = actionLines.map((line) =>
+    line.startsWith("- _") ? `\n_${line.slice(3)}` : line
+  );
 
-  // Take top 3 actions
-  const topActions = actions.slice(0, 3);
-  const actionLines = topActions.map((action, index) => {
-    const emoji = getPriorityEmoji(action.priority);
-    const number = index + 1;
-    return `${number}. ${emoji} ${action.description}`;
-  });
-  lines.push(...actionLines);
-
-  if (actions.length > 3) {
-    lines.push(`\n_${actions.length - 3} more recommendations available_`);
-  }
-
-  lines.push("");
-  return lines.join("\n");
+  return [`### ${UI_EMOJI.tools} Recommendation\n`, ...fixedLines, ""].join("\n");
 };
 
-/**
- * Builds the errors section from collected CI errors.
- */
 const buildErrorsSection = (analysis: AnalysisData): string => {
   const errors = collectCIErrors(analysis.annotations, analysis.testFailures, {
     includeEmoji: false,
@@ -251,134 +250,92 @@ const buildErrorsSection = (analysis: AnalysisData): string => {
 
   if (errors.length === 0) return "";
 
-  const lines: string[] = ["### 📋 Error Details\n"];
-  lines.push("```");
+  const displayErrors = errors.slice(0, GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS).map(formatError);
+  const overflow =
+    errors.length > GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS
+      ? `\n_...and ${errors.length - GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS} more errors_`
+      : "";
 
-  // Limit to 5 errors, truncate each
-  const displayErrors = errors.slice(0, 5);
-  const errorLines = displayErrors.map((err) => truncateText(err, 120));
-  lines.push(...errorLines);
-
-  lines.push("```");
-
-  if (errors.length > 5) {
-    lines.push(`\n_...and ${errors.length - 5} more errors_`);
-  }
-
-  lines.push("");
-  return lines.join("\n");
+  return [
+    `### ${UI_EMOJI.list} Error Details\n`,
+    "```",
+    ...displayErrors,
+    "```",
+    overflow,
+    "",
+  ].join("\n");
 };
 
-/**
- * Builds the confidence badge section.
- */
-const buildConfidenceSection = (analysis: AnalysisData): string => {
-  const percentage = Math.round(analysis.confidence * 100);
-  const label = getConfidenceLabel(analysis.confidence);
-  const badge = getConfidenceBadge(analysis.confidence);
+const buildConfidenceSection = (confidence: number): string => {
+  const percentage = Math.round(confidence * 100);
+  const label = getConfidenceLabel(confidence);
+  const badge = getConfidenceBadge(confidence);
 
   return `${badge} **Analysis Confidence:** ${percentage}% (${label})\n`;
 };
 
-/**
- * Builds the metadata section with commit/PR info.
- */
 const buildMetadataSection = (analysis: AnalysisData): string => {
-  const parts: string[] = [];
+  const metadataItems: Array<{ condition: boolean; content: string }> = [
+    {
+      condition: !!analysis.checkName,
+      content: `${UI_EMOJI.workflow} **Workflow:** ${analysis.checkName}`,
+    },
+    {
+      condition: !!analysis.headSha,
+      content: `${UI_EMOJI.commit} **Commit:** \`${analysis.headSha?.substring(0, GIT_DISPLAY.SHA_DISPLAY_LENGTH)}\``,
+    },
+    {
+      condition: !!analysis.workflowContext?.duration,
+      content: `${UI_EMOJI.timer} **Duration:** ${analysis.workflowContext?.duration}`,
+    },
+  ];
 
-  if (analysis.checkName) {
-    parts.push(`🔧 **Workflow:** ${analysis.checkName}`);
-  }
+  const parts = metadataItems.filter(({ condition }) => condition).map(({ content }) => content);
 
-  if (analysis.headSha) {
-    const shortSha = analysis.headSha.substring(0, GIT_DISPLAY.SHA_DISPLAY_LENGTH);
-    parts.push(`📝 **Commit:** \`${shortSha}\``);
-  }
+  if (parts.length === 0) return "";
 
-  if (analysis.workflowContext?.duration) {
-    parts.push(`⏱️ **Duration:** ${analysis.workflowContext.duration}`);
-  }
-
-  if (parts.length === 0) {
-    return "";
-  }
-
-  return `\n<details>\n<summary>📊 Details</summary>\n\n${parts.join(" • ")}\n\n</details>\n`;
+  return `\n<details>\n<summary>${UI_EMOJI.details} Details</summary>\n\n${parts.join(" • ")}\n\n</details>\n`;
 };
 
-/**
- * Builds the footer section.
- */
-const buildFooter = (): string =>
-  `---\n*🤖 Powered by [KenchiOps](https://github.com/kenchi/devops) — AI-driven DevOps Assistant*`;
+// ============================================================================
+// Public API
+// ============================================================================
 
 /**
  * Format analysis into a rich GitHub comment with structured sections.
- *
- * Structure:
- * ## ❌ KenchiOps — CI Failure Analysis
- * 📦 repo-name pipeline failed on test `test_name`
- *
- * ### 🔍 Evidence
- * > Main identified cause
- * - Test failures list
- * - Error locations
- *
- * ### 💥 Impact
- * - Impact items
- *
- * ### 🛠️ Recommendation
- * 1. Action 1
- * 2. Action 2
- *
- * ### 📋 Error Details
- * ```
- * Error messages
- * ```
- *
- * 🟢 Analysis Confidence: 85% (High)
- *
- * ---
- * 🤖 Powered by KenchiOps
- *
- * @param analysis - The CI failure analysis data
- * @returns Formatted markdown string for GitHub comment
  */
 export const formatGitHubComment = (analysis: AnalysisData): string => {
+  const failureAnnotations = getFailureAnnotations(analysis.annotations);
+
   const sections = [
-    buildHeader(),
+    HEADER,
     buildSummaryLine(analysis),
-    buildEvidenceSection(analysis),
-    buildImpactSection(analysis),
+    buildEvidenceSection(analysis, failureAnnotations),
+    buildImpactSection(analysis, failureAnnotations),
     buildRecommendationSection(analysis),
     buildErrorsSection(analysis),
-    buildConfidenceSection(analysis),
+    buildConfidenceSection(analysis.confidence),
     buildMetadataSection(analysis),
-    buildFooter(),
+    FOOTER,
   ];
 
   return sections.filter(Boolean).join("\n");
 };
 
 /**
- * Format a "low risk" / "all clear" comment for when confidence is high
- * and no critical issues are found.
- *
- * @param analysis - The CI failure analysis data
- * @returns Formatted markdown string for "all clear" scenario
+ * Format a "low risk" / "all clear" comment for when confidence is high.
  */
 export const formatAllClearComment = (analysis: AnalysisData): string => {
-  const repoName = analysis.repository.split("/").pop() || analysis.repository;
+  const repoName = getRepoName(analysis.repository);
   const percentage = Math.round(analysis.confidence * 100);
+  const cause = analysis.identified_cause ?? analysis.analysis ?? "No critical issues detected.";
 
-  const sections = [
-    `## ✅ KenchiOps — CI Analysis Complete\n`,
-    `📦 **${repoName}** analysis completed successfully.\n`,
-    `### 🔍 Summary\n`,
-    `> ${analysis.identified_cause || analysis.analysis || "No critical issues detected."}\n`,
-    `🟢 **Analysis Confidence:** ${percentage}%\n`,
-    buildFooter(),
-  ];
-
-  return sections.join("\n");
+  return [
+    SUCCESS_HEADER,
+    `${UI_EMOJI.package} **${repoName}** analysis completed successfully.\n`,
+    `### ${UI_EMOJI.search} Summary\n`,
+    `> ${cause}\n`,
+    `${UI_EMOJI.confidenceHigh} **Analysis Confidence:** ${percentage}%\n`,
+    FOOTER,
+  ].join("\n");
 };

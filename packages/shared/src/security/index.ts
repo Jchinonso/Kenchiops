@@ -24,4 +24,4 @@ export {
   FORBIDDEN_FIELDS,
   REDACTION_PLACEHOLDER,
   type SecretPattern,
-} from "../constants.js";
+} from "../constants/index.js";
