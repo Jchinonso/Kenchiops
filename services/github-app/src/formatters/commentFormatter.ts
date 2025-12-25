@@ -97,13 +97,16 @@ const formatTestFailure = (failure: CITestFailure): string => {
 const formatAnnotation = (ann: CIAnnotation): string =>
   `- ${UI_EMOJI.location} \`${ann.path}:${ann.startLine}\` — ${truncateText(ann.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
 
-const formatDependencyChange = (dep: NonNullable<AnalysisData["dependencyChanges"]>[number]): string => {
+const formatDependencyChange = (
+  dep: NonNullable<AnalysisData["dependencyChanges"]>[number]
+): string => {
   const icon = getDependencyEmoji(dep.type);
-  const version = dep.oldVersion && dep.newVersion
-    ? ` (${dep.oldVersion} → ${dep.newVersion})`
-    : dep.newVersion
-      ? ` (${dep.newVersion})`
-      : "";
+  const version =
+    dep.oldVersion && dep.newVersion
+      ? ` (${dep.oldVersion} → ${dep.newVersion})`
+      : dep.newVersion
+        ? ` (${dep.newVersion})`
+        : "";
   return `- ${icon} \`${dep.name}\`${version}`;
 };
 
@@ -113,8 +116,7 @@ const formatAction = (action: { priority: string; description: string }, index: 
 const formatError = (err: string): string =>
   truncateText(err, GITHUB_COMMENT_DISPLAY.MAX_ERROR_LINE_LENGTH);
 
-const formatImpact = (message: string): string =>
-  `- ${UI_EMOJI.warning} ${message}`;
+const formatImpact = (message: string): string => `- ${UI_EMOJI.warning} ${message}`;
 
 // ============================================================================
 // Section Builders
@@ -142,7 +144,12 @@ const buildTestFailuresSubsection = (testFailures: ReadonlyArray<CITestFailure>)
   const count = testFailures.length;
   return [
     `\n**Test Failures:** ${count} ${pluralize(count, "test")} failed\n`,
-    ...buildTruncatedList(testFailures, formatTestFailure, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS, "failures"),
+    ...buildTruncatedList(
+      testFailures,
+      formatTestFailure,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "failures"
+    ),
     "",
   ];
 };
@@ -152,22 +159,37 @@ const buildAnnotationsSubsection = (failureAnnotations: CIAnnotation[]): string[
 
   return [
     `**Error Locations:**\n`,
-    ...buildTruncatedList(failureAnnotations, formatAnnotation, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS, "errors"),
+    ...buildTruncatedList(
+      failureAnnotations,
+      formatAnnotation,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "errors"
+    ),
     "",
   ];
 };
 
-const buildDependencySubsection = (deps: NonNullable<AnalysisData["dependencyChanges"]>): string[] => {
+const buildDependencySubsection = (
+  deps: NonNullable<AnalysisData["dependencyChanges"]>
+): string[] => {
   if (deps.length === 0) return [];
 
   return [
     `**Dependency Changes:** ${deps.length} change(s)\n`,
-    ...buildTruncatedList(deps, formatDependencyChange, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS, "changes"),
+    ...buildTruncatedList(
+      deps,
+      formatDependencyChange,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "changes"
+    ),
     "",
   ];
 };
 
-const buildEvidenceSection = (analysis: AnalysisData, failureAnnotations: CIAnnotation[]): string => {
+const buildEvidenceSection = (
+  analysis: AnalysisData,
+  failureAnnotations: CIAnnotation[]
+): string => {
   const lines: string[] = [
     `### ${UI_EMOJI.search} Evidence\n`,
     buildCauseQuote(analysis),
@@ -185,7 +207,10 @@ const buildImpactSection = (analysis: AnalysisData, failureAnnotations: CIAnnota
 
   const impactConditions: Array<{ condition: boolean; message: string }> = [
     { condition: testCount > 0, message: `${testCount} ${pluralize(testCount, "test")} failing` },
-    { condition: errorCount > 0, message: `${errorCount} ${pluralize(errorCount, "error")} detected` },
+    {
+      condition: errorCount > 0,
+      message: `${errorCount} ${pluralize(errorCount, "error")} detected`,
+    },
     { condition: !!analysis.checkName, message: `\`${analysis.checkName}\` workflow blocked` },
     { condition: !!analysis.prContext, message: "PR cannot be merged until resolved" },
   ];
@@ -226,9 +251,10 @@ const buildErrorsSection = (analysis: AnalysisData): string => {
   if (errors.length === 0) return "";
 
   const displayErrors = errors.slice(0, GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS).map(formatError);
-  const overflow = errors.length > GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS
-    ? `\n_...and ${errors.length - GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS} more errors_`
-    : "";
+  const overflow =
+    errors.length > GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS
+      ? `\n_...and ${errors.length - GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS} more errors_`
+      : "";
 
   return [
     `### ${UI_EMOJI.list} Error Details\n`,
@@ -250,14 +276,21 @@ const buildConfidenceSection = (confidence: number): string => {
 
 const buildMetadataSection = (analysis: AnalysisData): string => {
   const metadataItems: Array<{ condition: boolean; content: string }> = [
-    { condition: !!analysis.checkName, content: `${UI_EMOJI.workflow} **Workflow:** ${analysis.checkName}` },
-    { condition: !!analysis.headSha, content: `${UI_EMOJI.commit} **Commit:** \`${analysis.headSha?.substring(0, GIT_DISPLAY.SHA_DISPLAY_LENGTH)}\`` },
-    { condition: !!analysis.workflowContext?.duration, content: `${UI_EMOJI.timer} **Duration:** ${analysis.workflowContext?.duration}` },
+    {
+      condition: !!analysis.checkName,
+      content: `${UI_EMOJI.workflow} **Workflow:** ${analysis.checkName}`,
+    },
+    {
+      condition: !!analysis.headSha,
+      content: `${UI_EMOJI.commit} **Commit:** \`${analysis.headSha?.substring(0, GIT_DISPLAY.SHA_DISPLAY_LENGTH)}\``,
+    },
+    {
+      condition: !!analysis.workflowContext?.duration,
+      content: `${UI_EMOJI.timer} **Duration:** ${analysis.workflowContext?.duration}`,
+    },
   ];
 
-  const parts = metadataItems
-    .filter(({ condition }) => condition)
-    .map(({ content }) => content);
+  const parts = metadataItems.filter(({ condition }) => condition).map(({ content }) => content);
 
   if (parts.length === 0) return "";
 

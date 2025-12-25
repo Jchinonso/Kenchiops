@@ -502,10 +502,7 @@ describe("Consolidated Formatter", () => {
 
     it("should include failure count", () => {
       const aggregation = createMockAggregation({
-        failures: [
-          createMockFailure({ checkRunId: 1 }),
-          createMockFailure({ checkRunId: 2 }),
-        ],
+        failures: [createMockFailure({ checkRunId: 1 }), createMockFailure({ checkRunId: 2 })],
       });
       const summary = buildConsolidatedCheckSummary(aggregation);
 

@@ -358,9 +358,7 @@ describe("Comment Formatter", () => {
 
     it("should pluralize errors correctly in impact", () => {
       const singleError = createMockAnalysis({
-        annotations: [
-          { path: "a.ts", startLine: 1, message: "Error", level: "failure" },
-        ],
+        annotations: [{ path: "a.ts", startLine: 1, message: "Error", level: "failure" }],
       });
       const multipleErrors = createMockAnalysis({
         annotations: [
@@ -432,9 +430,7 @@ describe("Comment Formatter", () => {
     it("should truncate long error messages", () => {
       const longError = "A".repeat(500);
       const analysis = createMockAnalysis({
-        annotations: [
-          { path: "test.ts", startLine: 1, message: longError, level: "failure" },
-        ],
+        annotations: [{ path: "test.ts", startLine: 1, message: longError, level: "failure" }],
       });
       const comment = formatGitHubComment(analysis);
 

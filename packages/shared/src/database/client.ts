@@ -9,11 +9,7 @@
 import pg from "pg";
 import { createLogger } from "../core/logger.js";
 import { ValidationError } from "../core/errors.js";
-import {
-  DATABASE_POOL_DEFAULTS,
-  QUERY_LOGGING,
-  TRANSACTION_COMMANDS,
-} from "../constants/index.js";
+import { DATABASE_POOL_DEFAULTS, QUERY_LOGGING, TRANSACTION_COMMANDS } from "../constants/index.js";
 
 const { Pool } = pg;
 
@@ -123,7 +119,8 @@ export const initDatabase = (config: DatabaseConfig): void => {
     connectionString: config.connectionString,
     max: config.maxConnections ?? DATABASE_POOL_DEFAULTS.MAX_CONNECTIONS,
     idleTimeoutMillis: config.idleTimeoutMs ?? DATABASE_POOL_DEFAULTS.IDLE_TIMEOUT_MS,
-    connectionTimeoutMillis: config.connectionTimeoutMs ?? DATABASE_POOL_DEFAULTS.CONNECTION_TIMEOUT_MS,
+    connectionTimeoutMillis:
+      config.connectionTimeoutMs ?? DATABASE_POOL_DEFAULTS.CONNECTION_TIMEOUT_MS,
   });
 
   registerPoolEventHandlers(pool);
@@ -163,7 +160,10 @@ export const query = async <T extends pg.QueryResultRow>(
     };
   } catch (error) {
     const duration = Date.now() - start;
-    logger.error("Query failed", createQueryMetadata(text, duration, undefined, getErrorMessage(error)));
+    logger.error(
+      "Query failed",
+      createQueryMetadata(text, duration, undefined, getErrorMessage(error))
+    );
     throw error;
   }
 };

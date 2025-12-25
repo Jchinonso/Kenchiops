@@ -4,7 +4,11 @@
 
 import { describe, it, expect } from "@jest/globals";
 import { buildConsolidatedSlackPayload } from "../formatters/slackPayloadFormatter.js";
-import type { AggregatedFailures, AnalyzedFailure, CodeAnnotation } from "../services/aggregation/types.js";
+import type {
+  AggregatedFailures,
+  AnalyzedFailure,
+  CodeAnnotation,
+} from "../services/aggregation/types.js";
 
 describe("Slack Payload Formatter", () => {
   const createAnnotation = (overrides: Partial<CodeAnnotation> = {}): CodeAnnotation => ({
@@ -263,7 +267,9 @@ describe("Slack Payload Formatter", () => {
       const aggregation = createAggregation({
         failures: [
           createFailure({
-            annotations: [createAnnotation({ path: "src/test.ts", line: 100, message: "Error here" })],
+            annotations: [
+              createAnnotation({ path: "src/test.ts", line: 100, message: "Error here" }),
+            ],
           }),
         ],
       });

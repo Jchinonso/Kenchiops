@@ -370,11 +370,9 @@ export const getInstallationRepositories = async (
       error: getErrorMessage(error),
     });
 
-    throw new ExternalServiceError(
-      "GitHub",
-      wrapError("Failed to fetch repositories", error),
-      { installationId }
-    );
+    throw new ExternalServiceError("GitHub", wrapError("Failed to fetch repositories", error), {
+      installationId,
+    });
   }
 };
 

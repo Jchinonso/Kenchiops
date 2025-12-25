@@ -468,7 +468,9 @@ describe("Prompts Module", () => {
       // Should only include docs with similarity > 0.7
       expect(truncated.relatedDocs).toBeDefined();
       if (truncated.relatedDocs && truncated.relatedDocs.length > 0) {
-        expect(truncated.relatedDocs.every((doc: KnowledgeDocument) => doc.similarity > 0.7)).toBe(true);
+        expect(truncated.relatedDocs.every((doc: KnowledgeDocument) => doc.similarity > 0.7)).toBe(
+          true
+        );
       }
     });
 

@@ -168,9 +168,7 @@ export const buildNoReposModal = (channelName: string): SlackModalView => ({
  * Build the unconfigure selection modal view.
  * Displays a list of currently configured repositories to remove.
  */
-export const buildUnconfigureModal = (
-  mappings: readonly RepositoryMapping[]
-): SlackModalView => ({
+export const buildUnconfigureModal = (mappings: readonly RepositoryMapping[]): SlackModalView => ({
   type: "modal",
   callback_id: UNCONFIGURE_MODAL_CALLBACK,
   title: {

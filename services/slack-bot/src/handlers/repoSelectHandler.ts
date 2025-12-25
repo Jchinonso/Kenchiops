@@ -6,7 +6,13 @@
  * confirms the configuration to the user.
  */
 
-import { logger, createMapping, deleteMapping, findBySlackWorkspace, getErrorMessage } from "@kenchi/shared";
+import {
+  logger,
+  createMapping,
+  deleteMapping,
+  findBySlackWorkspace,
+  getErrorMessage,
+} from "@kenchi/shared";
 import {
   REPO_SELECT_MODAL_CALLBACK,
   REPO_SELECT_ACTION_ID,
@@ -59,7 +65,12 @@ interface ViewSubmissionArgs {
     };
     chat: {
       postMessage: (args: { channel: string; text: string; mrkdwn?: boolean }) => Promise<void>;
-      update: (args: { channel: string; ts: string; text: string; blocks?: unknown[] }) => Promise<void>;
+      update: (args: {
+        channel: string;
+        ts: string;
+        text: string;
+        blocks?: unknown[];
+      }) => Promise<void>;
     };
   };
   body: {

@@ -302,17 +302,13 @@ describe("Health Routes", () => {
 
   describe("edge cases", () => {
     it("should handle requests with Accept header", async () => {
-      const response = await request(app)
-        .get("/health")
-        .set("Accept", "application/json");
+      const response = await request(app).get("/health").set("Accept", "application/json");
 
       expect(response.status).toBe(200);
     });
 
     it("should handle requests with custom headers", async () => {
-      const response = await request(app)
-        .get("/health")
-        .set("X-Custom-Header", "test-value");
+      const response = await request(app).get("/health").set("X-Custom-Header", "test-value");
 
       expect(response.status).toBe(200);
     });

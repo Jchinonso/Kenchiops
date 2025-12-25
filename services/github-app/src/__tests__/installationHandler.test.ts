@@ -53,15 +53,23 @@ import {
   activate,
 } from "@kenchi/shared";
 
-const mockCreateFromGitHubInstall = createFromGitHubInstall as jest.MockedFunction<typeof createFromGitHubInstall>;
-const mockHandleGitHubUninstall = handleGitHubUninstall as jest.MockedFunction<typeof handleGitHubUninstall>;
-const mockFindByGitHubInstallation = findByGitHubInstallation as jest.MockedFunction<typeof findByGitHubInstallation>;
+const mockCreateFromGitHubInstall = createFromGitHubInstall as jest.MockedFunction<
+  typeof createFromGitHubInstall
+>;
+const mockHandleGitHubUninstall = handleGitHubUninstall as jest.MockedFunction<
+  typeof handleGitHubUninstall
+>;
+const mockFindByGitHubInstallation = findByGitHubInstallation as jest.MockedFunction<
+  typeof findByGitHubInstallation
+>;
 const mockSuspend = suspend as jest.MockedFunction<typeof suspend>;
 const mockActivate = activate as jest.MockedFunction<typeof activate>;
 
 describe("Installation Handler", () => {
   // Test fixtures
-  const createMockWebhook = (overrides: Partial<InstallationWebhook> = {}): InstallationWebhook => ({
+  const createMockWebhook = (
+    overrides: Partial<InstallationWebhook> = {}
+  ): InstallationWebhook => ({
     action: GITHUB_INSTALLATION_ACTIONS.CREATED,
     installation: {
       id: 12345,
@@ -282,10 +290,7 @@ describe("Installation Handler", () => {
 
       expect(result.handled).toBe(true);
       expect(result.message).toContain("suspended");
-      expect(mockSuspend).toHaveBeenCalledWith(
-        "tenant-123",
-        "GitHub App suspended by admin"
-      );
+      expect(mockSuspend).toHaveBeenCalledWith("tenant-123", "GitHub App suspended by admin");
     });
 
     it("should handle suspend when tenant not found", async () => {
@@ -325,10 +330,7 @@ describe("Installation Handler", () => {
 
       await handleInstallation(webhook);
 
-      expect(mockSuspend).toHaveBeenCalledWith(
-        "tenant-123",
-        "GitHub App suspended by unknown"
-      );
+      expect(mockSuspend).toHaveBeenCalledWith("tenant-123", "GitHub App suspended by unknown");
     });
   });
 

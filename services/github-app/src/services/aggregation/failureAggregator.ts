@@ -414,7 +414,9 @@ export const initializeAggregator = (
  */
 export const getAggregator = (): FailureAggregator => {
   if (!aggregatorInstance) {
-    throw new ValidationError("FailureAggregator not initialized. Call initializeAggregator() first.");
+    throw new ValidationError(
+      "FailureAggregator not initialized. Call initializeAggregator() first."
+    );
   }
   return aggregatorInstance;
 };

@@ -10,14 +10,7 @@
  * dependencies before importing to prevent actual service initialization.
  */
 
-import {
-  describe,
-  it,
-  expect,
-  jest,
-  beforeEach,
-  afterEach,
-} from "@jest/globals";
+import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { AppConfig } from "../config/appConfig.js";
 
 // Mock process.exit to prevent actual exit during tests
@@ -230,10 +223,7 @@ describe("Slack Bot Service Index", () => {
     it("should register /kenchi command handler", async () => {
       await import("../index.js");
 
-      expect(mockApp.command).toHaveBeenCalledWith(
-        "/kenchi",
-        expect.any(Function)
-      );
+      expect(mockApp.command).toHaveBeenCalledWith("/kenchi", expect.any(Function));
     });
 
     it("should register message event handler", async () => {
@@ -245,37 +235,25 @@ describe("Slack Bot Service Index", () => {
     it("should register app_mention event handler", async () => {
       await import("../index.js");
 
-      expect(mockApp.event).toHaveBeenCalledWith(
-        "app_mention",
-        expect.any(Function)
-      );
+      expect(mockApp.event).toHaveBeenCalledWith("app_mention", expect.any(Function));
     });
 
     it("should register member_joined_channel event handler", async () => {
       await import("../index.js");
 
-      expect(mockApp.event).toHaveBeenCalledWith(
-        "member_joined_channel",
-        expect.any(Function)
-      );
+      expect(mockApp.event).toHaveBeenCalledWith("member_joined_channel", expect.any(Function));
     });
 
     it("should register member_left_channel event handler", async () => {
       await import("../index.js");
 
-      expect(mockApp.event).toHaveBeenCalledWith(
-        "member_left_channel",
-        expect.any(Function)
-      );
+      expect(mockApp.event).toHaveBeenCalledWith("member_left_channel", expect.any(Function));
     });
 
     it("should register app_home_opened event handler", async () => {
       await import("../index.js");
 
-      expect(mockApp.event).toHaveBeenCalledWith(
-        "app_home_opened",
-        expect.any(Function)
-      );
+      expect(mockApp.event).toHaveBeenCalledWith("app_home_opened", expect.any(Function));
     });
 
     it("should register approve action handler", async () => {
@@ -283,9 +261,7 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const actionCalls = mockApp.action.mock.calls as any[];
-      const approveAction = actionCalls.find(
-        (call) => String(call[0]).includes("approve_action_")
-      );
+      const approveAction = actionCalls.find((call) => String(call[0]).includes("approve_action_"));
       expect(approveAction).toBeDefined();
     });
 
@@ -294,70 +270,42 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const actionCalls = mockApp.action.mock.calls as any[];
-      const rejectAction = actionCalls.find(
-        (call) => String(call[0]).includes("reject_action_")
-      );
+      const rejectAction = actionCalls.find((call) => String(call[0]).includes("reject_action_"));
       expect(rejectAction).toBeDefined();
     });
 
     it("should register feedback action handlers", async () => {
       await import("../index.js");
 
-      expect(mockApp.action).toHaveBeenCalledWith(
-        "feedback_helpful",
-        expect.any(Function)
-      );
-      expect(mockApp.action).toHaveBeenCalledWith(
-        "feedback_not_helpful",
-        expect.any(Function)
-      );
+      expect(mockApp.action).toHaveBeenCalledWith("feedback_helpful", expect.any(Function));
+      expect(mockApp.action).toHaveBeenCalledWith("feedback_not_helpful", expect.any(Function));
     });
 
     it("should register app home action handlers", async () => {
       await import("../index.js");
 
-      expect(mockApp.action).toHaveBeenCalledWith(
-        "test_connection",
-        expect.any(Function)
-      );
-      expect(mockApp.action).toHaveBeenCalledWith(
-        "refresh_home",
-        expect.any(Function)
-      );
+      expect(mockApp.action).toHaveBeenCalledWith("test_connection", expect.any(Function));
+      expect(mockApp.action).toHaveBeenCalledWith("refresh_home", expect.any(Function));
     });
 
     it("should register external link action handlers", async () => {
       await import("../index.js");
 
-      expect(mockApp.action).toHaveBeenCalledWith(
-        "connect_github",
-        expect.any(Function)
-      );
-      expect(mockApp.action).toHaveBeenCalledWith(
-        "view_docs",
-        expect.any(Function)
-      );
-      expect(mockApp.action).toHaveBeenCalledWith(
-        "get_support",
-        expect.any(Function)
-      );
+      expect(mockApp.action).toHaveBeenCalledWith("connect_github", expect.any(Function));
+      expect(mockApp.action).toHaveBeenCalledWith("view_docs", expect.any(Function));
+      expect(mockApp.action).toHaveBeenCalledWith("get_support", expect.any(Function));
     });
 
     it("should register select_repository_button action handler", async () => {
       await import("../index.js");
 
-      expect(mockApp.action).toHaveBeenCalledWith(
-        "select_repository_button",
-        expect.any(Function)
-      );
+      expect(mockApp.action).toHaveBeenCalledWith("select_repository_button", expect.any(Function));
     });
 
     it("should register repository select modal handler", async () => {
       await import("../index.js");
 
-      const { registerRepoSelectHandler } = await import(
-        "../handlers/repoSelectHandler.js"
-      );
+      const { registerRepoSelectHandler } = await import("../handlers/repoSelectHandler.js");
 
       expect(registerRepoSelectHandler).toHaveBeenCalledWith(mockApp);
     });
@@ -477,9 +425,7 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const eventCalls = mockApp.event.mock.calls as any[];
-      const joinedChannelCall = eventCalls.find(
-        (call) => call[0] === "member_joined_channel"
-      );
+      const joinedChannelCall = eventCalls.find((call) => call[0] === "member_joined_channel");
 
       expect(joinedChannelCall).toBeDefined();
 
@@ -500,17 +446,11 @@ describe("Slack Bot Service Index", () => {
         channel: "C456",
       };
 
-      const { handleBotJoinedChannel } = await import(
-        "../handlers/channelHandler.js"
-      );
+      const { handleBotJoinedChannel } = await import("../handlers/channelHandler.js");
 
       await handler({ event: mockEvent, client: mockClient });
 
-      expect(handleBotJoinedChannel).toHaveBeenCalledWith(
-        mockClient,
-        "C456",
-        "B123"
-      );
+      expect(handleBotJoinedChannel).toHaveBeenCalledWith(mockClient, "C456", "B123");
     });
 
     it("should ignore when non-bot user joins", async () => {
@@ -518,9 +458,7 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const eventCalls = mockApp.event.mock.calls as any[];
-      const joinedChannelCall = eventCalls.find(
-        (call) => call[0] === "member_joined_channel"
-      );
+      const joinedChannelCall = eventCalls.find((call) => call[0] === "member_joined_channel");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const handler = joinedChannelCall[1] as any;
@@ -539,9 +477,7 @@ describe("Slack Bot Service Index", () => {
         channel: "C456",
       };
 
-      const { handleBotJoinedChannel } = await import(
-        "../handlers/channelHandler.js"
-      );
+      const { handleBotJoinedChannel } = await import("../handlers/channelHandler.js");
 
       (handleBotJoinedChannel as jest.Mock).mockClear();
 
@@ -557,9 +493,7 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const eventCalls = mockApp.event.mock.calls as any[];
-      const leftChannelCall = eventCalls.find(
-        (call) => call[0] === "member_left_channel"
-      );
+      const leftChannelCall = eventCalls.find((call) => call[0] === "member_left_channel");
 
       expect(leftChannelCall).toBeDefined();
 
@@ -568,11 +502,13 @@ describe("Slack Bot Service Index", () => {
 
       const mockClient = {
         auth: {
-          test: jest.fn<() => Promise<{ bot_id: string; user_id: string; team_id: string }>>().mockResolvedValue({
-            bot_id: "B123",
-            user_id: "U123",
-            team_id: "T456",
-          }),
+          test: jest
+            .fn<() => Promise<{ bot_id: string; user_id: string; team_id: string }>>()
+            .mockResolvedValue({
+              bot_id: "B123",
+              user_id: "U123",
+              team_id: "T456",
+            }),
         },
       };
 
@@ -591,10 +527,7 @@ describe("Slack Bot Service Index", () => {
       await handler({ event: mockEvent, client: mockClient });
 
       expect(mockFindBySlackWorkspace).toHaveBeenCalledWith("T456");
-      expect(mockDeleteMappingsForChannel).toHaveBeenCalledWith(
-        "tenant-123",
-        "C789"
-      );
+      expect(mockDeleteMappingsForChannel).toHaveBeenCalledWith("tenant-123", "C789");
     });
 
     it("should ignore when non-bot user leaves", async () => {
@@ -602,9 +535,7 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const eventCalls = mockApp.event.mock.calls as any[];
-      const leftChannelCall = eventCalls.find(
-        (call) => call[0] === "member_left_channel"
-      );
+      const leftChannelCall = eventCalls.find((call) => call[0] === "member_left_channel");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const handler = leftChannelCall[1] as any;
@@ -637,8 +568,8 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const actionCalls = mockApp.action.mock.calls as any[];
-      const approveActionCall = actionCalls.find(
-        (call) => String(call[0]).includes("approve_action_")
+      const approveActionCall = actionCalls.find((call) =>
+        String(call[0]).includes("approve_action_")
       );
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -659,9 +590,7 @@ describe("Slack Bot Service Index", () => {
       const mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
       const mockSay = jest.fn();
 
-      const { handleActionApproval } = await import(
-        "../handlers/actionHandler.js"
-      );
+      const { handleActionApproval } = await import("../handlers/actionHandler.js");
 
       await handler({
         action: mockAction,
@@ -683,8 +612,8 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const actionCalls = mockApp.action.mock.calls as any[];
-      const rejectActionCall = actionCalls.find(
-        (call) => String(call[0]).includes("reject_action_")
+      const rejectActionCall = actionCalls.find((call) =>
+        String(call[0]).includes("reject_action_")
       );
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -705,9 +634,7 @@ describe("Slack Bot Service Index", () => {
       const mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
       const mockSay = jest.fn();
 
-      const { handleActionRejection } = await import(
-        "../handlers/actionHandler.js"
-      );
+      const { handleActionRejection } = await import("../handlers/actionHandler.js");
 
       await handler({
         action: mockAction,
@@ -731,9 +658,7 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const actionCalls = mockApp.action.mock.calls as any[];
-      const selectRepoCall = actionCalls.find(
-        (call) => call[0] === "select_repository_button"
-      );
+      const selectRepoCall = actionCalls.find((call) => call[0] === "select_repository_button");
 
       expect(selectRepoCall).toBeDefined();
 
@@ -774,9 +699,8 @@ describe("Slack Bot Service Index", () => {
         githubInstallationId: "12345",
       });
 
-      const { getAvailableRepositories, buildRepoSelectModal } = await import(
-        "../handlers/channelHandler.js"
-      );
+      const { getAvailableRepositories, buildRepoSelectModal } =
+        await import("../handlers/channelHandler.js");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (getAvailableRepositories as any).mockResolvedValue([
@@ -810,9 +734,7 @@ describe("Slack Bot Service Index", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const actionCalls = mockApp.action.mock.calls as any[];
-      const selectRepoCall = actionCalls.find(
-        (call) => call[0] === "select_repository_button"
-      );
+      const selectRepoCall = actionCalls.find((call) => call[0] === "select_repository_button");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const handler = selectRepoCall[1] as any;

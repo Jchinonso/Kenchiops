@@ -191,9 +191,7 @@ describe("Formatter Utilities", () => {
     });
 
     it("should limit to DISPLAY_LIMITS.recommendedActions", () => {
-      const actions = Array.from({ length: 20 }, (_, i) =>
-        createAction(`Action ${i}`, "medium")
-      );
+      const actions = Array.from({ length: 20 }, (_, i) => createAction(`Action ${i}`, "medium"));
       const failures = [createFailure(actions)];
 
       const merged = mergeRecommendedActions(failures);

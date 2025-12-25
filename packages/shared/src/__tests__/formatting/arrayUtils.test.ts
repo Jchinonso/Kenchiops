@@ -40,12 +40,7 @@ describe("Array Utilities", () => {
     });
 
     it("should respect maxItems limit", () => {
-      const items = [
-        { id: 1 },
-        { id: 2 },
-        { id: 3 },
-        { id: 4 },
-      ];
+      const items = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
 
       const result = deduplicateByKey(items, (item) => item.id, 2);
 

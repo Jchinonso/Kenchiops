@@ -98,10 +98,8 @@ const validateNodeEnv = (value: string | undefined): Config["NODE_ENV"] => {
 /**
  * Parse optional integer with default if undefined.
  */
-const parseOptionalInt = (
-  value: string | undefined,
-  defaultValue: number
-): number | undefined => (value ? parseIntEnv(value, defaultValue) : undefined);
+const parseOptionalInt = (value: string | undefined, defaultValue: number): number | undefined =>
+  value ? parseIntEnv(value, defaultValue) : undefined;
 
 // ==================== Configuration ====================
 

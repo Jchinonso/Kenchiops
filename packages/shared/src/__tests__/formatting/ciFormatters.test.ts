@@ -56,9 +56,7 @@ describe("CI Formatters", () => {
     });
 
     it("should include emoji for test failures by default", () => {
-      const testFailures: CITestFailure[] = [
-        { testName: "failing test", file: "test.ts" },
-      ];
+      const testFailures: CITestFailure[] = [{ testName: "failing test", file: "test.ts" }];
 
       const result = collectCIErrors(undefined, testFailures);
 
@@ -74,9 +72,7 @@ describe("CI Formatters", () => {
           message: "Type error",
         },
       ];
-      const testFailures: CITestFailure[] = [
-        { testName: "failing test" },
-      ];
+      const testFailures: CITestFailure[] = [{ testName: "failing test" }];
 
       const result = collectCIErrors(annotations, testFailures);
 
@@ -162,9 +158,7 @@ describe("CI Formatters", () => {
     });
 
     it("should disable emoji when includeEmoji is false", () => {
-      const testFailures: CITestFailure[] = [
-        { testName: "failing test" },
-      ];
+      const testFailures: CITestFailure[] = [{ testName: "failing test" }];
 
       const result = collectCIErrors(undefined, testFailures, { includeEmoji: false });
 
@@ -186,9 +180,7 @@ describe("CI Formatters", () => {
     });
 
     it("should handle test failures without file field", () => {
-      const testFailures: CITestFailure[] = [
-        { testName: "test without file" },
-      ];
+      const testFailures: CITestFailure[] = [{ testName: "test without file" }];
 
       const result = collectCIErrors(undefined, testFailures);
 
@@ -209,9 +201,7 @@ describe("CI Formatters", () => {
     });
 
     it("should handle empty test name", () => {
-      const testFailures: CITestFailure[] = [
-        { testName: "" },
-      ];
+      const testFailures: CITestFailure[] = [{ testName: "" }];
 
       const result = collectCIErrors(undefined, testFailures);
 
@@ -276,10 +266,7 @@ describe("CI Formatters", () => {
         level: "failure",
         message: `Error ${i}`,
       }));
-      const testFailures: CITestFailure[] = [
-        { testName: "test 1" },
-        { testName: "test 2" },
-      ];
+      const testFailures: CITestFailure[] = [{ testName: "test 1" }, { testName: "test 2" }];
 
       const result = collectCIErrors(annotations, testFailures, { maxErrors: 3 });
 
@@ -513,9 +500,7 @@ describe("CI Formatters", () => {
     });
 
     it("should handle single dependency", () => {
-      const deps: DependencyChange[] = [
-        { name: "single", type: "added", newVersion: "1.0.0" },
-      ];
+      const deps: DependencyChange[] = [{ name: "single", type: "added", newVersion: "1.0.0" }];
 
       const result = formatDependencyChanges(deps);
 
@@ -580,9 +565,7 @@ describe("CI Formatters", () => {
     });
 
     it("should not add trailing newline", () => {
-      const deps: DependencyChange[] = [
-        { name: "pkg", type: "added", newVersion: "1.0.0" },
-      ];
+      const deps: DependencyChange[] = [{ name: "pkg", type: "added", newVersion: "1.0.0" }];
 
       const result = formatDependencyChanges(deps);
 
@@ -595,9 +578,7 @@ describe("CI Formatters", () => {
       const annotations: CIAnnotation[] = [
         { path: "a.ts", startLine: 1, level: "failure", message: "Error A" },
       ];
-      const testFailures: CITestFailure[] = [
-        { testName: "Test 1", file: "test.ts" },
-      ];
+      const testFailures: CITestFailure[] = [{ testName: "Test 1", file: "test.ts" }];
       const options: CollectErrorsOptions = {
         maxErrors: 10,
         maxMessageLength: 100,

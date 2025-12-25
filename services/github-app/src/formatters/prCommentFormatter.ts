@@ -6,7 +6,11 @@
  * and recommended actions.
  */
 
-import type { AggregatedFailures, AnalyzedFailure, CodeAnnotation } from "../services/aggregation/types.js";
+import type {
+  AggregatedFailures,
+  AnalyzedFailure,
+  CodeAnnotation,
+} from "../services/aggregation/types.js";
 import {
   DISPLAY_LIMITS,
   getPriorityEmoji,

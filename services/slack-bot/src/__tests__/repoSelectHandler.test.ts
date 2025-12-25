@@ -19,9 +19,7 @@ jest.mock("@kenchi/shared", () => ({
   },
   createMapping: jest.fn(() => Promise.resolve({ id: "mapping-123" })),
   deleteMapping: jest.fn(() => Promise.resolve()),
-  findBySlackWorkspace: jest.fn(() =>
-    Promise.resolve({ id: "tenant-123", name: "Test Tenant" })
-  ),
+  findBySlackWorkspace: jest.fn(() => Promise.resolve({ id: "tenant-123", name: "Test Tenant" })),
   getErrorMessage: jest.fn((error) => (error instanceof Error ? error.message : String(error))),
 }));
 
@@ -38,7 +36,9 @@ describe("Repository Selection Handler", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type MockViewSubmissionArgs = any;
 
-  const createMockArgs = (overrides: Partial<Record<string, unknown>> = {}): MockViewSubmissionArgs => ({
+  const createMockArgs = (
+    overrides: Partial<Record<string, unknown>> = {}
+  ): MockViewSubmissionArgs => ({
     ack: jest.fn().mockImplementation(() => Promise.resolve()),
     view: {
       private_metadata: JSON.stringify({

@@ -71,7 +71,10 @@ class LoggerImpl implements Logger {
   private readonly serviceName: string;
   private readonly minLevel: LogLevel;
 
-  constructor(serviceName: string = LOGGER_DEFAULTS.SERVICE_NAME, minLevel: LogLevel = LogLevel.INFO) {
+  constructor(
+    serviceName: string = LOGGER_DEFAULTS.SERVICE_NAME,
+    minLevel: LogLevel = LogLevel.INFO
+  ) {
     this.serviceName = serviceName;
     this.minLevel = minLevel;
   }
