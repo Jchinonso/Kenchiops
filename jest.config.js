@@ -47,8 +47,9 @@ const config = {
   ],
   coverageDirectory: 'coverage',
   // Use faster coverage reporters in CI
+  // text-summary provides a compact summary table that's always visible
   coverageReporters: process.env.CI 
-    ? ['text', 'lcov', 'json-summary'] // Skip HTML in CI for speed
+    ? ['text-summary', 'text', 'lcov', 'json-summary'] // text-summary shows compact table in CI
     : ['text', 'lcov', 'html', 'json-summary'],
   coverageThreshold: {
     global: {
@@ -59,7 +60,7 @@ const config = {
     },
   },
   
-  // Performance: reduce verbosity in CI
+  // Performance: reduce verbosity in CI, but still show coverage
   verbose: process.env.CI !== 'true',
   silent: false,
   
