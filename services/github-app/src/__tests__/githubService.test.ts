@@ -16,60 +16,52 @@ jest.mock("@octokit/auth-app", () => ({
   createAppAuth: jest.fn(),
 }));
 
-jest.mock("@kenchi/shared", () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  })),
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  OpenAIClient: jest.fn(function (this: any) {
+  const mockResolve = jest.fn() as any;
+  mockResolve.mockResolvedValue({
+    summary: "Test analysis",
+    rootCause: "Test cause",
+    suggestedActions: ["Action 1"],
+    confidence: 0.85,
+    reasoning: "Test reasoning",
+  });
+  return {
+    ...actual,
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockResolve = jest.fn() as any;
-    mockResolve.mockResolvedValue({
-      summary: "Test analysis",
-      rootCause: "Test cause",
-      suggestedActions: ["Action 1"],
-      confidence: 0.85,
-      reasoning: "Test reasoning",
-    });
-    return {
-      analyzeIncident: mockResolve,
-    };
-  }),
-  calculateConfidenceScore: jest.fn(() => ({
-    finalScore: 0.85,
-    gatingDecision: "auto_approve",
-    breakdown: {
-      llmConfidence: 0.85,
-      evidenceQuality: 0.8,
-      actionSpecificity: 0.9,
-    },
-  })),
-  LLMError: class LLMError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = "LLMError";
-    }
-  },
-  ExternalServiceError: class ExternalServiceError extends Error {
-    constructor(service: string, message: string, context?: unknown) {
-      super(`${service}: ${message}`);
-      this.name = "ExternalServiceError";
-    }
-  },
-  getErrorMessage: jest.fn((error: unknown) => {
-    if (error instanceof Error) return error.message;
-    return String(error);
-  }),
-  wrapError: jest.fn((message: string, error: unknown) => {
-    if (error instanceof Error) {
-      return `${message}: ${error.message}`;
-    }
-    return message;
-  }),
-}));
+    OpenAIClient: jest.fn(function (this: any) {
+      return {
+        analyzeIncident: mockResolve,
+      };
+    }),
+    calculateConfidenceScore: jest.fn(() => ({
+      finalScore: 0.85,
+      gatingDecision: "auto_approve",
+      breakdown: {
+        llmConfidence: 0.85,
+        evidenceQuality: 0.8,
+        actionSpecificity: 0.9,
+      },
+    })),
+    getErrorMessage: jest.fn((error: unknown) => {
+      if (error instanceof Error) return error.message;
+      return String(error);
+    }),
+    wrapError: jest.fn((message: string, error: unknown) => {
+      if (error instanceof Error) {
+        return `${message}: ${error.message}`;
+      }
+      return message;
+    }),
+  };
+});
 
 jest.mock("../config/appConfig.js", () => ({
   appConfig: {

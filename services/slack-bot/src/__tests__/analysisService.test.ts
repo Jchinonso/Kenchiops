@@ -6,28 +6,25 @@ import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals
 import type { Event, Evidence, LLMAnalysisResult, ConfidenceScoreResult } from "@kenchi/shared";
 
 // Mock @kenchi/shared module
-jest.mock("@kenchi/shared", () => ({
-  OpenAIClient: jest.fn().mockImplementation(() => ({
-    analyzeIncident: jest.fn(),
-  })),
-  calculateConfidenceScore: jest.fn(),
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
-  })),
-  LLMError: class LLMError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = "LLMError";
-    }
-  },
-  getErrorMessage: jest.fn((error) => (error instanceof Error ? error.message : String(error))),
-  wrapError: jest.fn((prefix, error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    return `${prefix}: ${message}`;
-  }),
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared");
+  return {
+    ...actual,
+    OpenAIClient: jest.fn().mockImplementation(() => ({
+      analyzeIncident: jest.fn(),
+    })),
+    calculateConfidenceScore: jest.fn(),
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    })),
+    getErrorMessage: jest.fn((error) => (error instanceof Error ? error.message : String(error))),
+    wrapError: jest.fn((prefix, error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      return `${prefix}: ${message}`;
+    }),
 }));
 
 // Import after mock

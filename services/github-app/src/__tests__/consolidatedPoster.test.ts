@@ -7,20 +7,18 @@ import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPo
 import type { AggregatedFailures } from "../services/aggregation/types.js";
 
 // Mock dependencies
-jest.mock("@kenchi/shared", () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  })),
-  ExternalServiceError: class ExternalServiceError extends Error {
-    constructor(service: string, message: string) {
-      super(`${service}: ${message}`);
-      this.name = "ExternalServiceError";
-    }
-  },
-}));
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared");
+  return {
+    ...actual,
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
+  };
+});
 
 jest.mock("../formatters/consolidatedFormatter.js", () => ({
   buildConsolidatedPRComment: jest.fn(() => "## Consolidated PR Comment\nTest content"),
