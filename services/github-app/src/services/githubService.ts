@@ -302,6 +302,83 @@ export const postPRComment = async (
 };
 
 /**
+ * Repository info returned from GitHub API
+ */
+export interface RepositoryInfo {
+  readonly id: number;
+  readonly name: string;
+  readonly fullName: string;
+  readonly private: boolean;
+  readonly defaultBranch: string;
+}
+
+/**
+ * Recursively fetch all repositories using pagination.
+ */
+const fetchRepositoriesPage = async (
+  octokit: Awaited<ReturnType<typeof getOctokit>>,
+  page: number,
+  perPage: number,
+  accumulated: readonly RepositoryInfo[]
+): Promise<readonly RepositoryInfo[]> => {
+  const { data } = await octokit.rest.apps.listReposAccessibleToInstallation({
+    per_page: perPage,
+    page,
+  });
+
+  const repos = data.repositories.map((repo) => ({
+    id: repo.id,
+    name: repo.name,
+    fullName: repo.full_name,
+    private: repo.private,
+    defaultBranch: repo.default_branch ?? "main",
+  }));
+
+  const allRepos = [...accumulated, ...repos];
+
+  // Base case: no more pages to fetch
+  if (repos.length < perPage || allRepos.length >= data.total_count) {
+    return allRepos;
+  }
+
+  // Recursive case: fetch next page
+  return fetchRepositoriesPage(octokit, page + 1, perPage, allRepos);
+};
+
+/**
+ * Fetch all repositories accessible to a GitHub App installation
+ */
+export const getInstallationRepositories = async (
+  installationId: number
+): Promise<RepositoryInfo[]> => {
+  try {
+    const octokit = await getOctokit(installationId);
+    const perPage = 100;
+
+    // Use recursive pagination
+    const repositories = await fetchRepositoriesPage(octokit, 1, perPage, []);
+
+    logger.info("Fetched installation repositories", {
+      installationId,
+      repositoryCount: repositories.length,
+    });
+
+    return [...repositories];
+  } catch (error) {
+    logger.error("Failed to fetch installation repositories", {
+      installationId,
+      error: getErrorMessage(error),
+    });
+
+    throw new ExternalServiceError(
+      "GitHub",
+      wrapError("Failed to fetch repositories", error),
+      { installationId }
+    );
+  }
+};
+
+/**
  * Annotation for a check run
  */
 export interface CheckAnnotation {

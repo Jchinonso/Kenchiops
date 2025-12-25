@@ -1,0 +1,410 @@
+/**
+ * Unit tests for core/errors.ts
+ */
+import { describe, it, expect } from "@jest/globals";
+import {
+  AppError,
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
+  ExternalServiceError,
+  LLMError,
+  isAppError,
+  getErrorMessage,
+  formatErrorForLog,
+  wrapError,
+} from "../../core/errors.js";
+import { ERROR_CODES, HTTP_STATUS } from "../../constants/index.js";
+
+describe("Core Errors", () => {
+  describe("AppError", () => {
+    it("should create error with all properties", () => {
+      const error = new AppError("Test error", "TEST_CODE", 400, true, { key: "value" });
+
+      expect(error.message).toBe("Test error");
+      expect(error.code).toBe("TEST_CODE");
+      expect(error.statusCode).toBe(400);
+      expect(error.isOperational).toBe(true);
+      expect(error.metadata).toEqual({ key: "value" });
+    });
+
+    it("should use default statusCode (500) when not provided", () => {
+      const error = new AppError("Test error", "TEST_CODE");
+
+      expect(error.statusCode).toBe(HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    });
+
+    it("should set isOperational to true by default", () => {
+      const error = new AppError("Test error", "TEST_CODE", 400);
+
+      expect(error.isOperational).toBe(true);
+    });
+
+    it("should set name to constructor name", () => {
+      const error = new AppError("Test error", "TEST_CODE");
+
+      expect(error.name).toBe("AppError");
+    });
+
+    it("should be instanceof Error", () => {
+      const error = new AppError("Test error", "TEST_CODE");
+
+      expect(error instanceof Error).toBe(true);
+      expect(error instanceof AppError).toBe(true);
+    });
+
+    it("should capture stack trace", () => {
+      const error = new AppError("Test error", "TEST_CODE");
+
+      expect(error.stack).toBeDefined();
+      expect(error.stack).toContain("AppError");
+    });
+
+    it("should allow non-operational errors", () => {
+      const error = new AppError("Critical error", "CRITICAL", 500, false);
+
+      expect(error.isOperational).toBe(false);
+    });
+  });
+
+  describe("ValidationError", () => {
+    it("should have statusCode 400", () => {
+      const error = new ValidationError("Invalid input");
+
+      expect(error.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
+    });
+
+    it("should have code VALIDATION_ERROR", () => {
+      const error = new ValidationError("Invalid input");
+
+      expect(error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
+    });
+
+    it("should include metadata when provided", () => {
+      const error = new ValidationError("Invalid input", { field: "email" });
+
+      expect(error.metadata).toEqual({ field: "email" });
+    });
+
+    it("should be instanceof AppError", () => {
+      const error = new ValidationError("Invalid input");
+
+      expect(error instanceof AppError).toBe(true);
+    });
+
+    it("should set name to ValidationError", () => {
+      const error = new ValidationError("Invalid input");
+
+      expect(error.name).toBe("ValidationError");
+    });
+  });
+
+  describe("AuthenticationError", () => {
+    it("should have statusCode 401", () => {
+      const error = new AuthenticationError();
+
+      expect(error.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
+    });
+
+    it("should use default message when not provided", () => {
+      const error = new AuthenticationError();
+
+      expect(error.message).toContain("Authentication");
+    });
+
+    it("should use custom message when provided", () => {
+      const error = new AuthenticationError("Token expired");
+
+      expect(error.message).toBe("Token expired");
+    });
+
+    it("should have code AUTHENTICATION_ERROR", () => {
+      const error = new AuthenticationError();
+
+      expect(error.code).toBe(ERROR_CODES.AUTHENTICATION_ERROR);
+    });
+
+    it("should include metadata when provided", () => {
+      const error = new AuthenticationError("Token expired", { tokenType: "jwt" });
+
+      expect(error.metadata).toEqual({ tokenType: "jwt" });
+    });
+  });
+
+  describe("AuthorizationError", () => {
+    it("should have statusCode 403", () => {
+      const error = new AuthorizationError();
+
+      expect(error.statusCode).toBe(HTTP_STATUS.FORBIDDEN);
+    });
+
+    it("should use default message when not provided", () => {
+      const error = new AuthorizationError();
+
+      expect(error.message).toContain("permission");
+    });
+
+    it("should use custom message when provided", () => {
+      const error = new AuthorizationError("Admin access required");
+
+      expect(error.message).toBe("Admin access required");
+    });
+
+    it("should have code AUTHORIZATION_ERROR", () => {
+      const error = new AuthorizationError();
+
+      expect(error.code).toBe(ERROR_CODES.AUTHORIZATION_ERROR);
+    });
+  });
+
+  describe("NotFoundError", () => {
+    it("should have statusCode 404", () => {
+      const error = new NotFoundError();
+
+      expect(error.statusCode).toBe(HTTP_STATUS.NOT_FOUND);
+    });
+
+    it("should use default message when not provided", () => {
+      const error = new NotFoundError();
+
+      expect(error.message).toContain("not found");
+    });
+
+    it("should use custom message when provided", () => {
+      const error = new NotFoundError("User not found");
+
+      expect(error.message).toBe("User not found");
+    });
+
+    it("should have code NOT_FOUND", () => {
+      const error = new NotFoundError();
+
+      expect(error.code).toBe(ERROR_CODES.NOT_FOUND);
+    });
+
+    it("should include metadata when provided", () => {
+      const error = new NotFoundError("User not found", { userId: "123" });
+
+      expect(error.metadata).toEqual({ userId: "123" });
+    });
+  });
+
+  describe("ExternalServiceError", () => {
+    it("should have statusCode 502", () => {
+      const error = new ExternalServiceError("GitHub", "API rate limit");
+
+      expect(error.statusCode).toBe(HTTP_STATUS.BAD_GATEWAY);
+    });
+
+    it("should include service name in message", () => {
+      const error = new ExternalServiceError("Slack", "Connection timeout");
+
+      expect(error.message).toContain("Slack");
+      expect(error.message).toContain("Connection timeout");
+    });
+
+    it("should have code EXTERNAL_SERVICE_ERROR", () => {
+      const error = new ExternalServiceError("GitHub", "Error");
+
+      expect(error.code).toBe(ERROR_CODES.EXTERNAL_SERVICE_ERROR);
+    });
+
+    it("should merge metadata with service name", () => {
+      const error = new ExternalServiceError("GitHub", "Error", { endpoint: "/api" });
+
+      expect(error.metadata).toEqual({ service: "GitHub", endpoint: "/api" });
+    });
+
+    it("should include service in metadata even without additional metadata", () => {
+      const error = new ExternalServiceError("GitHub", "Error");
+
+      expect(error.metadata).toEqual({ service: "GitHub" });
+    });
+  });
+
+  describe("LLMError", () => {
+    it("should extend ExternalServiceError", () => {
+      const error = new LLMError("Rate limit exceeded");
+
+      expect(error instanceof ExternalServiceError).toBe(true);
+    });
+
+    it("should use OpenAI as service name", () => {
+      const error = new LLMError("Rate limit exceeded");
+
+      expect(error.message).toContain("OpenAI");
+    });
+
+    it("should have statusCode 502", () => {
+      const error = new LLMError("Rate limit exceeded");
+
+      expect(error.statusCode).toBe(HTTP_STATUS.BAD_GATEWAY);
+    });
+
+    it("should include metadata when provided", () => {
+      const error = new LLMError("Rate limit exceeded", { retryAfter: 60 });
+
+      expect(error.metadata).toEqual({ service: "OpenAI", retryAfter: 60 });
+    });
+  });
+
+  describe("isAppError", () => {
+    it("should return true for AppError instances", () => {
+      const error = new AppError("Test", "TEST");
+
+      expect(isAppError(error)).toBe(true);
+    });
+
+    it("should return true for subclass instances", () => {
+      expect(isAppError(new ValidationError("Test"))).toBe(true);
+      expect(isAppError(new AuthenticationError())).toBe(true);
+      expect(isAppError(new AuthorizationError())).toBe(true);
+      expect(isAppError(new NotFoundError())).toBe(true);
+      expect(isAppError(new ExternalServiceError("Test", "Error"))).toBe(true);
+      expect(isAppError(new LLMError("Error"))).toBe(true);
+    });
+
+    it("should return false for standard Error", () => {
+      const error = new Error("Standard error");
+
+      expect(isAppError(error)).toBe(false);
+    });
+
+    it("should return false for non-Error objects", () => {
+      expect(isAppError({ message: "Not an error" })).toBe(false);
+      expect(isAppError("string error")).toBe(false);
+      expect(isAppError(123)).toBe(false);
+    });
+
+    it("should return false for null/undefined", () => {
+      expect(isAppError(null)).toBe(false);
+      expect(isAppError(undefined)).toBe(false);
+    });
+  });
+
+  describe("getErrorMessage", () => {
+    it("should extract message from Error instance", () => {
+      const error = new Error("Test message");
+
+      expect(getErrorMessage(error)).toBe("Test message");
+    });
+
+    it("should extract message from AppError instance", () => {
+      const error = new ValidationError("Validation failed");
+
+      expect(getErrorMessage(error)).toBe("Validation failed");
+    });
+
+    it("should return 'Unknown error' for non-Error values", () => {
+      expect(getErrorMessage("string error")).toBe("Unknown error");
+      expect(getErrorMessage(123)).toBe("Unknown error");
+      expect(getErrorMessage({ message: "object" })).toBe("Unknown error");
+    });
+
+    it("should handle null/undefined", () => {
+      expect(getErrorMessage(null)).toBe("Unknown error");
+      expect(getErrorMessage(undefined)).toBe("Unknown error");
+    });
+  });
+
+  describe("formatErrorForLog", () => {
+    it("should include message, name, stack for Error", () => {
+      const error = new Error("Test error");
+      const formatted = formatErrorForLog(error);
+
+      expect(formatted.message).toBe("Test error");
+      expect(formatted.name).toBe("Error");
+      expect(formatted.stack).toBeDefined();
+    });
+
+    it("should include message, name, stack for AppError", () => {
+      const error = new ValidationError("Invalid input");
+      const formatted = formatErrorForLog(error);
+
+      expect(formatted.message).toBe("Invalid input");
+      expect(formatted.name).toBe("ValidationError");
+      expect(formatted.stack).toBeDefined();
+    });
+
+    it("should return message only for non-Error values", () => {
+      expect(formatErrorForLog("string error")).toEqual({ message: "string error" });
+      expect(formatErrorForLog(123)).toEqual({ message: "123" });
+      expect(formatErrorForLog({ key: "value" })).toEqual({ message: "[object Object]" });
+    });
+
+    it("should handle null/undefined", () => {
+      expect(formatErrorForLog(null)).toEqual({ message: "null" });
+      expect(formatErrorForLog(undefined)).toEqual({ message: "undefined" });
+    });
+  });
+
+  describe("wrapError", () => {
+    it("should prepend context to error message", () => {
+      const error = new Error("Database connection failed");
+      const wrapped = wrapError("Failed to fetch user", error);
+
+      expect(wrapped).toBe("Failed to fetch user: Database connection failed");
+    });
+
+    it("should handle AppError instances", () => {
+      const error = new ValidationError("Email is required");
+      const wrapped = wrapError("User creation failed", error);
+
+      expect(wrapped).toBe("User creation failed: Email is required");
+    });
+
+    it("should handle non-Error values", () => {
+      const wrapped = wrapError("Operation failed", "timeout");
+
+      expect(wrapped).toBe("Operation failed: Unknown error");
+    });
+
+    it("should handle null/undefined", () => {
+      expect(wrapError("Operation failed", null)).toBe("Operation failed: Unknown error");
+      expect(wrapError("Operation failed", undefined)).toBe("Operation failed: Unknown error");
+    });
+
+    it("should handle empty error messages", () => {
+      const error = new Error("");
+      const wrapped = wrapError("Operation failed", error);
+
+      expect(wrapped).toBe("Operation failed: ");
+    });
+
+    it("should handle numbers as errors", () => {
+      const wrapped = wrapError("Operation failed", 404);
+
+      expect(wrapped).toBe("Operation failed: Unknown error");
+    });
+  });
+
+  describe("Error edge cases", () => {
+    it("should handle metadata with null values", () => {
+      const error = new ValidationError("Test", { value: null, key: undefined });
+
+      expect(error.metadata).toEqual({ value: null, key: undefined });
+    });
+
+    it("should handle metadata with nested objects", () => {
+      const metadata = { nested: { deep: { value: 123 } }, array: [1, 2, 3] };
+      const error = new NotFoundError("Test", metadata);
+
+      expect(error.metadata).toEqual(metadata);
+    });
+
+    it("should create error with zero statusCode", () => {
+      const error = new AppError("Test", "CODE", 0);
+
+      expect(error.statusCode).toBe(0);
+    });
+
+    it("should preserve error prototype chain", () => {
+      const validationError = new ValidationError("Test");
+      const authError = new AuthenticationError();
+
+      expect(Object.getPrototypeOf(validationError)).toBe(ValidationError.prototype);
+      expect(Object.getPrototypeOf(authError)).toBe(AuthenticationError.prototype);
+    });
+  });
+});

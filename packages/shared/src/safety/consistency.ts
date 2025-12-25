@@ -5,8 +5,8 @@
  * @module safety/consistency
  */
 
-import type { LLMAnalysisResult } from "../types.js";
-import { CONSISTENCY_ADJUSTMENTS, RELEVANCE_THRESHOLDS, RELEVANCE_RULES } from "../constants.js";
+import type { LLMAnalysisResult } from "../core/types.js";
+import { CONSISTENCY_ADJUSTMENTS, RELEVANCE_THRESHOLDS, RELEVANCE_RULES } from "../constants/index.js";
 
 /**
  * Checks if action matches cause based on relevance rules.

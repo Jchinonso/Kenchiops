@@ -8,7 +8,7 @@
  * before triggering consolidated posting.
  */
 
-import { createLogger } from "@kenchi/shared";
+import { createLogger, ValidationError } from "@kenchi/shared";
 import type {
   AggregatedFailures,
   AggregationKey,
@@ -198,12 +198,10 @@ export class FailureAggregator {
       this.cleanupIntervalId = null;
     }
 
-    // Clear all pending timers
-    this.pending.forEach((pending) => {
-      if (pending.timerId) {
-        clearTimeout(pending.timerId);
-      }
-    });
+    // Clear all pending timers using functional pattern
+    Array.from(this.pending.values())
+      .filter((pending) => pending.timerId !== null)
+      .map((pending) => clearTimeout(pending.timerId!));
     this.pending.clear();
 
     logger.info("FailureAggregator destroyed");
@@ -356,37 +354,36 @@ export class FailureAggregator {
 
   /**
    * Removes entries that have been pending too long (safety net).
+   * Uses functional pattern to identify and flush stale entries.
    */
   private cleanupStaleEntries(): void {
     const now = Date.now();
-    const staleKeys: string[] = [];
 
-    this.pending.forEach((pending, key) => {
-      const age = now - pending.data.firstFailureAt.getTime();
-      if (age > this.config.staleEntryMs) {
-        staleKeys.push(key);
-      }
+    // Find stale entries using functional filter
+    const staleEntries = Array.from(this.pending.entries()).filter(
+      ([, pending]) => now - pending.data.firstFailureAt.getTime() > this.config.staleEntryMs
+    );
+
+    if (staleEntries.length === 0) {
+      return;
+    }
+
+    const staleKeys = staleEntries.map(([key]) => key);
+
+    logger.warn("Cleaning up stale aggregation entries", {
+      count: staleKeys.length,
+      keys: staleKeys,
     });
 
-    if (staleKeys.length > 0) {
-      logger.warn("Cleaning up stale aggregation entries", {
-        count: staleKeys.length,
-        keys: staleKeys,
-      });
-
-      staleKeys.forEach((key) => {
-        const pending = this.pending.get(key);
-        if (pending) {
-          // Force flush stale entry
-          this.flushAggregation(key, pending).catch((error) => {
-            logger.error("Error flushing stale entry", {
-              key,
-              error: error instanceof Error ? error.message : "Unknown error",
-            });
-          });
-        }
-      });
-    }
+    // Flush stale entries using map
+    staleEntries.map(([key, pending]) =>
+      this.flushAggregation(key, pending).catch((error) => {
+        logger.error("Error flushing stale entry", {
+          key,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      })
+    );
   }
 }
 
@@ -417,7 +414,7 @@ export const initializeAggregator = (
  */
 export const getAggregator = (): FailureAggregator => {
   if (!aggregatorInstance) {
-    throw new Error("FailureAggregator not initialized. Call initializeAggregator() first.");
+    throw new ValidationError("FailureAggregator not initialized. Call initializeAggregator() first.");
   }
   return aggregatorInstance;
 };

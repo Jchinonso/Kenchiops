@@ -9,7 +9,9 @@ import { asyncHandler, createLogger, HTTP_STATUS, validate, validators } from "@
 import {
   postPRComment,
   createCheckRunWithAnnotations,
+  getInstallationRepositories,
   type CheckAnnotation,
+  type RepositoryInfo,
 } from "../services/githubService.js";
 import { appConfig } from "../config/appConfig.js";
 import { formatGitHubComment } from "../formatters/commentFormatter.js";
@@ -213,6 +215,50 @@ router.post(
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         status: "error",
         error: error instanceof Error ? error.message : "Failed to create check run",
+      });
+    }
+  })
+);
+
+/**
+ * GET /api/installations/:installationId/repositories
+ * Fetch all repositories accessible to a GitHub App installation
+ */
+router.get(
+  "/api/installations/:installationId/repositories",
+  asyncHandler(async (req: Request, res: Response) => {
+    const installationIdParam = req.params.installationId;
+
+    // Validate installation ID is a valid number
+    const installationId = parseInt(installationIdParam, 10);
+    if (isNaN(installationId) || installationId <= 0) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: "Invalid installation ID. Must be a positive integer",
+      });
+      return;
+    }
+
+    try {
+      const repositories: RepositoryInfo[] = await getInstallationRepositories(installationId);
+
+      logger.info("Fetched repositories for installation", {
+        installationId,
+        repositoryCount: repositories.length,
+      });
+
+      res.status(HTTP_STATUS.OK).json({
+        installationId,
+        repositories,
+        total: repositories.length,
+      });
+    } catch (error) {
+      logger.error("Failed to fetch installation repositories", {
+        installationId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        error: error instanceof Error ? error.message : "Failed to fetch repositories",
       });
     }
   })

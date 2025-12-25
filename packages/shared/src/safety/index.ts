@@ -19,9 +19,9 @@ export { validateAgainstKnowledgeBase } from "./knowledgeValidation.js";
 export { checkConsistency } from "./consistency.js";
 
 // Backward compatibility functions
-import type { LLMAnalysisResult, Evidence } from "../types.js";
+import type { LLMAnalysisResult, Evidence } from "../core/types.js";
 import { calculateConfidenceScore } from "./confidenceScoring.js";
-import { DEFAULT_CONFIDENCE_THRESHOLD, PLACEHOLDER_CONFIDENCE_SCORE } from "../constants.js";
+import { DEFAULT_CONFIDENCE_THRESHOLD, PLACEHOLDER_CONFIDENCE_SCORE } from "../constants/index.js";
 
 /**
  * Calculate confidence score for a result (backward compatible).

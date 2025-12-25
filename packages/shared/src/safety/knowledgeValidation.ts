@@ -3,8 +3,8 @@
  * Validates analysis against past incidents in the knowledge base.
  */
 
-import type { LLMAnalysisResult, Evidence } from "../types.js";
-import { SIMILARITY_THRESHOLDS, VALIDATION_ADJUSTMENTS } from "../constants.js";
+import type { LLMAnalysisResult, Evidence } from "../core/types.js";
+import { SIMILARITY_THRESHOLDS, VALIDATION_ADJUSTMENTS } from "../constants/index.js";
 
 /**
  * Finds the best matching incident by similarity.

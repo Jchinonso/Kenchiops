@@ -25,41 +25,58 @@ export const formatDuration = (ms: number): string => {
 };
 
 /**
+ * Format repository metadata lines.
+ */
+const formatRepoLines = (repo: NonNullable<EnrichedContext["repositoryMetadata"]>): string[] => [
+  `**Repository:** ${repo.fullName} (${repo.isPrivate ? "private" : "public"})`,
+  `**Default Branch:** ${repo.defaultBranch}`,
+  ...(repo.language ? [`**Language:** ${repo.language}`] : []),
+];
+
+/**
+ * Format workflow timing lines.
+ */
+const formatTimingLines = (timing: NonNullable<EnrichedContext["workflowTiming"]>): string[] => [
+  `**Workflow:** ${timing.workflowName}`,
+  ...(timing.jobName ? [`**Failed Job:** ${timing.jobName}`] : []),
+  ...(timing.durationMs ? [`**Duration:** ${formatDuration(timing.durationMs)}`] : []),
+  `**Conclusion:** ${timing.conclusion || "unknown"}`,
+];
+
+/**
  * Format repository and workflow overview section.
+ * Uses functional patterns - no let declarations.
  */
 const formatOverviewSection = (context: EnrichedContext): string | null => {
   if (!context.repositoryMetadata && !context.workflowTiming) {
     return null;
   }
 
-  let overview = "## Repository & CI Overview\n";
+  const lines = [
+    "## Repository & CI Overview",
+    ...(context.repositoryMetadata ? formatRepoLines(context.repositoryMetadata) : []),
+    ...(context.workflowTiming ? formatTimingLines(context.workflowTiming) : []),
+  ];
 
-  if (context.repositoryMetadata) {
-    const repo = context.repositoryMetadata;
-    overview += `**Repository:** ${repo.fullName} (${repo.isPrivate ? "private" : "public"})\n`;
-    overview += `**Default Branch:** ${repo.defaultBranch}\n`;
-    if (repo.language) {
-      overview += `**Language:** ${repo.language}\n`;
-    }
-  }
+  return lines.join("\n");
+};
 
-  if (context.workflowTiming) {
-    const timing = context.workflowTiming;
-    overview += `**Workflow:** ${timing.workflowName}\n`;
-    if (timing.jobName) {
-      overview += `**Failed Job:** ${timing.jobName}\n`;
-    }
-    if (timing.durationMs) {
-      overview += `**Duration:** ${formatDuration(timing.durationMs)}\n`;
-    }
-    overview += `**Conclusion:** ${timing.conclusion || "unknown"}\n`;
-  }
-
-  return overview;
+/**
+ * Format PR description with truncation.
+ */
+const formatDescription = (
+  description: string | null | undefined,
+  maxLength: number = 500
+): string[] => {
+  if (!description) return [];
+  const truncated = description.slice(0, maxLength);
+  const suffix = description.length > maxLength ? "..." : "";
+  return ["", `**Description:**`, `${truncated}${suffix}`];
 };
 
 /**
  * Format PR information section.
+ * Uses functional patterns - no let declarations.
  */
 const formatPRSection = (context: EnrichedContext): string | null => {
   if (!context.prMetadata) {
@@ -67,25 +84,20 @@ const formatPRSection = (context: EnrichedContext): string | null => {
   }
 
   const pr = context.prMetadata;
-  let prSection = `## Pull Request #${pr.number}\n`;
-  prSection += `**Title:** ${pr.title}\n`;
-  prSection += `**Author:** @${pr.author}\n`;
-  prSection += `**Branch:** ${pr.headBranch} → ${pr.baseBranch}\n`;
-  prSection += `**Review Status:** ${pr.reviewStatus}${pr.isDraft ? " (Draft)" : ""}\n`;
+  const lines = [
+    `## Pull Request #${pr.number}`,
+    `**Title:** ${pr.title}`,
+    `**Author:** @${pr.author}`,
+    `**Branch:** ${pr.headBranch} → ${pr.baseBranch}`,
+    `**Review Status:** ${pr.reviewStatus}${pr.isDraft ? " (Draft)" : ""}`,
+    ...(pr.labels.length > 0 ? [`**Labels:** ${pr.labels.map((l) => `\`${l}\``).join(", ")}`] : []),
+    ...(pr.reviewers.length > 0
+      ? [`**Reviewers:** ${pr.reviewers.map((r) => `@${r}`).join(", ")}`]
+      : []),
+    ...formatDescription(pr.description),
+  ];
 
-  if (pr.labels.length > 0) {
-    prSection += `**Labels:** ${pr.labels.map((l) => `\`${l}\``).join(", ")}\n`;
-  }
-  if (pr.reviewers.length > 0) {
-    prSection += `**Reviewers:** ${pr.reviewers.map((r) => `@${r}`).join(", ")}\n`;
-  }
-  if (pr.description) {
-    const maxDescLength = 500;
-    const truncatedDesc = pr.description.slice(0, maxDescLength);
-    prSection += `\n**Description:**\n${truncatedDesc}${pr.description.length > maxDescLength ? "..." : ""}\n`;
-  }
-
-  return prSection;
+  return lines.join("\n");
 };
 
 /**
