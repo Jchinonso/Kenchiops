@@ -14,7 +14,15 @@
 import Bolt from "@slack/bolt";
 import type { ButtonAction as BoltButtonAction } from "@slack/bolt";
 import express from "express";
-import { logger, config, initDatabase, closeDatabase } from "@kenchi/shared";
+import {
+  logger,
+  config,
+  initDatabase,
+  closeDatabase,
+  findBySlackWorkspace,
+  deleteMappingsForChannel,
+  isSocketModeDisconnectError,
+} from "@kenchi/shared";
 
 const { App } = Bolt;
 type SlackApp = InstanceType<typeof App>;
@@ -29,12 +37,18 @@ import {
   handlePositiveFeedback,
   handleNegativeFeedback,
 } from "./handlers/actionHandler.js";
-import { handleBotJoinedChannel } from "./handlers/channelHandler.js";
+import {
+  handleBotJoinedChannel,
+  buildRepoSelectModal,
+  buildNoReposModal,
+  getAvailableRepositories,
+} from "./handlers/channelHandler.js";
 import {
   handleAppHomeOpened,
   handleTestConnection,
   handleRefreshHome,
 } from "./handlers/appHomeHandler.js";
+import { registerRepoSelectHandler } from "./handlers/repoSelectHandler.js";
 import { createHttpRoutes } from "./routes/httpRoutes.js";
 import { oauthRoutes } from "./routes/oauthRoutes.js";
 
@@ -72,8 +86,8 @@ function setupSlackHandlers(app: SlackApp): void {
   });
 
   // Handle /kenchi slash command
-  app.command("/kenchi", async ({ command, ack, respond }) => {
-    await handleKenchiCommand(command, ack, respond);
+  app.command("/kenchi", async ({ command, ack, respond, client }) => {
+    await handleKenchiCommand(command, ack, respond, client);
   });
 
   // Handle message events
@@ -116,6 +130,44 @@ function setupSlackHandlers(app: SlackApp): void {
     }
 
     await handleBotJoinedChannel(client, event.channel, botId);
+  });
+
+  // Handle bot leaving a channel - clean up repository mappings
+  app.event("member_left_channel", async ({ event, client }) => {
+    const authResult = await client.auth.test();
+    const botId = authResult.bot_id;
+    const botUserId = authResult.user_id;
+
+    // Only handle when the bot itself leaves a channel
+    if (!botId || (event.user !== botId && event.user !== botUserId)) {
+      return;
+    }
+
+    const workspaceId = authResult.team_id || "";
+    const channelId = event.channel;
+
+    logger.info("Bot left channel, cleaning up mappings", {
+      channelId,
+      workspaceId,
+    });
+
+    try {
+      const tenant = await findBySlackWorkspace(workspaceId);
+
+      if (tenant) {
+        const deletedCount = await deleteMappingsForChannel(tenant.id, channelId);
+
+        logger.info("Cleaned up repository mappings for channel", {
+          channelId,
+          deletedCount,
+        });
+      }
+    } catch (error) {
+      logger.error("Failed to clean up mappings on channel leave", {
+        channelId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   });
 
   // Handle action button clicks
@@ -184,6 +236,72 @@ function setupSlackHandlers(app: SlackApp): void {
   app.action("get_support", async ({ ack }) => {
     await ack();
   });
+
+  // Handle select_repository_button - opens the repository selection modal
+  app.action("select_repository_button", async ({ ack, action, body, client }) => {
+    await ack();
+
+    try {
+      // Get button value
+      if (action.type !== "button" || !("value" in action) || !action.value) {
+        logger.error("Invalid action type for select_repository_button");
+        return;
+      }
+
+      const { channelId, channelName, messageTs } = JSON.parse(action.value) as {
+        channelId: string;
+        channelName: string;
+        messageTs?: string;
+      };
+
+      // Get trigger_id from body
+      if (!("trigger_id" in body)) {
+        logger.error("Missing trigger_id in body");
+        return;
+      }
+
+      // Get workspace ID for tenant lookup
+      const authResult = await client.auth.test();
+      const workspaceId = authResult.team_id || "";
+
+      // Look up tenant to get GitHub installation ID
+      const tenant = await findBySlackWorkspace(workspaceId);
+
+      if (!tenant || !tenant.githubInstallationId) {
+        logger.error("No GitHub installation found for workspace", { workspaceId });
+        return;
+      }
+
+      // Fetch available repositories from GitHub App API
+      const repositories = await getAvailableRepositories(tenant.githubInstallationId, tenant.id);
+
+      // Open the appropriate modal based on available repositories
+      const view =
+        repositories.length > 0
+          ? buildRepoSelectModal(channelId, channelName, repositories, messageTs)
+          : buildNoReposModal(channelName);
+
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        view: view as any,
+      });
+
+      logger.info("Opened repository selection modal from button", {
+        channelId,
+        channelName,
+        userId: body.user.id,
+        repositoryCount: repositories.length,
+      });
+    } catch (error) {
+      logger.error("Failed to open repository selection modal", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // Register repository selection modal handler
+  registerRepoSelectHandler(app);
 }
 
 /**
@@ -273,6 +391,32 @@ async function startService(): Promise<void> {
     process.exit(1);
   }
 }
+
+// Handle uncaught exceptions - specifically for socket-mode disconnect issues
+process.on("uncaughtException", (error) => {
+  // Socket-mode disconnect during connecting is a known transient issue
+  // Uses shared utility for pattern matching
+  if (isSocketModeDisconnectError(error.message)) {
+    logger.warn("Socket-mode disconnect detected, will auto-reconnect", {
+      error: error.message,
+    });
+    // Don't exit - the socket-mode client will auto-reconnect
+    return;
+  }
+
+  // All other uncaught exceptions should crash the app
+  logger.error("Uncaught exception - crashing", {
+    error: error.message,
+    stack: error.stack,
+  });
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled rejection", {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+});
 
 // Start the service
 startService().catch((error) => {

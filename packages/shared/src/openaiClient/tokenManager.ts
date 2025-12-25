@@ -8,10 +8,10 @@
  * @module openaiClient/tokenManager
  */
 
-import type { Event, Evidence } from "../types.js";
-import { OPENAI_CONSTANTS } from "../constants.js";
-import { ValidationError } from "../errors.js";
-import { buildAnalysisPrompt, estimateTokens, truncateEvidence } from "../prompts.js";
+import type { Event, Evidence } from "../core/types.js";
+import { OPENAI_CONSTANTS } from "../constants/index.js";
+import { ValidationError } from "../core/errors.js";
+import { buildAnalysisPrompt, estimateTokens, truncateEvidence } from "../integrations/prompts.js";
 
 /**
  * Token estimation result with metadata for optimization decisions.

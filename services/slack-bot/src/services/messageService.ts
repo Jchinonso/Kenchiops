@@ -2,9 +2,16 @@
  * Message Service
  *
  * Provides message posting and broadcasting functionality for Slack.
+ * Routes messages to the correct channel based on repository-channel mappings.
  */
 
-import { logger, getErrorMessage, ValidationError } from "@kenchi/shared";
+import {
+  logger,
+  getErrorMessage,
+  ValidationError,
+  findByGitHubInstallation,
+  findChannelForRepository,
+} from "@kenchi/shared";
 import type {
   SlackMessageRequest,
   SlackMessagePostResponse,
@@ -21,6 +28,15 @@ import {
   createAnalysisAttachments,
   type MessageAttachment,
 } from "../formatters/ciFailureFormatter.js";
+import {
+  buildMessageKey,
+  getMessage,
+  setMessage,
+  deleteMessage,
+  cleanupMessageStore,
+} from "./messageStore.js";
+
+// ==================== Types ====================
 
 /**
  * Message payload for Slack API
@@ -31,54 +47,7 @@ interface MessagePayload {
   readonly attachments?: MessageAttachment[];
 }
 
-/**
- * Stored message info for update/delete
- */
-interface StoredMessage {
-  readonly channelId: string;
-  readonly timestamp: string;
-  readonly postedAt: Date;
-}
-
-/**
- * In-memory store for tracking posted messages by repository + commit
- * Key format: "repository:commitSha"
- * Used to update/delete old messages when new analysis arrives
- */
-const messageStore = new Map<string, StoredMessage>();
-
-/**
- * Max age for stored messages (1 hour) - cleanup stale entries
- */
-const MESSAGE_STORE_MAX_AGE_MS = 60 * 60 * 1000;
-
-/**
- * Build message store key from repository and commit SHA
- */
-const buildMessageKey = (repository: string, commitSha: string): string =>
-  `${repository}:${commitSha}`;
-
-/**
- * Cleanup old entries from message store (called periodically)
- */
-const cleanupMessageStore = (): void => {
-  const now = Date.now();
-  const keysToDelete: string[] = [];
-
-  messageStore.forEach((stored, key) => {
-    if (now - stored.postedAt.getTime() > MESSAGE_STORE_MAX_AGE_MS) {
-      keysToDelete.push(key);
-    }
-  });
-
-  keysToDelete.forEach((key) => messageStore.delete(key));
-
-  if (keysToDelete.length > 0) {
-    logger.info("Cleaned up old message store entries", {
-      deletedCount: keysToDelete.length,
-    });
-  }
-};
+// ==================== Payload Builders ====================
 
 /**
  * Build message payload from request options.
@@ -101,7 +70,7 @@ const buildMessagePayload = (
   // Priority 2: Block Kit blocks
   if (blocks) {
     return {
-      fallbackText: message || "CI Failure Analysis",
+      fallbackText: message ?? "CI Failure Analysis",
       blocks: [...blocks] as SlackBlock[],
     };
   }
@@ -109,59 +78,42 @@ const buildMessagePayload = (
   // Priority 3: Attachments
   if (attachments) {
     return {
-      fallbackText: message || "CI Failure Analysis",
+      fallbackText: message ?? "CI Failure Analysis",
       attachments: attachments.map((a) => ({
-        color: a.color || "",
-        fallback: a.fallback || "",
+        color: a.color ?? "",
+        fallback: a.fallback ?? "",
         blocks: a.blocks ? ([...a.blocks] as SlackBlock[]) : [],
       })),
     };
   }
 
   // Default: plain text message
-  return { fallbackText: message || "CI Failure Analysis" };
+  return { fallbackText: message ?? "CI Failure Analysis" };
 };
+
+// ==================== Channel Resolution ====================
 
 /**
  * Gets the bot's active channel (the one channel it's a member of).
- * Returns null if bot is not in any channel.
  */
 const getActiveChannel = async (client: SlackClient): Promise<string | null> => {
   const channels = await getBotMemberChannels(client);
-  if (channels.length === 0) {
-    return null;
-  }
-  // Bot should only be in one channel (single-channel policy)
-  return channels[0].id || null;
+  return channels.length > 0 ? (channels[0].id ?? null) : null;
 };
 
 /**
  * Resolve the target channel for a message request.
- *
- * Priority:
- * 1. Explicit channel ID/name if provided
- * 2. Bot's active channel (fallback)
- *
- * Note: In multi-tenant mode, the channel should be provided explicitly
- * or determined by the tenant's configuration.
- *
- * @param client - Slack client instance
- * @param channel - Optional explicit channel
- * @returns Resolved channel ID
- * @throws Error if no channel can be determined
  */
 const resolveTargetChannel = async (
   client: SlackClient,
   channel: string | undefined
 ): Promise<string> => {
-  // Priority 1: Explicit channel provided
   if (channel) {
     const channelId = await resolveChannelId(client, channel);
     logger.info("Using explicitly provided channel", { channel, channelId });
     return channelId;
   }
 
-  // Priority 2: Bot's active channel
   const activeChannel = await getActiveChannel(client);
   if (!activeChannel) {
     throw new ValidationError(
@@ -175,17 +127,59 @@ const resolveTargetChannel = async (
 };
 
 /**
+ * Resolve channel for a repository using the channel mapping.
+ */
+const resolveChannelByRepository = async (
+  installationId: number,
+  repository: string
+): Promise<string | null> => {
+  const tenant = await findByGitHubInstallation(installationId);
+  if (!tenant) {
+    logger.warn("No tenant found for installation", { installationId });
+    return null;
+  }
+
+  const mapping = await findChannelForRepository(tenant.id, repository);
+  if (!mapping) {
+    logger.warn("No channel mapping found for repository", {
+      repository,
+      tenantId: tenant.id,
+      installationId,
+    });
+    return null;
+  }
+
+  return mapping.slackChannelId;
+};
+
+// ==================== Slack API Operations ====================
+
+/**
+ * Delete an existing Slack message
+ */
+const deleteSlackMessage = async (
+  client: SlackClient,
+  channelId: string,
+  timestamp: string
+): Promise<boolean> => {
+  try {
+    await client.chat.delete({ channel: channelId, ts: timestamp });
+    return true;
+  } catch (error) {
+    logger.warn("Failed to delete old Slack message", {
+      channelId,
+      timestamp,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
+};
+
+// ==================== Public API ====================
+
+/**
  * Posts a message to a Slack channel.
- *
  * Supports plain text, Block Kit blocks, and CI failure analysis formatting.
- *
- * Channel resolution priority:
- * 1. Explicit channel ID/name if provided
- * 2. Bot's active channel (fallback)
- *
- * @param client - Slack client instance
- * @param request - Message request with optional channel, message/blocks/analysis, and optional thread_ts
- * @returns Message response with status and details
  */
 export const postMessage = async (
   client: SlackClient,
@@ -194,7 +188,7 @@ export const postMessage = async (
   const { channel, message, thread_ts, blocks, attachments, analysis } = request;
 
   logger.info("Slack message request received", {
-    channel: channel || "(auto-detect)",
+    channel: channel ?? "(auto-detect)",
     hasThread: !!thread_ts,
     hasBlocks: !!blocks,
     hasAttachments: !!attachments,
@@ -202,9 +196,7 @@ export const postMessage = async (
   });
 
   try {
-    // Resolve target channel using priority-based logic
     const channelId = await resolveTargetChannel(client, channel);
-
     const payload = buildMessagePayload(message, analysis, blocks, attachments);
 
     const result = await client.chat.postMessage({
@@ -235,61 +227,25 @@ export const postMessage = async (
       error: getErrorMessage(error),
     });
 
-    return {
-      status: "error",
-      error: getErrorMessage(error),
-    };
-  }
-};
-
-/**
- * Delete an existing Slack message
- */
-const deleteSlackMessage = async (
-  client: SlackClient,
-  channelId: string,
-  timestamp: string
-): Promise<boolean> => {
-  try {
-    await client.chat.delete({
-      channel: channelId,
-      ts: timestamp,
-    });
-    return true;
-  } catch (error) {
-    logger.warn("Failed to delete old Slack message", {
-      channelId,
-      timestamp,
-      error: getErrorMessage(error),
-    });
-    return false;
+    return { status: "error", error: getErrorMessage(error) };
   }
 };
 
 /**
  * Posts a consolidated CI failure message to Slack.
- *
  * Uses pre-built Block Kit payload from the GitHub App's aggregation service.
- * This creates a single consolidated message for all failures in a commit.
- *
- * If an existing message for the same repository/commit exists, it will be
- * deleted first to keep the channel clean.
- *
- * @param client - Slack client instance
- * @param request - Consolidated message request with pre-built payload
- * @returns Message response with status and details
  */
 export const postConsolidatedMessage = async (
   client: SlackClient,
   request: ConsolidatedMessageRequest
 ): Promise<SlackMessagePostResponse> => {
-  const { payload, repository, commit_sha, failure_count, channel } = request;
+  const { payload, repository, commit_sha, failure_count, channel, installation_id } = request;
 
   logger.info("Consolidated Slack message request received", {
     repository,
     commitSha: commit_sha.substring(0, 7),
     failureCount: failure_count,
-    channel: channel || "(auto-detect)",
+    channel: channel ?? "(repository-based)",
     blockCount: payload.blocks.length,
   });
 
@@ -297,12 +253,24 @@ export const postConsolidatedMessage = async (
   cleanupMessageStore();
 
   try {
-    // Resolve target channel using priority-based logic
-    const channelId = await resolveTargetChannel(client, channel);
+    // Resolve target channel: explicit channel > repository mapping
+    const channelId = channel
+      ? await resolveChannelId(client, channel)
+      : await resolveChannelByRepository(installation_id, repository);
+
+    if (!channelId) {
+      logger.warn("Skipping Slack notification - no channel mapping for repository", {
+        repository,
+        installationId: installation_id,
+        failureCount: failure_count,
+      });
+
+      return { status: "error", error: `No channel mapping for repository: ${repository}` };
+    }
 
     // Check for existing message and delete it
     const messageKey = buildMessageKey(repository, commit_sha);
-    const existingMessage = messageStore.get(messageKey);
+    const existingMessage = getMessage(messageKey);
 
     if (existingMessage) {
       logger.info("Deleting existing Slack message for same commit", {
@@ -312,7 +280,7 @@ export const postConsolidatedMessage = async (
       });
 
       await deleteSlackMessage(client, existingMessage.channelId, existingMessage.timestamp);
-      messageStore.delete(messageKey);
+      deleteMessage(messageKey);
     }
 
     // Post new message
@@ -324,7 +292,7 @@ export const postConsolidatedMessage = async (
 
     // Store message info for future updates
     if (result.ts) {
-      messageStore.set(messageKey, {
+      setMessage(messageKey, {
         channelId,
         timestamp: result.ts,
         postedAt: new Date(),
@@ -352,19 +320,12 @@ export const postConsolidatedMessage = async (
       error: getErrorMessage(error),
     });
 
-    return {
-      status: "error",
-      error: getErrorMessage(error),
-    };
+    return { status: "error", error: getErrorMessage(error) };
   }
 };
 
 /**
  * Broadcasts a message to all channels the bot is a member of.
- *
- * @param client - Slack client instance
- * @param request - Broadcast request with message
- * @returns Broadcast response with status and channel results
  */
 export const broadcastMessage = async (
   client: SlackClient,
@@ -376,9 +337,7 @@ export const broadcastMessage = async (
 
   try {
     const channels = await getBotMemberChannels(client);
-    logger.info("Broadcasting to channels where bot is a member", {
-      count: channels.length,
-    });
+    logger.info("Broadcasting to channels where bot is a member", { count: channels.length });
 
     const results = await Promise.allSettled(
       channels.map(async (channel): Promise<SlackBroadcastChannelResult> => {
@@ -398,11 +357,7 @@ export const broadcastMessage = async (
             timestamp: postResult.ts,
           });
 
-          return {
-            name: channel.name,
-            id: channel.id,
-            status: "sent",
-          };
+          return { name: channel.name, id: channel.id, status: "sent" };
         } catch (error) {
           logger.error("Failed to post to channel", {
             channelName: channel.name,
@@ -425,9 +380,9 @@ export const broadcastMessage = async (
         ? r.value
         : { name: "unknown", id: "unknown", status: "failed" as const }
     );
+
     const successCount = channelResults.filter((r) => r.status === "sent").length;
     const failedCount = channelResults.filter((r) => r.status === "failed").length;
-
     const status = failedCount === 0 ? "sent" : successCount > 0 ? "partial" : "error";
 
     logger.info("Broadcast completed", {
@@ -444,9 +399,7 @@ export const broadcastMessage = async (
       channels: channelResults,
     };
   } catch (error) {
-    logger.error("Failed to broadcast message", {
-      error: getErrorMessage(error),
-    });
+    logger.error("Failed to broadcast message", { error: getErrorMessage(error) });
 
     return {
       status: "error",

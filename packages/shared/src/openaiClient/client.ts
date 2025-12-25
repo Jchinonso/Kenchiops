@@ -11,12 +11,12 @@
  */
 
 import OpenAI from "openai";
-import { config } from "../config.js";
-import { logger } from "../logger.js";
-import { LLMError } from "../errors.js";
-import { OPENAI_DEFAULTS, OPENAI_CONSTANTS, TIME_CONSTANTS } from "../constants.js";
-import type { Event, Evidence, LLMAnalysisResult } from "../types.js";
-import { buildAnalysisPrompt } from "../prompts.js";
+import { config } from "../core/config.js";
+import { logger } from "../core/logger.js";
+import { LLMError } from "../core/errors.js";
+import { OPENAI_DEFAULTS, OPENAI_CONSTANTS, TIME_CONSTANTS } from "../constants/index.js";
+import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
+import { buildAnalysisPrompt } from "../integrations/prompts.js";
 import { validateResponse } from "./validation.js";
 import { manageTokenBudget } from "./tokenManager.js";
 import { handleOpenAIError, sleep } from "./errors.js";

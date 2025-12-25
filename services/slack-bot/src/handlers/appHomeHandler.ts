@@ -5,36 +5,29 @@
  * home tab for users who open the Kenchi app.
  */
 
-import { createLogger, findBySlackWorkspace, type Tenant } from "@kenchi/shared";
+import {
+  createLogger,
+  findBySlackWorkspace,
+  findAllMappingsForTenant,
+  getTenantStatistics,
+  formatRelativeTime,
+  type Tenant,
+  type TenantStatistics,
+} from "@kenchi/shared";
 import type { WebClient } from "@slack/web-api";
 import {
   buildAppHomeView,
   buildErrorView,
   type AppHomeContext,
+  type RepositoryMappingDisplay,
 } from "../formatters/appHomeFormatter.js";
-import { getBotMemberChannels, type SlackChannel } from "../services/channelService.js";
 
 const logger = createLogger("app-home");
 
 /**
  * Type for Slack client (subset of WebClient)
  */
-type SlackClient = Pick<WebClient, "views" | "auth" | "conversations">;
-
-/**
- * Get the bot's active channel (first channel it's a member of)
- */
-const getActiveChannel = async (client: SlackClient): Promise<SlackChannel | undefined> => {
-  try {
-    const channels = await getBotMemberChannels(client as WebClient);
-    return channels[0];
-  } catch (error) {
-    logger.warn("Failed to get active channel", {
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-    return undefined;
-  }
-};
+type SlackClient = Pick<WebClient, "views" | "auth">;
 
 /**
  * Get tenant info for the workspace
@@ -53,28 +46,62 @@ const getTenantInfo = async (workspaceId: string): Promise<Tenant | undefined> =
 };
 
 /**
+ * Get repository-channel mappings for a tenant
+ */
+const getRepositoryMappings = async (
+  tenantId: string
+): Promise<readonly RepositoryMappingDisplay[]> => {
+  try {
+    const mappings = await findAllMappingsForTenant(tenantId);
+    return mappings.map((m) => ({
+      repository: m.repository,
+      channelId: m.slackChannelId,
+      channelName: m.slackChannelName,
+    }));
+  } catch (error) {
+    logger.warn("Failed to get repository mappings", {
+      tenantId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return [];
+  }
+};
+
+/**
+ * Get activity statistics for a tenant
+ */
+const getStatistics = async (tenantId: string): Promise<TenantStatistics | null> => {
+  try {
+    return await getTenantStatistics(tenantId);
+  } catch (error) {
+    logger.warn("Failed to get tenant statistics", {
+      tenantId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return null;
+  }
+};
+
+/**
  * Build the context for App Home view
  */
 const buildAppHomeContext = async (
-  client: SlackClient,
+  _client: SlackClient,
   workspaceId: string
 ): Promise<AppHomeContext> => {
-  // Fetch data in parallel
-  const [activeChannel, tenant] = await Promise.all([
-    getActiveChannel(client),
-    getTenantInfo(workspaceId),
-  ]);
+  // Fetch tenant first (needed for mappings and stats lookup)
+  const tenant = await getTenantInfo(workspaceId);
 
-  const hasActiveChannel = !!activeChannel;
+  // Fetch repository mappings and statistics in parallel if tenant exists
+  const [repositoryMappings, statistics] = tenant
+    ? await Promise.all([getRepositoryMappings(tenant.id), getStatistics(tenant.id)])
+    : [[], null];
 
+  // Bot is active if we successfully reached this point (Slack connection works)
+  // The tenant/GitHub status is shown separately
   return {
-    botStatus: hasActiveChannel ? "active" : "inactive",
-    activeChannel: activeChannel
-      ? {
-          id: activeChannel.id || "",
-          name: activeChannel.name || "unknown",
-        }
-      : undefined,
+    botStatus: "active",
+    repositoryMappings,
     tenant: tenant
       ? {
           githubOrg: tenant.githubOrg,
@@ -83,8 +110,11 @@ const buildAppHomeContext = async (
         }
       : undefined,
     recentActivity: {
-      failuresAnalyzed: 0, // TODO: Query from database
-      lastAlertTime: undefined,
+      failuresAnalyzed: statistics?.failuresAnalyzedToday ?? 0,
+      totalAlerts: statistics?.totalAlertsSent ?? 0,
+      lastAlertTime: statistics?.lastAlertTime
+        ? formatRelativeTime(statistics.lastAlertTime)
+        : undefined,
     },
     workspaceId,
   };
@@ -129,7 +159,7 @@ export const handleAppHomeOpened = async (client: SlackClient, userId: string): 
       userId,
       workspaceId,
       botStatus: context.botStatus,
-      hasActiveChannel: !!context.activeChannel,
+      repositoryMappingsCount: context.repositoryMappings.length,
       hasGitHubConnection: !!context.tenant?.githubOrg,
     });
   } catch (error) {

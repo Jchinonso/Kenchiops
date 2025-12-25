@@ -20,14 +20,14 @@ import type {
   LLMAnalysisResult,
   ValidationResult,
   EvidenceReference,
-} from "../types.js";
+} from "../core/types.js";
 import {
   DANGEROUS_KEYWORDS_PATTERN,
   MATCHING_CONFIG,
   SHA_PATTERN,
   SHA_PATTERN_SINGLE,
   QUOTED_TEXT_PATTERN,
-} from "../constants.js";
+} from "../constants/index.js";
 
 /**
  * Pre-computed lookup structures for validation.

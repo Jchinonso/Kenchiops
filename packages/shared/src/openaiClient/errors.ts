@@ -7,7 +7,7 @@
  * @module openaiClient/errors
  */
 
-import { HTTP_STATUS, OPENAI_CONSTANTS } from "../constants.js";
+import { HTTP_STATUS, OPENAI_CONSTANTS } from "../constants/index.js";
 
 /**
  * Type definition for OpenAI API error responses.

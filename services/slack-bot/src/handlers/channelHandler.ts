@@ -2,27 +2,33 @@
  * Channel Event Handler
  *
  * Handles Slack channel-related events, specifically when
- * the bot joins or leaves channels.
+ * the bot joins or leaves channels. Prompts users to select
+ * a repository for CI notifications when joining a channel.
  */
 
-import { logger, UI_CONSTANTS, config } from "@kenchi/shared";
 import {
-  getBotMemberChannels,
-  type SlackClient,
-  type SlackChannel,
-} from "../services/channelService.js";
+  logger,
+  config,
+  findBySlackWorkspace,
+  findMappingsForChannel,
+  deleteMappingsForChannel,
+  getMappedRepositories,
+  fetchInstallationRepositories,
+} from "@kenchi/shared";
+import { type SlackClient } from "../services/channelService.js";
+import { buildRepoSelectModal, buildNoReposModal, type RepositoryOption } from "./modalBuilders.js";
 
-// Re-export commonly used functions for backward compatibility
-export { resolveChannelId, getBotMemberChannels } from "../services/channelService.js";
+// Re-export modal constants and builders for backward compatibility
 export {
-  postMessage,
-  postConsolidatedMessage,
-  broadcastMessage,
-} from "../services/messageService.js";
-export {
-  formatCIFailureBlocks,
-  createAnalysisAttachments,
-} from "../formatters/ciFailureFormatter.js";
+  REPO_SELECT_MODAL_CALLBACK,
+  REPO_SELECT_ACTION_ID,
+  UNCONFIGURE_MODAL_CALLBACK,
+  UNCONFIGURE_SELECT_ACTION_ID,
+  buildRepoSelectModal,
+  buildNoReposModal,
+  buildUnconfigureModal,
+  buildNoConfiguredReposModal,
+} from "./modalBuilders.js";
 
 // ==================== GitHub Install URL ====================
 
@@ -38,117 +44,218 @@ export const getGitHubInstallUrl = (workspaceId: string): string => {
 
 // ==================== Message Templates ====================
 
-const SINGLE_CHANNEL_POLICY_MESSAGE = (activeChannelId: string): string =>
-  `\u26A0\uFE0F **Single Channel Policy**\n\n` +
-  `I'm already active in <#${activeChannelId}>.\n\n` +
-  `I can only be in ONE channel at a time. Please remove me from the other channel first if you want me here.\n\n` +
-  `_Leaving this channel now..._`;
-
 /**
- * Build welcome message with GitHub install link
+ * Build message prompting GitHub installation
  */
-const buildWelcomeMessage = (workspaceId: string): string => {
+const buildConnectGitHubMessage = (workspaceId: string): string => {
   const githubInstallUrl = getGitHubInstallUrl(workspaceId);
   return (
-    `\uD83D\uDC4B *Hello! I'm the Kenchi DevOps Assistant*\n\n` +
-    `\u2705 I'm now active in this channel.\n\n` +
-    `*Next step:* Connect your GitHub organization to receive CI failure alerts.\n\n` +
-    `<${githubInstallUrl}|:github: Install GitHub App>\n\n` +
-    `Or type \`/kenchi connect\` anytime to get the install link.\n\n` +
-    `_Note: I can only be in ONE channel at a time._`
+    `*Hello! I'm the Kenchi DevOps Assistant*\n\n` +
+    `To receive CI failure notifications in this channel, you need to connect GitHub first.\n\n` +
+    `<${githubInstallUrl}|Install GitHub App>\n\n` +
+    `After installing, add me to this channel again and I'll help you configure which repository to monitor.`
   );
 };
+
+/**
+ * Build success message after repo selection
+ */
+export const buildRepoConfiguredMessage = (repository: string, channelName: string): string =>
+  `*Repository Connected!*\n\n` +
+  `This channel will now receive CI failure notifications for \`${repository}\`.\n\n` +
+  `When a CI check fails, I'll:\n` +
+  `• Analyze the logs and identify the root cause\n` +
+  `• Post a detailed breakdown with fix suggestions\n` +
+  `• Highlight the specific files and lines causing issues\n\n` +
+  `Notifications will be posted here in #${channelName}.`;
 
 // ==================== Helper Functions ====================
 
 /**
- * Sends welcome message to the first channel the bot joins.
- * Includes GitHub App install link with workspace ID for tenant linking.
+ * Get available repositories from GitHub for the installation.
+ * Filters out already-mapped repositories.
  */
-const sendWelcomeMessage = async (client: SlackClient, channelId: string): Promise<void> => {
-  // Get workspace ID for the GitHub install link
-  const authResult = await client.auth.test();
-  const workspaceId = authResult.team_id || "unknown";
+export const getAvailableRepositories = async (
+  installationId: number,
+  tenantId: string
+): Promise<RepositoryOption[]> => {
+  try {
+    const [allRepositories, mappedRepos] = await Promise.all([
+      fetchInstallationRepositories(installationId),
+      getMappedRepositories(tenantId),
+    ]);
 
-  const welcomeMessage = buildWelcomeMessage(workspaceId);
+    const availableRepositories = allRepositories
+      .filter((repo) => !mappedRepos.has(repo.fullName))
+      .map((repo) => ({ fullName: repo.fullName, name: repo.name }));
 
-  await client.chat.postMessage({
-    channel: channelId,
-    text: welcomeMessage,
-    mrkdwn: true,
-  });
+    logger.info("Fetched available repositories", {
+      installationId,
+      totalRepos: allRepositories.length,
+      mappedRepos: mappedRepos.size,
+      availableRepos: availableRepositories.length,
+    });
 
-  logger.info("Bot successfully joined first channel", {
-    channel: channelId,
-    workspaceId,
-  });
+    return availableRepositories;
+  } catch (error) {
+    logger.error("Failed to fetch available repositories", {
+      installationId,
+      tenantId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return [];
+  }
 };
 
 /**
- * Handles single-channel policy violation by notifying and leaving.
+ * Get channel info for display
  */
-const enforceChannelPolicy = async (
-  client: SlackClient,
-  newChannelId: string,
-  activeChannel: SlackChannel
-): Promise<void> => {
-  const activeChannelId = activeChannel.id || "another channel";
-
-  // Notify user about the policy
-  await client.chat.postMessage({
-    channel: newChannelId,
-    text: SINGLE_CHANNEL_POLICY_MESSAGE(activeChannelId),
-  });
-
-  // Wait briefly before leaving
-  await new Promise((resolve) => setTimeout(resolve, UI_CONSTANTS.ACTION_TIMEOUT_MS));
-
-  // Leave the new channel
-  await client.conversations.leave({ channel: newChannelId });
-
-  logger.info("Bot left channel due to single-channel policy", {
-    leftChannel: newChannelId,
-    activeChannel: activeChannelId,
-  });
+const getChannelName = async (client: SlackClient, channelId: string): Promise<string> => {
+  try {
+    const result = await client.conversations.info({ channel: channelId });
+    return (result.channel as { name?: string })?.name ?? channelId;
+  } catch {
+    return channelId;
+  }
 };
+
+/**
+ * Build welcome message blocks with repository selection button
+ */
+const buildWelcomeBlocks = (
+  channelId: string,
+  channelName: string,
+  messageTs: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any[] => [
+  {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*Welcome!* I'm ready to monitor CI failures for this channel.`,
+    },
+  },
+  {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: "Select which repository should send notifications to this channel:",
+    },
+    accessory: {
+      type: "button",
+      text: {
+        type: "plain_text",
+        text: "Select Repository",
+        emoji: true,
+      },
+      style: "primary",
+      action_id: "select_repository_button",
+      value: JSON.stringify({ channelId, channelName, messageTs }),
+    },
+  },
+];
 
 // ==================== Main Handler ====================
 
 /**
  * Handles the member_joined_channel event when the bot joins a channel.
  *
- * Enforces single-channel policy: bot can only be in one channel at a time.
- * If the bot is already in another channel, it will leave the new channel
- * with an explanatory message.
- *
- * @param client - Slack client instance
- * @param channelId - The channel the bot joined
- * @param _botId - The bot's user ID (unused but kept for interface compatibility)
+ * Flow:
+ * 1. Check if GitHub is connected (tenant exists with installation)
+ * 2. If not connected, prompt to install GitHub App
+ * 3. If connected, clean up any stale mappings and post welcome message
+ * 4. User can click button to open repository selection modal
  */
 export const handleBotJoinedChannel = async (
   client: SlackClient,
   channelId: string,
-  _botId: string
+  _botId: string,
+  triggerId?: string
 ): Promise<void> => {
   try {
-    const memberChannels = await getBotMemberChannels(client);
+    const authResult = await client.auth.test();
+    const workspaceId = authResult.team_id ?? "";
 
-    logger.info("Bot joined channel", {
-      channel: channelId,
-      totalMemberChannels: memberChannels.length,
-    });
+    logger.info("Bot joined channel", { channelId, workspaceId });
 
-    // Single channel - send welcome message
-    if (memberChannels.length <= 1) {
-      await sendWelcomeMessage(client, channelId);
+    const tenant = await findBySlackWorkspace(workspaceId);
+
+    // GitHub not connected - prompt to install
+    if (!tenant?.githubInstallationId) {
+      await client.chat.postMessage({
+        channel: channelId,
+        text: buildConnectGitHubMessage(workspaceId),
+        mrkdwn: true,
+      });
+
+      logger.info("Prompted user to connect GitHub", {
+        channelId,
+        workspaceId,
+        hasTenant: !!tenant,
+      });
       return;
     }
 
-    // Multiple channels - enforce policy
-    const activeChannel = memberChannels.find((c) => c.id !== channelId);
-    if (activeChannel) {
-      await enforceChannelPolicy(client, channelId, activeChannel);
+    // Clean up any existing mappings when bot rejoins
+    const existingMappings = await findMappingsForChannel(tenant.id, channelId);
+    if (existingMappings.length > 0) {
+      await deleteMappingsForChannel(tenant.id, channelId);
+      logger.info("Cleaned up existing mappings on bot rejoin", {
+        channelId,
+        deletedCount: existingMappings.length,
+      });
     }
+
+    const [repositories, channelName] = await Promise.all([
+      getAvailableRepositories(tenant.githubInstallationId, tenant.id),
+      getChannelName(client, channelId),
+    ]);
+
+    // Post welcome message with button
+    const welcomeMessage = await client.chat.postMessage({
+      channel: channelId,
+      text: "Welcome! Click the button to select a repository for this channel.",
+      blocks: buildWelcomeBlocks(channelId, channelName, ""),
+    });
+
+    // Update the button value with the message timestamp for later updates
+    const messageTs = welcomeMessage.ts;
+    if (messageTs) {
+      await client.chat.update({
+        channel: channelId,
+        ts: messageTs,
+        text: "Welcome! Click the button to select a repository for this channel.",
+        blocks: buildWelcomeBlocks(channelId, channelName, messageTs),
+      });
+    }
+
+    logger.info("Posted welcome message with repository selection button", {
+      channelId,
+      channelName,
+      repositoryCount: repositories.length,
+    });
+
+    // Handle trigger_id case for direct modal opening
+    if (!triggerId) {
+      return;
+    }
+
+    // Open modal for repository selection
+    const modalView =
+      repositories.length === 0
+        ? buildNoReposModal(channelName)
+        : buildRepoSelectModal(channelId, channelName, repositories);
+
+    await client.views.open({
+      trigger_id: triggerId,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      view: modalView as any,
+    });
+
+    logger.info("Opened repository selection modal", {
+      channelId,
+      repositoryCount: repositories.length,
+    });
   } catch (error) {
     const errorDetails = error as { data?: { needed?: string; provided?: string } };
     logger.error("Failed to handle member_joined_channel event", {
