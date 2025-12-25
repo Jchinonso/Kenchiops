@@ -11,7 +11,8 @@ COPY services/slack-bot/package.json ./services/slack-bot/
 COPY services/github-app/package.json ./services/github-app/
 
 # Install dependencies (use npm install for workspaces compatibility)
-RUN npm install
+# Skip prepare scripts (husky) in Docker builds
+RUN npm install --ignore-scripts
 
 # Copy source files
 COPY . .
@@ -32,7 +33,8 @@ COPY services/slack-bot/package.json ./services/slack-bot/
 COPY services/github-app/package.json ./services/github-app/
 
 # Install production dependencies only (use npm install for workspaces)
-RUN npm install --omit=dev
+# Skip prepare scripts (husky) in Docker builds
+RUN npm install --omit=dev --ignore-scripts
 
 # Copy built files from builder
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
