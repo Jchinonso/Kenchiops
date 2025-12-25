@@ -6,13 +6,13 @@
  * feature to prevent accidental exposure of secrets.
  */
 
-import { createLogger } from "../logger.js";
+import { createLogger } from "../core/logger.js";
 import {
   SECRET_PATTERNS,
   FORBIDDEN_FIELDS,
   REDACTION_PLACEHOLDER,
   type SecretPattern,
-} from "../constants.js";
+} from "../constants/index.js";
 
 const logger = createLogger("security");
 

@@ -167,18 +167,19 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
 
 /**
  * Creates errors section with collected CI errors.
+ * Uses functional patterns - no let declarations.
  */
 const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
   if (errors.length === 0) return null;
 
   // Limit to 5 errors max
   const displayErrors = errors.slice(0, 5);
-  const hasMore = errors.length > 5;
+  const moreText = errors.length > 5 ? `\n_...and ${errors.length - 5} more errors_` : "";
 
-  let errorText = displayErrors.map((e) => `\`\`\`${truncateText(e, 100)}\`\`\``).join("\n");
-  if (hasMore) {
-    errorText += `\n_...and ${errors.length - 5} more errors_`;
-  }
+  const errorText = [
+    ...displayErrors.map((e) => `\`\`\`${truncateText(e, 100)}\`\`\``),
+    ...(moreText ? [moreText] : []),
+  ].join("\n");
 
   return {
     type: "section",

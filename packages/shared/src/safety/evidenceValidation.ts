@@ -3,7 +3,7 @@
  * Validates that LLM analysis aligns with provided evidence and assesses completeness.
  */
 
-import type { LLMAnalysisResult, Evidence } from "../types.js";
+import type { LLMAnalysisResult, Evidence } from "../core/types.js";
 import {
   ALIGNMENT_ADJUSTMENTS,
   SIMILARITY_THRESHOLDS,
@@ -13,7 +13,7 @@ import {
   COMPLETENESS_ADJUSTMENTS,
   MIN_LENGTHS,
   MIN_ACTIONS_FOR_BONUS,
-} from "../constants.js";
+} from "../constants/index.js";
 
 /**
  * Checks if reasoning contains metric keywords.

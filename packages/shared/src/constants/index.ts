@@ -1,0 +1,140 @@
+/**
+ * Centralized constants barrel file.
+ * Re-exports all constants from their respective modules.
+ */
+
+// Confidence scoring constants
+export {
+  CONFIDENCE_THRESHOLDS,
+  BASE_CONFIDENCE_SCORES,
+  DEFAULT_CONFIDENCE_THRESHOLD,
+  PLACEHOLDER_CONFIDENCE_SCORE,
+  UNCERTAINTY_PENALTIES,
+  ALIGNMENT_ADJUSTMENTS,
+  COMPLETENESS_ADJUSTMENTS,
+  VALIDATION_ADJUSTMENTS,
+  CONSISTENCY_ADJUSTMENTS,
+  SIMILARITY_THRESHOLDS,
+  RELEVANCE_THRESHOLDS,
+  MIN_LENGTHS,
+  MIN_ACTIONS_FOR_BONUS,
+  CONFIDENCE_MESSAGES,
+  type ConfidenceRange,
+} from "./confidence.js";
+
+// HTTP and error constants
+export {
+  HTTP_STATUS,
+  ERROR_CODES,
+  DEFAULT_ERROR_MESSAGES,
+  SERVICE_NAMES,
+} from "./http.js";
+
+// Time, ports, and rate limiting
+export {
+  TIME_CONSTANTS,
+  SERVICE_PORTS,
+  RATE_LIMIT_CONSTANTS,
+} from "./time.js";
+
+// UI and display constants
+export {
+  UI_CONFIDENCE_THRESHOLDS,
+  UI_CONSTANTS,
+  UI_EMOJI,
+  PRIORITY_EMOJI_MAP,
+  DEPENDENCY_EMOJI_MAP,
+  CONFIDENCE_BADGE_THRESHOLDS,
+  SLACK_COLORS,
+  SLACK_STATUS_EMOJI,
+  PRIORITY_EMOJI,
+  VALID_SAFETY_LEVELS,
+  GIT_DISPLAY,
+} from "./ui.js";
+
+// Validation constants
+export {
+  EMAIL_REGEX,
+  SLACK_CHANNEL_ID_PATTERN,
+  DEFAULT_VALIDATION_ERROR_MESSAGE,
+  DANGEROUS_KEYWORDS,
+  DANGEROUS_KEYWORDS_PATTERN,
+} from "./validation.js";
+
+// Safety analysis constants
+export {
+  UNCERTAINTY_PATTERNS,
+  METRIC_KEYWORDS,
+  INVALID_CAUSE_KEYWORDS,
+  RELEVANCE_RULES,
+  AUTO_APPROVABLE_SAFETY_LEVELS,
+  type UncertaintyPattern,
+  type RelevanceRule,
+} from "./safety.js";
+
+// GitHub constants
+export {
+  GITHUB_CONTEXT_LIMITS,
+  BUILD_CONFIG_FILES,
+  DEPENDENCY_FILES,
+  GITHUB_SIGNATURE,
+  GITHUB_COMMENT_DISPLAY,
+  LOG_PARSING_LIMITS,
+  EXCLUDED_PATH_PATTERNS,
+  ERROR_INDICATORS,
+  FILE_REFERENCE_PATTERNS,
+  EXCLUDED_PACKAGE_JSON_FIELDS,
+  DEPENDENCY_DIFF_PATTERNS,
+  CI_FAILURE_DISPLAY,
+} from "./github.js";
+
+// OpenAI and text processing constants
+export {
+  OPENAI_DEFAULTS,
+  OPENAI_CONSTANTS,
+  EVIDENCE_TRUNCATION,
+  MATCHING_CONFIG,
+  SHA_PATTERN,
+  SHA_PATTERN_SINGLE,
+  QUOTED_TEXT_PATTERN,
+} from "./openai.js";
+
+// Secret detection constants
+export {
+  REDACTION_PLACEHOLDER,
+  SECRET_PATTERNS,
+  FORBIDDEN_FIELDS,
+  type SecretPattern,
+} from "./secrets.js";
+
+// Slack-specific constants
+export {
+  SLACK_VERIFICATION,
+  SLACK_API_LIMITS,
+} from "./slack.js";
+
+// Database constants
+export {
+  DATABASE_POOL_DEFAULTS,
+  QUERY_LOGGING,
+  TRANSACTION_COMMANDS,
+} from "./database.js";
+
+// Tenant constants
+export {
+  TENANT_STATUS,
+  AUDIT_ACTIONS,
+  AUDIT_DEFAULTS,
+  TENANT_QUERIES,
+  AUDIT_QUERIES,
+  TENANT_FIELD_MAP,
+  AUDIT_FIELD_MAP,
+} from "./tenant.js";
+
+// Core module constants
+export {
+  LOGGER_DEFAULTS,
+  CONFIG_DEFAULTS,
+  VALID_NODE_ENVS,
+  PARSE_INT_RADIX,
+} from "./core.js";

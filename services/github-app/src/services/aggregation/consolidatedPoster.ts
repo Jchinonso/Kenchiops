@@ -47,76 +47,109 @@ const postToPR = async (
 };
 
 /**
- * Post consolidated analysis to GitHub (PR comments and check annotations)
+ * Post PR comments and return count of successful posts.
+ */
+const postPRComments = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  pullRequestNumbers: readonly number[],
+  commentBody: string
+): Promise<{ successCount: number; errors: string[] }> => {
+  if (pullRequestNumbers.length === 0) {
+    return { successCount: 0, errors: [] };
+  }
+
+  const results = await Promise.all(
+    pullRequestNumbers.map((prNumber) => postToPR(installationId, owner, repo, prNumber, commentBody))
+  );
+
+  const successCount = results.filter(Boolean).length;
+  const failCount = pullRequestNumbers.length - successCount;
+  const errors = failCount > 0 ? [`Failed to post to ${failCount} PR(s)`] : [];
+
+  return { successCount, errors };
+};
+
+/**
+ * Create check run with annotations.
+ * Returns success status and any errors.
+ */
+const createCheckAnnotations = async (
+  aggregation: AggregatedFailures,
+  annotations: ReturnType<typeof buildConsolidatedCheckAnnotations>
+): Promise<{ created: boolean; errors: string[] }> => {
+  if (annotations.length === 0) {
+    return { created: false, errors: [] };
+  }
+
+  const { repository, installationId, commitSha } = aggregation;
+
+  try {
+    const summary = buildConsolidatedCheckSummary(aggregation);
+
+    await createCheckRunWithAnnotations(
+      installationId,
+      repository.owner,
+      repository.name,
+      commitSha,
+      "KenchiOps Analysis",
+      summary,
+      annotations
+    );
+
+    logger.info("Created consolidated check run with annotations", {
+      repository: repository.fullName,
+      annotationCount: annotations.length,
+      failureCount: aggregation.failures.length,
+    });
+
+    return { created: true, errors: [] };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    logger.error("Failed to create consolidated check annotations", { error: errorMsg });
+    return { created: false, errors: [`Failed to create check annotations: ${errorMsg}`] };
+  }
+};
+
+/**
+ * Post consolidated analysis to GitHub (PR comments and check annotations).
+ * Uses functional composition - no let declarations.
  */
 const postToGitHub = async (
   aggregation: AggregatedFailures
 ): Promise<{ prCommentsPosted: number; checkAnnotationsCreated: boolean; errors: string[] }> => {
   const { repository, installationId, pullRequestNumbers, commitSha } = aggregation;
-  const errors: string[] = [];
-  let prCommentsPosted = 0;
-  let checkAnnotationsCreated = false;
-
-  const owner = repository.owner;
-  const repo = repository.name;
 
   // Build consolidated PR comment
   const commentBody = buildConsolidatedPRComment(aggregation);
 
-  // Post to all PRs in parallel
-  if (pullRequestNumbers.length > 0) {
-    const results = await Promise.all(
-      pullRequestNumbers.map((prNumber) =>
-        postToPR(installationId, owner, repo, prNumber, commentBody)
-      )
-    );
+  // Post PR comments
+  const prResult = await postPRComments(
+    installationId,
+    repository.owner,
+    repository.name,
+    pullRequestNumbers,
+    commentBody
+  );
 
-    prCommentsPosted = results.filter(Boolean).length;
-
-    if (prCommentsPosted < pullRequestNumbers.length) {
-      errors.push(`Failed to post to ${pullRequestNumbers.length - prCommentsPosted} PR(s)`);
-    }
-
+  if (prResult.successCount > 0) {
     logger.info("Posted consolidated PR comments", {
       repository: repository.fullName,
       totalPRs: pullRequestNumbers.length,
-      successfulPosts: prCommentsPosted,
+      successfulPosts: prResult.successCount,
     });
   }
 
-  // Create check run with consolidated annotations
+  // Create check annotations
   const annotations = buildConsolidatedCheckAnnotations(aggregation);
-  if (annotations.length > 0) {
-    try {
-      const summary = buildConsolidatedCheckSummary(aggregation);
+  const annotationResult = await createCheckAnnotations(aggregation, annotations);
 
-      await createCheckRunWithAnnotations(
-        installationId,
-        owner,
-        repo,
-        commitSha,
-        "KenchiOps Analysis",
-        summary,
-        annotations
-      );
-
-      checkAnnotationsCreated = true;
-
-      logger.info("Created consolidated check run with annotations", {
-        repository: repository.fullName,
-        annotationCount: annotations.length,
-        failureCount: aggregation.failures.length,
-      });
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      errors.push(`Failed to create check annotations: ${errorMsg}`);
-      logger.error("Failed to create consolidated check annotations", {
-        error: errorMsg,
-      });
-    }
-  }
-
-  return { prCommentsPosted, checkAnnotationsCreated, errors };
+  return {
+    prCommentsPosted: prResult.successCount,
+    checkAnnotationsCreated: annotationResult.created,
+    errors: [...prResult.errors, ...annotationResult.errors],
+  };
 };
 
 /**

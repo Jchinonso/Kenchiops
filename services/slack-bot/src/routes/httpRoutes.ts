@@ -14,7 +14,7 @@ import {
   postMessage,
   postConsolidatedMessage,
   broadcastMessage,
-} from "../handlers/channelHandler.js";
+} from "../services/messageService.js";
 import { getSlackClientForTenant, isMultiTenantEnabled } from "../services/tenantSlackClient.js";
 import type {
   SlackMessageRequest,

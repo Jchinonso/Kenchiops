@@ -8,14 +8,20 @@
 import type { KnownBlock, View } from "@slack/bolt";
 
 /**
+ * Repository-channel mapping for display
+ */
+export interface RepositoryMappingDisplay {
+  readonly repository: string;
+  readonly channelId: string;
+  readonly channelName: string | null;
+}
+
+/**
  * App Home context data
  */
 export interface AppHomeContext {
   readonly botStatus: "active" | "inactive";
-  readonly activeChannel?: {
-    readonly id: string;
-    readonly name: string;
-  };
+  readonly repositoryMappings: readonly RepositoryMappingDisplay[];
   readonly tenant?: {
     readonly githubOrg?: string;
     readonly status: string;
@@ -103,18 +109,12 @@ const buildConnectionStatusSection = (context: AppHomeContext): KnownBlock[] => 
 };
 
 /**
- * Build active channel section
+ * Build repository-channel mappings section
  */
-const buildChannelSection = (context: AppHomeContext): KnownBlock[] => {
-  const channelText = context.activeChannel
-    ? `<#${context.activeChannel.id}>`
-    : "_No channel configured_";
+const buildRepositoryMappingsSection = (context: AppHomeContext): KnownBlock[] => {
+  const { repositoryMappings } = context;
 
-  const statusText = context.activeChannel
-    ? ":large_green_circle: Notifications will be sent here"
-    : ":warning: Invite me to a channel to receive alerts";
-
-  return [
+  const blocks: KnownBlock[] = [
     {
       type: "divider",
     },
@@ -122,17 +122,46 @@ const buildChannelSection = (context: AppHomeContext): KnownBlock[] => {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*:hash: Notification Channel*",
-      },
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `${channelText}\n${statusText}`,
+        text: "*:package: Repository Channels*",
       },
     },
   ];
+
+  if (repositoryMappings.length === 0) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "_No repositories configured yet_\n:bulb: Add me to a channel and select a repository to monitor",
+      },
+    });
+    return blocks;
+  }
+
+  // Build mapping list
+  const mappingLines = repositoryMappings.map(
+    (mapping) => `:package: \`${mapping.repository}\` → <#${mapping.channelId}>`
+  );
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: mappingLines.join("\n"),
+    },
+  });
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `:large_green_circle: ${repositoryMappings.length} ${repositoryMappings.length === 1 ? "repository" : "repositories"} configured • Add me to more channels to monitor additional repos`,
+      },
+    ],
+  });
+
+  return blocks;
 };
 
 /**
@@ -293,10 +322,12 @@ const buildCommandsSection = (): KnownBlock[] => [
     text: {
       type: "mrkdwn",
       text:
+        "`/kenchi configure` - Select a repository for this channel\n" +
+        "`/kenchi unconfigure` - Remove the repository from this channel\n" +
+        "`/kenchi connect` - Get the GitHub App install link\n" +
+        "`/kenchi status` - Check connection status\n" +
         "`/kenchi help` - Show all available commands\n" +
-        "`/kenchi status` - Check bot and connection status\n" +
-        "`/kenchi analyze <url>` - Analyze a specific CI failure\n" +
-        "`@kenchi` - Mention me in a channel for help",
+        "`/kenchi <question>` - Ask Kenchi to analyze a CI issue",
     },
   },
 ];
@@ -376,7 +407,7 @@ export const buildAppHomeView = (context: AppHomeContext): View => {
   const blocks: KnownBlock[] = [
     ...buildHeaderSection(),
     ...buildConnectionStatusSection(context),
-    ...buildChannelSection(context),
+    ...buildRepositoryMappingsSection(context),
     ...buildStatisticsSection(context),
     ...buildFeaturesSection(),
     ...buildQuickActionsSection(context),

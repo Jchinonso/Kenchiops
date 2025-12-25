@@ -10,15 +10,24 @@
  */
 
 import type { SlashCommand, RespondFn, RespondArguments } from "@slack/bolt";
+import type { WebClient } from "@slack/web-api";
 import {
   createLogger,
   findBySlackWorkspace,
+  findAllMappingsForTenant,
   type ActionProposal,
   type ActionType,
 } from "@kenchi/shared";
 import { formatAnalysisMessage, formatActionButtons, formatErrorMessage } from "../formatters.js";
 import { createEventFromCommand, performAnalysis } from "../services/analysisService.js";
-import { getGitHubInstallUrl } from "./channelHandler.js";
+import {
+  getGitHubInstallUrl,
+  buildRepoSelectModal,
+  buildNoReposModal,
+  buildUnconfigureModal,
+  buildNoConfiguredReposModal,
+  getAvailableRepositories,
+} from "./channelHandler.js";
 import type { SlackBlock } from "../types/slackTypes.js";
 
 // Type for Slack blocks compatible with Bolt
@@ -33,6 +42,7 @@ interface CommandContext {
   readonly command: SlashCommand;
   readonly args: string;
   readonly respond: RespondFn;
+  readonly client: WebClient;
 }
 
 /**
@@ -171,6 +181,8 @@ const handleHelp: SubcommandHandler = async ({ respond }) => {
         text: {
           type: "mrkdwn",
           text:
+            "• `/kenchi configure` - Select a repository for this channel\n" +
+            "• `/kenchi unconfigure` - Remove the repository from this channel\n" +
             "• `/kenchi connect` - Get the GitHub App install link\n" +
             "• `/kenchi status` - Check your GitHub connection status\n" +
             "• `/kenchi help` - Show this help message\n" +
@@ -192,11 +204,129 @@ const handleHelp: SubcommandHandler = async ({ respond }) => {
 };
 
 /**
+ * Handle /kenchi configure - Open repository selection modal
+ */
+const handleConfigure: SubcommandHandler = async ({ command, respond, client }) => {
+  const workspaceId = command.team_id;
+  const channelId = command.channel_id;
+  const channelName = command.channel_name;
+
+  logger.info("Configure command received", {
+    user: command.user_id,
+    workspaceId,
+    channelId,
+  });
+
+  try {
+    // Check if GitHub is connected
+    const tenant = await findBySlackWorkspace(workspaceId);
+
+    if (!tenant || !tenant.githubInstallationId) {
+      await respond({
+        text: "Please connect GitHub first using `/kenchi connect`",
+        response_type: "ephemeral",
+      });
+      return;
+    }
+
+    // Fetch available repositories from GitHub App API
+    const repositories = await getAvailableRepositories(
+      tenant.githubInstallationId,
+      tenant.id
+    );
+
+    // Open the appropriate modal based on available repositories
+    const view = repositories.length > 0
+      ? buildRepoSelectModal(channelId, channelName, repositories)
+      : buildNoReposModal(channelName);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await client.views.open({
+      trigger_id: command.trigger_id,
+      view: view as any,
+    });
+
+    logger.info("Opened repository selection modal", {
+      channelId,
+      repositoryCount: repositories.length,
+    });
+  } catch (error) {
+    logger.error("Error opening configure modal", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      workspaceId,
+    });
+
+    await respond({
+      text: "Failed to open configuration. Please try again.",
+      response_type: "ephemeral",
+    });
+  }
+};
+
+/**
+ * Handle /kenchi unconfigure - Open modal to select repository to remove
+ */
+const handleUnconfigure: SubcommandHandler = async ({ command, respond, client }) => {
+  const workspaceId = command.team_id;
+
+  logger.info("Unconfigure command received", {
+    user: command.user_id,
+    workspaceId,
+  });
+
+  try {
+    const tenant = await findBySlackWorkspace(workspaceId);
+
+    if (!tenant) {
+      await respond({
+        text: "No configuration found for this workspace.",
+        response_type: "ephemeral",
+      });
+      return;
+    }
+
+    // Get all mappings for this tenant
+    const mappings = await findAllMappingsForTenant(tenant.id);
+
+    // Open the appropriate modal based on available mappings
+    const view = mappings.length > 0
+      ? buildUnconfigureModal(mappings.map((m) => ({
+          repository: m.repository,
+          channelId: m.slackChannelId,
+          channelName: m.slackChannelName,
+        })))
+      : buildNoConfiguredReposModal();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await client.views.open({
+      trigger_id: command.trigger_id,
+      view: view as any,
+    });
+
+    logger.info("Opened unconfigure modal", {
+      mappingCount: mappings.length,
+    });
+  } catch (error) {
+    logger.error("Error opening unconfigure modal", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      workspaceId,
+    });
+
+    await respond({
+      text: "Failed to open configuration. Please try again.",
+      response_type: "ephemeral",
+    });
+  }
+};
+
+/**
  * Handle /kenchi <text> - AI analysis (default behavior)
  */
-const handleAnalysis: SubcommandHandler = async ({ command, args, respond }) => {
+const handleAnalysis: SubcommandHandler = async (ctx) => {
+  const { command, args, respond } = ctx;
+
   if (!args.trim()) {
-    await handleHelp({ command, args, respond });
+    await handleHelp(ctx);
     return;
   }
 
@@ -254,6 +384,8 @@ const handleAnalysis: SubcommandHandler = async ({ command, args, respond }) => 
  * Subcommand handler lookup table
  */
 const subcommandHandlers: ReadonlyMap<string, SubcommandHandler> = new Map([
+  ["configure", handleConfigure],
+  ["unconfigure", handleUnconfigure],
   ["connect", handleConnect],
   ["status", handleStatus],
   ["help", handleHelp],
@@ -284,11 +416,13 @@ const parseCommand = (text: string): { subcommand: string; args: string } => {
  * @param command - Slack command object
  * @param ack - Acknowledge function
  * @param respond - Respond function
+ * @param client - Slack Web API client
  */
 export const handleKenchiCommand = async (
   command: SlashCommand,
   ack: () => Promise<void>,
-  respond: RespondFn
+  respond: RespondFn,
+  client: WebClient
 ): Promise<void> => {
   await ack();
 
@@ -301,7 +435,7 @@ export const handleKenchiCommand = async (
     channel: command.channel_id,
   });
 
-  const ctx: CommandContext = { command, args, respond };
+  const ctx: CommandContext = { command, args, respond, client };
 
   // Look up subcommand handler, fall back to analysis
   const handler = subcommandHandlers.get(subcommand) ?? handleAnalysis;

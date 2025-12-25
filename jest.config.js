@@ -9,7 +9,8 @@ export default {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,
       tsconfig: {
-        module: 'ESNext',
+        module: 'ES2022',
+        target: 'ES2022',
         moduleResolution: 'node',
         allowImportingTsExtensions: false,
       },
@@ -28,6 +29,14 @@ export default {
     '!**/__tests__/**',
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
+  coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
+  coverageThreshold: {
+    global: {
+      branches: 50,
+      functions: 50,
+      lines: 50,
+      statements: 50,
+    },
+  },
 };
 
