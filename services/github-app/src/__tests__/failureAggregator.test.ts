@@ -20,20 +20,18 @@ import type {
 } from "../services/aggregation/types.js";
 
 // Mock logger
-jest.mock("@kenchi/shared", () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  })),
-  ValidationError: class ValidationError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = "ValidationError";
-    }
-  },
-}));
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared");
+  return {
+    ...actual,
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
+  };
+});
 
 describe("FailureAggregator", () => {
   // Test fixtures

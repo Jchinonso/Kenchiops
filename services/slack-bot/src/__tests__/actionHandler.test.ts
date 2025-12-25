@@ -13,6 +13,7 @@ import {
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared");
   // Create mock logger inside the factory to avoid hoisting issues
   const mockLogger = {
     info: jest.fn(),
@@ -22,16 +23,11 @@ jest.mock("@kenchi/shared", () => {
   };
 
   return {
+    ...actual,
     createLogger: jest.fn(() => mockLogger),
     mockLogger, // Export it so we can access it in tests
     UI_CONSTANTS: {
       ACTION_TIMEOUT_MS: 2000,
-    },
-    ValidationError: class ValidationError extends Error {
-      constructor(message: string) {
-        super(message);
-        this.name = "ValidationError";
-      }
     },
   };
 });

@@ -12,27 +12,25 @@ import type {
 } from "../types/slackTypes.js";
 
 // Mock dependencies
-jest.mock("@kenchi/shared", () => ({
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-  getErrorMessage: jest.fn((error) => (error instanceof Error ? error.message : String(error))),
-  ValidationError: class ValidationError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = "ValidationError";
-    }
-  },
-  findByGitHubInstallation: jest.fn(() =>
-    Promise.resolve({ id: "tenant-123", name: "Test Tenant" })
-  ),
-  findChannelForRepository: jest.fn(() =>
-    Promise.resolve({ slackChannelId: "C123456", repository: "owner/repo" })
-  ),
-}));
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared");
+  return {
+    ...actual,
+    logger: {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+    getErrorMessage: jest.fn((error) => (error instanceof Error ? error.message : String(error))),
+    findByGitHubInstallation: jest.fn(() =>
+      Promise.resolve({ id: "tenant-123", name: "Test Tenant" })
+    ),
+    findChannelForRepository: jest.fn(() =>
+      Promise.resolve({ slackChannelId: "C123456", repository: "owner/repo" })
+    ),
+  };
+});
 
 jest.mock("../services/channelService.js", () => ({
   resolveChannelId: jest.fn((client, channel) => Promise.resolve(channel || "C123456")),

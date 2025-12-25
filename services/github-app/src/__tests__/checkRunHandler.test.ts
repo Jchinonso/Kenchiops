@@ -7,20 +7,18 @@ import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
 
 // Mock dependencies
-jest.mock("@kenchi/shared", () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  })),
-  ExternalServiceError: class ExternalServiceError extends Error {
-    constructor(service: string, message: string) {
-      super(`${service}: ${message}`);
-      this.name = "ExternalServiceError";
-    }
-  },
-}));
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared");
+  return {
+    ...actual,
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
+  };
+});
 
 jest.mock("../services/context/index.js", () => ({
   gatherEnrichedContext: jest.fn(() =>
