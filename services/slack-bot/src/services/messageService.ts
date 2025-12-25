@@ -365,7 +365,12 @@ export const broadcastMessage = async (
             error: getErrorMessage(error),
           });
 
-          return { name: channel.name, id: channel.id, status: "failed", error: getErrorMessage(error) };
+          return {
+            name: channel.name,
+            id: channel.id,
+            status: "failed",
+            error: getErrorMessage(error),
+          };
         }
       })
     );

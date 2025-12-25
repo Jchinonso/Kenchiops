@@ -47,16 +47,10 @@ global.fetch = mockFetch;
 
 // Import after mocks
 import { oauthRoutes } from "../routes/oauthRoutes.js";
-import {
-  findByGitHubOrg,
-  linkSlackWorkspace,
-  createFromSlackInstall,
-} from "@kenchi/shared";
+import { findByGitHubOrg, linkSlackWorkspace, createFromSlackInstall } from "@kenchi/shared";
 
 const mockFindByGitHubOrg = findByGitHubOrg as jest.MockedFunction<typeof findByGitHubOrg>;
-const mockLinkSlackWorkspace = linkSlackWorkspace as jest.MockedFunction<
-  typeof linkSlackWorkspace
->;
+const mockLinkSlackWorkspace = linkSlackWorkspace as jest.MockedFunction<typeof linkSlackWorkspace>;
 const mockCreateFromSlackInstall = createFromSlackInstall as jest.MockedFunction<
   typeof createFromSlackInstall
 >;
@@ -469,10 +463,9 @@ describe("OAuth Routes", () => {
     it("should include all OAuth scopes in token request", async () => {
       await request(app).get(`/slack/oauth/callback?code=test-code&state=${state}`);
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("code=test-code"),
-        { method: "POST" }
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("code=test-code"), {
+        method: "POST",
+      });
     });
 
     it("should handle special characters in team name", async () => {
@@ -884,10 +877,7 @@ describe("OAuth Routes", () => {
       const state = "random-state-token";
 
       mockFetch.mockImplementation(
-        () =>
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 100)
-          )
+        () => new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 100))
       );
 
       const response = await request(app).get(

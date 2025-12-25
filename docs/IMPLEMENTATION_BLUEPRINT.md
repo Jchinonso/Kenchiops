@@ -5,6 +5,7 @@
 This blueprint maps the vision outlined in the AI-Powered DevOps Co-Pilot concept document to the current Kenchi implementation, identifying what has been accomplished, what remains to be built, and the roadmap for achieving full capability.
 
 **Key Design Principles**:
+
 - **Data Minimization**: Only send what's necessary to the LLM
 - **Security First**: Never send secrets, tokens, or sensitive data to AI
 - **Two-Stage Pipeline**: Deterministic filtering before LLM reasoning
@@ -32,14 +33,14 @@ This blueprint maps the vision outlined in the AI-Powered DevOps Co-Pilot concep
 
 ### The Six Key Features from Concept Document
 
-| Feature | Concept Goal | Current Status | Completion |
-|---------|--------------|----------------|------------|
-| **1. Smart CI/CD Failure Assistant** | Analyze CI failures, explain in plain English, suggest fixes | **IMPLEMENTED** - Full pipeline working | 90% |
-| **2. Infrastructure-as-Code Copilot** | Explain IaC, suggest improvements, generate configs | **NOT STARTED** | 0% |
-| **3. Deployment Risk Analyzer** | Predict deployment risk, gate deployments | **NOT STARTED** | 0% |
-| **4. Incident Triage & Auto-Remediation** | 24/7 SRE assistant with auto-remediation | **PARTIAL** - Analysis only, no auto-remediation | 25% |
-| **5. Configuration Drift Detection** | Compare live vs. Git, detect drift | **NOT STARTED** | 0% |
-| **6. Documentation & Knowledge Assistant** | Smart knowledge base Q&A | **PARTIAL** - Vector store schema ready | 20% |
+| Feature                                    | Concept Goal                                                 | Current Status                                   | Completion |
+| ------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------ | ---------- |
+| **1. Smart CI/CD Failure Assistant**       | Analyze CI failures, explain in plain English, suggest fixes | **IMPLEMENTED** - Full pipeline working          | 90%        |
+| **2. Infrastructure-as-Code Copilot**      | Explain IaC, suggest improvements, generate configs          | **NOT STARTED**                                  | 0%         |
+| **3. Deployment Risk Analyzer**            | Predict deployment risk, gate deployments                    | **NOT STARTED**                                  | 0%         |
+| **4. Incident Triage & Auto-Remediation**  | 24/7 SRE assistant with auto-remediation                     | **PARTIAL** - Analysis only, no auto-remediation | 25%        |
+| **5. Configuration Drift Detection**       | Compare live vs. Git, detect drift                           | **NOT STARTED**                                  | 0%         |
+| **6. Documentation & Knowledge Assistant** | Smart knowledge base Q&A                                     | **PARTIAL** - Vector store schema ready          | 20%        |
 
 ---
 
@@ -48,6 +49,7 @@ This blueprint maps the vision outlined in the AI-Powered DevOps Co-Pilot concep
 ### Core Infrastructure (Fully Implemented)
 
 #### 1. Monorepo Architecture
+
 ```
 kenchi/
 ├── packages/shared/          # Comprehensive shared utilities
@@ -72,24 +74,25 @@ kenchi/
 
 #### 2. Shared Package (`@kenchi/shared`) - Complete
 
-| Module | Status | Description |
-|--------|--------|-------------|
-| **Security** | ✅ Complete | 47 secret patterns, 15 forbidden fields, recursive object redaction |
-| **Safety** | ✅ Complete | 6-factor confidence scoring, action gating, uncertainty detection |
-| **OpenAI Client** | ✅ Complete | Token budget, retry logic, response parsing |
-| **Prompts** | ✅ Complete | System prompts, evidence formatting, token estimation |
-| **Tenant Service** | ✅ Complete | Multi-tenant CRUD, audit logging, credential management |
-| **Repository Mapping** | ✅ Complete | Repo-to-channel routing, mapping CRUD |
-| **Types** | ✅ Complete | Events, Evidence, Analysis, Actions, Multi-tenant types |
-| **Constants** | ✅ Complete | 816 lines of configuration constants |
-| **Config** | ✅ Complete | Environment-based configuration with validation |
-| **Logging** | ✅ Complete | Structured JSON logging with service scoping |
-| **Errors** | ✅ Complete | Custom error classes with automatic redaction |
-| **Middleware** | ✅ Complete | Express error handling, async handlers, request logging |
+| Module                 | Status      | Description                                                         |
+| ---------------------- | ----------- | ------------------------------------------------------------------- |
+| **Security**           | ✅ Complete | 47 secret patterns, 15 forbidden fields, recursive object redaction |
+| **Safety**             | ✅ Complete | 6-factor confidence scoring, action gating, uncertainty detection   |
+| **OpenAI Client**      | ✅ Complete | Token budget, retry logic, response parsing                         |
+| **Prompts**            | ✅ Complete | System prompts, evidence formatting, token estimation               |
+| **Tenant Service**     | ✅ Complete | Multi-tenant CRUD, audit logging, credential management             |
+| **Repository Mapping** | ✅ Complete | Repo-to-channel routing, mapping CRUD                               |
+| **Types**              | ✅ Complete | Events, Evidence, Analysis, Actions, Multi-tenant types             |
+| **Constants**          | ✅ Complete | 816 lines of configuration constants                                |
+| **Config**             | ✅ Complete | Environment-based configuration with validation                     |
+| **Logging**            | ✅ Complete | Structured JSON logging with service scoping                        |
+| **Errors**             | ✅ Complete | Custom error classes with automatic redaction                       |
+| **Middleware**         | ✅ Complete | Express error handling, async handlers, request logging             |
 
 #### 3. Services Implementation
 
 **API Service (`services/api/`)**
+
 - `POST /api/analyze` - CI failure analysis endpoint
 - Validates input, creates Event/Evidence context
 - Calls OpenAI for analysis with anti-hallucination prompts
@@ -97,6 +100,7 @@ kenchi/
 - Returns analysis with confidence and gating decision
 
 **Slack Bot Service (`services/slack-bot/`)**
+
 - Socket Mode connection (no public URL needed)
 - `/kenchi configure` - Repository selection modal
 - `/kenchi unconfigure` - Remove repository mapping
@@ -107,6 +111,7 @@ kenchi/
 - Rich Block Kit formatting with emojis and colors
 
 **GitHub App Service (`services/github-app/`)**
+
 - Check run webhook handler with context enrichment
 - Failure aggregation with debounce (15s default, 120s max)
 - PR comment posting (with old comment cleanup)
@@ -117,18 +122,18 @@ kenchi/
 
 #### 4. Database Schema (PostgreSQL)
 
-| Table | Purpose | Status |
-|-------|---------|--------|
-| `events` | Webhook event storage | ✅ Ready |
-| `analyses` | LLM analysis results | ✅ Ready |
-| `action_proposals` | Proposed actions with approval tracking | ✅ Ready |
-| `flake_records` | Test flakiness tracking | ✅ Ready |
-| `diff_chunks` | RAG vector storage (pgvector) | ✅ Schema ready |
-| `knowledge_documents` | Runbooks, postmortems | ✅ Schema ready |
-| `analysis_feedback` | User feedback for model improvement | ✅ Ready |
-| `tenants` | Multi-tenant registry | ✅ Ready |
-| `tenant_audit_log` | Lifecycle audit trail | ✅ Ready |
-| `repository_channel_mappings` | Repo-to-channel routing | ✅ Ready |
+| Table                         | Purpose                                 | Status          |
+| ----------------------------- | --------------------------------------- | --------------- |
+| `events`                      | Webhook event storage                   | ✅ Ready        |
+| `analyses`                    | LLM analysis results                    | ✅ Ready        |
+| `action_proposals`            | Proposed actions with approval tracking | ✅ Ready        |
+| `flake_records`               | Test flakiness tracking                 | ✅ Ready        |
+| `diff_chunks`                 | RAG vector storage (pgvector)           | ✅ Schema ready |
+| `knowledge_documents`         | Runbooks, postmortems                   | ✅ Schema ready |
+| `analysis_feedback`           | User feedback for model improvement     | ✅ Ready        |
+| `tenants`                     | Multi-tenant registry                   | ✅ Ready        |
+| `tenant_audit_log`            | Lifecycle audit trail                   | ✅ Ready        |
+| `repository_channel_mappings` | Repo-to-channel routing                 | ✅ Ready        |
 
 ---
 
@@ -261,6 +266,7 @@ kenchi/
 **Location:** `packages/shared/src/security/redaction.ts`
 
 **47 Secret Pattern Types Detected:**
+
 - AWS Access Keys and Secret Keys
 - GitHub Tokens (PAT, OAuth, App, Server, Refresh)
 - Slack Tokens (Bot, User, App)
@@ -273,16 +279,29 @@ kenchi/
 - Bearer Tokens, Basic Auth
 
 **15 Forbidden Fields (Always Redacted):**
+
 ```typescript
 const FORBIDDEN_FIELDS = [
-  'password', 'passwd', 'pwd', 'secret', 'api_key',
-  'access_token', 'auth_token', 'private_key', 'secret_key',
-  'encryption_key', 'signing_key', 'bearer', 'authorization',
-  'credential', 'token'
+  "password",
+  "passwd",
+  "pwd",
+  "secret",
+  "api_key",
+  "access_token",
+  "auth_token",
+  "private_key",
+  "secret_key",
+  "encryption_key",
+  "signing_key",
+  "bearer",
+  "authorization",
+  "credential",
+  "token",
 ] as const;
 ```
 
 **API Functions:**
+
 ```typescript
 // Redact secrets from text
 redactSecrets(text: string, options?: RedactionOptions): string
@@ -307,6 +326,7 @@ createCustomRedactor(patterns: RegExp[]): (text: string) => string
 ```
 
 **Performance Optimizations:**
+
 - Pre-compiled regex patterns at module load
 - Single-pass iteration using functional `.reduce()`
 - Set-based lookups for forbidden fields (O(1))
@@ -401,16 +421,16 @@ const CONFIDENCE_THRESHOLDS = {
 
 ### Action Gating
 
-| Final Score | Gating Decision | Allowed Actions |
-|-------------|-----------------|-----------------|
-| >= 0.85 | `auto_approve` | `safe`, `low_risk` only |
-| 0.7 - 0.84 | `require_approval` | All (with approval) |
-| < 0.7 | `block` | None |
+| Final Score | Gating Decision    | Allowed Actions         |
+| ----------- | ------------------ | ----------------------- |
+| >= 0.85     | `auto_approve`     | `safe`, `low_risk` only |
+| 0.7 - 0.84  | `require_approval` | All (with approval)     |
+| < 0.7       | `block`            | None                    |
 
 ### Safety Levels
 
 ```typescript
-type SafetyLevel = 'safe' | 'low_risk' | 'medium_risk' | 'high_risk' | 'dangerous';
+type SafetyLevel = "safe" | "low_risk" | "medium_risk" | "high_risk" | "dangerous";
 
 // Auto-approvable: safe, low_risk
 // Requires approval: medium_risk, high_risk
@@ -508,6 +528,7 @@ CREATE TABLE tenant_audit_log (
 ### Repository-Channel Routing
 
 When a CI failure occurs:
+
 1. Look up tenant by GitHub installation ID
 2. Query `repository_channel_mappings` for the repository
 3. If mapping exists, send notification to that channel
@@ -521,7 +542,7 @@ const mapping = await findChannelForRepository(tenant.id, repository);
 if (mapping) {
   await postToSlack(mapping.slackChannelId, analysis);
 } else {
-  logger.warn('No channel mapping for repository', { repository });
+  logger.warn("No channel mapping for repository", { repository });
 }
 ```
 
@@ -584,12 +605,12 @@ if (mapping) {
 
 ### Remaining Work for Phase 1 Completion
 
-| Task | Effort | Priority |
-|------|--------|----------|
-| Flakiness fingerprinting | 2 days | High |
-| Interactive Slack buttons | 2 days | High |
-| Feedback collection UI | 1 day | Medium |
-| Customer privacy toggles | 2 days | Medium |
+| Task                      | Effort | Priority |
+| ------------------------- | ------ | -------- |
+| Flakiness fingerprinting  | 2 days | High     |
+| Interactive Slack buttons | 2 days | High     |
+| Feedback collection UI    | 1 day  | Medium   |
+| Customer privacy toggles  | 2 days | Medium   |
 
 ### Phase 2 Implementation Order
 
@@ -640,31 +661,31 @@ if (mapping) {
 
 ### Current Infrastructure
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Database** | PostgreSQL + pgvector | Persistence, vector search |
-| **API Service** | Express.js + TypeScript | Analysis endpoint |
-| **Slack Bot** | Slack Bolt (Socket Mode) | User interactions |
-| **GitHub App** | Express.js + TypeScript | Webhook handling |
-| **Container Orchestration** | Docker Compose | Local/staging deployment |
+| Component                   | Technology               | Purpose                    |
+| --------------------------- | ------------------------ | -------------------------- |
+| **Database**                | PostgreSQL + pgvector    | Persistence, vector search |
+| **API Service**             | Express.js + TypeScript  | Analysis endpoint          |
+| **Slack Bot**               | Slack Bolt (Socket Mode) | User interactions          |
+| **GitHub App**              | Express.js + TypeScript  | Webhook handling           |
+| **Container Orchestration** | Docker Compose           | Local/staging deployment   |
 
 ### Third-Party Services
 
-| Service | Cost | Purpose |
-|---------|------|---------|
-| **OpenAI API** | ~$50-200/month | LLM analysis (gpt-4o-mini) |
-| **Slack** | Free (standard features) | User notifications |
-| **GitHub** | Free (App registration) | Webhook source |
-| **PostgreSQL** | Hosting cost | Data persistence |
+| Service        | Cost                     | Purpose                    |
+| -------------- | ------------------------ | -------------------------- |
+| **OpenAI API** | ~$50-200/month           | LLM analysis (gpt-4o-mini) |
+| **Slack**      | Free (standard features) | User notifications         |
+| **GitHub**     | Free (App registration)  | Webhook source             |
+| **PostgreSQL** | Hosting cost             | Data persistence           |
 
 ### Development Effort Estimates
 
-| Phase | Effort | Team Size |
-|-------|--------|-----------|
-| Phase 1 Completion | 1-2 weeks | 1 developer |
-| Phase 2 (Code Fixes + RAG) | 3-4 weeks | 1-2 developers |
-| Phase 3 (Incident Triage) | 4-6 weeks | 1-2 developers |
-| Phase 4+ (Future) | 4-8 weeks each | 1-2 developers |
+| Phase                      | Effort         | Team Size      |
+| -------------------------- | -------------- | -------------- |
+| Phase 1 Completion         | 1-2 weeks      | 1 developer    |
+| Phase 2 (Code Fixes + RAG) | 3-4 weeks      | 1-2 developers |
+| Phase 3 (Incident Triage)  | 4-6 weeks      | 1-2 developers |
+| Phase 4+ (Future)          | 4-8 weeks each | 1-2 developers |
 
 ### Return on Investment
 
@@ -680,6 +701,7 @@ if (mapping) {
 ### Current State Summary
 
 Kenchi has achieved **90% completion of Phase 1** with:
+
 - Full CI failure analysis pipeline working end-to-end
 - Secret redaction protecting sensitive data
 - 6-factor confidence scoring validating AI outputs
@@ -688,13 +710,13 @@ Kenchi has achieved **90% completion of Phase 1** with:
 
 ### Key Differentiators
 
-| Capability | Status | Benefit |
-|------------|--------|---------|
-| **Secret Redaction** | ✅ Complete | Never expose sensitive data to LLM |
+| Capability             | Status      | Benefit                                |
+| ---------------------- | ----------- | -------------------------------------- |
+| **Secret Redaction**   | ✅ Complete | Never expose sensitive data to LLM     |
 | **Confidence Scoring** | ✅ Complete | Deterministic validation of AI outputs |
-| **Action Gating** | ✅ Complete | Prevent dangerous automated actions |
-| **Multi-Tenant** | ✅ Complete | SaaS-ready architecture |
-| **Aggregation** | ✅ Complete | Consolidated analysis per commit |
+| **Action Gating**      | ✅ Complete | Prevent dangerous automated actions    |
+| **Multi-Tenant**       | ✅ Complete | SaaS-ready architecture                |
+| **Aggregation**        | ✅ Complete | Consolidated analysis per commit       |
 
 ### Immediate Next Steps
 
@@ -711,6 +733,7 @@ This positions Kenchi as a **trustworthy AI DevOps co-pilot** that teams can rel
 **Created**: 2025-12-20
 **Updated**: 2025-12-24
 **Related Documents**:
+
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture
 - [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md) - Detailed design
 - [DATA_MODELS.md](./DATA_MODELS.md) - Data structures

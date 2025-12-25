@@ -77,7 +77,9 @@ export const getConfidenceEmoji = (percent: number): string =>
 /**
  * Deduplicate and merge recommended actions from all failures.
  */
-export const mergeRecommendedActions = (failures: readonly AnalyzedFailure[]): RecommendedAction[] => {
+export const mergeRecommendedActions = (
+  failures: readonly AnalyzedFailure[]
+): RecommendedAction[] => {
   const actionMap = failures
     .flatMap((f) => f.recommendedActions)
     .reduce((map, action) => {

@@ -5,7 +5,12 @@
  * colors, text, and list formatting across all services.
  */
 
-import { UI_CONFIDENCE_THRESHOLDS, SLACK_COLORS, TIME_CONSTANTS, GITHUB_COMMENT_DISPLAY } from "../constants/index.js";
+import {
+  UI_CONFIDENCE_THRESHOLDS,
+  SLACK_COLORS,
+  TIME_CONSTANTS,
+  GITHUB_COMMENT_DISPLAY,
+} from "../constants/index.js";
 
 // ==================== Lookup Tables ====================
 
@@ -124,7 +129,8 @@ interface TimeUnit {
  */
 const TIME_UNITS: readonly TimeUnit[] = [
   {
-    threshold: TIME_CONSTANTS.DAYS_PER_WEEK * TIME_CONSTANTS.HOURS_PER_DAY * TIME_CONSTANTS.MINUTES_PER_HOUR,
+    threshold:
+      TIME_CONSTANTS.DAYS_PER_WEEK * TIME_CONSTANTS.HOURS_PER_DAY * TIME_CONSTANTS.MINUTES_PER_HOUR,
     divisor: TIME_CONSTANTS.HOURS_PER_DAY * TIME_CONSTANTS.MINUTES_PER_HOUR,
     singular: "day",
     plural: "days",
@@ -215,8 +221,7 @@ export const getRepoName = (repository: string): string =>
  * getFirstSentence("Build failed. See logs.") // "Build failed"
  * getFirstSentence("No errors found!") // "No errors found"
  */
-export const getFirstSentence = (text: string): string =>
-  text.split(/[.!?]/)[0]?.trim() ?? "";
+export const getFirstSentence = (text: string): string => text.split(/[.!?]/)[0]?.trim() ?? "";
 
 /**
  * Builds a truncated list with overflow message.
@@ -244,8 +249,7 @@ export const buildTruncatedList = <T>(
   overflowLabel: string
 ): string[] => {
   const displayed = items.slice(0, maxItems).map(formatItem);
-  const overflow = items.length > maxItems
-    ? [`- _...and ${items.length - maxItems} more ${overflowLabel}_`]
-    : [];
+  const overflow =
+    items.length > maxItems ? [`- _...and ${items.length - maxItems} more ${overflowLabel}_`] : [];
   return [...displayed, ...overflow];
 };

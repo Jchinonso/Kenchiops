@@ -2,7 +2,12 @@
  * Custom error classes for better error handling and type safety.
  */
 
-import { ERROR_CODES, HTTP_STATUS, DEFAULT_ERROR_MESSAGES, SERVICE_NAMES } from "../constants/index.js";
+import {
+  ERROR_CODES,
+  HTTP_STATUS,
+  DEFAULT_ERROR_MESSAGES,
+  SERVICE_NAMES,
+} from "../constants/index.js";
 
 /**
  * Base error class for application-specific errors.

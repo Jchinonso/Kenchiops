@@ -190,12 +190,16 @@ describe("Health Routes", () => {
     it("should handle missing private key start marker", async () => {
       const mockAppConfig = jest.requireMock("../config/appConfig.js") as {
         appConfig: {
-          github: { privateKey: string; appId: string; webhookSecret: string; installationId?: number };
+          github: {
+            privateKey: string;
+            appId: string;
+            webhookSecret: string;
+            installationId?: number;
+          };
           serviceName: string;
         };
       };
-      mockAppConfig.appConfig.github.privateKey =
-        "invalid key\n-----END RSA PRIVATE KEY-----";
+      mockAppConfig.appConfig.github.privateKey = "invalid key\n-----END RSA PRIVATE KEY-----";
 
       const response = await request(app).get("/health/github");
 
@@ -205,7 +209,12 @@ describe("Health Routes", () => {
     it("should handle missing private key end marker", async () => {
       const mockAppConfig = jest.requireMock("../config/appConfig.js") as {
         appConfig: {
-          github: { privateKey: string; appId: string; webhookSecret: string; installationId?: number };
+          github: {
+            privateKey: string;
+            appId: string;
+            webhookSecret: string;
+            installationId?: number;
+          };
           serviceName: string;
         };
       };
@@ -219,7 +228,12 @@ describe("Health Routes", () => {
     it("should handle empty private key", async () => {
       const mockAppConfig = jest.requireMock("../config/appConfig.js") as {
         appConfig: {
-          github: { privateKey: string; appId: string; webhookSecret: string; installationId?: number };
+          github: {
+            privateKey: string;
+            appId: string;
+            webhookSecret: string;
+            installationId?: number;
+          };
           serviceName: string;
         };
       };
@@ -236,7 +250,12 @@ describe("Health Routes", () => {
     it("should handle missing installation ID", async () => {
       const mockAppConfig = jest.requireMock("../config/appConfig.js") as {
         appConfig: {
-          github: { privateKey: string; appId: string; webhookSecret: string; installationId?: number };
+          github: {
+            privateKey: string;
+            appId: string;
+            webhookSecret: string;
+            installationId?: number;
+          };
           serviceName: string;
         };
       };
@@ -250,7 +269,12 @@ describe("Health Routes", () => {
     it("should handle missing webhook secret", async () => {
       const mockAppConfig = jest.requireMock("../config/appConfig.js") as {
         appConfig: {
-          github: { privateKey: string; appId: string; webhookSecret: string; installationId?: number };
+          github: {
+            privateKey: string;
+            appId: string;
+            webhookSecret: string;
+            installationId?: number;
+          };
           serviceName: string;
         };
       };
@@ -264,7 +288,12 @@ describe("Health Routes", () => {
     it("should handle repos endpoint without installation ID", async () => {
       const mockAppConfig = jest.requireMock("../config/appConfig.js") as {
         appConfig: {
-          github: { privateKey: string; appId: string; webhookSecret: string; installationId?: number };
+          github: {
+            privateKey: string;
+            appId: string;
+            webhookSecret: string;
+            installationId?: number;
+          };
           serviceName: string;
         };
       };

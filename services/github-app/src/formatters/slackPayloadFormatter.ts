@@ -159,7 +159,10 @@ export const buildConsolidatedSlackPayload = (
           {
             type: "context",
             elements: [
-              { type: "mrkdwn", text: `_...and ${failures.length - DISPLAY_LIMITS.slackMaxChecks} more failed checks_` },
+              {
+                type: "mrkdwn",
+                text: `_...and ${failures.length - DISPLAY_LIMITS.slackMaxChecks} more failed checks_`,
+              },
             ],
           },
         ]

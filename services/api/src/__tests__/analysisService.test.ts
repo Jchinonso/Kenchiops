@@ -350,9 +350,7 @@ describe("API Analysis Service", () => {
         identifiedCause: "Root cause found",
         confidence: "high",
         analyzedAt: new Date().toISOString(),
-        recommendedActions: [
-          { actionType: "fix_code", description: "Fix it", priority: "high" },
-        ],
+        recommendedActions: [{ actionType: "fix_code", description: "Fix it", priority: "high" }],
       };
 
       mockAnalyzeIncident.mockResolvedValue(mockAnalysisResult);

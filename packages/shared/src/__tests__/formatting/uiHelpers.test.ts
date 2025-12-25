@@ -212,12 +212,7 @@ describe("UI Helpers", () => {
 
   describe("buildTruncatedList", () => {
     it("should return all items when under maxItems", () => {
-      const result = buildTruncatedList(
-        ["a", "b", "c"],
-        (item) => `- ${item}`,
-        5,
-        "items"
-      );
+      const result = buildTruncatedList(["a", "b", "c"], (item) => `- ${item}`, 5, "items");
 
       expect(result).toEqual(["- a", "- b", "- c"]);
     });
@@ -235,12 +230,7 @@ describe("UI Helpers", () => {
     });
 
     it("should use custom format function", () => {
-      const result = buildTruncatedList(
-        [1, 2, 3],
-        (n) => `Item ${n}`,
-        5,
-        "numbers"
-      );
+      const result = buildTruncatedList([1, 2, 3], (n) => `Item ${n}`, 5, "numbers");
 
       expect(result).toEqual(["Item 1", "Item 2", "Item 3"]);
     });
@@ -257,34 +247,19 @@ describe("UI Helpers", () => {
     });
 
     it("should handle empty array", () => {
-      const result = buildTruncatedList(
-        [],
-        (item) => item,
-        3,
-        "items"
-      );
+      const result = buildTruncatedList([], (item) => item, 3, "items");
 
       expect(result).toEqual([]);
     });
 
     it("should use custom overflow label", () => {
-      const result = buildTruncatedList(
-        [1, 2, 3, 4],
-        (n) => String(n),
-        2,
-        "failures"
-      );
+      const result = buildTruncatedList([1, 2, 3, 4], (n) => String(n), 2, "failures");
 
       expect(result[2]).toContain("2 more failures");
     });
 
     it("should handle exactly maxItems", () => {
-      const result = buildTruncatedList(
-        ["a", "b", "c"],
-        (item) => item,
-        3,
-        "items"
-      );
+      const result = buildTruncatedList(["a", "b", "c"], (item) => item, 3, "items");
 
       expect(result).toHaveLength(3);
       expect(result).not.toContain(expect.stringContaining("more"));

@@ -78,7 +78,9 @@ describe("Mention Handler", () => {
     return jest.fn<SayFn>().mockImplementation(() => Promise.resolve({ ok: true }));
   };
 
-  const createMockAppMentionEvent = (overrides: Partial<AppMentionEvent> = {}): AppMentionEvent => ({
+  const createMockAppMentionEvent = (
+    overrides: Partial<AppMentionEvent> = {}
+  ): AppMentionEvent => ({
     type: "app_mention",
     text: "<@U123456> help me debug this issue",
     user: "U789012",
@@ -451,12 +453,7 @@ describe("Mention Handler", () => {
 
       await handleAppMention(event, mockSay);
 
-      expect(createEventFromMention).toHaveBeenCalledWith(
-        event.user,
-        event.channel,
-        "",
-        event.ts
-      );
+      expect(createEventFromMention).toHaveBeenCalledWith(event.user, event.channel, "", event.ts);
     });
 
     it("should handle very long query text", async () => {

@@ -9,12 +9,7 @@ import pg from "pg";
 import { query, transaction } from "./client.js";
 import { createLogger } from "../core/logger.js";
 import { NotFoundError } from "../core/errors.js";
-import {
-  TENANT_STATUS,
-  AUDIT_ACTIONS,
-  AUDIT_DEFAULTS,
-  AUDIT_QUERIES,
-} from "../constants/index.js";
+import { TENANT_STATUS, AUDIT_ACTIONS, AUDIT_DEFAULTS, AUDIT_QUERIES } from "../constants/index.js";
 import type {
   Tenant,
   TenantStatus,

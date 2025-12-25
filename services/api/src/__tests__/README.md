@@ -49,6 +49,7 @@ npm install --save-dev supertest @types/supertest
 ```
 
 Add to root `package.json`:
+
 ```json
 {
   "devDependencies": {
@@ -88,12 +89,14 @@ The test suite provides comprehensive coverage of:
 ## Mocking Strategy
 
 All external dependencies are mocked to ensure:
+
 - Tests are isolated and fast
 - No external API calls during testing
 - Predictable test results
 - No need for test credentials
 
 Mocked dependencies include:
+
 - `@kenchi/shared` - Logger, validators, error handlers
 - `OpenAIClient` - LLM analysis
 - Service modules - Business logic isolation
@@ -101,6 +104,7 @@ Mocked dependencies include:
 ## Test Patterns
 
 Tests follow consistent patterns:
+
 1. **AAA Pattern**: Arrange, Act, Assert
 2. **Descriptive names**: `should [expected behavior] when [condition]`
 3. **Focused tests**: One assertion per test where possible

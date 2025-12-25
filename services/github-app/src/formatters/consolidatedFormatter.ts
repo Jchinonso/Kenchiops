@@ -40,14 +40,16 @@ export const buildConsolidatedCheckAnnotations = (
 ): GitHubCheckAnnotation[] => {
   // Flatten all annotations
   const allAnnotations = aggregation.failures.flatMap((failure) =>
-    failure.annotations.map((annotation): GitHubCheckAnnotation => ({
-      path: annotation.path,
-      start_line: annotation.line,
-      end_line: annotation.line,
-      annotation_level: annotation.level,
-      message: `[${failure.checkName}] ${annotation.message}`,
-      title: annotation.title ?? failure.checkName,
-    }))
+    failure.annotations.map(
+      (annotation): GitHubCheckAnnotation => ({
+        path: annotation.path,
+        start_line: annotation.line,
+        end_line: annotation.line,
+        annotation_level: annotation.level,
+        message: `[${failure.checkName}] ${annotation.message}`,
+        title: annotation.title ?? failure.checkName,
+      })
+    )
   );
 
   // Deduplicate using reduce with Set tracking
