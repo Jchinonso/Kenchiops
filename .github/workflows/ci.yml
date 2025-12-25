@@ -94,6 +94,17 @@ jobs:
           DATABASE_URL: postgres://test:test@localhost:5432/test
           VECTOR_DB_URL: postgres://test:test@localhost:5432/test_vector
 
+      - name: Generate and update coverage badge
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        run: npm run test:coverage:badge
+
+      - name: Commit coverage badge update
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git diff --quiet README.md || (git add README.md && git commit -m "chore: update coverage badge [skip ci]" && git push)
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: always()
