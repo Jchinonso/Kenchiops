@@ -32,7 +32,8 @@ const generateBadgeUrl = (label: string, pct: number): string => {
   const color = getColor(pct);
   const encodedLabel = encodeURIComponent(label);
   const value = `${pct.toFixed(1)}%25`;
-  return `https://img.shields.io/badge/${encodedLabel}-${value}-${color}`;
+  // Use shields.io dynamic badge endpoint that can be updated
+  return `https://img.shields.io/badge/${encodedLabel}-${value}-${color}?logo=jest`;
 };
 
 const main = (): void => {
