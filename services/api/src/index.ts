@@ -9,7 +9,13 @@
  */
 
 import express from "express";
-import { createLogger, errorHandler, requestLogger, defaultRateLimiter } from "@kenchi/shared";
+import {
+  createLogger,
+  errorHandler,
+  requestLogger,
+  defaultRateLimiter,
+  EXPRESS_CONFIG,
+} from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 
@@ -21,8 +27,8 @@ const logger = createLogger("api");
 const createApp = (): express.Express => {
   const app = express();
 
-  // Middleware
-  app.use(express.json());
+  // Middleware - use configured limit for large CI context payloads
+  app.use(express.json({ limit: EXPRESS_CONFIG.JSON_BODY_LIMIT }));
   app.use(requestLogger);
   app.use(defaultRateLimiter.middleware());
 

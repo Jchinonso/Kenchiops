@@ -107,13 +107,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload coverage to Coveralls
-        uses: coverallsapp/github-action@v2
-        if: always()
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./coverage/lcov.info
-
   build:
     name: Build
     runs-on: ubuntu-latest

@@ -23,7 +23,13 @@ export {
 } from "./confidence.js";
 
 // HTTP and error constants
-export { HTTP_STATUS, ERROR_CODES, DEFAULT_ERROR_MESSAGES, SERVICE_NAMES } from "./http.js";
+export {
+  HTTP_STATUS,
+  ERROR_CODES,
+  DEFAULT_ERROR_MESSAGES,
+  SERVICE_NAMES,
+  EXPRESS_CONFIG,
+} from "./http.js";
 
 // Time, ports, and rate limiting
 export { TIME_CONSTANTS, SERVICE_PORTS, RATE_LIMIT_CONSTANTS } from "./time.js";
@@ -99,7 +105,12 @@ export {
 } from "./secrets.js";
 
 // Slack-specific constants
-export { SLACK_VERIFICATION, SLACK_API_LIMITS } from "./slack.js";
+export {
+  SLACK_VERIFICATION,
+  SLACK_API_LIMITS,
+  SOCKET_MODE_ERROR_PATTERNS,
+  isSocketModeDisconnectError,
+} from "./slack.js";
 
 // Database constants
 export { DATABASE_POOL_DEFAULTS, QUERY_LOGGING, TRANSACTION_COMMANDS } from "./database.js";

@@ -21,6 +21,7 @@ import {
   closeDatabase,
   findBySlackWorkspace,
   deleteMappingsForChannel,
+  isSocketModeDisconnectError,
 } from "@kenchi/shared";
 
 const { App } = Bolt;
@@ -390,6 +391,32 @@ async function startService(): Promise<void> {
     process.exit(1);
   }
 }
+
+// Handle uncaught exceptions - specifically for socket-mode disconnect issues
+process.on("uncaughtException", (error) => {
+  // Socket-mode disconnect during connecting is a known transient issue
+  // Uses shared utility for pattern matching
+  if (isSocketModeDisconnectError(error.message)) {
+    logger.warn("Socket-mode disconnect detected, will auto-reconnect", {
+      error: error.message,
+    });
+    // Don't exit - the socket-mode client will auto-reconnect
+    return;
+  }
+
+  // All other uncaught exceptions should crash the app
+  logger.error("Uncaught exception - crashing", {
+    error: error.message,
+    stack: error.stack,
+  });
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled rejection", {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+});
 
 // Start the service
 startService().catch((error) => {

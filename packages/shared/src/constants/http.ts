@@ -43,3 +43,11 @@ export const DEFAULT_ERROR_MESSAGES = {
 export const SERVICE_NAMES = {
   OPENAI: "OpenAI",
 } as const;
+
+/**
+ * Express middleware configuration.
+ */
+export const EXPRESS_CONFIG = {
+  /** Maximum JSON body size for large CI context payloads */
+  JSON_BODY_LIMIT: "5mb",
+} as const;
