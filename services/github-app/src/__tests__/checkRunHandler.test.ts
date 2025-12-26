@@ -55,6 +55,8 @@ jest.mock("@kenchi/shared", () => {
         analyzedAt: new Date().toISOString(),
       })
     ),
+    // Redis aggregator mock
+    addFailureToRedis: jest.fn(() => Promise.resolve()),
   };
 });
 
@@ -107,11 +109,7 @@ jest.mock("../formatters/checkRunFormatter.js", () => ({
   buildEnrichedLogContent: jest.fn(() => "enriched log content"),
 }));
 
-jest.mock("../services/aggregation/index.js", () => ({
-  getAggregator: jest.fn(() => ({
-    addFailure: jest.fn(),
-  })),
-}));
+// No longer needed - addFailureToRedis is mocked in @kenchi/shared above
 
 jest.mock("../services/githubService.js", () => ({
   deleteKenchiOpsComments: jest.fn(),
@@ -120,18 +118,17 @@ jest.mock("../services/githubService.js", () => ({
 // Import handlers after mocks
 import { handleCheckRun, handleCheckRunFailure } from "../handlers/checkRunHandler.js";
 import { gatherEnrichedContext, fetchPRsByCommit } from "../services/context/index.js";
-import { getAggregator } from "../services/aggregation/index.js";
 import { deleteKenchiOpsComments } from "../services/githubService.js";
-import { resilientPost } from "@kenchi/shared";
+import { resilientPost, addFailureToRedis } from "@kenchi/shared";
 
-// Get the mocked resilientPost function
+// Get the mocked functions
 const mockResilientPost = resilientPost as jest.MockedFunction<typeof resilientPost>;
+const mockAddFailureToRedis = addFailureToRedis as jest.MockedFunction<typeof addFailureToRedis>;
 
 const mockGatherEnrichedContext = gatherEnrichedContext as jest.MockedFunction<
   typeof gatherEnrichedContext
 >;
 const mockFetchPRsByCommit = fetchPRsByCommit as jest.MockedFunction<typeof fetchPRsByCommit>;
-const mockGetAggregator = getAggregator as jest.MockedFunction<typeof getAggregator>;
 const mockDeleteKenchiOpsComments = deleteKenchiOpsComments as jest.MockedFunction<
   typeof deleteKenchiOpsComments
 >;
@@ -225,9 +222,8 @@ describe("Check Run Handler", () => {
 
     mockFetchPRsByCommit.mockResolvedValue([123]);
 
-    mockGetAggregator.mockReturnValue({
-      addFailure: jest.fn(),
-    } as unknown as ReturnType<typeof getAggregator>);
+    // Reset Redis aggregator mock
+    mockAddFailureToRedis.mockResolvedValue();
 
     mockDeleteKenchiOpsComments.mockResolvedValue(0);
   });
@@ -376,16 +372,12 @@ describe("Check Run Handler", () => {
       );
     });
 
-    it("should add failure to aggregator", async () => {
+    it("should add failure to Redis aggregator", async () => {
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalled();
+      expect(mockAddFailureToRedis).toHaveBeenCalled();
     });
 
     it("should handle API errors gracefully", async () => {
@@ -405,16 +397,12 @@ describe("Check Run Handler", () => {
       expect(result.handled).toBe(false);
     });
 
-    it("should include analysis metadata in aggregator", async () => {
+    it("should include analysis metadata in Redis aggregator", async () => {
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.objectContaining({
           repositoryFullName: "testowner/testrepo",
           commitSha: webhook.check_run.head_sha,
@@ -467,14 +455,10 @@ describe("Check Run Handler", () => {
       });
 
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
           annotations: expect.arrayContaining([
@@ -525,14 +509,10 @@ describe("Check Run Handler", () => {
       });
 
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
           annotations: expect.arrayContaining([
@@ -552,14 +532,10 @@ describe("Check Run Handler", () => {
 
     it("should include PR context when available", async () => {
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
         expect.any(Object),
@@ -576,14 +552,10 @@ describe("Check Run Handler", () => {
 
     it("should include workflow context when available", async () => {
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
         expect.any(Object),
@@ -598,12 +570,7 @@ describe("Check Run Handler", () => {
     });
 
     it("should handle aggregator errors", async () => {
-      const mockAddFailure = jest.fn(() => {
-        throw new Error("Aggregator error");
-      });
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
+      mockAddFailureToRedis.mockRejectedValueOnce(new Error("Aggregator error"));
 
       const webhook = createMockWebhook();
       const result = await handleCheckRunFailure(webhook);

@@ -3,6 +3,8 @@
  *
  * These types support consolidating multiple check run failures
  * into a single cohesive analysis before posting to GitHub/Slack.
+ *
+ * @module aggregation/types
  */
 
 /**
@@ -39,6 +41,21 @@ export interface AnalyzedFailure {
   readonly annotations: readonly CodeAnnotation[];
   readonly recommendedActions: readonly RecommendedAction[];
   readonly timestamp: Date;
+}
+
+/**
+ * Serializable version of AnalyzedFailure for Redis storage
+ */
+export interface SerializedFailure {
+  readonly checkRunId: number;
+  readonly checkName: string;
+  readonly conclusion: string;
+  readonly confidence: number;
+  readonly identifiedCause: string;
+  readonly analysis: string;
+  readonly annotations: readonly CodeAnnotation[];
+  readonly recommendedActions: readonly RecommendedAction[];
+  readonly timestamp: string; // ISO string instead of Date
 }
 
 /**
@@ -94,7 +111,7 @@ export interface AggregationKey {
 }
 
 /**
- * Serializes aggregation key to string for Map storage
+ * Serializes aggregation key to string for Redis storage
  */
 export const serializeAggregationKey = (key: AggregationKey): string =>
   `${key.repositoryFullName}:${key.commitSha}`;
@@ -111,26 +128,15 @@ export const deserializeAggregationKey = (serialized: string): AggregationKey =>
 };
 
 /**
- * Pending aggregation entry with timer
- */
-export interface PendingAggregation {
-  readonly key: AggregationKey;
-  data: AggregatedFailures;
-  timerId: NodeJS.Timeout | null;
-}
-
-/**
  * Configuration for failure aggregation
  */
 export interface AggregationConfig {
-  /** Time to wait after first failure before consolidating (ms) */
+  /** Time to wait after last failure before consolidating (ms) */
   readonly debounceMs: number;
   /** Maximum time to wait for aggregation (ms) */
   readonly maxWaitMs: number;
   /** Maximum failures to aggregate per commit */
   readonly maxFailuresPerCommit: number;
-  /** Time after which stale entries are cleaned up (ms) */
-  readonly staleEntryMs: number;
 }
 
 /**
@@ -140,7 +146,6 @@ export const DEFAULT_AGGREGATION_CONFIG: AggregationConfig = {
   debounceMs: 30_000, // 30 seconds after each failure
   maxWaitMs: 120_000, // 2 minutes max wait
   maxFailuresPerCommit: 20,
-  staleEntryMs: 300_000, // 5 minutes
 } as const;
 
 /**
@@ -153,3 +158,19 @@ export interface ConsolidatedPostResult {
   readonly checkAnnotationsCreated: boolean;
   readonly errors: readonly string[];
 }
+
+/**
+ * Redis key prefixes for aggregation
+ */
+export const AGGREGATION_KEYS = {
+  /** Hash storing failure data: kenchi:agg:{repo}:{sha}:failures */
+  failures: (key: AggregationKey) =>
+    `kenchi:agg:${key.repositoryFullName}:${key.commitSha}:failures`,
+  /** Hash storing metadata: kenchi:agg:{repo}:{sha}:meta */
+  metadata: (key: AggregationKey) => `kenchi:agg:${key.repositoryFullName}:${key.commitSha}:meta`,
+  /** Debounce lock key: kenchi:agg:{repo}:{sha}:debounce */
+  debounce: (key: AggregationKey) =>
+    `kenchi:agg:${key.repositoryFullName}:${key.commitSha}:debounce`,
+  /** Pattern to find all aggregation keys */
+  pattern: "kenchi:agg:*:meta",
+} as const;

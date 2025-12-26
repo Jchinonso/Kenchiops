@@ -248,6 +248,18 @@ export {
   type MessageHandler,
   type SubscriptionHandler,
   type QueueConfig,
+  // Slack notification queue
+  enqueueConsolidatedNotification,
+  enqueueActionResultNotification,
+  enqueueSystemAlert,
+  startSlackNotificationWorker,
+  getSlackNotificationQueueStats,
+  type SlackNotificationType,
+  type ConsolidatedCIFailurePayload,
+  type ActionResultPayload,
+  type SystemAlertPayload,
+  type SlackNotificationPayload,
+  type NotificationHandler,
 } from "./queue/index.js";
 
 // Redis caching
@@ -337,3 +349,38 @@ export {
   type CachedAnnotation,
   type CachedAction,
 } from "./cache/index.js";
+
+// Redis-based aggregation
+export {
+  // Types
+  type CodeAnnotation,
+  type RecommendedAction,
+  type AnalyzedFailure,
+  type SerializedFailure,
+  type PRContext,
+  type WorkflowContext,
+  type RepositoryInfo,
+  type AggregatedFailures,
+  type AggregationKey,
+  type AggregationConfig,
+  type ConsolidatedPostResult,
+  type AggregationReadyCallback,
+  type ConsolidatedAnalysisPayload,
+  // Utilities
+  serializeAggregationKey,
+  deserializeAggregationKey,
+  DEFAULT_AGGREGATION_CONFIG,
+  AGGREGATION_KEYS,
+  // Redis operations
+  addFailureToRedis,
+  getAggregationFromRedis,
+  deleteAggregationFromRedis,
+  isDebounceExpired,
+  isMaxWaitExceeded,
+  findReadyAggregations,
+  enqueueAggregation,
+  // Workers
+  startAggregatorWorker,
+  startAnalysisQueueProcessor,
+  deserializeQueuePayload,
+} from "./aggregation/index.js";

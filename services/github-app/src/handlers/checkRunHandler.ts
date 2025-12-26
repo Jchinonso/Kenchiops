@@ -18,7 +18,15 @@ import {
   generateLogHash,
   getCachedAnalysisByLogHash,
   cacheAnalysisByLogHash,
+  addFailureToRedis,
   type CachedAnalysis,
+  type AnalyzedFailure,
+  type AggregationKey,
+  type RepositoryInfo,
+  type PRContext,
+  type WorkflowContext,
+  type CodeAnnotation,
+  type RecommendedAction,
 } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
@@ -28,16 +36,6 @@ import {
   type EnrichedContext,
 } from "../services/context/index.js";
 import { buildEnrichedLogContent } from "../formatters/checkRunFormatter.js";
-import {
-  getAggregator,
-  type AnalyzedFailure,
-  type AggregationKey,
-  type RepositoryInfo,
-  type PRContext,
-  type WorkflowContext,
-  type CodeAnnotation,
-  type RecommendedAction,
-} from "../services/aggregation/index.js";
 import { deleteKenchiOpsComments } from "../services/githubService.js";
 
 const logger = createLogger("github-app");
@@ -395,7 +393,7 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
     return false;
   }
 
-  // Step 3: Add to aggregator (will be posted consolidated later)
+  // Step 3: Add to Redis aggregator (will be enqueued and posted consolidated later)
   if (!installation?.id) {
     logger.warn("No installation ID, skipping aggregation");
     return false;
@@ -413,8 +411,7 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
   const workflowContext = buildWorkflowContext(check_run.name, context);
 
   try {
-    const aggregator = getAggregator();
-    aggregator.addFailure(
+    await addFailureToRedis(
       aggregationKey,
       analyzedFailure,
       repositoryInfo,
@@ -424,7 +421,7 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
       workflowContext
     );
 
-    logger.info("Failure added to aggregator", {
+    logger.info("Failure added to Redis aggregator", {
       repository: repository.full_name,
       checkName: check_run.name,
       commitSha: check_run.head_sha.substring(0, 7),
@@ -432,7 +429,7 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
 
     return true;
   } catch (error) {
-    logger.error("Failed to add failure to aggregator", {
+    logger.error("Failed to add failure to Redis aggregator", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
     return false;

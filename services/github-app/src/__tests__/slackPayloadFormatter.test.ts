@@ -4,11 +4,7 @@
 
 import { describe, it, expect } from "@jest/globals";
 import { buildConsolidatedSlackPayload } from "../formatters/slackPayloadFormatter.js";
-import type {
-  AggregatedFailures,
-  AnalyzedFailure,
-  CodeAnnotation,
-} from "../services/aggregation/types.js";
+import type { AggregatedFailures, AnalyzedFailure, CodeAnnotation } from "@kenchi/shared";
 
 describe("Slack Payload Formatter", () => {
   const createAnnotation = (overrides: Partial<CodeAnnotation> = {}): CodeAnnotation => ({

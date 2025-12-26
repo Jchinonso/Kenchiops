@@ -3,10 +3,19 @@
  *
  * Handles posting consolidated CI failure analysis to GitHub and Slack.
  * Called by the FailureAggregator when aggregation is ready.
+ *
+ * Uses message queue for Slack notifications for reliable delivery.
  */
 
-import { createLogger, config, resilientPost } from "@kenchi/shared";
-import type { AggregatedFailures, ConsolidatedPostResult } from "./types.js";
+import {
+  createLogger,
+  config,
+  isRedisHealthy,
+  enqueueConsolidatedNotification,
+  resilientPost,
+  type AggregatedFailures,
+  type ConsolidatedPostResult,
+} from "@kenchi/shared";
 import {
   buildConsolidatedPRComment,
   buildConsolidatedSlackPayload,
@@ -150,12 +159,39 @@ const postToGitHub = async (
 };
 
 /**
- * Post consolidated analysis to Slack using resilient HTTP client
+ * Post consolidated analysis to Slack via message queue.
+ * Falls back to direct HTTP if Redis is unavailable.
  */
 const postToSlack = async (
   aggregation: AggregatedFailures
 ): Promise<{ success: boolean; error?: string }> => {
   const slackPayload = buildConsolidatedSlackPayload(aggregation);
+
+  // Check if Redis is available for queue-based delivery
+  const redisAvailable = await isRedisHealthy().catch(() => false);
+
+  if (redisAvailable) {
+    // Queue-based delivery (preferred - reliable with retries)
+    try {
+      const messageId = await enqueueConsolidatedNotification(aggregation, slackPayload);
+
+      logger.info("Enqueued consolidated Slack notification", {
+        messageId,
+        repository: aggregation.repository.fullName,
+        failureCount: aggregation.failures.length,
+      });
+
+      return { success: true };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      logger.warn("Failed to enqueue Slack notification, falling back to direct HTTP", {
+        error: errorMsg,
+      });
+      // Fall through to direct HTTP
+    }
+  }
+
+  // Direct HTTP fallback (when Redis unavailable)
   const slackUrl = `${config.SLACK_BOT_URL}/slack/message`;
 
   try {
@@ -168,7 +204,7 @@ const postToSlack = async (
       failure_count: aggregation.failures.length,
     });
 
-    logger.info("Posted consolidated Slack message", {
+    logger.info("Posted consolidated Slack message (direct HTTP)", {
       repository: aggregation.repository.fullName,
       failureCount: aggregation.failures.length,
       retryCount: response.retryCount,

@@ -10,14 +10,14 @@ import type {
   AggregatedFailures,
   AnalyzedFailure,
   CodeAnnotation,
-} from "../services/aggregation/types.js";
+  RecommendedAction,
+} from "@kenchi/shared";
 import {
   DISPLAY_LIMITS,
   getPriorityEmoji,
   calculateAverageConfidence,
   mergeRecommendedActions,
 } from "./formatterUtils.js";
-import type { RecommendedAction } from "../services/aggregation/types.js";
 
 // ==================== Constants ====================
 

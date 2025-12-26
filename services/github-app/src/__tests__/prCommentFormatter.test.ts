@@ -4,11 +4,7 @@
 
 import { describe, it, expect } from "@jest/globals";
 import { buildConsolidatedPRComment } from "../formatters/prCommentFormatter.js";
-import type {
-  AggregatedFailures,
-  AnalyzedFailure,
-  CodeAnnotation,
-} from "../services/aggregation/types.js";
+import type { AggregatedFailures, AnalyzedFailure, CodeAnnotation } from "@kenchi/shared";
 
 describe("PR Comment Formatter", () => {
   const createAnnotation = (overrides: Partial<CodeAnnotation> = {}): CodeAnnotation => ({

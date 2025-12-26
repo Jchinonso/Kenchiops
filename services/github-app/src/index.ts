@@ -21,14 +21,13 @@ import {
   EXPRESS_CONFIG,
   startActionQueueWorker,
   createRedisRateLimiter,
+  startAggregatorWorker,
+  startAnalysisQueueProcessor,
+  DEFAULT_AGGREGATION_CONFIG,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
-import {
-  initializeAggregator,
-  destroyAggregator,
-  postConsolidatedAnalysis,
-} from "./services/aggregation/index.js";
+import { postConsolidatedAnalysis } from "./services/aggregation/consolidatedPoster.js";
 
 const logger = createLogger("github-app");
 
@@ -103,21 +102,49 @@ const initializeDatabase = (): void => {
 };
 
 /**
- * Initialize failure aggregator for consolidated CI failure analysis
+ * Stop function for aggregator worker
+ */
+let stopAggregatorWorker: (() => void) | null = null;
+
+/**
+ * Stop function for analysis queue processor
+ */
+let stopAnalysisProcessor: (() => void) | null = null;
+
+/**
+ * Initialize Redis-based failure aggregator for consolidated CI failure analysis
  */
 const initializeFailureAggregator = (): void => {
+  // Only start if Redis is configured
+  if (!config.REDIS_URL) {
+    logger.warn("Redis not configured, skipping failure aggregator");
+    return;
+  }
+
   // Configure aggregation timing (can be overridden via env)
   const debounceMs = parseInt(process.env.AGGREGATION_DEBOUNCE_MS || "30000", 10);
   const maxWaitMs = parseInt(process.env.AGGREGATION_MAX_WAIT_MS || "120000", 10);
+  const maxFailuresPerCommit = DEFAULT_AGGREGATION_CONFIG.maxFailuresPerCommit;
 
-  initializeAggregator(postConsolidatedAnalysis, {
+  const aggregationConfig = {
     debounceMs,
     maxWaitMs,
+    maxFailuresPerCommit,
+  };
+
+  // Start the aggregator worker (checks for ready aggregations and enqueues them)
+  stopAggregatorWorker = startAggregatorWorker(aggregationConfig, 5000);
+
+  // Start the analysis queue processor (processes enqueued aggregations)
+  stopAnalysisProcessor = startAnalysisQueueProcessor(postConsolidatedAnalysis, {
+    pollIntervalMs: 1000,
+    maxConcurrent: 3,
   });
 
-  logger.info("Failure aggregator initialized", {
+  logger.info("Redis failure aggregator initialized", {
     debounceMs,
     maxWaitMs,
+    maxFailuresPerCommit,
   });
 };
 
@@ -163,9 +190,15 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
         stopActionQueueWorker();
       }
 
-      // Flush and destroy the aggregator (posts any pending analyses)
-      logger.info("Flushing failure aggregator...");
-      await destroyAggregator();
+      // Stop aggregator workers (Redis state persists, will be processed on restart)
+      if (stopAggregatorWorker) {
+        logger.info("Stopping aggregator worker...");
+        stopAggregatorWorker();
+      }
+      if (stopAnalysisProcessor) {
+        logger.info("Stopping analysis processor...");
+        stopAnalysisProcessor();
+      }
 
       // Close database and Redis connections
       await Promise.all([closeDatabase(), closeRedis()]);
@@ -173,7 +206,7 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
       process.exit(0);
     });
 
-    // Force exit after 15 seconds (increased to allow aggregator flush)
+    // Force exit after 15 seconds
     setTimeout(() => {
       logger.warn("Forced shutdown after timeout");
       process.exit(1);
