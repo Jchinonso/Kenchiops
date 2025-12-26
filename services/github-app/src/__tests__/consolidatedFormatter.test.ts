@@ -14,7 +14,7 @@ import type {
   AnalyzedFailure,
   RepositoryInfo,
   PRContext,
-} from "../services/aggregation/types.js";
+} from "@kenchi/shared";
 
 describe("Consolidated Formatter", () => {
   // Test fixtures

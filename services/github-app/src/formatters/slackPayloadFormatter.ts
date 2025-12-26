@@ -6,11 +6,7 @@
  * and recommended actions with interactive approve/reject buttons.
  */
 
-import type {
-  AggregatedFailures,
-  AnalyzedFailure,
-  RecommendedAction,
-} from "../services/aggregation/types.js";
+import type { AggregatedFailures, AnalyzedFailure, RecommendedAction } from "@kenchi/shared";
 import {
   DISPLAY_LIMITS,
   getPriorityEmoji,
@@ -69,6 +65,22 @@ interface SlackActionsBlock {
  * Combined block type for all Slack blocks
  */
 type SlackBlock = SlackTextBlock | SlackActionsBlock;
+
+/**
+ * Return type for buildConsolidatedSlackPayload
+ */
+export interface ConsolidatedSlackPayload {
+  readonly blocks: readonly SlackBlock[];
+  readonly text: string;
+  readonly metadata: {
+    readonly repository: string;
+    readonly commitSha: string;
+    readonly failureCount: number;
+    readonly checkNames: readonly string[];
+    readonly avgConfidence: number;
+    readonly isConsolidated: boolean;
+  };
+}
 
 /**
  * Action button value payload for JSON encoding
@@ -259,7 +271,7 @@ const formatFailureBlocks = (failure: AnalyzedFailure): SlackTextBlock[] => {
  */
 export const buildConsolidatedSlackPayload = (
   aggregation: AggregatedFailures
-): Record<string, unknown> => {
+): ConsolidatedSlackPayload => {
   const { failures, commitSha, repository, prContext } = aggregation;
   const avgConfidence = calculateAverageConfidence(failures);
   const mergedActions = mergeRecommendedActions(failures);

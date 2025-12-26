@@ -10,7 +10,7 @@
  * - formatterUtils.ts - Shared utilities
  */
 
-import type { AggregatedFailures } from "../services/aggregation/types.js";
+import type { AggregatedFailures } from "@kenchi/shared";
 import { calculateAverageConfidence } from "./formatterUtils.js";
 
 // Re-export formatting functions for backward compatibility

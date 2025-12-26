@@ -4,7 +4,7 @@
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
-import type { AggregatedFailures } from "../services/aggregation/types.js";
+import type { AggregatedFailures } from "@kenchi/shared";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
@@ -17,6 +17,10 @@ jest.mock("@kenchi/shared", () => {
       error: jest.fn(),
       debug: jest.fn(),
     })),
+    // Mock Redis health check - return false to use HTTP fallback
+    isRedisHealthy: jest.fn(() => Promise.resolve(false)),
+    // Mock enqueue function (not used when Redis unhealthy, but needed for import)
+    enqueueConsolidatedNotification: jest.fn(() => Promise.resolve("msg_123")),
     // Mock resilient HTTP client - prevent actual network calls and retries
     resilientPost: jest.fn(() =>
       Promise.resolve({

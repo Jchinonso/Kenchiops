@@ -91,14 +91,29 @@ describe("Slack Bot Service Index", () => {
     // Mock @kenchi/shared
     jest.doMock("@kenchi/shared", () => ({
       logger: mockLogger,
+      createLogger: jest.fn(() => mockLogger),
       config: {
         DATABASE_URL: "postgresql://test:test@localhost:5432/test",
         MULTI_TENANT_MODE: false,
+        REDIS_URL: undefined,
       },
       initDatabase: mockInitDatabase,
       closeDatabase: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      closeRedis: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
       findBySlackWorkspace: mockFindBySlackWorkspace,
       deleteMappingsForChannel: mockDeleteMappingsForChannel,
+      isSocketModeDisconnectError: jest.fn(() => false),
+      createRedisRateLimiter: jest.fn(() => ({
+        middleware: jest.fn(() =>
+          jest.fn((_req: unknown, _res: unknown, next: () => void) => next())
+        ),
+      })),
+      startSlackNotificationWorker: jest
+        .fn<() => Promise<() => void>>()
+        .mockResolvedValue(() => {}),
+      getErrorMessage: jest.fn((e: unknown) => (e instanceof Error ? e.message : String(e))),
+      NotFoundError: jest.fn((msg: unknown) => new Error(String(msg))),
+      getSlackCredentials: jest.fn<() => Promise<null>>().mockResolvedValue(null),
     }));
 
     // Mock config/appConfig
@@ -158,6 +173,10 @@ describe("Slack Bot Service Index", () => {
 
     jest.doMock("../routes/oauthRoutes.js", () => ({
       oauthRoutes: jest.fn(),
+    }));
+
+    jest.doMock("../services/notificationHandler.js", () => ({
+      createNotificationHandler: jest.fn(() => jest.fn()),
     }));
   });
 

@@ -26,3 +26,18 @@ export {
   type SubscriptionHandler,
   type QueueConfig,
 } from "./messageQueue.js";
+
+// Slack notification processor
+export {
+  enqueueConsolidatedNotification,
+  enqueueActionResultNotification,
+  enqueueSystemAlert,
+  startSlackNotificationWorker,
+  getSlackNotificationQueueStats,
+  type SlackNotificationType,
+  type ConsolidatedCIFailurePayload,
+  type ActionResultPayload,
+  type SystemAlertPayload,
+  type SlackNotificationPayload,
+  type NotificationHandler,
+} from "./slackNotificationProcessor.js";

@@ -5,7 +5,7 @@
  * consolidated CI failure messages.
  */
 
-import type { AnalyzedFailure, RecommendedAction } from "../services/aggregation/types.js";
+import type { AnalyzedFailure, RecommendedAction } from "@kenchi/shared";
 
 // ==================== Constants ====================
 

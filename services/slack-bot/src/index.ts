@@ -19,10 +19,12 @@ import {
   config,
   initDatabase,
   closeDatabase,
+  closeRedis,
   findBySlackWorkspace,
   deleteMappingsForChannel,
   isSocketModeDisconnectError,
   createRedisRateLimiter,
+  startSlackNotificationWorker,
 } from "@kenchi/shared";
 
 const { App } = Bolt;
@@ -52,6 +54,7 @@ import {
 import { registerRepoSelectHandler } from "./handlers/repoSelectHandler.js";
 import { createHttpRoutes } from "./routes/httpRoutes.js";
 import { oauthRoutes } from "./routes/oauthRoutes.js";
+import { createNotificationHandler } from "./services/notificationHandler.js";
 
 /**
  * Initializes and configures the Slack Bolt app.
@@ -367,12 +370,26 @@ async function startService(): Promise<void> {
       multiTenantMode: config.MULTI_TENANT_MODE || false,
     });
 
+    // Start notification queue worker (processes messages from GitHub App)
+    let stopNotificationWorker: (() => void) | null = null;
+    if (config.REDIS_URL) {
+      const notificationHandler = createNotificationHandler(slackApp.client);
+      stopNotificationWorker = await startSlackNotificationWorker(notificationHandler, {
+        pollIntervalMs: 1000,
+        maxConcurrent: 3,
+      });
+      logger.info("Slack notification queue worker started");
+    } else {
+      logger.warn("Redis not configured, notification queue worker disabled");
+    }
+
     // Start Express server for CI failure processing endpoints
     const server = expressApp.listen(appConfig.httpPort, () => {
       logger.info("HTTP server started for CI failure processing", {
         port: appConfig.httpPort,
         environment: appConfig.nodeEnv,
         oauthEnabled: !!(config.SLACK_CLIENT_ID && config.SLACK_CLIENT_SECRET),
+        queueWorkerEnabled: !!config.REDIS_URL,
       });
     });
 
@@ -380,8 +397,14 @@ async function startService(): Promise<void> {
     const shutdown = async (signal: string): Promise<void> => {
       logger.info(`Received ${signal}, shutting down gracefully`);
 
+      // Stop notification worker first
+      if (stopNotificationWorker) {
+        logger.info("Stopping notification queue worker...");
+        stopNotificationWorker();
+      }
+
       server.close(async () => {
-        await closeDatabase();
+        await Promise.all([closeDatabase(), closeRedis()]);
         logger.info("Server closed");
         process.exit(0);
       });

@@ -13,7 +13,7 @@ import {
   PRIORITY_ORDER,
   DISPLAY_LIMITS,
 } from "../formatters/formatterUtils.js";
-import type { AnalyzedFailure, RecommendedAction } from "../services/aggregation/types.js";
+import type { AnalyzedFailure, RecommendedAction } from "@kenchi/shared";
 
 describe("Formatter Utilities", () => {
   describe("getPriorityEmoji", () => {
