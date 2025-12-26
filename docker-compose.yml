@@ -18,6 +18,21 @@ services:
       retries: 5
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: kenchi-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -56,6 +71,7 @@ services:
       - PORT=3001
       - MULTI_TENANT_MODE=true
       - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
     env_file:
       - .env
     ports:
@@ -66,6 +82,8 @@ services:
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   github-app:
@@ -79,6 +97,9 @@ services:
       - PORT=3002
       - MULTI_TENANT_MODE=true
       - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+      - API_URL=http://api:3000
+      - SLACK_BOT_URL=http://slack-bot:3001
     env_file:
       - .env
     ports:
@@ -96,7 +117,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  redis_data:
 

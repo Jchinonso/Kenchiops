@@ -22,6 +22,7 @@ import {
   findBySlackWorkspace,
   deleteMappingsForChannel,
   isSocketModeDisconnectError,
+  createRedisRateLimiter,
 } from "@kenchi/shared";
 
 const { App } = Bolt;
@@ -341,6 +342,16 @@ async function startService(): Promise<void> {
     // Initialize Express app for HTTP endpoints (CI failure processing)
     const expressApp = express();
     expressApp.use(express.json());
+
+    // Redis-backed rate limiter for HTTP endpoints
+    const httpRateLimiter = createRedisRateLimiter({
+      windowMs: 60000, // 1 minute
+      max: 200, // Higher limit for internal service calls
+      message: "Too many requests to Slack bot service",
+      keyPrefix: "rl:slack-bot:",
+      skip: (req) => req.path === "/health",
+    });
+    expressApp.use(httpRateLimiter.middleware());
 
     // Add OAuth routes for multi-tenant Slack installation
     expressApp.use(oauthRoutes);

@@ -3,10 +3,14 @@
  *
  * Formats aggregated CI failures into Slack Block Kit payloads.
  * Creates visually rich messages with failure details, annotations,
- * and recommended actions.
+ * and recommended actions with interactive approve/reject buttons.
  */
 
-import type { AggregatedFailures, AnalyzedFailure } from "../services/aggregation/types.js";
+import type {
+  AggregatedFailures,
+  AnalyzedFailure,
+  RecommendedAction,
+} from "../services/aggregation/types.js";
 import {
   DISPLAY_LIMITS,
   getPriorityEmoji,
@@ -18,7 +22,7 @@ import {
 // ==================== Types ====================
 
 /**
- * Slack Block Kit block types
+ * Slack Block Kit text block types
  */
 interface SlackTextBlock {
   readonly type: "section" | "header" | "divider" | "context";
@@ -37,7 +41,176 @@ interface SlackTextBlock {
   }>;
 }
 
+/**
+ * Slack Block Kit button element
+ */
+interface SlackButtonElement {
+  readonly type: "button";
+  readonly text: {
+    readonly type: "plain_text";
+    readonly text: string;
+    readonly emoji: boolean;
+  };
+  readonly style?: "primary" | "danger";
+  readonly value: string;
+  readonly action_id: string;
+}
+
+/**
+ * Slack Block Kit actions block for interactive buttons
+ */
+interface SlackActionsBlock {
+  readonly type: "actions";
+  readonly block_id?: string;
+  readonly elements: readonly SlackButtonElement[];
+}
+
+/**
+ * Combined block type for all Slack blocks
+ */
+type SlackBlock = SlackTextBlock | SlackActionsBlock;
+
+/**
+ * Action button value payload for JSON encoding
+ */
+interface ActionButtonValue {
+  readonly actionId: string;
+  readonly actionType: string;
+  readonly description: string;
+  readonly repository: string;
+  readonly commitSha: string;
+  readonly installationId: number;
+  readonly priority: string | number;
+  readonly checkRunId?: number;
+}
+
+// ==================== Constants ====================
+
+/**
+ * Maximum actions to show buttons for
+ */
+const MAX_ACTION_BUTTONS = 3;
+
+/**
+ * Action types that can be auto-executed (safe actions)
+ */
+const EXECUTABLE_ACTION_TYPES = new Set([
+  "rerun_pipeline",
+  "notify_team",
+  "post_comment",
+  "manual_investigation",
+  "run_diagnostic",
+]);
+
 // ==================== Helper Functions ====================
+
+/**
+ * Generate a unique action ID from commit sha and index
+ */
+const generateActionId = (commitSha: string, index: number): string =>
+  `act_${commitSha.substring(0, 8)}_${index}`;
+
+/**
+ * Create action button value payload
+ */
+const createActionButtonValue = (
+  action: RecommendedAction,
+  actionId: string,
+  aggregation: AggregatedFailures,
+  checkRunId?: number
+): ActionButtonValue => ({
+  actionId,
+  actionType: action.actionType ?? "manual_investigation",
+  description: action.description,
+  repository: aggregation.repository.fullName,
+  commitSha: aggregation.commitSha,
+  installationId: aggregation.installationId,
+  priority: action.priority,
+  checkRunId,
+});
+
+/**
+ * Create approve/reject buttons for a single action
+ */
+const createActionButtons = (
+  action: RecommendedAction,
+  actionId: string,
+  aggregation: AggregatedFailures,
+  checkRunId?: number
+): SlackActionsBlock => {
+  const buttonValue = JSON.stringify(
+    createActionButtonValue(action, actionId, aggregation, checkRunId)
+  );
+
+  return {
+    type: "actions",
+    block_id: `action_block_${actionId}`,
+    elements: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: "✓ Execute", emoji: true },
+        style: "primary",
+        value: buttonValue,
+        action_id: `approve_action_${actionId}`,
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "✗ Dismiss", emoji: true },
+        style: "danger",
+        value: buttonValue,
+        action_id: `reject_action_${actionId}`,
+      },
+    ],
+  };
+};
+
+/**
+ * Build action blocks with buttons for executable actions
+ */
+const buildActionBlocks = (
+  actions: readonly RecommendedAction[],
+  aggregation: AggregatedFailures
+): SlackBlock[] => {
+  // Filter to executable actions and limit count
+  const executableActions = actions
+    .filter((a) => EXECUTABLE_ACTION_TYPES.has(a.actionType ?? ""))
+    .slice(0, MAX_ACTION_BUTTONS);
+
+  if (executableActions.length === 0) {
+    return [];
+  }
+
+  // Get checkRunId from first failure (for rerun actions)
+  const primaryCheckRunId = aggregation.failures[0]?.checkRunId;
+
+  const blocks: SlackBlock[] = [
+    { type: "divider" },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: "*🎯 Quick Actions*" },
+    },
+  ];
+
+  // Add description and buttons for each action
+  executableActions.forEach((action, index) => {
+    const actionId = generateActionId(aggregation.commitSha, index);
+    const priorityEmoji = getPriorityEmoji(action.priority);
+
+    // Action description
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `${priorityEmoji} *${action.actionType ?? "Action"}*: ${action.description}`,
+      },
+    });
+
+    // Action buttons
+    blocks.push(createActionButtons(action, actionId, aggregation, primaryCheckRunId));
+  });
+
+  return blocks;
+};
 
 /**
  * Format a single failure into Slack blocks
@@ -168,8 +341,8 @@ export const buildConsolidatedSlackPayload = (
         ]
       : [];
 
-  // Recommended actions blocks
-  const actionsBlocks: SlackTextBlock[] =
+  // Recommended actions summary blocks
+  const actionsSummaryBlocks: SlackTextBlock[] =
     mergedActions.length > 0
       ? [
           { type: "divider" },
@@ -187,6 +360,9 @@ export const buildConsolidatedSlackPayload = (
         ]
       : [];
 
+  // Interactive action buttons for executable actions
+  const actionButtonBlocks = buildActionBlocks(mergedActions, aggregation);
+
   // Footer blocks
   const footerBlocks: SlackTextBlock[] = [
     { type: "divider" },
@@ -197,13 +373,14 @@ export const buildConsolidatedSlackPayload = (
   ];
 
   // Combine all blocks
-  const blocks: SlackTextBlock[] = [
+  const blocks: SlackBlock[] = [
     ...headerBlocks,
     ...prLinkBlocks,
     ...failedChecksHeader,
     ...failureBlocks,
     ...moreFailuresBlock,
-    ...actionsBlocks,
+    ...actionsSummaryBlocks,
+    ...actionButtonBlocks,
     ...footerBlocks,
   ];
 

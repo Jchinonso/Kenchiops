@@ -43,6 +43,15 @@ jest.mock("@kenchi/shared", () => ({
     if (error instanceof Error) return error.message;
     return String(error);
   }),
+  // Cache functions - pass through to fetcher for testing
+  getOrFetchPullRequest: jest.fn(
+    async (_owner: string, _repo: string, _prNumber: number, fetcher: () => Promise<unknown>) =>
+      fetcher()
+  ),
+  getOrFetchPullRequestDiff: jest.fn(
+    async (_owner: string, _repo: string, _prNumber: number, fetcher: () => Promise<string>) =>
+      fetcher()
+  ),
 }));
 
 // Mock truncateWithContext

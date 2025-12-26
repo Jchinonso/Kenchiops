@@ -23,8 +23,31 @@ export const CONFIG_DEFAULTS = {
   OPENAI_MAX_TOKENS: 4096,
   OPENAI_TIMEOUT_MS: 30000,
   GITHUB_APP_SLUG: "kenchi-devops",
-  GITHUB_APP_URL: "http://github-app:3002",
   NODE_ENV: "development",
+  // Service URLs (Docker Compose DNS names)
+  API_URL: "http://api:3000",
+  SLACK_BOT_URL: "http://slack-bot:3001",
+  GITHUB_APP_URL: "http://github-app:3002",
+  // Redis URL
+  REDIS_URL: "redis://redis:6379",
+} as const;
+
+/**
+ * HTTP client resilience defaults
+ */
+export const HTTP_RESILIENCE_DEFAULTS = {
+  /** Request timeout in milliseconds */
+  TIMEOUT_MS: 30000,
+  /** Maximum retry attempts */
+  MAX_RETRIES: 3,
+  /** Initial retry delay in milliseconds */
+  INITIAL_RETRY_DELAY_MS: 1000,
+  /** Maximum retry delay in milliseconds */
+  MAX_RETRY_DELAY_MS: 10000,
+  /** Circuit breaker failure threshold */
+  CIRCUIT_BREAKER_THRESHOLD: 5,
+  /** Circuit breaker reset timeout in milliseconds */
+  CIRCUIT_BREAKER_RESET_MS: 30000,
 } as const;
 
 /**

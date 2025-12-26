@@ -127,4 +127,10 @@ export {
 } from "./tenant.js";
 
 // Core module constants
-export { LOGGER_DEFAULTS, CONFIG_DEFAULTS, VALID_NODE_ENVS, PARSE_INT_RADIX } from "./core.js";
+export {
+  LOGGER_DEFAULTS,
+  CONFIG_DEFAULTS,
+  VALID_NODE_ENVS,
+  PARSE_INT_RADIX,
+  HTTP_RESILIENCE_DEFAULTS,
+} from "./core.js";

@@ -16,8 +16,11 @@ import {
   requestLogger,
   initDatabase,
   closeDatabase,
+  closeRedis,
   config,
   EXPRESS_CONFIG,
+  startActionQueueWorker,
+  createRedisRateLimiter,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
@@ -39,6 +42,19 @@ declare module "express-serve-static-core" {
 }
 
 /**
+ * Redis-backed rate limiter for GitHub webhooks.
+ * Higher limit since webhooks can come in bursts during CI activity.
+ * Skips health check endpoints for monitoring.
+ */
+const githubRateLimiter = createRedisRateLimiter({
+  windowMs: 60000, // 1 minute
+  max: 500, // High limit for webhook bursts
+  message: "Too many requests to GitHub app service",
+  keyPrefix: "rl:github-app:",
+  skip: (req) => req.path === "/health" || req.path === "/github/health",
+});
+
+/**
  * Create and configure Express application
  */
 const createApp = (): express.Express => {
@@ -56,6 +72,7 @@ const createApp = (): express.Express => {
     })
   );
   app.use(requestLogger);
+  app.use(githubRateLimiter.middleware());
 
   // Register all routes
   registerRoutes(app);
@@ -105,6 +122,34 @@ const initializeFailureAggregator = (): void => {
 };
 
 /**
+ * Stop function for action queue worker
+ */
+let stopActionQueueWorker: (() => void) | null = null;
+
+/**
+ * Initialize action queue worker for async action processing
+ */
+const initializeActionQueueWorker = async (): Promise<void> => {
+  // Only start if Redis is configured
+  if (!config.REDIS_URL) {
+    logger.warn("Redis not configured, skipping action queue worker");
+    return;
+  }
+
+  try {
+    stopActionQueueWorker = await startActionQueueWorker({
+      pollIntervalMs: 1000,
+      maxConcurrent: 3,
+    });
+    logger.info("Action queue worker initialized");
+  } catch (error) {
+    logger.error("Failed to initialize action queue worker", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+/**
  * Handle graceful shutdown
  */
 const setupGracefulShutdown = (server: ReturnType<typeof express.application.listen>): void => {
@@ -112,11 +157,18 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
     logger.info(`Received ${signal}, shutting down gracefully`);
 
     server.close(async () => {
+      // Stop action queue worker
+      if (stopActionQueueWorker) {
+        logger.info("Stopping action queue worker...");
+        stopActionQueueWorker();
+      }
+
       // Flush and destroy the aggregator (posts any pending analyses)
       logger.info("Flushing failure aggregator...");
       await destroyAggregator();
 
-      await closeDatabase();
+      // Close database and Redis connections
+      await Promise.all([closeDatabase(), closeRedis()]);
       logger.info("Server closed");
       process.exit(0);
     });
@@ -135,12 +187,15 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
 /**
  * Start the GitHub App service
  */
-const startServer = (): void => {
+const startServer = async (): Promise<void> => {
   // Initialize database for multi-tenant support
   initializeDatabase();
 
   // Initialize failure aggregator for consolidated CI analysis
   initializeFailureAggregator();
+
+  // Initialize action queue worker for async action processing
+  await initializeActionQueueWorker();
 
   const app = createApp();
 
@@ -148,6 +203,7 @@ const startServer = (): void => {
     logger.info("GitHub App service started", {
       port: appConfig.port,
       environment: appConfig.environment,
+      redisEnabled: !!config.REDIS_URL,
     });
   });
 
@@ -155,4 +211,9 @@ const startServer = (): void => {
 };
 
 // Start the server
-startServer();
+startServer().catch((error) => {
+  logger.error("Failed to start server", {
+    error: error instanceof Error ? error.message : "Unknown error",
+  });
+  process.exit(1);
+});

@@ -13,13 +13,26 @@ import {
   createLogger,
   errorHandler,
   requestLogger,
-  defaultRateLimiter,
+  createRedisRateLimiter,
   EXPRESS_CONFIG,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 
 const logger = createLogger("api");
+
+/**
+ * Redis-backed rate limiter: 100 requests per minute per IP.
+ * Falls back to in-memory if Redis is unavailable.
+ * Skips health check endpoints for monitoring.
+ */
+const apiRateLimiter = createRedisRateLimiter({
+  windowMs: 60000, // 1 minute
+  max: 100,
+  message: "Too many requests to API, please try again later",
+  keyPrefix: "rl:api:",
+  skip: (req) => req.path === "/health" || req.path === "/api/health",
+});
 
 /**
  * Create and configure Express application
@@ -30,7 +43,7 @@ const createApp = (): express.Express => {
   // Middleware - use configured limit for large CI context payloads
   app.use(express.json({ limit: EXPRESS_CONFIG.JSON_BODY_LIMIT }));
   app.use(requestLogger);
-  app.use(defaultRateLimiter.middleware());
+  app.use(apiRateLimiter.middleware());
 
   // Register all routes
   registerRoutes(app);

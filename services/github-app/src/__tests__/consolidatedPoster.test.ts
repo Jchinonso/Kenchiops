@@ -17,6 +17,15 @@ jest.mock("@kenchi/shared", () => {
       error: jest.fn(),
       debug: jest.fn(),
     })),
+    // Mock resilient HTTP client - prevent actual network calls and retries
+    resilientPost: jest.fn(() =>
+      Promise.resolve({
+        data: { success: true },
+        status: 200,
+        retryCount: 0,
+        duration: 50,
+      })
+    ),
   };
 });
 
@@ -39,10 +48,6 @@ jest.mock("../formatters/consolidatedFormatter.js", () => ({
   buildConsolidatedCheckSummary: jest.fn(() => "## Summary\nTest summary"),
 }));
 
-// Mock global fetch - use type assertion to avoid strict typing issues
-const mockFetch = jest.fn<typeof fetch>();
-(global as { fetch: typeof fetch }).fetch = mockFetch;
-
 // Mock github service with module-level mocks
 jest.mock("../services/githubService.js", () => ({
   postPRComment: jest.fn(),
@@ -51,10 +56,14 @@ jest.mock("../services/githubService.js", () => ({
 
 // Import mocks after jest.mock - use explicit typing
 import { postPRComment, createCheckRunWithAnnotations } from "../services/githubService.js";
+import { resilientPost } from "@kenchi/shared";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPostPRComment = postPRComment as jest.MockedFunction<any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockCreateCheckRunWithAnnotations = createCheckRunWithAnnotations as jest.MockedFunction<any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockResilientPost = resilientPost as jest.MockedFunction<any>;
 
 describe("Consolidated Poster Service", () => {
   // Test fixtures
@@ -98,11 +107,13 @@ describe("Consolidated Poster Service", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFetch.mockResolvedValue({
-      ok: true,
+    // Reset resilientPost to default success response
+    mockResilientPost.mockResolvedValue({
+      data: { success: true },
       status: 200,
-      json: () => Promise.resolve({ success: true }),
-    } as Response);
+      retryCount: 0,
+      duration: 50,
+    });
   });
 
   describe("postConsolidatedAnalysis", () => {
@@ -127,11 +138,11 @@ describe("Consolidated Poster Service", () => {
       const aggregation = createMockAggregation();
       await postConsolidatedAnalysis(aggregation);
 
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockResilientPost).toHaveBeenCalledWith(
         expect.stringContaining("slack"),
         expect.objectContaining({
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          repository: "testowner/testrepo",
+          consolidated: true,
         })
       );
     });
@@ -140,30 +151,30 @@ describe("Consolidated Poster Service", () => {
       const aggregation = createMockAggregation();
       await postConsolidatedAnalysis(aggregation);
 
-      const fetchCall = mockFetch.mock.calls[0];
-      const body = JSON.parse(fetchCall[1]?.body as string);
-
-      expect(body.consolidated).toBe(true);
+      expect(mockResilientPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ consolidated: true })
+      );
     });
 
     it("should include repository info in Slack payload", async () => {
       const aggregation = createMockAggregation();
       await postConsolidatedAnalysis(aggregation);
 
-      const fetchCall = mockFetch.mock.calls[0];
-      const body = JSON.parse(fetchCall[1]?.body as string);
-
-      expect(body.repository).toBe("testowner/testrepo");
+      expect(mockResilientPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ repository: "testowner/testrepo" })
+      );
     });
 
     it("should include failure count in Slack payload", async () => {
       const aggregation = createMockAggregation();
       await postConsolidatedAnalysis(aggregation);
 
-      const fetchCall = mockFetch.mock.calls[0];
-      const body = JSON.parse(fetchCall[1]?.body as string);
-
-      expect(body.failure_count).toBe(1);
+      expect(mockResilientPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ failure_count: 1 })
+      );
     });
 
     it("should create check annotations", async () => {
@@ -191,10 +202,7 @@ describe("Consolidated Poster Service", () => {
     });
 
     it("should handle Slack failures gracefully", async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      } as Response);
+      mockResilientPost.mockRejectedValueOnce(new Error("Slack API error"));
 
       const aggregation = createMockAggregation();
       const result = await postConsolidatedAnalysis(aggregation);
@@ -254,9 +262,14 @@ describe("Consolidated Poster Service", () => {
         callOrder.push("github");
         return Promise.resolve();
       });
-      mockFetch.mockImplementation(() => {
+      mockResilientPost.mockImplementation(() => {
         callOrder.push("slack");
-        return Promise.resolve({ ok: true } as Response);
+        return Promise.resolve({
+          data: { success: true },
+          status: 200,
+          retryCount: 0,
+          duration: 50,
+        });
       });
 
       const aggregation = createMockAggregation();
@@ -295,30 +308,30 @@ describe("Consolidated Poster Service", () => {
       const aggregation = createMockAggregation();
       await postConsolidatedAnalysis(aggregation);
 
-      const fetchCall = mockFetch.mock.calls[0];
-      const body = JSON.parse(fetchCall[1]?.body as string);
-
-      expect(body.commit_sha).toBe("abc123def456789012345678901234567890abcd");
+      expect(mockResilientPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ commit_sha: "abc123def456789012345678901234567890abcd" })
+      );
     });
 
     it("should include installation ID in Slack payload", async () => {
       const aggregation = createMockAggregation();
       await postConsolidatedAnalysis(aggregation);
 
-      const fetchCall = mockFetch.mock.calls[0];
-      const body = JSON.parse(fetchCall[1]?.body as string);
-
-      expect(body.installation_id).toBe(12345);
+      expect(mockResilientPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ installation_id: 12345 })
+      );
     });
 
     it("should handle network errors for Slack", async () => {
-      mockFetch.mockRejectedValue(new Error("Network error"));
+      mockResilientPost.mockRejectedValueOnce(new Error("Network error"));
 
       const aggregation = createMockAggregation();
       const result = await postConsolidatedAnalysis(aggregation);
 
       expect(result.slackMessageSent).toBe(false);
-      expect(result.errors).toContain("Network error");
+      expect(result.errors.some((e) => e.includes("Network error"))).toBe(true);
     });
 
     it("should skip check annotations when none available", async () => {
@@ -338,7 +351,7 @@ describe("Consolidated Poster Service", () => {
     it("should collect all errors from different services", async () => {
       mockPostPRComment.mockRejectedValueOnce(new Error("PR error"));
       mockCreateCheckRunWithAnnotations.mockRejectedValueOnce(new Error("Check error"));
-      mockFetch.mockResolvedValue({ ok: false, status: 500 } as Response);
+      mockResilientPost.mockRejectedValueOnce(new Error("Slack error"));
 
       const aggregation = createMockAggregation();
       const result = await postConsolidatedAnalysis(aggregation);
