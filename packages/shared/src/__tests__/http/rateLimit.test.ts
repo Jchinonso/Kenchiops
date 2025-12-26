@@ -4,9 +4,36 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { Request, Response, NextFunction } from "express";
-import { createRateLimiter, defaultRateLimiter } from "../../http/rateLimit.js";
+import {
+  createRateLimiter,
+  defaultRateLimiter,
+  createRedisRateLimiter,
+  defaultRedisRateLimiter,
+} from "../../http/rateLimit.js";
 import { AppError } from "../../core/errors.js";
 import { RATE_LIMIT_CONSTANTS } from "../../constants/index.js";
+
+// Mock Redis client
+jest.mock("../../queue/redisClient.js", () => ({
+  getRedisClient: jest.fn(() => ({
+    ping: jest.fn(() => Promise.reject(new Error("Redis not available in tests"))),
+    incr: jest.fn(),
+    pttl: jest.fn(),
+    pexpire: jest.fn(),
+    del: jest.fn(),
+    scan: jest.fn(() => Promise.resolve(["0", []])),
+    multi: jest.fn(() => ({
+      incr: jest.fn().mockReturnThis(),
+      pttl: jest.fn().mockReturnThis(),
+      exec: jest.fn(() =>
+        Promise.resolve([
+          [null, 1],
+          [null, -1],
+        ])
+      ),
+    })),
+  })),
+}));
 
 describe("Rate Limiting", () => {
   // Mock Express objects
@@ -741,6 +768,158 @@ describe("Rate Limiting", () => {
       });
 
       expect(next).toHaveBeenCalledTimes(6);
+    });
+  });
+
+  describe("createRedisRateLimiter", () => {
+    const createMockResponse = (): Response =>
+      ({
+        setHeader: jest.fn(),
+      }) as unknown as Response;
+
+    it("should fall back to in-memory when Redis is unavailable", async () => {
+      const limiter = createRedisRateLimiter({ windowMs: 60000, max: 5 });
+
+      // Force use of memory store since Redis mock throws
+      limiter.useMemoryStore();
+
+      const middleware = limiter.middleware();
+      const req = createMockRequest();
+      const res = createMockResponse();
+      const next = createMockNext();
+
+      // Should work with in-memory fallback
+      await middleware(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it("should set rate limit headers", async () => {
+      const limiter = createRedisRateLimiter({ windowMs: 60000, max: 10 });
+      limiter.useMemoryStore();
+
+      const middleware = limiter.middleware();
+      const req = createMockRequest();
+      const res = createMockResponse();
+      const next = createMockNext();
+
+      await middleware(req, res, next);
+
+      expect(res.setHeader).toHaveBeenCalledWith("X-RateLimit-Limit", 10);
+      expect(res.setHeader).toHaveBeenCalledWith("X-RateLimit-Remaining", expect.any(Number));
+      expect(res.setHeader).toHaveBeenCalledWith("X-RateLimit-Reset", expect.any(Number));
+    });
+
+    it("should block requests exceeding limit", async () => {
+      const limiter = createRedisRateLimiter({ windowMs: 60000, max: 2 });
+      limiter.useMemoryStore();
+
+      const middleware = limiter.middleware();
+      const req = createMockRequest();
+      const res = createMockResponse();
+      const next = createMockNext();
+
+      // Make 2 requests (should pass)
+      await middleware(req, res, next);
+      await middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(2);
+
+      // 3rd request should be blocked
+      await expect(middleware(req, res, next)).rejects.toThrow(AppError);
+    });
+
+    it("should support skip option", async () => {
+      const limiter = createRedisRateLimiter({
+        windowMs: 60000,
+        max: 1,
+        skip: (req) => req.path === "/health",
+      });
+      limiter.useMemoryStore();
+
+      const middleware = limiter.middleware();
+      const healthReq = { ...createMockRequest(), path: "/health" } as Request;
+      const apiReq = { ...createMockRequest(), path: "/api" } as Request;
+      const res = createMockResponse();
+      const next = createMockNext();
+
+      // Health check should always pass (skipped)
+      await middleware(healthReq, res, next);
+      await middleware(healthReq, res, next);
+      await middleware(healthReq, res, next);
+
+      expect(next).toHaveBeenCalledTimes(3);
+
+      // API request should be rate limited
+      await middleware(apiReq, res, next);
+      expect(next).toHaveBeenCalledTimes(4);
+
+      // Second API request should be blocked
+      await expect(middleware(apiReq, res, next)).rejects.toThrow(AppError);
+    });
+
+    it("should reset rate limit data", async () => {
+      const limiter = createRedisRateLimiter({ windowMs: 60000, max: 1 });
+      limiter.useMemoryStore();
+
+      const middleware = limiter.middleware();
+      const req = createMockRequest();
+      const res = createMockResponse();
+      const next = createMockNext();
+
+      // Use up the limit
+      await middleware(req, res, next);
+
+      // Should be blocked
+      await expect(middleware(req, res, next)).rejects.toThrow(AppError);
+
+      // Reset
+      await limiter.reset();
+
+      // Should work again
+      await middleware(req, res, next);
+      expect(next).toHaveBeenCalledTimes(2);
+    });
+
+    it("should use custom key prefix", async () => {
+      const limiter = createRedisRateLimiter({
+        windowMs: 60000,
+        max: 5,
+        keyPrefix: "custom:rl:",
+      });
+      limiter.useMemoryStore();
+
+      const middleware = limiter.middleware();
+      const req = createMockRequest();
+      const res = createMockResponse();
+      const next = createMockNext();
+
+      await middleware(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+  });
+
+  describe("defaultRedisRateLimiter", () => {
+    const createMockResponse = (): Response =>
+      ({
+        setHeader: jest.fn(),
+      }) as unknown as Response;
+
+    beforeEach(() => {
+      // Force memory store and reset
+      defaultRedisRateLimiter.useMemoryStore();
+    });
+
+    it("should be pre-configured with default values", async () => {
+      await defaultRedisRateLimiter.reset();
+
+      const middleware = defaultRedisRateLimiter.middleware();
+      const req = createMockRequest();
+      const res = createMockResponse();
+      const next = createMockNext();
+
+      // Should allow at least one request
+      await middleware(req, res, next);
+      expect(next).toHaveBeenCalled();
     });
   });
 });

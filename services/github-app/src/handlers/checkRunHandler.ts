@@ -8,7 +8,18 @@
  * Flow: GitHub → Gather Context → API (OpenAI) → Aggregator → Consolidated Post
  */
 
-import { createLogger, ExternalServiceError } from "@kenchi/shared";
+import {
+  createLogger,
+  config,
+  resilientPost,
+  getCachedCheckAnalysis,
+  cacheCheckAnalysis,
+  buildCachedAnalysis,
+  generateLogHash,
+  getCachedAnalysisByLogHash,
+  cacheAnalysisByLogHash,
+  type CachedAnalysis,
+} from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
 import {
@@ -28,11 +39,6 @@ import {
   type RecommendedAction,
 } from "../services/aggregation/index.js";
 import { deleteKenchiOpsComments } from "../services/githubService.js";
-
-/**
- * Service URL for API analysis
- */
-const API_URL = process.env.API_URL || "http://api:3000/api/analyze";
 
 const logger = createLogger("github-app");
 
@@ -229,26 +235,106 @@ const buildWorkflowContext = (
 // ==================== Core Processing ====================
 
 /**
- * Fetch analysis from the API service
+ * Convert cached analysis to API analysis format
+ */
+const cachedToApiAnalysis = (cached: CachedAnalysis): ApiAnalysis => ({
+  repository: cached.repository,
+  confidence: cached.confidence,
+  analysis: cached.analysis,
+  identified_cause: cached.identifiedCause,
+  recommended_actions: cached.recommendedActions.map((a) => ({
+    description: a.description,
+    priority: a.priority,
+    actionType: a.actionType,
+    reasoning: a.reasoning,
+  })),
+  full_analysis: {
+    codeAnnotations: cached.annotations.map((a) => ({
+      path: a.path,
+      line: a.line,
+      level: a.level,
+      message: a.message,
+      title: a.title,
+    })),
+  },
+});
+
+/**
+ * Fetch analysis from cache or API service
+ * Uses multi-level caching: by check, then by log hash
  */
 const fetchAnalysis = async (
   enrichedLog: string,
-  repositoryFullName: string
+  repositoryFullName: string,
+  commitSha: string,
+  checkName: string
 ): Promise<ApiAnalysis> => {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      failure_log: enrichedLog,
-      repository: repositoryFullName,
-    }),
-  });
+  // Level 1: Check if we have cached analysis for this exact check
+  const cachedByCheck = await getCachedCheckAnalysis(repositoryFullName, commitSha, checkName);
 
-  if (!response.ok) {
-    throw new ExternalServiceError("API", `Analysis service returned ${response.status}`);
+  if (cachedByCheck) {
+    logger.info("Analysis cache hit (by check)", {
+      repository: repositoryFullName,
+      commitSha: commitSha.substring(0, 7),
+      checkName,
+    });
+    return cachedToApiAnalysis(cachedByCheck);
   }
 
-  return (await response.json()) as ApiAnalysis;
+  // Level 2: Check if we have cached analysis for same log content
+  const logHash = generateLogHash(enrichedLog);
+  const cachedByLog = await getCachedAnalysisByLogHash(logHash);
+
+  if (cachedByLog) {
+    logger.info("Analysis cache hit (by log hash)", {
+      repository: repositoryFullName,
+      logHash,
+    });
+
+    // Cache by check for faster future lookups
+    await cacheCheckAnalysis({
+      ...cachedByLog,
+      repository: repositoryFullName,
+      commitSha,
+      checkName,
+    });
+
+    return cachedToApiAnalysis(cachedByLog);
+  }
+
+  // Level 3: Fetch from API
+  const apiUrl = `${config.API_URL}/api/analyze`;
+
+  const response = await resilientPost<ApiAnalysis>(apiUrl, {
+    failure_log: enrichedLog,
+    repository: repositoryFullName,
+  });
+
+  logger.debug("Analysis API response", {
+    status: response.status,
+    retryCount: response.retryCount,
+    duration: response.duration,
+  });
+
+  // Cache the result for future use
+  const cachedAnalysis = buildCachedAnalysis(
+    repositoryFullName,
+    commitSha,
+    checkName,
+    response.data
+  );
+
+  // Cache by both check and log hash (fire and forget)
+  Promise.all([
+    cacheCheckAnalysis(cachedAnalysis),
+    cacheAnalysisByLogHash(logHash, cachedAnalysis),
+  ]).catch((error) => {
+    logger.warn("Failed to cache analysis", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  });
+
+  return response.data;
 };
 
 /**
@@ -285,20 +371,25 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
     pullRequestCount: pullRequestNumbers.length,
   });
 
-  // Step 2: Call API for OpenAI analysis
+  // Step 2: Get analysis (from cache or API)
   let analysis: ApiAnalysis;
   try {
-    analysis = await fetchAnalysis(enrichedLog, repository.full_name);
+    analysis = await fetchAnalysis(
+      enrichedLog,
+      repository.full_name,
+      check_run.head_sha,
+      check_run.name
+    );
 
     const aiAnnotationCount = analysis.full_analysis?.codeAnnotations?.length ?? 0;
-    logger.info("Analysis received from API", {
+    logger.info("Analysis received", {
       repository: repository.full_name,
       confidence: analysis.confidence,
       aiAnnotationCount,
       hasAIAnnotations: aiAnnotationCount > 0,
     });
   } catch (error) {
-    logger.error("Failed to get analysis from API", {
+    logger.error("Failed to get analysis", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
     return false;

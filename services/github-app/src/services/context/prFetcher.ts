@@ -12,6 +12,8 @@ import {
   DEPENDENCY_DIFF_PATTERNS,
   LOG_PARSING_LIMITS,
   getErrorMessage,
+  getOrFetchPullRequest,
+  getOrFetchPullRequestDiff,
 } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
 import { truncateWithContext } from "./logParser.js";
@@ -66,7 +68,7 @@ export const fetchPRsByCommit = async (
 };
 
 /**
- * Fetch PR diff.
+ * Fetch PR diff with caching.
  *
  * @param installationId - GitHub App installation ID
  * @param owner - Repository owner
@@ -81,26 +83,30 @@ export const fetchPRDiff = async (
   prNumber: number
 ): Promise<string | null> => {
   try {
-    const octokit = await getOctokit(installationId);
+    const diff = await getOrFetchPullRequestDiff(owner, repo, prNumber, async () => {
+      const octokit = await getOctokit(installationId);
 
-    const { data: diff } = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-      mediaType: {
-        format: "diff",
-      },
+      const { data } = await octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: prNumber,
+        mediaType: {
+          format: "diff",
+        },
+      });
+
+      // The diff comes as a string when using mediaType diff format
+      const diffContent = typeof data === "string" ? data : String(data);
+
+      logger.info("Fetched PR diff from API", {
+        prNumber,
+        diffSize: diffContent.length,
+      });
+
+      return truncateWithContext(diffContent, GITHUB_CONTEXT_LIMITS.MAX_DIFF_SIZE);
     });
 
-    // The diff comes as a string when using mediaType diff format
-    const diffContent = typeof diff === "string" ? diff : String(diff);
-
-    logger.info("Fetched PR diff", {
-      prNumber,
-      diffSize: diffContent.length,
-    });
-
-    return truncateWithContext(diffContent, GITHUB_CONTEXT_LIMITS.MAX_DIFF_SIZE);
+    return diff;
   } catch (error) {
     logger.warn("Failed to fetch PR diff", {
       prNumber,
@@ -111,7 +117,10 @@ export const fetchPRDiff = async (
 };
 
 /**
- * Fetch PR metadata including reviews and labels.
+ * Fetch PR metadata including reviews and labels with caching.
+ *
+ * Base PR data is cached, but reviews and comments are fetched fresh
+ * since they change frequently.
  *
  * @param installationId - GitHub App installation ID
  * @param owner - Repository owner
@@ -128,14 +137,27 @@ export const fetchPRMetadata = async (
   try {
     const octokit = await getOctokit(installationId);
 
-    // Fetch PR details, reviews, and comments in parallel
-    const [prResponse, reviewsResponse, commentsResponse] = await Promise.all([
-      octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
+    // Fetch cached PR data and fresh reviews/comments in parallel
+    const [cachedPR, reviewsResponse, commentsResponse] = await Promise.all([
+      getOrFetchPullRequest(owner, repo, prNumber, async () => {
+        const { data: pr } = await octokit.rest.pulls.get({ owner, repo, pull_number: prNumber });
+        return {
+          number: pr.number,
+          title: pr.title,
+          body: pr.body,
+          author: pr.user?.login || "unknown",
+          headBranch: pr.head.ref,
+          baseBranch: pr.base.ref,
+          headSha: pr.head.sha,
+          labels: pr.labels.map((l) => (typeof l === "string" ? l : l.name || "")).filter(Boolean),
+          state: pr.state,
+          draft: pr.draft || false,
+        };
+      }),
       octokit.rest.pulls.listReviews({ owner, repo, pull_number: prNumber, per_page: 20 }),
       octokit.rest.issues.listComments({ owner, repo, issue_number: prNumber, per_page: 10 }),
     ]);
 
-    const pr = prResponse.data;
     const reviews = reviewsResponse.data;
     const comments = commentsResponse.data;
 
@@ -164,18 +186,18 @@ export const fetchPRMetadata = async (
       prNumber,
       reviewStatus,
       reviewerCount: reviewers.length,
-      labelCount: pr.labels.length,
+      labelCount: cachedPR.labels.length,
     });
 
     return {
-      number: pr.number,
-      title: pr.title,
-      description: pr.body,
-      author: pr.user?.login || "unknown",
-      baseBranch: pr.base.ref,
-      headBranch: pr.head.ref,
-      labels: pr.labels.map((l) => (typeof l === "string" ? l : l.name || "")).filter(Boolean),
-      isDraft: pr.draft || false,
+      number: cachedPR.number,
+      title: cachedPR.title,
+      description: cachedPR.body,
+      author: cachedPR.author,
+      baseBranch: cachedPR.baseBranch,
+      headBranch: cachedPR.headBranch,
+      labels: [...cachedPR.labels],
+      isDraft: cachedPR.draft,
       reviewStatus,
       reviewers,
       comments: recentComments,

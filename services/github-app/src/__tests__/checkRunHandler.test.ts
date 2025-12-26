@@ -17,6 +17,44 @@ jest.mock("@kenchi/shared", () => {
       error: jest.fn(),
       debug: jest.fn(),
     })),
+    // Mock resilient HTTP client - prevent actual network calls
+    resilientPost: jest.fn(() =>
+      Promise.resolve({
+        data: {
+          confidence: 0.85,
+          analysis: "Build failure analysis",
+          identified_cause: "Missing dependency",
+          recommended_actions: [{ description: "Run npm install", priority: "high" }],
+        },
+        status: 200,
+        retryCount: 0,
+        duration: 100,
+      })
+    ),
+    // Cache mocks - return null/miss to trigger API call
+    getCachedCheckAnalysis: jest.fn(() => Promise.resolve(null)),
+    cacheCheckAnalysis: jest.fn(() => Promise.resolve()),
+    getCachedAnalysisByLogHash: jest.fn(() => Promise.resolve(null)),
+    cacheAnalysisByLogHash: jest.fn(() => Promise.resolve()),
+    generateLogHash: jest.fn(() => "test-hash-123"),
+    buildCachedAnalysis: jest.fn(
+      (
+        repo: string,
+        sha: string,
+        check: string,
+        data: { confidence?: number; identified_cause?: string; analysis?: string }
+      ) => ({
+        repository: repo,
+        commitSha: sha,
+        checkName: check,
+        confidence: data.confidence ?? 0.5,
+        identifiedCause: data.identified_cause ?? "",
+        analysis: data.analysis ?? "",
+        annotations: [],
+        recommendedActions: [],
+        analyzedAt: new Date().toISOString(),
+      })
+    ),
   };
 });
 
@@ -79,15 +117,15 @@ jest.mock("../services/githubService.js", () => ({
   deleteKenchiOpsComments: jest.fn(),
 }));
 
-// Mock global fetch
-const mockFetch = jest.fn<typeof fetch>();
-(global as { fetch: typeof fetch }).fetch = mockFetch;
-
 // Import handlers after mocks
 import { handleCheckRun, handleCheckRunFailure } from "../handlers/checkRunHandler.js";
 import { gatherEnrichedContext, fetchPRsByCommit } from "../services/context/index.js";
 import { getAggregator } from "../services/aggregation/index.js";
 import { deleteKenchiOpsComments } from "../services/githubService.js";
+import { resilientPost } from "@kenchi/shared";
+
+// Get the mocked resilientPost function
+const mockResilientPost = resilientPost as jest.MockedFunction<typeof resilientPost>;
 
 const mockGatherEnrichedContext = gatherEnrichedContext as jest.MockedFunction<
   typeof gatherEnrichedContext
@@ -132,18 +170,18 @@ describe("Check Run Handler", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Default mock implementations
-    mockFetch.mockResolvedValue({
-      ok: true,
+    // Default mock implementations - reset resilientPost to default success response
+    mockResilientPost.mockResolvedValue({
+      data: {
+        confidence: 0.85,
+        analysis: "Build failure analysis",
+        identified_cause: "Missing dependency",
+        recommended_actions: [{ description: "Run npm install", priority: "high" }],
+      },
       status: 200,
-      json: () =>
-        Promise.resolve({
-          confidence: 0.85,
-          analysis: "Build failure analysis",
-          identified_cause: "Missing dependency",
-          recommended_actions: [{ description: "Run npm install", priority: "high" }],
-        }),
-    } as Response);
+      retryCount: 0,
+      duration: 100,
+    });
 
     mockGatherEnrichedContext.mockResolvedValue({
       workflowLogs: "test logs",
@@ -329,11 +367,11 @@ describe("Check Run Handler", () => {
       const webhook = createMockWebhook();
       await handleCheckRunFailure(webhook);
 
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockResilientPost).toHaveBeenCalledWith(
         expect.stringContaining("analyze"),
         expect.objectContaining({
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          failure_log: expect.any(String),
+          repository: "testowner/testrepo",
         })
       );
     });
@@ -351,10 +389,7 @@ describe("Check Run Handler", () => {
     });
 
     it("should handle API errors gracefully", async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      } as Response);
+      mockResilientPost.mockRejectedValueOnce(new Error("API error"));
 
       const webhook = createMockWebhook();
       const result = await handleCheckRunFailure(webhook);
@@ -399,7 +434,7 @@ describe("Check Run Handler", () => {
     });
 
     it("should handle network errors", async () => {
-      mockFetch.mockRejectedValue(new Error("Network error"));
+      mockResilientPost.mockRejectedValueOnce(new Error("Network error"));
 
       const webhook = createMockWebhook();
       const result = await handleCheckRunFailure(webhook);
@@ -408,28 +443,28 @@ describe("Check Run Handler", () => {
     });
 
     it("should convert AI annotations when available", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
+      mockResilientPost.mockResolvedValueOnce({
+        data: {
+          confidence: 0.85,
+          analysis: "Analysis",
+          identified_cause: "Cause",
+          recommended_actions: [],
+          full_analysis: {
+            codeAnnotations: [
+              {
+                path: "src/index.ts",
+                line: 10,
+                level: "failure",
+                message: "Error here",
+                title: "Test Error",
+              },
+            ],
+          },
+        },
         status: 200,
-        json: () =>
-          Promise.resolve({
-            confidence: 0.85,
-            analysis: "Analysis",
-            identified_cause: "Cause",
-            recommended_actions: [],
-            full_analysis: {
-              codeAnnotations: [
-                {
-                  path: "src/index.ts",
-                  line: 10,
-                  level: "failure",
-                  message: "Error here",
-                  title: "Test Error",
-                },
-              ],
-            },
-          }),
-      } as Response);
+        retryCount: 0,
+        duration: 100,
+      });
 
       const webhook = createMockWebhook();
       const mockAddFailure = jest.fn();
