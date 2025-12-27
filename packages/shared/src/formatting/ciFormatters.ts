@@ -5,7 +5,7 @@
  * used by both Slack and GitHub formatters.
  */
 
-import { CI_FAILURE_DISPLAY } from "../constants/index.js";
+import { CI_FAILURE_DISPLAY, UI_EMOJI, DEPENDENCY_EMOJI_MAP } from "../constants/index.js";
 import { truncateText } from "./uiHelpers.js";
 
 /**
@@ -58,7 +58,7 @@ const formatAnnotationError = (annotation: CIAnnotation, maxMessageLength: numbe
  * @returns Formatted error string
  */
 const formatTestFailure = (test: CITestFailure, includeEmoji: boolean): string => {
-  const prefix = includeEmoji ? "\u274C " : ""; // ❌
+  const prefix = includeEmoji ? `${UI_EMOJI.failure} ` : "";
   const location = test.file ? ` (\`${test.file}\`)` : "";
   return `${prefix}${test.testName}${location}`;
 };
@@ -127,10 +127,10 @@ export interface DependencyChange {
 const DEPENDENCY_FORMATTERS: Readonly<
   Record<DependencyChangeType, (dep: DependencyChange) => string>
 > = {
-  added: (dep) => `\u2795 Added: \`${dep.name}@${dep.newVersion}\``,
-  removed: (dep) => `\u2796 Removed: \`${dep.name}@${dep.oldVersion}\``,
+  added: (dep) => `${DEPENDENCY_EMOJI_MAP.added} Added: \`${dep.name}@${dep.newVersion}\``,
+  removed: (dep) => `${DEPENDENCY_EMOJI_MAP.removed} Removed: \`${dep.name}@${dep.oldVersion}\``,
   updated: (dep) =>
-    `\uD83D\uDD04 Updated: \`${dep.name}\` ${dep.oldVersion} \u2192 ${dep.newVersion}`,
+    `${DEPENDENCY_EMOJI_MAP.updated} Updated: \`${dep.name}\` ${dep.oldVersion} → ${dep.newVersion}`,
 };
 
 /**

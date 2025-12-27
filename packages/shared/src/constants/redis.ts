@@ -20,6 +20,20 @@ export const REDIS_TIMEOUTS = {
   QUEUE_OPERATION_MS: 5000,
 } as const;
 
+// ==================== Connection Defaults ====================
+
+/**
+ * Redis connection configuration defaults
+ */
+export const REDIS_CONNECTION_DEFAULTS = {
+  /** Connection timeout in milliseconds */
+  CONNECT_TIMEOUT_MS: 10000,
+  /** Maximum retry attempts for connection */
+  MAX_RETRIES: 10,
+  /** Enable offline queue (buffer commands while disconnected) */
+  ENABLE_OFFLINE_QUEUE: false,
+} as const;
+
 // ==================== Retryable Patterns ====================
 
 /**
@@ -34,6 +48,15 @@ export const RETRYABLE_ERROR_PATTERNS = [
   /503/,
   /502/,
   /504/,
+] as const;
+
+/**
+ * Retryable error patterns specific to Slack API
+ */
+export const SLACK_RETRYABLE_ERROR_PATTERNS = [
+  ...RETRYABLE_ERROR_PATTERNS,
+  /channel_not_found/i,
+  /not_in_channel/i,
 ] as const;
 
 // ==================== Cache TTL ====================
@@ -97,6 +120,8 @@ export const QUEUE_WORKER_DEFAULTS = {
   AGGREGATOR_POLL_INTERVAL_MS: 5000,
   /** Default max concurrent workers */
   MAX_CONCURRENT: 5,
+  /** Slack notification worker max concurrent */
+  SLACK_MAX_CONCURRENT: 3,
   /** Concurrency throttle delay in milliseconds */
   CONCURRENCY_THROTTLE_MS: 100,
 } as const;

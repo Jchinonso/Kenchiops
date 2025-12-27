@@ -19,7 +19,8 @@ import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
 import { buildAnalysisPrompt } from "../integrations/prompts.js";
 import { validateResponse } from "./validation.js";
 import { manageTokenBudget } from "./tokenManager.js";
-import { handleOpenAIError, sleep } from "./errors.js";
+import { handleOpenAIError } from "./errors.js";
+import { delay } from "../core/utils.js";
 
 /**
  * OpenAI client configuration.
@@ -30,16 +31,6 @@ interface OpenAIConfig {
   readonly temperature: number;
   readonly timeout: number;
 }
-
-/**
- * Default model configuration.
- */
-const DEFAULT_MODEL = "gpt-4-turbo-2024-04-09";
-
-/**
- * Default max tokens for responses.
- */
-const DEFAULT_MAX_TOKENS = 4096;
 
 /**
  * Creates OpenAI client configuration from environment variables.
@@ -60,8 +51,8 @@ const createOpenAIClient = (): OpenAI => {
  */
 const createClientConfig = (): OpenAIConfig => {
   return {
-    model: config.OPENAI_MODEL || DEFAULT_MODEL,
-    maxTokens: config.OPENAI_MAX_TOKENS || DEFAULT_MAX_TOKENS,
+    model: config.OPENAI_MODEL || OPENAI_DEFAULTS.MODEL,
+    maxTokens: config.OPENAI_MAX_TOKENS || OPENAI_DEFAULTS.MAX_TOKENS,
     temperature: config.OPENAI_TEMPERATURE || OPENAI_DEFAULTS.TEMPERATURE,
     timeout: config.OPENAI_TIMEOUT_MS || OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
   } as const;
@@ -230,7 +221,7 @@ export class OpenAIClient {
       maxRetries,
       delayMs,
     });
-    await sleep(delayMs);
+    await delay(delayMs);
   };
 
   /**

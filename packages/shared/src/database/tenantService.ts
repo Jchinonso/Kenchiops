@@ -495,7 +495,7 @@ export const getTenantStatistics = async (tenantId: string): Promise<TenantStati
   return {
     failuresAnalyzedToday: parseDbCount(analysesToday.rows),
     totalAlertsSent: parseDbCount(alertsTotal.rows),
-    lastAlertTime: lastAlert.rows[0]?.created_at ?? null,
+    lastAlertTime: lastAlert.rows.length > 0 ? lastAlert.rows[0].created_at : null,
   };
 };
 
