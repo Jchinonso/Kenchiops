@@ -189,3 +189,25 @@ export const SLACK_BOT_HEALTH_PATH = "/health";
  */
 export const shouldSkipSlackBotRateLimit = (path: string): boolean =>
   path === SLACK_BOT_HEALTH_PATH;
+
+// ==================== Client Cache ====================
+
+/**
+ * Slack client cache configuration.
+ */
+export const SLACK_CLIENT_CACHE = {
+  /** Cache TTL in milliseconds (5 minutes) - clients recreated after TTL to pick up token refreshes */
+  TTL_MS: 5 * TIME_CONSTANTS.MILLISECONDS_PER_MINUTE,
+  /** Cleanup interval in milliseconds (1 minute) */
+  CLEANUP_INTERVAL_MS: TIME_CONSTANTS.MILLISECONDS_PER_MINUTE,
+} as const;
+
+// ==================== Message Store ====================
+
+/**
+ * Message store configuration for tracking posted Slack messages.
+ */
+export const MESSAGE_STORE_CONFIG = {
+  /** Max age for stored messages in milliseconds (1 hour) - cleanup stale entries */
+  MAX_AGE_MS: TIME_CONSTANTS.MILLISECONDS_PER_MINUTE * 60,
+} as const;

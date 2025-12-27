@@ -5,7 +5,7 @@
  * Used for updating or deleting old messages when new analysis arrives.
  */
 
-import { logger } from "@kenchi/shared";
+import { logger, MESSAGE_STORE_CONFIG } from "@kenchi/shared";
 
 // ==================== Types ====================
 
@@ -17,13 +17,6 @@ export interface StoredMessage {
   readonly timestamp: string;
   readonly postedAt: Date;
 }
-
-// ==================== Constants ====================
-
-/**
- * Max age for stored messages (1 hour) - cleanup stale entries
- */
-const MESSAGE_STORE_MAX_AGE_MS = 60 * 60 * 1000;
 
 // ==================== Store ====================
 
@@ -67,7 +60,7 @@ export const cleanupMessageStore = (): void => {
 
   // Find keys to delete using filter
   const keysToDelete = Array.from(messageStore.entries())
-    .filter(([, stored]) => now - stored.postedAt.getTime() > MESSAGE_STORE_MAX_AGE_MS)
+    .filter(([, stored]) => now - stored.postedAt.getTime() > MESSAGE_STORE_CONFIG.MAX_AGE_MS)
     .map(([key]) => key);
 
   // Delete old entries using forEach (proper side effect handling)

@@ -25,6 +25,14 @@ import {
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   DEFAULT_AGGREGATION_CONFIG,
+  QUEUE_WORKER_DEFAULTS,
+  AGGREGATION_DEFAULTS,
+  REDIS_CONNECTION_DEFAULTS,
+  GITHUB_APP_RATE_LIMITS,
+  GITHUB_APP_MESSAGES,
+  GITHUB_APP_TIMEOUTS,
+  GITHUB_APP_DB_CONFIG,
+  shouldSkipGitHubAppRateLimit,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
@@ -47,11 +55,11 @@ declare module "express-serve-static-core" {
  * Skips health check endpoints for monitoring.
  */
 const githubRateLimiter = createRedisRateLimiter({
-  windowMs: 60000, // 1 minute
-  max: 500, // High limit for webhook bursts
-  message: "Too many requests to GitHub app service",
-  keyPrefix: "rl:github-app:",
-  skip: (req) => req.path === "/health" || req.path === "/github/health",
+  windowMs: GITHUB_APP_RATE_LIMITS.WINDOW_MS,
+  max: GITHUB_APP_RATE_LIMITS.MAX_REQUESTS,
+  message: GITHUB_APP_MESSAGES.RATE_LIMIT_EXCEEDED,
+  keyPrefix: GITHUB_APP_RATE_LIMITS.KEY_PREFIX,
+  skip: (req) => shouldSkipGitHubAppRateLimit(req.path),
 });
 
 /**
@@ -90,8 +98,8 @@ const initializeDatabase = (): void => {
   try {
     initDatabase({
       connectionString: config.DATABASE_URL,
-      maxConnections: 10,
-      idleTimeoutMs: 30000,
+      maxConnections: GITHUB_APP_DB_CONFIG.MAX_CONNECTIONS,
+      idleTimeoutMs: GITHUB_APP_DB_CONFIG.IDLE_TIMEOUT_MS,
     });
     logger.info("Database connection initialized");
   } catch (error) {
@@ -123,8 +131,14 @@ const initializeFailureAggregator = (): void => {
   }
 
   // Configure aggregation timing (can be overridden via env)
-  const debounceMs = parseInt(process.env.AGGREGATION_DEBOUNCE_MS || "30000", 10);
-  const maxWaitMs = parseInt(process.env.AGGREGATION_MAX_WAIT_MS || "120000", 10);
+  const debounceMs = parseInt(
+    process.env.AGGREGATION_DEBOUNCE_MS || String(AGGREGATION_DEFAULTS.DEBOUNCE_MS),
+    10
+  );
+  const maxWaitMs = parseInt(
+    process.env.AGGREGATION_MAX_WAIT_MS || String(AGGREGATION_DEFAULTS.MAX_WAIT_MS),
+    10
+  );
   const maxFailuresPerCommit = DEFAULT_AGGREGATION_CONFIG.maxFailuresPerCommit;
 
   const aggregationConfig = {
@@ -134,12 +148,15 @@ const initializeFailureAggregator = (): void => {
   };
 
   // Start the aggregator worker (checks for ready aggregations and enqueues them)
-  stopAggregatorWorker = startAggregatorWorker(aggregationConfig, 5000);
+  stopAggregatorWorker = startAggregatorWorker(
+    aggregationConfig,
+    QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS
+  );
 
   // Start the analysis queue processor (processes enqueued aggregations)
   stopAnalysisProcessor = startAnalysisQueueProcessor(postConsolidatedAnalysis, {
-    pollIntervalMs: 1000,
-    maxConcurrent: 3,
+    pollIntervalMs: QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
+    maxConcurrent: QUEUE_WORKER_DEFAULTS.SLACK_MAX_CONCURRENT,
   });
 
   logger.info("Redis failure aggregator initialized", {
@@ -166,8 +183,8 @@ const initializeActionQueueWorker = async (): Promise<void> => {
 
   try {
     stopActionQueueWorker = await startActionQueueWorker({
-      pollIntervalMs: 1000,
-      maxConcurrent: 3,
+      pollIntervalMs: QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
+      maxConcurrent: QUEUE_WORKER_DEFAULTS.SLACK_MAX_CONCURRENT,
     });
     logger.info("Action queue worker initialized");
   } catch (error) {
@@ -207,11 +224,11 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
       process.exit(0);
     });
 
-    // Force exit after 15 seconds
+    // Force exit after configured timeout
     setTimeout(() => {
       logger.warn("Forced shutdown after timeout");
       process.exit(1);
-    }, 15000);
+    }, GITHUB_APP_TIMEOUTS.SHUTDOWN_TIMEOUT_MS);
   };
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -228,7 +245,7 @@ const startServer = async (): Promise<void> => {
   // Wait for Redis to be connected before starting queue workers
   if (config.REDIS_URL) {
     try {
-      await waitForRedisConnection(10000);
+      await waitForRedisConnection(REDIS_CONNECTION_DEFAULTS.CONNECT_TIMEOUT_MS);
       logger.info("Redis connection ready");
     } catch (error) {
       logger.error("Failed to connect to Redis", {
