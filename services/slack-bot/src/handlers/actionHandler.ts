@@ -11,6 +11,8 @@ import {
   executeAction,
   enqueueAction,
   isRedisHealthy,
+  SLACK_BOT_TIMEOUTS,
+  SLACK_BOT_MESSAGES,
   type ActionExecutionContext,
   type ActionType,
 } from "@kenchi/shared";
@@ -236,7 +238,7 @@ export const handleActionApproval = async (
       const inProgressBlocks = formatProgressUpdate(
         value.actionId,
         "in_progress",
-        "Action approved and executing..."
+        SLACK_BOT_MESSAGES.LEGACY_ACTION_IN_PROGRESS
       );
 
       await say({
@@ -250,7 +252,7 @@ export const handleActionApproval = async (
           const completedBlocks = formatProgressUpdate(
             value.actionId,
             "completed",
-            "Action completed successfully"
+            SLACK_BOT_MESSAGES.LEGACY_ACTION_COMPLETED
           );
 
           await say({
@@ -262,7 +264,7 @@ export const handleActionApproval = async (
             error: timeoutError instanceof Error ? timeoutError.message : "Unknown error",
           });
         }
-      }, 2000);
+      }, SLACK_BOT_TIMEOUTS.LEGACY_ACTION_TIMEOUT_MS);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

@@ -26,6 +26,11 @@ import {
   isSocketModeDisconnectError,
   createRedisRateLimiter,
   startSlackNotificationWorker,
+  SLACK_BOT_RATE_LIMITS,
+  SLACK_BOT_TIMEOUTS,
+  SLACK_BOT_DB_CONFIG,
+  SLACK_BOT_MESSAGES,
+  shouldSkipSlackBotRateLimit,
 } from "@kenchi/shared";
 
 const { App } = Bolt;
@@ -316,8 +321,8 @@ function initializeDatabase(): void {
   try {
     initDatabase({
       connectionString: config.DATABASE_URL,
-      maxConnections: 10,
-      idleTimeoutMs: 30000,
+      maxConnections: SLACK_BOT_DB_CONFIG.MAX_CONNECTIONS,
+      idleTimeoutMs: SLACK_BOT_DB_CONFIG.IDLE_TIMEOUT_MS,
     });
     logger.info("Database connection initialized for multi-tenant support");
   } catch (error) {
@@ -349,11 +354,11 @@ async function startService(): Promise<void> {
 
     // Redis-backed rate limiter for HTTP endpoints
     const httpRateLimiter = createRedisRateLimiter({
-      windowMs: 60000, // 1 minute
-      max: 200, // Higher limit for internal service calls
-      message: "Too many requests to Slack bot service",
-      keyPrefix: "rl:slack-bot:",
-      skip: (req) => req.path === "/health",
+      windowMs: SLACK_BOT_RATE_LIMITS.WINDOW_MS,
+      max: SLACK_BOT_RATE_LIMITS.MAX_REQUESTS,
+      message: SLACK_BOT_MESSAGES.RATE_LIMIT_EXCEEDED,
+      keyPrefix: SLACK_BOT_RATE_LIMITS.KEY_PREFIX,
+      skip: (req) => shouldSkipSlackBotRateLimit(req.path),
     });
     expressApp.use(httpRateLimiter.middleware());
 
@@ -376,7 +381,7 @@ async function startService(): Promise<void> {
     if (config.REDIS_URL) {
       // Wait for Redis to be connected before starting queue worker
       try {
-        await waitForRedisConnection(10000);
+        await waitForRedisConnection(SLACK_BOT_TIMEOUTS.REDIS_CONNECTION_MS);
         logger.info("Redis connection ready");
       } catch (error) {
         logger.error("Failed to connect to Redis", {
@@ -387,8 +392,8 @@ async function startService(): Promise<void> {
 
       const notificationHandler = createNotificationHandler(slackApp.client);
       stopNotificationWorker = await startSlackNotificationWorker(notificationHandler, {
-        pollIntervalMs: 1000,
-        maxConcurrent: 3,
+        pollIntervalMs: SLACK_BOT_TIMEOUTS.QUEUE_POLL_INTERVAL_MS,
+        maxConcurrent: SLACK_BOT_TIMEOUTS.QUEUE_MAX_CONCURRENT,
       });
       logger.info("Slack notification queue worker started");
     } else {
@@ -421,11 +426,11 @@ async function startService(): Promise<void> {
         process.exit(0);
       });
 
-      // Force exit after 10 seconds
+      // Force exit after timeout
       setTimeout(() => {
         logger.warn("Forced shutdown after timeout");
         process.exit(1);
-      }, 10000);
+      }, SLACK_BOT_TIMEOUTS.SHUTDOWN_TIMEOUT_MS);
     };
 
     process.on("SIGTERM", () => shutdown("SIGTERM"));

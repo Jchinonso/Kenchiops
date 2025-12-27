@@ -7,6 +7,7 @@
 
 import {
   PRIORITY_EMOJI,
+  PRIORITY_NUMERIC_MAP,
   getConfidenceColor,
   getConfidenceLabel,
   getConfidenceEmoji,
@@ -32,15 +33,11 @@ export interface MessageAttachment {
  * @returns Emoji string for the priority level
  */
 export const getPriorityEmoji = (priority: string | number): string => {
-  // Handle numeric priorities
+  // Handle numeric priorities using centralized mapping
   if (typeof priority === "number") {
-    const numericMap: Record<number, keyof typeof PRIORITY_EMOJI> = {
-      1: "critical",
-      2: "high",
-      3: "medium",
-      4: "low",
-    };
-    return PRIORITY_EMOJI[numericMap[priority] || "low"];
+    const priorityKey =
+      PRIORITY_NUMERIC_MAP[priority as keyof typeof PRIORITY_NUMERIC_MAP] || "low";
+    return PRIORITY_EMOJI[priorityKey];
   }
   const p = priority.toLowerCase() as keyof typeof PRIORITY_EMOJI;
   return PRIORITY_EMOJI[p] || PRIORITY_EMOJI.low;
