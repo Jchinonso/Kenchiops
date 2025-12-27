@@ -76,6 +76,7 @@ export const getConfidenceEmoji = (percent: number): string =>
 
 /**
  * Deduplicate and merge recommended actions from all failures.
+ * Deduplicates by actionType to avoid showing multiple similar actions.
  */
 export const mergeRecommendedActions = (
   failures: readonly AnalyzedFailure[]
@@ -83,7 +84,8 @@ export const mergeRecommendedActions = (
   const actionMap = failures
     .flatMap((f) => f.recommendedActions)
     .reduce((map, action) => {
-      const key = action.description.toLowerCase().trim();
+      // Deduplicate by actionType (or description for actions without type)
+      const key = action.actionType ?? action.description.toLowerCase().trim();
       return map.has(key) ? map : map.set(key, action);
     }, new Map<string, RecommendedAction>());
 
