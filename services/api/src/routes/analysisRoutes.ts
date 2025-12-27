@@ -5,12 +5,21 @@
  */
 
 import { Router } from "express";
-import { asyncHandler, validate, validators, HTTP_STATUS, createLogger } from "@kenchi/shared";
+import {
+  asyncHandler,
+  validate,
+  validators,
+  HTTP_STATUS,
+  createLogger,
+  SERVICE_NAMES,
+  API_ROUTES,
+  API_LOG_LIMITS,
+} from "@kenchi/shared";
 import { performAnalysis } from "../services/analysisService.js";
 import type { AnalyzeRequest } from "../types/apiTypes.js";
 
 const router = Router();
-const logger = createLogger("api");
+const logger = createLogger(SERVICE_NAMES.API);
 
 /**
  * CI Failure Analysis endpoint
@@ -20,8 +29,9 @@ const logger = createLogger("api");
  * structured analysis with recommendations
  */
 router.post(
-  "/api/analyze",
+  API_ROUTES.ANALYZE,
   (req, res, next) => {
+    const previewLength = API_LOG_LIMITS.RAW_BODY_PREVIEW_LENGTH;
     logger.info("Received analyze request", {
       contentType: req.headers["content-type"],
       bodyType: typeof req.body,
@@ -30,8 +40,8 @@ router.post(
       hasRepository: !!req.body?.repository,
       rawBody:
         typeof req.body === "string"
-          ? req.body.substring(0, 200)
-          : JSON.stringify(req.body).substring(0, 200),
+          ? req.body.substring(0, previewLength)
+          : JSON.stringify(req.body).substring(0, previewLength),
     });
     next();
   },

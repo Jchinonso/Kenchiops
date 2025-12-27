@@ -59,8 +59,17 @@ export const RATE_LIMIT_MESSAGES = {
 /**
  * External service names.
  */
-export const SERVICE_NAMES = {
+export const EXTERNAL_SERVICE_NAMES = {
   OPENAI: "OpenAI",
+} as const;
+
+/**
+ * Internal service identifiers for logging and configuration.
+ */
+export const SERVICE_NAMES = {
+  API: "api",
+  SLACK_BOT: "slack-bot",
+  GITHUB_APP: "github-app",
 } as const;
 
 /**

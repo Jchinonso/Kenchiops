@@ -4,7 +4,7 @@
  * Types specific to the API service
  */
 
-import type { Event, Evidence, LLMAnalysisResult } from "@kenchi/shared";
+import type { Event, Evidence, LLMAnalysisResult, HealthStatus } from "@kenchi/shared";
 
 /**
  * CI failure analysis request payload
@@ -46,7 +46,7 @@ export interface AnalysisContext {
  * Health check response
  */
 export interface HealthResponse {
-  readonly status: "ok" | "error";
+  readonly status: HealthStatus;
   readonly service: string;
   readonly timestamp: string;
   readonly uptime: number;

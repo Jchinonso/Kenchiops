@@ -5,11 +5,19 @@
  */
 
 import { Router } from "express";
-import { asyncHandler, createLogger, HTTP_STATUS } from "@kenchi/shared";
+import {
+  asyncHandler,
+  createLogger,
+  HTTP_STATUS,
+  SERVICE_NAMES,
+  API_ROUTES,
+  API_RESPONSE_STATUS,
+  API_MESSAGES,
+} from "@kenchi/shared";
 import type { WebhookPayload } from "../types/apiTypes.js";
 
 const router = Router();
-const logger = createLogger("api");
+const logger = createLogger(SERVICE_NAMES.API);
 
 /**
  * Generic webhook endpoint
@@ -19,7 +27,7 @@ const logger = createLogger("api");
  * TODO: Add authentication/authorization
  */
 router.post(
-  "/webhook/:source",
+  API_ROUTES.WEBHOOK,
   asyncHandler(async (req, res) => {
     const { source } = req.params as { source: string };
     const payload = req.body as WebhookPayload;
@@ -34,9 +42,9 @@ router.post(
     // TODO: Trigger appropriate workflow or service
 
     res.status(HTTP_STATUS.OK).json({
-      status: "received",
+      status: API_RESPONSE_STATUS.RECEIVED,
       source,
-      message: "TODO: Implement webhook processing logic",
+      message: API_MESSAGES.WEBHOOK_PROCESSING_PENDING,
     });
   })
 );

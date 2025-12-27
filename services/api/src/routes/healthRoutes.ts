@@ -5,7 +5,7 @@
  */
 
 import { Router, Request, Response } from "express";
-import { HTTP_STATUS, config } from "@kenchi/shared";
+import { HTTP_STATUS, config, HEALTH_STATUS, API_ROUTES } from "@kenchi/shared";
 import type { HealthResponse } from "../types/apiTypes.js";
 import { appConfig } from "../config/appConfig.js";
 
@@ -15,9 +15,9 @@ const router = Router();
  * Health check endpoint with detailed status
  * GET /health
  */
-router.get("/health", (_req: Request, res: Response) => {
+router.get(API_ROUTES.HEALTH, (_req: Request, res: Response) => {
   const response: HealthResponse = {
-    status: "ok",
+    status: HEALTH_STATUS.OK,
     service: appConfig.serviceName,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),

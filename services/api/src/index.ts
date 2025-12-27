@@ -16,6 +16,9 @@ import {
   createRedisRateLimiter,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
+  API_MESSAGES,
+  API_REDIS_PREFIXES,
+  shouldSkipRateLimit,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
@@ -30,9 +33,9 @@ const logger = createLogger("api");
 const apiRateLimiter = createRedisRateLimiter({
   windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
   max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
-  message: "Too many requests to API, please try again later",
-  keyPrefix: "rl:api:",
-  skip: (req) => req.path === "/health" || req.path === "/api/health",
+  message: API_MESSAGES.RATE_LIMIT_EXCEEDED,
+  keyPrefix: API_REDIS_PREFIXES.RATE_LIMIT,
+  skip: (req) => shouldSkipRateLimit(req.path),
 });
 
 /**

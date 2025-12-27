@@ -29,9 +29,25 @@ export {
   DEFAULT_ERROR_MESSAGES,
   VALIDATION_MESSAGES,
   RATE_LIMIT_MESSAGES,
+  EXTERNAL_SERVICE_NAMES,
   SERVICE_NAMES,
   EXPRESS_CONFIG,
 } from "./http.js";
+
+// Event constants
+export {
+  EVENT_TYPES,
+  EVENT_SOURCES,
+  EVENT_SEVERITY,
+  LOG_LEVELS,
+  EVIDENCE_SOURCES,
+  EVENT_DEFAULTS,
+  type EventType,
+  type EventSource,
+  type EventSeverity,
+  type LogLevel,
+  type EvidenceSource,
+} from "./events.js";
 
 // Time, ports, and rate limiting
 export { TIME_CONSTANTS, SERVICE_PORTS, RATE_LIMIT_CONSTANTS } from "./time.js";
@@ -175,3 +191,20 @@ export {
   PUBSUB_CHANNELS,
   type CacheNamespace,
 } from "./redis.js";
+
+// API service constants
+export {
+  API_ROUTES,
+  SWAGGER_ROUTES,
+  RATE_LIMIT_SKIP_PATHS,
+  HEALTH_STATUS,
+  API_RESPONSE_STATUS,
+  API_MESSAGES,
+  API_REDIS_PREFIXES,
+  API_LOG_CONTEXT,
+  API_LOG_LIMITS,
+  API_REQUEST_FIELDS,
+  shouldSkipRateLimit,
+  type HealthStatus,
+  type ApiResponseStatus,
+} from "./api.js";
