@@ -30,15 +30,16 @@ export const PRIORITY_ORDER: Readonly<Record<string, number>> = {
 } as const;
 
 /**
- * Maximum items to display per section
+ * Maximum items to display per section.
+ * Increased to show comprehensive context for AI analysis.
  */
 export const DISPLAY_LIMITS = {
-  annotationsPerCheck: 10,
-  totalAnnotations: 30,
-  recommendedActions: 8,
-  checksToShow: 10,
-  slackAnnotationsPerCheck: 5,
-  slackMaxChecks: 5,
+  annotationsPerCheck: 50,
+  totalAnnotations: 100,
+  recommendedActions: 10,
+  checksToShow: 20,
+  slackAnnotationsPerCheck: 20,
+  slackMaxChecks: 10,
 } as const;
 
 // ==================== Utility Functions ====================
