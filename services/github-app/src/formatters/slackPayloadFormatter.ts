@@ -17,9 +17,6 @@ import {
 
 // ==================== Types ====================
 
-/**
- * Slack Block Kit text block types
- */
 interface SlackTextBlock {
   readonly type: "section" | "header" | "divider" | "context";
   readonly text?: {
@@ -38,9 +35,6 @@ interface SlackTextBlock {
   readonly accessory?: SlackButtonElement;
 }
 
-/**
- * Slack Block Kit button element
- */
 interface SlackButtonElement {
   readonly type: "button";
   readonly text: {
@@ -53,23 +47,14 @@ interface SlackButtonElement {
   readonly action_id: string;
 }
 
-/**
- * Slack Block Kit actions block for interactive buttons
- */
 interface SlackActionsBlock {
   readonly type: "actions";
   readonly block_id?: string;
   readonly elements: readonly SlackButtonElement[];
 }
 
-/**
- * Combined block type for all Slack blocks
- */
 type SlackBlock = SlackTextBlock | SlackActionsBlock;
 
-/**
- * Return type for buildConsolidatedSlackPayload
- */
 export interface ConsolidatedSlackPayload {
   readonly blocks: readonly SlackBlock[];
   readonly text: string;
@@ -83,9 +68,6 @@ export interface ConsolidatedSlackPayload {
   };
 }
 
-/**
- * Action button value payload for JSON encoding
- */
 interface ActionButtonValue {
   readonly actionId: string;
   readonly actionType: string;
@@ -97,16 +79,21 @@ interface ActionButtonValue {
   readonly checkRunId?: number;
 }
 
+interface ConsolidatedTestFailure {
+  readonly testName: string;
+  readonly file?: string;
+}
+
+interface ConsolidatedAnnotation {
+  readonly path: string;
+  readonly line: number;
+  readonly message: string;
+}
+
 // ==================== Constants ====================
 
-/**
- * Maximum actions to show buttons for
- */
 const MAX_ACTION_BUTTONS = 3;
 
-/**
- * Action types that can be auto-executed (safe actions)
- */
 const EXECUTABLE_ACTION_TYPES = new Set([
   "rerun_pipeline",
   "notify_team",
@@ -115,66 +102,66 @@ const EXECUTABLE_ACTION_TYPES = new Set([
   "run_diagnostic",
 ]);
 
-// ==================== Helper Functions ====================
+// ==================== Pure Helper Functions ====================
 
 /**
- * Consolidated test failure with source check info
+ * Convert snake_case to Title Case for display
  */
-interface ConsolidatedTestFailure {
-  readonly testName: string;
-  readonly file?: string;
-}
+const toTitleCase = (snakeCase: string): string =>
+  snakeCase
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 
 /**
- * Consolidated annotation with source check info
- */
-interface ConsolidatedAnnotation {
-  readonly path: string;
-  readonly line: number;
-  readonly message: string;
-}
-
-/**
- * Consolidate test failures across all checks, deduplicating by testName
- */
-const consolidateTestFailures = (
-  failures: readonly AnalyzedFailure[]
-): ConsolidatedTestFailure[] => {
-  const seen = new Set<string>();
-  return failures
-    .flatMap((f) => f.testFailures ?? [])
-    .filter((tf) => {
-      const key = `${tf.testName}|${tf.file ?? ""}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-};
-
-/**
- * Consolidate annotations across all checks, deduplicating by path:line
- */
-const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] => {
-  const seen = new Set<string>();
-  return failures
-    .flatMap((f) => f.annotations)
-    .filter((a) => {
-      const key = `${a.path}:${a.line}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .map((a) => ({ path: a.path, line: a.line, message: a.message }));
-};
-
-/**
- * Generate a unique action ID from commit sha and index
+ * Generate unique action ID from commit sha and index
  */
 const generateActionId = (commitSha: string, index: number): string =>
   `act_${commitSha.substring(0, 8)}_${index}`;
 
 /**
- * Create action button value payload
+ * Deduplicate items by key using reduce with Map (O(n) performance)
+ */
+const deduplicateByKey = <T>(items: readonly T[], getKey: (item: T) => string): T[] => [
+  ...items
+    .reduce(
+      (map, item) => (map.has(getKey(item)) ? map : map.set(getKey(item), item)),
+      new Map<string, T>()
+    )
+    .values(),
+];
+
+/**
+ * Consolidate test failures across checks using Map-based deduplication
+ */
+const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): ConsolidatedTestFailure[] =>
+  deduplicateByKey(
+    failures.flatMap((f) => f.testFailures ?? []),
+    (tf) => `${tf.testName}|${tf.file ?? ""}`
+  );
+
+/**
+ * Consolidate annotations across checks using Map-based deduplication
+ */
+const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] =>
+  deduplicateByKey(
+    failures.flatMap((f) => f.annotations),
+    (a) => `${a.path}:${a.line}`
+  ).map((a) => ({ path: a.path, line: a.line, message: a.message }));
+
+/**
+ * Extract unique causes from failures
+ */
+const extractUniqueCauses = (failures: readonly AnalyzedFailure[]): string[] =>
+  deduplicateByKey(
+    failures.map((f) => f.identifiedCause ?? f.analysis ?? "").filter(Boolean),
+    (cause) => cause
+  );
+
+// ==================== Block Builders ====================
+
+/**
+ * Build action button value payload
  */
 const createActionButtonValue = (
   action: RecommendedAction,
@@ -193,118 +180,98 @@ const createActionButtonValue = (
 });
 
 /**
- * Convert snake_case to Title Case for display
+ * Create button element for an action
  */
-const toTitleCase = (snakeCase: string): string =>
-  snakeCase
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-
-/**
- * Create execute buttons block for all actions
- */
-const createExecuteButtonsBlock = (
-  actions: readonly RecommendedAction[],
+const createActionButton = (
+  action: RecommendedAction,
+  index: number,
   aggregation: AggregatedFailures,
   checkRunId?: number
-): SlackActionsBlock => {
-  const executeButtons = actions.map((action, index) => {
-    const actionId = generateActionId(aggregation.commitSha, index);
-    const buttonValue = JSON.stringify(
-      createActionButtonValue(action, actionId, aggregation, checkRunId)
-    );
-    const buttonLabel = toTitleCase(action.actionType ?? "Action");
-
-    return {
-      type: "button" as const,
-      text: { type: "plain_text" as const, text: buttonLabel, emoji: true },
-      style: "primary" as const,
-      value: buttonValue,
-      action_id: `approve_action_${actionId}`,
-    };
-  });
-
+): SlackButtonElement => {
+  const actionId = generateActionId(aggregation.commitSha, index);
   return {
-    type: "actions",
-    block_id: "execute_actions_block",
-    elements: executeButtons,
+    type: "button",
+    text: { type: "plain_text", text: toTitleCase(action.actionType ?? "Action"), emoji: true },
+    style: "primary",
+    value: JSON.stringify(createActionButtonValue(action, actionId, aggregation, checkRunId)),
+    action_id: `approve_action_${actionId}`,
   };
 };
 
 /**
- * Build action blocks with clean layout.
- * Shows action descriptions, then grouped Execute buttons at the bottom.
- * Deduplicates by actionType to avoid showing multiple similar buttons.
+ * Build execute buttons block for actions
+ */
+const buildExecuteButtonsBlock = (
+  actions: readonly RecommendedAction[],
+  aggregation: AggregatedFailures,
+  checkRunId?: number
+): SlackActionsBlock => ({
+  type: "actions",
+  block_id: "execute_actions_block",
+  elements: actions.map((action, index) =>
+    createActionButton(action, index, aggregation, checkRunId)
+  ),
+});
+
+/**
+ * Filter and deduplicate executable actions
+ */
+const getExecutableActions = (actions: readonly RecommendedAction[]): RecommendedAction[] =>
+  deduplicateByKey(
+    actions.filter((a) => EXECUTABLE_ACTION_TYPES.has(a.actionType ?? "")),
+    (a) => a.actionType ?? ""
+  ).slice(0, MAX_ACTION_BUTTONS);
+
+/**
+ * Build action description block
+ */
+const buildActionDescriptionBlock = (action: RecommendedAction): SlackTextBlock => ({
+  type: "section",
+  text: {
+    type: "mrkdwn",
+    text: `${getPriorityEmoji(action.priority)} *${toTitleCase(action.actionType ?? "Action")}*: ${action.description}`,
+  },
+});
+
+/**
+ * Build action blocks with descriptions and buttons
  */
 const buildActionBlocks = (
   actions: readonly RecommendedAction[],
   aggregation: AggregatedFailures
 ): SlackBlock[] => {
-  // Filter to executable actions, deduplicate by actionType, and limit count
-  const seenTypes = new Set<string>();
-  const executableActions = actions
-    .filter((a) => {
-      const actionType = a.actionType ?? "";
-      if (!EXECUTABLE_ACTION_TYPES.has(actionType) || seenTypes.has(actionType)) {
-        return false;
-      }
-      seenTypes.add(actionType);
-      return true;
-    })
-    .slice(0, MAX_ACTION_BUTTONS);
-
-  if (executableActions.length === 0) {
-    return [];
-  }
-
-  // Get checkRunId from first failure (for rerun actions)
-  const primaryCheckRunId = aggregation.failures[0]?.checkRunId;
-
-  const blocks: SlackBlock[] = [
-    { type: "divider" },
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: "*🎯 Quick Actions*" },
-    },
-  ];
-
-  // Add action descriptions
-  executableActions.forEach((action) => {
-    const priorityEmoji = getPriorityEmoji(action.priority);
-    const actionLabel = toTitleCase(action.actionType ?? "Action");
-
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `${priorityEmoji} *${actionLabel}*: ${action.description}`,
-      },
-    });
-  });
-
-  // Add grouped execute buttons at the bottom
-  blocks.push(createExecuteButtonsBlock(executableActions, aggregation, primaryCheckRunId));
-
-  return blocks;
+  const executableActions = getExecutableActions(actions);
+  return executableActions.length === 0
+    ? []
+    : [
+        { type: "divider" },
+        { type: "section", text: { type: "mrkdwn", text: "*🎯 Quick Actions*" } },
+        ...executableActions.map(buildActionDescriptionBlock),
+        buildExecuteButtonsBlock(
+          executableActions,
+          aggregation,
+          aggregation.failures[0]?.checkRunId
+        ),
+      ];
 };
 
 /**
  * Build consolidated test failures block
  */
-const buildConsolidatedTestFailuresBlock = (
-  testFailures: ConsolidatedTestFailure[]
+const buildTestFailuresBlock = (
+  testFailures: readonly ConsolidatedTestFailure[]
 ): SlackTextBlock | null => {
   if (testFailures.length === 0) return null;
 
+  const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
   const testLines = testFailures
-    .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
+    .slice(0, displayCount)
     .map((t) => `   • \`${t.testName}\`${t.file ? ` (${t.file})` : ""}`)
     .join("\n");
 
-  const moreTests =
-    testFailures.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
-      ? `\n   _...and ${testFailures.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
+  const moreText =
+    testFailures.length > displayCount
+      ? `\n   _...and ${testFailures.length - displayCount} more_`
       : "";
 
   return {
@@ -312,7 +279,7 @@ const buildConsolidatedTestFailuresBlock = (
     elements: [
       {
         type: "mrkdwn",
-        text: `🧪 *Failed Tests (${testFailures.length}):*\n${testLines}${moreTests}`,
+        text: `🧪 *Failed Tests (${testFailures.length}):*\n${testLines}${moreText}`,
       },
     ],
   };
@@ -321,59 +288,43 @@ const buildConsolidatedTestFailuresBlock = (
 /**
  * Build consolidated affected files block
  */
-const buildConsolidatedAnnotationsBlock = (
-  annotations: ConsolidatedAnnotation[]
+const buildAnnotationsBlock = (
+  annotations: readonly ConsolidatedAnnotation[]
 ): SlackTextBlock | null => {
   if (annotations.length === 0) return null;
 
-  const annotationLines = annotations
-    .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
+  const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
+  const lines = annotations
+    .slice(0, displayCount)
     .map((a) => `   • \`${a.path}:${a.line}\` — ${a.message}`)
     .join("\n");
 
-  const moreAnnotations =
-    annotations.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
-      ? `\n   _...and ${annotations.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
+  const moreText =
+    annotations.length > displayCount
+      ? `\n   _...and ${annotations.length - displayCount} more_`
       : "";
 
   return {
     type: "context",
-    elements: [
-      {
-        type: "mrkdwn",
-        text: `📍 *Affected Files:*\n${annotationLines}${moreAnnotations}`,
-      },
-    ],
+    elements: [{ type: "mrkdwn", text: `📍 *Affected Files:*\n${lines}${moreText}` }],
   };
 };
 
 /**
  * Build check names list block
  */
-const buildCheckNamesBlock = (failures: readonly AnalyzedFailure[]): SlackTextBlock => {
-  const checkNames = failures.map((f) => `\`${f.checkName}\``).join(", ");
-  return {
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text: `*Checks:* ${checkNames}`,
-    },
-  };
-};
+const buildCheckNamesBlock = (failures: readonly AnalyzedFailure[]): SlackTextBlock => ({
+  type: "section",
+  text: {
+    type: "mrkdwn",
+    text: `*Checks:* ${failures.map((f) => `\`${f.checkName}\``).join(", ")}`,
+  },
+});
 
 /**
- * Build root cause analysis block - consolidate unique causes
+ * Build root cause analysis block
  */
-const buildRootCauseBlock = (failures: readonly AnalyzedFailure[]): SlackTextBlock | null => {
-  const uniqueCauses = new Set<string>();
-  const causes = failures
-    .map((f) => f.identifiedCause ?? f.analysis ?? "")
-    .filter((cause) => {
-      if (!cause || uniqueCauses.has(cause)) return false;
-      uniqueCauses.add(cause);
-      return true;
-    });
-
+const buildRootCauseBlock = (causes: readonly string[]): SlackTextBlock | null => {
   if (causes.length === 0) return null;
 
   const causeText =
@@ -381,41 +332,26 @@ const buildRootCauseBlock = (failures: readonly AnalyzedFailure[]): SlackTextBlo
 
   return {
     type: "section",
-    text: {
-      type: "mrkdwn",
-      text: `*🔍 Root Cause:*\n${causeText}`,
-    },
+    text: { type: "mrkdwn", text: `*🔍 Root Cause:*\n${causeText}` },
   };
 };
 
-// ==================== Public API ====================
-
 /**
- * Build consolidated Slack payload from aggregated failures.
- * Creates a Block Kit message with all failure details.
+ * Build header blocks with repository info
  */
-export const buildConsolidatedSlackPayload = (
-  aggregation: AggregatedFailures
-): ConsolidatedSlackPayload => {
-  const { failures, commitSha, repository, prContext } = aggregation;
-  const avgConfidence = calculateAverageConfidence(failures);
-  const mergedActions = mergeRecommendedActions(failures);
-  const confidencePercent = Math.round(avgConfidence * 100);
-
-  // Build GitHub links
+const buildHeaderBlocks = (
+  repository: AggregatedFailures["repository"],
+  commitSha: string,
+  prContext: AggregatedFailures["prContext"],
+  confidencePercent: number
+): SlackTextBlock[] => {
   const repoUrl = `https://github.com/${repository.fullName}`;
   const commitUrl = `${repoUrl}/commit/${commitSha}`;
-  const prUrl = prContext ? `${repoUrl}/pull/${prContext.number}` : null;
 
-  // Build header blocks
-  const headerBlocks: SlackTextBlock[] = [
+  return [
     {
       type: "header",
-      text: {
-        type: "plain_text",
-        text: "🚨 CI Build Failed",
-        emoji: true,
-      },
+      text: { type: "plain_text", text: "🚨 CI Build Failed", emoji: true },
     },
     {
       type: "section",
@@ -433,91 +369,87 @@ export const buildConsolidatedSlackPayload = (
       ],
     },
   ];
+};
 
-  // PR link block (conditional)
-  const prLinkBlocks: SlackTextBlock[] =
-    prContext && prUrl
-      ? [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `*🔗 Pull Request:* <${prUrl}|#${prContext.number} - ${prContext.title}>`,
-            },
-          },
-        ]
-      : [];
+/**
+ * Build PR link block if context exists
+ */
+const buildPRLinkBlock = (
+  repository: AggregatedFailures["repository"],
+  prContext: AggregatedFailures["prContext"]
+): SlackTextBlock | null => {
+  if (!prContext) return null;
 
-  // Failed checks header with check names
-  const failedChecksHeader: SlackTextBlock[] = [
-    { type: "divider" },
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: `*❌ Failed Checks (${failures.length})*` },
+  const prUrl = `https://github.com/${repository.fullName}/pull/${prContext.number}`;
+  return {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*🔗 Pull Request:* <${prUrl}|#${prContext.number} - ${prContext.title}>`,
     },
+  };
+};
+
+/**
+ * Build recommended actions summary blocks
+ */
+const buildActionsSummaryBlocks = (actions: readonly RecommendedAction[]): SlackTextBlock[] => {
+  if (actions.length === 0) return [];
+
+  const actionText = actions
+    .slice(0, DISPLAY_LIMITS.slackMaxChecks)
+    .map((a, i) => `${i + 1}. ${getPriorityEmoji(a.priority)} ${a.description}`)
+    .join("\n");
+
+  return [
+    { type: "divider" },
+    { type: "section", text: { type: "mrkdwn", text: "*🛠️ Recommended Actions*" } },
+    { type: "section", text: { type: "mrkdwn", text: actionText } },
   ];
+};
 
-  // Consolidated check names block
-  const checkNamesBlock: SlackTextBlock[] =
-    failures.length > 0 ? [buildCheckNamesBlock(failures)] : [];
+// ==================== Public API ====================
 
-  // Consolidated root cause block
-  const rootCauseBlock = buildRootCauseBlock(failures);
-  const rootCauseBlocks: SlackTextBlock[] = rootCauseBlock ? [rootCauseBlock] : [];
+/**
+ * Build consolidated Slack payload from aggregated failures
+ */
+export const buildConsolidatedSlackPayload = (
+  aggregation: AggregatedFailures
+): ConsolidatedSlackPayload => {
+  const { failures, commitSha, repository, prContext } = aggregation;
+  const avgConfidence = calculateAverageConfidence(failures);
+  const mergedActions = mergeRecommendedActions(failures);
+  const confidencePercent = Math.round(avgConfidence * 100);
 
-  // Consolidated test failures (deduplicated across all checks)
-  const consolidatedTestFailures = consolidateTestFailures(failures);
-  const testFailuresBlock = buildConsolidatedTestFailuresBlock(consolidatedTestFailures);
-  const testFailuresBlocks: SlackTextBlock[] = testFailuresBlock ? [testFailuresBlock] : [];
+  // Pre-compute consolidated data (O(n) with Map-based deduplication)
+  const testFailures = consolidateTestFailures(failures);
+  const annotations = consolidateAnnotations(failures);
+  const causes = extractUniqueCauses(failures);
 
-  // Consolidated annotations (deduplicated across all checks)
-  const consolidatedAnnotations = consolidateAnnotations(failures);
-  const annotationsBlock = buildConsolidatedAnnotationsBlock(consolidatedAnnotations);
-  const annotationsBlocks: SlackTextBlock[] = annotationsBlock ? [annotationsBlock] : [];
+  // Build all block sections
+  const headerBlocks = buildHeaderBlocks(repository, commitSha, prContext, confidencePercent);
+  const prLinkBlock = buildPRLinkBlock(repository, prContext);
+  const testFailuresBlock = buildTestFailuresBlock(testFailures);
+  const annotationsBlock = buildAnnotationsBlock(annotations);
+  const rootCauseBlock = buildRootCauseBlock(causes);
 
-  // Recommended actions summary blocks
-  const actionsSummaryBlocks: SlackTextBlock[] =
-    mergedActions.length > 0
-      ? [
-          { type: "divider" },
-          { type: "section", text: { type: "mrkdwn", text: "*🛠️ Recommended Actions*" } },
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: mergedActions
-                .slice(0, DISPLAY_LIMITS.slackMaxChecks)
-                .map((a, i) => `${i + 1}. ${getPriorityEmoji(a.priority)} ${a.description}`)
-                .join("\n"),
-            },
-          },
-        ]
-      : [];
-
-  // Interactive action buttons for executable actions
-  const actionButtonBlocks = buildActionBlocks(mergedActions, aggregation);
-
-  // Footer blocks
-  const footerBlocks: SlackTextBlock[] = [
+  // Combine blocks using array spread with filter for optional blocks
+  const blocks: SlackBlock[] = [
+    ...headerBlocks,
+    ...(prLinkBlock ? [prLinkBlock] : []),
+    { type: "divider" },
+    { type: "section", text: { type: "mrkdwn", text: `*❌ Failed Checks (${failures.length})*` } },
+    ...(failures.length > 0 ? [buildCheckNamesBlock(failures)] : []),
+    ...(rootCauseBlock ? [rootCauseBlock] : []),
+    ...(testFailuresBlock ? [testFailuresBlock] : []),
+    ...(annotationsBlock ? [annotationsBlock] : []),
+    ...buildActionsSummaryBlocks(mergedActions),
+    ...buildActionBlocks(mergedActions, aggregation),
     { type: "divider" },
     {
       type: "context",
       elements: [{ type: "mrkdwn", text: "🤖 _Generated by KenchiOps DevOps Assistant_" }],
     },
-  ];
-
-  // Combine all blocks - consolidated view
-  const blocks: SlackBlock[] = [
-    ...headerBlocks,
-    ...prLinkBlocks,
-    ...failedChecksHeader,
-    ...checkNamesBlock,
-    ...rootCauseBlocks,
-    ...testFailuresBlocks,
-    ...annotationsBlocks,
-    ...actionsSummaryBlocks,
-    ...actionButtonBlocks,
-    ...footerBlocks,
   ];
 
   return {
