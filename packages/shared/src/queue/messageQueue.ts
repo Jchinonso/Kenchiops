@@ -20,6 +20,7 @@ import {
   QUEUE_VISIBILITY_TIMEOUT,
   PUBSUB_CHANNELS,
   REDIS_LIST_OPS,
+  REDIS_STATUS,
 } from "../constants/index.js";
 
 const logger = createLogger("message-queue");
@@ -202,7 +203,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
     const client = getRedisClient();
 
     // Check if Redis is ready
-    if (client.status !== "ready") {
+    if (client.status !== REDIS_STATUS.READY) {
       return; // Skip if not ready
     }
 

@@ -7,7 +7,12 @@
  * @module cache/cacheKeys
  */
 
-import { REDIS_KEY_PREFIXES, CACHE_NAMESPACES, type CacheNamespace } from "../constants/index.js";
+import {
+  REDIS_KEY_PREFIXES,
+  CACHE_NAMESPACES,
+  CACHE_KEY_STRUCTURE,
+  type CacheNamespace,
+} from "../constants/index.js";
 
 // Re-export for backward compatibility
 export const CACHE_NAMESPACE = CACHE_NAMESPACES;
@@ -175,7 +180,11 @@ export const parseCacheKey = (key: string): { namespace: string; parts: string[]
   const segments = key.split(":");
   const [prefix, cachePrefix, ...rest] = segments;
 
-  if (rest.length < 1 || prefix !== "kenchi" || cachePrefix !== "cache") {
+  if (
+    rest.length < 1 ||
+    prefix !== CACHE_KEY_STRUCTURE.ROOT_PREFIX ||
+    cachePrefix !== CACHE_KEY_STRUCTURE.CACHE_PREFIX
+  ) {
     return null;
   }
 
