@@ -143,36 +143,14 @@ const createActionButtonValue = (
 });
 
 /**
- * Create inline execute button for section accessory
+ * Create execute buttons block for all actions
  */
-const createInlineExecuteButton = (
-  action: RecommendedAction,
-  actionId: string,
-  aggregation: AggregatedFailures,
-  checkRunId?: number
-): SlackButtonElement => {
-  const buttonValue = JSON.stringify(
-    createActionButtonValue(action, actionId, aggregation, checkRunId)
-  );
-
-  return {
-    type: "button",
-    text: { type: "plain_text", text: "Execute", emoji: true },
-    style: "primary",
-    value: buttonValue,
-    action_id: `approve_action_${actionId}`,
-  };
-};
-
-/**
- * Create dismiss buttons block for all actions
- */
-const createDismissButtonsBlock = (
+const createExecuteButtonsBlock = (
   actions: readonly RecommendedAction[],
   aggregation: AggregatedFailures,
   checkRunId?: number
 ): SlackActionsBlock => {
-  const dismissButtons = actions.map((action, index) => {
+  const executeButtons = actions.map((action, index) => {
     const actionId = generateActionId(aggregation.commitSha, index);
     const buttonValue = JSON.stringify(
       createActionButtonValue(action, actionId, aggregation, checkRunId)
@@ -180,24 +158,23 @@ const createDismissButtonsBlock = (
 
     return {
       type: "button" as const,
-      text: { type: "plain_text" as const, text: `✗ ${action.actionType}`, emoji: true },
-      style: "danger" as const,
+      text: { type: "plain_text" as const, text: `${action.actionType}`, emoji: true },
+      style: "primary" as const,
       value: buttonValue,
-      action_id: `reject_action_${actionId}`,
+      action_id: `approve_action_${actionId}`,
     };
   });
 
   return {
     type: "actions",
-    block_id: "dismiss_actions_block",
-    elements: dismissButtons,
+    block_id: "execute_actions_block",
+    elements: executeButtons,
   };
 };
 
 /**
- * Build action blocks with compact inline buttons.
- * Each action shows description with Execute button on the right.
- * Dismiss buttons are grouped at the bottom.
+ * Build action blocks with clean layout.
+ * Shows action descriptions, then grouped Execute buttons at the bottom.
  * Deduplicates by actionType to avoid showing multiple similar buttons.
  */
 const buildActionBlocks = (
@@ -232,9 +209,8 @@ const buildActionBlocks = (
     },
   ];
 
-  // Add compact action rows with inline Execute buttons
-  executableActions.forEach((action, index) => {
-    const actionId = generateActionId(aggregation.commitSha, index);
+  // Add action descriptions
+  executableActions.forEach((action) => {
     const priorityEmoji = getPriorityEmoji(action.priority);
 
     blocks.push({
@@ -243,12 +219,11 @@ const buildActionBlocks = (
         type: "mrkdwn",
         text: `${priorityEmoji} *${action.actionType ?? "Action"}*: ${action.description}`,
       },
-      accessory: createInlineExecuteButton(action, actionId, aggregation, primaryCheckRunId),
     });
   });
 
-  // Add grouped dismiss buttons at the bottom
-  blocks.push(createDismissButtonsBlock(executableActions, aggregation, primaryCheckRunId));
+  // Add grouped execute buttons at the bottom
+  blocks.push(createExecuteButtonsBlock(executableActions, aggregation, primaryCheckRunId));
 
   return blocks;
 };
