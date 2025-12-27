@@ -16,6 +16,8 @@ import {
   RATE_LIMIT_CONSTANTS,
   TIME_CONSTANTS,
   HTTP_RESILIENCE_DEFAULTS,
+  REDIS_TTL_VALUES,
+  REDIS_SCAN,
 } from "../constants/index.js";
 import { getRedisClient } from "../queue/redisClient.js";
 
@@ -107,7 +109,7 @@ class RedisRateLimitStore implements RateLimitStore {
     if (ttlErr) throw ttlErr;
 
     // Set expiry on first request in window
-    if (ttl === -1 || ttl === -2) {
+    if (ttl === REDIS_TTL_VALUES.NO_EXPIRY || ttl === REDIS_TTL_VALUES.KEY_NOT_FOUND) {
       await redis.pexpire(redisKey, windowMs);
     }
 
@@ -130,7 +132,7 @@ class RedisRateLimitStore implements RateLimitStore {
     const pattern = `${this.keyPrefix}*`;
 
     // Use SCAN for efficient key iteration
-    let cursor = "0";
+    let cursor: string = REDIS_SCAN.INITIAL_CURSOR;
     do {
       const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
       cursor = nextCursor;
@@ -138,7 +140,7 @@ class RedisRateLimitStore implements RateLimitStore {
       if (keys.length > 0) {
         await redis.del(...keys);
       }
-    } while (cursor !== "0");
+    } while (cursor !== REDIS_SCAN.INITIAL_CURSOR);
   }
 }
 

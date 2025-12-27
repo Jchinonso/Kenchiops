@@ -23,6 +23,7 @@ import {
   REDIS_KEY_PREFIXES,
   AGGREGATION_DEFAULTS,
   DISPLAY_DEFAULTS,
+  REDIS_SCAN,
 } from "../constants/index.js";
 import type {
   AggregatedFailures,
@@ -402,7 +403,7 @@ export const findReadyAggregations = async (
 
   try {
     // Scan for all metadata keys
-    let cursor = "0";
+    let cursor: string = REDIS_SCAN.INITIAL_CURSOR;
     do {
       const [nextCursor, keys] = await withTimeout(
         redis.scan(cursor, "MATCH", AGGREGATION_KEYS.pattern, "COUNT", 100),
@@ -426,7 +427,7 @@ export const findReadyAggregations = async (
           readyKeys.push(key);
         }
       }
-    } while (cursor !== "0");
+    } while (cursor !== REDIS_SCAN.INITIAL_CURSOR);
   } catch (error) {
     logger.error("Failed to find ready aggregations", {
       error: getErrorMessage(error),
