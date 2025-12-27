@@ -11,6 +11,7 @@ import { slackNotificationQueue, type QueueMessage, type ProcessResult } from ".
 import { createLogger } from "../core/logger.js";
 import { QUEUE_WORKER_DEFAULTS, SLACK_RETRYABLE_ERROR_PATTERNS } from "../constants/index.js";
 import { delay } from "../core/utils.js";
+import { getErrorMessage } from "../core/errors.js";
 import type { AggregatedFailures } from "../aggregation/types.js";
 
 const logger = createLogger("slack-notification-queue");
@@ -230,20 +231,20 @@ const processNotificationJob =
         shouldRetry: isRetryableError(result.error),
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMsg = getErrorMessage(error);
       const duration = Date.now() - startTime;
 
       logger.error("Notification job threw exception", {
         messageId: message.id,
         type: payload.type,
-        error: errorMessage,
+        error: errorMsg,
         duration,
       });
 
       return {
         success: false,
-        error: errorMessage,
-        shouldRetry: isRetryableError(errorMessage),
+        error: errorMsg,
+        shouldRetry: isRetryableError(errorMsg),
       };
     }
   };
@@ -298,7 +299,7 @@ export const startSlackNotificationWorker = async (
   // Don't await - let them run in background
   Promise.all(workers).catch((error) => {
     logger.error("Slack notification queue worker error", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   });
 

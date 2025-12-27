@@ -98,6 +98,7 @@ export {
 // Secret detection constants
 export {
   REDACTION_PLACEHOLDER,
+  REDACTION_DEFAULTS,
   SECRET_PATTERNS,
   FORBIDDEN_FIELDS,
   type SecretPattern,
@@ -134,6 +135,7 @@ export {
   HTTP_RESILIENCE_DEFAULTS,
   RETRYABLE_HTTP_STATUS_CODES,
   RETRYABLE_NETWORK_ERRORS,
+  ID_GENERATION,
 } from "./core.js";
 
 // Redis constants

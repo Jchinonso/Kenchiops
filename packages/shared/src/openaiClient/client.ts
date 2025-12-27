@@ -13,7 +13,7 @@
 import OpenAI from "openai";
 import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
-import { LLMError } from "../core/errors.js";
+import { LLMError, getErrorMessage } from "../core/errors.js";
 import { OPENAI_DEFAULTS, OPENAI_CONSTANTS, TIME_CONSTANTS } from "../constants/index.js";
 import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
 import { buildAnalysisPrompt } from "../integrations/prompts.js";
@@ -429,8 +429,7 @@ export class OpenAIClient {
       const parsed = JSON.parse(jsonString) as Record<string, unknown>;
       return this.createAnalysisFromParsed(parsed, eventId);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      throw new LLMError(`Failed to parse OpenAI response: ${errorMessage}`);
+      throw new LLMError(`Failed to parse OpenAI response: ${getErrorMessage(error)}`);
     }
   };
 }

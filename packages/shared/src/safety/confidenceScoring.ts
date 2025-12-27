@@ -10,7 +10,7 @@ import { validateAgainstKnowledgeBase } from "./knowledgeValidation.js";
 import { checkConsistency } from "./consistency.js";
 import { determineGatingDecision } from "./actionGating.js";
 import { clampConfidenceScore } from "./confidenceUtils.js";
-import { BASE_CONFIDENCE_SCORES } from "../constants/index.js";
+import { BASE_CONFIDENCE_SCORES, DISPLAY_DEFAULTS } from "../constants/index.js";
 
 /**
  * LLM confidence level to base score mapping.
@@ -44,7 +44,7 @@ const formatAdjustment = (value: number, label: string): string => {
   if (value === 0) return "";
 
   const sign = value > 0 ? "+" : "";
-  return `${label}: ${sign}${value.toFixed(2)}`;
+  return `${label}: ${sign}${value.toFixed(DISPLAY_DEFAULTS.SCORE_DECIMAL_PRECISION)}`;
 };
 
 /**
@@ -102,7 +102,7 @@ export const calculateConfidenceScore = (
 
   // Generate reasoning
   const reasoning: string[] = [
-    `Base score: ${baseScore.toFixed(2)} (from LLM confidence: ${analysis.confidence || "medium"})`,
+    `Base score: ${baseScore.toFixed(DISPLAY_DEFAULTS.SCORE_DECIMAL_PRECISION)} (from LLM confidence: ${analysis.confidence || "medium"})`,
     formatAdjustment(uncertaintyAdjustment, "Uncertainty adjustment"),
     formatAdjustment(evidenceAlignment, "Evidence alignment"),
     formatAdjustment(completeness, "Completeness"),
@@ -110,7 +110,9 @@ export const calculateConfidenceScore = (
     formatAdjustment(consistency, "Consistency"),
   ].filter(Boolean);
 
-  reasoning.push(`Final confidence score: ${finalScore.toFixed(2)}`);
+  reasoning.push(
+    `Final confidence score: ${finalScore.toFixed(DISPLAY_DEFAULTS.SCORE_DECIMAL_PRECISION)}`
+  );
 
   // Determine action gating decision
   const gatingDecision = determineGatingDecision(finalScore);

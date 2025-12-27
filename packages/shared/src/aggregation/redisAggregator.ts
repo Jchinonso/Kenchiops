@@ -406,7 +406,7 @@ export const findReadyAggregations = async (
     let cursor: string = REDIS_SCAN.INITIAL_CURSOR;
     do {
       const [nextCursor, keys] = await withTimeout(
-        redis.scan(cursor, "MATCH", AGGREGATION_KEYS.pattern, "COUNT", 100),
+        redis.scan(cursor, "MATCH", AGGREGATION_KEYS.pattern, "COUNT", REDIS_SCAN.BATCH_SIZE),
         REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
       );
       cursor = nextCursor;
