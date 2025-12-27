@@ -242,39 +242,64 @@ const buildActionBlocks = (
  * Format a single failure into Slack blocks
  */
 const formatFailureBlocks = (failure: AnalyzedFailure): SlackTextBlock[] => {
-  const rootCauseBlock: SlackTextBlock = {
+  const blocks: SlackTextBlock[] = [];
+
+  // Root cause block
+  blocks.push({
     type: "section",
     text: {
       type: "mrkdwn",
       text: `*\`${failure.checkName}\`*\n${failure.identifiedCause ?? failure.analysis ?? "Analysis unavailable"}`,
     },
-  };
+  });
 
-  if (failure.annotations.length === 0) {
-    return [rootCauseBlock];
+  // Test failures block (if any)
+  if (failure.testFailures && failure.testFailures.length > 0) {
+    const testLines = failure.testFailures
+      .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
+      .map((t) => `   • \`${t.testName}\`${t.file ? ` (${t.file})` : ""}`)
+      .join("\n");
+
+    const moreTests =
+      failure.testFailures.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
+        ? `\n   _...and ${failure.testFailures.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
+        : "";
+
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `🧪 *Failed Tests (${failure.testFailures.length}):*\n${testLines}${moreTests}`,
+        },
+      ],
+    });
   }
 
-  const annotationLines = failure.annotations
-    .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
-    .map((a) => `   • \`${a.path}:${a.line}\` — ${a.message}`)
-    .join("\n");
+  // Annotations block (if any)
+  if (failure.annotations.length > 0) {
+    const annotationLines = failure.annotations
+      .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
+      .map((a) => `   • \`${a.path}:${a.line}\` — ${a.message}`)
+      .join("\n");
 
-  const moreText =
-    failure.annotations.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
-      ? `\n   _...and ${failure.annotations.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
-      : "";
+    const moreAnnotations =
+      failure.annotations.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
+        ? `\n   _...and ${failure.annotations.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
+        : "";
 
-  const annotationBlock: SlackTextBlock = {
-    type: "context",
-    elements: [
-      {
-        type: "mrkdwn",
-        text: `📍 *Affected Files:*\n${annotationLines}${moreText}`,
-      },
-    ],
-  };
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `📍 *Affected Files:*\n${annotationLines}${moreAnnotations}`,
+        },
+      ],
+    });
+  }
 
-  return [rootCauseBlock, annotationBlock];
+  return blocks;
 };
 
 // ==================== Public API ====================

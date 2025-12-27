@@ -11,6 +11,7 @@
 export type {
   CodeAnnotation,
   RecommendedAction,
+  TestFailureInfo,
   AnalyzedFailure,
   SerializedFailure,
   PRContext,

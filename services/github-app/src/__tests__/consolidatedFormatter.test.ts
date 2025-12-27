@@ -46,6 +46,7 @@ describe("Consolidated Formatter", () => {
       { description: "Run npm install to install dependencies", priority: "high" },
       { description: "Check package.json for missing entries", priority: "medium" },
     ],
+    testFailures: [],
     annotations: [
       {
         path: "src/index.ts",

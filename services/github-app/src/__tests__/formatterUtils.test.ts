@@ -76,6 +76,7 @@ describe("Formatter Utilities", () => {
       identifiedCause: "test",
       annotations: [],
       recommendedActions: [],
+      testFailures: [],
       timestamp: new Date(),
     });
 
@@ -140,6 +141,7 @@ describe("Formatter Utilities", () => {
       identifiedCause: "test",
       annotations: [],
       recommendedActions: actions,
+      testFailures: [],
       timestamp: new Date(),
     });
 

@@ -31,6 +31,14 @@ export interface RecommendedAction {
 }
 
 /**
+ * Individual test failure info for display
+ */
+export interface TestFailureInfo {
+  readonly testName: string;
+  readonly file?: string;
+}
+
+/**
  * Result of analyzing a single check run failure
  */
 export interface AnalyzedFailure {
@@ -42,6 +50,7 @@ export interface AnalyzedFailure {
   readonly analysis: string;
   readonly annotations: readonly CodeAnnotation[];
   readonly recommendedActions: readonly RecommendedAction[];
+  readonly testFailures: readonly TestFailureInfo[];
   readonly timestamp: Date;
 }
 
@@ -57,6 +66,7 @@ export interface SerializedFailure {
   readonly analysis: string;
   readonly annotations: readonly CodeAnnotation[];
   readonly recommendedActions: readonly RecommendedAction[];
+  readonly testFailures: readonly TestFailureInfo[];
   readonly timestamp: string; // ISO string instead of Date
 }
 

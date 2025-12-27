@@ -25,6 +25,7 @@ describe("Slack Payload Formatter", () => {
     identifiedCause: "Missing semicolon in index.ts",
     annotations: [],
     recommendedActions: [],
+    testFailures: [],
     timestamp: new Date(),
     ...overrides,
   });

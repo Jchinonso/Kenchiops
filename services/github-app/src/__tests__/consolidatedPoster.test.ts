@@ -92,6 +92,7 @@ describe("Consolidated Poster Service", () => {
         identifiedCause: "Missing dependency",
         recommendedActions: [{ description: "Run npm install", priority: "high" }],
         annotations: [{ path: "src/index.ts", line: 10, message: "Error", level: "failure" }],
+        testFailures: [],
         timestamp: new Date("2024-01-01T10:00:00Z"),
       },
     ],
