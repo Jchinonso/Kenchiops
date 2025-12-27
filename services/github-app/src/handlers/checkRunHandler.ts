@@ -19,6 +19,7 @@ import {
   getCachedAnalysisByLogHash,
   cacheAnalysisByLogHash,
   addFailureToRedis,
+  KENCHI_BRANDING,
   type CachedAnalysis,
   type AnalyzedFailure,
   type AggregationKey,
@@ -485,10 +486,20 @@ const FAILURE_CONCLUSIONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Check if the check run should be processed
+ * Check if the check run should be processed.
+ * Filters out our own KenchiOps check runs to prevent infinite loops.
  */
 const shouldProcessCheckRun = (webhook: CheckRunWebhook): boolean => {
   const { action, check_run } = webhook;
+
+  // Skip our own check runs to prevent feedback loop
+  if (check_run.name === KENCHI_BRANDING.CHECK_RUN_NAME) {
+    logger.debug("Skipping own KenchiOps check run", {
+      checkName: check_run.name,
+      repository: webhook.repository.full_name,
+    });
+    return false;
+  }
 
   // Only process completed check runs with failure conclusions
   return (
@@ -497,10 +508,17 @@ const shouldProcessCheckRun = (webhook: CheckRunWebhook): boolean => {
 };
 
 /**
- * Check if this is a successful check run that should trigger comment cleanup
+ * Check if this is a successful check run that should trigger comment cleanup.
+ * Skips our own KenchiOps check runs.
  */
 const isSuccessfulCheckRun = (webhook: CheckRunWebhook): boolean => {
   const { action, check_run } = webhook;
+
+  // Skip our own check runs
+  if (check_run.name === KENCHI_BRANDING.CHECK_RUN_NAME) {
+    return false;
+  }
+
   return (
     action === GITHUB_CHECK_ACTIONS.COMPLETED &&
     check_run.conclusion === GITHUB_CHECK_CONCLUSIONS.SUCCESS
