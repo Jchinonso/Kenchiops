@@ -62,3 +62,13 @@ export const SHA_PATTERN_SINGLE = /\b[0-9a-f]{6,40}\b/i;
  * Captures content inside quotes without the quotes themselves.
  */
 export const QUOTED_TEXT_PATTERN = /["']([^"']+)["']/g;
+
+/**
+ * OpenAI-related error and default messages.
+ */
+export const OPENAI_MESSAGES = {
+  NO_CONTENT: "No content in OpenAI response",
+  NO_JSON_FOUND: "No JSON found in response",
+  NO_SUMMARY: "No summary provided",
+  UNKNOWN_ERROR: "Unknown OpenAI error occurred",
+} as const;

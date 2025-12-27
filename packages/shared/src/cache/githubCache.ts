@@ -17,6 +17,7 @@ import {
 } from "./cacheClient.js";
 import { githubCacheKeys } from "./cacheKeys.js";
 import { createLogger } from "../core/logger.js";
+import { GITHUB_STATUS } from "../constants/index.js";
 
 const logger = createLogger("github-cache");
 
@@ -293,7 +294,7 @@ export const cacheCheckRun = async (
   checkRun: CachedCheckRun
 ): Promise<void> => {
   // Completed check runs can be cached longer
-  const ttl = checkRun.status === "completed" ? CACHE_TTL.LONG : CACHE_TTL.SHORT;
+  const ttl = checkRun.status === GITHUB_STATUS.COMPLETED ? CACHE_TTL.LONG : CACHE_TTL.SHORT;
 
   await cacheSet(githubCacheKeys.checkRun(owner, repo, checkRunId), checkRun, { ttlSeconds: ttl });
 };
@@ -335,7 +336,7 @@ export const cacheWorkflowRun = async (
   workflowRun: CachedWorkflowRun
 ): Promise<void> => {
   // Completed workflow runs can be cached longer
-  const ttl = workflowRun.status === "completed" ? CACHE_TTL.LONG : CACHE_TTL.SHORT;
+  const ttl = workflowRun.status === GITHUB_STATUS.COMPLETED ? CACHE_TTL.LONG : CACHE_TTL.SHORT;
 
   await cacheSet(githubCacheKeys.workflowRun(owner, repo, runId), workflowRun, { ttlSeconds: ttl });
 };

@@ -27,6 +27,8 @@ export {
   HTTP_STATUS,
   ERROR_CODES,
   DEFAULT_ERROR_MESSAGES,
+  VALIDATION_MESSAGES,
+  RATE_LIMIT_MESSAGES,
   SERVICE_NAMES,
   EXPRESS_CONFIG,
 } from "./http.js";
@@ -82,6 +84,9 @@ export {
   EXCLUDED_PACKAGE_JSON_FIELDS,
   DEPENDENCY_DIFF_PATTERNS,
   CI_FAILURE_DISPLAY,
+  GITHUB_STATUS,
+  GITHUB_CONCLUSION,
+  GITHUB_ANNOTATION_LEVEL,
 } from "./github.js";
 
 // OpenAI and text processing constants
@@ -93,6 +98,7 @@ export {
   SHA_PATTERN,
   SHA_PATTERN_SINGLE,
   QUOTED_TEXT_PATTERN,
+  OPENAI_MESSAGES,
 } from "./openai.js";
 
 // Secret detection constants

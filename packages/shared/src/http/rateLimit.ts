@@ -18,6 +18,7 @@ import {
   HTTP_RESILIENCE_DEFAULTS,
   REDIS_TTL_VALUES,
   REDIS_SCAN,
+  RATE_LIMIT_MESSAGES,
 } from "../constants/index.js";
 import { getRedisClient } from "../queue/redisClient.js";
 
@@ -223,7 +224,7 @@ class RateLimiter {
   constructor(options: RateLimitOptions) {
     this.windowMs = options.windowMs;
     this.max = options.max;
-    this.message = options.message ?? "Too many requests, please try again later";
+    this.message = options.message ?? RATE_LIMIT_MESSAGES.TOO_MANY_REQUESTS;
     this.keyGenerator = options.keyGenerator ?? ((req) => req.ip ?? "unknown");
     this.keyPrefix = options.keyPrefix ?? "rl:";
     this.skip = options.skip;
@@ -367,7 +368,7 @@ class SyncRateLimiter {
   constructor(options: RateLimitOptions) {
     this.windowMs = options.windowMs;
     this.max = options.max;
-    this.message = options.message ?? "Too many requests, please try again later";
+    this.message = options.message ?? RATE_LIMIT_MESSAGES.TOO_MANY_REQUESTS;
     this.keyGenerator = options.keyGenerator ?? ((req) => req.ip ?? "unknown");
   }
 
@@ -455,7 +456,7 @@ export const createRateLimiter = (options: RateLimitOptions): SyncRateLimiter =>
 export const defaultRateLimiter = createRateLimiter({
   windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
   max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
-  message: "Too many requests, please try again later",
+  message: RATE_LIMIT_MESSAGES.TOO_MANY_REQUESTS,
 });
 
 /**
@@ -465,7 +466,7 @@ export const defaultRateLimiter = createRateLimiter({
 export const defaultRedisRateLimiter = createRedisRateLimiter({
   windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
   max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
-  message: "Too many requests, please try again later",
+  message: RATE_LIMIT_MESSAGES.TOO_MANY_REQUESTS,
   keyPrefix: "rl:default:",
 });
 
