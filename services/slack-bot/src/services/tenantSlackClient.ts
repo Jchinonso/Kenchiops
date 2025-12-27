@@ -6,7 +6,13 @@
  */
 
 import { WebClient, LogLevel } from "@slack/web-api";
-import { createLogger, getSlackCredentials, config, NotFoundError } from "@kenchi/shared";
+import {
+  createLogger,
+  getSlackCredentials,
+  config,
+  NotFoundError,
+  SLACK_CLIENT_CACHE,
+} from "@kenchi/shared";
 
 const logger = createLogger("tenant-slack-client");
 
@@ -23,12 +29,6 @@ interface CachedClient {
 const clientCache = new Map<number, CachedClient>();
 
 /**
- * Cache TTL in milliseconds (5 minutes)
- * Clients are recreated after TTL to pick up token refreshes
- */
-const CLIENT_CACHE_TTL = 5 * 60 * 1000;
-
-/**
  * Log level lookup based on environment
  */
 const LOG_LEVEL_BY_ENV: Record<string, LogLevel> = {
@@ -41,7 +41,7 @@ const LOG_LEVEL_BY_ENV: Record<string, LogLevel> = {
  * Check if a cached client is expired
  */
 const isExpired = (cached: CachedClient, now: number): boolean =>
-  now - cached.createdAt > CLIENT_CACHE_TTL;
+  now - cached.createdAt > SLACK_CLIENT_CACHE.TTL_MS;
 
 /**
  * Check if a cached client is valid (exists and not expired)
@@ -66,8 +66,8 @@ const cleanupExpiredClients = (): void => {
     logger.debug("Cache cleanup complete", { deletedCount: expiredIds.length });
 };
 
-// Clean up expired clients every minute
-setInterval(cleanupExpiredClients, 60 * 1000);
+// Clean up expired clients periodically
+setInterval(cleanupExpiredClients, SLACK_CLIENT_CACHE.CLEANUP_INTERVAL_MS);
 
 /**
  * Create a new Slack WebClient with appropriate configuration

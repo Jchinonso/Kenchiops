@@ -224,6 +224,19 @@ export {
   SLACK_BOT_MESSAGES,
   SLACK_BOT_HEALTH_PATH,
   shouldSkipSlackBotRateLimit,
+  SLACK_CLIENT_CACHE,
+  MESSAGE_STORE_CONFIG,
   type NumericPriority,
   type StringPriority,
 } from "./slackBot.js";
+
+// GitHub App service constants
+export {
+  GITHUB_APP_RATE_LIMITS,
+  GITHUB_APP_HEALTH_PATHS,
+  shouldSkipGitHubAppRateLimit,
+  GITHUB_APP_TIMEOUTS,
+  GITHUB_APP_DB_CONFIG,
+  GITHUB_SETUP_CONFIG,
+  GITHUB_APP_MESSAGES,
+} from "./githubApp.js";

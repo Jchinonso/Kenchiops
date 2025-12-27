@@ -4,7 +4,7 @@
  * Centralized configuration management with validation
  */
 
-import { config, SERVICE_PORTS, ValidationError } from "@kenchi/shared";
+import { config, SERVICE_PORTS, SERVICE_NAMES, ValidationError } from "@kenchi/shared";
 
 /**
  * GitHub App configuration interface
@@ -62,7 +62,7 @@ validateGitHubConfig();
 export const appConfig: GitHubAppConfig = {
   port: config.PORT ? parseInt(String(config.PORT), 10) : SERVICE_PORTS.GITHUB_APP,
   environment: config.NODE_ENV || "development",
-  serviceName: "github-app",
+  serviceName: SERVICE_NAMES.GITHUB_APP,
   github: {
     appId: config.GITHUB_APP_ID || "",
     privateKey: parsePrivateKey(config.GITHUB_APP_PRIVATE_KEY),
