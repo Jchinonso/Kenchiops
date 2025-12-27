@@ -91,3 +91,24 @@ export const safeJsonParse = <T>(json: string): T | null => {
  */
 export const parseDbCount = (rows: readonly { count: string }[], radix = 10): number =>
   parseInt(rows[0]?.count ?? "0", radix);
+
+// ==================== ID Generation ====================
+
+/**
+ * Generate a unique event ID with optional prefix.
+ *
+ * @param prefix - Prefix for the event ID (e.g., "evt", "pr", "check")
+ * @returns Unique event ID string
+ *
+ * @example
+ * ```typescript
+ * generateEventId("evt");   // "evt_1703683200000_abc123xyz"
+ * generateEventId("pr");    // "pr_1703683200000_def456uvw"
+ * generateEventId("check"); // "check_1703683200000_ghi789rst"
+ * ```
+ */
+export const generateEventId = (prefix = "evt"): string => {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 11);
+  return `${prefix}_${timestamp}_${random}`;
+};

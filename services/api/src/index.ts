@@ -15,6 +15,7 @@ import {
   requestLogger,
   createRedisRateLimiter,
   EXPRESS_CONFIG,
+  RATE_LIMIT_CONSTANTS,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
@@ -27,8 +28,8 @@ const logger = createLogger("api");
  * Skips health check endpoints for monitoring.
  */
 const apiRateLimiter = createRedisRateLimiter({
-  windowMs: 60000, // 1 minute
-  max: 100,
+  windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
+  max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
   message: "Too many requests to API, please try again later",
   keyPrefix: "rl:api:",
   skip: (req) => req.path === "/health" || req.path === "/api/health",
