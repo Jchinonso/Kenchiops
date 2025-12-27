@@ -143,6 +143,15 @@ const createActionButtonValue = (
 });
 
 /**
+ * Convert snake_case to Title Case for display
+ */
+const toTitleCase = (snakeCase: string): string =>
+  snakeCase
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+
+/**
  * Create execute buttons block for all actions
  */
 const createExecuteButtonsBlock = (
@@ -155,10 +164,11 @@ const createExecuteButtonsBlock = (
     const buttonValue = JSON.stringify(
       createActionButtonValue(action, actionId, aggregation, checkRunId)
     );
+    const buttonLabel = toTitleCase(action.actionType ?? "Action");
 
     return {
       type: "button" as const,
-      text: { type: "plain_text" as const, text: `${action.actionType}`, emoji: true },
+      text: { type: "plain_text" as const, text: buttonLabel, emoji: true },
       style: "primary" as const,
       value: buttonValue,
       action_id: `approve_action_${actionId}`,
