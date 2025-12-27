@@ -119,6 +119,21 @@ const deserialize = <T>(raw: string): CacheEntry<T> | null => {
   }
 };
 
+// ==================== Constants ====================
+
+/** Timeout for cache operations in milliseconds */
+const CACHE_OPERATION_TIMEOUT_MS = 2000;
+
+/**
+ * Wrap a promise with a timeout
+ */
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Cache operation timeout")), timeoutMs)
+  );
+  return Promise.race([promise, timeoutPromise]);
+};
+
 // ==================== Core Cache Operations ====================
 
 /**
@@ -127,7 +142,15 @@ const deserialize = <T>(raw: string): CacheEntry<T> | null => {
 export const cacheGet = async <T>(key: string): Promise<CacheResult<T>> => {
   try {
     const client = getRedisClient();
-    const raw = await client.get(key);
+
+    // Check if client is ready before attempting operation
+    if (client.status !== "ready") {
+      logger.debug("Redis not ready for cache get", { status: client.status });
+      stats.misses++;
+      return { hit: false, data: null };
+    }
+
+    const raw = await withTimeout(client.get(key), CACHE_OPERATION_TIMEOUT_MS);
 
     if (!raw) {
       stats.misses++;
@@ -168,9 +191,19 @@ export const cacheSet = async <T>(
 ): Promise<boolean> => {
   try {
     const client = getRedisClient();
+
+    // Check if client is ready before attempting operation
+    if (client.status !== "ready") {
+      logger.debug("Redis not ready for cache set", { status: client.status });
+      return false;
+    }
+
     const serialized = serialize(data, options.ttlSeconds);
 
-    await client.setex(key, options.ttlSeconds, serialized);
+    await withTimeout(
+      client.setex(key, options.ttlSeconds, serialized),
+      CACHE_OPERATION_TIMEOUT_MS
+    );
 
     logger.debug("Cache set", { key, ttlSeconds: options.ttlSeconds });
     return true;
@@ -189,7 +222,12 @@ export const cacheSet = async <T>(
 export const cacheDelete = async (key: string): Promise<boolean> => {
   try {
     const client = getRedisClient();
-    const deleted = await client.del(key);
+
+    if (client.status !== "ready") {
+      return false;
+    }
+
+    const deleted = await withTimeout(client.del(key), CACHE_OPERATION_TIMEOUT_MS);
 
     logger.debug("Cache delete", { key, deleted: deleted > 0 });
     return deleted > 0;
@@ -208,13 +246,18 @@ export const cacheDelete = async (key: string): Promise<boolean> => {
 export const cacheDeletePattern = async (pattern: string): Promise<number> => {
   try {
     const client = getRedisClient();
-    const keys = await client.keys(pattern);
+
+    if (client.status !== "ready") {
+      return 0;
+    }
+
+    const keys = await withTimeout(client.keys(pattern), CACHE_OPERATION_TIMEOUT_MS);
 
     if (keys.length === 0) {
       return 0;
     }
 
-    const deleted = await client.del(...keys);
+    const deleted = await withTimeout(client.del(...keys), CACHE_OPERATION_TIMEOUT_MS);
 
     logger.debug("Cache delete pattern", { pattern, deleted });
     return deleted;
@@ -233,7 +276,10 @@ export const cacheDeletePattern = async (pattern: string): Promise<number> => {
 export const cacheExists = async (key: string): Promise<boolean> => {
   try {
     const client = getRedisClient();
-    const exists = await client.exists(key);
+    if (client.status !== "ready") {
+      return false;
+    }
+    const exists = await withTimeout(client.exists(key), CACHE_OPERATION_TIMEOUT_MS);
     return exists === 1;
   } catch {
     return false;
@@ -246,7 +292,10 @@ export const cacheExists = async (key: string): Promise<boolean> => {
 export const cacheTTL = async (key: string): Promise<number> => {
   try {
     const client = getRedisClient();
-    return await client.ttl(key);
+    if (client.status !== "ready") {
+      return -1;
+    }
+    return await withTimeout(client.ttl(key), CACHE_OPERATION_TIMEOUT_MS);
   } catch {
     return -1;
   }
@@ -289,7 +338,12 @@ export const cacheGetMany = async <T>(keys: readonly string[]): Promise<Map<stri
 
   try {
     const client = getRedisClient();
-    const values = await client.mget(...keys);
+
+    if (client.status !== "ready") {
+      return new Map();
+    }
+
+    const values = await withTimeout(client.mget(...keys), CACHE_OPERATION_TIMEOUT_MS);
 
     const result = new Map<string, T>();
 

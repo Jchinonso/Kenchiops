@@ -234,17 +234,21 @@ class RateLimiter {
     }
   }
 
-  private async getStore(): Promise<RateLimitStore> {
+  private getStore(): RateLimitStore {
     if (this.useRedis && this.redisStore) {
       try {
-        // Test Redis connectivity
+        // Check Redis client status synchronously (no ping, faster)
         const redis = getRedisClient();
-        await redis.ping();
-        return this.redisStore;
+        if (redis.status === "ready") {
+          return this.redisStore;
+        }
+        logger.warn("Redis not ready, falling back to in-memory rate limiting", {
+          status: redis.status,
+        });
       } catch {
         logger.warn("Redis connection lost, falling back to in-memory rate limiting");
-        this.useRedis = false;
       }
+      this.useRedis = false;
     }
     return this.memoryStore;
   }
@@ -259,8 +263,13 @@ class RateLimiter {
       const key = this.keyGenerator(req);
 
       try {
-        const store = await this.getStore();
-        const info = await store.increment(key, this.windowMs);
+        const store = this.getStore();
+
+        // Add timeout to prevent indefinite hangs on Redis operations
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Rate limit check timeout")), 3000)
+        );
+        const info = await Promise.race([store.increment(key, this.windowMs), timeoutPromise]);
 
         // Set rate limit headers
         res.setHeader("X-RateLimit-Limit", this.max);
@@ -302,7 +311,7 @@ class RateLimiter {
   };
 
   readonly reset = async (key?: string): Promise<void> => {
-    const store = await this.getStore();
+    const store = this.getStore();
 
     if (key) {
       await store.reset(key);

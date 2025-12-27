@@ -17,6 +17,7 @@ import {
   initDatabase,
   closeDatabase,
   closeRedis,
+  waitForRedisConnection,
   config,
   EXPRESS_CONFIG,
   startActionQueueWorker,
@@ -223,6 +224,19 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
 const startServer = async (): Promise<void> => {
   // Initialize database for multi-tenant support
   initializeDatabase();
+
+  // Wait for Redis to be connected before starting queue workers
+  if (config.REDIS_URL) {
+    try {
+      await waitForRedisConnection(10000);
+      logger.info("Redis connection ready");
+    } catch (error) {
+      logger.error("Failed to connect to Redis", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      // Continue anyway - workers will handle reconnection
+    }
+  }
 
   // Initialize failure aggregator for consolidated CI analysis
   initializeFailureAggregator();

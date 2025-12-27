@@ -20,6 +20,7 @@ import {
   initDatabase,
   closeDatabase,
   closeRedis,
+  waitForRedisConnection,
   findBySlackWorkspace,
   deleteMappingsForChannel,
   isSocketModeDisconnectError,
@@ -373,6 +374,17 @@ async function startService(): Promise<void> {
     // Start notification queue worker (processes messages from GitHub App)
     let stopNotificationWorker: (() => void) | null = null;
     if (config.REDIS_URL) {
+      // Wait for Redis to be connected before starting queue worker
+      try {
+        await waitForRedisConnection(10000);
+        logger.info("Redis connection ready");
+      } catch (error) {
+        logger.error("Failed to connect to Redis", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        // Continue anyway - worker will handle reconnection
+      }
+
       const notificationHandler = createNotificationHandler(slackApp.client);
       stopNotificationWorker = await startSlackNotificationWorker(notificationHandler, {
         pollIntervalMs: 1000,

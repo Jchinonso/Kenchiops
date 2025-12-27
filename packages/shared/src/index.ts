@@ -234,6 +234,7 @@ export {
   getRedisClient,
   getSubscriberClient,
   isRedisHealthy,
+  waitForRedisConnection,
   closeRedis,
   publish,
   subscribe,

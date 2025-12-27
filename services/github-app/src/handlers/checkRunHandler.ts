@@ -268,7 +268,9 @@ const fetchAnalysis = async (
   checkName: string
 ): Promise<ApiAnalysis> => {
   // Level 1: Check if we have cached analysis for this exact check
+  logger.info("Checking cache (level 1: by check)...");
   const cachedByCheck = await getCachedCheckAnalysis(repositoryFullName, commitSha, checkName);
+  logger.info("Cache check (level 1) completed", { found: !!cachedByCheck });
 
   if (cachedByCheck) {
     logger.info("Analysis cache hit (by check)", {
@@ -370,6 +372,11 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
   });
 
   // Step 2: Get analysis (from cache or API)
+  logger.info("Fetching analysis from cache or API...", {
+    repository: repository.full_name,
+    commitSha: check_run.head_sha.substring(0, 7),
+  });
+
   let analysis: ApiAnalysis;
   try {
     analysis = await fetchAnalysis(

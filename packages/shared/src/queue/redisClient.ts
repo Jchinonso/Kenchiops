@@ -39,7 +39,7 @@ let subscriberClient: Redis | null = null;
  */
 const DEFAULT_OPTIONS: Required<Omit<RedisOptions, "url">> = {
   maxRetries: 10,
-  enableOfflineQueue: true,
+  enableOfflineQueue: false, // Disable to fail fast instead of hanging
   connectTimeout: 10000,
 };
 
@@ -112,6 +112,45 @@ export const isRedisHealthy = async (): Promise<boolean> => {
   } catch {
     return false;
   }
+};
+
+/**
+ * Waits for Redis to be connected and ready
+ * @param timeoutMs - Maximum time to wait in milliseconds (default: 10000)
+ * @returns Promise that resolves when connected or rejects on timeout
+ */
+export const waitForRedisConnection = async (timeoutMs = 10000): Promise<void> => {
+  const client = getRedisClient();
+  const status = client.status;
+
+  // Already connected
+  if (status === "ready") {
+    return;
+  }
+
+  // Wait for connection
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Redis connection timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const onReady = (): void => {
+      clearTimeout(timeout);
+      client.off("ready", onReady);
+      client.off("error", onError);
+      resolve();
+    };
+
+    const onError = (err: Error): void => {
+      clearTimeout(timeout);
+      client.off("ready", onReady);
+      client.off("error", onError);
+      reject(err);
+    };
+
+    client.once("ready", onReady);
+    client.once("error", onError);
+  });
 };
 
 /**
