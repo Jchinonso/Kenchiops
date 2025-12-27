@@ -242,7 +242,7 @@ describe("Slack Payload Formatter", () => {
       expect(checksHeader?.text?.text).toContain("(3)");
     });
 
-    it("should include failure blocks with check name", () => {
+    it("should include check names in consolidated view", () => {
       const aggregation = createAggregation({
         failures: [createFailure({ checkName: "Unit Tests", identifiedCause: "Test failure" })],
       });
@@ -252,12 +252,28 @@ describe("Slack Payload Formatter", () => {
         text?: { text: string };
       }>;
 
-      const failureBlock = blocks.find(
-        (b) => b.type === "section" && b.text?.text?.includes("Unit Tests")
+      const checksBlock = blocks.find(
+        (b) => b.type === "section" && b.text?.text?.includes("Checks:")
       );
 
-      expect(failureBlock?.text?.text).toContain("Unit Tests");
-      expect(failureBlock?.text?.text).toContain("Test failure");
+      expect(checksBlock?.text?.text).toContain("Unit Tests");
+    });
+
+    it("should include root cause in consolidated view", () => {
+      const aggregation = createAggregation({
+        failures: [createFailure({ checkName: "Unit Tests", identifiedCause: "Test failure" })],
+      });
+      const payload = buildConsolidatedSlackPayload(aggregation);
+      const blocks = payload.blocks as Array<{
+        type: string;
+        text?: { text: string };
+      }>;
+
+      const rootCauseBlock = blocks.find(
+        (b) => b.type === "section" && b.text?.text?.includes("Root Cause")
+      );
+
+      expect(rootCauseBlock?.text?.text).toContain("Test failure");
     });
 
     it("should include annotations when present", () => {
@@ -284,10 +300,37 @@ describe("Slack Payload Formatter", () => {
       expect(contextBlock?.elements?.[0]?.text).toContain("src/test.ts:100");
     });
 
-    it("should limit displayed checks to 5", () => {
-      const failures = Array.from({ length: 10 }, (_, i) =>
+    it("should show all check names in consolidated view", () => {
+      const failures = Array.from({ length: 5 }, (_, i) =>
         createFailure({ checkName: `Check ${i}` })
       );
+      const aggregation = createAggregation({ failures });
+      const payload = buildConsolidatedSlackPayload(aggregation);
+      const blocks = payload.blocks as Array<{
+        type: string;
+        text?: { text: string };
+      }>;
+
+      const checksBlock = blocks.find(
+        (b) => b.type === "section" && b.text?.text?.includes("Checks:")
+      );
+
+      // All check names should be present in consolidated view
+      expect(checksBlock?.text?.text).toContain("Check 0");
+      expect(checksBlock?.text?.text).toContain("Check 4");
+    });
+
+    it("should deduplicate test failures across multiple checks", () => {
+      const failures = [
+        createFailure({
+          checkName: "Check 1",
+          testFailures: [{ testName: "should work", file: "test.ts" }],
+        }),
+        createFailure({
+          checkName: "Check 2",
+          testFailures: [{ testName: "should work", file: "test.ts" }], // Same test
+        }),
+      ];
       const aggregation = createAggregation({ failures });
       const payload = buildConsolidatedSlackPayload(aggregation);
       const blocks = payload.blocks as Array<{
@@ -295,12 +338,39 @@ describe("Slack Payload Formatter", () => {
         elements?: Array<{ text: string }>;
       }>;
 
-      const moreBlock = blocks.find(
-        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("more failed"))
+      const testBlock = blocks.find(
+        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("Failed Tests"))
       );
 
-      expect(moreBlock).toBeDefined();
-      expect(moreBlock?.elements?.[0]?.text).toContain("5 more failed checks");
+      // Should show count of 1 (deduplicated), not 2
+      expect(testBlock?.elements?.[0]?.text).toContain("Failed Tests (1)");
+    });
+
+    it("should deduplicate annotations across multiple checks", () => {
+      const failures = [
+        createFailure({
+          checkName: "Check 1",
+          annotations: [createAnnotation({ path: "src/index.ts", line: 10 })],
+        }),
+        createFailure({
+          checkName: "Check 2",
+          annotations: [createAnnotation({ path: "src/index.ts", line: 10 })], // Same location
+        }),
+      ];
+      const aggregation = createAggregation({ failures });
+      const payload = buildConsolidatedSlackPayload(aggregation);
+      const blocks = payload.blocks as Array<{
+        type: string;
+        elements?: Array<{ text: string }>;
+      }>;
+
+      const annotationBlock = blocks.find(
+        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("Affected Files"))
+      );
+
+      // Should only show one entry for src/index.ts:10
+      const matches = annotationBlock?.elements?.[0]?.text?.match(/src\/index\.ts:10/g);
+      expect(matches?.length).toBe(1);
     });
 
     it("should include recommended actions section", () => {

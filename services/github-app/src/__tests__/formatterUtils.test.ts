@@ -126,10 +126,14 @@ describe("Formatter Utilities", () => {
   });
 
   describe("mergeRecommendedActions", () => {
-    const createAction = (description: string, priority: string): RecommendedAction => ({
+    const createAction = (
+      description: string,
+      priority: string,
+      actionType = "fix"
+    ): RecommendedAction => ({
       description,
       priority,
-      actionType: "fix",
+      actionType,
     });
 
     const createFailure = (actions: RecommendedAction[]): AnalyzedFailure => ({
@@ -147,8 +151,8 @@ describe("Formatter Utilities", () => {
 
     it("should merge actions from multiple failures", () => {
       const failures = [
-        createFailure([createAction("Action 1", "high")]),
-        createFailure([createAction("Action 2", "medium")]),
+        createFailure([createAction("Action 1", "high", "rerun_pipeline")]),
+        createFailure([createAction("Action 2", "medium", "notify_team")]),
       ];
 
       const merged = mergeRecommendedActions(failures);
@@ -180,9 +184,9 @@ describe("Formatter Utilities", () => {
 
     it("should sort by priority", () => {
       const failures = [
-        createFailure([createAction("Low priority", "low")]),
-        createFailure([createAction("High priority", "high")]),
-        createFailure([createAction("Immediate", "immediate")]),
+        createFailure([createAction("Low priority", "low", "notify_team")]),
+        createFailure([createAction("High priority", "high", "rerun_pipeline")]),
+        createFailure([createAction("Immediate", "immediate", "post_comment")]),
       ];
 
       const merged = mergeRecommendedActions(failures);
@@ -193,7 +197,10 @@ describe("Formatter Utilities", () => {
     });
 
     it("should limit to DISPLAY_LIMITS.recommendedActions", () => {
-      const actions = Array.from({ length: 20 }, (_, i) => createAction(`Action ${i}`, "medium"));
+      // Create 20 actions with unique actionTypes to avoid deduplication
+      const actions = Array.from({ length: 20 }, (_, i) =>
+        createAction(`Action ${i}`, "medium", `action_type_${i}`)
+      );
       const failures = [createFailure(actions)];
 
       const merged = mergeRecommendedActions(failures);

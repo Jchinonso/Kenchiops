@@ -318,7 +318,7 @@ describe("Consolidated Formatter", () => {
       expect(content).toContain("npm install");
     });
 
-    it("should limit failures to 5 in blocks", () => {
+    it("should show all check names in consolidated view", () => {
       const manyFailures = Array.from({ length: 8 }, (_, i) =>
         createMockFailure({ checkRunId: i, checkName: `Check${i}` })
       );
@@ -326,7 +326,10 @@ describe("Consolidated Formatter", () => {
       const payload = buildConsolidatedSlackPayload(aggregation);
       const content = JSON.stringify(payload);
 
-      expect(content).toContain("and 3 more failed checks");
+      // All check names should be listed in consolidated view
+      expect(content).toContain("Check0");
+      expect(content).toContain("Check7");
+      expect(content).toContain("Failed Checks (8)");
     });
 
     it("should include metadata", () => {
