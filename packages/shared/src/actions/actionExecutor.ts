@@ -11,6 +11,7 @@ import type { ActionType, ActionProposal, ExecutionResult } from "../core/types.
 import { createLogger, ExternalServiceError, getErrorMessage } from "../core/index.js";
 import { config } from "../core/config.js";
 import { resilientPost } from "../http/resilientClient.js";
+import { ACTION_MESSAGES } from "../constants/index.js";
 
 const logger = createLogger("action-executor");
 
@@ -95,7 +96,7 @@ const executeRerunPipeline: ActionExecutor = async (action, context) => {
   if (!context.workflowRunId && !context.checkRunId) {
     return {
       success: false,
-      message: "Cannot rerun pipeline: No workflow run ID or check run ID provided",
+      message: ACTION_MESSAGES.MISSING_WORKFLOW_CONTEXT,
       error: "Missing workflowRunId or checkRunId in context",
     };
   }
@@ -115,7 +116,7 @@ const executeRerunPipeline: ActionExecutor = async (action, context) => {
     if (!response.data.success) {
       return {
         success: false,
-        message: response.data.message ?? "Rerun request failed",
+        message: response.data.message ?? ACTION_MESSAGES.RERUN_REQUEST_FAILED,
         error: response.data.error,
       };
     }
@@ -179,7 +180,7 @@ const executePostComment: ActionExecutor = async (action, context) => {
   if (!context.prNumber) {
     return {
       success: false,
-      message: "Cannot post comment: No PR number provided",
+      message: ACTION_MESSAGES.MISSING_PR_NUMBER,
       error: "Missing prNumber in context",
     };
   }
@@ -304,7 +305,7 @@ export const executeAction = async (
       success: result.success,
       actionId: action.id,
       actionType: action.actionType,
-      message: result.message ?? "Action completed",
+      message: result.message ?? ACTION_MESSAGES.ACTION_COMPLETED,
       output: result.output,
       error: result.error,
       executedAt: new Date().toISOString(),
@@ -334,7 +335,7 @@ export const executeAction = async (
       success: false,
       actionId: action.id,
       actionType: action.actionType,
-      message: "Action execution failed",
+      message: ACTION_MESSAGES.EXECUTION_FAILED,
       error: errorMessage,
       executedAt: new Date().toISOString(),
       duration: Date.now() - startTime,

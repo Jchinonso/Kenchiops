@@ -85,3 +85,10 @@ export const RELEVANCE_RULES: Readonly<RelevanceRule[]> = [
  * Safety levels that allow auto-approval with high confidence.
  */
 export const AUTO_APPROVABLE_SAFETY_LEVELS: Readonly<Set<string>> = new Set(["safe", "low_risk"]);
+
+/**
+ * Safety-related messages for action gating and validation.
+ */
+export const SAFETY_MESSAGES = {
+  INVALID_ACTION: "Invalid action proposal. Manual review required.",
+} as const;
