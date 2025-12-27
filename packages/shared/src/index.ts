@@ -364,6 +364,7 @@ export {
   // Types
   type CodeAnnotation,
   type RecommendedAction,
+  type TestFailureInfo,
   type AnalyzedFailure,
   type SerializedFailure,
   type PRContext,

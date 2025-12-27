@@ -50,6 +50,14 @@ const formatAction = (action: RecommendedAction, index: number): string => {
 };
 
 /**
+ * Format a test failure for display
+ */
+const formatTestFailure = (testFailure: { testName: string; file?: string }): string => {
+  const file = testFailure.file ? ` (\`${testFailure.file}\`)` : "";
+  return `  - \`${testFailure.testName}\`${file}`;
+};
+
+/**
  * Format a single failure section for PR comment
  */
 const formatFailureSection = (failure: AnalyzedFailure, showAnnotations: boolean): string[] => {
@@ -60,6 +68,20 @@ const formatFailureSection = (failure: AnalyzedFailure, showAnnotations: boolean
     `**Confidence:** ${Math.round(failure.confidence * 100)}%`,
     "",
   ];
+
+  // Show test failures if available
+  if (failure.testFailures && failure.testFailures.length > 0) {
+    lines.push(`**Failed Tests:** ${failure.testFailures.length}`);
+    const displayTests = failure.testFailures.slice(0, DISPLAY_LIMITS.annotationsPerCheck);
+    lines.push(...displayTests.map(formatTestFailure));
+
+    if (failure.testFailures.length > DISPLAY_LIMITS.annotationsPerCheck) {
+      lines.push(
+        `  - ... and ${failure.testFailures.length - DISPLAY_LIMITS.annotationsPerCheck} more tests`
+      );
+    }
+    lines.push("");
+  }
 
   if (showAnnotations && failure.annotations.length > 0) {
     lines.push("**Affected Files:**");
