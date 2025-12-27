@@ -14,7 +14,12 @@ import OpenAI from "openai";
 import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { LLMError, getErrorMessage } from "../core/errors.js";
-import { OPENAI_DEFAULTS, OPENAI_CONSTANTS, TIME_CONSTANTS } from "../constants/index.js";
+import {
+  OPENAI_DEFAULTS,
+  OPENAI_CONSTANTS,
+  TIME_CONSTANTS,
+  OPENAI_MESSAGES,
+} from "../constants/index.js";
 import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
 import { buildAnalysisPrompt } from "../integrations/prompts.js";
 import { validateResponse } from "./validation.js";
@@ -176,7 +181,7 @@ export class OpenAIClient {
     return (
       completion.choices[0]?.message?.content ??
       (() => {
-        throw new LLMError("No content in OpenAI response");
+        throw new LLMError(OPENAI_MESSAGES.NO_CONTENT);
       })()
     );
   };
@@ -308,7 +313,7 @@ export class OpenAIClient {
     return (
       responseContent.match(/\{[\s\S]*\}/)?.[0] ??
       (() => {
-        throw new LLMError("No JSON found in response");
+        throw new LLMError(OPENAI_MESSAGES.NO_JSON_FOUND);
       })()
     );
   };
@@ -393,7 +398,7 @@ export class OpenAIClient {
 
     return {
       eventId,
-      summary: string(parsed.summary, "No summary provided"),
+      summary: string(parsed.summary, OPENAI_MESSAGES.NO_SUMMARY),
       identifiedCause: optionalString(parsed.identifiedCause),
       impactAssessment: optional(
         parsed.impactAssessment,

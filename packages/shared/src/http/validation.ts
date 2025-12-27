@@ -4,7 +4,11 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { ValidationError } from "../core/errors.js";
-import { EMAIL_REGEX, DEFAULT_VALIDATION_ERROR_MESSAGE } from "../constants/index.js";
+import {
+  EMAIL_REGEX,
+  DEFAULT_VALIDATION_ERROR_MESSAGE,
+  VALIDATION_MESSAGES,
+} from "../constants/index.js";
 
 /**
  * Validator function type.
@@ -113,7 +117,7 @@ const createStringValidator =
   (value: unknown): boolean | string => {
     const str = asString(value);
     if (str === null) {
-      return "must be a string";
+      return VALIDATION_MESSAGES.MUST_BE_STRING;
     }
     return check(str);
   };
@@ -140,7 +144,7 @@ export const validators = {
    */
   required: (value: unknown): boolean | string => {
     if (value === undefined || value === null || value === "") {
-      return "is required";
+      return VALIDATION_MESSAGES.REQUIRED;
     }
     return true;
   },
@@ -150,7 +154,7 @@ export const validators = {
    */
   string: (value: unknown): boolean | string => {
     if (typeof value !== "string") {
-      return "must be a string";
+      return VALIDATION_MESSAGES.MUST_BE_STRING;
     }
     return true;
   },
@@ -160,7 +164,7 @@ export const validators = {
    */
   number: (value: unknown): boolean | string => {
     if (typeof value !== "number" || Number.isNaN(value)) {
-      return "must be a number";
+      return VALIDATION_MESSAGES.MUST_BE_NUMBER;
     }
     return true;
   },
@@ -168,7 +172,9 @@ export const validators = {
   /**
    * Validates that a value is a valid email address.
    */
-  email: createStringValidator((str) => (EMAIL_REGEX.test(str) ? true : "must be a valid email")),
+  email: createStringValidator((str) =>
+    EMAIL_REGEX.test(str) ? true : VALIDATION_MESSAGES.MUST_BE_EMAIL
+  ),
 
   /**
    * Creates a validator that checks minimum string length.

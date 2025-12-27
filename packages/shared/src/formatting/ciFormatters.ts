@@ -5,7 +5,12 @@
  * used by both Slack and GitHub formatters.
  */
 
-import { CI_FAILURE_DISPLAY, UI_EMOJI, DEPENDENCY_EMOJI_MAP } from "../constants/index.js";
+import {
+  CI_FAILURE_DISPLAY,
+  UI_EMOJI,
+  DEPENDENCY_EMOJI_MAP,
+  GITHUB_ANNOTATION_LEVEL,
+} from "../constants/index.js";
 import { truncateText } from "./uiHelpers.js";
 
 /**
@@ -91,7 +96,7 @@ export const collectCIErrors = (
 
   // Collect annotation errors (failures only), limited to maxErrors
   const annotationErrors = (annotations ?? [])
-    .filter((ann) => ann.level === "failure")
+    .filter((ann) => ann.level === GITHUB_ANNOTATION_LEVEL.FAILURE)
     .slice(0, maxErrors)
     .map((ann) => formatAnnotationError(ann, maxMessageLength));
 

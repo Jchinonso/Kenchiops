@@ -133,3 +133,32 @@ export const CI_FAILURE_DISPLAY = {
   /** Maximum length for truncated error messages */
   MAX_ERROR_MESSAGE_LENGTH: 100,
 } as const;
+
+/**
+ * GitHub check run and workflow status values.
+ */
+export const GITHUB_STATUS = {
+  COMPLETED: "completed",
+  IN_PROGRESS: "in_progress",
+  QUEUED: "queued",
+} as const;
+
+/**
+ * GitHub check run conclusion values.
+ */
+export const GITHUB_CONCLUSION = {
+  SUCCESS: "success",
+  FAILURE: "failure",
+  CANCELLED: "cancelled",
+  SKIPPED: "skipped",
+  TIMED_OUT: "timed_out",
+} as const;
+
+/**
+ * GitHub annotation severity levels.
+ */
+export const GITHUB_ANNOTATION_LEVEL = {
+  FAILURE: "failure",
+  WARNING: "warning",
+  NOTICE: "notice",
+} as const;
