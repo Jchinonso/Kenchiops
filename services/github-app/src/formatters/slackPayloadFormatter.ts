@@ -118,6 +118,56 @@ const EXECUTABLE_ACTION_TYPES = new Set([
 // ==================== Helper Functions ====================
 
 /**
+ * Consolidated test failure with source check info
+ */
+interface ConsolidatedTestFailure {
+  readonly testName: string;
+  readonly file?: string;
+}
+
+/**
+ * Consolidated annotation with source check info
+ */
+interface ConsolidatedAnnotation {
+  readonly path: string;
+  readonly line: number;
+  readonly message: string;
+}
+
+/**
+ * Consolidate test failures across all checks, deduplicating by testName
+ */
+const consolidateTestFailures = (
+  failures: readonly AnalyzedFailure[]
+): ConsolidatedTestFailure[] => {
+  const seen = new Set<string>();
+  return failures
+    .flatMap((f) => f.testFailures ?? [])
+    .filter((tf) => {
+      const key = `${tf.testName}|${tf.file ?? ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
+/**
+ * Consolidate annotations across all checks, deduplicating by path:line
+ */
+const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] => {
+  const seen = new Set<string>();
+  return failures
+    .flatMap((f) => f.annotations)
+    .filter((a) => {
+      const key = `${a.path}:${a.line}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((a) => ({ path: a.path, line: a.line, message: a.message }));
+};
+
+/**
  * Generate a unique action ID from commit sha and index
  */
 const generateActionId = (commitSha: string, index: number): string =>
@@ -240,67 +290,102 @@ const buildActionBlocks = (
 };
 
 /**
- * Format a single failure into Slack blocks
+ * Build consolidated test failures block
  */
-const formatFailureBlocks = (failure: AnalyzedFailure): SlackTextBlock[] => {
-  const blocks: SlackTextBlock[] = [];
+const buildConsolidatedTestFailuresBlock = (
+  testFailures: ConsolidatedTestFailure[]
+): SlackTextBlock | null => {
+  if (testFailures.length === 0) return null;
 
-  // Root cause block
-  blocks.push({
+  const testLines = testFailures
+    .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
+    .map((t) => `   • \`${t.testName}\`${t.file ? ` (${t.file})` : ""}`)
+    .join("\n");
+
+  const moreTests =
+    testFailures.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
+      ? `\n   _...and ${testFailures.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
+      : "";
+
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `🧪 *Failed Tests (${testFailures.length}):*\n${testLines}${moreTests}`,
+      },
+    ],
+  };
+};
+
+/**
+ * Build consolidated affected files block
+ */
+const buildConsolidatedAnnotationsBlock = (
+  annotations: ConsolidatedAnnotation[]
+): SlackTextBlock | null => {
+  if (annotations.length === 0) return null;
+
+  const annotationLines = annotations
+    .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
+    .map((a) => `   • \`${a.path}:${a.line}\` — ${a.message}`)
+    .join("\n");
+
+  const moreAnnotations =
+    annotations.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
+      ? `\n   _...and ${annotations.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
+      : "";
+
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `📍 *Affected Files:*\n${annotationLines}${moreAnnotations}`,
+      },
+    ],
+  };
+};
+
+/**
+ * Build check names list block
+ */
+const buildCheckNamesBlock = (failures: readonly AnalyzedFailure[]): SlackTextBlock => {
+  const checkNames = failures.map((f) => `\`${f.checkName}\``).join(", ");
+  return {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*\`${failure.checkName}\`*\n${failure.identifiedCause ?? failure.analysis ?? "Analysis unavailable"}`,
+      text: `*Checks:* ${checkNames}`,
     },
-  });
+  };
+};
 
-  // Test failures block (if any)
-  if (failure.testFailures && failure.testFailures.length > 0) {
-    const testLines = failure.testFailures
-      .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
-      .map((t) => `   • \`${t.testName}\`${t.file ? ` (${t.file})` : ""}`)
-      .join("\n");
-
-    const moreTests =
-      failure.testFailures.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
-        ? `\n   _...and ${failure.testFailures.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
-        : "";
-
-    blocks.push({
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: `🧪 *Failed Tests (${failure.testFailures.length}):*\n${testLines}${moreTests}`,
-        },
-      ],
+/**
+ * Build root cause analysis block - consolidate unique causes
+ */
+const buildRootCauseBlock = (failures: readonly AnalyzedFailure[]): SlackTextBlock | null => {
+  const uniqueCauses = new Set<string>();
+  const causes = failures
+    .map((f) => f.identifiedCause ?? f.analysis ?? "")
+    .filter((cause) => {
+      if (!cause || uniqueCauses.has(cause)) return false;
+      uniqueCauses.add(cause);
+      return true;
     });
-  }
 
-  // Annotations block (if any)
-  if (failure.annotations.length > 0) {
-    const annotationLines = failure.annotations
-      .slice(0, DISPLAY_LIMITS.slackAnnotationsPerCheck)
-      .map((a) => `   • \`${a.path}:${a.line}\` — ${a.message}`)
-      .join("\n");
+  if (causes.length === 0) return null;
 
-    const moreAnnotations =
-      failure.annotations.length > DISPLAY_LIMITS.slackAnnotationsPerCheck
-        ? `\n   _...and ${failure.annotations.length - DISPLAY_LIMITS.slackAnnotationsPerCheck} more_`
-        : "";
+  const causeText =
+    causes.length === 1 ? causes[0] : causes.map((c, i) => `${i + 1}. ${c}`).join("\n");
 
-    blocks.push({
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: `📍 *Affected Files:*\n${annotationLines}${moreAnnotations}`,
-        },
-      ],
-    });
-  }
-
-  return blocks;
+  return {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*🔍 Root Cause:*\n${causeText}`,
+    },
+  };
 };
 
 // ==================== Public API ====================
@@ -363,7 +448,7 @@ export const buildConsolidatedSlackPayload = (
         ]
       : [];
 
-  // Failed checks header
+  // Failed checks header with check names
   const failedChecksHeader: SlackTextBlock[] = [
     { type: "divider" },
     {
@@ -372,26 +457,23 @@ export const buildConsolidatedSlackPayload = (
     },
   ];
 
-  // Individual failure blocks
-  const failureBlocks = failures
-    .slice(0, DISPLAY_LIMITS.slackMaxChecks)
-    .flatMap(formatFailureBlocks);
+  // Consolidated check names block
+  const checkNamesBlock: SlackTextBlock[] =
+    failures.length > 0 ? [buildCheckNamesBlock(failures)] : [];
 
-  // More failures indicator
-  const moreFailuresBlock: SlackTextBlock[] =
-    failures.length > DISPLAY_LIMITS.slackMaxChecks
-      ? [
-          {
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: `_...and ${failures.length - DISPLAY_LIMITS.slackMaxChecks} more failed checks_`,
-              },
-            ],
-          },
-        ]
-      : [];
+  // Consolidated root cause block
+  const rootCauseBlock = buildRootCauseBlock(failures);
+  const rootCauseBlocks: SlackTextBlock[] = rootCauseBlock ? [rootCauseBlock] : [];
+
+  // Consolidated test failures (deduplicated across all checks)
+  const consolidatedTestFailures = consolidateTestFailures(failures);
+  const testFailuresBlock = buildConsolidatedTestFailuresBlock(consolidatedTestFailures);
+  const testFailuresBlocks: SlackTextBlock[] = testFailuresBlock ? [testFailuresBlock] : [];
+
+  // Consolidated annotations (deduplicated across all checks)
+  const consolidatedAnnotations = consolidateAnnotations(failures);
+  const annotationsBlock = buildConsolidatedAnnotationsBlock(consolidatedAnnotations);
+  const annotationsBlocks: SlackTextBlock[] = annotationsBlock ? [annotationsBlock] : [];
 
   // Recommended actions summary blocks
   const actionsSummaryBlocks: SlackTextBlock[] =
@@ -424,13 +506,15 @@ export const buildConsolidatedSlackPayload = (
     },
   ];
 
-  // Combine all blocks
+  // Combine all blocks - consolidated view
   const blocks: SlackBlock[] = [
     ...headerBlocks,
     ...prLinkBlocks,
     ...failedChecksHeader,
-    ...failureBlocks,
-    ...moreFailuresBlock,
+    ...checkNamesBlock,
+    ...rootCauseBlocks,
+    ...testFailuresBlocks,
+    ...annotationsBlocks,
     ...actionsSummaryBlocks,
     ...actionButtonBlocks,
     ...footerBlocks,
