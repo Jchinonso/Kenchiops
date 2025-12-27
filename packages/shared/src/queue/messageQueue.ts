@@ -12,6 +12,14 @@
 
 import { getRedisClient, getSubscriberClient } from "./redisClient.js";
 import { createLogger } from "../core/logger.js";
+import { generateEventId, getErrorMessage } from "../core/index.js";
+import {
+  QUEUE_CONFIG,
+  QUEUE_NAMES,
+  QUEUE_RETRY_CONFIG,
+  QUEUE_VISIBILITY_TIMEOUT,
+  PUBSUB_CHANNELS,
+} from "../constants/index.js";
 
 const logger = createLogger("message-queue");
 
@@ -62,21 +70,7 @@ export interface QueueConfig {
   readonly deadLetterQueue?: string;
 }
 
-// ==================== Constants ====================
-
-const DEFAULT_MAX_RETRIES = 3;
-const PROCESSING_SUFFIX = ":processing";
-
 // ==================== Helper Functions ====================
-
-/**
- * Generates a unique message ID
- */
-const generateMessageId = (): string => {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 10);
-  return `msg_${timestamp}_${random}`;
-};
 
 /**
  * Serializes a message for storage
@@ -102,7 +96,7 @@ export const publish = async <T>(
 ): Promise<string> => {
   const client = getRedisClient();
   const message: QueueMessage<T> = {
-    id: generateMessageId(),
+    id: generateEventId(QUEUE_CONFIG.MESSAGE_ID_PREFIX),
     type,
     payload,
     timestamp: new Date().toISOString(),
@@ -137,7 +131,7 @@ export const subscribe = async <T>(
     } catch (error) {
       logger.error("Error processing subscription message", {
         channel,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
     }
   };
@@ -163,12 +157,12 @@ export const subscribe = async <T>(
 export const createQueue = (queueConfig: QueueConfig) => {
   const {
     name,
-    maxRetries = DEFAULT_MAX_RETRIES,
+    maxRetries = QUEUE_CONFIG.DEFAULT_MAX_RETRIES,
     // visibilityTimeout not used with non-blocking rpoplpush
-    deadLetterQueue = `${name}:dead`,
+    deadLetterQueue = `${name}${QUEUE_CONFIG.DEAD_LETTER_SUFFIX}`,
   } = queueConfig;
 
-  const processingQueue = `${name}${PROCESSING_SUFFIX}`;
+  const processingQueue = `${name}${QUEUE_CONFIG.PROCESSING_SUFFIX}`;
 
   /**
    * Adds a job to the queue
@@ -180,7 +174,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
   ): Promise<string> => {
     const client = getRedisClient();
     const message: QueueMessage<T> = {
-      id: generateMessageId(),
+      id: generateEventId(QUEUE_CONFIG.MESSAGE_ID_PREFIX),
       type,
       payload,
       timestamp: new Date().toISOString(),
@@ -257,7 +251,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
       }
     } catch (error) {
       // Unexpected error - retry if possible
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage = getErrorMessage(error);
 
       if ((message.retryCount ?? 0) < maxRetries) {
         const updatedMessage: QueueMessage<T> = {
@@ -325,39 +319,33 @@ export const createQueue = (queueConfig: QueueConfig) => {
  * Queue for CI analysis jobs (async processing)
  */
 export const ciAnalysisQueue = createQueue({
-  name: "kenchi:ci-analysis",
-  maxRetries: 3,
-  visibilityTimeout: 60,
+  name: QUEUE_NAMES.CI_ANALYSIS,
+  maxRetries: QUEUE_RETRY_CONFIG.CI_ANALYSIS,
+  visibilityTimeout: QUEUE_VISIBILITY_TIMEOUT.CI_ANALYSIS,
 });
 
 /**
  * Queue for Slack notification jobs
  */
 export const slackNotificationQueue = createQueue({
-  name: "kenchi:slack-notifications",
-  maxRetries: 5,
-  visibilityTimeout: 30,
+  name: QUEUE_NAMES.SLACK_NOTIFICATIONS,
+  maxRetries: QUEUE_RETRY_CONFIG.SLACK_NOTIFICATION,
+  visibilityTimeout: QUEUE_VISIBILITY_TIMEOUT.SLACK_NOTIFICATION,
 });
 
 /**
  * Queue for GitHub action jobs (rerun pipeline, post comment, etc.)
  */
 export const githubActionQueue = createQueue({
-  name: "kenchi:github-actions",
-  maxRetries: 3,
-  visibilityTimeout: 120,
+  name: QUEUE_NAMES.GITHUB_ACTIONS,
+  maxRetries: QUEUE_RETRY_CONFIG.GITHUB_ACTION,
+  visibilityTimeout: QUEUE_VISIBILITY_TIMEOUT.GITHUB_ACTION,
 });
 
 // ==================== Event Channels ====================
 
 /**
  * Pre-defined pub/sub channels
+ * @deprecated Use PUBSUB_CHANNELS from constants instead
  */
-export const CHANNELS = {
-  /** CI failure events */
-  CI_FAILURES: "kenchi:events:ci-failures",
-  /** Action execution events */
-  ACTION_EVENTS: "kenchi:events:actions",
-  /** System health events */
-  HEALTH_EVENTS: "kenchi:events:health",
-} as const;
+export const CHANNELS = PUBSUB_CHANNELS;

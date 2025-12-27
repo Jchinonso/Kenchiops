@@ -167,3 +167,67 @@ export const RETRY_DEFAULTS = {
   /** Maximum delay between retries (ms) */
   MAX_DELAY_MS: 5000,
 } as const;
+
+// ==================== Message Queue Configuration ====================
+
+/**
+ * Queue processing configuration
+ */
+export const QUEUE_CONFIG = {
+  /** Suffix for processing queue */
+  PROCESSING_SUFFIX: ":processing",
+  /** Suffix for dead letter queue */
+  DEAD_LETTER_SUFFIX: ":dead",
+  /** Default max retries before dead letter */
+  DEFAULT_MAX_RETRIES: 3,
+  /** Message ID prefix */
+  MESSAGE_ID_PREFIX: "msg",
+} as const;
+
+/**
+ * Queue-specific retry configurations
+ */
+export const QUEUE_RETRY_CONFIG = {
+  /** CI analysis queue max retries */
+  CI_ANALYSIS: 3,
+  /** Slack notification queue max retries */
+  SLACK_NOTIFICATION: 5,
+  /** GitHub action queue max retries */
+  GITHUB_ACTION: 3,
+} as const;
+
+/**
+ * Queue visibility timeout in seconds (how long a job is hidden while processing)
+ */
+export const QUEUE_VISIBILITY_TIMEOUT = {
+  /** CI analysis visibility timeout */
+  CI_ANALYSIS: 60,
+  /** Slack notification visibility timeout */
+  SLACK_NOTIFICATION: 30,
+  /** GitHub action visibility timeout */
+  GITHUB_ACTION: 120,
+} as const;
+
+/**
+ * Pre-defined queue names
+ */
+export const QUEUE_NAMES = {
+  /** CI analysis jobs queue */
+  CI_ANALYSIS: "kenchi:ci-analysis",
+  /** Slack notification jobs queue */
+  SLACK_NOTIFICATIONS: "kenchi:slack-notifications",
+  /** GitHub action jobs queue */
+  GITHUB_ACTIONS: "kenchi:github-actions",
+} as const;
+
+/**
+ * Pre-defined pub/sub channel names
+ */
+export const PUBSUB_CHANNELS = {
+  /** CI failure events */
+  CI_FAILURES: "kenchi:events:ci-failures",
+  /** Action execution events */
+  ACTION_EVENTS: "kenchi:events:actions",
+  /** System health events */
+  HEALTH_EVENTS: "kenchi:events:health",
+} as const;

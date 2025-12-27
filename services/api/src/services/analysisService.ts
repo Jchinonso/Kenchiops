@@ -9,6 +9,7 @@ import {
   OpenAIClient,
   calculateConfidenceScore,
   createLogger,
+  generateEventId,
   type Event,
   type Evidence,
   type LLMAnalysisResult,
@@ -37,19 +38,10 @@ const getOpenAIClient = (): OpenAIClient => {
 };
 
 /**
- * Generate a unique event ID
- */
-const generateEventId = (): string => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 11);
-  return `evt_${timestamp}_${random}`;
-};
-
-/**
  * Create analysis context (Event and Evidence) from request
  */
 export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext => {
-  const eventId = generateEventId();
+  const eventId = generateEventId("evt");
 
   const event: Event = {
     id: eventId,

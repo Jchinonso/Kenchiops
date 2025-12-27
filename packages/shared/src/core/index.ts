@@ -9,7 +9,14 @@ export { config, type Config } from "./config.js";
 export { createLogger, logger, LogLevel, type Logger } from "./logger.js";
 
 // Utilities
-export { withTimeout, isRetryableError, delay, safeJsonParse, parseDbCount } from "./utils.js";
+export {
+  withTimeout,
+  isRetryableError,
+  delay,
+  safeJsonParse,
+  parseDbCount,
+  generateEventId,
+} from "./utils.js";
 
 // Error handling
 export {

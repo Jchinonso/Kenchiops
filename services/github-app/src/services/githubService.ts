@@ -11,6 +11,7 @@ import {
   createLogger,
   OpenAIClient,
   calculateConfidenceScore,
+  generateEventId,
   type Event,
   type Evidence,
   type LLMAnalysisResult,
@@ -81,15 +82,6 @@ export interface AnalysisResult {
   readonly confidence: ConfidenceScoreResult;
   readonly event: Event;
 }
-
-/**
- * Generate a unique event ID
- */
-const generateEventId = (prefix: string): string => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 11);
-  return `${prefix}_${timestamp}_${random}`;
-};
 
 /**
  * Create an Event from a pull request webhook
