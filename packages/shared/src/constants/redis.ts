@@ -27,11 +27,13 @@ export const REDIS_TTL_VALUES = {
 } as const;
 
 /**
- * Redis SCAN cursor values
+ * Redis SCAN cursor values and configuration
  */
 export const REDIS_SCAN = {
   /** Initial cursor for SCAN iteration */
   INITIAL_CURSOR: "0",
+  /** Default batch size for SCAN COUNT parameter */
+  BATCH_SIZE: 100,
 } as const;
 
 // ==================== Timeouts ====================
@@ -182,6 +184,8 @@ export const DISPLAY_DEFAULTS = {
   SHA_DISPLAY_LENGTH: 7,
   /** Log hash length for content-based deduplication */
   LOG_HASH_LENGTH: 16,
+  /** Decimal precision for score display */
+  SCORE_DECIMAL_PRECISION: 2,
 } as const;
 
 // ==================== Retry Defaults ====================

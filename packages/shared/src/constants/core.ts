@@ -82,3 +82,15 @@ export const VALID_NODE_ENVS = ["development", "production", "test"] as const;
  * Radix for parseInt operations
  */
 export const PARSE_INT_RADIX = 10;
+
+/**
+ * ID generation configuration
+ */
+export const ID_GENERATION = {
+  /** Start index for extracting random part from base36 string (skip "0.") */
+  RANDOM_START_INDEX: 2,
+  /** End index for extracting random part (9 characters) */
+  RANDOM_END_INDEX: 11,
+  /** Default prefix for event IDs */
+  DEFAULT_PREFIX: "evt",
+} as const;

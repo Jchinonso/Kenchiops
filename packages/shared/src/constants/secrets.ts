@@ -8,6 +8,14 @@
 export const REDACTION_PLACEHOLDER = "[REDACTED]" as const;
 
 /**
+ * Redaction operation defaults.
+ */
+export const REDACTION_DEFAULTS = {
+  /** Maximum depth for object traversal during redaction */
+  MAX_DEPTH: 10,
+} as const;
+
+/**
  * Secret pattern configuration type.
  */
 export type SecretPattern = {

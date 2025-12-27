@@ -134,7 +134,13 @@ class RedisRateLimitStore implements RateLimitStore {
     // Use SCAN for efficient key iteration
     let cursor: string = REDIS_SCAN.INITIAL_CURSOR;
     do {
-      const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
+      const [nextCursor, keys] = await redis.scan(
+        cursor,
+        "MATCH",
+        pattern,
+        "COUNT",
+        REDIS_SCAN.BATCH_SIZE
+      );
       cursor = nextCursor;
 
       if (keys.length > 0) {

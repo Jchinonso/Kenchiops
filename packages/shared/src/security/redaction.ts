@@ -11,6 +11,7 @@ import {
   SECRET_PATTERNS,
   FORBIDDEN_FIELDS,
   REDACTION_PLACEHOLDER,
+  REDACTION_DEFAULTS,
   type SecretPattern,
 } from "../constants/index.js";
 
@@ -149,7 +150,7 @@ export const redactObject = <T extends Record<string, unknown>>(
   obj: T,
   options: { logRedactions?: boolean; maxDepth?: number } = {}
 ): T => {
-  const { logRedactions = false, maxDepth = 10 } = options;
+  const { logRedactions = false, maxDepth = REDACTION_DEFAULTS.MAX_DEPTH } = options;
 
   const redactRecursive = (value: unknown, depth: number): unknown => {
     // Prevent infinite recursion

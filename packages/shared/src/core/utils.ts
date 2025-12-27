@@ -6,6 +6,8 @@
  * @module core/utils
  */
 
+import { ID_GENERATION } from "../constants/core.js";
+
 // ==================== Promise Utilities ====================
 
 /**
@@ -107,8 +109,10 @@ export const parseDbCount = (rows: readonly { count: string }[], radix = 10): nu
  * generateEventId("check"); // "check_1703683200000_ghi789rst"
  * ```
  */
-export const generateEventId = (prefix = "evt"): string => {
+export const generateEventId = (prefix: string = ID_GENERATION.DEFAULT_PREFIX): string => {
   const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 11);
+  const random = Math.random()
+    .toString(36)
+    .substring(ID_GENERATION.RANDOM_START_INDEX, ID_GENERATION.RANDOM_END_INDEX);
   return `${prefix}_${timestamp}_${random}`;
 };
