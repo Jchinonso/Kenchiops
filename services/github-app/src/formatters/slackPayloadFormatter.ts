@@ -177,15 +177,24 @@ const createActionButtons = (
 };
 
 /**
- * Build action blocks with buttons for executable actions
+ * Build action blocks with buttons for executable actions.
+ * Deduplicates by actionType to avoid showing multiple similar buttons.
  */
 const buildActionBlocks = (
   actions: readonly RecommendedAction[],
   aggregation: AggregatedFailures
 ): SlackBlock[] => {
-  // Filter to executable actions and limit count
+  // Filter to executable actions, deduplicate by actionType, and limit count
+  const seenTypes = new Set<string>();
   const executableActions = actions
-    .filter((a) => EXECUTABLE_ACTION_TYPES.has(a.actionType ?? ""))
+    .filter((a) => {
+      const actionType = a.actionType ?? "";
+      if (!EXECUTABLE_ACTION_TYPES.has(actionType) || seenTypes.has(actionType)) {
+        return false;
+      }
+      seenTypes.add(actionType);
+      return true;
+    })
     .slice(0, MAX_ACTION_BUTTONS);
 
   if (executableActions.length === 0) {
