@@ -35,6 +35,7 @@ interface SlackTextBlock {
     readonly type: "mrkdwn" | "plain_text";
     readonly text: string;
   }>;
+  readonly accessory?: SlackButtonElement;
 }
 
 /**
@@ -142,42 +143,61 @@ const createActionButtonValue = (
 });
 
 /**
- * Create approve/reject buttons for a single action
+ * Create inline execute button for section accessory
  */
-const createActionButtons = (
+const createInlineExecuteButton = (
   action: RecommendedAction,
   actionId: string,
   aggregation: AggregatedFailures,
   checkRunId?: number
-): SlackActionsBlock => {
+): SlackButtonElement => {
   const buttonValue = JSON.stringify(
     createActionButtonValue(action, actionId, aggregation, checkRunId)
   );
 
   return {
-    type: "actions",
-    block_id: `action_block_${actionId}`,
-    elements: [
-      {
-        type: "button",
-        text: { type: "plain_text", text: "✓ Execute", emoji: true },
-        style: "primary",
-        value: buttonValue,
-        action_id: `approve_action_${actionId}`,
-      },
-      {
-        type: "button",
-        text: { type: "plain_text", text: "✗ Dismiss", emoji: true },
-        style: "danger",
-        value: buttonValue,
-        action_id: `reject_action_${actionId}`,
-      },
-    ],
+    type: "button",
+    text: { type: "plain_text", text: "Execute", emoji: true },
+    style: "primary",
+    value: buttonValue,
+    action_id: `approve_action_${actionId}`,
   };
 };
 
 /**
- * Build action blocks with buttons for executable actions.
+ * Create dismiss buttons block for all actions
+ */
+const createDismissButtonsBlock = (
+  actions: readonly RecommendedAction[],
+  aggregation: AggregatedFailures,
+  checkRunId?: number
+): SlackActionsBlock => {
+  const dismissButtons = actions.map((action, index) => {
+    const actionId = generateActionId(aggregation.commitSha, index);
+    const buttonValue = JSON.stringify(
+      createActionButtonValue(action, actionId, aggregation, checkRunId)
+    );
+
+    return {
+      type: "button" as const,
+      text: { type: "plain_text" as const, text: `✗ ${action.actionType}`, emoji: true },
+      style: "danger" as const,
+      value: buttonValue,
+      action_id: `reject_action_${actionId}`,
+    };
+  });
+
+  return {
+    type: "actions",
+    block_id: "dismiss_actions_block",
+    elements: dismissButtons,
+  };
+};
+
+/**
+ * Build action blocks with compact inline buttons.
+ * Each action shows description with Execute button on the right.
+ * Dismiss buttons are grouped at the bottom.
  * Deduplicates by actionType to avoid showing multiple similar buttons.
  */
 const buildActionBlocks = (
@@ -212,23 +232,23 @@ const buildActionBlocks = (
     },
   ];
 
-  // Add description and buttons for each action
+  // Add compact action rows with inline Execute buttons
   executableActions.forEach((action, index) => {
     const actionId = generateActionId(aggregation.commitSha, index);
     const priorityEmoji = getPriorityEmoji(action.priority);
 
-    // Action description
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
         text: `${priorityEmoji} *${action.actionType ?? "Action"}*: ${action.description}`,
       },
+      accessory: createInlineExecuteButton(action, actionId, aggregation, primaryCheckRunId),
     });
-
-    // Action buttons
-    blocks.push(createActionButtons(action, actionId, aggregation, primaryCheckRunId));
   });
+
+  // Add grouped dismiss buttons at the bottom
+  blocks.push(createDismissButtonsBlock(executableActions, aggregation, primaryCheckRunId));
 
   return blocks;
 };
