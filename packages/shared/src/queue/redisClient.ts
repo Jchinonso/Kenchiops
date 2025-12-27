@@ -10,6 +10,7 @@
 import Redis from "ioredis";
 import { createLogger } from "../core/logger.js";
 import { config } from "../core/config.js";
+import { RETRY_DEFAULTS } from "../constants/index.js";
 
 const logger = createLogger("redis");
 
@@ -59,7 +60,7 @@ const createRedisClient = (options: RedisOptions = {}): Redis => {
         logger.error("Redis max retries exceeded", { attempts: times });
         return null; // Stop retrying
       }
-      const delay = Math.min(times * 200, 5000);
+      const delay = Math.min(times * RETRY_DEFAULTS.BASE_DELAY_MS, RETRY_DEFAULTS.MAX_DELAY_MS);
       logger.warn("Redis reconnecting", { attempt: times, delayMs: delay });
       return delay;
     },

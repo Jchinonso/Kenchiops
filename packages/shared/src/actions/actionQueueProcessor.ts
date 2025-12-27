@@ -19,7 +19,8 @@ import {
   type ActionExecutionContext,
   type ActionExecutionResult,
 } from "./actionExecutor.js";
-import { createLogger } from "../core/logger.js";
+import { createLogger, isRetryableError, delay, getErrorMessage } from "../core/index.js";
+import { RETRYABLE_ERROR_PATTERNS, QUEUE_WORKER_DEFAULTS } from "../constants/index.js";
 import type { ActionType, ActionProposal } from "../core/types.js";
 
 const logger = createLogger("action-queue");
@@ -120,10 +121,10 @@ const processActionJob = async (
     return {
       success: result.success,
       error: result.error,
-      shouldRetry: !result.success && isRetryableError(result.error),
+      shouldRetry: !result.success && checkRetryable(result.error),
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = getErrorMessage(error);
 
     logger.error("Action job failed", {
       messageId: message.id,
@@ -134,30 +135,16 @@ const processActionJob = async (
     return {
       success: false,
       error: errorMessage,
-      shouldRetry: isRetryableError(errorMessage),
+      shouldRetry: checkRetryable(errorMessage),
     };
   }
 };
 
 /**
- * Determines if an error is retryable
+ * Check if error is retryable using shared patterns
  */
-const isRetryableError = (error?: string): boolean => {
-  if (!error) return false;
-
-  const retryablePatterns = [
-    /timeout/i,
-    /network/i,
-    /ECONNRESET/i,
-    /ETIMEDOUT/i,
-    /rate limit/i,
-    /503/,
-    /502/,
-    /504/,
-  ];
-
-  return retryablePatterns.some((pattern) => pattern.test(error));
-};
+const checkRetryable = (error?: string): boolean =>
+  isRetryableError(error, RETRYABLE_ERROR_PATTERNS);
 
 // ==================== Worker Functions ====================
 
@@ -168,7 +155,10 @@ const isRetryableError = (error?: string): boolean => {
 export const startActionQueueWorker = async (
   options: { pollIntervalMs?: number; maxConcurrent?: number } = {}
 ): Promise<() => void> => {
-  const { pollIntervalMs = 1000, maxConcurrent = 5 } = options;
+  const {
+    pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
+    maxConcurrent = QUEUE_WORKER_DEFAULTS.MAX_CONCURRENT,
+  } = options;
   let running = true;
   let activeJobs = 0;
 
@@ -181,7 +171,7 @@ export const startActionQueueWorker = async (
     while (running) {
       // Wait if at max concurrency
       if (activeJobs >= maxConcurrent) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);
         continue;
       }
 
@@ -193,7 +183,7 @@ export const startActionQueueWorker = async (
       }
 
       // Small delay between processing attempts
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await delay(pollIntervalMs);
     }
   };
 
@@ -203,7 +193,7 @@ export const startActionQueueWorker = async (
   // Don't await - let them run in background
   Promise.all(workers).catch((error) => {
     logger.error("Action queue worker error", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   });
 

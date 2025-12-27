@@ -8,7 +8,8 @@
  */
 
 import { getRedisClient } from "../queue/redisClient.js";
-import { createLogger } from "../core/logger.js";
+import { createLogger, withTimeout, getErrorMessage } from "../core/index.js";
+import { CACHE_TTL_SECONDS, REDIS_TIMEOUTS } from "../constants/index.js";
 
 const logger = createLogger("cache");
 
@@ -49,25 +50,8 @@ export interface CacheStats {
   readonly hitRate: number;
 }
 
-// ==================== Constants ====================
-
-/**
- * Default TTL values in seconds
- */
-export const CACHE_TTL = {
-  /** Short-lived cache (1 minute) */
-  SHORT: 60,
-  /** Medium cache (5 minutes) */
-  MEDIUM: 300,
-  /** Standard cache (15 minutes) */
-  STANDARD: 900,
-  /** Long cache (1 hour) */
-  LONG: 3600,
-  /** Extended cache (6 hours) */
-  EXTENDED: 21600,
-  /** Daily cache (24 hours) */
-  DAILY: 86400,
-} as const;
+// Re-export for backward compatibility
+export const CACHE_TTL = CACHE_TTL_SECONDS;
 
 // ==================== Statistics Tracking ====================
 
@@ -119,21 +103,6 @@ const deserialize = <T>(raw: string): CacheEntry<T> | null => {
   }
 };
 
-// ==================== Constants ====================
-
-/** Timeout for cache operations in milliseconds */
-const CACHE_OPERATION_TIMEOUT_MS = 2000;
-
-/**
- * Wrap a promise with a timeout
- */
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Cache operation timeout")), timeoutMs)
-  );
-  return Promise.race([promise, timeoutPromise]);
-};
-
 // ==================== Core Cache Operations ====================
 
 /**
@@ -150,7 +119,7 @@ export const cacheGet = async <T>(key: string): Promise<CacheResult<T>> => {
       return { hit: false, data: null };
     }
 
-    const raw = await withTimeout(client.get(key), CACHE_OPERATION_TIMEOUT_MS);
+    const raw = await withTimeout(client.get(key), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
 
     if (!raw) {
       stats.misses++;
@@ -174,7 +143,7 @@ export const cacheGet = async <T>(key: string): Promise<CacheResult<T>> => {
   } catch (error) {
     logger.warn("Cache get failed", {
       key,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     stats.misses++;
     return { hit: false, data: null };
@@ -202,7 +171,7 @@ export const cacheSet = async <T>(
 
     await withTimeout(
       client.setex(key, options.ttlSeconds, serialized),
-      CACHE_OPERATION_TIMEOUT_MS
+      REDIS_TIMEOUTS.CACHE_OPERATION_MS
     );
 
     logger.debug("Cache set", { key, ttlSeconds: options.ttlSeconds });
@@ -210,7 +179,7 @@ export const cacheSet = async <T>(
   } catch (error) {
     logger.warn("Cache set failed", {
       key,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return false;
   }
@@ -227,14 +196,14 @@ export const cacheDelete = async (key: string): Promise<boolean> => {
       return false;
     }
 
-    const deleted = await withTimeout(client.del(key), CACHE_OPERATION_TIMEOUT_MS);
+    const deleted = await withTimeout(client.del(key), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
 
     logger.debug("Cache delete", { key, deleted: deleted > 0 });
     return deleted > 0;
   } catch (error) {
     logger.warn("Cache delete failed", {
       key,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return false;
   }
@@ -251,20 +220,20 @@ export const cacheDeletePattern = async (pattern: string): Promise<number> => {
       return 0;
     }
 
-    const keys = await withTimeout(client.keys(pattern), CACHE_OPERATION_TIMEOUT_MS);
+    const keys = await withTimeout(client.keys(pattern), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
 
     if (keys.length === 0) {
       return 0;
     }
 
-    const deleted = await withTimeout(client.del(...keys), CACHE_OPERATION_TIMEOUT_MS);
+    const deleted = await withTimeout(client.del(...keys), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
 
     logger.debug("Cache delete pattern", { pattern, deleted });
     return deleted;
   } catch (error) {
     logger.warn("Cache delete pattern failed", {
       pattern,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return 0;
   }
@@ -279,7 +248,7 @@ export const cacheExists = async (key: string): Promise<boolean> => {
     if (client.status !== "ready") {
       return false;
     }
-    const exists = await withTimeout(client.exists(key), CACHE_OPERATION_TIMEOUT_MS);
+    const exists = await withTimeout(client.exists(key), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
     return exists === 1;
   } catch {
     return false;
@@ -295,7 +264,7 @@ export const cacheTTL = async (key: string): Promise<number> => {
     if (client.status !== "ready") {
       return -1;
     }
-    return await withTimeout(client.ttl(key), CACHE_OPERATION_TIMEOUT_MS);
+    return await withTimeout(client.ttl(key), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
   } catch {
     return -1;
   }
@@ -343,7 +312,7 @@ export const cacheGetMany = async <T>(keys: readonly string[]): Promise<Map<stri
       return new Map();
     }
 
-    const values = await withTimeout(client.mget(...keys), CACHE_OPERATION_TIMEOUT_MS);
+    const values = await withTimeout(client.mget(...keys), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
 
     const result = new Map<string, T>();
 
@@ -365,7 +334,7 @@ export const cacheGetMany = async <T>(keys: readonly string[]): Promise<Map<stri
   } catch (error) {
     logger.warn("Cache get many failed", {
       keyCount: keys.length,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return new Map();
   }
@@ -384,10 +353,18 @@ export const cacheHashSet = async (
 ): Promise<boolean> => {
   try {
     const client = getRedisClient();
-    await client.hset(key, field, JSON.stringify(value));
+
+    if (client.status !== "ready") {
+      return false;
+    }
+
+    await withTimeout(
+      client.hset(key, field, JSON.stringify(value)),
+      REDIS_TIMEOUTS.CACHE_OPERATION_MS
+    );
 
     if (ttlSeconds) {
-      await client.expire(key, ttlSeconds);
+      await withTimeout(client.expire(key, ttlSeconds), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
     }
 
     return true;
@@ -395,7 +372,7 @@ export const cacheHashSet = async (
     logger.warn("Cache hash set failed", {
       key,
       field,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return false;
   }
@@ -407,7 +384,12 @@ export const cacheHashSet = async (
 export const cacheHashGet = async <T>(key: string, field: string): Promise<T | null> => {
   try {
     const client = getRedisClient();
-    const raw = await client.hget(key, field);
+
+    if (client.status !== "ready") {
+      return null;
+    }
+
+    const raw = await withTimeout(client.hget(key, field), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
 
     if (!raw) {
       return null;
@@ -425,7 +407,12 @@ export const cacheHashGet = async <T>(key: string, field: string): Promise<T | n
 export const cacheHashGetAll = async <T>(key: string): Promise<Record<string, T>> => {
   try {
     const client = getRedisClient();
-    const raw = await client.hgetall(key);
+
+    if (client.status !== "ready") {
+      return {};
+    }
+
+    const raw = await withTimeout(client.hgetall(key), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
 
     const result: Record<string, T> = {};
 
@@ -449,7 +436,12 @@ export const cacheHashGetAll = async <T>(key: string): Promise<Record<string, T>
 export const cacheHashDelete = async (key: string, field: string): Promise<boolean> => {
   try {
     const client = getRedisClient();
-    const deleted = await client.hdel(key, field);
+
+    if (client.status !== "ready") {
+      return false;
+    }
+
+    const deleted = await withTimeout(client.hdel(key, field), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
     return deleted > 0;
   } catch {
     return false;

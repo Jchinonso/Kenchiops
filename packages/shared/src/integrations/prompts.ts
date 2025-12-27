@@ -552,7 +552,9 @@ export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidenc
   truncated.metrics = evidence.metrics;
 
   if (evidence.logs && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_COMMITS) {
-    const additionalLogs = evidence.logs.filter((log) => log.level !== "ERROR").slice(0, 20);
+    const additionalLogs = evidence.logs
+      .filter((log) => log.level !== "ERROR")
+      .slice(0, EVIDENCE_TRUNCATION.MAX_ADDITIONAL_LOGS);
 
     const currentLogs = truncated.logs || [];
     const result = takeWhileTokenBudget(additionalLogs, remainingTokens, (log) =>

@@ -12,7 +12,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../core/errors.js";
 import { createLogger } from "../core/logger.js";
-import { RATE_LIMIT_CONSTANTS, TIME_CONSTANTS } from "../constants/index.js";
+import {
+  RATE_LIMIT_CONSTANTS,
+  TIME_CONSTANTS,
+  HTTP_RESILIENCE_DEFAULTS,
+} from "../constants/index.js";
 import { getRedisClient } from "../queue/redisClient.js";
 
 const logger = createLogger("rate-limiter");
@@ -267,7 +271,10 @@ class RateLimiter {
 
         // Add timeout to prevent indefinite hangs on Redis operations
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Rate limit check timeout")), 3000)
+          setTimeout(
+            () => reject(new Error("Rate limit check timeout")),
+            HTTP_RESILIENCE_DEFAULTS.RATE_LIMIT_CHECK_TIMEOUT_MS
+          )
         );
         const info = await Promise.race([store.increment(key, this.windowMs), timeoutPromise]);
 

@@ -12,7 +12,11 @@
 
 import { createLogger } from "../core/logger.js";
 import { ExternalServiceError } from "../core/errors.js";
-import { HTTP_RESILIENCE_DEFAULTS } from "../constants/index.js";
+import {
+  HTTP_RESILIENCE_DEFAULTS,
+  RETRYABLE_HTTP_STATUS_CODES,
+  RETRYABLE_NETWORK_ERRORS,
+} from "../constants/index.js";
 
 const logger = createLogger("resilient-http");
 
@@ -162,7 +166,7 @@ export const getCircuitBreakerStatus = (
  */
 const calculateBackoff = (attempt: number, initialDelay: number, maxDelay: number): number => {
   const exponentialDelay = initialDelay * Math.pow(2, attempt - 1);
-  const jitter = Math.random() * 0.3 * exponentialDelay; // 0-30% jitter
+  const jitter = Math.random() * HTTP_RESILIENCE_DEFAULTS.JITTER_FACTOR * exponentialDelay;
   return Math.min(exponentialDelay + jitter, maxDelay);
 };
 
@@ -173,22 +177,13 @@ const isRetryableError = (status: number, error?: Error): boolean => {
   // Network errors are retryable
   if (error) {
     const message = error.message.toLowerCase();
-    const retryableNetworkErrors = [
-      "econnrefused",
-      "econnreset",
-      "etimedout",
-      "enotfound",
-      "eai_again",
-      "socket hang up",
-      "network",
-      "fetch failed",
-    ];
-    if (retryableNetworkErrors.some((e) => message.includes(e))) return true;
+    if (RETRYABLE_NETWORK_ERRORS.some((e) => message.includes(e))) return true;
   }
 
   // HTTP status codes that are retryable
-  const retryableStatuses = [408, 429, 500, 502, 503, 504];
-  return retryableStatuses.includes(status);
+  return RETRYABLE_HTTP_STATUS_CODES.includes(
+    status as (typeof RETRYABLE_HTTP_STATUS_CODES)[number]
+  );
 };
 
 /**

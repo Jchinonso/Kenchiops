@@ -7,7 +7,7 @@
 
 import pg from "pg";
 import { query, transaction } from "./client.js";
-import { createLogger } from "../core/logger.js";
+import { createLogger, parseDbCount } from "../core/index.js";
 import { NotFoundError } from "../core/errors.js";
 import { TENANT_STATUS, AUDIT_ACTIONS, AUDIT_DEFAULTS, AUDIT_QUERIES } from "../constants/index.js";
 import type {
@@ -130,12 +130,6 @@ const getStatusAfterGitHubInstall = (hasSlack: boolean): TenantStatus =>
  */
 const getStatusAfterSlackInstall = (hasGitHub: boolean): TenantStatus =>
   hasGitHub ? TENANT_STATUS.ACTIVE : TENANT_STATUS.PENDING_GITHUB;
-
-/**
- * Parse count result to number
- */
-const parseCount = (rows: readonly { count: string }[]): number =>
-  parseInt(rows[0]?.count ?? "0", 10);
 
 // ==================== Lookup Methods ====================
 
@@ -499,8 +493,8 @@ export const getTenantStatistics = async (tenantId: string): Promise<TenantStati
   ]);
 
   return {
-    failuresAnalyzedToday: parseCount(analysesToday.rows),
-    totalAlertsSent: parseCount(alertsTotal.rows),
+    failuresAnalyzedToday: parseDbCount(analysesToday.rows),
+    totalAlertsSent: parseDbCount(alertsTotal.rows),
     lastAlertTime: lastAlert.rows[0]?.created_at ?? null,
   };
 };

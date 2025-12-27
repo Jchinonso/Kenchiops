@@ -15,7 +15,7 @@ import {
   getFirstSentence,
   buildTruncatedList,
   // Constants
-  GIT_DISPLAY,
+  DISPLAY_DEFAULTS,
   UI_EMOJI,
   PRIORITY_EMOJI_MAP,
   DEPENDENCY_EMOJI_MAP,
@@ -282,7 +282,7 @@ const buildMetadataSection = (analysis: AnalysisData): string => {
     },
     {
       condition: !!analysis.headSha,
-      content: `${UI_EMOJI.commit} **Commit:** \`${analysis.headSha?.substring(0, GIT_DISPLAY.SHA_DISPLAY_LENGTH)}\``,
+      content: `${UI_EMOJI.commit} **Commit:** \`${analysis.headSha?.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH)}\``,
     },
     {
       condition: !!analysis.workflowContext?.duration,

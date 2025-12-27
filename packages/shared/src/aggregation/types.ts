@@ -7,6 +7,8 @@
  * @module aggregation/types
  */
 
+import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
+
 /**
  * AI-generated code annotation from analysis
  */
@@ -143,9 +145,9 @@ export interface AggregationConfig {
  * Default aggregation configuration
  */
 export const DEFAULT_AGGREGATION_CONFIG: AggregationConfig = {
-  debounceMs: 30_000, // 30 seconds after each failure
-  maxWaitMs: 120_000, // 2 minutes max wait
-  maxFailuresPerCommit: 20,
+  debounceMs: AGGREGATION_DEFAULTS.DEBOUNCE_MS,
+  maxWaitMs: AGGREGATION_DEFAULTS.MAX_WAIT_MS,
+  maxFailuresPerCommit: AGGREGATION_DEFAULTS.MAX_FAILURES_PER_COMMIT,
 } as const;
 
 /**
@@ -165,12 +167,13 @@ export interface ConsolidatedPostResult {
 export const AGGREGATION_KEYS = {
   /** Hash storing failure data: kenchi:agg:{repo}:{sha}:failures */
   failures: (key: AggregationKey) =>
-    `kenchi:agg:${key.repositoryFullName}:${key.commitSha}:failures`,
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:failures`,
   /** Hash storing metadata: kenchi:agg:{repo}:{sha}:meta */
-  metadata: (key: AggregationKey) => `kenchi:agg:${key.repositoryFullName}:${key.commitSha}:meta`,
+  metadata: (key: AggregationKey) =>
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:meta`,
   /** Debounce lock key: kenchi:agg:{repo}:{sha}:debounce */
   debounce: (key: AggregationKey) =>
-    `kenchi:agg:${key.repositoryFullName}:${key.commitSha}:debounce`,
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:debounce`,
   /** Pattern to find all aggregation keys */
-  pattern: "kenchi:agg:*:meta",
+  pattern: `${REDIS_KEY_PREFIXES.AGGREGATION}:*:meta`,
 } as const;
