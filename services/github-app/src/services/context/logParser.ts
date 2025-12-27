@@ -18,16 +18,30 @@ import type { FileReference, TestFailure } from "./types.js";
 
 const logger = createLogger("github-app");
 
+// ==================== ANSI Code Stripping ====================
+
+/**
+ * Strip ANSI color codes from log content.
+ * ANSI codes start with ESC (0x1B) followed by [ and end with m.
+ * eslint-disable-next-line no-control-regex - Required for ANSI stripping
+ */
+const stripAnsiCodes = (text: string): string =>
+  // eslint-disable-next-line no-control-regex
+  text.replace(/\x1b\[[0-9;]*m/g, "");
+
 // ==================== Test Failure Patterns ====================
 
 /**
  * Jest/Vitest test failure patterns.
+ * These patterns match after ANSI codes are stripped.
  */
 const JEST_PATTERNS: readonly RegExp[] = [
+  // ● TestSuite › SubSuite › test name (Jest format with bullet point)
+  /●\s+([^\n]+?)[\r\n]+\s*([\s\S]+?)(?=\s*●|\s*PASS|\s*FAIL|Test Suites:|$)/gm,
   // ✕ test name (123 ms) followed by error
-  /[✕✗]\s+(.+?)\s*(?:\(\d+\s*m?s\))?[\r\n]+\s*((?:Expected|Received|Error|at ).+?)(?=[\r\n]+\s*[✓✕✗]|$)/gms,
-  // FAIL src/test.ts followed by test suite
-  /FAIL\s+(\S+\.(?:test|spec)\.\w+)[\s\S]*?●\s+(.+?)[\r\n]+([\s\S]+?)(?=\s*●|\s*PASS|\s*FAIL|$)/gm,
+  /[✕✗×]\s+(.+?)\s*(?:\(\d+\s*m?s\))?[\r\n]+\s*((?:Expected|Received|Error|at ).+?)(?=[\r\n]+\s*[✓✕✗×]|$)/gms,
+  // FAIL file.test.ts with test name on next lines
+  /FAIL\s+(\S+\.(?:test|spec)\.\w+)/gm,
 ];
 
 /**
@@ -161,16 +175,27 @@ const extractPatternMatches = (
 
 /**
  * Extract Jest/Vitest test failure from regex match.
+ * Handles both ● bullet format and ✕ checkmark format.
  */
 const extractJestMatch = (match: RegExpExecArray): PatternMatch => {
-  const testName = (match[1]?.trim() || "Unknown test").slice(0, 200);
+  const rawTestName = match[1]?.trim() || "Unknown test";
+  // Clean up test name - remove timestamps and extra whitespace
+  const testName = rawTestName
+    .replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/g, "")
+    .trim()
+    .slice(0, 200);
+
   const error = (match[2]?.trim() || match[3]?.trim() || "Test failed").slice(0, 500);
+
+  // Try to extract file from error stack trace
   const fileMatch = error.match(STACK_FILE_PATTERN);
+  // Also try to extract file from test name if it looks like a file path
+  const fileFromName = testName.match(/(\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/)?.[1];
 
   return {
-    testName,
+    testName: fileFromName ? testName.replace(fileFromName, "").trim() || testName : testName,
     error,
-    file: fileMatch?.[1],
+    file: fileMatch?.[1] || fileFromName,
   };
 };
 
@@ -226,6 +251,7 @@ const tryExtractFromFramework = (
  * Extract test failures from workflow logs.
  *
  * Supports Jest, Vitest, and Mocha test frameworks.
+ * Strips ANSI color codes before parsing.
  *
  * @param logs - The workflow log content
  * @returns Array of test failure information
@@ -233,9 +259,12 @@ const tryExtractFromFramework = (
 export const extractTestFailures = (logs: string): TestFailure[] => {
   const maxFailures = LOG_PARSING_LIMITS.MAX_TEST_FAILURES;
 
+  // Strip ANSI color codes from CI logs before parsing
+  const cleanLogs = stripAnsiCodes(logs);
+
   // Try each framework in order, return first match
   const result = FRAMEWORK_PATTERNS.map((framework) =>
-    tryExtractFromFramework(logs, framework, maxFailures)
+    tryExtractFromFramework(cleanLogs, framework, maxFailures)
   ).find((matches) => matches !== null);
 
   if (result) {
