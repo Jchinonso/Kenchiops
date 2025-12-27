@@ -7,7 +7,14 @@
  */
 
 import { Express } from "express";
-import { logger, SERVICE_PORTS, HTTP_STATUS } from "@kenchi/shared";
+import {
+  logger,
+  SERVICE_PORTS,
+  HTTP_STATUS,
+  SWAGGER_ROUTES,
+  HEALTH_STATUS,
+  API_RESPONSE_STATUS,
+} from "@kenchi/shared";
 
 /**
  * Basic OpenAPI 3.0 specification.
@@ -27,7 +34,7 @@ export const openApiSpec = {
     },
   ],
   paths: {
-    "/health": {
+    [SWAGGER_ROUTES.HEALTH]: {
       get: {
         summary: "Health check",
         description: "Returns the health status of the API service",
@@ -39,7 +46,7 @@ export const openApiSpec = {
                 schema: {
                   type: "object",
                   properties: {
-                    status: { type: "string", example: "ok" },
+                    status: { type: "string", example: HEALTH_STATUS.OK },
                     service: { type: "string", example: "api" },
                     timestamp: { type: "string", format: "date-time" },
                     uptime: { type: "number" },
@@ -52,7 +59,7 @@ export const openApiSpec = {
         },
       },
     },
-    "/webhook/{source}": {
+    [SWAGGER_ROUTES.WEBHOOK]: {
       post: {
         summary: "Generic webhook endpoint",
         description: "Receives webhooks from various sources",
@@ -84,7 +91,7 @@ export const openApiSpec = {
                 schema: {
                   type: "object",
                   properties: {
-                    status: { type: "string" },
+                    status: { type: "string", example: API_RESPONSE_STATUS.RECEIVED },
                     source: { type: "string" },
                     message: { type: "string" },
                   },
@@ -95,7 +102,7 @@ export const openApiSpec = {
         },
       },
     },
-    "/events": {
+    [SWAGGER_ROUTES.EVENTS]: {
       post: {
         summary: "Event ingestion",
         description: "Ingest events for processing and storage",
@@ -124,7 +131,7 @@ export const openApiSpec = {
                 schema: {
                   type: "object",
                   properties: {
-                    status: { type: "string", example: "accepted" },
+                    status: { type: "string", example: API_RESPONSE_STATUS.ACCEPTED },
                     message: { type: "string" },
                   },
                 },

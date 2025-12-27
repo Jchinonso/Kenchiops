@@ -11,11 +11,15 @@ import {
   validate,
   validators,
   HTTP_STATUS,
+  SERVICE_NAMES,
+  API_ROUTES,
+  API_RESPONSE_STATUS,
+  API_MESSAGES,
   type WebhookEvent,
 } from "@kenchi/shared";
 
 const router = Router();
-const logger = createLogger("api");
+const logger = createLogger(SERVICE_NAMES.API);
 
 /**
  * Event ingestion endpoint
@@ -25,7 +29,7 @@ const logger = createLogger("api");
  * TODO: Trigger analysis workflows
  */
 router.post(
-  "/events",
+  API_ROUTES.EVENTS,
   validate({
     body: {
       source: (v) => validators.required(v) && validators.string(v),
@@ -46,8 +50,8 @@ router.post(
     // TODO: Trigger appropriate analysis workflow
 
     res.status(HTTP_STATUS.OK).json({
-      status: "accepted",
-      message: "TODO: Implement event processing and storage",
+      status: API_RESPONSE_STATUS.ACCEPTED,
+      message: API_MESSAGES.EVENT_PROCESSING_PENDING,
     });
   })
 );
