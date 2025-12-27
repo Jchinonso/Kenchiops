@@ -236,12 +236,12 @@ describe("Formatter Utilities", () => {
     });
 
     it("should have correct DISPLAY_LIMITS values", () => {
-      expect(DISPLAY_LIMITS.annotationsPerCheck).toBe(10);
-      expect(DISPLAY_LIMITS.totalAnnotations).toBe(30);
-      expect(DISPLAY_LIMITS.recommendedActions).toBe(8);
-      expect(DISPLAY_LIMITS.checksToShow).toBe(10);
-      expect(DISPLAY_LIMITS.slackAnnotationsPerCheck).toBe(5);
-      expect(DISPLAY_LIMITS.slackMaxChecks).toBe(5);
+      expect(DISPLAY_LIMITS.annotationsPerCheck).toBe(50);
+      expect(DISPLAY_LIMITS.totalAnnotations).toBe(100);
+      expect(DISPLAY_LIMITS.recommendedActions).toBe(10);
+      expect(DISPLAY_LIMITS.checksToShow).toBe(20);
+      expect(DISPLAY_LIMITS.slackAnnotationsPerCheck).toBe(20);
+      expect(DISPLAY_LIMITS.slackMaxChecks).toBe(10);
     });
   });
 });

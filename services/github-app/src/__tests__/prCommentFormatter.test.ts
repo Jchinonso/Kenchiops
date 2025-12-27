@@ -173,7 +173,7 @@ describe("PR Comment Formatter", () => {
     });
 
     it("should truncate annotations when over per-check limit", () => {
-      const annotations = Array.from({ length: 15 }, (_, i) =>
+      const annotations = Array.from({ length: 60 }, (_, i) =>
         createAnnotation({ path: `file${i}.ts`, line: i })
       );
       const aggregation = createAggregation({
@@ -181,7 +181,7 @@ describe("PR Comment Formatter", () => {
       });
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).toContain("... and 5 more locations");
+      expect(comment).toContain("... and 10 more locations");
     });
 
     it("should include recommended actions with priority emoji", () => {
