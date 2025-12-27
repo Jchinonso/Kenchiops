@@ -9,6 +9,28 @@
 // ==================== Redis API Constants ====================
 
 /**
+ * Redis client status values
+ */
+export const REDIS_STATUS = {
+  /** Client is connected and ready */
+  READY: "ready",
+  /** Client is connecting */
+  CONNECTING: "connecting",
+  /** Client is disconnected */
+  DISCONNECTED: "end",
+} as const;
+
+/**
+ * Redis command responses
+ */
+export const REDIS_RESPONSES = {
+  /** Expected response from PING command */
+  PONG: "PONG",
+  /** Success response from commands */
+  OK: "OK",
+} as const;
+
+/**
  * Redis list operation parameters
  */
 export const REDIS_LIST_OPS = {
@@ -123,6 +145,16 @@ export const REDIS_KEY_PREFIXES = {
   QUEUE: "kenchi:queue",
   /** Rate limiting prefix */
   RATE_LIMIT: "kenchi:ratelimit",
+} as const;
+
+/**
+ * Key structure components for parsing cache keys
+ */
+export const CACHE_KEY_STRUCTURE = {
+  /** Root namespace prefix for all Kenchi keys */
+  ROOT_PREFIX: "kenchi",
+  /** Cache namespace identifier */
+  CACHE_PREFIX: "cache",
 } as const;
 
 /**

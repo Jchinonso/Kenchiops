@@ -10,7 +10,12 @@
 import Redis from "ioredis";
 import { createLogger } from "../core/logger.js";
 import { config } from "../core/config.js";
-import { RETRY_DEFAULTS, REDIS_CONNECTION_DEFAULTS } from "../constants/index.js";
+import {
+  RETRY_DEFAULTS,
+  REDIS_CONNECTION_DEFAULTS,
+  REDIS_STATUS,
+  REDIS_RESPONSES,
+} from "../constants/index.js";
 
 const logger = createLogger("redis");
 
@@ -109,7 +114,7 @@ export const isRedisHealthy = async (): Promise<boolean> => {
   try {
     const client = getRedisClient();
     const result = await client.ping();
-    return result === "PONG";
+    return result === REDIS_RESPONSES.PONG;
   } catch {
     return false;
   }
@@ -127,7 +132,7 @@ export const waitForRedisConnection = async (
   const status = client.status;
 
   // Already connected
-  if (status === "ready") {
+  if (status === REDIS_STATUS.READY) {
     return;
   }
 
