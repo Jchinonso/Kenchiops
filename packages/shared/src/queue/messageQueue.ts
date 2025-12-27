@@ -19,6 +19,7 @@ import {
   QUEUE_RETRY_CONFIG,
   QUEUE_VISIBILITY_TIMEOUT,
   PUBSUB_CHANNELS,
+  REDIS_LIST_OPS,
 } from "../constants/index.js";
 
 const logger = createLogger("message-queue");
@@ -178,7 +179,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
       type,
       payload,
       timestamp: new Date().toISOString(),
-      retryCount: 0,
+      retryCount: QUEUE_CONFIG.INITIAL_RETRY_COUNT,
       metadata,
     };
 
@@ -218,7 +219,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
 
       if (result.success) {
         // Remove from processing queue
-        await client.lrem(processingQueue, 1, data);
+        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
         logger.info("Job completed", {
           queue: name,
           messageId: message.id,
@@ -230,7 +231,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
           ...message,
           retryCount: (message.retryCount ?? 0) + 1,
         };
-        await client.lrem(processingQueue, 1, data);
+        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
         await client.lpush(name, serializeMessage(updatedMessage));
         logger.warn("Job retrying", {
           queue: name,
@@ -240,7 +241,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
         });
       } else {
         // Move to dead letter queue
-        await client.lrem(processingQueue, 1, data);
+        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
         await client.lpush(deadLetterQueue, data);
         logger.error("Job moved to dead letter queue", {
           queue: name,
@@ -258,7 +259,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
           ...message,
           retryCount: (message.retryCount ?? 0) + 1,
         };
-        await client.lrem(processingQueue, 1, data);
+        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
         await client.lpush(name, serializeMessage(updatedMessage));
         logger.warn("Job failed, retrying", {
           queue: name,
@@ -267,7 +268,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
           error: errorMessage,
         });
       } else {
-        await client.lrem(processingQueue, 1, data);
+        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
         await client.lpush(deadLetterQueue, data);
         logger.error("Job failed, moved to dead letter queue", {
           queue: name,

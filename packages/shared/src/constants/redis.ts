@@ -6,6 +6,34 @@
  * @module constants/redis
  */
 
+// ==================== Redis API Constants ====================
+
+/**
+ * Redis list operation parameters
+ */
+export const REDIS_LIST_OPS = {
+  /** Remove first matching element (LREM count parameter) */
+  REMOVE_FIRST_MATCH: 1,
+} as const;
+
+/**
+ * Redis TTL special return values
+ */
+export const REDIS_TTL_VALUES = {
+  /** Key exists but has no expiry */
+  NO_EXPIRY: -1,
+  /** Key does not exist */
+  KEY_NOT_FOUND: -2,
+} as const;
+
+/**
+ * Redis SCAN cursor values
+ */
+export const REDIS_SCAN = {
+  /** Initial cursor for SCAN iteration */
+  INITIAL_CURSOR: "0",
+} as const;
+
 // ==================== Timeouts ====================
 
 /**
@@ -182,6 +210,8 @@ export const QUEUE_CONFIG = {
   DEFAULT_MAX_RETRIES: 3,
   /** Message ID prefix */
   MESSAGE_ID_PREFIX: "msg",
+  /** Initial retry count for new messages */
+  INITIAL_RETRY_COUNT: 0,
 } as const;
 
 /**
