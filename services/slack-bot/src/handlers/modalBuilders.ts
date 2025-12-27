@@ -5,29 +5,14 @@
  * for repository selection and unconfiguration flows.
  */
 
+import { SLACK_MODAL_CALLBACKS, SLACK_ACTION_IDS, SLACK_BLOCK_IDS } from "@kenchi/shared";
 import type { SlackModalView } from "../types/slackTypes.js";
 
-// ==================== Constants ====================
-
-/**
- * Modal callback ID for repository selection
- */
-export const REPO_SELECT_MODAL_CALLBACK = "repo_select_modal";
-
-/**
- * Action ID for repository dropdown
- */
-export const REPO_SELECT_ACTION_ID = "repo_select_action";
-
-/**
- * Modal callback ID for unconfigure selection
- */
-export const UNCONFIGURE_MODAL_CALLBACK = "unconfigure_modal";
-
-/**
- * Action ID for unconfigure dropdown
- */
-export const UNCONFIGURE_SELECT_ACTION_ID = "unconfigure_select_action";
+// Re-export for backward compatibility with existing imports
+export const REPO_SELECT_MODAL_CALLBACK = SLACK_MODAL_CALLBACKS.REPO_SELECT;
+export const REPO_SELECT_ACTION_ID = SLACK_ACTION_IDS.REPO_SELECT;
+export const UNCONFIGURE_MODAL_CALLBACK = SLACK_MODAL_CALLBACKS.UNCONFIGURE;
+export const UNCONFIGURE_SELECT_ACTION_ID = SLACK_ACTION_IDS.UNCONFIGURE_SELECT;
 
 // ==================== Types ====================
 
@@ -61,7 +46,7 @@ export const buildRepoSelectModal = (
   messageTs?: string
 ): SlackModalView => ({
   type: "modal",
-  callback_id: REPO_SELECT_MODAL_CALLBACK,
+  callback_id: SLACK_MODAL_CALLBACKS.REPO_SELECT,
   private_metadata: JSON.stringify({ channelId, channelName, messageTs }),
   title: {
     type: "plain_text",
@@ -91,10 +76,10 @@ export const buildRepoSelectModal = (
     },
     {
       type: "input",
-      block_id: "repo_select_block",
+      block_id: SLACK_BLOCK_IDS.REPO_SELECT,
       element: {
         type: "static_select",
-        action_id: REPO_SELECT_ACTION_ID,
+        action_id: SLACK_ACTION_IDS.REPO_SELECT,
         placeholder: {
           type: "plain_text",
           text: "Select a repository",
@@ -133,7 +118,7 @@ export const buildRepoSelectModal = (
  */
 export const buildNoReposModal = (channelName: string): SlackModalView => ({
   type: "modal",
-  callback_id: "no_repos_modal",
+  callback_id: SLACK_MODAL_CALLBACKS.NO_REPOS,
   title: {
     type: "plain_text",
     text: "No Repositories",
@@ -170,7 +155,7 @@ export const buildNoReposModal = (channelName: string): SlackModalView => ({
  */
 export const buildUnconfigureModal = (mappings: readonly RepositoryMapping[]): SlackModalView => ({
   type: "modal",
-  callback_id: UNCONFIGURE_MODAL_CALLBACK,
+  callback_id: SLACK_MODAL_CALLBACKS.UNCONFIGURE,
   title: {
     type: "plain_text",
     text: "Remove Repository",
@@ -199,10 +184,10 @@ export const buildUnconfigureModal = (mappings: readonly RepositoryMapping[]): S
     },
     {
       type: "input",
-      block_id: "unconfigure_select_block",
+      block_id: SLACK_BLOCK_IDS.UNCONFIGURE_SELECT,
       element: {
         type: "static_select",
-        action_id: UNCONFIGURE_SELECT_ACTION_ID,
+        action_id: SLACK_ACTION_IDS.UNCONFIGURE_SELECT,
         placeholder: {
           type: "plain_text",
           text: "Select a repository",
@@ -241,7 +226,7 @@ export const buildUnconfigureModal = (mappings: readonly RepositoryMapping[]): S
  */
 export const buildNoConfiguredReposModal = (): SlackModalView => ({
   type: "modal",
-  callback_id: "no_configured_repos_modal",
+  callback_id: SLACK_MODAL_CALLBACKS.NO_CONFIGURED_REPOS,
   title: {
     type: "plain_text",
     text: "No Repositories",

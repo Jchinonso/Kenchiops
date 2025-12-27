@@ -208,3 +208,22 @@ export {
   type HealthStatus,
   type ApiResponseStatus,
 } from "./api.js";
+
+// Slack Bot service constants
+export {
+  SLACK_BOT_RATE_LIMITS,
+  SLACK_BOT_TIMEOUTS,
+  SLACK_BOT_DB_CONFIG,
+  SLACK_MODAL_CALLBACKS,
+  SLACK_ACTION_IDS,
+  SLACK_BLOCK_IDS,
+  SLACK_OAUTH_TIMING,
+  SLACK_OAUTH_SCOPES,
+  SLACK_OAUTH_SCOPES_STRING,
+  PRIORITY_NUMERIC_MAP,
+  SLACK_BOT_MESSAGES,
+  SLACK_BOT_HEALTH_PATH,
+  shouldSkipSlackBotRateLimit,
+  type NumericPriority,
+  type StringPriority,
+} from "./slackBot.js";
