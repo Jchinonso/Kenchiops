@@ -30,6 +30,8 @@ import {
   SLACK_BOT_TIMEOUTS,
   SLACK_BOT_DB_CONFIG,
   SLACK_BOT_MESSAGES,
+  SLACK_ACTION_IDS,
+  SLACK_ACTION_PATTERNS,
   shouldSkipSlackBotRateLimit,
 } from "@kenchi/shared";
 
@@ -181,7 +183,7 @@ function setupSlackHandlers(app: SlackApp): void {
   });
 
   // Handle action button clicks
-  app.action(/^approve_action_/, async ({ action, ack, say, body }) => {
+  app.action(SLACK_ACTION_PATTERNS.APPROVE, async ({ action, ack, say, body }) => {
     const messageTs =
       "message" in body && body.message && "ts" in body.message
         ? (body.message.ts as string)
@@ -191,7 +193,7 @@ function setupSlackHandlers(app: SlackApp): void {
     }
   });
 
-  app.action(/^reject_action_/, async ({ action, ack, say, body }) => {
+  app.action(SLACK_ACTION_PATTERNS.REJECT, async ({ action, ack, say, body }) => {
     const messageTs =
       "message" in body && body.message && "ts" in body.message
         ? (body.message.ts as string)
@@ -202,13 +204,13 @@ function setupSlackHandlers(app: SlackApp): void {
   });
 
   // Handle feedback buttons
-  app.action("feedback_helpful", async ({ action, ack }) => {
+  app.action(SLACK_ACTION_IDS.FEEDBACK_HELPFUL, async ({ action, ack }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
       await handlePositiveFeedback(action as ButtonAction, ack);
     }
   });
 
-  app.action("feedback_not_helpful", async ({ action, ack }) => {
+  app.action(SLACK_ACTION_IDS.FEEDBACK_NOT_HELPFUL, async ({ action, ack }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
       await handleNegativeFeedback(action as ButtonAction, ack);
     }
@@ -220,35 +222,35 @@ function setupSlackHandlers(app: SlackApp): void {
   });
 
   // Handle App Home action buttons
-  app.action("test_connection", async ({ ack, client, body }) => {
+  app.action(SLACK_ACTION_IDS.TEST_CONNECTION, async ({ ack, client, body }) => {
     await ack();
     await handleTestConnection(client, body.user.id);
     // Refresh the home view to show the result
     await handleRefreshHome(client, body.user.id);
   });
 
-  app.action("refresh_home", async ({ ack, client, body }) => {
+  app.action(SLACK_ACTION_IDS.REFRESH_HOME, async ({ ack, client, body }) => {
     await ack();
     await handleRefreshHome(client, body.user.id);
   });
 
   // Handle connect_github button (external link, just acknowledge)
-  app.action("connect_github", async ({ ack }) => {
+  app.action(SLACK_ACTION_IDS.CONNECT_GITHUB, async ({ ack }) => {
     await ack();
   });
 
   // Handle view_docs button (external link, just acknowledge)
-  app.action("view_docs", async ({ ack }) => {
+  app.action(SLACK_ACTION_IDS.VIEW_DOCS, async ({ ack }) => {
     await ack();
   });
 
   // Handle get_support button (external link, just acknowledge)
-  app.action("get_support", async ({ ack }) => {
+  app.action(SLACK_ACTION_IDS.GET_SUPPORT, async ({ ack }) => {
     await ack();
   });
 
   // Handle select_repository_button - opens the repository selection modal
-  app.action("select_repository_button", async ({ ack, action, body, client }) => {
+  app.action(SLACK_ACTION_IDS.SELECT_REPOSITORY, async ({ ack, action, body, client }) => {
     await ack();
 
     try {

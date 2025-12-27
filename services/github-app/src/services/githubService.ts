@@ -20,6 +20,8 @@ import {
   ExternalServiceError,
   getErrorMessage,
   wrapError,
+  KENCHI_BRANDING,
+  GITHUB_PAGINATION,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
@@ -182,9 +184,9 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
 };
 
 /**
- * Marker to identify KenchiOps comments
+ * Marker to identify KenchiOps comments (from centralized branding)
  */
-const KENCHIOPS_COMMENT_MARKER = "KenchiOps CI Failure Analysis";
+const KENCHIOPS_COMMENT_MARKER = KENCHI_BRANDING.COMMENT_MARKER;
 
 /**
  * Delete existing KenchiOps comments on a PR
@@ -204,7 +206,7 @@ export const deleteKenchiOpsComments = async (
       owner,
       repo,
       issue_number: prNumber,
-      per_page: 100,
+      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
     });
 
     // Find KenchiOps comments (look for our marker in the body)
@@ -345,10 +347,14 @@ export const getInstallationRepositories = async (
 ): Promise<RepositoryInfo[]> => {
   try {
     const octokit = await getOctokit(installationId);
-    const perPage = 100;
 
-    // Use recursive pagination
-    const repositories = await fetchRepositoriesPage(octokit, 1, perPage, []);
+    // Use recursive pagination with default page size
+    const repositories = await fetchRepositoriesPage(
+      octokit,
+      1,
+      GITHUB_PAGINATION.DEFAULT_PER_PAGE,
+      []
+    );
 
     logger.info("Fetched installation repositories", {
       installationId,
@@ -381,9 +387,9 @@ export interface CheckAnnotation {
 }
 
 /**
- * GitHub API annotation batch size limit
+ * GitHub API annotation batch size limit (from centralized pagination config)
  */
-const MAX_ANNOTATIONS_PER_CALL = 50;
+const MAX_ANNOTATIONS_PER_CALL = GITHUB_PAGINATION.MAX_ANNOTATIONS_PER_CALL;
 
 /**
  * Result of a workflow rerun attempt

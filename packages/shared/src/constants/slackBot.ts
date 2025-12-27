@@ -89,6 +89,20 @@ export const SLACK_ACTION_IDS = {
   FEEDBACK_HELPFUL: "feedback_helpful",
   /** Feedback not helpful button */
   FEEDBACK_NOT_HELPFUL: "feedback_not_helpful",
+  /** Approve action prefix */
+  APPROVE_PREFIX: "approve_action_",
+  /** Reject action prefix */
+  REJECT_PREFIX: "reject_action_",
+} as const;
+
+/**
+ * Regex patterns for matching action IDs with dynamic suffixes.
+ */
+export const SLACK_ACTION_PATTERNS = {
+  /** Pattern for approve action buttons */
+  APPROVE: /^approve_action_/,
+  /** Pattern for reject action buttons */
+  REJECT: /^reject_action_/,
 } as const;
 
 /**

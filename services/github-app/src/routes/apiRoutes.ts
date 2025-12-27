@@ -5,7 +5,14 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import { asyncHandler, createLogger, HTTP_STATUS, validate, validators } from "@kenchi/shared";
+import {
+  asyncHandler,
+  createLogger,
+  HTTP_STATUS,
+  validate,
+  validators,
+  KENCHI_BRANDING,
+} from "@kenchi/shared";
 import {
   postPRComment,
   createCheckRunWithAnnotations,
@@ -105,7 +112,7 @@ router.post(
           owner,
           repo,
           analysis.headSha,
-          "KenchiOps Analysis",
+          KENCHI_BRANDING.CHECK_RUN_NAME,
           analysis.identified_cause || analysis.analysis || "CI failure analyzed",
           checkAnnotations
         );
@@ -193,7 +200,7 @@ router.post(
         owner,
         repo,
         head_sha,
-        check_name || "KenchiOps Analysis",
+        check_name || KENCHI_BRANDING.CHECK_RUN_NAME,
         summary,
         checkAnnotations
       );

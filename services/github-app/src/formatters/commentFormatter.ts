@@ -21,6 +21,7 @@ import {
   DEPENDENCY_EMOJI_MAP,
   CONFIDENCE_BADGE_THRESHOLDS,
   GITHUB_COMMENT_DISPLAY,
+  GITHUB_COMMENT_TEMPLATES,
   // Types
   type CIAnnotation,
   type CITestFailure,
@@ -62,12 +63,12 @@ export interface AnalysisData {
 }
 
 // ============================================================================
-// Static Content (uses shared UI_EMOJI)
+// Static Content (uses shared UI_EMOJI and templates)
 // ============================================================================
 
-const HEADER = `## ${UI_EMOJI.failure} KenchiOps — CI Failure Analysis\n`;
-const SUCCESS_HEADER = `## ${UI_EMOJI.success} KenchiOps — CI Analysis Complete\n`;
-const FOOTER = `---\n*${UI_EMOJI.robot} Powered by [KenchiOps](https://github.com/kenchi/devops) — AI-driven DevOps Assistant*`;
+const HEADER = GITHUB_COMMENT_TEMPLATES.FAILURE_HEADER(UI_EMOJI.failure);
+const SUCCESS_HEADER = GITHUB_COMMENT_TEMPLATES.SUCCESS_HEADER(UI_EMOJI.success);
+const FOOTER = GITHUB_COMMENT_TEMPLATES.FOOTER(UI_EMOJI.robot);
 
 // ============================================================================
 // Helper Functions
