@@ -201,12 +201,26 @@ export const deleteKenchiOpsComments = async (
   try {
     const octokit = await getOctokit(installationId);
 
+    logger.info("Checking for old KenchiOps comments to delete", {
+      owner,
+      repo,
+      prNumber,
+      marker: KENCHIOPS_COMMENT_MARKER,
+    });
+
     // List all comments on the PR
     const { data: comments } = await octokit.rest.issues.listComments({
       owner,
       repo,
       issue_number: prNumber,
       per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
+    });
+
+    logger.info("Found PR comments", {
+      owner,
+      repo,
+      prNumber,
+      totalComments: comments.length,
     });
 
     // Find KenchiOps comments (look for our marker in the body)
