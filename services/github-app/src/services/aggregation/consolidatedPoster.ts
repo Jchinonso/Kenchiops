@@ -13,6 +13,7 @@ import {
   isRedisHealthy,
   enqueueConsolidatedNotification,
   resilientPost,
+  KENCHI_BRANDING,
   type AggregatedFailures,
   type ConsolidatedPostResult,
 } from "@kenchi/shared";
@@ -99,7 +100,7 @@ const createCheckAnnotations = async (
       repository.owner,
       repository.name,
       commitSha,
-      "KenchiOps Analysis",
+      KENCHI_BRANDING.CHECK_RUN_NAME,
       summary,
       annotations
     );

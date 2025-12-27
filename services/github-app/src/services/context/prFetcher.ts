@@ -11,6 +11,7 @@ import {
   EXCLUDED_PACKAGE_JSON_FIELDS,
   DEPENDENCY_DIFF_PATTERNS,
   LOG_PARSING_LIMITS,
+  GITHUB_PAGINATION,
   getErrorMessage,
   getOrFetchPullRequest,
   getOrFetchPullRequestDiff,
@@ -236,7 +237,7 @@ export const fetchDependencyChanges = async (
       owner,
       repo,
       pull_number: prNumber,
-      per_page: 100,
+      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
     });
 
     // Find package.json changes
@@ -336,7 +337,7 @@ export const fetchBuildConfigChanges = async (
       owner,
       repo,
       pull_number: prNumber,
-      per_page: 100,
+      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
     });
 
     const buildConfigSet = new Set<string>(BUILD_CONFIG_FILES);

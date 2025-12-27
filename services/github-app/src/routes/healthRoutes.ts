@@ -5,7 +5,7 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import { HTTP_STATUS, config } from "@kenchi/shared";
+import { HTTP_STATUS, config, GITHUB_PAGINATION } from "@kenchi/shared";
 import type { HealthResponse } from "../types/githubTypes.js";
 import { appConfig } from "../config/appConfig.js";
 
@@ -63,7 +63,7 @@ router.get("/health/github/repos", async (_req: Request, res: Response) => {
     const { getOctokit } = await import("../services/githubService.js");
     const octokit = await getOctokit(installationId);
     const { data } = await octokit.rest.apps.listReposAccessibleToInstallation({
-      per_page: 100,
+      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
     });
 
     res.status(HTTP_STATUS.OK).json({

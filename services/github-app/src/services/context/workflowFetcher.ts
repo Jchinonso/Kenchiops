@@ -4,17 +4,12 @@
  * Fetches workflow logs and timing information from GitHub Actions.
  */
 
-import { createLogger, GITHUB_CONTEXT_LIMITS } from "@kenchi/shared";
+import { createLogger, GITHUB_CONTEXT_LIMITS, GITHUB_RETRY_CONFIG } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
 import { truncateWithContext } from "./logParser.js";
 import type { WorkflowTiming } from "./types.js";
 
 const logger = createLogger("github-app");
-
-/**
- * Retry configuration
- */
-const MAX_RETRIES = 3;
 
 /**
  * Check if error is a DNS-related error
@@ -23,9 +18,10 @@ const isDnsError = (errorMessage: string): boolean =>
   errorMessage.includes("EAI_AGAIN") || errorMessage.includes("ENOTFOUND");
 
 /**
- * Calculate exponential backoff delay
+ * Calculate exponential backoff delay using centralized config
  */
-const getBackoffDelay = (attempt: number): number => 1000 * Math.pow(2, attempt - 1);
+const getBackoffDelay = (attempt: number): number =>
+  GITHUB_RETRY_CONFIG.BASE_DELAY_MS * Math.pow(GITHUB_RETRY_CONFIG.BACKOFF_BASE, attempt - 1);
 
 /**
  * Wait for a specified duration
@@ -115,13 +111,13 @@ export const fetchWorkflowLogs = async (
         return truncateWithContext(logContent, GITHUB_CONTEXT_LIMITS.MAX_LOG_SIZE);
       } catch (logError) {
         const errorMessage = logError instanceof Error ? logError.message : "Unknown error";
-        const shouldRetry = isDnsError(errorMessage) && attempt < MAX_RETRIES;
+        const shouldRetry = isDnsError(errorMessage) && attempt < GITHUB_RETRY_CONFIG.MAX_RETRIES;
 
         if (shouldRetry) {
           logger.warn("DNS error fetching logs, retrying...", {
             jobId: failedJob.id,
             attempt,
-            maxRetries: MAX_RETRIES,
+            maxRetries: GITHUB_RETRY_CONFIG.MAX_RETRIES,
             error: errorMessage,
           });
           await wait(getBackoffDelay(attempt));

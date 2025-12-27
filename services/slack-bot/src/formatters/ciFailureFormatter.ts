@@ -14,6 +14,8 @@ import {
   collectCIErrors,
   DISPLAY_DEFAULTS,
   truncateText,
+  SLACK_FAILURE_TEMPLATES,
+  FORMATTER_DISPLAY_LIMITS,
 } from "@kenchi/shared";
 import type { SlackBlock, CIFailureAnalysis } from "../types/slackTypes.js";
 
@@ -51,7 +53,7 @@ const createBrandedHeaderBlock = (): SlackBlock => ({
   type: "header",
   text: {
     type: "plain_text",
-    text: "❌ KenchiOps — CI Failure Detected",
+    text: SLACK_FAILURE_TEMPLATES.HEADER,
     emoji: true,
   },
 });
@@ -66,7 +68,9 @@ const createSummaryBlock = (analysis: CIFailureAnalysis): SlackBlock => {
 
   // Find the first test failure name if available
   const firstTest = analysis.testFailures?.[0]?.testName;
-  const testInfo = firstTest ? ` on test \`${truncateText(firstTest, 40)}\`` : "";
+  const testInfo = firstTest
+    ? ` on test \`${truncateText(firstTest, FORMATTER_DISPLAY_LIMITS.SLACK_TEST_NAME_LENGTH)}\``
+    : "";
 
   return {
     type: "section",
@@ -98,7 +102,9 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
   if (analysis.testFailures && analysis.testFailures.length > 0) {
     const failureCount = analysis.testFailures.length;
     if (failureCount === 1) {
-      reasons.push(`1 test failed: \`${truncateText(analysis.testFailures[0].testName, 50)}\``);
+      reasons.push(
+        `1 test failed: \`${truncateText(analysis.testFailures[0].testName, FORMATTER_DISPLAY_LIMITS.DETAILED_TEST_NAME_LENGTH)}\``
+      );
     } else {
       reasons.push(`${failureCount} tests failed in this run`);
     }
@@ -143,8 +149,8 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
     return null;
   }
 
-  // Take top 3 actions max
-  const topActions = actions.slice(0, 3);
+  // Take top actions based on display limit
+  const topActions = actions.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ACTION_BUTTONS);
   const actionsList = topActions
     .map((action, index) => {
       const emoji = getPriorityEmoji(action.priority);
@@ -169,9 +175,12 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
 const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
   if (errors.length === 0) return null;
 
-  // Limit to 5 errors max
-  const displayErrors = errors.slice(0, 5);
-  const moreText = errors.length > 5 ? `\n_...and ${errors.length - 5} more errors_` : "";
+  // Limit errors based on display limit
+  const displayErrors = errors.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED);
+  const moreText =
+    errors.length > FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED
+      ? `\n_...and ${errors.length - FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED} more errors_`
+      : "";
 
   const errorText = [
     ...displayErrors.map((e) => `\`\`\`${truncateText(e, 100)}\`\`\``),

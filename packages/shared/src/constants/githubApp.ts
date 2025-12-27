@@ -72,3 +72,97 @@ export const GITHUB_APP_MESSAGES = {
   /** Rate limit exceeded message */
   RATE_LIMIT_EXCEEDED: "Too many requests to GitHub app service",
 } as const;
+
+// ==================== Branding ====================
+
+/**
+ * KenchiOps branding constants for consistent identity across comments and checks.
+ */
+export const KENCHI_BRANDING = {
+  /** Application name */
+  APP_NAME: "KenchiOps",
+  /** Comment marker for identifying KenchiOps comments on PRs */
+  COMMENT_MARKER: "KenchiOps CI Failure Analysis",
+  /** Check run name for GitHub status checks */
+  CHECK_RUN_NAME: "KenchiOps Analysis",
+  /** GitHub project URL */
+  PROJECT_URL: "https://github.com/kenchi/devops",
+  /** Brand description */
+  TAGLINE: "AI-driven DevOps Assistant",
+} as const;
+
+/**
+ * GitHub comment header and footer templates.
+ * These use template functions to allow dynamic emoji insertion.
+ */
+export const GITHUB_COMMENT_TEMPLATES = {
+  /** Failure analysis header */
+  FAILURE_HEADER: (emoji: string): string => `## ${emoji} KenchiOps — CI Failure Analysis\n`,
+  /** Success analysis header */
+  SUCCESS_HEADER: (emoji: string): string => `## ${emoji} KenchiOps — CI Analysis Complete\n`,
+  /** Comment footer with branding */
+  FOOTER: (emoji: string): string =>
+    `---\n*${emoji} Powered by [KenchiOps](https://github.com/kenchi/devops) — AI-driven DevOps Assistant*`,
+} as const;
+
+/**
+ * Slack notification header templates for CI failures.
+ */
+export const SLACK_FAILURE_TEMPLATES = {
+  /** CI failure header text */
+  HEADER: "❌ KenchiOps — CI Failure Detected",
+  /** CI failure notification header with build status */
+  BUILD_FAILED: "🚨 CI Build Failed",
+  /** Footer branding */
+  FOOTER: "🤖 KenchiOps",
+} as const;
+
+// ==================== Formatter Configuration ====================
+
+/**
+ * Display limits for formatters to prevent overly long output.
+ */
+export const FORMATTER_DISPLAY_LIMITS = {
+  /** Maximum test name length in Slack notifications */
+  SLACK_TEST_NAME_LENGTH: 40,
+  /** Maximum test name length in detailed views */
+  DETAILED_TEST_NAME_LENGTH: 50,
+  /** Maximum number of action buttons to display */
+  MAX_ACTION_BUTTONS: 3,
+  /** Maximum number of errors to display in summary */
+  MAX_ERRORS_DISPLAYED: 5,
+  /** Confidence percentage multiplier */
+  CONFIDENCE_MULTIPLIER: 100,
+} as const;
+
+// ==================== Retry Configuration ====================
+
+/**
+ * Retry configuration for GitHub API calls.
+ */
+export const GITHUB_RETRY_CONFIG = {
+  /** Maximum number of retry attempts */
+  MAX_RETRIES: 3,
+  /** Base delay in milliseconds for exponential backoff */
+  BASE_DELAY_MS: 1000,
+  /** Exponential backoff base (delay = BASE_DELAY_MS * BACKOFF_BASE^attempt) */
+  BACKOFF_BASE: 2,
+} as const;
+
+/**
+ * GitHub API pagination configuration.
+ */
+export const GITHUB_PAGINATION = {
+  /** Default items per page for list operations */
+  DEFAULT_PER_PAGE: 100,
+  /** Maximum annotations per API call (GitHub limit) */
+  MAX_ANNOTATIONS_PER_CALL: 50,
+} as const;
+
+/**
+ * Context fetching configuration for code snippets.
+ */
+export const CONTEXT_FETCH_CONFIG = {
+  /** Number of lines to include before/after error line */
+  CONTEXT_LINES: 10,
+} as const;
