@@ -32,6 +32,21 @@ import { AGGREGATION_KEYS, DEFAULT_AGGREGATION_CONFIG } from "./types.js";
 
 const logger = createLogger("redis-aggregator");
 
+// ==================== Constants ====================
+
+/** Timeout for Redis operations in milliseconds */
+const REDIS_OPERATION_TIMEOUT_MS = 3000;
+
+/**
+ * Wrap a promise with a timeout
+ */
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Redis operation timeout")), timeoutMs)
+  );
+  return Promise.race([promise, timeoutPromise]);
+};
+
 // ==================== Types ====================
 
 /**
@@ -144,6 +159,13 @@ export const addFailureToRedis = async (
   config: AggregationConfig = DEFAULT_AGGREGATION_CONFIG
 ): Promise<void> => {
   const redis = getRedisClient();
+
+  // Check if Redis is ready
+  if (redis.status !== "ready") {
+    logger.warn("Redis not ready for aggregation", { status: redis.status });
+    return;
+  }
+
   const failuresKey = AGGREGATION_KEYS.failures(key);
   const metadataKey = AGGREGATION_KEYS.metadata(key);
   const debounceKey = AGGREGATION_KEYS.debounce(key);
@@ -152,61 +174,69 @@ export const addFailureToRedis = async (
   const serializedFailure = serializeFailure(failure);
   const checkRunIdStr = String(failure.checkRunId);
 
-  // Check if this is a new aggregation or update
-  const existingMeta = await redis.hgetall(metadataKey);
-  const isNew = Object.keys(existingMeta).length === 0;
+  try {
+    // Check if this is a new aggregation or update
+    const existingMeta = await withTimeout(redis.hgetall(metadataKey), REDIS_OPERATION_TIMEOUT_MS);
+    const isNew = Object.keys(existingMeta).length === 0;
 
-  // Get current failure count
-  const currentCount = await redis.hlen(failuresKey);
-  if (currentCount >= config.maxFailuresPerCommit) {
-    logger.warn("Max failures reached for aggregation", {
+    // Get current failure count
+    const currentCount = await withTimeout(redis.hlen(failuresKey), REDIS_OPERATION_TIMEOUT_MS);
+    if (currentCount >= config.maxFailuresPerCommit) {
+      logger.warn("Max failures reached for aggregation", {
+        commitSha: key.commitSha.substring(0, 7),
+        maxFailures: config.maxFailuresPerCommit,
+        currentCount,
+      });
+      return;
+    }
+
+    // Use pipeline for atomic operations
+    const pipeline = redis.pipeline();
+
+    // Add/update failure
+    pipeline.hset(failuresKey, checkRunIdStr, serializedFailure);
+
+    // Update or set metadata
+    const metadata = buildMetadata(
+      key,
+      repositoryInfo,
+      installationId,
+      pullRequestNumbers,
+      prContext,
+      workflowContext,
+      isNew ? now : new Date(existingMeta.firstFailureAt || now.toISOString()),
+      now
+    );
+
+    // Set all metadata fields
+    pipeline.hset(metadataKey, metadata as unknown as Record<string, string>);
+
+    // Set TTL on all keys (cleanup safety net)
+    const ttlSeconds = Math.ceil(config.maxWaitMs / 1000) + 60; // Max wait + 1 minute buffer
+    pipeline.expire(failuresKey, ttlSeconds);
+    pipeline.expire(metadataKey, ttlSeconds);
+
+    // Set debounce key with TTL - when this expires, we should flush
+    // The debounce key acts as "time since last failure"
+    const debounceSeconds = Math.ceil(config.debounceMs / 1000);
+    pipeline.set(debounceKey, "1", "EX", debounceSeconds);
+
+    await withTimeout(pipeline.exec(), REDIS_OPERATION_TIMEOUT_MS);
+
+    logger.info("Failure added to Redis aggregation", {
+      repository: key.repositoryFullName,
       commitSha: key.commitSha.substring(0, 7),
-      maxFailures: config.maxFailuresPerCommit,
-      currentCount,
+      checkName: failure.checkName,
+      isNewAggregation: isNew,
+      totalFailures: currentCount + 1,
     });
-    return;
+  } catch (error) {
+    logger.error("Failed to add failure to Redis aggregation", {
+      repository: key.repositoryFullName,
+      commitSha: key.commitSha.substring(0, 7),
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
   }
-
-  // Use pipeline for atomic operations
-  const pipeline = redis.pipeline();
-
-  // Add/update failure
-  pipeline.hset(failuresKey, checkRunIdStr, serializedFailure);
-
-  // Update or set metadata
-  const metadata = buildMetadata(
-    key,
-    repositoryInfo,
-    installationId,
-    pullRequestNumbers,
-    prContext,
-    workflowContext,
-    isNew ? now : new Date(existingMeta.firstFailureAt || now.toISOString()),
-    now
-  );
-
-  // Set all metadata fields
-  pipeline.hset(metadataKey, metadata as unknown as Record<string, string>);
-
-  // Set TTL on all keys (cleanup safety net)
-  const ttlSeconds = Math.ceil(config.maxWaitMs / 1000) + 60; // Max wait + 1 minute buffer
-  pipeline.expire(failuresKey, ttlSeconds);
-  pipeline.expire(metadataKey, ttlSeconds);
-
-  // Set debounce key with TTL - when this expires, we should flush
-  // The debounce key acts as "time since last failure"
-  const debounceSeconds = Math.ceil(config.debounceMs / 1000);
-  pipeline.set(debounceKey, "1", "EX", debounceSeconds);
-
-  await pipeline.exec();
-
-  logger.info("Failure added to Redis aggregation", {
-    repository: key.repositoryFullName,
-    commitSha: key.commitSha.substring(0, 7),
-    checkName: failure.checkName,
-    isNewAggregation: isNew,
-    totalFailures: currentCount + 1,
-  });
 };
 
 /**
@@ -216,24 +246,41 @@ export const getAggregationFromRedis = async (
   key: AggregationKey
 ): Promise<AggregatedFailures | null> => {
   const redis = getRedisClient();
+
+  if (redis.status !== "ready") {
+    logger.warn("Redis not ready for getAggregation", { status: redis.status });
+    return null;
+  }
+
   const failuresKey = AGGREGATION_KEYS.failures(key);
   const metadataKey = AGGREGATION_KEYS.metadata(key);
 
-  // Get metadata first
-  const metadata = (await redis.hgetall(metadataKey)) as unknown as AggregationMetadata;
-  if (!metadata || !metadata.commitSha) {
+  try {
+    // Get metadata first
+    const metadata = (await withTimeout(
+      redis.hgetall(metadataKey),
+      REDIS_OPERATION_TIMEOUT_MS
+    )) as unknown as AggregationMetadata;
+    if (!metadata || !metadata.commitSha) {
+      return null;
+    }
+
+    // Get all failures
+    const failuresData = await withTimeout(redis.hgetall(failuresKey), REDIS_OPERATION_TIMEOUT_MS);
+    const failures = Object.values(failuresData).map(deserializeFailure);
+
+    if (failures.length === 0) {
+      return null;
+    }
+
+    return reconstructAggregation(metadata, failures);
+  } catch (error) {
+    logger.error("Failed to get aggregation from Redis", {
+      repository: key.repositoryFullName,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return null;
   }
-
-  // Get all failures
-  const failuresData = await redis.hgetall(failuresKey);
-  const failures = Object.values(failuresData).map(deserializeFailure);
-
-  if (failures.length === 0) {
-    return null;
-  }
-
-  return reconstructAggregation(metadata, failures);
 };
 
 /**
@@ -241,16 +288,29 @@ export const getAggregationFromRedis = async (
  */
 export const deleteAggregationFromRedis = async (key: AggregationKey): Promise<void> => {
   const redis = getRedisClient();
+
+  if (redis.status !== "ready") {
+    logger.warn("Redis not ready for deleteAggregation", { status: redis.status });
+    return;
+  }
+
   const failuresKey = AGGREGATION_KEYS.failures(key);
   const metadataKey = AGGREGATION_KEYS.metadata(key);
   const debounceKey = AGGREGATION_KEYS.debounce(key);
 
-  await redis.del(failuresKey, metadataKey, debounceKey);
+  try {
+    await withTimeout(redis.del(failuresKey, metadataKey, debounceKey), REDIS_OPERATION_TIMEOUT_MS);
 
-  logger.debug("Aggregation deleted from Redis", {
-    repository: key.repositoryFullName,
-    commitSha: key.commitSha.substring(0, 7),
-  });
+    logger.debug("Aggregation deleted from Redis", {
+      repository: key.repositoryFullName,
+      commitSha: key.commitSha.substring(0, 7),
+    });
+  } catch (error) {
+    logger.error("Failed to delete aggregation from Redis", {
+      repository: key.repositoryFullName,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 };
 
 /**
@@ -258,9 +318,18 @@ export const deleteAggregationFromRedis = async (key: AggregationKey): Promise<v
  */
 export const isDebounceExpired = async (key: AggregationKey): Promise<boolean> => {
   const redis = getRedisClient();
-  const debounceKey = AGGREGATION_KEYS.debounce(key);
-  const exists = await redis.exists(debounceKey);
-  return exists === 0;
+
+  if (redis.status !== "ready") {
+    return false;
+  }
+
+  try {
+    const debounceKey = AGGREGATION_KEYS.debounce(key);
+    const exists = await withTimeout(redis.exists(debounceKey), REDIS_OPERATION_TIMEOUT_MS);
+    return exists === 0;
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -271,13 +340,25 @@ export const isMaxWaitExceeded = async (
   maxWaitMs: number
 ): Promise<boolean> => {
   const redis = getRedisClient();
-  const metadataKey = AGGREGATION_KEYS.metadata(key);
-  const firstFailureAt = await redis.hget(metadataKey, "firstFailureAt");
 
-  if (!firstFailureAt) return false;
+  if (redis.status !== "ready") {
+    return false;
+  }
 
-  const elapsed = Date.now() - new Date(firstFailureAt).getTime();
-  return elapsed >= maxWaitMs;
+  try {
+    const metadataKey = AGGREGATION_KEYS.metadata(key);
+    const firstFailureAt = await withTimeout(
+      redis.hget(metadataKey, "firstFailureAt"),
+      REDIS_OPERATION_TIMEOUT_MS
+    );
+
+    if (!firstFailureAt) return false;
+
+    const elapsed = Date.now() - new Date(firstFailureAt).getTime();
+    return elapsed >= maxWaitMs;
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -287,37 +368,46 @@ export const findReadyAggregations = async (
   config: AggregationConfig = DEFAULT_AGGREGATION_CONFIG
 ): Promise<AggregationKey[]> => {
   const redis = getRedisClient();
+
+  if (redis.status !== "ready") {
+    logger.debug("Redis not ready, skipping findReadyAggregations", { status: redis.status });
+    return [];
+  }
+
   const readyKeys: AggregationKey[] = [];
 
-  // Scan for all metadata keys
-  let cursor = "0";
-  do {
-    const [nextCursor, keys] = await redis.scan(
-      cursor,
-      "MATCH",
-      AGGREGATION_KEYS.pattern,
-      "COUNT",
-      100
-    );
-    cursor = nextCursor;
+  try {
+    // Scan for all metadata keys
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await withTimeout(
+        redis.scan(cursor, "MATCH", AGGREGATION_KEYS.pattern, "COUNT", 100),
+        REDIS_OPERATION_TIMEOUT_MS
+      );
+      cursor = nextCursor;
 
-    for (const metaKey of keys) {
-      // Extract repo:sha from key pattern kenchi:agg:{repo}:{sha}:meta
-      const match = metaKey.match(/^kenchi:agg:(.+):([a-f0-9]+):meta$/);
-      if (!match) continue;
+      for (const metaKey of keys) {
+        // Extract repo:sha from key pattern kenchi:agg:{repo}:{sha}:meta
+        const match = metaKey.match(/^kenchi:agg:(.+):([a-f0-9]+):meta$/);
+        if (!match) continue;
 
-      const [, repoFullName, commitSha] = match;
-      const key: AggregationKey = { repositoryFullName: repoFullName, commitSha };
+        const [, repoFullName, commitSha] = match;
+        const key: AggregationKey = { repositoryFullName: repoFullName, commitSha };
 
-      // Check if ready to flush
-      const debounceExpired = await isDebounceExpired(key);
-      const maxWaitExceeded = await isMaxWaitExceeded(key, config.maxWaitMs);
+        // Check if ready to flush
+        const debounceExpired = await isDebounceExpired(key);
+        const maxWaitExceeded = await isMaxWaitExceeded(key, config.maxWaitMs);
 
-      if (debounceExpired || maxWaitExceeded) {
-        readyKeys.push(key);
+        if (debounceExpired || maxWaitExceeded) {
+          readyKeys.push(key);
+        }
       }
-    }
-  } while (cursor !== "0");
+    } while (cursor !== "0");
+  } catch (error) {
+    logger.error("Failed to find ready aggregations", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 
   return readyKeys;
 };

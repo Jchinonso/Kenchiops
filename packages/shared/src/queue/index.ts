@@ -7,6 +7,7 @@ export {
   getRedisClient,
   getSubscriberClient,
   isRedisHealthy,
+  waitForRedisConnection,
   closeRedis,
   type RedisOptions,
 } from "./redisClient.js";

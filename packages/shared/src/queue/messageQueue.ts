@@ -65,7 +65,6 @@ export interface QueueConfig {
 // ==================== Constants ====================
 
 const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_VISIBILITY_TIMEOUT = 30; // seconds
 const PROCESSING_SUFFIX = ":processing";
 
 // ==================== Helper Functions ====================
@@ -165,7 +164,7 @@ export const createQueue = (queueConfig: QueueConfig) => {
   const {
     name,
     maxRetries = DEFAULT_MAX_RETRIES,
-    visibilityTimeout = DEFAULT_VISIBILITY_TIMEOUT,
+    // visibilityTimeout not used with non-blocking rpoplpush
     deadLetterQueue = `${name}:dead`,
   } = queueConfig;
 
@@ -201,13 +200,19 @@ export const createQueue = (queueConfig: QueueConfig) => {
   };
 
   /**
-   * Processes jobs from the queue
+   * Processes jobs from the queue (non-blocking)
+   * Uses rpoplpush instead of brpoplpush to avoid blocking the Redis connection
    */
   const process = async <T>(handler: MessageHandler<T>): Promise<void> => {
     const client = getRedisClient();
 
-    // Move job from main queue to processing queue (atomic)
-    const data = await client.brpoplpush(name, processingQueue, visibilityTimeout);
+    // Check if Redis is ready
+    if (client.status !== "ready") {
+      return; // Skip if not ready
+    }
+
+    // Move job from main queue to processing queue (atomic, non-blocking)
+    const data = await client.rpoplpush(name, processingQueue);
 
     if (!data) return; // No job available
 
