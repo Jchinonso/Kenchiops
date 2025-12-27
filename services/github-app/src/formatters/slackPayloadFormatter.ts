@@ -222,12 +222,13 @@ const buildActionBlocks = (
   // Add action descriptions
   executableActions.forEach((action) => {
     const priorityEmoji = getPriorityEmoji(action.priority);
+    const actionLabel = toTitleCase(action.actionType ?? "Action");
 
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `${priorityEmoji} *${action.actionType ?? "Action"}*: ${action.description}`,
+        text: `${priorityEmoji} *${actionLabel}*: ${action.description}`,
       },
     });
   });
