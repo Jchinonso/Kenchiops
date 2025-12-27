@@ -20,6 +20,11 @@ jest.mock("@kenchi/shared", () => ({
     MAX_FILES: 5,
     MAX_ANNOTATIONS: 20,
   },
+  GITHUB_RETRY_CONFIG: {
+    MAX_RETRIES: 3,
+    BASE_DELAY_MS: 1000,
+    BACKOFF_BASE: 2,
+  },
 }));
 
 jest.mock("../../services/context/logParser.js", () => ({
