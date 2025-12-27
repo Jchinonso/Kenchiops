@@ -6,11 +6,11 @@
  * Maximum size limits for GitHub context data.
  */
 export const GITHUB_CONTEXT_LIMITS = {
-  MAX_LOG_SIZE: 50000, // 50KB of logs
-  MAX_DIFF_SIZE: 30000, // 30KB of diff
-  MAX_FILE_SIZE: 10000, // 10KB per file
-  MAX_FILES: 5, // Maximum number of source files to fetch
-  MAX_ANNOTATIONS: 20, // Maximum number of annotations
+  MAX_LOG_SIZE: 100000, // 100KB of logs - increased for full context
+  MAX_DIFF_SIZE: 50000, // 50KB of diff - increased for full context
+  MAX_FILE_SIZE: 15000, // 15KB per file
+  MAX_FILES: 10, // Maximum number of source files to fetch
+  MAX_ANNOTATIONS: 50, // Maximum number of annotations - increased for full context
 } as const;
 
 /**
@@ -75,7 +75,7 @@ export const GITHUB_COMMENT_DISPLAY = {
  * Maximum number of test failures to extract from logs.
  */
 export const LOG_PARSING_LIMITS = {
-  MAX_TEST_FAILURES: 10,
+  MAX_TEST_FAILURES: 50, // Increased to capture all test failures
   /** Maximum size for build config diff in characters */
   MAX_BUILD_CONFIG_DIFF_SIZE: 5000,
 } as const;
