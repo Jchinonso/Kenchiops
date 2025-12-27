@@ -10,7 +10,7 @@
 import Redis from "ioredis";
 import { createLogger } from "../core/logger.js";
 import { config } from "../core/config.js";
-import { RETRY_DEFAULTS } from "../constants/index.js";
+import { RETRY_DEFAULTS, REDIS_CONNECTION_DEFAULTS } from "../constants/index.js";
 
 const logger = createLogger("redis");
 
@@ -39,9 +39,9 @@ let subscriberClient: Redis | null = null;
  * Default Redis options
  */
 const DEFAULT_OPTIONS: Required<Omit<RedisOptions, "url">> = {
-  maxRetries: 10,
-  enableOfflineQueue: false, // Disable to fail fast instead of hanging
-  connectTimeout: 10000,
+  maxRetries: REDIS_CONNECTION_DEFAULTS.MAX_RETRIES,
+  enableOfflineQueue: REDIS_CONNECTION_DEFAULTS.ENABLE_OFFLINE_QUEUE,
+  connectTimeout: REDIS_CONNECTION_DEFAULTS.CONNECT_TIMEOUT_MS,
 };
 
 /**
@@ -117,10 +117,12 @@ export const isRedisHealthy = async (): Promise<boolean> => {
 
 /**
  * Waits for Redis to be connected and ready
- * @param timeoutMs - Maximum time to wait in milliseconds (default: 10000)
+ * @param timeoutMs - Maximum time to wait in milliseconds
  * @returns Promise that resolves when connected or rejects on timeout
  */
-export const waitForRedisConnection = async (timeoutMs = 10000): Promise<void> => {
+export const waitForRedisConnection = async (
+  timeoutMs = REDIS_CONNECTION_DEFAULTS.CONNECT_TIMEOUT_MS
+): Promise<void> => {
   const client = getRedisClient();
   const status = client.status;
 

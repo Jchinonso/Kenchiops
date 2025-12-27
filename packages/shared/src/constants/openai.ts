@@ -7,6 +7,10 @@
  */
 export const OPENAI_DEFAULTS = {
   TEMPERATURE: 0.1,
+  /** Default model for analysis */
+  MODEL: "gpt-4-turbo-2024-04-09",
+  /** Default max tokens for responses */
+  MAX_TOKENS: 4096,
 } as const;
 
 /**

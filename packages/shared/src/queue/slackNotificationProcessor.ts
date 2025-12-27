@@ -9,6 +9,8 @@
 
 import { slackNotificationQueue, type QueueMessage, type ProcessResult } from "./messageQueue.js";
 import { createLogger } from "../core/logger.js";
+import { QUEUE_WORKER_DEFAULTS, SLACK_RETRYABLE_ERROR_PATTERNS } from "../constants/index.js";
+import { delay } from "../core/utils.js";
 import type { AggregatedFailures } from "../aggregation/types.js";
 
 const logger = createLogger("slack-notification-queue");
@@ -180,21 +182,7 @@ export const enqueueSystemAlert = async (
  */
 const isRetryableError = (error?: string): boolean => {
   if (!error) return false;
-
-  const retryablePatterns = [
-    /timeout/i,
-    /network/i,
-    /ECONNRESET/i,
-    /ETIMEDOUT/i,
-    /rate.?limit/i,
-    /503/,
-    /502/,
-    /504/,
-    /channel_not_found/i,
-    /not_in_channel/i,
-  ];
-
-  return retryablePatterns.some((pattern) => pattern.test(error));
+  return SLACK_RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(error));
 };
 
 // ==================== Worker Functions ====================
@@ -272,7 +260,10 @@ export const startSlackNotificationWorker = async (
   handler: NotificationHandler,
   options: { pollIntervalMs?: number; maxConcurrent?: number } = {}
 ): Promise<() => void> => {
-  const { pollIntervalMs = 1000, maxConcurrent = 3 } = options;
+  const {
+    pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
+    maxConcurrent = QUEUE_WORKER_DEFAULTS.SLACK_MAX_CONCURRENT,
+  } = options;
   let running = true;
   let activeJobs = 0;
 
@@ -285,7 +276,7 @@ export const startSlackNotificationWorker = async (
     while (running) {
       // Wait if at max concurrency
       if (activeJobs >= maxConcurrent) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);
         continue;
       }
 
@@ -297,7 +288,7 @@ export const startSlackNotificationWorker = async (
       }
 
       // Small delay between processing attempts
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await delay(pollIntervalMs);
     }
   };
 

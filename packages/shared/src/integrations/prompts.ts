@@ -12,7 +12,12 @@ import type {
   MetricsSummary,
   SystemState,
 } from "../core/types.js";
-import { SIMILARITY_THRESHOLDS, EVIDENCE_TRUNCATION, UI_CONSTANTS } from "../constants/index.js";
+import {
+  SIMILARITY_THRESHOLDS,
+  EVIDENCE_TRUNCATION,
+  UI_CONSTANTS,
+  OPENAI_CONSTANTS,
+} from "../constants/index.js";
 
 /**
  * Builds the system context prompt that establishes the LLM's role and constraints.
@@ -467,7 +472,7 @@ export const formatKnowledgeDocs = (docs: KnowledgeDocument[]): string => {
  * Estimates token count for text (rough approximation).
  */
 export const estimateTokens = (text: string): number => {
-  return Math.ceil(text.length / 4);
+  return Math.ceil(text.length / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE);
 };
 
 /**
