@@ -9,7 +9,13 @@ import pg from "pg";
 import { query, transaction } from "./client.js";
 import { createLogger, parseDbCount } from "../core/index.js";
 import { NotFoundError } from "../core/errors.js";
-import { TENANT_STATUS, AUDIT_ACTIONS, AUDIT_DEFAULTS, AUDIT_QUERIES } from "../constants/index.js";
+import {
+  TENANT_STATUS,
+  AUDIT_ACTIONS,
+  AUDIT_DEFAULTS,
+  AUDIT_QUERIES,
+  TENANT_DEFAULTS,
+} from "../constants/index.js";
 import type {
   Tenant,
   TenantStatus,
@@ -398,7 +404,7 @@ export const activate = async (tenantId: string): Promise<Tenant> => {
  */
 export const suspend = async (tenantId: string, reason?: string): Promise<Tenant> => {
   const tenant = await updateStatus(tenantId, TENANT_STATUS.SUSPENDED, AUDIT_ACTIONS.SUSPENDED, {
-    reason: reason ?? "No reason provided",
+    reason: reason ?? TENANT_DEFAULTS.SUSPENSION_REASON,
   });
   logger.info("Tenant suspended", { tenantId, reason });
   return tenant;

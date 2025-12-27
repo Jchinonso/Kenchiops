@@ -66,6 +66,7 @@ export {
   INVALID_CAUSE_KEYWORDS,
   RELEVANCE_RULES,
   AUTO_APPROVABLE_SAFETY_LEVELS,
+  SAFETY_MESSAGES,
   type UncertaintyPattern,
   type RelevanceRule,
 } from "./safety.js";
@@ -121,11 +122,15 @@ export {
 // Database constants
 export { DATABASE_POOL_DEFAULTS, QUERY_LOGGING, TRANSACTION_COMMANDS } from "./database.js";
 
+// Action executor constants
+export { ACTION_MESSAGES } from "./actions.js";
+
 // Tenant constants
 export {
   TENANT_STATUS,
   AUDIT_ACTIONS,
   AUDIT_DEFAULTS,
+  TENANT_DEFAULTS,
   TENANT_QUERIES,
   AUDIT_QUERIES,
   TENANT_FIELD_MAP,
