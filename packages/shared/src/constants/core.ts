@@ -48,7 +48,30 @@ export const HTTP_RESILIENCE_DEFAULTS = {
   CIRCUIT_BREAKER_THRESHOLD: 5,
   /** Circuit breaker reset timeout in milliseconds */
   CIRCUIT_BREAKER_RESET_MS: 30000,
+  /** Jitter factor for exponential backoff (0-30%) */
+  JITTER_FACTOR: 0.3,
+  /** Rate limit check timeout in milliseconds */
+  RATE_LIMIT_CHECK_TIMEOUT_MS: 3000,
 } as const;
+
+/**
+ * Retryable HTTP status codes
+ */
+export const RETRYABLE_HTTP_STATUS_CODES = [408, 429, 500, 502, 503, 504] as const;
+
+/**
+ * Retryable network error patterns (lowercase)
+ */
+export const RETRYABLE_NETWORK_ERRORS = [
+  "econnrefused",
+  "econnreset",
+  "etimedout",
+  "enotfound",
+  "eai_again",
+  "socket hang up",
+  "network",
+  "fetch failed",
+] as const;
 
 /**
  * Valid Node.js environment values

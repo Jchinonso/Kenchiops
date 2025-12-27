@@ -18,31 +18,14 @@ import {
 } from "./cacheClient.js";
 import { analysisCacheKeys } from "./cacheKeys.js";
 import { createLogger } from "../core/logger.js";
+import { DISPLAY_DEFAULTS } from "../constants/index.js";
+import type { CodeAnnotation, RecommendedAction } from "../aggregation/types.js";
 
 const logger = createLogger("analysis-cache");
 
-// ==================== Types ====================
-
-/**
- * Cached code annotation
- */
-export interface CachedAnnotation {
-  readonly path: string;
-  readonly line: number;
-  readonly level: "failure" | "warning" | "notice";
-  readonly message: string;
-  readonly title?: string;
-}
-
-/**
- * Cached recommended action
- */
-export interface CachedAction {
-  readonly description: string;
-  readonly priority: string | number;
-  readonly actionType?: string;
-  readonly reasoning?: string;
-}
+// Re-export types under cache-specific names for backward compatibility
+export type CachedAnnotation = CodeAnnotation;
+export type CachedAction = RecommendedAction;
 
 /**
  * Cached analysis result
@@ -83,7 +66,11 @@ export const generateLogHash = (logContent: string): string => {
     .replace(/\s+/g, " ") // Normalize whitespace
     .trim();
 
-  return crypto.createHash("sha256").update(normalized).digest("hex").substring(0, 16);
+  return crypto
+    .createHash("sha256")
+    .update(normalized)
+    .digest("hex")
+    .substring(0, DISPLAY_DEFAULTS.LOG_HASH_LENGTH);
 };
 
 // ==================== Single Check Analysis Cache ====================
@@ -114,7 +101,7 @@ export const cacheCheckAnalysis = async (analysis: CachedAnalysis): Promise<void
 
   logger.debug("Cached check analysis", {
     repository: analysis.repository,
-    commitSha: analysis.commitSha.substring(0, 7),
+    commitSha: analysis.commitSha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH),
     checkName: analysis.checkName,
     confidence: analysis.confidence,
   });
@@ -160,7 +147,7 @@ export const cacheConsolidatedAnalysis = async (
 
   logger.debug("Cached consolidated analysis", {
     repository: analysis.repository,
-    commitSha: analysis.commitSha.substring(0, 7),
+    commitSha: analysis.commitSha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH),
     checkCount: analysis.checkCount,
   });
 };

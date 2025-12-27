@@ -11,7 +11,7 @@ import {
   getConfidenceLabel,
   getConfidenceEmoji,
   collectCIErrors,
-  GIT_DISPLAY,
+  DISPLAY_DEFAULTS,
   truncateText,
 } from "@kenchi/shared";
 import type { SlackBlock, CIFailureAnalysis } from "../types/slackTypes.js";
@@ -229,7 +229,7 @@ const createFooterBlock = (analysis: CIFailureAnalysis): SlackBlock => {
 
   // Add commit SHA
   if (analysis.headSha) {
-    const shortSha = analysis.headSha.substring(0, GIT_DISPLAY.SHA_DISPLAY_LENGTH);
+    const shortSha = analysis.headSha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH);
     parts.push(`📝 \`${shortSha}\``);
   }
 

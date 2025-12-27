@@ -16,7 +16,14 @@
 
 import { getRedisClient } from "../queue/redisClient.js";
 import { ciAnalysisQueue } from "../queue/messageQueue.js";
-import { createLogger } from "../core/logger.js";
+import { createLogger, withTimeout, delay, getErrorMessage } from "../core/index.js";
+import {
+  REDIS_TIMEOUTS,
+  QUEUE_WORKER_DEFAULTS,
+  REDIS_KEY_PREFIXES,
+  AGGREGATION_DEFAULTS,
+  DISPLAY_DEFAULTS,
+} from "../constants/index.js";
 import type {
   AggregatedFailures,
   AggregationKey,
@@ -32,20 +39,10 @@ import { AGGREGATION_KEYS, DEFAULT_AGGREGATION_CONFIG } from "./types.js";
 
 const logger = createLogger("redis-aggregator");
 
-// ==================== Constants ====================
-
-/** Timeout for Redis operations in milliseconds */
-const REDIS_OPERATION_TIMEOUT_MS = 3000;
-
-/**
- * Wrap a promise with a timeout
- */
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Redis operation timeout")), timeoutMs)
-  );
-  return Promise.race([promise, timeoutPromise]);
-};
+/** Regex pattern for parsing aggregation metadata keys */
+const AGGREGATION_KEY_PATTERN = new RegExp(
+  `^${REDIS_KEY_PREFIXES.AGGREGATION.replace(":", "\\:")}:(.+):([a-f0-9]+):meta$`
+);
 
 // ==================== Types ====================
 
@@ -71,6 +68,25 @@ interface AggregationMetadata {
 export type AggregationReadyCallback = (
   aggregation: AggregatedFailures
 ) => Promise<ConsolidatedPostResult>;
+
+// ==================== Helpers ====================
+
+/**
+ * Format SHA for display logging
+ */
+const formatShaForDisplay = (sha: string): string =>
+  sha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH);
+
+/**
+ * Calculate TTL for aggregation keys (max wait + buffer)
+ */
+const calculateAggregationTTL = (maxWaitMs: number): number =>
+  Math.ceil(maxWaitMs / 1000) + AGGREGATION_DEFAULTS.TTL_BUFFER_SECONDS;
+
+/**
+ * Calculate debounce TTL in seconds
+ */
+const calculateDebounceTTL = (debounceMs: number): number => Math.ceil(debounceMs / 1000);
 
 // ==================== Serialization ====================
 
@@ -176,27 +192,27 @@ export const addFailureToRedis = async (
 
   try {
     // Check if this is a new aggregation or update
-    const existingMeta = await withTimeout(redis.hgetall(metadataKey), REDIS_OPERATION_TIMEOUT_MS);
+    const existingMeta = await withTimeout(
+      redis.hgetall(metadataKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    );
     const isNew = Object.keys(existingMeta).length === 0;
 
     // Get current failure count
-    const currentCount = await withTimeout(redis.hlen(failuresKey), REDIS_OPERATION_TIMEOUT_MS);
+    const currentCount = await withTimeout(
+      redis.hlen(failuresKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    );
     if (currentCount >= config.maxFailuresPerCommit) {
       logger.warn("Max failures reached for aggregation", {
-        commitSha: key.commitSha.substring(0, 7),
+        commitSha: formatShaForDisplay(key.commitSha),
         maxFailures: config.maxFailuresPerCommit,
         currentCount,
       });
       return;
     }
 
-    // Use pipeline for atomic operations
-    const pipeline = redis.pipeline();
-
-    // Add/update failure
-    pipeline.hset(failuresKey, checkRunIdStr, serializedFailure);
-
-    // Update or set metadata
+    // Build metadata
     const metadata = buildMetadata(
       key,
       repositoryInfo,
@@ -208,24 +224,23 @@ export const addFailureToRedis = async (
       now
     );
 
-    // Set all metadata fields
-    pipeline.hset(metadataKey, metadata as unknown as Record<string, string>);
+    // Calculate TTLs
+    const ttlSeconds = calculateAggregationTTL(config.maxWaitMs);
+    const debounceSeconds = calculateDebounceTTL(config.debounceMs);
 
-    // Set TTL on all keys (cleanup safety net)
-    const ttlSeconds = Math.ceil(config.maxWaitMs / 1000) + 60; // Max wait + 1 minute buffer
+    // Use pipeline for atomic operations
+    const pipeline = redis.pipeline();
+    pipeline.hset(failuresKey, checkRunIdStr, serializedFailure);
+    pipeline.hset(metadataKey, metadata as unknown as Record<string, string>);
     pipeline.expire(failuresKey, ttlSeconds);
     pipeline.expire(metadataKey, ttlSeconds);
+    pipeline.set(debounceKey, AGGREGATION_DEFAULTS.DEBOUNCE_MARKER, "EX", debounceSeconds);
 
-    // Set debounce key with TTL - when this expires, we should flush
-    // The debounce key acts as "time since last failure"
-    const debounceSeconds = Math.ceil(config.debounceMs / 1000);
-    pipeline.set(debounceKey, "1", "EX", debounceSeconds);
-
-    await withTimeout(pipeline.exec(), REDIS_OPERATION_TIMEOUT_MS);
+    await withTimeout(pipeline.exec(), REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS);
 
     logger.info("Failure added to Redis aggregation", {
       repository: key.repositoryFullName,
-      commitSha: key.commitSha.substring(0, 7),
+      commitSha: formatShaForDisplay(key.commitSha),
       checkName: failure.checkName,
       isNewAggregation: isNew,
       totalFailures: currentCount + 1,
@@ -233,8 +248,8 @@ export const addFailureToRedis = async (
   } catch (error) {
     logger.error("Failed to add failure to Redis aggregation", {
       repository: key.repositoryFullName,
-      commitSha: key.commitSha.substring(0, 7),
-      error: error instanceof Error ? error.message : "Unknown error",
+      commitSha: formatShaForDisplay(key.commitSha),
+      error: getErrorMessage(error),
     });
   }
 };
@@ -259,14 +274,17 @@ export const getAggregationFromRedis = async (
     // Get metadata first
     const metadata = (await withTimeout(
       redis.hgetall(metadataKey),
-      REDIS_OPERATION_TIMEOUT_MS
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
     )) as unknown as AggregationMetadata;
     if (!metadata || !metadata.commitSha) {
       return null;
     }
 
     // Get all failures
-    const failuresData = await withTimeout(redis.hgetall(failuresKey), REDIS_OPERATION_TIMEOUT_MS);
+    const failuresData = await withTimeout(
+      redis.hgetall(failuresKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    );
     const failures = Object.values(failuresData).map(deserializeFailure);
 
     if (failures.length === 0) {
@@ -277,7 +295,7 @@ export const getAggregationFromRedis = async (
   } catch (error) {
     logger.error("Failed to get aggregation from Redis", {
       repository: key.repositoryFullName,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return null;
   }
@@ -299,16 +317,19 @@ export const deleteAggregationFromRedis = async (key: AggregationKey): Promise<v
   const debounceKey = AGGREGATION_KEYS.debounce(key);
 
   try {
-    await withTimeout(redis.del(failuresKey, metadataKey, debounceKey), REDIS_OPERATION_TIMEOUT_MS);
+    await withTimeout(
+      redis.del(failuresKey, metadataKey, debounceKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    );
 
     logger.debug("Aggregation deleted from Redis", {
       repository: key.repositoryFullName,
-      commitSha: key.commitSha.substring(0, 7),
+      commitSha: formatShaForDisplay(key.commitSha),
     });
   } catch (error) {
     logger.error("Failed to delete aggregation from Redis", {
       repository: key.repositoryFullName,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   }
 };
@@ -325,7 +346,10 @@ export const isDebounceExpired = async (key: AggregationKey): Promise<boolean> =
 
   try {
     const debounceKey = AGGREGATION_KEYS.debounce(key);
-    const exists = await withTimeout(redis.exists(debounceKey), REDIS_OPERATION_TIMEOUT_MS);
+    const exists = await withTimeout(
+      redis.exists(debounceKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    );
     return exists === 0;
   } catch {
     return false;
@@ -349,7 +373,7 @@ export const isMaxWaitExceeded = async (
     const metadataKey = AGGREGATION_KEYS.metadata(key);
     const firstFailureAt = await withTimeout(
       redis.hget(metadataKey, "firstFailureAt"),
-      REDIS_OPERATION_TIMEOUT_MS
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
     );
 
     if (!firstFailureAt) return false;
@@ -382,13 +406,13 @@ export const findReadyAggregations = async (
     do {
       const [nextCursor, keys] = await withTimeout(
         redis.scan(cursor, "MATCH", AGGREGATION_KEYS.pattern, "COUNT", 100),
-        REDIS_OPERATION_TIMEOUT_MS
+        REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
       );
       cursor = nextCursor;
 
       for (const metaKey of keys) {
-        // Extract repo:sha from key pattern kenchi:agg:{repo}:{sha}:meta
-        const match = metaKey.match(/^kenchi:agg:(.+):([a-f0-9]+):meta$/);
+        // Extract repo:sha from key pattern
+        const match = metaKey.match(AGGREGATION_KEY_PATTERN);
         if (!match) continue;
 
         const [, repoFullName, commitSha] = match;
@@ -405,7 +429,7 @@ export const findReadyAggregations = async (
     } while (cursor !== "0");
   } catch (error) {
     logger.error("Failed to find ready aggregations", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   }
 
@@ -421,7 +445,7 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
   if (!aggregation || aggregation.failures.length === 0) {
     logger.warn("No aggregation data to enqueue", {
       repository: key.repositoryFullName,
-      commitSha: key.commitSha.substring(0, 7),
+      commitSha: formatShaForDisplay(key.commitSha),
     });
     await deleteAggregationFromRedis(key);
     return null;
@@ -446,7 +470,7 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
 
   logger.info("Aggregation enqueued for processing", {
     repository: key.repositoryFullName,
-    commitSha: key.commitSha.substring(0, 7),
+    commitSha: formatShaForDisplay(key.commitSha),
     messageId,
     failureCount: aggregation.failures.length,
   });
@@ -462,7 +486,7 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
  */
 export const startAggregatorWorker = (
   config: AggregationConfig = DEFAULT_AGGREGATION_CONFIG,
-  pollIntervalMs: number = 5000
+  pollIntervalMs: number = QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS
 ): (() => void) => {
   let running = true;
 
@@ -485,19 +509,19 @@ export const startAggregatorWorker = (
         }
       } catch (error) {
         logger.error("Aggregator worker error", {
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: getErrorMessage(error),
         });
       }
 
       // Wait before next poll
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await delay(pollIntervalMs);
     }
   };
 
   // Start polling (don't await)
   poll().catch((error) => {
     logger.error("Aggregator worker fatal error", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   });
 
@@ -550,7 +574,7 @@ export const startAnalysisQueueProcessor = (
   onReady: AggregationReadyCallback,
   options: { pollIntervalMs?: number; maxConcurrent?: number } = {}
 ): (() => void) => {
-  const { pollIntervalMs = 1000, maxConcurrent = 3 } = options;
+  const { pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS, maxConcurrent = 3 } = options;
   let running = true;
   let activeJobs = 0;
 
@@ -562,7 +586,7 @@ export const startAnalysisQueueProcessor = (
   const processLoop = async (): Promise<void> => {
     while (running) {
       if (activeJobs >= maxConcurrent) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);
         continue;
       }
 
@@ -583,7 +607,7 @@ export const startAnalysisQueueProcessor = (
           logger.info("Processing consolidated analysis", {
             messageId: message.id,
             repository: aggregation.repository.fullName,
-            commitSha: aggregation.commitSha.substring(0, 7),
+            commitSha: formatShaForDisplay(aggregation.commitSha),
             failureCount: aggregation.failures.length,
           });
 
@@ -599,7 +623,7 @@ export const startAnalysisQueueProcessor = (
 
             return { success: result.success };
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            const errorMessage = getErrorMessage(error);
             logger.error("Failed to process consolidated analysis", {
               messageId: message.id,
               error: errorMessage,
@@ -611,7 +635,7 @@ export const startAnalysisQueueProcessor = (
         activeJobs--;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await delay(pollIntervalMs);
     }
   };
 
@@ -619,7 +643,7 @@ export const startAnalysisQueueProcessor = (
   const workers = Array.from({ length: maxConcurrent }, () => processLoop());
   Promise.all(workers).catch((error) => {
     logger.error("Analysis queue processor error", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   });
 

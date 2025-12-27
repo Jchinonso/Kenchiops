@@ -8,6 +8,7 @@
 // Core infrastructure
 export { config, type Config } from "./core/index.js";
 export { createLogger, logger, LogLevel, type Logger } from "./core/index.js";
+export { withTimeout, isRetryableError, delay, safeJsonParse, parseDbCount } from "./core/index.js";
 export {
   AppError,
   ValidationError,

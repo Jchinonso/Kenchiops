@@ -8,9 +8,8 @@
  */
 
 import type { ActionType, ActionProposal, ExecutionResult } from "../core/types.js";
-import { createLogger } from "../core/logger.js";
+import { createLogger, ExternalServiceError, getErrorMessage } from "../core/index.js";
 import { config } from "../core/config.js";
-import { ExternalServiceError } from "../core/errors.js";
 import { resilientPost } from "../http/resilientClient.js";
 
 const logger = createLogger("action-executor");
@@ -133,7 +132,7 @@ const executeRerunPipeline: ActionExecutor = async (action, context) => {
       output: `Workflow run ID: ${response.data.runId ?? "pending"}`,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = getErrorMessage(error);
     logger.error("Failed to trigger pipeline rerun", {
       repository: context.repository,
       error: errorMessage,
@@ -321,7 +320,7 @@ export const executeAction = async (
 
     return executionResult;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = getErrorMessage(error);
     const isExternalError = error instanceof ExternalServiceError;
 
     logger.error("Action execution failed", {

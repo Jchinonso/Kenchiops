@@ -7,25 +7,11 @@
  * @module cache/cacheKeys
  */
 
-// ==================== Constants ====================
+import { REDIS_KEY_PREFIXES, CACHE_NAMESPACES, type CacheNamespace } from "../constants/index.js";
 
-/**
- * Cache key prefix for all Kenchi cache entries
- */
-const PREFIX = "kenchi:cache" as const;
-
-/**
- * Cache namespaces for different data types
- */
-export const CACHE_NAMESPACE = {
-  GITHUB: "github",
-  TENANT: "tenant",
-  MAPPING: "mapping",
-  ANALYSIS: "analysis",
-  TOKEN: "token",
-} as const;
-
-export type CacheNamespace = (typeof CACHE_NAMESPACE)[keyof typeof CACHE_NAMESPACE];
+// Re-export for backward compatibility
+export const CACHE_NAMESPACE = CACHE_NAMESPACES;
+export type { CacheNamespace };
 
 // ==================== Key Builders ====================
 
@@ -33,7 +19,7 @@ export type CacheNamespace = (typeof CACHE_NAMESPACE)[keyof typeof CACHE_NAMESPA
  * Build a cache key with namespace
  */
 const buildKey = (namespace: CacheNamespace, ...parts: readonly string[]): string =>
-  [PREFIX, namespace, ...parts].join(":");
+  [REDIS_KEY_PREFIXES.CACHE, namespace, ...parts].join(":");
 
 // ==================== GitHub Cache Keys ====================
 
@@ -144,24 +130,19 @@ export const mappingCacheKeys = {
  * AI analysis result cache key builders
  */
 export const analysisCacheKeys = {
-  /** Analysis by commit SHA and check name */
+  /** Analysis by commit SHA and check name (uses full SHA for zero collision risk) */
   byCommitAndCheck: (repository: string, commitSha: string, checkName: string): string =>
     buildKey(
       CACHE_NAMESPACE.ANALYSIS,
       "check",
       repository.replace("/", "-"),
-      commitSha.substring(0, 12),
+      commitSha,
       checkName.replace(/\s+/g, "-").toLowerCase()
     ),
 
-  /** Consolidated analysis for a commit */
+  /** Consolidated analysis for a commit (uses full SHA for zero collision risk) */
   byCommit: (repository: string, commitSha: string): string =>
-    buildKey(
-      CACHE_NAMESPACE.ANALYSIS,
-      "commit",
-      repository.replace("/", "-"),
-      commitSha.substring(0, 12)
-    ),
+    buildKey(CACHE_NAMESPACE.ANALYSIS, "commit", repository.replace("/", "-"), commitSha),
 
   /** Analysis by log hash (for deduplication) */
   byLogHash: (logHash: string): string => buildKey(CACHE_NAMESPACE.ANALYSIS, "log", logHash),
@@ -192,18 +173,19 @@ export const tokenCacheKeys = {
  */
 export const parseCacheKey = (key: string): { namespace: string; parts: string[] } | null => {
   const segments = key.split(":");
+  const [prefix, cachePrefix, ...rest] = segments;
 
-  if (segments.length < 3 || segments[0] !== "kenchi" || segments[1] !== "cache") {
+  if (rest.length < 1 || prefix !== "kenchi" || cachePrefix !== "cache") {
     return null;
   }
 
   return {
-    namespace: segments[2],
-    parts: segments.slice(3),
+    namespace: rest[0],
+    parts: rest.slice(1),
   };
 };
 
 /**
  * Get all cache key patterns for invalidation
  */
-export const getAllPatterns = (): readonly string[] => [`${PREFIX}:*`];
+export const getAllPatterns = (): readonly string[] => [`${REDIS_KEY_PREFIXES.CACHE}:*`];

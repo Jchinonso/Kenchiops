@@ -8,6 +8,9 @@ export { config, type Config } from "./config.js";
 // Logger
 export { createLogger, logger, LogLevel, type Logger } from "./logger.js";
 
+// Utilities
+export { withTimeout, isRetryableError, delay, safeJsonParse, parseDbCount } from "./utils.js";
+
 // Error handling
 export {
   AppError,

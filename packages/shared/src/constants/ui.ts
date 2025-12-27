@@ -134,10 +134,4 @@ export const VALID_SAFETY_LEVELS: Readonly<Set<string>> = new Set([
   "dangerous",
 ]);
 
-/**
- * Git-related display constants.
- */
-export const GIT_DISPLAY = {
-  /** Standard length for displaying truncated commit SHA */
-  SHA_DISPLAY_LENGTH: 7,
-} as const;
+// Note: SHA display length is in DISPLAY_DEFAULTS (redis.ts) to avoid duplication

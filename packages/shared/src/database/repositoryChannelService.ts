@@ -7,7 +7,7 @@
  */
 
 import { query } from "./client.js";
-import { createLogger } from "../core/logger.js";
+import { createLogger, parseDbCount } from "../core/index.js";
 import type { RepositoryChannelMapping, CreateRepositoryChannelMapping } from "../core/types.js";
 
 const logger = createLogger("repository-channel-service");
@@ -51,12 +51,6 @@ const rowToMapping = (row: MappingRow): RepositoryChannelMapping => ({
  */
 const extractMapping = (rows: readonly MappingRow[]): RepositoryChannelMapping | null =>
   rows.length > 0 ? rowToMapping(rows[0]) : null;
-
-/**
- * Parse count result to number
- */
-const parseCount = (rows: readonly { count: string }[]): number =>
-  parseInt(rows[0]?.count ?? "0", 10);
 
 /**
  * Get row count with fallback to 0
@@ -225,5 +219,5 @@ export const isMapped = async (tenantId: string, repository: string): Promise<bo
      WHERE tenant_id = $1 AND repository = $2`,
     [tenantId, repository]
   );
-  return parseCount(result.rows) > 0;
+  return parseDbCount(result.rows) > 0;
 };
