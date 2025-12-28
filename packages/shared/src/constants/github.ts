@@ -75,7 +75,7 @@ export const GITHUB_COMMENT_DISPLAY = {
  * Maximum number of test failures to extract from logs.
  */
 export const LOG_PARSING_LIMITS = {
-  MAX_TEST_FAILURES: 50, // Increased to capture all test failures
+  MAX_TEST_FAILURES: 100, // Increased to capture all test failures in large test suites
   /** Maximum size for build config diff in characters */
   MAX_BUILD_CONFIG_DIFF_SIZE: 5000,
 } as const;
