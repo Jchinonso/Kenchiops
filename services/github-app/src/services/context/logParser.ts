@@ -162,24 +162,74 @@ const extractPatternMatches = (
   logs: string,
   pattern: RegExp,
   maxMatches: number,
-  extractMatch: (match: RegExpExecArray) => PatternMatch
+  extractMatch: (match: RegExpExecArray, logs?: string) => PatternMatch
 ): PatternMatch[] => {
   const matches: PatternMatch[] = [];
   const regex = new RegExp(pattern.source, pattern.flags);
   let match;
 
   while ((match = regex.exec(logs)) !== null && matches.length < maxMatches) {
-    matches.push(extractMatch(match));
+    matches.push(extractMatch(match, logs));
   }
 
   return matches;
 };
 
 /**
+ * Build a map of test names to their source files from Jest output.
+ * Parses FAIL blocks to associate tests with their file paths.
+ */
+const buildTestFileMap = (logs: string): Map<string, string> => {
+  const fileMap = new Map<string, string>();
+
+  // Split logs into FAIL blocks
+  const failBlocks = logs.split(/(?=FAIL\s+\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/);
+
+  failBlocks.forEach((block) => {
+    // Extract file from FAIL line
+    const failMatch = block.match(/^FAIL\s+(\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/);
+    if (!failMatch) return;
+
+    const filePath = failMatch[1];
+
+    // Find all test names in this block (● TestName format)
+    const testPattern = /●\s+([^\n]+)/g;
+    let testMatch;
+    while ((testMatch = testPattern.exec(block)) !== null) {
+      const testName = testMatch[1]
+        .trim()
+        .replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/g, "")
+        .trim();
+      if (testName) {
+        fileMap.set(testName.toLowerCase(), filePath);
+      }
+    }
+  });
+
+  return fileMap;
+};
+
+// Cache for test file map to avoid rebuilding for each match
+let cachedTestFileMap: Map<string, string> | null = null;
+let cachedLogsHash = "";
+
+/**
+ * Get or build the test file map, with simple caching.
+ */
+const getTestFileMap = (logs: string): Map<string, string> => {
+  const logsHash = logs.slice(0, 1000) + logs.length; // Simple hash
+  if (cachedLogsHash !== logsHash) {
+    cachedTestFileMap = buildTestFileMap(logs);
+    cachedLogsHash = logsHash;
+  }
+  return cachedTestFileMap!;
+};
+
+/**
  * Extract Jest/Vitest test failure from regex match.
  * Handles both ● bullet format and ✕ checkmark format.
  */
-const extractJestMatch = (match: RegExpExecArray): PatternMatch => {
+const extractJestMatch = (match: RegExpExecArray, logs?: string): PatternMatch => {
   const rawTestName = match[1]?.trim() || "Unknown test";
   // Clean up test name - remove timestamps and extra whitespace
   const testName = rawTestName
@@ -194,17 +244,24 @@ const extractJestMatch = (match: RegExpExecArray): PatternMatch => {
   // Also try to extract file from test name if it looks like a file path
   const fileFromName = testName.match(/(\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/)?.[1];
 
+  // Try to get file from the FAIL block context if available
+  let fileFromContext: string | undefined;
+  if (logs) {
+    const testFileMap = getTestFileMap(logs);
+    fileFromContext = testFileMap.get(testName.toLowerCase());
+  }
+
   return {
     testName: fileFromName ? testName.replace(fileFromName, "").trim() || testName : testName,
     error,
-    file: fileMatch?.[1] || fileFromName,
+    file: fileFromContext || fileMatch?.[1] || fileFromName,
   };
 };
 
 /**
  * Extract Mocha test failure from regex match.
  */
-const extractMochaMatch = (match: RegExpExecArray): PatternMatch => ({
+const extractMochaMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => ({
   testName: match[1].trim().slice(0, 200),
   error: match[2].trim().slice(0, 500),
 });
