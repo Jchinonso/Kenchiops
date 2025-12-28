@@ -40,8 +40,10 @@ const JEST_PATTERNS: readonly RegExp[] = [
   /●\s+([^\n]+?)[\r\n]+\s*([\s\S]+?)(?=\s*●|\s*PASS|\s*FAIL|Test Suites:|$)/gm,
   // ✕ test name (123 ms) followed by error
   /[✕✗×]\s+(.+?)\s*(?:\(\d+\s*m?s\))?[\r\n]+\s*((?:Expected|Received|Error|at ).+?)(?=[\r\n]+\s*[✓✕✗×]|$)/gms,
-  // FAIL file.test.ts with test name on next lines
-  /FAIL\s+(\S+\.(?:test|spec)\.\w+)/gm,
+  // FAIL file.test.ts followed by ● Test suite failed to run
+  /FAIL\s+(\S+\.(?:test|spec)\.\w+)[\s\S]*?●\s+Test suite failed to run[\r\n]+\s*([\s\S]+?)(?=\s*FAIL\s|\s*PASS\s|Test Suites:|$)/gm,
+  // Generic test failure with expect().toX pattern
+  /●\s+([^\n]+?)[\r\n]+[\s\S]*?(expect\(.+?\)\.to\w+[\s\S]*?)(?=\s*●|\s*at Object|$)/gm,
 ];
 
 /**
@@ -226,25 +228,44 @@ const FRAMEWORK_PATTERNS: readonly FrameworkPattern[] = [
 
 /**
  * Try to extract failures from a framework's patterns.
+ * Combines results from ALL patterns and deduplicates by test name.
  */
 const tryExtractFromFramework = (
   logs: string,
   framework: FrameworkPattern,
   maxFailures: number
 ): TestFailure[] | null => {
-  const matches = framework.patterns
-    .map((pattern) => extractPatternMatches(logs, pattern, maxFailures, framework.extractor))
-    .find((m) => m.length > 0);
+  // Collect matches from ALL patterns - use higher limit per pattern to ensure we get all matches
+  const perPatternLimit = maxFailures * 2;
+  const allMatches = framework.patterns.flatMap((pattern) =>
+    extractPatternMatches(logs, pattern, perPatternLimit, framework.extractor)
+  );
 
-  if (matches) {
-    logger.info("Extracted test failures from logs", {
-      count: matches.length,
-      framework: framework.name,
-    });
-    return matches;
+  if (allMatches.length === 0) {
+    return null;
   }
 
-  return null;
+  // Deduplicate by test name and limit to maxFailures
+  const seen = new Set<string>();
+  const deduplicated = allMatches.filter((match) => {
+    const key = match.testName.toLowerCase().trim();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+
+  const limited = deduplicated.slice(0, maxFailures);
+
+  logger.info("Extracted test failures from logs", {
+    count: limited.length,
+    framework: framework.name,
+    rawMatches: allMatches.length,
+    afterDedup: deduplicated.length,
+  });
+
+  return limited;
 };
 
 /**
