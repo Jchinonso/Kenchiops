@@ -25,6 +25,7 @@ import {
 interface ConsolidatedTestFailure {
   readonly testName: string;
   readonly file?: string;
+  readonly line?: number;
 }
 
 interface ConsolidatedAnnotation {
@@ -114,7 +115,12 @@ const formatAction = (action: RecommendedAction, index: number): string =>
  * Format a test failure for display
  */
 const formatTestFailure = (testFailure: ConsolidatedTestFailure): string => {
-  const file = testFailure.file ? ` (\`${testFailure.file}\`)` : "";
+  const filePath = testFailure.file
+    ? testFailure.line
+      ? `${testFailure.file}:${testFailure.line}`
+      : testFailure.file
+    : null;
+  const file = filePath ? ` (\`${filePath}\`)` : "";
   return `  - \`${testFailure.testName}\`${file}`;
 };
 
