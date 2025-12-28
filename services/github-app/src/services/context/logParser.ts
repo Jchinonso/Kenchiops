@@ -226,6 +226,23 @@ const getTestFileMap = (logs: string): Map<string, string> => {
 };
 
 /**
+ * Pattern to find file:line anywhere in text (more flexible than stack trace)
+ * Matches: file.test.ts:123 or file.ts:45
+ */
+const FILE_LINE_PATTERN = /(\S+\.(?:test|spec)?\.?(?:ts|js|tsx|jsx)):(\d+)/;
+
+/**
+ * Extract line number for a specific file from error text
+ */
+const extractLineForFile = (error: string, filePath: string): number | undefined => {
+  // Look for the file path followed by :lineNumber
+  const escapedPath = filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`${escapedPath}:(\\d+)`);
+  const match = error.match(pattern);
+  return match?.[1] ? parseInt(match[1], 10) : undefined;
+};
+
+/**
  * Extract Jest/Vitest test failure from regex match.
  * Handles both ● bullet format and ✕ checkmark format.
  */
@@ -237,10 +254,12 @@ const extractJestMatch = (match: RegExpExecArray, logs?: string): PatternMatch =
     .trim()
     .slice(0, 200);
 
-  const error = (match[2]?.trim() || match[3]?.trim() || "Test failed").slice(0, 500);
+  // Get FULL error content for line number extraction (before truncation)
+  const fullError = match[2]?.trim() || match[3]?.trim() || "Test failed";
+  const error = fullError.slice(0, 500);
 
-  // Try to extract file and line from error stack trace
-  const fileMatch = error.match(STACK_FILE_PATTERN);
+  // Try to extract file and line from error stack trace (use full error)
+  const fileMatch = fullError.match(STACK_FILE_PATTERN);
   const fileFromStack = fileMatch?.[1];
   const lineFromStack = fileMatch?.[2] ? parseInt(fileMatch[2], 10) : undefined;
 
@@ -254,11 +273,27 @@ const extractJestMatch = (match: RegExpExecArray, logs?: string): PatternMatch =
     fileFromContext = testFileMap.get(testName.toLowerCase());
   }
 
+  // Determine final file
+  const file = fileFromContext || fileFromStack || fileFromName;
+
+  // Get line number - try to match the specific file path in the full error
+  let line = lineFromStack;
+  if (file && !line) {
+    line = extractLineForFile(fullError, file);
+  }
+  // Fallback: try to find any file:line pattern in the error
+  if (!line) {
+    const anyLineMatch = fullError.match(FILE_LINE_PATTERN);
+    if (anyLineMatch?.[2]) {
+      line = parseInt(anyLineMatch[2], 10);
+    }
+  }
+
   return {
     testName: fileFromName ? testName.replace(fileFromName, "").trim() || testName : testName,
     error,
-    file: fileFromContext || fileFromStack || fileFromName,
-    line: lineFromStack,
+    file,
+    line,
   };
 };
 
