@@ -50,9 +50,10 @@ const JEST_PATTERNS: readonly RegExp[] = [
 const MOCHA_PATTERN = /^\s*\d+\)\s+(.+?)[\r\n]+([\s\S]+?)(?=^\s*\d+\)|$)/gm;
 
 /**
- * Pattern to extract file path from error stack trace.
+ * Pattern to extract file path and line number from error stack trace.
+ * Captures: [1] = file path, [2] = line number
  */
-const STACK_FILE_PATTERN = /at\s+.*?\(([^)]+\.(?:ts|js|tsx|jsx)):\d+:\d+\)/;
+const STACK_FILE_PATTERN = /at\s+.*?\(([^)]+\.(?:ts|js|tsx|jsx)):(\d+):\d+\)/;
 
 // ==================== File Reference Extraction ====================
 
@@ -145,6 +146,7 @@ interface PatternMatch {
   readonly testName: string;
   readonly error: string;
   readonly file?: string;
+  readonly line?: number;
 }
 
 /**
@@ -237,8 +239,11 @@ const extractJestMatch = (match: RegExpExecArray, logs?: string): PatternMatch =
 
   const error = (match[2]?.trim() || match[3]?.trim() || "Test failed").slice(0, 500);
 
-  // Try to extract file from error stack trace
+  // Try to extract file and line from error stack trace
   const fileMatch = error.match(STACK_FILE_PATTERN);
+  const fileFromStack = fileMatch?.[1];
+  const lineFromStack = fileMatch?.[2] ? parseInt(fileMatch[2], 10) : undefined;
+
   // Also try to extract file from test name if it looks like a file path
   const fileFromName = testName.match(/(\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/)?.[1];
 
@@ -252,7 +257,8 @@ const extractJestMatch = (match: RegExpExecArray, logs?: string): PatternMatch =
   return {
     testName: fileFromName ? testName.replace(fileFromName, "").trim() || testName : testName,
     error,
-    file: fileFromContext || fileMatch?.[1] || fileFromName,
+    file: fileFromContext || fileFromStack || fileFromName,
+    line: lineFromStack,
   };
 };
 

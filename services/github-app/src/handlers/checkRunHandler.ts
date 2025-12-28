@@ -188,7 +188,11 @@ const buildAnalyzedFailure = (
   analysis: analysis.analysis || "Analysis unavailable",
   annotations: convertAIAnnotations(analysis.full_analysis?.codeAnnotations, context.annotations),
   recommendedActions: convertRecommendedActions(analysis.recommended_actions),
-  testFailures: context.testFailures.map((tf) => ({ testName: tf.testName, file: tf.file })),
+  testFailures: context.testFailures.map((tf) => ({
+    testName: tf.testName,
+    file: tf.file,
+    line: tf.line,
+  })),
   timestamp: new Date(),
 });
 
