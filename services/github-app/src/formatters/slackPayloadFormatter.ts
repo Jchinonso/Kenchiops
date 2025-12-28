@@ -82,6 +82,7 @@ interface ActionButtonValue {
 interface ConsolidatedTestFailure {
   readonly testName: string;
   readonly file?: string;
+  readonly line?: number;
 }
 
 interface ConsolidatedAnnotation {
@@ -266,7 +267,10 @@ const buildTestFailuresBlock = (
   const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
   const testLines = testFailures
     .slice(0, displayCount)
-    .map((t) => `   • \`${t.testName}\`${t.file ? ` (${t.file})` : ""}`)
+    .map((t) => {
+      const filePath = t.file ? (t.line ? `${t.file}:${t.line}` : t.file) : null;
+      return `   • \`${t.testName}\`${filePath ? ` (${filePath})` : ""}`;
+    })
     .join("\n");
 
   const moreText =
