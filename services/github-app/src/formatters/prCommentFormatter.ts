@@ -12,6 +12,7 @@ import type {
   CodeAnnotation,
   RecommendedAction,
 } from "@kenchi/shared";
+import { shouldExcludePath, EXCLUDED_PATH_PATTERNS } from "@kenchi/shared";
 import {
   DISPLAY_LIMITS,
   getPriorityEmoji,
@@ -66,11 +67,14 @@ const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): Consolid
   );
 
 /**
- * Consolidate annotations across checks using Map-based deduplication
+ * Consolidate annotations across checks using Map-based deduplication.
+ * Excludes test files since those are where tests run, not where fixes are needed.
  */
 const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] =>
   deduplicateByKey(
-    failures.flatMap((f) => f.annotations),
+    failures
+      .flatMap((f) => f.annotations)
+      .filter((a) => !shouldExcludePath(a.path, EXCLUDED_PATH_PATTERNS)),
     (a) => `${a.path}:${a.line}`
   ).map((a) => ({
     path: a.path,
