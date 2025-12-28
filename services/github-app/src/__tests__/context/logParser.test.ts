@@ -119,7 +119,7 @@ describe("Log Parser", () => {
       expect(refs[0]).toEqual({ path: "src/index.ts", line: 10 }); // First occurrence kept
     });
 
-    it("should limit results to MAX_FILES (5)", () => {
+    it("should extract all unique file references without limits", () => {
       const logs = `
         Error at file1.ts:1
         Error at file2.ts:2
@@ -131,7 +131,8 @@ describe("Log Parser", () => {
       `;
       const refs = extractFileReferences(logs);
 
-      expect(refs.length).toBeLessThanOrEqual(5);
+      // Should extract all unique files (no limit)
+      expect(refs.length).toBe(7);
     });
 
     it("should handle TypeScript file extensions", () => {
@@ -253,9 +254,9 @@ src/utils.ts(25,10): error TS2345: Argument of type 'string' is not assignable t
       const refs = extractFileReferences(largeLog);
       const duration = Date.now() - start;
 
-      // Should complete quickly (< 1 second) and limit results
+      // Should complete quickly (< 1 second) and extract all unique files
       expect(duration).toBeLessThan(1000);
-      expect(refs.length).toBeLessThanOrEqual(5);
+      expect(refs.length).toBe(1000); // All unique files extracted
     });
   });
 
@@ -492,18 +493,41 @@ src/utils.ts(25,10): error TS2345: Argument of type 'string' is not assignable t
         expect(failures.length).toBeGreaterThan(0);
       });
 
-      it("should limit test failures to MAX_TEST_FAILURES (10)", () => {
+      it("should extract all unique test failures without artificial limits", () => {
+        // Generate many unique tests
         const manyTests = Array.from(
-          { length: 15 },
+          { length: 150 },
           (_, i) => `
- ✕ test ${i}
+ ✕ unique_test_${i}
     Error: Failed
 `
         ).join("\n");
 
         const failures = extractTestFailures(manyTests);
 
-        expect(failures.length).toBeLessThanOrEqual(10);
+        // Should extract all unique failures (no limit)
+        expect(failures.length).toBe(150);
+      });
+
+      it("should deduplicate test failures by name", () => {
+        // Generate duplicate tests
+        const duplicateTests = `
+ ✕ same_test
+    Error: Failed
+
+ ✕ same_test
+    Error: Also failed
+
+ ✕ different_test
+    Error: Failed
+`;
+
+        const failures = extractTestFailures(duplicateTests);
+
+        // Should deduplicate by test name
+        expect(failures.length).toBe(2);
+        expect(failures.map((f) => f.testName)).toContain("same_test");
+        expect(failures.map((f) => f.testName)).toContain("different_test");
       });
     });
 
