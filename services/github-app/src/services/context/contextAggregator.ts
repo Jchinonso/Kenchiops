@@ -11,6 +11,7 @@ import {
   redactSecretsWithStats,
   deduplicateByKey,
 } from "@kenchi/shared";
+import { truncateWithContext } from "./logParser.js";
 import type { CheckRunWebhook } from "../../types/githubTypes.js";
 import type { EnrichedContext, FileReference } from "./types.js";
 import { fetchWorkflowLogs, fetchWorkflowTiming } from "./workflowFetcher.js";
@@ -171,8 +172,13 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
       ])
     : [[], [], null];
 
-  // Extract test failures from logs
+  // Extract test failures from FULL logs (before truncation to capture all failures)
   const testFailures = workflowLogs ? extractTestFailures(workflowLogs) : [];
+
+  // Truncate logs for LLM context after test failure extraction
+  const truncatedLogs = workflowLogs
+    ? truncateWithContext(workflowLogs, GITHUB_CONTEXT_LIMITS.MAX_LOG_SIZE)
+    : null;
 
   // Extract file references from logs, annotations, and check output
   const allLogs = [
@@ -265,8 +271,9 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
   logger.info("=== END GATHERED CONTEXT ===");
 
   // CRITICAL: Redact secrets before returning context for LLM analysis
+  // Use truncated logs for LLM context (test failures already extracted from full logs)
   const rawContext: EnrichedContext = {
-    workflowLogs,
+    workflowLogs: truncatedLogs,
     prDiff,
     sourceFiles,
     commitInfo,

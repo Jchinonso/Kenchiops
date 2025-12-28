@@ -4,9 +4,8 @@
  * Fetches workflow logs and timing information from GitHub Actions.
  */
 
-import { createLogger, GITHUB_CONTEXT_LIMITS, GITHUB_RETRY_CONFIG } from "@kenchi/shared";
+import { createLogger, GITHUB_RETRY_CONFIG } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
-import { truncateWithContext } from "./logParser.js";
 import type { WorkflowTiming } from "./types.js";
 
 const logger = createLogger("github-app");
@@ -108,7 +107,8 @@ export const fetchWorkflowLogs = async (
           attempt,
         });
 
-        return truncateWithContext(logContent, GITHUB_CONTEXT_LIMITS.MAX_LOG_SIZE);
+        // Return full logs - truncation happens after test failure extraction
+        return logContent;
       } catch (logError) {
         const errorMessage = logError instanceof Error ? logError.message : "Unknown error";
         const shouldRetry = isDnsError(errorMessage) && attempt < GITHUB_RETRY_CONFIG.MAX_RETRIES;
