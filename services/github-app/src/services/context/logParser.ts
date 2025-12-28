@@ -6,11 +6,9 @@
 
 import {
   createLogger,
-  GITHUB_CONTEXT_LIMITS,
   FILE_REFERENCE_PATTERNS,
   EXCLUDED_PATH_PATTERNS,
   ERROR_INDICATORS,
-  LOG_PARSING_LIMITS,
   shouldExcludePath,
   deduplicateByKey,
 } from "@kenchi/shared";
@@ -89,15 +87,15 @@ const extractMatchesFromPattern = (logs: string, pattern: RegExp): FileReference
  * - Error: src/components/App.tsx(15,20)
  *
  * @param logs - The log content to parse
- * @returns Array of unique file references up to MAX_FILES limit
+ * @returns Array of unique file references (no artificial limit)
  */
 export const extractFileReferences = (logs: string): FileReference[] => {
   const allReferences = FILE_REFERENCE_PATTERNS.flatMap((pattern) =>
     extractMatchesFromPattern(logs, pattern)
   );
 
-  // Deduplicate by path and limit results
-  return deduplicateByKey(allReferences, (ref) => ref.path, GITHUB_CONTEXT_LIMITS.MAX_FILES);
+  // Deduplicate by path - no artificial limit
+  return deduplicateByKey(allReferences, (ref) => ref.path);
 };
 
 // ==================== Content Truncation ====================
@@ -285,34 +283,31 @@ const FRAMEWORK_PATTERNS: readonly FrameworkPattern[] = [
 
 /**
  * Try to extract failures from a framework's patterns.
- * Combines results from ALL patterns and deduplicates by test name.
+ * Extracts ALL matches and deduplicates by test name - no arbitrary limits.
  */
 const tryExtractFromFramework = (
   logs: string,
-  framework: FrameworkPattern,
-  maxFailures: number
+  framework: FrameworkPattern
 ): TestFailure[] | null => {
-  // Collect matches from ALL patterns - use higher limit per pattern to ensure we get all matches
-  const perPatternLimit = maxFailures * 2;
+  // Collect ALL matches from ALL patterns (no per-pattern limit)
   const allMatches = framework.patterns.flatMap((pattern) =>
-    extractPatternMatches(logs, pattern, perPatternLimit, framework.extractor)
+    extractPatternMatches(logs, pattern, Number.MAX_SAFE_INTEGER, framework.extractor)
   );
 
   if (allMatches.length === 0) {
     return null;
   }
 
-  // No aggressive deduplication - just limit to maxFailures
-  // The patterns may produce some duplicates but it's better to have extras than miss failures
-  const limited = allMatches.slice(0, maxFailures);
+  // Deduplicate by test name to get unique failures
+  const uniqueFailures = deduplicateByKey(allMatches, (match) => match.testName.toLowerCase());
 
   logger.info("Extracted test failures from logs", {
-    count: limited.length,
+    count: uniqueFailures.length,
     framework: framework.name,
     totalMatched: allMatches.length,
   });
 
-  return limited;
+  return uniqueFailures;
 };
 
 /**
@@ -320,19 +315,18 @@ const tryExtractFromFramework = (
  *
  * Supports Jest, Vitest, and Mocha test frameworks.
  * Strips ANSI color codes before parsing.
+ * Extracts ALL unique failures - no artificial limits.
  *
  * @param logs - The workflow log content
- * @returns Array of test failure information
+ * @returns Array of unique test failure information
  */
 export const extractTestFailures = (logs: string): TestFailure[] => {
-  const maxFailures = LOG_PARSING_LIMITS.MAX_TEST_FAILURES;
-
   // Strip ANSI color codes from CI logs before parsing
   const cleanLogs = stripAnsiCodes(logs);
 
   // Try each framework in order, return first match
   const result = FRAMEWORK_PATTERNS.map((framework) =>
-    tryExtractFromFramework(cleanLogs, framework, maxFailures)
+    tryExtractFromFramework(cleanLogs, framework)
   ).find((matches) => matches !== null);
 
   if (result) {

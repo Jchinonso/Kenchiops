@@ -41,12 +41,12 @@ jest.mock("@kenchi/shared", () => ({
       redactedTypes,
     };
   }),
-  deduplicateByKey: jest.fn(<T>(items: T[], keyFn: (item: T) => string, limit: number): T[] => {
+  deduplicateByKey: jest.fn(<T>(items: T[], keyFn: (item: T) => string): T[] => {
     const seen = new Set<string>();
     const result: T[] = [];
     for (const item of items) {
       const key = keyFn(item);
-      if (!seen.has(key) && result.length < limit) {
+      if (!seen.has(key)) {
         seen.add(key);
         result.push(item);
       }
@@ -85,6 +85,7 @@ jest.mock("../../services/context/annotationFetcher.js", () => ({
 jest.mock("../../services/context/logParser.js", () => ({
   extractFileReferences: jest.fn(),
   extractTestFailures: jest.fn(),
+  truncateWithContext: jest.fn((content: string) => content), // Returns content unchanged
 }));
 
 // Import mocked functions after jest.mock
@@ -930,7 +931,7 @@ describe("Context Aggregator", () => {
         expect(fileRefs[0].path).toBe("src/important.ts");
       });
 
-      it("should respect MAX_FILES limit", async () => {
+      it("should extract all unique file references without artificial limits", async () => {
         const manyRefs = Array.from({ length: 20 }, (_, i) => ({
           path: `src/file${i}.ts`,
           line: i,
@@ -944,10 +945,11 @@ describe("Context Aggregator", () => {
           deduplicateByKey: jest.Mock;
         };
         const callArgs = deduplicateByKey.mock.calls[0];
-        const limit = callArgs[2];
+        const fileRefs = callArgs[0] as { path: string; line?: number }[];
 
-        // Should be limited to MAX_FILES (10 in our mock)
-        expect(limit).toBe(10);
+        // Should include log file references + any annotation files (no artificial limit)
+        // The exact count may include annotations from the mock webhook
+        expect(fileRefs.length).toBeGreaterThanOrEqual(20);
       });
 
       it("should handle annotations with warnings and notices", async () => {

@@ -195,11 +195,10 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
     .filter((ann) => ann.level === "failure" || ann.level === "warning")
     .map((ann) => ({ path: ann.path, line: ann.startLine }));
 
-  // Combine and dedupe file references (annotations first for priority)
+  // Combine and dedupe file references (annotations first for priority) - no artificial limit
   const uniqueFileRefs = deduplicateByKey(
     [...annotationFiles, ...logFileReferences],
-    (ref) => ref.path,
-    GITHUB_CONTEXT_LIMITS.MAX_FILES
+    (ref) => ref.path
   );
 
   // Phase 3: Fetch source files in parallel
