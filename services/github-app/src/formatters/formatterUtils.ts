@@ -34,11 +34,11 @@ export const PRIORITY_ORDER: Readonly<Record<string, number>> = {
  * Increased to show comprehensive context for AI analysis.
  */
 export const DISPLAY_LIMITS = {
-  annotationsPerCheck: 50,
-  totalAnnotations: 100,
+  annotationsPerCheck: 100,
+  totalAnnotations: 150,
   recommendedActions: 10,
   checksToShow: 20,
-  slackAnnotationsPerCheck: 20,
+  slackAnnotationsPerCheck: 50,
   slackMaxChecks: 10,
 } as const;
 
