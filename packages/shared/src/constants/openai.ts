@@ -19,7 +19,7 @@ export const OPENAI_DEFAULTS = {
 export const OPENAI_CONSTANTS = {
   MAX_PROMPT_TOKENS: 8000, // Leave room for response
   MAX_RETRIES: 3,
-  DEFAULT_TIMEOUT_MS: 30000,
+  DEFAULT_TIMEOUT_MS: 90000,
   TOKEN_BUFFER: 1000, // Buffer for event and instructions
   EXPONENTIAL_BACKOFF_BASE: 2, // Base for exponential backoff: 2^attempt
   CHARS_PER_TOKEN_ESTIMATE: 4, // Rough estimate: ~4 chars per token
