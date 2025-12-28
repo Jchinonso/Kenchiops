@@ -21,7 +21,7 @@ export const LOGGER_DEFAULTS = {
 export const CONFIG_DEFAULTS = {
   PORT: 3000,
   OPENAI_MAX_TOKENS: 4096,
-  OPENAI_TIMEOUT_MS: 30000,
+  OPENAI_TIMEOUT_MS: 90000,
   GITHUB_APP_SLUG: "kenchi-devops",
   NODE_ENV: "development",
   // Service URLs (Docker Compose DNS names)
@@ -37,7 +37,7 @@ export const CONFIG_DEFAULTS = {
  */
 export const HTTP_RESILIENCE_DEFAULTS = {
   /** Request timeout in milliseconds */
-  TIMEOUT_MS: 30000,
+  TIMEOUT_MS: 90000,
   /** Maximum retry attempts */
   MAX_RETRIES: 3,
   /** Initial retry delay in milliseconds */
