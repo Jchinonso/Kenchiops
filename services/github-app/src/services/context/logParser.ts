@@ -245,24 +245,14 @@ const tryExtractFromFramework = (
     return null;
   }
 
-  // Deduplicate by test name and limit to maxFailures
-  const seen = new Set<string>();
-  const deduplicated = allMatches.filter((match) => {
-    const key = match.testName.toLowerCase().trim();
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-
-  const limited = deduplicated.slice(0, maxFailures);
+  // No aggressive deduplication - just limit to maxFailures
+  // The patterns may produce some duplicates but it's better to have extras than miss failures
+  const limited = allMatches.slice(0, maxFailures);
 
   logger.info("Extracted test failures from logs", {
     count: limited.length,
     framework: framework.name,
-    rawMatches: allMatches.length,
-    afterDedup: deduplicated.length,
+    totalMatched: allMatches.length,
   });
 
   return limited;
