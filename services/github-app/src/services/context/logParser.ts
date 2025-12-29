@@ -27,6 +27,13 @@ const stripAnsiCodes = (text: string): string =>
   // eslint-disable-next-line no-control-regex
   text.replace(/\x1b\[[0-9;]*m/g, "");
 
+/**
+ * Strip CI timestamps from log content.
+ * GitHub Actions logs have timestamps like: 2025-12-28T17:31:34.1659529Z
+ */
+const stripCITimestamps = (text: string): string =>
+  text.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/gm, "");
+
 // ==================== Test Failure Patterns ====================
 
 /**
@@ -59,23 +66,17 @@ const STACK_FILE_PATTERN = /at\s+.*?\(([^)]+\.(?:ts|js|tsx|jsx)):(\d+):\d+\)/;
 
 /**
  * Extract matches from a single regex pattern.
+ * Uses matchAll() for functional iteration over regex matches.
  */
 const extractMatchesFromPattern = (logs: string, pattern: RegExp): FileReference[] => {
   const regex = new RegExp(pattern.source, pattern.flags);
-  const references: FileReference[] = [];
-  let match;
 
-  // While loop is required for regex.exec iteration with global flag
-  while ((match = regex.exec(logs)) !== null) {
-    const path = match[1];
-    const line = parseInt(match[2], 10);
-
-    if (!shouldExcludePath(path, EXCLUDED_PATH_PATTERNS)) {
-      references.push({ path, line });
-    }
-  }
-
-  return references;
+  return [...logs.matchAll(regex)]
+    .filter((match) => !shouldExcludePath(match[1], EXCLUDED_PATH_PATTERNS))
+    .map((match) => ({
+      path: match[1],
+      line: parseInt(match[2], 10),
+    }));
 };
 
 /**
@@ -151,6 +152,7 @@ interface PatternMatch {
 
 /**
  * Extract matches from logs using a regex pattern.
+ * Uses matchAll() for functional iteration with slice for limiting results.
  *
  * @param logs - Log content to search
  * @param pattern - Regex pattern to match
@@ -164,49 +166,44 @@ const extractPatternMatches = (
   maxMatches: number,
   extractMatch: (match: RegExpExecArray, logs?: string) => PatternMatch
 ): PatternMatch[] => {
-  const matches: PatternMatch[] = [];
   const regex = new RegExp(pattern.source, pattern.flags);
-  let match;
 
-  while ((match = regex.exec(logs)) !== null && matches.length < maxMatches) {
-    matches.push(extractMatch(match, logs));
-  }
-
-  return matches;
+  return [...logs.matchAll(regex)]
+    .slice(0, maxMatches)
+    .map((match) => extractMatch(match as RegExpExecArray, logs));
 };
 
 /**
  * Build a map of test names to their source files from Jest output.
  * Parses FAIL blocks to associate tests with their file paths.
+ * Uses matchAll() for functional iteration over test names.
  */
 const buildTestFileMap = (logs: string): Map<string, string> => {
-  const fileMap = new Map<string, string>();
-
   // Split logs into FAIL blocks
   const failBlocks = logs.split(/(?=FAIL\s+\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/);
 
-  failBlocks.forEach((block) => {
+  // Process blocks and build entries as [testName, filePath] pairs
+  const entries = failBlocks.flatMap((block) => {
     // Extract file from FAIL line
     const failMatch = block.match(/^FAIL\s+(\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/);
-    if (!failMatch) return;
+    if (!failMatch) return [];
 
     const filePath = failMatch[1];
-
-    // Find all test names in this block (● TestName format)
     const testPattern = /●\s+([^\n]+)/g;
-    let testMatch;
-    while ((testMatch = testPattern.exec(block)) !== null) {
-      const testName = testMatch[1]
-        .trim()
-        .replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/g, "")
-        .trim();
-      if (testName) {
-        fileMap.set(testName.toLowerCase(), filePath);
-      }
-    }
+
+    // Use matchAll to find all test names in this block
+    return [...block.matchAll(testPattern)]
+      .map((match) =>
+        match[1]
+          .trim()
+          .replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/g, "")
+          .trim()
+      )
+      .filter((testName) => testName.length > 0)
+      .map((testName): [string, string] => [testName.toLowerCase(), filePath]);
   });
 
-  return fileMap;
+  return new Map(entries);
 };
 
 // Cache for test file map to avoid rebuilding for each match
@@ -362,8 +359,8 @@ const tryExtractFromFramework = (
  * @returns Array of unique test failure information
  */
 export const extractTestFailures = (logs: string): TestFailure[] => {
-  // Strip ANSI color codes from CI logs before parsing
-  const cleanLogs = stripAnsiCodes(logs);
+  // Strip ANSI color codes and CI timestamps from logs before parsing
+  const cleanLogs = stripCITimestamps(stripAnsiCodes(logs));
 
   // Try each framework in order, return first match
   const result = FRAMEWORK_PATTERNS.map((framework) =>

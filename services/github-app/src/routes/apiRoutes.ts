@@ -17,14 +17,16 @@ import {
   postPRComment,
   createCheckRunWithAnnotations,
   getInstallationRepositories,
+  type CheckAnnotation,
+  type RepositoryInfo,
+} from "../services/githubService.js";
+import {
   rerunFailedJobs,
   getWorkflowRunIdForCheckRun,
   getCheckSuiteIdForRun,
   rerequestCheckSuite,
-  type CheckAnnotation,
-  type RepositoryInfo,
   type RerunResult,
-} from "../services/githubService.js";
+} from "../services/workflowService.js";
 import { appConfig } from "../config/appConfig.js";
 import { formatGitHubComment } from "../formatters/commentFormatter.js";
 

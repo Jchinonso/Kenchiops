@@ -20,6 +20,9 @@ jest.mock("@kenchi/shared", () => ({
   GITHUB_CONTEXT_LIMITS: {
     MAX_FILE_SIZE: 10000,
   },
+  CONTEXT_FETCH_CONFIG: {
+    CONTEXT_LINES: 10,
+  },
 }));
 
 // Mock truncateWithContext

@@ -57,14 +57,14 @@ export const buildConsolidatedCheckAnnotations = (
     seen: Set<string>;
     annotations: GitHubCheckAnnotation[];
   }>(
-    (acc, ann) => {
-      const key = `${ann.path}:${ann.start_line}`;
-      if (acc.seen.has(key) || acc.annotations.length >= 50) {
-        return acc;
+    (state, currentAnnotation) => {
+      const key = `${currentAnnotation.path}:${currentAnnotation.start_line}`;
+      if (state.seen.has(key) || state.annotations.length >= 50) {
+        return state;
       }
-      acc.seen.add(key);
-      acc.annotations.push(ann);
-      return acc;
+      state.seen.add(key);
+      state.annotations.push(currentAnnotation);
+      return state;
     },
     { seen: new Set(), annotations: [] }
   );
@@ -80,7 +80,10 @@ export const buildConsolidatedCheckSummary = (aggregation: AggregatedFailures): 
   const avgConfidence = calculateAverageConfidence(failures);
 
   const checkList = failures
-    .map((f) => `- **${f.checkName}**: ${f.identifiedCause ?? "Analysis in progress"}`)
+    .map(
+      (failure) =>
+        `- **${failure.checkName}**: ${failure.identifiedCause ?? "Analysis in progress"}`
+    )
     .join("\n");
 
   return [

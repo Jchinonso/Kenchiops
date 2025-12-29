@@ -22,6 +22,10 @@ jest.mock("@kenchi/shared", () => ({
     error: jest.fn(),
     debug: jest.fn(),
   },
+  MESSAGE_STORE_CONFIG: {
+    MAX_AGE_MS: 3600000, // 1 hour
+    CLEANUP_INTERVAL_MS: 300000, // 5 minutes
+  },
 }));
 
 describe("Message Store", () => {

@@ -395,7 +395,8 @@ describe("Slack Payload Formatter", () => {
       );
 
       expect(actionsHeader).toBeDefined();
-      expect(actionsBlock?.text?.text).toContain("🔴 Fix the bug");
+      // high priority uses 🟠
+      expect(actionsBlock?.text?.text).toContain("🟠 Fix the bug");
     });
 
     it("should include footer with KenchiOps credit", () => {

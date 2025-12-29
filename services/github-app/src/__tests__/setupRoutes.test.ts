@@ -19,6 +19,17 @@ jest.mock("@kenchi/shared", () => ({
     BAD_REQUEST: 400,
     INTERNAL_SERVER_ERROR: 500,
   },
+  GITHUB_SETUP_CONFIG: {
+    SUCCESS_TITLE: "Setup Complete",
+    SUCCESS_HEADING: "GitHub App Installed!",
+    SUCCESS_MESSAGE: "Your GitHub App has been successfully installed.",
+    ERROR_TITLE: "Setup Error",
+    ERROR_HEADING: "Installation Error",
+    PROCESSING_TITLE: "Installation Processing",
+    PROCESSING_HEADING: "Please Wait...",
+    PROCESSING_MESSAGE: "Installation is being processed. This page will refresh automatically.",
+    REFRESH_INTERVAL_SECONDS: 3,
+  },
   findBySlackWorkspace: jest.fn(() =>
     Promise.resolve({
       id: "slack-tenant-123",

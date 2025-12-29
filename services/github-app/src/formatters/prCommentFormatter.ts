@@ -12,7 +12,13 @@ import type {
   CodeAnnotation,
   RecommendedAction,
 } from "@kenchi/shared";
-import { shouldExcludePath, EXCLUDED_PATH_PATTERNS } from "@kenchi/shared";
+import {
+  shouldExcludePath,
+  EXCLUDED_PATH_PATTERNS,
+  UI_EMOJI,
+  ANNOTATION_LEVEL_EMOJI_MAP,
+  deduplicateByKey,
+} from "@kenchi/shared";
 import {
   DISPLAY_LIMITS,
   getPriorityEmoji,
@@ -36,35 +42,15 @@ interface ConsolidatedAnnotation {
   readonly title?: string;
 }
 
-// ==================== Constants ====================
-
-const LEVEL_ICONS: Readonly<Record<CodeAnnotation["level"], string>> = {
-  failure: "❌",
-  warning: "⚠️",
-  notice: "ℹ️",
-} as const;
-
 // ==================== Pure Helper Functions ====================
-
-/**
- * Deduplicate items by key using reduce with Map (O(n) performance)
- */
-const deduplicateByKey = <T>(items: readonly T[], getKey: (item: T) => string): T[] => [
-  ...items
-    .reduce(
-      (map, item) => (map.has(getKey(item)) ? map : map.set(getKey(item), item)),
-      new Map<string, T>()
-    )
-    .values(),
-];
 
 /**
  * Consolidate test failures across checks using Map-based deduplication
  */
 const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): ConsolidatedTestFailure[] =>
   deduplicateByKey(
-    failures.flatMap((f) => f.testFailures ?? []),
-    (tf) => `${tf.testName}|${tf.file ?? ""}`
+    failures.flatMap((failure) => failure.testFailures ?? []),
+    (testFailure) => `${testFailure.testName}|${testFailure.file ?? ""}`
   );
 
 /**
@@ -74,15 +60,15 @@ const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): Consolid
 const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] =>
   deduplicateByKey(
     failures
-      .flatMap((f) => f.annotations)
-      .filter((a) => !shouldExcludePath(a.path, EXCLUDED_PATH_PATTERNS)),
-    (a) => `${a.path}:${a.line}`
-  ).map((a) => ({
-    path: a.path,
-    line: a.line,
-    message: a.message,
-    level: a.level,
-    title: a.title,
+      .flatMap((failure) => failure.annotations)
+      .filter((annotation) => !shouldExcludePath(annotation.path, EXCLUDED_PATH_PATTERNS)),
+    (annotation) => `${annotation.path}:${annotation.line}`
+  ).map((annotation) => ({
+    path: annotation.path,
+    line: annotation.line,
+    message: annotation.message,
+    level: annotation.level,
+    title: annotation.title,
   }));
 
 /**
@@ -90,7 +76,7 @@ const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): Consolida
  */
 const extractUniqueCauses = (failures: readonly AnalyzedFailure[]): string[] =>
   deduplicateByKey(
-    failures.map((f) => f.identifiedCause ?? f.analysis ?? "").filter(Boolean),
+    failures.map((failure) => failure.identifiedCause ?? failure.analysis ?? "").filter(Boolean),
     (cause) => cause
   );
 
@@ -100,7 +86,7 @@ const extractUniqueCauses = (failures: readonly AnalyzedFailure[]): string[] =>
  * Format a single annotation as markdown
  */
 const formatAnnotation = (annotation: ConsolidatedAnnotation): string => {
-  const icon = LEVEL_ICONS[annotation.level];
+  const icon = ANNOTATION_LEVEL_EMOJI_MAP[annotation.level] ?? UI_EMOJI.info;
   const title = annotation.title ? `**${annotation.title}**: ` : "";
   return `  - ${icon} \`${annotation.path}:${annotation.line}\` - ${title}${annotation.message}`;
 };
@@ -134,7 +120,7 @@ const buildHeader = (
   prContext: AggregatedFailures["prContext"]
 ): string[] => {
   const lines = [
-    "## 🤖 KenchiOps CI Failure Analysis",
+    `## ${UI_EMOJI.robot} KenchiOps CI Failure Analysis`,
     "",
     `**Commit:** \`${commitSha.substring(0, 7)}\``,
     `**Failed Checks:** ${failureCount}`,
@@ -154,7 +140,7 @@ const buildHeader = (
 const buildCheckNamesSection = (failures: readonly AnalyzedFailure[]): string[] =>
   failures.length === 0
     ? []
-    : ["", `**Checks:** ${failures.map((f) => `\`${f.checkName}\``).join(", ")}`, ""];
+    : ["", `**Checks:** ${failures.map((failure) => `\`${failure.checkName}\``).join(", ")}`, ""];
 
 /**
  * Build root cause section with unique causes
@@ -163,9 +149,11 @@ const buildRootCauseSection = (causes: readonly string[]): string[] => {
   if (causes.length === 0) return [];
 
   const causeText =
-    causes.length === 1 ? causes[0] : causes.map((c, i) => `${i + 1}. ${c}`).join("\n");
+    causes.length === 1
+      ? causes[0]
+      : causes.map((cause, index) => `${index + 1}. ${cause}`).join("\n");
 
-  return ["### 🔍 Root Cause", "", causeText, ""];
+  return [`### ${UI_EMOJI.search} Root Cause`, "", causeText, ""];
 };
 
 /**
@@ -177,7 +165,7 @@ const buildTestFailuresSection = (testFailures: readonly ConsolidatedTestFailure
   const displayLimit = DISPLAY_LIMITS.annotationsPerCheck;
   const displayTests = testFailures.slice(0, displayLimit);
   const lines = [
-    `### 🧪 Failed Tests (${testFailures.length})`,
+    `### ${UI_EMOJI.test} Failed Tests (${testFailures.length})`,
     "",
     ...displayTests.map(formatTestFailure),
   ];
@@ -198,7 +186,11 @@ const buildAnnotationsSection = (annotations: readonly ConsolidatedAnnotation[])
 
   const displayLimit = DISPLAY_LIMITS.annotationsPerCheck;
   const displayAnnotations = annotations.slice(0, displayLimit);
-  const lines = ["### 📍 Affected Files", "", ...displayAnnotations.map(formatAnnotation)];
+  const lines = [
+    `### ${UI_EMOJI.location} Affected Files`,
+    "",
+    ...displayAnnotations.map(formatAnnotation),
+  ];
 
   if (annotations.length > displayLimit) {
     lines.push(`  - ... and ${annotations.length - displayLimit} more locations`);
@@ -214,7 +206,7 @@ const buildAnnotationsSection = (annotations: readonly ConsolidatedAnnotation[])
 const buildActionsSection = (actions: readonly RecommendedAction[]): string[] =>
   actions.length === 0
     ? []
-    : ["---", "", "## 🛠️ Recommended Actions", "", ...actions.map(formatAction), ""];
+    : ["---", "", `## ${UI_EMOJI.tools} Recommended Actions`, "", ...actions.map(formatAction), ""];
 
 // ==================== Public API ====================
 

@@ -111,14 +111,9 @@ jest.mock("../formatters/checkRunFormatter.js", () => ({
 
 // No longer needed - addFailureToRedis is mocked in @kenchi/shared above
 
-jest.mock("../services/githubService.js", () => ({
-  deleteKenchiOpsComments: jest.fn(),
-}));
-
 // Import handlers after mocks
 import { handleCheckRun, handleCheckRunFailure } from "../handlers/checkRunHandler.js";
 import { gatherEnrichedContext, fetchPRsByCommit } from "../services/context/index.js";
-import { deleteKenchiOpsComments } from "../services/githubService.js";
 import { resilientPost, addFailureToRedis } from "@kenchi/shared";
 
 // Get the mocked functions
@@ -129,9 +124,6 @@ const mockGatherEnrichedContext = gatherEnrichedContext as jest.MockedFunction<
   typeof gatherEnrichedContext
 >;
 const mockFetchPRsByCommit = fetchPRsByCommit as jest.MockedFunction<typeof fetchPRsByCommit>;
-const mockDeleteKenchiOpsComments = deleteKenchiOpsComments as jest.MockedFunction<
-  typeof deleteKenchiOpsComments
->;
 
 describe("Check Run Handler", () => {
   // Test fixtures
@@ -224,8 +216,6 @@ describe("Check Run Handler", () => {
 
     // Reset Redis aggregator mock
     mockAddFailureToRedis.mockResolvedValue();
-
-    mockDeleteKenchiOpsComments.mockResolvedValue(0);
   });
 
   describe("handleCheckRun", () => {
@@ -249,7 +239,7 @@ describe("Check Run Handler", () => {
       expect(result.message).toContain("skipped");
     });
 
-    it("should skip successful check runs and clean up comments", async () => {
+    it("should skip successful check runs without processing", async () => {
       const webhook = createMockWebhook({
         check_run: {
           ...createMockWebhook().check_run,
@@ -259,9 +249,9 @@ describe("Check Run Handler", () => {
 
       const result = await handleCheckRun(webhook);
 
-      expect(result.handled).toBe(true);
-      expect(result.message).toContain("succeeded");
-      expect(mockDeleteKenchiOpsComments).toHaveBeenCalled();
+      expect(result.handled).toBe(false);
+      expect(result.message).toContain("skipped");
+      expect(mockGatherEnrichedContext).not.toHaveBeenCalled();
     });
 
     it("should process timed_out conclusions as failures", async () => {
@@ -305,7 +295,7 @@ describe("Check Run Handler", () => {
       expect(result.handled).toBe(false);
     });
 
-    it("should clean up comments on multiple PRs when successful", async () => {
+    it("should skip successful check runs even with multiple PRs", async () => {
       const webhook = createMockWebhook({
         check_run: {
           ...createMockWebhook().check_run,
@@ -325,9 +315,10 @@ describe("Check Run Handler", () => {
         },
       });
 
-      await handleCheckRun(webhook);
+      const result = await handleCheckRun(webhook);
 
-      expect(mockDeleteKenchiOpsComments).toHaveBeenCalledTimes(2);
+      expect(result.handled).toBe(false);
+      expect(mockGatherEnrichedContext).not.toHaveBeenCalled();
     });
 
     it("should fetch PRs by commit when not in webhook", async () => {

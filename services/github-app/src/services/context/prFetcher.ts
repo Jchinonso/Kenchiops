@@ -249,27 +249,21 @@ export const fetchDependencyChanges = async (
     const patch = packageJsonFile.patch;
 
     // Use Map for O(1) lookups when merging added/removed into updates
-    const addedDeps = new Map<string, string>();
-    const removedDeps = new Map<string, string>();
-
-    // Parse added dependencies (lines starting with +)
+    // Parse added dependencies (lines starting with +) using matchAll
     const addedRegex = new RegExp(DEPENDENCY_DIFF_PATTERNS.ADDED.source, "gm");
-    let match;
-    while ((match = addedRegex.exec(patch)) !== null) {
-      const [, name, version] = match;
-      if (!name.startsWith("//") && !EXCLUDED_PACKAGE_JSON_FIELDS.has(name)) {
-        addedDeps.set(name, version);
-      }
-    }
+    const addedDeps = new Map(
+      [...patch.matchAll(addedRegex)]
+        .filter(([, name]) => !name.startsWith("//") && !EXCLUDED_PACKAGE_JSON_FIELDS.has(name))
+        .map(([, name, version]): [string, string] => [name, version])
+    );
 
-    // Parse removed dependencies (lines starting with -)
+    // Parse removed dependencies (lines starting with -) using matchAll
     const removedRegex = new RegExp(DEPENDENCY_DIFF_PATTERNS.REMOVED.source, "gm");
-    while ((match = removedRegex.exec(patch)) !== null) {
-      const [, name, version] = match;
-      if (!name.startsWith("//") && !EXCLUDED_PACKAGE_JSON_FIELDS.has(name)) {
-        removedDeps.set(name, version);
-      }
-    }
+    const removedDeps = new Map(
+      [...patch.matchAll(removedRegex)]
+        .filter(([, name]) => !name.startsWith("//") && !EXCLUDED_PACKAGE_JSON_FIELDS.has(name))
+        .map(([, name, version]): [string, string] => [name, version])
+    );
 
     // Build changes list: merge added + removed into updates
     // Find dependencies that are both added and removed (= updates)

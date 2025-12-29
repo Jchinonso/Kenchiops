@@ -173,8 +173,9 @@ describe("PR Comment Formatter", () => {
     });
 
     it("should truncate annotations when over per-check limit", () => {
-      const annotations = Array.from({ length: 60 }, (_, i) =>
-        createAnnotation({ path: `file${i}.ts`, line: i })
+      // DISPLAY_LIMITS.annotationsPerCheck is 100, so create 110 to trigger truncation
+      const annotations = Array.from({ length: 110 }, (_, annotationIndex) =>
+        createAnnotation({ path: `file${annotationIndex}.ts`, line: annotationIndex })
       );
       const aggregation = createAggregation({
         failures: [createFailure({ annotations })],
@@ -198,7 +199,8 @@ describe("PR Comment Formatter", () => {
       const comment = buildConsolidatedPRComment(aggregation);
 
       expect(comment).toContain("## 🛠️ Recommended Actions");
-      expect(comment).toContain("🔴 Fix the import");
+      // high priority uses 🟠, medium uses 🟡
+      expect(comment).toContain("🟠 Fix the import");
       expect(comment).toContain("🟡 Run tests");
     });
 

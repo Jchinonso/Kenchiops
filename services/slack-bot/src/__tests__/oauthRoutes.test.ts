@@ -25,6 +25,11 @@ jest.mock("@kenchi/shared", () => ({
     BAD_REQUEST: 400,
     INTERNAL_SERVER_ERROR: 500,
   },
+  SLACK_OAUTH_TIMING: {
+    STATE_EXPIRY_MS: 600000,
+    CLEANUP_INTERVAL_MS: 60000,
+  },
+  SLACK_OAUTH_SCOPES_STRING: "chat:write,channels:read",
   findByGitHubOrg: jest.fn(),
   linkSlackWorkspace: jest.fn(),
   createFromSlackInstall: jest.fn(),
