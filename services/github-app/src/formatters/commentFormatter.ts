@@ -158,7 +158,22 @@ const buildSummaryLine = (analysis: AnalysisData): string => {
 
 const buildCauseQuote = (analysis: AnalysisData): string => {
   const cause = analysis.identified_cause ?? getFirstSentence(analysis.analysis ?? "");
-  return cause ? `> ${cause}\n` : "";
+
+  // If no meaningful cause identified, provide context about the failure
+  if (!cause) {
+    const hasAnnotations = (analysis.annotations?.length ?? 0) > 0;
+    const hasTestFailures = (analysis.testFailures?.length ?? 0) > 0;
+
+    if (hasTestFailures) {
+      return "> Test failures detected. See details below for specific failing tests.\n";
+    }
+    if (hasAnnotations) {
+      return "> CI check failed. See error locations below for details.\n";
+    }
+    return "> CI check failed. Unable to determine specific root cause from available logs.\n";
+  }
+
+  return `> ${cause}\n`;
 };
 
 const buildTestFailuresSubsection = (testFailures: ReadonlyArray<CITestFailure>): string[] => {

@@ -38,6 +38,7 @@ export const GITHUB_CHECK_CONCLUSIONS = {
   SKIPPED: "skipped",
   TIMED_OUT: "timed_out",
   ACTION_REQUIRED: "action_required",
+  STALE: "stale",
 } as const;
 
 export type GitHubCheckConclusion =
