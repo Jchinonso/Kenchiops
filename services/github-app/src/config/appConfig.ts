@@ -47,7 +47,7 @@ const REQUIRED_GITHUB_CONFIG = [
  * Validate required GitHub configuration
  */
 const validateGitHubConfig = (): void => {
-  const missingConfig = REQUIRED_GITHUB_CONFIG.find((c) => !c.value());
+  const missingConfig = REQUIRED_GITHUB_CONFIG.find((configItem) => !configItem.value());
   if (missingConfig) {
     throw new ValidationError(missingConfig.message);
   }

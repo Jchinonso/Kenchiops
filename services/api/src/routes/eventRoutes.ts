@@ -32,8 +32,8 @@ router.post(
   API_ROUTES.EVENTS,
   validate({
     body: {
-      source: (v) => validators.required(v) && validators.string(v),
-      type: (v) => validators.required(v) && validators.string(v),
+      source: (value) => validators.required(value) && validators.string(value),
+      type: (value) => validators.required(value) && validators.string(value),
     },
   }),
   asyncHandler(async (req, res) => {

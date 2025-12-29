@@ -119,17 +119,18 @@ export const createHttpRoutes = (app: SlackApp): express.Router => {
     "/slack/message",
     validate({
       body: {
-        installation_id: (v) => !v || validators.number(v),
-        channel: (v) => !v || validators.string(v),
-        message: (v) => !v || validators.string(v),
-        thread_ts: (v) => !v || validators.string(v),
-        analysis: (v) => !v || (typeof v === "object" && v !== null),
+        installation_id: (value) => !value || validators.number(value),
+        channel: (value) => !value || validators.string(value),
+        message: (value) => !value || validators.string(value),
+        thread_ts: (value) => !value || validators.string(value),
+        analysis: (value) => !value || (typeof value === "object" && value !== null),
         // Consolidated message fields
-        consolidated: (v) => v === undefined || typeof v === "boolean" || "must be a boolean",
-        payload: (v) => !v || (typeof v === "object" && v !== null),
-        repository: (v) => !v || validators.string(v),
-        commit_sha: (v) => !v || validators.string(v),
-        failure_count: (v) => !v || validators.number(v),
+        consolidated: (value) =>
+          value === undefined || typeof value === "boolean" || "must be a boolean",
+        payload: (value) => !value || (typeof value === "object" && value !== null),
+        repository: (value) => !value || validators.string(value),
+        commit_sha: (value) => !value || validators.string(value),
+        failure_count: (value) => !value || validators.number(value),
       },
     }),
     asyncHandler(async (req: Request, res: Response) => {
@@ -172,7 +173,7 @@ export const createHttpRoutes = (app: SlackApp): express.Router => {
     "/slack/broadcast",
     validate({
       body: {
-        message: (v) => validators.required(v) && validators.string(v),
+        message: (value) => validators.required(value) && validators.string(value),
       },
     }),
     asyncHandler(async (req: Request, res: Response) => {

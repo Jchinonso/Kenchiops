@@ -50,10 +50,10 @@ const handleConsolidatedCIFailure = async (
     repository: aggregation.repository.fullName,
     commitSha: aggregation.commitSha,
     failureCount: aggregation.failures.length,
-    checkNames: aggregation.failures.map((f) => f.checkName),
+    checkNames: aggregation.failures.map((failure) => failure.checkName),
     avgConfidence:
       aggregation.failures.length > 0
-        ? aggregation.failures.reduce((sum, f) => sum + f.confidence, 0) /
+        ? aggregation.failures.reduce((sum, failure) => sum + failure.confidence, 0) /
           aggregation.failures.length
         : 0,
     isConsolidated: true,

@@ -236,7 +236,7 @@ export const postConsolidatedAnalysis = async (
     repository: aggregation.repository.fullName,
     commitSha: aggregation.commitSha.substring(0, 7),
     failureCount: aggregation.failures.length,
-    checkNames: aggregation.failures.map((f) => f.checkName),
+    checkNames: aggregation.failures.map((failure) => failure.checkName),
     prCount: aggregation.pullRequestNumbers.length,
   });
 
