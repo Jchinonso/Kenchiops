@@ -53,10 +53,10 @@ const getRepositoryMappings = async (
 ): Promise<readonly RepositoryMappingDisplay[]> => {
   try {
     const mappings = await findAllMappingsForTenant(tenantId);
-    return mappings.map((m) => ({
-      repository: m.repository,
-      channelId: m.slackChannelId,
-      channelName: m.slackChannelName,
+    return mappings.map((mapping) => ({
+      repository: mapping.repository,
+      channelId: mapping.slackChannelId,
+      channelName: mapping.slackChannelName,
     }));
   } catch (error) {
     logger.warn("Failed to get repository mappings", {

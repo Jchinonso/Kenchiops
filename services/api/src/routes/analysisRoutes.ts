@@ -47,8 +47,8 @@ router.post(
   },
   validate({
     body: {
-      failure_log: (v) => validators.required(v) && validators.string(v),
-      repository: (v) => validators.required(v) && validators.string(v),
+      failure_log: (value) => validators.required(value) && validators.string(value),
+      repository: (value) => validators.required(value) && validators.string(value),
     },
   }),
   asyncHandler(async (req, res) => {

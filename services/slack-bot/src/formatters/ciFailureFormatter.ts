@@ -111,7 +111,8 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
   }
 
   // Add annotation context
-  const failureAnnotations = analysis.annotations?.filter((a) => a.level === "failure") || [];
+  const failureAnnotations =
+    analysis.annotations?.filter((annotation) => annotation.level === "failure") || [];
   if (failureAnnotations.length > 0 && reasons.length < 3) {
     const firstAnn = failureAnnotations[0];
     reasons.push(`Error in \`${firstAnn.path}:${firstAnn.startLine}\``);
@@ -136,7 +137,7 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
     reasons.push("CI pipeline execution failed");
   }
 
-  const reasonsList = reasons.map((r) => `• ${r}`).join("\n");
+  const reasonsList = reasons.map((reason) => `• ${reason}`).join("\n");
 
   return {
     type: "section",
@@ -191,7 +192,7 @@ const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
       : "";
 
   const errorText = [
-    ...displayErrors.map((e) => `\`\`\`${truncateText(e, 100)}\`\`\``),
+    ...displayErrors.map((error) => `\`\`\`${truncateText(error, 100)}\`\`\``),
     ...(moreText ? [moreText] : []),
   ].join("\n");
 

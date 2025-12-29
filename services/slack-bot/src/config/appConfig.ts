@@ -50,7 +50,7 @@ export function loadAppConfig(): AppConfig {
   const slackAppToken = config.SLACK_APP_LEVEL_TOKEN;
 
   // Validate all required config
-  const missingConfig = REQUIRED_CONFIG.find((c) => !c.value());
+  const missingConfig = REQUIRED_CONFIG.find((configItem) => !configItem.value());
   if (missingConfig) {
     throw new ValidationError(missingConfig.message);
   }
