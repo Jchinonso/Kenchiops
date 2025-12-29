@@ -116,3 +116,9 @@ export const generateEventId = (prefix: string = ID_GENERATION.DEFAULT_PREFIX): 
     .substring(ID_GENERATION.RANDOM_START_INDEX, ID_GENERATION.RANDOM_END_INDEX);
   return `${prefix}_${timestamp}_${random}`;
 };
+
+// Intentional type error to trigger CI failure
+export const brokenFunction = (value: number): string => {
+  const result: number = "this should be a number"; // Type error!
+  return result + value;
+};
