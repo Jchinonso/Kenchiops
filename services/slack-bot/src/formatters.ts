@@ -117,7 +117,7 @@ export function formatAnalysisMessage(
     blocks.push(createDividerBlock());
     blocks.push(
       createSectionBlock(
-        `*Uncertainties*\n${analysis.uncertainties.map((u) => `• ${u}`).join("\n")}`
+        `*Uncertainties*\n${analysis.uncertainties.map((uncertainty) => `• ${uncertainty}`).join("\n")}`
       )
     );
   }

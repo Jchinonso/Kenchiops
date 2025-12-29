@@ -119,7 +119,7 @@ export const fetchCommitInfo = async (
       author: commit.commit.author?.name || commit.author?.login || "unknown",
       committer: commit.commit.committer?.name || commit.committer?.login || "unknown",
       timestamp: commit.commit.author?.date || new Date().toISOString(),
-      changedFiles: commit.files?.map((f) => f.filename) || [],
+      changedFiles: commit.files?.map((file) => file.filename) || [],
     };
   } catch (error) {
     logger.warn("Failed to fetch commit info", {

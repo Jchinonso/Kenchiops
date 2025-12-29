@@ -41,9 +41,9 @@ router.post(
   "/api/github/comment",
   validate({
     body: {
-      repository: (v) => validators.required(v) && validators.string(v),
-      pr_number: (v) => validators.required(v) && typeof v === "number",
-      analysis: (v) => validators.required(v) && typeof v === "object",
+      repository: (value) => validators.required(value) && validators.string(value),
+      pr_number: (value) => validators.required(value) && typeof value === "number",
+      analysis: (value) => validators.required(value) && typeof value === "object",
     },
   }),
   asyncHandler(async (req: Request, res: Response) => {
@@ -155,10 +155,10 @@ router.post(
   "/api/github/annotations",
   validate({
     body: {
-      repository: (v) => validators.required(v) && validators.string(v),
-      head_sha: (v) => validators.required(v) && validators.string(v),
-      annotations: (v) => validators.required(v) && Array.isArray(v),
-      summary: (v) => validators.required(v) && validators.string(v),
+      repository: (value) => validators.required(value) && validators.string(value),
+      head_sha: (value) => validators.required(value) && validators.string(value),
+      annotations: (value) => validators.required(value) && Array.isArray(value),
+      summary: (value) => validators.required(value) && validators.string(value),
     },
   }),
   asyncHandler(async (req: Request, res: Response) => {
@@ -362,8 +362,8 @@ router.post(
   "/api/actions/rerun",
   validate({
     body: {
-      installationId: (v) => validators.required(v) && typeof v === "number",
-      repository: (v) => validators.required(v) && validators.string(v),
+      installationId: (value) => validators.required(value) && typeof value === "number",
+      repository: (value) => validators.required(value) && validators.string(value),
     },
   }),
   asyncHandler(async (req: Request, res: Response) => {
