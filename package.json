@@ -22,7 +22,6 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:coverage:ci": "jest --coverage --maxWorkers=2 --forceExit",
-    "test:coverage:badge": "jest --coverage && tsx scripts/generate-coverage-badge.ts",
     "dev:api": "npm run build:shared && npm --workspace services/api run dev",
     "dev:slack-bot": "npm run build:shared && npm --workspace services/slack-bot run dev",
     "dev:github-app": "npm run build:shared && npm --workspace services/github-app run dev",
