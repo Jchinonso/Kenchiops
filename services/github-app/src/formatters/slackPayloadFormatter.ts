@@ -138,11 +138,12 @@ const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): Consolid
 
 /**
  * Consolidate annotations across checks using Map-based deduplication
+ * Key includes message to preserve multiple errors on the same line
  */
 const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] =>
   deduplicateByKey(
     failures.flatMap((failure) => failure.annotations),
-    (annotation) => `${annotation.path}:${annotation.line}`
+    (annotation) => `${annotation.path}:${annotation.line}:${annotation.message}`
   ).map((annotation) => ({
     path: annotation.path,
     line: annotation.line,
