@@ -42,6 +42,13 @@ export const AUDIT_DEFAULTS = {
   EMPTY_METADATA: "{}",
 } as const;
 
+/**
+ * Default values for tenant operations
+ */
+export const TENANT_DEFAULTS = {
+  SUSPENSION_REASON: "No reason provided",
+} as const;
+
 // ==================== Query Templates ====================
 
 /**

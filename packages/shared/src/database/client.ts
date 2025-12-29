@@ -8,7 +8,7 @@
 
 import pg from "pg";
 import { createLogger } from "../core/logger.js";
-import { ValidationError } from "../core/errors.js";
+import { ValidationError, getErrorMessage } from "../core/errors.js";
 import { DATABASE_POOL_DEFAULTS, QUERY_LOGGING, TRANSACTION_COMMANDS } from "../constants/index.js";
 
 const { Pool } = pg;
@@ -71,12 +71,6 @@ const createQueryMetadata = (
   ...(rowCount !== undefined && { rowCount }),
   ...(error && { error }),
 });
-
-/**
- * Extracts error message safely from unknown error
- */
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Unknown error";
 
 /**
  * Ensures pool is initialized, throws ValidationError if not

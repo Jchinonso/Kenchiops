@@ -35,13 +35,41 @@ export const DEFAULT_ERROR_MESSAGES = {
   INSUFFICIENT_PERMISSIONS: "Insufficient permissions",
   RESOURCE_NOT_FOUND: "Resource not found",
   UNEXPECTED_ERROR: "An unexpected error occurred",
+  UNKNOWN_ERROR: "Unknown error",
+  OPERATION_TIMEOUT: "Operation timed out",
+} as const;
+
+/**
+ * Validation error messages.
+ */
+export const VALIDATION_MESSAGES = {
+  REQUIRED: "is required",
+  MUST_BE_STRING: "must be a string",
+  MUST_BE_NUMBER: "must be a number",
+  MUST_BE_EMAIL: "must be a valid email",
+} as const;
+
+/**
+ * Rate limiting messages.
+ */
+export const RATE_LIMIT_MESSAGES = {
+  TOO_MANY_REQUESTS: "Too many requests, please try again later",
 } as const;
 
 /**
  * External service names.
  */
-export const SERVICE_NAMES = {
+export const EXTERNAL_SERVICE_NAMES = {
   OPENAI: "OpenAI",
+} as const;
+
+/**
+ * Internal service identifiers for logging and configuration.
+ */
+export const SERVICE_NAMES = {
+  API: "api",
+  SLACK_BOT: "slack-bot",
+  GITHUB_APP: "github-app",
 } as const;
 
 /**

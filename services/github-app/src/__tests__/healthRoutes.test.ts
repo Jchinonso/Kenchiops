@@ -16,6 +16,9 @@ jest.mock("@kenchi/shared", () => ({
   config: {
     NODE_ENV: "test",
   },
+  GITHUB_PAGINATION: {
+    DEFAULT_PER_PAGE: 100,
+  },
 }));
 
 jest.mock("../config/appConfig.js", () => ({

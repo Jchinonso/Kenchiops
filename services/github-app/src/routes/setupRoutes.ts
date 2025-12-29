@@ -10,6 +10,7 @@ import { Router, type Request, type Response } from "express";
 import {
   createLogger,
   HTTP_STATUS,
+  GITHUB_SETUP_CONFIG,
   findBySlackWorkspace,
   findByGitHubInstallation,
   linkSlackWorkspace,
@@ -146,7 +147,7 @@ router.get("/github/setup", async (req: Request, res: Response) => {
           <body>
             <h1>Installation Processing</h1>
             <p>Your installation is being processed. Please wait a moment and refresh.</p>
-            <script>setTimeout(() => location.reload(), 3000);</script>
+            <script>setTimeout(() => location.reload(), ${GITHUB_SETUP_CONFIG.RELOAD_DELAY_MS});</script>
           </body>
         </html>
       `);

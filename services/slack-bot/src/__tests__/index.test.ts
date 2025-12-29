@@ -91,14 +91,74 @@ describe("Slack Bot Service Index", () => {
     // Mock @kenchi/shared
     jest.doMock("@kenchi/shared", () => ({
       logger: mockLogger,
+      createLogger: jest.fn(() => mockLogger),
       config: {
         DATABASE_URL: "postgresql://test:test@localhost:5432/test",
         MULTI_TENANT_MODE: false,
+        REDIS_URL: undefined,
       },
       initDatabase: mockInitDatabase,
       closeDatabase: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      closeRedis: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      waitForRedisConnection: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
       findBySlackWorkspace: mockFindBySlackWorkspace,
       deleteMappingsForChannel: mockDeleteMappingsForChannel,
+      isSocketModeDisconnectError: jest.fn(() => false),
+      createRedisRateLimiter: jest.fn(() => ({
+        middleware: jest.fn(() =>
+          jest.fn((_req: unknown, _res: unknown, next: () => void) => next())
+        ),
+      })),
+      startSlackNotificationWorker: jest
+        .fn<() => Promise<() => void>>()
+        .mockResolvedValue(() => {}),
+      getErrorMessage: jest.fn((e: unknown) => (e instanceof Error ? e.message : String(e))),
+      NotFoundError: jest.fn((msg: unknown) => new Error(String(msg))),
+      getSlackCredentials: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+      shouldSkipSlackBotRateLimit: jest.fn(() => false),
+      SLACK_BOT_RATE_LIMITS: {
+        ACTIONS_WINDOW_MS: 60000,
+        ACTIONS_MAX_REQUESTS: 30,
+        COMMANDS_WINDOW_MS: 60000,
+        COMMANDS_MAX_REQUESTS: 20,
+      },
+      SLACK_BOT_TIMEOUTS: {
+        APP_START_TIMEOUT_MS: 5000,
+        DATABASE_INIT_TIMEOUT_MS: 10000,
+        SHUTDOWN_TIMEOUT_MS: 10000,
+      },
+      SLACK_BOT_DB_CONFIG: {
+        MAX_RETRIES: 3,
+        RETRY_DELAY_MS: 1000,
+        MAX_CONNECTIONS: 10,
+        IDLE_TIMEOUT_MS: 30000,
+      },
+      SLACK_BOT_MESSAGES: {
+        ERROR_GENERIC: "An error occurred. Please try again.",
+        NO_TENANT: "No tenant found. Please install the app first.",
+        COMMAND_NOT_FOUND: "Command not found.",
+        DISABLED_CHANNEL: "This channel has been disabled.",
+      },
+      SLACK_ACTION_IDS: {
+        APPROVE: "approve_action",
+        REJECT: "reject_action",
+        SELECT_REPOSITORY: "select_repository_button",
+        REPOSITORY_SELECTED: "repository_selected",
+        DISABLE_CHANNEL: "disable_channel",
+        ENABLE_CHANNEL: "enable_channel",
+        FEEDBACK_HELPFUL: "feedback_helpful",
+        FEEDBACK_NOT_HELPFUL: "feedback_not_helpful",
+        TEST_CONNECTION: "test_connection",
+        REFRESH_HOME: "refresh_home",
+        CONNECT_GITHUB: "connect_github",
+        VIEW_DOCS: "view_docs",
+        GET_SUPPORT: "get_support",
+      },
+      SLACK_ACTION_PATTERNS: {
+        APPROVE: /^approve_action_/,
+        REJECT: /^reject_action_/,
+        RERUN: /^rerun_ci_/,
+      },
     }));
 
     // Mock config/appConfig
@@ -158,6 +218,10 @@ describe("Slack Bot Service Index", () => {
 
     jest.doMock("../routes/oauthRoutes.js", () => ({
       oauthRoutes: jest.fn(),
+    }));
+
+    jest.doMock("../services/notificationHandler.js", () => ({
+      createNotificationHandler: jest.fn(() => jest.fn()),
     }));
   });
 

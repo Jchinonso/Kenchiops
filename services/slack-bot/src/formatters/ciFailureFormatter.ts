@@ -7,12 +7,15 @@
 
 import {
   PRIORITY_EMOJI,
+  PRIORITY_NUMERIC_MAP,
   getConfidenceColor,
   getConfidenceLabel,
   getConfidenceEmoji,
   collectCIErrors,
-  GIT_DISPLAY,
+  DISPLAY_DEFAULTS,
   truncateText,
+  SLACK_FAILURE_TEMPLATES,
+  FORMATTER_DISPLAY_LIMITS,
 } from "@kenchi/shared";
 import type { SlackBlock, CIFailureAnalysis } from "../types/slackTypes.js";
 
@@ -32,15 +35,11 @@ export interface MessageAttachment {
  * @returns Emoji string for the priority level
  */
 export const getPriorityEmoji = (priority: string | number): string => {
-  // Handle numeric priorities
+  // Handle numeric priorities using centralized mapping
   if (typeof priority === "number") {
-    const numericMap: Record<number, keyof typeof PRIORITY_EMOJI> = {
-      1: "critical",
-      2: "high",
-      3: "medium",
-      4: "low",
-    };
-    return PRIORITY_EMOJI[numericMap[priority] || "low"];
+    const priorityKey =
+      PRIORITY_NUMERIC_MAP[priority as keyof typeof PRIORITY_NUMERIC_MAP] || "low";
+    return PRIORITY_EMOJI[priorityKey];
   }
   const p = priority.toLowerCase() as keyof typeof PRIORITY_EMOJI;
   return PRIORITY_EMOJI[p] || PRIORITY_EMOJI.low;
@@ -54,7 +53,7 @@ const createBrandedHeaderBlock = (): SlackBlock => ({
   type: "header",
   text: {
     type: "plain_text",
-    text: "❌ KenchiOps — CI Failure Detected",
+    text: SLACK_FAILURE_TEMPLATES.HEADER,
     emoji: true,
   },
 });
@@ -69,7 +68,9 @@ const createSummaryBlock = (analysis: CIFailureAnalysis): SlackBlock => {
 
   // Find the first test failure name if available
   const firstTest = analysis.testFailures?.[0]?.testName;
-  const testInfo = firstTest ? ` on test \`${truncateText(firstTest, 40)}\`` : "";
+  const testInfo = firstTest
+    ? ` on test \`${truncateText(firstTest, FORMATTER_DISPLAY_LIMITS.SLACK_TEST_NAME_LENGTH)}\``
+    : "";
 
   return {
     type: "section",
@@ -101,7 +102,9 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
   if (analysis.testFailures && analysis.testFailures.length > 0) {
     const failureCount = analysis.testFailures.length;
     if (failureCount === 1) {
-      reasons.push(`1 test failed: \`${truncateText(analysis.testFailures[0].testName, 50)}\``);
+      reasons.push(
+        `1 test failed: \`${truncateText(analysis.testFailures[0].testName, FORMATTER_DISPLAY_LIMITS.DETAILED_TEST_NAME_LENGTH)}\``
+      );
     } else {
       reasons.push(`${failureCount} tests failed in this run`);
     }
@@ -114,10 +117,18 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
     reasons.push(`Error in \`${firstAnn.path}:${firstAnn.startLine}\``);
   }
 
-  // Add dependency change context if available
-  if (analysis.dependencyChanges && analysis.dependencyChanges.length > 0) {
-    const depCount = analysis.dependencyChanges.length;
+  // Add dependency change context if available (prefer AI-extracted, fallback to legacy)
+  const depChanges = analysis.detectedDependencyChanges ?? analysis.dependencyChanges ?? [];
+  if (depChanges.length > 0) {
+    const depCount = depChanges.length;
     reasons.push(`${depCount} dependency change${depCount > 1 ? "s" : ""} in this PR`);
+  }
+
+  // Add build config change context if available (AI-extracted)
+  const buildChanges = analysis.detectedBuildConfigChanges ?? [];
+  if (buildChanges.length > 0) {
+    const configCount = buildChanges.length;
+    reasons.push(`${configCount} build config change${configCount > 1 ? "s" : ""} detected`);
   }
 
   // Ensure we have at least one reason
@@ -146,8 +157,8 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
     return null;
   }
 
-  // Take top 3 actions max
-  const topActions = actions.slice(0, 3);
+  // Take top actions based on display limit
+  const topActions = actions.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ACTION_BUTTONS);
   const actionsList = topActions
     .map((action, index) => {
       const emoji = getPriorityEmoji(action.priority);
@@ -172,9 +183,12 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
 const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
   if (errors.length === 0) return null;
 
-  // Limit to 5 errors max
-  const displayErrors = errors.slice(0, 5);
-  const moreText = errors.length > 5 ? `\n_...and ${errors.length - 5} more errors_` : "";
+  // Limit errors based on display limit
+  const displayErrors = errors.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED);
+  const moreText =
+    errors.length > FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED
+      ? `\n_...and ${errors.length - FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED} more errors_`
+      : "";
 
   const errorText = [
     ...displayErrors.map((e) => `\`\`\`${truncateText(e, 100)}\`\`\``),
@@ -229,7 +243,7 @@ const createFooterBlock = (analysis: CIFailureAnalysis): SlackBlock => {
 
   // Add commit SHA
   if (analysis.headSha) {
-    const shortSha = analysis.headSha.substring(0, GIT_DISPLAY.SHA_DISPLAY_LENGTH);
+    const shortSha = analysis.headSha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH);
     parts.push(`📝 \`${shortSha}\``);
   }
 

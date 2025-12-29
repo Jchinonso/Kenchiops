@@ -62,16 +62,48 @@ export const UI_EMOJI = {
   commit: "📝",
   timer: "⏱️",
   robot: "🤖",
+  info: "ℹ️",
+  test: "🧪",
+  alert: "🚨",
+  target: "🎯",
+  link: "🔗",
+  branch: "🔀",
 } as const;
 
 /**
  * Priority emoji lookup table using centralized UI_EMOJI.
  */
 export const PRIORITY_EMOJI_MAP: Readonly<Record<string, string>> = {
+  immediate: UI_EMOJI.priorityCritical,
   critical: UI_EMOJI.priorityCritical,
   high: UI_EMOJI.priorityHigh,
   medium: UI_EMOJI.priorityMedium,
   low: UI_EMOJI.priorityLow,
+} as const;
+
+/**
+ * Priority order lookup for sorting actions (lower = higher priority).
+ */
+export const PRIORITY_ORDER: Readonly<Record<string, number>> = {
+  immediate: 0,
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+} as const;
+
+/**
+ * Default priority order for unknown priorities.
+ */
+export const PRIORITY_ORDER_DEFAULT = 4;
+
+/**
+ * Annotation level emoji lookup table using centralized UI_EMOJI.
+ */
+export const ANNOTATION_LEVEL_EMOJI_MAP: Readonly<Record<string, string>> = {
+  failure: UI_EMOJI.failure,
+  warning: UI_EMOJI.warning,
+  notice: UI_EMOJI.info,
 } as const;
 
 /**
@@ -134,10 +166,4 @@ export const VALID_SAFETY_LEVELS: Readonly<Set<string>> = new Set([
   "dangerous",
 ]);
 
-/**
- * Git-related display constants.
- */
-export const GIT_DISPLAY = {
-  /** Standard length for displaying truncated commit SHA */
-  SHA_DISPLAY_LENGTH: 7,
-} as const;
+// Note: SHA display length is in DISPLAY_DEFAULTS (redis.ts) to avoid duplication

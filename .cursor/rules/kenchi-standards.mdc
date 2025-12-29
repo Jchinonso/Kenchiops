@@ -6,12 +6,7 @@ alwaysApply: true
 
 ## Project Context
 
-TypeScript monorepo for an AI-driven DevOps assistant. Three services (API, Slack bot, GitHub app) share one safety-critical package. LLMs only analyze — deterministic gates and humans own execution. Strict separation of concerns with shared package for all common functionality.
-
-**Before touching code, read:**
-- `docs/ARCHITECTURE.md` - System architecture
-- `docs/SYSTEM_ARCHITECTURE.md` - Detailed design
-- `docs/AI_TOOL_GUIDELINES.md` - AI tool usage guidelines
+TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of concerns with shared package for all common functionality.
 
 ## Monorepo Structure
 
@@ -20,15 +15,7 @@ kenchi/
 ├── packages/shared/     # ALL shared code goes here
 │   └── src/
 │       ├── index.ts     # Check this FIRST for available exports
-│       ├── core/        # config.ts, logger.ts, errors.ts, types.ts
-│       ├── constants/   # ALL constants organized by domain
-│       ├── database/    # Database clients and services
-│       ├── formatting/  # Formatters and UI helpers
-│       ├── http/        # middleware.ts, validation.ts, rateLimit.ts
-│       ├── integrations/ # External service clients
-│       ├── openaiClient/ # OpenAI client
-│       ├── safety/      # Safety and confidence scoring
-│       └── security/    # Security utilities
+│       ├── config.ts, logger.ts, errors.ts, middleware.ts, validation.ts, types.ts
 ├── services/            # Service-specific code ONLY
 │   ├── api/
 │   ├── slack-bot/
@@ -36,32 +23,25 @@ kenchi/
 └── docs/                # Documentation
 ```
 
-## Non-Negotiable Guardrails
+## Zero Duplication Policy
 
-1. **Shared-first development**
-   - Inspect `packages/shared/src/index.ts` before writing any code.
-   - Import from `@kenchi/shared`; never re-implement utilities, types, loggers, errors, middleware, or validators inside services.
-   - If functionality should exist across services, add it to `packages/shared/src/` and export it immediately.
+**Before writing ANY code:**
 
-2. **Duplication zero tolerance**
-   - Run targeted searches (`rg`, `npm run check:duplication`, `jscpd`) when adding utilities.
-   - Delete local helpers/constants if the shared package already provides them.
-   - No `utils/`, `helpers/`, or duplicated type/interface definitions inside `services/*`.
-   - Before creating ANY new file: search for existing files with similar purpose, extend existing files rather than creating new parallel ones.
+1. Check `packages/shared/src/index.ts` for existing exports
+2. Search codebase for similar functionality
+3. If it exists, import from `@kenchi/shared`
+4. If it doesn't exist and is reusable, add to shared package first
 
-3. **Single constants registry**
-   - All regexes, thresholds, arrays, and configuration objects belong in `packages/shared/src/constants/` directory.
-   - Export via `@kenchi/shared` and reuse; never redeclare literals across files.
+**Before creating ANY new file:**
 
-4. **Safety alignment**
-   - LLM-facing modules must respect the defense-in-depth plan in `docs/ANTI_HALLUCINATION_REVIEW.md` and `docs/CONFIDENCE_SCORING.md`.
-   - Code must keep LLM logic read-only, feed outputs through deterministic confidence scoring, validation, and safety gates, and gate dangerous actions behind human approval.
-
-5. **Documentation-driven changes**
-   - Any feature that touches prompts, scoring, or validation must stay consistent with `docs/PROMPT_TEMPLATES.md`, `docs/DATA_MODELS.md`, and `docs/IMPLEMENTATION_BLUEPRINT.md`.
-   - Update documentation when behavior changes.
+1. Search for existing files with similar purpose
+2. Extend existing files rather than creating new parallel ones
+3. Never create a second file for the same concern (e.g., two formatters, two validators)
+4. If similar file exists, add your function there instead
+5. Consolidate related functionality into single, focused files
 
 **Decision Rules:**
+
 - Used in 2+ services → shared
 - Domain invariant (logger, errors, config) → shared
 - Integration adapter (Slack/GitHub-specific) → service
@@ -70,16 +50,16 @@ kenchi/
 ## Available Shared Utilities
 
 **Always import from `@kenchi/shared`:**
+
 - **Config**: `config`, `Config`
 - **Logging**: `logger`, `createLogger`, `LogLevel`
 - **Errors**: `AppError`, `ValidationError`, `AuthenticationError`, `NotFoundError`, `ExternalServiceError`, `LLMError`, `isAppError`
 - **Middleware**: `errorHandler`, `asyncHandler`, `requestLogger`
-- **Validation & Rate Limiting**: `validate`, `validators`, `ValidationSchema`, `createRateLimiter`, `defaultRateLimiter`
-- **AI & Safety**: `OpenAIClient`, `VectorStore`, `InMemoryVectorStore`, `confidenceScore`, `shouldActOnResult`
-- **Types & Models**: `LLMAnalysisResult`, `WebhookEvent`, `CIFailureEvent`, `SlackMessageEvent`, `GitHubPREvent`, shared DTOs defined in `types.ts`
-- **Constants**: import once from the shared constants module; do not inline strings or numeric thresholds
-
-If you need something absent from this list, add it to `packages/shared/src/` with tests, export it through `index.ts`, and then consume it.
+- **Validation**: `validate`, `validators`, `ValidationSchema`
+- **Rate Limiting**: `createRateLimiter`, `defaultRateLimiter`
+- **AI/ML**: `OpenAIClient`, `VectorStore`, `InMemoryVectorStore`
+- **Safety**: `confidenceScore`, `shouldActOnResult`
+- **Types**: `LLMAnalysisResult`, `WebhookEvent`, `CIFailureEvent`, `SlackMessageEvent`, `GitHubPREvent`
 
 ## Code Patterns
 
@@ -96,53 +76,50 @@ interface WebhookEvent { ... }                       // Duplicate type
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;   // Constants in wrong place
 ```
 
-## Code Placement Rules
-
-| Scenario                                                        | Location                  | Notes                                                                                     |
-| --------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------- |
-| Multi-service utility, type, constant, validation, safety logic | `packages/shared/src/`    | Update `index.ts` immediately.                                                            |
-| API/Slack/GitHub routing, handlers, integration glue            | `services/<service>/src/` | Keep files under ~300 lines; delegate shared work.                                        |
-| Prompt/validation/safety heuristics used by multiple components | Shared package            | Build deterministic helpers for hallucination detection, evidence alignment, and scoring. |
+## File Organization
 
 **Shared Package** (`packages/shared/src/`):
+
 - All utilities, helpers, formatters, middleware, clients
 - Cross-service types (events, core domain, public DTOs)
-- **ALL constants/enums** in `constants/` directory (organized by domain)
+- **ALL constants/enums** in `constants.ts`
 
 **Services** (`services/*/src/`):
+
 - Entry point (`index.ts`), routes, handlers
 - Service-specific business logic and integrations
 - Integration-specific types only
 
 ## Constants Rule
 
-**ALL constants must be in `packages/shared/src/constants/` directory:**
+**ALL constants must be in `packages/shared/src/constants.ts`:**
+
 - Regex patterns, arrays, Sets, Maps, numeric thresholds
 - Configuration objects, string constants
-- Organized by domain (confidence.ts, http.ts, github.ts, etc.)
 - Use `as const` for immutability
-- Import from `@kenchi/shared` - constants are re-exported from `constants/index.ts`
 
 ---
 
-## TypeScript & Design Expectations
+## TypeScript Standards
 
-- Use explicit parameter/return types and `import type { ... }` where possible.
-- Prefer arrow functions; reserve declarations for overloads/type guards.
-- Replace imperative loops with `map/filter/reduce`, and replace long conditional chains with lookup tables or handler registries.
-- Utilize `Set`/`Map` for membership checks and handlers to keep code O(1).
-- Keep modules cohesive (utilities 50-150 LOC, handlers ≤300 LOC, never exceed 500 LOC — split files when approaching the ceiling).
-- Keep business logic in service modules, validation in shared helpers, and IO boundaries clean (routes → services → repositories).
-- No `any`; use `unknown` + type guards when shape is uncertain.
+### Types
+
+- **Explicit types** on function parameters and returns
+- **Use `unknown`** instead of `any`, with type guards
+- **Use `readonly`** for immutable data
+- **Discriminated unions** for event types with `type` field
+- **Separate imports**: `import type { X }` for types, `import { Y }` for values
 
 ### Type Guards
+
 ```typescript
 function isWebhookEvent(data: unknown): data is WebhookEvent {
-  return typeof data === 'object' && data !== null && 'type' in data;
+  return typeof data === "object" && data !== null && "type" in data;
 }
 ```
 
 ### Avoid
+
 - `any` type - defeats type safety
 - Unnecessary type assertions (`as`)
 - Inline complex types - use type aliases
@@ -163,7 +140,7 @@ function isWebhookEvent(data: unknown): data is WebhookEvent {
 ## Error Handling
 
 - Use custom error classes from `@kenchi/shared`
-- Use Result types: `{ success: true; data: T } | { success: false; error: E }`
+- Use Result types for expected errors: `{ success: true; data: T } | { success: false; error: E }`
 - Let middleware handle unexpected errors
 - Use Map/Set for O(1) error lookups instead of if-else chains
 
@@ -187,32 +164,28 @@ const profile = await fetchProfile();
 
 ---
 
-## Performance & Reliability Habits
-
-- Parallelize independent async operations with `Promise.all`.
-- Pre-compute expensive regex/patterns once (static properties or module-level constants).
-- Use `AbortController` for cancelable tasks.
-- Sanitize and validate all external input; throw shared errors and let middleware centralize responses.
-- Keep logging structured via shared logger; never instantiate ad-hoc loggers.
+## Performance Rules
 
 ### Data Structures
+
 - **Set** for membership testing (O(1) vs O(n) for arrays)
 - **Map** for key-value lookups
 - **Pre-compute** lookup structures once, reuse
 
 ### Optimization
+
 - **Early exits** - return as soon as possible
 - **Batch operations** - avoid N+1 queries
 - **Lazy evaluation** - defer expensive operations
-- **Streaming** for large data
+- **Streaming** for large data - don't load everything into memory
 - **Parallelize** independent async operations
 
 ### Avoid
+
 - Nested loops when better data structures work
 - Repeated computations (toLowerCase, regex) in loops
 - `Array.from(set).some()` - iterate Set directly
 - Recreating constants/patterns in methods
-- `console.log/warn/error` - use `createLogger` from shared
 
 ```typescript
 // ✅ Pre-compiled regex at class level
@@ -280,19 +253,6 @@ return matched?.handler() ?? new Error("Unknown error");
 
 ---
 
-## Safety & Validation Hooks
-
-- LLM output consumers must:
-  1. Validate evidence references (commits, incidents, logs) against provided context.
-  2. Run deterministic confidence scoring (base score + uncertainty + evidence alignment + completeness + knowledge base adjustment).
-  3. Block or escalate actions based on `docs/CONFIDENCE_SCORING.md` thresholds (0.0‑0.29 block, 0.30‑0.49 approval, etc.).
-  4. Reject dangerous actions containing destructive keywords before they reach execution layers.
-  5. Capture `uncertainties`, `evidenceUsed`, and metadata defined in `docs/DATA_MODELS.md`.
-
-- Architecturally, ensure the LLM stays isolated to analysis steps (∼7% of total functions). Deterministic code executes actions; humans review low-confidence paths.
-
----
-
 ## Security
 
 - **Validate all inputs** with type guards
@@ -302,12 +262,10 @@ return matched?.handler() ?? new Error("Unknown error");
 
 ---
 
-## Testing + Verification
+## Testing
 
-- Follow Arrange/Act/Assert; name tests descriptively (`should detect hallucinated commit sha`).
-- Add unit coverage for shared utilities and hallucination detection helpers.
-- For new safety logic, craft integration tests simulating hallucination scenarios and ensure action gating respects confidence thresholds.
-- Run relevant npm scripts (`npm test`, `npm run check:duplication`) before handing work back.
+- **Descriptive test names**: `should validate event before processing`
+- **AAA pattern**: Arrange, Act, Assert
 - **Type-safe mocks**: `jest.Mocked<Logger>`
 - **Separate unit/integration tests**
 
@@ -321,10 +279,38 @@ return matched?.handler() ?? new Error("Unknown error");
 - **Maximum**: 500 lines - split if larger
 
 ### Naming
+
 - **Variables**: descriptive (`userEmailAddress` not `ue`)
 - **Functions**: verb + noun (`validateUserEmail`, `fetchUserById`)
 - **Booleans**: `is/has/should/can` prefix
 - **Constants**: `UPPER_SNAKE_CASE`
+- **Callback parameters**: descriptive names, never single letters (applies to both array method callbacks and standalone callback functions)
+
+```typescript
+// ❌ Single-letter callback parameters in array methods
+failures.map((f) => f.checkName);
+annotations.filter((a) => a.level === "failure");
+items.reduce((acc, item) => acc + item.value, 0);
+actions.sort((a, b) => a.priority - b.priority);
+thresholds.find((t) => value >= t.min);
+
+// ✅ Descriptive callback parameters in array methods
+failures.map((failure) => failure.checkName);
+annotations.filter((annotation) => annotation.level === "failure");
+items.reduce((accumulator, currentItem) => accumulator + currentItem.value, 0);
+actions.sort((firstAction, secondAction) => firstAction.priority - secondAction.priority);
+thresholds.find((threshold) => value >= threshold.min);
+
+// ❌ Single-letter parameters in callback functions
+const createFailure = (c: number): AnalyzedFailure => ({...});
+const formatItem = (i: Item) => `${i.name}`;
+const handleError = (e: Error) => console.log(e);
+
+// ✅ Descriptive parameters in callback functions
+const createAnalyzedFailureWithConfidence = (confidenceScore: number): AnalyzedFailure => ({...});
+const formatItem = (item: Item) => `${item.name}`;
+const handleError = (error: Error) => console.log(error);
+```
 
 ### Structure
 - One concept per file
@@ -375,27 +361,23 @@ Routes (presentation) → Services (business logic) → Repositories (data acces
 - [ ] Write or update tests + docs.
 - [ ] Ensure new shared code is exported and consumed via `@kenchi/shared`.
 
-## Detailed Checklist (Before committing)
+## Checklist
+
+Before committing:
 
 - [ ] Checked `@kenchi/shared` for existing utilities
-- [ ] No code duplication (ran `npm run check:duplication`)
+- [ ] No code duplication
 - [ ] Types explicit, no `any`
 - [ ] Errors use shared classes
-- [ ] Constants in `constants/` directory
+- [ ] Constants in `constants.ts`
 - [ ] Module under 500 lines
 - [ ] Functions small and focused
 - [ ] Layers properly separated
-- [ ] Tests written (including hallucination scenarios for safety logic)
-- [ ] Performance optimized (Set/Map, early exits, no N+1)
+- [ ] Tests written
 
 ## References
 
 - `docs/ARCHITECTURE.md` - System architecture
 - `docs/SYSTEM_ARCHITECTURE.md` - Detailed design
-- `docs/AI_TOOL_GUIDELINES.md` - AI tool usage guidelines
-- `docs/ANTI_HALLUCINATION_REVIEW.md` - Defense-in-depth plan
-- `docs/CONFIDENCE_SCORING.md` - Confidence scoring thresholds and rules
 - `docs/DATA_MODELS.md` - Data structures
-- `docs/PROMPT_TEMPLATES.md` - Prompt templates
-- `docs/IMPLEMENTATION_BLUEPRINT.md` - Implementation blueprint
 - `packages/shared/src/index.ts` - Available utilities

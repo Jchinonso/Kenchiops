@@ -68,7 +68,9 @@ export const fetchInstallationRepositories = async (
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+      throw new ExternalServiceError("GitHubApp", `HTTP ${response.status}: ${errorText}`, {
+        installationId,
+      });
     }
 
     const data = (await response.json()) as RepositoriesResponse;

@@ -54,7 +54,12 @@ export interface Config {
   readonly MULTI_TENANT_MODE?: boolean;
 
   // Service URLs (for inter-service communication)
+  readonly API_URL: string;
+  readonly SLACK_BOT_URL: string;
   readonly GITHUB_APP_URL: string;
+
+  // Redis Configuration
+  readonly REDIS_URL: string;
 }
 
 // ==================== Parser Helpers ====================
@@ -150,5 +155,10 @@ export const config: Config = {
   MULTI_TENANT_MODE: process.env.MULTI_TENANT_MODE === "true",
 
   // Service URLs (for inter-service communication)
+  API_URL: process.env.API_URL || CONFIG_DEFAULTS.API_URL,
+  SLACK_BOT_URL: process.env.SLACK_BOT_URL || CONFIG_DEFAULTS.SLACK_BOT_URL,
   GITHUB_APP_URL: process.env.GITHUB_APP_URL || CONFIG_DEFAULTS.GITHUB_APP_URL,
+
+  // Redis Configuration
+  REDIS_URL: process.env.REDIS_URL || CONFIG_DEFAULTS.REDIS_URL,
 } as const;

@@ -3,7 +3,13 @@
  * These types extend the shared Event types with Slack-specific structures.
  */
 
-import type { Event, EventType, EventPayload } from "@kenchi/shared";
+import type {
+  Event,
+  EventType,
+  EventPayload,
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
+} from "@kenchi/shared";
 
 /**
  * Slack command payload structure.
@@ -128,6 +134,10 @@ export interface WorkflowContext {
   readonly conclusion?: string;
 }
 
+// Re-export AI-extracted types from shared for convenience
+export type { LLMDetectedDependencyChange as DetectedDependencyChange } from "@kenchi/shared";
+export type { LLMDetectedBuildConfigChange as DetectedBuildConfigChange } from "@kenchi/shared";
+
 /**
  * CI Failure analysis data structure from CI failure.
  * Extended to include enriched context for better formatting.
@@ -149,12 +159,16 @@ export interface CIFailureAnalysis {
   readonly testFailures?: readonly TestFailure[];
   readonly prContext?: PRContext;
   readonly workflowContext?: WorkflowContext;
+  // Legacy field (deprecated - use detectedDependencyChanges instead)
   readonly dependencyChanges?: readonly {
     readonly type: "added" | "removed" | "updated";
     readonly name: string;
     readonly oldVersion?: string;
     readonly newVersion?: string;
   }[];
+  // AI-extracted structured data (Phase 4 - Language Agnostic)
+  readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
+  readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
 }
 
 /**

@@ -5,7 +5,14 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import { asyncHandler, createLogger, HTTP_STATUS, validate, validators } from "@kenchi/shared";
+import {
+  asyncHandler,
+  createLogger,
+  HTTP_STATUS,
+  validate,
+  validators,
+  KENCHI_BRANDING,
+} from "@kenchi/shared";
 import {
   postPRComment,
   createCheckRunWithAnnotations,
@@ -13,6 +20,13 @@ import {
   type CheckAnnotation,
   type RepositoryInfo,
 } from "../services/githubService.js";
+import {
+  rerunFailedJobs,
+  getWorkflowRunIdForCheckRun,
+  getCheckSuiteIdForRun,
+  rerequestCheckSuite,
+  type RerunResult,
+} from "../services/workflowService.js";
 import { appConfig } from "../config/appConfig.js";
 import { formatGitHubComment } from "../formatters/commentFormatter.js";
 
@@ -100,7 +114,7 @@ router.post(
           owner,
           repo,
           analysis.headSha,
-          "KenchiOps Analysis",
+          KENCHI_BRANDING.CHECK_RUN_NAME,
           analysis.identified_cause || analysis.analysis || "CI failure analyzed",
           checkAnnotations
         );
@@ -188,7 +202,7 @@ router.post(
         owner,
         repo,
         head_sha,
-        check_name || "KenchiOps Analysis",
+        check_name || KENCHI_BRANDING.CHECK_RUN_NAME,
         summary,
         checkAnnotations
       );
@@ -261,6 +275,140 @@ router.get(
         error: error instanceof Error ? error.message : "Failed to fetch repositories",
       });
     }
+  })
+);
+
+/**
+ * Rerun request payload
+ */
+interface RerunRequestBody {
+  readonly installationId: number;
+  readonly repository: string;
+  readonly workflowRunId?: number;
+  readonly checkRunId?: number;
+  readonly commitSha?: string;
+  readonly approvedBy?: string;
+}
+
+/**
+ * Parse repository string into owner and repo
+ */
+const parseRepository = (repository: string): { owner: string; repo: string } | null => {
+  const [owner, repo] = repository.split("/");
+  return owner && repo ? { owner, repo } : null;
+};
+
+/**
+ * Attempt rerun via workflow run ID (preferred method)
+ */
+const attemptWorkflowRerun = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  workflowRunId: number
+): Promise<RerunResult> => {
+  logger.info("Attempting rerun via workflow run ID", {
+    owner,
+    repo,
+    workflowRunId,
+  });
+
+  return rerunFailedJobs(installationId, owner, repo, workflowRunId);
+};
+
+/**
+ * Attempt rerun via check run ID (fallback method)
+ * First tries to find the workflow run, then falls back to check suite rerequest
+ */
+const attemptCheckRunRerun = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  checkRunId: number
+): Promise<RerunResult> => {
+  logger.info("Attempting rerun via check run ID", {
+    owner,
+    repo,
+    checkRunId,
+  });
+
+  // Try to get workflow run ID from check run
+  const workflowRunId = await getWorkflowRunIdForCheckRun(installationId, owner, repo, checkRunId);
+
+  if (workflowRunId) {
+    return rerunFailedJobs(installationId, owner, repo, workflowRunId);
+  }
+
+  // Fallback: rerequest check suite
+  const checkSuiteId = await getCheckSuiteIdForRun(installationId, owner, repo, checkRunId);
+
+  if (checkSuiteId) {
+    return rerequestCheckSuite(installationId, owner, repo, checkSuiteId);
+  }
+
+  return {
+    success: false,
+    message: "Could not find workflow run or check suite for this check run",
+    error: "Unable to determine rerun method",
+  };
+};
+
+/**
+ * POST /api/actions/rerun
+ * Rerun a failed CI workflow or check run
+ * Called by the action executor in the shared package
+ */
+router.post(
+  "/api/actions/rerun",
+  validate({
+    body: {
+      installationId: (v) => validators.required(v) && typeof v === "number",
+      repository: (v) => validators.required(v) && validators.string(v),
+    },
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = req.body as RerunRequestBody;
+    const { installationId, repository, workflowRunId, checkRunId, approvedBy } = body;
+
+    // Parse repository
+    const parsed = parseRepository(repository);
+    if (!parsed) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: "Invalid repository format. Expected 'owner/repo'",
+      });
+      return;
+    }
+
+    const { owner, repo } = parsed;
+
+    logger.info("Processing rerun request", {
+      repository,
+      workflowRunId,
+      checkRunId,
+      approvedBy,
+    });
+
+    // Determine rerun strategy based on available IDs
+    const result: RerunResult = workflowRunId
+      ? await attemptWorkflowRerun(installationId, owner, repo, workflowRunId)
+      : checkRunId
+        ? await attemptCheckRunRerun(installationId, owner, repo, checkRunId)
+        : {
+            success: false,
+            message: "No workflow run ID or check run ID provided",
+            error: "Missing required identifier",
+          };
+
+    logger.info("Rerun request completed", {
+      repository,
+      success: result.success,
+      runId: result.runId,
+      approvedBy,
+    });
+
+    const statusCode = result.success ? HTTP_STATUS.OK : HTTP_STATUS.INTERNAL_SERVER_ERROR;
+    res.status(statusCode).json(result);
   })
 );
 

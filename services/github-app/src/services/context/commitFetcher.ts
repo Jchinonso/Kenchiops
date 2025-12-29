@@ -4,7 +4,7 @@
  * Fetches commit information, source files, and repository metadata.
  */
 
-import { createLogger, GITHUB_CONTEXT_LIMITS } from "@kenchi/shared";
+import { createLogger, GITHUB_CONTEXT_LIMITS, CONTEXT_FETCH_CONFIG } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
 import { truncateWithContext } from "./logParser.js";
 import type { CommitInfo, SourceFile, RepositoryMetadata } from "./types.js";
@@ -54,9 +54,8 @@ export const fetchSourceFile = async (
     // If we have a line number, extract context around it
     if (lineNumber) {
       const lines = content.split("\n");
-      const contextLines = 10;
-      const startLine = Math.max(1, lineNumber - contextLines);
-      const endLine = Math.min(lines.length, lineNumber + contextLines);
+      const startLine = Math.max(1, lineNumber - CONTEXT_FETCH_CONFIG.CONTEXT_LINES);
+      const endLine = Math.min(lines.length, lineNumber + CONTEXT_FETCH_CONFIG.CONTEXT_LINES);
       const relevantLines = lines.slice(startLine - 1, endLine);
 
       // Add line numbers for context with marker for target line

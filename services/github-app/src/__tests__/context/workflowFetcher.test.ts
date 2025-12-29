@@ -20,11 +20,15 @@ jest.mock("@kenchi/shared", () => ({
     MAX_FILES: 5,
     MAX_ANNOTATIONS: 20,
   },
+  GITHUB_RETRY_CONFIG: {
+    MAX_RETRIES: 3,
+    BASE_DELAY_MS: 1000,
+    BACKOFF_BASE: 2,
+  },
 }));
 
-jest.mock("../../services/context/logParser.js", () => ({
-  truncateWithContext: jest.fn((content: string) => content),
-}));
+// Note: truncateWithContext is no longer imported by workflowFetcher
+// Logs are returned in full, truncation happens in contextAggregator
 
 // Mock Octokit instance
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,11 +54,7 @@ jest.mock("../../services/githubService.js", () => ({
 
 // Import mocks after jest.mock
 import { getOctokit } from "../../services/githubService.js";
-import { truncateWithContext } from "../../services/context/logParser.js";
 const mockGetOctokit = getOctokit as jest.MockedFunction<typeof getOctokit>;
-const mockTruncateWithContext = truncateWithContext as jest.MockedFunction<
-  typeof truncateWithContext
->;
 
 describe("Workflow Fetcher Service", () => {
   // Test fixtures
@@ -90,7 +90,6 @@ describe("Workflow Fetcher Service", () => {
 
     // Default mock implementations
     mockGetOctokit.mockResolvedValue(mockOctokit as any);
-    mockTruncateWithContext.mockImplementation((content: string) => content);
 
     mockListWorkflowRunsForRepo.mockResolvedValue({
       data: {
@@ -213,18 +212,16 @@ describe("Workflow Fetcher Service", () => {
       });
     });
 
-    it("should truncate logs when exceeding max size", async () => {
+    it("should return full logs without truncation", async () => {
+      // Truncation now happens in contextAggregator after test failure extraction
       const longLogs = "x".repeat(60000);
       mockDownloadJobLogsForWorkflowRun.mockResolvedValue({
         data: longLogs,
       } as any);
 
-      mockTruncateWithContext.mockReturnValue("truncated logs");
-
       const logs = await fetchWorkflowLogs(mockInstallationId, mockOwner, mockRepo, mockHeadSha);
 
-      expect(mockTruncateWithContext).toHaveBeenCalledWith(longLogs, 50000);
-      expect(logs).toBe("truncated logs");
+      expect(logs).toBe(longLogs);
     });
 
     it("should handle string log data", async () => {

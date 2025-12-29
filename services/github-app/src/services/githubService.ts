@@ -11,6 +11,7 @@ import {
   createLogger,
   OpenAIClient,
   calculateConfidenceScore,
+  generateEventId,
   type Event,
   type Evidence,
   type LLMAnalysisResult,
@@ -19,6 +20,8 @@ import {
   ExternalServiceError,
   getErrorMessage,
   wrapError,
+  KENCHI_BRANDING,
+  GITHUB_PAGINATION,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
@@ -81,15 +84,6 @@ export interface AnalysisResult {
   readonly confidence: ConfidenceScoreResult;
   readonly event: Event;
 }
-
-/**
- * Generate a unique event ID
- */
-const generateEventId = (prefix: string): string => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 11);
-  return `${prefix}_${timestamp}_${random}`;
-};
 
 /**
  * Create an Event from a pull request webhook
@@ -190,9 +184,9 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
 };
 
 /**
- * Marker to identify KenchiOps comments
+ * Marker to identify KenchiOps comments (from centralized branding)
  */
-const KENCHIOPS_COMMENT_MARKER = "KenchiOps CI Failure Analysis";
+const KENCHIOPS_COMMENT_MARKER = KENCHI_BRANDING.COMMENT_MARKER;
 
 /**
  * Delete existing KenchiOps comments on a PR
@@ -207,12 +201,26 @@ export const deleteKenchiOpsComments = async (
   try {
     const octokit = await getOctokit(installationId);
 
+    logger.info("Checking for old KenchiOps comments to delete", {
+      owner,
+      repo,
+      prNumber,
+      marker: KENCHIOPS_COMMENT_MARKER,
+    });
+
     // List all comments on the PR
     const { data: comments } = await octokit.rest.issues.listComments({
       owner,
       repo,
       issue_number: prNumber,
-      per_page: 100,
+      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
+    });
+
+    logger.info("Found PR comments", {
+      owner,
+      repo,
+      prNumber,
+      totalComments: comments.length,
     });
 
     // Find KenchiOps comments (look for our marker in the body)
@@ -353,10 +361,14 @@ export const getInstallationRepositories = async (
 ): Promise<RepositoryInfo[]> => {
   try {
     const octokit = await getOctokit(installationId);
-    const perPage = 100;
 
-    // Use recursive pagination
-    const repositories = await fetchRepositoriesPage(octokit, 1, perPage, []);
+    // Use recursive pagination with default page size
+    const repositories = await fetchRepositoriesPage(
+      octokit,
+      1,
+      GITHUB_PAGINATION.DEFAULT_PER_PAGE,
+      []
+    );
 
     logger.info("Fetched installation repositories", {
       installationId,
@@ -389,9 +401,9 @@ export interface CheckAnnotation {
 }
 
 /**
- * GitHub API annotation batch size limit
+ * GitHub API annotation batch size limit (from centralized pagination config)
  */
-const MAX_ANNOTATIONS_PER_CALL = 50;
+const MAX_ANNOTATIONS_PER_CALL = GITHUB_PAGINATION.MAX_ANNOTATIONS_PER_CALL;
 
 /**
  * Split array into batches of specified size

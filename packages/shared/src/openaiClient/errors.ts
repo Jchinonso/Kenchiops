@@ -140,18 +140,3 @@ export const handleOpenAIError = (error: unknown, timeout: number): Error => {
   // Return handled error or default
   return handledError ?? new Error(DEFAULT_ERROR_MESSAGE);
 };
-
-/**
- * Sleep utility for retry delays.
- *
- * @param ms - Milliseconds to sleep
- * @returns Promise that resolves after the specified delay
- *
- * @example
- * ```typescript
- * await sleep(1000); // Sleep for 1 second
- * ```
- */
-export const sleep = (ms: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};

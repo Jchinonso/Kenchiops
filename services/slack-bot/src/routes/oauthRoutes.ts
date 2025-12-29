@@ -18,6 +18,8 @@ import {
   findByGitHubOrg,
   linkSlackWorkspace,
   createFromSlackInstall,
+  SLACK_OAUTH_TIMING,
+  SLACK_OAUTH_SCOPES_STRING,
   type Tenant,
 } from "@kenchi/shared";
 
@@ -56,37 +58,18 @@ interface TenantLinkResult {
 const oauthStates = new Map<string, StoredState>();
 
 /**
- * Clean up expired OAuth states (older than 10 minutes)
+ * Clean up expired OAuth states
  * Uses functional approach: filter expired keys, then delete them
  */
 const cleanupExpiredStates = (): void => {
-  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+  const expiryTime = Date.now() - SLACK_OAUTH_TIMING.STATE_EXPIRY_MS;
   Array.from(oauthStates.entries())
-    .filter(([, value]) => value.createdAt < tenMinutesAgo)
-    .map(([key]) => {
-      oauthStates.delete(key);
-      return key;
-    });
+    .filter(([, value]) => value.createdAt < expiryTime)
+    .forEach(([key]) => oauthStates.delete(key));
 };
 
-// Clean up expired states every 5 minutes
-setInterval(cleanupExpiredStates, 5 * 60 * 1000);
-
-/**
- * Required OAuth scopes for the Slack bot
- */
-const OAUTH_SCOPES = [
-  "chat:write",
-  "channels:read",
-  "channels:history",
-  "groups:read",
-  "groups:history",
-  "im:history",
-  "mpim:history",
-  "app_mentions:read",
-  "commands",
-  "users:read",
-].join(",");
+// Clean up expired states periodically
+setInterval(cleanupExpiredStates, SLACK_OAUTH_TIMING.CLEANUP_INTERVAL_MS);
 
 /**
  * OAuth response from Slack
@@ -321,7 +304,7 @@ router.get("/slack/install", (req: Request, res: Response) => {
     config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
   const authUrl = new URL("https://slack.com/oauth/v2/authorize");
   authUrl.searchParams.set("client_id", clientId);
-  authUrl.searchParams.set("scope", OAUTH_SCOPES);
+  authUrl.searchParams.set("scope", SLACK_OAUTH_SCOPES_STRING);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("state", state);
 

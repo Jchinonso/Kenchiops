@@ -1,10 +1,11 @@
 /**
  * Aggregation module exports.
  *
- * Provides failure aggregation functionality for consolidating
- * multiple CI check run failures into a single analysis.
+ * Types are re-exported from @kenchi/shared for convenience.
+ * The consolidatedPoster handles posting to GitHub/Slack.
  */
 
+// Re-export types from shared for backward compatibility
 export type {
   CodeAnnotation,
   RecommendedAction,
@@ -15,22 +16,14 @@ export type {
   AggregatedFailures,
   AggregationKey,
   AggregationConfig,
-  PendingAggregation,
   ConsolidatedPostResult,
-} from "./types.js";
+} from "@kenchi/shared";
 
 export {
   serializeAggregationKey,
   deserializeAggregationKey,
   DEFAULT_AGGREGATION_CONFIG,
-} from "./types.js";
+} from "@kenchi/shared";
 
-export {
-  FailureAggregator,
-  initializeAggregator,
-  getAggregator,
-  destroyAggregator,
-  type AggregationReadyCallback,
-} from "./failureAggregator.js";
-
+// Consolidated poster (posts to GitHub/Slack)
 export { postConsolidatedAnalysis } from "./consolidatedPoster.js";
