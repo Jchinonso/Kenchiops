@@ -12,7 +12,12 @@ import type {
   MetricsSummary,
   SystemState,
 } from "../core/types.js";
-import { SIMILARITY_THRESHOLDS, EVIDENCE_TRUNCATION, UI_CONSTANTS } from "../constants/index.js";
+import {
+  SIMILARITY_THRESHOLDS,
+  EVIDENCE_TRUNCATION,
+  UI_CONSTANTS,
+  OPENAI_CONSTANTS,
+} from "../constants/index.js";
 
 /**
  * Builds the system context prompt that establishes the LLM's role and constraints.
@@ -186,6 +191,22 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
   ],
   "nextSteps": [
     "Suggested next steps for investigation or resolution"
+  ],
+  "detectedDependencyChanges": [
+    {
+      "name": "package-name",
+      "type": "added|removed|updated",
+      "oldVersion": "1.0.0 (if updated/removed)",
+      "newVersion": "2.0.0 (if added/updated)",
+      "ecosystem": "npm|pip|cargo|go|maven|gem|etc"
+    }
+  ],
+  "detectedBuildConfigChanges": [
+    {
+      "file": "tsconfig.json",
+      "changeType": "added|modified|deleted",
+      "summary": "Brief description of what changed (e.g., 'Added strict mode')"
+    }
   ]
 }
 \`\`\`
@@ -193,32 +214,31 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
 ## CODE ANNOTATIONS REQUIREMENTS - CRITICAL
 You MUST analyze the logs and error output to identify ALL specific file locations where issues occurred.
 
-### Common CI Tool Output Patterns to Parse:
+### Universal File Reference Patterns (Language-Agnostic):
+Look for file paths with line numbers in ANY of these formats:
+- \`path/to/file.ext:line:column\` (most common - TypeScript, Python, Go, Rust, etc.)
+- \`path/to/file.ext(line,column)\` (C#, TypeScript compiler)
+- \`at path/to/file.ext:line\` (stack traces)
+- \`File "path/to/file.py", line N\` (Python tracebacks)
+- \`path/to/file.go:line:\` (Go)
+- \`path/to/file.rs:line:column\` (Rust)
 
-**Prettier/Formatting:**
-- Pattern: \`[warn] path/to/file.ts\` or \`Checking formatting...\` followed by file paths
-- Level: "warning"
-- Message: "Formatting issue - file needs formatting"
+### Test Failure Detection (Any Framework):
+Identify test failures from ANY test framework by looking for:
+- **JavaScript/TypeScript**: \`FAIL\`, \`✕\`, \`●\` markers (Jest/Vitest/Mocha)
+- **Python**: \`FAILED\`, \`E       assert\`, pytest output
+- **Go**: \`--- FAIL:\`, \`FAIL\` with package names
+- **Rust**: \`---- test_name stdout ----\`, \`thread '...' panicked\`
+- **Ruby**: \`Failure/Error:\`, RSpec numbered failures
+- **Java**: \`FAILURE\`, JUnit stack traces with \`.java:line\`
+- **C#**: \`Failed\`, NUnit/xUnit output
+- **Generic**: Words like "failed", "error", "assertion" near test names
 
-**ESLint:**
-- Pattern: \`path/to/file.ts:line:column  error/warning  message  rule-name\`
-- Level: "failure" for errors, "warning" for warnings
-- Include the rule name and specific error message
-
-**TypeScript (tsc):**
-- Pattern: \`path/to/file.ts(line,column): error TSxxxx: message\`
-- Pattern: \`path/to/file.ts:line:column - error TSxxxx: message\`
-- Level: "failure"
-- Include the TypeScript error code and message
-
-**Test Failures (Jest/Vitest/Mocha):**
-- Look for \`FAIL path/to/test.ts\` or stack traces with file:line references
-- Level: "failure"
-- Include test name and assertion error
-
-**Build Errors:**
-- Look for compilation errors with file paths
-- Level: "failure"
+### Dependency & Build Config Detection:
+When PR diff is provided, identify:
+- **Dependency files**: package.json, requirements.txt, Pipfile, go.mod, Cargo.toml, Gemfile, pom.xml, build.gradle, etc.
+- **Build configs**: tsconfig.json, webpack.config.*, .babelrc, pyproject.toml, Makefile, CMakeLists.txt, Dockerfile, etc.
+- Note any added/removed/changed dependencies or build settings that could cause failures
 
 ### Annotation Rules:
 1. Extract EVERY file with errors from the logs - do not skip any
@@ -467,7 +487,7 @@ export const formatKnowledgeDocs = (docs: KnowledgeDocument[]): string => {
  * Estimates token count for text (rough approximation).
  */
 export const estimateTokens = (text: string): number => {
-  return Math.ceil(text.length / 4);
+  return Math.ceil(text.length / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE);
 };
 
 /**
@@ -552,7 +572,9 @@ export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidenc
   truncated.metrics = evidence.metrics;
 
   if (evidence.logs && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_COMMITS) {
-    const additionalLogs = evidence.logs.filter((log) => log.level !== "ERROR").slice(0, 20);
+    const additionalLogs = evidence.logs
+      .filter((log) => log.level !== "ERROR")
+      .slice(0, EVIDENCE_TRUNCATION.MAX_ADDITIONAL_LOGS);
 
     const currentLogs = truncated.logs || [];
     const result = takeWhileTokenBudget(additionalLogs, remainingTokens, (log) =>

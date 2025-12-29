@@ -6,7 +6,7 @@ import {
   ERROR_CODES,
   HTTP_STATUS,
   DEFAULT_ERROR_MESSAGES,
-  SERVICE_NAMES,
+  EXTERNAL_SERVICE_NAMES,
 } from "../constants/index.js";
 
 /**
@@ -101,7 +101,7 @@ export class ExternalServiceError extends AppError {
  */
 export class LLMError extends ExternalServiceError {
   constructor(message: string, metadata?: Record<string, unknown>) {
-    super(SERVICE_NAMES.OPENAI, message, metadata);
+    super(EXTERNAL_SERVICE_NAMES.OPENAI, message, metadata);
   }
 }
 

@@ -9,16 +9,24 @@ import {
   OpenAIClient,
   calculateConfidenceScore,
   createLogger,
+  generateEventId,
   type Event,
   type Evidence,
   type LLMAnalysisResult,
   LLMError,
   getErrorMessage,
   wrapError,
+  EVENT_TYPES,
+  EVENT_SOURCES,
+  EVENT_SEVERITY,
+  LOG_LEVELS,
+  EVIDENCE_SOURCES,
+  EVENT_DEFAULTS,
+  SERVICE_NAMES,
 } from "@kenchi/shared";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
-const logger = createLogger("api");
+const logger = createLogger(SERVICE_NAMES.API);
 
 /**
  * Singleton OpenAI client instance
@@ -37,31 +45,22 @@ const getOpenAIClient = (): OpenAIClient => {
 };
 
 /**
- * Generate a unique event ID
- */
-const generateEventId = (): string => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 11);
-  return `evt_${timestamp}_${random}`;
-};
-
-/**
  * Create analysis context (Event and Evidence) from request
  */
 export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext => {
-  const eventId = generateEventId();
+  const eventId = generateEventId("evt");
 
   const event: Event = {
     id: eventId,
-    type: "CICD_FAILURE",
-    source: "github-app",
+    type: EVENT_TYPES.CICD_FAILURE,
+    source: EVENT_SOURCES.GITHUB_APP,
     timestamp: new Date().toISOString(),
-    severity: "high",
+    severity: EVENT_SEVERITY.HIGH,
     title: `CI Failure in ${request.repository}`,
     payload: {
       repository: request.repository,
       failureLog: request.failure_log,
-      commit: request.commit || "unknown",
+      commit: request.commit || EVENT_DEFAULTS.UNKNOWN_COMMIT,
     },
   };
 
@@ -69,10 +68,10 @@ export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext 
     eventId,
     logs: [
       {
-        level: "ERROR",
+        level: LOG_LEVELS.ERROR,
         message: request.failure_log,
         timestamp: new Date().toISOString(),
-        source: "ci",
+        source: EVIDENCE_SOURCES.CI,
       },
     ],
     collectedAt: new Date().toISOString(),

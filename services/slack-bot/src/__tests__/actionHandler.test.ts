@@ -232,7 +232,7 @@ describe("Action Handler", () => {
 
       await handleActionApproval(action, mockAck, mockSay);
 
-      expect(mockLogger.info).toHaveBeenCalledWith("Action approved", {
+      expect(mockLogger.info).toHaveBeenCalledWith("Action approval received", {
         action_id: "approve_action_456",
       });
     });
@@ -290,10 +290,11 @@ describe("Action Handler", () => {
 
       await handleActionRejection(action, mockAck, mockSay);
 
+      // Legacy format shows "action" as the action type
       expect(formatProgressUpdate).toHaveBeenCalledWith(
         "action-456",
         "failed",
-        "Action rejected by user"
+        "Action *action* dismissed by user"
       );
     });
 

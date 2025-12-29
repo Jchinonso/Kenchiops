@@ -8,6 +8,16 @@ export { config, type Config } from "./config.js";
 // Logger
 export { createLogger, logger, LogLevel, type Logger } from "./logger.js";
 
+// Utilities
+export {
+  withTimeout,
+  isRetryableError,
+  delay,
+  safeJsonParse,
+  parseDbCount,
+  generateEventId,
+} from "./utils.js";
+
 // Error handling
 export {
   AppError,
@@ -47,6 +57,8 @@ export type {
   ImpactAssessment,
   LLMRecommendedAction,
   EvidenceReference,
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
   // Action Proposal Types
   ActionProposal,
   ActionType,

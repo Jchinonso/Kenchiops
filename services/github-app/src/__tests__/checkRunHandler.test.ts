@@ -17,6 +17,46 @@ jest.mock("@kenchi/shared", () => {
       error: jest.fn(),
       debug: jest.fn(),
     })),
+    // Mock resilient HTTP client - prevent actual network calls
+    resilientPost: jest.fn(() =>
+      Promise.resolve({
+        data: {
+          confidence: 0.85,
+          analysis: "Build failure analysis",
+          identified_cause: "Missing dependency",
+          recommended_actions: [{ description: "Run npm install", priority: "high" }],
+        },
+        status: 200,
+        retryCount: 0,
+        duration: 100,
+      })
+    ),
+    // Cache mocks - return null/miss to trigger API call
+    getCachedCheckAnalysis: jest.fn(() => Promise.resolve(null)),
+    cacheCheckAnalysis: jest.fn(() => Promise.resolve()),
+    getCachedAnalysisByLogHash: jest.fn(() => Promise.resolve(null)),
+    cacheAnalysisByLogHash: jest.fn(() => Promise.resolve()),
+    generateLogHash: jest.fn(() => "test-hash-123"),
+    buildCachedAnalysis: jest.fn(
+      (
+        repo: string,
+        sha: string,
+        check: string,
+        data: { confidence?: number; identified_cause?: string; analysis?: string }
+      ) => ({
+        repository: repo,
+        commitSha: sha,
+        checkName: check,
+        confidence: data.confidence ?? 0.5,
+        identifiedCause: data.identified_cause ?? "",
+        analysis: data.analysis ?? "",
+        annotations: [],
+        recommendedActions: [],
+        analyzedAt: new Date().toISOString(),
+      })
+    ),
+    // Redis aggregator mock
+    addFailureToRedis: jest.fn(() => Promise.resolve()),
   };
 });
 
@@ -69,34 +109,21 @@ jest.mock("../formatters/checkRunFormatter.js", () => ({
   buildEnrichedLogContent: jest.fn(() => "enriched log content"),
 }));
 
-jest.mock("../services/aggregation/index.js", () => ({
-  getAggregator: jest.fn(() => ({
-    addFailure: jest.fn(),
-  })),
-}));
-
-jest.mock("../services/githubService.js", () => ({
-  deleteKenchiOpsComments: jest.fn(),
-}));
-
-// Mock global fetch
-const mockFetch = jest.fn<typeof fetch>();
-(global as { fetch: typeof fetch }).fetch = mockFetch;
+// No longer needed - addFailureToRedis is mocked in @kenchi/shared above
 
 // Import handlers after mocks
 import { handleCheckRun, handleCheckRunFailure } from "../handlers/checkRunHandler.js";
 import { gatherEnrichedContext, fetchPRsByCommit } from "../services/context/index.js";
-import { getAggregator } from "../services/aggregation/index.js";
-import { deleteKenchiOpsComments } from "../services/githubService.js";
+import { resilientPost, addFailureToRedis } from "@kenchi/shared";
+
+// Get the mocked functions
+const mockResilientPost = resilientPost as jest.MockedFunction<typeof resilientPost>;
+const mockAddFailureToRedis = addFailureToRedis as jest.MockedFunction<typeof addFailureToRedis>;
 
 const mockGatherEnrichedContext = gatherEnrichedContext as jest.MockedFunction<
   typeof gatherEnrichedContext
 >;
 const mockFetchPRsByCommit = fetchPRsByCommit as jest.MockedFunction<typeof fetchPRsByCommit>;
-const mockGetAggregator = getAggregator as jest.MockedFunction<typeof getAggregator>;
-const mockDeleteKenchiOpsComments = deleteKenchiOpsComments as jest.MockedFunction<
-  typeof deleteKenchiOpsComments
->;
 
 describe("Check Run Handler", () => {
   // Test fixtures
@@ -132,18 +159,18 @@ describe("Check Run Handler", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Default mock implementations
-    mockFetch.mockResolvedValue({
-      ok: true,
+    // Default mock implementations - reset resilientPost to default success response
+    mockResilientPost.mockResolvedValue({
+      data: {
+        confidence: 0.85,
+        analysis: "Build failure analysis",
+        identified_cause: "Missing dependency",
+        recommended_actions: [{ description: "Run npm install", priority: "high" }],
+      },
       status: 200,
-      json: () =>
-        Promise.resolve({
-          confidence: 0.85,
-          analysis: "Build failure analysis",
-          identified_cause: "Missing dependency",
-          recommended_actions: [{ description: "Run npm install", priority: "high" }],
-        }),
-    } as Response);
+      retryCount: 0,
+      duration: 100,
+    });
 
     mockGatherEnrichedContext.mockResolvedValue({
       workflowLogs: "test logs",
@@ -187,11 +214,8 @@ describe("Check Run Handler", () => {
 
     mockFetchPRsByCommit.mockResolvedValue([123]);
 
-    mockGetAggregator.mockReturnValue({
-      addFailure: jest.fn(),
-    } as unknown as ReturnType<typeof getAggregator>);
-
-    mockDeleteKenchiOpsComments.mockResolvedValue(0);
+    // Reset Redis aggregator mock
+    mockAddFailureToRedis.mockResolvedValue();
   });
 
   describe("handleCheckRun", () => {
@@ -215,7 +239,7 @@ describe("Check Run Handler", () => {
       expect(result.message).toContain("skipped");
     });
 
-    it("should skip successful check runs and clean up comments", async () => {
+    it("should skip successful check runs without processing", async () => {
       const webhook = createMockWebhook({
         check_run: {
           ...createMockWebhook().check_run,
@@ -225,9 +249,9 @@ describe("Check Run Handler", () => {
 
       const result = await handleCheckRun(webhook);
 
-      expect(result.handled).toBe(true);
-      expect(result.message).toContain("succeeded");
-      expect(mockDeleteKenchiOpsComments).toHaveBeenCalled();
+      expect(result.handled).toBe(false);
+      expect(result.message).toContain("skipped");
+      expect(mockGatherEnrichedContext).not.toHaveBeenCalled();
     });
 
     it("should process timed_out conclusions as failures", async () => {
@@ -271,7 +295,7 @@ describe("Check Run Handler", () => {
       expect(result.handled).toBe(false);
     });
 
-    it("should clean up comments on multiple PRs when successful", async () => {
+    it("should skip successful check runs even with multiple PRs", async () => {
       const webhook = createMockWebhook({
         check_run: {
           ...createMockWebhook().check_run,
@@ -291,9 +315,10 @@ describe("Check Run Handler", () => {
         },
       });
 
-      await handleCheckRun(webhook);
+      const result = await handleCheckRun(webhook);
 
-      expect(mockDeleteKenchiOpsComments).toHaveBeenCalledTimes(2);
+      expect(result.handled).toBe(false);
+      expect(mockGatherEnrichedContext).not.toHaveBeenCalled();
     });
 
     it("should fetch PRs by commit when not in webhook", async () => {
@@ -329,32 +354,25 @@ describe("Check Run Handler", () => {
       const webhook = createMockWebhook();
       await handleCheckRunFailure(webhook);
 
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockResilientPost).toHaveBeenCalledWith(
         expect.stringContaining("analyze"),
         expect.objectContaining({
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          failure_log: expect.any(String),
+          repository: "testowner/testrepo",
         })
       );
     });
 
-    it("should add failure to aggregator", async () => {
+    it("should add failure to Redis aggregator", async () => {
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalled();
+      expect(mockAddFailureToRedis).toHaveBeenCalled();
     });
 
     it("should handle API errors gracefully", async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      } as Response);
+      mockResilientPost.mockRejectedValueOnce(new Error("API error"));
 
       const webhook = createMockWebhook();
       const result = await handleCheckRunFailure(webhook);
@@ -370,16 +388,12 @@ describe("Check Run Handler", () => {
       expect(result.handled).toBe(false);
     });
 
-    it("should include analysis metadata in aggregator", async () => {
+    it("should include analysis metadata in Redis aggregator", async () => {
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.objectContaining({
           repositoryFullName: "testowner/testrepo",
           commitSha: webhook.check_run.head_sha,
@@ -399,7 +413,7 @@ describe("Check Run Handler", () => {
     });
 
     it("should handle network errors", async () => {
-      mockFetch.mockRejectedValue(new Error("Network error"));
+      mockResilientPost.mockRejectedValueOnce(new Error("Network error"));
 
       const webhook = createMockWebhook();
       const result = await handleCheckRunFailure(webhook);
@@ -408,38 +422,34 @@ describe("Check Run Handler", () => {
     });
 
     it("should convert AI annotations when available", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
+      mockResilientPost.mockResolvedValueOnce({
+        data: {
+          confidence: 0.85,
+          analysis: "Analysis",
+          identified_cause: "Cause",
+          recommended_actions: [],
+          full_analysis: {
+            codeAnnotations: [
+              {
+                path: "src/index.ts",
+                line: 10,
+                level: "failure",
+                message: "Error here",
+                title: "Test Error",
+              },
+            ],
+          },
+        },
         status: 200,
-        json: () =>
-          Promise.resolve({
-            confidence: 0.85,
-            analysis: "Analysis",
-            identified_cause: "Cause",
-            recommended_actions: [],
-            full_analysis: {
-              codeAnnotations: [
-                {
-                  path: "src/index.ts",
-                  line: 10,
-                  level: "failure",
-                  message: "Error here",
-                  title: "Test Error",
-                },
-              ],
-            },
-          }),
-      } as Response);
+        retryCount: 0,
+        duration: 100,
+      });
 
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
           annotations: expect.arrayContaining([
@@ -490,14 +500,10 @@ describe("Check Run Handler", () => {
       });
 
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
           annotations: expect.arrayContaining([
@@ -517,14 +523,10 @@ describe("Check Run Handler", () => {
 
     it("should include PR context when available", async () => {
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
         expect.any(Object),
@@ -541,14 +543,10 @@ describe("Check Run Handler", () => {
 
     it("should include workflow context when available", async () => {
       const webhook = createMockWebhook();
-      const mockAddFailure = jest.fn();
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
 
       await handleCheckRunFailure(webhook);
 
-      expect(mockAddFailure).toHaveBeenCalledWith(
+      expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
         expect.any(Object),
@@ -563,12 +561,7 @@ describe("Check Run Handler", () => {
     });
 
     it("should handle aggregator errors", async () => {
-      const mockAddFailure = jest.fn(() => {
-        throw new Error("Aggregator error");
-      });
-      mockGetAggregator.mockReturnValue({
-        addFailure: mockAddFailure,
-      } as unknown as ReturnType<typeof getAggregator>);
+      mockAddFailureToRedis.mockRejectedValueOnce(new Error("Aggregator error"));
 
       const webhook = createMockWebhook();
       const result = await handleCheckRunFailure(webhook);

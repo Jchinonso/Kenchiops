@@ -3,7 +3,16 @@
  *
  * These types support consolidating multiple check run failures
  * into a single cohesive analysis before posting to GitHub/Slack.
+ *
+ * @module aggregation/types
  */
+
+import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
+import type { LLMDetectedDependencyChange, LLMDetectedBuildConfigChange } from "../core/types.js";
+
+// Re-export AI-extracted types from core (canonical definitions)
+export type { LLMDetectedDependencyChange as DetectedDependencyChange } from "../core/types.js";
+export type { LLMDetectedBuildConfigChange as DetectedBuildConfigChange } from "../core/types.js";
 
 /**
  * AI-generated code annotation from analysis
@@ -27,6 +36,15 @@ export interface RecommendedAction {
 }
 
 /**
+ * Individual test failure info for display
+ */
+export interface TestFailureInfo {
+  readonly testName: string;
+  readonly file?: string;
+  readonly line?: number;
+}
+
+/**
  * Result of analyzing a single check run failure
  */
 export interface AnalyzedFailure {
@@ -38,7 +56,30 @@ export interface AnalyzedFailure {
   readonly analysis: string;
   readonly annotations: readonly CodeAnnotation[];
   readonly recommendedActions: readonly RecommendedAction[];
+  readonly testFailures: readonly TestFailureInfo[];
   readonly timestamp: Date;
+  // AI-extracted structured data (Phase 4 - Language Agnostic)
+  readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
+  readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+}
+
+/**
+ * Serializable version of AnalyzedFailure for Redis storage
+ */
+export interface SerializedFailure {
+  readonly checkRunId: number;
+  readonly checkName: string;
+  readonly conclusion: string;
+  readonly confidence: number;
+  readonly identifiedCause: string;
+  readonly analysis: string;
+  readonly annotations: readonly CodeAnnotation[];
+  readonly recommendedActions: readonly RecommendedAction[];
+  readonly testFailures: readonly TestFailureInfo[];
+  readonly timestamp: string; // ISO string instead of Date
+  // AI-extracted structured data (Phase 4 - Language Agnostic)
+  readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
+  readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
 }
 
 /**
@@ -94,7 +135,7 @@ export interface AggregationKey {
 }
 
 /**
- * Serializes aggregation key to string for Map storage
+ * Serializes aggregation key to string for Redis storage
  */
 export const serializeAggregationKey = (key: AggregationKey): string =>
   `${key.repositoryFullName}:${key.commitSha}`;
@@ -111,36 +152,24 @@ export const deserializeAggregationKey = (serialized: string): AggregationKey =>
 };
 
 /**
- * Pending aggregation entry with timer
- */
-export interface PendingAggregation {
-  readonly key: AggregationKey;
-  data: AggregatedFailures;
-  timerId: NodeJS.Timeout | null;
-}
-
-/**
  * Configuration for failure aggregation
  */
 export interface AggregationConfig {
-  /** Time to wait after first failure before consolidating (ms) */
+  /** Time to wait after last failure before consolidating (ms) */
   readonly debounceMs: number;
   /** Maximum time to wait for aggregation (ms) */
   readonly maxWaitMs: number;
   /** Maximum failures to aggregate per commit */
   readonly maxFailuresPerCommit: number;
-  /** Time after which stale entries are cleaned up (ms) */
-  readonly staleEntryMs: number;
 }
 
 /**
  * Default aggregation configuration
  */
 export const DEFAULT_AGGREGATION_CONFIG: AggregationConfig = {
-  debounceMs: 30_000, // 30 seconds after each failure
-  maxWaitMs: 120_000, // 2 minutes max wait
-  maxFailuresPerCommit: 20,
-  staleEntryMs: 300_000, // 5 minutes
+  debounceMs: AGGREGATION_DEFAULTS.DEBOUNCE_MS,
+  maxWaitMs: AGGREGATION_DEFAULTS.MAX_WAIT_MS,
+  maxFailuresPerCommit: AGGREGATION_DEFAULTS.MAX_FAILURES_PER_COMMIT,
 } as const;
 
 /**
@@ -153,3 +182,20 @@ export interface ConsolidatedPostResult {
   readonly checkAnnotationsCreated: boolean;
   readonly errors: readonly string[];
 }
+
+/**
+ * Redis key prefixes for aggregation
+ */
+export const AGGREGATION_KEYS = {
+  /** Hash storing failure data: kenchi:agg:{repo}:{sha}:failures */
+  failures: (key: AggregationKey) =>
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:failures`,
+  /** Hash storing metadata: kenchi:agg:{repo}:{sha}:meta */
+  metadata: (key: AggregationKey) =>
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:meta`,
+  /** Debounce lock key: kenchi:agg:{repo}:{sha}:debounce */
+  debounce: (key: AggregationKey) =>
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:debounce`,
+  /** Pattern to find all aggregation keys */
+  pattern: `${REDIS_KEY_PREFIXES.AGGREGATION}:*:meta`,
+} as const;

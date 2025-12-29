@@ -5,7 +5,12 @@
  * used by both Slack and GitHub formatters.
  */
 
-import { CI_FAILURE_DISPLAY } from "../constants/index.js";
+import {
+  CI_FAILURE_DISPLAY,
+  UI_EMOJI,
+  DEPENDENCY_EMOJI_MAP,
+  GITHUB_ANNOTATION_LEVEL,
+} from "../constants/index.js";
 import { truncateText } from "./uiHelpers.js";
 
 /**
@@ -58,7 +63,7 @@ const formatAnnotationError = (annotation: CIAnnotation, maxMessageLength: numbe
  * @returns Formatted error string
  */
 const formatTestFailure = (test: CITestFailure, includeEmoji: boolean): string => {
-  const prefix = includeEmoji ? "\u274C " : ""; // ❌
+  const prefix = includeEmoji ? `${UI_EMOJI.failure} ` : "";
   const location = test.file ? ` (\`${test.file}\`)` : "";
   return `${prefix}${test.testName}${location}`;
 };
@@ -91,7 +96,7 @@ export const collectCIErrors = (
 
   // Collect annotation errors (failures only), limited to maxErrors
   const annotationErrors = (annotations ?? [])
-    .filter((ann) => ann.level === "failure")
+    .filter((ann) => ann.level === GITHUB_ANNOTATION_LEVEL.FAILURE)
     .slice(0, maxErrors)
     .map((ann) => formatAnnotationError(ann, maxMessageLength));
 
@@ -127,10 +132,10 @@ export interface DependencyChange {
 const DEPENDENCY_FORMATTERS: Readonly<
   Record<DependencyChangeType, (dep: DependencyChange) => string>
 > = {
-  added: (dep) => `\u2795 Added: \`${dep.name}@${dep.newVersion}\``,
-  removed: (dep) => `\u2796 Removed: \`${dep.name}@${dep.oldVersion}\``,
+  added: (dep) => `${DEPENDENCY_EMOJI_MAP.added} Added: \`${dep.name}@${dep.newVersion}\``,
+  removed: (dep) => `${DEPENDENCY_EMOJI_MAP.removed} Removed: \`${dep.name}@${dep.oldVersion}\``,
   updated: (dep) =>
-    `\uD83D\uDD04 Updated: \`${dep.name}\` ${dep.oldVersion} \u2192 ${dep.newVersion}`,
+    `${DEPENDENCY_EMOJI_MAP.updated} Updated: \`${dep.name}\` ${dep.oldVersion} → ${dep.newVersion}`,
 };
 
 /**

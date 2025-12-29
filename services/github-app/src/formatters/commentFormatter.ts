@@ -15,16 +15,23 @@ import {
   getFirstSentence,
   buildTruncatedList,
   // Constants
-  GIT_DISPLAY,
+  DISPLAY_DEFAULTS,
   UI_EMOJI,
   PRIORITY_EMOJI_MAP,
   DEPENDENCY_EMOJI_MAP,
   CONFIDENCE_BADGE_THRESHOLDS,
   GITHUB_COMMENT_DISPLAY,
+  GITHUB_COMMENT_TEMPLATES,
   // Types
   type CIAnnotation,
   type CITestFailure,
+  type LLMDetectedDependencyChange,
+  type LLMDetectedBuildConfigChange,
 } from "@kenchi/shared";
+
+// Type aliases for local use
+type DetectedDependencyChange = LLMDetectedDependencyChange;
+type DetectedBuildConfigChange = LLMDetectedBuildConfigChange;
 
 /**
  * Analysis data structure for GitHub comments.
@@ -53,28 +60,32 @@ export interface AnalysisData {
     readonly name: string;
     readonly duration?: string;
   };
+  // Legacy field (deprecated - use detectedDependencyChanges instead)
   readonly dependencyChanges?: ReadonlyArray<{
     readonly type: "added" | "removed" | "updated";
     readonly name: string;
     readonly oldVersion?: string;
     readonly newVersion?: string;
   }>;
+  // AI-extracted structured data (Phase 3 - Language Agnostic)
+  readonly detectedDependencyChanges?: ReadonlyArray<DetectedDependencyChange>;
+  readonly detectedBuildConfigChanges?: ReadonlyArray<DetectedBuildConfigChange>;
 }
 
 // ============================================================================
-// Static Content (uses shared UI_EMOJI)
+// Static Content (uses shared UI_EMOJI and templates)
 // ============================================================================
 
-const HEADER = `## ${UI_EMOJI.failure} KenchiOps — CI Failure Analysis\n`;
-const SUCCESS_HEADER = `## ${UI_EMOJI.success} KenchiOps — CI Analysis Complete\n`;
-const FOOTER = `---\n*${UI_EMOJI.robot} Powered by [KenchiOps](https://github.com/kenchi/devops) — AI-driven DevOps Assistant*`;
+const HEADER = GITHUB_COMMENT_TEMPLATES.FAILURE_HEADER(UI_EMOJI.failure);
+const SUCCESS_HEADER = GITHUB_COMMENT_TEMPLATES.SUCCESS_HEADER(UI_EMOJI.success);
+const FOOTER = GITHUB_COMMENT_TEMPLATES.FOOTER(UI_EMOJI.robot);
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
 const getFailureAnnotations = (annotations?: ReadonlyArray<CIAnnotation>): CIAnnotation[] =>
-  annotations?.filter((a) => a.level === "failure") ?? [];
+  annotations?.filter((annotation) => annotation.level === "failure") ?? [];
 
 const getPriorityEmoji = (priority: string): string =>
   PRIORITY_EMOJI_MAP[priority.toLowerCase()] ?? UI_EMOJI.priorityDefault;
@@ -83,7 +94,8 @@ const getDependencyEmoji = (type: string): string =>
   DEPENDENCY_EMOJI_MAP[type] ?? UI_EMOJI.depUpdated;
 
 const getConfidenceBadge = (confidence: number): string =>
-  CONFIDENCE_BADGE_THRESHOLDS.find((t) => confidence >= t.min)?.emoji ?? UI_EMOJI.confidenceVeryLow;
+  CONFIDENCE_BADGE_THRESHOLDS.find((threshold) => confidence >= threshold.min)?.emoji ??
+  UI_EMOJI.confidenceVeryLow;
 
 // ============================================================================
 // Item Formatters
@@ -94,29 +106,40 @@ const formatTestFailure = (failure: CITestFailure): string => {
   return `- ${UI_EMOJI.failure} \`${truncateText(failure.testName, GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH)}\`${location}`;
 };
 
-const formatAnnotation = (ann: CIAnnotation): string =>
-  `- ${UI_EMOJI.location} \`${ann.path}:${ann.startLine}\` — ${truncateText(ann.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
+const formatAnnotation = (annotation: CIAnnotation): string =>
+  `- ${UI_EMOJI.location} \`${annotation.path}:${annotation.startLine}\` — ${truncateText(annotation.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
 
 const formatDependencyChange = (
-  dep: NonNullable<AnalysisData["dependencyChanges"]>[number]
+  dependencyChange:
+    | DetectedDependencyChange
+    | NonNullable<AnalysisData["dependencyChanges"]>[number]
 ): string => {
-  const icon = getDependencyEmoji(dep.type);
+  const icon = getDependencyEmoji(dependencyChange.type);
   const version =
-    dep.oldVersion && dep.newVersion
-      ? ` (${dep.oldVersion} → ${dep.newVersion})`
-      : dep.newVersion
-        ? ` (${dep.newVersion})`
+    dependencyChange.oldVersion && dependencyChange.newVersion
+      ? ` (${dependencyChange.oldVersion} → ${dependencyChange.newVersion})`
+      : dependencyChange.newVersion
+        ? ` (${dependencyChange.newVersion})`
         : "";
-  return `- ${icon} \`${dep.name}\`${version}`;
+  const ecosystem =
+    "ecosystem" in dependencyChange && dependencyChange.ecosystem
+      ? ` [${dependencyChange.ecosystem}]`
+      : "";
+  return `- ${icon} \`${dependencyChange.name}\`${version}${ecosystem}`;
+};
+
+const formatBuildConfigChange = (change: DetectedBuildConfigChange): string => {
+  const icon = change.changeType === "added" ? "➕" : change.changeType === "deleted" ? "➖" : "📝";
+  return `- ${icon} \`${change.file}\` — ${change.summary}`;
 };
 
 const formatAction = (action: { priority: string; description: string }, index: number): string =>
   `${index + 1}. ${getPriorityEmoji(action.priority)} ${action.description}`;
 
-const formatError = (err: string): string =>
-  truncateText(err, GITHUB_COMMENT_DISPLAY.MAX_ERROR_LINE_LENGTH);
+const formatError = (errorMessage: string): string =>
+  truncateText(errorMessage, GITHUB_COMMENT_DISPLAY.MAX_ERROR_LINE_LENGTH);
 
-const formatImpact = (message: string): string => `- ${UI_EMOJI.warning} ${message}`;
+const formatImpact = (impactMessage: string): string => `- ${UI_EMOJI.warning} ${impactMessage}`;
 
 // ============================================================================
 // Section Builders
@@ -170,15 +193,34 @@ const buildAnnotationsSubsection = (failureAnnotations: CIAnnotation[]): string[
 };
 
 const buildDependencySubsection = (
-  deps: NonNullable<AnalysisData["dependencyChanges"]>
+  deps: ReadonlyArray<DetectedDependencyChange> | NonNullable<AnalysisData["dependencyChanges"]>
 ): string[] => {
   if (deps.length === 0) return [];
 
   return [
     `**Dependency Changes:** ${deps.length} change(s)\n`,
     ...buildTruncatedList(
-      deps,
+      deps as ReadonlyArray<
+        DetectedDependencyChange | NonNullable<AnalysisData["dependencyChanges"]>[number]
+      >,
       formatDependencyChange,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "changes"
+    ),
+    "",
+  ];
+};
+
+const buildBuildConfigSubsection = (
+  changes: ReadonlyArray<DetectedBuildConfigChange>
+): string[] => {
+  if (changes.length === 0) return [];
+
+  return [
+    `**Build Config Changes:** ${changes.length} change(s)\n`,
+    ...buildTruncatedList(
+      changes,
+      formatBuildConfigChange,
       GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
       "changes"
     ),
@@ -190,12 +232,17 @@ const buildEvidenceSection = (
   analysis: AnalysisData,
   failureAnnotations: CIAnnotation[]
 ): string => {
+  // Prefer AI-extracted dependency changes, fallback to legacy
+  const depChanges = analysis.detectedDependencyChanges ?? analysis.dependencyChanges ?? [];
+  const buildChanges = analysis.detectedBuildConfigChanges ?? [];
+
   const lines: string[] = [
     `### ${UI_EMOJI.search} Evidence\n`,
     buildCauseQuote(analysis),
     ...buildTestFailuresSubsection(analysis.testFailures ?? []),
     ...buildAnnotationsSubsection(failureAnnotations),
-    ...buildDependencySubsection(analysis.dependencyChanges ?? []),
+    ...buildDependencySubsection(depChanges),
+    ...buildBuildConfigSubsection(buildChanges),
   ];
 
   return lines.join("\n");
@@ -236,8 +283,8 @@ const buildRecommendationSection = (analysis: AnalysisData): string => {
   );
 
   // Fix overflow format for recommendations (no dash prefix)
-  const fixedLines = actionLines.map((line) =>
-    line.startsWith("- _") ? `\n_${line.slice(3)}` : line
+  const fixedLines = actionLines.map((actionLine) =>
+    actionLine.startsWith("- _") ? `\n_${actionLine.slice(3)}` : actionLine
   );
 
   return [`### ${UI_EMOJI.tools} Recommendation\n`, ...fixedLines, ""].join("\n");
@@ -282,7 +329,7 @@ const buildMetadataSection = (analysis: AnalysisData): string => {
     },
     {
       condition: !!analysis.headSha,
-      content: `${UI_EMOJI.commit} **Commit:** \`${analysis.headSha?.substring(0, GIT_DISPLAY.SHA_DISPLAY_LENGTH)}\``,
+      content: `${UI_EMOJI.commit} **Commit:** \`${analysis.headSha?.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH)}\``,
     },
     {
       condition: !!analysis.workflowContext?.duration,

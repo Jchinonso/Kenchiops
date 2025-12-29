@@ -282,6 +282,33 @@ return matched?.handler() ?? new Error("Unknown error");
 - **Functions**: verb + noun (`validateUserEmail`, `fetchUserById`)
 - **Booleans**: `is/has/should/can` prefix
 - **Constants**: `UPPER_SNAKE_CASE`
+- **Callback parameters**: descriptive names, never single letters (applies to both array method callbacks and standalone callback functions)
+
+```typescript
+// ❌ Single-letter callback parameters in array methods
+failures.map((f) => f.checkName);
+annotations.filter((a) => a.level === "failure");
+items.reduce((acc, item) => acc + item.value, 0);
+actions.sort((a, b) => a.priority - b.priority);
+thresholds.find((t) => value >= t.min);
+
+// ✅ Descriptive callback parameters in array methods
+failures.map((failure) => failure.checkName);
+annotations.filter((annotation) => annotation.level === "failure");
+items.reduce((accumulator, currentItem) => accumulator + currentItem.value, 0);
+actions.sort((firstAction, secondAction) => firstAction.priority - secondAction.priority);
+thresholds.find((threshold) => value >= threshold.min);
+
+// ❌ Single-letter parameters in callback functions
+const createFailure = (c: number): AnalyzedFailure => ({...});
+const formatItem = (i: Item) => `${i.name}`;
+const handleError = (e: Error) => console.log(e);
+
+// ✅ Descriptive parameters in callback functions
+const createAnalyzedFailureWithConfidence = (confidenceScore: number): AnalyzedFailure => ({...});
+const formatItem = (item: Item) => `${item.name}`;
+const handleError = (error: Error) => console.log(error);
+```
 
 ### Structure
 

@@ -3,10 +3,20 @@
  *
  * Handles posting consolidated CI failure analysis to GitHub and Slack.
  * Called by the FailureAggregator when aggregation is ready.
+ *
+ * Uses message queue for Slack notifications for reliable delivery.
  */
 
-import { createLogger, ExternalServiceError } from "@kenchi/shared";
-import type { AggregatedFailures, ConsolidatedPostResult } from "./types.js";
+import {
+  createLogger,
+  config,
+  isRedisHealthy,
+  enqueueConsolidatedNotification,
+  resilientPost,
+  KENCHI_BRANDING,
+  type AggregatedFailures,
+  type ConsolidatedPostResult,
+} from "@kenchi/shared";
 import {
   buildConsolidatedPRComment,
   buildConsolidatedSlackPayload,
@@ -16,11 +26,6 @@ import {
 import { postPRComment, createCheckRunWithAnnotations } from "../githubService.js";
 
 const logger = createLogger("github-app");
-
-/**
- * Service URLs for CI failure processing
- */
-const SLACK_URL = process.env.SLACK_URL || "http://slack-bot:3001/slack/message";
 
 /**
  * Post consolidated analysis to a single PR
@@ -95,7 +100,7 @@ const createCheckAnnotations = async (
       repository.owner,
       repository.name,
       commitSha,
-      "KenchiOps Analysis",
+      KENCHI_BRANDING.CHECK_RUN_NAME,
       summary,
       annotations
     );
@@ -155,34 +160,56 @@ const postToGitHub = async (
 };
 
 /**
- * Post consolidated analysis to Slack
+ * Post consolidated analysis to Slack via message queue.
+ * Falls back to direct HTTP if Redis is unavailable.
  */
 const postToSlack = async (
   aggregation: AggregatedFailures
 ): Promise<{ success: boolean; error?: string }> => {
   const slackPayload = buildConsolidatedSlackPayload(aggregation);
 
-  try {
-    const response = await fetch(SLACK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        consolidated: true,
-        payload: slackPayload,
+  // Check if Redis is available for queue-based delivery
+  const redisAvailable = await isRedisHealthy().catch(() => false);
+
+  if (redisAvailable) {
+    // Queue-based delivery (preferred - reliable with retries)
+    try {
+      const messageId = await enqueueConsolidatedNotification(aggregation, slackPayload);
+
+      logger.info("Enqueued consolidated Slack notification", {
+        messageId,
         repository: aggregation.repository.fullName,
-        installation_id: aggregation.installationId,
-        commit_sha: aggregation.commitSha,
-        failure_count: aggregation.failures.length,
-      }),
+        failureCount: aggregation.failures.length,
+      });
+
+      return { success: true };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      logger.warn("Failed to enqueue Slack notification, falling back to direct HTTP", {
+        error: errorMsg,
+      });
+      // Fall through to direct HTTP
+    }
+  }
+
+  // Direct HTTP fallback (when Redis unavailable)
+  const slackUrl = `${config.SLACK_BOT_URL}/slack/message`;
+
+  try {
+    const response = await resilientPost<{ success: boolean }>(slackUrl, {
+      consolidated: true,
+      payload: slackPayload,
+      repository: aggregation.repository.fullName,
+      installation_id: aggregation.installationId,
+      commit_sha: aggregation.commitSha,
+      failure_count: aggregation.failures.length,
     });
 
-    if (!response.ok) {
-      throw new ExternalServiceError("Slack", `Slack service returned ${response.status}`);
-    }
-
-    logger.info("Posted consolidated Slack message", {
+    logger.info("Posted consolidated Slack message (direct HTTP)", {
       repository: aggregation.repository.fullName,
       failureCount: aggregation.failures.length,
+      retryCount: response.retryCount,
+      duration: response.duration,
     });
 
     return { success: true };

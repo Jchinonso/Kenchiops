@@ -20,17 +20,25 @@ jest.mock("@kenchi/shared", () => ({
     BAD_REQUEST: 400,
     INTERNAL_SERVER_ERROR: 500,
   },
+  KENCHI_BRANDING: {
+    CHECK_RUN_NAME: "KenchiOps Analysis",
+    COMMENT_MARKER: "<!-- kenchiops-marker -->",
+  },
   validate:
     (schema: { body?: Record<string, unknown> }) =>
     (req: Request, res: Response, next: () => void) => {
       // Basic validation for required fields
       if (schema.body) {
-        for (const field of Object.keys(schema.body)) {
+        Object.keys(schema.body).forEach((field) => {
           if (req.body[field] === undefined || req.body[field] === null || req.body[field] === "") {
             res.status(400).json({ error: `${field} is required` });
-            return;
           }
-        }
+        });
+        const missingField = Object.keys(schema.body).find(
+          (field) =>
+            req.body[field] === undefined || req.body[field] === null || req.body[field] === ""
+        );
+        if (missingField) return;
       }
       next();
     },
@@ -53,6 +61,15 @@ jest.mock("../services/githubService.js", () => ({
         defaultBranch: "main",
       },
     ])
+  ),
+}));
+
+jest.mock("../services/workflowService.js", () => ({
+  rerunFailedJobs: jest.fn(() => Promise.resolve({ success: true, message: "Rerun triggered" })),
+  getWorkflowRunIdForCheckRun: jest.fn(() => Promise.resolve(12345)),
+  getCheckSuiteIdForRun: jest.fn(() => Promise.resolve(67890)),
+  rerequestCheckSuite: jest.fn(() =>
+    Promise.resolve({ success: true, message: "Check suite rerequested" })
   ),
 }));
 

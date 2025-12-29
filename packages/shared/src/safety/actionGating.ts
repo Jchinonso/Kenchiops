@@ -12,6 +12,7 @@ import {
   AUTO_APPROVABLE_SAFETY_LEVELS,
   VALID_SAFETY_LEVELS,
   CONFIDENCE_MESSAGES,
+  SAFETY_MESSAGES,
   type ConfidenceRange,
 } from "../constants/index.js";
 
@@ -219,7 +220,7 @@ const RANGE_HANDLERS: Readonly<Record<ConfidenceRange, RangeHandler>> = {
 const INVALID_ACTION_RESULT: ActionGatingResult = createGatingResult(
   true,
   false,
-  "Invalid action proposal. Manual review required."
+  SAFETY_MESSAGES.INVALID_ACTION
 );
 
 /**

@@ -7,6 +7,10 @@
  */
 export const OPENAI_DEFAULTS = {
   TEMPERATURE: 0.1,
+  /** Default model for analysis */
+  MODEL: "gpt-4-turbo-2024-04-09",
+  /** Default max tokens for responses */
+  MAX_TOKENS: 4096,
 } as const;
 
 /**
@@ -15,7 +19,7 @@ export const OPENAI_DEFAULTS = {
 export const OPENAI_CONSTANTS = {
   MAX_PROMPT_TOKENS: 8000, // Leave room for response
   MAX_RETRIES: 3,
-  DEFAULT_TIMEOUT_MS: 30000,
+  DEFAULT_TIMEOUT_MS: 90000,
   TOKEN_BUFFER: 1000, // Buffer for event and instructions
   EXPONENTIAL_BACKOFF_BASE: 2, // Base for exponential backoff: 2^attempt
   CHARS_PER_TOKEN_ESTIMATE: 4, // Rough estimate: ~4 chars per token
@@ -31,6 +35,7 @@ export const EVIDENCE_TRUNCATION = {
   MAX_ERROR_LOGS: 10,
   MAX_RECENT_COMMITS: 5,
   MAX_HIGH_SIMILARITY_DOCS: 3,
+  MAX_ADDITIONAL_LOGS: 20,
 } as const;
 
 /**
@@ -57,3 +62,13 @@ export const SHA_PATTERN_SINGLE = /\b[0-9a-f]{6,40}\b/i;
  * Captures content inside quotes without the quotes themselves.
  */
 export const QUOTED_TEXT_PATTERN = /["']([^"']+)["']/g;
+
+/**
+ * OpenAI-related error and default messages.
+ */
+export const OPENAI_MESSAGES = {
+  NO_CONTENT: "No content in OpenAI response",
+  NO_JSON_FOUND: "No JSON found in response",
+  NO_SUMMARY: "No summary provided",
+  UNKNOWN_ERROR: "Unknown OpenAI error occurred",
+} as const;

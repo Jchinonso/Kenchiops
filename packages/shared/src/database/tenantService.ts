@@ -7,9 +7,15 @@
 
 import pg from "pg";
 import { query, transaction } from "./client.js";
-import { createLogger } from "../core/logger.js";
+import { createLogger, parseDbCount } from "../core/index.js";
 import { NotFoundError } from "../core/errors.js";
-import { TENANT_STATUS, AUDIT_ACTIONS, AUDIT_DEFAULTS, AUDIT_QUERIES } from "../constants/index.js";
+import {
+  TENANT_STATUS,
+  AUDIT_ACTIONS,
+  AUDIT_DEFAULTS,
+  AUDIT_QUERIES,
+  TENANT_DEFAULTS,
+} from "../constants/index.js";
 import type {
   Tenant,
   TenantStatus,
@@ -130,12 +136,6 @@ const getStatusAfterGitHubInstall = (hasSlack: boolean): TenantStatus =>
  */
 const getStatusAfterSlackInstall = (hasGitHub: boolean): TenantStatus =>
   hasGitHub ? TENANT_STATUS.ACTIVE : TENANT_STATUS.PENDING_GITHUB;
-
-/**
- * Parse count result to number
- */
-const parseCount = (rows: readonly { count: string }[]): number =>
-  parseInt(rows[0]?.count ?? "0", 10);
 
 // ==================== Lookup Methods ====================
 
@@ -404,7 +404,7 @@ export const activate = async (tenantId: string): Promise<Tenant> => {
  */
 export const suspend = async (tenantId: string, reason?: string): Promise<Tenant> => {
   const tenant = await updateStatus(tenantId, TENANT_STATUS.SUSPENDED, AUDIT_ACTIONS.SUSPENDED, {
-    reason: reason ?? "No reason provided",
+    reason: reason ?? TENANT_DEFAULTS.SUSPENSION_REASON,
   });
   logger.info("Tenant suspended", { tenantId, reason });
   return tenant;
@@ -499,9 +499,9 @@ export const getTenantStatistics = async (tenantId: string): Promise<TenantStati
   ]);
 
   return {
-    failuresAnalyzedToday: parseCount(analysesToday.rows),
-    totalAlertsSent: parseCount(alertsTotal.rows),
-    lastAlertTime: lastAlert.rows[0]?.created_at ?? null,
+    failuresAnalyzedToday: parseDbCount(analysesToday.rows),
+    totalAlertsSent: parseDbCount(alertsTotal.rows),
+    lastAlertTime: lastAlert.rows.length > 0 ? lastAlert.rows[0].created_at : null,
   };
 };
 

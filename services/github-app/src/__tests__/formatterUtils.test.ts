@@ -9,23 +9,23 @@ import {
   calculateAverageConfidence,
   getConfidenceEmoji,
   mergeRecommendedActions,
-  PRIORITY_EMOJI,
-  PRIORITY_ORDER,
   DISPLAY_LIMITS,
 } from "../formatters/formatterUtils.js";
-import type { AnalyzedFailure, RecommendedAction } from "../services/aggregation/types.js";
+import type { AnalyzedFailure, RecommendedAction } from "@kenchi/shared";
+import { PRIORITY_EMOJI_MAP, PRIORITY_ORDER } from "@kenchi/shared";
 
 describe("Formatter Utilities", () => {
   describe("getPriorityEmoji", () => {
     it("should return correct emoji for string priorities", () => {
       expect(getPriorityEmoji("immediate")).toBe("🔴");
-      expect(getPriorityEmoji("high")).toBe("🔴");
+      expect(getPriorityEmoji("critical")).toBe("🔴");
+      expect(getPriorityEmoji("high")).toBe("🟠");
       expect(getPriorityEmoji("medium")).toBe("🟡");
       expect(getPriorityEmoji("low")).toBe("🟢");
     });
 
     it("should handle case-insensitive string priorities", () => {
-      expect(getPriorityEmoji("HIGH")).toBe("🔴");
+      expect(getPriorityEmoji("HIGH")).toBe("🟠");
       expect(getPriorityEmoji("Medium")).toBe("🟡");
       expect(getPriorityEmoji("LOW")).toBe("🟢");
     });
@@ -46,6 +46,7 @@ describe("Formatter Utilities", () => {
   describe("getNumericPriority", () => {
     it("should convert string priorities to numbers", () => {
       expect(getNumericPriority("immediate")).toBe(0);
+      expect(getNumericPriority("critical")).toBe(0);
       expect(getNumericPriority("high")).toBe(1);
       expect(getNumericPriority("medium")).toBe(2);
       expect(getNumericPriority("low")).toBe(3);
@@ -54,6 +55,7 @@ describe("Formatter Utilities", () => {
     it("should handle case-insensitive strings", () => {
       expect(getNumericPriority("HIGH")).toBe(1);
       expect(getNumericPriority("Medium")).toBe(2);
+      expect(getNumericPriority("CRITICAL")).toBe(0);
     });
 
     it("should return number as-is for numeric input", () => {
@@ -67,26 +69,31 @@ describe("Formatter Utilities", () => {
   });
 
   describe("calculateAverageConfidence", () => {
-    const createFailure = (confidence: number): AnalyzedFailure => ({
+    const createAnalyzedFailureWithConfidence = (confidenceScore: number): AnalyzedFailure => ({
       checkRunId: 12345,
       checkName: "test",
       conclusion: "failure",
-      confidence,
+      confidence: confidenceScore,
       analysis: "test",
       identifiedCause: "test",
       annotations: [],
       recommendedActions: [],
+      testFailures: [],
       timestamp: new Date(),
     });
 
     it("should calculate average for single failure", () => {
-      const failures = [createFailure(0.8)];
-      expect(calculateAverageConfidence(failures)).toBe(0.8);
+      const analyzedFailures = [createAnalyzedFailureWithConfidence(0.8)];
+      expect(calculateAverageConfidence(analyzedFailures)).toBe(0.8);
     });
 
     it("should calculate average for multiple failures", () => {
-      const failures = [createFailure(0.8), createFailure(0.6), createFailure(0.4)];
-      expect(calculateAverageConfidence(failures)).toBeCloseTo(0.6, 5);
+      const analyzedFailures = [
+        createAnalyzedFailureWithConfidence(0.8),
+        createAnalyzedFailureWithConfidence(0.6),
+        createAnalyzedFailureWithConfidence(0.4),
+      ];
+      expect(calculateAverageConfidence(analyzedFailures)).toBeCloseTo(0.6, 5);
     });
 
     it("should return 0 for empty array", () => {
@@ -94,13 +101,19 @@ describe("Formatter Utilities", () => {
     });
 
     it("should handle all zeros", () => {
-      const failures = [createFailure(0), createFailure(0)];
-      expect(calculateAverageConfidence(failures)).toBe(0);
+      const analyzedFailures = [
+        createAnalyzedFailureWithConfidence(0),
+        createAnalyzedFailureWithConfidence(0),
+      ];
+      expect(calculateAverageConfidence(analyzedFailures)).toBe(0);
     });
 
     it("should handle all ones", () => {
-      const failures = [createFailure(1), createFailure(1)];
-      expect(calculateAverageConfidence(failures)).toBe(1);
+      const analyzedFailures = [
+        createAnalyzedFailureWithConfidence(1),
+        createAnalyzedFailureWithConfidence(1),
+      ];
+      expect(calculateAverageConfidence(analyzedFailures)).toBe(1);
     });
   });
 
@@ -125,13 +138,19 @@ describe("Formatter Utilities", () => {
   });
 
   describe("mergeRecommendedActions", () => {
-    const createAction = (description: string, priority: string): RecommendedAction => ({
-      description,
-      priority,
-      actionType: "fix",
+    const createRecommendedActionWithPriority = (
+      actionDescription: string,
+      priorityLevel: string,
+      actionTypeName = "fix"
+    ): RecommendedAction => ({
+      description: actionDescription,
+      priority: priorityLevel,
+      actionType: actionTypeName,
     });
 
-    const createFailure = (actions: RecommendedAction[]): AnalyzedFailure => ({
+    const createAnalyzedFailureWithActions = (
+      recommendedActions: RecommendedAction[]
+    ): AnalyzedFailure => ({
       checkRunId: 12345,
       checkName: "test",
       conclusion: "failure",
@@ -139,100 +158,131 @@ describe("Formatter Utilities", () => {
       analysis: "test",
       identifiedCause: "test",
       annotations: [],
-      recommendedActions: actions,
+      recommendedActions,
+      testFailures: [],
       timestamp: new Date(),
     });
 
     it("should merge actions from multiple failures", () => {
-      const failures = [
-        createFailure([createAction("Action 1", "high")]),
-        createFailure([createAction("Action 2", "medium")]),
+      const analyzedFailures = [
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("Action 1", "high", "rerun_pipeline"),
+        ]),
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("Action 2", "medium", "notify_team"),
+        ]),
       ];
 
-      const merged = mergeRecommendedActions(failures);
+      const mergedActions = mergeRecommendedActions(analyzedFailures);
 
-      expect(merged).toHaveLength(2);
+      expect(mergedActions).toHaveLength(2);
     });
 
     it("should deduplicate identical actions", () => {
-      const failures = [
-        createFailure([createAction("Same action", "high")]),
-        createFailure([createAction("Same action", "high")]),
+      const analyzedFailures = [
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("Same action", "high"),
+        ]),
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("Same action", "high"),
+        ]),
       ];
 
-      const merged = mergeRecommendedActions(failures);
+      const mergedActions = mergeRecommendedActions(analyzedFailures);
 
-      expect(merged).toHaveLength(1);
+      expect(mergedActions).toHaveLength(1);
     });
 
     it("should deduplicate case-insensitively", () => {
-      const failures = [
-        createFailure([createAction("Same Action", "high")]),
-        createFailure([createAction("same action", "high")]),
+      const analyzedFailures = [
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("Same Action", "high"),
+        ]),
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("same action", "high"),
+        ]),
       ];
 
-      const merged = mergeRecommendedActions(failures);
+      const mergedActions = mergeRecommendedActions(analyzedFailures);
 
-      expect(merged).toHaveLength(1);
+      expect(mergedActions).toHaveLength(1);
     });
 
     it("should sort by priority", () => {
-      const failures = [
-        createFailure([createAction("Low priority", "low")]),
-        createFailure([createAction("High priority", "high")]),
-        createFailure([createAction("Immediate", "immediate")]),
+      const analyzedFailures = [
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("Low priority", "low", "notify_team"),
+        ]),
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("High priority", "high", "rerun_pipeline"),
+        ]),
+        createAnalyzedFailureWithActions([
+          createRecommendedActionWithPriority("Immediate", "immediate", "post_comment"),
+        ]),
       ];
 
-      const merged = mergeRecommendedActions(failures);
+      const mergedActions = mergeRecommendedActions(analyzedFailures);
 
-      expect(merged[0].description).toBe("Immediate");
-      expect(merged[1].description).toBe("High priority");
-      expect(merged[2].description).toBe("Low priority");
+      expect(mergedActions[0].description).toBe("Immediate");
+      expect(mergedActions[1].description).toBe("High priority");
+      expect(mergedActions[2].description).toBe("Low priority");
     });
 
     it("should limit to DISPLAY_LIMITS.recommendedActions", () => {
-      const actions = Array.from({ length: 20 }, (_, i) => createAction(`Action ${i}`, "medium"));
-      const failures = [createFailure(actions)];
+      // Create 20 actions with unique actionTypes to avoid deduplication
+      const manyActions = Array.from({ length: 20 }, (_, actionIndex) =>
+        createRecommendedActionWithPriority(
+          `Action ${actionIndex}`,
+          "medium",
+          `action_type_${actionIndex}`
+        )
+      );
+      const analyzedFailures = [createAnalyzedFailureWithActions(manyActions)];
 
-      const merged = mergeRecommendedActions(failures);
+      const mergedActions = mergeRecommendedActions(analyzedFailures);
 
-      expect(merged).toHaveLength(DISPLAY_LIMITS.recommendedActions);
+      expect(mergedActions).toHaveLength(DISPLAY_LIMITS.recommendedActions);
     });
 
     it("should handle empty failures array", () => {
-      const merged = mergeRecommendedActions([]);
-      expect(merged).toEqual([]);
+      const mergedActions = mergeRecommendedActions([]);
+      expect(mergedActions).toEqual([]);
     });
 
     it("should handle failures with no actions", () => {
-      const failures = [createFailure([]), createFailure([])];
-      const merged = mergeRecommendedActions(failures);
-      expect(merged).toEqual([]);
+      const analyzedFailures = [
+        createAnalyzedFailureWithActions([]),
+        createAnalyzedFailureWithActions([]),
+      ];
+      const mergedActions = mergeRecommendedActions(analyzedFailures);
+      expect(mergedActions).toEqual([]);
     });
   });
 
   describe("Constants", () => {
-    it("should have correct PRIORITY_EMOJI values", () => {
-      expect(PRIORITY_EMOJI.immediate).toBe("🔴");
-      expect(PRIORITY_EMOJI.high).toBe("🔴");
-      expect(PRIORITY_EMOJI.medium).toBe("🟡");
-      expect(PRIORITY_EMOJI.low).toBe("🟢");
+    it("should have correct PRIORITY_EMOJI_MAP values", () => {
+      expect(PRIORITY_EMOJI_MAP.immediate).toBe("🔴");
+      expect(PRIORITY_EMOJI_MAP.critical).toBe("🔴");
+      expect(PRIORITY_EMOJI_MAP.high).toBe("🟠");
+      expect(PRIORITY_EMOJI_MAP.medium).toBe("🟡");
+      expect(PRIORITY_EMOJI_MAP.low).toBe("🟢");
     });
 
     it("should have correct PRIORITY_ORDER values", () => {
       expect(PRIORITY_ORDER.immediate).toBe(0);
+      expect(PRIORITY_ORDER.critical).toBe(0);
       expect(PRIORITY_ORDER.high).toBe(1);
       expect(PRIORITY_ORDER.medium).toBe(2);
       expect(PRIORITY_ORDER.low).toBe(3);
     });
 
     it("should have correct DISPLAY_LIMITS values", () => {
-      expect(DISPLAY_LIMITS.annotationsPerCheck).toBe(10);
-      expect(DISPLAY_LIMITS.totalAnnotations).toBe(30);
-      expect(DISPLAY_LIMITS.recommendedActions).toBe(8);
-      expect(DISPLAY_LIMITS.checksToShow).toBe(10);
-      expect(DISPLAY_LIMITS.slackAnnotationsPerCheck).toBe(5);
-      expect(DISPLAY_LIMITS.slackMaxChecks).toBe(5);
+      expect(DISPLAY_LIMITS.annotationsPerCheck).toBe(100);
+      expect(DISPLAY_LIMITS.totalAnnotations).toBe(150);
+      expect(DISPLAY_LIMITS.recommendedActions).toBe(10);
+      expect(DISPLAY_LIMITS.checksToShow).toBe(20);
+      expect(DISPLAY_LIMITS.slackAnnotationsPerCheck).toBe(50);
+      expect(DISPLAY_LIMITS.slackMaxChecks).toBe(10);
     });
   });
 });

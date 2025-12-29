@@ -110,6 +110,7 @@ export interface TestFailure {
   readonly testName: string;
   readonly error: string;
   readonly file?: string;
+  readonly line?: number;
 }
 
 /**

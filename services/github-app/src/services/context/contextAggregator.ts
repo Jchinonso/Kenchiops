@@ -11,15 +11,11 @@ import {
   redactSecretsWithStats,
   deduplicateByKey,
 } from "@kenchi/shared";
+import { truncateWithContext } from "./logParser.js";
 import type { CheckRunWebhook } from "../../types/githubTypes.js";
 import type { EnrichedContext, FileReference } from "./types.js";
 import { fetchWorkflowLogs, fetchWorkflowTiming } from "./workflowFetcher.js";
-import {
-  fetchPRDiff,
-  fetchPRMetadata,
-  fetchDependencyChanges,
-  fetchBuildConfigChanges,
-} from "./prFetcher.js";
+import { fetchPRDiff, fetchPRMetadata, fetchChangedFiles } from "./prFetcher.js";
 import { fetchCommitInfo, fetchSourceFile, fetchRepositoryMetadata } from "./commitFetcher.js";
 import { fetchCheckRunAnnotations } from "./annotationFetcher.js";
 import { extractFileReferences, extractTestFailures } from "./logParser.js";
@@ -163,16 +159,31 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
     ]);
 
   // Phase 2: Fetch PR-specific context if we have a PR
-  const [dependencyChanges, buildConfigChanges, prMetadata] = prNumber
+  // Note: Dependency and build config changes are now detected by AI from the diff
+  // We fetch changed file paths for context but don't pre-parse specific changes
+  const [prMetadata, changedFiles] = prNumber
     ? await Promise.all([
-        fetchDependencyChanges(installationId, owner, repo, prNumber),
-        fetchBuildConfigChanges(installationId, owner, repo, prNumber),
         fetchPRMetadata(installationId, owner, repo, prNumber),
+        fetchChangedFiles(installationId, owner, repo, prNumber),
       ])
-    : [[], [], null];
+    : [null, []];
 
-  // Extract test failures from logs
+  // Log changed files for debugging (AI will analyze the diff for specific changes)
+  if (changedFiles.length > 0) {
+    logger.info("Changed files in PR (AI will analyze diff for details)", {
+      prNumber,
+      fileCount: changedFiles.length,
+      files: changedFiles.slice(0, 10), // Log first 10 for brevity
+    });
+  }
+
+  // Extract test failures from FULL logs (before truncation to capture all failures)
   const testFailures = workflowLogs ? extractTestFailures(workflowLogs) : [];
+
+  // Truncate logs for LLM context after test failure extraction
+  const truncatedLogs = workflowLogs
+    ? truncateWithContext(workflowLogs, GITHUB_CONTEXT_LIMITS.MAX_LOG_SIZE)
+    : null;
 
   // Extract file references from logs, annotations, and check output
   const allLogs = [
@@ -189,11 +200,10 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
     .filter((ann) => ann.level === "failure" || ann.level === "warning")
     .map((ann) => ({ path: ann.path, line: ann.startLine }));
 
-  // Combine and dedupe file references (annotations first for priority)
+  // Combine and dedupe file references (annotations first for priority) - no artificial limit
   const uniqueFileRefs = deduplicateByKey(
     [...annotationFiles, ...logFileReferences],
-    (ref) => ref.path,
-    GITHUB_CONTEXT_LIMITS.MAX_FILES
+    (ref) => ref.path
   );
 
   // Phase 3: Fetch source files in parallel
@@ -265,14 +275,16 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
   logger.info("=== END GATHERED CONTEXT ===");
 
   // CRITICAL: Redact secrets before returning context for LLM analysis
+  // Use truncated logs for LLM context (test failures already extracted from full logs)
+  // Note: dependencyChanges and buildConfigChanges are empty - AI extracts these from prDiff
   const rawContext: EnrichedContext = {
-    workflowLogs,
+    workflowLogs: truncatedLogs,
     prDiff,
     sourceFiles,
     commitInfo,
     annotations,
-    dependencyChanges,
-    buildConfigChanges,
+    dependencyChanges: [], // AI extracts from prDiff (language-agnostic)
+    buildConfigChanges: [], // AI extracts from prDiff (language-agnostic)
     testFailures,
     prMetadata,
     repositoryMetadata,
