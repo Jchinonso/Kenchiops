@@ -245,18 +245,7 @@ const getExecutableActions = (actions: readonly RecommendedAction[]): Recommende
   ).slice(0, MAX_ACTION_BUTTONS);
 
 /**
- * Build action description block
- */
-const buildActionDescriptionBlock = (action: RecommendedAction): SlackTextBlock => ({
-  type: "section",
-  text: {
-    type: "mrkdwn",
-    text: `${getPriorityEmoji(action.priority)} *${toTitleCase(action.actionType ?? "Action")}*: ${action.description}`,
-  },
-});
-
-/**
- * Build action blocks with descriptions and buttons
+ * Build action blocks with buttons only (no duplicate descriptions)
  */
 const buildActionBlocks = (
   actions: readonly RecommendedAction[],
@@ -266,9 +255,6 @@ const buildActionBlocks = (
   return executableActions.length === 0
     ? []
     : [
-        { type: "divider" },
-        { type: "section", text: { type: "mrkdwn", text: `*${UI_EMOJI.target} Quick Actions*` } },
-        ...executableActions.map(buildActionDescriptionBlock),
         buildExecuteButtonsBlock(
           executableActions,
           aggregation,
