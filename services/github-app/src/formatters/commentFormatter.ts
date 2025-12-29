@@ -75,7 +75,7 @@ const FOOTER = GITHUB_COMMENT_TEMPLATES.FOOTER(UI_EMOJI.robot);
 // ============================================================================
 
 const getFailureAnnotations = (annotations?: ReadonlyArray<CIAnnotation>): CIAnnotation[] =>
-  annotations?.filter((a) => a.level === "failure") ?? [];
+  annotations?.filter((annotation) => annotation.level === "failure") ?? [];
 
 const getPriorityEmoji = (priority: string): string =>
   PRIORITY_EMOJI_MAP[priority.toLowerCase()] ?? UI_EMOJI.priorityDefault;
@@ -84,7 +84,8 @@ const getDependencyEmoji = (type: string): string =>
   DEPENDENCY_EMOJI_MAP[type] ?? UI_EMOJI.depUpdated;
 
 const getConfidenceBadge = (confidence: number): string =>
-  CONFIDENCE_BADGE_THRESHOLDS.find((t) => confidence >= t.min)?.emoji ?? UI_EMOJI.confidenceVeryLow;
+  CONFIDENCE_BADGE_THRESHOLDS.find((threshold) => confidence >= threshold.min)?.emoji ??
+  UI_EMOJI.confidenceVeryLow;
 
 // ============================================================================
 // Item Formatters
@@ -95,29 +96,29 @@ const formatTestFailure = (failure: CITestFailure): string => {
   return `- ${UI_EMOJI.failure} \`${truncateText(failure.testName, GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH)}\`${location}`;
 };
 
-const formatAnnotation = (ann: CIAnnotation): string =>
-  `- ${UI_EMOJI.location} \`${ann.path}:${ann.startLine}\` — ${truncateText(ann.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
+const formatAnnotation = (annotation: CIAnnotation): string =>
+  `- ${UI_EMOJI.location} \`${annotation.path}:${annotation.startLine}\` — ${truncateText(annotation.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
 
 const formatDependencyChange = (
-  dep: NonNullable<AnalysisData["dependencyChanges"]>[number]
+  dependencyChange: NonNullable<AnalysisData["dependencyChanges"]>[number]
 ): string => {
-  const icon = getDependencyEmoji(dep.type);
+  const icon = getDependencyEmoji(dependencyChange.type);
   const version =
-    dep.oldVersion && dep.newVersion
-      ? ` (${dep.oldVersion} → ${dep.newVersion})`
-      : dep.newVersion
-        ? ` (${dep.newVersion})`
+    dependencyChange.oldVersion && dependencyChange.newVersion
+      ? ` (${dependencyChange.oldVersion} → ${dependencyChange.newVersion})`
+      : dependencyChange.newVersion
+        ? ` (${dependencyChange.newVersion})`
         : "";
-  return `- ${icon} \`${dep.name}\`${version}`;
+  return `- ${icon} \`${dependencyChange.name}\`${version}`;
 };
 
 const formatAction = (action: { priority: string; description: string }, index: number): string =>
   `${index + 1}. ${getPriorityEmoji(action.priority)} ${action.description}`;
 
-const formatError = (err: string): string =>
-  truncateText(err, GITHUB_COMMENT_DISPLAY.MAX_ERROR_LINE_LENGTH);
+const formatError = (errorMessage: string): string =>
+  truncateText(errorMessage, GITHUB_COMMENT_DISPLAY.MAX_ERROR_LINE_LENGTH);
 
-const formatImpact = (message: string): string => `- ${UI_EMOJI.warning} ${message}`;
+const formatImpact = (impactMessage: string): string => `- ${UI_EMOJI.warning} ${impactMessage}`;
 
 // ============================================================================
 // Section Builders
@@ -237,8 +238,8 @@ const buildRecommendationSection = (analysis: AnalysisData): string => {
   );
 
   // Fix overflow format for recommendations (no dash prefix)
-  const fixedLines = actionLines.map((line) =>
-    line.startsWith("- _") ? `\n_${line.slice(3)}` : line
+  const fixedLines = actionLines.map((actionLine) =>
+    actionLine.startsWith("- _") ? `\n_${actionLine.slice(3)}` : actionLine
   );
 
   return [`### ${UI_EMOJI.tools} Recommendation\n`, ...fixedLines, ""].join("\n");

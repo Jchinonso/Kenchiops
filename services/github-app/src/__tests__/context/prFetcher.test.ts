@@ -22,6 +22,9 @@ jest.mock("@kenchi/shared", () => ({
   GITHUB_CONTEXT_LIMITS: {
     MAX_DIFF_SIZE: 50000,
   },
+  GITHUB_PAGINATION: {
+    DEFAULT_PER_PAGE: 100,
+  },
   BUILD_CONFIG_FILES: [
     "tsconfig.json",
     "webpack.config.js",

@@ -20,14 +20,7 @@ import {
   cacheAnalysisByLogHash,
   addFailureToRedis,
   KENCHI_BRANDING,
-  type CachedAnalysis,
-  type AnalyzedFailure,
   type AggregationKey,
-  type RepositoryInfo,
-  type PRContext,
-  type WorkflowContext,
-  type CodeAnnotation,
-  type RecommendedAction,
 } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
@@ -37,6 +30,14 @@ import {
   type EnrichedContext,
 } from "../services/context/index.js";
 import { buildEnrichedLogContent } from "../formatters/checkRunFormatter.js";
+import {
+  type ApiAnalysis,
+  buildAnalyzedFailure,
+  buildRepositoryInfo,
+  buildPRContext,
+  buildWorkflowContext,
+  cachedToApiAnalysis,
+} from "./checkRunConverters.js";
 
 const logger = createLogger("github-app");
 
@@ -64,41 +65,6 @@ interface ContextMetadata {
   readonly sourceFilesCount: number;
 }
 
-/**
- * AI-generated code annotation from analysis
- */
-interface AICodeAnnotation {
-  readonly path: string;
-  readonly line: number;
-  readonly level: "failure" | "warning" | "notice";
-  readonly message: string;
-  readonly title?: string;
-}
-
-/**
- * Full LLM analysis result (subset of fields we use)
- */
-interface FullAnalysisResult {
-  readonly codeAnnotations?: readonly AICodeAnnotation[];
-}
-
-/**
- * API analysis response type
- */
-interface ApiAnalysis {
-  repository?: string;
-  confidence?: number;
-  analysis?: string;
-  identified_cause?: string;
-  recommended_actions?: Array<{
-    description: string;
-    priority: string | number;
-    actionType?: string;
-    reasoning?: string;
-  }>;
-  full_analysis?: FullAnalysisResult;
-}
-
 // ==================== Utility Functions ====================
 
 /**
@@ -112,154 +78,6 @@ const buildContextMetadata = (context: EnrichedContext): ContextMetadata => ({
   annotationsCount: context.annotations.length,
   testFailuresCount: context.testFailures.length,
   sourceFilesCount: context.sourceFiles.length,
-});
-
-/**
- * Format duration in milliseconds to human-readable string
- */
-const formatDuration = (ms: number | undefined): string => {
-  if (!ms) return "";
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${seconds}s`;
-};
-
-// ==================== Conversion Functions ====================
-
-/**
- * Convert AI annotations to aggregation CodeAnnotation format
- */
-const convertAIAnnotations = (
-  aiAnnotations: readonly AICodeAnnotation[] | undefined,
-  githubAnnotations: EnrichedContext["annotations"]
-): CodeAnnotation[] => {
-  // Prefer AI annotations when available
-  if (aiAnnotations && aiAnnotations.length > 0) {
-    return aiAnnotations.map((ann) => ({
-      path: ann.path,
-      line: ann.line,
-      level: ann.level,
-      message: ann.message,
-      title: ann.title,
-    }));
-  }
-
-  // Fallback to GitHub annotations
-  return githubAnnotations.map((ann) => ({
-    path: ann.path,
-    line: ann.startLine,
-    level: ann.level,
-    message: ann.message,
-    title: ann.title,
-  }));
-};
-
-/**
- * Convert API recommended actions to aggregation format
- */
-const convertRecommendedActions = (
-  actions: ApiAnalysis["recommended_actions"]
-): RecommendedAction[] => {
-  if (!actions) return [];
-
-  return actions.map((action) => ({
-    description: action.description,
-    priority: action.priority,
-    actionType: action.actionType,
-    reasoning: action.reasoning,
-  }));
-};
-
-/**
- * Build AnalyzedFailure from API analysis result
- */
-const buildAnalyzedFailure = (
-  checkRun: CheckRunWebhook["check_run"],
-  analysis: ApiAnalysis,
-  context: EnrichedContext
-): AnalyzedFailure => ({
-  checkRunId: checkRun.id,
-  checkName: checkRun.name,
-  conclusion: checkRun.conclusion || "failure",
-  confidence: analysis.confidence ?? 0.5,
-  identifiedCause: analysis.identified_cause || "",
-  analysis: analysis.analysis || "Analysis unavailable",
-  annotations: convertAIAnnotations(analysis.full_analysis?.codeAnnotations, context.annotations),
-  recommendedActions: convertRecommendedActions(analysis.recommended_actions),
-  testFailures: context.testFailures.map((tf) => ({
-    testName: tf.testName,
-    file: tf.file,
-    line: tf.line,
-  })),
-  timestamp: new Date(),
-});
-
-/**
- * Build repository info from webhook
- */
-const buildRepositoryInfo = (repository: CheckRunWebhook["repository"]): RepositoryInfo => ({
-  fullName: repository.full_name,
-  owner: repository.owner.login,
-  name: repository.name,
-});
-
-/**
- * Build PR context from enriched context
- */
-const buildPRContext = (context: EnrichedContext, prNumber: number): PRContext | null => {
-  if (!context.prMetadata) return null;
-
-  return {
-    number: prNumber,
-    title: context.prMetadata.title ?? "",
-    author: context.prMetadata.author ?? "",
-    branch: context.prMetadata.headBranch ?? "",
-    baseBranch: context.prMetadata.baseBranch ?? "",
-    labels: context.prMetadata.labels ?? [],
-  };
-};
-
-/**
- * Build workflow context from enriched context
- */
-const buildWorkflowContext = (
-  checkName: string,
-  context: EnrichedContext
-): WorkflowContext | null => {
-  if (!context.workflowTiming) return null;
-
-  return {
-    name: checkName,
-    duration: formatDuration(context.workflowTiming.durationMs ?? undefined),
-  };
-};
-
-// ==================== Core Processing ====================
-
-/**
- * Convert cached analysis to API analysis format
- */
-const cachedToApiAnalysis = (cached: CachedAnalysis): ApiAnalysis => ({
-  repository: cached.repository,
-  confidence: cached.confidence,
-  analysis: cached.analysis,
-  identified_cause: cached.identifiedCause,
-  recommended_actions: cached.recommendedActions.map((a) => ({
-    description: a.description,
-    priority: a.priority,
-    actionType: a.actionType,
-    reasoning: a.reasoning,
-  })),
-  full_analysis: {
-    codeAnnotations: cached.annotations.map((a) => ({
-      path: a.path,
-      line: a.line,
-      level: a.level,
-      message: a.message,
-      title: a.title,
-    })),
-  },
 });
 
 /**

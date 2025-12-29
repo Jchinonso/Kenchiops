@@ -7,6 +7,7 @@
  */
 
 import type { AggregatedFailures, AnalyzedFailure, RecommendedAction } from "@kenchi/shared";
+import { deduplicateByKey, UI_EMOJI } from "@kenchi/shared";
 import {
   DISPLAY_LIMITS,
   getPriorityEmoji,
@@ -108,8 +109,8 @@ const EXECUTABLE_ACTION_TYPES = new Set([
 /**
  * Convert snake_case to Title Case for display
  */
-const toTitleCase = (snakeCase: string): string =>
-  snakeCase
+const toTitleCase = (snakeCaseString: string): string =>
+  snakeCaseString
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
@@ -121,24 +122,12 @@ const generateActionId = (commitSha: string, index: number): string =>
   `act_${commitSha.substring(0, 8)}_${index}`;
 
 /**
- * Deduplicate items by key using reduce with Map (O(n) performance)
- */
-const deduplicateByKey = <T>(items: readonly T[], getKey: (item: T) => string): T[] => [
-  ...items
-    .reduce(
-      (map, item) => (map.has(getKey(item)) ? map : map.set(getKey(item), item)),
-      new Map<string, T>()
-    )
-    .values(),
-];
-
-/**
  * Consolidate test failures across checks using Map-based deduplication
  */
 const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): ConsolidatedTestFailure[] =>
   deduplicateByKey(
-    failures.flatMap((f) => f.testFailures ?? []),
-    (tf) => `${tf.testName}|${tf.file ?? ""}`
+    failures.flatMap((failure) => failure.testFailures ?? []),
+    (testFailure) => `${testFailure.testName}|${testFailure.file ?? ""}`
   );
 
 /**
@@ -146,16 +135,20 @@ const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): Consolid
  */
 const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] =>
   deduplicateByKey(
-    failures.flatMap((f) => f.annotations),
-    (a) => `${a.path}:${a.line}`
-  ).map((a) => ({ path: a.path, line: a.line, message: a.message }));
+    failures.flatMap((failure) => failure.annotations),
+    (annotation) => `${annotation.path}:${annotation.line}`
+  ).map((annotation) => ({
+    path: annotation.path,
+    line: annotation.line,
+    message: annotation.message,
+  }));
 
 /**
  * Extract unique causes from failures
  */
 const extractUniqueCauses = (failures: readonly AnalyzedFailure[]): string[] =>
   deduplicateByKey(
-    failures.map((f) => f.identifiedCause ?? f.analysis ?? "").filter(Boolean),
+    failures.map((failure) => failure.identifiedCause ?? failure.analysis ?? "").filter(Boolean),
     (cause) => cause
   );
 
@@ -219,8 +212,8 @@ const buildExecuteButtonsBlock = (
  */
 const getExecutableActions = (actions: readonly RecommendedAction[]): RecommendedAction[] =>
   deduplicateByKey(
-    actions.filter((a) => EXECUTABLE_ACTION_TYPES.has(a.actionType ?? "")),
-    (a) => a.actionType ?? ""
+    actions.filter((action) => EXECUTABLE_ACTION_TYPES.has(action.actionType ?? "")),
+    (action) => action.actionType ?? ""
   ).slice(0, MAX_ACTION_BUTTONS);
 
 /**
@@ -246,7 +239,7 @@ const buildActionBlocks = (
     ? []
     : [
         { type: "divider" },
-        { type: "section", text: { type: "mrkdwn", text: "*🎯 Quick Actions*" } },
+        { type: "section", text: { type: "mrkdwn", text: `*${UI_EMOJI.target} Quick Actions*` } },
         ...executableActions.map(buildActionDescriptionBlock),
         buildExecuteButtonsBlock(
           executableActions,
@@ -267,9 +260,13 @@ const buildTestFailuresBlock = (
   const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
   const testLines = testFailures
     .slice(0, displayCount)
-    .map((t) => {
-      const filePath = t.file ? (t.line ? `${t.file}:${t.line}` : t.file) : null;
-      return `   • \`${t.testName}\`${filePath ? ` (${filePath})` : ""}`;
+    .map((testFailure) => {
+      const filePath = testFailure.file
+        ? testFailure.line
+          ? `${testFailure.file}:${testFailure.line}`
+          : testFailure.file
+        : null;
+      return `   • \`${testFailure.testName}\`${filePath ? ` (${filePath})` : ""}`;
     })
     .join("\n");
 
@@ -283,7 +280,7 @@ const buildTestFailuresBlock = (
     elements: [
       {
         type: "mrkdwn",
-        text: `🧪 *Failed Tests (${testFailures.length}):*\n${testLines}${moreText}`,
+        text: `${UI_EMOJI.test} *Failed Tests (${testFailures.length}):*\n${testLines}${moreText}`,
       },
     ],
   };
@@ -300,7 +297,7 @@ const buildAnnotationsBlock = (
   const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
   const lines = annotations
     .slice(0, displayCount)
-    .map((a) => `   • \`${a.path}:${a.line}\` — ${a.message}`)
+    .map((annotation) => `   • \`${annotation.path}:${annotation.line}\` — ${annotation.message}`)
     .join("\n");
 
   const moreText =
@@ -310,7 +307,9 @@ const buildAnnotationsBlock = (
 
   return {
     type: "context",
-    elements: [{ type: "mrkdwn", text: `📍 *Affected Files:*\n${lines}${moreText}` }],
+    elements: [
+      { type: "mrkdwn", text: `${UI_EMOJI.location} *Affected Files:*\n${lines}${moreText}` },
+    ],
   };
 };
 
@@ -321,7 +320,7 @@ const buildCheckNamesBlock = (failures: readonly AnalyzedFailure[]): SlackTextBl
   type: "section",
   text: {
     type: "mrkdwn",
-    text: `*Checks:* ${failures.map((f) => `\`${f.checkName}\``).join(", ")}`,
+    text: `*Checks:* ${failures.map((failure) => `\`${failure.checkName}\``).join(", ")}`,
   },
 });
 
@@ -332,11 +331,13 @@ const buildRootCauseBlock = (causes: readonly string[]): SlackTextBlock | null =
   if (causes.length === 0) return null;
 
   const causeText =
-    causes.length === 1 ? causes[0] : causes.map((c, i) => `${i + 1}. ${c}`).join("\n");
+    causes.length === 1
+      ? causes[0]
+      : causes.map((cause, index) => `${index + 1}. ${cause}`).join("\n");
 
   return {
     type: "section",
-    text: { type: "mrkdwn", text: `*🔍 Root Cause:*\n${causeText}` },
+    text: { type: "mrkdwn", text: `*${UI_EMOJI.search} Root Cause:*\n${causeText}` },
   };
 };
 
@@ -355,20 +356,26 @@ const buildHeaderBlocks = (
   return [
     {
       type: "header",
-      text: { type: "plain_text", text: "🚨 CI Build Failed", emoji: true },
+      text: { type: "plain_text", text: `${UI_EMOJI.alert} CI Build Failed`, emoji: true },
     },
     {
       type: "section",
       fields: [
-        { type: "mrkdwn", text: `*📦 Repository*\n<${repoUrl}|${repository.fullName}>` },
         {
           type: "mrkdwn",
-          text: `*🔀 Branch*\n\`${prContext?.branch ?? "unknown"}\` → \`${prContext?.baseBranch ?? "main"}\``,
+          text: `*${UI_EMOJI.package} Repository*\n<${repoUrl}|${repository.fullName}>`,
         },
-        { type: "mrkdwn", text: `*📝 Commit*\n<${commitUrl}|\`${commitSha.substring(0, 7)}\`>` },
         {
           type: "mrkdwn",
-          text: `*📊 Confidence*\n${getConfidenceEmoji(confidencePercent)} ${confidencePercent}%`,
+          text: `*${UI_EMOJI.branch} Branch*\n\`${prContext?.branch ?? "unknown"}\` → \`${prContext?.baseBranch ?? "main"}\``,
+        },
+        {
+          type: "mrkdwn",
+          text: `*${UI_EMOJI.commit} Commit*\n<${commitUrl}|\`${commitSha.substring(0, 7)}\`>`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*${UI_EMOJI.details} Confidence*\n${getConfidenceEmoji(confidencePercent)} ${confidencePercent}%`,
         },
       ],
     },
@@ -389,7 +396,7 @@ const buildPRLinkBlock = (
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*🔗 Pull Request:* <${prUrl}|#${prContext.number} - ${prContext.title}>`,
+      text: `*${UI_EMOJI.link} Pull Request:* <${prUrl}|#${prContext.number} - ${prContext.title}>`,
     },
   };
 };
@@ -402,12 +409,14 @@ const buildActionsSummaryBlocks = (actions: readonly RecommendedAction[]): Slack
 
   const actionText = actions
     .slice(0, DISPLAY_LIMITS.slackMaxChecks)
-    .map((a, i) => `${i + 1}. ${getPriorityEmoji(a.priority)} ${a.description}`)
+    .map(
+      (action, index) => `${index + 1}. ${getPriorityEmoji(action.priority)} ${action.description}`
+    )
     .join("\n");
 
   return [
     { type: "divider" },
-    { type: "section", text: { type: "mrkdwn", text: "*🛠️ Recommended Actions*" } },
+    { type: "section", text: { type: "mrkdwn", text: `*${UI_EMOJI.tools} Recommended Actions*` } },
     { type: "section", text: { type: "mrkdwn", text: actionText } },
   ];
 };
@@ -442,7 +451,10 @@ export const buildConsolidatedSlackPayload = (
     ...headerBlocks,
     ...(prLinkBlock ? [prLinkBlock] : []),
     { type: "divider" },
-    { type: "section", text: { type: "mrkdwn", text: `*❌ Failed Checks (${failures.length})*` } },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*${UI_EMOJI.failure} Failed Checks (${failures.length})*` },
+    },
     ...(failures.length > 0 ? [buildCheckNamesBlock(failures)] : []),
     ...(rootCauseBlock ? [rootCauseBlock] : []),
     ...(testFailuresBlock ? [testFailuresBlock] : []),
@@ -452,18 +464,20 @@ export const buildConsolidatedSlackPayload = (
     { type: "divider" },
     {
       type: "context",
-      elements: [{ type: "mrkdwn", text: "🤖 _Generated by KenchiOps DevOps Assistant_" }],
+      elements: [
+        { type: "mrkdwn", text: `${UI_EMOJI.robot} _Generated by KenchiOps DevOps Assistant_` },
+      ],
     },
   ];
 
   return {
     blocks,
-    text: `🚨 CI Failure: ${failures.length} check(s) failed in ${repository.fullName}`,
+    text: `${UI_EMOJI.alert} CI Failure: ${failures.length} check(s) failed in ${repository.fullName}`,
     metadata: {
       repository: repository.fullName,
       commitSha,
       failureCount: failures.length,
-      checkNames: failures.map((f) => f.checkName),
+      checkNames: failures.map((failure) => failure.checkName),
       avgConfidence,
       isConsolidated: true,
     },

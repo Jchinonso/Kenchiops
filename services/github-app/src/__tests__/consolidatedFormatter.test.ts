@@ -96,7 +96,7 @@ describe("Consolidated Formatter", () => {
       const aggregation = createMockAggregation();
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).toContain("### ❌ CI Build");
+      expect(comment).toContain("**Checks:** `CI Build`");
       expect(comment).toContain("Missing npm package 'lodash'");
     });
 
@@ -142,7 +142,7 @@ describe("Consolidated Formatter", () => {
       const aggregation = createMockAggregation();
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).toContain("**Affected Files:**");
+      expect(comment).toContain("### 📍 Affected Files");
       expect(comment).toContain("`src/index.ts:10`");
     });
 
@@ -157,19 +157,22 @@ describe("Consolidated Formatter", () => {
       const comment = buildConsolidatedPRComment(aggregation);
 
       expect(comment).toContain("Failed Checks:** 3");
-      expect(comment).toContain("### ❌ Build");
-      expect(comment).toContain("### ❌ Test");
-      expect(comment).toContain("### ❌ Lint");
+      expect(comment).toContain("`Build`");
+      expect(comment).toContain("`Test`");
+      expect(comment).toContain("`Lint`");
     });
 
-    it("should limit displayed checks when exceeding threshold", () => {
-      const manyFailures = Array.from({ length: 15 }, (_, i) =>
-        createMockFailure({ checkRunId: i, checkName: `Check${i}` })
+    it("should show all check names in consolidated view", () => {
+      const manyFailures = Array.from({ length: 15 }, (_, failureIndex) =>
+        createMockFailure({ checkRunId: failureIndex, checkName: `Check${failureIndex}` })
       );
       const aggregation = createMockAggregation({ failures: manyFailures });
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).toContain("... and 5 more failed checks");
+      // All check names should be included
+      expect(comment).toContain("`Check0`");
+      expect(comment).toContain("`Check14`");
+      expect(comment).toContain("**Failed Checks:** 15");
     });
 
     it("should deduplicate recommended actions", () => {

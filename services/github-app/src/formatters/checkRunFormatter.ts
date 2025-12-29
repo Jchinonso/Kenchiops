@@ -4,7 +4,7 @@
  * Formats enriched context into markdown for CI failure analysis.
  */
 
-import { formatDependencyChanges } from "@kenchi/shared";
+import { formatDependencyChanges, UI_EMOJI, ANNOTATION_LEVEL_EMOJI_MAP } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import type { EnrichedContext } from "../services/context/index.js";
 
@@ -90,9 +90,11 @@ const formatPRSection = (context: EnrichedContext): string | null => {
     `**Author:** @${pr.author}`,
     `**Branch:** ${pr.headBranch} → ${pr.baseBranch}`,
     `**Review Status:** ${pr.reviewStatus}${pr.isDraft ? " (Draft)" : ""}`,
-    ...(pr.labels.length > 0 ? [`**Labels:** ${pr.labels.map((l) => `\`${l}\``).join(", ")}`] : []),
+    ...(pr.labels.length > 0
+      ? [`**Labels:** ${pr.labels.map((label) => `\`${label}\``).join(", ")}`]
+      : []),
     ...(pr.reviewers.length > 0
-      ? [`**Reviewers:** ${pr.reviewers.map((r) => `@${r}`).join(", ")}`]
+      ? [`**Reviewers:** ${pr.reviewers.map((reviewer) => `@${reviewer}`).join(", ")}`]
       : []),
     ...formatDescription(pr.description),
   ];
@@ -124,10 +126,10 @@ const formatAnnotationsSection = (context: EnrichedContext): string | null => {
   }
 
   const annotationsSection = context.annotations
-    .map((ann) => {
-      const levelEmoji = ann.level === "failure" ? "❌" : ann.level === "warning" ? "⚠️" : "ℹ️";
-      const title = ann.title ? `**${ann.title}**\n` : "";
-      return `${levelEmoji} ${title}📍 \`${ann.path}:${ann.startLine}\`\n${ann.message}`;
+    .map((annotation) => {
+      const levelEmoji = ANNOTATION_LEVEL_EMOJI_MAP[annotation.level] ?? UI_EMOJI.info;
+      const title = annotation.title ? `**${annotation.title}**\n` : "";
+      return `${levelEmoji} ${title}${UI_EMOJI.location} \`${annotation.path}:${annotation.startLine}\`\n${annotation.message}`;
     })
     .join("\n\n");
 
@@ -143,9 +145,9 @@ const formatTestFailuresSection = (context: EnrichedContext): string | null => {
   }
 
   const testSection = context.testFailures
-    .map((test) => {
-      const fileInfo = test.file ? ` (${test.file})` : "";
-      return `### ❌ ${test.testName}${fileInfo}\n\`\`\`\n${test.error}\n\`\`\``;
+    .map((testFailure) => {
+      const fileInfo = testFailure.file ? ` (${testFailure.file})` : "";
+      return `### ${UI_EMOJI.failure} ${testFailure.testName}${fileInfo}\n\`\`\`\n${testFailure.error}\n\`\`\``;
     })
     .join("\n\n");
 
@@ -173,7 +175,7 @@ const formatBuildConfigSection = (context: EnrichedContext): string | null => {
   }
 
   const configSection = context.buildConfigChanges
-    .map((config) => `### ${config.file}\n\`\`\`diff\n${config.diff}\n\`\`\``)
+    .map((configChange) => `### ${configChange.file}\n\`\`\`diff\n${configChange.diff}\n\`\`\``)
     .join("\n\n");
 
   return `## Build Config Changes\n${configSection}`;
@@ -204,7 +206,7 @@ const formatCommitSection = (context: EnrichedContext): string | null => {
     `**Committer:** ${context.commitInfo.committer}\n` +
     `**Timestamp:** ${context.commitInfo.timestamp}\n` +
     `**Message:** ${context.commitInfo.message}\n` +
-    `**Changed files:**\n${context.commitInfo.changedFiles.map((f) => `  - ${f}`).join("\n")}`
+    `**Changed files:**\n${context.commitInfo.changedFiles.map((filePath) => `  - ${filePath}`).join("\n")}`
   );
 };
 
@@ -227,10 +229,12 @@ const formatSourceFilesSection = (context: EnrichedContext): string | null => {
   }
 
   const filesSection = context.sourceFiles
-    .map((file) => {
+    .map((sourceFile) => {
       const lineInfo =
-        file.startLine && file.endLine ? ` (lines ${file.startLine}-${file.endLine})` : "";
-      return `### ${file.path}${lineInfo}\n\`\`\`\n${file.content}\n\`\`\``;
+        sourceFile.startLine && sourceFile.endLine
+          ? ` (lines ${sourceFile.startLine}-${sourceFile.endLine})`
+          : "";
+      return `### ${sourceFile.path}${lineInfo}\n\`\`\`\n${sourceFile.content}\n\`\`\``;
     })
     .join("\n\n");
 
@@ -246,7 +250,10 @@ const formatCommentsSection = (context: EnrichedContext): string | null => {
   }
 
   const commentsSection = context.prMetadata.comments
-    .map((c) => `**@${c.author}** (${c.createdAt}):\n> ${c.body.replace(/\n/g, "\n> ")}`)
+    .map(
+      (comment) =>
+        `**@${comment.author}** (${comment.createdAt}):\n> ${comment.body.replace(/\n/g, "\n> ")}`
+    )
     .join("\n\n");
 
   return `## Recent PR Discussion\n${commentsSection}`;
