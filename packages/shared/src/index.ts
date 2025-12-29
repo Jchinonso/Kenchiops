@@ -52,6 +52,8 @@ export type {
   ImpactAssessment,
   LLMRecommendedAction,
   EvidenceReference,
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
   // Action Proposal Types
   ActionProposal,
   ActionType,

@@ -1,16 +1,13 @@
 /**
  * Pull request fetcher utilities.
  *
- * Fetches PR diff, metadata, dependency changes, and build config changes.
+ * Fetches PR diff and metadata from GitHub API.
+ * Dependency and build config change detection is handled by AI analysis.
  */
 
 import {
   createLogger,
   GITHUB_CONTEXT_LIMITS,
-  BUILD_CONFIG_FILES,
-  EXCLUDED_PACKAGE_JSON_FIELDS,
-  DEPENDENCY_DIFF_PATTERNS,
-  LOG_PARSING_LIMITS,
   GITHUB_PAGINATION,
   getErrorMessage,
   getOrFetchPullRequest,
@@ -18,7 +15,7 @@ import {
 } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
 import { truncateWithContext } from "./logParser.js";
-import type { PRMetadata, DependencyChange, BuildConfigChange } from "./types.js";
+import type { PRMetadata } from "./types.js";
 
 const logger = createLogger("github-app");
 
@@ -70,6 +67,11 @@ export const fetchPRsByCommit = async (
 
 /**
  * Fetch PR diff with caching.
+ *
+ * Returns the full diff for AI analysis. AI will extract:
+ * - Dependency changes (any package manager format)
+ * - Build config changes (any language/toolchain)
+ * - File modifications relevant to the failure
  *
  * @param installationId - GitHub App installation ID
  * @param owner - Repository owner
@@ -150,7 +152,9 @@ export const fetchPRMetadata = async (
           headBranch: pr.head.ref,
           baseBranch: pr.base.ref,
           headSha: pr.head.sha,
-          labels: pr.labels.map((l) => (typeof l === "string" ? l : l.name || "")).filter(Boolean),
+          labels: pr.labels
+            .map((label) => (typeof label === "string" ? label : label.name || ""))
+            .filter(Boolean),
           state: pr.state,
           draft: pr.draft || false,
         };
@@ -163,8 +167,8 @@ export const fetchPRMetadata = async (
     const comments = commentsResponse.data;
 
     // Determine review status
-    const hasApproval = reviews.some((r) => r.state === "APPROVED");
-    const hasChangesRequested = reviews.some((r) => r.state === "CHANGES_REQUESTED");
+    const hasApproval = reviews.some((review) => review.state === "APPROVED");
+    const hasChangesRequested = reviews.some((review) => review.state === "CHANGES_REQUESTED");
     const reviewStatus: PRMetadata["reviewStatus"] = hasChangesRequested
       ? "changes_requested"
       : hasApproval
@@ -174,13 +178,15 @@ export const fetchPRMetadata = async (
           : "review_required";
 
     // Extract unique reviewers
-    const reviewers = [...new Set(reviews.map((r) => r.user?.login).filter(Boolean))] as string[];
+    const reviewers = [
+      ...new Set(reviews.map((review) => review.user?.login).filter(Boolean)),
+    ] as string[];
 
     // Extract recent comments (for context)
-    const recentComments = comments.slice(-5).map((c) => ({
-      author: c.user?.login || "unknown",
-      body: c.body?.slice(0, 500) || "",
-      createdAt: c.created_at,
+    const recentComments = comments.slice(-5).map((comment) => ({
+      author: comment.user?.login || "unknown",
+      body: comment.body?.slice(0, 500) || "",
+      createdAt: comment.created_at,
     }));
 
     logger.info("Fetched PR metadata", {
@@ -213,117 +219,25 @@ export const fetchPRMetadata = async (
 };
 
 /**
- * Parse dependency changes from PR files.
+ * Fetch list of changed files in a PR.
  *
- * Analyzes package.json changes to detect added, removed, or updated dependencies.
- *
- * @param installationId - GitHub App installation ID
- * @param owner - Repository owner
- * @param repo - Repository name
- * @param prNumber - Pull request number
- * @returns Array of dependency changes
- */
-export const fetchDependencyChanges = async (
-  installationId: number,
-  owner: string,
-  repo: string,
-  prNumber: number
-): Promise<DependencyChange[]> => {
-  try {
-    const octokit = await getOctokit(installationId);
-
-    // Get list of files changed in the PR
-    const { data: files } = await octokit.rest.pulls.listFiles({
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
-    });
-
-    // Find package.json changes
-    const packageJsonFile = files.find((f) => f.filename === "package.json");
-    if (!packageJsonFile || !packageJsonFile.patch) {
-      return [];
-    }
-
-    const patch = packageJsonFile.patch;
-
-    // Use Map for O(1) lookups when merging added/removed into updates
-    // Parse added dependencies (lines starting with +) using matchAll
-    const addedRegex = new RegExp(DEPENDENCY_DIFF_PATTERNS.ADDED.source, "gm");
-    const addedDeps = new Map(
-      [...patch.matchAll(addedRegex)]
-        .filter(([, name]) => !name.startsWith("//") && !EXCLUDED_PACKAGE_JSON_FIELDS.has(name))
-        .map(([, name, version]): [string, string] => [name, version])
-    );
-
-    // Parse removed dependencies (lines starting with -) using matchAll
-    const removedRegex = new RegExp(DEPENDENCY_DIFF_PATTERNS.REMOVED.source, "gm");
-    const removedDeps = new Map(
-      [...patch.matchAll(removedRegex)]
-        .filter(([, name]) => !name.startsWith("//") && !EXCLUDED_PACKAGE_JSON_FIELDS.has(name))
-        .map(([, name, version]): [string, string] => [name, version])
-    );
-
-    // Build changes list: merge added + removed into updates
-    // Find dependencies that are both added and removed (= updates)
-    const updatedDeps = [...addedDeps.entries()]
-      .filter(([name]) => removedDeps.has(name))
-      .map(([name, newVersion]) => ({
-        name,
-        type: "updated" as const,
-        oldVersion: removedDeps.get(name)!,
-        newVersion,
-      }));
-
-    // Get names of updated deps to exclude from added/removed
-    const updatedNames = new Set(updatedDeps.map((d) => d.name));
-
-    // Remaining added deps (not updated)
-    const addedOnly = [...addedDeps.entries()]
-      .filter(([name]) => !updatedNames.has(name))
-      .map(([name, newVersion]) => ({ name, type: "added" as const, newVersion }));
-
-    // Remaining removed deps (not updated)
-    const removedOnly = [...removedDeps.entries()]
-      .filter(([name]) => !updatedNames.has(name))
-      .map(([name, oldVersion]) => ({ name, type: "removed" as const, oldVersion }));
-
-    const changes: DependencyChange[] = [...updatedDeps, ...addedOnly, ...removedOnly];
-
-    logger.info("Parsed dependency changes", {
-      prNumber,
-      count: changes.length,
-    });
-
-    return changes;
-  } catch (error) {
-    logger.warn("Failed to fetch dependency changes", {
-      prNumber,
-      error: getErrorMessage(error),
-    });
-    return [];
-  }
-};
-
-/**
- * Fetch build config changes from PR.
- *
- * Detects changes to build configuration files like tsconfig.json,
- * webpack.config.js, etc.
+ * Returns file paths for AI to analyze. AI will determine:
+ * - Which are dependency files (any format)
+ * - Which are build config files (any language)
+ * - Which are source files relevant to the failure
  *
  * @param installationId - GitHub App installation ID
  * @param owner - Repository owner
  * @param repo - Repository name
  * @param prNumber - Pull request number
- * @returns Array of build config changes
+ * @returns Array of changed file paths
  */
-export const fetchBuildConfigChanges = async (
+export const fetchChangedFiles = async (
   installationId: number,
   owner: string,
   repo: string,
   prNumber: number
-): Promise<BuildConfigChange[]> => {
+): Promise<string[]> => {
   try {
     const octokit = await getOctokit(installationId);
 
@@ -334,26 +248,16 @@ export const fetchBuildConfigChanges = async (
       per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
     });
 
-    const buildConfigSet = new Set<string>(BUILD_CONFIG_FILES);
+    const filePaths = files.map((file) => file.filename);
 
-    const changes: BuildConfigChange[] = files
-      .filter((file) => {
-        const filename = file.filename.split("/").pop() || file.filename;
-        return buildConfigSet.has(filename) && file.patch;
-      })
-      .map((file) => ({
-        file: file.filename,
-        diff: truncateWithContext(file.patch!, LOG_PARSING_LIMITS.MAX_BUILD_CONFIG_DIFF_SIZE),
-      }));
-
-    logger.info("Fetched build config changes", {
+    logger.info("Fetched changed files", {
       prNumber,
-      count: changes.length,
+      fileCount: filePaths.length,
     });
 
-    return changes;
+    return filePaths;
   } catch (error) {
-    logger.warn("Failed to fetch build config changes", {
+    logger.warn("Failed to fetch changed files", {
       prNumber,
       error: getErrorMessage(error),
     });

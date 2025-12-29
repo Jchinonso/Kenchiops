@@ -205,6 +205,28 @@ export interface LLMCodeAnnotation {
   title?: string;
 }
 
+/**
+ * Dependency change detected by AI from PR diff.
+ * Matches any package manager format (npm, pip, cargo, go, etc.)
+ */
+export interface LLMDetectedDependencyChange {
+  readonly name: string;
+  readonly type: "added" | "removed" | "updated";
+  readonly oldVersion?: string;
+  readonly newVersion?: string;
+  readonly ecosystem?: string; // npm, pip, cargo, go, maven, etc.
+}
+
+/**
+ * Build config change detected by AI from PR diff.
+ * Works with any build system (webpack, tsconfig, pyproject, Makefile, etc.)
+ */
+export interface LLMDetectedBuildConfigChange {
+  readonly file: string;
+  readonly changeType: "added" | "modified" | "deleted";
+  readonly summary: string; // Brief description of what changed
+}
+
 export interface LLMAnalysisResult {
   eventId: string;
   summary: string;
@@ -222,6 +244,12 @@ export interface LLMAnalysisResult {
   analyzedAt: string;
   llmModel?: string;
   processingTime?: number;
+
+  // AI-extracted structured data (Phase 3 - Language Agnostic)
+  /** Dependency changes detected from PR diff (any package manager format) */
+  detectedDependencyChanges?: LLMDetectedDependencyChange[];
+  /** Build config changes detected from PR diff (any build system) */
+  detectedBuildConfigChanges?: LLMDetectedBuildConfigChange[];
 }
 
 // ==================== Action Proposal Types ====================

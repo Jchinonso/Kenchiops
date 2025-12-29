@@ -6,8 +6,14 @@
  * and recommended actions with interactive approve/reject buttons.
  */
 
-import type { AggregatedFailures, AnalyzedFailure, RecommendedAction } from "@kenchi/shared";
-import { deduplicateByKey, UI_EMOJI } from "@kenchi/shared";
+import type {
+  AggregatedFailures,
+  AnalyzedFailure,
+  RecommendedAction,
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
+} from "@kenchi/shared";
+import { deduplicateByKey, UI_EMOJI, DEPENDENCY_EMOJI_MAP } from "@kenchi/shared";
 import {
   DISPLAY_LIMITS,
   getPriorityEmoji,
@@ -150,6 +156,28 @@ const extractUniqueCauses = (failures: readonly AnalyzedFailure[]): string[] =>
   deduplicateByKey(
     failures.map((failure) => failure.identifiedCause ?? failure.analysis ?? "").filter(Boolean),
     (cause) => cause
+  );
+
+/**
+ * Consolidate detected dependency changes across failures
+ */
+const consolidateDependencyChanges = (
+  failures: readonly AnalyzedFailure[]
+): LLMDetectedDependencyChange[] =>
+  deduplicateByKey(
+    failures.flatMap((failure) => failure.detectedDependencyChanges ?? []),
+    (dep) => `${dep.name}|${dep.type}|${dep.ecosystem ?? ""}`
+  );
+
+/**
+ * Consolidate detected build config changes across failures
+ */
+const consolidateBuildConfigChanges = (
+  failures: readonly AnalyzedFailure[]
+): LLMDetectedBuildConfigChange[] =>
+  deduplicateByKey(
+    failures.flatMap((failure) => failure.detectedBuildConfigChanges ?? []),
+    (cfg) => cfg.file
   );
 
 // ==================== Block Builders ====================
@@ -402,6 +430,75 @@ const buildPRLinkBlock = (
 };
 
 /**
+ * Build dependency changes block
+ */
+const buildDependencyChangesBlock = (
+  deps: readonly LLMDetectedDependencyChange[]
+): SlackTextBlock | null => {
+  if (deps.length === 0) return null;
+
+  const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
+  const lines = deps
+    .slice(0, displayCount)
+    .map((dep) => {
+      const emoji = DEPENDENCY_EMOJI_MAP[dep.type] ?? "📦";
+      const version =
+        dep.oldVersion && dep.newVersion
+          ? ` (${dep.oldVersion} → ${dep.newVersion})`
+          : dep.newVersion
+            ? ` (${dep.newVersion})`
+            : "";
+      const ecosystem = dep.ecosystem ? ` [${dep.ecosystem}]` : "";
+      return `   • ${emoji} \`${dep.name}\`${version}${ecosystem}`;
+    })
+    .join("\n");
+
+  const moreText =
+    deps.length > displayCount ? `\n   _...and ${deps.length - displayCount} more_` : "";
+
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `${UI_EMOJI.depUpdated ?? "📦"} *Dependency Changes (${deps.length}):*\n${lines}${moreText}`,
+      },
+    ],
+  };
+};
+
+/**
+ * Build build config changes block
+ */
+const buildConfigChangesBlock = (
+  configs: readonly LLMDetectedBuildConfigChange[]
+): SlackTextBlock | null => {
+  if (configs.length === 0) return null;
+
+  const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
+  const lines = configs
+    .slice(0, displayCount)
+    .map((cfg) => {
+      const emoji = cfg.changeType === "added" ? "➕" : cfg.changeType === "deleted" ? "➖" : "📝";
+      return `   • ${emoji} \`${cfg.file}\` — ${cfg.summary}`;
+    })
+    .join("\n");
+
+  const moreText =
+    configs.length > displayCount ? `\n   _...and ${configs.length - displayCount} more_` : "";
+
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `🔧 *Build Config Changes (${configs.length}):*\n${lines}${moreText}`,
+      },
+    ],
+  };
+};
+
+/**
  * Build recommended actions summary blocks
  */
 const buildActionsSummaryBlocks = (actions: readonly RecommendedAction[]): SlackTextBlock[] => {
@@ -438,6 +535,9 @@ export const buildConsolidatedSlackPayload = (
   const testFailures = consolidateTestFailures(failures);
   const annotations = consolidateAnnotations(failures);
   const causes = extractUniqueCauses(failures);
+  // AI-extracted context (Phase 4 - Language Agnostic)
+  const dependencyChanges = consolidateDependencyChanges(failures);
+  const buildConfigChanges = consolidateBuildConfigChanges(failures);
 
   // Build all block sections
   const headerBlocks = buildHeaderBlocks(repository, commitSha, prContext, confidencePercent);
@@ -445,6 +545,9 @@ export const buildConsolidatedSlackPayload = (
   const testFailuresBlock = buildTestFailuresBlock(testFailures);
   const annotationsBlock = buildAnnotationsBlock(annotations);
   const rootCauseBlock = buildRootCauseBlock(causes);
+  // AI-extracted blocks
+  const dependencyBlock = buildDependencyChangesBlock(dependencyChanges);
+  const configBlock = buildConfigChangesBlock(buildConfigChanges);
 
   // Combine blocks using array spread with filter for optional blocks
   const blocks: SlackBlock[] = [
@@ -459,6 +562,8 @@ export const buildConsolidatedSlackPayload = (
     ...(rootCauseBlock ? [rootCauseBlock] : []),
     ...(testFailuresBlock ? [testFailuresBlock] : []),
     ...(annotationsBlock ? [annotationsBlock] : []),
+    ...(dependencyBlock ? [dependencyBlock] : []),
+    ...(configBlock ? [configBlock] : []),
     ...buildActionsSummaryBlocks(mergedActions),
     ...buildActionBlocks(mergedActions, aggregation),
     { type: "divider" },
