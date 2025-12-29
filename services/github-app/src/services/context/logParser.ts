@@ -57,6 +57,65 @@ const JEST_PATTERNS: readonly RegExp[] = [
 const MOCHA_PATTERN = /^\s*\d+\)\s+(.+?)[\r\n]+([\s\S]+?)(?=^\s*\d+\)|$)/gm;
 
 /**
+ * Python pytest failure patterns.
+ * Matches: FAILED test_file.py::test_name - AssertionError
+ * And: E       assert 1 == 2
+ */
+const PYTEST_PATTERNS: readonly RegExp[] = [
+  // FAILED test_file.py::TestClass::test_method - Error
+  /FAILED\s+(\S+\.py::[\w:]+)\s*[-–]\s*([\s\S]+?)(?=FAILED\s+|PASSED\s+|={3,}|$)/gm,
+  // E       AssertionError: assert x == y
+  /(\S+\.py):(\d+):\s+(?:in\s+\w+)?\s*[\r\n]+\s*(E\s+[\s\S]+?)(?=\S+\.py:\d+:|FAILED|PASSED|={3,}|$)/gm,
+];
+
+/**
+ * Go test failure patterns.
+ * Matches: --- FAIL: TestName (0.00s)
+ * And: file_test.go:123: Error message
+ */
+const GO_TEST_PATTERNS: readonly RegExp[] = [
+  // --- FAIL: TestName (0.00s)
+  /---\s+FAIL:\s+(\w+(?:\/\w+)*)\s+\(\d+\.\d+s\)\s*([\s\S]+?)(?=---\s+(?:FAIL|PASS|RUN):|FAIL\s+|ok\s+|$)/gm,
+  // file_test.go:123: error message
+  /(\w+_test\.go):(\d+):\s+(.+)/gm,
+];
+
+/**
+ * Ruby RSpec failure patterns.
+ * Matches: 1) ClassName#method_name
+ * And: Failure/Error: expect(x).to eq(y)
+ */
+const RSPEC_PATTERNS: readonly RegExp[] = [
+  // 1) ClassName#method_name or 1) Description text
+  /^\s*\d+\)\s+(.+?)[\r\n]+\s*(Failure\/Error:[\s\S]+?)(?=^\s*\d+\)|Finished in|$)/gm,
+  // ./spec/file_spec.rb:123:in `method'
+  /([\w/]+_spec\.rb):(\d+)(?::\s*in\s+`[^']+')?\s*(.+)?/gm,
+];
+
+/**
+ * Java JUnit failure patterns.
+ * Matches: org.junit.ComparisonFailure: expected:<[x]> but was:<[y]>
+ */
+const JUNIT_PATTERNS: readonly RegExp[] = [
+  // TestClass.testMethod() failed
+  /(\w+(?:\.\w+)*\.test\w+)\s*\([^)]*\)\s+(?:Time elapsed:.*)?FAILURE[\r\n]+\s*([\s\S]+?)(?=\w+\.\w+\(|Tests run:|$)/gm,
+  // at package.Class.method(File.java:123)
+  /at\s+([\w.]+)\(([\w]+\.java):(\d+)\)/gm,
+];
+
+/**
+ * Rust cargo test failure patterns.
+ * Matches: ---- test_name stdout ----
+ * And: thread 'test_name' panicked at 'assertion failed'
+ */
+const RUST_TEST_PATTERNS: readonly RegExp[] = [
+  // ---- test_name stdout ----
+  /----\s+([\w:]+)\s+stdout\s+----\s*([\s\S]+?)(?=----\s+\w+|test result:|$)/gm,
+  // thread 'test_name' panicked at 'message', src/file.rs:123
+  /thread\s+'([^']+)'\s+panicked\s+at\s+'([^']+)'(?:,\s*([\w/]+\.rs):(\d+))?/gm,
+];
+
+/**
  * Pattern to extract file path and line number from error stack trace.
  * Captures: [1] = file path, [2] = line number
  */
@@ -303,6 +362,66 @@ const extractMochaMatch = (match: RegExpExecArray, _logs?: string): PatternMatch
 });
 
 /**
+ * Extract Python pytest failure from regex match.
+ */
+const extractPytestMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
+  // Handle both FAILED and file:line patterns
+  const testName = match[1]?.trim() || "Unknown test";
+  const error = (match[2] || match[3] || "Test failed").trim().slice(0, 500);
+  const lineMatch = testName.match(/:(\d+)$/);
+  return {
+    testName: testName.replace(/::\w+$/, "").slice(0, 200),
+    error,
+    file: testName.split("::")[0],
+    line: lineMatch ? parseInt(lineMatch[1], 10) : undefined,
+  };
+};
+
+/**
+ * Extract Go test failure from regex match.
+ */
+const extractGoTestMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
+  const testName = match[1]?.trim() || "Unknown test";
+  const error = (match[2] || match[3] || "Test failed").trim().slice(0, 500);
+  const file = match[1]?.includes("_test.go") ? match[1] : undefined;
+  const line = match[2] ? parseInt(match[2], 10) : undefined;
+  return { testName: testName.slice(0, 200), error, file, line };
+};
+
+/**
+ * Extract Ruby RSpec failure from regex match.
+ */
+const extractRspecMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
+  const testName = match[1]?.trim() || "Unknown test";
+  const error = (match[2] || match[3] || "Test failed").trim().slice(0, 500);
+  const file = match[1]?.includes("_spec.rb") ? match[1] : undefined;
+  const line = match[2] ? parseInt(match[2], 10) : undefined;
+  return { testName: testName.slice(0, 200), error, file, line };
+};
+
+/**
+ * Extract Java JUnit failure from regex match.
+ */
+const extractJunitMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
+  const testName = match[1]?.trim() || "Unknown test";
+  const error = (match[2] || "Test failed").trim().slice(0, 500);
+  const file = match[2]?.includes(".java") ? match[2] : undefined;
+  const line = match[3] ? parseInt(match[3], 10) : undefined;
+  return { testName: testName.slice(0, 200), error, file, line };
+};
+
+/**
+ * Extract Rust cargo test failure from regex match.
+ */
+const extractRustMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
+  const testName = match[1]?.trim() || "Unknown test";
+  const error = (match[2] || "Test failed").trim().slice(0, 500);
+  const file = match[3];
+  const line = match[4] ? parseInt(match[4], 10) : undefined;
+  return { testName: testName.slice(0, 200), error, file, line };
+};
+
+/**
  * Test framework pattern configuration.
  */
 interface FrameworkPattern {
@@ -313,10 +432,17 @@ interface FrameworkPattern {
 
 /**
  * Framework patterns in order of precedence.
+ * Supports: JavaScript (Jest, Vitest, Mocha), Python (pytest),
+ * Go, Ruby (RSpec), Java (JUnit), Rust (cargo test)
  */
 const FRAMEWORK_PATTERNS: readonly FrameworkPattern[] = [
   { patterns: JEST_PATTERNS, extractor: extractJestMatch, name: "jest" },
   { patterns: [MOCHA_PATTERN], extractor: extractMochaMatch, name: "mocha" },
+  { patterns: PYTEST_PATTERNS, extractor: extractPytestMatch, name: "pytest" },
+  { patterns: GO_TEST_PATTERNS, extractor: extractGoTestMatch, name: "go" },
+  { patterns: RSPEC_PATTERNS, extractor: extractRspecMatch, name: "rspec" },
+  { patterns: JUNIT_PATTERNS, extractor: extractJunitMatch, name: "junit" },
+  { patterns: RUST_TEST_PATTERNS, extractor: extractRustMatch, name: "rust" },
 ];
 
 /**
