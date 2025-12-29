@@ -290,10 +290,10 @@ const handleUnconfigure: SubcommandHandler = async ({ command, respond, client }
     const view =
       mappings.length > 0
         ? buildUnconfigureModal(
-            mappings.map((m) => ({
-              repository: m.repository,
-              channelId: m.slackChannelId,
-              channelName: m.slackChannelName,
+            mappings.map((mapping) => ({
+              repository: mapping.repository,
+              channelId: mapping.slackChannelId,
+              channelName: mapping.slackChannelName,
             }))
           )
         : buildNoConfiguredReposModal();

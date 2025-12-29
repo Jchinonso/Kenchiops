@@ -212,7 +212,9 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
   );
 
   const sourceFilesResults = await Promise.all(sourceFilePromises);
-  const sourceFiles = sourceFilesResults.filter((f): f is NonNullable<typeof f> => f !== null);
+  const sourceFiles = sourceFilesResults.filter(
+    (sourceFile): sourceFile is NonNullable<typeof sourceFile> => sourceFile !== null
+  );
 
   // Detailed logging of gathered context for debugging
   logger.info("=== GATHERED CONTEXT FROM GITHUB ===", {
@@ -229,28 +231,31 @@ export const gatherEnrichedContext = async (webhook: CheckRunWebhook): Promise<E
 
   logger.info("Context: Annotations from GitHub", {
     count: annotations.length,
-    annotations: annotations.map((a) => ({
-      path: a.path,
-      line: a.startLine,
-      level: a.level,
-      messagePreview: a.message.substring(0, 80),
+    annotations: annotations.map((annotation) => ({
+      path: annotation.path,
+      line: annotation.startLine,
+      level: annotation.level,
+      messagePreview: annotation.message.substring(0, 80),
     })),
   });
 
   logger.info("Context: Test Failures Parsed from Logs", {
     count: testFailures.length,
-    failures: testFailures.map((t) => ({
-      name: t.testName,
-      file: t.file ?? "(unknown)",
+    failures: testFailures.map((testFailure) => ({
+      name: testFailure.testName,
+      file: testFailure.file ?? "(unknown)",
     })),
   });
 
   logger.info("Context: Source Files Fetched", {
     count: sourceFiles.length,
-    files: sourceFiles.map((f) => ({
-      path: f.path,
-      lines: f.startLine && f.endLine ? `${f.startLine}-${f.endLine}` : "full",
-      contentLength: f.content.length,
+    files: sourceFiles.map((sourceFile) => ({
+      path: sourceFile.path,
+      lines:
+        sourceFile.startLine && sourceFile.endLine
+          ? `${sourceFile.startLine}-${sourceFile.endLine}`
+          : "full",
+      contentLength: sourceFile.content.length,
     })),
   });
 

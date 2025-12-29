@@ -79,10 +79,10 @@ const buildMessagePayload = (
   if (attachments) {
     return {
       fallbackText: message ?? "CI Failure Analysis",
-      attachments: attachments.map((a) => ({
-        color: a.color ?? "",
-        fallback: a.fallback ?? "",
-        blocks: a.blocks ? ([...a.blocks] as SlackBlock[]) : [],
+      attachments: attachments.map((attachment) => ({
+        color: attachment.color ?? "",
+        fallback: attachment.fallback ?? "",
+        blocks: attachment.blocks ? ([...attachment.blocks] as SlackBlock[]) : [],
       })),
     };
   }
@@ -375,14 +375,18 @@ export const broadcastMessage = async (
       })
     );
 
-    const channelResults = results.map((r) =>
-      r.status === "fulfilled"
-        ? r.value
+    const channelResults = results.map((result) =>
+      result.status === "fulfilled"
+        ? result.value
         : { name: "unknown", id: "unknown", status: "failed" as const }
     );
 
-    const successCount = channelResults.filter((r) => r.status === "sent").length;
-    const failedCount = channelResults.filter((r) => r.status === "failed").length;
+    const successCount = channelResults.filter(
+      (channelResult) => channelResult.status === "sent"
+    ).length;
+    const failedCount = channelResults.filter(
+      (channelResult) => channelResult.status === "failed"
+    ).length;
     const status = failedCount === 0 ? "sent" : successCount > 0 ? "partial" : "error";
 
     logger.info("Broadcast completed", {

@@ -441,7 +441,9 @@ export const createCheckRunWithAnnotations = async (
       name,
       head_sha: headSha,
       status: "completed",
-      conclusion: annotations.some((a) => a.annotation_level === "failure") ? "failure" : "neutral",
+      conclusion: annotations.some((annotation) => annotation.annotation_level === "failure")
+        ? "failure"
+        : "neutral",
       output: {
         title: "KenchiOps CI Analysis",
         summary,
