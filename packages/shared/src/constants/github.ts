@@ -140,6 +140,9 @@ export const GITHUB_CONCLUSION = {
   CANCELLED: "cancelled",
   SKIPPED: "skipped",
   TIMED_OUT: "timed_out",
+  STALE: "stale",
+  NEUTRAL: "neutral",
+  ACTION_REQUIRED: "action_required",
 } as const;
 
 /**
