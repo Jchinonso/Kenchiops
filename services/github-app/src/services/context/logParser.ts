@@ -1,7 +1,10 @@
 /**
  * Log parsing utilities.
  *
- * Extracts file references, test failures, and linting issues from CI workflow logs.
+ * Provides minimal preprocessing for CI logs before AI analysis.
+ * Framework-specific test failure detection is now handled by AI.
+ *
+ * @see docs/LANGUAGE_AGNOSTIC_MIGRATION.md
  */
 
 import {
@@ -34,93 +37,6 @@ const stripAnsiCodes = (text: string): string =>
 const stripCITimestamps = (text: string): string =>
   text.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/gm, "");
 
-// ==================== Test Failure Patterns ====================
-
-/**
- * Jest/Vitest test failure patterns.
- * These patterns match after ANSI codes are stripped.
- */
-const JEST_PATTERNS: readonly RegExp[] = [
-  // ● TestSuite › SubSuite › test name (Jest format with bullet point)
-  /●\s+([^\n]+?)[\r\n]+\s*([\s\S]+?)(?=\s*●|\s*PASS|\s*FAIL|Test Suites:|$)/gm,
-  // ✕ test name (123 ms) followed by error
-  /[✕✗×]\s+(.+?)\s*(?:\(\d+\s*m?s\))?[\r\n]+\s*((?:Expected|Received|Error|at ).+?)(?=[\r\n]+\s*[✓✕✗×]|$)/gms,
-  // FAIL file.test.ts followed by ● Test suite failed to run
-  /FAIL\s+(\S+\.(?:test|spec)\.\w+)[\s\S]*?●\s+Test suite failed to run[\r\n]+\s*([\s\S]+?)(?=\s*FAIL\s|\s*PASS\s|Test Suites:|$)/gm,
-  // Generic test failure with expect().toX pattern
-  /●\s+([^\n]+?)[\r\n]+[\s\S]*?(expect\(.+?\)\.to\w+[\s\S]*?)(?=\s*●|\s*at Object|$)/gm,
-];
-
-/**
- * Mocha test failure pattern.
- */
-const MOCHA_PATTERN = /^\s*\d+\)\s+(.+?)[\r\n]+([\s\S]+?)(?=^\s*\d+\)|$)/gm;
-
-/**
- * Python pytest failure patterns.
- * Matches: FAILED test_file.py::test_name - AssertionError
- * And: E       assert 1 == 2
- */
-const PYTEST_PATTERNS: readonly RegExp[] = [
-  // FAILED test_file.py::TestClass::test_method - Error
-  /FAILED\s+(\S+\.py::[\w:]+)\s*[-–]\s*([\s\S]+?)(?=FAILED\s+|PASSED\s+|={3,}|$)/gm,
-  // E       AssertionError: assert x == y
-  /(\S+\.py):(\d+):\s+(?:in\s+\w+)?\s*[\r\n]+\s*(E\s+[\s\S]+?)(?=\S+\.py:\d+:|FAILED|PASSED|={3,}|$)/gm,
-];
-
-/**
- * Go test failure patterns.
- * Matches: --- FAIL: TestName (0.00s)
- * And: file_test.go:123: Error message
- */
-const GO_TEST_PATTERNS: readonly RegExp[] = [
-  // --- FAIL: TestName (0.00s)
-  /---\s+FAIL:\s+(\w+(?:\/\w+)*)\s+\(\d+\.\d+s\)\s*([\s\S]+?)(?=---\s+(?:FAIL|PASS|RUN):|FAIL\s+|ok\s+|$)/gm,
-  // file_test.go:123: error message
-  /(\w+_test\.go):(\d+):\s+(.+)/gm,
-];
-
-/**
- * Ruby RSpec failure patterns.
- * Matches: 1) ClassName#method_name
- * And: Failure/Error: expect(x).to eq(y)
- */
-const RSPEC_PATTERNS: readonly RegExp[] = [
-  // 1) ClassName#method_name or 1) Description text
-  /^\s*\d+\)\s+(.+?)[\r\n]+\s*(Failure\/Error:[\s\S]+?)(?=^\s*\d+\)|Finished in|$)/gm,
-  // ./spec/file_spec.rb:123:in `method'
-  /([\w/]+_spec\.rb):(\d+)(?::\s*in\s+`[^']+')?\s*(.+)?/gm,
-];
-
-/**
- * Java JUnit failure patterns.
- * Matches: org.junit.ComparisonFailure: expected:<[x]> but was:<[y]>
- */
-const JUNIT_PATTERNS: readonly RegExp[] = [
-  // TestClass.testMethod() failed
-  /(\w+(?:\.\w+)*\.test\w+)\s*\([^)]*\)\s+(?:Time elapsed:.*)?FAILURE[\r\n]+\s*([\s\S]+?)(?=\w+\.\w+\(|Tests run:|$)/gm,
-  // at package.Class.method(File.java:123)
-  /at\s+([\w.]+)\(([\w]+\.java):(\d+)\)/gm,
-];
-
-/**
- * Rust cargo test failure patterns.
- * Matches: ---- test_name stdout ----
- * And: thread 'test_name' panicked at 'assertion failed'
- */
-const RUST_TEST_PATTERNS: readonly RegExp[] = [
-  // ---- test_name stdout ----
-  /----\s+([\w:]+)\s+stdout\s+----\s*([\s\S]+?)(?=----\s+\w+|test result:|$)/gm,
-  // thread 'test_name' panicked at 'message', src/file.rs:123
-  /thread\s+'([^']+)'\s+panicked\s+at\s+'([^']+)'(?:,\s*([\w/]+\.rs):(\d+))?/gm,
-];
-
-/**
- * Pattern to extract file path and line number from error stack trace.
- * Captures: [1] = file path, [2] = line number
- */
-const STACK_FILE_PATTERN = /at\s+.*?\(([^)]+\.(?:ts|js|tsx|jsx)):(\d+):\d+\)/;
-
 // ==================== File Reference Extraction ====================
 
 /**
@@ -141,7 +57,7 @@ const extractMatchesFromPattern = (logs: string, pattern: RegExp): FileReference
 /**
  * Extract file paths and line numbers from error logs.
  *
- * Matches patterns like:
+ * Matches universal patterns like:
  * - src/utils.ts:42
  * - /path/to/file.js:123:45
  * - at Object.<anonymous> (src/index.ts:10:5)
@@ -200,303 +116,60 @@ export const truncateWithContext = (content: string, maxSize: number): string =>
 // ==================== Test Failure Extraction ====================
 
 /**
- * Result of matching a test failure pattern.
+ * Universal test failure indicator patterns.
+ * These are minimal patterns that work across all test frameworks.
+ * Detailed extraction is handled by AI.
  */
-interface PatternMatch {
-  readonly testName: string;
-  readonly error: string;
-  readonly file?: string;
-  readonly line?: number;
-}
-
-/**
- * Extract matches from logs using a regex pattern.
- * Uses matchAll() for functional iteration with slice for limiting results.
- *
- * @param logs - Log content to search
- * @param pattern - Regex pattern to match
- * @param maxMatches - Maximum number of matches to return
- * @param extractMatch - Function to extract data from each match
- * @returns Array of extracted matches
- */
-const extractPatternMatches = (
-  logs: string,
-  pattern: RegExp,
-  maxMatches: number,
-  extractMatch: (match: RegExpExecArray, logs?: string) => PatternMatch
-): PatternMatch[] => {
-  const regex = new RegExp(pattern.source, pattern.flags);
-
-  return [...logs.matchAll(regex)]
-    .slice(0, maxMatches)
-    .map((match) => extractMatch(match as RegExpExecArray, logs));
-};
-
-/**
- * Build a map of test names to their source files from Jest output.
- * Parses FAIL blocks to associate tests with their file paths.
- * Uses matchAll() for functional iteration over test names.
- */
-const buildTestFileMap = (logs: string): Map<string, string> => {
-  // Split logs into FAIL blocks
-  const failBlocks = logs.split(/(?=FAIL\s+\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/);
-
-  // Process blocks and build entries as [testName, filePath] pairs
-  const entries = failBlocks.flatMap((block) => {
-    // Extract file from FAIL line
-    const failMatch = block.match(/^FAIL\s+(\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/);
-    if (!failMatch) return [];
-
-    const filePath = failMatch[1];
-    const testPattern = /●\s+([^\n]+)/g;
-
-    // Use matchAll to find all test names in this block
-    return [...block.matchAll(testPattern)]
-      .map((match) =>
-        match[1]
-          .trim()
-          .replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/g, "")
-          .trim()
-      )
-      .filter((testName) => testName.length > 0)
-      .map((testName): [string, string] => [testName.toLowerCase(), filePath]);
-  });
-
-  return new Map(entries);
-};
-
-// Cache for test file map to avoid rebuilding for each match
-let cachedTestFileMap: Map<string, string> | null = null;
-let cachedLogsHash = "";
-
-/**
- * Get or build the test file map, with simple caching.
- */
-const getTestFileMap = (logs: string): Map<string, string> => {
-  const logsHash = logs.slice(0, 1000) + logs.length; // Simple hash
-  if (cachedLogsHash !== logsHash) {
-    cachedTestFileMap = buildTestFileMap(logs);
-    cachedLogsHash = logsHash;
-  }
-  return cachedTestFileMap!;
-};
-
-/**
- * Pattern to find file:line anywhere in text (more flexible than stack trace)
- * Matches: file.test.ts:123 or file.ts:45
- */
-const FILE_LINE_PATTERN = /(\S+\.(?:test|spec)?\.?(?:ts|js|tsx|jsx)):(\d+)/;
-
-/**
- * Extract line number for a specific file from error text
- */
-const extractLineForFile = (error: string, filePath: string): number | undefined => {
-  // Look for the file path followed by :lineNumber
-  const escapedPath = filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`${escapedPath}:(\\d+)`);
-  const match = error.match(pattern);
-  return match?.[1] ? parseInt(match[1], 10) : undefined;
-};
-
-/**
- * Extract Jest/Vitest test failure from regex match.
- * Handles both ● bullet format and ✕ checkmark format.
- */
-const extractJestMatch = (match: RegExpExecArray, logs?: string): PatternMatch => {
-  const rawTestName = match[1]?.trim() || "Unknown test";
-  // Clean up test name - remove timestamps and extra whitespace
-  const testName = rawTestName
-    .replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/g, "")
-    .trim()
-    .slice(0, 200);
-
-  // Get FULL error content for line number extraction (before truncation)
-  const fullError = match[2]?.trim() || match[3]?.trim() || "Test failed";
-  const error = fullError.slice(0, 500);
-
-  // Try to extract file and line from error stack trace (use full error)
-  const fileMatch = fullError.match(STACK_FILE_PATTERN);
-  const fileFromStack = fileMatch?.[1];
-  const lineFromStack = fileMatch?.[2] ? parseInt(fileMatch[2], 10) : undefined;
-
-  // Also try to extract file from test name if it looks like a file path
-  const fileFromName = testName.match(/(\S+\.(?:test|spec)\.(?:ts|js|tsx|jsx))/)?.[1];
-
-  // Try to get file from the FAIL block context if available
-  let fileFromContext: string | undefined;
-  if (logs) {
-    const testFileMap = getTestFileMap(logs);
-    fileFromContext = testFileMap.get(testName.toLowerCase());
-  }
-
-  // Determine final file
-  const file = fileFromContext || fileFromStack || fileFromName;
-
-  // Get line number - try to match the specific file path in the full error
-  let line = lineFromStack;
-  if (file && !line) {
-    line = extractLineForFile(fullError, file);
-  }
-  // Fallback: try to find any file:line pattern in the error
-  if (!line) {
-    const anyLineMatch = fullError.match(FILE_LINE_PATTERN);
-    if (anyLineMatch?.[2]) {
-      line = parseInt(anyLineMatch[2], 10);
-    }
-  }
-
-  return {
-    testName: fileFromName ? testName.replace(fileFromName, "").trim() || testName : testName,
-    error,
-    file,
-    line,
-  };
-};
-
-/**
- * Extract Mocha test failure from regex match.
- */
-const extractMochaMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => ({
-  testName: match[1].trim().slice(0, 200),
-  error: match[2].trim().slice(0, 500),
-});
-
-/**
- * Extract Python pytest failure from regex match.
- */
-const extractPytestMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
-  // Handle both FAILED and file:line patterns
-  const testName = match[1]?.trim() || "Unknown test";
-  const error = (match[2] || match[3] || "Test failed").trim().slice(0, 500);
-  const lineMatch = testName.match(/:(\d+)$/);
-  return {
-    testName: testName.replace(/::\w+$/, "").slice(0, 200),
-    error,
-    file: testName.split("::")[0],
-    line: lineMatch ? parseInt(lineMatch[1], 10) : undefined,
-  };
-};
-
-/**
- * Extract Go test failure from regex match.
- */
-const extractGoTestMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
-  const testName = match[1]?.trim() || "Unknown test";
-  const error = (match[2] || match[3] || "Test failed").trim().slice(0, 500);
-  const file = match[1]?.includes("_test.go") ? match[1] : undefined;
-  const line = match[2] ? parseInt(match[2], 10) : undefined;
-  return { testName: testName.slice(0, 200), error, file, line };
-};
-
-/**
- * Extract Ruby RSpec failure from regex match.
- */
-const extractRspecMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
-  const testName = match[1]?.trim() || "Unknown test";
-  const error = (match[2] || match[3] || "Test failed").trim().slice(0, 500);
-  const file = match[1]?.includes("_spec.rb") ? match[1] : undefined;
-  const line = match[2] ? parseInt(match[2], 10) : undefined;
-  return { testName: testName.slice(0, 200), error, file, line };
-};
-
-/**
- * Extract Java JUnit failure from regex match.
- */
-const extractJunitMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
-  const testName = match[1]?.trim() || "Unknown test";
-  const error = (match[2] || "Test failed").trim().slice(0, 500);
-  const file = match[2]?.includes(".java") ? match[2] : undefined;
-  const line = match[3] ? parseInt(match[3], 10) : undefined;
-  return { testName: testName.slice(0, 200), error, file, line };
-};
-
-/**
- * Extract Rust cargo test failure from regex match.
- */
-const extractRustMatch = (match: RegExpExecArray, _logs?: string): PatternMatch => {
-  const testName = match[1]?.trim() || "Unknown test";
-  const error = (match[2] || "Test failed").trim().slice(0, 500);
-  const file = match[3];
-  const line = match[4] ? parseInt(match[4], 10) : undefined;
-  return { testName: testName.slice(0, 200), error, file, line };
-};
-
-/**
- * Test framework pattern configuration.
- */
-interface FrameworkPattern {
-  readonly patterns: readonly RegExp[];
-  readonly extractor: (match: RegExpExecArray) => PatternMatch;
-  readonly name: string;
-}
-
-/**
- * Framework patterns in order of precedence.
- * Supports: JavaScript (Jest, Vitest, Mocha), Python (pytest),
- * Go, Ruby (RSpec), Java (JUnit), Rust (cargo test)
- */
-const FRAMEWORK_PATTERNS: readonly FrameworkPattern[] = [
-  { patterns: JEST_PATTERNS, extractor: extractJestMatch, name: "jest" },
-  { patterns: [MOCHA_PATTERN], extractor: extractMochaMatch, name: "mocha" },
-  { patterns: PYTEST_PATTERNS, extractor: extractPytestMatch, name: "pytest" },
-  { patterns: GO_TEST_PATTERNS, extractor: extractGoTestMatch, name: "go" },
-  { patterns: RSPEC_PATTERNS, extractor: extractRspecMatch, name: "rspec" },
-  { patterns: JUNIT_PATTERNS, extractor: extractJunitMatch, name: "junit" },
-  { patterns: RUST_TEST_PATTERNS, extractor: extractRustMatch, name: "rust" },
-];
-
-/**
- * Try to extract failures from a framework's patterns.
- * Extracts ALL matches and deduplicates by test name - no arbitrary limits.
- */
-const tryExtractFromFramework = (
-  logs: string,
-  framework: FrameworkPattern
-): TestFailure[] | null => {
-  // Collect ALL matches from ALL patterns (no per-pattern limit)
-  const allMatches = framework.patterns.flatMap((pattern) =>
-    extractPatternMatches(logs, pattern, Number.MAX_SAFE_INTEGER, framework.extractor)
-  );
-
-  if (allMatches.length === 0) {
-    return null;
-  }
-
-  // Deduplicate by test name to get unique failures
-  const uniqueFailures = deduplicateByKey(allMatches, (match) => match.testName.toLowerCase());
-
-  logger.info("Extracted test failures from logs", {
-    count: uniqueFailures.length,
-    framework: framework.name,
-    totalMatched: allMatches.length,
-  });
-
-  return uniqueFailures;
-};
+const UNIVERSAL_FAILURE_PATTERNS = [
+  // Generic FAIL/FAILED with file path
+  /(?:FAIL(?:ED)?|✕|✗|×)\s+(\S+\.(?:test|spec)\.\w+)/gim,
+  // pytest style: FAILED path/to/test.py::test_name
+  /FAILED\s+(\S+\.py::\S+)/gim,
+  // Go test: --- FAIL: TestName
+  /---\s+FAIL:\s+(\w+(?:\/\w+)*)/gim,
+  // Rust: thread 'test_name' panicked
+  /thread\s+'([^']+)'\s+panicked/gim,
+] as const;
 
 /**
  * Extract test failures from workflow logs.
  *
- * Supports Jest, Vitest, and Mocha test frameworks.
- * Strips ANSI color codes before parsing.
- * Extracts ALL unique failures - no artificial limits.
+ * This function provides basic extraction using universal patterns.
+ * The AI performs detailed analysis of the raw logs for comprehensive
+ * failure detection across all test frameworks.
  *
  * @param logs - The workflow log content
- * @returns Array of unique test failure information
+ * @returns Array of test failure information
  */
 export const extractTestFailures = (logs: string): TestFailure[] => {
-  // Strip ANSI color codes and CI timestamps from logs before parsing
+  // Strip ANSI color codes and CI timestamps before parsing
   const cleanLogs = stripCITimestamps(stripAnsiCodes(logs));
 
-  // Try each framework in order, return first match
-  const result = FRAMEWORK_PATTERNS.map((framework) =>
-    tryExtractFromFramework(cleanLogs, framework)
-  ).find((matches) => matches !== null);
+  const failures: TestFailure[] = [];
+  const seenTests = new Set<string>();
 
-  if (result) {
-    return result;
+  // Extract failures using universal patterns
+  UNIVERSAL_FAILURE_PATTERNS.forEach((pattern) => {
+    const regex = new RegExp(pattern.source, pattern.flags);
+    const matches = [...cleanLogs.matchAll(regex)];
+
+    matches.forEach((match) => {
+      const testName = match[1]?.trim();
+      if (!testName || seenTests.has(testName.toLowerCase())) return;
+
+      seenTests.add(testName.toLowerCase());
+      failures.push({
+        testName: testName.slice(0, 200),
+        error: "Test failed (see logs for details)",
+      });
+    });
+  });
+
+  if (failures.length > 0) {
+    logger.info("Extracted test failures using universal patterns", {
+      count: failures.length,
+    });
   }
 
-  logger.info("No test failures found in logs");
-  return [];
+  return failures;
 };

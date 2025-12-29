@@ -14,34 +14,16 @@ export const GITHUB_CONTEXT_LIMITS = {
 } as const;
 
 /**
- * Build configuration files to check for changes.
+ * NOTE: Build configuration and dependency file detection is now handled by AI.
+ * These constants were removed as part of the language-agnostic migration.
+ * See docs/LANGUAGE_AGNOSTIC_MIGRATION.md for details.
+ *
+ * Previous constants removed:
+ * - BUILD_CONFIG_FILES (14 JS-only files)
+ * - DEPENDENCY_FILES (4 npm-only files)
+ *
+ * AI-based detection provides universal language support without maintenance.
  */
-export const BUILD_CONFIG_FILES = [
-  "tsconfig.json",
-  "tsconfig.build.json",
-  "webpack.config.js",
-  "webpack.config.ts",
-  "vite.config.js",
-  "vite.config.ts",
-  "rollup.config.js",
-  "esbuild.config.js",
-  ".babelrc",
-  "babel.config.js",
-  "jest.config.js",
-  "jest.config.ts",
-  ".eslintrc.js",
-  ".eslintrc.json",
-] as const;
-
-/**
- * Dependency files to check for changes.
- */
-export const DEPENDENCY_FILES = [
-  "package.json",
-  "package-lock.json",
-  "yarn.lock",
-  "pnpm-lock.yaml",
-] as const;
 
 /**
  * GitHub webhook signature verification constants.
@@ -83,8 +65,27 @@ export const LOG_PARSING_LIMITS = {
 
 /**
  * Paths to exclude when extracting file references from logs.
+ * These are universal patterns for vendor/generated code across languages.
+ * Kept minimal - AI handles language-specific filtering.
  */
-export const EXCLUDED_PATH_PATTERNS = ["node_modules", ".test.", ".spec.", "internal/"] as const;
+export const EXCLUDED_PATH_PATTERNS = [
+  // Universal vendor directories
+  "node_modules",
+  "vendor",
+  ".venv",
+  "site-packages",
+  // Build output directories
+  "dist/",
+  "build/",
+  "target/",
+  // Version control
+  ".git/",
+  // Test files (don't fetch source for test files - focus on source code)
+  ".test.",
+  ".spec.",
+  // Internal/generated code
+  "internal/",
+] as const;
 
 /**
  * Error indicators for context-preserving log truncation.
@@ -92,38 +93,24 @@ export const EXCLUDED_PATH_PATTERNS = ["node_modules", ".test.", ".spec.", "inte
 export const ERROR_INDICATORS = ["error", "Error", "ERROR", "failed", "Failed", "FAILED"] as const;
 
 /**
- * Regex patterns for extracting file references from logs.
+ * Basic regex patterns for extracting file references from logs.
+ * Uses minimal patterns - AI handles complex/language-specific extraction.
  * Pre-compiled at module level for performance.
  */
 export const FILE_REFERENCE_PATTERNS = [
-  // Pattern 1: file.ts:line or file.ts:line:column
-  /(?:^|[\s(])([a-zA-Z0-9_\-./]+\.[a-zA-Z]+):(\d+)(?::\d+)?/gm,
-  // Pattern 2: file.ts(line,column)
-  /([a-zA-Z0-9_\-./]+\.[a-zA-Z]+)\((\d+),\d+\)/gm,
-  // Pattern 3: at ... (file.ts:line:column)
-  /at\s+.*?\(([a-zA-Z0-9_\-./]+\.[a-zA-Z]+):(\d+):\d+\)/gm,
+  // Universal: path/file.ext:line or path/file.ext:line:column
+  // Works for most languages: TypeScript, Python, Go, Rust, Ruby, Java, etc.
+  /(?:^|[\s("'])([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+):(\d+)(?::\d+)?/gm,
+  // TypeScript/C# compiler: path/file.ext(line,column)
+  /([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)\((\d+),\d+\)/gm,
 ] as const;
 
 /**
- * Fields to exclude when parsing package.json dependency changes.
+ * NOTE: Dependency change detection is now handled by AI.
+ * Previous regex-based patterns were removed as part of language-agnostic migration.
+ * AI can parse diffs from any package manager format without maintenance.
+ * See docs/LANGUAGE_AGNOSTIC_MIGRATION.md for details.
  */
-export const EXCLUDED_PACKAGE_JSON_FIELDS: Readonly<Set<string>> = new Set([
-  "name",
-  "version",
-  "description",
-  "main",
-  "scripts",
-]);
-
-/**
- * Regex patterns for parsing dependency changes from git diffs.
- */
-export const DEPENDENCY_DIFF_PATTERNS = {
-  /** Pattern for added dependencies in package.json diff */
-  ADDED: /^\+\s*"([^"]+)":\s*"([^"]+)"/gm,
-  /** Pattern for removed dependencies in package.json diff */
-  REMOVED: /^-\s*"([^"]+)":\s*"([^"]+)"/gm,
-} as const;
 
 /**
  * Display limits for CI failure notifications (Slack and GitHub).

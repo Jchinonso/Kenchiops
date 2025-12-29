@@ -103,6 +103,53 @@ export class OpenAIClient {
   }
 
   /**
+   * Logs AI extraction telemetry for tracking accuracy and usage.
+   *
+   * @param analysis - The analysis result to log telemetry for
+   */
+  private logExtractionTelemetry = (analysis: LLMAnalysisResult): void => {
+    const depChanges = analysis.detectedDependencyChanges ?? [];
+    const configChanges = analysis.detectedBuildConfigChanges ?? [];
+
+    // Count dependencies by ecosystem
+    const ecosystemCounts = depChanges.reduce(
+      (acc, dep) => {
+        const ecosystem = dep.ecosystem ?? "unknown";
+        acc[ecosystem] = (acc[ecosystem] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+
+    // Count dependencies by change type
+    const changeTypeCounts = depChanges.reduce(
+      (acc, dep) => {
+        acc[dep.type] = (acc[dep.type] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+
+    // Only log if there's extraction data
+    if (depChanges.length > 0 || configChanges.length > 0) {
+      logger.info("AI extraction telemetry", {
+        eventId: analysis.eventId,
+        extraction: {
+          dependencyChanges: {
+            total: depChanges.length,
+            byEcosystem: ecosystemCounts,
+            byType: changeTypeCounts,
+          },
+          buildConfigChanges: {
+            total: configChanges.length,
+            files: configChanges.map((c) => c.file),
+          },
+        },
+      });
+    }
+  };
+
+  /**
    * Enriches analysis result with metadata.
    *
    * @param analysis - Parsed analysis result
@@ -111,6 +158,9 @@ export class OpenAIClient {
    */
   private enrichAnalysis(analysis: LLMAnalysisResult, startTime: number): LLMAnalysisResult {
     const processingTime = (Date.now() - startTime) / TIME_CONSTANTS.MILLISECONDS_PER_SECOND;
+
+    // Log AI extraction telemetry for tracking accuracy
+    this.logExtractionTelemetry(analysis);
 
     return {
       ...analysis,
@@ -384,6 +434,100 @@ export class OpenAIClient {
   };
 
   /**
+   * Validates and normalizes a detected dependency change from AI response.
+   *
+   * @param change - Raw dependency change object from AI
+   * @returns Validated dependency change or null if invalid
+   */
+  private validateDependencyChange = (
+    change: unknown
+  ): LLMAnalysisResult["detectedDependencyChanges"] extends (infer T)[] | undefined
+    ? T | null
+    : never => {
+    if (!change || typeof change !== "object") return null;
+
+    const dep = change as Record<string, unknown>;
+    const name = typeof dep.name === "string" ? dep.name : null;
+    const type = typeof dep.type === "string" ? dep.type : null;
+
+    if (!name || !type || !["added", "removed", "updated"].includes(type)) return null;
+
+    return {
+      name,
+      type: type as "added" | "removed" | "updated",
+      oldVersion: typeof dep.oldVersion === "string" ? dep.oldVersion : undefined,
+      newVersion: typeof dep.newVersion === "string" ? dep.newVersion : undefined,
+      ecosystem: typeof dep.ecosystem === "string" ? dep.ecosystem : undefined,
+    };
+  };
+
+  /**
+   * Validates and normalizes a detected build config change from AI response.
+   *
+   * @param change - Raw build config change object from AI
+   * @returns Validated build config change or null if invalid
+   */
+  private validateBuildConfigChange = (
+    change: unknown
+  ): LLMAnalysisResult["detectedBuildConfigChanges"] extends (infer T)[] | undefined
+    ? T | null
+    : never => {
+    if (!change || typeof change !== "object") return null;
+
+    const cfg = change as Record<string, unknown>;
+    const file = typeof cfg.file === "string" ? cfg.file : null;
+    const changeType = typeof cfg.changeType === "string" ? cfg.changeType : null;
+    const summary = typeof cfg.summary === "string" ? cfg.summary : null;
+
+    if (
+      !file ||
+      !changeType ||
+      !summary ||
+      !["added", "modified", "deleted"].includes(changeType)
+    ) {
+      return null;
+    }
+
+    return {
+      file,
+      changeType: changeType as "added" | "modified" | "deleted",
+      summary,
+    };
+  };
+
+  /**
+   * Parses detected dependency changes array from AI response.
+   *
+   * @param rawChanges - Raw dependency changes array from AI
+   * @returns Validated array of dependency changes
+   */
+  private parseDependencyChanges = (
+    rawChanges: unknown
+  ): LLMAnalysisResult["detectedDependencyChanges"] => {
+    if (!Array.isArray(rawChanges)) return [];
+
+    return rawChanges
+      .map(this.validateDependencyChange)
+      .filter((change): change is NonNullable<typeof change> => change !== null);
+  };
+
+  /**
+   * Parses detected build config changes array from AI response.
+   *
+   * @param rawChanges - Raw build config changes array from AI
+   * @returns Validated array of build config changes
+   */
+  private parseBuildConfigChanges = (
+    rawChanges: unknown
+  ): LLMAnalysisResult["detectedBuildConfigChanges"] => {
+    if (!Array.isArray(rawChanges)) return [];
+
+    return rawChanges
+      .map(this.validateBuildConfigChange)
+      .filter((change): change is NonNullable<typeof change> => change !== null);
+  };
+
+  /**
    * Parses JSON string and creates LLM analysis result with defaults.
    *
    * @param parsed - Parsed JSON object
@@ -417,6 +561,9 @@ export class OpenAIClient {
       relatedIncidents: array(parsed.relatedIncidents, []) as string[],
       nextSteps: array(parsed.nextSteps, []) as string[],
       analyzedAt: new Date().toISOString(),
+      // Phase 3: AI-extracted structured data
+      detectedDependencyChanges: this.parseDependencyChanges(parsed.detectedDependencyChanges),
+      detectedBuildConfigChanges: this.parseBuildConfigChanges(parsed.detectedBuildConfigChanges),
     };
   };
 

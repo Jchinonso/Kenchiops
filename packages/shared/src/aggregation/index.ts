@@ -12,6 +12,8 @@ export type {
   CodeAnnotation,
   RecommendedAction,
   TestFailureInfo,
+  DetectedDependencyChange,
+  DetectedBuildConfigChange,
   AnalyzedFailure,
   SerializedFailure,
   PRContext,

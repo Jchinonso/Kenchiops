@@ -8,6 +8,11 @@
  */
 
 import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
+import type { LLMDetectedDependencyChange, LLMDetectedBuildConfigChange } from "../core/types.js";
+
+// Re-export AI-extracted types from core (canonical definitions)
+export type { LLMDetectedDependencyChange as DetectedDependencyChange } from "../core/types.js";
+export type { LLMDetectedBuildConfigChange as DetectedBuildConfigChange } from "../core/types.js";
 
 /**
  * AI-generated code annotation from analysis
@@ -53,6 +58,9 @@ export interface AnalyzedFailure {
   readonly recommendedActions: readonly RecommendedAction[];
   readonly testFailures: readonly TestFailureInfo[];
   readonly timestamp: Date;
+  // AI-extracted structured data (Phase 4 - Language Agnostic)
+  readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
+  readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
 }
 
 /**
@@ -69,6 +77,9 @@ export interface SerializedFailure {
   readonly recommendedActions: readonly RecommendedAction[];
   readonly testFailures: readonly TestFailureInfo[];
   readonly timestamp: string; // ISO string instead of Date
+  // AI-extracted structured data (Phase 4 - Language Agnostic)
+  readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
+  readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
 }
 
 /**

@@ -25,7 +25,13 @@ import {
   // Types
   type CIAnnotation,
   type CITestFailure,
+  type LLMDetectedDependencyChange,
+  type LLMDetectedBuildConfigChange,
 } from "@kenchi/shared";
+
+// Type aliases for local use
+type DetectedDependencyChange = LLMDetectedDependencyChange;
+type DetectedBuildConfigChange = LLMDetectedBuildConfigChange;
 
 /**
  * Analysis data structure for GitHub comments.
@@ -54,12 +60,16 @@ export interface AnalysisData {
     readonly name: string;
     readonly duration?: string;
   };
+  // Legacy field (deprecated - use detectedDependencyChanges instead)
   readonly dependencyChanges?: ReadonlyArray<{
     readonly type: "added" | "removed" | "updated";
     readonly name: string;
     readonly oldVersion?: string;
     readonly newVersion?: string;
   }>;
+  // AI-extracted structured data (Phase 3 - Language Agnostic)
+  readonly detectedDependencyChanges?: ReadonlyArray<DetectedDependencyChange>;
+  readonly detectedBuildConfigChanges?: ReadonlyArray<DetectedBuildConfigChange>;
 }
 
 // ============================================================================
@@ -100,7 +110,9 @@ const formatAnnotation = (annotation: CIAnnotation): string =>
   `- ${UI_EMOJI.location} \`${annotation.path}:${annotation.startLine}\` — ${truncateText(annotation.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
 
 const formatDependencyChange = (
-  dependencyChange: NonNullable<AnalysisData["dependencyChanges"]>[number]
+  dependencyChange:
+    | DetectedDependencyChange
+    | NonNullable<AnalysisData["dependencyChanges"]>[number]
 ): string => {
   const icon = getDependencyEmoji(dependencyChange.type);
   const version =
@@ -109,7 +121,16 @@ const formatDependencyChange = (
       : dependencyChange.newVersion
         ? ` (${dependencyChange.newVersion})`
         : "";
-  return `- ${icon} \`${dependencyChange.name}\`${version}`;
+  const ecosystem =
+    "ecosystem" in dependencyChange && dependencyChange.ecosystem
+      ? ` [${dependencyChange.ecosystem}]`
+      : "";
+  return `- ${icon} \`${dependencyChange.name}\`${version}${ecosystem}`;
+};
+
+const formatBuildConfigChange = (change: DetectedBuildConfigChange): string => {
+  const icon = change.changeType === "added" ? "➕" : change.changeType === "deleted" ? "➖" : "📝";
+  return `- ${icon} \`${change.file}\` — ${change.summary}`;
 };
 
 const formatAction = (action: { priority: string; description: string }, index: number): string =>
@@ -172,15 +193,34 @@ const buildAnnotationsSubsection = (failureAnnotations: CIAnnotation[]): string[
 };
 
 const buildDependencySubsection = (
-  deps: NonNullable<AnalysisData["dependencyChanges"]>
+  deps: ReadonlyArray<DetectedDependencyChange> | NonNullable<AnalysisData["dependencyChanges"]>
 ): string[] => {
   if (deps.length === 0) return [];
 
   return [
     `**Dependency Changes:** ${deps.length} change(s)\n`,
     ...buildTruncatedList(
-      deps,
+      deps as ReadonlyArray<
+        DetectedDependencyChange | NonNullable<AnalysisData["dependencyChanges"]>[number]
+      >,
       formatDependencyChange,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "changes"
+    ),
+    "",
+  ];
+};
+
+const buildBuildConfigSubsection = (
+  changes: ReadonlyArray<DetectedBuildConfigChange>
+): string[] => {
+  if (changes.length === 0) return [];
+
+  return [
+    `**Build Config Changes:** ${changes.length} change(s)\n`,
+    ...buildTruncatedList(
+      changes,
+      formatBuildConfigChange,
       GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
       "changes"
     ),
@@ -192,12 +232,17 @@ const buildEvidenceSection = (
   analysis: AnalysisData,
   failureAnnotations: CIAnnotation[]
 ): string => {
+  // Prefer AI-extracted dependency changes, fallback to legacy
+  const depChanges = analysis.detectedDependencyChanges ?? analysis.dependencyChanges ?? [];
+  const buildChanges = analysis.detectedBuildConfigChanges ?? [];
+
   const lines: string[] = [
     `### ${UI_EMOJI.search} Evidence\n`,
     buildCauseQuote(analysis),
     ...buildTestFailuresSubsection(analysis.testFailures ?? []),
     ...buildAnnotationsSubsection(failureAnnotations),
-    ...buildDependencySubsection(analysis.dependencyChanges ?? []),
+    ...buildDependencySubsection(depChanges),
+    ...buildBuildConfigSubsection(buildChanges),
   ];
 
   return lines.join("\n");

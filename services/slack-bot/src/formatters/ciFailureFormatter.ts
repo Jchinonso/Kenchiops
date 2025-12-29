@@ -117,10 +117,18 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
     reasons.push(`Error in \`${firstAnn.path}:${firstAnn.startLine}\``);
   }
 
-  // Add dependency change context if available
-  if (analysis.dependencyChanges && analysis.dependencyChanges.length > 0) {
-    const depCount = analysis.dependencyChanges.length;
+  // Add dependency change context if available (prefer AI-extracted, fallback to legacy)
+  const depChanges = analysis.detectedDependencyChanges ?? analysis.dependencyChanges ?? [];
+  if (depChanges.length > 0) {
+    const depCount = depChanges.length;
     reasons.push(`${depCount} dependency change${depCount > 1 ? "s" : ""} in this PR`);
+  }
+
+  // Add build config change context if available (AI-extracted)
+  const buildChanges = analysis.detectedBuildConfigChanges ?? [];
+  if (buildChanges.length > 0) {
+    const configCount = buildChanges.length;
+    reasons.push(`${configCount} build config change${configCount > 1 ? "s" : ""} detected`);
   }
 
   // Ensure we have at least one reason

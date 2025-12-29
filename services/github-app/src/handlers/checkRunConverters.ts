@@ -13,6 +13,8 @@ import type {
   PRContext,
   WorkflowContext,
   CachedAnalysis,
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
 } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import type { EnrichedContext } from "../services/context/index.js";
@@ -35,6 +37,9 @@ export interface AICodeAnnotation {
  */
 export interface FullAnalysisResult {
   readonly codeAnnotations?: readonly AICodeAnnotation[];
+  // AI-extracted structured data (Phase 4 - Language Agnostic)
+  readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
+  readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
 }
 
 /**
@@ -135,6 +140,9 @@ export const buildAnalyzedFailure = (
     line: testFailure.line,
   })),
   timestamp: new Date(),
+  // AI-extracted structured data (Phase 4 - Language Agnostic)
+  detectedDependencyChanges: analysis.full_analysis?.detectedDependencyChanges,
+  detectedBuildConfigChanges: analysis.full_analysis?.detectedBuildConfigChanges,
 });
 
 /**

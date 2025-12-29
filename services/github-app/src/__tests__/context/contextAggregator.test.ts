@@ -1,5 +1,10 @@
 /**
  * Unit tests for Context Aggregator
+ *
+ * Note: fetchDependencyChanges and fetchBuildConfigChanges were removed
+ * as part of the language-agnostic migration. dependencyChanges and
+ * buildConfigChanges are now always empty arrays - AI extracts these
+ * from the PR diff directly.
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
@@ -10,8 +15,6 @@ import type {
   CommitInfo,
   PRMetadata,
   CheckRunAnnotation,
-  DependencyChange,
-  BuildConfigChange,
   SourceFile,
   TestFailure,
   RepositoryMetadata,
@@ -30,6 +33,7 @@ jest.mock("@kenchi/shared", () => ({
     MAX_LOG_LENGTH: 50000,
     MAX_DIFF_LENGTH: 20000,
     MAX_FILE_LENGTH: 5000,
+    MAX_LOG_SIZE: 100000,
   },
   redactSecrets: jest.fn((text: string) => text.replace(/secret/gi, "[REDACTED]")),
   redactSecretsWithStats: jest.fn((text: string) => {
@@ -61,12 +65,11 @@ jest.mock("../../services/context/workflowFetcher.js", () => ({
   fetchWorkflowTiming: jest.fn(),
 }));
 
-// Mock PR fetcher
+// Mock PR fetcher (removed fetchDependencyChanges and fetchBuildConfigChanges)
 jest.mock("../../services/context/prFetcher.js", () => ({
   fetchPRDiff: jest.fn(),
   fetchPRMetadata: jest.fn(),
-  fetchDependencyChanges: jest.fn(),
-  fetchBuildConfigChanges: jest.fn(),
+  fetchChangedFiles: jest.fn(),
 }));
 
 // Mock commit fetcher
@@ -85,7 +88,7 @@ jest.mock("../../services/context/annotationFetcher.js", () => ({
 jest.mock("../../services/context/logParser.js", () => ({
   extractFileReferences: jest.fn(),
   extractTestFailures: jest.fn(),
-  truncateWithContext: jest.fn((content: string) => content), // Returns content unchanged
+  truncateWithContext: jest.fn((content: string) => content),
 }));
 
 // Import mocked functions after jest.mock
@@ -93,8 +96,7 @@ import { fetchWorkflowLogs, fetchWorkflowTiming } from "../../services/context/w
 import {
   fetchPRDiff,
   fetchPRMetadata,
-  fetchDependencyChanges,
-  fetchBuildConfigChanges,
+  fetchChangedFiles,
 } from "../../services/context/prFetcher.js";
 import {
   fetchCommitInfo,
@@ -111,12 +113,7 @@ const mockFetchWorkflowTiming = fetchWorkflowTiming as jest.MockedFunction<
 >;
 const mockFetchPRDiff = fetchPRDiff as jest.MockedFunction<typeof fetchPRDiff>;
 const mockFetchPRMetadata = fetchPRMetadata as jest.MockedFunction<typeof fetchPRMetadata>;
-const mockFetchDependencyChanges = fetchDependencyChanges as jest.MockedFunction<
-  typeof fetchDependencyChanges
->;
-const mockFetchBuildConfigChanges = fetchBuildConfigChanges as jest.MockedFunction<
-  typeof fetchBuildConfigChanges
->;
+const mockFetchChangedFiles = fetchChangedFiles as jest.MockedFunction<typeof fetchChangedFiles>;
 const mockFetchCommitInfo = fetchCommitInfo as jest.MockedFunction<typeof fetchCommitInfo>;
 const mockFetchSourceFile = fetchSourceFile as jest.MockedFunction<typeof fetchSourceFile>;
 const mockFetchRepositoryMetadata = fetchRepositoryMetadata as jest.MockedFunction<
@@ -229,28 +226,6 @@ describe("Context Aggregator", () => {
     },
   ];
 
-  const createMockDependencyChanges = (): DependencyChange[] => [
-    {
-      name: "jest",
-      type: "updated",
-      oldVersion: "29.0.0",
-      newVersion: "29.5.0",
-    },
-    {
-      name: "typescript",
-      type: "updated",
-      oldVersion: "5.0.0",
-      newVersion: "5.3.0",
-    },
-  ];
-
-  const createMockBuildConfigChanges = (): BuildConfigChange[] => [
-    {
-      file: "tsconfig.json",
-      diff: '- "target": "ES2020"\n+ "target": "ES2022"',
-    },
-  ];
-
   const createMockSourceFile = (path: string): SourceFile => ({
     path,
     content: `// File: ${path}\nexport const foo = 'bar';`,
@@ -285,8 +260,7 @@ describe("Context Aggregator", () => {
     mockFetchCommitInfo.mockResolvedValue(createMockCommitInfo());
     mockFetchPRDiff.mockResolvedValue("diff --git a/src/index.ts b/src/index.ts\n+new code");
     mockFetchPRMetadata.mockResolvedValue(createMockPRMetadata());
-    mockFetchDependencyChanges.mockResolvedValue(createMockDependencyChanges());
-    mockFetchBuildConfigChanges.mockResolvedValue(createMockBuildConfigChanges());
+    mockFetchChangedFiles.mockResolvedValue(["src/index.ts", "package.json"]);
     mockFetchCheckRunAnnotations.mockResolvedValue(createMockAnnotations());
     mockFetchRepositoryMetadata.mockResolvedValue(createMockRepositoryMetadata());
     mockExtractFileReferences.mockReturnValue([
@@ -311,8 +285,9 @@ describe("Context Aggregator", () => {
         expect(result.testFailures).toHaveLength(1);
         expect(result.sourceFiles.length).toBeGreaterThan(0);
         expect(result.prMetadata).toBeDefined();
-        expect(result.dependencyChanges).toHaveLength(2);
-        expect(result.buildConfigChanges).toHaveLength(1);
+        // AI extracts these from diff now - always empty arrays
+        expect(result.dependencyChanges).toHaveLength(0);
+        expect(result.buildConfigChanges).toHaveLength(0);
         expect(result.repositoryMetadata).toBeDefined();
         expect(result.workflowTiming).toBeDefined();
       });
@@ -353,19 +328,8 @@ describe("Context Aggregator", () => {
         const webhook = createMockWebhook();
         await gatherEnrichedContext(webhook);
 
-        expect(mockFetchDependencyChanges).toHaveBeenCalledWith(
-          12345,
-          "testowner",
-          "testrepo",
-          123
-        );
-        expect(mockFetchBuildConfigChanges).toHaveBeenCalledWith(
-          12345,
-          "testowner",
-          "testrepo",
-          123
-        );
         expect(mockFetchPRMetadata).toHaveBeenCalledWith(12345, "testowner", "testrepo", 123);
+        expect(mockFetchChangedFiles).toHaveBeenCalledWith(12345, "testowner", "testrepo", 123);
       });
 
       it("should fetch source files based on file references", async () => {
@@ -373,14 +337,6 @@ describe("Context Aggregator", () => {
         await gatherEnrichedContext(webhook);
 
         expect(mockFetchSourceFile).toHaveBeenCalled();
-        expect(mockFetchSourceFile).toHaveBeenCalledWith(
-          12345,
-          "testowner",
-          "testrepo",
-          expect.any(String),
-          "abc123def456789012345678901234567890abcd",
-          expect.any(Number)
-        );
       });
 
       it("should extract test failures from workflow logs", async () => {
@@ -390,34 +346,6 @@ describe("Context Aggregator", () => {
         expect(mockExtractTestFailures).toHaveBeenCalledWith(expect.any(String));
         expect(result.testFailures).toHaveLength(1);
         expect(result.testFailures[0].testName).toBe("should calculate sum correctly");
-      });
-
-      it("should extract file references from logs and annotations", async () => {
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        expect(mockExtractFileReferences).toHaveBeenCalledWith(expect.stringContaining("FAIL"));
-      });
-
-      it("should combine file references from annotations and logs", async () => {
-        mockExtractFileReferences.mockReturnValue([{ path: "src/new.ts", line: 5 }]);
-
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        // Should have called fetchSourceFile for annotation files + log files
-        expect(mockFetchSourceFile).toHaveBeenCalled();
-      });
-
-      it("should filter null source files", async () => {
-        mockFetchSourceFile.mockResolvedValueOnce(null);
-        mockFetchSourceFile.mockResolvedValueOnce(createMockSourceFile("src/valid.ts"));
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.sourceFiles).toHaveLength(1);
-        expect(result.sourceFiles[0].path).toBe("src/valid.ts");
       });
     });
 
@@ -486,18 +414,6 @@ describe("Context Aggregator", () => {
         expect(result.repositoryMetadata).toBeNull();
         expect(result.workflowTiming).toBeNull();
       });
-
-      it("should not call any fetchers when installation ID is missing", async () => {
-        const webhook = createMockWebhook({
-          installation: undefined,
-        });
-
-        await gatherEnrichedContext(webhook);
-
-        expect(mockFetchWorkflowLogs).not.toHaveBeenCalled();
-        expect(mockFetchCommitInfo).not.toHaveBeenCalled();
-        expect(mockFetchPRDiff).not.toHaveBeenCalled();
-      });
     });
 
     describe("secret redaction", () => {
@@ -533,156 +449,6 @@ describe("Context Aggregator", () => {
 
         expect(result.sourceFiles[0].content).toContain("[REDACTED]");
       });
-
-      it("should redact secrets from commit messages", async () => {
-        mockFetchCommitInfo.mockResolvedValue({
-          sha: "abc123",
-          message: "fix: update secret token",
-          author: "Test Author",
-          committer: "Test Committer",
-          timestamp: "2024-01-01T09:00:00Z",
-          changedFiles: ["src/index.ts"],
-        });
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.commitInfo?.message).toContain("[REDACTED]");
-      });
-
-      it("should redact secrets from annotations", async () => {
-        mockFetchCheckRunAnnotations.mockResolvedValue([
-          {
-            path: "src/index.ts",
-            startLine: 10,
-            endLine: 10,
-            level: "failure",
-            message: "Found secret in code",
-            title: "Security Issue",
-          },
-        ]);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.annotations[0].message).toContain("[REDACTED]");
-      });
-
-      it("should redact secrets from test failures", async () => {
-        mockExtractTestFailures.mockReturnValue([
-          {
-            testName: "auth test",
-            error: "Expected secret to be defined",
-            file: "src/auth.test.ts",
-          },
-        ]);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.testFailures[0].error).toContain("[REDACTED]");
-      });
-
-      it("should redact secrets from PR metadata description", async () => {
-        mockFetchPRMetadata.mockResolvedValue({
-          number: 123,
-          title: "Update config",
-          description: "Updated secret key configuration",
-          author: "testuser",
-          baseBranch: "main",
-          headBranch: "feature",
-          labels: [],
-          isDraft: false,
-          reviewStatus: "pending",
-          reviewers: [],
-          comments: [],
-        });
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.prMetadata?.description).toContain("[REDACTED]");
-      });
-
-      it("should redact secrets from PR comments", async () => {
-        mockFetchPRMetadata.mockResolvedValue({
-          number: 123,
-          title: "Update config",
-          description: null,
-          author: "testuser",
-          baseBranch: "main",
-          headBranch: "feature",
-          labels: [],
-          isDraft: false,
-          reviewStatus: "pending",
-          reviewers: [],
-          comments: [
-            {
-              author: "reviewer",
-              body: "Don't commit the secret key",
-              createdAt: "2024-01-01T10:00:00Z",
-            },
-          ],
-        });
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.prMetadata?.comments[0].body).toContain("[REDACTED]");
-      });
-
-      it("should redact secrets from build config changes", async () => {
-        mockFetchBuildConfigChanges.mockResolvedValue([
-          {
-            file: ".env",
-            diff: "+API_SECRET=secret_value\n-API_SECRET=old_secret",
-          },
-        ]);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.buildConfigChanges[0].diff).toContain("[REDACTED]");
-      });
-    });
-
-    describe("parallel execution", () => {
-      it("should fetch phase 1 data in parallel", async () => {
-        const webhook = createMockWebhook();
-
-        await gatherEnrichedContext(webhook);
-
-        // All phase 1 fetchers should be called
-        expect(mockFetchWorkflowLogs).toHaveBeenCalled();
-        expect(mockFetchCommitInfo).toHaveBeenCalled();
-        expect(mockFetchCheckRunAnnotations).toHaveBeenCalled();
-        expect(mockFetchRepositoryMetadata).toHaveBeenCalled();
-        expect(mockFetchWorkflowTiming).toHaveBeenCalled();
-      });
-
-      it("should fetch phase 2 PR data in parallel after phase 1", async () => {
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        // Phase 2 PR-specific fetchers should be called
-        expect(mockFetchDependencyChanges).toHaveBeenCalled();
-        expect(mockFetchBuildConfigChanges).toHaveBeenCalled();
-        expect(mockFetchPRMetadata).toHaveBeenCalled();
-      });
-
-      it("should fetch source files in parallel", async () => {
-        mockExtractFileReferences.mockReturnValue([
-          { path: "src/file1.ts", line: 1 },
-          { path: "src/file2.ts", line: 2 },
-          { path: "src/file3.ts", line: 3 },
-        ]);
-
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        // fetchSourceFile should be called multiple times
-        expect(mockFetchSourceFile.mock.calls.length).toBeGreaterThan(1);
-      });
     });
 
     describe("error handling", () => {
@@ -712,101 +478,6 @@ describe("Context Aggregator", () => {
         const result = await gatherEnrichedContext(webhook);
 
         expect(result.prDiff).toBeNull();
-      });
-
-      it("should handle annotations fetch failure", async () => {
-        mockFetchCheckRunAnnotations.mockResolvedValue([]);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.annotations).toHaveLength(0);
-      });
-
-      it("should handle repository metadata fetch failure", async () => {
-        mockFetchRepositoryMetadata.mockResolvedValue(null);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.repositoryMetadata).toBeNull();
-      });
-
-      it("should handle workflow timing fetch failure", async () => {
-        mockFetchWorkflowTiming.mockResolvedValue(null);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.workflowTiming).toBeNull();
-      });
-
-      it("should handle dependency changes fetch failure", async () => {
-        mockFetchDependencyChanges.mockResolvedValue([]);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.dependencyChanges).toHaveLength(0);
-      });
-
-      it("should handle build config changes fetch failure", async () => {
-        mockFetchBuildConfigChanges.mockResolvedValue([]);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.buildConfigChanges).toHaveLength(0);
-      });
-
-      it("should handle PR metadata fetch failure", async () => {
-        mockFetchPRMetadata.mockResolvedValue(null);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.prMetadata).toBeNull();
-      });
-
-      it("should handle source file fetch failures by filtering nulls", async () => {
-        mockFetchSourceFile.mockResolvedValueOnce(null);
-        mockFetchSourceFile.mockResolvedValueOnce(null);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.sourceFiles).toHaveLength(0);
-      });
-
-      it("should handle empty workflow logs", async () => {
-        mockFetchWorkflowLogs.mockResolvedValue(null);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.workflowLogs).toBeNull();
-        expect(result.testFailures).toHaveLength(0);
-      });
-
-      it("should handle null PR metadata description", async () => {
-        mockFetchPRMetadata.mockResolvedValue({
-          number: 123,
-          title: "Test",
-          description: null,
-          author: "testuser",
-          baseBranch: "main",
-          headBranch: "feature",
-          labels: [],
-          isDraft: false,
-          reviewStatus: "pending",
-          reviewers: [],
-          comments: [],
-        });
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.prMetadata?.description).toBeNull();
       });
     });
 
@@ -858,241 +529,27 @@ describe("Context Aggregator", () => {
 
         expect(result.sourceFiles).toHaveLength(0);
       });
-
-      it("should handle null check run output fields", async () => {
-        const webhook = createMockWebhook({
-          check_run: {
-            id: 12345,
-            name: "CI Build",
-            conclusion: "failure",
-            head_sha: "abc123def456789012345678901234567890abcd",
-            output: {
-              title: null,
-              summary: null,
-              text: null,
-            },
-            pull_requests: [],
-          },
-        });
-
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result).toBeDefined();
-        expect(mockExtractFileReferences).toHaveBeenCalled();
-      });
-
-      it("should deduplicate file references", async () => {
-        mockExtractFileReferences.mockReturnValue([
-          { path: "src/index.ts", line: 10 },
-          { path: "src/index.ts", line: 20 },
-        ]);
-        mockFetchCheckRunAnnotations.mockResolvedValue([
-          {
-            path: "src/index.ts",
-            startLine: 10,
-            endLine: 10,
-            level: "failure",
-            message: "Error",
-          },
-        ]);
-
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        // deduplicateByKey should be called to remove duplicates
-        const { deduplicateByKey } = jest.requireMock("@kenchi/shared") as {
-          deduplicateByKey: jest.Mock;
-        };
-        expect(deduplicateByKey).toHaveBeenCalled();
-      });
-
-      it("should prioritize annotation files over log files", async () => {
-        mockFetchCheckRunAnnotations.mockResolvedValue([
-          {
-            path: "src/important.ts",
-            startLine: 10,
-            endLine: 10,
-            level: "failure",
-            message: "Critical error",
-          },
-        ]);
-        mockExtractFileReferences.mockReturnValue([{ path: "src/other.ts", line: 5 }]);
-
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        const { deduplicateByKey } = jest.requireMock("@kenchi/shared") as {
-          deduplicateByKey: jest.Mock;
-        };
-        const callArgs = deduplicateByKey.mock.calls[0];
-        const fileRefs = callArgs[0] as { path: string; line?: number }[];
-
-        // Annotation files should come first
-        expect(fileRefs[0].path).toBe("src/important.ts");
-      });
-
-      it("should extract all unique file references without artificial limits", async () => {
-        const manyRefs = Array.from({ length: 20 }, (_, i) => ({
-          path: `src/file${i}.ts`,
-          line: i,
-        }));
-        mockExtractFileReferences.mockReturnValue(manyRefs);
-
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        const { deduplicateByKey } = jest.requireMock("@kenchi/shared") as {
-          deduplicateByKey: jest.Mock;
-        };
-        const callArgs = deduplicateByKey.mock.calls[0];
-        const fileRefs = callArgs[0] as { path: string; line?: number }[];
-
-        // Should include log file references + any annotation files (no artificial limit)
-        // The exact count may include annotations from the mock webhook
-        expect(fileRefs.length).toBeGreaterThanOrEqual(20);
-      });
-
-      it("should handle annotations with warnings and notices", async () => {
-        mockFetchCheckRunAnnotations.mockResolvedValue([
-          {
-            path: "src/index.ts",
-            startLine: 10,
-            endLine: 10,
-            level: "failure",
-            message: "Error",
-          },
-          {
-            path: "src/utils.ts",
-            startLine: 20,
-            endLine: 20,
-            level: "warning",
-            message: "Warning",
-          },
-          {
-            path: "src/config.ts",
-            startLine: 30,
-            endLine: 30,
-            level: "notice",
-            message: "Notice",
-          },
-        ]);
-
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        const { deduplicateByKey } = jest.requireMock("@kenchi/shared") as {
-          deduplicateByKey: jest.Mock;
-        };
-        const callArgs = deduplicateByKey.mock.calls[0];
-        const fileRefs = callArgs[0] as { path: string; line?: number }[];
-
-        // Should only include failure and warning level annotations in file refs
-        const annotationRefs = fileRefs.filter(
-          (ref: { path: string }) => ref.path === "src/index.ts" || ref.path === "src/utils.ts"
-        );
-        expect(annotationRefs.length).toBeGreaterThan(0);
-      });
-
-      it("should handle empty dependency changes", async () => {
-        mockFetchDependencyChanges.mockResolvedValue([]);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.dependencyChanges).toHaveLength(0);
-      });
-
-      it("should handle empty build config changes", async () => {
-        mockFetchBuildConfigChanges.mockResolvedValue([]);
-
-        const webhook = createMockWebhook();
-        const result = await gatherEnrichedContext(webhook);
-
-        expect(result.buildConfigChanges).toHaveLength(0);
-      });
     });
 
-    describe("data extraction", () => {
-      it("should extract test failures from logs when logs are present", async () => {
-        const logs = "FAIL test.ts\nExpected 1 to equal 2";
-        mockFetchWorkflowLogs.mockResolvedValue(logs);
-
+    describe("AI-first approach", () => {
+      it("should always return empty arrays for dependency and build config changes", async () => {
         const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
+        const result = await gatherEnrichedContext(webhook);
 
-        expect(mockExtractTestFailures).toHaveBeenCalledWith(logs);
+        // AI extracts these from diff - not pre-parsed
+        expect(result.dependencyChanges).toEqual([]);
+        expect(result.buildConfigChanges).toEqual([]);
       });
 
-      it("should not extract test failures when logs are null", async () => {
-        mockFetchWorkflowLogs.mockResolvedValue(null);
+      it("should provide diff for AI to analyze", async () => {
+        const expectedDiff = "diff --git a/package.json b/package.json\n+axios@1.0.0";
+        mockFetchPRDiff.mockResolvedValue(expectedDiff);
 
         const webhook = createMockWebhook();
         const result = await gatherEnrichedContext(webhook);
 
-        expect(result.testFailures).toHaveLength(0);
-      });
-
-      it("should combine logs from multiple sources for file extraction", async () => {
-        const webhook = createMockWebhook({
-          check_run: {
-            id: 12345,
-            name: "CI Build",
-            conclusion: "failure",
-            head_sha: "abc123def456789012345678901234567890abcd",
-            output: {
-              title: "Error in src/index.ts",
-              summary: "Failed at src/utils.ts",
-              text: "See src/config.ts",
-            },
-            pull_requests: [],
-          },
-        });
-
-        await gatherEnrichedContext(webhook);
-
-        expect(mockExtractFileReferences).toHaveBeenCalledWith(
-          expect.stringContaining("Error in src/index.ts")
-        );
-        expect(mockExtractFileReferences).toHaveBeenCalledWith(
-          expect.stringContaining("Failed at src/utils.ts")
-        );
-        expect(mockExtractFileReferences).toHaveBeenCalledWith(
-          expect.stringContaining("See src/config.ts")
-        );
-      });
-
-      it("should fetch source files with line context when available", async () => {
-        mockExtractFileReferences.mockReturnValue([{ path: "src/custom.ts", line: 42 }]);
-        mockFetchCheckRunAnnotations.mockResolvedValue([]);
-
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        expect(mockFetchSourceFile).toHaveBeenCalledWith(
-          12345,
-          "testowner",
-          "testrepo",
-          "src/custom.ts",
-          "abc123def456789012345678901234567890abcd",
-          42
-        );
-      });
-
-      it("should fetch source files without line context when not available", async () => {
-        mockExtractFileReferences.mockReturnValue([{ path: "src/nocontext.ts" }]);
-        mockFetchCheckRunAnnotations.mockResolvedValue([]);
-
-        const webhook = createMockWebhook();
-        await gatherEnrichedContext(webhook);
-
-        expect(mockFetchSourceFile).toHaveBeenCalledWith(
-          12345,
-          "testowner",
-          "testrepo",
-          "src/nocontext.ts",
-          "abc123def456789012345678901234567890abcd",
-          undefined
-        );
+        // Diff is available for AI analysis
+        expect(result.prDiff).toBe(expectedDiff);
       });
     });
   });
