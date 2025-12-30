@@ -65,7 +65,9 @@ export interface ApiAnalysis {
  * Format duration in milliseconds to human-readable string
  */
 export const formatDuration = (ms: number | undefined): string => {
-  if (!ms) return "";
+  if (!ms) {
+    return "";
+  }
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -108,7 +110,9 @@ export const convertAIAnnotations = (
 export const convertRecommendedActions = (
   actions: ApiAnalysis["recommended_actions"]
 ): RecommendedAction[] => {
-  if (!actions) return [];
+  if (!actions) {
+    return [];
+  }
 
   return actions.map((action) => ({
     description: action.description,
@@ -158,7 +162,9 @@ export const buildRepositoryInfo = (repository: CheckRunWebhook["repository"]): 
  * Build PR context from enriched context
  */
 export const buildPRContext = (context: EnrichedContext, prNumber: number): PRContext | null => {
-  if (!context.prMetadata) return null;
+  if (!context.prMetadata) {
+    return null;
+  }
 
   return {
     number: prNumber,
@@ -177,7 +183,9 @@ export const buildWorkflowContext = (
   checkName: string,
   context: EnrichedContext
 ): WorkflowContext | null => {
-  if (!context.workflowTiming) return null;
+  if (!context.workflowTiming) {
+    return null;
+  }
 
   return {
     name: checkName,

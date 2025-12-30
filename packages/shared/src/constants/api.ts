@@ -45,10 +45,23 @@ export const RATE_LIMIT_SKIP_PATHS: ReadonlySet<string> = new Set([
 export const HEALTH_STATUS = {
   OK: "ok",
   ERROR: "error",
+  HEALTHY: "healthy",
+  DEGRADED: "degraded",
+  UNHEALTHY: "unhealthy",
 } as const;
 
-/** Type for health status values */
+/** Type for health status values (legacy: "ok" | "error", new: "healthy" | "degraded" | "unhealthy") */
 export type HealthStatus = (typeof HEALTH_STATUS)[keyof typeof HEALTH_STATUS];
+
+/**
+ * Memory usage threshold percentages for health checks.
+ */
+export const MEMORY_THRESHOLDS = {
+  /** Heap usage percentage that triggers degraded status */
+  WARNING: 90,
+  /** Heap usage percentage that triggers unhealthy status */
+  CRITICAL: 98,
+} as const;
 
 /**
  * API response status values for webhook and event endpoints.

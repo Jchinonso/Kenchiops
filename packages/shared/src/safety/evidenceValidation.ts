@@ -39,7 +39,9 @@ const ALIGNMENT_CHECKS: readonly AlignmentCheck[] = [
   {
     // Check 1: Does identified cause contain text from error logs?
     condition: (analysis, evidence) => {
-      if (!analysis.identifiedCause || !evidence.logs?.length) return false;
+      if (!analysis.identifiedCause || !evidence.logs?.length) {
+        return false;
+      }
       const cause = analysis.identifiedCause.toLowerCase();
       return evidence.logs.some((log) =>
         cause.includes(log.message.toLowerCase().substring(0, MATCHING_CONFIG.LOG_PREFIX_LENGTH))
@@ -50,7 +52,9 @@ const ALIGNMENT_CHECKS: readonly AlignmentCheck[] = [
   {
     // Check 2: Does analysis reference specific commits?
     condition: (analysis, evidence) => {
-      if (!analysis.reasoning || !evidence.gitHistory?.length) return false;
+      if (!analysis.reasoning || !evidence.gitHistory?.length) {
+        return false;
+      }
       const reasoning = analysis.reasoning.toLowerCase();
       return evidence.gitHistory.some((commit) =>
         reasoning.includes(commit.sha.substring(0, MATCHING_CONFIG.COMMIT_PREFIX_LENGTH))

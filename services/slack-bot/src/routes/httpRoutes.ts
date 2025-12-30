@@ -7,9 +7,20 @@
  */
 
 import express, { type Request, type Response } from "express";
-import { validate, validators, HTTP_STATUS, asyncHandler } from "@kenchi/shared";
+import {
+  validate,
+  validators,
+  HTTP_STATUS,
+  asyncHandler,
+  config,
+  HEALTH_STATUS,
+  performHealthCheck,
+  livenessCheck,
+  readinessCheck,
+} from "@kenchi/shared";
 import type Bolt from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
+import type { AppConfig } from "../config/appConfig.js";
 import {
   postMessage,
   postConsolidatedMessage,
@@ -100,10 +111,21 @@ const getStatusCode = (status: string): number =>
  * Creates HTTP routes for the Slack bot service.
  *
  * @param app - Slack Bolt app instance
+ * @param appConfig - Application configuration (optional, for health checks)
  * @returns Express router with routes
  */
-export const createHttpRoutes = (app: SlackApp): express.Router => {
+export const createHttpRoutes = (app: SlackApp, appConfig?: AppConfig): express.Router => {
   const router = express.Router();
+
+  /** Health check config for this service */
+  const healthConfig = {
+    serviceName: appConfig?.serviceName ?? "slack-bot",
+    version: appConfig?.version ?? "1.0.0",
+    environment: config.NODE_ENV || "development",
+    includeDatabase: true,
+    includeRedis: true,
+    includeCircuitBreakers: true,
+  } as const;
 
   /**
    * POST /slack/message
@@ -185,18 +207,52 @@ export const createHttpRoutes = (app: SlackApp): express.Router => {
   );
 
   /**
+   * Comprehensive health check endpoint
    * GET /health
-   * Health check endpoint
+   * Returns detailed component health status
    */
-  router.get("/health", (_req: Request, res: Response) => {
-    res.status(HTTP_STATUS.OK).json({
-      status: "ok",
-      service: "slack-bot",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV ?? "development",
-    });
+  router.get(
+    "/health",
+    asyncHandler(async (_req: Request, res: Response) => {
+      const health = await performHealthCheck(healthConfig);
+      const statusCode =
+        health.status === HEALTH_STATUS.UNHEALTHY
+          ? HTTP_STATUS.SERVICE_UNAVAILABLE
+          : HTTP_STATUS.OK;
+
+      res.status(statusCode).json(health);
+    })
+  );
+
+  /**
+   * Liveness probe endpoint
+   * GET /live
+   * Simple check that the process is running (for Kubernetes liveness probes)
+   */
+  router.get("/live", (_req: Request, res: Response) => {
+    res.status(HTTP_STATUS.OK).json(livenessCheck());
   });
+
+  /**
+   * Readiness probe endpoint
+   * GET /ready
+   * Checks if service can accept traffic (for Kubernetes readiness probes)
+   */
+  router.get(
+    "/ready",
+    asyncHandler(async (_req: Request, res: Response) => {
+      const result = await readinessCheck({
+        serviceName: healthConfig.serviceName,
+        version: healthConfig.version,
+        environment: healthConfig.environment,
+        includeDatabase: true,
+        includeRedis: true,
+      });
+
+      const statusCode = result.ready ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE;
+      res.status(statusCode).json(result);
+    })
+  );
 
   return router;
 };

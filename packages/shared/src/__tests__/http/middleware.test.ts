@@ -43,9 +43,9 @@ describe("HTTP Middleware", () => {
   const createMockResponse = (): Response & {
     _status: number;
     _json: unknown;
-    _listeners: Map<string, (() => void)[]>;
+    _listeners: Map<string, Array<() => void>>;
   } => {
-    const listeners = new Map<string, (() => void)[]>();
+    const listeners = new Map<string, Array<() => void>>();
     const res: Record<string, unknown> = {
       _status: 200,
       _json: null,
@@ -74,7 +74,7 @@ describe("HTTP Middleware", () => {
     return res as unknown as Response & {
       _status: number;
       _json: unknown;
-      _listeners: Map<string, (() => void)[]>;
+      _listeners: Map<string, Array<() => void>>;
     };
   };
 
@@ -92,7 +92,7 @@ describe("HTTP Middleware", () => {
     });
 
     it("should handle AppError with correct status and body", () => {
-      const error = new ValidationError("Email is required", { field: "email" });
+      const error = new ValidationError("Email is required", { metadata: { field: "email" } });
 
       errorHandler(error, req, res, next);
 
@@ -107,7 +107,9 @@ describe("HTTP Middleware", () => {
     });
 
     it("should include metadata when present", () => {
-      const error = new ValidationError("Invalid input", { field: "name", value: "x" });
+      const error = new ValidationError("Invalid input", {
+        metadata: { field: "name", value: "x" },
+      });
 
       errorHandler(error, req, res, next);
 

@@ -349,6 +349,8 @@ describe("Application Configuration", () => {
         "slackSigningSecret",
         "slackAppToken",
         "nodeEnv",
+        "serviceName",
+        "version",
       ];
 
       const actualKeys = Object.keys(config);

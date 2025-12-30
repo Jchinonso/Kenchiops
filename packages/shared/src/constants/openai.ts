@@ -24,6 +24,10 @@ export const OPENAI_CONSTANTS = {
   EXPONENTIAL_BACKOFF_BASE: 2, // Base for exponential backoff: 2^attempt
   CHARS_PER_TOKEN_ESTIMATE: 4, // Rough estimate: ~4 chars per token
   RATE_LIMIT_STATUS_CODE: 429,
+  /** Circuit breaker failure threshold before opening */
+  CIRCUIT_BREAKER_THRESHOLD: 3,
+  /** Circuit breaker reset timeout in milliseconds (60 seconds) */
+  CIRCUIT_BREAKER_RESET_MS: 60000,
 } as const;
 
 /**

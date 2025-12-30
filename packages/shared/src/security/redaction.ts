@@ -77,9 +77,9 @@ export const redactSecrets = (text: string, options: { logRedactions?: boolean }
       return REDACTION_PLACEHOLDER;
     });
 
-    matchCount > 0 &&
-      options.logRedactions &&
+    if (matchCount > 0 && options.logRedactions) {
       logger.info("Redacted secret from text", { type: name, count: matchCount });
+    }
 
     return redacted;
   }, text);
@@ -178,7 +178,9 @@ export const redactObject = <T extends Record<string, unknown>>(
       return Object.entries(value).reduce<Record<string, unknown>>((result, [key, val]) => {
         // Skip forbidden fields entirely
         if (isForbiddenField(key)) {
-          logRedactions && logger.info("Removed forbidden field", { field: key });
+          if (logRedactions) {
+            logger.info("Removed forbidden field", { field: key });
+          }
           result[key] = REDACTION_PLACEHOLDER;
         } else {
           result[key] = redactRecursive(val, depth + 1);

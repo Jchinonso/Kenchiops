@@ -37,16 +37,17 @@ const validateSource = (
   source: Readonly<Record<string, unknown>>,
   schema: Readonly<Record<string, Validator>>,
   prefix: string
-): string[] => {
-  return Object.entries(schema)
+): string[] =>
+  Object.entries(schema)
     .map(([key, validator]) => {
       const result = validator(source[key]);
-      if (result === true) return null;
+      if (result === true) {
+        return null;
+      }
       const message = typeof result === "string" ? result : DEFAULT_VALIDATION_ERROR_MESSAGE;
       return `${prefix}.${key}: ${message}`;
     })
     .filter((error): error is string => error !== null);
-};
 
 type ValidationSource = {
   readonly source: Record<string, unknown>;
@@ -74,8 +75,9 @@ type ValidationSource = {
  * app.post('/users', validateRequest, handler);
  * ```
  */
-export const validate = (schema: ValidationSchema) => {
-  return (req: Request, _res: Response, next: NextFunction): void => {
+export const validate =
+  (schema: ValidationSchema) =>
+  (req: Request, _res: Response, next: NextFunction): void => {
     // Data-driven validation: build validation sources array
     const validationSources: ValidationSource[] = [
       schema.body && { source: req.body, schema: schema.body, prefix: "body" },
@@ -93,12 +95,11 @@ export const validate = (schema: ValidationSchema) => {
     );
 
     if (errors.length > 0) {
-      throw new ValidationError("Validation failed", { errors });
+      throw new ValidationError("Validation failed", { metadata: { errors } });
     }
 
     next();
   };
-};
 
 // ==================== Validation Helpers ====================
 

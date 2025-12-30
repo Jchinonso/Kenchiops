@@ -103,7 +103,7 @@ export const handleRepoSelectSubmission = async (args: ViewSubmissionArgs): Prom
     }
 
     // Extract selected repository
-    const values = view.state.values;
+    const { values } = view.state;
     const repoBlock = values.repo_select_block;
     const selectedRepo = repoBlock?.[REPO_SELECT_ACTION_ID]?.selected_option?.value;
 
@@ -219,7 +219,7 @@ export const handleUnconfigureSubmission = async (args: {
     await ack();
 
     // Extract selected mapping
-    const values = view.state.values;
+    const { values } = view.state;
     const selectBlock = values.unconfigure_select_block;
     const selectedValue = selectBlock?.[UNCONFIGURE_SELECT_ACTION_ID]?.selected_option?.value;
 

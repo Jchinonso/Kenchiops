@@ -68,7 +68,9 @@ const formatDescription = (
   description: string | null | undefined,
   maxLength: number = 500
 ): string[] => {
-  if (!description) return [];
+  if (!description) {
+    return [];
+  }
   const truncated = description.slice(0, maxLength);
   const suffix = description.length > maxLength ? "..." : "";
   return ["", `**Description:**`, `${truncated}${suffix}`];

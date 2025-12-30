@@ -20,12 +20,15 @@ const isDnsError = (errorMessage: string): boolean =>
  * Calculate exponential backoff delay using centralized config
  */
 const getBackoffDelay = (attempt: number): number =>
-  GITHUB_RETRY_CONFIG.BASE_DELAY_MS * Math.pow(GITHUB_RETRY_CONFIG.BACKOFF_BASE, attempt - 1);
+  GITHUB_RETRY_CONFIG.BASE_DELAY_MS * GITHUB_RETRY_CONFIG.BACKOFF_BASE ** (attempt - 1);
 
 /**
  * Wait for a specified duration
  */
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 /**
  * Fetch workflow run logs for a check run.

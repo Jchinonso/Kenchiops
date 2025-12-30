@@ -180,10 +180,9 @@ const getClientForNotification = async (
 /**
  * Creates a notification handler function for the queue worker
  */
-export const createNotificationHandler = (
-  defaultClient: WebClient
-): ((payload: SlackNotificationPayload) => Promise<HandlerResult>) => {
-  return async (payload: SlackNotificationPayload): Promise<HandlerResult> => {
+export const createNotificationHandler =
+  (defaultClient: WebClient): ((payload: SlackNotificationPayload) => Promise<HandlerResult>) =>
+  async (payload: SlackNotificationPayload): Promise<HandlerResult> => {
     const startTime = Date.now();
 
     try {
@@ -231,4 +230,3 @@ export const createNotificationHandler = (
       return { success: false, error: errorMsg };
     }
   };
-};

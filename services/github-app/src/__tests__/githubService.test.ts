@@ -35,12 +35,9 @@ jest.mock("@kenchi/shared", () => {
       error: jest.fn(),
       debug: jest.fn(),
     })),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    OpenAIClient: jest.fn(function (this: any) {
-      return {
-        analyzeIncident: mockResolve,
-      };
-    }),
+    OpenAIClient: jest.fn().mockImplementation(() => ({
+      analyzeIncident: mockResolve,
+    })),
     calculateConfidenceScore: jest.fn(() => ({
       finalScore: 0.85,
       gatingDecision: "auto_approve",

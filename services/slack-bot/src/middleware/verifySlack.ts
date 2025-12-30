@@ -28,12 +28,12 @@ interface VerificationResult {
  * @param signingSecret - Slack signing secret
  * @returns Verification result
  */
-function verifySignature(
+const verifySignature = (
   slackSignature: string,
   slackRequestTimestamp: string,
   requestBody: string,
   signingSecret: string
-): VerificationResult {
+): VerificationResult => {
   // Check timestamp freshness (prevent replay attacks)
   const timestamp = parseInt(slackRequestTimestamp, 10);
   const currentTime = Math.floor(Date.now() / TIME_CONSTANTS.MILLISECONDS_PER_SECOND);
@@ -68,8 +68,8 @@ function verifySignature(
 
     if (!isValid) {
       logger.warn("Invalid Slack signature", {
-        expected: computedSignature.substring(0, SLACK_VERIFICATION.LOG_SUBSTRING_LENGTH) + "...",
-        received: slackSignature.substring(0, SLACK_VERIFICATION.LOG_SUBSTRING_LENGTH) + "...",
+        expected: `${computedSignature.substring(0, SLACK_VERIFICATION.LOG_SUBSTRING_LENGTH)}...`,
+        received: `${slackSignature.substring(0, SLACK_VERIFICATION.LOG_SUBSTRING_LENGTH)}...`,
       });
       return {
         valid: false,
@@ -88,7 +88,7 @@ function verifySignature(
       error: "Invalid signature",
     };
   }
-}
+};
 
 /**
  * Verifies Slack request signatures to prevent unauthorized access.
@@ -98,7 +98,7 @@ function verifySignature(
  *
  * @throws {Error} If signature is invalid or timestamp is stale
  */
-export function verifySlackSignature(req: Request, res: Response, next: NextFunction): void {
+export const verifySlackSignature = (req: Request, res: Response, next: NextFunction): void => {
   const slackSignature = req.headers["x-slack-signature"] as string | undefined;
   const slackRequestTimestamp = req.headers["x-slack-request-timestamp"] as string | undefined;
 
@@ -135,7 +135,7 @@ export function verifySlackSignature(req: Request, res: Response, next: NextFunc
   // Signature is valid, proceed
   logger.debug("Slack signature verified successfully");
   next();
-}
+};
 
 /**
  * Middleware factory that can be configured with custom signing secret.
@@ -144,10 +144,9 @@ export function verifySlackSignature(req: Request, res: Response, next: NextFunc
  * @param signingSecret - Custom signing secret (optional, defaults to config)
  * @returns Express middleware function
  */
-export function createSlackVerifier(
-  signingSecret?: string
-): (req: Request, res: Response, next: NextFunction) => void {
-  return (req: Request, res: Response, next: NextFunction) => {
+export const createSlackVerifier =
+  (signingSecret?: string): ((req: Request, res: Response, next: NextFunction) => void) =>
+  (req: Request, res: Response, next: NextFunction) => {
     const secret = signingSecret || config.SLACK_SIGNING_SECRET;
     if (!secret) {
       logger.error("SLACK_SIGNING_SECRET not configured");
@@ -173,4 +172,3 @@ export function createSlackVerifier(
 
     next();
   };
-}

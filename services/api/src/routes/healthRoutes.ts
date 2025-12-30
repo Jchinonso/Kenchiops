@@ -1,30 +1,79 @@
 /**
  * Health Check Routes
  *
- * Provides health and status endpoints for the API service
+ * Provides comprehensive health and status endpoints for the API service.
+ * Includes liveness, readiness, and detailed component health checks.
  */
 
-import { Router, Request, Response } from "express";
-import { HTTP_STATUS, config, HEALTH_STATUS, API_ROUTES } from "@kenchi/shared";
-import type { HealthResponse } from "../types/apiTypes.js";
+import { Router, type Request, type Response } from "express";
+import {
+  HTTP_STATUS,
+  config,
+  HEALTH_STATUS,
+  API_ROUTES,
+  performHealthCheck,
+  livenessCheck,
+  readinessCheck,
+  asyncHandler,
+} from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 
 const router = Router();
 
-/**
- * Health check endpoint with detailed status
- * GET /health
- */
-router.get(API_ROUTES.HEALTH, (_req: Request, res: Response) => {
-  const response: HealthResponse = {
-    status: HEALTH_STATUS.OK,
-    service: appConfig.serviceName,
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: config.NODE_ENV || "development",
-  };
+/** Health check config for this service */
+const healthConfig = {
+  serviceName: appConfig.serviceName,
+  version: appConfig.version,
+  environment: config.NODE_ENV || "development",
+  includeDatabase: true,
+  includeRedis: true,
+  includeCircuitBreakers: true,
+} as const;
 
-  res.status(HTTP_STATUS.OK).json(response);
+/**
+ * Comprehensive health check endpoint
+ * GET /health
+ * Returns detailed component health status
+ */
+router.get(
+  API_ROUTES.HEALTH,
+  asyncHandler(async (_req: Request, res: Response) => {
+    const health = await performHealthCheck(healthConfig);
+    const statusCode =
+      health.status === HEALTH_STATUS.UNHEALTHY ? HTTP_STATUS.SERVICE_UNAVAILABLE : HTTP_STATUS.OK;
+
+    res.status(statusCode).json(health);
+  })
+);
+
+/**
+ * Liveness probe endpoint
+ * GET /live
+ * Simple check that the process is running (for Kubernetes liveness probes)
+ */
+router.get("/live", (_req: Request, res: Response) => {
+  res.status(HTTP_STATUS.OK).json(livenessCheck());
 });
+
+/**
+ * Readiness probe endpoint
+ * GET /ready
+ * Checks if service can accept traffic (for Kubernetes readiness probes)
+ */
+router.get(
+  "/ready",
+  asyncHandler(async (_req: Request, res: Response) => {
+    const result = await readinessCheck({
+      serviceName: healthConfig.serviceName,
+      version: healthConfig.version,
+      environment: healthConfig.environment,
+      includeDatabase: true,
+      includeRedis: true,
+    });
+
+    const statusCode = result.ready ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE;
+    res.status(statusCode).json(result);
+  })
+);
 
 export { router as healthRoutes };

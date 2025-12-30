@@ -68,7 +68,9 @@ export interface Config {
  * Parses integer from environment variable with validation.
  */
 const parseIntEnv = (value: string | undefined, defaultValue: number): number => {
-  if (!value) return defaultValue;
+  if (!value) {
+    return defaultValue;
+  }
   const parsed = parseInt(value, PARSE_INT_RADIX);
   return Number.isNaN(parsed) ? defaultValue : parsed;
 };
@@ -77,7 +79,9 @@ const parseIntEnv = (value: string | undefined, defaultValue: number): number =>
  * Parses float from environment variable with validation.
  */
 const parseFloatEnv = (value: string | undefined): number | undefined => {
-  if (!value) return undefined;
+  if (!value) {
+    return undefined;
+  }
   const parsed = parseFloat(value);
   return Number.isNaN(parsed) ? undefined : parsed;
 };
