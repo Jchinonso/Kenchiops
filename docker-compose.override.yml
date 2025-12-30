@@ -1,0 +1,27 @@
+# Development overrides - automatically loaded by docker compose
+# This file is NOT used in production
+#
+# Usage:
+#   1. Run: npm run build
+#   2. Changes are immediately available in containers
+#   3. No need to rebuild Docker images for code changes
+#
+# When to rebuild Docker image:
+#   - Adding new npm dependencies
+#   - Changing Dockerfile
+
+services:
+  api:
+    volumes:
+      - ./packages/shared/dist:/app/packages/shared/dist:ro
+      - ./services/api/dist:/app/services/api/dist:ro
+
+  github-app:
+    volumes:
+      - ./packages/shared/dist:/app/packages/shared/dist:ro
+      - ./services/github-app/dist:/app/services/github-app/dist:ro
+
+  slack-bot:
+    volumes:
+      - ./packages/shared/dist:/app/packages/shared/dist:ro
+      - ./services/slack-bot/dist:/app/services/slack-bot/dist:ro
