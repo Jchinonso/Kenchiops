@@ -59,7 +59,7 @@ router.post(
     }
 
     // Get installation ID from config
-    const installationId = appConfig.github.installationId;
+    const { installationId } = appConfig.github;
     if (!installationId) {
       logger.warn("No GitHub installation ID configured");
       res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -109,15 +109,15 @@ router.post(
           })
         );
 
-        await createCheckRunWithAnnotations(
+        await createCheckRunWithAnnotations({
           installationId,
           owner,
           repo,
-          analysis.headSha,
-          KENCHI_BRANDING.CHECK_RUN_NAME,
-          analysis.identified_cause || analysis.analysis || "CI failure analyzed",
-          checkAnnotations
-        );
+          headSha: analysis.headSha,
+          name: KENCHI_BRANDING.CHECK_RUN_NAME,
+          summary: analysis.identified_cause || analysis.analysis || "CI failure analyzed",
+          annotations: checkAnnotations,
+        });
       }
 
       logger.info("Posted analysis comment to GitHub PR", {
@@ -174,7 +174,7 @@ router.post(
     }
 
     // Get installation ID from config
-    const installationId = appConfig.github.installationId;
+    const { installationId } = appConfig.github;
     if (!installationId) {
       logger.warn("No GitHub installation ID configured");
       res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -197,15 +197,15 @@ router.post(
     );
 
     try {
-      await createCheckRunWithAnnotations(
+      await createCheckRunWithAnnotations({
         installationId,
         owner,
         repo,
-        head_sha,
-        check_name || KENCHI_BRANDING.CHECK_RUN_NAME,
+        headSha: head_sha,
+        name: check_name || KENCHI_BRANDING.CHECK_RUN_NAME,
         summary,
-        checkAnnotations
-      );
+        annotations: checkAnnotations,
+      });
 
       logger.info("Created check run with annotations", {
         repository,

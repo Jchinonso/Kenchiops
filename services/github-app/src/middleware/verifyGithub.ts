@@ -63,7 +63,7 @@ export const verifyGitHubWebhook = (req: Request, res: Response, next: NextFunct
   }
 
   // Get raw body from the request (captured by express.json verify option)
-  const rawBody = req.rawBody;
+  const { rawBody } = req;
 
   if (!rawBody) {
     logger.error("Raw body not available for signature verification", {

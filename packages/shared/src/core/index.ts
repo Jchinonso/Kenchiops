@@ -27,10 +27,18 @@ export {
   NotFoundError,
   ExternalServiceError,
   LLMError,
+  RateLimitError,
+  CircuitBreakerOpenError,
   isAppError,
+  isRetryableAppError,
+  isExternalServiceError,
   getErrorMessage,
+  getUserFriendlyMessage,
+  getRetryInfo,
   formatErrorForLog,
   wrapError,
+  enrichError,
+  type ErrorContext,
 } from "./errors.js";
 
 // Types

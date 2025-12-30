@@ -48,10 +48,10 @@ const buildLookups = (evidence: Evidence): ValidationLookups => {
 
   return {
     commits: buildCommitPrefixSet(evidence.gitHistory),
-    incidents: new Set(relatedDocs.map((d) => d.id)),
-    documentTitles: new Set(relatedDocs.map((d) => d.title.toLowerCase())),
+    incidents: new Set(relatedDocs.map((doc) => doc.id)),
+    documentTitles: new Set(relatedDocs.map((doc) => doc.title.toLowerCase())),
     logs: buildLogLookupMap(evidence.logs),
-    logValues: evidence.logs?.map((l) => l.message.toLowerCase()) || [],
+    logValues: evidence.logs?.map((log) => log.message.toLowerCase()) || [],
   };
 };
 
@@ -90,9 +90,8 @@ export const validateResponse = (
 /**
  * Builds analysis text once for reuse.
  */
-const buildAnalysisText = (reasoning?: string, identifiedCause?: string): string => {
-  return reasoning || identifiedCause ? `${reasoning ?? ""} ${identifiedCause ?? ""}`.trim() : "";
-};
+const buildAnalysisText = (reasoning?: string, identifiedCause?: string): string =>
+  reasoning || identifiedCause ? `${reasoning ?? ""} ${identifiedCause ?? ""}`.trim() : "";
 
 /**
  * Validates all evidence references and returns invalid reference warnings.
@@ -101,11 +100,10 @@ const getEvidenceReferenceWarnings = (
   evidenceUsed: LLMAnalysisResult["evidenceUsed"],
   context: { event: Event; evidence: Evidence },
   lookups: ValidationLookups
-): string[] => {
-  return (evidenceUsed ?? [])
+): string[] =>
+  (evidenceUsed ?? [])
     .filter((evidence) => !isEvidenceValid(evidence, context, lookups))
     .map((evidence) => `LLM cited evidence that was not provided: ${evidence.reference}`);
-};
 
 /**
  * Gets errors for cited incidents not found in known incidents.
@@ -113,20 +111,18 @@ const getEvidenceReferenceWarnings = (
 const getCitedIncidentErrors = (
   relatedIncidents: string[] | undefined,
   incidentsSet: Set<string>
-): string[] => {
-  return (relatedIncidents ?? [])
+): string[] =>
+  (relatedIncidents ?? [])
     .filter((cited) => !incidentsSet.has(cited))
     .map((cited) => `LLM cited non-existent incident: ${cited}`);
-};
 
 /**
  * Gets errors for cited commits not found in known commits.
  */
-const getCitedCommitErrors = (text: string, commitsSet: Set<string>): string[] => {
-  return extractCommitSHAs(text)
+const getCitedCommitErrors = (text: string, commitsSet: Set<string>): string[] =>
+  extractCommitSHAs(text)
     .filter((cited) => !isCommitValid(cited, commitsSet))
     .map((cited) => `LLM cited non-existent commit: ${cited}`);
-};
 
 /**
  * Gets warnings for quoted text not found in logs.
@@ -153,7 +149,9 @@ const EVIDENCE_VALIDATORS: Readonly<Record<string, EvidenceValidator>> = {
     const prefix = refLower.substring(0, MATCHING_CONFIG.LOG_PREFIX_LENGTH);
 
     // O(1) prefix lookup
-    if (lookups.logs.has(prefix)) return true;
+    if (lookups.logs.has(prefix)) {
+      return true;
+    }
 
     // Check if any log contains the reference
     return lookups.logValues.some(
@@ -170,9 +168,11 @@ const EVIDENCE_VALIDATORS: Readonly<Record<string, EvidenceValidator>> = {
 
   related_incident: (ref, context, lookups) => {
     // O(1) Set lookup first
-    if (lookups.incidents.has(ref)) return true;
+    if (lookups.incidents.has(ref)) {
+      return true;
+    }
     // Fallback: check if reference contains any incident ID
-    return context.evidence.relatedDocs?.some((d) => ref.includes(d.id)) ?? false;
+    return context.evidence.relatedDocs?.some((doc) => ref.includes(doc.id)) ?? false;
   },
 
   metric: (_ref, context) => context.evidence.metrics !== undefined,
@@ -227,8 +227,8 @@ const extractQuotedText = (text: string): string[] => {
  * Gets errors for actions containing dangerous keywords.
  * Uses pre-compiled regex pattern for O(n) matching.
  */
-const getDangerousKeywordErrors = (actions: LLMAnalysisResult["recommendedActions"]): string[] => {
-  return (actions ?? [])
+const getDangerousKeywordErrors = (actions: LLMAnalysisResult["recommendedActions"]): string[] =>
+  (actions ?? [])
     .map((action) => {
       const match = action.description.match(DANGEROUS_KEYWORDS_PATTERN);
       return match
@@ -236,7 +236,6 @@ const getDangerousKeywordErrors = (actions: LLMAnalysisResult["recommendedAction
         : null;
     })
     .filter((error): error is string => error !== null);
-};
 
 /**
  * Generates all prefix lengths for a SHA.
@@ -327,16 +326,13 @@ const buildLogLookupMap = (logs: Evidence["logs"]): Map<string, string> => {
  * Checks if quoted text matches any provided log message.
  * Uses pre-computed lowercased log array for efficient matching.
  */
-const isQuotedTextValid = (quoted: string, logValues: string[]): boolean => {
-  return (
-    logValues.length > 0 &&
-    logValues.some((log) => {
-      const quotedLower = quoted.toLowerCase();
-      const comparisonLen = MATCHING_CONFIG.LOG_COMPARISON_PREFIX_LENGTH;
-      return log.includes(quotedLower) || quotedLower.includes(log.substring(0, comparisonLen));
-    })
-  );
-};
+const isQuotedTextValid = (quoted: string, logValues: string[]): boolean =>
+  logValues.length > 0 &&
+  logValues.some((log) => {
+    const quotedLower = quoted.toLowerCase();
+    const comparisonLen = MATCHING_CONFIG.LOG_COMPARISON_PREFIX_LENGTH;
+    return log.includes(quotedLower) || quotedLower.includes(log.substring(0, comparisonLen));
+  });
 
 /**
  * Extracts SHA from evidence reference string.

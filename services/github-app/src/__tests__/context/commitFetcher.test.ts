@@ -57,6 +57,7 @@ jest.mock("../../services/githubService.js", () => ({
 
 // Import the mocked function to access it in tests
 import { truncateWithContext } from "../../services/context/logParser.js";
+
 const mockTruncateWithContext = truncateWithContext as jest.MockedFunction<
   typeof truncateWithContext
 >;

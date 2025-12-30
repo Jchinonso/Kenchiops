@@ -10,7 +10,7 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
-import { AppError } from "../core/errors.js";
+import { AppError, RateLimitError } from "../core/errors.js";
 import { createLogger } from "../core/logger.js";
 import {
   RATE_LIMIT_CONSTANTS,
@@ -106,8 +106,12 @@ class RedisRateLimitStore implements RateLimitStore {
       [Error | null, number],
     ];
 
-    if (incrErr) throw incrErr;
-    if (ttlErr) throw ttlErr;
+    if (incrErr) {
+      throw incrErr;
+    }
+    if (ttlErr) {
+      throw ttlErr;
+    }
 
     // Set expiry on first request in window
     if (ttl === REDIS_TTL_VALUES.NO_EXPIRY || ttl === REDIS_TTL_VALUES.KEY_NOT_FOUND) {
@@ -266,8 +270,9 @@ class RateLimiter {
     return this.memoryStore;
   }
 
-  readonly middleware = () => {
-    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  readonly middleware =
+    () =>
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       // Check if this request should skip rate limiting
       if (this.skip?.(req)) {
         return next();
@@ -279,12 +284,12 @@ class RateLimiter {
         const store = this.getStore();
 
         // Add timeout to prevent indefinite hangs on Redis operations
-        const timeoutPromise = new Promise<never>((_, reject) =>
+        const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () => reject(new Error("Rate limit check timeout")),
             HTTP_RESILIENCE_DEFAULTS.RATE_LIMIT_CHECK_TIMEOUT_MS
-          )
-        );
+          );
+        });
         const info = await Promise.race([store.increment(key, this.windowMs), timeoutPromise]);
 
         // Set rate limit headers
@@ -296,18 +301,11 @@ class RateLimiter {
         );
 
         if (info.current > this.max) {
-          const retryAfter = Math.ceil(
-            (info.resetTime - Date.now()) / TIME_CONSTANTS.MILLISECONDS_PER_SECOND
-          );
-          res.setHeader("Retry-After", retryAfter);
+          const retryAfterMs = info.resetTime - Date.now();
+          const retryAfterSec = Math.ceil(retryAfterMs / TIME_CONSTANTS.MILLISECONDS_PER_SECOND);
+          res.setHeader("Retry-After", retryAfterSec);
 
-          throw new AppError(
-            this.message,
-            "RATE_LIMIT_EXCEEDED",
-            RATE_LIMIT_CONSTANTS.RATE_LIMIT_STATUS_CODE,
-            true,
-            { retryAfter }
-          );
+          throw new RateLimitError(this.message, retryAfterMs);
         }
 
         next();
@@ -324,7 +322,6 @@ class RateLimiter {
         next();
       }
     };
-  };
 
   readonly reset = async (key?: string): Promise<void> => {
     const store = this.getStore();
@@ -372,8 +369,9 @@ class SyncRateLimiter {
     this.keyGenerator = options.keyGenerator ?? ((req) => req.ip ?? "unknown");
   }
 
-  readonly middleware = () => {
-    return (req: Request, _res: Response, next: NextFunction): void => {
+  readonly middleware =
+    () =>
+    (req: Request, _res: Response, next: NextFunction): void => {
       const key = this.keyGenerator(req);
       const now = Date.now();
       const record = this.store.get(key);
@@ -393,23 +391,13 @@ class SyncRateLimiter {
       }
 
       if (record.count >= this.max) {
-        throw new AppError(
-          this.message,
-          "RATE_LIMIT_EXCEEDED",
-          RATE_LIMIT_CONSTANTS.RATE_LIMIT_STATUS_CODE,
-          true,
-          {
-            retryAfter: Math.ceil(
-              (record.resetTime - now) / TIME_CONSTANTS.MILLISECONDS_PER_SECOND
-            ),
-          }
-        );
+        const retryAfterMs = record.resetTime - now;
+        throw new RateLimitError(this.message, retryAfterMs);
       }
 
       record.count++;
       next();
     };
-  };
 
   private readonly cleanup = (now: number): void => {
     this.store.forEach((entry, key) => {
@@ -433,9 +421,8 @@ class SyncRateLimiter {
  * const limiter = createRedisRateLimiter({ windowMs: 60000, max: 100 });
  * app.use('/api/', limiter.middleware());
  */
-export const createRedisRateLimiter = (options: RateLimitOptions): RateLimiter => {
-  return new RateLimiter(options);
-};
+export const createRedisRateLimiter = (options: RateLimitOptions): RateLimiter =>
+  new RateLimiter(options);
 
 /**
  * Create a rate limiter middleware.
@@ -445,9 +432,8 @@ export const createRedisRateLimiter = (options: RateLimitOptions): RateLimiter =
  * const limiter = createRateLimiter({ windowMs: 60000, max: 100 });
  * app.use('/api/', limiter.middleware());
  */
-export const createRateLimiter = (options: RateLimitOptions): SyncRateLimiter => {
-  return new SyncRateLimiter(options);
-};
+export const createRateLimiter = (options: RateLimitOptions): SyncRateLimiter =>
+  new SyncRateLimiter(options);
 
 /**
  * Default rate limiter: 100 requests per minute per IP.

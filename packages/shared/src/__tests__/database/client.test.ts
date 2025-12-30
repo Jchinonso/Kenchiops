@@ -53,7 +53,7 @@ jest.mock("pg", () => {
   return {
     __esModule: true,
     default: {
-      Pool: jest.fn().mockImplementation(function (this: unknown, config: unknown) {
+      Pool: jest.fn().mockImplementation((this: unknown, config: unknown) => {
         mockPoolCalls.push([config]);
         return innerMockPool;
       }),

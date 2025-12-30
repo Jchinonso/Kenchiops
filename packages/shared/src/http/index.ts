@@ -18,6 +18,18 @@ export {
   type RateLimitInfo,
 } from "./rateLimit.js";
 
+// Generic circuit breaker pattern
+export {
+  withCircuitBreaker,
+  getCircuitStatus,
+  resetCircuit,
+  resetAllCircuits,
+  getAllCircuitStatus,
+  SERVICE_KEYS,
+  type CircuitBreakerConfig,
+  type CircuitBreakerStatus,
+} from "./circuitBreaker.js";
+
 // Resilient HTTP client with retry and circuit breaker
 export {
   resilientFetch,

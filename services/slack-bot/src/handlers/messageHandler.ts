@@ -12,9 +12,8 @@ import type { MessageEvent } from "@slack/bolt";
  * @param message - Slack message event
  * @returns True if message has text property
  */
-function hasText(message: MessageEvent): message is MessageEvent & { text: string } {
-  return "text" in message && typeof message.text === "string";
-}
+const hasText = (message: MessageEvent): message is MessageEvent & { text: string } =>
+  "text" in message && typeof message.text === "string";
 
 /**
  * Handles Slack message events.
@@ -22,7 +21,7 @@ function hasText(message: MessageEvent): message is MessageEvent & { text: strin
  *
  * @param message - Slack message event
  */
-export async function handleMessage(message: MessageEvent): Promise<void> {
+export const handleMessage = async (message: MessageEvent): Promise<void> => {
   // Skip bot messages to avoid loops
   if (message.subtype === "bot_message") {
     return;
@@ -38,7 +37,7 @@ export async function handleMessage(message: MessageEvent): Promise<void> {
     channel: "channel" in message ? message.channel : undefined,
   });
 
-  // TODO: Check if message mentions the bot or is in a monitored channel
-  // TODO: Use OpenAI to analyze message and generate response
-  // TODO: Validate confidence before responding
-}
+  // Future: Check if message mentions the bot or is in a monitored channel
+  // Future: Use OpenAI to analyze message and generate response
+  // Future: Validate confidence before responding
+};

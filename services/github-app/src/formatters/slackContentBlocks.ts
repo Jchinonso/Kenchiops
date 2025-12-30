@@ -5,13 +5,14 @@
  * Extracted from slackPayloadFormatter for maintainability.
  */
 
-import type {
-  AnalyzedFailure,
-  RecommendedAction,
-  LLMDetectedDependencyChange,
-  LLMDetectedBuildConfigChange,
+import {
+  UI_EMOJI,
+  DEPENDENCY_EMOJI_MAP,
+  type AnalyzedFailure,
+  type RecommendedAction,
+  type LLMDetectedDependencyChange,
+  type LLMDetectedBuildConfigChange,
 } from "@kenchi/shared";
-import { UI_EMOJI, DEPENDENCY_EMOJI_MAP } from "@kenchi/shared";
 import { DISPLAY_LIMITS, getPriorityEmoji } from "./formatterUtils.js";
 
 // ==================== Types ====================
@@ -74,7 +75,9 @@ export interface ConsolidatedAnnotation {
 export const buildTestFailuresBlock = (
   testFailures: readonly ConsolidatedTestFailure[]
 ): SlackTextBlock | null => {
-  if (testFailures.length === 0) return null;
+  if (testFailures.length === 0) {
+    return null;
+  }
 
   const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
   const testLines = testFailures
@@ -113,7 +116,9 @@ export const buildTestFailuresBlock = (
 export const buildAnnotationsBlock = (
   annotations: readonly ConsolidatedAnnotation[]
 ): SlackTextBlock | null => {
-  if (annotations.length === 0) return null;
+  if (annotations.length === 0) {
+    return null;
+  }
 
   const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
   const lines = annotations
@@ -194,7 +199,9 @@ export const buildRootCauseBlock = (
 export const buildDependencyChangesBlock = (
   deps: readonly LLMDetectedDependencyChange[]
 ): SlackTextBlock | null => {
-  if (deps.length === 0) return null;
+  if (deps.length === 0) {
+    return null;
+  }
 
   const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
   const lines = deps
@@ -246,7 +253,9 @@ const getChangeTypeEmoji = (changeType: string): string => {
 export const buildConfigChangesBlock = (
   configs: readonly LLMDetectedBuildConfigChange[]
 ): SlackTextBlock | null => {
-  if (configs.length === 0) return null;
+  if (configs.length === 0) {
+    return null;
+  }
 
   const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
   const lines = configs
@@ -279,7 +288,9 @@ export const buildConfigChangesBlock = (
 export const buildActionsSummaryBlocks = (
   actions: readonly RecommendedAction[]
 ): SlackTextBlock[] => {
-  if (actions.length === 0) return [];
+  if (actions.length === 0) {
+    return [];
+  }
 
   const actionText = actions
     .slice(0, DISPLAY_LIMITS.slackMaxChecks)

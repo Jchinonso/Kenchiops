@@ -107,7 +107,9 @@ export const getOrFetchTenantById = async (
   fetcher: () => Promise<CachedTenant | null>
 ): Promise<CachedTenant | null> => {
   const cached = await getCachedTenantById(tenantId);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
 
   const tenant = await fetcher();
   if (tenant) {
@@ -149,7 +151,9 @@ export const getOrFetchTenantByInstallation = async (
   fetcher: () => Promise<CachedTenant | null>
 ): Promise<CachedTenant | null> => {
   const cached = await getCachedTenantByInstallation(installationId);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
 
   const tenant = await fetcher();
   if (tenant) {
@@ -191,7 +195,9 @@ export const getOrFetchTenantBySlackWorkspace = async (
   fetcher: () => Promise<CachedTenant | null>
 ): Promise<CachedTenant | null> => {
   const cached = await getCachedTenantBySlackWorkspace(workspaceId);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
 
   const tenant = await fetcher();
   if (tenant) {
@@ -288,7 +294,9 @@ export const getOrFetchChannelForRepo = async (
   fetcher: () => Promise<CachedMapping | null>
 ): Promise<CachedMapping | null> => {
   const cached = await getCachedChannelForRepo(tenantId, repository);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
 
   const mapping = await fetcher();
   if (mapping) {

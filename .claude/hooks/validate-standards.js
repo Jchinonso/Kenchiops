@@ -261,6 +261,153 @@ const VALIDATION_RULES = [
     onlyInServices: true,
   },
 
+  // ==================== Readonly Enforcement ====================
+
+  // Mutable array type declarations in interfaces/types (should use readonly)
+  // Note: Skipped in function signatures to maintain compatibility with existing APIs
+  {
+    id: "mutable-array-type",
+    pattern: /(?:interface|type)\s+\w+[^{]*\{[^}]*:\s*(?:Array<[^>]+>|[A-Za-z]+\[\])\s*[;,]/g,
+    message: "Use 'readonly' for array types in interfaces/types to enforce immutability",
+    extract: () => "Found mutable array type in interface/type - use 'readonly T[]'",
+    skipInTests: true,
+  },
+
+  // ==================== Import Type Enforcement ====================
+
+  // Type-only imports not using 'import type'
+  // Note: Excludes "Error" suffix since Error classes are used as constructors (values)
+  {
+    id: "missing-import-type",
+    pattern: /import\s+\{\s*(?:type\s+)?([A-Z][A-Za-z]*(?:Type|Interface|Props|State|Config|Options|Params|Result|Response|Request|Event|Data|Info|Context|Schema|Spec|Definition|Descriptor|Metadata|Payload|DTO))\s*(?:,|\})\s*from/g,
+    message: "Use 'import type' for type-only imports",
+    extract: (match) => `Found '${match[1]}' - use 'import type { ${match[1]} }' for type-only imports`,
+  },
+
+  // ==================== Explicit Return Types ====================
+
+  // Arrow functions without return types (exported or assigned to const)
+  {
+    id: "missing-return-type-arrow",
+    pattern: /(?:export\s+)?const\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*(?:async\s+)?\([^)]*\)\s*=>\s*[^:]/g,
+    message: "Add explicit return type to arrow functions",
+    extract: () => "Found arrow function without return type - add ': ReturnType' after parameters",
+    skipInTests: true,
+  },
+
+  // Function declarations without return types
+  {
+    id: "missing-return-type-function",
+    pattern: /(?:export\s+)?(?:async\s+)?function\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\([^)]*\)\s*\{/g,
+    message: "Add explicit return type to function declarations",
+    extract: () => "Found function without return type - add ': ReturnType' after parameters",
+    skipInTests: true,
+  },
+
+  // ==================== Boolean Naming ====================
+
+  // Boolean variables without proper prefix
+  {
+    id: "boolean-naming",
+    pattern: /(?:const|let|var)\s+([a-z][a-zA-Z]*)\s*:\s*boolean\s*=/g,
+    message: "Boolean variables should use is/has/should/can/will/did prefix",
+    extract: (match) => {
+      const name = match[1];
+      const prefixes = ["is", "has", "should", "can", "will", "did", "was", "are", "does"];
+      const hasPrefix = prefixes.some((prefix) => name.startsWith(prefix) && name[prefix.length] === name[prefix.length]?.toUpperCase());
+      return hasPrefix ? null : `Boolean '${name}' should start with is/has/should/can prefix`;
+    },
+    skipIfNull: true,
+  },
+
+  // ==================== Arrow Function Preference ====================
+
+  // Function declarations (prefer arrow functions)
+  {
+    id: "prefer-arrow-function",
+    pattern: /(?<!export\s+default\s+)function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g,
+    message: "Use arrow functions by default, function declarations only for overloads/generators/type guards",
+    extract: (match) => `Found function declaration '${match[1]}' - prefer arrow function: const ${match[1]} = () =>`,
+    skipInTests: true,
+    skipInShared: true,
+  },
+
+  // ==================== JSDoc on Exports ====================
+
+  // Exported functions without JSDoc
+  {
+    id: "missing-jsdoc-export",
+    pattern: /(?<!\*\/\s*\n\s*)export\s+(?:const|function|class)\s+[a-zA-Z]/g,
+    message: "Add JSDoc comment for exported functions/classes",
+    extract: () => "Found export without JSDoc - add /** description */ above",
+    skipInTests: true,
+  },
+
+  // ==================== Circular Import Detection ====================
+
+  // Importing from parent directories in a way that could cause cycles
+  {
+    id: "potential-circular-import",
+    pattern: /from\s+['"]\.\.\/\.\.\/[^'"]*['"]/g,
+    message: "Deep parent imports may cause circular dependencies - consider restructuring",
+    extract: () => "Found deep parent import (../../) - verify no circular dependency",
+  },
+
+  // ==================== Principal Engineer Standards ====================
+
+  // Class inheritance (prefer composition)
+  {
+    id: "prefer-composition",
+    pattern: /class\s+\w+\s+extends\s+(?!Error|AppError|ValidationError|AuthenticationError|NotFoundError|ExternalServiceError|LLMError)\w+/g,
+    message: "Prefer composition over inheritance - use dependency injection instead",
+    extract: () => "Found class inheritance - prefer composition over inheritance (SOLID)",
+    skipInTests: true,
+  },
+
+  // Empty catch blocks (comprehensive error handling)
+  {
+    id: "empty-catch-block",
+    pattern: /catch\s*\([^)]*\)\s*\{\s*\}/g,
+    message: "Empty catch blocks swallow errors - handle or rethrow",
+    extract: () => "Found empty catch block - add error handling or rethrow",
+  },
+
+  // Catch without logging or rethrowing
+  {
+    id: "silent-catch",
+    pattern: /catch\s*\([^)]*\)\s*\{\s*\/\//g,
+    message: "Catch blocks should log errors or rethrow - don't silently ignore",
+    extract: () => "Found catch with only comment - add proper error handling",
+  },
+
+  // Console.log in production code
+  {
+    id: "console-log",
+    pattern: /console\.(log|debug|info|warn|error)\s*\(/g,
+    message: "Use logger from @kenchi/shared instead of console",
+    extract: () => "Found console.* - use logger from @kenchi/shared",
+    skipInTests: true,
+  },
+
+  // TODO/FIXME without ticket reference
+  {
+    id: "todo-without-ticket",
+    pattern: /\/\/\s*(TODO|FIXME|HACK|XXX)(?!:?\s*\[|\s*#|\s*JIRA|\s*GH-)/gi,
+    message: "TODOs should reference a ticket or issue number",
+    extract: () => "Found TODO/FIXME without ticket reference - add issue number",
+  },
+
+  // Magic numbers (numeric literals in logic)
+  {
+    id: "magic-number",
+    pattern: /(?:if|while|for|return|===|!==|>|<|>=|<=|\+|-|\*|\/)\s*\d{2,}(?!\d*[mshdwMY])/g,
+    message: "Avoid magic numbers - use named constants",
+    extract: () => "Found magic number - extract to named constant in shared/constants",
+    skipInTests: true,
+    skipInConstants: true,
+    stripTemplateLiterals: true,
+  },
+
   // ==================== Performance ====================
 
   // Array.from(set).some() anti-pattern
@@ -330,9 +477,36 @@ const isServiceFile = (filePath) => {
 };
 
 /**
+ * Check if file is a test file
+ */
+const isTestFile = (filePath) => {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  return (
+    normalizedPath.includes("__tests__") ||
+    normalizedPath.includes(".test.") ||
+    normalizedPath.includes(".spec.") ||
+    normalizedPath.includes("/tests/")
+  );
+};
+
+/**
  * Count lines in content
  */
 const countLines = (content) => content.split("\n").length;
+
+/**
+ * Strip template literal content for certain validations.
+ * Replaces content inside backticks with spaces to preserve line numbers.
+ * Handles escaped backticks within template literals.
+ */
+const stripTemplateLiterals = (content) => {
+  // Match template literals including escaped backticks: `...` or `...\`...`
+  // (?:[^`\\]|\\.)* matches: non-backtick/non-backslash chars OR escaped chars
+  return content.replace(/`(?:[^`\\]|\\.)*`/gs, (match) => {
+    // Preserve newlines, replace other chars with spaces
+    return match.replace(/[^\n]/g, " ");
+  });
+};
 
 /**
  * Get line number for a match position
@@ -352,6 +526,7 @@ const validateFile = (filePath, content) => {
   const isConstants = isConstantsFile(filePath);
   const isShared = isSharedFile(filePath);
   const isService = isServiceFile(filePath);
+  const isTest = isTestFile(filePath);
 
   // Check module size
   const lineCount = countLines(content);
@@ -363,23 +538,35 @@ const validateFile = (filePath, content) => {
     });
   }
 
+  // Pre-compute stripped content for rules that need it
+  const strippedContent = stripTemplateLiterals(content);
+
   // Check each rule
   VALIDATION_RULES.forEach((rule) => {
     // Skip rules based on file location
     if (rule.skipInConstants && isConstants) return;
     if (rule.skipInShared && isShared) return;
     if (rule.onlyInServices && !isService) return;
+    if (rule.skipInTests && isTest) return;
+
+    // Use stripped content for rules that need template literals removed
+    const contentToCheck = rule.stripTemplateLiterals ? strippedContent : content;
 
     // Reset regex lastIndex for global patterns
     rule.pattern.lastIndex = 0;
 
-    const matches = content.matchAll(rule.pattern);
+    const matches = contentToCheck.matchAll(rule.pattern);
     for (const match of matches) {
-      const line = getLineNumber(content, match.index);
+      const line = getLineNumber(contentToCheck, match.index);
+      const message = rule.extract ? rule.extract(match) : rule.message;
+
+      // Skip if extract returns null (for conditional rules like boolean-naming)
+      if (rule.skipIfNull && message === null) continue;
+
       violations.push({
         rule: rule.id,
         line,
-        message: rule.extract ? rule.extract(match) : rule.message,
+        message: message || rule.message,
       });
     }
   });

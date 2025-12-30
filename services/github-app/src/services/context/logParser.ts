@@ -155,7 +155,9 @@ export const extractTestFailures = (logs: string): TestFailure[] => {
 
     matches.forEach((match) => {
       const testName = match[1]?.trim();
-      if (!testName || seenTests.has(testName.toLowerCase())) return;
+      if (!testName || seenTests.has(testName.toLowerCase())) {
+        return;
+      }
 
       seenTests.add(testName.toLowerCase());
       failures.push({

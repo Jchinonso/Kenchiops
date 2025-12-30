@@ -86,8 +86,8 @@ const ensurePoolInitialized = (): pg.Pool => {
  * Registers pool event handlers for logging
  */
 const registerPoolEventHandlers = (dbPool: pg.Pool): void => {
-  dbPool.on("error", (err: Error) => {
-    logger.error("Unexpected database pool error", { error: err.message });
+  dbPool.on("error", (poolError: Error) => {
+    logger.error("Unexpected database pool error", { error: poolError.message });
   });
 
   dbPool.on("connect", () => {
@@ -190,10 +190,14 @@ export const transaction = async <T>(fn: (client: pg.PoolClient) => Promise<T>):
  * Call this during graceful shutdown.
  */
 export const closeDatabase = async (): Promise<void> => {
-  if (!pool) return;
+  const currentPool = pool;
+  if (!currentPool) {
+    return;
+  }
 
-  await pool.end();
+  // Set to null first to prevent concurrent access
   pool = null;
+  await currentPool.end();
   logger.info("Database pool closed");
 };
 

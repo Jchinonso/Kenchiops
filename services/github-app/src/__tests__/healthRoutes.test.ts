@@ -6,12 +6,24 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import express from "express";
 import request from "supertest";
 
+// Mock health check functions
+const mockPerformHealthCheck = jest.fn<() => Promise<Record<string, unknown>>>();
+const mockLivenessCheck = jest.fn<() => Record<string, unknown>>();
+const mockReadinessCheck = jest.fn<() => Promise<{ ready: boolean; reason?: string }>>();
+
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
   HTTP_STATUS: {
     OK: 200,
     BAD_REQUEST: 400,
     INTERNAL_SERVER_ERROR: 500,
+    SERVICE_UNAVAILABLE: 503,
+  },
+  HEALTH_STATUS: {
+    OK: "ok",
+    HEALTHY: "healthy",
+    DEGRADED: "degraded",
+    UNHEALTHY: "unhealthy",
   },
   config: {
     NODE_ENV: "test",
@@ -19,11 +31,24 @@ jest.mock("@kenchi/shared", () => ({
   GITHUB_PAGINATION: {
     DEFAULT_PER_PAGE: 100,
   },
+  performHealthCheck: mockPerformHealthCheck,
+  livenessCheck: mockLivenessCheck,
+  readinessCheck: mockReadinessCheck,
+  asyncHandler:
+    (fn: (...args: unknown[]) => Promise<unknown>) =>
+    async (req: unknown, res: unknown, next: unknown) => {
+      try {
+        await fn(req, res, next);
+      } catch (error) {
+        (next as (err: unknown) => void)(error);
+      }
+    },
 }));
 
 jest.mock("../config/appConfig.js", () => ({
   appConfig: {
     serviceName: "github-app",
+    version: "1.0.0",
     github: {
       appId: "123456",
       privateKey:
@@ -73,6 +98,37 @@ describe("Health Routes", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // Default mock implementations
+    mockPerformHealthCheck.mockResolvedValue({
+      status: "healthy",
+      service: "github-app",
+      version: "1.0.0",
+      timestamp: new Date().toISOString(),
+      uptime: 12345,
+      environment: "test",
+      components: [
+        { name: "memory", status: "healthy", message: "Heap usage: 50%" },
+        { name: "database", status: "healthy", message: "PostgreSQL connection OK", latencyMs: 5 },
+        { name: "redis", status: "healthy", message: "Redis connection OK", latencyMs: 2 },
+      ],
+      memory: {
+        heapUsed: 50,
+        heapTotal: 100,
+        heapUsedPercent: 50,
+        rss: 150,
+        external: 10,
+      },
+    });
+
+    mockLivenessCheck.mockReturnValue({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+    });
+
+    mockReadinessCheck.mockResolvedValue({
+      ready: true,
+    });
+
     // Create Express app with routes
     app = express();
     app.use(express.json());
@@ -83,15 +139,36 @@ describe("Health Routes", () => {
   });
 
   describe("GET /health", () => {
-    it("should return health status", async () => {
+    it("should return comprehensive health status", async () => {
       const response = await request(app).get("/health");
 
       expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({
-        status: "ok",
+      expect(response.body).toHaveProperty("status", "healthy");
+      expect(response.body).toHaveProperty("service", "github-app");
+      expect(response.body).toHaveProperty("version");
+      expect(response.body).toHaveProperty("timestamp");
+      expect(response.body).toHaveProperty("uptime");
+      expect(response.body).toHaveProperty("environment");
+      expect(response.body).toHaveProperty("components");
+      expect(response.body).toHaveProperty("memory");
+    });
+
+    it("should return 503 when unhealthy", async () => {
+      mockPerformHealthCheck.mockResolvedValue({
+        status: "unhealthy",
         service: "github-app",
+        version: "1.0.0",
+        timestamp: new Date().toISOString(),
+        uptime: 100,
         environment: "test",
+        components: [{ name: "database", status: "unhealthy", message: "Connection failed" }],
+        memory: { heapUsed: 50, heapTotal: 100, heapUsedPercent: 50, rss: 150, external: 10 },
       });
+
+      const response = await request(app).get("/health");
+
+      expect(response.status).toBe(503);
+      expect(response.body.status).toBe("unhealthy");
     });
 
     it("should include timestamp", async () => {
@@ -107,11 +184,53 @@ describe("Health Routes", () => {
       expect(response.body.uptime).toBe(12345);
     });
 
-    it("should return ISO timestamp", async () => {
+    it("should include component health details", async () => {
       const response = await request(app).get("/health");
 
-      const timestamp = response.body.timestamp;
-      expect(timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.components)).toBe(true);
+      expect(response.body.components.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("GET /live", () => {
+    it("should return liveness status", async () => {
+      const response = await request(app).get("/live");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty("status", "ok");
+      expect(response.body).toHaveProperty("timestamp");
+    });
+
+    it("should respond quickly", async () => {
+      const start = Date.now();
+      const response = await request(app).get("/live");
+      const duration = Date.now() - start;
+
+      expect(response.status).toBe(200);
+      expect(duration).toBeLessThan(50);
+    });
+  });
+
+  describe("GET /ready", () => {
+    it("should return ready when all dependencies are healthy", async () => {
+      const response = await request(app).get("/ready");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty("ready", true);
+    });
+
+    it("should return 503 when not ready", async () => {
+      mockReadinessCheck.mockResolvedValue({
+        ready: false,
+        reason: "Unhealthy components: database",
+      });
+
+      const response = await request(app).get("/ready");
+
+      expect(response.status).toBe(503);
+      expect(response.body.ready).toBe(false);
+      expect(response.body.reason).toBeDefined();
     });
   });
 
@@ -200,6 +319,7 @@ describe("Health Routes", () => {
             installationId?: number;
           };
           serviceName: string;
+          version: string;
         };
       };
       mockAppConfig.appConfig.github.privateKey = "invalid key\n-----END RSA PRIVATE KEY-----";
@@ -219,6 +339,7 @@ describe("Health Routes", () => {
             installationId?: number;
           };
           serviceName: string;
+          version: string;
         };
       };
       mockAppConfig.appConfig.github.privateKey = "-----BEGIN RSA PRIVATE KEY-----\ninvalid";
@@ -238,6 +359,7 @@ describe("Health Routes", () => {
             installationId?: number;
           };
           serviceName: string;
+          version: string;
         };
       };
       mockAppConfig.appConfig.github.privateKey = "";
@@ -260,6 +382,7 @@ describe("Health Routes", () => {
             installationId?: number;
           };
           serviceName: string;
+          version: string;
         };
       };
       mockAppConfig.appConfig.github.installationId = undefined;
@@ -279,6 +402,7 @@ describe("Health Routes", () => {
             installationId?: number;
           };
           serviceName: string;
+          version: string;
         };
       };
       mockAppConfig.appConfig.github.webhookSecret = "";
@@ -298,6 +422,7 @@ describe("Health Routes", () => {
             installationId?: number;
           };
           serviceName: string;
+          version: string;
         };
       };
       mockAppConfig.appConfig.github.installationId = undefined;

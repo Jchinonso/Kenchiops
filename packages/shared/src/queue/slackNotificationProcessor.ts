@@ -182,7 +182,9 @@ export const enqueueSystemAlert = async (
  * Determines if an error is retryable
  */
 const isRetryableError = (error?: string): boolean => {
-  if (!error) return false;
+  if (!error) {
+    return false;
+  }
   return SLACK_RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(error));
 };
 
@@ -266,6 +268,7 @@ export const startSlackNotificationWorker = async (
     maxConcurrent = QUEUE_WORKER_DEFAULTS.SLACK_MAX_CONCURRENT,
   } = options;
   let running = true;
+  const isRunning = (): boolean => running;
   let activeJobs = 0;
 
   logger.info("Starting Slack notification queue worker", {
@@ -274,7 +277,7 @@ export const startSlackNotificationWorker = async (
   });
 
   const processLoop = async (): Promise<void> => {
-    while (running) {
+    while (isRunning()) {
       // Wait if at max concurrency
       if (activeJobs >= maxConcurrent) {
         await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);

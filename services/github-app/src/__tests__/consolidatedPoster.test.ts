@@ -187,13 +187,15 @@ describe("Consolidated Poster Service", () => {
       await postConsolidatedAnalysis(aggregation);
 
       expect(mockCreateCheckRunWithAnnotations).toHaveBeenCalledWith(
-        12345,
-        "testowner",
-        "testrepo",
-        expect.any(String),
-        "KenchiOps Analysis",
-        expect.any(String),
-        expect.any(Array)
+        expect.objectContaining({
+          installationId: 12345,
+          owner: "testowner",
+          repo: "testrepo",
+          headSha: expect.any(String),
+          name: "KenchiOps Analysis",
+          summary: expect.any(String),
+          annotations: expect.any(Array),
+        })
       );
     });
 

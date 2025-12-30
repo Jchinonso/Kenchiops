@@ -139,7 +139,7 @@ const initializeFailureAggregator = (): void => {
     process.env.AGGREGATION_MAX_WAIT_MS || String(AGGREGATION_DEFAULTS.MAX_WAIT_MS),
     10
   );
-  const maxFailuresPerCommit = DEFAULT_AGGREGATION_CONFIG.maxFailuresPerCommit;
+  const { maxFailuresPerCommit } = DEFAULT_AGGREGATION_CONFIG;
 
   const aggregationConfig = {
     debounceMs,

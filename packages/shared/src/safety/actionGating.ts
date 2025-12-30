@@ -60,14 +60,11 @@ const DEFAULT_CONFIDENCE_RANGE: ConfidenceRange = "very_high";
  * @param action - Action proposal to validate
  * @returns True if action is valid
  */
-const isValidAction = (action: unknown): action is ActionProposal => {
-  return (
-    typeof action === "object" &&
-    action !== null &&
-    typeof (action as Record<string, unknown>).safetyLevel === "string" &&
-    VALID_SAFETY_LEVELS.has((action as Record<string, unknown>).safetyLevel as string)
-  );
-};
+const isValidAction = (action: unknown): action is ActionProposal =>
+  typeof action === "object" &&
+  action !== null &&
+  typeof (action as Record<string, unknown>).safetyLevel === "string" &&
+  VALID_SAFETY_LEVELS.has((action as Record<string, unknown>).safetyLevel as string);
 
 /**
  * Determines confidence range from score using functional lookup.
@@ -142,13 +139,8 @@ const HIGH_CONFIDENCE_MESSAGE_TEMPLATES: Readonly<
 const getMessageContext = (
   safetyLevel: SafetyLevel,
   canAutoApprove: boolean
-): keyof typeof HIGH_CONFIDENCE_MESSAGE_TEMPLATES => {
-  return canAutoApprove
-    ? "auto_approve"
-    : safetyLevel === "medium_risk"
-      ? "medium_risk"
-      : "high_risk";
-};
+): keyof typeof HIGH_CONFIDENCE_MESSAGE_TEMPLATES =>
+  canAutoApprove ? "auto_approve" : safetyLevel === "medium_risk" ? "medium_risk" : "high_risk";
 
 /**
  * Message factory for high confidence ranges with safety level context.

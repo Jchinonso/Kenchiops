@@ -62,7 +62,7 @@ const handleDefault: RelevanceHandler = () => CONSISTENCY_ADJUSTMENTS.DEFAULT;
  * Array of relevance handlers in priority order.
  * First matching handler returns its adjustment value.
  */
-const RELEVANCE_HANDLERS: ReadonlyArray<RelevanceHandler> = [
+const RELEVANCE_HANDLERS: readonly RelevanceHandler[] = [
   handleHighRelevance,
   handleNoRelevance,
   handleDefault,

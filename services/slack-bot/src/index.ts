@@ -11,8 +11,7 @@
  */
 
 // @slack/bolt is a CommonJS module - use default import
-import Bolt from "@slack/bolt";
-import type { ButtonAction as BoltButtonAction } from "@slack/bolt";
+import Bolt, { type ButtonAction as BoltButtonAction } from "@slack/bolt";
 import express from "express";
 import {
   logger,
@@ -34,10 +33,6 @@ import {
   SLACK_ACTION_PATTERNS,
   shouldSkipSlackBotRateLimit,
 } from "@kenchi/shared";
-
-const { App } = Bolt;
-type SlackApp = InstanceType<typeof App>;
-type ButtonAction = BoltButtonAction;
 import { loadAppConfig } from "./config/appConfig.js";
 import { handleKenchiCommand } from "./handlers/commandHandler.js";
 import { handleAppMention } from "./handlers/mentionHandler.js";
@@ -64,31 +59,62 @@ import { createHttpRoutes } from "./routes/httpRoutes.js";
 import { oauthRoutes } from "./routes/oauthRoutes.js";
 import { createNotificationHandler } from "./services/notificationHandler.js";
 
+const { App } = Bolt;
+type SlackApp = InstanceType<typeof App>;
+type ButtonAction = BoltButtonAction;
+
+/**
+ * Handle bot leaving a channel - clean up repository mappings
+ */
+const handleBotLeftChannel = async (workspaceId: string, channelId: string): Promise<void> => {
+  logger.info("Bot left channel, cleaning up mappings", {
+    channelId,
+    workspaceId,
+  });
+
+  try {
+    const tenant = await findBySlackWorkspace(workspaceId);
+
+    if (tenant) {
+      const deletedCount = await deleteMappingsForChannel(tenant.id, channelId);
+
+      logger.info("Cleaned up repository mappings for channel", {
+        channelId,
+        deletedCount,
+      });
+    }
+  } catch (error) {
+    logger.error("Failed to clean up mappings on channel leave", {
+      channelId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
 /**
  * Initializes and configures the Slack Bolt app.
  * Uses Socket Mode to receive events via WebSocket (no public URL needed).
  *
- * @param config - Application configuration
+ * @param appConfig - Application configuration
  * @returns Configured Slack Bolt app instance
  */
-function createSlackApp(config: ReturnType<typeof loadAppConfig>): SlackApp {
-  return new App({
-    token: config.slackBotToken,
-    signingSecret: config.slackSigningSecret,
+const createSlackApp = (appConfig: ReturnType<typeof loadAppConfig>): SlackApp =>
+  new App({
+    token: appConfig.slackBotToken,
+    signingSecret: appConfig.slackSigningSecret,
     socketMode: true,
-    appToken: config.slackAppToken,
+    appToken: appConfig.slackAppToken,
   });
-}
 
 /**
  * Sets up Slack event handlers.
  *
  * @param app - Slack Bolt app instance
  */
-function setupSlackHandlers(app: SlackApp): void {
+const setupSlackHandlers = (app: SlackApp): void => {
   // Debug: Log all incoming events
   app.use(async (args) => {
-    const payload = args.payload;
+    const { payload } = args;
     if (payload && "type" in payload) {
       logger.info("Received Slack event", {
         type: payload.type,
@@ -156,30 +182,7 @@ function setupSlackHandlers(app: SlackApp): void {
     }
 
     const workspaceId = authResult.team_id || "";
-    const channelId = event.channel;
-
-    logger.info("Bot left channel, cleaning up mappings", {
-      channelId,
-      workspaceId,
-    });
-
-    try {
-      const tenant = await findBySlackWorkspace(workspaceId);
-
-      if (tenant) {
-        const deletedCount = await deleteMappingsForChannel(tenant.id, channelId);
-
-        logger.info("Cleaned up repository mappings for channel", {
-          channelId,
-          deletedCount,
-        });
-      }
-    } catch (error) {
-      logger.error("Failed to clean up mappings on channel leave", {
-        channelId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
+    await handleBotLeftChannel(workspaceId, event.channel);
   });
 
   // Handle action button clicks
@@ -314,12 +317,12 @@ function setupSlackHandlers(app: SlackApp): void {
 
   // Register repository selection modal handler
   registerRepoSelectHandler(app);
-}
+};
 
 /**
  * Initialize database connection for multi-tenant support
  */
-function initializeDatabase(): void {
+const initializeDatabase = (): void => {
   try {
     initDatabase({
       connectionString: config.DATABASE_URL,
@@ -333,13 +336,13 @@ function initializeDatabase(): void {
     });
     throw error;
   }
-}
+};
 
 /**
  * Initializes and starts the Slack bot service.
  * Uses Socket Mode for Slack events (WebSocket connection, no public URL needed).
  */
-async function startService(): Promise<void> {
+const startService = async (): Promise<void> => {
   try {
     const appConfig = loadAppConfig();
 
@@ -367,8 +370,8 @@ async function startService(): Promise<void> {
     // Add OAuth routes for multi-tenant Slack installation
     expressApp.use(oauthRoutes);
 
-    // Add message/broadcast routes
-    expressApp.use(createHttpRoutes(slackApp));
+    // Add message/broadcast routes with health checks
+    expressApp.use(createHttpRoutes(slackApp, appConfig));
 
     // Start Slack app in Socket Mode (connects via WebSocket)
     await slackApp.start();
@@ -443,7 +446,7 @@ async function startService(): Promise<void> {
     });
     process.exit(1);
   }
-}
+};
 
 // Handle uncaught exceptions - specifically for socket-mode disconnect issues
 process.on("uncaughtException", (error) => {

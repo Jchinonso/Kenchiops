@@ -33,9 +33,9 @@ export const withTimeout = <T>(
   timeoutMs: number,
   errorMessage = "Operation timed out"
 ): Promise<T> => {
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
-  );
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+  });
   return Promise.race([promise, timeoutPromise]);
 };
 
@@ -52,7 +52,9 @@ export const isRetryableError = (
   error: string | undefined,
   patterns: readonly RegExp[]
 ): boolean => {
-  if (!error) return false;
+  if (!error) {
+    return false;
+  }
   return patterns.some((pattern) => pattern.test(error));
 };
 
@@ -65,7 +67,9 @@ export const isRetryableError = (
  * @returns Promise that resolves after the delay
  */
 export const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 /**
  * Safely parse JSON with type assertion.
@@ -91,7 +95,7 @@ export const safeJsonParse = <T>(json: string): T | null => {
  * @param radix - Parse radix (default 10)
  * @returns Parsed count number
  */
-export const parseDbCount = (rows: readonly { count: string }[], radix = 10): number =>
+export const parseDbCount = (rows: ReadonlyArray<{ count: string }>, radix = 10): number =>
   parseInt(rows[0]?.count ?? "0", radix);
 
 // ==================== ID Generation ====================

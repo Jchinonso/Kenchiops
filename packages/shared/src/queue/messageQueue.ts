@@ -72,6 +72,21 @@ export interface QueueConfig {
   readonly deadLetterQueue?: string;
 }
 
+/**
+ * Queue manager interface
+ */
+export interface QueueManager {
+  readonly name: string;
+  readonly enqueue: <T>(
+    type: string,
+    payload: T,
+    metadata?: Record<string, unknown>
+  ) => Promise<string>;
+  readonly process: <T>(handler: MessageHandler<T>) => Promise<void>;
+  readonly getStats: () => Promise<{ pending: number; processing: number; dead: number }>;
+  readonly clear: () => Promise<void>;
+}
+
 // ==================== Helper Functions ====================
 
 /**
@@ -156,7 +171,7 @@ export const subscribe = async <T>(
 /**
  * Creates a queue manager for reliable job processing
  */
-export const createQueue = (queueConfig: QueueConfig) => {
+export const createQueue = (queueConfig: QueueConfig): QueueManager => {
   const {
     name,
     maxRetries = QUEUE_CONFIG.DEFAULT_MAX_RETRIES,
@@ -210,7 +225,9 @@ export const createQueue = (queueConfig: QueueConfig) => {
     // Move job from main queue to processing queue (atomic, non-blocking)
     const data = await client.rpoplpush(name, processingQueue);
 
-    if (!data) return; // No job available
+    if (!data) {
+      return;
+    } // No job available
 
     const message = deserializeMessage<T>(data);
     const startTime = Date.now();

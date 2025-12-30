@@ -21,9 +21,13 @@ import {
   addFailureToRedis,
   KENCHI_BRANDING,
   type AggregationKey,
+  type FailureContext,
 } from "@kenchi/shared";
-import type { CheckRunWebhook } from "../types/githubTypes.js";
-import { GITHUB_CHECK_ACTIONS, GITHUB_CHECK_CONCLUSIONS } from "../types/githubTypes.js";
+import {
+  GITHUB_CHECK_ACTIONS,
+  GITHUB_CHECK_CONCLUSIONS,
+  type CheckRunWebhook,
+} from "../types/githubTypes.js";
 import {
   gatherEnrichedContext,
   fetchPRsByCommit,
@@ -252,16 +256,16 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
     pullRequestNumbers.length > 0 ? buildPRContext(context, pullRequestNumbers[0]) : null;
   const workflowContext = buildWorkflowContext(check_run.name, context);
 
+  const failureContext: FailureContext = {
+    repositoryInfo,
+    installationId: installation.id,
+    pullRequestNumbers,
+    prContext,
+    workflowContext,
+  };
+
   try {
-    await addFailureToRedis(
-      aggregationKey,
-      analyzedFailure,
-      repositoryInfo,
-      installation.id,
-      pullRequestNumbers,
-      prContext,
-      workflowContext
-    );
+    await addFailureToRedis(aggregationKey, analyzedFailure, failureContext);
 
     logger.info("Failure added to Redis aggregator", {
       repository: repository.full_name,

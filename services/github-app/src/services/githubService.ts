@@ -302,9 +302,8 @@ export const postPRComment = async (
     });
 
     throw new ExternalServiceError("GitHub", wrapError("Failed to post comment", error), {
-      owner,
-      repo,
-      prNumber,
+      operation: "postPRComment",
+      metadata: { owner, repo, prNumber },
     });
   }
 };
@@ -383,7 +382,8 @@ export const getInstallationRepositories = async (
     });
 
     throw new ExternalServiceError("GitHub", wrapError("Failed to fetch repositories", error), {
-      installationId,
+      operation: "fetchRepositories",
+      metadata: { installationId },
     });
   }
 };
@@ -401,9 +401,22 @@ export interface CheckAnnotation {
 }
 
 /**
+ * Options for creating a check run with annotations
+ */
+export interface CreateCheckRunOptions {
+  readonly installationId: number;
+  readonly owner: string;
+  readonly repo: string;
+  readonly headSha: string;
+  readonly name: string;
+  readonly summary: string;
+  readonly annotations: readonly CheckAnnotation[];
+}
+
+/**
  * GitHub API annotation batch size limit (from centralized pagination config)
  */
-const MAX_ANNOTATIONS_PER_CALL = GITHUB_PAGINATION.MAX_ANNOTATIONS_PER_CALL;
+const { MAX_ANNOTATIONS_PER_CALL } = GITHUB_PAGINATION;
 
 /**
  * Split array into batches of specified size
@@ -420,19 +433,15 @@ const batchArray = <T>(array: T[], batchSize: number): T[][] => {
  * This posts line-level feedback directly on the PR files
  */
 export const createCheckRunWithAnnotations = async (
-  installationId: number,
-  owner: string,
-  repo: string,
-  headSha: string,
-  name: string,
-  summary: string,
-  annotations: CheckAnnotation[]
+  options: CreateCheckRunOptions
 ): Promise<void> => {
+  const { installationId, owner, repo, headSha, name, summary, annotations } = options;
+
   try {
     const octokit = await getOctokit(installationId);
 
     // Split annotations into batches (GitHub limits to 50 per API call)
-    const annotationBatches = batchArray(annotations, MAX_ANNOTATIONS_PER_CALL);
+    const annotationBatches = batchArray([...annotations], MAX_ANNOTATIONS_PER_CALL);
 
     // Create the check run with first batch
     const { data: checkRun } = await octokit.rest.checks.create({
@@ -484,9 +493,8 @@ export const createCheckRunWithAnnotations = async (
     });
 
     throw new ExternalServiceError("GitHub", wrapError("Failed to create check run", error), {
-      owner,
-      repo,
-      headSha,
+      operation: "createCheckRun",
+      metadata: { owner, repo, headSha },
     });
   }
 };
