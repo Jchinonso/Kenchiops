@@ -58,9 +58,9 @@ export type HealthStatus = (typeof HEALTH_STATUS)[keyof typeof HEALTH_STATUS];
  */
 export const MEMORY_THRESHOLDS = {
   /** Heap usage percentage that triggers degraded status */
-  WARNING: 90,
+  WARNING: 95,
   /** Heap usage percentage that triggers unhealthy status */
-  CRITICAL: 98,
+  CRITICAL: 99,
 } as const;
 
 /**
