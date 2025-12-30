@@ -149,7 +149,7 @@
 
     // ==================== ES6+ ====================
     "arrow-body-style": ["warn", "as-needed"],
-    "no-confusing-arrow": ["error", { "allowParens": true, "onlyOneSimpleParam": true }],
+    "no-confusing-arrow": "off", // Disabled: conflicts with Prettier formatting
     "no-duplicate-imports": "error",
     "no-useless-computed-key": "error",
     "no-useless-constructor": "error",
