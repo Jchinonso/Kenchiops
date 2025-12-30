@@ -20,12 +20,12 @@ import { appConfig } from "../config/appConfig.js";
 
 const router = Router();
 
-/** Health check config for this service */
+/** Health check config for this service - API service doesn't use database directly */
 const healthConfig = {
   serviceName: appConfig.serviceName,
   version: appConfig.version,
   environment: config.NODE_ENV || "development",
-  includeDatabase: true,
+  includeDatabase: false,
   includeRedis: true,
   includeCircuitBreakers: true,
 } as const;
@@ -67,7 +67,7 @@ router.get(
       serviceName: healthConfig.serviceName,
       version: healthConfig.version,
       environment: healthConfig.environment,
-      includeDatabase: true,
+      includeDatabase: false,
       includeRedis: true,
     });
 
