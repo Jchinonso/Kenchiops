@@ -41,7 +41,9 @@ export const getBaseScore = (llmConfidence?: string): number => {
  * Formats adjustment value for reasoning output.
  */
 const formatAdjustment = (value: number, label: string): string => {
-  if (value === 0) return "";
+  if (value === 0) {
+    return "";
+  }
 
   const sign = value > 0 ? "+" : "";
   return `${label}: ${sign}${value.toFixed(DISPLAY_DEFAULTS.SCORE_DECIMAL_PRECISION)}`;

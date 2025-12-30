@@ -14,6 +14,7 @@ import {
   errorHandler,
   requestLogger,
   createRedisRateLimiter,
+  setupGracefulShutdown,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
   API_MESSAGES,
@@ -24,6 +25,9 @@ import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 
 const logger = createLogger("api");
+
+/** Default shutdown timeout in milliseconds */
+const SHUTDOWN_TIMEOUT_MS = 30000;
 
 /**
  * Redis-backed rate limiter: 100 requests per minute per IP.
@@ -64,11 +68,19 @@ const createApp = (): express.Express => {
 const startServer = (): void => {
   const app = createApp();
 
-  app.listen(appConfig.port, () => {
+  const server = app.listen(appConfig.port, () => {
     logger.info("API service started", {
       port: appConfig.port,
       environment: appConfig.environment,
     });
+  });
+
+  // Set up graceful shutdown
+  setupGracefulShutdown(server, {
+    serviceName: appConfig.serviceName,
+    timeoutMs: SHUTDOWN_TIMEOUT_MS,
+    closeDatabase: false, // API service doesn't use database directly
+    closeRedis: true,
   });
 };
 

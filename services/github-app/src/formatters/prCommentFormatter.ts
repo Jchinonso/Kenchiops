@@ -6,18 +6,16 @@
  * and recommended actions.
  */
 
-import type {
-  AggregatedFailures,
-  AnalyzedFailure,
-  CodeAnnotation,
-  RecommendedAction,
-} from "@kenchi/shared";
 import {
   shouldExcludePath,
   EXCLUDED_PATH_PATTERNS,
   UI_EMOJI,
   ANNOTATION_LEVEL_EMOJI_MAP,
   deduplicateByKey,
+  type AggregatedFailures,
+  type AnalyzedFailure,
+  type CodeAnnotation,
+  type RecommendedAction,
 } from "@kenchi/shared";
 import {
   DISPLAY_LIMITS,
@@ -146,7 +144,9 @@ const buildCheckNamesSection = (failures: readonly AnalyzedFailure[]): string[] 
  * Build root cause section with unique causes
  */
 const buildRootCauseSection = (causes: readonly string[]): string[] => {
-  if (causes.length === 0) return [];
+  if (causes.length === 0) {
+    return [];
+  }
 
   const causeText =
     causes.length === 1
@@ -160,7 +160,9 @@ const buildRootCauseSection = (causes: readonly string[]): string[] => {
  * Build consolidated test failures section
  */
 const buildTestFailuresSection = (testFailures: readonly ConsolidatedTestFailure[]): string[] => {
-  if (testFailures.length === 0) return [];
+  if (testFailures.length === 0) {
+    return [];
+  }
 
   const displayLimit = DISPLAY_LIMITS.annotationsPerCheck;
   const displayTests = testFailures.slice(0, displayLimit);
@@ -182,7 +184,9 @@ const buildTestFailuresSection = (testFailures: readonly ConsolidatedTestFailure
  * Build consolidated affected files section
  */
 const buildAnnotationsSection = (annotations: readonly ConsolidatedAnnotation[]): string[] => {
-  if (annotations.length === 0) return [];
+  if (annotations.length === 0) {
+    return [];
+  }
 
   const displayLimit = DISPLAY_LIMITS.annotationsPerCheck;
   const displayAnnotations = annotations.slice(0, displayLimit);

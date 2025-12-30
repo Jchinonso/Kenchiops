@@ -48,13 +48,11 @@ export const errorHandler = (
 /**
  * Async handler wrapper to catch promise rejections in route handlers.
  */
-export const asyncHandler = (
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>
-) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
+export const asyncHandler =
+  (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
+  (req: Request, res: Response, next: NextFunction): void => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
-};
 
 /**
  * Request logging middleware.

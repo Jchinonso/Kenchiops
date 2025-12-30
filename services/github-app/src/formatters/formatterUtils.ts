@@ -5,12 +5,13 @@
  * consolidated CI failure messages.
  */
 
-import type { AnalyzedFailure, RecommendedAction } from "@kenchi/shared";
 import {
   UI_EMOJI,
   PRIORITY_EMOJI_MAP,
   PRIORITY_ORDER,
   PRIORITY_ORDER_DEFAULT,
+  type AnalyzedFailure,
+  type RecommendedAction,
 } from "@kenchi/shared";
 
 /**
@@ -59,7 +60,9 @@ export const getNumericPriority = (priority: string | number): number =>
  * Calculate average confidence from failures
  */
 export const calculateAverageConfidence = (failures: readonly AnalyzedFailure[]): number => {
-  if (failures.length === 0) return 0;
+  if (failures.length === 0) {
+    return 0;
+  }
   const sum = failures.reduce((accumulator, failure) => accumulator + failure.confidence, 0);
   return sum / failures.length;
 };

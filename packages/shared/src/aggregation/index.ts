@@ -46,4 +46,5 @@ export {
   deserializeQueuePayload,
   type AggregationReadyCallback,
   type ConsolidatedAnalysisPayload,
+  type FailureContext,
 } from "./redisAggregator.js";

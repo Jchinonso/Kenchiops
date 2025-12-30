@@ -358,48 +358,13 @@ export interface ValidationResult {
   warnings: string[];
 }
 
-// ==================== Legacy Webhook Event Types ====================
-// These types are kept for backward compatibility with existing services
-
-export interface WebhookEvent {
-  source: string;
-  type: string;
-  payload: Record<string, unknown>;
-  timestamp?: string;
-}
-
-export interface CIFailureEvent {
-  repository: string;
-  branch: string;
-  commit: string;
-  failureLog: string;
-  jobName?: string;
-  timestamp: string;
-}
-
-export interface SlackMessageEvent {
-  channel: string;
-  user: string;
-  text: string;
-  timestamp: string;
-  threadTs?: string;
-}
-
-export interface GitHubPREvent {
-  action: string;
-  repository: {
-    full_name: string;
-    owner: { login: string };
-    name: string;
-  };
-  pull_request: {
-    number: number;
-    title: string;
-    body?: string;
-    head: { sha: string; ref: string };
-    base: { ref: string };
-  };
-}
+// Re-export legacy webhook types for backward compatibility
+export type {
+  WebhookEvent,
+  CIFailureEvent,
+  SlackMessageEvent,
+  GitHubPREvent,
+} from "./webhookTypes.js";
 
 // ==================== Multi-Tenant Types ====================
 

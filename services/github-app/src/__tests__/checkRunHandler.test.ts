@@ -404,11 +404,11 @@ describe("Check Run Handler", () => {
           confidence: 0.85,
           identifiedCause: "Missing dependency",
         }),
-        expect.any(Object),
-        12345,
-        expect.any(Array),
-        expect.any(Object),
-        expect.any(Object)
+        expect.objectContaining({
+          installationId: 12345,
+          repositoryInfo: expect.any(Object),
+          pullRequestNumbers: expect.any(Array),
+        })
       );
     });
 
@@ -460,11 +460,11 @@ describe("Check Run Handler", () => {
             }),
           ]),
         }),
-        expect.any(Object),
-        expect.any(Number),
-        expect.any(Array),
-        expect.any(Object),
-        expect.any(Object)
+        expect.objectContaining({
+          installationId: expect.any(Number),
+          repositoryInfo: expect.any(Object),
+          pullRequestNumbers: expect.any(Array),
+        })
       );
     });
 
@@ -513,11 +513,11 @@ describe("Check Run Handler", () => {
             }),
           ]),
         }),
-        expect.any(Object),
-        expect.any(Number),
-        expect.any(Array),
-        expect.any(Object),
-        expect.any(Object)
+        expect.objectContaining({
+          installationId: expect.any(Number),
+          repositoryInfo: expect.any(Object),
+          pullRequestNumbers: expect.any(Array),
+        })
       );
     });
 
@@ -529,15 +529,13 @@ describe("Check Run Handler", () => {
       expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
-        expect.any(Object),
-        expect.any(Number),
-        expect.any(Array),
         expect.objectContaining({
-          number: 123,
-          title: "Test PR",
-          author: "testuser",
-        }),
-        expect.any(Object)
+          prContext: expect.objectContaining({
+            number: 123,
+            title: "Test PR",
+            author: "testuser",
+          }),
+        })
       );
     });
 
@@ -549,13 +547,11 @@ describe("Check Run Handler", () => {
       expect(mockAddFailureToRedis).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
-        expect.any(Object),
-        expect.any(Number),
-        expect.any(Array),
-        expect.any(Object),
         expect.objectContaining({
-          name: "CI Build",
-          duration: expect.any(String),
+          workflowContext: expect.objectContaining({
+            name: "CI Build",
+            duration: expect.any(String),
+          }),
         })
       );
     });

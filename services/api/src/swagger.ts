@@ -6,7 +6,7 @@
  * npm install --save-dev @types/swagger-ui-express @types/swagger-jsdoc
  */
 
-import { Express } from "express";
+import type { Express } from "express";
 import {
   logger,
   SERVICE_PORTS,
@@ -158,7 +158,7 @@ export const openApiSpec = {
  *   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
  * }
  */
-export function setupSwagger(_app: Express): void {
+export const setupSwagger = (_app: Express): void => {
   // TODO: Implement when swagger-ui-express is installed
   logger.info("Swagger documentation available at /api-docs (when implemented)");
-}
+};

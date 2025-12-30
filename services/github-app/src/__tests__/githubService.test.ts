@@ -35,12 +35,9 @@ jest.mock("@kenchi/shared", () => {
       error: jest.fn(),
       debug: jest.fn(),
     })),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    OpenAIClient: jest.fn(function (this: any) {
-      return {
-        analyzeIncident: mockResolve,
-      };
-    }),
+    OpenAIClient: jest.fn().mockImplementation(() => ({
+      analyzeIncident: mockResolve,
+    })),
     calculateConfidenceScore: jest.fn(() => ({
       finalScore: 0.85,
       gatingDecision: "auto_approve",
@@ -492,19 +489,6 @@ describe("GitHub Service", () => {
     });
   });
 
-  // Note: deleteKenchiOpsComments tests require integration testing
-  // due to complex interactions between module-level mocks and internal getOctokit calls.
-  // The function is covered by integration tests that use actual Octokit interactions.
-
-  // Note: postPRComment tests require integration testing
-  // due to complex interactions between module-level mocks and internal getOctokit calls.
-  // The function is covered by integration tests that use actual Octokit interactions.
-
-  // Note: getInstallationRepositories tests require integration testing
-  // due to complex interactions between module-level mocks and internal getOctokit calls.
-  // The function is covered by integration tests that use actual Octokit interactions.
-
-  // Note: createCheckRunWithAnnotations tests require integration testing
-  // due to complex interactions between module-level mocks and internal getOctokit calls.
-  // The function is covered by integration tests that use actual Octokit interactions.
+  // Note: API functions (deleteKenchiOpsComments, postPRComment, getInstallationRepositories,
+  // createCheckRunWithAnnotations) are tested in githubServiceApi.test.ts with proper mock setup
 });

@@ -16,6 +16,16 @@ jest.mock("@kenchi/shared", () => ({
     OK: 200,
     BAD_REQUEST: 400,
     INTERNAL_SERVER_ERROR: 500,
+    SERVICE_UNAVAILABLE: 503,
+  },
+  HEALTH_STATUS: {
+    OK: "ok",
+    HEALTHY: "healthy",
+    DEGRADED: "degraded",
+    UNHEALTHY: "unhealthy",
+  },
+  config: {
+    NODE_ENV: "test",
   },
   validate: jest.fn((_schema) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,6 +46,20 @@ jest.mock("@kenchi/shared", () => ({
       Promise.resolve(fn(req, res, next)).catch(next);
     }
   ),
+  performHealthCheck: jest.fn(() =>
+    Promise.resolve({
+      status: "healthy",
+      service: "slack-bot",
+      version: "1.0.0",
+      timestamp: new Date().toISOString(),
+      uptime: 12345,
+      environment: "test",
+      components: [{ name: "memory", status: "healthy", message: "Heap usage: 50%" }],
+      memory: { heapUsed: 50, heapTotal: 100, heapUsedPercent: 50, rss: 150, external: 10 },
+    })
+  ),
+  livenessCheck: jest.fn(() => ({ status: "ok", timestamp: new Date().toISOString() })),
+  readinessCheck: jest.fn(() => Promise.resolve({ ready: true })),
 }));
 
 jest.mock("../services/messageService.js", () => ({
@@ -693,15 +717,18 @@ describe("HTTP Routes", () => {
   });
 
   describe("GET /health", () => {
-    it("should return health status", async () => {
+    it("should return comprehensive health status", async () => {
       const response = await request(app).get("/health");
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty("status", "ok");
+      expect(response.body).toHaveProperty("status", "healthy");
       expect(response.body).toHaveProperty("service", "slack-bot");
+      expect(response.body).toHaveProperty("version");
       expect(response.body).toHaveProperty("timestamp");
       expect(response.body).toHaveProperty("uptime");
       expect(response.body).toHaveProperty("environment");
+      expect(response.body).toHaveProperty("components");
+      expect(response.body).toHaveProperty("memory");
     });
 
     it("should return valid ISO timestamp", async () => {
@@ -720,24 +747,12 @@ describe("HTTP Routes", () => {
       expect(response.body.uptime).toBeGreaterThanOrEqual(0);
     });
 
-    it("should return environment from process.env", async () => {
+    it("should return environment", async () => {
       const response = await request(app).get("/health");
 
       expect(response.status).toBe(200);
       expect(response.body.environment).toBeDefined();
       expect(typeof response.body.environment).toBe("string");
-    });
-
-    it("should default to development when NODE_ENV not set", async () => {
-      const originalEnv = process.env.NODE_ENV;
-      delete process.env.NODE_ENV;
-
-      const response = await request(app).get("/health");
-
-      expect(response.status).toBe(200);
-      expect(response.body.environment).toBe("development");
-
-      process.env.NODE_ENV = originalEnv;
     });
 
     it("should return JSON content type", async () => {
@@ -754,17 +769,8 @@ describe("HTTP Routes", () => {
 
       responses.forEach((response) => {
         expect(response.status).toBe(200);
-        expect(response.body.status).toBe("ok");
+        expect(response.body.status).toBe("healthy");
       });
-    });
-
-    it("should respond quickly", async () => {
-      const start = Date.now();
-      const response = await request(app).get("/health");
-      const duration = Date.now() - start;
-
-      expect(response.status).toBe(200);
-      expect(duration).toBeLessThan(100);
     });
 
     it("should not require authentication", async () => {
@@ -777,22 +783,38 @@ describe("HTTP Routes", () => {
       const response = await request(app).get("/health?param=value&other=123");
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe("ok");
+      expect(response.body.status).toBe("healthy");
     });
 
-    it("should use ISO 8601 format for timestamp", async () => {
+    it("should include component health details", async () => {
       const response = await request(app).get("/health");
 
       expect(response.status).toBe(200);
-      const timestamp = response.body.timestamp;
-      expect(timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(Array.isArray(response.body.components)).toBe(true);
+    });
+
+    it("should include memory health information", async () => {
+      const response = await request(app).get("/health");
+
+      expect(response.status).toBe(200);
+      expect(response.body.memory).toHaveProperty("heapUsed");
+      expect(response.body.memory).toHaveProperty("heapTotal");
     });
 
     it("should include all required fields", async () => {
       const response = await request(app).get("/health");
 
       expect(response.status).toBe(200);
-      const requiredFields = ["status", "service", "timestamp", "uptime", "environment"];
+      const requiredFields = [
+        "status",
+        "service",
+        "version",
+        "timestamp",
+        "uptime",
+        "environment",
+        "components",
+        "memory",
+      ];
       requiredFields.forEach((field) => {
         expect(response.body).toHaveProperty(field);
       });

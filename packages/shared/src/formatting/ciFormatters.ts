@@ -159,6 +159,5 @@ export const formatDependencyChange = (dep: DependencyChange): string => {
  * @param deps - Array of dependency changes
  * @returns Formatted string with all changes
  */
-export const formatDependencyChanges = (deps: readonly DependencyChange[]): string => {
-  return deps.map(formatDependencyChange).join("\n");
-};
+export const formatDependencyChanges = (deps: readonly DependencyChange[]): string =>
+  deps.map(formatDependencyChange).join("\n");

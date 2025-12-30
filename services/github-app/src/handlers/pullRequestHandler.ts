@@ -5,8 +5,7 @@
  */
 
 import { createLogger } from "@kenchi/shared";
-import type { PullRequestWebhook } from "../types/githubTypes.js";
-import { GITHUB_PR_ACTIONS } from "../types/githubTypes.js";
+import { GITHUB_PR_ACTIONS, type PullRequestWebhook } from "../types/githubTypes.js";
 
 const logger = createLogger("github-app");
 

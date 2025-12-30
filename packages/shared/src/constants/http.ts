@@ -13,6 +13,7 @@ export const HTTP_STATUS = {
   NOT_FOUND: 404,
   INTERNAL_SERVER_ERROR: 500,
   BAD_GATEWAY: 502,
+  SERVICE_UNAVAILABLE: 503,
 } as const;
 
 /**
@@ -70,6 +71,15 @@ export const SERVICE_NAMES = {
   API: "api",
   SLACK_BOT: "slack-bot",
   GITHUB_APP: "github-app",
+} as const;
+
+/**
+ * Service version strings for health checks.
+ */
+export const SERVICE_VERSIONS = {
+  API: "1.0.0",
+  SLACK_BOT: "1.0.0",
+  GITHUB_APP: "1.0.0",
 } as const;
 
 /**

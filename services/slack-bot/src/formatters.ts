@@ -3,12 +3,14 @@
  * Converts LLM analysis results into rich, interactive Slack messages.
  */
 
-import type { LLMAnalysisResult, ActionProposal, ConfidenceScoreResult } from "@kenchi/shared";
 import {
   UI_CONSTANTS,
   SLACK_STATUS_EMOJI,
   getConfidenceEmoji,
   getConfidenceLabelParenthesized,
+  type LLMAnalysisResult,
+  type ActionProposal,
+  type ConfidenceScoreResult,
 } from "@kenchi/shared";
 import type { SlackBlock } from "./types/slackTypes.js";
 
@@ -58,10 +60,10 @@ const createDividerBlock = (): SlackBlock => ({ type: "divider" });
  * @param confidence - The confidence score result
  * @returns Slack Block Kit blocks array (mutable for Slack Bolt compatibility)
  */
-export function formatAnalysisMessage(
+export const formatAnalysisMessage = (
   analysis: LLMAnalysisResult,
   confidence: ConfidenceScoreResult
-): SlackBlock[] {
+): SlackBlock[] => {
   const confidenceEmoji = getConfidenceEmoji(confidence.finalScore);
   const confidencePercent = (confidence.finalScore * UI_CONSTANTS.PERCENTAGE_MULTIPLIER).toFixed(0);
 
@@ -127,7 +129,7 @@ export function formatAnalysisMessage(
   blocks.push(createContextBlock(footerText));
 
   return blocks;
-}
+};
 
 /**
  * Formats action buttons for approval workflow.
@@ -159,10 +161,10 @@ const createActionButtonsBlock = (eventId: string, actionId: string): SlackBlock
   ],
 });
 
-export function formatActionButtons(
+export const formatActionButtons = (
   actions: readonly ActionProposal[],
   eventId: string
-): SlackBlock[] {
+): SlackBlock[] => {
   if (actions.length === 0) {
     return [];
   }
@@ -179,7 +181,7 @@ export function formatActionButtons(
     createSectionBlock("*Actions require approval*"),
     ...approvalActions.map((action) => createActionButtonsBlock(eventId, action.id)),
   ];
-}
+};
 
 /**
  * Formats an error message for Slack.
@@ -187,13 +189,11 @@ export function formatActionButtons(
  * @param error - The error object
  * @returns Slack Block Kit blocks (mutable for Slack Bolt compatibility)
  */
-export function formatErrorMessage(error: Error): SlackBlock[] {
-  return [
-    createSectionBlock(":warning: *Error occurred*"),
-    createSectionBlock(`\`\`\`${error.message}\`\`\``),
-    createContextBlock("Please try again or contact support if the issue persists."),
-  ];
-}
+export const formatErrorMessage = (error: Error): SlackBlock[] => [
+  createSectionBlock(":warning: *Error occurred*"),
+  createSectionBlock(`\`\`\`${error.message}\`\`\``),
+  createContextBlock("Please try again or contact support if the issue persists."),
+];
 
 /**
  * Formats a progress update message.
@@ -203,10 +203,10 @@ export function formatErrorMessage(error: Error): SlackBlock[] {
  * @param message - Status message
  * @returns Slack Block Kit blocks (mutable for Slack Bolt compatibility)
  */
-export function formatProgressUpdate(
+export const formatProgressUpdate = (
   actionId: string,
   status: "pending" | "in_progress" | "completed" | "failed",
   message: string
-): SlackBlock[] {
-  return [createSectionBlock(`${SLACK_STATUS_EMOJI[status]} *Action ${actionId}*\n${message}`)];
-}
+): SlackBlock[] => [
+  createSectionBlock(`${SLACK_STATUS_EMOJI[status]} *Action ${actionId}*\n${message}`),
+];

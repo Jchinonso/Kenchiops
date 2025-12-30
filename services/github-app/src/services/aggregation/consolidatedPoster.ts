@@ -95,15 +95,15 @@ const createCheckAnnotations = async (
   try {
     const summary = buildConsolidatedCheckSummary(aggregation);
 
-    await createCheckRunWithAnnotations(
+    await createCheckRunWithAnnotations({
       installationId,
-      repository.owner,
-      repository.name,
-      commitSha,
-      KENCHI_BRANDING.CHECK_RUN_NAME,
+      owner: repository.owner,
+      repo: repository.name,
+      headSha: commitSha,
+      name: KENCHI_BRANDING.CHECK_RUN_NAME,
       summary,
-      annotations
-    );
+      annotations,
+    });
 
     logger.info("Created consolidated check run with annotations", {
       repository: repository.fullName,

@@ -4,6 +4,39 @@
 
 TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of concerns with shared package for all common functionality.
 
+## Project Guidelines
+
+### Code Style
+
+- **Write code like a principal engineer** - every line should reflect senior-level craftsmanship
+- **Prioritize readability and maintainability** - code is read more than written
+- **Include comprehensive error handling** - anticipate and handle all failure modes
+- **Write meaningful comments for complex logic** - explain the "why", not the "what"
+
+### Architecture Principles
+
+- **Follow SOLID principles**:
+  - Single Responsibility: one reason to change per module
+  - Open/Closed: extend behavior without modifying existing code
+  - Liskov Substitution: subtypes must be substitutable
+  - Interface Segregation: prefer small, focused interfaces
+  - Dependency Inversion: depend on abstractions, not concretions
+- **Prefer composition over inheritance** - build complex behavior from simple pieces
+- **Keep functions small and focused** - each function does one thing well
+
+### Testing
+
+- **Write tests for all new functionality** - no untested code in production
+- **Aim for high coverage on critical paths** - prioritize business logic and error handling
+
+### Code Standards
+
+- **Follow engineering principles** in `docs/engineering-standards.md`
+- **Write production-quality code** with proper error handling, logging, and observability
+- **Use structured logging** - always use logger from `@kenchi/shared`, never `console.*`
+- **Handle all error paths** - no empty catch blocks, always log or rethrow
+- **Reference tickets in TODOs** - format: `// TODO: [#123] description`
+
 ## Monorepo Structure
 
 ```

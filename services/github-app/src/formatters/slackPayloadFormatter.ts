@@ -6,14 +6,16 @@
  * and recommended actions with interactive approve/reject buttons.
  */
 
-import type {
-  AggregatedFailures,
-  AnalyzedFailure,
-  RecommendedAction,
-  LLMDetectedDependencyChange,
-  LLMDetectedBuildConfigChange,
+import {
+  deduplicateByKey,
+  UI_EMOJI,
+  FORMATTER_DISPLAY_LIMITS,
+  type AggregatedFailures,
+  type AnalyzedFailure,
+  type RecommendedAction,
+  type LLMDetectedDependencyChange,
+  type LLMDetectedBuildConfigChange,
 } from "@kenchi/shared";
-import { deduplicateByKey, UI_EMOJI, FORMATTER_DISPLAY_LIMITS } from "@kenchi/shared";
 import {
   calculateAverageConfidence,
   mergeRecommendedActions,
@@ -275,7 +277,9 @@ const buildPRLinkBlock = (
   repository: AggregatedFailures["repository"],
   prContext: AggregatedFailures["prContext"]
 ): SlackTextBlock | null => {
-  if (!prContext) return null;
+  if (!prContext) {
+    return null;
+  }
 
   const prUrl = `https://github.com/${repository.fullName}/pull/${prContext.number}`;
   return {

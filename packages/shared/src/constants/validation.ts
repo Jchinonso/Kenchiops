@@ -39,6 +39,8 @@ export const DANGEROUS_KEYWORDS = [
  * Created once at module load time for performance.
  */
 export const DANGEROUS_KEYWORDS_PATTERN = ((): RegExp => {
-  const escapedKeywords = DANGEROUS_KEYWORDS.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const escapedKeywords = DANGEROUS_KEYWORDS.map((keyword) =>
+    keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  );
   return new RegExp(`\\b(${escapedKeywords.join("|")})\\b`, "i");
 })();

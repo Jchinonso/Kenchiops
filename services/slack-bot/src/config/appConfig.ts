@@ -3,7 +3,13 @@
  * Separates configuration from application logic.
  */
 
-import { config, SERVICE_PORTS, ValidationError } from "@kenchi/shared";
+import {
+  config,
+  SERVICE_PORTS,
+  SERVICE_NAMES,
+  SERVICE_VERSIONS,
+  ValidationError,
+} from "@kenchi/shared";
 
 /**
  * Application configuration interface
@@ -15,6 +21,8 @@ export interface AppConfig {
   readonly slackSigningSecret: string;
   readonly slackAppToken: string;
   readonly nodeEnv: string;
+  readonly serviceName: string;
+  readonly version: string;
 }
 
 /**
@@ -44,7 +52,7 @@ const REQUIRED_CONFIG = [
  * @returns Application configuration
  * @throws {ValidationError} If required configuration is missing
  */
-export function loadAppConfig(): AppConfig {
+export const loadAppConfig = (): AppConfig => {
   const slackBotToken = config.SLACK_BOT_TOKEN;
   const slackSigningSecret = config.SLACK_SIGNING_SECRET;
   const slackAppToken = config.SLACK_APP_LEVEL_TOKEN;
@@ -65,5 +73,7 @@ export function loadAppConfig(): AppConfig {
     slackSigningSecret,
     slackAppToken,
     nodeEnv: config.NODE_ENV || "development",
+    serviceName: SERVICE_NAMES.SLACK_BOT,
+    version: SERVICE_VERSIONS.SLACK_BOT,
   };
-}
+};

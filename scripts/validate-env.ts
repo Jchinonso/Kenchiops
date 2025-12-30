@@ -21,7 +21,7 @@ const requiredVars: RequiredVar[] = [
   { name: "DATABASE_URL", value: config.DATABASE_URL, required: false },
 ];
 
-function validateEnv(): boolean {
+const validateEnv = (): boolean => {
   const missing: string[] = [];
   const warnings: string[] = [];
 
@@ -34,14 +34,12 @@ function validateEnv(): boolean {
           ? `${envVar.value.substring(0, 4)}...${envVar.value.substring(envVar.value.length - 4)}`
           : "***";
       console.log(`✅ ${envVar.name}: ${masked}`);
+    } else if (envVar.required) {
+      missing.push(envVar.name);
+      console.log(`❌ ${envVar.name}: MISSING (required)`);
     } else {
-      if (envVar.required) {
-        missing.push(envVar.name);
-        console.log(`❌ ${envVar.name}: MISSING (required)`);
-      } else {
-        warnings.push(envVar.name);
-        console.log(`⚠️  ${envVar.name}: not set (optional)`);
-      }
+      warnings.push(envVar.name);
+      console.log(`⚠️  ${envVar.name}: not set (optional)`);
     }
   }
 
@@ -62,7 +60,7 @@ function validateEnv(): boolean {
 
   console.log("✅ Environment validation passed!\n");
   return true;
-}
+};
 
 if (!validateEnv()) {
   process.exit(1);

@@ -74,7 +74,7 @@ const DUPLICATION_PATTERNS = [
 const EXCLUDE_DIRS = ["node_modules", "dist", "coverage", ".git"];
 const INCLUDE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"];
 
-async function getAllFiles(dir: string, baseDir: string = dir): Promise<string[]> {
+const getAllFiles = async (dir: string, baseDir: string = dir): Promise<string[]> => {
   const files: string[] = [];
 
   try {
@@ -100,10 +100,12 @@ async function getAllFiles(dir: string, baseDir: string = dir): Promise<string[]
   }
 
   return files;
-}
+};
 
-function shouldCheckFile(file: string, pattern: { exclude?: string[] }): boolean {
-  if (!pattern.exclude) return true;
+const shouldCheckFile = (file: string, pattern: { exclude?: string[] }): boolean => {
+  if (!pattern.exclude) {
+    return true;
+  }
 
   for (const exclude of pattern.exclude) {
     if (file.includes(exclude)) {
@@ -112,12 +114,12 @@ function shouldCheckFile(file: string, pattern: { exclude?: string[] }): boolean
   }
 
   return true;
-}
+};
 
-async function checkFile(
+const checkFile = async (
   file: string,
   patterns: typeof DUPLICATION_PATTERNS
-): Promise<DuplicationIssue[]> {
+): Promise<DuplicationIssue[]> => {
   const issues: DuplicationIssue[] = [];
 
   try {
@@ -125,12 +127,16 @@ async function checkFile(
     const lines = content.split("\n");
 
     for (const pattern of patterns) {
-      if (!shouldCheckFile(file, pattern)) continue;
+      if (!shouldCheckFile(file, pattern)) {
+        continue;
+      }
 
       lines.forEach((line, index) => {
         if (pattern.pattern.test(line)) {
           // Skip if it's importing from @kenchi/shared
-          if (line.includes("@kenchi/shared")) return;
+          if (line.includes("@kenchi/shared")) {
+            return;
+          }
 
           issues.push({
             file,
@@ -146,9 +152,9 @@ async function checkFile(
   }
 
   return issues;
-}
+};
 
-async function main() {
+const main = async (): Promise<void> => {
   console.log("🔍 Checking for code duplication...\n");
 
   const rootDir = join(process.cwd());
@@ -195,7 +201,7 @@ async function main() {
   // Group by file
   const issuesByFile = new Map<string, DuplicationIssue[]>();
   allIssues.forEach((issue) => {
-    const relativePath = issue.file.replace(rootDir + "/", "");
+    const relativePath = issue.file.replace(`${rootDir}/`, "");
     if (!issuesByFile.has(relativePath)) {
       issuesByFile.set(relativePath, []);
     }
@@ -219,7 +225,7 @@ async function main() {
   console.log("   4. Update packages/shared/src/index.ts to export new functionality\n");
 
   process.exit(1);
-}
+};
 
 main().catch((error) => {
   console.error("Error:", error);

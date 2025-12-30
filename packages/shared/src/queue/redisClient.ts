@@ -129,7 +129,7 @@ export const waitForRedisConnection = async (
   timeoutMs = REDIS_CONNECTION_DEFAULTS.CONNECT_TIMEOUT_MS
 ): Promise<void> => {
   const client = getRedisClient();
-  const status = client.status;
+  const { status } = client;
 
   // Already connected
   if (status === REDIS_STATUS.READY) {
@@ -149,11 +149,11 @@ export const waitForRedisConnection = async (
       resolve();
     };
 
-    const onError = (err: Error): void => {
+    const onError = (connectionError: Error): void => {
       clearTimeout(timeout);
       client.off("ready", onReady);
       client.off("error", onError);
-      reject(err);
+      reject(connectionError);
     };
 
     client.once("ready", onReady);
@@ -165,7 +165,7 @@ export const waitForRedisConnection = async (
  * Closes all Redis connections
  */
 export const closeRedis = async (): Promise<void> => {
-  const closePromises: Promise<void>[] = [];
+  const closePromises: Array<Promise<void>> = [];
 
   if (redisClient) {
     closePromises.push(

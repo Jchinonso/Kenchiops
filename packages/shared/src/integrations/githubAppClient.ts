@@ -69,7 +69,8 @@ export const fetchInstallationRepositories = async (
     if (!response.ok) {
       const errorText = await response.text();
       throw new ExternalServiceError("GitHubApp", `HTTP ${response.status}: ${errorText}`, {
-        installationId,
+        operation: "fetchInstallationRepositories",
+        metadata: { installationId },
       });
     }
 
@@ -89,6 +90,9 @@ export const fetchInstallationRepositories = async (
       error: getErrorMessage(error),
     });
 
-    throw new ExternalServiceError("GitHubApp", getErrorMessage(error), { installationId });
+    throw new ExternalServiceError("GitHubApp", getErrorMessage(error), {
+      operation: "fetchInstallationRepositories",
+      metadata: { installationId },
+    });
   }
 };

@@ -14,8 +14,7 @@ import {
   activate,
   type Tenant,
 } from "@kenchi/shared";
-import type { InstallationWebhook } from "../types/githubTypes.js";
-import { GITHUB_INSTALLATION_ACTIONS } from "../types/githubTypes.js";
+import { GITHUB_INSTALLATION_ACTIONS, type InstallationWebhook } from "../types/githubTypes.js";
 
 const logger = createLogger("github-app");
 
@@ -174,7 +173,9 @@ const handleInstallationSuspend = async (
 
   try {
     const lookup = await lookupTenant(installation.id, "Suspend");
-    if (!lookup.found) return lookup.result;
+    if (!lookup.found) {
+      return lookup.result;
+    }
 
     const { tenant } = lookup;
     await suspend(
@@ -230,7 +231,9 @@ const handleInstallationUnsuspend = async (
 
   try {
     const lookup = await lookupTenant(installation.id, "Unsuspend");
-    if (!lookup.found) return lookup.result;
+    if (!lookup.found) {
+      return lookup.result;
+    }
 
     const { tenant } = lookup;
     const slackStatus = tenant.slackWorkspaceId ? "connected" : "pending";

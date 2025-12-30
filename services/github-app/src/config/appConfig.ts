@@ -4,7 +4,13 @@
  * Centralized configuration management with validation
  */
 
-import { config, SERVICE_PORTS, SERVICE_NAMES, ValidationError } from "@kenchi/shared";
+import {
+  config,
+  SERVICE_PORTS,
+  SERVICE_NAMES,
+  SERVICE_VERSIONS,
+  ValidationError,
+} from "@kenchi/shared";
 
 /**
  * GitHub App configuration interface
@@ -13,6 +19,7 @@ export interface GitHubAppConfig {
   readonly port: number;
   readonly environment: string;
   readonly serviceName: string;
+  readonly version: string;
   readonly github: {
     readonly appId: string;
     readonly privateKey: string;
@@ -26,7 +33,9 @@ export interface GitHubAppConfig {
  * Docker env_file doesn't support multi-line values, so we use \n escapes
  */
 const parsePrivateKey = (key: string | undefined): string => {
-  if (!key) return "";
+  if (!key) {
+    return "";
+  }
   // Remove surrounding quotes if present and convert \n to actual newlines
   return key.replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
 };
@@ -63,6 +72,7 @@ export const appConfig: GitHubAppConfig = {
   port: config.PORT ? parseInt(String(config.PORT), 10) : SERVICE_PORTS.GITHUB_APP,
   environment: config.NODE_ENV || "development",
   serviceName: SERVICE_NAMES.GITHUB_APP,
+  version: SERVICE_VERSIONS.GITHUB_APP,
   github: {
     appId: config.GITHUB_APP_ID || "",
     privateKey: parsePrivateKey(config.GITHUB_APP_PRIVATE_KEY),
