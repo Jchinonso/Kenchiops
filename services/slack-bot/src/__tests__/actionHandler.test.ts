@@ -11,6 +11,10 @@ import {
   handleNegativeFeedback,
 } from "../handlers/actionHandler.js";
 
+// Track mock state for isRedisHealthy
+let mockRedisHealthy = false;
+let mockExecuteActionResult = { success: true, message: "Action executed", duration: 100 };
+
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
   const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
@@ -29,6 +33,9 @@ jest.mock("@kenchi/shared", () => {
     UI_CONSTANTS: {
       ACTION_TIMEOUT_MS: 2000,
     },
+    isRedisHealthy: jest.fn(() => Promise.resolve(mockRedisHealthy)),
+    executeAction: jest.fn(() => Promise.resolve(mockExecuteActionResult)),
+    enqueueAction: jest.fn(() => Promise.resolve()),
   };
 });
 
@@ -63,10 +70,20 @@ describe("Action Handler", () => {
     mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockSay = jest.fn<SayFn>().mockResolvedValue(undefined as any);
+
+    // Reset mock state
+    mockRedisHealthy = false;
+    mockExecuteActionResult = { success: true, message: "Action executed", duration: 100 };
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
+    // Only run pending timers if fake timers are active
+    // This check prevents errors when tests use real timers
+    try {
+      jest.runOnlyPendingTimers();
+    } catch {
+      // Fake timers not active, ignore
+    }
     jest.useRealTimers();
   });
 
@@ -82,6 +99,32 @@ describe("Action Handler", () => {
     value,
     action_ts: "1234567890.123456",
   });
+
+  /**
+   * Create a new-format ActionButtonValue
+   */
+  const createActionButtonValue = (
+    overrides: Partial<{
+      actionId: string;
+      actionType: string;
+      description: string;
+      repository: string;
+      commitSha: string;
+      installationId: number;
+      priority: string | number;
+      checkRunId?: number;
+    }> = {}
+  ): string =>
+    JSON.stringify({
+      actionId: "act_123",
+      actionType: "rerun_pipeline",
+      description: "Rerun failed pipeline",
+      repository: "owner/repo",
+      commitSha: "abc123def456",
+      installationId: 12345,
+      priority: "high",
+      ...overrides,
+    });
 
   describe("handleActionApproval", () => {
     it("should acknowledge the action immediately", async () => {
@@ -251,6 +294,298 @@ describe("Action Handler", () => {
 
       // Say should not have been called since it was undefined
       expect(mockSay).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("handleActionApproval with ActionButtonValue format", () => {
+    it("should execute action synchronously when Redis is unavailable", async () => {
+      jest.useRealTimers(); // Use real timers for this test
+      const action = createMockAction(createActionButtonValue());
+      const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
+      };
+      const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockResolvedValue({ success: true, message: "Action executed", duration: 100 });
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      // Should show in_progress then completed
+      expect(formatProgressUpdate).toHaveBeenCalledWith(
+        "act_123",
+        "in_progress",
+        expect.stringContaining("Executing")
+      );
+      expect(executeAction).toHaveBeenCalled();
+      expect(formatProgressUpdate).toHaveBeenCalledWith(
+        "act_123",
+        "completed",
+        expect.stringContaining("executed successfully")
+      );
+      expect(mockSay).toHaveBeenCalledTimes(2);
+    });
+
+    it("should enqueue action when Redis is healthy", async () => {
+      jest.useRealTimers();
+      mockRedisHealthy = true;
+      const action = createMockAction(createActionButtonValue());
+      const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
+      };
+      const { enqueueAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        enqueueAction: jest.MockedFunction<() => Promise<void>>;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(true);
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      expect(enqueueAction).toHaveBeenCalled();
+      expect(formatProgressUpdate).toHaveBeenCalledWith(
+        "act_123",
+        "in_progress",
+        expect.stringContaining("Queued")
+      );
+      expect(formatProgressUpdate).toHaveBeenCalledWith(
+        "act_123",
+        "completed",
+        expect.stringContaining("queued for processing")
+      );
+    });
+
+    it("should handle failed action execution", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue());
+      const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
+      };
+      const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockResolvedValue({
+        success: false,
+        message: "Pipeline not found",
+        duration: 50,
+      });
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      expect(formatProgressUpdate).toHaveBeenCalledWith(
+        "act_123",
+        "failed",
+        expect.stringContaining("failed")
+      );
+    });
+
+    it("should include checkRunId in execution context when provided", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue({ checkRunId: 99999 }));
+      const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockResolvedValue({ success: true, message: "Success", duration: 100 });
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      expect(executeAction).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({
+          checkRunId: 99999,
+        })
+      );
+    });
+
+    it("should send error message to Slack when action fails with error", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue());
+      const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockRejectedValue(new Error("Execution failed"));
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        "Error handling action approval",
+        expect.objectContaining({
+          error: "Execution failed",
+        })
+      );
+      // Should try to send error message
+      expect(mockSay).toHaveBeenCalled();
+    });
+
+    it("should handle isRedisHealthy throwing an error", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue());
+      const { isRedisHealthy, executeAction } = jest.requireMock("@kenchi/shared") as {
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+      };
+
+      isRedisHealthy.mockRejectedValue(new Error("Redis connection error"));
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      // Should fall back to sync execution
+      expect(executeAction).toHaveBeenCalled();
+    });
+
+    it("should include thread_ts in messages when provided", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue());
+      const messageTs = "1234567890.999999";
+      const { isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+
+      await handleActionApproval(action, mockAck, mockSay, messageTs);
+
+      expect(mockSay).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thread_ts: messageTs,
+        })
+      );
+    });
+
+    it("should handle different action types", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue({ actionType: "notify_team" }));
+      const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
+      };
+      const { isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      expect(formatProgressUpdate).toHaveBeenCalledWith(
+        "act_123",
+        "in_progress",
+        expect.stringContaining("notify_team")
+      );
+    });
+
+    it("should log action execution details on success", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue());
+      const { isRedisHealthy, executeAction } = jest.requireMock("@kenchi/shared") as {
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockResolvedValue({ success: true, message: "Done", duration: 100 });
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        "Action executed synchronously",
+        expect.objectContaining({
+          actionId: "act_123",
+          actionType: "rerun_pipeline",
+          success: true,
+        })
+      );
+    });
+
+    it("should handle failed say call gracefully in error handler", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue());
+      const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockRejectedValue(new Error("Execution failed"));
+      // First call is for in_progress message, second is for error message
+      mockSay
+        .mockResolvedValueOnce(undefined as never)
+        .mockRejectedValueOnce(new Error("Say failed in error handler"));
+
+      await handleActionApproval(action, mockAck, mockSay);
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        "Failed to send error message to Slack",
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe("handleActionRejection with ActionButtonValue format", () => {
+    it("should handle new action button value format", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue());
+      const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
+        formatProgressUpdate: jest.MockedFunction<
+          typeof import("../formatters.js").formatProgressUpdate
+        >;
+      };
+
+      await handleActionRejection(action, mockAck, mockSay);
+
+      expect(formatProgressUpdate).toHaveBeenCalledWith(
+        "act_123",
+        "failed",
+        expect.stringContaining("rerun_pipeline")
+      );
+    });
+
+    it("should log rejection details for new format", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createActionButtonValue({ actionType: "notify_team" }));
+
+      await handleActionRejection(action, mockAck, mockSay);
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        "Action rejection handled",
+        expect.objectContaining({
+          actionId: "act_123",
+          actionType: "notify_team",
+        })
+      );
     });
   });
 
