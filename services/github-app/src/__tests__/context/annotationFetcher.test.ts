@@ -40,6 +40,7 @@ jest.mock("../../services/githubService.js", () => ({
 
 // Import mocks after jest.mock
 import { getOctokit } from "../../services/githubService.js";
+
 const mockGetOctokit = getOctokit as jest.MockedFunction<typeof getOctokit>;
 
 describe("Annotation Fetcher Service", () => {

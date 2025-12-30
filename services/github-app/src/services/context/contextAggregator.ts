@@ -11,14 +11,13 @@ import {
   redactSecretsWithStats,
   deduplicateByKey,
 } from "@kenchi/shared";
-import { truncateWithContext } from "./logParser.js";
+import { truncateWithContext, extractFileReferences, extractTestFailures } from "./logParser.js";
 import type { CheckRunWebhook } from "../../types/githubTypes.js";
 import type { EnrichedContext, FileReference } from "./types.js";
 import { fetchWorkflowLogs, fetchWorkflowTiming } from "./workflowFetcher.js";
 import { fetchPRDiff, fetchPRMetadata, fetchChangedFiles } from "./prFetcher.js";
 import { fetchCommitInfo, fetchSourceFile, fetchRepositoryMetadata } from "./commitFetcher.js";
 import { fetchCheckRunAnnotations } from "./annotationFetcher.js";
-import { extractFileReferences, extractTestFailures } from "./logParser.js";
 
 const logger = createLogger("github-app");
 
@@ -34,7 +33,9 @@ const redactEnrichedContext = (context: EnrichedContext): EnrichedContext => {
 
   // Helper to redact and track stats
   const redactWithTracking = (text: string | null): string | null => {
-    if (!text) return text;
+    if (!text) {
+      return text;
+    }
     const result = redactSecretsWithStats(text);
     totalRedacted += result.redactedCount;
     allRedactedTypes.push(...result.redactedTypes);

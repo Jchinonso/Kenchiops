@@ -1,30 +1,38 @@
 /**
- * Prompt templates for OpenAI/LLM interactions.
+ * Prompt Templates for OpenAI/LLM Interactions
+ *
+ * Builds structured prompts for incident analysis.
  * Based on PROMPT_TEMPLATES.md specifications.
+ *
+ * @module integrations/prompts
  */
 
-import type {
-  Event,
-  Evidence,
-  LogEntry,
-  GitCommit,
-  KnowledgeDocument,
-  MetricsSummary,
-  SystemState,
-} from "../core/types.js";
-import {
-  SIMILARITY_THRESHOLDS,
-  EVIDENCE_TRUNCATION,
-  UI_CONSTANTS,
-  OPENAI_CONSTANTS,
-} from "../constants/index.js";
+import type { Event, Evidence } from "../core/types.js";
+import { GITHUB_CONTEXT_LIMITS } from "../constants/index.js";
+import { formatEvent, formatEvidence } from "./promptFormatters.js";
+
+// Re-export formatters and token manager for backwards compatibility
+export {
+  formatEvent,
+  formatEvidence,
+  formatLogs,
+  formatMetrics,
+  formatGitHistory,
+  formatKnowledgeDocs,
+} from "./promptFormatters.js";
+
+export { estimateTokens, truncateEvidence } from "./promptTokenManager.js";
+
+// ==================== System Prompt ====================
 
 /**
  * Builds the system context prompt that establishes the LLM's role and constraints.
  * This remains mostly constant across all prompts.
+ *
+ * @returns System prompt string
  */
-export const buildSystemPrompt = (): string => {
-  return `You are an expert DevOps incident analysis assistant. Your role is to analyze DevOps events (CI/CD failures, monitoring alerts, deployment issues) and provide helpful insights to engineering teams.
+export const buildSystemPrompt =
+  (): string => `You are an expert DevOps incident analysis assistant. Your role is to analyze DevOps events (CI/CD failures, monitoring alerts, deployment issues) and provide helpful insights to engineering teams.
 
 ## Your Capabilities
 - Analyze logs, metrics, and error messages to identify root causes
@@ -60,39 +68,15 @@ export const buildSystemPrompt = (): string => {
 - Use clear, concise language
 - Be specific (cite line numbers, commit SHAs, exact error messages)
 - Prioritize accuracy over speed`;
-};
 
-/**
- * Builds the complete analysis prompt including task, context, and output format.
- */
-export const buildAnalysisPrompt = (event: Event, evidence: Evidence): string => {
-  const systemPrompt = buildSystemPrompt();
-  const eventSection = formatEvent(event);
-  const evidenceSection = formatEvidence(evidence);
-  const taskSection = buildTaskSection();
-  const outputFormatSection = buildOutputFormatSection();
-  const safetyConstraintsSection = buildSafetyConstraintsSection();
-
-  return `${systemPrompt}
-
-${taskSection}
-
-${eventSection}
-
-${evidenceSection}
-
-${safetyConstraintsSection}
-
-${outputFormatSection}
-
-Now, analyze the event and provide your structured response.`;
-};
+// ==================== Task Section ====================
 
 /**
  * Builds the task specification section.
+ *
+ * @returns Task section string
  */
-const buildTaskSection = (): string => {
-  return `## TASK
+const buildTaskSection = (): string => `## TASK
 Analyze the following DevOps event and provide:
 1. A concise summary of what happened
 2. The identified root cause (or state if it cannot be determined)
@@ -106,13 +90,15 @@ Analyze the following DevOps event and provide:
 - Do NOT speculate about information not present in the context
 - If evidence is insufficient, state this explicitly in the "uncertainties" field
 - Cite specific evidence (e.g., "According to log entry at 10:30:45: 'AUTH_SECRET is not defined'")`;
-};
+
+// ==================== Safety Constraints ====================
 
 /**
  * Builds the safety constraints section.
+ *
+ * @returns Safety constraints section string
  */
-const buildSafetyConstraintsSection = (): string => {
-  return `## SAFETY CONSTRAINTS FOR RECOMMENDATIONS
+const buildSafetyConstraintsSection = (): string => `## SAFETY CONSTRAINTS FOR RECOMMENDATIONS
 Your recommended actions MUST follow these rules:
 
 **ALLOWED Actions** (safe and reversible):
@@ -138,12 +124,18 @@ Your recommended actions MUST follow these rules:
 - Actions that could cause outages or data loss
 
 If the appropriate fix would involve a dangerous action, suggest "manual_investigation" with details of what to check, rather than suggesting the dangerous action directly.`;
-};
+
+// ==================== Output Format ====================
 
 /**
  * Builds the output format specification section.
+ * Uses constants for configurable values like max annotations.
+ *
+ * @returns Output format section string
  */
 const buildOutputFormatSection = (): string => {
+  const maxAnnotations = GITHUB_CONTEXT_LIMITS.MAX_ANNOTATIONS;
+
   return `## OUTPUT FORMAT
 Respond with ONLY a JSON object matching this structure (no additional text before or after):
 
@@ -162,7 +154,7 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
   "codeAnnotations": [
     {
       "path": "src/path/to/file.ts",
-      "line": 42,
+      "line": 1,
       "level": "failure|warning|notice",
       "message": "Specific error message or explanation",
       "title": "Short title for the annotation (optional)"
@@ -196,8 +188,8 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
     {
       "name": "package-name",
       "type": "added|removed|updated",
-      "oldVersion": "1.0.0 (if updated/removed)",
-      "newVersion": "2.0.0 (if added/updated)",
+      "oldVersion": "<old-version> (if updated/removed)",
+      "newVersion": "<new-version> (if added/updated)",
       "ecosystem": "npm|pip|cargo|go|maven|gem|etc"
     }
   ],
@@ -247,344 +239,38 @@ When PR diff is provided, identify:
 4. Create ONE annotation per distinct error location (same file:line = one annotation)
 5. Aggregate multiple errors at the same location into a single comprehensive message
 6. Prioritize actual errors over warnings
-7. Maximum 50 annotations to keep response manageable
+7. Maximum ${maxAnnotations} annotations to keep response manageable
 8. Only include annotations for files actually mentioned in the evidence`;
 };
 
-/**
- * Formats event details for inclusion in the prompt.
- */
-export const formatEvent = (event: Event): string => {
-  const payload = JSON.stringify(event.payload, null, 2);
-
-  return `## EVENT DETAILS
-**Event ID**: ${event.id}
-**Type**: ${event.type}
-**Source**: ${event.source}
-**Timestamp**: ${event.timestamp}
-**Severity**: ${event.severity || "medium"}
-${event.title ? `\n**Title**: ${event.title}` : ""}
-
-**Event Payload**:
-\`\`\`json
-${payload}
-\`\`\``;
-};
+// ==================== Main Prompt Builder ====================
 
 /**
- * Evidence section configuration for data-driven formatting.
+ * Builds the complete analysis prompt including task, context, and output format.
+ *
+ * @param event - The event to analyze
+ * @param evidence - Collected evidence about the event
+ * @returns Complete analysis prompt string
  */
-interface EvidenceSectionConfig {
-  readonly title: string;
-  readonly emptyMessage: string;
-  readonly hasData: (evidence: Evidence) => boolean;
-  readonly format: (evidence: Evidence) => string;
-}
+export const buildAnalysisPrompt = (event: Event, evidence: Evidence): string => {
+  const systemPrompt = buildSystemPrompt();
+  const eventSection = formatEvent(event);
+  const evidenceSection = formatEvidence(evidence);
+  const taskSection = buildTaskSection();
+  const outputFormatSection = buildOutputFormatSection();
+  const safetyConstraintsSection = buildSafetyConstraintsSection();
 
-/**
- * Evidence sections configuration - enables easy addition/removal of sections.
- */
-const EVIDENCE_SECTIONS: readonly EvidenceSectionConfig[] = [
-  {
-    title: "### Error Logs",
-    emptyMessage: "No error logs available.",
-    hasData: (e) => Boolean(e.logs?.length),
-    format: (e) => formatLogs(e.logs!),
-  },
-  {
-    title: "### System Metrics (at time of event)",
-    emptyMessage: "No metrics available.",
-    hasData: (e) => Boolean(e.metrics?.summary),
-    format: (e) => formatMetrics(e.metrics!.summary!),
-  },
-  {
-    title: "### Recent Git History",
-    emptyMessage: "No recent commits available.",
-    hasData: (e) => Boolean(e.gitHistory?.length),
-    format: (e) => formatGitHistory(e.gitHistory!),
-  },
-  {
-    title: "### System State",
-    emptyMessage: "",
-    hasData: (e) => Boolean(e.systemState),
-    format: (e) => formatSystemState(e.systemState!),
-  },
-  {
-    title: "### Related Knowledge Base Documents",
-    emptyMessage: "No related documents found in knowledge base.",
-    hasData: (e) => Boolean(e.relatedDocs?.length),
-    format: (e) => formatKnowledgeDocs(e.relatedDocs!),
-  },
-];
+  return `${systemPrompt}
 
-/**
- * Formats all evidence sections for inclusion in the prompt.
- * Uses data-driven configuration with functional patterns.
- */
-export const formatEvidence = (evidence: Evidence): string => {
-  const evidenceSections = EVIDENCE_SECTIONS.flatMap((config) => {
-    if (config.hasData(evidence)) {
-      return [config.title, config.format(evidence)];
-    }
-    return config.emptyMessage ? [`${config.title}\n${config.emptyMessage}`] : [];
-  });
+${taskSection}
 
-  return ["## COLLECTED EVIDENCE", ...evidenceSections].join("\n\n");
-};
+${eventSection}
 
-/**
- * Formats log entries for inclusion in LLM prompts.
- */
-export const formatLogs = (logs: LogEntry[]): string => {
-  return logs
-    .map((log) => {
-      const timestamp = log.timestamp || "unknown time";
-      const level = log.level || "INFO";
-      const source = log.source || "unknown";
-      const stack = log.stackTrace ? `\n${log.stackTrace}` : "";
-      return `[${timestamp}] [${level}] ${source}\n${log.message}${stack}\n---`;
-    })
-    .join("\n");
-};
+${evidenceSection}
 
-/**
- * Metric field definition for data-driven formatting.
- */
-interface MetricField {
-  readonly key: keyof MetricsSummary;
-  readonly label: string;
-  readonly suffix?: string;
-}
+${safetyConstraintsSection}
 
-/**
- * Standard metrics lookup table for consistent formatting.
- */
-const STANDARD_METRICS: readonly MetricField[] = [
-  { key: "errorRate", label: "Error Rate" },
-  { key: "requestRate", label: "Request Rate", suffix: " req/s" },
-  { key: "cpuUsage", label: "CPU Usage", suffix: "%" },
-  { key: "memoryUsage", label: "Memory Usage", suffix: "%" },
-  { key: "latencyP50", label: "Latency P50", suffix: "ms" },
-  { key: "latencyP95", label: "Latency P95", suffix: "ms" },
-  { key: "latencyP99", label: "Latency P99", suffix: "ms" },
-] as const;
+${outputFormatSection}
 
-/**
- * Set of standard metric keys for efficient lookup.
- */
-const STANDARD_METRIC_KEYS = new Set<string>(STANDARD_METRICS.map((m) => m.key as string));
-
-/**
- * Formats metrics summary using data-driven approach with functional patterns.
- */
-export const formatMetrics = (summary: MetricsSummary): string => {
-  const standardLines = STANDARD_METRICS.filter(({ key }) => summary[key] !== undefined).map(
-    ({ key, label, suffix }) => `- ${label}: ${summary[key]}${suffix ?? ""}`
-  );
-
-  const customLines = Object.entries(summary)
-    .filter(([key]) => !STANDARD_METRIC_KEYS.has(key))
-    .map(([key, value]) => `- ${key}: ${value}`);
-
-  return [...standardLines, ...customLines].join("\n");
-};
-
-/**
- * Formats git commit history.
- */
-export const formatGitHistory = (commits: GitCommit[]): string => {
-  return commits
-    .map((commit) => {
-      const lines = [
-        `- Commit: ${commit.sha}`,
-        `  Author: ${commit.author}`,
-        `  Date: ${commit.timestamp}`,
-        `  Message: ${commit.message}`,
-      ];
-
-      if (commit.filesChanged && commit.filesChanged.length > 0) {
-        lines.push(`  Files Changed: ${commit.filesChanged.join(", ")}`);
-      }
-
-      if (commit.additions !== undefined && commit.deletions !== undefined) {
-        lines.push(`  +${commit.additions} -${commit.deletions}`);
-      }
-
-      if (commit.url) {
-        lines.push(`  URL: ${commit.url}`);
-      }
-
-      return lines.join("\n");
-    })
-    .join("\n\n");
-};
-
-/**
- * Deployment status field configuration.
- */
-const DEPLOYMENT_FIELDS: readonly {
-  key: keyof NonNullable<SystemState["deploymentStatus"]>;
-  label: string;
-}[] = [
-  { key: "currentVersion", label: "Current Version" },
-  { key: "previousVersion", label: "Previous Version" },
-  { key: "deployedAt", label: "Deployed At" },
-  { key: "deployedBy", label: "Deployed By" },
-];
-
-/**
- * Formats system state information using data-driven approach with functional patterns.
- */
-const formatSystemState = (systemState: SystemState): string => {
-  const sections: string[] = [];
-
-  if (systemState.deploymentStatus) {
-    const ds = systemState.deploymentStatus;
-    const deploymentLines = DEPLOYMENT_FIELDS.filter(({ key }) => ds[key]).map(
-      ({ key, label }) => `- ${label}: ${ds[key]}`
-    );
-    sections.push("**Deployment**:", ...deploymentLines);
-  }
-
-  if (systemState.serviceHealth) {
-    const healthLines = Object.entries(systemState.serviceHealth).map(
-      ([service, status]) => `- ${service}: ${status}`
-    );
-    sections.push("\n**Service Health**:", ...healthLines);
-  }
-
-  if (systemState.dependencies?.length) {
-    const depLines = systemState.dependencies.map((dep) => {
-      const responseTime = dep.responseTime ? ` (${dep.responseTime}ms)` : "";
-      return `- ${dep.name}: ${dep.status}${responseTime}`;
-    });
-    sections.push("\n**Dependencies**:", ...depLines);
-  }
-
-  return sections.join("\n");
-};
-
-/**
- * Formats knowledge base documents using functional array composition.
- */
-export const formatKnowledgeDocs = (docs: KnowledgeDocument[]): string => {
-  return docs
-    .map((doc) => {
-      const similarity = (doc.similarity * UI_CONSTANTS.PERCENTAGE_MULTIPLIER).toFixed(0);
-      const lines = [
-        `**[${doc.type}] ${doc.title}** (Similarity: ${similarity}%)`,
-        doc.excerpt,
-        doc.url && `Full document: ${doc.url}`,
-        doc.metadata?.tags?.length && `Tags: ${doc.metadata.tags.join(", ")}`,
-        "---",
-      ].filter(Boolean);
-      return lines.join("\n");
-    })
-    .join("\n");
-};
-
-/**
- * Estimates token count for text (rough approximation).
- */
-export const estimateTokens = (text: string): number => {
-  return Math.ceil(text.length / OPENAI_CONSTANTS.CHARS_PER_TOKEN_ESTIMATE);
-};
-
-/**
- * Takes items from array while they fit within token budget.
- */
-const takeWhileTokenBudget = <T>(
-  items: readonly T[],
-  tokenBudget: number,
-  getTokens: (item: T) => number
-): { items: T[]; remainingBudget: number } => {
-  return items.reduce<{ items: T[]; remainingBudget: number }>(
-    (acc, item) => {
-      const tokens = getTokens(item);
-      if (acc.remainingBudget >= tokens) {
-        return {
-          items: [...acc.items, item],
-          remainingBudget: acc.remainingBudget - tokens,
-        };
-      }
-      return acc;
-    },
-    { items: [], remainingBudget: tokenBudget }
-  );
-};
-
-/**
- * Truncates evidence to fit within token budget while prioritizing important information.
- */
-export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidence => {
-  const truncated: Evidence = {
-    ...evidence,
-    logs: undefined,
-    gitHistory: undefined,
-    relatedDocs: undefined,
-  };
-
-  let remainingTokens = maxTokens;
-
-  if (evidence.logs) {
-    const errorLogs = evidence.logs
-      .filter((log) => log.level === "ERROR")
-      .slice(0, EVIDENCE_TRUNCATION.MAX_ERROR_LOGS);
-    const logSection = formatLogs(errorLogs);
-    const logTokens = estimateTokens(logSection);
-
-    if (logTokens <= remainingTokens) {
-      truncated.logs = errorLogs;
-      remainingTokens -= logTokens;
-    } else {
-      const result = takeWhileTokenBudget(errorLogs, remainingTokens, (log) =>
-        estimateTokens(formatLogs([log]))
-      );
-      truncated.logs = result.items;
-      remainingTokens = result.remainingBudget;
-    }
-  }
-
-  if (evidence.gitHistory && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_COMMITS) {
-    const recentCommits = evidence.gitHistory.slice(0, EVIDENCE_TRUNCATION.MAX_RECENT_COMMITS);
-    const commitSection = formatGitHistory(recentCommits);
-    const commitTokens = estimateTokens(commitSection);
-
-    if (commitTokens <= remainingTokens) {
-      truncated.gitHistory = recentCommits;
-      remainingTokens -= commitTokens;
-    }
-  }
-
-  if (evidence.relatedDocs && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_DOCS) {
-    const topDocs = evidence.relatedDocs
-      .filter((doc) => doc.similarity > SIMILARITY_THRESHOLDS.MINIMUM_FOR_FILTERING)
-      .slice(0, EVIDENCE_TRUNCATION.MAX_HIGH_SIMILARITY_DOCS);
-    const docSection = formatKnowledgeDocs(topDocs);
-    const docTokens = estimateTokens(docSection);
-
-    if (docTokens <= remainingTokens) {
-      truncated.relatedDocs = topDocs;
-      remainingTokens -= docTokens;
-    }
-  }
-
-  truncated.metrics = evidence.metrics;
-
-  if (evidence.logs && remainingTokens > EVIDENCE_TRUNCATION.MIN_TOKENS_FOR_COMMITS) {
-    const additionalLogs = evidence.logs
-      .filter((log) => log.level !== "ERROR")
-      .slice(0, EVIDENCE_TRUNCATION.MAX_ADDITIONAL_LOGS);
-
-    const currentLogs = truncated.logs || [];
-    const result = takeWhileTokenBudget(additionalLogs, remainingTokens, (log) =>
-      estimateTokens(formatLogs([log]))
-    );
-    truncated.logs = [...currentLogs, ...result.items];
-  }
-
-  truncated.systemState = evidence.systemState;
-  truncated.relatedEvents = evidence.relatedEvents;
-
-  return truncated;
+Now, analyze the event and provide your structured response.`;
 };

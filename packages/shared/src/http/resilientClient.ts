@@ -76,7 +76,9 @@ const circuitBreakers = new Map<string, CircuitState>();
  */
 const getCircuitState = (serviceKey: string): CircuitState => {
   const existing = circuitBreakers.get(serviceKey);
-  if (existing) return existing;
+  if (existing) {
+    return existing;
+  }
 
   const initial: CircuitState = { failures: 0, lastFailure: 0, isOpen: false };
   circuitBreakers.set(serviceKey, initial);
@@ -101,7 +103,9 @@ const getServiceKey = (url: string): string => {
 const isCircuitOpen = (serviceKey: string): boolean => {
   const state = getCircuitState(serviceKey);
 
-  if (!state.isOpen) return false;
+  if (!state.isOpen) {
+    return false;
+  }
 
   // Check if reset timeout has passed
   const timeSinceFailure = Date.now() - state.lastFailure;
@@ -165,7 +169,7 @@ export const getCircuitBreakerStatus = (
  * Calculates exponential backoff delay with jitter
  */
 const calculateBackoff = (attempt: number, initialDelay: number, maxDelay: number): number => {
-  const exponentialDelay = initialDelay * Math.pow(2, attempt - 1);
+  const exponentialDelay = initialDelay * 2 ** (attempt - 1);
   const jitter = Math.random() * HTTP_RESILIENCE_DEFAULTS.JITTER_FACTOR * exponentialDelay;
   return Math.min(exponentialDelay + jitter, maxDelay);
 };
@@ -177,7 +181,9 @@ const isRetryableError = (status: number, error?: Error): boolean => {
   // Network errors are retryable
   if (error) {
     const message = error.message.toLowerCase();
-    if (RETRYABLE_NETWORK_ERRORS.some((e) => message.includes(e))) return true;
+    if (RETRYABLE_NETWORK_ERRORS.some((errorPattern) => message.includes(errorPattern))) {
+      return true;
+    }
   }
 
   // HTTP status codes that are retryable
@@ -189,7 +195,10 @@ const isRetryableError = (status: number, error?: Error): boolean => {
 /**
  * Waits for specified milliseconds
  */
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 // ==================== Main Client ====================
 

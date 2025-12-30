@@ -10,17 +10,25 @@ import {
   NotFoundError,
   ExternalServiceError,
   LLMError,
+  RateLimitError,
+  CircuitBreakerOpenError,
   isAppError,
+  isRetryableAppError,
   getErrorMessage,
+  getUserFriendlyMessage,
+  getRetryInfo,
   formatErrorForLog,
   wrapError,
+  enrichError,
 } from "../../core/errors.js";
 import { ERROR_CODES, HTTP_STATUS } from "../../constants/index.js";
 
 describe("Core Errors", () => {
   describe("AppError", () => {
     it("should create error with all properties", () => {
-      const error = new AppError("Test error", "TEST_CODE", 400, true, { key: "value" });
+      const error = new AppError("Test error", "TEST_CODE", 400, true, {
+        metadata: { key: "value" },
+      });
 
       expect(error.message).toBe("Test error");
       expect(error.code).toBe("TEST_CODE");
@@ -82,7 +90,7 @@ describe("Core Errors", () => {
     });
 
     it("should include metadata when provided", () => {
-      const error = new ValidationError("Invalid input", { field: "email" });
+      const error = new ValidationError("Invalid input", { metadata: { field: "email" } });
 
       expect(error.metadata).toEqual({ field: "email" });
     });
@@ -126,7 +134,7 @@ describe("Core Errors", () => {
     });
 
     it("should include metadata when provided", () => {
-      const error = new AuthenticationError("Token expired", { tokenType: "jwt" });
+      const error = new AuthenticationError("Token expired", { metadata: { tokenType: "jwt" } });
 
       expect(error.metadata).toEqual({ tokenType: "jwt" });
     });
@@ -184,7 +192,7 @@ describe("Core Errors", () => {
     });
 
     it("should include metadata when provided", () => {
-      const error = new NotFoundError("User not found", { userId: "123" });
+      const error = new NotFoundError("User not found", { metadata: { userId: "123" } });
 
       expect(error.metadata).toEqual({ userId: "123" });
     });
@@ -211,7 +219,7 @@ describe("Core Errors", () => {
     });
 
     it("should merge metadata with service name", () => {
-      const error = new ExternalServiceError("GitHub", "Error", { endpoint: "/api" });
+      const error = new ExternalServiceError("GitHub", "Error", { metadata: { endpoint: "/api" } });
 
       expect(error.metadata).toEqual({ service: "GitHub", endpoint: "/api" });
     });
@@ -220,6 +228,12 @@ describe("Core Errors", () => {
       const error = new ExternalServiceError("GitHub", "Error");
 
       expect(error.metadata).toEqual({ service: "GitHub" });
+    });
+
+    it("should expose service property", () => {
+      const error = new ExternalServiceError("GitHub", "Error");
+
+      expect(error.service).toBe("GitHub");
     });
   });
 
@@ -243,9 +257,15 @@ describe("Core Errors", () => {
     });
 
     it("should include metadata when provided", () => {
-      const error = new LLMError("Rate limit exceeded", { retryAfter: 60 });
+      const error = new LLMError("Rate limit exceeded", { metadata: { retryAfter: 60 } });
 
       expect(error.metadata).toEqual({ service: "OpenAI", retryAfter: 60 });
+    });
+
+    it("should set operation to AI analysis by default", () => {
+      const error = new LLMError("Rate limit exceeded");
+
+      expect(error.operation).toBe("AI analysis");
     });
   });
 
@@ -381,14 +401,14 @@ describe("Core Errors", () => {
 
   describe("Error edge cases", () => {
     it("should handle metadata with null values", () => {
-      const error = new ValidationError("Test", { value: null, key: undefined });
+      const error = new ValidationError("Test", { metadata: { value: null, key: undefined } });
 
       expect(error.metadata).toEqual({ value: null, key: undefined });
     });
 
     it("should handle metadata with nested objects", () => {
       const metadata = { nested: { deep: { value: 123 } }, array: [1, 2, 3] };
-      const error = new NotFoundError("Test", metadata);
+      const error = new NotFoundError("Test", { metadata });
 
       expect(error.metadata).toEqual(metadata);
     });
@@ -405,6 +425,153 @@ describe("Core Errors", () => {
 
       expect(Object.getPrototypeOf(validationError)).toBe(ValidationError.prototype);
       expect(Object.getPrototypeOf(authError)).toBe(AuthenticationError.prototype);
+    });
+  });
+
+  describe("RateLimitError", () => {
+    it("should create error with retry information", () => {
+      const error = new RateLimitError("Too many requests", 30000);
+
+      expect(error.statusCode).toBe(429);
+      expect(error.retryable).toBe(true);
+      expect(error.retryAfterMs).toBe(30000);
+    });
+
+    it("should include retry time in suggestion", () => {
+      const error = new RateLimitError("Too many requests", 30000);
+
+      expect(error.suggestion).toContain("30 seconds");
+    });
+  });
+
+  describe("CircuitBreakerOpenError", () => {
+    it("should create error with service and retry information", () => {
+      const error = new CircuitBreakerOpenError("openai", 60000);
+
+      expect(error.service).toBe("openai");
+      expect(error.retryable).toBe(true);
+      expect(error.retryAfterMs).toBe(60000);
+    });
+
+    it("should include retry time in suggestion", () => {
+      const error = new CircuitBreakerOpenError("openai", 60000);
+
+      expect(error.suggestion).toContain("60 seconds");
+    });
+  });
+
+  describe("isRetryableAppError", () => {
+    it("should return true for retryable errors", () => {
+      const error = new RateLimitError("Too many requests", 30000);
+      expect(isRetryableAppError(error)).toBe(true);
+    });
+
+    it("should return false for non-retryable errors", () => {
+      const error = new ValidationError("Invalid input");
+      expect(isRetryableAppError(error)).toBe(false);
+    });
+
+    it("should return false for non-AppError", () => {
+      expect(isRetryableAppError(new Error("test"))).toBe(false);
+    });
+  });
+
+  describe("getUserFriendlyMessage", () => {
+    it("should return message with suggestion for AppError", () => {
+      const error = new RateLimitError("Too many requests", 30000);
+      const message = getUserFriendlyMessage(error);
+
+      expect(message).toContain("Too many requests");
+      expect(message).toContain("30 seconds");
+    });
+
+    it("should return plain message for non-AppError", () => {
+      const error = new Error("Test error");
+      expect(getUserFriendlyMessage(error)).toBe("Test error");
+    });
+  });
+
+  describe("getRetryInfo", () => {
+    it("should extract retry info from retryable error", () => {
+      const error = new RateLimitError("Too many requests", 30000);
+      const info = getRetryInfo(error);
+
+      expect(info.retryable).toBe(true);
+      expect(info.retryAfterMs).toBe(30000);
+    });
+
+    it("should return false for non-retryable error", () => {
+      const error = new ValidationError("Invalid input");
+      const info = getRetryInfo(error);
+
+      expect(info.retryable).toBe(false);
+      expect(info.retryAfterMs).toBeUndefined();
+    });
+  });
+
+  describe("enrichError", () => {
+    it("should add context to error", () => {
+      const original = new Error("Original error");
+      const enriched = enrichError(original, {
+        operation: "testOperation",
+        correlationId: "test-123",
+      });
+
+      expect(enriched.operation).toBe("testOperation");
+      expect(enriched.correlationId).toBe("test-123");
+    });
+
+    it("should preserve AppError properties", () => {
+      const original = new ValidationError("Original", { metadata: { field: "email" } });
+      const enriched = enrichError(original, {
+        operation: "testOperation",
+        metadata: { extra: "data" },
+      });
+
+      expect(enriched.code).toBe(ERROR_CODES.VALIDATION_ERROR);
+      expect(enriched.metadata).toEqual({ field: "email", extra: "data" });
+    });
+  });
+
+  describe("AppError toLogFormat", () => {
+    it("should format error with all fields", () => {
+      const error = new AppError("Test", "TEST", 500, true, {
+        operation: "testOp",
+        correlationId: "123",
+        retryable: true,
+        retryAfterMs: 5000,
+        suggestion: "Try again",
+        metadata: { key: "value" },
+      });
+
+      const formatted = error.toLogFormat();
+
+      expect(formatted.name).toBe("AppError");
+      expect(formatted.code).toBe("TEST");
+      expect(formatted.message).toBe("Test");
+      expect(formatted.operation).toBe("testOp");
+      expect(formatted.correlationId).toBe("123");
+      expect(formatted.retryable).toBe(true);
+      expect(formatted.retryAfterMs).toBe(5000);
+      expect(formatted.suggestion).toBe("Try again");
+      expect(formatted.metadata).toEqual({ key: "value" });
+    });
+  });
+
+  describe("AppError toUserMessage", () => {
+    it("should combine message and suggestion", () => {
+      const error = new RateLimitError("Too many requests", 30000);
+      const message = error.toUserMessage();
+
+      expect(message).toContain("Too many requests");
+      expect(message).toContain("30 seconds");
+    });
+
+    it("should return just message when no suggestion", () => {
+      const error = new NotFoundError("User not found");
+      const message = error.toUserMessage();
+
+      expect(message).toBe("User not found");
     });
   });
 });

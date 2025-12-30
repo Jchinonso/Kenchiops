@@ -79,9 +79,7 @@ class LoggerImpl implements Logger {
     this.minLevel = minLevel;
   }
 
-  private readonly shouldLog = (level: LogLevel): boolean => {
-    return level >= this.minLevel;
-  };
+  private readonly shouldLog = (level: LogLevel): boolean => level >= this.minLevel;
 
   private readonly formatMessage = (
     level: LogLevel,
@@ -133,9 +131,8 @@ class LoggerImpl implements Logger {
 /**
  * Create a logger instance for a specific service.
  */
-export const createLogger = (serviceName: string, minLevel: LogLevel = LogLevel.INFO): Logger => {
-  return new LoggerImpl(serviceName, minLevel);
-};
+export const createLogger = (serviceName: string, minLevel: LogLevel = LogLevel.INFO): Logger =>
+  new LoggerImpl(serviceName, minLevel);
 
 /**
  * Default logger instance.

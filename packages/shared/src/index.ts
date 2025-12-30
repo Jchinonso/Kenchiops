@@ -24,10 +24,18 @@ export {
   NotFoundError,
   ExternalServiceError,
   LLMError,
+  RateLimitError,
+  CircuitBreakerOpenError,
   isAppError,
+  isRetryableAppError,
+  isExternalServiceError,
   getErrorMessage,
+  getUserFriendlyMessage,
+  getRetryInfo,
   formatErrorForLog,
   wrapError,
+  enrichError,
+  type ErrorContext,
 } from "./core/index.js";
 export type {
   // Event Types
@@ -148,6 +156,16 @@ export {
   getCircuitBreakerStatus,
   type ResilientRequestOptions,
   type ResilientResponse,
+} from "./http/index.js";
+export {
+  withCircuitBreaker,
+  getCircuitStatus,
+  resetCircuit,
+  resetAllCircuits,
+  getAllCircuitStatus,
+  SERVICE_KEYS,
+  type CircuitBreakerConfig,
+  type CircuitBreakerStatus,
 } from "./http/index.js";
 
 // Formatting utilities
@@ -378,6 +396,7 @@ export {
   type ConsolidatedPostResult,
   type AggregationReadyCallback,
   type ConsolidatedAnalysisPayload,
+  type FailureContext,
   // Utilities
   serializeAggregationKey,
   deserializeAggregationKey,
@@ -396,3 +415,32 @@ export {
   startAnalysisQueueProcessor,
   deserializeQueuePayload,
 } from "./aggregation/index.js";
+
+// Health check utilities
+export {
+  // Types (HealthStatus comes from constants for consistency)
+  type ComponentHealth,
+  type ServiceHealth,
+  type MemoryHealth,
+  type HealthCheckConfig,
+  // Health check functions
+  getMemoryHealth,
+  checkMemoryStatus,
+  checkDatabaseHealth,
+  checkRedisHealth,
+  checkCircuitBreakerHealth,
+  checkAllCircuitBreakers,
+  performHealthCheck,
+  livenessCheck,
+  readinessCheck,
+} from "./health/index.js";
+
+// Graceful shutdown utilities
+export {
+  setupGracefulShutdown,
+  registerCleanupHandler,
+  isShuttingDown,
+  getShutdownStatus,
+  type CleanupFunction,
+  type GracefulShutdownConfig,
+} from "./shutdown/index.js";

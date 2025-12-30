@@ -3,27 +3,25 @@
  *
  * Handles multi-tenant operations including tenant lookup, creation, and lifecycle management.
  * This service is the central point for all tenant-related database operations.
+ *
+ * @module database/tenantService
  */
 
-import pg from "pg";
 import { query, transaction } from "./client.js";
 import { createLogger, parseDbCount } from "../core/index.js";
 import { NotFoundError } from "../core/errors.js";
-import {
-  TENANT_STATUS,
-  AUDIT_ACTIONS,
-  AUDIT_DEFAULTS,
-  AUDIT_QUERIES,
-  TENANT_DEFAULTS,
-} from "../constants/index.js";
+import { TENANT_STATUS, AUDIT_ACTIONS, TENANT_DEFAULTS } from "../constants/index.js";
 import type {
   Tenant,
   TenantStatus,
   CreateTenantFromGitHub,
   LinkSlackWorkspace,
   TenantAuditAction,
-  TenantAuditEntry,
 } from "../core/types.js";
+import { insertAuditLog } from "./tenantAudit.js";
+
+// Re-export audit functions for backwards compatibility
+export { logAuditEvent, getAuditLog } from "./tenantAudit.js";
 
 const logger = createLogger("tenant-service");
 
@@ -45,18 +43,6 @@ interface TenantRow {
   readonly status: TenantStatus;
   readonly created_at: Date;
   readonly updated_at: Date;
-}
-
-/**
- * Database row type for tenant_audit_log table
- */
-interface AuditRow {
-  readonly id: string;
-  readonly tenant_id: string;
-  readonly action: TenantAuditAction;
-  readonly actor: string | null;
-  readonly metadata: Record<string, unknown>;
-  readonly created_at: Date;
 }
 
 /**
@@ -88,18 +74,6 @@ const rowToTenant = (row: TenantRow): Tenant => ({
   updatedAt: row.updated_at,
 });
 
-/**
- * Convert database row to TenantAuditEntry
- */
-const rowToAuditEntry = (row: AuditRow): TenantAuditEntry => ({
-  id: row.id,
-  tenantId: row.tenant_id,
-  action: row.action,
-  actor: row.actor,
-  metadata: row.metadata,
-  createdAt: row.created_at,
-});
-
 // ==================== Internal Helpers ====================
 
 /**
@@ -107,23 +81,6 @@ const rowToAuditEntry = (row: AuditRow): TenantAuditEntry => ({
  */
 const extractTenant = (rows: readonly TenantRow[]): Tenant | null =>
   rows.length > 0 ? rowToTenant(rows[0]) : null;
-
-/**
- * Insert an audit log entry within a transaction
- */
-const insertAuditLog = async (
-  client: pg.PoolClient,
-  tenantId: string,
-  action: TenantAuditAction,
-  metadata: Record<string, unknown> = {}
-): Promise<void> => {
-  await client.query(AUDIT_QUERIES.INSERT, [
-    tenantId,
-    action,
-    AUDIT_DEFAULTS.ACTOR,
-    JSON.stringify(metadata),
-  ]);
-};
 
 /**
  * Determine new status after GitHub installation
@@ -446,31 +403,6 @@ export const handleGitHubUninstall = async (installationId: number): Promise<voi
     tenantId: tenant.id,
     installationId,
   });
-};
-
-// ==================== Audit Log ====================
-
-/**
- * Log an audit event for a tenant.
- */
-export const logAuditEvent = async (
-  tenantId: string,
-  action: TenantAuditAction,
-  metadata: Record<string, unknown> = {},
-  actor: string = AUDIT_DEFAULTS.ACTOR
-): Promise<void> => {
-  await query(AUDIT_QUERIES.INSERT, [tenantId, action, actor, JSON.stringify(metadata)]);
-};
-
-/**
- * Get audit log entries for a tenant.
- */
-export const getAuditLog = async (
-  tenantId: string,
-  limit: number = AUDIT_DEFAULTS.LIMIT
-): Promise<readonly TenantAuditEntry[]> => {
-  const result = await query<AuditRow>(AUDIT_QUERIES.SELECT_BY_TENANT, [tenantId, limit]);
-  return result.rows.map(rowToAuditEntry);
 };
 
 // ==================== Statistics ====================

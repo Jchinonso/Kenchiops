@@ -153,10 +153,14 @@ interface TenantLinkStrategy {
 const tenantLinkStrategies: readonly TenantLinkStrategy[] = [
   {
     name: "existing_tenant_id",
-    matches: async (state) => !!state.tenantId,
+    matches: async (state) => Boolean(state.tenantId),
     execute: async (state, slackData) => {
+      // tenantId is guaranteed by matches check above
+      if (!state.tenantId) {
+        throw new Error("Tenant ID required but missing");
+      }
       const tenant = await linkSlackWorkspace({
-        tenantId: state.tenantId!,
+        tenantId: state.tenantId,
         ...slackData,
       });
       return { tenant, isNewTenant: false };
@@ -166,12 +170,16 @@ const tenantLinkStrategies: readonly TenantLinkStrategy[] = [
     name: "matching_github_org",
     matches: async (_state, teamName) => {
       const existing = await findByGitHubOrg(teamName);
-      return !!existing;
+      return Boolean(existing);
     },
     execute: async (_state, slackData, teamName) => {
       const existingTenant = await findByGitHubOrg(teamName);
+      // existingTenant is guaranteed by matches check above
+      if (!existingTenant) {
+        throw new Error("Existing tenant not found");
+      }
       const tenant = await linkSlackWorkspace({
-        tenantId: existingTenant!.id,
+        tenantId: existingTenant.id,
         ...slackData,
       });
       return { tenant, isNewTenant: false };
@@ -394,11 +402,19 @@ router.get("/slack/oauth/callback", async (req: Request, res: Response) => {
   const { storedState } = validation;
 
   try {
+    // These are guaranteed to exist by validateOAuthCallback above
+    const clientId = config.SLACK_CLIENT_ID;
+    const clientSecret = config.SLACK_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ error: "OAuth not configured" });
+      return;
+    }
+
     const redirectUri =
       config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
     const tokenUrl = new URL("https://slack.com/api/oauth.v2.access");
-    tokenUrl.searchParams.set("client_id", config.SLACK_CLIENT_ID!);
-    tokenUrl.searchParams.set("client_secret", config.SLACK_CLIENT_SECRET!);
+    tokenUrl.searchParams.set("client_id", clientId);
+    tokenUrl.searchParams.set("client_secret", clientSecret);
     tokenUrl.searchParams.set("code", validation.code);
     tokenUrl.searchParams.set("redirect_uri", redirectUri);
 
@@ -437,9 +453,9 @@ router.get("/slack/oauth/callback", async (req: Request, res: Response) => {
     const html = buildSuccessHtml(tokenData.team.name, tenant.status, statusMessage, isNewTenant);
 
     res.send(html);
-  } catch (err) {
+  } catch (caughtError) {
     logger.error("OAuth callback error", {
-      error: err instanceof Error ? err.message : "Unknown error",
+      error: caughtError instanceof Error ? caughtError.message : "Unknown error",
     });
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       error: "Failed to complete OAuth flow",

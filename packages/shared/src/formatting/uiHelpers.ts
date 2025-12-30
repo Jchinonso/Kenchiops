@@ -26,7 +26,7 @@ interface ThresholdEntry<T> {
 /**
  * Confidence label lookup table (descending order for first-match).
  */
-const CONFIDENCE_LABELS: readonly ThresholdEntry<string>[] = [
+const CONFIDENCE_LABELS: ReadonlyArray<ThresholdEntry<string>> = [
   { threshold: UI_CONFIDENCE_THRESHOLDS.VERY_HIGH, value: "Very High" },
   { threshold: UI_CONFIDENCE_THRESHOLDS.HIGH, value: "High" },
   { threshold: UI_CONFIDENCE_THRESHOLDS.MEDIUM, value: "Medium" },
@@ -37,7 +37,7 @@ const CONFIDENCE_LABELS: readonly ThresholdEntry<string>[] = [
  * Confidence color lookup table.
  * Uses UI_CONFIDENCE_THRESHOLDS for consistency.
  */
-const CONFIDENCE_COLORS: readonly ThresholdEntry<string>[] = [
+const CONFIDENCE_COLORS: ReadonlyArray<ThresholdEntry<string>> = [
   { threshold: UI_CONFIDENCE_THRESHOLDS.HIGH, value: SLACK_COLORS.SUCCESS },
   { threshold: UI_CONFIDENCE_THRESHOLDS.MEDIUM, value: SLACK_COLORS.WARNING },
 ] as const;
@@ -45,7 +45,7 @@ const CONFIDENCE_COLORS: readonly ThresholdEntry<string>[] = [
 /**
  * Confidence emoji lookup table.
  */
-const CONFIDENCE_EMOJIS: readonly ThresholdEntry<string>[] = [
+const CONFIDENCE_EMOJIS: ReadonlyArray<ThresholdEntry<string>> = [
   { threshold: UI_CONFIDENCE_THRESHOLDS.VERY_HIGH, value: ":large_green_circle:" },
   { threshold: UI_CONFIDENCE_THRESHOLDS.HIGH, value: ":large_blue_circle:" },
   { threshold: UI_CONFIDENCE_THRESHOLDS.MEDIUM, value: ":large_yellow_circle:" },
@@ -55,7 +55,11 @@ const CONFIDENCE_EMOJIS: readonly ThresholdEntry<string>[] = [
 /**
  * Generic threshold lookup - finds first matching threshold (descending order).
  */
-const findByThreshold = <T>(score: number, table: readonly ThresholdEntry<T>[], fallback: T): T => {
+const findByThreshold = <T>(
+  score: number,
+  table: ReadonlyArray<ThresholdEntry<T>>,
+  fallback: T
+): T => {
   const entry = table.find(({ threshold }) => score >= threshold);
   return entry?.value ?? fallback;
 };
@@ -107,7 +111,9 @@ export const getConfidenceEmoji = (score: number): string =>
  * @returns Truncated text with "..." if it exceeds maxLength
  */
 export const truncateText = (text: string, maxLength: number): string => {
-  if (text.length <= maxLength) return text;
+  if (text.length <= maxLength) {
+    return text;
+  }
   return `${text.slice(0, maxLength - 3)}...`;
 };
 
@@ -166,7 +172,9 @@ export const formatRelativeTime = (date: Date): string => {
   const diffMins = Math.floor(diffMs / TIME_CONSTANTS.MILLISECONDS_PER_MINUTE);
 
   // Less than 1 minute
-  if (diffMins < 1) return "just now";
+  if (diffMins < 1) {
+    return "just now";
+  }
 
   // Find matching time unit
   const matchedUnit = TIME_UNITS.find(({ threshold }) => diffMins >= threshold);
@@ -243,7 +251,7 @@ export const getFirstSentence = (text: string): string => text.split(/[.!?]/)[0]
  * // Returns: ["- a", "- b", "- c", "- _...and 1 more items_"]
  */
 export const buildTruncatedList = <T>(
-  items: ReadonlyArray<T>,
+  items: readonly T[],
   formatItem: (item: T, index: number) => string,
   maxItems: number = GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
   overflowLabel: string

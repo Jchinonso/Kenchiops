@@ -155,7 +155,7 @@ router.get("/github/setup", async (req: Request, res: Response) => {
     }
 
     let isLinked = !!tenant.slackWorkspaceId;
-    let slackTeamName = tenant.slackTeamName;
+    let { slackTeamName } = tenant;
 
     // If state contains Slack workspace ID and tenant isn't already linked
     if (state && typeof state === "string" && !tenant.slackWorkspaceId) {
@@ -174,11 +174,13 @@ router.get("/github/setup", async (req: Request, res: Response) => {
         });
 
         // Update the GitHub tenant with Slack details
+        // Note: slackWorkspaceId must exist since we found slackTenant by it
+        // slackBotToken was checked in the if condition above
         await linkSlackWorkspace({
           tenantId: tenant.id,
-          slackWorkspaceId: slackTenant.slackWorkspaceId!,
-          slackTeamName: slackTenant.slackTeamName!,
-          slackBotToken: slackTenant.slackBotToken!,
+          slackWorkspaceId: slackTenant.slackWorkspaceId ?? slackWorkspaceId,
+          slackTeamName: slackTenant.slackTeamName ?? "",
+          slackBotToken: slackTenant.slackBotToken,
           slackBotUserId: slackTenant.slackBotUserId || undefined,
         });
 

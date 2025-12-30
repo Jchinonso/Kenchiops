@@ -16,27 +16,26 @@
 
 import { getRedisClient } from "../queue/redisClient.js";
 import { ciAnalysisQueue } from "../queue/messageQueue.js";
-import { createLogger, withTimeout, delay, getErrorMessage } from "../core/index.js";
+import { createLogger, withTimeout, getErrorMessage } from "../core/index.js";
 import {
   REDIS_TIMEOUTS,
-  QUEUE_WORKER_DEFAULTS,
   REDIS_KEY_PREFIXES,
   AGGREGATION_DEFAULTS,
   DISPLAY_DEFAULTS,
   REDIS_SCAN,
 } from "../constants/index.js";
-import type {
-  AggregatedFailures,
-  AggregationKey,
-  AggregationConfig,
-  AnalyzedFailure,
-  SerializedFailure,
-  RepositoryInfo,
-  PRContext,
-  WorkflowContext,
-  ConsolidatedPostResult,
+import {
+  AGGREGATION_KEYS,
+  DEFAULT_AGGREGATION_CONFIG,
+  type AggregatedFailures,
+  type AggregationKey,
+  type AggregationConfig,
+  type AnalyzedFailure,
+  type SerializedFailure,
+  type RepositoryInfo,
+  type PRContext,
+  type WorkflowContext,
 } from "./types.js";
-import { AGGREGATION_KEYS, DEFAULT_AGGREGATION_CONFIG } from "./types.js";
 
 const logger = createLogger("redis-aggregator");
 
@@ -46,6 +45,17 @@ const AGGREGATION_KEY_PATTERN = new RegExp(
 );
 
 // ==================== Types ====================
+
+/**
+ * Context for failure aggregation operations
+ */
+export interface FailureContext {
+  readonly repositoryInfo: RepositoryInfo;
+  readonly installationId: number;
+  readonly pullRequestNumbers: readonly number[];
+  readonly prContext: PRContext | null;
+  readonly workflowContext: WorkflowContext | null;
+}
 
 /**
  * Metadata stored in Redis for an aggregation
@@ -62,13 +72,6 @@ interface AggregationMetadata {
   readonly firstFailureAt: string; // ISO timestamp
   readonly lastFailureAt: string; // ISO timestamp
 }
-
-/**
- * Callback type for when aggregation is ready to be posted
- */
-export type AggregationReadyCallback = (
-  aggregation: AggregatedFailures
-) => Promise<ConsolidatedPostResult>;
 
 // ==================== Helpers ====================
 
@@ -116,22 +119,18 @@ const deserializeFailure = (data: string): AnalyzedFailure => {
  */
 const buildMetadata = (
   key: AggregationKey,
-  repositoryInfo: RepositoryInfo,
-  installationId: number,
-  pullRequestNumbers: readonly number[],
-  prContext: PRContext | null,
-  workflowContext: WorkflowContext | null,
+  context: FailureContext,
   firstFailureAt: Date,
   lastFailureAt: Date
 ): AggregationMetadata => ({
-  repositoryFullName: repositoryInfo.fullName,
-  repositoryOwner: repositoryInfo.owner,
-  repositoryName: repositoryInfo.name,
+  repositoryFullName: context.repositoryInfo.fullName,
+  repositoryOwner: context.repositoryInfo.owner,
+  repositoryName: context.repositoryInfo.name,
   commitSha: key.commitSha,
-  installationId,
-  pullRequestNumbers: JSON.stringify(pullRequestNumbers),
-  prContext: prContext ? JSON.stringify(prContext) : null,
-  workflowContext: workflowContext ? JSON.stringify(workflowContext) : null,
+  installationId: context.installationId,
+  pullRequestNumbers: JSON.stringify(context.pullRequestNumbers),
+  prContext: context.prContext ? JSON.stringify(context.prContext) : null,
+  workflowContext: context.workflowContext ? JSON.stringify(context.workflowContext) : null,
   firstFailureAt: firstFailureAt.toISOString(),
   lastFailureAt: lastFailureAt.toISOString(),
 });
@@ -168,11 +167,7 @@ const reconstructAggregation = (
 export const addFailureToRedis = async (
   key: AggregationKey,
   failure: AnalyzedFailure,
-  repositoryInfo: RepositoryInfo,
-  installationId: number,
-  pullRequestNumbers: readonly number[],
-  prContext: PRContext | null,
-  workflowContext: WorkflowContext | null,
+  context: FailureContext,
   config: AggregationConfig = DEFAULT_AGGREGATION_CONFIG
 ): Promise<void> => {
   const redis = getRedisClient();
@@ -216,11 +211,7 @@ export const addFailureToRedis = async (
     // Build metadata
     const metadata = buildMetadata(
       key,
-      repositoryInfo,
-      installationId,
-      pullRequestNumbers,
-      prContext,
-      workflowContext,
+      context,
       isNew ? now : new Date(existingMeta.firstFailureAt || now.toISOString()),
       now
     );
@@ -377,7 +368,9 @@ export const isMaxWaitExceeded = async (
       REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
     );
 
-    if (!firstFailureAt) return false;
+    if (!firstFailureAt) {
+      return false;
+    }
 
     const elapsed = Date.now() - new Date(firstFailureAt).getTime();
     return elapsed >= maxWaitMs;
@@ -414,7 +407,9 @@ export const findReadyAggregations = async (
       for (const metaKey of keys) {
         // Extract repo:sha from key pattern
         const match = metaKey.match(AGGREGATION_KEY_PATTERN);
-        if (!match) continue;
+        if (!match) {
+          continue;
+        }
 
         const [, repoFullName, commitSha] = match;
         const key: AggregationKey = { repositoryFullName: repoFullName, commitSha };
@@ -457,9 +452,9 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
     aggregation: {
       ...aggregation,
       // Convert Dates to ISO strings for serialization
-      failures: aggregation.failures.map((f) => ({
-        ...f,
-        timestamp: f.timestamp.toISOString(),
+      failures: aggregation.failures.map((failure) => ({
+        ...failure,
+        timestamp: failure.timestamp.toISOString(),
       })),
       firstFailureAt: aggregation.firstFailureAt.toISOString(),
       lastFailureAt: aggregation.lastFailureAt.toISOString(),
@@ -479,177 +474,13 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
   return messageId;
 };
 
-// ==================== Aggregator Worker ====================
+// ==================== Re-exports from extracted modules ====================
 
-/**
- * Starts the aggregator worker that checks for ready aggregations
- * and enqueues them for processing
- */
-export const startAggregatorWorker = (
-  config: AggregationConfig = DEFAULT_AGGREGATION_CONFIG,
-  pollIntervalMs: number = QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS
-): (() => void) => {
-  let running = true;
-
-  logger.info("Starting Redis aggregator worker", {
-    pollIntervalMs,
-    debounceMs: config.debounceMs,
-    maxWaitMs: config.maxWaitMs,
-  });
-
-  const poll = async (): Promise<void> => {
-    while (running) {
-      try {
-        const readyKeys = await findReadyAggregations(config);
-
-        if (readyKeys.length > 0) {
-          logger.info("Found ready aggregations", { count: readyKeys.length });
-
-          // Enqueue all ready aggregations in parallel
-          await Promise.all(readyKeys.map(enqueueAggregation));
-        }
-      } catch (error) {
-        logger.error("Aggregator worker error", {
-          error: getErrorMessage(error),
-        });
-      }
-
-      // Wait before next poll
-      await delay(pollIntervalMs);
-    }
-  };
-
-  // Start polling (don't await)
-  poll().catch((error) => {
-    logger.error("Aggregator worker fatal error", {
-      error: getErrorMessage(error),
-    });
-  });
-
-  // Return stop function
-  return () => {
-    running = false;
-    logger.info("Aggregator worker stopping");
-  };
-};
-
-// ==================== CI Analysis Queue Processor ====================
-
-/**
- * Payload structure for consolidated analysis jobs
- */
-export interface ConsolidatedAnalysisPayload {
-  readonly aggregation: {
-    readonly commitSha: string;
-    readonly repository: RepositoryInfo;
-    readonly installationId: number;
-    readonly pullRequestNumbers: readonly number[];
-    readonly failures: readonly SerializedFailure[];
-    readonly prContext: PRContext | null;
-    readonly workflowContext: WorkflowContext | null;
-    readonly firstFailureAt: string;
-    readonly lastFailureAt: string;
-  };
-}
-
-/**
- * Deserialize aggregation from queue payload
- */
-export const deserializeQueuePayload = (
-  payload: ConsolidatedAnalysisPayload
-): AggregatedFailures => ({
-  ...payload.aggregation,
-  failures: payload.aggregation.failures.map((f) => ({
-    ...f,
-    timestamp: new Date(f.timestamp),
-  })),
-  firstFailureAt: new Date(payload.aggregation.firstFailureAt),
-  lastFailureAt: new Date(payload.aggregation.lastFailureAt),
-});
-
-/**
- * Starts the CI analysis queue processor
- * Processes consolidated analysis jobs and posts results
- */
-export const startAnalysisQueueProcessor = (
-  onReady: AggregationReadyCallback,
-  options: { pollIntervalMs?: number; maxConcurrent?: number } = {}
-): (() => void) => {
-  const { pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS, maxConcurrent = 3 } = options;
-  let running = true;
-  let activeJobs = 0;
-
-  logger.info("Starting CI analysis queue processor", {
-    pollIntervalMs,
-    maxConcurrent,
-  });
-
-  const processLoop = async (): Promise<void> => {
-    while (running) {
-      if (activeJobs >= maxConcurrent) {
-        await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);
-        continue;
-      }
-
-      try {
-        activeJobs++;
-        await ciAnalysisQueue.process(async (message) => {
-          const payload = message.payload as ConsolidatedAnalysisPayload;
-
-          // Validate payload
-          if (!payload.aggregation || !payload.aggregation.failures) {
-            logger.error("Invalid queue payload", { messageId: message.id });
-            return { success: false, error: "Invalid payload", shouldRetry: false };
-          }
-
-          // Deserialize and process
-          const aggregation = deserializeQueuePayload(payload);
-
-          logger.info("Processing consolidated analysis", {
-            messageId: message.id,
-            repository: aggregation.repository.fullName,
-            commitSha: formatShaForDisplay(aggregation.commitSha),
-            failureCount: aggregation.failures.length,
-          });
-
-          try {
-            const result = await onReady(aggregation);
-
-            logger.info("Consolidated analysis completed", {
-              messageId: message.id,
-              success: result.success,
-              prCommentsPosted: result.prCommentsPosted,
-              slackMessageSent: result.slackMessageSent,
-            });
-
-            return { success: result.success };
-          } catch (error) {
-            const errorMessage = getErrorMessage(error);
-            logger.error("Failed to process consolidated analysis", {
-              messageId: message.id,
-              error: errorMessage,
-            });
-            return { success: false, error: errorMessage, shouldRetry: true };
-          }
-        });
-      } finally {
-        activeJobs--;
-      }
-
-      await delay(pollIntervalMs);
-    }
-  };
-
-  // Start workers
-  const workers = Array.from({ length: maxConcurrent }, () => processLoop());
-  Promise.all(workers).catch((error) => {
-    logger.error("Analysis queue processor error", {
-      error: getErrorMessage(error),
-    });
-  });
-
-  return () => {
-    running = false;
-    logger.info("Analysis queue processor stopping");
-  };
-};
+// Re-export worker and processor from their dedicated modules
+export { startAggregatorWorker } from "./aggregatorWorker.js";
+export {
+  startAnalysisQueueProcessor,
+  deserializeQueuePayload,
+  type ConsolidatedAnalysisPayload,
+  type AggregationReadyCallback,
+} from "./analysisQueueProcessor.js";

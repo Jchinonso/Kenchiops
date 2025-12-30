@@ -180,10 +180,9 @@ const getClientForNotification = async (
 /**
  * Creates a notification handler function for the queue worker
  */
-export const createNotificationHandler = (
-  defaultClient: WebClient
-): ((payload: SlackNotificationPayload) => Promise<HandlerResult>) => {
-  return async (payload: SlackNotificationPayload): Promise<HandlerResult> => {
+export const createNotificationHandler =
+  (defaultClient: WebClient): ((payload: SlackNotificationPayload) => Promise<HandlerResult>) =>
+  async (payload: SlackNotificationPayload): Promise<HandlerResult> => {
     const startTime = Date.now();
 
     try {
@@ -193,12 +192,14 @@ export const createNotificationHandler = (
       // Route to appropriate handler based on type
       const handlers: Record<
         SlackNotificationPayload["type"],
-        (client: WebClient, payload: SlackNotificationPayload) => Promise<HandlerResult>
+        (slackClient: WebClient, notification: SlackNotificationPayload) => Promise<HandlerResult>
       > = {
-        consolidated_ci_failure: (c, p) =>
-          handleConsolidatedCIFailure(c, p as ConsolidatedCIFailurePayload),
-        action_result: (c, p) => handleActionResult(c, p as ActionResultPayload),
-        system_alert: (c, p) => handleSystemAlert(c, p as SystemAlertPayload),
+        consolidated_ci_failure: (slackClient, notification) =>
+          handleConsolidatedCIFailure(slackClient, notification as ConsolidatedCIFailurePayload),
+        action_result: (slackClient, notification) =>
+          handleActionResult(slackClient, notification as ActionResultPayload),
+        system_alert: (slackClient, notification) =>
+          handleSystemAlert(slackClient, notification as SystemAlertPayload),
       };
 
       const handler = handlers[payload.type];
@@ -231,4 +232,3 @@ export const createNotificationHandler = (
       return { success: false, error: errorMsg };
     }
   };
-};

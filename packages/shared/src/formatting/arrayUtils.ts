@@ -34,7 +34,10 @@ export const deduplicateByKey = <T, K>(
     return result;
   }, []);
 
-  return maxItems !== undefined ? unique.slice(0, maxItems) : unique;
+  if (maxItems === undefined) {
+    return unique;
+  }
+  return unique.slice(0, maxItems);
 };
 
 /**
@@ -70,9 +73,8 @@ export const startsWithAny = (text: string, prefixes: readonly string[]): boolea
  * @param patterns - Array of exclusion patterns
  * @returns True if path should be excluded
  */
-export const shouldExcludePath = (path: string, patterns: readonly string[]): boolean => {
-  return containsAny(path, patterns) || startsWithAny(path, patterns);
-};
+export const shouldExcludePath = (path: string, patterns: readonly string[]): boolean =>
+  containsAny(path, patterns) || startsWithAny(path, patterns);
 
 /**
  * Groups array items by a key function.
@@ -90,7 +92,11 @@ export const groupBy = <T, K>(items: readonly T[], keyFn: (item: T) => K): Map<K
   items.reduce((groups, item) => {
     const key = keyFn(item);
     const group = groups.get(key);
-    group ? group.push(item) : groups.set(key, [item]);
+    if (group) {
+      group.push(item);
+    } else {
+      groups.set(key, [item]);
+    }
     return groups;
   }, new Map<K, T[]>());
 

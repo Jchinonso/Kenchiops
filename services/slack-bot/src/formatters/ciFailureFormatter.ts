@@ -182,7 +182,9 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
  * Uses functional patterns - no let declarations.
  */
 const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
-  if (errors.length === 0) return null;
+  if (errors.length === 0) {
+    return null;
+  }
 
   // Limit errors based on display limit
   const displayErrors = errors.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED);
@@ -282,7 +284,9 @@ const createFooterBlock = (analysis: CIFailureAnalysis): SlackBlock => {
  */
 const createActionsBlock = (analysis: CIFailureAnalysis): SlackBlock | null => {
   // Only add actions if we have repository context
-  if (!analysis.repository) return null;
+  if (!analysis.repository) {
+    return null;
+  }
 
   const elements: object[] = [];
 

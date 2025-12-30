@@ -210,19 +210,21 @@ describe("API Routes", () => {
       await request(app).post("/api/github/comment").send(bodyWithAnnotations);
 
       expect(mockCreateCheckRunWithAnnotations).toHaveBeenCalledWith(
-        12345,
-        "testowner",
-        "testrepo",
-        "abc123",
-        "KenchiOps Analysis",
-        expect.any(String),
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: "src/index.ts",
-            start_line: 10,
-            annotation_level: "failure",
-          }),
-        ])
+        expect.objectContaining({
+          installationId: 12345,
+          owner: "testowner",
+          repo: "testrepo",
+          headSha: "abc123",
+          name: "KenchiOps Analysis",
+          summary: expect.any(String),
+          annotations: expect.arrayContaining([
+            expect.objectContaining({
+              path: "src/index.ts",
+              start_line: 10,
+              annotation_level: "failure",
+            }),
+          ]),
+        })
       );
     });
 
@@ -282,17 +284,19 @@ describe("API Routes", () => {
       await request(app).post("/api/github/comment").send(bodyWithMixedAnnotations);
 
       expect(mockCreateCheckRunWithAnnotations).toHaveBeenCalledWith(
-        expect.any(Number),
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
-        expect.arrayContaining([
-          expect.objectContaining({ annotation_level: "failure" }),
-          expect.objectContaining({ annotation_level: "warning" }),
-          expect.objectContaining({ annotation_level: "notice" }),
-        ])
+        expect.objectContaining({
+          installationId: expect.any(Number),
+          owner: expect.any(String),
+          repo: expect.any(String),
+          headSha: expect.any(String),
+          name: expect.any(String),
+          summary: expect.any(String),
+          annotations: expect.arrayContaining([
+            expect.objectContaining({ annotation_level: "failure" }),
+            expect.objectContaining({ annotation_level: "warning" }),
+            expect.objectContaining({ annotation_level: "notice" }),
+          ]),
+        })
       );
     });
   });
@@ -320,13 +324,15 @@ describe("API Routes", () => {
       expect(response.status).toBe(200);
       expect(response.body.status).toBe("created");
       expect(mockCreateCheckRunWithAnnotations).toHaveBeenCalledWith(
-        12345,
-        "testowner",
-        "testrepo",
-        "abc123def456",
-        "Custom Check",
-        "Test summary",
-        expect.any(Array)
+        expect.objectContaining({
+          installationId: 12345,
+          owner: "testowner",
+          repo: "testrepo",
+          headSha: "abc123def456",
+          name: "Custom Check",
+          summary: "Test summary",
+          annotations: expect.any(Array),
+        })
       );
     });
 
@@ -336,13 +342,15 @@ describe("API Routes", () => {
       await request(app).post("/api/github/annotations").send(bodyWithoutCheckName);
 
       expect(mockCreateCheckRunWithAnnotations).toHaveBeenCalledWith(
-        expect.any(Number),
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
-        "KenchiOps Analysis",
-        expect.any(String),
-        expect.any(Array)
+        expect.objectContaining({
+          installationId: expect.any(Number),
+          owner: expect.any(String),
+          repo: expect.any(String),
+          headSha: expect.any(String),
+          name: "KenchiOps Analysis",
+          summary: expect.any(String),
+          annotations: expect.any(Array),
+        })
       );
     });
 
@@ -371,19 +379,21 @@ describe("API Routes", () => {
       await request(app).post("/api/github/annotations").send(validBody);
 
       expect(mockCreateCheckRunWithAnnotations).toHaveBeenCalledWith(
-        expect.any(Number),
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
-        expect.arrayContaining([
-          expect.objectContaining({
-            annotation_level: "failure",
-            start_line: 10,
-            end_line: 10,
-          }),
-        ])
+        expect.objectContaining({
+          installationId: expect.any(Number),
+          owner: expect.any(String),
+          repo: expect.any(String),
+          headSha: expect.any(String),
+          name: expect.any(String),
+          summary: expect.any(String),
+          annotations: expect.arrayContaining([
+            expect.objectContaining({
+              annotation_level: "failure",
+              start_line: 10,
+              end_line: 10,
+            }),
+          ]),
+        })
       );
     });
 

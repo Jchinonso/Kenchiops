@@ -171,6 +171,8 @@ describe("Slack Bot Service Index", () => {
           slackSigningSecret: "test-signing-secret",
           slackAppToken: "xapp-test-app-token",
           nodeEnv: "test",
+          serviceName: "slack-bot",
+          version: "1.0.0",
         })
       ),
     }));

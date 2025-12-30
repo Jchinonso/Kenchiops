@@ -48,8 +48,8 @@ export interface AnalysisData {
   readonly repository: string;
   readonly checkName?: string;
   readonly headSha?: string;
-  readonly annotations?: ReadonlyArray<CIAnnotation>;
-  readonly testFailures?: ReadonlyArray<CITestFailure>;
+  readonly annotations?: readonly CIAnnotation[];
+  readonly testFailures?: readonly CITestFailure[];
   readonly prContext?: {
     readonly number: number;
     readonly title: string;
@@ -68,8 +68,8 @@ export interface AnalysisData {
     readonly newVersion?: string;
   }>;
   // AI-extracted structured data (Phase 3 - Language Agnostic)
-  readonly detectedDependencyChanges?: ReadonlyArray<DetectedDependencyChange>;
-  readonly detectedBuildConfigChanges?: ReadonlyArray<DetectedBuildConfigChange>;
+  readonly detectedDependencyChanges?: readonly DetectedDependencyChange[];
+  readonly detectedBuildConfigChanges?: readonly DetectedBuildConfigChange[];
 }
 
 // ============================================================================
@@ -84,7 +84,7 @@ const FOOTER = GITHUB_COMMENT_TEMPLATES.FOOTER(UI_EMOJI.robot);
 // Helper Functions
 // ============================================================================
 
-const getFailureAnnotations = (annotations?: ReadonlyArray<CIAnnotation>): CIAnnotation[] =>
+const getFailureAnnotations = (annotations?: readonly CIAnnotation[]): CIAnnotation[] =>
   annotations?.filter((annotation) => annotation.level === "failure") ?? [];
 
 const getPriorityEmoji = (priority: string): string =>
@@ -176,8 +176,10 @@ const buildCauseQuote = (analysis: AnalysisData): string => {
   return `> ${cause}\n`;
 };
 
-const buildTestFailuresSubsection = (testFailures: ReadonlyArray<CITestFailure>): string[] => {
-  if (testFailures.length === 0) return [];
+const buildTestFailuresSubsection = (testFailures: readonly CITestFailure[]): string[] => {
+  if (testFailures.length === 0) {
+    return [];
+  }
 
   const count = testFailures.length;
   return [
@@ -193,7 +195,9 @@ const buildTestFailuresSubsection = (testFailures: ReadonlyArray<CITestFailure>)
 };
 
 const buildAnnotationsSubsection = (failureAnnotations: CIAnnotation[]): string[] => {
-  if (failureAnnotations.length === 0) return [];
+  if (failureAnnotations.length === 0) {
+    return [];
+  }
 
   return [
     `**Error Locations:**\n`,
@@ -208,9 +212,11 @@ const buildAnnotationsSubsection = (failureAnnotations: CIAnnotation[]): string[
 };
 
 const buildDependencySubsection = (
-  deps: ReadonlyArray<DetectedDependencyChange> | NonNullable<AnalysisData["dependencyChanges"]>
+  deps: readonly DetectedDependencyChange[] | NonNullable<AnalysisData["dependencyChanges"]>
 ): string[] => {
-  if (deps.length === 0) return [];
+  if (deps.length === 0) {
+    return [];
+  }
 
   return [
     `**Dependency Changes:** ${deps.length} change(s)\n`,
@@ -226,10 +232,10 @@ const buildDependencySubsection = (
   ];
 };
 
-const buildBuildConfigSubsection = (
-  changes: ReadonlyArray<DetectedBuildConfigChange>
-): string[] => {
-  if (changes.length === 0) return [];
+const buildBuildConfigSubsection = (changes: readonly DetectedBuildConfigChange[]): string[] => {
+  if (changes.length === 0) {
+    return [];
+  }
 
   return [
     `**Build Config Changes:** ${changes.length} change(s)\n`,
@@ -288,7 +294,9 @@ const buildImpactSection = (analysis: AnalysisData, failureAnnotations: CIAnnota
 
 const buildRecommendationSection = (analysis: AnalysisData): string => {
   const actions = analysis.recommended_actions ?? [];
-  if (actions.length === 0) return "";
+  if (actions.length === 0) {
+    return "";
+  }
 
   const actionLines = buildTruncatedList(
     actions,
@@ -310,7 +318,9 @@ const buildErrorsSection = (analysis: AnalysisData): string => {
     includeEmoji: false,
   });
 
-  if (errors.length === 0) return "";
+  if (errors.length === 0) {
+    return "";
+  }
 
   const displayErrors = errors.slice(0, GITHUB_COMMENT_DISPLAY.MAX_ERROR_DETAILS).map(formatError);
   const overflow =
@@ -354,7 +364,9 @@ const buildMetadataSection = (analysis: AnalysisData): string => {
 
   const parts = metadataItems.filter(({ condition }) => condition).map(({ content }) => content);
 
-  if (parts.length === 0) return "";
+  if (parts.length === 0) {
+    return "";
+  }
 
   return `\n<details>\n<summary>${UI_EMOJI.details} Details</summary>\n\n${parts.join(" • ")}\n\n</details>\n`;
 };

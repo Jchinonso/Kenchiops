@@ -10,7 +10,7 @@ import {
   createRedisRateLimiter,
   defaultRedisRateLimiter,
 } from "../../http/rateLimit.js";
-import { AppError } from "../../core/errors.js";
+import { AppError, RateLimitError } from "../../core/errors.js";
 import { RATE_LIMIT_CONSTANTS } from "../../constants/index.js";
 
 // Mock Redis client
@@ -123,12 +123,12 @@ describe("Rate Limiting", () => {
 
         try {
           middleware(req, res, next);
-          throw new Error("Should have thrown AppError");
+          throw new Error("Should have thrown RateLimitError");
         } catch (error) {
-          const appError = error as AppError;
-          expect(appError.metadata).toHaveProperty("retryAfter");
-          expect(typeof appError.metadata?.retryAfter).toBe("number");
-          expect(appError.metadata?.retryAfter).toBeGreaterThan(0);
+          const rateLimitError = error as RateLimitError;
+          expect(rateLimitError.retryable).toBe(true);
+          expect(typeof rateLimitError.retryAfterMs).toBe("number");
+          expect(rateLimitError.retryAfterMs).toBeGreaterThan(0);
         }
       });
     });
@@ -292,13 +292,13 @@ describe("Rate Limiting", () => {
 
         try {
           middleware(req, res, next);
-          throw new Error("Should have thrown AppError");
+          throw new Error("Should have thrown RateLimitError");
         } catch (error) {
-          const appError = error as AppError;
-          const retryAfter = appError.metadata?.retryAfter as number;
-          // Should be approximately 45 seconds (60 - 15)
-          expect(retryAfter).toBeGreaterThan(40);
-          expect(retryAfter).toBeLessThan(50);
+          const rateLimitError = error as RateLimitError;
+          // Should be approximately 45 seconds (60 - 15) in milliseconds
+          const retryAfterMs = rateLimitError.retryAfterMs ?? 0;
+          expect(retryAfterMs).toBeGreaterThan(40000);
+          expect(retryAfterMs).toBeLessThan(50000);
         }
       });
     });

@@ -62,8 +62,9 @@ const cleanupExpiredClients = (): void => {
       return installationId;
     });
 
-  expiredIds.length > 0 &&
+  if (expiredIds.length > 0) {
     logger.debug("Cache cleanup complete", { deletedCount: expiredIds.length });
+  }
 };
 
 // Clean up expired clients periodically
@@ -140,7 +141,9 @@ export const getCachedWorkspaceId = (installationId: number): string | null =>
  */
 export const invalidateTenantClient = (installationId: number): void => {
   const existed = clientCache.delete(installationId);
-  existed && logger.info("Invalidated cached Slack client", { installationId });
+  if (existed) {
+    logger.info("Invalidated cached Slack client", { installationId });
+  }
 };
 
 /**

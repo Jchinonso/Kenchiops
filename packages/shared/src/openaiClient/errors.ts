@@ -21,9 +21,8 @@ interface OpenAIErrorLike {
 /**
  * Type guard for error-like objects.
  */
-const isErrorLike = (error: unknown): error is OpenAIErrorLike => {
-  return typeof error === "object" && error !== null;
-};
+const isErrorLike = (error: unknown): error is OpenAIErrorLike =>
+  typeof error === "object" && error !== null;
 
 /**
  * Error message factory type for status code handlers.
@@ -70,8 +69,10 @@ const DEFAULT_ERROR_MESSAGE = "Unknown OpenAI error occurred";
  * @returns Error instance if status code is handled, null otherwise
  */
 const handleStatusError = (error: OpenAIErrorLike): Error | null => {
-  const messageFactory =
-    error.status !== undefined ? STATUS_ERROR_MESSAGES.get(error.status) : null;
+  if (error.status === undefined) {
+    return null;
+  }
+  const messageFactory = STATUS_ERROR_MESSAGES.get(error.status);
   return messageFactory ? new Error(messageFactory(error.message)) : null;
 };
 
@@ -93,15 +94,14 @@ const handleTimeoutError = (error: OpenAIErrorLike, timeout: number): Error | nu
  * @param error - Error object with message
  * @returns Error instance if message exists, null otherwise
  */
-const handleMessageError = (error: OpenAIErrorLike): Error | null => {
-  return error.message ? new Error(`OpenAI error: ${error.message}`) : null;
-};
+const handleMessageError = (error: OpenAIErrorLike): Error | null =>
+  error.message ? new Error(`OpenAI error: ${error.message}`) : null;
 
 /**
  * Array of error handlers in priority order.
  * Each handler returns an Error if it can handle the error, or null to continue.
  */
-const errorHandlers: ReadonlyArray<ErrorHandler> = [
+const errorHandlers: readonly ErrorHandler[] = [
   handleStatusError,
   handleTimeoutError,
   handleMessageError,

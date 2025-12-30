@@ -36,7 +36,7 @@ const packages: PackageCheck[] = [
   },
 ];
 
-function checkBuilds(): boolean {
+const checkBuilds = (): boolean => {
   console.log("🔍 Checking build status...\n");
 
   let allGood = true;
@@ -47,13 +47,11 @@ function checkBuilds(): boolean {
 
     if (hasBuild) {
       console.log(`✅ ${pkg.name}: built`);
+    } else if (pkg.required) {
+      console.log(`❌ ${pkg.name}: NOT BUILT (required)`);
+      allGood = false;
     } else {
-      if (pkg.required) {
-        console.log(`❌ ${pkg.name}: NOT BUILT (required)`);
-        allGood = false;
-      } else {
-        console.log(`⚠️  ${pkg.name}: not built (optional)`);
-      }
+      console.log(`⚠️  ${pkg.name}: not built (optional)`);
     }
   }
 
@@ -67,7 +65,7 @@ function checkBuilds(): boolean {
 
   console.log("✅ All required builds are present!\n");
   return true;
-}
+};
 
 if (!checkBuilds()) {
   process.exit(1);

@@ -257,19 +257,19 @@ export const buildCachedAnalysis = (
   identifiedCause: apiResponse.identified_cause ?? "",
   analysis: apiResponse.analysis ?? "Analysis unavailable",
   annotations:
-    apiResponse.full_analysis?.codeAnnotations?.map((a) => ({
-      path: a.path,
-      line: a.line,
-      level: a.level,
-      message: a.message,
-      title: a.title,
+    apiResponse.full_analysis?.codeAnnotations?.map((annotation) => ({
+      path: annotation.path,
+      line: annotation.line,
+      level: annotation.level,
+      message: annotation.message,
+      title: annotation.title,
     })) ?? [],
   recommendedActions:
-    apiResponse.recommended_actions?.map((a) => ({
-      description: a.description,
-      priority: a.priority,
-      actionType: a.actionType,
-      reasoning: a.reasoning,
+    apiResponse.recommended_actions?.map((action) => ({
+      description: action.description,
+      priority: action.priority,
+      actionType: action.actionType,
+      reasoning: action.reasoning,
     })) ?? [],
   analyzedAt: new Date().toISOString(),
 });

@@ -160,6 +160,7 @@ export const startActionQueueWorker = async (
     maxConcurrent = QUEUE_WORKER_DEFAULTS.MAX_CONCURRENT,
   } = options;
   let running = true;
+  const isRunning = (): boolean => running;
   let activeJobs = 0;
 
   logger.info("Starting action queue worker", {
@@ -168,7 +169,7 @@ export const startActionQueueWorker = async (
   });
 
   const processLoop = async (): Promise<void> => {
-    while (running) {
+    while (isRunning()) {
       // Wait if at max concurrency
       if (activeJobs >= maxConcurrent) {
         await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);
