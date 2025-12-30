@@ -313,7 +313,11 @@ export const buildConsolidatedSlackPayload = (
   const prLinkBlock = buildPRLinkBlock(repository, prContext);
   const testFailuresBlock = buildTestFailuresBlock(testFailures);
   const annotationsBlock = buildAnnotationsBlock(annotations);
-  const rootCauseBlock = buildRootCauseBlock(causes);
+  const rootCauseBlock = buildRootCauseBlock(
+    causes,
+    testFailures.length > 0,
+    annotations.length > 0
+  );
   // AI-extracted blocks
   const dependencyBlock = buildDependencyChangesBlock(dependencyChanges);
   const configBlock = buildConfigChangesBlock(buildConfigChanges);
@@ -328,7 +332,7 @@ export const buildConsolidatedSlackPayload = (
       text: { type: "mrkdwn", text: `*${UI_EMOJI.failure} Failed Checks (${failures.length})*` },
     },
     ...(failures.length > 0 ? [buildCheckNamesBlock(failures)] : []),
-    ...(rootCauseBlock ? [rootCauseBlock] : []),
+    rootCauseBlock,
     ...(testFailuresBlock ? [testFailuresBlock] : []),
     ...(annotationsBlock ? [annotationsBlock] : []),
     ...(dependencyBlock ? [dependencyBlock] : []),

@@ -154,9 +154,26 @@ export const buildCheckNamesBlock = (failures: readonly AnalyzedFailure[]): Slac
 
 /**
  * Build root cause analysis block
+ * Always returns a block - provides fallback message if no causes identified
  */
-export const buildRootCauseBlock = (causes: readonly string[]): SlackTextBlock | null => {
-  if (causes.length === 0) return null;
+export const buildRootCauseBlock = (
+  causes: readonly string[],
+  hasTestFailures: boolean = false,
+  hasAnnotations: boolean = false
+): SlackTextBlock => {
+  // If no causes identified, provide context-appropriate fallback message
+  if (causes.length === 0) {
+    const fallbackMessage = hasTestFailures
+      ? "Test failures detected. See details below."
+      : hasAnnotations
+        ? "CI check failed. See error locations below."
+        : "CI check failed. Unable to determine specific root cause from available logs.";
+
+    return {
+      type: "section",
+      text: { type: "mrkdwn", text: `*${UI_EMOJI.search} Root Cause:*\n${fallbackMessage}` },
+    };
+  }
 
   const causeText =
     causes.length === 1

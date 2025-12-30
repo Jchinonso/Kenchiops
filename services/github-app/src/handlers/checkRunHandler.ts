@@ -174,6 +174,18 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
   });
 
   const context = await gatherEnrichedContext(webhook);
+
+  // Skip if workflow was cancelled (job might show as "failure" but workflow was cancelled)
+  const workflowConclusion = context.workflowTiming?.conclusion;
+  if (workflowConclusion && SKIP_CONCLUSIONS.has(workflowConclusion)) {
+    logger.info("Skipping analysis - workflow was cancelled/skipped", {
+      repository: repository.full_name,
+      checkName: check_run.name,
+      workflowConclusion,
+    });
+    return false;
+  }
+
   const enrichedLog = buildEnrichedLogContent(webhook, context);
   const contextMetadata = buildContextMetadata(context);
 
@@ -300,11 +312,20 @@ export const handleCheckRunFailure = async (
 };
 
 /**
- * Conclusions that represent actual CI failures
+ * Conclusions that represent actual CI failures worth analyzing
  */
 const FAILURE_CONCLUSIONS: ReadonlySet<string> = new Set([
   GITHUB_CHECK_CONCLUSIONS.FAILURE,
   GITHUB_CHECK_CONCLUSIONS.TIMED_OUT,
+]);
+
+/**
+ * Conclusions that should be skipped (not actual failures)
+ */
+const SKIP_CONCLUSIONS: ReadonlySet<string> = new Set([
+  GITHUB_CHECK_CONCLUSIONS.CANCELLED,
+  GITHUB_CHECK_CONCLUSIONS.SKIPPED,
+  GITHUB_CHECK_CONCLUSIONS.STALE,
 ]);
 
 /**
