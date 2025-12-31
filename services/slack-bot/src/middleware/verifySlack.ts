@@ -9,7 +9,14 @@
 
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { config, logger, HTTP_STATUS, SLACK_VERIFICATION, TIME_CONSTANTS } from "@kenchi/shared";
+import {
+  config,
+  logger,
+  HTTP_STATUS,
+  SLACK_VERIFICATION,
+  TIME_CONSTANTS,
+  getErrorMessage,
+} from "@kenchi/shared";
 
 /**
  * Verification result
@@ -81,7 +88,7 @@ const verifySignature = (
   } catch (error) {
     // timingSafeEqual throws if buffer lengths don't match
     logger.warn("Slack signature verification failed", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return {
       valid: false,

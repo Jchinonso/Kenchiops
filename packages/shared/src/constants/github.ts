@@ -11,6 +11,8 @@ export const GITHUB_CONTEXT_LIMITS = {
   MAX_FILE_SIZE: 15000, // 15KB per file
   MAX_FILES: 10, // Maximum number of source files to fetch
   MAX_ANNOTATIONS: 50, // Maximum number of annotations - increased for full context
+  MAX_COMMENT_BODY_LENGTH: 2000, // 2KB per comment body for context extraction
+  MAX_RECENT_COMMENTS: 5, // Maximum recent comments to include in context
 } as const;
 
 /**
@@ -153,3 +155,9 @@ export const GITHUB_ANNOTATION_LEVEL = {
   WARNING: "warning",
   NOTICE: "notice",
 } as const;
+
+/**
+ * Commit SHA display length for short format.
+ * Standard GitHub short SHA length (7 characters).
+ */
+export const SHORT_COMMIT_SHA_LENGTH = 7;

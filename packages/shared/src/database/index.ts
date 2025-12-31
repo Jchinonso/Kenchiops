@@ -83,6 +83,14 @@ export {
   getKnowledgeDocCountsByType,
 } from "./knowledgeDocRepository.js";
 
+// Knowledge document hit tracking
+export {
+  getKnowledgeDocById,
+  incrementKnowledgeDocHitCount,
+  batchIncrementKnowledgeDocHitCounts,
+  recordKnowledgeDocNegativeFeedback,
+} from "./knowledgeDocHitTracking.js";
+
 // Feedback repository
 export {
   createRAGFeedback,
@@ -123,3 +131,85 @@ export {
   type CreateModelVersionInput,
   type SaveFeatureFlagsInput,
 } from "./modelVersionRepository.js";
+
+// Relationship repository (Multi-Hop RAG)
+export {
+  createRelationship,
+  createRelationshipsBatch,
+  getRelationshipById,
+  getOutgoingRelationships,
+  getIncomingRelationships,
+  getBidirectionalRelationships,
+  getRelationshipsByType,
+  deleteRelationship,
+  deleteRelationshipsByDoc,
+  getRelationshipCount,
+  getRelationshipTypeDistribution,
+  type IncidentRelationship,
+  type CreateRelationshipInput,
+} from "./relationshipRepository.js";
+
+// External source repository (Cross-Repo Knowledge)
+export {
+  createExternalSource,
+  getExternalSourceById,
+  getExternalSourcesByTenant,
+  getEnabledExternalSources,
+  getExternalSourcesByType,
+  getSourcesDueForSync,
+  updateExternalSource,
+  updateSyncStatus,
+  deleteExternalSource,
+  deleteExternalSourcesByTenant,
+  getExternalSourceCount,
+  type ExternalSource,
+  type CreateExternalSourceInput,
+  type UpdateExternalSourceInput,
+} from "./externalSourceRepository.js";
+
+// Test case repository (Automated QA)
+export {
+  createTestCase,
+  getTestCaseById,
+  getActiveTestCases,
+  getActiveTestCasesByTenant,
+  getTestCasesByCategory,
+  updateTestCaseResult,
+  setTestCaseActive,
+  deleteTestCase,
+  getTestCaseCount,
+  getRecentlyFailedTestCases,
+  type RAGTestCase,
+  type CreateTestCaseInput,
+  type TestResultInput,
+} from "./testCaseRepository.js";
+
+// Metrics history repository (Drift Detection)
+export {
+  recordMetric,
+  getRecentMetrics,
+  getMetricBaseline,
+  getAllBaselines,
+  detectDrift,
+  getMetricTrend,
+  cleanupOldMetrics,
+  getMetricCounts,
+  type RAGMetricHistory,
+  type RecordMetricInput,
+  type MetricBaseline,
+  type DriftDetectionResult,
+} from "./metricsHistoryRepository.js";
+
+// Cost tracking repository (Cost Controls)
+export {
+  recordCost,
+  getMonthlyCostSummary,
+  getBudgetStatus,
+  getDailyCostTrend,
+  getTopCostConsumers,
+  cleanupOldCostRecords,
+  type CostRecord,
+  type RecordCostInput,
+  type CostSummary,
+  type BudgetStatus,
+} from "./costTrackingRepository.js";

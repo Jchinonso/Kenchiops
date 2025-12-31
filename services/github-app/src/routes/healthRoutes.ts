@@ -15,6 +15,7 @@ import {
   livenessCheck,
   readinessCheck,
   asyncHandler,
+  getErrorMessage,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 
@@ -125,7 +126,7 @@ router.get("/health/github/repos", async (_req: Request, res: Response) => {
     });
   } catch (error) {
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      error: error instanceof Error ? error.message : "Failed to list repositories",
+      error: getErrorMessage(error),
     });
   }
 });

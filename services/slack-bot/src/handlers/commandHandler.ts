@@ -15,6 +15,7 @@ import {
   createLogger,
   findBySlackWorkspace,
   findAllMappingsForTenant,
+  getErrorMessage,
   type ActionProposal,
   type ActionType,
 } from "@kenchi/shared";
@@ -152,7 +153,7 @@ const handleStatus: SubcommandHandler = async ({ command, respond }) => {
     });
   } catch (error) {
     logger.error("Error checking status", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       workspaceId,
     });
 
@@ -250,7 +251,7 @@ const handleConfigure: SubcommandHandler = async ({ command, respond, client }) 
     });
   } catch (error) {
     logger.error("Error opening configure modal", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       workspaceId,
     });
 
@@ -309,7 +310,7 @@ const handleUnconfigure: SubcommandHandler = async ({ command, respond, client }
     });
   } catch (error) {
     logger.error("Error opening unconfigure modal", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       workspaceId,
     });
 
@@ -364,7 +365,7 @@ const handleAnalysis: SubcommandHandler = async (ctx) => {
     });
   } catch (error) {
     logger.error("Error processing analysis command", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
 

@@ -182,12 +182,14 @@ export const fetchPRMetadata = async (
       ...new Set(reviews.map((review) => review.user?.login).filter(Boolean)),
     ] as string[];
 
-    // Extract recent comments (for context)
-    const recentComments = comments.slice(-5).map((comment) => ({
-      author: comment.user?.login || "unknown",
-      body: comment.body?.slice(0, 500) || "",
-      createdAt: comment.created_at,
-    }));
+    // Extract recent comments (for context) - full content, chunking handled downstream
+    const recentComments = comments
+      .slice(-GITHUB_CONTEXT_LIMITS.MAX_RECENT_COMMENTS)
+      .map((comment) => ({
+        author: comment.user?.login || "unknown",
+        body: comment.body ?? "",
+        createdAt: comment.created_at,
+      }));
 
     logger.info("Fetched PR metadata", {
       prNumber,

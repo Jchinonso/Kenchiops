@@ -4,7 +4,12 @@
  * Fetches commit information, source files, and repository metadata.
  */
 
-import { createLogger, GITHUB_CONTEXT_LIMITS, CONTEXT_FETCH_CONFIG } from "@kenchi/shared";
+import {
+  createLogger,
+  GITHUB_CONTEXT_LIMITS,
+  CONTEXT_FETCH_CONFIG,
+  getErrorMessage,
+} from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
 import { truncateWithContext } from "./logParser.js";
 import type { CommitInfo, SourceFile, RepositoryMetadata } from "./types.js";
@@ -83,7 +88,7 @@ export const fetchSourceFile = async (
   } catch (error) {
     logger.warn("Failed to fetch source file", {
       path,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return null;
   }
@@ -124,7 +129,7 @@ export const fetchCommitInfo = async (
   } catch (error) {
     logger.warn("Failed to fetch commit info", {
       sha,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return null;
   }
@@ -164,7 +169,7 @@ export const fetchRepositoryMetadata = async (
     logger.warn("Failed to fetch repository metadata", {
       owner,
       repo,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return null;
   }

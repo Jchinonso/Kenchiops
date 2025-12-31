@@ -11,6 +11,7 @@ import {
   HTTP_STATUS,
   validate,
   validators,
+  getErrorMessage,
   KENCHI_BRANDING,
 } from "@kenchi/shared";
 import {
@@ -136,12 +137,12 @@ router.post(
       logger.error("Failed to post to GitHub", {
         repository,
         prNumber: pr_number,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
 
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         status: "error",
-        error: error instanceof Error ? error.message : "Failed to post to GitHub",
+        error: getErrorMessage(error),
       });
     }
   })
@@ -223,12 +224,12 @@ router.post(
       logger.error("Failed to create check run with annotations", {
         repository,
         headSha: head_sha,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
 
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         status: "error",
-        error: error instanceof Error ? error.message : "Failed to create check run",
+        error: getErrorMessage(error),
       });
     }
   })
@@ -268,11 +269,11 @@ router.get(
     } catch (error) {
       logger.error("Failed to fetch installation repositories", {
         installationId,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
 
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        error: error instanceof Error ? error.message : "Failed to fetch repositories",
+        error: getErrorMessage(error),
       });
     }
   })

@@ -9,6 +9,7 @@ import { healthRoutes } from "./healthRoutes.js";
 import { webhookRoutes } from "./webhookRoutes.js";
 import { eventRoutes } from "./eventRoutes.js";
 import { analysisRoutes } from "./analysisRoutes.js";
+import { ragRoutes } from "./ragRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -25,4 +26,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Analysis routes
   app.use(analysisRoutes);
+
+  // RAG document ingestion routes
+  app.use(ragRoutes);
 };

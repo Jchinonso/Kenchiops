@@ -179,6 +179,7 @@ describe("RAG Search Module", () => {
       const query: KnowledgeSearchQuery = {
         queryText: "Search with custom topK value",
         topK: 5,
+        enableReranking: false, // Disable reranking to test exact topK behavior
       };
 
       await searchKnowledgeDocs(query);

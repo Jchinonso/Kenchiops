@@ -18,6 +18,7 @@ Kenchi has strong deterministic safety controls (confidence scoring, action gati
 | 5   | High     | Webhook ingestion             | `/webhook/:source` route is exposed with TODOs for auth/validation, letting anyone inject fake CI events or trigger downstream workflows.                                                                                                                                                     |
 | 6   | Medium   | Logging                       | The analysis endpoint logs raw request bodies before redaction (`services/api/src/routes/analysisRoutes.ts:31-45`), risking leakage of secrets contained in CI logs or stack traces.                                                                                                          |
 | 7   | Medium   | Slack OAuth state management  | OAuth `state` values are stored only in process memory (`services/slack-bot/src/routes/oauthRoutes.ts:52-93`). In multi-instance or autoscaled deployments, callbacks may validate against an empty map, forcing disabled CSRF protection or causing fallbacks that attackers can exploit.    |
+| 8   | Medium   | Vector search SQL             | `diffChunkRepository` and `knowledgeDocRepository` interpolate similarity thresholds and limits into SQL strings, creating injection risk if future APIs accept untrusted filters.                                                                                                            |
 
 ## Detailed Findings & Recommendations
 
@@ -84,6 +85,15 @@ Kenchi has strong deterministic safety controls (confidence scoring, action gati
   1. Move state storage to Redis or another shared, expiring store (keyed by state token).
   2. Add environment flags to discourage in-memory mode outside local dev.
   3. Monitor state cleanup and set tighter TTLs to reduce replay windows.
+
+### 8. Dynamic SQL in Vector Searches
+
+- **Evidence**: `packages/shared/src/database/diffChunkRepository.ts:120-154` and `packages/shared/src/database/knowledgeDocRepository.ts:132-166` embed `minSimilarity`, `limit`, and conditional fragments via template literals rather than parameter placeholders.
+- **Impact**: Today these filters are numeric and server-controlled, but exposing search parameters to tenants (e.g., API search endpoints) would allow SQL injection (e.g., `limit = "1; DROP TABLE diff_chunks;"`). The pattern also encourages copy/paste of unsafe SQL assembly elsewhere.
+- **Remediation**:
+  1. Parameterize numeric thresholds and limits (`AND similarity >= $N`, `LIMIT $N`) and add them to the parameter array.
+  2. Validate filter inputs rigorously (number ranges, allowlisted columns) before appending to SQL.
+  3. Create shared helpers for safe query building to avoid direct string interpolation going forward.
 
 ## Next Steps
 

@@ -16,6 +16,7 @@ import { isDatabaseHealthy } from "../database/client.js";
 import { isRedisHealthy } from "../queue/redisClient.js";
 import { getCircuitStatus, SERVICE_KEYS } from "../http/circuitBreaker.js";
 import { createLogger } from "../core/logger.js";
+import { getErrorMessage } from "../core/errors.js";
 import { HEALTH_STATUS, MEMORY_THRESHOLDS } from "../constants/index.js";
 
 const logger = createLogger("health-check");
@@ -165,7 +166,7 @@ export const checkDatabaseHealth = async (): Promise<ComponentHealth> => {
     return {
       name: "database",
       status: HEALTH_STATUS.UNHEALTHY,
-      message: error instanceof Error ? error.message : "Database check failed",
+      message: getErrorMessage(error),
       latencyMs,
     };
   }
@@ -206,7 +207,7 @@ export const checkRedisHealth = async (): Promise<ComponentHealth> => {
     return {
       name: "redis",
       status: HEALTH_STATUS.DEGRADED,
-      message: error instanceof Error ? error.message : "Redis check failed",
+      message: getErrorMessage(error),
       latencyMs,
     };
   }

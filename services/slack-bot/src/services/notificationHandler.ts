@@ -9,6 +9,10 @@ import type { WebClient } from "@slack/web-api";
 import {
   logger,
   getErrorMessage,
+  findChannelForRepository,
+  findByGitHubInstallation,
+  UI_EMOJI,
+  SLACK_COLORS,
   type SlackNotificationPayload,
   type ConsolidatedCIFailurePayload,
   type ActionResultPayload,
@@ -17,6 +21,7 @@ import {
 import { postConsolidatedMessage } from "./messageService.js";
 import type { ConsolidatedMessageRequest } from "../types/slackTypes.js";
 import { getSlackClientForTenant, isMultiTenantEnabled } from "./tenantSlackClient.js";
+import { storeAnalysisContext } from "./analysisContextStore.js";
 
 // ==================== Types ====================
 
@@ -78,6 +83,11 @@ const handleConsolidatedCIFailure = async (
     return { success: false, error: result.error };
   }
 
+  // Store analysis context for later lesson extraction on positive feedback
+  if (result.channel && result.timestamp) {
+    storeAnalysisContext(aggregation, result.channel, result.timestamp);
+  }
+
   return { success: true };
 };
 
@@ -126,31 +136,160 @@ const handleActionResult = async (
 };
 
 /**
+ * Severity emoji mapping for system alerts using UI_EMOJI constants
+ */
+const SEVERITY_EMOJI: Record<SystemAlertPayload["severity"], string> = {
+  info: UI_EMOJI.info,
+  warning: UI_EMOJI.warning,
+  error: UI_EMOJI.failure,
+  critical: UI_EMOJI.alert,
+} as const;
+
+/**
+ * Severity color mapping for system alerts using SLACK_COLORS
+ */
+const SEVERITY_COLOR: Record<SystemAlertPayload["severity"], string> = {
+  info: SLACK_COLORS.INFO,
+  warning: SLACK_COLORS.WARNING,
+  error: SLACK_COLORS.DANGER,
+  critical: SLACK_COLORS.DANGER,
+} as const;
+
+/**
+ * Formats system alert details as a readable string
+ */
+const formatAlertDetails = (details?: Record<string, unknown>): string => {
+  if (!details || Object.keys(details).length === 0) {
+    return "";
+  }
+
+  return Object.entries(details)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => `• *${key}*: ${String(value)}`)
+    .join("\n");
+};
+
+/**
+ * Looks up channel for system alert based on installation ID and repository.
+ */
+const findAlertChannel = async (
+  installationId: number,
+  repository: string
+): Promise<string | null> => {
+  // Skip lookup for system-level alerts
+  if (repository === "system" || installationId === 0) {
+    return null;
+  }
+
+  try {
+    const tenant = await findByGitHubInstallation(installationId);
+    if (!tenant) {
+      return null;
+    }
+
+    const mapping = await findChannelForRepository(tenant.id, repository);
+    return mapping?.slackChannelId ?? null;
+  } catch (error) {
+    logger.warn("Failed to lookup alert channel", {
+      installationId,
+      repository,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
+
+/**
  * Handle system alert notification
  */
 const handleSystemAlert = async (
   client: WebClient,
   payload: SystemAlertPayload
 ): Promise<HandlerResult> => {
-  const { severity, title, message, details } = payload;
+  const { severity, title, message, details, repository, installationId } = payload;
 
   logger.info("Processing system alert notification", {
     severity,
     title,
+    repository,
   });
 
-  // System alerts could be posted to a dedicated ops channel
-  // For now, just log them
-  logger.warn("System alert received", {
-    severity,
-    title,
-    message,
-    details,
-  });
+  // Try to find a channel for this alert
+  const channelId = await findAlertChannel(installationId, repository);
 
-  // TODO: Post to a configured alerts channel when available
+  if (!channelId) {
+    // No channel configured - log and succeed (alerts still go to monitoring)
+    logger.info("System alert logged (no channel configured)", {
+      severity,
+      title,
+      message,
+      repository,
+      details,
+    });
+    return { success: true };
+  }
 
-  return { success: true };
+  // Build formatted alert message
+  const emoji = SEVERITY_EMOJI[severity];
+  const color = SEVERITY_COLOR[severity];
+  const formattedDetails = formatAlertDetails(details);
+
+  // Build message text parts
+  const headerText = `*${title}*\n\n${message}`;
+  const detailsText = formattedDetails ? `*Details:*\n${formattedDetails}` : null;
+  const contextText = `Severity: *${severity.toUpperCase()}* | Repository: \`${repository}\``;
+
+  try {
+    await client.chat.postMessage({
+      channel: channelId,
+      text: `${emoji} ${title}`,
+      attachments: [
+        {
+          color,
+          fallback: `${title}: ${message}`,
+          blocks: [
+            {
+              type: "section" as const,
+              text: {
+                type: "mrkdwn" as const,
+                text: headerText,
+              },
+            },
+            ...(detailsText
+              ? [
+                  {
+                    type: "section" as const,
+                    text: {
+                      type: "mrkdwn" as const,
+                      text: detailsText,
+                    },
+                  },
+                ]
+              : []),
+            {
+              type: "context" as const,
+              elements: [
+                {
+                  type: "mrkdwn" as const,
+                  text: contextText,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    logger.info("System alert posted to Slack", {
+      severity,
+      title,
+      channelId,
+    });
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
 };
 
 // ==================== Main Handler ====================

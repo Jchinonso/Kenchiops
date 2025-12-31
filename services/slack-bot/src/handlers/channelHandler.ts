@@ -14,6 +14,7 @@ import {
   deleteMappingsForChannel,
   getMappedRepositories,
   fetchInstallationRepositories,
+  getErrorMessage,
 } from "@kenchi/shared";
 import { type SlackClient } from "../services/channelService.js";
 import { buildRepoSelectModal, buildNoReposModal, type RepositoryOption } from "./modalBuilders.js";
@@ -101,7 +102,7 @@ export const getAvailableRepositories = async (
     logger.error("Failed to fetch available repositories", {
       installationId,
       tenantId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return [];
   }
@@ -259,7 +260,7 @@ export const handleBotJoinedChannel = async (
   } catch (error) {
     const errorDetails = error as { data?: { needed?: string; provided?: string } };
     logger.error("Failed to handle member_joined_channel event", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       channel: channelId,
       needed: errorDetails?.data?.needed,
       provided: errorDetails?.data?.provided,

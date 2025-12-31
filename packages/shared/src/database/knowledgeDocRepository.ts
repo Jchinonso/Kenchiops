@@ -44,6 +44,7 @@ const KNOWLEDGE_DOC_QUERIES = {
     SELECT *, 1 - (embedding <=> $1::vector) AS similarity
     FROM knowledge_documents
     WHERE embedding IS NOT NULL
+      AND (is_stale IS NULL OR is_stale = FALSE)
   `,
 
   GET_WITHOUT_EMBEDDINGS: `

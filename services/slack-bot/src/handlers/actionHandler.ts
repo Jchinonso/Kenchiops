@@ -14,6 +14,9 @@ import {
   recordRAGFeedback,
   updateActionProposalStatus,
   createAnalysisFeedback,
+  getErrorMessage,
+  ingestAnalysisLesson,
+  extractAnalysisContext,
   SLACK_BOT_TIMEOUTS,
   SLACK_BOT_MESSAGES,
   type ActionExecutionContext,
@@ -21,6 +24,7 @@ import {
   type RAGRelevance,
   type FeedbackType,
 } from "@kenchi/shared";
+import { getAnalysisContext, deleteAnalysisContext } from "../services/analysisContextStore.js";
 import { formatProgressUpdate } from "../formatters.js";
 
 // Type for Slack blocks compatible with Bolt
@@ -89,9 +93,7 @@ const parseActionValue = (action: ButtonAction): ParsedActionValue => {
   try {
     return JSON.parse(action.value) as ParsedActionValue;
   } catch (error) {
-    throw new ValidationError(
-      `Failed to parse action value: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
+    throw new ValidationError(`Failed to parse action value: ${getErrorMessage(error)}`);
   }
 };
 
@@ -135,7 +137,7 @@ const canUseAsyncExecution = async (): Promise<boolean> => {
     return await isRedisHealthy();
   } catch (error) {
     logger.debug("Redis health check failed, using sync execution", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return false;
   }
@@ -162,7 +164,7 @@ const persistActionStatus = async (
     logger.warn("Failed to persist action status", {
       actionId,
       status,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   }
 };
@@ -325,7 +327,7 @@ export const handleActionApproval = async (
       }, SLACK_BOT_TIMEOUTS.LEGACY_ACTION_TIMEOUT_MS);
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = getErrorMessage(error);
 
     logger.error("Error handling action approval", {
       error: errorMessage,
@@ -399,7 +401,7 @@ export const handleActionRejection = async (
     });
   } catch (error) {
     logger.error("Error handling action rejection", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
@@ -424,9 +426,48 @@ const persistAnalysisFeedback = async (
     logger.warn("Failed to persist analysis feedback", {
       analysisId,
       feedbackType,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   }
+};
+
+/**
+ * Extracts and ingests analysis lesson in the background (fire-and-forget).
+ */
+const extractLessonInBackground = (analysisId: string, confirmedBy: string): void => {
+  const doExtraction = async (): Promise<void> => {
+    const storedContext = getAnalysisContext(analysisId);
+
+    if (!storedContext) {
+      logger.debug("No stored context for lesson extraction", { analysisId });
+      return;
+    }
+
+    const lessonContext = extractAnalysisContext(storedContext.aggregation, confirmedBy);
+
+    try {
+      const result = await ingestAnalysisLesson(lessonContext);
+
+      if (result.success && result.lessonsCreated > 0) {
+        logger.info("Analysis lesson extracted from positive feedback", {
+          analysisId,
+          lessonsCreated: result.lessonsCreated,
+          chunksCreated: result.ingestionResult?.chunksCreated,
+        });
+
+        // Remove context after successful extraction
+        deleteAnalysisContext(analysisId);
+      }
+    } catch (extractionError) {
+      logger.warn("Failed to extract analysis lesson", {
+        analysisId,
+        error: getErrorMessage(extractionError),
+      });
+    }
+  };
+
+  // Fire and forget - don't block feedback acknowledgment
+  void doExtraction();
 };
 
 /**
@@ -443,6 +484,9 @@ export const handlePositiveFeedback = async (
   logger.info("Positive feedback received", { analysisId, userId });
 
   await persistAnalysisFeedback(analysisId, "correct", userId);
+
+  // Trigger lesson extraction in background
+  extractLessonInBackground(analysisId, userId);
 };
 
 /**

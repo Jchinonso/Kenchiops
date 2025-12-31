@@ -104,6 +104,7 @@ export {
   GITHUB_STATUS,
   GITHUB_CONCLUSION,
   GITHUB_ANNOTATION_LEVEL,
+  SHORT_COMMIT_SHA_LENGTH,
 } from "./github.js";
 
 // OpenAI and text processing constants
@@ -125,8 +126,25 @@ export {
   DATASET_THRESHOLDS,
   FINE_TUNING_CONFIG,
   FINE_TUNING_STATUS,
+  // Phase 4 constants
+  RELATIONSHIP_TYPES,
+  MULTI_HOP_CONFIG,
+  EXTERNAL_SOURCE_TYPES,
+  TECH_STACK_TAGS,
+  EXTERNAL_SOURCE_CONFIG,
+  TTL_POLICIES,
+  DRIFT_DETECTION_THRESHOLDS,
+  RAG_TEST_CASE_CONFIG,
+  EMBEDDING_TIERS,
+  COST_CONTROL_CONFIG,
+  RAG_METRIC_TYPES,
   type KnowledgeDocType,
   type FineTuningStatus,
+  type RelationshipType,
+  type ExternalSourceType,
+  type TechStackTag,
+  type EmbeddingTierName,
+  type RAGMetricType,
 } from "./openai.js";
 
 // Secret detection constants
@@ -239,6 +257,8 @@ export {
   shouldSkipSlackBotRateLimit,
   SLACK_CLIENT_CACHE,
   MESSAGE_STORE_CONFIG,
+  RESOLUTION_SERVICE_CONFIG,
+  ANALYSIS_CONTEXT_STORE_CONFIG,
   type NumericPriority,
   type StringPriority,
 } from "./slackBot.js";
@@ -260,3 +280,16 @@ export {
   GITHUB_PAGINATION,
   CONTEXT_FETCH_CONFIG,
 } from "./githubApp.js";
+
+// Passive learning constants
+export {
+  PASSIVE_LEARNING_TIME,
+  FIX_COMMENT_PATTERNS,
+  FIX_COMMENT_EXCLUSIONS,
+  PR_FIX_COMMENT_CONFIG,
+  SLACK_RESOLUTION_CONFIG,
+  ANALYSIS_LESSON_CONFIG,
+  KNOWLEDGE_QUALITY_WEIGHTS,
+  SOURCE_RELIABILITY_SCORES,
+  KNOWLEDGE_GC_CONFIG,
+} from "./passiveLearning.js";
