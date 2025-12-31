@@ -12,6 +12,7 @@ export type {
   CodeAnnotation,
   RecommendedAction,
   TestFailureInfo,
+  RelatedKnowledgeDoc,
   DetectedDependencyChange,
   DetectedBuildConfigChange,
   AnalyzedFailure,

@@ -36,6 +36,15 @@ jest.mock("@kenchi/shared", () => {
     isRedisHealthy: jest.fn(() => Promise.resolve(mockRedisHealthy)),
     executeAction: jest.fn(() => Promise.resolve(mockExecuteActionResult)),
     enqueueAction: jest.fn(() => Promise.resolve()),
+    createAnalysisFeedback: jest.fn(() =>
+      Promise.resolve({
+        id: "feedback_123",
+        analysisId: "event-123",
+        feedbackType: "correct",
+        userId: "user_123",
+        createdAt: new Date().toISOString(),
+      })
+    ),
   };
 });
 
@@ -714,28 +723,31 @@ describe("Action Handler", () => {
   });
 
   describe("handlePositiveFeedback", () => {
+    const testUserId = "user_123";
+
     it("should acknowledge the action immediately", async () => {
       const action = createMockAction("event-123");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, testUserId);
 
       expect(mockAck).toHaveBeenCalledTimes(1);
     });
 
-    it("should log positive feedback with event_id", async () => {
+    it("should log positive feedback with analysisId and userId", async () => {
       const action = createMockAction("event-456");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, testUserId);
 
       expect(mockLogger.info).toHaveBeenCalledWith("Positive feedback received", {
-        event_id: "event-456",
+        analysisId: "event-456",
+        userId: testUserId,
       });
     });
 
     it("should handle empty action value", async () => {
       const action = createMockAction("");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, testUserId);
 
       expect(mockAck).toHaveBeenCalled();
       // Should not crash
@@ -744,10 +756,11 @@ describe("Action Handler", () => {
     it("should handle action with special characters in value", async () => {
       const action = createMockAction("event-123-<special>");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, testUserId);
 
       expect(mockLogger.info).toHaveBeenCalledWith("Positive feedback received", {
-        event_id: "event-123-<special>",
+        analysisId: "event-123-<special>",
+        userId: testUserId,
       });
     });
 
@@ -755,33 +768,38 @@ describe("Action Handler", () => {
       const action = createMockAction("event-123");
       mockAck.mockRejectedValue(new Error("Ack failed"));
 
-      await expect(handlePositiveFeedback(action, mockAck)).rejects.toThrow("Ack failed");
+      await expect(handlePositiveFeedback(action, mockAck, testUserId)).rejects.toThrow(
+        "Ack failed"
+      );
     });
   });
 
   describe("handleNegativeFeedback", () => {
+    const testUserId = "user_456";
+
     it("should acknowledge the action immediately", async () => {
       const action = createMockAction("event-123");
 
-      await handleNegativeFeedback(action, mockAck);
+      await handleNegativeFeedback(action, mockAck, testUserId);
 
       expect(mockAck).toHaveBeenCalledTimes(1);
     });
 
-    it("should log negative feedback with event_id", async () => {
+    it("should log negative feedback with analysisId and userId", async () => {
       const action = createMockAction("event-789");
 
-      await handleNegativeFeedback(action, mockAck);
+      await handleNegativeFeedback(action, mockAck, testUserId);
 
       expect(mockLogger.info).toHaveBeenCalledWith("Negative feedback received", {
-        event_id: "event-789",
+        analysisId: "event-789",
+        userId: testUserId,
       });
     });
 
     it("should handle empty action value", async () => {
       const action = createMockAction("");
 
-      await handleNegativeFeedback(action, mockAck);
+      await handleNegativeFeedback(action, mockAck, testUserId);
 
       expect(mockAck).toHaveBeenCalled();
       // Should not crash
@@ -790,10 +808,11 @@ describe("Action Handler", () => {
     it("should handle action with special characters in value", async () => {
       const action = createMockAction("event-999-@#$%");
 
-      await handleNegativeFeedback(action, mockAck);
+      await handleNegativeFeedback(action, mockAck, testUserId);
 
       expect(mockLogger.info).toHaveBeenCalledWith("Negative feedback received", {
-        event_id: "event-999-@#$%",
+        analysisId: "event-999-@#$%",
+        userId: testUserId,
       });
     });
 
@@ -801,7 +820,9 @@ describe("Action Handler", () => {
       const action = createMockAction("event-123");
       mockAck.mockRejectedValue(new Error("Ack failed"));
 
-      await expect(handleNegativeFeedback(action, mockAck)).rejects.toThrow("Ack failed");
+      await expect(handleNegativeFeedback(action, mockAck, testUserId)).rejects.toThrow(
+        "Ack failed"
+      );
     });
   });
 
@@ -833,7 +854,7 @@ describe("Action Handler", () => {
     it("should handle action with unicode characters in value", async () => {
       const action = createMockAction("event-テスト-🚀");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, "user_123");
 
       expect(mockAck).toHaveBeenCalled();
     });
@@ -896,7 +917,7 @@ describe("Action Handler", () => {
       const longEventId = "event-" + "a".repeat(10000);
       const action = createMockAction(longEventId);
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, "user_123");
 
       expect(mockAck).toHaveBeenCalled();
     });

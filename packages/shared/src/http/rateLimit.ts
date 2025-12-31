@@ -10,7 +10,7 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
-import { AppError, RateLimitError } from "../core/errors.js";
+import { AppError, RateLimitError, ExternalServiceError, getErrorMessage } from "../core/errors.js";
 import { createLogger } from "../core/logger.js";
 import {
   RATE_LIMIT_CONSTANTS,
@@ -98,7 +98,7 @@ class RedisRateLimitStore implements RateLimitStore {
     const results = await pipeline.exec();
 
     if (!results) {
-      throw new Error("Redis pipeline failed");
+      throw new ExternalServiceError("redis", "Rate limit pipeline execution failed");
     }
 
     const [[incrErr, current], [ttlErr, ttl]] = results as [
@@ -245,7 +245,7 @@ class RateLimiter {
       this.redisStore = new RedisRateLimitStore(this.keyPrefix, this.max);
     } catch (error) {
       logger.warn("Redis unavailable for rate limiting, using in-memory fallback", {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
       this.useRedis = false;
     }
@@ -316,7 +316,7 @@ class RateLimiter {
 
         // Log error but don't block request if rate limiting fails
         logger.error("Rate limiting error, allowing request", {
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: getErrorMessage(error),
           key,
         });
         next();

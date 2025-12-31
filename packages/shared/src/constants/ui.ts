@@ -68,6 +68,14 @@ export const UI_EMOJI = {
   target: "🎯",
   link: "🔗",
   branch: "🔀",
+
+  // Knowledge/documentation icons
+  book: "📚",
+  history: "📜",
+
+  // Feedback icons
+  thumbsUp: "👍",
+  thumbsDown: "👎",
 } as const;
 
 /**

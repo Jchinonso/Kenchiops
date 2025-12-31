@@ -133,6 +133,57 @@ export {
   deleteMappingsForChannel,
   isMapped,
 } from "./database/index.js";
+export {
+  // Vector types
+  type DiffChunk,
+  type CreateDiffChunkInput,
+  type KnowledgeDocRecord,
+  type CreateKnowledgeDocInput,
+  type VectorSearchResult,
+  type VectorSearchFilters,
+  // Diff chunk repository
+  createDiffChunk,
+  createDiffChunksBatch,
+  searchSimilarDiffChunks,
+  getDiffChunksWithoutEmbeddings,
+  updateDiffChunkEmbedding,
+  deleteDiffChunksByPR,
+  deleteDiffChunksByTenant,
+  getDiffChunkCount,
+  // Knowledge document repository
+  createKnowledgeDoc,
+  createKnowledgeDocsBatch,
+  searchSimilarKnowledgeDocs,
+  getKnowledgeDocsWithoutEmbeddings,
+  updateKnowledgeDocEmbedding,
+  deleteKnowledgeDocsByParent,
+  deleteKnowledgeDocsByTenant,
+  getDocsNeedingReembedding,
+  getKnowledgeDocsByType,
+  getKnowledgeDocCountsByType,
+} from "./database/index.js";
+export {
+  // Feedback repository
+  createRAGFeedback,
+  createAnalysisFeedback,
+  getFeedbackByAnalysis,
+  getRAGFeedbackMetrics,
+  getRAGFeedbackByDoc,
+  type FeedbackType,
+  type CreateRAGFeedbackInput,
+  type CreateAnalysisFeedbackInput,
+  type FeedbackRecord,
+  type RAGFeedbackMetrics,
+  // Action proposal repository
+  updateActionProposalStatus,
+  getActionProposalById,
+  getActionProposalsByAnalysis,
+  getActionApprovalStats,
+  type ActionProposalStatus,
+  type UpdateActionStatusInput,
+  type ActionProposalRecord,
+  type ActionApprovalStats,
+} from "./database/index.js";
 
 // HTTP utilities
 export { errorHandler, asyncHandler, requestLogger } from "./http/index.js";
@@ -215,9 +266,26 @@ export {
   estimateTokens,
   truncateEvidence,
 } from "./integrations/index.js";
+export {
+  buildTenantPromptAdditions,
+  createTenantPromptConfig,
+  validateTenantPromptConfig,
+  type TenantPromptConfig,
+  type TechStackConfig,
+  type CISystem,
+  type AnalysisDepth,
+  type PromptPreferences,
+  type FocusArea,
+  type VerbosityLevel,
+} from "./integrations/index.js";
 
 // OpenAI client
 export { OpenAIClient } from "./openaiClient/index.js";
+export {
+  EmbeddingClient,
+  type EmbeddingResult,
+  type BatchEmbeddingResult,
+} from "./openaiClient/index.js";
 
 // Safety and confidence scoring
 export {
@@ -385,6 +453,7 @@ export {
   type CodeAnnotation,
   type RecommendedAction,
   type TestFailureInfo,
+  type RelatedKnowledgeDoc,
   type AnalyzedFailure,
   type SerializedFailure,
   type PRContext,
@@ -444,3 +513,114 @@ export {
   type CleanupFunction,
   type GracefulShutdownConfig,
 } from "./shutdown/index.js";
+
+// RAG (Retrieval-Augmented Generation) utilities
+export {
+  chunkText,
+  chunkDiff,
+  chunkKnowledgeDoc,
+  splitMarkdownSections,
+  estimateTokenCount,
+  type ChunkMetadata,
+  type TextChunk,
+  type ChunkingOptions,
+  type DiffChunkResult,
+  type KnowledgeChunkResult,
+  type MarkdownSection,
+  // Ingestion functions
+  ingestDiffChunks,
+  ingestKnowledgeDoc,
+  processPendingEmbeddings,
+  type IngestDiffInput,
+  type IngestDiffResult,
+  type IngestKnowledgeDocInput,
+  type IngestKnowledgeDocResult,
+  // Metrics functions
+  recordEmbeddingOperation,
+  recordIngestionOperation,
+  getEmbeddingMetrics,
+  getIngestionMetrics,
+  getRAGMetricsSnapshot,
+  logRAGMetrics,
+  checkRAGAlerts,
+  resetMetrics,
+  type EmbeddingMetrics,
+  type IngestionMetrics,
+  type RAGMetricsSnapshot,
+  // Search functions
+  searchDiffChunks,
+  searchKnowledgeDocs,
+  searchAll,
+  searchFromEventContext,
+  clearEmbeddingCache,
+  type SearchQuery,
+  type DiffSearchQuery,
+  type KnowledgeSearchQuery,
+  type RAGSearchResult,
+  type EventQueryContext,
+  // Governance functions
+  getTenantRAGStats,
+  purgeTenantRAGData,
+  purgePRDiffChunks,
+  purgeKnowledgeDocChunks,
+  triggerReembedding,
+  checkRAGHealth,
+  type RAGTenantStats,
+  type PurgeResult,
+  type ReembeddingResult,
+  type ReembeddingConfig,
+  type RAGHealthStatus,
+  // Evaluation functions
+  calculateRecallAtK,
+  calculateMRR,
+  calculateHelpfulRate,
+  recordRAGFeedback,
+  runRAGTestCase,
+  getRAGEvaluationMetrics,
+  type RAGRelevance,
+  type RAGFeedbackInput,
+  type RAGEvaluationMetrics,
+  type RetrievalResult,
+  type RAGTestCase,
+  type RAGTestResult,
+  type FeedbackResult,
+} from "./rag/index.js";
+
+// Fine-tuning
+export {
+  buildTrainingExample,
+  toOpenAIFormat,
+  toJSONL,
+  filterExamples,
+  calculateDatasetStats,
+  logDatasetStats,
+  type TrainingExample,
+  type FeedbackQualityLabel,
+  type TrainingExampleMetadata,
+  type OpenAITrainingRow,
+  type TrainingExampleInput,
+  type DatasetStats,
+  type DatasetBuildOptions,
+} from "./finetuning/index.js";
+export {
+  registerModelVersion,
+  getModelVersion,
+  getAllModelVersions,
+  getBaselineModel,
+  updateFeatureFlags,
+  getFeatureFlags,
+  setTenantModelOverride,
+  removeTenantModelOverride,
+  triggerRollback,
+  clearRollback,
+  isRollbackActive,
+  selectModel,
+  logModelSelection,
+  type ModelVersion,
+  type ModelMetadata,
+  type EvaluationMetrics,
+  type ModelFeatureFlags,
+  type ABTestConfig,
+  type ModelSelectionResult,
+  type ModelSelectionReason,
+} from "./finetuning/index.js";

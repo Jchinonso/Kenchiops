@@ -15,6 +15,7 @@ import {
   type RecommendedAction,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
+  type RelatedKnowledgeDoc,
 } from "@kenchi/shared";
 import {
   calculateAverageConfidence,
@@ -28,6 +29,8 @@ import {
   buildRootCauseBlock,
   buildDependencyChangesBlock,
   buildConfigChangesBlock,
+  buildRelatedKnowledgeBlock,
+  buildRAGFeedbackButtonsBlock,
   buildActionsSummaryBlocks,
   type SlackBlock,
   type SlackTextBlock,
@@ -142,6 +145,15 @@ const consolidateBuildConfigChanges = (
   deduplicateByKey(
     failures.flatMap((failure) => failure.detectedBuildConfigChanges ?? []),
     (configChange) => configChange.file
+  );
+
+/**
+ * Consolidate related knowledge documents across failures
+ */
+const consolidateRelatedKnowledge = (failures: readonly AnalyzedFailure[]): RelatedKnowledgeDoc[] =>
+  deduplicateByKey(
+    failures.flatMap((failure) => failure.relatedKnowledge ?? []),
+    (knowledgeDoc) => knowledgeDoc.id
   );
 
 // ==================== Action Button Builders ====================
@@ -311,6 +323,8 @@ export const buildConsolidatedSlackPayload = (
   // AI-extracted context (Phase 4 - Language Agnostic)
   const dependencyChanges = consolidateDependencyChanges(failures);
   const buildConfigChanges = consolidateBuildConfigChanges(failures);
+  // RAG-retrieved context (Phase 2 - RAG Integration)
+  const relatedKnowledge = consolidateRelatedKnowledge(failures);
 
   // Build all block sections
   const headerBlocks = buildHeaderBlocks(repository, commitSha, prContext, confidencePercent);
@@ -325,6 +339,11 @@ export const buildConsolidatedSlackPayload = (
   // AI-extracted blocks
   const dependencyBlock = buildDependencyChangesBlock(dependencyChanges);
   const configBlock = buildConfigChangesBlock(buildConfigChanges);
+  // RAG-retrieved blocks
+  const relatedKnowledgeBlock = buildRelatedKnowledgeBlock(relatedKnowledge);
+  // RAG feedback buttons (only shown if knowledge docs exist)
+  const analysisId = `${repository.fullName}:${commitSha}`;
+  const ragFeedbackBlock = buildRAGFeedbackButtonsBlock(relatedKnowledge, analysisId);
 
   // Combine blocks using array spread with filter for optional blocks
   const blocks: SlackBlock[] = [
@@ -341,6 +360,8 @@ export const buildConsolidatedSlackPayload = (
     ...(annotationsBlock ? [annotationsBlock] : []),
     ...(dependencyBlock ? [dependencyBlock] : []),
     ...(configBlock ? [configBlock] : []),
+    ...(relatedKnowledgeBlock ? [relatedKnowledgeBlock] : []),
+    ...(ragFeedbackBlock ? [ragFeedbackBlock] : []),
     ...buildActionsSummaryBlocks(mergedActions),
     ...buildActionBlocks(mergedActions, aggregation),
     { type: "divider" },

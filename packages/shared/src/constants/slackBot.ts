@@ -89,6 +89,10 @@ export const SLACK_ACTION_IDS = {
   FEEDBACK_HELPFUL: "feedback_helpful",
   /** Feedback not helpful button */
   FEEDBACK_NOT_HELPFUL: "feedback_not_helpful",
+  /** RAG feedback helpful button */
+  RAG_FEEDBACK_HELPFUL: "rag_feedback_helpful",
+  /** RAG feedback not helpful button */
+  RAG_FEEDBACK_NOT_HELPFUL: "rag_feedback_not_helpful",
   /** Approve action prefix */
   APPROVE_PREFIX: "approve_action_",
   /** Reject action prefix */
