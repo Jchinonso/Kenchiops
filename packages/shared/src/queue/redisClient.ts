@@ -10,6 +10,7 @@
 import Redis from "ioredis";
 import { createLogger } from "../core/logger.js";
 import { config } from "../core/config.js";
+import { getErrorMessage } from "../core/errors.js";
 import {
   RETRY_DEFAULTS,
   REDIS_CONNECTION_DEFAULTS,
@@ -168,20 +169,36 @@ export const closeRedis = async (): Promise<void> => {
   const closePromises: Array<Promise<void>> = [];
 
   if (redisClient) {
+    const client = redisClient;
     closePromises.push(
-      redisClient.quit().then(() => {
-        redisClient = null;
-        logger.info("Redis main client closed");
-      })
+      client
+        .quit()
+        .then(() => {
+          redisClient = null;
+          logger.info("Redis main client closed");
+        })
+        .catch((error: unknown) => {
+          redisClient = null;
+          logger.error("Failed to close Redis main client", { error: getErrorMessage(error) });
+        })
     );
   }
 
   if (subscriberClient) {
+    const client = subscriberClient;
     closePromises.push(
-      subscriberClient.quit().then(() => {
-        subscriberClient = null;
-        logger.info("Redis subscriber client closed");
-      })
+      client
+        .quit()
+        .then(() => {
+          subscriberClient = null;
+          logger.info("Redis subscriber client closed");
+        })
+        .catch((error: unknown) => {
+          subscriberClient = null;
+          logger.error("Failed to close Redis subscriber client", {
+            error: getErrorMessage(error),
+          });
+        })
     );
   }
 

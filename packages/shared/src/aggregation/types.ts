@@ -45,6 +45,18 @@ export interface TestFailureInfo {
 }
 
 /**
+ * Related knowledge document from RAG retrieval
+ */
+export interface RelatedKnowledgeDoc {
+  readonly id: string;
+  readonly type: string;
+  readonly title: string;
+  readonly excerpt?: string;
+  readonly url?: string;
+  readonly similarity: number;
+}
+
+/**
  * Result of analyzing a single check run failure
  */
 export interface AnalyzedFailure {
@@ -61,6 +73,8 @@ export interface AnalyzedFailure {
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
   readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+  // RAG-retrieved related knowledge (Phase 2 - RAG Integration)
+  readonly relatedKnowledge?: readonly RelatedKnowledgeDoc[];
 }
 
 /**
@@ -80,6 +94,8 @@ export interface SerializedFailure {
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
   readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+  // RAG-retrieved related knowledge (Phase 2 - RAG Integration)
+  readonly relatedKnowledge?: readonly RelatedKnowledgeDoc[];
 }
 
 /**

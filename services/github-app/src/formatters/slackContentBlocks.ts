@@ -7,11 +7,13 @@
 
 import {
   UI_EMOJI,
+  UI_CONSTANTS,
   DEPENDENCY_EMOJI_MAP,
   type AnalyzedFailure,
   type RecommendedAction,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
+  type RelatedKnowledgeDoc,
 } from "@kenchi/shared";
 import { DISPLAY_LIMITS, getPriorityEmoji } from "./formatterUtils.js";
 
@@ -59,6 +61,17 @@ export interface ConsolidatedTestFailure {
   readonly testName: string;
   readonly file?: string;
   readonly line?: number;
+}
+
+/**
+ * RAG feedback button value payload.
+ * Serialized as JSON in button value for feedback recording.
+ */
+export interface RAGFeedbackButtonValue {
+  readonly analysisId: string;
+  readonly knowledgeDocId: string;
+  readonly similarity: number;
+  readonly rank: number;
 }
 
 export interface ConsolidatedAnnotation {
@@ -275,6 +288,104 @@ export const buildConfigChangesBlock = (
       {
         type: "mrkdwn",
         text: `${UI_EMOJI.workflow} *Build Config Changes (${configs.length}):*\n${lines}${moreText}`,
+      },
+    ],
+  };
+};
+
+// ==================== Related Knowledge Block ====================
+
+/**
+ * Get emoji for knowledge document type
+ */
+const getKnowledgeTypeEmoji = (docType: string): string => {
+  const typeEmojiMap: Record<string, string> = {
+    runbook: UI_EMOJI.book,
+    past_incident: UI_EMOJI.history,
+    documentation: UI_EMOJI.book,
+    best_practice: UI_EMOJI.success,
+    playbook: UI_EMOJI.tools,
+    postmortem: UI_EMOJI.history,
+    troubleshooting: UI_EMOJI.search,
+    sop: UI_EMOJI.book,
+  };
+  return typeEmojiMap[docType] ?? UI_EMOJI.book;
+};
+
+/**
+ * Build related knowledge documents block
+ */
+export const buildRelatedKnowledgeBlock = (
+  docs: readonly RelatedKnowledgeDoc[]
+): SlackTextBlock | null => {
+  if (docs.length === 0) {
+    return null;
+  }
+
+  const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
+  const lines = docs
+    .slice(0, displayCount)
+    .map((doc) => {
+      const emoji = getKnowledgeTypeEmoji(doc.type);
+      const similarity = Math.round(doc.similarity * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
+      const link = doc.url ? `<${doc.url}|${doc.title}>` : doc.title;
+      return `   ${UI_EMOJI.list} ${emoji} ${link} _(${similarity}% match)_`;
+    })
+    .join("\n");
+
+  const moreText =
+    docs.length > displayCount ? `\n   _...and ${docs.length - displayCount} more_` : "";
+
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `${UI_EMOJI.book} *Related Knowledge (${docs.length}):*\n${lines}${moreText}`,
+      },
+    ],
+  };
+};
+
+/**
+ * Build RAG feedback buttons block for knowledge documents.
+ * Allows users to rate whether retrieved knowledge was helpful.
+ */
+export const buildRAGFeedbackButtonsBlock = (
+  docs: readonly RelatedKnowledgeDoc[],
+  analysisId: string
+): SlackActionsBlock | null => {
+  if (docs.length === 0) {
+    return null;
+  }
+
+  // Create feedback value with first doc info (most relevant)
+  const topDoc = docs[0];
+  const feedbackValue: RAGFeedbackButtonValue = {
+    analysisId,
+    knowledgeDocId: topDoc.id,
+    similarity: topDoc.similarity,
+    rank: 1,
+  };
+
+  const valueString = JSON.stringify(feedbackValue);
+
+  return {
+    type: "actions",
+    block_id: "rag_feedback_block",
+    elements: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: `${UI_EMOJI.thumbsUp} Helpful`, emoji: true },
+        style: "primary",
+        value: valueString,
+        action_id: "rag_feedback_helpful",
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: `${UI_EMOJI.thumbsDown} Not Helpful`, emoji: true },
+        value: valueString,
+        action_id: "rag_feedback_not_helpful",
       },
     ],
   };

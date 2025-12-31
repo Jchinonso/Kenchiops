@@ -42,6 +42,8 @@ import {
   handleActionRejection,
   handlePositiveFeedback,
   handleNegativeFeedback,
+  handleRAGFeedbackHelpful,
+  handleRAGFeedbackNotHelpful,
 } from "./handlers/actionHandler.js";
 import {
   handleBotJoinedChannel,
@@ -207,15 +209,28 @@ const setupSlackHandlers = (app: SlackApp): void => {
   });
 
   // Handle feedback buttons
-  app.action(SLACK_ACTION_IDS.FEEDBACK_HELPFUL, async ({ action, ack }) => {
+  app.action(SLACK_ACTION_IDS.FEEDBACK_HELPFUL, async ({ action, ack, body }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handlePositiveFeedback(action as ButtonAction, ack);
+      await handlePositiveFeedback(action as ButtonAction, ack, body.user.id);
     }
   });
 
-  app.action(SLACK_ACTION_IDS.FEEDBACK_NOT_HELPFUL, async ({ action, ack }) => {
+  app.action(SLACK_ACTION_IDS.FEEDBACK_NOT_HELPFUL, async ({ action, ack, body }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleNegativeFeedback(action as ButtonAction, ack);
+      await handleNegativeFeedback(action as ButtonAction, ack, body.user.id);
+    }
+  });
+
+  // Handle RAG feedback buttons
+  app.action(SLACK_ACTION_IDS.RAG_FEEDBACK_HELPFUL, async ({ action, ack, body }) => {
+    if (action.type === "button" && "action_id" in action && "value" in action) {
+      await handleRAGFeedbackHelpful(action as ButtonAction, ack, body.user.id);
+    }
+  });
+
+  app.action(SLACK_ACTION_IDS.RAG_FEEDBACK_NOT_HELPFUL, async ({ action, ack, body }) => {
+    if (action.type === "button" && "action_id" in action && "value" in action) {
+      await handleRAGFeedbackNotHelpful(action as ButtonAction, ack, body.user.id);
     }
   });
 

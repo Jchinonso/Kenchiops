@@ -10,7 +10,7 @@
  */
 
 import { createLogger } from "../core/logger.js";
-import { ExternalServiceError } from "../core/errors.js";
+import { CircuitBreakerOpenError, getErrorMessage } from "../core/errors.js";
 import { HTTP_RESILIENCE_DEFAULTS } from "../constants/index.js";
 
 const logger = createLogger("circuit-breaker");
@@ -30,6 +30,7 @@ interface CircuitStateRecord {
   failures: number;
   lastFailure: number;
   successes: number;
+  lastErrorMessage?: string;
 }
 
 /**
@@ -181,11 +182,16 @@ const recordSuccess = (serviceKey: string, config: Required<CircuitBreakerConfig
 /**
  * Records failed execution
  */
-const recordFailure = (serviceKey: string, config: Required<CircuitBreakerConfig>): void => {
+const recordFailure = (
+  serviceKey: string,
+  config: Required<CircuitBreakerConfig>,
+  error?: unknown
+): void => {
   const record = getCircuitRecord(serviceKey);
   record.failures += 1;
   record.lastFailure = Date.now();
   record.successes = 0;
+  record.lastErrorMessage = error ? getErrorMessage(error) : undefined;
 
   // In half-open state, immediately open circuit
   if (record.state === "half-open") {
@@ -238,12 +244,16 @@ export const withCircuitBreaker = async <T>(
       state: record.state,
       failures: record.failures,
       timeUntilRetryMs: timeUntilRetry,
+      lastError: record.lastErrorMessage,
     });
 
-    throw new ExternalServiceError(
-      serviceKey,
-      `Circuit breaker is open for ${serviceKey}. Service appears unavailable. Retry in ${Math.ceil(timeUntilRetry / 1000)}s.`
-    );
+    throw new CircuitBreakerOpenError(serviceKey, timeUntilRetry, {
+      operation: `${serviceKey} request`,
+      metadata: {
+        failures: record.failures,
+        lastError: record.lastErrorMessage,
+      },
+    });
   }
 
   try {
@@ -251,7 +261,7 @@ export const withCircuitBreaker = async <T>(
     recordSuccess(serviceKey, mergedConfig);
     return result;
   } catch (error) {
-    recordFailure(serviceKey, mergedConfig);
+    recordFailure(serviceKey, mergedConfig, error);
     throw error;
   }
 };

@@ -20,6 +20,9 @@ import {
   createFromSlackInstall,
   SLACK_OAUTH_TIMING,
   SLACK_OAUTH_SCOPES_STRING,
+  ValidationError,
+  NotFoundError,
+  getErrorMessage,
   type Tenant,
 } from "@kenchi/shared";
 
@@ -102,9 +105,9 @@ type ValidationErrorType =
   | "token_exchange_failed";
 
 /**
- * Validation error with type and message
+ * OAuth validation error with type and message.
  */
-interface ValidationError {
+interface OAuthValidationError {
   readonly type: ValidationErrorType;
   readonly message: string;
   readonly htmlResponse?: string;
@@ -115,7 +118,7 @@ interface ValidationError {
  */
 const errorResponseHandlers: Record<
   ValidationErrorType,
-  (res: Response, error: ValidationError) => void
+  (res: Response, error: OAuthValidationError) => void
 > = {
   oauth_denied: (res, error) => {
     res.status(HTTP_STATUS.BAD_REQUEST).send(error.htmlResponse);
@@ -157,7 +160,9 @@ const tenantLinkStrategies: readonly TenantLinkStrategy[] = [
     execute: async (state, slackData) => {
       // tenantId is guaranteed by matches check above
       if (!state.tenantId) {
-        throw new Error("Tenant ID required but missing");
+        throw new ValidationError("Tenant ID required but missing", {
+          operation: "link_slack_workspace",
+        });
       }
       const tenant = await linkSlackWorkspace({
         tenantId: state.tenantId,
@@ -176,7 +181,10 @@ const tenantLinkStrategies: readonly TenantLinkStrategy[] = [
       const existingTenant = await findByGitHubOrg(teamName);
       // existingTenant is guaranteed by matches check above
       if (!existingTenant) {
-        throw new Error("Existing tenant not found");
+        throw new NotFoundError(`Tenant not found for GitHub org: ${teamName}`, {
+          operation: "link_slack_workspace",
+          metadata: { teamName },
+        });
       }
       const tenant = await linkSlackWorkspace({
         tenantId: existingTenant.id,
@@ -333,7 +341,7 @@ const validateOAuthCallback = (
   error: unknown
 ):
   | { valid: true; code: string; state: string; storedState: StoredState }
-  | { valid: false; error: ValidationError } => {
+  | { valid: false; error: OAuthValidationError } => {
   // Check for OAuth denial
   if (error) {
     return {
@@ -455,7 +463,7 @@ router.get("/slack/oauth/callback", async (req: Request, res: Response) => {
     res.send(html);
   } catch (caughtError) {
     logger.error("OAuth callback error", {
-      error: caughtError instanceof Error ? caughtError.message : "Unknown error",
+      error: getErrorMessage(caughtError),
     });
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       error: "Failed to complete OAuth flow",

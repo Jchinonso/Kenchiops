@@ -11,15 +11,23 @@ import {
   executeAction,
   enqueueAction,
   isRedisHealthy,
+  recordRAGFeedback,
+  updateActionProposalStatus,
+  createAnalysisFeedback,
   SLACK_BOT_TIMEOUTS,
   SLACK_BOT_MESSAGES,
   type ActionExecutionContext,
   type ActionType,
+  type RAGRelevance,
+  type FeedbackType,
 } from "@kenchi/shared";
 import { formatProgressUpdate } from "../formatters.js";
 
 // Type for Slack blocks compatible with Bolt
 type SlackBlocks = NonNullable<SayArguments["blocks"]>;
+
+// Type alias for Slack ack function
+type AckFunction = () => Promise<void>;
 
 const logger = createLogger("slack-bot");
 
@@ -45,6 +53,16 @@ interface ActionButtonValue {
 interface LegacyActionValue {
   readonly eventId: string;
   readonly actionId: string;
+}
+
+/**
+ * RAG feedback button value payload (matches slackContentBlocks.ts)
+ */
+interface RAGFeedbackButtonValue {
+  readonly analysisId: string;
+  readonly knowledgeDocId: string;
+  readonly similarity: number;
+  readonly rank: number;
 }
 
 /**
@@ -115,8 +133,37 @@ const formatResultMessage = (
 const canUseAsyncExecution = async (): Promise<boolean> => {
   try {
     return await isRedisHealthy();
-  } catch {
+  } catch (error) {
+    logger.debug("Redis health check failed, using sync execution", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return false;
+  }
+};
+
+/**
+ * Persists action status to database (non-blocking, logs errors)
+ */
+const persistActionStatus = async (
+  actionId: string,
+  status: "approved" | "rejected" | "executed" | "failed",
+  approvedBy?: string,
+  executionResult?: Record<string, unknown>
+): Promise<void> => {
+  try {
+    await updateActionProposalStatus({
+      actionId,
+      status,
+      approvedBy,
+      executionResult,
+    });
+    logger.debug("Action status persisted", { actionId, status });
+  } catch (error) {
+    logger.warn("Failed to persist action status", {
+      actionId,
+      status,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 };
 
@@ -180,6 +227,9 @@ export const handleActionApproval = async (
 
         await enqueueAction(actionProposal, context);
 
+        // Persist approval status to database
+        await persistActionStatus(value.actionId, "approved", "slack-user");
+
         logger.info("Action enqueued for async execution", {
           actionId: value.actionId,
           actionType: value.actionType,
@@ -211,6 +261,14 @@ export const handleActionApproval = async (
         });
 
         const result = await executeAction(actionProposal, context);
+
+        // Persist execution result to database
+        const executionStatus = result.success ? "executed" : "failed";
+        await persistActionStatus(value.actionId, executionStatus, "slack-user", {
+          success: result.success,
+          message: result.message,
+          duration: result.duration,
+        });
 
         // Send completion update
         const { status, text } = formatResultMessage(
@@ -332,6 +390,9 @@ export const handleActionRejection = async (
       ...(messageTs && { thread_ts: messageTs }),
     });
 
+    // Persist rejection status to database
+    await persistActionStatus(displayId, "rejected", "slack-user");
+
     logger.info("Action rejection handled", {
       actionId: displayId,
       actionType,
@@ -345,18 +406,43 @@ export const handleActionRejection = async (
 };
 
 /**
+ * Persists analysis feedback to the database.
+ */
+const persistAnalysisFeedback = async (
+  analysisId: string,
+  feedbackType: FeedbackType,
+  userId: string
+): Promise<void> => {
+  try {
+    await createAnalysisFeedback({
+      analysisId,
+      feedbackType,
+      userId,
+    });
+    logger.debug("Analysis feedback persisted", { analysisId, feedbackType });
+  } catch (error: unknown) {
+    logger.warn("Failed to persist analysis feedback", {
+      analysisId,
+      feedbackType,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+/**
  * Handles positive feedback.
  */
 export const handlePositiveFeedback = async (
   action: ButtonAction,
-  ack: () => Promise<void>
+  ack: AckFunction,
+  userId: string
 ): Promise<void> => {
   await ack();
 
-  const eventId = action.value;
-  logger.info("Positive feedback received", { event_id: eventId });
+  const analysisId = action.value ?? "";
+  logger.info("Positive feedback received", { analysisId, userId });
 
-  // TODO: Store feedback in database/metrics
+  await persistAnalysisFeedback(analysisId, "correct", userId);
 };
 
 /**
@@ -364,12 +450,112 @@ export const handlePositiveFeedback = async (
  */
 export const handleNegativeFeedback = async (
   action: ButtonAction,
-  ack: () => Promise<void>
+  ack: AckFunction,
+  userId: string
 ): Promise<void> => {
   await ack();
 
-  const eventId = action.value;
-  logger.info("Negative feedback received", { event_id: eventId });
+  const analysisId = action.value ?? "";
+  logger.info("Negative feedback received", { analysisId, userId });
 
-  // TODO: Store feedback in database/metrics
+  await persistAnalysisFeedback(analysisId, "incorrect", userId);
+};
+
+// ==================== RAG Feedback Handlers ====================
+
+/**
+ * Parses RAG feedback button value from JSON string.
+ */
+const parseRAGFeedbackValue = (valueString: string | undefined): RAGFeedbackButtonValue | null => {
+  if (!valueString) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(valueString) as unknown;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "analysisId" in parsed &&
+      "knowledgeDocId" in parsed &&
+      "similarity" in parsed &&
+      "rank" in parsed
+    ) {
+      return parsed as RAGFeedbackButtonValue;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Records RAG feedback with the given relevance level.
+ */
+const recordRAGFeedbackWithRelevance = async (
+  feedbackValue: RAGFeedbackButtonValue,
+  relevance: RAGRelevance,
+  userId: string
+): Promise<void> => {
+  const result = await recordRAGFeedback({
+    analysisId: feedbackValue.analysisId,
+    knowledgeDocId: feedbackValue.knowledgeDocId,
+    relevance,
+    retrievalSimilarity: feedbackValue.similarity,
+    retrievalRank: feedbackValue.rank,
+    userId,
+  });
+
+  if (!result.success) {
+    logger.warn("Failed to record RAG feedback", { error: result.error });
+  }
+};
+
+/**
+ * Handles RAG helpful feedback button.
+ */
+export const handleRAGFeedbackHelpful = async (
+  action: ButtonAction,
+  ack: AckFunction,
+  userId: string
+): Promise<void> => {
+  await ack();
+
+  const feedbackValue = parseRAGFeedbackValue(action.value);
+  if (!feedbackValue) {
+    logger.warn("Invalid RAG feedback button value", { value: action.value });
+    return;
+  }
+
+  logger.info("RAG helpful feedback received", {
+    analysisId: feedbackValue.analysisId,
+    knowledgeDocId: feedbackValue.knowledgeDocId,
+    userId,
+  });
+
+  await recordRAGFeedbackWithRelevance(feedbackValue, "helpful", userId);
+};
+
+/**
+ * Handles RAG not helpful feedback button.
+ */
+export const handleRAGFeedbackNotHelpful = async (
+  action: ButtonAction,
+  ack: AckFunction,
+  userId: string
+): Promise<void> => {
+  await ack();
+
+  const feedbackValue = parseRAGFeedbackValue(action.value);
+  if (!feedbackValue) {
+    logger.warn("Invalid RAG feedback button value", { value: action.value });
+    return;
+  }
+
+  logger.info("RAG not helpful feedback received", {
+    analysisId: feedbackValue.analysisId,
+    knowledgeDocId: feedbackValue.knowledgeDocId,
+    userId,
+  });
+
+  await recordRAGFeedbackWithRelevance(feedbackValue, "not_helpful", userId);
 };
