@@ -41,6 +41,7 @@ const DIFF_CHUNK_QUERIES = {
     SELECT *, 1 - (embedding <=> $1::vector) AS similarity
     FROM diff_chunks
     WHERE embedding IS NOT NULL
+      AND (is_stale IS NULL OR is_stale = FALSE)
   `,
 
   GET_WITHOUT_EMBEDDINGS: `

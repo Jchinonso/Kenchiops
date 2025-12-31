@@ -109,7 +109,14 @@ jest.mock("../formatters/checkRunFormatter.js", () => ({
   buildEnrichedLogContent: jest.fn(() => "enriched log content"),
 }));
 
-// No longer needed - addFailureToRedis is mocked in @kenchi/shared above
+jest.mock("../handlers/checkRunSuccessHandler.js", () => ({
+  handleCheckRunSuccess: jest.fn(() =>
+    Promise.resolve({
+      handled: true,
+      message: "Success processed for passive learning",
+    })
+  ),
+}));
 
 // Import handlers after mocks
 import { handleCheckRun, handleCheckRunFailure } from "../handlers/checkRunHandler.js";
@@ -239,7 +246,7 @@ describe("Check Run Handler", () => {
       expect(result.message).toContain("skipped");
     });
 
-    it("should skip successful check runs without processing", async () => {
+    it("should process successful check runs for passive learning without failure analysis", async () => {
       const webhook = createMockWebhook({
         check_run: {
           ...createMockWebhook().check_run,
@@ -249,8 +256,10 @@ describe("Check Run Handler", () => {
 
       const result = await handleCheckRun(webhook);
 
-      expect(result.handled).toBe(false);
-      expect(result.message).toContain("skipped");
+      // Success is now handled for passive learning (fix comment capture)
+      expect(result.handled).toBe(true);
+      expect(result.message).toContain("passive learning");
+      // But should not gather enriched context (that's for failures)
       expect(mockGatherEnrichedContext).not.toHaveBeenCalled();
     });
 
@@ -295,7 +304,7 @@ describe("Check Run Handler", () => {
       expect(result.handled).toBe(false);
     });
 
-    it("should skip successful check runs even with multiple PRs", async () => {
+    it("should process successful check runs for passive learning", async () => {
       const webhook = createMockWebhook({
         check_run: {
           ...createMockWebhook().check_run,
@@ -317,7 +326,10 @@ describe("Check Run Handler", () => {
 
       const result = await handleCheckRun(webhook);
 
-      expect(result.handled).toBe(false);
+      // Success is handled for passive learning (fix comment capture)
+      expect(result.handled).toBe(true);
+      expect(result.message).toContain("passive learning");
+      // But should not gather enriched context (that's for failures)
       expect(mockGatherEnrichedContext).not.toHaveBeenCalled();
     });
 

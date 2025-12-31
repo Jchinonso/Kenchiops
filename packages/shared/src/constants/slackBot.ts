@@ -229,3 +229,29 @@ export const MESSAGE_STORE_CONFIG = {
   /** Max age for stored messages in milliseconds (1 hour) - cleanup stale entries */
   MAX_AGE_MS: TIME_CONSTANTS.MILLISECONDS_PER_MINUTE * 60,
 } as const;
+
+// ==================== Resolution Service ====================
+
+/**
+ * Resolution service configuration for tracking CI failure threads and detecting resolutions.
+ */
+export const RESOLUTION_SERVICE_CONFIG = {
+  /** Max age for tracked threads in milliseconds (7 days) */
+  MAX_THREAD_AGE_MS: TIME_CONSTANTS.MILLISECONDS_PER_DAY * 7,
+  /** Minimum messages before checking for resolution */
+  MIN_THREAD_MESSAGES: 2,
+  /** Cleanup interval in milliseconds (1 hour) */
+  CLEANUP_INTERVAL_MS: TIME_CONSTANTS.MILLISECONDS_PER_HOUR,
+} as const;
+
+// ==================== Analysis Context Store ====================
+
+/**
+ * Analysis context store configuration for lesson extraction from confirmed analyses.
+ */
+export const ANALYSIS_CONTEXT_STORE_CONFIG = {
+  /** Max age for stored context in milliseconds (24 hours) */
+  MAX_AGE_MS: TIME_CONSTANTS.MILLISECONDS_PER_DAY,
+  /** Cleanup interval in milliseconds (1 hour) */
+  CLEANUP_INTERVAL_MS: TIME_CONSTANTS.MILLISECONDS_PER_HOUR,
+} as const;

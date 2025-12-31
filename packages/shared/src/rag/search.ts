@@ -15,6 +15,8 @@ import { EmbeddingClient } from "../openaiClient/embedding.js";
 import {
   searchSimilarDiffChunks,
   searchSimilarKnowledgeDocs,
+  recordCost,
+  batchIncrementKnowledgeDocHitCounts,
   type DiffChunk,
   type VectorSearchResult,
   type VectorSearchFilters,
@@ -23,6 +25,12 @@ import { type KnowledgeDocRecord } from "../database/vectorTypes.js";
 import { VECTOR_SIMILARITY_THRESHOLDS } from "../constants/index.js";
 import { recordEmbeddingOperation } from "./metrics.js";
 import { estimateTokenCount } from "./chunking.js";
+import {
+  fullRerank,
+  type RerankableResult,
+  type QueryContext,
+  type RerankedResult,
+} from "./reranker.js";
 
 const logger = createLogger("rag-search");
 
@@ -37,6 +45,12 @@ export interface SearchQuery {
   readonly repository?: string;
   readonly topK?: number;
   readonly minSimilarity?: number;
+  /** Enable reranking for knowledge docs (default: true) */
+  readonly enableReranking?: boolean;
+  /** Workflow name for metadata boost */
+  readonly workflow?: string;
+  /** Error signature for metadata boost */
+  readonly errorSignature?: string;
 }
 
 /**
@@ -52,6 +66,12 @@ export interface DiffSearchQuery extends SearchQuery {
  */
 export interface KnowledgeSearchQuery extends SearchQuery {
   readonly docType?: string;
+  /** Enable reranking with deterministic scoring formula */
+  readonly enableReranking?: boolean;
+  /** Workflow name for metadata boost */
+  readonly workflow?: string;
+  /** Error signature for metadata boost */
+  readonly errorSignature?: string;
 }
 
 /**
@@ -90,6 +110,46 @@ const SEARCH_CONSTANTS = {
 } as const;
 
 // ==================== Helper Functions ====================
+
+/**
+ * Records query cost safely without blocking the main operation.
+ * Errors are logged but don't affect the caller.
+ */
+const recordQueryCostSafely = async (tenantId: string, tokenCount: number): Promise<void> => {
+  try {
+    await recordCost({
+      tenantId,
+      operationType: "query",
+      embeddingTier: "STANDARD",
+      tokenCount,
+    });
+  } catch (error) {
+    logger.warn("Failed to record query cost", { error: getErrorMessage(error) });
+  }
+};
+
+/**
+ * Tracks hit counts for retrieved knowledge documents safely (fire-and-forget).
+ * Increments hit count in metadata for analytics and reranking.
+ */
+const trackKnowledgeDocHitsSafely = async (docIds: readonly string[]): Promise<void> => {
+  if (docIds.length === 0) {
+    return;
+  }
+
+  try {
+    const updatedCount = await batchIncrementKnowledgeDocHitCounts(docIds);
+    logger.debug("Tracked knowledge doc hits", {
+      requestedCount: docIds.length,
+      updatedCount,
+    });
+  } catch (error) {
+    logger.warn("Failed to track knowledge doc hits", {
+      error: getErrorMessage(error),
+      docCount: docIds.length,
+    });
+  }
+};
 
 /**
  * Generates a cache key for a query embedding.
@@ -176,6 +236,48 @@ const buildQueryFromContext = (context: EventQueryContext): string => {
  */
 const validateQuery = (queryText: string): boolean =>
   queryText.trim().length >= SEARCH_CONSTANTS.MIN_QUERY_LENGTH;
+
+/**
+ * Converts a knowledge doc search result to a rerankable format.
+ */
+const toRerankableResult = (result: VectorSearchResult<KnowledgeDocRecord>): RerankableResult => ({
+  id: result.item.id,
+  similarity: result.similarity,
+  docType: result.item.docType,
+  content: result.item.content,
+  createdAt: result.item.createdAt.toISOString(),
+  metadata: {
+    repository: result.item.repository ?? undefined,
+    workflow: (result.item.metadata as Record<string, unknown>)?.workflow as string | undefined,
+    errorSignature: (result.item.metadata as Record<string, unknown>)?.errorSignature as
+      | string
+      | undefined,
+    language: (result.item.metadata as Record<string, unknown>)?.language as string | undefined,
+    hitCount: (result.item.metadata as Record<string, unknown>)?.hitCount as number | undefined,
+    helpfulRate: (result.item.metadata as Record<string, unknown>)?.helpfulRate as
+      | number
+      | undefined,
+    negativeFeedbackCount: (result.item.metadata as Record<string, unknown>)
+      ?.negativeFeedbackCount as number | undefined,
+  },
+});
+
+/**
+ * Converts reranked results back to VectorSearchResult format.
+ */
+const fromRerankedResult = (
+  reranked: RerankedResult,
+  originalResults: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>
+): VectorSearchResult<KnowledgeDocRecord> => {
+  const original = originalResults.find((result) => result.item.id === reranked.result.id);
+  if (!original) {
+    throw new Error(`Reranked result not found in original results: ${reranked.result.id}`);
+  }
+  return {
+    item: original.item,
+    similarity: reranked.finalScore, // Use final score as new similarity
+  };
+};
 
 // ==================== Embedding Functions ====================
 
@@ -267,6 +369,12 @@ export const searchDiffChunks = async (
 
     const results = await searchSimilarDiffChunks(embedding, filters);
 
+    // Record query cost for tenant if not a cache hit (fire-and-forget)
+    if (query.tenantId && !cacheHit) {
+      const tokenCount = estimateTokenCount(normalizedQuery);
+      void recordQueryCostSafely(query.tenantId, tokenCount);
+    }
+
     logger.info("Diff chunk search complete", {
       resultCount: results.length,
       cacheHit,
@@ -281,6 +389,7 @@ export const searchDiffChunks = async (
 
 /**
  * Searches for similar knowledge documents using semantic similarity.
+ * Optionally applies deterministic reranking for improved relevance.
  *
  * @param query - Search query with filters
  * @returns Array of knowledge documents with similarity scores
@@ -301,31 +410,79 @@ export const searchKnowledgeDocs = async (
     return { results: [], cacheHit: false };
   }
 
+  const enableReranking = query.enableReranking ?? true; // Default to enabled
+
   logger.info("Searching knowledge documents", {
     queryLength: normalizedQuery.length,
     tenantId: query.tenantId,
     docType: query.docType,
     topK: query.topK,
+    enableReranking,
   });
 
   try {
     const { embedding, cacheHit } = await getQueryEmbedding(normalizedQuery, query.tenantId);
 
+    // Fetch more results when reranking to allow for reordering
+    const fetchLimit = enableReranking
+      ? (query.topK ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K) * 2
+      : (query.topK ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K);
+
     const filters: VectorSearchFilters = {
       tenantId: query.tenantId,
       docType: query.docType as VectorSearchFilters["docType"],
       minSimilarity: query.minSimilarity ?? VECTOR_SIMILARITY_THRESHOLDS.KNOWLEDGE_DOCS,
-      limit: query.topK ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K,
+      limit: fetchLimit,
     };
 
-    const results = await searchSimilarKnowledgeDocs(embedding, filters);
+    const rawResults = await searchSimilarKnowledgeDocs(embedding, filters);
+
+    // Apply reranking if enabled
+    let finalResults: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>;
+
+    if (enableReranking && rawResults.length > 0) {
+      const queryContext: QueryContext = {
+        repository: query.repository,
+        workflow: query.workflow,
+        errorSignature: query.errorSignature,
+      };
+
+      const rerankableResults = rawResults.map(toRerankableResult);
+      const reranked = fullRerank(rerankableResults, {
+        queryContext,
+        topK: query.topK ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K,
+      });
+
+      finalResults = reranked.map((rerankedResult) =>
+        fromRerankedResult(rerankedResult, rawResults)
+      );
+
+      logger.debug("Reranking applied to knowledge docs", {
+        originalCount: rawResults.length,
+        rerankedCount: finalResults.length,
+        topScore: reranked[0]?.finalScore ?? 0,
+      });
+    } else {
+      finalResults = rawResults.slice(0, query.topK ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K);
+    }
+
+    // Record query cost for tenant if not a cache hit (fire-and-forget)
+    if (query.tenantId && !cacheHit) {
+      const tokenCount = estimateTokenCount(normalizedQuery);
+      void recordQueryCostSafely(query.tenantId, tokenCount);
+    }
+
+    // Track hit counts for retrieved documents (fire-and-forget)
+    const docIds = finalResults.map((result) => result.item.id);
+    void trackKnowledgeDocHitsSafely(docIds);
 
     logger.info("Knowledge doc search complete", {
-      resultCount: results.length,
+      resultCount: finalResults.length,
       cacheHit,
+      reranked: enableReranking,
     });
 
-    return { results, cacheHit };
+    return { results: finalResults, cacheHit };
   } catch (error) {
     logger.error("Knowledge doc search failed", { error: getErrorMessage(error) });
     throw error;
@@ -335,6 +492,7 @@ export const searchKnowledgeDocs = async (
 /**
  * Performs a combined search across diff chunks and knowledge documents.
  * Useful for finding all relevant context for an event.
+ * Applies reranking to knowledge docs by default for improved relevance.
  *
  * @param query - Search query with filters
  * @returns Combined search results from both sources
@@ -356,36 +514,76 @@ export const searchAll = async (query: SearchQuery): Promise<RAGSearchResult> =>
     };
   }
 
+  const enableReranking = query.enableReranking ?? true;
+  const topK = query.topK ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K;
+
   logger.info("Performing combined RAG search", {
     queryLength: normalizedQuery.length,
     queryTokens,
     tenantId: query.tenantId,
     repository: query.repository,
+    enableReranking,
   });
 
   try {
     // Get embedding (shared between both searches)
     const { embedding, cacheHit } = await getQueryEmbedding(normalizedQuery, query.tenantId);
 
+    // Fetch more knowledge docs when reranking to allow for reordering
+    const knowledgeLimit = enableReranking ? topK * 2 : topK;
+
     // Run both searches in parallel
-    const [diffResults, knowledgeResults] = await Promise.all([
+    const [diffResults, rawKnowledgeResults] = await Promise.all([
       searchSimilarDiffChunks(embedding, {
         tenantId: query.tenantId,
         repository: query.repository,
         minSimilarity: query.minSimilarity ?? VECTOR_SIMILARITY_THRESHOLDS.DIFF_CHUNKS,
-        limit: query.topK ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K,
+        limit: topK,
       }),
       searchSimilarKnowledgeDocs(embedding, {
         tenantId: query.tenantId,
         minSimilarity: query.minSimilarity ?? VECTOR_SIMILARITY_THRESHOLDS.KNOWLEDGE_DOCS,
-        limit: query.topK ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K,
+        limit: knowledgeLimit,
       }),
     ]);
+
+    // Apply reranking to knowledge docs if enabled
+    let knowledgeResults: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>;
+
+    if (enableReranking && rawKnowledgeResults.length > 0) {
+      const queryContext: QueryContext = {
+        repository: query.repository,
+        workflow: query.workflow,
+        errorSignature: query.errorSignature,
+      };
+
+      const rerankableResults = rawKnowledgeResults.map(toRerankableResult);
+      const reranked = fullRerank(rerankableResults, {
+        queryContext,
+        topK,
+      });
+
+      knowledgeResults = reranked.map((rerankedResult) =>
+        fromRerankedResult(rerankedResult, rawKnowledgeResults)
+      );
+
+      logger.debug("Reranking applied in combined search", {
+        originalCount: rawKnowledgeResults.length,
+        rerankedCount: knowledgeResults.length,
+      });
+    } else {
+      knowledgeResults = rawKnowledgeResults.slice(0, topK);
+    }
+
+    // Track hit counts for retrieved knowledge documents (fire-and-forget)
+    const docIds = knowledgeResults.map((result) => result.item.id);
+    void trackKnowledgeDocHitsSafely(docIds);
 
     logger.info("Combined RAG search complete", {
       diffChunkCount: diffResults.length,
       knowledgeDocCount: knowledgeResults.length,
       cacheHit,
+      reranked: enableReranking,
     });
 
     return {

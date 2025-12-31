@@ -17,6 +17,20 @@ export const API_ROUTES = {
   EVENTS: "/events",
   /** Generic webhook endpoint with source parameter (Express format) */
   WEBHOOK: "/webhook/:source",
+  /** RAG document ingestion endpoint */
+  RAG_INGEST: "/api/rag/ingest",
+  /** RAG document search endpoint */
+  RAG_SEARCH: "/api/rag/search",
+  /** RAG statistics endpoint */
+  RAG_STATS: "/api/rag/stats",
+  /** RAG external source sync endpoint */
+  RAG_SYNC: "/api/rag/sync",
+  /** RAG tenant data purge endpoint (Express format) */
+  RAG_PURGE_TENANT: "/api/rag/tenant/:tenantId",
+  /** RAG PR diff chunks purge endpoint (Express format) */
+  RAG_PURGE_PR: "/api/rag/pr/:repository/:prNumber",
+  /** RAG knowledge doc purge endpoint (Express format) */
+  RAG_PURGE_DOC: "/api/rag/doc/:parentId",
 } as const;
 
 /**

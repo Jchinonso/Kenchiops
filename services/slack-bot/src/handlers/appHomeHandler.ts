@@ -11,6 +11,7 @@ import {
   findAllMappingsForTenant,
   getTenantStatistics,
   formatRelativeTime,
+  getErrorMessage,
   type Tenant,
   type TenantStatistics,
 } from "@kenchi/shared";
@@ -39,7 +40,7 @@ const getTenantInfo = async (workspaceId: string): Promise<Tenant | undefined> =
   } catch (error) {
     logger.warn("Failed to get tenant info", {
       workspaceId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return undefined;
   }
@@ -61,7 +62,7 @@ const getRepositoryMappings = async (
   } catch (error) {
     logger.warn("Failed to get repository mappings", {
       tenantId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return [];
   }
@@ -76,7 +77,7 @@ const getStatistics = async (tenantId: string): Promise<TenantStatistics | null>
   } catch (error) {
     logger.warn("Failed to get tenant statistics", {
       tenantId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return null;
   }
@@ -165,7 +166,7 @@ export const handleAppHomeOpened = async (client: SlackClient, userId: string): 
   } catch (error) {
     logger.error("Failed to publish App Home view", {
       userId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
 
     // Try to publish error view
@@ -207,7 +208,7 @@ export const handleTestConnection = async (
   } catch (error) {
     logger.error("Connection test failed", {
       userId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
 
     return {

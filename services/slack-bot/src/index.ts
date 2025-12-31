@@ -25,6 +25,7 @@ import {
   isSocketModeDisconnectError,
   createRedisRateLimiter,
   startSlackNotificationWorker,
+  getErrorMessage,
   SLACK_BOT_RATE_LIMITS,
   SLACK_BOT_TIMEOUTS,
   SLACK_BOT_DB_CONFIG,
@@ -88,7 +89,7 @@ const handleBotLeftChannel = async (workspaceId: string, channelId: string): Pro
   } catch (error) {
     logger.error("Failed to clean up mappings on channel leave", {
       channelId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   }
 };
@@ -130,9 +131,9 @@ const setupSlackHandlers = (app: SlackApp): void => {
     await handleKenchiCommand(command, ack, respond, client);
   });
 
-  // Handle message events
-  app.message(async ({ message }) => {
-    await handleMessage(message);
+  // Handle message events (includes resolution detection for CI failure threads)
+  app.message(async ({ message, client }) => {
+    await handleMessage(message, client);
   });
 
   // Handle app mentions
@@ -325,7 +326,7 @@ const setupSlackHandlers = (app: SlackApp): void => {
       });
     } catch (error) {
       logger.error("Failed to open repository selection modal", {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
     }
   });
@@ -347,7 +348,7 @@ const initializeDatabase = (): void => {
     logger.info("Database connection initialized for multi-tenant support");
   } catch (error) {
     logger.error("Failed to initialize database", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     throw error;
   }
@@ -405,7 +406,7 @@ const startService = async (): Promise<void> => {
         logger.info("Redis connection ready");
       } catch (error) {
         logger.error("Failed to connect to Redis", {
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: getErrorMessage(error),
         });
         // Continue anyway - worker will handle reconnection
       }
@@ -457,7 +458,7 @@ const startService = async (): Promise<void> => {
     process.on("SIGINT", () => shutdown("SIGINT"));
   } catch (error) {
     logger.error("Failed to start Slack bot", {
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     });
     process.exit(1);
   }
@@ -485,14 +486,14 @@ process.on("uncaughtException", (error) => {
 
 process.on("unhandledRejection", (reason) => {
   logger.error("Unhandled rejection", {
-    reason: reason instanceof Error ? reason.message : String(reason),
+    reason: getErrorMessage(reason),
   });
 });
 
 // Start the service
 startService().catch((error) => {
   logger.error("Fatal error starting Slack bot service", {
-    error: error instanceof Error ? error.message : String(error),
+    error: getErrorMessage(error),
   });
   process.exit(1);
 });

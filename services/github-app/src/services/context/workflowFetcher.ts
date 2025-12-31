@@ -4,7 +4,7 @@
  * Fetches workflow logs and timing information from GitHub Actions.
  */
 
-import { createLogger, GITHUB_RETRY_CONFIG } from "@kenchi/shared";
+import { createLogger, GITHUB_RETRY_CONFIG, getErrorMessage } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
 import type { WorkflowTiming } from "./types.js";
 
@@ -141,7 +141,7 @@ export const fetchWorkflowLogs = async (
   } catch (error) {
     logger.warn("Failed to fetch workflow logs", {
       headSha,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return null;
   }
@@ -218,7 +218,7 @@ export const fetchWorkflowTiming = async (
   } catch (error) {
     logger.warn("Failed to fetch workflow timing", {
       headSha,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return null;
   }

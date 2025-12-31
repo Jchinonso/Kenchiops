@@ -11,8 +11,10 @@ import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
 import { EmbeddingClient } from "../openaiClient/embedding.js";
-import { chunkDiff, chunkKnowledgeDoc } from "./chunking.js";
+import { chunkDiff } from "./chunking.js";
+import { chunkByDocType } from "./docTypeChunking.js";
 import { recordIngestionOperation } from "./metrics.js";
+import { validateMetadata, hasSchemaForDocType } from "./schemas/index.js";
 import {
   createDiffChunksBatch,
   updateDiffChunkEmbedding,
@@ -75,6 +77,7 @@ export interface IngestKnowledgeDocResult {
   readonly chunksEmbedded: number;
   readonly parentId: string | null;
   readonly errors: readonly string[];
+  readonly validationWarnings: readonly string[];
 }
 
 /**
@@ -376,18 +379,20 @@ export const ingestDiffChunks = async (input: IngestDiffInput): Promise<IngestDi
  * Ingests a knowledge document into the vector store.
  *
  * Process:
- * 1. Chunk the document by logical sections
- * 2. Redact secrets from each chunk
- * 3. Store chunks in database with parent reference
- * 4. Generate embeddings for stored chunks
+ * 1. Validate metadata against doc-type schema
+ * 2. Chunk the document using doc-type-specific strategy
+ * 3. Redact secrets from each chunk
+ * 4. Store chunks in database with parent reference
+ * 5. Generate embeddings for stored chunks
  *
  * @param input - Knowledge doc ingestion input
- * @returns Ingestion result with statistics
+ * @returns Ingestion result with statistics and validation warnings
  */
 export const ingestKnowledgeDoc = async (
   input: IngestKnowledgeDocInput
 ): Promise<IngestKnowledgeDocResult> => {
   const errors: string[] = [];
+  const validationWarnings: string[] = [];
   let chunksCreated = 0;
   let chunksEmbedded = 0;
   let parentId: string | null = null;
@@ -398,23 +403,47 @@ export const ingestKnowledgeDoc = async (
     contentLength: input.content.length,
   });
 
+  // Validate metadata if schema exists for this doc type
+  if (input.metadata && hasSchemaForDocType(input.docType)) {
+    const validationResult = validateMetadata(input.docType, input.metadata);
+
+    if (!validationResult.success && validationResult.errors) {
+      validationResult.errors.forEach((validationError) => {
+        validationWarnings.push(`${validationError.path}: ${validationError.message}`);
+      });
+
+      logger.warn("Metadata validation warnings - proceeding with ingestion", {
+        docType: input.docType,
+        title: input.title,
+        warnings: validationWarnings,
+      });
+    }
+  }
+
   try {
-    // Chunk the document
-    const chunkResult = chunkKnowledgeDoc(input.content, input.title, input.docType);
+    // Chunk the document using doc-type-specific strategy
+    const chunkResult = chunkByDocType(input.content, input.docType, input.title);
 
     if (chunkResult.chunks.length === 0) {
       logger.info("No chunks generated from knowledge doc", {
         docType: input.docType,
         title: input.title,
       });
-      return { success: true, chunksCreated: 0, chunksEmbedded: 0, parentId: null, errors: [] };
+      return {
+        success: true,
+        chunksCreated: 0,
+        chunksEmbedded: 0,
+        parentId: null,
+        errors: [],
+        validationWarnings: Object.freeze(validationWarnings),
+      };
     }
 
     // Map chunks to database input format
     const chunkInputs = mapKnowledgeChunksToInputs(
       chunkResult.chunks,
       input.docType,
-      chunkResult.title,
+      input.title,
       null,
       input.repository,
       input.sourceUrl,
@@ -466,6 +495,7 @@ export const ingestKnowledgeDoc = async (
       chunksEmbedded,
       parentId,
       errors: Object.freeze(errors),
+      validationWarnings: Object.freeze(validationWarnings),
     };
   } catch (error) {
     const errorMessage = getErrorMessage(error);
@@ -485,6 +515,7 @@ export const ingestKnowledgeDoc = async (
       chunksEmbedded,
       parentId,
       errors: Object.freeze(errors),
+      validationWarnings: Object.freeze(validationWarnings),
     };
   }
 };

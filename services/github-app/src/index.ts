@@ -24,6 +24,7 @@ import {
   createRedisRateLimiter,
   startAggregatorWorker,
   startAnalysisQueueProcessor,
+  getErrorMessage,
   DEFAULT_AGGREGATION_CONFIG,
   QUEUE_WORKER_DEFAULTS,
   AGGREGATION_DEFAULTS,
@@ -104,7 +105,7 @@ const initializeDatabase = (): void => {
     logger.info("Database connection initialized");
   } catch (error) {
     logger.error("Failed to initialize database", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     throw error;
   }
@@ -189,7 +190,7 @@ const initializeActionQueueWorker = async (): Promise<void> => {
     logger.info("Action queue worker initialized");
   } catch (error) {
     logger.error("Failed to initialize action queue worker", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   }
 };
@@ -249,7 +250,7 @@ const startServer = async (): Promise<void> => {
       logger.info("Redis connection ready");
     } catch (error) {
       logger.error("Failed to connect to Redis", {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
       // Continue anyway - workers will handle reconnection
     }
@@ -277,7 +278,7 @@ const startServer = async (): Promise<void> => {
 // Start the server
 startServer().catch((error) => {
   logger.error("Failed to start server", {
-    error: error instanceof Error ? error.message : "Unknown error",
+    error: getErrorMessage(error),
   });
   process.exit(1);
 });

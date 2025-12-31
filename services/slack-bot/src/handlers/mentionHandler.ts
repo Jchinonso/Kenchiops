@@ -4,7 +4,7 @@
  */
 
 import type { AppMentionEvent, SayFn, SayArguments } from "@slack/bolt";
-import { createLogger, TIME_CONSTANTS } from "@kenchi/shared";
+import { createLogger, TIME_CONSTANTS, getErrorMessage } from "@kenchi/shared";
 import { formatAnalysisMessage, formatErrorMessage } from "../formatters.js";
 import { createEventFromMention, performAnalysis } from "../services/analysisService.js";
 import type { SlackBlock } from "../types/slackTypes.js";
@@ -107,7 +107,7 @@ export const handleAppMention = async (event: AppMentionEvent, say: SayFn): Prom
     });
   } catch (error) {
     logger.error("Error processing app mention", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
 

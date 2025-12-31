@@ -19,6 +19,7 @@ import {
   getCachedAnalysisByLogHash,
   cacheAnalysisByLogHash,
   addFailureToRedis,
+  getErrorMessage,
   KENCHI_BRANDING,
   type AggregationKey,
   type FailureContext,
@@ -42,6 +43,7 @@ import {
   buildWorkflowContext,
   cachedToApiAnalysis,
 } from "./checkRunConverters.js";
+import { handleCheckRunSuccess } from "./checkRunSuccessHandler.js";
 
 const logger = createLogger("github-app");
 
@@ -157,7 +159,7 @@ const fetchAnalysis = async (
     cacheAnalysisByLogHash(logHash, cachedAnalysis),
   ]).catch((error) => {
     logger.warn("Failed to cache analysis", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   });
 
@@ -234,7 +236,7 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
     });
   } catch (error) {
     logger.error("Failed to get analysis", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return false;
   }
@@ -276,7 +278,7 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
     return true;
   } catch (error) {
     logger.error("Failed to add failure to Redis aggregator", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return false;
   }
@@ -355,22 +357,64 @@ const shouldProcessCheckRun = (webhook: CheckRunWebhook): boolean => {
 };
 
 /**
+ * Check if this is a successful check run we should capture knowledge from.
+ */
+const isSuccessfulCheckRun = (webhook: CheckRunWebhook): boolean => {
+  const { action, check_run } = webhook;
+
+  // Skip our own check runs
+  if (check_run.name === KENCHI_BRANDING.CHECK_RUN_NAME) {
+    return false;
+  }
+
+  return (
+    action === GITHUB_CHECK_ACTIONS.COMPLETED &&
+    check_run.conclusion === GITHUB_CHECK_CONCLUSIONS.SUCCESS
+  );
+};
+
+/**
+ * Process successful check run for passive learning (fire and forget).
+ */
+const processSuccessForLearning = async (webhook: CheckRunWebhook): Promise<void> => {
+  try {
+    await handleCheckRunSuccess(webhook);
+  } catch (error) {
+    logger.warn("Failed to capture fix knowledge from successful check", {
+      error: getErrorMessage(error),
+      repository: webhook.repository.full_name,
+      checkName: webhook.check_run.name,
+    });
+  }
+};
+
+/**
  * Handle check run webhook
  */
 export const handleCheckRun = async (webhook: CheckRunWebhook): Promise<CheckRunHandlerResult> => {
-  // Skip non-failure check runs
-  if (!shouldProcessCheckRun(webhook)) {
-    logger.info("Check run event skipped", {
-      action: webhook.action,
-      conclusion: webhook.check_run.conclusion,
-      repository: webhook.repository.full_name,
-    });
+  // Process failures for analysis
+  if (shouldProcessCheckRun(webhook)) {
+    return handleCheckRunFailure(webhook);
+  }
+
+  // Process successes for passive learning (fire and forget)
+  if (isSuccessfulCheckRun(webhook)) {
+    void processSuccessForLearning(webhook);
 
     return {
-      handled: false,
-      message: "Check run event skipped (not a failure)",
+      handled: true,
+      message: "Success event queued for passive learning",
     };
   }
 
-  return handleCheckRunFailure(webhook);
+  logger.info("Check run event skipped", {
+    action: webhook.action,
+    conclusion: webhook.check_run.conclusion,
+    repository: webhook.repository.full_name,
+  });
+
+  return {
+    handled: false,
+    message: "Check run event skipped (not a failure or success)",
+  };
 };
