@@ -567,11 +567,13 @@ describe("Core Errors", () => {
       expect(message).toContain("30 seconds");
     });
 
-    it("should return just message when no suggestion", () => {
+    it("should include default suggestion for NotFoundError", () => {
       const error = new NotFoundError("User not found");
       const message = error.toUserMessage();
 
-      expect(message).toBe("User not found");
+      expect(message).toBe(
+        "User not found. Please verify the resource exists and check the identifier."
+      );
     });
   });
 });

@@ -10,6 +10,7 @@ import {
   deduplicateByKey,
   UI_EMOJI,
   FORMATTER_DISPLAY_LIMITS,
+  SLACK_FAILURE_TEMPLATES,
   type AggregatedFailures,
   type AnalyzedFailure,
   type RecommendedAction,
@@ -31,6 +32,7 @@ import {
   buildConfigChangesBlock,
   buildRelatedKnowledgeBlock,
   buildRAGFeedbackButtonsBlock,
+  buildAnalysisFeedbackButtonsBlock,
   buildActionsSummaryBlocks,
   type SlackBlock,
   type SlackTextBlock,
@@ -114,6 +116,7 @@ const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): Consolida
     path: annotation.path,
     line: annotation.line,
     message: annotation.message,
+    suggestedFix: annotation.suggestedFix,
   }));
 
 /**
@@ -341,9 +344,12 @@ export const buildConsolidatedSlackPayload = (
   const configBlock = buildConfigChangesBlock(buildConfigChanges);
   // RAG-retrieved blocks
   const relatedKnowledgeBlock = buildRelatedKnowledgeBlock(relatedKnowledge);
-  // RAG feedback buttons (only shown if knowledge docs exist)
+  // Analysis ID for feedback tracking
   const analysisId = `${repository.fullName}:${commitSha}`;
+  // RAG feedback buttons (only shown if knowledge docs exist)
   const ragFeedbackBlock = buildRAGFeedbackButtonsBlock(relatedKnowledge, analysisId);
+  // Analysis feedback buttons (always shown for passive learning)
+  const analysisFeedbackBlock = buildAnalysisFeedbackButtonsBlock(analysisId);
 
   // Combine blocks using array spread with filter for optional blocks
   const blocks: SlackBlock[] = [
@@ -362,9 +368,14 @@ export const buildConsolidatedSlackPayload = (
     ...(configBlock ? [configBlock] : []),
     ...(relatedKnowledgeBlock ? [relatedKnowledgeBlock] : []),
     ...(ragFeedbackBlock ? [ragFeedbackBlock] : []),
+    analysisFeedbackBlock,
     ...buildActionsSummaryBlocks(mergedActions),
     ...buildActionBlocks(mergedActions, aggregation),
     { type: "divider" },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: SLACK_FAILURE_TEMPLATES.RESOLUTION_TIP }],
+    },
     {
       type: "context",
       elements: [

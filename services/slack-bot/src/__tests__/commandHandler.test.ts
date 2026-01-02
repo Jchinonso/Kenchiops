@@ -21,6 +21,44 @@ jest.mock("@kenchi/shared", () => ({
   findAllMappingsForTenant: jest.fn(() => Promise.resolve([])),
   fetchInstallationRepositories: jest.fn(() => Promise.resolve([])),
   getMappedRepositories: jest.fn(() => Promise.resolve(new Set())),
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
+  SLACK_UI_ERROR_MESSAGES: {
+    STATUS_CHECK_FAILED:
+      "Failed to check connection status. Please verify your network connection and try again later.",
+    CONFIG_MODAL_FAILED:
+      "Failed to open configuration. This may be due to a temporary connection issue. Please try again in a few seconds.",
+  },
+  KNOWLEDGE_DOC_TYPES: {
+    TROUBLESHOOTING: "troubleshooting",
+    RUNBOOK: "runbook",
+    KNOWN_ISSUES: "known_issues",
+    POSTMORTEM: "postmortem",
+    SOP: "sop",
+    ARCHITECTURE: "architecture",
+    DOCUMENTATION: "documentation",
+  },
+  SLACK_MODAL_CALLBACKS: {
+    ADD_DOCUMENT: "add_document_modal",
+  },
+  SLACK_ACTION_IDS: {
+    DOC_TITLE: "doc_title_input",
+    DOC_TYPE: "doc_type_select",
+    DOC_CONTENT: "doc_content_input",
+    DOC_DESCRIPTION: "doc_description_input",
+  },
+  SLACK_BLOCK_IDS: {
+    DOC_TITLE: "doc_title_block",
+    DOC_TYPE: "doc_type_block",
+    DOC_CONTENT: "doc_content_block",
+    DOC_DESCRIPTION: "doc_description_block",
+  },
+  DOC_INGESTION_CONFIG: {
+    MAX_TITLE_LENGTH: 200,
+    MAX_CONTENT_LENGTH: 3000,
+    MAX_DESCRIPTION_LENGTH: 500,
+  },
 }));
 
 jest.mock("../formatters.js", () => ({

@@ -11,27 +11,17 @@ import {
   executeAction,
   enqueueAction,
   isRedisHealthy,
-  recordRAGFeedback,
   updateActionProposalStatus,
-  createAnalysisFeedback,
   getErrorMessage,
-  ingestAnalysisLesson,
-  extractAnalysisContext,
   SLACK_BOT_TIMEOUTS,
   SLACK_BOT_MESSAGES,
   type ActionExecutionContext,
   type ActionType,
-  type RAGRelevance,
-  type FeedbackType,
 } from "@kenchi/shared";
-import { getAnalysisContext, deleteAnalysisContext } from "../services/analysisContextStore.js";
 import { formatProgressUpdate } from "../formatters.js";
 
 // Type for Slack blocks compatible with Bolt
 type SlackBlocks = NonNullable<SayArguments["blocks"]>;
-
-// Type alias for Slack ack function
-type AckFunction = () => Promise<void>;
 
 const logger = createLogger("slack-bot");
 
@@ -57,16 +47,6 @@ interface ActionButtonValue {
 interface LegacyActionValue {
   readonly eventId: string;
   readonly actionId: string;
-}
-
-/**
- * RAG feedback button value payload (matches slackContentBlocks.ts)
- */
-interface RAGFeedbackButtonValue {
-  readonly analysisId: string;
-  readonly knowledgeDocId: string;
-  readonly similarity: number;
-  readonly rank: number;
 }
 
 /**
@@ -405,201 +385,4 @@ export const handleActionRejection = async (
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
-};
-
-/**
- * Persists analysis feedback to the database.
- */
-const persistAnalysisFeedback = async (
-  analysisId: string,
-  feedbackType: FeedbackType,
-  userId: string
-): Promise<void> => {
-  try {
-    await createAnalysisFeedback({
-      analysisId,
-      feedbackType,
-      userId,
-    });
-    logger.debug("Analysis feedback persisted", { analysisId, feedbackType });
-  } catch (error: unknown) {
-    logger.warn("Failed to persist analysis feedback", {
-      analysisId,
-      feedbackType,
-      error: getErrorMessage(error),
-    });
-  }
-};
-
-/**
- * Extracts and ingests analysis lesson in the background (fire-and-forget).
- */
-const extractLessonInBackground = (analysisId: string, confirmedBy: string): void => {
-  const doExtraction = async (): Promise<void> => {
-    const storedContext = getAnalysisContext(analysisId);
-
-    if (!storedContext) {
-      logger.debug("No stored context for lesson extraction", { analysisId });
-      return;
-    }
-
-    const lessonContext = extractAnalysisContext(storedContext.aggregation, confirmedBy);
-
-    try {
-      const result = await ingestAnalysisLesson(lessonContext);
-
-      if (result.success && result.lessonsCreated > 0) {
-        logger.info("Analysis lesson extracted from positive feedback", {
-          analysisId,
-          lessonsCreated: result.lessonsCreated,
-          chunksCreated: result.ingestionResult?.chunksCreated,
-        });
-
-        // Remove context after successful extraction
-        deleteAnalysisContext(analysisId);
-      }
-    } catch (extractionError) {
-      logger.warn("Failed to extract analysis lesson", {
-        analysisId,
-        error: getErrorMessage(extractionError),
-      });
-    }
-  };
-
-  // Fire and forget - don't block feedback acknowledgment
-  void doExtraction();
-};
-
-/**
- * Handles positive feedback.
- */
-export const handlePositiveFeedback = async (
-  action: ButtonAction,
-  ack: AckFunction,
-  userId: string
-): Promise<void> => {
-  await ack();
-
-  const analysisId = action.value ?? "";
-  logger.info("Positive feedback received", { analysisId, userId });
-
-  await persistAnalysisFeedback(analysisId, "correct", userId);
-
-  // Trigger lesson extraction in background
-  extractLessonInBackground(analysisId, userId);
-};
-
-/**
- * Handles negative feedback.
- */
-export const handleNegativeFeedback = async (
-  action: ButtonAction,
-  ack: AckFunction,
-  userId: string
-): Promise<void> => {
-  await ack();
-
-  const analysisId = action.value ?? "";
-  logger.info("Negative feedback received", { analysisId, userId });
-
-  await persistAnalysisFeedback(analysisId, "incorrect", userId);
-};
-
-// ==================== RAG Feedback Handlers ====================
-
-/**
- * Parses RAG feedback button value from JSON string.
- */
-const parseRAGFeedbackValue = (valueString: string | undefined): RAGFeedbackButtonValue | null => {
-  if (!valueString) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(valueString) as unknown;
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "analysisId" in parsed &&
-      "knowledgeDocId" in parsed &&
-      "similarity" in parsed &&
-      "rank" in parsed
-    ) {
-      return parsed as RAGFeedbackButtonValue;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Records RAG feedback with the given relevance level.
- */
-const recordRAGFeedbackWithRelevance = async (
-  feedbackValue: RAGFeedbackButtonValue,
-  relevance: RAGRelevance,
-  userId: string
-): Promise<void> => {
-  const result = await recordRAGFeedback({
-    analysisId: feedbackValue.analysisId,
-    knowledgeDocId: feedbackValue.knowledgeDocId,
-    relevance,
-    retrievalSimilarity: feedbackValue.similarity,
-    retrievalRank: feedbackValue.rank,
-    userId,
-  });
-
-  if (!result.success) {
-    logger.warn("Failed to record RAG feedback", { error: result.error });
-  }
-};
-
-/**
- * Handles RAG helpful feedback button.
- */
-export const handleRAGFeedbackHelpful = async (
-  action: ButtonAction,
-  ack: AckFunction,
-  userId: string
-): Promise<void> => {
-  await ack();
-
-  const feedbackValue = parseRAGFeedbackValue(action.value);
-  if (!feedbackValue) {
-    logger.warn("Invalid RAG feedback button value", { value: action.value });
-    return;
-  }
-
-  logger.info("RAG helpful feedback received", {
-    analysisId: feedbackValue.analysisId,
-    knowledgeDocId: feedbackValue.knowledgeDocId,
-    userId,
-  });
-
-  await recordRAGFeedbackWithRelevance(feedbackValue, "helpful", userId);
-};
-
-/**
- * Handles RAG not helpful feedback button.
- */
-export const handleRAGFeedbackNotHelpful = async (
-  action: ButtonAction,
-  ack: AckFunction,
-  userId: string
-): Promise<void> => {
-  await ack();
-
-  const feedbackValue = parseRAGFeedbackValue(action.value);
-  if (!feedbackValue) {
-    logger.warn("Invalid RAG feedback button value", { value: action.value });
-    return;
-  }
-
-  logger.info("RAG not helpful feedback received", {
-    analysisId: feedbackValue.analysisId,
-    knowledgeDocId: feedbackValue.knowledgeDocId,
-    userId,
-  });
-
-  await recordRAGFeedbackWithRelevance(feedbackValue, "not_helpful", userId);
 };

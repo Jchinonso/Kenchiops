@@ -157,9 +157,130 @@ function isWebhookEvent(data: unknown): data is WebhookEvent {
 
 ## Error Handling
 
-- Use custom error classes from `@kenchi/shared`
-- Use Result types for expected errors: `{ success: true; data: T } | { success: false; error: E }`
-- Let middleware handle unexpected errors
+### Error Classes
+
+**Always use custom error classes from `@kenchi/shared`:**
+
+| Error Class               | HTTP Code | Use Case                              |
+| ------------------------- | --------- | ------------------------------------- |
+| `ValidationError`         | 400       | Invalid input, malformed data         |
+| `AuthenticationError`     | 401       | Missing or invalid credentials        |
+| `AuthorizationError`      | 403       | Insufficient permissions              |
+| `NotFoundError`           | 404       | Resource doesn't exist                |
+| `ExternalServiceError`    | 502       | External API failures (GitHub, Slack) |
+| `LLMError`                | 502       | OpenAI-specific failures              |
+| `RateLimitError`          | 429       | Rate limiting                         |
+| `CircuitBreakerOpenError` | 502       | Circuit breaker open state            |
+
+```typescript
+// ❌ WRONG - Generic Error
+throw new Error("Tenant not found");
+throw new Error("GitHub API failed");
+
+// ✅ CORRECT - Typed errors with context
+throw new NotFoundError("Tenant not found", { metadata: { tenantId } });
+throw new ExternalServiceError("github", `API error: ${status}`);
+```
+
+### Error Message Extraction
+
+**Always use `getErrorMessage()` for extracting error messages:**
+
+```typescript
+// ❌ WRONG - Manual type checking
+logger.error("Failed", { error: error instanceof Error ? error.message : "Unknown" });
+
+// ✅ CORRECT - Use shared utility
+import { getErrorMessage } from "@kenchi/shared";
+logger.error("Failed", { error: getErrorMessage(error) });
+```
+
+### Promise Error Handling
+
+**Always handle promise rejections:**
+
+```typescript
+// ❌ WRONG - Unhandled promise rejection
+somePromise.then(() => { ... });
+
+// ✅ CORRECT - Handle errors
+somePromise.then(() => { ... }).catch((error) => {
+  logger.error("Operation failed", { error: getErrorMessage(error) });
+});
+
+// ✅ BETTER - Use async/await with try-catch
+try {
+  await somePromise;
+} catch (error) {
+  logger.error("Operation failed", { error: getErrorMessage(error) });
+}
+```
+
+### Catch Blocks
+
+**Never have empty catch blocks - always log or rethrow:**
+
+```typescript
+// ❌ WRONG - Silent failure
+try { ... } catch { }
+try { ... } catch (error) { }
+
+// ✅ CORRECT - Log the error
+try { ... } catch (error) {
+  logger.error("Operation failed", { error: getErrorMessage(error) });
+}
+
+// ✅ CORRECT - Rethrow with context
+try { ... } catch (error) {
+  throw new ExternalServiceError("github", wrapError("Failed to fetch PR", error));
+}
+
+// ✅ ACCEPTABLE - Health checks returning boolean (intentionally silent)
+const isHealthy = async (): Promise<boolean> => {
+  try {
+    await ping();
+    return true;
+  } catch {
+    return false;  // Intentionally silent - health check pattern
+  }
+};
+```
+
+### Error Context
+
+**Include relevant context in errors:**
+
+```typescript
+throw new ValidationError("Invalid input", {
+  operation: "createUser",
+  metadata: { field: "email", value: input.email },
+});
+
+throw new ExternalServiceError("slack", "Failed to post message", {
+  metadata: { channel, teamId },
+  retryable: true,
+});
+```
+
+### Result Types
+
+**Use Result types for expected errors:**
+
+```typescript
+type Result<T, E = string> = { success: true; data: T } | { success: false; error: E };
+
+const parseConfig = (input: unknown): Result<Config> => {
+  if (!isValidConfig(input)) {
+    return { success: false, error: "Invalid configuration" };
+  }
+  return { success: true, data: input as Config };
+};
+```
+
+### Middleware Error Handling
+
+- Let `errorHandler` middleware handle unexpected errors
+- Use `asyncHandler` wrapper for async route handlers
 - Use Map/Set for O(1) error lookups instead of if-else chains
 
 ---

@@ -16,6 +16,7 @@ import {
   findBySlackWorkspace,
   findAllMappingsForTenant,
   getErrorMessage,
+  SLACK_UI_ERROR_MESSAGES,
   type ActionProposal,
   type ActionType,
 } from "@kenchi/shared";
@@ -29,7 +30,9 @@ import {
   buildNoConfiguredReposModal,
   getAvailableRepositories,
 } from "./channelHandler.js";
-import type { SlackBlock } from "../types/slackTypes.js";
+import { handleAddDocCommand } from "./documentIngestionHandler.js";
+import { toSlackSDKView, type SlackBlock } from "../types/slackTypes.js";
+import type { View } from "@slack/types";
 
 // Type for Slack blocks compatible with Bolt
 type SlackBlocks = NonNullable<RespondArguments["blocks"]>;
@@ -158,7 +161,7 @@ const handleStatus: SubcommandHandler = async ({ command, respond }) => {
     });
 
     await respond({
-      text: "Failed to check connection status. Please try again later.",
+      text: SLACK_UI_ERROR_MESSAGES.STATUS_CHECK_FAILED,
       response_type: "ephemeral",
     });
   }
@@ -186,8 +189,9 @@ const handleHelp: SubcommandHandler = async ({ respond }) => {
             "• `/kenchi unconfigure` - Remove the repository from this channel\n" +
             "• `/kenchi connect` - Get the GitHub App install link\n" +
             "• `/kenchi status` - Check your GitHub connection status\n" +
+            "• `/kenchi add-doc` - Add a document to the knowledge base\n" +
             "• `/kenchi help` - Show this help message\n" +
-            "• `/kenchi <question>` - Ask Kenchi to analyze a CI issue",
+            "• `/kenchi <question>` - Ask Kenchi a question or analyze a CI issue",
         },
       },
       {
@@ -195,7 +199,7 @@ const handleHelp: SubcommandHandler = async ({ respond }) => {
         elements: [
           {
             type: "mrkdwn",
-            text: "Kenchi automatically analyzes CI failures and posts alerts to this channel.",
+            text: "Kenchi automatically analyzes CI failures and posts alerts to this channel. You can also upload a file and mention @kenchi to add it to the knowledge base.",
           },
         ],
       },
@@ -241,8 +245,7 @@ const handleConfigure: SubcommandHandler = async ({ command, respond, client }) 
 
     await client.views.open({
       trigger_id: command.trigger_id,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      view: view as any,
+      view: toSlackSDKView(view) as View,
     });
 
     logger.info("Opened repository selection modal", {
@@ -256,7 +259,7 @@ const handleConfigure: SubcommandHandler = async ({ command, respond, client }) 
     });
 
     await respond({
-      text: "Failed to open configuration. Please try again.",
+      text: SLACK_UI_ERROR_MESSAGES.CONFIG_MODAL_FAILED,
       response_type: "ephemeral",
     });
   }
@@ -301,8 +304,7 @@ const handleUnconfigure: SubcommandHandler = async ({ command, respond, client }
 
     await client.views.open({
       trigger_id: command.trigger_id,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      view: view as any,
+      view: toSlackSDKView(view) as View,
     });
 
     logger.info("Opened unconfigure modal", {
@@ -315,7 +317,7 @@ const handleUnconfigure: SubcommandHandler = async ({ command, respond, client }
     });
 
     await respond({
-      text: "Failed to open configuration. Please try again.",
+      text: SLACK_UI_ERROR_MESSAGES.CONFIG_MODAL_FAILED,
       response_type: "ephemeral",
     });
   }
@@ -383,6 +385,13 @@ const handleAnalysis: SubcommandHandler = async (ctx) => {
 // ==================== Subcommand Router ====================
 
 /**
+ * Handle /kenchi add-doc - Open document ingestion modal
+ */
+const handleAddDoc: SubcommandHandler = async ({ command, respond, client }) => {
+  await handleAddDocCommand(command, respond, client);
+};
+
+/**
  * Subcommand handler lookup table
  */
 const subcommandHandlers: ReadonlyMap<string, SubcommandHandler> = new Map([
@@ -390,6 +399,7 @@ const subcommandHandlers: ReadonlyMap<string, SubcommandHandler> = new Map([
   ["unconfigure", handleUnconfigure],
   ["connect", handleConnect],
   ["status", handleStatus],
+  ["add-doc", handleAddDoc],
   ["help", handleHelp],
 ]);
 

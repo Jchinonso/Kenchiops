@@ -103,6 +103,9 @@ export const GITHUB_COMMENT_TEMPLATES = {
   /** Comment footer with branding */
   FOOTER: (emoji: string): string =>
     `---\n*${emoji} Powered by [KenchiOps](https://github.com/kenchi/devops) — AI-driven DevOps Assistant*`,
+  /** User education tip for fix comments */
+  RESOLUTION_TIP:
+    "\n> 📚 **Tip:** If you resolve this issue, comment with what fixed it — your solution helps the team with future issues.\n",
 } as const;
 
 /**
@@ -115,6 +118,9 @@ export const SLACK_FAILURE_TEMPLATES = {
   BUILD_FAILED: "🚨 CI Build Failed",
   /** Footer branding */
   FOOTER: "🤖 KenchiOps",
+  /** User education tip for resolution tracking */
+  RESOLUTION_TIP:
+    "💡 _Reply in this thread when you find the fix — it helps Kenchi suggest solutions for similar issues._",
 } as const;
 
 // ==================== Formatter Configuration ====================
@@ -133,6 +139,8 @@ export const FORMATTER_DISPLAY_LIMITS = {
   MAX_ERRORS_DISPLAYED: 5,
   /** Confidence percentage multiplier */
   CONFIDENCE_MULTIPLIER: 100,
+  /** Minimum confidence threshold for displaying suggested fixes (0.0 to 1.0) */
+  MIN_FIX_CONFIDENCE: 0.7,
 } as const;
 
 // ==================== Retry Configuration ====================

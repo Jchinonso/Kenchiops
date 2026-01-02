@@ -14,6 +14,7 @@ import { TENANT_STATUS, AUDIT_ACTIONS, TENANT_DEFAULTS } from "../constants/inde
 import type {
   Tenant,
   TenantStatus,
+  TenantEmbeddingTier,
   CreateTenantFromGitHub,
   LinkSlackWorkspace,
   TenantAuditAction,
@@ -30,7 +31,7 @@ const logger = createLogger("tenant-service");
 /**
  * Database row type for tenants table
  */
-interface TenantRow {
+export interface TenantRow {
   readonly id: string;
   readonly github_org: string;
   readonly github_installation_id: number | null;
@@ -43,6 +44,11 @@ interface TenantRow {
   readonly status: TenantStatus;
   readonly created_at: Date;
   readonly updated_at: Date;
+  // RAG budget configuration
+  readonly rag_monthly_budget_usd: string | null;
+  readonly rag_preferred_tier: string | null;
+  readonly rag_allow_premium: boolean | null;
+  readonly rag_degrade_on_budget_warning: boolean | null;
 }
 
 /**
@@ -57,9 +63,19 @@ export interface TenantStatistics {
 // ==================== Row Converters ====================
 
 /**
+ * Default RAG budget configuration values
+ */
+const RAG_BUDGET_DEFAULTS = {
+  monthlyBudgetUsd: 0,
+  preferredTier: "STANDARD" as TenantEmbeddingTier,
+  allowPremium: false,
+  degradeOnBudgetWarning: true,
+} as const;
+
+/**
  * Convert database row to Tenant entity
  */
-const rowToTenant = (row: TenantRow): Tenant => ({
+export const rowToTenant = (row: TenantRow): Tenant => ({
   id: row.id,
   githubOrg: row.github_org,
   githubInstallationId: row.github_installation_id,
@@ -72,6 +88,15 @@ const rowToTenant = (row: TenantRow): Tenant => ({
   status: row.status,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  // RAG budget configuration with defaults
+  ragMonthlyBudgetUsd: row.rag_monthly_budget_usd
+    ? parseFloat(row.rag_monthly_budget_usd)
+    : RAG_BUDGET_DEFAULTS.monthlyBudgetUsd,
+  ragPreferredTier:
+    (row.rag_preferred_tier as TenantEmbeddingTier) ?? RAG_BUDGET_DEFAULTS.preferredTier,
+  ragAllowPremium: row.rag_allow_premium ?? RAG_BUDGET_DEFAULTS.allowPremium,
+  ragDegradeOnBudgetWarning:
+    row.rag_degrade_on_budget_warning ?? RAG_BUDGET_DEFAULTS.degradeOnBudgetWarning,
 });
 
 // ==================== Internal Helpers ====================

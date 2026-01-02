@@ -8,9 +8,11 @@
  */
 
 import { createLogger } from "../core/logger.js";
+import { getErrorMessage } from "../core/errors.js";
 import {
   COST_CONTROL_CONFIG,
   EMBEDDING_TIERS,
+  CACHE_TTL_SECONDS,
   type EmbeddingTierName,
 } from "../constants/index.js";
 import {
@@ -18,6 +20,7 @@ import {
   getBudgetStatus,
   type BudgetStatus,
 } from "../database/costTrackingRepository.js";
+import { getRAGBudgetConfig } from "../database/tenantRagConfig.js";
 
 const logger = createLogger("rag-cost-controls");
 
@@ -189,15 +192,41 @@ const DEFAULT_TIER_CONFIG: Omit<TenantTierConfig, "tenantId"> = {
 };
 
 /**
- * Tier configurations stored by tenant.
+ * In-memory cache for tenant configs (TTL: 5 minutes).
+ * Reduces database calls for frequently accessed tenants.
  */
-const tenantConfigs = new Map<string, TenantTierConfig>();
+const tenantConfigCache = new Map<string, { config: TenantTierConfig; expiresAt: number }>();
+const CONFIG_CACHE_TTL_MS = CACHE_TTL_SECONDS.MEDIUM * COST_CONTROL_CONFIG.MS_PER_SECOND;
 
 /**
- * Sets tier configuration for a tenant.
+ * Clears cached config for a tenant (call after updates).
  */
-export const setTenantTierConfig = (config: TenantTierConfig): void => {
-  tenantConfigs.set(config.tenantId, config);
+export const clearTenantConfigCache = (tenantId: string): void => {
+  tenantConfigCache.delete(tenantId);
+};
+
+/**
+ * Sets tier configuration for a tenant (updates database).
+ * For backwards compatibility - prefer using updateRAGBudgetConfig from tenantRagConfig.
+ */
+export const setTenantTierConfig = async (config: TenantTierConfig): Promise<void> => {
+  // Import dynamically to avoid circular dependency
+  const { updateRAGBudgetConfig } = await import("../database/tenantRagConfig.js");
+
+  await updateRAGBudgetConfig({
+    tenantId: config.tenantId,
+    monthlyBudgetUsd: config.monthlyBudgetUsd,
+    preferredTier: config.preferredTier,
+    allowPremium: config.allowPremium,
+    degradeOnBudgetWarning: config.degradeOnBudgetWarning,
+  });
+
+  // Update cache
+  tenantConfigCache.set(config.tenantId, {
+    config,
+    expiresAt: Date.now() + CONFIG_CACHE_TTL_MS,
+  });
+
   logger.info("Set tenant tier config", {
     tenantId: config.tenantId,
     preferredTier: config.preferredTier,
@@ -206,11 +235,45 @@ export const setTenantTierConfig = (config: TenantTierConfig): void => {
 };
 
 /**
- * Gets tier configuration for a tenant.
+ * Gets tier configuration for a tenant from database (with caching).
  */
-export const getTenantTierConfig = (tenantId: string): TenantTierConfig => {
-  const config = tenantConfigs.get(tenantId);
-  return config ?? { ...DEFAULT_TIER_CONFIG, tenantId };
+export const getTenantTierConfig = async (tenantId: string): Promise<TenantTierConfig> => {
+  // Check cache first
+  const cached = tenantConfigCache.get(tenantId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.config;
+  }
+
+  // Fetch from database
+  try {
+    const dbConfig = await getRAGBudgetConfig(tenantId);
+
+    if (dbConfig) {
+      const config: TenantTierConfig = {
+        tenantId: dbConfig.tenantId,
+        preferredTier: dbConfig.preferredTier,
+        monthlyBudgetUsd: dbConfig.monthlyBudgetUsd,
+        allowPremium: dbConfig.allowPremium,
+        degradeOnBudgetWarning: dbConfig.degradeOnBudgetWarning,
+      };
+
+      // Cache the result
+      tenantConfigCache.set(tenantId, {
+        config,
+        expiresAt: Date.now() + CONFIG_CACHE_TTL_MS,
+      });
+
+      return config;
+    }
+  } catch (error) {
+    logger.warn("Failed to fetch tenant config from database, using defaults", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+  }
+
+  // Return defaults if not found or error
+  return { ...DEFAULT_TIER_CONFIG, tenantId };
 };
 
 /**
@@ -220,7 +283,7 @@ export const selectEmbeddingTier = async (
   tenantId: string,
   _tokenCount: number
 ): Promise<TierSelectionResult> => {
-  const config = getTenantTierConfig(tenantId);
+  const config = await getTenantTierConfig(tenantId);
   const budgetStatus = await getBudgetStatus(tenantId, config.monthlyBudgetUsd);
 
   // Default to preferred tier
@@ -397,3 +460,14 @@ export const recommendTier = (
 
   return findSuitableTier(0);
 };
+
+// Re-export budget-aware embedding from dedicated module
+export {
+  generateBudgetAwareEmbedding,
+  generateBatchBudgetAwareEmbeddings,
+  BudgetExceededError,
+  type BudgetAwareEmbeddingOptions,
+  type BatchBudgetAwareEmbeddingOptions,
+  type BudgetAwareEmbeddingResult,
+  type BatchBudgetAwareEmbeddingResult,
+} from "./budgetAwareEmbedding.js";

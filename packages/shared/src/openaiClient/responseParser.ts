@@ -9,7 +9,12 @@
 
 import { LLMError } from "../core/errors.js";
 import { OPENAI_MESSAGES } from "../constants/index.js";
-import type { LLMAnalysisResult } from "../core/types.js";
+import type {
+  LLMAnalysisResult,
+  LLMCodeAnnotation,
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
+} from "../core/types.js";
 
 // ==================== Types ====================
 
@@ -130,16 +135,13 @@ export const parseCodeAnnotations = (
     return [];
   }
 
-  return rawAnnotations.reduce<NonNullable<LLMAnalysisResult["codeAnnotations"]>>(
-    (validated, annotation) => {
-      const result = validateCodeAnnotation(annotation);
-      if (result !== null) {
-        validated.push(result);
-      }
-      return validated;
-    },
-    []
-  );
+  return rawAnnotations.reduce<LLMCodeAnnotation[]>((validated, annotation) => {
+    const result = validateCodeAnnotation(annotation);
+    if (result !== null) {
+      validated.push(result);
+    }
+    return validated;
+  }, []);
 };
 
 // ==================== Dependency Change Parsing ====================
@@ -194,16 +196,13 @@ export const parseDependencyChanges = (
     return [];
   }
 
-  return rawChanges.reduce<NonNullable<LLMAnalysisResult["detectedDependencyChanges"]>>(
-    (validated, change) => {
-      const result = validateDependencyChange(change);
-      if (result !== null) {
-        validated.push(result);
-      }
-      return validated;
-    },
-    []
-  );
+  return rawChanges.reduce<LLMDetectedDependencyChange[]>((validated, change) => {
+    const result = validateDependencyChange(change);
+    if (result !== null) {
+      validated.push(result);
+    }
+    return validated;
+  }, []);
 };
 
 // ==================== Build Config Change Parsing ====================
@@ -262,16 +261,13 @@ export const parseBuildConfigChanges = (
     return [];
   }
 
-  return rawChanges.reduce<NonNullable<LLMAnalysisResult["detectedBuildConfigChanges"]>>(
-    (validated, change) => {
-      const result = validateBuildConfigChange(change);
-      if (result !== null) {
-        validated.push(result);
-      }
-      return validated;
-    },
-    []
-  );
+  return rawChanges.reduce<LLMDetectedBuildConfigChange[]>((validated, change) => {
+    const result = validateBuildConfigChange(change);
+    if (result !== null) {
+      validated.push(result);
+    }
+    return validated;
+  }, []);
 };
 
 // ==================== Main Parser ====================

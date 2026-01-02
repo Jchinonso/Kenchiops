@@ -41,6 +41,9 @@ jest.mock("@kenchi/shared", () => ({
     MILLISECONDS_PER_MINUTE: 60 * 1000,
     SLACK_TIMESTAMP_WINDOW_MINUTES: 5,
   },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 describe("Slack Signature Verification", () => {

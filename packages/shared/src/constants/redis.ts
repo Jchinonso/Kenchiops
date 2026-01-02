@@ -145,6 +145,8 @@ export const REDIS_KEY_PREFIXES = {
   QUEUE: "kenchi:queue",
   /** Rate limiting prefix */
   RATE_LIMIT: "kenchi:ratelimit",
+  /** PR failure tracking prefix (for linked commit ingestion) */
+  PR_FAILURES: "kenchi:pr-failures",
 } as const;
 
 /**

@@ -11,11 +11,13 @@ import {
   EXCLUDED_PATH_PATTERNS,
   UI_EMOJI,
   ANNOTATION_LEVEL_EMOJI_MAP,
+  FORMATTER_DISPLAY_LIMITS,
   deduplicateByKey,
   type AggregatedFailures,
   type AnalyzedFailure,
   type CodeAnnotation,
   type RecommendedAction,
+  type SuggestedFix,
 } from "@kenchi/shared";
 import {
   DISPLAY_LIMITS,
@@ -38,6 +40,7 @@ interface ConsolidatedAnnotation {
   readonly message: string;
   readonly level: CodeAnnotation["level"];
   readonly title?: string;
+  readonly suggestedFix?: SuggestedFix;
 }
 
 // ==================== Pure Helper Functions ====================
@@ -67,6 +70,7 @@ const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): Consolida
     message: annotation.message,
     level: annotation.level,
     title: annotation.title,
+    suggestedFix: annotation.suggestedFix,
   }));
 
 /**
@@ -81,12 +85,50 @@ const extractUniqueCauses = (failures: readonly AnalyzedFailure[]): string[] =>
 // ==================== Formatting Functions ====================
 
 /**
+ * Format a suggested fix as markdown code block
+ */
+const formatSuggestedFix = (fix: SuggestedFix): string[] => {
+  const lines: string[] = [];
+  const lang = fix.language ?? "typescript";
+  const confidencePercent = Math.round(
+    fix.confidence * FORMATTER_DISPLAY_LIMITS.CONFIDENCE_MULTIPLIER
+  );
+
+  lines.push(
+    `    > ${UI_EMOJI.tools} **Suggested Fix** (${confidencePercent}% confidence): ${fix.description}`
+  );
+
+  if (fix.before) {
+    lines.push("    ```diff");
+    fix.before.split("\n").forEach((line) => lines.push(`    - ${line}`));
+    fix.after.split("\n").forEach((line) => lines.push(`    + ${line}`));
+    lines.push("    ```");
+  } else {
+    lines.push(`    \`\`\`${lang}`);
+    fix.after.split("\n").forEach((line) => lines.push(`    ${line}`));
+    lines.push("    ```");
+  }
+
+  return lines;
+};
+
+/**
  * Format a single annotation as markdown
  */
 const formatAnnotation = (annotation: ConsolidatedAnnotation): string => {
   const icon = ANNOTATION_LEVEL_EMOJI_MAP[annotation.level] ?? UI_EMOJI.info;
   const title = annotation.title ? `**${annotation.title}**: ` : "";
-  return `  - ${icon} \`${annotation.path}:${annotation.line}\` - ${title}${annotation.message}`;
+  const mainLine = `  - ${icon} \`${annotation.path}:${annotation.line}\` - ${title}${annotation.message}`;
+
+  if (
+    annotation.suggestedFix &&
+    annotation.suggestedFix.confidence >= FORMATTER_DISPLAY_LIMITS.MIN_FIX_CONFIDENCE
+  ) {
+    const fixLines = formatSuggestedFix(annotation.suggestedFix);
+    return [mainLine, ...fixLines].join("\n");
+  }
+
+  return mainLine;
 };
 
 /**

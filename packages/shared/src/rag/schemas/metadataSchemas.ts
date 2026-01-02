@@ -8,6 +8,7 @@
  */
 
 import { z } from "zod";
+import { ValidationError } from "../../core/errors.js";
 
 // ==================== Doc Type Constants ====================
 // Defined locally to avoid circular imports with constants module
@@ -297,7 +298,10 @@ export const validateMetadataOrThrow = (docType: string, metadata: unknown): Doc
     const errorMessages = result.errors
       ?.map((validationError) => `${validationError.path}: ${validationError.message}`)
       .join(", ");
-    throw new Error(`Metadata validation failed for ${docType}: ${errorMessages}`);
+    throw new ValidationError(`Metadata validation failed for ${docType}: ${errorMessages}`, {
+      operation: "validateMetadataOrThrow",
+      metadata: { docType },
+    });
   }
 
   return result.data as DocumentMetadata;

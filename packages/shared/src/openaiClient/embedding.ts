@@ -1,9 +1,13 @@
 /**
  * OpenAI Embedding Client
  *
- * Provides vector embedding generation using OpenAI's text-embedding-3-small model.
+ * Provides vector embedding generation using OpenAI's embedding models.
+ * Supports tiered models (LIGHT, STANDARD, PREMIUM) for cost optimization.
  * Used for RAG (Retrieval-Augmented Generation) to enable semantic search over
  * code diffs, documentation, and incident history.
+ *
+ * Architecture note: Provider-agnostic interface supports future LLM integrations.
+ * The tier abstraction allows swapping embedding providers without changing consumers.
  *
  * @module openaiClient/embedding
  */
@@ -12,7 +16,12 @@ import OpenAI from "openai";
 import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { ExternalServiceError, getErrorMessage } from "../core/errors.js";
-import { EMBEDDING_CONFIG, OPENAI_CONSTANTS } from "../constants/index.js";
+import {
+  EMBEDDING_CONFIG,
+  OPENAI_CONSTANTS,
+  EMBEDDING_TIERS,
+  type EmbeddingTierName,
+} from "../constants/index.js";
 import { withCircuitBreaker, getCircuitStatus, SERVICE_KEYS } from "../http/circuitBreaker.js";
 
 /**
@@ -25,6 +34,10 @@ export interface EmbeddingResult {
   readonly tokenCount: number;
   /** Model used for embedding */
   readonly model: string;
+  /** Tier used for this embedding */
+  readonly tier: EmbeddingTierName;
+  /** Embedding dimension */
+  readonly dimension: number;
 }
 
 /**
@@ -37,6 +50,10 @@ export interface BatchEmbeddingResult {
   readonly totalTokens: number;
   /** Model used for embedding */
   readonly model: string;
+  /** Tier used for this embedding */
+  readonly tier: EmbeddingTierName;
+  /** Embedding dimension */
+  readonly dimension: number;
 }
 
 /**
@@ -44,8 +61,10 @@ export interface BatchEmbeddingResult {
  */
 interface EmbeddingClientConfig {
   readonly model: string;
+  readonly dimension: number;
   readonly timeout: number;
   readonly maxBatchSize: number;
+  readonly tier: EmbeddingTierName;
 }
 
 /**
@@ -58,13 +77,18 @@ const createOpenAIClient = (): OpenAI =>
   });
 
 /**
- * Creates embedding client configuration from constants.
+ * Creates embedding client configuration from tier.
  */
-const createClientConfig = (): EmbeddingClientConfig => ({
-  model: EMBEDDING_CONFIG.MODEL,
-  timeout: EMBEDDING_CONFIG.TIMEOUT_MS,
-  maxBatchSize: EMBEDDING_CONFIG.MAX_BATCH_SIZE,
-});
+const createClientConfig = (tier: EmbeddingTierName = "STANDARD"): EmbeddingClientConfig => {
+  const tierConfig = EMBEDDING_TIERS[tier];
+  return {
+    model: tierConfig.model,
+    dimension: tierConfig.dimension,
+    timeout: EMBEDDING_CONFIG.TIMEOUT_MS,
+    maxBatchSize: EMBEDDING_CONFIG.MAX_BATCH_SIZE,
+    tier,
+  };
+};
 
 /**
  * Validates input text for embedding.
@@ -101,11 +125,16 @@ const validateBatchInput = (texts: readonly string[], maxBatchSize: number): str
  *
  * @example
  * ```typescript
+ * // Standard tier (default)
  * const client = new EmbeddingClient();
+ *
+ * // Specific tier for cost optimization
+ * const lightClient = new EmbeddingClient("LIGHT");
+ * const premiumClient = new EmbeddingClient("PREMIUM");
  *
  * // Single embedding
  * const result = await client.generateEmbedding("TypeScript compilation failed");
- * // result.embedding.length === 1536
+ * // result.embedding.length === tier dimension (512/1536/3072)
  *
  * // Batch embeddings
  * const batchResult = await client.generateBatchEmbeddings([
@@ -118,10 +147,20 @@ export class EmbeddingClient {
   private readonly client: OpenAI;
   private readonly clientConfig: EmbeddingClientConfig;
 
-  constructor() {
+  constructor(tier: EmbeddingTierName = "STANDARD") {
     this.client = createOpenAIClient();
-    this.clientConfig = createClientConfig();
+    this.clientConfig = createClientConfig(tier);
   }
+
+  /**
+   * Gets the current tier configuration.
+   */
+  readonly getTier = (): EmbeddingTierName => this.clientConfig.tier;
+
+  /**
+   * Gets the embedding dimension for this client's tier.
+   */
+  readonly getDimension = (): number => this.clientConfig.dimension;
 
   /**
    * Gets the circuit breaker status for the embedding service.
@@ -170,6 +209,8 @@ export class EmbeddingClient {
         embedding: Object.freeze([...embedding]),
         tokenCount: response.usage?.total_tokens ?? 0,
         model: this.clientConfig.model,
+        tier: this.clientConfig.tier,
+        dimension: this.clientConfig.dimension,
       };
 
       this.logEmbeddingTelemetry(1, result.tokenCount, Date.now() - startTime);
@@ -215,6 +256,8 @@ export class EmbeddingClient {
         embeddings: Object.freeze(embeddings),
         totalTokens: response.usage?.total_tokens ?? 0,
         model: this.clientConfig.model,
+        tier: this.clientConfig.tier,
+        dimension: this.clientConfig.dimension,
       };
 
       this.logEmbeddingTelemetry(texts.length, result.totalTokens, Date.now() - startTime);
@@ -226,6 +269,7 @@ export class EmbeddingClient {
 
   /**
    * Calls the OpenAI embedding API with circuit breaker protection.
+   * Passes dimensions parameter for text-embedding-3 models.
    */
   private readonly callEmbeddingAPI = async (
     texts: readonly string[]
@@ -236,6 +280,7 @@ export class EmbeddingClient {
         this.client.embeddings.create({
           model: this.clientConfig.model,
           input: [...texts],
+          dimensions: this.clientConfig.dimension,
         }),
       {
         threshold: OPENAI_CONSTANTS.CIRCUIT_BREAKER_THRESHOLD,
@@ -256,6 +301,8 @@ export class EmbeddingClient {
       tokenCount,
       durationMs,
       model: this.clientConfig.model,
+      tier: this.clientConfig.tier,
+      dimension: this.clientConfig.dimension,
       tokensPerText: textCount > 0 ? Math.round(tokenCount / textCount) : 0,
     });
   };
@@ -269,8 +316,65 @@ export class EmbeddingClient {
     logger.error("Embedding API error", {
       error: message,
       model: this.clientConfig.model,
+      tier: this.clientConfig.tier,
     });
 
     return new ExternalServiceError("OpenAI", `Embedding generation failed: ${message}`);
   };
 }
+
+// ==================== Client Cache ====================
+
+/**
+ * Cached client instances by tier for reuse.
+ * Avoids recreating clients for each request.
+ */
+const clientCache = new Map<EmbeddingTierName, EmbeddingClient>();
+
+/**
+ * Gets or creates an EmbeddingClient for the specified tier.
+ * Clients are cached for reuse.
+ *
+ * @param tier - The embedding tier to use
+ * @returns Cached or new EmbeddingClient instance
+ */
+export const getEmbeddingClient = (tier: EmbeddingTierName = "STANDARD"): EmbeddingClient => {
+  const cached = clientCache.get(tier);
+  if (cached) {
+    return cached;
+  }
+
+  const client = new EmbeddingClient(tier);
+  clientCache.set(tier, client);
+  return client;
+};
+
+/**
+ * Clears the client cache. Useful for testing or reconfiguration.
+ */
+export const clearClientCache = (): void => {
+  clientCache.clear();
+};
+
+// ==================== Provider-Agnostic Interface ====================
+
+/**
+ * Provider-agnostic embedding interface.
+ * Supports future integration of other LLM providers.
+ */
+export interface EmbeddingProvider {
+  readonly generateEmbedding: (text: string) => Promise<EmbeddingResult>;
+  readonly generateBatchEmbeddings: (texts: readonly string[]) => Promise<BatchEmbeddingResult>;
+  readonly getTier: () => EmbeddingTierName;
+  readonly getDimension: () => number;
+}
+
+/**
+ * Creates an embedding provider for the specified tier.
+ * Currently uses OpenAI, but interface supports future providers.
+ *
+ * @param tier - The embedding tier to use
+ * @returns EmbeddingProvider instance
+ */
+export const createEmbeddingProvider = (tier: EmbeddingTierName = "STANDARD"): EmbeddingProvider =>
+  getEmbeddingClient(tier);

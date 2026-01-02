@@ -11,7 +11,7 @@
  */
 
 // @slack/bolt is a CommonJS module - use default import
-import Bolt, { type ButtonAction as BoltButtonAction } from "@slack/bolt";
+import Bolt from "@slack/bolt";
 import express from "express";
 import {
   logger,
@@ -20,8 +20,6 @@ import {
   closeDatabase,
   closeRedis,
   waitForRedisConnection,
-  findBySlackWorkspace,
-  deleteMappingsForChannel,
   isSocketModeDisconnectError,
   createRedisRateLimiter,
   startSlackNotificationWorker,
@@ -30,69 +28,16 @@ import {
   SLACK_BOT_TIMEOUTS,
   SLACK_BOT_DB_CONFIG,
   SLACK_BOT_MESSAGES,
-  SLACK_ACTION_IDS,
-  SLACK_ACTION_PATTERNS,
   shouldSkipSlackBotRateLimit,
 } from "@kenchi/shared";
 import { loadAppConfig } from "./config/appConfig.js";
-import { handleKenchiCommand } from "./handlers/commandHandler.js";
-import { handleAppMention } from "./handlers/mentionHandler.js";
-import { handleMessage } from "./handlers/messageHandler.js";
-import {
-  handleActionApproval,
-  handleActionRejection,
-  handlePositiveFeedback,
-  handleNegativeFeedback,
-  handleRAGFeedbackHelpful,
-  handleRAGFeedbackNotHelpful,
-} from "./handlers/actionHandler.js";
-import {
-  handleBotJoinedChannel,
-  buildRepoSelectModal,
-  buildNoReposModal,
-  getAvailableRepositories,
-} from "./handlers/channelHandler.js";
-import {
-  handleAppHomeOpened,
-  handleTestConnection,
-  handleRefreshHome,
-} from "./handlers/appHomeHandler.js";
-import { registerRepoSelectHandler } from "./handlers/repoSelectHandler.js";
+import { setupSlackHandlers } from "./handlers/slackEventSetup.js";
 import { createHttpRoutes } from "./routes/httpRoutes.js";
 import { oauthRoutes } from "./routes/oauthRoutes.js";
 import { createNotificationHandler } from "./services/notificationHandler.js";
 
 const { App } = Bolt;
 type SlackApp = InstanceType<typeof App>;
-type ButtonAction = BoltButtonAction;
-
-/**
- * Handle bot leaving a channel - clean up repository mappings
- */
-const handleBotLeftChannel = async (workspaceId: string, channelId: string): Promise<void> => {
-  logger.info("Bot left channel, cleaning up mappings", {
-    channelId,
-    workspaceId,
-  });
-
-  try {
-    const tenant = await findBySlackWorkspace(workspaceId);
-
-    if (tenant) {
-      const deletedCount = await deleteMappingsForChannel(tenant.id, channelId);
-
-      logger.info("Cleaned up repository mappings for channel", {
-        channelId,
-        deletedCount,
-      });
-    }
-  } catch (error) {
-    logger.error("Failed to clean up mappings on channel leave", {
-      channelId,
-      error: getErrorMessage(error),
-    });
-  }
-};
 
 /**
  * Initializes and configures the Slack Bolt app.
@@ -110,233 +55,7 @@ const createSlackApp = (appConfig: ReturnType<typeof loadAppConfig>): SlackApp =
   });
 
 /**
- * Sets up Slack event handlers.
- *
- * @param app - Slack Bolt app instance
- */
-const setupSlackHandlers = (app: SlackApp): void => {
-  // Debug: Log all incoming events
-  app.use(async (args) => {
-    const { payload } = args;
-    if (payload && "type" in payload) {
-      logger.info("Received Slack event", {
-        type: payload.type,
-      });
-    }
-    await args.next();
-  });
-
-  // Handle /kenchi slash command
-  app.command("/kenchi", async ({ command, ack, respond, client }) => {
-    await handleKenchiCommand(command, ack, respond, client);
-  });
-
-  // Handle message events (includes resolution detection for CI failure threads)
-  app.message(async ({ message, client }) => {
-    await handleMessage(message, client);
-  });
-
-  // Handle app mentions
-  app.event("app_mention", async ({ event, say }) => {
-    await handleAppMention(event, say);
-  });
-
-  // Handle bot joining a channel - enforce single channel limit
-  app.event("member_joined_channel", async ({ event, client }) => {
-    logger.info("member_joined_channel event received", {
-      user: event.user,
-      channel: event.channel,
-    });
-
-    const authResult = await client.auth.test();
-    const botId = authResult.bot_id;
-    const botUserId = authResult.user_id;
-
-    logger.info("Bot identity check", {
-      eventUser: event.user,
-      botId,
-      botUserId,
-      isBot: event.user === botId || event.user === botUserId,
-    });
-
-    // Only handle when the bot itself joins a channel
-    // Check both bot_id and user_id as Slack may use either
-    if (!botId || (event.user !== botId && event.user !== botUserId)) {
-      logger.info("Ignoring event - not the bot joining", {
-        eventUser: event.user,
-        botId,
-        botUserId,
-      });
-      return;
-    }
-
-    await handleBotJoinedChannel(client, event.channel, botId);
-  });
-
-  // Handle bot leaving a channel - clean up repository mappings
-  app.event("member_left_channel", async ({ event, client }) => {
-    const authResult = await client.auth.test();
-    const botId = authResult.bot_id;
-    const botUserId = authResult.user_id;
-
-    // Only handle when the bot itself leaves a channel
-    if (!botId || (event.user !== botId && event.user !== botUserId)) {
-      return;
-    }
-
-    const workspaceId = authResult.team_id || "";
-    await handleBotLeftChannel(workspaceId, event.channel);
-  });
-
-  // Handle action button clicks
-  app.action(SLACK_ACTION_PATTERNS.APPROVE, async ({ action, ack, say, body }) => {
-    const messageTs =
-      "message" in body && body.message && "ts" in body.message
-        ? (body.message.ts as string)
-        : undefined;
-    if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleActionApproval(action, ack, say, messageTs);
-    }
-  });
-
-  app.action(SLACK_ACTION_PATTERNS.REJECT, async ({ action, ack, say, body }) => {
-    const messageTs =
-      "message" in body && body.message && "ts" in body.message
-        ? (body.message.ts as string)
-        : undefined;
-    if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleActionRejection(action, ack, say, messageTs);
-    }
-  });
-
-  // Handle feedback buttons
-  app.action(SLACK_ACTION_IDS.FEEDBACK_HELPFUL, async ({ action, ack, body }) => {
-    if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handlePositiveFeedback(action as ButtonAction, ack, body.user.id);
-    }
-  });
-
-  app.action(SLACK_ACTION_IDS.FEEDBACK_NOT_HELPFUL, async ({ action, ack, body }) => {
-    if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleNegativeFeedback(action as ButtonAction, ack, body.user.id);
-    }
-  });
-
-  // Handle RAG feedback buttons
-  app.action(SLACK_ACTION_IDS.RAG_FEEDBACK_HELPFUL, async ({ action, ack, body }) => {
-    if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleRAGFeedbackHelpful(action as ButtonAction, ack, body.user.id);
-    }
-  });
-
-  app.action(SLACK_ACTION_IDS.RAG_FEEDBACK_NOT_HELPFUL, async ({ action, ack, body }) => {
-    if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleRAGFeedbackNotHelpful(action as ButtonAction, ack, body.user.id);
-    }
-  });
-
-  // Handle App Home opened event
-  app.event("app_home_opened", async ({ event, client }) => {
-    await handleAppHomeOpened(client, event.user);
-  });
-
-  // Handle App Home action buttons
-  app.action(SLACK_ACTION_IDS.TEST_CONNECTION, async ({ ack, client, body }) => {
-    await ack();
-    await handleTestConnection(client, body.user.id);
-    // Refresh the home view to show the result
-    await handleRefreshHome(client, body.user.id);
-  });
-
-  app.action(SLACK_ACTION_IDS.REFRESH_HOME, async ({ ack, client, body }) => {
-    await ack();
-    await handleRefreshHome(client, body.user.id);
-  });
-
-  // Handle connect_github button (external link, just acknowledge)
-  app.action(SLACK_ACTION_IDS.CONNECT_GITHUB, async ({ ack }) => {
-    await ack();
-  });
-
-  // Handle view_docs button (external link, just acknowledge)
-  app.action(SLACK_ACTION_IDS.VIEW_DOCS, async ({ ack }) => {
-    await ack();
-  });
-
-  // Handle get_support button (external link, just acknowledge)
-  app.action(SLACK_ACTION_IDS.GET_SUPPORT, async ({ ack }) => {
-    await ack();
-  });
-
-  // Handle select_repository_button - opens the repository selection modal
-  app.action(SLACK_ACTION_IDS.SELECT_REPOSITORY, async ({ ack, action, body, client }) => {
-    await ack();
-
-    try {
-      // Get button value
-      if (action.type !== "button" || !("value" in action) || !action.value) {
-        logger.error("Invalid action type for select_repository_button");
-        return;
-      }
-
-      const { channelId, channelName, messageTs } = JSON.parse(action.value) as {
-        channelId: string;
-        channelName: string;
-        messageTs?: string;
-      };
-
-      // Get trigger_id from body
-      if (!("trigger_id" in body)) {
-        logger.error("Missing trigger_id in body");
-        return;
-      }
-
-      // Get workspace ID for tenant lookup
-      const authResult = await client.auth.test();
-      const workspaceId = authResult.team_id || "";
-
-      // Look up tenant to get GitHub installation ID
-      const tenant = await findBySlackWorkspace(workspaceId);
-
-      if (!tenant || !tenant.githubInstallationId) {
-        logger.error("No GitHub installation found for workspace", { workspaceId });
-        return;
-      }
-
-      // Fetch available repositories from GitHub App API
-      const repositories = await getAvailableRepositories(tenant.githubInstallationId, tenant.id);
-
-      // Open the appropriate modal based on available repositories
-      const view =
-        repositories.length > 0
-          ? buildRepoSelectModal(channelId, channelName, repositories, messageTs)
-          : buildNoReposModal(channelName);
-
-      await client.views.open({
-        trigger_id: body.trigger_id,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        view: view as any,
-      });
-
-      logger.info("Opened repository selection modal from button", {
-        channelId,
-        channelName,
-        userId: body.user.id,
-        repositoryCount: repositories.length,
-      });
-    } catch (error) {
-      logger.error("Failed to open repository selection modal", {
-        error: getErrorMessage(error),
-      });
-    }
-  });
-
-  // Register repository selection modal handler
-  registerRepoSelectHandler(app);
-};
-
-/**
- * Initialize database connection for multi-tenant support
+ * Initialize database connection for multi-tenant support.
  */
 const initializeDatabase = (): void => {
   try {
@@ -353,6 +72,71 @@ const initializeDatabase = (): void => {
     throw error;
   }
 };
+
+/**
+ * Start notification queue worker if Redis is configured.
+ *
+ * @param slackApp - The Slack Bolt app instance
+ * @returns Stop function for the worker, or null if not started
+ */
+const startQueueWorker = async (slackApp: SlackApp): Promise<(() => void) | null> => {
+  if (!config.REDIS_URL) {
+    logger.warn("Redis not configured, notification queue worker disabled");
+    return null;
+  }
+
+  try {
+    await waitForRedisConnection(SLACK_BOT_TIMEOUTS.REDIS_CONNECTION_MS);
+    logger.info("Redis connection ready");
+  } catch (error) {
+    logger.error("Failed to connect to Redis", {
+      error: getErrorMessage(error),
+    });
+    // Continue anyway - worker will handle reconnection
+  }
+
+  const notificationHandler = createNotificationHandler(slackApp.client);
+  const stopWorker = await startSlackNotificationWorker(notificationHandler, {
+    pollIntervalMs: SLACK_BOT_TIMEOUTS.QUEUE_POLL_INTERVAL_MS,
+    maxConcurrent: SLACK_BOT_TIMEOUTS.QUEUE_MAX_CONCURRENT,
+  });
+  logger.info("Slack notification queue worker started");
+
+  return stopWorker;
+};
+
+/**
+ * Create graceful shutdown handler.
+ *
+ * @param server - Express server instance
+ * @param stopNotificationWorker - Optional worker stop function
+ * @returns Shutdown function
+ */
+const createShutdownHandler =
+  (
+    server: ReturnType<typeof express.application.listen>,
+    stopNotificationWorker: (() => void) | null
+  ): ((signal: string) => Promise<void>) =>
+  async (signal: string): Promise<void> => {
+    logger.info(`Received ${signal}, shutting down gracefully`);
+
+    if (stopNotificationWorker) {
+      logger.info("Stopping notification queue worker...");
+      stopNotificationWorker();
+    }
+
+    server.close(async () => {
+      await Promise.all([closeDatabase(), closeRedis()]);
+      logger.info("Server closed");
+      process.exit(0);
+    });
+
+    // Force exit after timeout
+    setTimeout(() => {
+      logger.warn("Forced shutdown after timeout");
+      process.exit(1);
+    }, SLACK_BOT_TIMEOUTS.SHUTDOWN_TIMEOUT_MS);
+  };
 
 /**
  * Initializes and starts the Slack bot service.
@@ -397,29 +181,8 @@ const startService = async (): Promise<void> => {
       multiTenantMode: config.MULTI_TENANT_MODE || false,
     });
 
-    // Start notification queue worker (processes messages from GitHub App)
-    let stopNotificationWorker: (() => void) | null = null;
-    if (config.REDIS_URL) {
-      // Wait for Redis to be connected before starting queue worker
-      try {
-        await waitForRedisConnection(SLACK_BOT_TIMEOUTS.REDIS_CONNECTION_MS);
-        logger.info("Redis connection ready");
-      } catch (error) {
-        logger.error("Failed to connect to Redis", {
-          error: getErrorMessage(error),
-        });
-        // Continue anyway - worker will handle reconnection
-      }
-
-      const notificationHandler = createNotificationHandler(slackApp.client);
-      stopNotificationWorker = await startSlackNotificationWorker(notificationHandler, {
-        pollIntervalMs: SLACK_BOT_TIMEOUTS.QUEUE_POLL_INTERVAL_MS,
-        maxConcurrent: SLACK_BOT_TIMEOUTS.QUEUE_MAX_CONCURRENT,
-      });
-      logger.info("Slack notification queue worker started");
-    } else {
-      logger.warn("Redis not configured, notification queue worker disabled");
-    }
+    // Start notification queue worker
+    const stopNotificationWorker = await startQueueWorker(slackApp);
 
     // Start Express server for CI failure processing endpoints
     const server = expressApp.listen(appConfig.httpPort, () => {
@@ -432,28 +195,7 @@ const startService = async (): Promise<void> => {
     });
 
     // Handle graceful shutdown
-    const shutdown = async (signal: string): Promise<void> => {
-      logger.info(`Received ${signal}, shutting down gracefully`);
-
-      // Stop notification worker first
-      if (stopNotificationWorker) {
-        logger.info("Stopping notification queue worker...");
-        stopNotificationWorker();
-      }
-
-      server.close(async () => {
-        await Promise.all([closeDatabase(), closeRedis()]);
-        logger.info("Server closed");
-        process.exit(0);
-      });
-
-      // Force exit after timeout
-      setTimeout(() => {
-        logger.warn("Forced shutdown after timeout");
-        process.exit(1);
-      }, SLACK_BOT_TIMEOUTS.SHUTDOWN_TIMEOUT_MS);
-    };
-
+    const shutdown = createShutdownHandler(server, stopNotificationWorker);
     process.on("SIGTERM", () => shutdown("SIGTERM"));
     process.on("SIGINT", () => shutdown("SIGINT"));
   } catch (error) {

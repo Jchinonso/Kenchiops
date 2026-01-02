@@ -53,6 +53,9 @@ export interface PullRequestWebhook {
     readonly number: number;
     readonly title: string;
     readonly body: string | null;
+    readonly merged: boolean;
+    readonly merge_commit_sha: string | null;
+    readonly changed_files?: number;
     readonly head: {
       readonly sha: string;
       readonly ref: string;
@@ -191,4 +194,35 @@ export interface HealthResponse {
   readonly timestamp: string;
   readonly uptime: number;
   readonly environment: string;
+}
+
+/**
+ * Push webhook payload for doc file updates
+ */
+export interface PushWebhook {
+  readonly ref: string;
+  readonly before: string;
+  readonly after: string;
+  readonly repository: {
+    readonly full_name: string;
+    readonly owner: {
+      readonly login: string;
+    };
+    readonly name: string;
+    readonly default_branch: string;
+  };
+  readonly pusher: {
+    readonly name: string;
+    readonly email?: string;
+  };
+  readonly commits: readonly {
+    readonly id: string;
+    readonly message: string;
+    readonly added: readonly string[];
+    readonly removed: readonly string[];
+    readonly modified: readonly string[];
+  }[];
+  readonly installation?: {
+    readonly id: number;
+  };
 }

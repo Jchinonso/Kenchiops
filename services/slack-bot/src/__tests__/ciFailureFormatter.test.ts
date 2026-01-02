@@ -96,7 +96,7 @@ describe("CI Failure Formatter", () => {
       const analysis = createMockAnalysis();
       const blocks = formatCIFailureBlocks(analysis);
 
-      const headerBlock = blocks.find((b) => b.type === "header");
+      const headerBlock = blocks.find((block) => block.type === "header");
       expect(headerBlock).toBeDefined();
       expect(JSON.stringify(headerBlock)).toContain("KenchiOps");
     });
@@ -271,7 +271,7 @@ describe("CI Failure Formatter", () => {
       const analysis = createMockAnalysis();
       const blocks = formatCIFailureBlocks(analysis);
 
-      const dividers = blocks.filter((b) => b.type === "divider");
+      const dividers = blocks.filter((block) => block.type === "divider");
       expect(dividers.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -279,7 +279,7 @@ describe("CI Failure Formatter", () => {
       const analysis = createMockAnalysis({ repository: "owner/repo" });
       const blocks = formatCIFailureBlocks(analysis);
 
-      const actionsBlock = blocks.find((b) => b.type === "actions");
+      const actionsBlock = blocks.find((block) => block.type === "actions");
       expect(actionsBlock).toBeDefined();
     });
 

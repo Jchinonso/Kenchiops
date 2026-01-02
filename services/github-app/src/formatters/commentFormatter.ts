@@ -14,6 +14,8 @@ import {
   getRepoName,
   getFirstSentence,
   buildTruncatedList,
+  generateFeedbackUrl,
+  config,
   // Constants
   DISPLAY_DEFAULTS,
   UI_EMOJI,
@@ -79,6 +81,7 @@ export interface AnalysisData {
 const HEADER = GITHUB_COMMENT_TEMPLATES.FAILURE_HEADER(UI_EMOJI.failure);
 const SUCCESS_HEADER = GITHUB_COMMENT_TEMPLATES.SUCCESS_HEADER(UI_EMOJI.success);
 const FOOTER = GITHUB_COMMENT_TEMPLATES.FOOTER(UI_EMOJI.robot);
+const { RESOLUTION_TIP } = GITHUB_COMMENT_TEMPLATES;
 
 // ============================================================================
 // Helper Functions
@@ -371,15 +374,65 @@ const buildMetadataSection = (analysis: AnalysisData): string => {
   return `\n<details>\n<summary>${UI_EMOJI.details} Details</summary>\n\n${parts.join(" • ")}\n\n</details>\n`;
 };
 
+/**
+ * Get the feedback API base URL from config.
+ */
+const getFeedbackBaseUrl = (): string => {
+  const baseUrl = config.GITHUB_APP_URL || config.API_URL;
+  if (!baseUrl) {
+    return "";
+  }
+  return `${baseUrl}/api/feedback`;
+};
+
+/**
+ * Get the signing secret for feedback URLs.
+ */
+const getFeedbackSecret = (): string => config.GITHUB_WEBHOOK_SECRET || "";
+
+/**
+ * Generate analysis ID from repository and commit SHA.
+ */
+const generateAnalysisId = (analysis: AnalysisData): string =>
+  `${analysis.repository}:${analysis.headSha || "unknown"}`;
+
+/**
+ * Build the feedback section with helpful/not helpful links.
+ */
+const buildFeedbackSection = async (analysis: AnalysisData): Promise<string> => {
+  const baseUrl = getFeedbackBaseUrl();
+  const secret = getFeedbackSecret();
+
+  // Skip feedback section if no URL or secret configured
+  if (!baseUrl || !secret) {
+    return "";
+  }
+
+  const analysisId = generateAnalysisId(analysis);
+
+  const [helpfulUrl, notHelpfulUrl] = await Promise.all([
+    generateFeedbackUrl(baseUrl, analysisId, "correct", secret),
+    generateFeedbackUrl(baseUrl, analysisId, "incorrect", secret),
+  ]);
+
+  return [
+    "\n---\n",
+    `**Was this analysis helpful?** [${UI_EMOJI.thumbsUp} Yes](${helpfulUrl}) · [${UI_EMOJI.thumbsDown} No](${notHelpfulUrl})`,
+    "",
+  ].join("\n");
+};
+
 // ============================================================================
 // Public API
 // ============================================================================
 
 /**
  * Format analysis into a rich GitHub comment with structured sections.
+ * Includes feedback links for user rating.
  */
-export const formatGitHubComment = (analysis: AnalysisData): string => {
+export const formatGitHubComment = async (analysis: AnalysisData): Promise<string> => {
   const failureAnnotations = getFailureAnnotations(analysis.annotations);
+  const feedbackSection = await buildFeedbackSection(analysis);
 
   const sections = [
     HEADER,
@@ -390,6 +443,8 @@ export const formatGitHubComment = (analysis: AnalysisData): string => {
     buildErrorsSection(analysis),
     buildConfidenceSection(analysis.confidence),
     buildMetadataSection(analysis),
+    feedbackSection,
+    RESOLUTION_TIP,
     FOOTER,
   ];
 

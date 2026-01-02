@@ -155,7 +155,11 @@ export class NotFoundError extends AppError {
     message: string = DEFAULT_ERROR_MESSAGES.RESOURCE_NOT_FOUND,
     context: ErrorContext = {}
   ) {
-    super(message, ERROR_CODES.NOT_FOUND, HTTP_STATUS.NOT_FOUND, true, context);
+    super(message, ERROR_CODES.NOT_FOUND, HTTP_STATUS.NOT_FOUND, true, {
+      ...context,
+      suggestion:
+        context.suggestion ?? "Please verify the resource exists and check the identifier.",
+    });
   }
 }
 
@@ -173,6 +177,9 @@ export class ExternalServiceError extends AppError {
       true,
       {
         ...context,
+        suggestion:
+          context.suggestion ??
+          `The ${service} service encountered an issue. Please try again in a few moments.`,
         metadata: { service, ...context.metadata },
       }
     );
@@ -188,6 +195,9 @@ export class LLMError extends ExternalServiceError {
     super(EXTERNAL_SERVICE_NAMES.OPENAI, message, {
       ...context,
       operation: context.operation ?? "AI analysis",
+      suggestion:
+        context.suggestion ??
+        "The AI analysis service is temporarily unavailable. Please try again in a few moments.",
     });
   }
 }

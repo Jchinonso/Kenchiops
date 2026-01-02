@@ -318,7 +318,7 @@ export const performHealthCheck = async (config: HealthCheckConfig): Promise<Ser
     try {
       components.push(await checkDatabaseHealth());
     } catch (error) {
-      logger.error("Database health check failed", { error });
+      logger.error("Database health check failed", { error: getErrorMessage(error) });
       components.push({
         name: "database",
         status: HEALTH_STATUS.UNHEALTHY,
@@ -332,7 +332,7 @@ export const performHealthCheck = async (config: HealthCheckConfig): Promise<Ser
     try {
       components.push(await checkRedisHealth());
     } catch (error) {
-      logger.error("Redis health check failed", { error });
+      logger.error("Redis health check failed", { error: getErrorMessage(error) });
       components.push({
         name: "redis",
         status: HEALTH_STATUS.DEGRADED,

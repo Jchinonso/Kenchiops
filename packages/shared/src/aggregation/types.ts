@@ -8,11 +8,16 @@
  */
 
 import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
-import type { LLMDetectedDependencyChange, LLMDetectedBuildConfigChange } from "../core/types.js";
+import type {
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
+  LLMSuggestedFix,
+} from "../core/types.js";
 
 // Re-export AI-extracted types from core (canonical definitions)
 export type { LLMDetectedDependencyChange as DetectedDependencyChange } from "../core/types.js";
 export type { LLMDetectedBuildConfigChange as DetectedBuildConfigChange } from "../core/types.js";
+export type { LLMSuggestedFix as SuggestedFix } from "../core/types.js";
 
 /**
  * AI-generated code annotation from analysis
@@ -23,6 +28,8 @@ export interface CodeAnnotation {
   readonly level: "failure" | "warning" | "notice";
   readonly message: string;
   readonly title?: string;
+  /** AI-suggested fix for this issue */
+  readonly suggestedFix?: LLMSuggestedFix;
 }
 
 /**

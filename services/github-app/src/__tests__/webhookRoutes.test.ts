@@ -18,6 +18,9 @@ jest.mock("@kenchi/shared", () => ({
   HTTP_STATUS: {
     OK: 200,
   },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 jest.mock("../handlers/pullRequestHandler.js", () => ({

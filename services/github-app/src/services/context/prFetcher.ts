@@ -221,6 +221,52 @@ export const fetchPRMetadata = async (
 };
 
 /**
+ * Fetch commits for a PR.
+ *
+ * Returns commit messages for linked commit knowledge ingestion.
+ *
+ * @param installationId - GitHub App installation ID
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param prNumber - Pull request number
+ * @returns Array of commit messages
+ */
+export const fetchPRCommits = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<string[]> => {
+  try {
+    const octokit = await getOctokit(installationId);
+
+    const { data: commits } = await octokit.rest.pulls.listCommits({
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
+    });
+
+    const messages = commits
+      .map((commit) => commit.commit.message)
+      .filter((msg): msg is string => Boolean(msg));
+
+    logger.info("Fetched PR commits", {
+      prNumber,
+      commitCount: messages.length,
+    });
+
+    return messages;
+  } catch (error) {
+    logger.warn("Failed to fetch PR commits", {
+      prNumber,
+      error: getErrorMessage(error),
+    });
+    return [];
+  }
+};
+
+/**
  * Fetch list of changed files in a PR.
  *
  * Returns file paths for AI to analyze. AI will determine:

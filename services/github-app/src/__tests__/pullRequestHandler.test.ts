@@ -14,6 +14,9 @@ jest.mock("@kenchi/shared", () => ({
     error: jest.fn(),
     debug: jest.fn(),
   })),
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 // Import handlers

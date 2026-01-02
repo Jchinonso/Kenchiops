@@ -25,6 +25,9 @@ jest.mock("@kenchi/shared", () => ({
     BASE_DELAY_MS: 1000,
     BACKOFF_BASE: 2,
   },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 // Note: truncateWithContext is no longer imported by workflowFetcher

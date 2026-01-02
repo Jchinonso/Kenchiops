@@ -35,6 +35,14 @@ export {
   type TenantStatistics,
 } from "./tenantService.js";
 
+// RAG budget configuration
+export {
+  getRAGBudgetConfig,
+  updateRAGBudgetConfig,
+  type TenantRAGBudgetConfig,
+  type UpdateRAGBudgetInput,
+} from "./tenantRagConfig.js";
+
 // Repository channel service
 export {
   findChannelForRepository,
@@ -98,12 +106,28 @@ export {
   getFeedbackByAnalysis,
   getRAGFeedbackMetrics,
   getRAGFeedbackByDoc,
+  createOrUpdateAnalysisFeedback,
+  createQAFeedback,
+  createOrUpdateQAFeedback,
+  getQAFeedbackByQueryAndUser,
   type FeedbackType,
   type CreateRAGFeedbackInput,
   type CreateAnalysisFeedbackInput,
+  type CreateQAFeedbackInput,
   type FeedbackRecord,
   type RAGFeedbackMetrics,
 } from "./feedbackRepository.js";
+
+// Analysis repository
+export {
+  createAnalysis,
+  getAnalysisById,
+  getAnalysisByEventId,
+  getAnalysesByModelVersion,
+  countAnalysesByModelVersion,
+  type CreateAnalysisInput,
+  type AnalysisRecord,
+} from "./analysisRepository.js";
 
 // Action proposal repository
 export {
@@ -182,6 +206,9 @@ export {
   type RAGTestCase,
   type CreateTestCaseInput,
   type TestResultInput,
+  validateExpectedDocIds,
+  validateTestCase,
+  type ValidateExpectedDocIdsResult,
 } from "./testCaseRepository.js";
 
 // Metrics history repository (Drift Detection)

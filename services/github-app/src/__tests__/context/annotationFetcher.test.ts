@@ -20,6 +20,9 @@ jest.mock("@kenchi/shared", () => ({
     MAX_FILES: 5,
     MAX_ANNOTATIONS: 20,
   },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 // Mock Octokit instance

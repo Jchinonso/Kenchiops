@@ -15,6 +15,7 @@ export type {
   RelatedKnowledgeDoc,
   DetectedDependencyChange,
   DetectedBuildConfigChange,
+  SuggestedFix,
   AnalyzedFailure,
   SerializedFailure,
   PRContext,
