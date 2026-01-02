@@ -22,6 +22,7 @@ Kenchi has strong deterministic safety controls (confidence scoring, action gati
 | 8   | Medium   | Vector search SQL             | `diffChunkRepository` and `knowledgeDocRepository` interpolate similarity thresholds and limits into SQL strings, creating injection risk if future APIs accept untrusted filters.                                                                                                            |
 | 9   | High     | RAG ingestion/search APIs     | `/api/rag/ingest`, `/api/rag/search`, `/api/rag/sync`, and purge endpoints accept unauthenticated requests, allowing attackers to poison the knowledge base or exfiltrate every tenant’s documents/diff chunks.                                                                               |
 | 10  | High     | Cross-tenant RAG leakage      | `searchAll` defaults to no tenant filter; `performAnalysis` calls `searchFromEventContext` without `tenantId`, so CI analyses can ingest retrieved docs from other tenants. Slack QA requests can also specify any `tenantId`, leading to data leakage.                                       |
+| 11  | High     | Credential storage            | Slack/GitHub tokens are stored in plaintext DB columns despite comments claiming encryption, so a DB compromise exposes tenant credentials.                                                                                                                                                   |
 
 ## Detailed Findings & Recommendations
 
@@ -115,6 +116,15 @@ Kenchi has strong deterministic safety controls (confidence scoring, action gati
   1. Make `tenantId` mandatory in search APIs and derive it from authenticated context (installation ID, API key), not user input.
   2. Pass tenant metadata throughout the analysis pipeline so `searchFromEventContext` filters correctly.
   3. Add automated tests to ensure cross-tenant queries return zero results; monitor for violations.
+
+### 11. Credential Storage in Plaintext
+
+- **Evidence**: Slack bot/user tokens and GitHub installation tokens are persisted directly in `tenants.slack_bot_token`/related columns (`packages/shared/src/database/tenantService.ts:233-305`, `database/init/002_tenants.sql`). Comments suggest “encrypted at application level,” but no crypto is applied.
+- **Impact**: Database compromise grants long-lived control of every customer workspace (posting in Slack, responding to GitHub webhooks). Attackers could silently hijack or impersonate Kenchi across tenants.
+- **Remediation**:
+  1. Encrypt tokens before storing (AES-GCM or envelope encryption via KMS); store only ciphertext and metadata.
+  2. Minimize decryption (only when calling the provider) and scrub tokens from logs/memory.
+  3. Rotate stored credentials regularly and update docs to reflect actual storage behavior.
 
 ## Remediation Progress (2026-01-02 Audit)
 
