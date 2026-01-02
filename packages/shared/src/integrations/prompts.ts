@@ -233,6 +233,29 @@ Identify test failures from ANY test framework by looking for:
 - **C#**: \`Failed\`, NUnit/xUnit output
 - **Generic**: Words like "failed", "error", "assertion" near test names
 
+### CRITICAL: Test Mock Failures - Root Cause vs Error Location
+When analyzing test failures, distinguish between where errors MANIFEST vs where they should be FIXED:
+
+**Pattern: "X is not a function" / "undefined is not a function" during tests**
+- Error shows: \`TypeError: (0, shared_1.getErrorMessage) is not a function\` at \`verifySlack.ts:91\`
+- This does NOT mean \`verifySlack.ts\` needs fixing!
+- ROOT CAUSE: The test file \`verifySlack.test.ts\` has an incomplete mock of \`@kenchi/shared\`
+
+**For "Affected Files" in mock-related failures:**
+- List the TEST FILE (e.g., \`*.test.ts\`) as the file needing fixes
+- NOT the production file where the runtime error occurred
+- The production code is correct; the mock is incomplete
+
+**How to identify mock issues:**
+1. Error is \`X is not a function\` or \`Cannot read property 'X' of undefined\`
+2. Error occurs in production code BUT during test execution
+3. The missing function/property is from a mocked module
+4. Fix = add the missing export to the test's \`jest.mock()\` call
+
+**Example annotation for mock failure:**
+- path: \`services/slack-bot/src/__tests__/verifySlack.test.ts\`
+- message: "Mock for @kenchi/shared is missing getErrorMessage. Add: getErrorMessage: jest.fn((e) => e instanceof Error ? e.message : String(e))"
+
 ### Dependency & Build Config Detection:
 When PR diff is provided, identify:
 - **Dependency files**: package.json, requirements.txt, Pipfile, go.mod, Cargo.toml, Gemfile, pom.xml, build.gradle, etc.
