@@ -16,6 +16,8 @@ import {
   truncateText,
   SLACK_FAILURE_TEMPLATES,
   FORMATTER_DISPLAY_LIMITS,
+  UI_EMOJI,
+  UI_CONSTANTS,
 } from "@kenchi/shared";
 import type { SlackBlock, CIFailureAnalysis } from "../types/slackTypes.js";
 
@@ -83,11 +85,12 @@ const createSummaryBlock = (analysis: CIFailureAnalysis): SlackBlock => {
 
 /**
  * Creates the "Why" section with bullet points explaining the failure.
+ * Uses progressive disclosure - most important reason first, details after.
  */
 const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
   const reasons: string[] = [];
 
-  // Add the main identified cause
+  // Add the main identified cause (highest priority)
   if (analysis.identified_cause) {
     reasons.push(analysis.identified_cause);
   } else if (analysis.analysis) {
@@ -103,33 +106,35 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
     const failureCount = analysis.testFailures.length;
     if (failureCount === 1) {
       reasons.push(
-        `1 test failed: \`${truncateText(analysis.testFailures[0].testName, FORMATTER_DISPLAY_LIMITS.DETAILED_TEST_NAME_LENGTH)}\``
+        `${UI_EMOJI.test} 1 test failed: \`${truncateText(analysis.testFailures[0].testName, FORMATTER_DISPLAY_LIMITS.DETAILED_TEST_NAME_LENGTH)}\``
       );
     } else {
-      reasons.push(`${failureCount} tests failed in this run`);
+      reasons.push(`${UI_EMOJI.test} ${failureCount} tests failed`);
     }
   }
 
-  // Add annotation context
+  // Add annotation context (error locations)
   const failureAnnotations =
     analysis.annotations?.filter((annotation) => annotation.level === "failure") || [];
   if (failureAnnotations.length > 0 && reasons.length < 3) {
     const firstAnn = failureAnnotations[0];
-    reasons.push(`Error in \`${firstAnn.path}:${firstAnn.startLine}\``);
+    reasons.push(`${UI_EMOJI.location} Error at \`${firstAnn.path}:${firstAnn.startLine}\``);
   }
 
   // Add dependency change context if available (prefer AI-extracted, fallback to legacy)
   const depChanges = analysis.detectedDependencyChanges ?? analysis.dependencyChanges ?? [];
   if (depChanges.length > 0) {
     const depCount = depChanges.length;
-    reasons.push(`${depCount} dependency change${depCount > 1 ? "s" : ""} in this PR`);
+    reasons.push(`${UI_EMOJI.package} ${depCount} dependency change${depCount > 1 ? "s" : ""}`);
   }
 
   // Add build config change context if available (AI-extracted)
   const buildChanges = analysis.detectedBuildConfigChanges ?? [];
   if (buildChanges.length > 0) {
     const configCount = buildChanges.length;
-    reasons.push(`${configCount} build config change${configCount > 1 ? "s" : ""} detected`);
+    reasons.push(
+      `${UI_EMOJI.workflow} ${configCount} build config change${configCount > 1 ? "s" : ""}`
+    );
   }
 
   // Ensure we have at least one reason
@@ -137,19 +142,21 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
     reasons.push("CI pipeline execution failed");
   }
 
-  const reasonsList = reasons.map((reason) => `• ${reason}`).join("\n");
+  // Format with visual bullets
+  const reasonsList = reasons.map((reason) => `  •  ${reason}`).join("\n");
 
   return {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*🔍 Why:*\n${reasonsList}`,
+      text: `${SLACK_FAILURE_TEMPLATES.SECTION_WHY}\n${reasonsList}`,
     },
   };
 };
 
 /**
- * Creates the "Recommended" section with action items.
+ * Creates the "Recommended" section with prioritized action items.
+ * Actions are sorted by priority and displayed with semantic icons.
  */
 const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null => {
   const actions = analysis.recommended_actions || [];
@@ -163,8 +170,8 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
   const actionsList = topActions
     .map((action, index) => {
       const emoji = getPriorityEmoji(action.priority);
-      const prefix = index === 0 ? emoji : "•";
-      return `${prefix} ${action.description}`;
+      // Number each action for clarity, with priority emoji
+      return `  ${index + 1}. ${emoji} ${action.description}`;
     })
     .join("\n");
 
@@ -172,14 +179,14 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*🛠️ Recommended:*\n${actionsList}`,
+      text: `${SLACK_FAILURE_TEMPLATES.SECTION_RECOMMENDED}\n${actionsList}`,
     },
   };
 };
 
 /**
  * Creates errors section with collected CI errors.
- * Uses functional patterns - no let declarations.
+ * Shows actual error messages in code blocks for easy reading.
  */
 const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
   if (errors.length === 0) {
@@ -188,39 +195,43 @@ const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
 
   // Limit errors based on display limit
   const displayErrors = errors.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED);
-  const moreText =
-    errors.length > FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED
-      ? `\n_...and ${errors.length - FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED} more errors_`
-      : "";
+  const moreCount = errors.length - FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED;
+  const moreText = moreCount > 0 ? `\n_+${moreCount} more error${moreCount > 1 ? "s" : ""}_` : "";
 
-  const errorText = [
-    ...displayErrors.map((error) => `\`\`\`${truncateText(error, 100)}\`\`\``),
-    ...(moreText ? [moreText] : []),
-  ].join("\n");
+  // Format each error in its own code block for clarity
+  const errorText = displayErrors
+    .map((error) => `\`\`\`${truncateText(error, 100)}\`\`\``)
+    .join("\n");
 
   return {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*📋 Errors:*\n${errorText}`,
+      text: `${SLACK_FAILURE_TEMPLATES.SECTION_ERRORS}\n${errorText}${moreText}`,
     },
   };
 };
 
 /**
- * Creates confidence score section with visual indicator.
+ * Creates confidence score section with visual progress indicator.
+ * Uses a simple visualization for quick scanning.
  */
 const createConfidenceBlock = (confidence: number): SlackBlock => {
-  const percentage = Math.round(confidence * 100);
+  const percentage = Math.round(confidence * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
   const label = getConfidenceLabel(confidence);
   const emoji = getConfidenceEmoji(confidence);
+
+  // Create a simple visual indicator using configured segments
+  const segments = UI_CONSTANTS.PROGRESS_BAR_SEGMENTS;
+  const filledSegments = Math.round(confidence * segments);
+  const progressIndicator = "█".repeat(filledSegments) + "░".repeat(segments - filledSegments);
 
   return {
     type: "context",
     elements: [
       {
         type: "mrkdwn",
-        text: `${emoji} *Confidence:* ${percentage}% (${label})`,
+        text: `${emoji} *Analysis Confidence:* ${progressIndicator} ${percentage}% _(${label})_`,
       },
     ],
   };
