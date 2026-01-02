@@ -261,25 +261,49 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
 ## CODE ANNOTATIONS REQUIREMENTS - CRITICAL
 You MUST analyze the logs and error output to identify ALL specific file locations where issues occurred.
 
-### Universal File Reference Patterns (Language-Agnostic):
-Look for file paths with line numbers in ANY of these formats:
-- \`path/to/file.ext:line:column\` (most common - TypeScript, Python, Go, Rust, etc.)
-- \`path/to/file.ext(line,column)\` (C#, TypeScript compiler)
-- \`at path/to/file.ext:line\` (stack traces)
-- \`File "path/to/file.py", line N\` (Python tracebacks)
-- \`path/to/file.go:line:\` (Go)
-- \`path/to/file.rs:line:column\` (Rust)
+### File Reference Pattern Recognition:
+Extract file locations from error output by recognizing these structural patterns:
 
-### Test Failure Detection (Any Framework):
-Identify test failures from ANY test framework by looking for:
-- **JavaScript/TypeScript**: \`FAIL\`, \`✕\`, \`●\` markers (Jest/Vitest/Mocha)
-- **Python**: \`FAILED\`, \`E       assert\`, pytest output
-- **Go**: \`--- FAIL:\`, \`FAIL\` with package names
-- **Rust**: \`---- test_name stdout ----\`, \`thread '...' panicked\`
-- **Ruby**: \`Failure/Error:\`, RSpec numbered failures
-- **Java**: \`FAILURE\`, JUnit stack traces with \`.java:line\`
-- **C#**: \`Failed\`, NUnit/xUnit output
-- **Generic**: Words like "failed", "error", "assertion" near test names
+**Common Formats** (separator-based):
+- Colon-separated: \`path/file.ext:line:column\` or \`path/file.ext:line\`
+- Parenthetical: \`path/file.ext(line,column)\` or \`path/file.ext(line)\`
+- Bracketed: \`path/file.ext[line]\`
+
+**Stack Trace Patterns**:
+- Prefixed: \`at path/file.ext:line\`, \`in path/file.ext:line\`
+- Verbose: \`File "path/file.ext", line N\`
+- Method context: \`at ClassName.method (path/file.ext:line)\`
+
+**Recognition Strategy**:
+1. Look for file extensions (.ts, .js, .py, .go, .rs, .java, .rb, .cs, etc.)
+2. Numbers immediately after file paths are likely line numbers
+3. Second numbers (if present) are typically column numbers
+4. Paths may be absolute (/home/...) or relative (src/...)
+
+### Test Failure Detection (Language-Agnostic):
+Identify test failures from ANY test framework by recognizing these universal patterns:
+
+**Failure Indicators** (look for these keywords/symbols in any language):
+- Words: "FAIL", "FAILED", "FAILURE", "ERROR", "BROKEN", "PANIC"
+- Symbols: ✕, ✗, ×, ●, ✖, [FAIL], [ERROR]
+- Phrases: "assertion failed", "expected...got", "did not match", "test failed"
+
+**Structural Patterns** (common across frameworks):
+- Test name followed by failure status: \`test_something ... FAILED\`
+- Failure count summaries: \`X passed, Y failed\`, \`X failures\`
+- Stack traces with test file references: \`at TestClass.testMethod\`
+- Assertion diffs showing expected vs actual values
+
+**Context Clues**:
+- Exit codes: non-zero exit (1, 2, etc.) after test execution
+- CI step names containing "test", "spec", "check"
+- Output sections labeled "Failures:", "Errors:", "Failed tests:"
+
+**Approach**: Don't rely on memorized patterns for specific frameworks. Instead:
+1. Scan for failure keywords and symbols
+2. Look for file:line references near failure indicators
+3. Identify test names from context (function names, describe blocks, test classes)
+4. Extract assertion messages that explain what failed
 
 ### Test Mock Failures (Apply Root Cause Analysis Framework)
 When errors occur in production code DURING test execution, apply the "Error Manifestation vs Fix Location" framework:
