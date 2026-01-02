@@ -157,7 +157,14 @@ Respond with ONLY a JSON object matching this structure (no additional text befo
       "line": 1,
       "level": "failure|warning|notice",
       "message": "Specific error message or explanation",
-      "title": "Short title for the annotation (optional)"
+      "title": "Short title for the annotation (optional)",
+      "suggestedFix": {
+        "description": "Brief description of what the fix does",
+        "before": "The problematic code (optional, for context)",
+        "after": "The corrected code",
+        "confidence": 0.8,
+        "language": "typescript"
+      }
     }
   ],
   "recommendedActions": [
@@ -240,7 +247,31 @@ When PR diff is provided, identify:
 5. Aggregate multiple errors at the same location into a single comprehensive message
 6. Prioritize actual errors over warnings
 7. Maximum ${maxAnnotations} annotations to keep response manageable
-8. Only include annotations for files actually mentioned in the evidence`;
+8. Only include annotations for files actually mentioned in the evidence
+
+### Suggested Fix Requirements - CRITICAL:
+For each codeAnnotation, provide a "suggestedFix" when you can determine a fix with reasonable confidence:
+
+**WHEN to provide suggestedFix:**
+- Missing imports or exports (confidence: 0.9)
+- Typos in variable/function names (confidence: 0.85)
+- Type mismatches with clear solutions (confidence: 0.8)
+- Missing function arguments (confidence: 0.75)
+- Incorrect module paths (confidence: 0.8)
+- Common syntax errors (confidence: 0.85)
+
+**WHEN NOT to provide suggestedFix:**
+- Complex logic errors requiring architectural changes
+- Issues where multiple valid solutions exist without clear preference
+- Errors where you lack context about the intended behavior
+- Security-related issues that need manual review
+
+**suggestedFix Format:**
+- "description": Clear, actionable description (e.g., "Add missing import for getErrorMessage")
+- "before": The problematic code snippet (optional, include if it helps understanding)
+- "after": The complete corrected code - must be valid, copy-pasteable code
+- "confidence": Number between 0 and 1 (0.7+ recommended for inclusion)
+- "language": Programming language for syntax highlighting (typescript, python, go, rust, etc.)`;
 };
 
 // ==================== Main Prompt Builder ====================

@@ -230,7 +230,7 @@ describe("UI Helpers", () => {
     });
 
     it("should use custom format function", () => {
-      const result = buildTruncatedList([1, 2, 3], (n) => `Item ${n}`, 5, "numbers");
+      const result = buildTruncatedList([1, 2, 3], (num) => `Item ${num}`, 5, "numbers");
 
       expect(result).toEqual(["Item 1", "Item 2", "Item 3"]);
     });
@@ -253,7 +253,7 @@ describe("UI Helpers", () => {
     });
 
     it("should use custom overflow label", () => {
-      const result = buildTruncatedList([1, 2, 3, 4], (n) => String(n), 2, "failures");
+      const result = buildTruncatedList([1, 2, 3, 4], (num) => String(num), 2, "failures");
 
       expect(result[2]).toContain("2 more failures");
     });

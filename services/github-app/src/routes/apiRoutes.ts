@@ -70,7 +70,7 @@ router.post(
     }
 
     // Format the comment with all enriched context
-    const comment = formatGitHubComment({
+    const comment = await formatGitHubComment({
       summary: analysis.analysis || analysis.summary,
       analysis: analysis.analysis,
       identified_cause: analysis.identified_cause,

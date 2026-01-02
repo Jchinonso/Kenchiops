@@ -4,12 +4,8 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { ButtonAction, SayFn } from "@slack/bolt";
-import {
-  handleActionApproval,
-  handleActionRejection,
-  handlePositiveFeedback,
-  handleNegativeFeedback,
-} from "../handlers/actionHandler.js";
+import { handleActionApproval, handleActionRejection } from "../handlers/actionHandler.js";
+import { handlePositiveFeedback, handleNegativeFeedback } from "../handlers/feedbackHandler.js";
 
 // Track mock state for isRedisHealthy
 let mockRedisHealthy = false;

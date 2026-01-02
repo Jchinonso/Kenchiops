@@ -12,7 +12,15 @@
  */
 
 export { OpenAIClient } from "./client.js";
-export { EmbeddingClient, type EmbeddingResult, type BatchEmbeddingResult } from "./embedding.js";
+export {
+  EmbeddingClient,
+  getEmbeddingClient,
+  clearClientCache,
+  createEmbeddingProvider,
+  type EmbeddingResult,
+  type BatchEmbeddingResult,
+  type EmbeddingProvider,
+} from "./embedding.js";
 export { validateResponse } from "./validation.js";
 export { manageTokenBudget } from "./tokenManager.js";
 export { handleOpenAIError } from "./errors.js";

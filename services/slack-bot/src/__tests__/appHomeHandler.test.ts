@@ -21,6 +21,12 @@ jest.mock("@kenchi/shared", () => ({
   findAllMappingsForTenant: jest.fn(),
   getTenantStatistics: jest.fn(),
   formatRelativeTime: jest.fn((_date: Date) => "2 hours ago"),
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
+  SLACK_UI_ERROR_MESSAGES: {
+    DASHBOARD_LOAD_FAILED: "Failed to load dashboard. Please refresh or check back in a moment.",
+  },
 }));
 
 jest.mock("../formatters/appHomeFormatter.js", () => ({
@@ -270,7 +276,9 @@ describe("App Home Handler", () => {
       await handleAppHomeOpened(mockClient, "U123456");
 
       // Should publish error view
-      expect(buildErrorView).toHaveBeenCalledWith("Failed to load dashboard. Please try again.");
+      expect(buildErrorView).toHaveBeenCalledWith(
+        "Failed to load dashboard. Please refresh or check back in a moment."
+      );
       expect(mockClient.views.publish).toHaveBeenCalledWith({
         user_id: "U123456",
         view: expect.objectContaining({ type: "home" }),

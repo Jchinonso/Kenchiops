@@ -177,10 +177,18 @@ export {
   estimateEmbeddingCost,
   estimateMonthlyCost,
   recommendTier,
+  // Budget-aware embedding functions
+  generateBudgetAwareEmbedding,
+  generateBatchBudgetAwareEmbeddings,
+  BudgetExceededError,
   // Types
   type TierSelectionResult,
   type CacheStats,
   type TenantTierConfig,
+  type BudgetAwareEmbeddingOptions,
+  type BatchBudgetAwareEmbeddingOptions,
+  type BudgetAwareEmbeddingResult,
+  type BatchBudgetAwareEmbeddingResult,
 } from "./costControls.js";
 
 export {
@@ -322,3 +330,38 @@ export {
   type AnalysisLessonContext,
   type IngestAnalysisLessonResult,
 } from "./analysisLessonIngestion.js";
+
+export {
+  // Linked commit ingestion (failure context + commit messages + diff)
+  trackPRFailure,
+  getPRFailures,
+  clearPRFailures,
+  ingestLinkedCommitKnowledge,
+  createFailureSummary,
+  // Types
+  type FailureSummary,
+  type PRFailureContext,
+  type LinkedCommitInput,
+  type LinkedCommitResult,
+} from "./linkedCommitIngestion.js";
+
+export {
+  // Relationship detection for multi-hop RAG
+  findRelatedDocuments,
+  createDetectedRelationships,
+  detectAndCreateRelationships,
+  // Types
+  type DocumentContext,
+  type DetectedRelationship,
+  type RelationshipDetectionResult,
+} from "./relationshipDetection.js";
+
+export {
+  // Test case seeding for drift detection
+  seedTestCases,
+  getSeedTestCaseTemplates,
+  getSeedTemplatesByCategory,
+  getSeedCategories,
+  // Types
+  type SeedTestCasesResult,
+} from "./testCaseSeeding.js";

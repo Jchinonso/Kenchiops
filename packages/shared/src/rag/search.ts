@@ -9,28 +9,31 @@
 
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
-import { redactSecrets } from "../security/index.js";
-import { cacheGet, cacheSet } from "../cache/cacheClient.js";
-import { EmbeddingClient } from "../openaiClient/embedding.js";
 import {
   searchSimilarDiffChunks,
   searchSimilarKnowledgeDocs,
-  recordCost,
-  batchIncrementKnowledgeDocHitCounts,
   type DiffChunk,
   type VectorSearchResult,
   type VectorSearchFilters,
 } from "../database/index.js";
 import { type KnowledgeDocRecord } from "../database/vectorTypes.js";
 import { VECTOR_SIMILARITY_THRESHOLDS } from "../constants/index.js";
-import { recordEmbeddingOperation } from "./metrics.js";
 import { estimateTokenCount } from "./chunking.js";
+import { fullRerank, type QueryContext } from "./reranker.js";
 import {
-  fullRerank,
-  type RerankableResult,
-  type QueryContext,
-  type RerankedResult,
-} from "./reranker.js";
+  validateQuery,
+  normalizeQueryText,
+  getQueryEmbedding,
+  recordQueryCostSafely,
+  trackKnowledgeDocHitsSafely,
+  toRerankableResult,
+  fromRerankedResult,
+  buildQueryFromContext,
+  type EventQueryContext,
+} from "./searchHelpers.js";
+
+// Re-export types and helpers for external use
+export { EventQueryContext } from "./searchHelpers.js";
 
 const logger = createLogger("rag-search");
 
@@ -83,249 +86,6 @@ export interface RAGSearchResult {
   readonly queryTokens: number;
   readonly cacheHit: boolean;
 }
-
-/**
- * Query construction input from event context.
- */
-export interface EventQueryContext {
-  readonly eventType: string;
-  readonly repository: string;
-  readonly errorMessage?: string;
-  readonly failureSummary?: string;
-  readonly affectedFiles?: readonly string[];
-  readonly testNames?: readonly string[];
-}
-
-// ==================== Constants ====================
-
-const SEARCH_CONSTANTS = {
-  /** Maximum query tokens before truncation */
-  MAX_QUERY_TOKENS: 2000,
-  /** Cache TTL for query embeddings in seconds (1 hour) */
-  EMBEDDING_CACHE_TTL_SECONDS: 3600,
-  /** Minimum query length to process */
-  MIN_QUERY_LENGTH: 10,
-  /** Cache key prefix for query embeddings */
-  CACHE_KEY_PREFIX: "rag:embedding:",
-} as const;
-
-// ==================== Helper Functions ====================
-
-/**
- * Records query cost safely without blocking the main operation.
- * Errors are logged but don't affect the caller.
- */
-const recordQueryCostSafely = async (tenantId: string, tokenCount: number): Promise<void> => {
-  try {
-    await recordCost({
-      tenantId,
-      operationType: "query",
-      embeddingTier: "STANDARD",
-      tokenCount,
-    });
-  } catch (error) {
-    logger.warn("Failed to record query cost", { error: getErrorMessage(error) });
-  }
-};
-
-/**
- * Tracks hit counts for retrieved knowledge documents safely (fire-and-forget).
- * Increments hit count in metadata for analytics and reranking.
- */
-const trackKnowledgeDocHitsSafely = async (docIds: readonly string[]): Promise<void> => {
-  if (docIds.length === 0) {
-    return;
-  }
-
-  try {
-    const updatedCount = await batchIncrementKnowledgeDocHitCounts(docIds);
-    logger.debug("Tracked knowledge doc hits", {
-      requestedCount: docIds.length,
-      updatedCount,
-    });
-  } catch (error) {
-    logger.warn("Failed to track knowledge doc hits", {
-      error: getErrorMessage(error),
-      docCount: docIds.length,
-    });
-  }
-};
-
-/**
- * Generates a cache key for a query embedding.
- */
-const buildEmbeddingCacheKey = (queryText: string, tenantId?: string): string => {
-  const hash = simpleHash(queryText);
-  const tenantPart = tenantId ?? "global";
-  return `${SEARCH_CONSTANTS.CACHE_KEY_PREFIX}${tenantPart}:${hash}`;
-};
-
-/**
- * Simple string hash for cache keys.
- * Uses djb2 algorithm for fast, reasonably distributed hashing.
- */
-const simpleHash = (text: string): string => {
-  const DJB2_INITIAL = 5381;
-  const DJB2_MULTIPLIER = 33;
-
-  const hashValue = text.split("").reduce(
-    // eslint-disable-next-line no-bitwise -- DJB2 hash algorithm requires bitwise XOR and unsigned right shift
-    (hash, char) => ((hash * DJB2_MULTIPLIER) ^ char.charCodeAt(0)) >>> 0,
-    DJB2_INITIAL
-  );
-
-  return hashValue.toString(16);
-};
-
-/**
- * Normalizes query text by redacting secrets and truncating.
- */
-const normalizeQueryText = (text: string): string => {
-  // Redact secrets first
-  const redacted = redactSecrets(text);
-
-  // Estimate tokens
-  const tokens = estimateTokenCount(redacted);
-
-  // Truncate if too long (rough character estimate)
-  if (tokens > SEARCH_CONSTANTS.MAX_QUERY_TOKENS) {
-    const charsPerToken = 4;
-    const maxChars = SEARCH_CONSTANTS.MAX_QUERY_TOKENS * charsPerToken;
-    return redacted.substring(0, maxChars);
-  }
-
-  return redacted;
-};
-
-/**
- * Builds a search query from event context.
- */
-const buildQueryFromContext = (context: EventQueryContext): string => {
-  const parts: string[] = [];
-
-  // Add event type context
-  parts.push(`Event: ${context.eventType}`);
-  parts.push(`Repository: ${context.repository}`);
-
-  // Add error/failure information
-  if (context.errorMessage) {
-    parts.push(`Error: ${context.errorMessage}`);
-  }
-
-  if (context.failureSummary) {
-    parts.push(`Summary: ${context.failureSummary}`);
-  }
-
-  // Add affected files
-  if (context.affectedFiles && context.affectedFiles.length > 0) {
-    const fileList = context.affectedFiles.slice(0, 10).join(", ");
-    parts.push(`Files: ${fileList}`);
-  }
-
-  // Add test names
-  if (context.testNames && context.testNames.length > 0) {
-    const testList = context.testNames.slice(0, 5).join(", ");
-    parts.push(`Tests: ${testList}`);
-  }
-
-  return parts.join("\n");
-};
-
-/**
- * Validates search query input.
- */
-const validateQuery = (queryText: string): boolean =>
-  queryText.trim().length >= SEARCH_CONSTANTS.MIN_QUERY_LENGTH;
-
-/**
- * Converts a knowledge doc search result to a rerankable format.
- */
-const toRerankableResult = (result: VectorSearchResult<KnowledgeDocRecord>): RerankableResult => ({
-  id: result.item.id,
-  similarity: result.similarity,
-  docType: result.item.docType,
-  content: result.item.content,
-  createdAt: result.item.createdAt.toISOString(),
-  metadata: {
-    repository: result.item.repository ?? undefined,
-    workflow: (result.item.metadata as Record<string, unknown>)?.workflow as string | undefined,
-    errorSignature: (result.item.metadata as Record<string, unknown>)?.errorSignature as
-      | string
-      | undefined,
-    language: (result.item.metadata as Record<string, unknown>)?.language as string | undefined,
-    hitCount: (result.item.metadata as Record<string, unknown>)?.hitCount as number | undefined,
-    helpfulRate: (result.item.metadata as Record<string, unknown>)?.helpfulRate as
-      | number
-      | undefined,
-    negativeFeedbackCount: (result.item.metadata as Record<string, unknown>)
-      ?.negativeFeedbackCount as number | undefined,
-  },
-});
-
-/**
- * Converts reranked results back to VectorSearchResult format.
- */
-const fromRerankedResult = (
-  reranked: RerankedResult,
-  originalResults: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>
-): VectorSearchResult<KnowledgeDocRecord> => {
-  const original = originalResults.find((result) => result.item.id === reranked.result.id);
-  if (!original) {
-    throw new Error(`Reranked result not found in original results: ${reranked.result.id}`);
-  }
-  return {
-    item: original.item,
-    similarity: reranked.finalScore, // Use final score as new similarity
-  };
-};
-
-// ==================== Embedding Functions ====================
-
-/**
- * Gets or generates embedding for a query, using cache when available.
- */
-const getQueryEmbedding = async (
-  queryText: string,
-  tenantId?: string
-): Promise<{ embedding: readonly number[]; cacheHit: boolean }> => {
-  const cacheKey = buildEmbeddingCacheKey(queryText, tenantId);
-
-  // Try cache first
-  const cached = await cacheGet<readonly number[]>(cacheKey);
-  if (cached.hit && cached.data) {
-    logger.debug("Query embedding cache hit", { cacheKey });
-    return { embedding: cached.data, cacheHit: true };
-  }
-
-  // Generate new embedding
-  const startTime = Date.now();
-  const embeddingClient = new EmbeddingClient();
-
-  try {
-    const result = await embeddingClient.generateEmbedding(queryText);
-    const latencyMs = Date.now() - startTime;
-
-    // Record metrics
-    recordEmbeddingOperation(result.tokenCount, latencyMs, true);
-
-    // Cache the embedding
-    await cacheSet(cacheKey, result.embedding, {
-      ttlSeconds: SEARCH_CONSTANTS.EMBEDDING_CACHE_TTL_SECONDS,
-    });
-
-    logger.debug("Generated and cached query embedding", {
-      cacheKey,
-      tokens: result.tokenCount,
-      latencyMs,
-    });
-
-    return { embedding: result.embedding, cacheHit: false };
-  } catch (error) {
-    const latencyMs = Date.now() - startTime;
-    recordEmbeddingOperation(0, latencyMs, false);
-    throw error;
-  }
-};
 
 // ==================== Public API ====================
 

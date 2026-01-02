@@ -11,6 +11,7 @@ import {
   calculateConfidenceScore,
   createLogger,
   generateEventId,
+  createAnalysis,
   type Event,
   type Evidence,
   type KnowledgeDocument,
@@ -26,8 +27,11 @@ import {
   EVENT_DEFAULTS,
   SERVICE_NAMES,
   searchFromEventContext,
+  selectModel,
+  logModelSelection,
   type RAGSearchResult,
   type EventQueryContext,
+  type ModelSelectionResult,
 } from "@kenchi/shared";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
@@ -140,10 +144,12 @@ const mapRAGResultsToKnowledgeDocs = (ragResult: RAGSearchResult): readonly Know
 /**
  * Retrieves relevant knowledge documents using RAG search.
  * Returns empty array if search fails (graceful degradation).
+ * When tenantId is provided, enables cost tracking and budget-aware tier selection.
  */
 const retrieveRelevantKnowledge = async (
   repository: string,
-  failureLog: string
+  failureLog: string,
+  tenantId?: string
 ): Promise<readonly KnowledgeDocument[]> => {
   try {
     const errorSummary = extractErrorSummary(failureLog);
@@ -156,14 +162,16 @@ const retrieveRelevantKnowledge = async (
 
     logger.info("Searching RAG for relevant knowledge", {
       repository,
+      tenantId,
       queryLength: errorSummary.length,
     });
 
-    const ragResult = await searchFromEventContext(queryContext);
+    const ragResult = await searchFromEventContext(queryContext, tenantId);
     const knowledgeDocs = mapRAGResultsToKnowledgeDocs(ragResult);
 
     logger.info("RAG search completed", {
       repository,
+      tenantId,
       diffChunksFound: ragResult.diffChunks.length,
       knowledgeDocsFound: knowledgeDocs.length,
       cacheHit: ragResult.cacheHit,
@@ -173,6 +181,7 @@ const retrieveRelevantKnowledge = async (
   } catch (error) {
     logger.warn("RAG search failed, continuing without knowledge context", {
       repository,
+      tenantId,
       error: getErrorMessage(error),
     });
     return [];
@@ -259,18 +268,42 @@ export const formatAnalysisResponse = (
 };
 
 /**
+ * Selects the appropriate model for analysis and logs the selection.
+ *
+ * @param tenantId - Optional tenant ID for tenant-specific model selection
+ * @returns Model selection result
+ */
+const selectAnalysisModel = (tenantId?: string): ModelSelectionResult => {
+  const selection = selectModel(tenantId ?? "");
+  logModelSelection(selection, tenantId ?? "");
+  return selection;
+};
+
+/**
  * Complete analysis flow: create context, retrieve RAG knowledge, analyze, format response
  */
 export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeResponse> => {
   const { event, evidence: baseEvidence } = createAnalysisContext(request);
 
+  // Select model version for this analysis (Phase 3 fine-tuning integration)
+  const modelSelection = selectAnalysisModel(request.tenant_id);
+
   logger.info("CI failure analysis requested", {
     eventId: event.id,
     repository: request.repository,
+    tenantId: request.tenant_id,
+    modelVersionId: modelSelection.versionId,
+    modelId: modelSelection.modelId,
+    selectionReason: modelSelection.reason,
   });
 
   // Retrieve relevant knowledge documents via RAG (Phase 2 integration)
-  const relatedDocs = await retrieveRelevantKnowledge(request.repository, request.failure_log);
+  // When tenantId is provided, enables cost tracking and budget-aware tier selection
+  const relatedDocs = await retrieveRelevantKnowledge(
+    request.repository,
+    request.failure_log,
+    request.tenant_id
+  );
 
   // Enrich evidence with RAG results
   const enrichedEvidence: Evidence = {
@@ -284,10 +317,26 @@ export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeR
   });
 
   const analysisResult = await analyzeFailure(event, enrichedEvidence);
+  const confidenceResult = calculateConfidenceScore(analysisResult, enrichedEvidence);
 
-  logger.info("Analysis completed", {
+  // Persist analysis to database for evaluation and fine-tuning
+  const savedAnalysis = await createAnalysis({
     eventId: event.id,
-    confidence: calculateConfidenceScore(analysisResult, enrichedEvidence).finalScore,
+    summary: analysisResult.summary,
+    identifiedCause: analysisResult.identifiedCause,
+    diagnosisConfidence: confidenceResult.finalScore,
+    confidenceSignals: confidenceResult.breakdown as unknown as Record<string, unknown>,
+    recommendedActions: analysisResult.recommendedActions?.map((action) => action.description),
+    fullAnalysis: analysisResult as unknown as Record<string, unknown>,
+    tenantId: request.tenant_id,
+    modelVersionId: modelSelection.versionId,
+  });
+
+  logger.info("Analysis completed and saved", {
+    analysisId: savedAnalysis.id,
+    eventId: event.id,
+    modelVersionId: modelSelection.versionId,
+    confidence: confidenceResult.finalScore,
     hasActions: (analysisResult.recommendedActions?.length ?? 0) > 0,
     ragDocsUsed: relatedDocs.length,
   });

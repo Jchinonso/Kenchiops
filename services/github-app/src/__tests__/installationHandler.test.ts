@@ -41,6 +41,9 @@ jest.mock("@kenchi/shared", () => ({
   ),
   suspend: jest.fn(() => Promise.resolve()),
   activate: jest.fn(() => Promise.resolve()),
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 // Import handlers and mocked functions

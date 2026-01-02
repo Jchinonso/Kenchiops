@@ -32,145 +32,23 @@ import {
   getKnowledgeDocCountsByType,
   type IngestKnowledgeDocInput,
 } from "../packages/shared/src/rag/index.js";
+import { KNOWLEDGE_DOC_TYPES } from "../packages/shared/src/constants/index.js";
+import { logger, getErrorMessage } from "../packages/shared/src/index.js";
 import {
-  KNOWLEDGE_DOC_TYPES,
-  type KnowledgeDocType,
-} from "../packages/shared/src/constants/index.js";
-import { logger } from "../packages/shared/src/index.js";
+  CLI_CONSTANTS,
+  parseArgs,
+  inferDocType,
+  extractTitle,
+  extractTags,
+  collectFiles,
+  type CliOptions,
+  type IngestionResult,
+} from "./ingest-helpers.js";
 
-// ==================== Constants ====================
-
-const CLI_CONSTANTS = {
-  /** Supported file extensions */
-  SUPPORTED_EXTENSIONS: [".md", ".mdx", ".txt", ".rst"] as const,
-  /** Default document type */
-  DEFAULT_DOC_TYPE: KNOWLEDGE_DOC_TYPES.ARCHITECTURE,
-  /** Batch size for directory ingestion */
-  BATCH_SIZE: 10,
-  /** Percentage multiplier for display */
-  PERCENTAGE_MULTIPLIER: 100,
-  /** Table separator width */
-  TABLE_SEPARATOR_WIDTH: 40,
-  /** Column padding for stats display */
-  STATS_COLUMN_PADDING: 20,
-  /** Count column padding */
-  COUNT_COLUMN_PADDING: 6,
-} as const;
-
-const DOC_TYPE_BY_FOLDER: Record<string, KnowledgeDocType> = {
-  runbooks: KNOWLEDGE_DOC_TYPES.RUNBOOK,
-  postmortems: KNOWLEDGE_DOC_TYPES.POSTMORTEM,
-  troubleshooting: KNOWLEDGE_DOC_TYPES.TROUBLESHOOTING,
-  "known-issues": KNOWLEDGE_DOC_TYPES.KNOWN_ISSUES,
-  sops: KNOWLEDGE_DOC_TYPES.SOP,
-  docs: KNOWLEDGE_DOC_TYPES.ARCHITECTURE,
-} as const;
-
-// ==================== Types ====================
-
-interface CliOptions {
-  readonly type?: KnowledgeDocType;
-  readonly tenant?: string;
-  readonly repository?: string;
-  readonly dryRun?: boolean;
-  readonly verbose?: boolean;
-}
-
-interface IngestionResult {
-  readonly path: string;
-  readonly success: boolean;
-  readonly docId?: string;
-  readonly chunkCount?: number;
-  readonly error?: string;
-}
-
-// ==================== Helper Functions ====================
+// ==================== File Preparation ====================
 
 /**
- * Parses command line arguments
- */
-const parseArgs = (
-  args: readonly string[]
-): { command: string; target: string; options: CliOptions } => {
-  const command = args[0] ?? "help";
-  const target = args[1] ?? "";
-  const options: CliOptions = {};
-
-  args.slice(2).forEach((arg, index, allArgs) => {
-    if (arg === "--type" && allArgs[index + 1]) {
-      options.type = allArgs[index + 1] as KnowledgeDocType;
-    }
-    if (arg === "--tenant" && allArgs[index + 1]) {
-      options.tenant = allArgs[index + 1];
-    }
-    if (arg === "--repository" && allArgs[index + 1]) {
-      options.repository = allArgs[index + 1];
-    }
-    if (arg === "--dry-run") {
-      options.dryRun = true;
-    }
-    if (arg === "--verbose" || arg === "-v") {
-      options.verbose = true;
-    }
-  });
-
-  return { command, target, options };
-};
-
-/**
- * Infers document type from file path
- */
-const inferDocType = (filePath: string): KnowledgeDocType => {
-  const normalizedPath = filePath.toLowerCase();
-
-  const matchedFolder = Object.entries(DOC_TYPE_BY_FOLDER).find(
-    ([folder]) => normalizedPath.includes(`/${folder}/`) || normalizedPath.includes(`\\${folder}\\`)
-  );
-
-  return matchedFolder ? matchedFolder[1] : CLI_CONSTANTS.DEFAULT_DOC_TYPE;
-};
-
-/**
- * Extracts title from markdown content
- */
-const extractTitle = (content: string, filePath: string): string => {
-  // Try to find first H1 heading
-  const h1Match = content.match(/^#\s+(.+)$/m);
-  if (h1Match) {
-    return h1Match[1].trim();
-  }
-
-  // Fall back to filename
-  return path
-    .basename(filePath, path.extname(filePath))
-    .replace(/-/g, " ")
-    .replace(/_/g, " ")
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-};
-
-/**
- * Extracts tags from markdown content
- */
-const extractTags = (content: string): readonly string[] => {
-  // Look for tags section at end of document
-  const tagsMatch = content.match(/^##?\s*Tags\s*\n+`([^`]+)`/m);
-  if (tagsMatch) {
-    return tagsMatch[1].split(/`\s*`/).map((tag) => tag.trim());
-  }
-
-  // Look for inline tags
-  const inlineMatch = content.match(/tags?:\s*`([^`]+)`/i);
-  if (inlineMatch) {
-    return inlineMatch[1].split(/[,\s]+/).filter(Boolean);
-  }
-
-  return [];
-};
-
-/**
- * Reads and prepares file for ingestion
+ * Reads and prepares file for ingestion.
  */
 const prepareFileForIngestion = (
   filePath: string,
@@ -195,38 +73,6 @@ const prepareFileForIngestion = (
       tags: [...tags],
     },
   };
-};
-
-/**
- * Collects files from directory recursively
- */
-const collectFiles = (dirPath: string): readonly string[] => {
-  const results: string[] = [];
-  const absoluteDir = path.resolve(dirPath);
-
-  const processDir = (currentPath: string): void => {
-    const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-
-    entries.forEach((entry) => {
-      const fullPath = path.join(currentPath, entry.name);
-
-      if (entry.isDirectory() && !entry.name.startsWith(".")) {
-        processDir(fullPath);
-      } else if (entry.isFile()) {
-        const ext = path.extname(entry.name).toLowerCase();
-        if (
-          CLI_CONSTANTS.SUPPORTED_EXTENSIONS.includes(
-            ext as (typeof CLI_CONSTANTS.SUPPORTED_EXTENSIONS)[number]
-          )
-        ) {
-          results.push(fullPath);
-        }
-      }
-    });
-  };
-
-  processDir(absoluteDir);
-  return Object.freeze(results);
 };
 
 // ==================== Commands ====================
@@ -269,7 +115,7 @@ const ingestFile = async (filePath: string, options: CliOptions): Promise<Ingest
       chunkCount: result.chunkCount,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error("Failed to ingest file", { path: filePath, error: errorMessage });
     return { path: filePath, success: false, error: errorMessage };
   }
@@ -335,7 +181,7 @@ const syncExternal = async (options: CliOptions): Promise<void> => {
     }
   } catch (error) {
     logger.error("Failed to sync external sources", {
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     });
   }
 };
@@ -362,7 +208,7 @@ const showStats = async (): Promise<void> => {
       });
   } catch (error) {
     logger.error("Failed to fetch statistics", {
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     });
   }
 };
@@ -497,7 +343,7 @@ const runMain = async (): Promise<void> => {
     await main();
   } catch (error) {
     logger.error("Fatal error", {
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     });
     process.exit(1);
   }

@@ -12,6 +12,7 @@ import {
   getTenantStatistics,
   formatRelativeTime,
   getErrorMessage,
+  SLACK_UI_ERROR_MESSAGES,
   type Tenant,
   type TenantStatistics,
 } from "@kenchi/shared";
@@ -171,7 +172,7 @@ export const handleAppHomeOpened = async (client: SlackClient, userId: string): 
 
     // Try to publish error view
     try {
-      const errorView = buildErrorView("Failed to load dashboard. Please try again.");
+      const errorView = buildErrorView(SLACK_UI_ERROR_MESSAGES.DASHBOARD_LOAD_FAILED);
       await client.views.publish({
         user_id: userId,
         view: errorView,

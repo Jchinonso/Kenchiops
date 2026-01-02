@@ -14,6 +14,7 @@ export interface ApiConfig {
   readonly environment: string;
   readonly serviceName: string;
   readonly version: string;
+  readonly databaseUrl: string;
 }
 
 /**
@@ -24,4 +25,5 @@ export const appConfig: ApiConfig = {
   environment: config.NODE_ENV || "development",
   serviceName: SERVICE_NAMES.API,
   version: SERVICE_VERSIONS.API,
+  databaseUrl: config.DATABASE_URL,
 } as const;

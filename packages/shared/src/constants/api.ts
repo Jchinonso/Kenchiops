@@ -31,6 +31,38 @@ export const API_ROUTES = {
   RAG_PURGE_PR: "/api/rag/pr/:repository/:prNumber",
   /** RAG knowledge doc purge endpoint (Express format) */
   RAG_PURGE_DOC: "/api/rag/doc/:parentId",
+  /** RAG cost statistics endpoint */
+  RAG_COST_STATS: "/api/rag/cost-stats",
+  /** RAG tenant tier configuration endpoint (Express format) */
+  RAG_TENANT_TIER: "/api/rag/tenant/:tenantId/tier",
+  /** RAG test suite execution endpoint */
+  RAG_TEST_SUITE: "/api/rag/test-suite",
+  /** RAG drift report endpoint */
+  RAG_DRIFT_REPORT: "/api/rag/drift-report",
+  /** RAG metric bounds check endpoint */
+  RAG_CHECK_METRIC: "/api/rag/check-metric",
+  /** RAG staleness check endpoint */
+  RAG_STALENESS: "/api/rag/staleness",
+  /** RAG cleanup endpoint */
+  RAG_CLEANUP: "/api/rag/cleanup",
+  /** RAG health check endpoint */
+  RAG_HEALTH: "/api/rag/health",
+  /** RAG metrics endpoint */
+  RAG_METRICS: "/api/rag/metrics",
+  /** RAG evaluation metrics endpoint */
+  RAG_EVALUATION: "/api/rag/evaluation",
+  /** RAG embedding cache stats endpoint */
+  RAG_CACHE_STATS: "/api/rag/cache/stats",
+  /** RAG embedding cache clear endpoint */
+  RAG_CACHE_CLEAR: "/api/rag/cache/clear",
+  /** RAG cost estimation endpoint */
+  RAG_COST_ESTIMATE: "/api/rag/cost/estimate",
+  /** RAG re-embedding trigger endpoint */
+  RAG_REEMBED: "/api/rag/reembed",
+  /** RAG test case seeding endpoint */
+  RAG_SEED_TEST_CASES: "/api/rag/seed-test-cases",
+  /** RAG relationship detection endpoint */
+  RAG_DETECT_RELATIONSHIPS: "/api/rag/detect-relationships",
 } as const;
 
 /**

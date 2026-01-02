@@ -295,3 +295,71 @@ export const getRecentlyFailedTestCases = async (
   const result = await query<TestCaseRow>(TEST_CASE_QUERIES.GET_FAILED_RECENT, [limit]);
   return Object.freeze(result.rows.map(mapRowToTestCase));
 };
+
+// ==================== Validation ====================
+
+/**
+ * SQL query to check document IDs existence in both tables.
+ */
+const VALIDATE_DOC_IDS_QUERY = `
+  SELECT id FROM (
+    SELECT id FROM diff_chunks WHERE id = ANY($1)
+    UNION
+    SELECT id FROM knowledge_documents WHERE id = ANY($1)
+  ) combined
+`;
+
+/**
+ * Result of validating expected document IDs.
+ */
+export interface ValidateExpectedDocIdsResult {
+  readonly valid: boolean;
+  readonly existingIds: readonly string[];
+  readonly missingIds: readonly string[];
+}
+
+/**
+ * Validates that expected document IDs exist in the database.
+ * Checks both diff_chunks and knowledge_documents tables.
+ *
+ * @param expectedDocIds - Array of document IDs to validate
+ * @returns Validation result with existing and missing IDs
+ */
+export const validateExpectedDocIds = async (
+  expectedDocIds: readonly string[]
+): Promise<ValidateExpectedDocIdsResult> => {
+  if (expectedDocIds.length === 0) {
+    return {
+      valid: true,
+      existingIds: Object.freeze([]),
+      missingIds: Object.freeze([]),
+    };
+  }
+
+  const result = await query<{ id: string }>(VALIDATE_DOC_IDS_QUERY, [[...expectedDocIds]]);
+  const existingIds = new Set(result.rows.map((row) => row.id));
+
+  const missingIds = expectedDocIds.filter((docId) => !existingIds.has(docId));
+
+  logger.debug("Validated expected document IDs", {
+    totalIds: expectedDocIds.length,
+    existingCount: existingIds.size,
+    missingCount: missingIds.length,
+  });
+
+  return {
+    valid: missingIds.length === 0,
+    existingIds: Object.freeze([...existingIds]),
+    missingIds: Object.freeze(missingIds),
+  };
+};
+
+/**
+ * Validates a test case's expected document IDs.
+ *
+ * @param testCase - The test case to validate
+ * @returns Validation result
+ */
+export const validateTestCase = async (
+  testCase: RAGTestCase
+): Promise<ValidateExpectedDocIdsResult> => validateExpectedDocIds(testCase.expectedDocIds);

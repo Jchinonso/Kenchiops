@@ -46,6 +46,9 @@ jest.mock("@kenchi/shared", () => ({
     required: (v: unknown) => v !== undefined && v !== null && v !== "",
     string: (v: unknown) => typeof v === "string",
   },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 jest.mock("../services/githubService.js", () => ({

@@ -177,11 +177,14 @@ describe("Message Handler", () => {
 
       await handleMessage(asMessageEvent(emptyTextMessage));
 
-      expect(logger.debug).toHaveBeenCalledWith("Slack message received", {
-        text: "",
-        user: "U123456",
-        channel: "C123456",
-      });
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Slack message received",
+        expect.objectContaining({
+          text: "",
+          user: "U123456",
+          channel: "C123456",
+        })
+      );
     });
 
     it("should process messages with valid text", async () => {
@@ -191,11 +194,14 @@ describe("Message Handler", () => {
 
       await handleMessage(asMessageEvent(validMessage));
 
-      expect(logger.debug).toHaveBeenCalledWith("Slack message received", {
-        text: "Hello, World!",
-        user: "U123456",
-        channel: "C123456",
-      });
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Slack message received",
+        expect.objectContaining({
+          text: "Hello, World!",
+          user: "U123456",
+          channel: "C123456",
+        })
+      );
     });
   });
 
@@ -210,11 +216,14 @@ describe("Message Handler", () => {
       await handleMessage(asMessageEvent(message));
 
       expect(logger.debug).toHaveBeenCalledTimes(1);
-      expect(logger.debug).toHaveBeenCalledWith("Slack message received", {
-        text: "Test message",
-        user: "U123456",
-        channel: "C123456",
-      });
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Slack message received",
+        expect.objectContaining({
+          text: "Test message",
+          user: "U123456",
+          channel: "C123456",
+        })
+      );
     });
 
     it("should include text in log payload", async () => {
@@ -243,11 +252,14 @@ describe("Message Handler", () => {
 
       await handleMessage(asMessageEvent(message));
 
-      expect(logger.debug).toHaveBeenCalledWith("Slack message received", {
-        text: "Message with metadata",
-        user: "U999999",
-        channel: "C888888",
-      });
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Slack message received",
+        expect.objectContaining({
+          text: "Message with metadata",
+          user: "U999999",
+          channel: "C888888",
+        })
+      );
     });
 
     it("should handle messages without user property", async () => {
@@ -264,11 +276,14 @@ describe("Message Handler", () => {
 
       await handleMessage(asMessageEvent(messageWithoutUser));
 
-      expect(logger.debug).toHaveBeenCalledWith("Slack message received", {
-        text: "Message without user",
-        user: undefined,
-        channel: "C123456",
-      });
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Slack message received",
+        expect.objectContaining({
+          text: "Message without user",
+          user: undefined,
+          channel: "C123456",
+        })
+      );
     });
 
     it("should handle messages without channel property", async () => {
@@ -285,11 +300,8 @@ describe("Message Handler", () => {
 
       await handleMessage(asMessageEvent(messageWithoutChannel));
 
-      expect(logger.debug).toHaveBeenCalledWith("Slack message received", {
-        text: "Message without channel",
-        user: "U123456",
-        channel: undefined,
-      });
+      // Handler returns early for messages without channel
+      expect(logger.debug).not.toHaveBeenCalled();
     });
 
     it("should handle messages without both user and channel", async () => {
@@ -305,11 +317,8 @@ describe("Message Handler", () => {
 
       await handleMessage(asMessageEvent(minimalMessage));
 
-      expect(logger.debug).toHaveBeenCalledWith("Slack message received", {
-        text: "Minimal message",
-        user: undefined,
-        channel: undefined,
-      });
+      // Handler returns early for messages without channel
+      expect(logger.debug).not.toHaveBeenCalled();
     });
   });
 
@@ -346,11 +355,14 @@ describe("Message Handler", () => {
 
       await handleMessage(asMessageEvent(threadMessage));
 
-      expect(logger.debug).toHaveBeenCalledWith("Slack message received", {
-        text: "Reply in thread",
-        user: "U123456",
-        channel: "C123456",
-      });
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Slack message received",
+        expect.objectContaining({
+          text: "Reply in thread",
+          user: "U123456",
+          channel: "C123456",
+        })
+      );
     });
 
     it("should process edited messages", async () => {
@@ -377,10 +389,11 @@ describe("Message Handler", () => {
 
       await handleMessage(asMessageEvent(longMessage));
 
+      // Handler truncates text to 100 characters for logging
       expect(logger.debug).toHaveBeenCalledWith(
         "Slack message received",
         expect.objectContaining({
-          text: longText,
+          text: longText.substring(0, 100),
         })
       );
     });

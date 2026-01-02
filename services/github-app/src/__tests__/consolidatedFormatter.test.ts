@@ -242,7 +242,7 @@ describe("Consolidated Formatter", () => {
       const payload = buildConsolidatedSlackPayload(aggregation);
       const blocks = payload.blocks as Array<{ type: string }>;
 
-      const headerBlock = blocks.find((b) => b.type === "header");
+      const headerBlock = blocks.find((block) => block.type === "header");
       expect(headerBlock).toBeDefined();
     });
 

@@ -218,6 +218,9 @@ export const SOURCE_RELIABILITY_SCORES = {
   /** Manual team documentation (highest reliability) */
   TEAM_DOCS: 1.0,
 
+  /** Linked commit fixes: failure + commit message + diff (very high reliability) */
+  LINKED_FIX: 0.9,
+
   /** PR comments with fix explanations */
   PR_FIX_COMMENT: 0.85,
 
@@ -246,4 +249,15 @@ export const KNOWLEDGE_GC_CONFIG = {
 
   /** Maximum documents per tenant per type */
   MAX_DOCS_PER_TENANT_TYPE: 1000,
+} as const;
+
+/**
+ * Configuration for feedback URL signing.
+ */
+export const FEEDBACK_URL_CONFIG = {
+  /** Default expiry time for feedback URLs (7 days in milliseconds) */
+  DEFAULT_EXPIRY_MS: 7 * 24 * 60 * 60 * 1000,
+
+  /** Days in milliseconds multiplier */
+  DAYS_TO_MS: 24 * 60 * 60 * 1000,
 } as const;

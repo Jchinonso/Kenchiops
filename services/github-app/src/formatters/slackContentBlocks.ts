@@ -9,11 +9,13 @@ import {
   UI_EMOJI,
   UI_CONSTANTS,
   DEPENDENCY_EMOJI_MAP,
+  FORMATTER_DISPLAY_LIMITS,
   type AnalyzedFailure,
   type RecommendedAction,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
   type RelatedKnowledgeDoc,
+  type SuggestedFix,
 } from "@kenchi/shared";
 import { DISPLAY_LIMITS, getPriorityEmoji } from "./formatterUtils.js";
 
@@ -78,6 +80,7 @@ export interface ConsolidatedAnnotation {
   readonly path: string;
   readonly line: number;
   readonly message: string;
+  readonly suggestedFix?: SuggestedFix;
 }
 
 // ==================== Test Failures Block ====================
@@ -124,6 +127,23 @@ export const buildTestFailuresBlock = (
 // ==================== Annotations Block ====================
 
 /**
+ * Format a single annotation line with optional fix indicator
+ */
+const formatAnnotationLine = (annotation: ConsolidatedAnnotation): string => {
+  const baseLine = `   ${UI_EMOJI.list} \`${annotation.path}:${annotation.line}\` — ${annotation.message}`;
+
+  // Add fix indicator if a high-confidence fix is available
+  if (
+    annotation.suggestedFix &&
+    annotation.suggestedFix.confidence >= FORMATTER_DISPLAY_LIMITS.MIN_FIX_CONFIDENCE
+  ) {
+    return `${baseLine}\n      ${UI_EMOJI.tools} _Fix available: ${annotation.suggestedFix.description}_`;
+  }
+
+  return baseLine;
+};
+
+/**
  * Build consolidated affected files block
  */
 export const buildAnnotationsBlock = (
@@ -134,13 +154,7 @@ export const buildAnnotationsBlock = (
   }
 
   const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
-  const lines = annotations
-    .slice(0, displayCount)
-    .map(
-      (annotation) =>
-        `   ${UI_EMOJI.list} \`${annotation.path}:${annotation.line}\` — ${annotation.message}`
-    )
-    .join("\n");
+  const lines = annotations.slice(0, displayCount).map(formatAnnotationLine).join("\n");
 
   const moreText =
     annotations.length > displayCount
@@ -390,6 +404,41 @@ export const buildRAGFeedbackButtonsBlock = (
     ],
   };
 };
+
+// ==================== Analysis Feedback Block ====================
+
+/**
+ * Analysis feedback button value payload.
+ * Simple string analysisId for main analysis feedback.
+ */
+export interface AnalysisFeedbackButtonValue {
+  readonly analysisId: string;
+}
+
+/**
+ * Build analysis feedback buttons block.
+ * Always displayed to allow users to mark the analysis as helpful/not helpful.
+ * This enables passive learning even before any RAG documents exist.
+ */
+export const buildAnalysisFeedbackButtonsBlock = (analysisId: string): SlackActionsBlock => ({
+  type: "actions",
+  block_id: "analysis_feedback_block",
+  elements: [
+    {
+      type: "button",
+      text: { type: "plain_text", text: `${UI_EMOJI.thumbsUp} Helpful`, emoji: true },
+      style: "primary",
+      value: analysisId,
+      action_id: "feedback_helpful",
+    },
+    {
+      type: "button",
+      text: { type: "plain_text", text: `${UI_EMOJI.thumbsDown} Not Helpful`, emoji: true },
+      value: analysisId,
+      action_id: "feedback_not_helpful",
+    },
+  ],
+});
 
 // ==================== Actions Summary Block ====================
 

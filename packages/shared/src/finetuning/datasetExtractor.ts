@@ -29,20 +29,18 @@ const logger = createLogger("dataset-extractor");
 // ==================== Types ====================
 
 /**
- * Raw analysis row from database.
+ * Raw analysis row from database (joined with events).
  */
 interface AnalysisRow {
   readonly id: string;
   readonly event_id: string;
   readonly event_type: string;
   readonly event_source: string;
-  readonly event_severity: string;
-  readonly event_title: string | null;
+  readonly event_severity: string | null;
   readonly summary: string;
   readonly identified_cause: string | null;
-  readonly confidence: string;
-  readonly confidence_score: number | null;
-  readonly reasoning: string | null;
+  readonly diagnosis_confidence: number;
+  readonly full_analysis: Record<string, unknown> | null;
   readonly created_at: string;
 }
 
@@ -87,17 +85,16 @@ const EXTRACTION_QUERIES = {
     SELECT
       a.id,
       a.event_id,
-      a.event_type,
-      a.event_source,
-      a.event_severity,
-      a.event_title,
+      e.type AS event_type,
+      e.source AS event_source,
+      e.severity AS event_severity,
       a.summary,
       a.identified_cause,
-      a.confidence,
-      a.confidence_score,
-      a.reasoning,
+      a.diagnosis_confidence,
+      a.full_analysis,
       a.created_at
     FROM analyses a
+    INNER JOIN events e ON a.event_id = e.id
     INNER JOIN (
       SELECT DISTINCT analysis_id
       FROM analysis_feedback
@@ -135,10 +132,22 @@ const mapRowToEvent = (row: AnalysisRow): Event => ({
   type: row.event_type as Event["type"],
   source: row.event_source,
   timestamp: row.created_at,
-  severity: row.event_severity as Event["severity"],
-  title: row.event_title ?? undefined,
+  severity: (row.event_severity ?? "medium") as Event["severity"],
   payload: {},
 });
+
+/**
+ * Derives confidence level from numeric score.
+ */
+const deriveConfidenceLevel = (score: number): LLMAnalysisResult["confidence"] => {
+  if (score >= 0.8) {
+    return "high";
+  }
+  if (score >= 0.5) {
+    return "medium";
+  }
+  return "low";
+};
 
 /**
  * Maps database row to LLMAnalysisResult.
@@ -147,9 +156,9 @@ const mapRowToAnalysis = (row: AnalysisRow): LLMAnalysisResult => ({
   eventId: row.id,
   summary: row.summary,
   identifiedCause: row.identified_cause ?? undefined,
-  confidence: row.confidence as LLMAnalysisResult["confidence"],
-  confidenceScore: row.confidence_score ?? undefined,
-  reasoning: row.reasoning ?? undefined,
+  confidence: deriveConfidenceLevel(row.diagnosis_confidence),
+  confidenceScore: row.diagnosis_confidence,
+  reasoning: (row.full_analysis?.reasoning as string) ?? undefined,
   analyzedAt: row.created_at,
 });
 

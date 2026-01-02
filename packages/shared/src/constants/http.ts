@@ -31,14 +31,17 @@ export const ERROR_CODES = {
 
 /**
  * Default error messages for common error types.
+ * These are used in API JSON responses and should be clear but concise.
  */
 export const DEFAULT_ERROR_MESSAGES = {
-  AUTHENTICATION_REQUIRED: "Authentication required",
-  INSUFFICIENT_PERMISSIONS: "Insufficient permissions",
-  RESOURCE_NOT_FOUND: "Resource not found",
-  UNEXPECTED_ERROR: "An unexpected error occurred",
-  UNKNOWN_ERROR: "Unknown error",
-  OPERATION_TIMEOUT: "Operation timed out",
+  AUTHENTICATION_REQUIRED: "Authentication required. Please provide valid credentials.",
+  INSUFFICIENT_PERMISSIONS: "Insufficient permissions to perform this action.",
+  RESOURCE_NOT_FOUND: "The requested resource was not found.",
+  UNEXPECTED_ERROR:
+    "An unexpected error occurred. Please try again or contact support if the issue persists.",
+  UNKNOWN_ERROR: "An unknown error occurred. Please try again.",
+  OPERATION_TIMEOUT:
+    "The operation timed out. Please try again with a smaller request or check your connection.",
 } as const;
 
 /**

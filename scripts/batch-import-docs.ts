@@ -28,7 +28,7 @@ import {
   KNOWLEDGE_DOC_TYPES,
   type KnowledgeDocType,
 } from "../packages/shared/src/constants/index.js";
-import { logger } from "../packages/shared/src/index.js";
+import { logger, getErrorMessage } from "../packages/shared/src/index.js";
 
 // ==================== Constants ====================
 
@@ -226,7 +226,7 @@ const ingestFile = async (
 
     return { success: result.success };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error("Failed to ingest file", {
       path: fileInfo.relativePath,
       error: errorMessage,
@@ -442,7 +442,7 @@ const runMain = async (): Promise<void> => {
     await main();
   } catch (error) {
     logger.error("Fatal error during batch import", {
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     });
     process.exit(1);
   }

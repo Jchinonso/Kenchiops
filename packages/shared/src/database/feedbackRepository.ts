@@ -12,78 +12,26 @@ import { createLogger } from "../core/logger.js";
 import { generateEventId } from "../core/utils.js";
 import type { RAGRelevance } from "../rag/evaluation.js";
 
+import type {
+  FeedbackType,
+  CreateRAGFeedbackInput,
+  CreateAnalysisFeedbackInput,
+  CreateQAFeedbackInput,
+  FeedbackRecord,
+  RAGFeedbackMetrics,
+} from "./feedbackTypes.js";
+
+// Re-export types for backward compatibility
+export type {
+  FeedbackType,
+  CreateRAGFeedbackInput,
+  CreateAnalysisFeedbackInput,
+  CreateQAFeedbackInput,
+  FeedbackRecord,
+  RAGFeedbackMetrics,
+} from "./feedbackTypes.js";
+
 const logger = createLogger("feedback-repository");
-
-// ==================== Types ====================
-
-/**
- * Feedback type for analysis quality rating.
- */
-export type FeedbackType =
-  | "correct"
-  | "incorrect"
-  | "flaky"
-  | "needs_more_context"
-  | "rag_helpful"
-  | "rag_not_helpful"
-  | "rag_partially_helpful";
-
-/**
- * Input for creating RAG feedback.
- */
-export interface CreateRAGFeedbackInput {
-  readonly analysisId: string;
-  readonly knowledgeDocId: string;
-  readonly ragRelevance: RAGRelevance;
-  readonly retrievalSimilarity: number;
-  readonly retrievalRank: number;
-  readonly userId: string;
-  readonly slackChannel?: string;
-  readonly slackMessageTs?: string;
-}
-
-/**
- * Input for creating general analysis feedback.
- */
-export interface CreateAnalysisFeedbackInput {
-  readonly analysisId: string;
-  readonly feedbackType: FeedbackType;
-  readonly userId: string;
-  readonly correction?: string;
-  readonly slackChannel?: string;
-  readonly slackMessageTs?: string;
-}
-
-/**
- * Feedback record from database.
- */
-export interface FeedbackRecord {
-  readonly id: string;
-  readonly analysisId: string | null;
-  readonly feedbackType: FeedbackType;
-  readonly correction: string | null;
-  readonly userId: string;
-  readonly slackChannel: string | null;
-  readonly slackMessageTs: string | null;
-  readonly knowledgeDocId: string | null;
-  readonly ragRelevance: RAGRelevance | null;
-  readonly retrievalSimilarity: number | null;
-  readonly retrievalRank: number | null;
-  readonly createdAt: Date;
-}
-
-/**
- * RAG feedback metrics for evaluation.
- */
-export interface RAGFeedbackMetrics {
-  readonly totalFeedback: number;
-  readonly helpfulCount: number;
-  readonly notHelpfulCount: number;
-  readonly partiallyHelpfulCount: number;
-  readonly helpfulRate: number;
-  readonly averageSimilarity: number;
-  readonly averageRank: number;
-}
 
 // ==================== Row Types ====================
 
@@ -131,6 +79,21 @@ const FEEDBACK_QUERIES = {
     RETURNING *
   `,
 
+  INSERT_QA_FEEDBACK: `
+    INSERT INTO analysis_feedback (
+      id, analysis_id, feedback_type, correction, user_id, slack_channel, slack_message_ts
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *
+  `,
+
+  GET_QA_FEEDBACK_BY_QUERY: `
+    SELECT * FROM analysis_feedback
+    WHERE analysis_id = $1 AND user_id = $2
+      AND feedback_type IN ('qa_helpful', 'qa_not_helpful')
+    LIMIT 1
+  `,
+
   GET_FEEDBACK_BY_ANALYSIS: `
     SELECT * FROM analysis_feedback
     WHERE analysis_id = $1
@@ -155,6 +118,19 @@ const FEEDBACK_QUERIES = {
     WHERE knowledge_doc_id = $1
     ORDER BY created_at DESC
     LIMIT $2
+  `,
+
+  GET_FEEDBACK_BY_USER_AND_ANALYSIS: `
+    SELECT * FROM analysis_feedback
+    WHERE analysis_id = $1 AND user_id = $2
+    LIMIT 1
+  `,
+
+  UPDATE_FEEDBACK_TYPE: `
+    UPDATE analysis_feedback
+    SET feedback_type = $1, updated_at = NOW()
+    WHERE id = $2
+    RETURNING *
   `,
 } as const;
 
@@ -308,4 +284,155 @@ export const getRAGFeedbackByDoc = async (
   ]);
 
   return Object.freeze(result.rows.map(mapRowToFeedback));
+};
+
+/**
+ * Gets existing feedback for a user on a specific analysis.
+ * Used for deduplication - prevents duplicate votes.
+ *
+ * @param analysisId - Analysis ID
+ * @param userId - User ID (GitHub username or Slack user ID)
+ * @returns Existing feedback record or null
+ */
+export const getFeedbackByUserAndAnalysis = async (
+  analysisId: string,
+  userId: string
+): Promise<FeedbackRecord | null> => {
+  const result = await query<FeedbackRow>(FEEDBACK_QUERIES.GET_FEEDBACK_BY_USER_AND_ANALYSIS, [
+    analysisId,
+    userId,
+  ]);
+
+  return result.rows.length > 0 ? mapRowToFeedback(result.rows[0]) : null;
+};
+
+/**
+ * Updates the feedback type for an existing feedback record.
+ * Used when a user changes their vote.
+ *
+ * @param feedbackId - Feedback record ID
+ * @param feedbackType - New feedback type
+ * @returns Updated feedback record
+ */
+export const updateFeedbackType = async (
+  feedbackId: string,
+  feedbackType: FeedbackType
+): Promise<FeedbackRecord> => {
+  const result = await query<FeedbackRow>(FEEDBACK_QUERIES.UPDATE_FEEDBACK_TYPE, [
+    feedbackType,
+    feedbackId,
+  ]);
+
+  logger.info("Updated feedback type", { feedbackId, feedbackType });
+
+  return mapRowToFeedback(result.rows[0]);
+};
+
+/**
+ * Creates or updates analysis feedback with deduplication.
+ * If user already voted, updates their vote instead of creating duplicate.
+ *
+ * @param input - Analysis feedback data
+ * @returns Object with feedback record and whether it was updated vs created
+ */
+export const createOrUpdateAnalysisFeedback = async (
+  input: CreateAnalysisFeedbackInput
+): Promise<{ feedback: FeedbackRecord; wasUpdated: boolean }> => {
+  // Check for existing feedback from this user
+  const existingFeedback = await getFeedbackByUserAndAnalysis(input.analysisId, input.userId);
+
+  if (existingFeedback) {
+    // User already voted - update their vote
+    const updatedFeedback = await updateFeedbackType(existingFeedback.id, input.feedbackType);
+    logger.info("Updated existing feedback", {
+      feedbackId: existingFeedback.id,
+      analysisId: input.analysisId,
+      oldType: existingFeedback.feedbackType,
+      newType: input.feedbackType,
+    });
+    return { feedback: updatedFeedback, wasUpdated: true };
+  }
+
+  // No existing feedback - create new
+  const newFeedback = await createAnalysisFeedback(input);
+  return { feedback: newFeedback, wasUpdated: false };
+};
+
+/**
+ * Gets existing Q&A feedback for a user on a specific query.
+ * Used for deduplication - prevents duplicate votes.
+ *
+ * @param queryId - Q&A query ID
+ * @param userId - User ID (Slack user ID)
+ * @returns Existing feedback record or null
+ */
+export const getQAFeedbackByQueryAndUser = async (
+  queryId: string,
+  userId: string
+): Promise<FeedbackRecord | null> => {
+  const result = await query<FeedbackRow>(FEEDBACK_QUERIES.GET_QA_FEEDBACK_BY_QUERY, [
+    queryId,
+    userId,
+  ]);
+
+  return result.rows.length > 0 ? mapRowToFeedback(result.rows[0]) : null;
+};
+
+/**
+ * Creates Q&A feedback for a knowledge base search.
+ *
+ * @param input - Q&A feedback data
+ * @returns The created feedback record
+ */
+export const createQAFeedback = async (input: CreateQAFeedbackInput): Promise<FeedbackRecord> => {
+  const id = generateEventId();
+
+  const result = await query<FeedbackRow>(FEEDBACK_QUERIES.INSERT_QA_FEEDBACK, [
+    id,
+    input.queryId, // Store queryId as analysis_id
+    input.feedbackType,
+    input.query, // Store query text in correction field
+    input.userId,
+    input.slackChannel ?? null,
+    input.slackMessageTs ?? null,
+  ]);
+
+  logger.info("Created Q&A feedback", {
+    id,
+    queryId: input.queryId,
+    feedbackType: input.feedbackType,
+    resultCount: input.resultCount,
+  });
+
+  return mapRowToFeedback(result.rows[0]);
+};
+
+/**
+ * Creates or updates Q&A feedback with deduplication.
+ * If user already voted on this query, updates their vote.
+ *
+ * @param input - Q&A feedback data
+ * @returns Object with feedback record and whether it was updated vs created
+ */
+export const createOrUpdateQAFeedback = async (
+  input: CreateQAFeedbackInput
+): Promise<{ feedback: FeedbackRecord; wasUpdated: boolean }> => {
+  // Check for existing feedback from this user on this query
+  const existingFeedback = await getQAFeedbackByQueryAndUser(input.queryId, input.userId);
+
+  if (existingFeedback) {
+    // User already voted - update their vote
+    const updatedFeedback = await updateFeedbackType(existingFeedback.id, input.feedbackType);
+    logger.info("Updated existing Q&A feedback", {
+      feedbackId: existingFeedback.id,
+      queryId: input.queryId,
+      oldType: existingFeedback.feedbackType,
+      newType: input.feedbackType,
+    });
+    return { feedback: updatedFeedback, wasUpdated: true };
+  }
+
+  // No existing feedback - create new
+  const newFeedback = await createQAFeedback(input);
+  return { feedback: newFeedback, wasUpdated: false };
 };

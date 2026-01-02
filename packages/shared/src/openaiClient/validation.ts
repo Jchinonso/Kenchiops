@@ -109,7 +109,7 @@ const getEvidenceReferenceWarnings = (
  * Gets errors for cited incidents not found in known incidents.
  */
 const getCitedIncidentErrors = (
-  relatedIncidents: string[] | undefined,
+  relatedIncidents: readonly string[] | undefined,
   incidentsSet: Set<string>
 ): string[] =>
   (relatedIncidents ?? [])

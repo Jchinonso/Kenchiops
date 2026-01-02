@@ -466,7 +466,7 @@ describe("Multi-Language AI Extraction", () => {
       const result = await client.analyzeIncident(event, evidence);
 
       expect(result.detectedDependencyChanges).toBeDefined();
-      const goChanges = result.detectedDependencyChanges?.filter((d) => d.ecosystem === "go");
+      const goChanges = result.detectedDependencyChanges?.filter((dep) => dep.ecosystem === "go");
       expect(goChanges?.length).toBeGreaterThan(0);
     });
   });
@@ -502,7 +502,9 @@ describe("Multi-Language AI Extraction", () => {
       const result = await client.analyzeIncident(event, evidence);
 
       expect(result.detectedDependencyChanges).toBeDefined();
-      const cargoChanges = result.detectedDependencyChanges?.filter((d) => d.ecosystem === "cargo");
+      const cargoChanges = result.detectedDependencyChanges?.filter(
+        (dep) => dep.ecosystem === "cargo"
+      );
       expect(cargoChanges?.length).toBeGreaterThan(0);
     });
   });
@@ -532,7 +534,7 @@ describe("Multi-Language AI Extraction", () => {
       const result = await client.analyzeIncident(event, evidence);
 
       expect(result.detectedDependencyChanges).toBeDefined();
-      const gemChanges = result.detectedDependencyChanges?.filter((d) => d.ecosystem === "gem");
+      const gemChanges = result.detectedDependencyChanges?.filter((dep) => dep.ecosystem === "gem");
       expect(gemChanges?.length).toBeGreaterThan(0);
     });
   });
@@ -562,7 +564,9 @@ describe("Multi-Language AI Extraction", () => {
       const result = await client.analyzeIncident(event, evidence);
 
       expect(result.detectedDependencyChanges).toBeDefined();
-      const mavenChanges = result.detectedDependencyChanges?.filter((d) => d.ecosystem === "maven");
+      const mavenChanges = result.detectedDependencyChanges?.filter(
+        (dep) => dep.ecosystem === "maven"
+      );
       expect(mavenChanges?.length).toBeGreaterThan(0);
     });
   });
@@ -594,10 +598,12 @@ describe("Multi-Language AI Extraction", () => {
       expect(result.detectedDependencyChanges).toBeDefined();
       expect(result.detectedBuildConfigChanges).toBeDefined();
 
-      const npmChanges = result.detectedDependencyChanges?.filter((d) => d.ecosystem === "npm");
+      const npmChanges = result.detectedDependencyChanges?.filter((dep) => dep.ecosystem === "npm");
       expect(npmChanges?.length).toBeGreaterThan(0);
 
-      const tsConfig = result.detectedBuildConfigChanges?.find((c) => c.file === "tsconfig.json");
+      const tsConfig = result.detectedBuildConfigChanges?.find(
+        (config) => config.file === "tsconfig.json"
+      );
       expect(tsConfig).toBeDefined();
     });
   });
@@ -642,7 +648,7 @@ describe("Multi-Language AI Extraction", () => {
       const result = await client.analyzeIncident(event, evidence);
 
       expect(result.detectedDependencyChanges).toBeDefined();
-      const ecosystems = new Set(result.detectedDependencyChanges?.map((d) => d.ecosystem));
+      const ecosystems = new Set(result.detectedDependencyChanges?.map((dep) => dep.ecosystem));
       expect(ecosystems.size).toBeGreaterThan(1);
     });
 
@@ -672,15 +678,15 @@ describe("Multi-Language AI Extraction", () => {
       const deps = result.detectedDependencyChanges ?? [];
 
       // Check added package has newVersion but optional oldVersion
-      const added = deps.find((d) => d.type === "added");
+      const added = deps.find((dep) => dep.type === "added");
       expect(added?.newVersion).toBeDefined();
 
       // Check removed package has oldVersion but optional newVersion
-      const removed = deps.find((d) => d.type === "removed");
+      const removed = deps.find((dep) => dep.type === "removed");
       expect(removed?.oldVersion).toBeDefined();
 
       // Check updated package has both versions
-      const updated = deps.find((d) => d.type === "updated");
+      const updated = deps.find((dep) => dep.type === "updated");
       expect(updated?.oldVersion).toBeDefined();
       expect(updated?.newVersion).toBeDefined();
     });

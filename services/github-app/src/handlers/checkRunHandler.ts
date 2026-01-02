@@ -19,7 +19,10 @@ import {
   getCachedAnalysisByLogHash,
   cacheAnalysisByLogHash,
   addFailureToRedis,
+  trackPRFailure,
+  createFailureSummary,
   getErrorMessage,
+  findByGitHubInstallation,
   KENCHI_BRANDING,
   type AggregationKey,
   type FailureContext,
@@ -94,7 +97,8 @@ const fetchAnalysis = async (
   enrichedLog: string,
   repositoryFullName: string,
   commitSha: string,
-  checkName: string
+  checkName: string,
+  tenantId?: string
 ): Promise<ApiAnalysis> => {
   // Level 1: Check if we have cached analysis for this exact check
   logger.info("Checking cache (level 1: by check)...");
@@ -137,6 +141,7 @@ const fetchAnalysis = async (
   const response = await resilientPost<ApiAnalysis>(apiUrl, {
     failure_log: enrichedLog,
     repository: repositoryFullName,
+    tenant_id: tenantId,
   });
 
   logger.debug("Analysis API response", {
@@ -154,14 +159,18 @@ const fetchAnalysis = async (
   );
 
   // Cache by both check and log hash (fire and forget)
-  Promise.all([
-    cacheCheckAnalysis(cachedAnalysis),
-    cacheAnalysisByLogHash(logHash, cachedAnalysis),
-  ]).catch((error) => {
-    logger.warn("Failed to cache analysis", {
-      error: getErrorMessage(error),
-    });
-  });
+  void (async () => {
+    try {
+      await Promise.all([
+        cacheCheckAnalysis(cachedAnalysis),
+        cacheAnalysisByLogHash(logHash, cachedAnalysis),
+      ]);
+    } catch (error) {
+      logger.warn("Failed to cache analysis", {
+        error: getErrorMessage(error),
+      });
+    }
+  })();
 
   return response.data;
 };
@@ -212,10 +221,30 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
     pullRequestCount: pullRequestNumbers.length,
   });
 
-  // Step 2: Get analysis (from cache or API)
+  // Step 2: Look up tenant for cost tracking
+  let tenantId: string | undefined;
+  if (installation?.id) {
+    try {
+      const tenant = await findByGitHubInstallation(installation.id);
+      tenantId = tenant?.id;
+      logger.debug("Tenant lookup for cost tracking", {
+        installationId: installation.id,
+        tenantId,
+        found: !!tenant,
+      });
+    } catch (error) {
+      logger.warn("Failed to look up tenant, continuing without cost tracking", {
+        installationId: installation.id,
+        error: getErrorMessage(error),
+      });
+    }
+  }
+
+  // Step 3: Get analysis (from cache or API)
   logger.info("Fetching analysis from cache or API...", {
     repository: repository.full_name,
     commitSha: check_run.head_sha.substring(0, 7),
+    tenantId,
   });
 
   let analysis: ApiAnalysis;
@@ -224,7 +253,8 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
       enrichedLog,
       repository.full_name,
       check_run.head_sha,
-      check_run.name
+      check_run.name,
+      tenantId
     );
 
     const aiAnnotationCount = analysis.full_analysis?.codeAnnotations?.length ?? 0;
@@ -274,6 +304,32 @@ const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
       checkName: check_run.name,
       commitSha: check_run.head_sha.substring(0, 7),
     });
+
+    // Track failure for linked commit ingestion (when PR merges)
+    if (pullRequestNumbers.length > 0) {
+      const failureSummary = createFailureSummary(
+        check_run.name,
+        check_run.conclusion ?? "failure",
+        analysis.identified_cause ?? "",
+        analysis.analysis ?? "",
+        analysis.confidence ?? 0,
+        context.annotations.map((annotation) => annotation.message),
+        context.testFailures.map((testFailure) => testFailure.testName)
+      );
+
+      // Track for each associated PR
+      await Promise.all(
+        pullRequestNumbers.map((prNumber) =>
+          trackPRFailure(repository.full_name, prNumber, failureSummary)
+        )
+      );
+
+      logger.debug("Failure tracked for linked commit ingestion", {
+        repository: repository.full_name,
+        pullRequestNumbers,
+        checkName: check_run.name,
+      });
+    }
 
     return true;
   } catch (error) {

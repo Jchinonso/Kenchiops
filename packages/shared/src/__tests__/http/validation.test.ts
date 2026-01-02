@@ -697,20 +697,20 @@ describe("HTTP Validation", () => {
     it("should validate complex nested validation logic", () => {
       const schema: ValidationSchema = {
         body: {
-          email: (v) => {
-            const requiredResult = validators.required(v);
+          email: (value) => {
+            const requiredResult = validators.required(value);
             if (requiredResult !== true) return requiredResult;
-            return validators.email(v);
+            return validators.email(value);
           },
-          password: (v) => {
-            const requiredResult = validators.required(v);
+          password: (value) => {
+            const requiredResult = validators.required(value);
             if (requiredResult !== true) return requiredResult;
 
-            const stringResult = validators.string(v);
+            const stringResult = validators.string(value);
             if (stringResult !== true) return stringResult;
 
             const minLength = validators.minLength(8);
-            return minLength(v);
+            return minLength(value);
           },
         },
       };

@@ -17,6 +17,7 @@ import {
 import {
   getActiveTestCases,
   updateTestCaseResult,
+  validateExpectedDocIds,
   type RAGTestCase,
   type TestResultInput,
 } from "../database/testCaseRepository.js";
@@ -24,86 +25,37 @@ import {
   recordMetric,
   detectDrift,
   getAllBaselines,
-  type MetricBaseline,
 } from "../database/metricsHistoryRepository.js";
 import { searchDiffChunks, searchKnowledgeDocs } from "./search.js";
 import { calculateRecallAtK, calculateMRR, type RetrievalResult } from "./evaluation.js";
+import type {
+  TestSuiteResult,
+  TestCaseResult,
+  DriftReport,
+  DriftMetricReport,
+  DriftAlert,
+  DriftDetectionWithAlertsResult,
+  MetricAlertThreshold,
+} from "./driftDetectionTypes.js";
+
+// Re-export types for consumers
+export type {
+  TestSuiteResult,
+  TestCaseResult,
+  DriftReport,
+  DriftMetricReport,
+  DriftAlert,
+  DriftDetectionWithAlertsResult,
+} from "./driftDetectionTypes.js";
 
 const logger = createLogger("rag-drift-detection");
-
-// ==================== Types ====================
-
-/**
- * Test suite execution result.
- */
-export interface TestSuiteResult {
-  readonly totalTests: number;
-  readonly passed: number;
-  readonly failed: number;
-  readonly skipped: number;
-  readonly avgRecall: number;
-  readonly avgMRR: number;
-  readonly duration: number;
-  readonly testResults: readonly TestCaseResult[];
-}
-
-/**
- * Single test case result.
- */
-export interface TestCaseResult {
-  readonly testCaseId: string;
-  readonly name: string;
-  readonly passed: boolean;
-  readonly recall: number;
-  readonly mrr: number;
-  readonly retrievedDocIds: readonly string[];
-  readonly error?: string;
-}
-
-/**
- * Drift report for monitoring.
- */
-export interface DriftReport {
-  readonly timestamp: string;
-  readonly overallHealth: "healthy" | "degraded" | "critical";
-  readonly metrics: readonly DriftMetricReport[];
-  readonly alerts: readonly DriftAlert[];
-  readonly baselines: readonly MetricBaseline[];
-}
-
-/**
- * Individual metric drift report.
- */
-export interface DriftMetricReport {
-  readonly metricType: RAGMetricType;
-  readonly currentValue: number;
-  readonly baselineValue: number;
-  readonly deviationPercent: number;
-  readonly status: "ok" | "warning" | "alert";
-  readonly trend: "improving" | "stable" | "degrading";
-}
-
-/**
- * Drift alert for notifications.
- */
-export interface DriftAlert {
-  readonly severity: "warning" | "critical";
-  readonly metricType: RAGMetricType;
-  readonly message: string;
-  readonly deviationPercent: number;
-}
 
 // ==================== Metric Thresholds ====================
 
 /**
  * Maps metric types to their alert thresholds.
  */
-const METRIC_ALERT_THRESHOLDS: ReadonlyArray<{
-  metricType: RAGMetricType;
-  warningThreshold: number;
-  criticalThreshold: number;
-  higherIsBetter: boolean;
-}> = [
+const METRIC_ALERT_THRESHOLDS: readonly MetricAlertThreshold[] = [
   {
     metricType: RAG_METRIC_TYPES.RECALL_AT_5,
     warningThreshold: DRIFT_DETECTION_THRESHOLDS.RECALL_AT_5_DROP_PERCENT,
@@ -150,11 +102,38 @@ const buildRetrievalResults = (
 
 /**
  * Executes a single RAG test case.
+ * Validates expectedDocIds exist before running the test.
  */
 const executeTestCase = async (testCase: RAGTestCase): Promise<TestCaseResult> => {
   const startTime = Date.now();
 
   try {
+    // Validate expected document IDs exist before running test
+    if (testCase.expectedDocIds.length > 0) {
+      const validation = await validateExpectedDocIds(testCase.expectedDocIds);
+
+      if (!validation.valid) {
+        logger.warn("Test case skipped - missing expected documents", {
+          testCaseId: testCase.id,
+          name: testCase.name,
+          missingCount: validation.missingIds.length,
+          missingIds: validation.missingIds.slice(0, 5), // Log first 5
+        });
+
+        return {
+          testCaseId: testCase.id,
+          name: testCase.name,
+          passed: false,
+          recall: 0,
+          mrr: 0,
+          retrievedDocIds: Object.freeze([]),
+          skipped: true,
+          skipReason: `Missing ${validation.missingIds.length} expected document(s)`,
+          missingDocIds: validation.missingIds,
+        };
+      }
+    }
+
     // Search for relevant documents using the test query
     const [diffResponse, docResponse] = await Promise.all([
       searchDiffChunks({ queryText: testCase.queryText, topK: 10 }),
@@ -425,15 +404,6 @@ export const checkMetricBounds = async (
     threshold: threshold.warningThreshold,
   };
 };
-
-/**
- * Result of running drift detection with alert dispatch.
- */
-export interface DriftDetectionWithAlertsResult {
-  readonly report: DriftReport;
-  readonly alertsDispatched: number;
-  readonly dispatchErrors: number;
-}
 
 /**
  * Generates a drift report and dispatches any alerts to Slack.
