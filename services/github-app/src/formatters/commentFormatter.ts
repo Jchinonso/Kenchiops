@@ -19,6 +19,7 @@ import {
   // Constants
   DISPLAY_DEFAULTS,
   UI_EMOJI,
+  UI_CONSTANTS,
   PRIORITY_EMOJI_MAP,
   DEPENDENCY_EMOJI_MAP,
   CONFIDENCE_BADGE_THRESHOLDS,
@@ -261,7 +262,7 @@ const buildEvidenceSection = (
   const buildChanges = analysis.detectedBuildConfigChanges ?? [];
 
   const lines: string[] = [
-    `### ${UI_EMOJI.search} Evidence\n`,
+    `### ${UI_EMOJI.target} Root Cause\n`,
     buildCauseQuote(analysis),
     ...buildTestFailuresSubsection(analysis.testFailures ?? []),
     ...buildAnnotationsSubsection(failureAnnotations),
@@ -342,11 +343,16 @@ const buildErrorsSection = (analysis: AnalysisData): string => {
 };
 
 const buildConfidenceSection = (confidence: number): string => {
-  const percentage = Math.round(confidence * 100);
+  const percentage = Math.round(confidence * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
   const label = getConfidenceLabel(confidence);
   const badge = getConfidenceBadge(confidence);
 
-  return `${badge} **Analysis Confidence:** ${percentage}% (${label})\n`;
+  // Visual progress indicator for GitHub
+  const segments = UI_CONSTANTS.PROGRESS_BAR_SEGMENTS;
+  const filledSegments = Math.round(confidence * segments);
+  const progressIndicator = "█".repeat(filledSegments) + "░".repeat(segments - filledSegments);
+
+  return `${badge} **Analysis Confidence:** ${progressIndicator} ${percentage}% _(${label})_\n`;
 };
 
 const buildMetadataSection = (analysis: AnalysisData): string => {

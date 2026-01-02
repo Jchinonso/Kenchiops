@@ -94,33 +94,51 @@ export const KENCHI_BRANDING = {
 /**
  * GitHub comment header and footer templates.
  * These use template functions to allow dynamic emoji insertion.
+ *
+ * Design: Clean, professional look with clear visual hierarchy.
+ * - Headers use consistent branding with visual separator
+ * - Sections use semantic icons for quick scanning
+ * - Footer is subtle to not distract from content
  */
 export const GITHUB_COMMENT_TEMPLATES = {
-  /** Failure analysis header */
-  FAILURE_HEADER: (emoji: string): string => `## ${emoji} KenchiOps — CI Failure Analysis\n`,
-  /** Success analysis header */
-  SUCCESS_HEADER: (emoji: string): string => `## ${emoji} KenchiOps — CI Analysis Complete\n`,
-  /** Comment footer with branding */
+  /** Failure analysis header - bold, attention-grabbing */
+  FAILURE_HEADER: (emoji: string): string =>
+    `## ${emoji} KenchiOps — CI Failure Analysis\n\n<sub>AI-powered root cause analysis</sub>\n`,
+  /** Success analysis header - positive, reassuring */
+  SUCCESS_HEADER: (emoji: string): string =>
+    `## ${emoji} KenchiOps — CI Analysis Complete\n\n<sub>All checks passed</sub>\n`,
+  /** Comment footer with branding - subtle, professional */
   FOOTER: (emoji: string): string =>
-    `---\n*${emoji} Powered by [KenchiOps](https://github.com/kenchi/devops) — AI-driven DevOps Assistant*`,
-  /** User education tip for fix comments */
+    `\n---\n<sub>${emoji} Powered by <a href="https://github.com/kenchi/devops">KenchiOps</a> — AI-driven DevOps Assistant</sub>`,
+  /** User education tip - encouraging, actionable */
   RESOLUTION_TIP:
-    "\n> 📚 **Tip:** If you resolve this issue, comment with what fixed it — your solution helps the team with future issues.\n",
+    "\n> 💡 **Share your fix:** When you resolve this, reply with what worked — it helps the team learn faster.\n",
+  /** Section divider for visual separation */
+  SECTION_DIVIDER: "\n---\n",
 } as const;
 
 /**
  * Slack notification header templates for CI failures.
+ *
+ * Design: Optimized for Slack Block Kit with attention to:
+ * - Immediate visual impact with clear status
+ * - Scannable layout with consistent iconography
+ * - Contextual colors via attachment sidebar
  */
 export const SLACK_FAILURE_TEMPLATES = {
-  /** CI failure header text */
+  /** CI failure header text - immediate attention */
   HEADER: "❌ KenchiOps — CI Failure Detected",
   /** CI failure notification header with build status */
   BUILD_FAILED: "🚨 CI Build Failed",
-  /** Footer branding */
+  /** Footer branding - subtle but present */
   FOOTER: "🤖 KenchiOps",
   /** User education tip for resolution tracking */
-  RESOLUTION_TIP:
-    "💡 _Reply in this thread when you find the fix — it helps Kenchi suggest solutions for similar issues._",
+  RESOLUTION_TIP: "💡 _Reply in thread when you fix this — helps Kenchi learn for next time._",
+  /** Section labels with consistent formatting */
+  SECTION_WHY: "*🔍 Why:*",
+  SECTION_RECOMMENDED: "*🛠️ Recommended:*",
+  SECTION_ERRORS: "*📋 Errors:*",
+  SECTION_CONFIDENCE: "*📊 Confidence:*",
 } as const;
 
 // ==================== Formatter Configuration ====================

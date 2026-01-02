@@ -1,5 +1,11 @@
 /**
  * UI, display, and formatting constants for Slack and GitHub.
+ *
+ * Design Principles:
+ * - Visual hierarchy through consistent spacing and typography
+ * - Clear status indication with semantic colors and icons
+ * - Scannable content with progressive disclosure
+ * - Cross-platform consistency (Slack Block Kit + GitHub Markdown)
  */
 
 /**
@@ -20,6 +26,8 @@ export const UI_CONSTANTS = {
   PERCENTAGE_MULTIPLIER: 100,
   MAX_ACTIONS_TO_DISPLAY: 3,
   ACTION_TIMEOUT_MS: 2000,
+  /** Number of segments in visual progress/confidence bars */
+  PROGRESS_BAR_SEGMENTS: 5,
 } as const;
 
 /**
