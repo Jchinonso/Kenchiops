@@ -85,11 +85,59 @@ Analyze the following DevOps event and provide:
 5. Your confidence level in this analysis
 6. Any uncertainties or gaps in your understanding
 
+## ROOT CAUSE ANALYSIS FRAMEWORK
+Apply systematic root cause analysis by distinguishing these critical concepts:
+
+### Error Manifestation vs Fix Location
+Errors often MANIFEST in one location but require FIXES in another:
+
+| Manifestation | Typical Root Cause | Fix Location |
+|--------------|-------------------|--------------|
+| "X is not a function" in production code during tests | Incomplete mock | Test file's jest.mock() |
+| Import error in file A | Missing export | Source module being imported |
+| Type error in consuming code | Interface change | Type definition or all consumers |
+| Runtime error in handler | Invalid input upstream | Validation layer or caller |
+| Build failure in CI | Local dependency issue | package.json or lock file |
+
+### Root Cause Categories
+Systematically consider these categories:
+
+1. **Code Defects**: Syntax errors, logic bugs, type mismatches
+   - Look for: Error line numbers, stack traces, compiler output
+   - Fix location: Usually the file mentioned in the error
+
+2. **Dependency Issues**: Missing/incompatible packages, version conflicts
+   - Look for: "Cannot find module", version mismatch warnings, peer dependency errors
+   - Fix location: package.json, lock files, or dependency configuration
+
+3. **Configuration Problems**: Missing env vars, incorrect settings, schema changes
+   - Look for: "undefined", "not defined", configuration validation errors
+   - Fix location: .env files, config files, CI/CD settings
+
+4. **Test Infrastructure**: Mock issues, fixture problems, test environment
+   - Look for: Errors during test execution, "is not a function" from mocked modules
+   - Fix location: Test files, mock setup, test configuration
+
+5. **Build/Compilation**: TypeScript errors, bundler issues, asset problems
+   - Look for: Compiler errors with file:line:col format, build step failures
+   - Fix location: Source files mentioned, tsconfig, build configuration
+
+6. **Environment/Infrastructure**: CI runner issues, resource limits, network
+   - Look for: Timeout errors, out of memory, network unreachable
+   - Fix location: CI configuration, infrastructure settings
+
+### Evidence Evaluation
+Rate evidence quality when forming conclusions:
+- **Strong**: Exact file:line reference, reproducible error, clear stack trace
+- **Moderate**: Error message without location, partial stack trace
+- **Weak**: Generic failure message, no specific location, timeout without cause
+
 ## ANALYSIS CONSTRAINTS
 - Base your analysis ONLY on the evidence provided below
 - Do NOT speculate about information not present in the context
 - If evidence is insufficient, state this explicitly in the "uncertainties" field
-- Cite specific evidence (e.g., "According to log entry at 10:30:45: 'AUTH_SECRET is not defined'")`;
+- Cite specific evidence (e.g., "According to log entry at 10:30:45: 'AUTH_SECRET is not defined'")
+- When identifying affected files, list the files that need FIXING, not just where errors appear`;
 
 // ==================== Safety Constraints ====================
 
@@ -233,28 +281,23 @@ Identify test failures from ANY test framework by looking for:
 - **C#**: \`Failed\`, NUnit/xUnit output
 - **Generic**: Words like "failed", "error", "assertion" near test names
 
-### CRITICAL: Test Mock Failures - Root Cause vs Error Location
-When analyzing test failures, distinguish between where errors MANIFEST vs where they should be FIXED:
+### Test Mock Failures (Apply Root Cause Analysis Framework)
+When errors occur in production code DURING test execution, apply the "Error Manifestation vs Fix Location" framework:
 
-**Pattern: "X is not a function" / "undefined is not a function" during tests**
-- Error shows: \`TypeError: (0, shared_1.getErrorMessage) is not a function\` at \`verifySlack.ts:91\`
-- This does NOT mean \`verifySlack.ts\` needs fixing!
-- ROOT CAUSE: The test file \`verifySlack.test.ts\` has an incomplete mock of \`@kenchi/shared\`
+**Recognizing Mock-Related Failures:**
+- Pattern: \`X is not a function\` or \`Cannot read property 'X' of undefined\`
+- Context: Error in production file (e.g., \`verifySlack.ts:91\`) during test run
+- Evidence: The missing function/property comes from a mocked module
 
-**For "Affected Files" in mock-related failures:**
-- List the TEST FILE (e.g., \`*.test.ts\`) as the file needing fixes
-- NOT the production file where the runtime error occurred
-- The production code is correct; the mock is incomplete
+**Correct Analysis:**
+- Root cause: Incomplete mock in test file
+- Fix location: The TEST file (e.g., \`verifySlack.test.ts\`), NOT the production file
+- Action: Add missing export to \`jest.mock()\` call
 
-**How to identify mock issues:**
-1. Error is \`X is not a function\` or \`Cannot read property 'X' of undefined\`
-2. Error occurs in production code BUT during test execution
-3. The missing function/property is from a mocked module
-4. Fix = add the missing export to the test's \`jest.mock()\` call
-
-**Example annotation for mock failure:**
-- path: \`services/slack-bot/src/__tests__/verifySlack.test.ts\`
-- message: "Mock for @kenchi/shared is missing getErrorMessage. Add: getErrorMessage: jest.fn((e) => e instanceof Error ? e.message : String(e))"
+**Example:**
+- Error: \`TypeError: (0, shared_1.getErrorMessage) is not a function\` at \`verifySlack.ts:91\`
+- Annotation path: \`services/slack-bot/src/__tests__/verifySlack.test.ts\` (NOT verifySlack.ts)
+- Message: "Mock for @kenchi/shared is missing getErrorMessage export"
 
 ### Dependency & Build Config Detection:
 When PR diff is provided, identify:
@@ -272,29 +315,51 @@ When PR diff is provided, identify:
 7. Maximum ${maxAnnotations} annotations to keep response manageable
 8. Only include annotations for files actually mentioned in the evidence
 
-### Suggested Fix Requirements - CRITICAL:
-For each codeAnnotation, provide a "suggestedFix" when you can determine a fix with reasonable confidence:
+### Suggested Fix Requirements:
+For each codeAnnotation, provide a "suggestedFix" when you have sufficient evidence to determine a fix.
 
-**WHEN to provide suggestedFix:**
-- Missing imports or exports (confidence: 0.9)
-- Typos in variable/function names (confidence: 0.85)
-- Type mismatches with clear solutions (confidence: 0.8)
-- Missing function arguments (confidence: 0.75)
-- Incorrect module paths (confidence: 0.8)
-- Common syntax errors (confidence: 0.85)
+**Confidence Assessment Framework:**
+Assess your confidence based on these criteria (do NOT use pre-determined values):
 
-**WHEN NOT to provide suggestedFix:**
-- Complex logic errors requiring architectural changes
-- Issues where multiple valid solutions exist without clear preference
-- Errors where you lack context about the intended behavior
-- Security-related issues that need manual review
+1. **Evidence Completeness** - How much relevant context do you have?
+   - Full stack trace with line numbers → Higher confidence
+   - Only error message without location → Lower confidence
+   - Multiple corroborating evidence sources → Higher confidence
+
+2. **Fix Specificity** - How unambiguous is the solution?
+   - Single correct fix exists (e.g., exact import path) → Higher confidence
+   - Multiple valid approaches possible → Lower confidence
+   - Fix requires understanding code intent → Lower confidence
+
+3. **Pattern Recognition** - How well-known is this error pattern?
+   - Common, well-documented error → Higher confidence
+   - Unusual or environment-specific → Lower confidence
+   - Similar patterns seen in evidence → Higher confidence
+
+4. **Impact Assessment** - What's the risk of the suggested fix?
+   - Additive change (adding import/export) → Can be higher confidence
+   - Modifying existing logic → Requires stronger evidence
+   - Security-related code → Require manual review, lower confidence
+
+**PROVIDE suggestedFix when:**
+- You can trace the error to a specific, identifiable cause
+- The fix is deterministic (not a matter of preference)
+- You have sufficient evidence to validate the fix would work
+- The change is safe and reversible
+
+**DO NOT provide suggestedFix when:**
+- Multiple valid solutions exist without clear preference
+- The fix requires understanding business logic not in evidence
+- Security implications require human review
+- Architectural changes are needed
+- You are uncertain about the intended behavior
 
 **suggestedFix Format:**
-- "description": Clear, actionable description (e.g., "Add missing import for getErrorMessage")
-- "before": The problematic code snippet (optional, include if it helps understanding)
-- "after": The complete corrected code - must be valid, copy-pasteable code
-- "confidence": Number between 0 and 1 (0.7+ recommended for inclusion)
-- "language": Programming language for syntax highlighting (typescript, python, go, rust, etc.)`;
+- "description": Clear, actionable description explaining WHAT and WHY
+- "before": The problematic code snippet (include when it aids understanding)
+- "after": The complete corrected code - must be valid, copy-pasteable
+- "confidence": Your assessed confidence (0-1) based on the framework above
+- "language": Programming language for syntax highlighting`;
 };
 
 // ==================== Main Prompt Builder ====================
