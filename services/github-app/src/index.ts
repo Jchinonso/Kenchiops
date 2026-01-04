@@ -20,6 +20,7 @@ import {
   waitForRedisConnection,
   config,
   EXPRESS_CONFIG,
+  SERVER_TIMEOUTS,
   startActionQueueWorker,
   createRedisRateLimiter,
   startAggregatorWorker,
@@ -74,6 +75,10 @@ const githubRateLimiter = createRedisRateLimiter({
  */
 const createApp = (): express.Express => {
   const app = express();
+
+  // Trust first proxy (nginx/load balancer) for accurate client IP detection
+  // Required for rate limiting to work correctly behind reverse proxies
+  app.set("trust proxy", 1);
 
   // Capture raw body for webhook signature verification
   // This must come before express.json() so we have the original payload
@@ -350,6 +355,10 @@ const startServer = async (): Promise<void> => {
       redisEnabled: !!config.REDIS_URL,
     });
   });
+
+  // Configure server timeouts for slowloris attack protection
+  server.keepAliveTimeout = SERVER_TIMEOUTS.KEEP_ALIVE_MS;
+  server.headersTimeout = SERVER_TIMEOUTS.HEADERS_MS;
 
   setupGracefulShutdown(server);
 };
