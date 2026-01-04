@@ -160,6 +160,19 @@ export interface LLMDetectedBuildConfigChange {
   readonly summary: string; // Brief description of what changed
 }
 
+/** Failure category classification */
+export type FailureCategory =
+  | "dependency"
+  | "compile"
+  | "test"
+  | "runtime"
+  | "config"
+  | "infra"
+  | "unknown";
+
+/** Pipeline phase where failure occurred */
+export type PipelinePhase = "dependency" | "build" | "test" | "deploy" | "runtime" | "unknown";
+
 export interface LLMAnalysisResult {
   eventId: string;
   summary: string;
@@ -177,6 +190,12 @@ export interface LLMAnalysisResult {
   analyzedAt: string;
   llmModel?: string;
   processingTime?: number;
+
+  // Failure classification (Phase 4 - Language Agnostic)
+  /** Type of failure: dependency, compile, test, runtime, config, infra, unknown */
+  category?: FailureCategory;
+  /** Pipeline phase where failure occurred: dependency, build, test, deploy, runtime, unknown */
+  phase?: PipelinePhase;
 
   // AI-extracted structured data (Phase 3 - Language Agnostic)
   /** Dependency changes detected from PR diff (any package manager format) */
