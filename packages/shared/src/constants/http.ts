@@ -92,4 +92,19 @@ export const SERVICE_VERSIONS = {
 export const EXPRESS_CONFIG = {
   /** Maximum JSON body size for large CI context payloads */
   JSON_BODY_LIMIT: "5mb",
+  /** Maximum JSON body size for Slack bot (smaller to prevent abuse) */
+  SLACK_BOT_JSON_LIMIT: "1mb",
+} as const;
+
+/**
+ * Server timeout configuration for slowloris attack protection.
+ * These values should match or slightly exceed your load balancer timeouts.
+ */
+export const SERVER_TIMEOUTS = {
+  /** Keep-alive timeout in milliseconds (65 seconds - slightly above typical LB timeout) */
+  KEEP_ALIVE_MS: 65000,
+  /** Headers timeout in milliseconds (must be greater than keep-alive) */
+  HEADERS_MS: 66000,
+  /** Request timeout in milliseconds (2 minutes for long-running requests) */
+  REQUEST_MS: 120000,
 } as const;
