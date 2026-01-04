@@ -155,7 +155,8 @@ describe("API Routes", () => {
         "testowner",
         "testrepo",
         123,
-        expect.any(String)
+        expect.any(String),
+        true
       );
     });
 
