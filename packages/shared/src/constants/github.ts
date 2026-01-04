@@ -53,6 +53,34 @@ export const GITHUB_COMMENT_DISPLAY = {
   MAX_ERROR_LINE_LENGTH: 120,
   /** Maximum recommended actions to display */
   MAX_ACTIONS: 3,
+  /** Maximum length for a valid file path in annotations */
+  MAX_FILE_PATH_LENGTH: 200,
+} as const;
+
+/**
+ * Patterns for validating and extracting file locations from annotation paths.
+ * Used to ensure annotation paths are actual file paths, not error text.
+ */
+export const FILE_PATH_VALIDATION = {
+  /**
+   * Pattern to extract path:line from strings.
+   * Handles: file.ext:42, file.ext:42:10, path/to/file.ext:42
+   */
+  LOCATION_PATTERN: /^([^\s:()]+\.[a-zA-Z0-9]{1,10}):(\d+)(?::\d+)?/,
+  /**
+   * Pattern to validate a string looks like a real file path.
+   * Requires: alphanumeric with dots, slashes, underscores, hyphens; ends with extension.
+   */
+  VALID_PATH_PATTERN: /^[a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]{1,10}$/,
+  /**
+   * Pattern to identify evidence ID prefixes in annotation titles.
+   * These should be stripped from display as they're internal identifiers.
+   */
+  EVIDENCE_TITLE_PATTERN: /^(check|anno|test|dep|cfg|wflog|diff|src|comment)#/i,
+  /**
+   * Pattern to strip evidence prefixes from messages (e.g., "[anno#1] message").
+   */
+  EVIDENCE_PREFIX_PATTERN: /^\s*\[[a-z]+#[^\]]+\]\s*/i,
 } as const;
 
 /**
@@ -105,6 +133,8 @@ export const FILE_REFERENCE_PATTERNS = [
   /(?:^|[\s("'])([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+):(\d+)(?::\d+)?/gm,
   // TypeScript/C# compiler: path/file.ext(line,column)
   /([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)\((\d+),\d+\)/gm,
+  // Python traceback: File "path/file.py", line 12
+  /File\s+["']([^"']+\.[a-zA-Z0-9]+)["'],\s*line\s*(\d+)/gm,
 ] as const;
 
 /**
