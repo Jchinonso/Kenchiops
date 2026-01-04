@@ -10,13 +10,14 @@ import {
   deduplicateByKey,
   UI_EMOJI,
   FORMATTER_DISPLAY_LIMITS,
-  SLACK_FAILURE_TEMPLATES,
+  redactSecrets,
+  storeActionPayload,
+  normalizeTestFailure,
   type AggregatedFailures,
   type AnalyzedFailure,
   type RecommendedAction,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
-  type RelatedKnowledgeDoc,
 } from "@kenchi/shared";
 import {
   calculateAverageConfidence,
@@ -24,7 +25,6 @@ import {
   getConfidenceEmoji,
 } from "./formatterUtils.js";
 import {
-  buildTestFailuresBlock,
   buildAnnotationsBlock,
   buildCheckNamesBlock,
   buildRootCauseBlock,
@@ -57,16 +57,15 @@ export interface ConsolidatedSlackPayload {
   };
 }
 
-interface ActionButtonValue {
-  readonly actionId: string;
-  readonly actionType: string;
-  readonly description: string;
-  readonly repository: string;
-  readonly commitSha: string;
-  readonly installationId: number;
-  readonly priority: string | number;
-  readonly checkRunId?: number;
-}
+/**
+ * Action types that require confirmation before execution.
+ * These can be costly, spammy, or potentially dangerous.
+ */
+const CONFIRMATION_REQUIRED_ACTIONS = new Set([
+  "rerun_pipeline", // Can be costly and spammy
+  "notify_team", // Can spam teams
+  "post_comment", // Can leak info
+]);
 
 // ==================== Constants ====================
 
@@ -77,6 +76,55 @@ const EXECUTABLE_ACTION_TYPES = new Set([
   "manual_investigation",
   "run_diagnostic",
 ]);
+
+// ==================== Secret Scrubbing ====================
+
+/**
+ * Recursively scrubs secrets from Slack block text content.
+ * Defense-in-depth to prevent leaking tokens, keys, etc. to Slack.
+ */
+const scrubBlockSecrets = (block: SlackBlock): SlackBlock => {
+  // Handle text blocks with text property
+  if ("text" in block && block.text && typeof block.text === "object" && "text" in block.text) {
+    return {
+      ...block,
+      text: {
+        ...block.text,
+        text: redactSecrets(block.text.text),
+      },
+    } as SlackBlock;
+  }
+
+  // Handle blocks with fields array
+  if ("fields" in block && block.fields) {
+    return {
+      ...block,
+      fields: block.fields.map((field) => ({
+        ...field,
+        text: redactSecrets(field.text),
+      })),
+    } as SlackBlock;
+  }
+
+  // Handle context blocks with elements
+  if ("elements" in block && block.elements && block.type === "context") {
+    return {
+      ...block,
+      elements: (block as SlackTextBlock).elements?.map((element) => ({
+        ...element,
+        text: redactSecrets(element.text),
+      })),
+    } as SlackBlock;
+  }
+
+  return block;
+};
+
+/**
+ * Scrubs secrets from all blocks in a payload.
+ */
+const scrubAllBlockSecrets = (blocks: readonly SlackBlock[]): SlackBlock[] =>
+  blocks.map((block) => scrubBlockSecrets(block));
 
 // ==================== Pure Helper Functions ====================
 
@@ -90,19 +138,14 @@ const toTitleCase = (snakeCaseString: string): string =>
     .join(" ");
 
 /**
- * Generate unique action ID from commit sha and index
- */
-const generateActionId = (commitSha: string, index: number): string =>
-  `act_${commitSha.substring(0, 8)}_${index}`;
-
-/**
- * Consolidate test failures across checks using Map-based deduplication
+ * Consolidate test failures across checks using Map-based deduplication.
+ * Normalizes test identifiers to extract file paths from test names.
  */
 const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): ConsolidatedTestFailure[] =>
   deduplicateByKey(
     failures.flatMap((failure) => failure.testFailures ?? []),
     (testFailure) => `${testFailure.testName}|${testFailure.file ?? ""}`
-  );
+  ).map((testFailure) => normalizeTestFailure(testFailure));
 
 /**
  * Consolidate annotations across checks using Map-based deduplication
@@ -116,7 +159,7 @@ const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): Consolida
     path: annotation.path,
     line: annotation.line,
     message: annotation.message,
-    suggestedFix: annotation.suggestedFix,
+    suggestedFix: annotation.suggestedFix?.description,
   }));
 
 /**
@@ -150,57 +193,52 @@ const consolidateBuildConfigChanges = (
     (configChange) => configChange.file
   );
 
-/**
- * Consolidate related knowledge documents across failures
- */
-const consolidateRelatedKnowledge = (failures: readonly AnalyzedFailure[]): RelatedKnowledgeDoc[] =>
-  deduplicateByKey(
-    failures.flatMap((failure) => failure.relatedKnowledge ?? []),
-    (knowledgeDoc) => knowledgeDoc.id
-  );
-
 // ==================== Action Button Builders ====================
 
 /**
- * Build action button value payload
+ * Checks if an action requires confirmation before execution.
  */
-const createActionButtonValue = (
-  action: RecommendedAction,
-  actionId: string,
-  aggregation: AggregatedFailures,
-  checkRunId?: number
-): ActionButtonValue => ({
-  actionId,
-  actionType: action.actionType ?? "manual_investigation",
-  description: action.description,
-  repository: aggregation.repository.fullName,
-  commitSha: aggregation.commitSha,
-  installationId: aggregation.installationId,
-  priority: action.priority,
-  checkRunId,
-});
+const requiresConfirmation = (actionType: string): boolean =>
+  CONFIRMATION_REQUIRED_ACTIONS.has(actionType);
 
 /**
- * Create button element for an action
+ * Create button element for an action using opaque server-side stored payload.
+ * Stores full payload server-side, puts only short opaque ID in button value.
  */
 const createActionButton = (
   action: RecommendedAction,
-  index: number,
   aggregation: AggregatedFailures,
   checkRunId?: number
 ): SlackButtonElement => {
-  const actionId = generateActionId(aggregation.commitSha, index);
+  const actionType = action.actionType ?? "manual_investigation";
+
+  // Store full payload server-side, get opaque reference
+  const opaqueValue = storeActionPayload({
+    actionType,
+    description: action.description,
+    repository: aggregation.repository.fullName,
+    commitSha: aggregation.commitSha,
+    installationId: aggregation.installationId,
+    priority: action.priority,
+    checkRunId,
+  });
+
+  // Use different action_id for confirmation-required actions
+  const needsConfirmation = requiresConfirmation(actionType);
+  const actionIdPrefix = needsConfirmation ? "confirm_action" : "approve_action";
+
   return {
     type: "button",
-    text: { type: "plain_text", text: toTitleCase(action.actionType ?? "Action"), emoji: true },
-    style: "primary",
-    value: JSON.stringify(createActionButtonValue(action, actionId, aggregation, checkRunId)),
-    action_id: `approve_action_${actionId}`,
+    text: { type: "plain_text", text: toTitleCase(actionType), emoji: true },
+    style: needsConfirmation ? undefined : "primary", // No style for confirmation buttons
+    value: JSON.stringify(opaqueValue), // Small opaque value instead of full payload
+    action_id: `${actionIdPrefix}_${opaqueValue.id}`,
   };
 };
 
 /**
- * Build execute buttons block for actions
+ * Build execute buttons block for actions.
+ * Each button stores its payload server-side and uses an opaque ID.
  */
 const buildExecuteButtonsBlock = (
   actions: readonly RecommendedAction[],
@@ -209,9 +247,7 @@ const buildExecuteButtonsBlock = (
 ): SlackActionsBlock => ({
   type: "actions",
   block_id: "execute_actions_block",
-  elements: actions.map((action, index) =>
-    createActionButton(action, index, aggregation, checkRunId)
-  ),
+  elements: actions.map((action) => createActionButton(action, aggregation, checkRunId)),
 });
 
 /**
@@ -326,14 +362,19 @@ export const buildConsolidatedSlackPayload = (
   // AI-extracted context (Phase 4 - Language Agnostic)
   const dependencyChanges = consolidateDependencyChanges(failures);
   const buildConfigChanges = consolidateBuildConfigChanges(failures);
-  // RAG-retrieved context (Phase 2 - RAG Integration)
-  const relatedKnowledge = consolidateRelatedKnowledge(failures);
+  // RAG-retrieved related knowledge
+  const relatedKnowledge = deduplicateByKey(
+    failures.flatMap((failure) => failure.relatedKnowledge ?? []),
+    (doc) => doc.id
+  );
+  // Analysis ID for feedback tracking
+  const analysisId = `${repository.fullName}:${commitSha}`;
 
   // Build all block sections
   const headerBlocks = buildHeaderBlocks(repository, commitSha, prContext, confidencePercent);
   const prLinkBlock = buildPRLinkBlock(repository, prContext);
-  const testFailuresBlock = buildTestFailuresBlock(testFailures);
-  const annotationsBlock = buildAnnotationsBlock(annotations);
+  // Combine test failures and annotations into unified Affected Files block
+  const annotationsBlock = buildAnnotationsBlock(annotations, testFailures);
   const rootCauseBlock = buildRootCauseBlock(
     causes,
     testFailures.length > 0,
@@ -344,8 +385,6 @@ export const buildConsolidatedSlackPayload = (
   const configBlock = buildConfigChangesBlock(buildConfigChanges);
   // RAG-retrieved blocks
   const relatedKnowledgeBlock = buildRelatedKnowledgeBlock(relatedKnowledge);
-  // Analysis ID for feedback tracking
-  const analysisId = `${repository.fullName}:${commitSha}`;
   // RAG feedback buttons (only shown if knowledge docs exist)
   const ragFeedbackBlock = buildRAGFeedbackButtonsBlock(relatedKnowledge, analysisId);
   // Analysis feedback buttons (always shown for passive learning)
@@ -362,7 +401,6 @@ export const buildConsolidatedSlackPayload = (
     },
     ...(failures.length > 0 ? [buildCheckNamesBlock(failures)] : []),
     rootCauseBlock,
-    ...(testFailuresBlock ? [testFailuresBlock] : []),
     ...(annotationsBlock ? [annotationsBlock] : []),
     ...(dependencyBlock ? [dependencyBlock] : []),
     ...(configBlock ? [configBlock] : []),
@@ -374,19 +412,21 @@ export const buildConsolidatedSlackPayload = (
     { type: "divider" },
     {
       type: "context",
-      elements: [{ type: "mrkdwn", text: SLACK_FAILURE_TEMPLATES.RESOLUTION_TIP }],
-    },
-    {
-      type: "context",
       elements: [
         { type: "mrkdwn", text: `${UI_EMOJI.robot} _Generated by KenchiOps DevOps Assistant_` },
       ],
     },
   ];
 
+  // Scrub secrets from all text content before sending to Slack
+  const scrubbedBlocks = scrubAllBlockSecrets(blocks);
+  const scrubbedText = redactSecrets(
+    `${UI_EMOJI.alert} CI Failure: ${failures.length} check(s) failed in ${repository.fullName}`
+  );
+
   return {
-    blocks,
-    text: `${UI_EMOJI.alert} CI Failure: ${failures.length} check(s) failed in ${repository.fullName}`,
+    blocks: scrubbedBlocks,
+    text: scrubbedText,
     metadata: {
       repository: repository.fullName,
       commitSha,
