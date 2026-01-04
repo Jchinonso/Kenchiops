@@ -14,13 +14,9 @@ import {
   getRepoName,
   getFirstSentence,
   buildTruncatedList,
-  generateFeedbackUrl,
-  config,
   // Constants
   DISPLAY_DEFAULTS,
   UI_EMOJI,
-  UI_CONSTANTS,
-  PRIORITY_EMOJI_MAP,
   DEPENDENCY_EMOJI_MAP,
   CONFIDENCE_BADGE_THRESHOLDS,
   GITHUB_COMMENT_DISPLAY,
@@ -30,11 +26,23 @@ import {
   type CITestFailure,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
+  type LLMAnalysisResult,
 } from "@kenchi/shared";
+import {
+  formatFeedbackLinksContent,
+  getPriorityEmoji,
+  type FeedbackLinks,
+} from "./formatterUtils.js";
 
 // Type aliases for local use
 type DetectedDependencyChange = LLMDetectedDependencyChange;
 type DetectedBuildConfigChange = LLMDetectedBuildConfigChange;
+type RecommendedAction = Readonly<{
+  readonly priority?: string | number;
+  readonly description: string;
+  readonly actionType?: string;
+  readonly reasoning?: string;
+}>;
 
 /**
  * Analysis data structure for GitHub comments.
@@ -44,10 +52,7 @@ export interface AnalysisData {
   readonly analysis?: string;
   readonly identified_cause?: string;
   readonly confidence: number;
-  readonly recommended_actions?: ReadonlyArray<{
-    readonly priority: string;
-    readonly description: string;
-  }>;
+  readonly recommended_actions?: readonly RecommendedAction[];
   readonly repository: string;
   readonly checkName?: string;
   readonly headSha?: string;
@@ -73,6 +78,8 @@ export interface AnalysisData {
   // AI-extracted structured data (Phase 3 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly DetectedDependencyChange[];
   readonly detectedBuildConfigChanges?: readonly DetectedBuildConfigChange[];
+  readonly full_analysis?: LLMAnalysisResult;
+  readonly feedbackLinks?: FeedbackLinks;
 }
 
 // ============================================================================
@@ -82,7 +89,6 @@ export interface AnalysisData {
 const HEADER = GITHUB_COMMENT_TEMPLATES.FAILURE_HEADER(UI_EMOJI.failure);
 const SUCCESS_HEADER = GITHUB_COMMENT_TEMPLATES.SUCCESS_HEADER(UI_EMOJI.success);
 const FOOTER = GITHUB_COMMENT_TEMPLATES.FOOTER(UI_EMOJI.robot);
-const { RESOLUTION_TIP } = GITHUB_COMMENT_TEMPLATES;
 
 // ============================================================================
 // Helper Functions
@@ -91,9 +97,6 @@ const { RESOLUTION_TIP } = GITHUB_COMMENT_TEMPLATES;
 const getFailureAnnotations = (annotations?: readonly CIAnnotation[]): CIAnnotation[] =>
   annotations?.filter((annotation) => annotation.level === "failure") ?? [];
 
-const getPriorityEmoji = (priority: string): string =>
-  PRIORITY_EMOJI_MAP[priority.toLowerCase()] ?? UI_EMOJI.priorityDefault;
-
 const getDependencyEmoji = (type: string): string =>
   DEPENDENCY_EMOJI_MAP[type] ?? UI_EMOJI.depUpdated;
 
@@ -101,17 +104,48 @@ const getConfidenceBadge = (confidence: number): string =>
   CONFIDENCE_BADGE_THRESHOLDS.find((threshold) => confidence >= threshold.min)?.emoji ??
   UI_EMOJI.confidenceVeryLow;
 
+const resolveAnnotations = (analysis: AnalysisData): CIAnnotation[] => {
+  if (analysis.annotations && analysis.annotations.length > 0) {
+    return [...analysis.annotations];
+  }
+
+  const aiAnnotations = analysis.full_analysis?.codeAnnotations ?? [];
+  return aiAnnotations.map((annotation) => ({
+    path: annotation.path,
+    startLine: annotation.line,
+    level: annotation.level,
+    message: annotation.message,
+  }));
+};
+
 // ============================================================================
 // Item Formatters
 // ============================================================================
 
 const formatTestFailure = (failure: CITestFailure): string => {
-  const location = failure.file ? ` in \`${failure.file}\`` : "";
+  const showLocation = failure.file && failure.file !== failure.testName;
+  const location = showLocation ? ` in \`${failure.file}\`` : "";
   return `- ${UI_EMOJI.failure} \`${truncateText(failure.testName, GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH)}\`${location}`;
 };
 
-const formatAnnotation = (annotation: CIAnnotation): string =>
-  `- ${UI_EMOJI.location} \`${annotation.path}:${annotation.startLine}\` — ${truncateText(annotation.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
+const formatAnnotation = (annotation: CIAnnotation): string => {
+  const hasPath = annotation.path !== "unknown" && annotation.path.length > 0;
+  const hasLine = annotation.startLine > 0;
+  const location = hasPath
+    ? hasLine
+      ? `\`${annotation.path}:${annotation.startLine}\``
+      : `\`${annotation.path}\``
+    : "";
+  const separator = location ? " — " : "";
+
+  return `- ${UI_EMOJI.location} ${location}${separator}${truncateText(annotation.message, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)}`;
+};
+
+const BUILD_CONFIG_CHANGE_EMOJI_MAP: Record<DetectedBuildConfigChange["changeType"], string> = {
+  added: "➕",
+  modified: "📝",
+  deleted: "➖",
+} as const;
 
 const formatDependencyChange = (
   dependencyChange:
@@ -133,12 +167,12 @@ const formatDependencyChange = (
 };
 
 const formatBuildConfigChange = (change: DetectedBuildConfigChange): string => {
-  const icon = change.changeType === "added" ? "➕" : change.changeType === "deleted" ? "➖" : "📝";
+  const icon = BUILD_CONFIG_CHANGE_EMOJI_MAP[change.changeType];
   return `- ${icon} \`${change.file}\` — ${change.summary}`;
 };
 
-const formatAction = (action: { priority: string; description: string }, index: number): string =>
-  `${index + 1}. ${getPriorityEmoji(action.priority)} ${action.description}`;
+const formatAction = (action: RecommendedAction, index: number): string =>
+  `${index + 1}. ${getPriorityEmoji(action.priority ?? "medium")} ${action.description}`;
 
 const formatError = (errorMessage: string): string =>
   truncateText(errorMessage, GITHUB_COMMENT_DISPLAY.MAX_ERROR_LINE_LENGTH);
@@ -160,12 +194,16 @@ const buildSummaryLine = (analysis: AnalysisData): string => {
   return `${UI_EMOJI.package} **${repoName}** ${checkName} pipeline failed${testInfo}\n`;
 };
 
-const buildCauseQuote = (analysis: AnalysisData): string => {
-  const cause = analysis.identified_cause ?? getFirstSentence(analysis.analysis ?? "");
+const buildCauseQuote = (analysis: AnalysisData, annotations: readonly CIAnnotation[]): string => {
+  const analysisSentence = getFirstSentence(analysis.analysis ?? "");
+  const cause =
+    analysis.identified_cause ??
+    analysis.full_analysis?.identifiedCause ??
+    (analysisSentence || analysis.summary || "");
 
   // If no meaningful cause identified, provide context about the failure
   if (!cause) {
-    const hasAnnotations = (analysis.annotations?.length ?? 0) > 0;
+    const hasAnnotations = annotations.length > 0;
     const hasTestFailures = (analysis.testFailures?.length ?? 0) > 0;
 
     if (hasTestFailures) {
@@ -255,15 +293,28 @@ const buildBuildConfigSubsection = (changes: readonly DetectedBuildConfigChange[
 
 const buildEvidenceSection = (
   analysis: AnalysisData,
+  annotations: readonly CIAnnotation[],
   failureAnnotations: CIAnnotation[]
 ): string => {
   // Prefer AI-extracted dependency changes, fallback to legacy
-  const depChanges = analysis.detectedDependencyChanges ?? analysis.dependencyChanges ?? [];
-  const buildChanges = analysis.detectedBuildConfigChanges ?? [];
+  const depChanges =
+    analysis.detectedDependencyChanges && analysis.detectedDependencyChanges.length > 0
+      ? analysis.detectedDependencyChanges
+      : analysis.full_analysis?.detectedDependencyChanges &&
+          analysis.full_analysis.detectedDependencyChanges.length > 0
+        ? analysis.full_analysis.detectedDependencyChanges
+        : (analysis.dependencyChanges ?? []);
+  const buildChanges =
+    analysis.detectedBuildConfigChanges && analysis.detectedBuildConfigChanges.length > 0
+      ? analysis.detectedBuildConfigChanges
+      : analysis.full_analysis?.detectedBuildConfigChanges &&
+          analysis.full_analysis.detectedBuildConfigChanges.length > 0
+        ? analysis.full_analysis.detectedBuildConfigChanges
+        : [];
 
   const lines: string[] = [
-    `### ${UI_EMOJI.target} Root Cause\n`,
-    buildCauseQuote(analysis),
+    `### ${UI_EMOJI.search} Evidence\n`,
+    buildCauseQuote(analysis, annotations),
     ...buildTestFailuresSubsection(analysis.testFailures ?? []),
     ...buildAnnotationsSubsection(failureAnnotations),
     ...buildDependencySubsection(depChanges),
@@ -271,6 +322,24 @@ const buildEvidenceSection = (
   ];
 
   return lines.join("\n");
+};
+
+const buildSecondaryFindingsSection = (analysis: AnalysisData): string => {
+  const findings = analysis.full_analysis?.uncertainties ?? [];
+  if (findings.length === 0) {
+    return "";
+  }
+
+  return [
+    `### ${UI_EMOJI.info} Secondary Findings\n`,
+    ...buildTruncatedList(
+      findings,
+      (finding) => `- ${UI_EMOJI.info} ${finding}`,
+      GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS,
+      "findings"
+    ),
+    "",
+  ].join("\n");
 };
 
 const buildImpactSection = (analysis: AnalysisData, failureAnnotations: CIAnnotation[]): string => {
@@ -297,7 +366,10 @@ const buildImpactSection = (analysis: AnalysisData, failureAnnotations: CIAnnota
 };
 
 const buildRecommendationSection = (analysis: AnalysisData): string => {
-  const actions = analysis.recommended_actions ?? [];
+  const actions: readonly RecommendedAction[] =
+    analysis.recommended_actions && analysis.recommended_actions.length > 0
+      ? analysis.recommended_actions
+      : (analysis.full_analysis?.recommendedActions ?? []);
   if (actions.length === 0) {
     return "";
   }
@@ -317,8 +389,11 @@ const buildRecommendationSection = (analysis: AnalysisData): string => {
   return [`### ${UI_EMOJI.tools} Recommendation\n`, ...fixedLines, ""].join("\n");
 };
 
-const buildErrorsSection = (analysis: AnalysisData): string => {
-  const errors = collectCIErrors(analysis.annotations, analysis.testFailures, {
+const buildErrorsSection = (
+  analysis: AnalysisData,
+  annotations: readonly CIAnnotation[]
+): string => {
+  const errors = collectCIErrors(annotations, analysis.testFailures, {
     includeEmoji: false,
   });
 
@@ -343,20 +418,32 @@ const buildErrorsSection = (analysis: AnalysisData): string => {
 };
 
 const buildConfidenceSection = (confidence: number): string => {
-  const percentage = Math.round(confidence * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
+  const percentage = Math.round(confidence * 100);
   const label = getConfidenceLabel(confidence);
   const badge = getConfidenceBadge(confidence);
 
-  // Visual progress indicator for GitHub
-  const segments = UI_CONSTANTS.PROGRESS_BAR_SEGMENTS;
-  const filledSegments = Math.round(confidence * segments);
-  const progressIndicator = "█".repeat(filledSegments) + "░".repeat(segments - filledSegments);
+  return `${badge} **Analysis Confidence:** ${percentage}% (${label})\n`;
+};
 
-  return `${badge} **Analysis Confidence:** ${progressIndicator} ${percentage}% _(${label})_\n`;
+const buildClassificationLine = (analysis: AnalysisData): string | null => {
+  const category = analysis.full_analysis?.category;
+  const phase = analysis.full_analysis?.phase;
+  const parts = [category, phase].filter(Boolean);
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return `${UI_EMOJI.target} **Classification:** ${parts.join(" / ")}`;
 };
 
 const buildMetadataSection = (analysis: AnalysisData): string => {
+  const classification = buildClassificationLine(analysis);
   const metadataItems: Array<{ condition: boolean; content: string }> = [
+    {
+      condition: !!classification,
+      content: classification ?? "",
+    },
     {
       condition: !!analysis.checkName,
       content: `${UI_EMOJI.workflow} **Workflow:** ${analysis.checkName}`,
@@ -380,52 +467,18 @@ const buildMetadataSection = (analysis: AnalysisData): string => {
   return `\n<details>\n<summary>${UI_EMOJI.details} Details</summary>\n\n${parts.join(" • ")}\n\n</details>\n`;
 };
 
-/**
- * Get the feedback API base URL from config.
- */
-const getFeedbackBaseUrl = (): string => {
-  const baseUrl = config.GITHUB_APP_URL || config.API_URL;
-  if (!baseUrl) {
-    return "";
-  }
-  return `${baseUrl}/api/feedback`;
-};
-
-/**
- * Get the signing secret for feedback URLs.
- */
-const getFeedbackSecret = (): string => config.GITHUB_WEBHOOK_SECRET || "";
-
-/**
- * Generate analysis ID from repository and commit SHA.
- */
-const generateAnalysisId = (analysis: AnalysisData): string =>
-  `${analysis.repository}:${analysis.headSha || "unknown"}`;
-
-/**
- * Build the feedback section with helpful/not helpful links.
- */
-const buildFeedbackSection = async (analysis: AnalysisData): Promise<string> => {
-  const baseUrl = getFeedbackBaseUrl();
-  const secret = getFeedbackSecret();
-
-  // Skip feedback section if no URL or secret configured
-  if (!baseUrl || !secret) {
+const buildFeedbackSection = (analysis: AnalysisData): string => {
+  if (!analysis.feedbackLinks) {
     return "";
   }
 
-  const analysisId = generateAnalysisId(analysis);
-
-  const [helpfulUrl, notHelpfulUrl] = await Promise.all([
-    generateFeedbackUrl(baseUrl, analysisId, "correct", secret),
-    generateFeedbackUrl(baseUrl, analysisId, "incorrect", secret),
-  ]);
-
-  return [
-    "\n---\n",
-    `**Was this analysis helpful?** [${UI_EMOJI.thumbsUp} Yes](${helpfulUrl}) · [${UI_EMOJI.thumbsDown} No](${notHelpfulUrl})`,
+  const lines = [
+    GITHUB_COMMENT_TEMPLATES.SECTION_DIVIDER.trim(),
+    ...formatFeedbackLinksContent(analysis.feedbackLinks),
     "",
-  ].join("\n");
+  ];
+
+  return lines.join("\n");
 };
 
 // ============================================================================
@@ -434,23 +487,22 @@ const buildFeedbackSection = async (analysis: AnalysisData): Promise<string> => 
 
 /**
  * Format analysis into a rich GitHub comment with structured sections.
- * Includes feedback links for user rating.
  */
-export const formatGitHubComment = async (analysis: AnalysisData): Promise<string> => {
-  const failureAnnotations = getFailureAnnotations(analysis.annotations);
-  const feedbackSection = await buildFeedbackSection(analysis);
+export const formatGitHubComment = (analysis: AnalysisData): string => {
+  const annotations = resolveAnnotations(analysis);
+  const failureAnnotations = getFailureAnnotations(annotations);
 
   const sections = [
     HEADER,
     buildSummaryLine(analysis),
-    buildEvidenceSection(analysis, failureAnnotations),
+    buildEvidenceSection(analysis, annotations, failureAnnotations),
+    buildSecondaryFindingsSection(analysis),
     buildImpactSection(analysis, failureAnnotations),
     buildRecommendationSection(analysis),
-    buildErrorsSection(analysis),
+    buildErrorsSection(analysis, annotations),
     buildConfidenceSection(analysis.confidence),
     buildMetadataSection(analysis),
-    feedbackSection,
-    RESOLUTION_TIP,
+    buildFeedbackSection(analysis),
     FOOTER,
   ];
 
@@ -463,7 +515,12 @@ export const formatGitHubComment = async (analysis: AnalysisData): Promise<strin
 export const formatAllClearComment = (analysis: AnalysisData): string => {
   const repoName = getRepoName(analysis.repository);
   const percentage = Math.round(analysis.confidence * 100);
-  const cause = analysis.identified_cause ?? analysis.analysis ?? "No critical issues detected.";
+  const cause =
+    analysis.identified_cause ??
+    analysis.full_analysis?.identifiedCause ??
+    analysis.analysis ??
+    analysis.summary ??
+    "No critical issues detected.";
 
   return [
     SUCCESS_HEADER,
