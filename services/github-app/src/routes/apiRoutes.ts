@@ -30,6 +30,7 @@ import {
 } from "../services/workflowService.js";
 import { appConfig } from "../config/appConfig.js";
 import { formatGitHubComment } from "../formatters/commentFormatter.js";
+import { createFeedbackLinks } from "../formatters/formatterUtils.js";
 
 const router = Router();
 const logger = createLogger("github-app");
@@ -70,6 +71,11 @@ router.post(
     }
 
     // Format the comment with all enriched context
+    const analysisId = analysis.headSha
+      ? `${repository}:${analysis.headSha}`
+      : analysis.full_analysis?.eventId;
+    const feedbackLinks = analysisId ? await createFeedbackLinks(analysisId) : null;
+
     const comment = await formatGitHubComment({
       summary: analysis.analysis || analysis.summary,
       analysis: analysis.analysis,
@@ -84,11 +90,15 @@ router.post(
       prContext: analysis.prContext,
       workflowContext: analysis.workflowContext,
       dependencyChanges: analysis.dependencyChanges,
+      detectedDependencyChanges: analysis.detectedDependencyChanges,
+      detectedBuildConfigChanges: analysis.detectedBuildConfigChanges,
+      full_analysis: analysis.full_analysis,
+      feedbackLinks: feedbackLinks ?? undefined,
     });
 
     try {
       // Post the comment
-      await postPRComment(installationId, owner, repo, pr_number, comment);
+      await postPRComment(installationId, owner, repo, pr_number, comment, true);
 
       // Also create check run with annotations if we have any
       if (analysis.annotations && analysis.annotations.length > 0 && analysis.headSha) {
