@@ -9,13 +9,15 @@ import {
   UI_EMOJI,
   UI_CONSTANTS,
   DEPENDENCY_EMOJI_MAP,
+  GITHUB_COMMENT_DISPLAY,
+  FILE_PATH_VALIDATION,
   FORMATTER_DISPLAY_LIMITS,
+  SLACK_ACTION_IDS,
   type AnalyzedFailure,
   type RecommendedAction,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
   type RelatedKnowledgeDoc,
-  type SuggestedFix,
 } from "@kenchi/shared";
 import { DISPLAY_LIMITS, getPriorityEmoji } from "./formatterUtils.js";
 
@@ -65,6 +67,13 @@ export interface ConsolidatedTestFailure {
   readonly line?: number;
 }
 
+export interface ConsolidatedAnnotation {
+  readonly path: string;
+  readonly line: number;
+  readonly message: string;
+  readonly suggestedFix?: string;
+}
+
 /**
  * RAG feedback button value payload.
  * Serialized as JSON in button value for feedback recording.
@@ -76,117 +85,205 @@ export interface RAGFeedbackButtonValue {
   readonly rank: number;
 }
 
-export interface ConsolidatedAnnotation {
-  readonly path: string;
-  readonly line: number;
-  readonly message: string;
-  readonly suggestedFix?: SuggestedFix;
-}
-
-// ==================== Test Failures Block ====================
+// ==================== Annotations Block ====================
 
 /**
- * Build consolidated test failures block
+ * Truncates a display string to max length with ellipsis.
  */
-export const buildTestFailuresBlock = (
-  testFailures: readonly ConsolidatedTestFailure[]
-): SlackTextBlock | null => {
-  if (testFailures.length === 0) {
+const truncateDisplay = (
+  text: string,
+  maxLength: number = FORMATTER_DISPLAY_LIMITS.SLACK_MAX_LINE_CHARS
+): string => (text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`);
+
+/**
+ * Extracts and validates file location from annotation path and line.
+ * Returns null if the path doesn't look like a valid file path.
+ * Handles cases where error text is accidentally included in the path field.
+ *
+ * @param path - Raw path string from annotation
+ * @param line - Line number from annotation
+ * @returns Formatted location string (e.g., "src/index.ts:42") or null if invalid
+ */
+const extractValidFileLocation = (path: string, line: number): string | null => {
+  if (!path || path === "unknown" || path.length > GITHUB_COMMENT_DISPLAY.MAX_FILE_PATH_LENGTH) {
     return null;
   }
 
-  const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
-  const testLines = testFailures
-    .slice(0, displayCount)
-    .map((testFailure) => {
-      const filePath = testFailure.file
-        ? testFailure.line
-          ? `${testFailure.file}:${testFailure.line}`
-          : testFailure.file
-        : null;
-      return `   ${UI_EMOJI.list} \`${testFailure.testName}\`${filePath ? ` (${filePath})` : ""}`;
-    })
-    .join("\n");
+  const trimmedPath = path.trim();
 
-  const moreText =
-    testFailures.length > displayCount
-      ? `\n   _...and ${testFailures.length - displayCount} more_`
-      : "";
+  // Try to extract file:line pattern from the path itself (handles embedded line numbers)
+  const embeddedMatch = trimmedPath.match(FILE_PATH_VALIDATION.LOCATION_PATTERN);
+  if (embeddedMatch) {
+    const extractedPath = embeddedMatch[1];
+    const extractedLine = parseInt(embeddedMatch[2], 10);
+    if (FILE_PATH_VALIDATION.VALID_PATH_PATTERN.test(extractedPath)) {
+      return `${extractedPath}:${extractedLine}`;
+    }
+  }
+
+  // Validate the path looks like a real file path (not error text)
+  if (!FILE_PATH_VALIDATION.VALID_PATH_PATTERN.test(trimmedPath)) {
+    return null;
+  }
+
+  // Return path with line if valid
+  return line > 0 ? `${trimmedPath}:${line}` : trimmedPath;
+};
+
+const normalizeAnnotationMessage = (message: string): string => {
+  const stripped = message.replace(FILE_PATH_VALIDATION.EVIDENCE_PREFIX_PATTERN, "").trim();
+  const lines = stripped.split("\n").map((line) => line.trim());
+  const firstLine = lines.find((line) => line.length > 0 && !/^TEST_ERROR_/i.test(line)) ?? "";
+  return truncateDisplay(firstLine, 60);
+};
+
+/**
+ * Formats an annotation entry showing error and fix compactly.
+ * Shows: `path:line` — error (Fix: short fix)
+ * Returns null if no valid file location.
+ */
+const formatAnnotationEntry = (annotation: ConsolidatedAnnotation): string | null => {
+  const location = extractValidFileLocation(annotation.path, annotation.line);
+  if (!location) {
+    return null;
+  }
+
+  // Build compact display: error first, then fix if present
+  const errorSummary = normalizeAnnotationMessage(annotation.message);
+  const fixNote = annotation.suggestedFix
+    ? ` _(Fix: ${normalizeAnnotationMessage(annotation.suggestedFix)})_`
+    : "";
+
+  return `   ${UI_EMOJI.list} \`${location}\` — ${errorSummary}${fixNote}`;
+};
+
+/**
+ * Formats a test failure entry.
+ * Test failures should be pre-normalized via normalizeTestFailure() at consolidation.
+ * Validates file paths to prevent error text from appearing in location.
+ */
+const formatTestFailureEntry = (testFailure: ConsolidatedTestFailure): string | null => {
+  const location = testFailure.file
+    ? extractValidFileLocation(testFailure.file, testFailure.line ?? 0)
+    : null;
+  if (!location) {
+    return null;
+  }
+
+  const truncatedTestName = truncateDisplay(testFailure.testName, 50);
+  const display =
+    testFailure.file && testFailure.file === testFailure.testName
+      ? "Test failed"
+      : `Test failed: ${truncatedTestName}`;
+  return `   ${UI_EMOJI.list} \`${location}\` — ${display}`;
+};
+
+/**
+ * Build consolidated affected files block
+ * Combines annotations and test failures into a single unified view.
+ * Applies display limits and shows "...and N more" for overflow.
+ */
+export const buildAnnotationsBlock = (
+  annotations: readonly ConsolidatedAnnotation[],
+  testFailures: readonly ConsolidatedTestFailure[] = []
+): SlackTextBlock | null => {
+  const displayLimit = DISPLAY_LIMITS.slackAnnotationsPerCheck;
+
+  const formattedAnnotations = annotations
+    .map((annotation) => formatAnnotationEntry(annotation))
+    .filter((line): line is string => Boolean(line));
+
+  const formattedTestFailures = testFailures
+    .map((testFailure) => formatTestFailureEntry(testFailure))
+    .filter((line): line is string => Boolean(line));
+
+  const totalCount = formattedAnnotations.length + formattedTestFailures.length;
+  if (totalCount === 0) {
+    return null;
+  }
+
+  // Format annotation entries (prioritize these first)
+  const annotationLines = formattedAnnotations.slice(0, displayLimit);
+
+  // Calculate remaining slots for test failures
+  const remainingSlots = Math.max(0, displayLimit - annotationLines.length);
+  const testFailureLines = formattedTestFailures.slice(0, remainingSlots);
+
+  const displayedLines = [...annotationLines, ...testFailureLines];
+  const displayedCount = displayedLines.length;
+  const overflowCount = totalCount - displayedCount;
+
+  const moreText = overflowCount > 0 ? `\n   _...and ${overflowCount} more_` : "";
 
   return {
     type: "context",
     elements: [
       {
         type: "mrkdwn",
-        text: `${UI_EMOJI.test} *Failed Tests (${testFailures.length}):*\n${testLines}${moreText}`,
+        text: `${UI_EMOJI.location} *Affected Files (${totalCount}):*\n${displayedLines.join("\n")}${moreText}`,
       },
-    ],
-  };
-};
-
-// ==================== Annotations Block ====================
-
-/**
- * Format a single annotation line with optional fix indicator
- */
-const formatAnnotationLine = (annotation: ConsolidatedAnnotation): string => {
-  const baseLine = `   ${UI_EMOJI.list} \`${annotation.path}:${annotation.line}\` — ${annotation.message}`;
-
-  // Add fix indicator if a high-confidence fix is available
-  if (
-    annotation.suggestedFix &&
-    annotation.suggestedFix.confidence >= FORMATTER_DISPLAY_LIMITS.MIN_FIX_CONFIDENCE
-  ) {
-    return `${baseLine}\n      ${UI_EMOJI.tools} _Fix available: ${annotation.suggestedFix.description}_`;
-  }
-
-  return baseLine;
-};
-
-/**
- * Build consolidated affected files block
- */
-export const buildAnnotationsBlock = (
-  annotations: readonly ConsolidatedAnnotation[]
-): SlackTextBlock | null => {
-  if (annotations.length === 0) {
-    return null;
-  }
-
-  const displayCount = DISPLAY_LIMITS.slackAnnotationsPerCheck;
-  const lines = annotations.slice(0, displayCount).map(formatAnnotationLine).join("\n");
-
-  const moreText =
-    annotations.length > displayCount
-      ? `\n   _...and ${annotations.length - displayCount} more_`
-      : "";
-
-  return {
-    type: "context",
-    elements: [
-      { type: "mrkdwn", text: `${UI_EMOJI.location} *Affected Files:*\n${lines}${moreText}` },
     ],
   };
 };
 
 // ==================== Check Names Block ====================
 
+/** Maximum characters for check names line to prevent Slack overflow */
+const MAX_CHECK_NAMES_CHARS = 200;
+
 /**
- * Build check names list block
+ * Build check names list block with truncation.
+ * Shows first N checks that fit within character limit.
  */
-export const buildCheckNamesBlock = (failures: readonly AnalyzedFailure[]): SlackTextBlock => ({
-  type: "section",
-  text: {
-    type: "mrkdwn",
-    text: `*Checks:* ${failures.map((failure) => `\`${failure.checkName}\``).join(", ")}`,
-  },
-});
+export const buildCheckNamesBlock = (failures: readonly AnalyzedFailure[]): SlackTextBlock => {
+  const displayLimit = DISPLAY_LIMITS.slackMaxChecks;
+  const displayedFailures = failures.slice(0, displayLimit);
+
+  // Build check names string with character limit
+  const checkNames = displayedFailures.map((failure) => `\`${failure.checkName}\``);
+
+  // Truncate if total string exceeds limit
+  const fullText = checkNames.join(", ");
+  const overflowCount = failures.length - displayedFailures.length;
+  const moreText = overflowCount > 0 ? `, _+${overflowCount} more_` : "";
+
+  const truncatedText =
+    fullText.length > MAX_CHECK_NAMES_CHARS
+      ? `${fullText.slice(0, MAX_CHECK_NAMES_CHARS)}...${moreText}`
+      : `${fullText}${moreText}`;
+
+  return {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*Checks:* ${truncatedText}`,
+    },
+  };
+};
 
 // ==================== Root Cause Block ====================
 
+/** Maximum root causes to display (top 3 highest confidence) */
+const MAX_ROOT_CAUSES = 3;
+
+/** Maximum characters per root cause line */
+const MAX_CAUSE_LINE_CHARS = 200;
+
 /**
- * Build root cause analysis block
- * Always returns a block - provides fallback message if no causes identified
+ * Normalizes a root cause string for consistent display and deduplication.
+ * - Trims whitespace
+ * - Collapses multiple spaces/newlines
+ * - Removes leading/trailing punctuation
+ */
+const normalizeRootCause = (cause: string): string =>
+  cause
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[.,;:\s]+|[.,;:\s]+$/g, "");
+
+/**
+ * Build root cause analysis block.
+ * Normalizes causes, limits to top 3, and provides fallback message.
  */
 export const buildRootCauseBlock = (
   causes: readonly string[],
@@ -207,14 +304,40 @@ export const buildRootCauseBlock = (
     };
   }
 
+  // Normalize and deduplicate causes
+  const normalizedCauses = causes
+    .map((cause) => normalizeRootCause(cause))
+    .filter((cause) => cause.length > 0);
+
+  // Deduplicate by normalized lowercase (keeps first occurrence)
+  const uniqueCauses = Array.from(
+    normalizedCauses
+      .reduce((seen, cause) => {
+        const key = cause.toLowerCase();
+        return seen.has(key) ? seen : seen.set(key, cause);
+      }, new Map<string, string>())
+      .values()
+  );
+
+  // Limit to top 3 and truncate each line
+  const displayCauses = uniqueCauses.slice(0, MAX_ROOT_CAUSES);
+  const overflowCount = uniqueCauses.length - displayCauses.length;
+
   const causeText =
-    causes.length === 1
-      ? causes[0]
-      : causes.map((cause, causeIndex) => `${causeIndex + 1}. ${cause}`).join("\n");
+    displayCauses.length === 1
+      ? truncateDisplay(displayCauses[0], MAX_CAUSE_LINE_CHARS)
+      : displayCauses
+          .map(
+            (cause, causeIndex) =>
+              `${causeIndex + 1}. ${truncateDisplay(cause, MAX_CAUSE_LINE_CHARS)}`
+          )
+          .join("\n");
+
+  const moreText = overflowCount > 0 ? `\n_...and ${overflowCount} more potential causes_` : "";
 
   return {
     type: "section",
-    text: { type: "mrkdwn", text: `*${UI_EMOJI.search} Root Cause:*\n${causeText}` },
+    text: { type: "mrkdwn", text: `*${UI_EMOJI.search} Root Cause:*\n${causeText}${moreText}` },
   };
 };
 
@@ -373,7 +496,6 @@ export const buildRAGFeedbackButtonsBlock = (
     return null;
   }
 
-  // Create feedback value with first doc info (most relevant)
   const topDoc = docs[0];
   const feedbackValue: RAGFeedbackButtonValue = {
     analysisId,
@@ -393,32 +515,21 @@ export const buildRAGFeedbackButtonsBlock = (
         text: { type: "plain_text", text: `${UI_EMOJI.thumbsUp} Helpful`, emoji: true },
         style: "primary",
         value: valueString,
-        action_id: "rag_feedback_helpful",
+        action_id: SLACK_ACTION_IDS.RAG_FEEDBACK_HELPFUL,
       },
       {
         type: "button",
         text: { type: "plain_text", text: `${UI_EMOJI.thumbsDown} Not Helpful`, emoji: true },
         value: valueString,
-        action_id: "rag_feedback_not_helpful",
+        action_id: SLACK_ACTION_IDS.RAG_FEEDBACK_NOT_HELPFUL,
       },
     ],
   };
 };
 
-// ==================== Analysis Feedback Block ====================
-
 /**
- * Analysis feedback button value payload.
- * Simple string analysisId for main analysis feedback.
- */
-export interface AnalysisFeedbackButtonValue {
-  readonly analysisId: string;
-}
-
-/**
- * Build analysis feedback buttons block.
- * Always displayed to allow users to mark the analysis as helpful/not helpful.
- * This enables passive learning even before any RAG documents exist.
+ * Build analysis feedback buttons block for passive learning.
+ * Always shown to collect user feedback on analysis quality.
  */
 export const buildAnalysisFeedbackButtonsBlock = (analysisId: string): SlackActionsBlock => ({
   type: "actions",
@@ -428,14 +539,14 @@ export const buildAnalysisFeedbackButtonsBlock = (analysisId: string): SlackActi
       type: "button",
       text: { type: "plain_text", text: `${UI_EMOJI.thumbsUp} Helpful`, emoji: true },
       style: "primary",
-      value: analysisId,
-      action_id: "feedback_helpful",
+      value: JSON.stringify({ analysisId, feedback: "positive" }),
+      action_id: SLACK_ACTION_IDS.FEEDBACK_HELPFUL,
     },
     {
       type: "button",
       text: { type: "plain_text", text: `${UI_EMOJI.thumbsDown} Not Helpful`, emoji: true },
-      value: analysisId,
-      action_id: "feedback_not_helpful",
+      value: JSON.stringify({ analysisId, feedback: "negative" }),
+      action_id: SLACK_ACTION_IDS.FEEDBACK_NOT_HELPFUL,
     },
   ],
 });
