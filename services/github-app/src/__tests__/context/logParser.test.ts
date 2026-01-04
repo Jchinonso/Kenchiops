@@ -551,7 +551,7 @@ FAIL src/utils.test.ts
         expect(failures.length).toBeGreaterThanOrEqual(2);
       });
 
-      it("should not extract detailed error messages (AI handles this)", () => {
+      it("should extract error bodies for AI context", () => {
         const logs = `
 FAIL src/utils.test.ts
   ● detailed test with complex assertion
@@ -561,9 +561,10 @@ FAIL src/utils.test.ts
         const failures = extractTestFailures(logs);
 
         if (failures.length > 0) {
-          // Simplified extraction doesn't parse detailed errors
-          expect(failures[0].error).toBe("Test failed (see logs for details)");
-          // File and line are not extracted (AI handles this)
+          // Should capture actual error body for AI analysis
+          expect(failures[0].error).toContain("Expected:");
+          expect(failures[0].error).toContain("Received:");
+          // File and line are not extracted from test name (normalizeTestFailure handles this)
           expect(failures[0].file).toBeUndefined();
           expect(failures[0].line).toBeUndefined();
         }
