@@ -68,6 +68,9 @@ export type {
   EvidenceReference,
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
+  // Failure Classification Types
+  FailureCategory,
+  PipelinePhase,
   // Action Proposal Types
   ActionProposal,
   ActionType,
@@ -259,6 +262,7 @@ export {
   getConfidenceColor,
   getConfidenceEmoji,
   truncateText,
+  sanitizeIdPart,
   formatRelativeTime,
   pluralize,
   getRepoName,
@@ -277,6 +281,7 @@ export {
   collectCIErrors,
   formatDependencyChange,
   formatDependencyChanges,
+  normalizeTestFailure,
   type CIAnnotation,
   type CITestFailure,
   type CollectErrorsOptions,
@@ -295,6 +300,7 @@ export {
   formatLogs,
   formatMetrics,
   formatGitHistory,
+  formatRelatedEvents,
   formatKnowledgeDocs,
   estimateTokens,
   truncateEvidence,
@@ -353,10 +359,19 @@ export {
   enqueueAction,
   startActionQueueWorker,
   getActionQueueStats,
+  storeActionPayload,
+  retrieveActionPayload,
+  deleteActionPayload,
+  parseOpaqueActionValue,
+  getActionStoreStats,
+  clearActionStore,
   type ActionExecutionContext,
   type ActionExecutionResult,
   type ActionJobPayload,
   type ActionResultEvent,
+  type StoredActionPayload,
+  type OpaqueActionValue,
+  type ActionVerificationContext,
 } from "./actions/index.js";
 
 // Constants (re-export all)
