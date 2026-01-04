@@ -29,6 +29,8 @@ import {
   SLACK_BOT_DB_CONFIG,
   SLACK_BOT_MESSAGES,
   shouldSkipSlackBotRateLimit,
+  SERVER_TIMEOUTS,
+  EXPRESS_CONFIG,
 } from "@kenchi/shared";
 import { loadAppConfig } from "./config/appConfig.js";
 import { setupSlackHandlers } from "./handlers/slackEventSetup.js";
@@ -155,7 +157,12 @@ const startService = async (): Promise<void> => {
 
     // Initialize Express app for HTTP endpoints (CI failure processing)
     const expressApp = express();
-    expressApp.use(express.json());
+
+    // Trust first proxy (nginx/load balancer) for accurate client IP detection
+    // Required for rate limiting to work correctly behind reverse proxies
+    expressApp.set("trust proxy", 1);
+
+    expressApp.use(express.json({ limit: EXPRESS_CONFIG.SLACK_BOT_JSON_LIMIT }));
 
     // Redis-backed rate limiter for HTTP endpoints
     const httpRateLimiter = createRedisRateLimiter({
@@ -193,6 +200,10 @@ const startService = async (): Promise<void> => {
         queueWorkerEnabled: !!config.REDIS_URL,
       });
     });
+
+    // Configure server timeouts for slowloris attack protection
+    server.keepAliveTimeout = SERVER_TIMEOUTS.KEEP_ALIVE_MS;
+    server.headersTimeout = SERVER_TIMEOUTS.HEADERS_MS;
 
     // Handle graceful shutdown
     const shutdown = createShutdownHandler(server, stopNotificationWorker);
