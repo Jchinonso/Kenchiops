@@ -4,6 +4,8 @@
  */
 
 export interface LogEntry {
+  /** Optional stable ID for cross-run traceability (e.g., hash of timestamp+source+message) */
+  id?: string;
   source?: string;
   timestamp?: string;
   level?: "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
