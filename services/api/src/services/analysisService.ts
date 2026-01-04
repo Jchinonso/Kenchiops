@@ -320,8 +320,9 @@ export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeR
   const confidenceResult = calculateConfidenceScore(analysisResult, enrichedEvidence);
 
   // Persist analysis to database for evaluation and fine-tuning
+  // Note: eventId is null because we don't persist events to the events table
   const savedAnalysis = await createAnalysis({
-    eventId: event.id,
+    eventId: null,
     summary: analysisResult.summary,
     identifiedCause: analysisResult.identifiedCause,
     diagnosisConfidence: confidenceResult.finalScore,
