@@ -10,6 +10,11 @@ import {
   PRIORITY_EMOJI_MAP,
   PRIORITY_ORDER,
   PRIORITY_ORDER_DEFAULT,
+  GITHUB_COMMENT_TEMPLATES,
+  config,
+  generateFeedbackUrl,
+  createLogger,
+  getErrorMessage,
   type AnalyzedFailure,
   type RecommendedAction,
 } from "@kenchi/shared";
@@ -26,6 +31,13 @@ export const DISPLAY_LIMITS = {
   slackAnnotationsPerCheck: 50,
   slackMaxChecks: 10,
 } as const;
+
+const logger = createLogger("github-app");
+
+export interface FeedbackLinks {
+  readonly correctUrl: string;
+  readonly incorrectUrl: string;
+}
 
 // ==================== Utility Functions ====================
 
@@ -107,4 +119,43 @@ export const mergeRecommendedActions = (
         getNumericPriority(firstAction.priority) - getNumericPriority(secondAction.priority)
     )
     .slice(0, DISPLAY_LIMITS.recommendedActions);
+};
+
+/**
+ * Generate signed feedback URLs for analysis comments.
+ */
+export const createFeedbackLinks = async (analysisId: string): Promise<FeedbackLinks | null> => {
+  if (!config.GITHUB_WEBHOOK_SECRET) {
+    logger.warn("Feedback links skipped - missing webhook secret", { analysisId });
+    return null;
+  }
+
+  const baseUrl = `${config.GITHUB_APP_URL}/api/feedback`;
+
+  try {
+    const [correctUrl, incorrectUrl] = await Promise.all([
+      generateFeedbackUrl(baseUrl, analysisId, "correct", config.GITHUB_WEBHOOK_SECRET),
+      generateFeedbackUrl(baseUrl, analysisId, "incorrect", config.GITHUB_WEBHOOK_SECRET),
+    ]);
+
+    return { correctUrl, incorrectUrl };
+  } catch (error) {
+    logger.warn("Failed to generate feedback links", {
+      analysisId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
+
+/**
+ * Format feedback prompt lines for GitHub comments.
+ */
+export const formatFeedbackLinksContent = (links: FeedbackLinks): string[] => {
+  const tip = GITHUB_COMMENT_TEMPLATES.RESOLUTION_TIP.trim();
+  const lines = [
+    `**Was this analysis helpful?** [👍 Yes](${links.correctUrl}) · [👎 No](${links.incorrectUrl})`,
+  ];
+
+  return tip ? [...lines, tip] : lines;
 };
