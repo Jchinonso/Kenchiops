@@ -14,12 +14,11 @@ import {
   collectCIErrors,
   DISPLAY_DEFAULTS,
   truncateText,
+  getFirstSentence,
   SLACK_FAILURE_TEMPLATES,
   FORMATTER_DISPLAY_LIMITS,
-  UI_EMOJI,
-  UI_CONSTANTS,
 } from "@kenchi/shared";
-import type { SlackBlock, CIFailureAnalysis } from "../types/slackTypes.js";
+import type { SlackBlock, CIFailureAnalysis, CIAnnotation } from "../types/slackTypes.js";
 
 /**
  * Slack attachment type compatible with Slack API.
@@ -29,6 +28,12 @@ export interface MessageAttachment {
   fallback: string;
   blocks: SlackBlock[];
 }
+
+type DependencyChange =
+  | NonNullable<CIFailureAnalysis["detectedDependencyChanges"]>[number]
+  | NonNullable<CIFailureAnalysis["dependencyChanges"]>[number];
+type BuildConfigChange = NonNullable<CIFailureAnalysis["detectedBuildConfigChanges"]>[number];
+type RecommendedAction = NonNullable<CIFailureAnalysis["recommended_actions"]>[number];
 
 /**
  * Gets priority emoji for action priority.
@@ -45,6 +50,63 @@ export const getPriorityEmoji = (priority: string | number): string => {
   }
   const p = priority.toLowerCase() as keyof typeof PRIORITY_EMOJI;
   return PRIORITY_EMOJI[p] || PRIORITY_EMOJI.low;
+};
+
+const resolveAnnotations = (analysis: CIFailureAnalysis): readonly CIAnnotation[] => {
+  if (analysis.annotations && analysis.annotations.length > 0) {
+    return analysis.annotations;
+  }
+
+  const aiAnnotations = analysis.full_analysis?.codeAnnotations ?? [];
+  return aiAnnotations.map((annotation) => ({
+    path: annotation.path,
+    startLine: annotation.line,
+    level: annotation.level,
+    message: annotation.message,
+    title: annotation.title,
+    suggestedFix: annotation.suggestedFix,
+  }));
+};
+
+const resolveDependencyChanges = (analysis: CIFailureAnalysis): readonly DependencyChange[] => {
+  if (analysis.detectedDependencyChanges && analysis.detectedDependencyChanges.length > 0) {
+    return analysis.detectedDependencyChanges;
+  }
+
+  const aiChanges = analysis.full_analysis?.detectedDependencyChanges;
+  if (aiChanges && aiChanges.length > 0) {
+    return aiChanges;
+  }
+
+  return analysis.dependencyChanges ?? [];
+};
+
+const resolveBuildConfigChanges = (analysis: CIFailureAnalysis): readonly BuildConfigChange[] => {
+  if (analysis.detectedBuildConfigChanges && analysis.detectedBuildConfigChanges.length > 0) {
+    return analysis.detectedBuildConfigChanges;
+  }
+
+  const aiChanges = analysis.full_analysis?.detectedBuildConfigChanges;
+  if (aiChanges && aiChanges.length > 0) {
+    return aiChanges;
+  }
+
+  return [];
+};
+
+const resolveRecommendedActions = (analysis: CIFailureAnalysis): readonly RecommendedAction[] => {
+  if (analysis.recommended_actions && analysis.recommended_actions.length > 0) {
+    return analysis.recommended_actions;
+  }
+
+  return (
+    analysis.full_analysis?.recommendedActions?.map((action) => ({
+      description: action.description,
+      priority: action.priority,
+      actionType: action.actionType,
+      reasoning: action.reasoning,
+    })) ?? []
+  );
 };
 
 /**
@@ -85,20 +147,23 @@ const createSummaryBlock = (analysis: CIFailureAnalysis): SlackBlock => {
 
 /**
  * Creates the "Why" section with bullet points explaining the failure.
- * Uses progressive disclosure - most important reason first, details after.
  */
-const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
+const createWhyBlock = (
+  analysis: CIFailureAnalysis,
+  annotations: readonly CIAnnotation[],
+  dependencyChanges: readonly DependencyChange[],
+  buildConfigChanges: readonly BuildConfigChange[]
+): SlackBlock => {
   const reasons: string[] = [];
 
-  // Add the main identified cause (highest priority)
-  if (analysis.identified_cause) {
-    reasons.push(analysis.identified_cause);
-  } else if (analysis.analysis) {
-    // Use first sentence of analysis if no identified cause
-    const firstSentence = analysis.analysis.split(/[.!?]/)[0]?.trim();
-    if (firstSentence) {
-      reasons.push(firstSentence);
-    }
+  // Add the main identified cause
+  const analysisSentence = getFirstSentence(analysis.analysis ?? "");
+  const cause =
+    analysis.identified_cause ??
+    analysis.full_analysis?.identifiedCause ??
+    (analysisSentence || analysis.full_analysis?.summary || "");
+  if (cause) {
+    reasons.push(cause);
   }
 
   // Add context from test failures
@@ -106,35 +171,30 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
     const failureCount = analysis.testFailures.length;
     if (failureCount === 1) {
       reasons.push(
-        `${UI_EMOJI.test} 1 test failed: \`${truncateText(analysis.testFailures[0].testName, FORMATTER_DISPLAY_LIMITS.DETAILED_TEST_NAME_LENGTH)}\``
+        `1 test failed: \`${truncateText(analysis.testFailures[0].testName, FORMATTER_DISPLAY_LIMITS.DETAILED_TEST_NAME_LENGTH)}\``
       );
     } else {
-      reasons.push(`${UI_EMOJI.test} ${failureCount} tests failed`);
+      reasons.push(`${failureCount} tests failed in this run`);
     }
   }
 
-  // Add annotation context (error locations)
-  const failureAnnotations =
-    analysis.annotations?.filter((annotation) => annotation.level === "failure") || [];
+  // Add annotation context
+  const failureAnnotations = annotations.filter((annotation) => annotation.level === "failure");
   if (failureAnnotations.length > 0 && reasons.length < 3) {
     const firstAnn = failureAnnotations[0];
-    reasons.push(`${UI_EMOJI.location} Error at \`${firstAnn.path}:${firstAnn.startLine}\``);
+    reasons.push(`Error in \`${firstAnn.path}:${firstAnn.startLine}\``);
   }
 
   // Add dependency change context if available (prefer AI-extracted, fallback to legacy)
-  const depChanges = analysis.detectedDependencyChanges ?? analysis.dependencyChanges ?? [];
-  if (depChanges.length > 0) {
-    const depCount = depChanges.length;
-    reasons.push(`${UI_EMOJI.package} ${depCount} dependency change${depCount > 1 ? "s" : ""}`);
+  if (dependencyChanges.length > 0) {
+    const depCount = dependencyChanges.length;
+    reasons.push(`${depCount} dependency change${depCount > 1 ? "s" : ""} in this PR`);
   }
 
   // Add build config change context if available (AI-extracted)
-  const buildChanges = analysis.detectedBuildConfigChanges ?? [];
-  if (buildChanges.length > 0) {
-    const configCount = buildChanges.length;
-    reasons.push(
-      `${UI_EMOJI.workflow} ${configCount} build config change${configCount > 1 ? "s" : ""}`
-    );
+  if (buildConfigChanges.length > 0) {
+    const configCount = buildConfigChanges.length;
+    reasons.push(`${configCount} build config change${configCount > 1 ? "s" : ""} detected`);
   }
 
   // Ensure we have at least one reason
@@ -142,24 +202,48 @@ const createWhyBlock = (analysis: CIFailureAnalysis): SlackBlock => {
     reasons.push("CI pipeline execution failed");
   }
 
-  // Format with visual bullets
-  const reasonsList = reasons.map((reason) => `  •  ${reason}`).join("\n");
+  const reasonsList = reasons.map((reason) => `• ${reason}`).join("\n");
 
   return {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `${SLACK_FAILURE_TEMPLATES.SECTION_WHY}\n${reasonsList}`,
+      text: `*🔍 Why:*\n${reasonsList}`,
     },
   };
 };
 
 /**
- * Creates the "Recommended" section with prioritized action items.
- * Actions are sorted by priority and displayed with semantic icons.
+ * Creates the "Secondary Findings" section when uncertainties are present.
+ */
+const createSecondaryFindingsBlock = (analysis: CIFailureAnalysis): SlackBlock | null => {
+  const findings = analysis.full_analysis?.uncertainties ?? [];
+  if (findings.length === 0) {
+    return null;
+  }
+
+  const displayFindings = findings.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED);
+  const moreText =
+    findings.length > FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED
+      ? `\n_...and ${findings.length - FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED} more findings_`
+      : "";
+
+  const findingsText = displayFindings.map((finding) => `• ${finding}`).join("\n");
+
+  return {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*ℹ️ Secondary Findings:*\n${findingsText}${moreText}`,
+    },
+  };
+};
+
+/**
+ * Creates the "Recommended" section with action items.
  */
 const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null => {
-  const actions = analysis.recommended_actions || [];
+  const actions = resolveRecommendedActions(analysis);
 
   if (actions.length === 0) {
     return null;
@@ -169,9 +253,9 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
   const topActions = actions.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ACTION_BUTTONS);
   const actionsList = topActions
     .map((action, index) => {
-      const emoji = getPriorityEmoji(action.priority);
-      // Number each action for clarity, with priority emoji
-      return `  ${index + 1}. ${emoji} ${action.description}`;
+      const emoji = getPriorityEmoji(action.priority ?? "medium");
+      const prefix = index === 0 ? emoji : "•";
+      return `${prefix} ${action.description}`;
     })
     .join("\n");
 
@@ -179,14 +263,14 @@ const createRecommendedBlock = (analysis: CIFailureAnalysis): SlackBlock | null 
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `${SLACK_FAILURE_TEMPLATES.SECTION_RECOMMENDED}\n${actionsList}`,
+      text: `*🛠️ Recommended:*\n${actionsList}`,
     },
   };
 };
 
 /**
  * Creates errors section with collected CI errors.
- * Shows actual error messages in code blocks for easy reading.
+ * Uses functional patterns - no let declarations.
  */
 const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
   if (errors.length === 0) {
@@ -195,43 +279,39 @@ const createErrorsBlock = (errors: readonly string[]): SlackBlock | null => {
 
   // Limit errors based on display limit
   const displayErrors = errors.slice(0, FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED);
-  const moreCount = errors.length - FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED;
-  const moreText = moreCount > 0 ? `\n_+${moreCount} more error${moreCount > 1 ? "s" : ""}_` : "";
+  const moreText =
+    errors.length > FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED
+      ? `\n_...and ${errors.length - FORMATTER_DISPLAY_LIMITS.MAX_ERRORS_DISPLAYED} more errors_`
+      : "";
 
-  // Format each error in its own code block for clarity
-  const errorText = displayErrors
-    .map((error) => `\`\`\`${truncateText(error, 100)}\`\`\``)
-    .join("\n");
+  const errorText = [
+    ...displayErrors.map((error) => `\`\`\`${truncateText(error, 100)}\`\`\``),
+    ...(moreText ? [moreText] : []),
+  ].join("\n");
 
   return {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `${SLACK_FAILURE_TEMPLATES.SECTION_ERRORS}\n${errorText}${moreText}`,
+      text: `*📋 Errors:*\n${errorText}`,
     },
   };
 };
 
 /**
- * Creates confidence score section with visual progress indicator.
- * Uses a simple visualization for quick scanning.
+ * Creates confidence score section with visual indicator.
  */
 const createConfidenceBlock = (confidence: number): SlackBlock => {
-  const percentage = Math.round(confidence * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
+  const percentage = Math.round(confidence * 100);
   const label = getConfidenceLabel(confidence);
   const emoji = getConfidenceEmoji(confidence);
-
-  // Create a simple visual indicator using configured segments
-  const segments = UI_CONSTANTS.PROGRESS_BAR_SEGMENTS;
-  const filledSegments = Math.round(confidence * segments);
-  const progressIndicator = "█".repeat(filledSegments) + "░".repeat(segments - filledSegments);
 
   return {
     type: "context",
     elements: [
       {
         type: "mrkdwn",
-        text: `${emoji} *Analysis Confidence:* ${progressIndicator} ${percentage}% _(${label})_`,
+        text: `${emoji} *Confidence:* ${percentage}% (${label})`,
       },
     ],
   };
@@ -272,6 +352,13 @@ const createFooterBlock = (analysis: CIFailureAnalysis): SlackBlock => {
   // Add workflow duration if available
   if (analysis.workflowContext?.duration) {
     parts.push(`⏱️ ${analysis.workflowContext.duration}`);
+  }
+
+  const category = analysis.full_analysis?.category;
+  const phase = analysis.full_analysis?.phase;
+  const classification = [category, phase].filter(Boolean).join(" / ");
+  if (classification) {
+    parts.push(`🎯 ${classification}`);
   }
 
   // Fallback if no parts
@@ -355,8 +442,12 @@ const createActionsBlock = (analysis: CIFailureAnalysis): SlackBlock | null => {
  * @returns Array of Slack blocks
  */
 export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[] => {
+  const annotations = resolveAnnotations(analysis);
+  const dependencyChanges = resolveDependencyChanges(analysis);
+  const buildConfigChanges = resolveBuildConfigChanges(analysis);
+
   // Collect errors using shared utility
-  const errors = collectCIErrors(analysis.annotations, analysis.testFailures, {
+  const errors = collectCIErrors(annotations, analysis.testFailures, {
     includeEmoji: false,
   });
 
@@ -365,7 +456,8 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
     createBrandedHeaderBlock(),
     createSummaryBlock(analysis),
     createDivider(),
-    createWhyBlock(analysis),
+    createWhyBlock(analysis, annotations, dependencyChanges, buildConfigChanges),
+    createSecondaryFindingsBlock(analysis),
     createRecommendedBlock(analysis),
     createErrorsBlock(errors),
     createDivider(),
@@ -392,11 +484,17 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
  */
 export const createAnalysisAttachments = (analysis: CIFailureAnalysis): MessageAttachment[] => {
   const color = getConfidenceColor(analysis.confidence);
+  const analysisText = analysis.analysis || analysis.full_analysis?.summary;
+  const cause =
+    analysis.identified_cause ??
+    analysis.full_analysis?.identifiedCause ??
+    analysisText ??
+    "CI failure analysis";
 
   return [
     {
       color,
-      fallback: `❌ CI Failure in ${analysis.repository}: ${analysis.identified_cause || analysis.analysis}`,
+      fallback: `❌ CI Failure in ${analysis.repository}: ${cause}`,
       blocks: formatCIFailureBlocks(analysis),
     },
   ];
