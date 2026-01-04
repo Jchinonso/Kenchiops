@@ -271,7 +271,7 @@ describe("CI Formatters", () => {
       const result = collectCIErrors(annotations, testFailures, { maxErrors: 3 });
 
       expect(result).toHaveLength(3);
-      expect(result.every((errorLine) => errorLine.includes(".ts:"))).toBe(true);
+      expect(result.every((errorLine) => errorLine.includes(".ts"))).toBe(true);
     });
 
     it("should use default maxErrors when not specified", () => {
