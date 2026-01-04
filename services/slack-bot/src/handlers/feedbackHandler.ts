@@ -190,11 +190,8 @@ export const handlePositiveFeedback = async (
 
   // Send ephemeral confirmation to user
   if (respond) {
-    const message = wasUpdated
-      ? `${UI_EMOJI.success} Your vote has been updated to helpful.`
-      : `${UI_EMOJI.success} Thanks for the feedback! This analysis has been marked as helpful and will be used to improve future suggestions.`;
     await respond({
-      text: message,
+      text: `${UI_EMOJI.success} Thanks for the feedback! This analysis has been marked as helpful and will be used to improve future suggestions.`,
       replace_original: false,
       response_type: "ephemeral",
     });
@@ -222,15 +219,12 @@ export const handleNegativeFeedback = async (
   const analysisId = action.value ?? "";
   logger.info("Negative feedback received", { analysisId, userId });
 
-  const wasUpdated = await persistAnalysisFeedback(analysisId, "incorrect", userId);
+  await persistAnalysisFeedback(analysisId, "incorrect", userId);
 
   // Send ephemeral confirmation to user
   if (respond) {
-    const message = wasUpdated
-      ? `${UI_EMOJI.commit} Your vote has been updated to not helpful.`
-      : `${UI_EMOJI.commit} Thanks for the feedback! We'll use this to improve our analysis accuracy.`;
     await respond({
-      text: message,
+      text: `${UI_EMOJI.commit} Thanks for the feedback! We'll use this to improve our analysis accuracy.`,
       replace_original: false,
       response_type: "ephemeral",
     });
@@ -340,15 +334,12 @@ export const handleQAFeedbackHelpful = async (
   const queryId = action.value ?? "";
   logger.info("Q&A helpful feedback received", { queryId, userId });
 
-  const wasUpdated = await persistQAFeedback(queryId, "qa_helpful", userId);
+  await persistQAFeedback(queryId, "qa_helpful", userId);
 
   // Send ephemeral confirmation to user
   if (respond) {
-    const message = wasUpdated
-      ? `${UI_EMOJI.success} Your vote has been updated to helpful.`
-      : `${UI_EMOJI.success} Thanks! Your feedback helps improve our knowledge base.`;
     await respond({
-      text: message,
+      text: `${UI_EMOJI.success} Thanks! Your feedback helps improve our knowledge base.`,
       replace_original: false,
       response_type: "ephemeral",
     });
@@ -370,15 +361,12 @@ export const handleQAFeedbackNotHelpful = async (
   const queryId = action.value ?? "";
   logger.info("Q&A not helpful feedback received", { queryId, userId });
 
-  const wasUpdated = await persistQAFeedback(queryId, "qa_not_helpful", userId);
+  await persistQAFeedback(queryId, "qa_not_helpful", userId);
 
   // Send ephemeral confirmation to user
   if (respond) {
-    const message = wasUpdated
-      ? `${UI_EMOJI.commit} Your vote has been updated to not helpful.`
-      : `${UI_EMOJI.commit} Thanks for letting us know. We'll use this to improve search results.`;
     await respond({
-      text: message,
+      text: `${UI_EMOJI.commit} Thanks for letting us know. We'll use this to improve search results.`,
       replace_original: false,
       response_type: "ephemeral",
     });
