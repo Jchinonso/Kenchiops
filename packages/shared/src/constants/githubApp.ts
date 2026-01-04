@@ -103,10 +103,10 @@ export const KENCHI_BRANDING = {
 export const GITHUB_COMMENT_TEMPLATES = {
   /** Failure analysis header - bold, attention-grabbing */
   FAILURE_HEADER: (emoji: string): string =>
-    `## ${emoji} KenchiOps — CI Failure Analysis\n\n<sub>AI-powered root cause analysis</sub>\n`,
+    `## ${emoji} KenchiOps — CI Failure Analysis\n\n<!-- ${KENCHI_BRANDING.COMMENT_MARKER} -->\n<sub>AI-powered root cause analysis</sub>\n`,
   /** Success analysis header - positive, reassuring */
   SUCCESS_HEADER: (emoji: string): string =>
-    `## ${emoji} KenchiOps — CI Analysis Complete\n\n<sub>All checks passed</sub>\n`,
+    `## ${emoji} KenchiOps — CI Analysis Complete\n\n<!-- ${KENCHI_BRANDING.COMMENT_MARKER} -->\n<sub>All checks passed</sub>\n`,
   /** Comment footer with branding - subtle, professional */
   FOOTER: (emoji: string): string =>
     `\n---\n<sub>${emoji} Powered by <a href="https://github.com/kenchi/devops">KenchiOps</a> — AI-driven DevOps Assistant</sub>`,
@@ -159,6 +159,8 @@ export const FORMATTER_DISPLAY_LIMITS = {
   CONFIDENCE_MULTIPLIER: 100,
   /** Minimum confidence threshold for displaying suggested fixes (0.0 to 1.0) */
   MIN_FIX_CONFIDENCE: 0.7,
+  /** Maximum characters per display line in Slack to prevent overflow */
+  SLACK_MAX_LINE_CHARS: 100,
 } as const;
 
 // ==================== Retry Configuration ====================
