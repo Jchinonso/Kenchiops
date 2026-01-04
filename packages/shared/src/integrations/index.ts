@@ -17,6 +17,7 @@ export {
   formatLogs,
   formatMetrics,
   formatGitHistory,
+  formatRelatedEvents,
   formatKnowledgeDocs,
   estimateTokens,
   truncateEvidence,
