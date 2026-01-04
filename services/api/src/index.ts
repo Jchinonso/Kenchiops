@@ -28,6 +28,7 @@ import {
   API_MESSAGES,
   API_REDIS_PREFIXES,
   shouldSkipRateLimit,
+  SERVER_TIMEOUTS,
 } from "@kenchi/shared";
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
@@ -201,6 +202,10 @@ const apiRateLimiter = createRedisRateLimiter({
 const createApp = (): express.Express => {
   const app = express();
 
+  // Trust first proxy (nginx/load balancer) for accurate client IP detection
+  // Required for rate limiting to work correctly behind reverse proxies
+  app.set("trust proxy", 1);
+
   // Middleware - use configured limit for large CI context payloads
   app.use(express.json({ limit: EXPRESS_CONFIG.JSON_BODY_LIMIT }));
   app.use(requestLogger);
@@ -241,6 +246,10 @@ const startServer = async (): Promise<void> => {
       environment: appConfig.environment,
     });
   });
+
+  // Configure server timeouts for slowloris attack protection
+  server.keepAliveTimeout = SERVER_TIMEOUTS.KEEP_ALIVE_MS;
+  server.headersTimeout = SERVER_TIMEOUTS.HEADERS_MS;
 
   // Start cleanup scheduler and register for graceful shutdown
   startCleanupScheduler();
