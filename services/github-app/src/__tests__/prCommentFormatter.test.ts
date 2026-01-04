@@ -172,8 +172,8 @@ describe("PR Comment Formatter", () => {
       expect(comment).toContain("ℹ️");
     });
 
-    it("should truncate annotations when over per-check limit", () => {
-      // DISPLAY_LIMITS.annotationsPerCheck is 100, so create 110 to trigger truncation
+    it("should show all annotations without truncation", () => {
+      // Create many annotations - all should be shown (no display limit)
       const annotations = Array.from({ length: 110 }, (_, annotationIndex) =>
         createAnnotation({ path: `file${annotationIndex}.ts`, line: annotationIndex })
       );
@@ -182,7 +182,9 @@ describe("PR Comment Formatter", () => {
       });
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).toContain("... and 10 more locations");
+      // All 110 entries should be shown
+      expect(comment).toContain("Affected Files (110)");
+      expect(comment).toContain("file109.ts:109");
     });
 
     it("should include recommended actions with priority emoji", () => {
@@ -222,7 +224,7 @@ describe("PR Comment Formatter", () => {
       expect(comment).toContain("`Check 4`");
     });
 
-    it("should deduplicate test failures across checks", () => {
+    it("should deduplicate test failures into Affected Files", () => {
       const failures = [
         createFailure({
           checkName: "Check 1",
@@ -236,8 +238,9 @@ describe("PR Comment Formatter", () => {
       const aggregation = createAggregation({ failures });
       const comment = buildConsolidatedPRComment(aggregation);
 
-      // Should show count of 1 (deduplicated)
-      expect(comment).toContain("### 🧪 Failed Tests (1)");
+      // Test failures are now shown in Affected Files section
+      expect(comment).toContain("### 📍 Affected Files");
+      expect(comment).toContain("test.ts");
     });
 
     it("should deduplicate annotations across checks", () => {
