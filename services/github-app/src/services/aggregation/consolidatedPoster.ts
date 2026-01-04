@@ -24,6 +24,7 @@ import {
   buildConsolidatedCheckAnnotations,
   buildConsolidatedCheckSummary,
 } from "../../formatters/consolidatedFormatter.js";
+import { createFeedbackLinks } from "../../formatters/formatterUtils.js";
 import { postPRComment, createCheckRunWithAnnotations } from "../githubService.js";
 
 const logger = createLogger("github-app");
@@ -128,9 +129,11 @@ const postToGitHub = async (
   aggregation: AggregatedFailures
 ): Promise<{ prCommentsPosted: number; checkAnnotationsCreated: boolean; errors: string[] }> => {
   const { repository, installationId, pullRequestNumbers } = aggregation;
+  const analysisId = `${repository.fullName}:${aggregation.commitSha}`;
+  const feedbackLinks = await createFeedbackLinks(analysisId);
 
   // Build consolidated PR comment
-  const commentBody = buildConsolidatedPRComment(aggregation);
+  const commentBody = buildConsolidatedPRComment(aggregation, feedbackLinks ?? undefined);
 
   // Post PR comments
   const prResult = await postPRComments(
