@@ -79,7 +79,7 @@ describe("Slack Payload Formatter", () => {
       const payload = buildConsolidatedSlackPayload(aggregation);
       const blocks = payload.blocks as Array<{ type: string; text?: { text: string } }>;
 
-      const headerBlock = blocks.find((block) => block.type === "header");
+      const headerBlock = blocks.find((b) => b.type === "header");
       expect(headerBlock?.text?.text).toBe("🚨 CI Build Failed");
     });
 
@@ -93,8 +93,8 @@ describe("Slack Payload Formatter", () => {
         fields?: Array<{ text: string }>;
       }>;
 
-      const sectionBlock = blocks.find((block) => block.fields);
-      const repoField = sectionBlock?.fields?.find((field) => field.text.includes("Repository"));
+      const sectionBlock = blocks.find((b) => b.fields);
+      const repoField = sectionBlock?.fields?.find((f) => f.text.includes("Repository"));
 
       expect(repoField?.text).toContain("myorg/myrepo");
       expect(repoField?.text).toContain("https://github.com/myorg/myrepo");
@@ -117,8 +117,8 @@ describe("Slack Payload Formatter", () => {
         fields?: Array<{ text: string }>;
       }>;
 
-      const sectionBlock = blocks.find((block) => block.fields);
-      const branchField = sectionBlock?.fields?.find((field) => field.text.includes("Branch"));
+      const sectionBlock = blocks.find((b) => b.fields);
+      const branchField = sectionBlock?.fields?.find((f) => f.text.includes("Branch"));
 
       expect(branchField?.text).toContain("feature/test");
       expect(branchField?.text).toContain("develop");
@@ -132,8 +132,8 @@ describe("Slack Payload Formatter", () => {
         fields?: Array<{ text: string }>;
       }>;
 
-      const sectionBlock = blocks.find((block) => block.fields);
-      const commitField = sectionBlock?.fields?.find((field) => field.text.includes("Commit"));
+      const sectionBlock = blocks.find((b) => b.fields);
+      const commitField = sectionBlock?.fields?.find((f) => f.text.includes("Commit"));
 
       expect(commitField?.text).toContain("abcdef1");
     });
@@ -148,10 +148,8 @@ describe("Slack Payload Formatter", () => {
         fields?: Array<{ text: string }>;
       }>;
 
-      const sectionBlock = blocks.find((block) => block.fields);
-      const confidenceField = sectionBlock?.fields?.find((field) =>
-        field.text.includes("Confidence")
-      );
+      const sectionBlock = blocks.find((b) => b.fields);
+      const confidenceField = sectionBlock?.fields?.find((f) => f.text.includes("Confidence"));
 
       expect(confidenceField?.text).toContain("🟢"); // High confidence
       expect(confidenceField?.text).toContain("90%");
@@ -167,10 +165,8 @@ describe("Slack Payload Formatter", () => {
         fields?: Array<{ text: string }>;
       }>;
 
-      const sectionBlock = blocks.find((block) => block.fields);
-      const confidenceField = sectionBlock?.fields?.find((field) =>
-        field.text.includes("Confidence")
-      );
+      const sectionBlock = blocks.find((b) => b.fields);
+      const confidenceField = sectionBlock?.fields?.find((f) => f.text.includes("Confidence"));
 
       expect(confidenceField?.text).toContain("🟡");
     });
@@ -185,10 +181,8 @@ describe("Slack Payload Formatter", () => {
         fields?: Array<{ text: string }>;
       }>;
 
-      const sectionBlock = blocks.find((block) => block.fields);
-      const confidenceField = sectionBlock?.fields?.find((field) =>
-        field.text.includes("Confidence")
-      );
+      const sectionBlock = blocks.find((b) => b.fields);
+      const confidenceField = sectionBlock?.fields?.find((f) => f.text.includes("Confidence"));
 
       expect(confidenceField?.text).toContain("🔴");
     });
@@ -211,7 +205,7 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const prBlock = blocks.find(
-        (block) => block.type === "section" && block.text?.text?.includes("Pull Request")
+        (b) => b.type === "section" && b.text?.text?.includes("Pull Request")
       );
 
       expect(prBlock?.text?.text).toContain("#456");
@@ -227,7 +221,7 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const prBlock = blocks.find(
-        (block) => block.type === "section" && block.text?.text?.includes("Pull Request")
+        (b) => b.type === "section" && b.text?.text?.includes("Pull Request")
       );
 
       expect(prBlock).toBeUndefined();
@@ -243,7 +237,7 @@ describe("Slack Payload Formatter", () => {
         text?: { text: string };
       }>;
 
-      const checksHeader = blocks.find((block) => block.text?.text?.includes("Failed Checks"));
+      const checksHeader = blocks.find((b) => b.text?.text?.includes("Failed Checks"));
 
       expect(checksHeader?.text?.text).toContain("(3)");
     });
@@ -259,7 +253,7 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const checksBlock = blocks.find(
-        (block) => block.type === "section" && block.text?.text?.includes("Checks:")
+        (b) => b.type === "section" && b.text?.text?.includes("Checks:")
       );
 
       expect(checksBlock?.text?.text).toContain("Unit Tests");
@@ -276,7 +270,7 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const rootCauseBlock = blocks.find(
-        (block) => block.type === "section" && block.text?.text?.includes("Root Cause")
+        (b) => b.type === "section" && b.text?.text?.includes("Root Cause")
       );
 
       expect(rootCauseBlock?.text?.text).toContain("Test failure");
@@ -299,9 +293,7 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const contextBlock = blocks.find(
-        (block) =>
-          block.type === "context" &&
-          block.elements?.some((elem) => elem.text?.includes("src/test.ts"))
+        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("src/test.ts"))
       );
 
       expect(contextBlock).toBeDefined();
@@ -320,7 +312,7 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const checksBlock = blocks.find(
-        (block) => block.type === "section" && block.text?.text?.includes("Checks:")
+        (b) => b.type === "section" && b.text?.text?.includes("Checks:")
       );
 
       // All check names should be present in consolidated view
@@ -328,7 +320,7 @@ describe("Slack Payload Formatter", () => {
       expect(checksBlock?.text?.text).toContain("Check 4");
     });
 
-    it("should deduplicate test failures across multiple checks", () => {
+    it("should deduplicate test failures into Affected Files", () => {
       const failures = [
         createFailure({
           checkName: "Check 1",
@@ -346,14 +338,13 @@ describe("Slack Payload Formatter", () => {
         elements?: Array<{ text: string }>;
       }>;
 
-      const testBlock = blocks.find(
-        (block) =>
-          block.type === "context" &&
-          block.elements?.some((elem) => elem.text?.includes("Failed Tests"))
+      // Test failures are now shown in Affected Files section
+      const affectedBlock = blocks.find(
+        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("Affected Files"))
       );
 
-      // Should show count of 1 (deduplicated), not 2
-      expect(testBlock?.elements?.[0]?.text).toContain("Failed Tests (1)");
+      // Should show deduplicated test file
+      expect(affectedBlock?.elements?.[0]?.text).toContain("test.ts");
     });
 
     it("should deduplicate annotations across multiple checks", () => {
@@ -375,9 +366,7 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const annotationBlock = blocks.find(
-        (block) =>
-          block.type === "context" &&
-          block.elements?.some((elem) => elem.text?.includes("Affected Files"))
+        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("Affected Files"))
       );
 
       // Should only show one entry for src/index.ts:10
@@ -401,11 +390,9 @@ describe("Slack Payload Formatter", () => {
         text?: { text: string };
       }>;
 
-      const actionsHeader = blocks.find((block) =>
-        block.text?.text?.includes("Recommended Actions")
-      );
+      const actionsHeader = blocks.find((b) => b.text?.text?.includes("Recommended Actions"));
       const actionsBlock = blocks.find(
-        (block) => block.type === "section" && block.text?.text?.includes("Fix the bug")
+        (b) => b.type === "section" && b.text?.text?.includes("Fix the bug")
       );
 
       expect(actionsHeader).toBeDefined();
@@ -422,9 +409,7 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const footerBlock = blocks.find(
-        (block) =>
-          block.type === "context" &&
-          block.elements?.some((elem) => elem.text?.includes("KenchiOps"))
+        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("KenchiOps"))
       );
 
       expect(footerBlock).toBeDefined();
