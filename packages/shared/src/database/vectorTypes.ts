@@ -201,6 +201,27 @@ export const parseEmbeddingVector = (vectorString: string | null): readonly numb
 };
 
 /**
+ * Parses a JSONB field from PostgreSQL.
+ * PostgreSQL JSONB columns return objects directly when using the pg driver.
+ * This handles both cases: string (needs parsing) or already-parsed object.
+ */
+export const parseJsonbField = (
+  value: string | Record<string, unknown> | null
+): Record<string, unknown> | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "object") {
+    return value;
+  }
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Formats a number array as PostgreSQL vector string.
  */
 export const formatEmbeddingVector = (embedding: readonly number[]): string =>
@@ -224,7 +245,7 @@ export const mapRowToDiffChunk = (row: DiffChunkRow): DiffChunk => ({
   embeddingModel: row.embedding_model,
   embeddingVersion: row.embedding_version,
   tenantId: row.tenant_id,
-  metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : null,
+  metadata: parseJsonbField(row.metadata),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -246,7 +267,7 @@ export const mapRowToKnowledgeDoc = (row: KnowledgeDocRow): KnowledgeDocRecord =
   embeddingModel: row.embedding_model,
   embeddingVersion: row.embedding_version,
   tenantId: row.tenant_id,
-  metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : {},
+  metadata: parseJsonbField(row.metadata) ?? {},
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
