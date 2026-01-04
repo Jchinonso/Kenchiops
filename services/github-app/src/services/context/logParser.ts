@@ -14,6 +14,7 @@ import {
   ERROR_INDICATORS,
   shouldExcludePath,
   deduplicateByKey,
+  normalizeTestFailure,
 } from "@kenchi/shared";
 import type { FileReference, TestFailure } from "./types.js";
 
@@ -115,10 +116,96 @@ export const truncateWithContext = (content: string, maxSize: number): string =>
 
 // ==================== Test Failure Extraction ====================
 
+/** Maximum characters to capture for error body */
+const MAX_ERROR_BODY_CHARS = 800;
+
+/** Number of lines to scan after a failure marker for error context */
+const ERROR_CONTEXT_LINES = 30;
+
+/** Pattern to find a file path with separators but without line numbers */
+const FILE_PATH_ONLY_PATTERN = /([^\s:()]+[\\/][^\s:()]+\.[a-zA-Z0-9]+)(?=$|[\s:()])/;
+
+const ASSERTION_MESSAGE_PATTERNS: readonly RegExp[] = [
+  /^Expected\s/i,
+  /^Received\s/i,
+  /^AssertionError\b/i,
+  /to(Be|Equal|Contain|Match|Throw)\b/,
+] as const;
+
+const isAssertionMessage = (testName: string): boolean => {
+  const trimmed = testName.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  const looksLikePath = trimmed.includes("/") || trimmed.includes("\\");
+  const looksLikeJestChain = trimmed.includes(" > ");
+  if (looksLikePath || looksLikeJestChain) {
+    return false;
+  }
+
+  return ASSERTION_MESSAGE_PATTERNS.some((pattern) => pattern.test(trimmed));
+};
+
+const extractLineForFile = (text: string, filePath: string): number | undefined => {
+  const lines = text.split("\n");
+
+  for (const lineText of lines) {
+    const index = lineText.indexOf(filePath);
+    if (index === -1) {
+      continue;
+    }
+
+    const suffix = lineText.slice(index + filePath.length);
+    const colonMatch = suffix.match(/:(\d+)/);
+    if (colonMatch) {
+      const line = parseInt(colonMatch[1], 10);
+      if (line > 0) {
+        return line;
+      }
+    }
+
+    const pythonMatch = suffix.match(/,\s*line\s*(\d+)/i);
+    if (pythonMatch) {
+      const line = parseInt(pythonMatch[1], 10);
+      if (line > 0) {
+        return line;
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const pathsMatch = (left: string, right: string): boolean =>
+  left === right || left.endsWith(right) || right.endsWith(left);
+
+const extractFileReferenceFromText = (text: string): FileReference | null => {
+  for (const pattern of FILE_REFERENCE_PATTERNS) {
+    const regex = new RegExp(pattern.source, pattern.flags);
+    const match = [...text.matchAll(regex)][0];
+    if (!match) {
+      continue;
+    }
+
+    const line = parseInt(match[2], 10);
+    if (match[1] && line > 0) {
+      return { path: match[1], line };
+    }
+  }
+
+  const pathOnlyMatch = text.match(FILE_PATH_ONLY_PATTERN);
+  if (pathOnlyMatch) {
+    return { path: pathOnlyMatch[1] };
+  }
+
+  return null;
+};
+
 /**
  * Universal test failure indicator patterns.
  * These are minimal patterns that work across all test frameworks.
- * Detailed extraction is handled by AI.
+ * Captures test identifier at match position for error body extraction.
  */
 const UNIVERSAL_FAILURE_PATTERNS = [
   // Generic FAIL/FAILED with file path
@@ -132,14 +219,73 @@ const UNIVERSAL_FAILURE_PATTERNS = [
 ] as const;
 
 /**
+ * Patterns that indicate the end of an error block.
+ * Stop capturing when these are encountered.
+ */
+const ERROR_END_MARKERS = [
+  /^={3,}/, // Separator lines
+  /^-{3,}/, // Separator dashes
+  /^PASSED\s/i,
+  /^FAILED\s/i, // Next test failure
+  /^ok\s+\d/, // Go test pass
+  /^---\s+PASS:/i, // Go test pass
+  /^---\s+FAIL:/i, // Go test next failure
+  /^test\s+\S+\s+\.\.\.\s+ok/i, // Rust test pass
+  /^\s*✓\s/, // Jest pass marker
+  /^\s*✕\s/, // Jest fail marker (next test)
+] as const;
+
+/**
+ * Extract error body starting from a position in the logs.
+ * Captures lines until an end marker or character limit is reached.
+ */
+const extractErrorBody = (logs: string, startIndex: number): string => {
+  // Get the content after the match
+  const remainingContent = logs.slice(startIndex);
+  const lines = remainingContent.split("\n");
+
+  const errorLines: string[] = [];
+  let charCount = 0;
+
+  // Skip the first line (contains the failure marker itself)
+  const linesToProcess = lines.slice(1, ERROR_CONTEXT_LINES + 1);
+
+  for (const line of linesToProcess) {
+    // Check if we've hit an end marker
+    const isEndMarker = ERROR_END_MARKERS.some((marker) => marker.test(line));
+    if (isEndMarker) {
+      break;
+    }
+
+    // Stop if we've exceeded the character limit
+    if (charCount + line.length > MAX_ERROR_BODY_CHARS) {
+      // Add truncated line if there's room
+      const remaining = MAX_ERROR_BODY_CHARS - charCount;
+      if (remaining > 20) {
+        errorLines.push(`${line.slice(0, remaining)}...`);
+      }
+      break;
+    }
+
+    errorLines.push(line);
+    charCount += line.length + 1; // +1 for newline
+  }
+
+  const errorBody = errorLines.join("\n").trim();
+
+  // Return captured error or fallback
+  return errorBody.length > 0 ? errorBody : "Test failed (see logs for details)";
+};
+
+/**
  * Extract test failures from workflow logs.
  *
- * This function provides basic extraction using universal patterns.
- * The AI performs detailed analysis of the raw logs for comprehensive
- * failure detection across all test frameworks.
+ * Captures both test identifiers and actual error bodies (tracebacks,
+ * assertion diffs) for AI analysis. Uses universal patterns that work
+ * across test frameworks.
  *
  * @param logs - The workflow log content
- * @returns Array of test failure information
+ * @returns Array of test failure information with error bodies
  */
 export const extractTestFailures = (logs: string): TestFailure[] => {
   // Strip ANSI color codes and CI timestamps before parsing
@@ -160,16 +306,44 @@ export const extractTestFailures = (logs: string): TestFailure[] => {
       }
 
       seenTests.add(testName.toLowerCase());
+
+      // Extract the error body starting from the match position
+      const matchEndIndex = (match.index ?? 0) + match[0].length;
+      const errorBody = extractErrorBody(cleanLogs, matchEndIndex);
+
+      const normalized = normalizeTestFailure({ testName, file: undefined, line: undefined });
+      const locationFromError = extractFileReferenceFromText(errorBody);
+      const file = normalized.file ?? locationFromError?.path;
+      const lineFromFile = normalized.file
+        ? extractLineForFile(errorBody, normalized.file)
+        : undefined;
+      const line =
+        lineFromFile ??
+        (normalized.file &&
+        locationFromError?.path &&
+        pathsMatch(normalized.file, locationFromError.path)
+          ? locationFromError.line
+          : normalized.file
+            ? undefined
+            : locationFromError?.line);
+      const finalTestName =
+        file && isAssertionMessage(normalized.testName) ? "Test failed" : normalized.testName;
+
       failures.push({
-        testName: testName.slice(0, 200),
-        error: "Test failed (see logs for details)",
+        testName: finalTestName.slice(0, 200),
+        error: errorBody,
+        file,
+        line,
       });
     });
   });
 
   if (failures.length > 0) {
-    logger.info("Extracted test failures using universal patterns", {
+    logger.info("Extracted test failures with error bodies", {
       count: failures.length,
+      hasErrorBodies: failures.some(
+        (testFailure) => testFailure.error !== "Test failed (see logs for details)"
+      ),
     });
   }
 
