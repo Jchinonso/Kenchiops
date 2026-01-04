@@ -19,7 +19,7 @@ const logger = createLogger("analysis-repository");
  * Input for creating a new analysis.
  */
 export interface CreateAnalysisInput {
-  readonly eventId: string;
+  readonly eventId?: string | null;
   readonly summary: string;
   readonly identifiedCause?: string;
   readonly diagnosisConfidence: number;
