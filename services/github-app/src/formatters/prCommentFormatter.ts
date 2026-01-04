@@ -7,23 +7,24 @@
  */
 
 import {
-  shouldExcludePath,
-  EXCLUDED_PATH_PATTERNS,
   UI_EMOJI,
   ANNOTATION_LEVEL_EMOJI_MAP,
-  FORMATTER_DISPLAY_LIMITS,
   deduplicateByKey,
+  normalizeTestFailure,
+  truncateText,
+  GITHUB_COMMENT_DISPLAY,
+  FILE_PATH_VALIDATION,
   type AggregatedFailures,
   type AnalyzedFailure,
   type CodeAnnotation,
   type RecommendedAction,
-  type SuggestedFix,
 } from "@kenchi/shared";
 import {
-  DISPLAY_LIMITS,
   getPriorityEmoji,
   calculateAverageConfidence,
   mergeRecommendedActions,
+  formatFeedbackLinksContent,
+  type FeedbackLinks,
 } from "./formatterUtils.js";
 
 // ==================== Types ====================
@@ -40,29 +41,72 @@ interface ConsolidatedAnnotation {
   readonly message: string;
   readonly level: CodeAnnotation["level"];
   readonly title?: string;
-  readonly suggestedFix?: SuggestedFix;
+  readonly suggestedFix?: string;
 }
 
 // ==================== Pure Helper Functions ====================
 
+const stripEvidencePrefix = (message: string): string =>
+  message.replace(FILE_PATH_VALIDATION.EVIDENCE_PREFIX_PATTERN, "");
+
+const normalizeAnnotationMessage = (message: string): string => {
+  const trimmed = stripEvidencePrefix(message).trim();
+  const firstLine = trimmed.split("\n").find((line) => line.trim().length > 0) ?? "";
+  return truncateText(firstLine.trim(), GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH);
+};
+
 /**
- * Consolidate test failures across checks using Map-based deduplication
+ * Extracts and validates file location from annotation path and line.
+ * Returns null if the path doesn't look like a valid file path.
+ * Handles cases where error text is accidentally included in the path field.
+ *
+ * @param path - Raw path string from annotation
+ * @param line - Line number from annotation
+ * @returns Formatted location string (e.g., "src/index.ts:42") or null if invalid
+ */
+const extractValidFileLocation = (path: string, line: number): string | null => {
+  if (!path || path === "unknown" || path.length > GITHUB_COMMENT_DISPLAY.MAX_FILE_PATH_LENGTH) {
+    return null;
+  }
+
+  const trimmedPath = path.trim();
+
+  // Try to extract file:line pattern from the path itself (handles embedded line numbers)
+  const embeddedMatch = trimmedPath.match(FILE_PATH_VALIDATION.LOCATION_PATTERN);
+  if (embeddedMatch) {
+    const extractedPath = embeddedMatch[1];
+    const extractedLine = parseInt(embeddedMatch[2], 10);
+    if (FILE_PATH_VALIDATION.VALID_PATH_PATTERN.test(extractedPath)) {
+      return `${extractedPath}:${extractedLine}`;
+    }
+  }
+
+  // Validate the path looks like a real file path (not error text)
+  if (!FILE_PATH_VALIDATION.VALID_PATH_PATTERN.test(trimmedPath)) {
+    return null;
+  }
+
+  // Return path with line if valid
+  return line > 0 ? `${trimmedPath}:${line}` : trimmedPath;
+};
+
+/**
+ * Consolidate test failures across checks using Map-based deduplication.
+ * Normalizes test identifiers to extract file paths from test names.
  */
 const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): ConsolidatedTestFailure[] =>
   deduplicateByKey(
     failures.flatMap((failure) => failure.testFailures ?? []),
     (testFailure) => `${testFailure.testName}|${testFailure.file ?? ""}`
-  );
+  ).map((testFailure) => normalizeTestFailure(testFailure));
 
 /**
  * Consolidate annotations across checks using Map-based deduplication.
- * Excludes test files since those are where tests run, not where fixes are needed.
+ * Shows ALL annotations - language agnostic, no path exclusions.
  */
 const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] =>
   deduplicateByKey(
-    failures
-      .flatMap((failure) => failure.annotations)
-      .filter((annotation) => !shouldExcludePath(annotation.path, EXCLUDED_PATH_PATTERNS)),
+    failures.flatMap((failure) => failure.annotations),
     (annotation) => `${annotation.path}:${annotation.line}`
   ).map((annotation) => ({
     path: annotation.path,
@@ -70,7 +114,7 @@ const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): Consolida
     message: annotation.message,
     level: annotation.level,
     title: annotation.title,
-    suggestedFix: annotation.suggestedFix,
+    suggestedFix: annotation.suggestedFix?.description,
   }));
 
 /**
@@ -85,70 +129,10 @@ const extractUniqueCauses = (failures: readonly AnalyzedFailure[]): string[] =>
 // ==================== Formatting Functions ====================
 
 /**
- * Format a suggested fix as markdown code block
- */
-const formatSuggestedFix = (fix: SuggestedFix): string[] => {
-  const lines: string[] = [];
-  const lang = fix.language ?? "typescript";
-  const confidencePercent = Math.round(
-    fix.confidence * FORMATTER_DISPLAY_LIMITS.CONFIDENCE_MULTIPLIER
-  );
-
-  lines.push(
-    `    > ${UI_EMOJI.tools} **Suggested Fix** (${confidencePercent}% confidence): ${fix.description}`
-  );
-
-  if (fix.before) {
-    lines.push("    ```diff");
-    fix.before.split("\n").forEach((line) => lines.push(`    - ${line}`));
-    fix.after.split("\n").forEach((line) => lines.push(`    + ${line}`));
-    lines.push("    ```");
-  } else {
-    lines.push(`    \`\`\`${lang}`);
-    fix.after.split("\n").forEach((line) => lines.push(`    ${line}`));
-    lines.push("    ```");
-  }
-
-  return lines;
-};
-
-/**
- * Format a single annotation as markdown
- */
-const formatAnnotation = (annotation: ConsolidatedAnnotation): string => {
-  const icon = ANNOTATION_LEVEL_EMOJI_MAP[annotation.level] ?? UI_EMOJI.info;
-  const title = annotation.title ? `**${annotation.title}**: ` : "";
-  const mainLine = `  - ${icon} \`${annotation.path}:${annotation.line}\` - ${title}${annotation.message}`;
-
-  if (
-    annotation.suggestedFix &&
-    annotation.suggestedFix.confidence >= FORMATTER_DISPLAY_LIMITS.MIN_FIX_CONFIDENCE
-  ) {
-    const fixLines = formatSuggestedFix(annotation.suggestedFix);
-    return [mainLine, ...fixLines].join("\n");
-  }
-
-  return mainLine;
-};
-
-/**
  * Format a recommended action as markdown
  */
 const formatAction = (action: RecommendedAction, index: number): string =>
   `${index + 1}. ${getPriorityEmoji(action.priority)} ${action.description}`;
-
-/**
- * Format a test failure for display
- */
-const formatTestFailure = (testFailure: ConsolidatedTestFailure): string => {
-  const filePath = testFailure.file
-    ? testFailure.line
-      ? `${testFailure.file}:${testFailure.line}`
-      : testFailure.file
-    : null;
-  const file = filePath ? ` (\`${filePath}\`)` : "";
-  return `  - \`${testFailure.testName}\`${file}`;
-};
 
 /**
  * Build header section
@@ -199,51 +183,71 @@ const buildRootCauseSection = (causes: readonly string[]): string[] => {
 };
 
 /**
- * Build consolidated test failures section
- */
-const buildTestFailuresSection = (testFailures: readonly ConsolidatedTestFailure[]): string[] => {
-  if (testFailures.length === 0) {
-    return [];
-  }
-
-  const displayLimit = DISPLAY_LIMITS.annotationsPerCheck;
-  const displayTests = testFailures.slice(0, displayLimit);
-  const lines = [
-    `### ${UI_EMOJI.test} Failed Tests (${testFailures.length})`,
-    "",
-    ...displayTests.map(formatTestFailure),
-  ];
-
-  if (testFailures.length > displayLimit) {
-    lines.push(`  - ... and ${testFailures.length - displayLimit} more tests`);
-  }
-
-  lines.push("");
-  return lines;
-};
-
-/**
  * Build consolidated affected files section
+ * Combines annotations and test failures into a single unified view
  */
-const buildAnnotationsSection = (annotations: readonly ConsolidatedAnnotation[]): string[] => {
-  if (annotations.length === 0) {
+const buildAnnotationsSection = (
+  annotations: readonly ConsolidatedAnnotation[],
+  testFailures: readonly ConsolidatedTestFailure[] = []
+): string[] => {
+  // Combine annotations and test failures into unified entries
+  // Show fix if available, otherwise show error message
+  const annotationEntries = annotations.map((annotation) => {
+    const message = normalizeAnnotationMessage(annotation.message);
+    const fixNote = annotation.suggestedFix
+      ? ` Fix: ${normalizeAnnotationMessage(annotation.suggestedFix)}`
+      : "";
+    return {
+      location: extractValidFileLocation(annotation.path, annotation.line),
+      display: `${message}${fixNote}`.trim(),
+      level: annotation.level,
+      title:
+        annotation.title && !FILE_PATH_VALIDATION.EVIDENCE_TITLE_PATTERN.test(annotation.title)
+          ? annotation.title
+          : undefined,
+    };
+  });
+
+  // Test failures are pre-normalized via normalizeTestFailure() at consolidation
+  // Apply same file path validation to prevent error text in location
+  const testFailureEntries = testFailures.map((testFailure) => {
+    const location = testFailure.file
+      ? extractValidFileLocation(testFailure.file, testFailure.line ?? 0)
+      : null;
+    const testName = truncateText(
+      testFailure.testName,
+      GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH
+    );
+    const display =
+      testFailure.file && testFailure.file === testFailure.testName
+        ? "Test failed"
+        : `Test failed: ${testName}`;
+
+    return {
+      location,
+      display,
+      level: "failure" as CodeAnnotation["level"],
+      title: undefined as string | undefined,
+    };
+  });
+
+  const allEntries = [...annotationEntries, ...testFailureEntries].filter(
+    (entry) => entry.location
+  );
+
+  if (allEntries.length === 0) {
     return [];
   }
 
-  const displayLimit = DISPLAY_LIMITS.annotationsPerCheck;
-  const displayAnnotations = annotations.slice(0, displayLimit);
-  const lines = [
-    `### ${UI_EMOJI.location} Affected Files`,
-    "",
-    ...displayAnnotations.map(formatAnnotation),
-  ];
+  // Build lines showing all affected files with fix/error details
+  const allLines = allEntries.map((entry) => {
+    const icon = ANNOTATION_LEVEL_EMOJI_MAP[entry.level ?? "failure"] ?? UI_EMOJI.info;
+    const location = entry.location ? `\`${entry.location}\` - ` : "";
+    const title = entry.title ? `**${entry.title}**: ` : "";
+    return `  - ${icon} ${location}${title}${entry.display}`;
+  });
 
-  if (annotations.length > displayLimit) {
-    lines.push(`  - ... and ${annotations.length - displayLimit} more locations`);
-  }
-
-  lines.push("");
-  return lines;
+  return [`### ${UI_EMOJI.location} Affected Files (${allLines.length})`, "", ...allLines, ""];
 };
 
 /**
@@ -254,13 +258,24 @@ const buildActionsSection = (actions: readonly RecommendedAction[]): string[] =>
     ? []
     : ["---", "", `## ${UI_EMOJI.tools} Recommended Actions`, "", ...actions.map(formatAction), ""];
 
+const buildFeedbackSection = (feedbackLinks?: FeedbackLinks): string[] => {
+  if (!feedbackLinks) {
+    return [];
+  }
+
+  return ["---", "", ...formatFeedbackLinksContent(feedbackLinks), ""];
+};
+
 // ==================== Public API ====================
 
 /**
  * Build consolidated PR comment body from aggregated failures.
  * Creates a comprehensive markdown summary with deduplicated failure details.
  */
-export const buildConsolidatedPRComment = (aggregation: AggregatedFailures): string => {
+export const buildConsolidatedPRComment = (
+  aggregation: AggregatedFailures,
+  feedbackLinks?: FeedbackLinks
+): string => {
   const { failures, commitSha, prContext } = aggregation;
   const avgConfidence = calculateAverageConfidence(failures);
   const mergedActions = mergeRecommendedActions(failures);
@@ -270,16 +285,16 @@ export const buildConsolidatedPRComment = (aggregation: AggregatedFailures): str
   const annotations = consolidateAnnotations(failures);
   const causes = extractUniqueCauses(failures);
 
-  // Build all sections
+  // Build all sections (test failures consolidated into Affected Files)
   const lines: string[] = [
     ...buildHeader(commitSha, failures.length, avgConfidence, prContext),
     "",
     "---",
     ...buildCheckNamesSection(failures),
     ...buildRootCauseSection(causes),
-    ...buildTestFailuresSection(testFailures),
-    ...buildAnnotationsSection(annotations),
+    ...buildAnnotationsSection(annotations, testFailures),
     ...buildActionsSection(mergedActions),
+    ...buildFeedbackSection(feedbackLinks),
     "---",
     "*Generated by KenchiOps DevOps Assistant*",
   ];
