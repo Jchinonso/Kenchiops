@@ -13,10 +13,13 @@ import {
   isRedisHealthy,
   updateActionProposalStatus,
   getErrorMessage,
-  SLACK_BOT_TIMEOUTS,
-  SLACK_BOT_MESSAGES,
+  parseOpaqueActionValue,
+  retrieveActionPayload,
+  deleteActionPayload,
   type ActionExecutionContext,
   type ActionType,
+  type StoredActionPayload,
+  type OpaqueActionValue,
 } from "@kenchi/shared";
 import { formatProgressUpdate } from "../formatters.js";
 
@@ -28,70 +31,119 @@ const logger = createLogger("slack-bot");
 // ==================== Types ====================
 
 /**
- * Action button value payload (matches slackPayloadFormatter.ts)
- */
-interface ActionButtonValue {
-  readonly actionId: string;
-  readonly actionType: string;
-  readonly description: string;
-  readonly repository: string;
-  readonly commitSha: string;
-  readonly installationId: number;
-  readonly priority: string | number;
-  readonly checkRunId?: number;
-}
-
-/**
- * Legacy action value format (for backward compatibility)
+ * Legacy action value format (for backward compatibility with old buttons)
  */
 interface LegacyActionValue {
-  readonly eventId: string;
+  readonly eventId?: string;
   readonly actionId: string;
+  readonly actionType?: string;
+  readonly repository?: string;
+  readonly commitSha?: string;
+  readonly installationId?: number;
+  readonly priority?: string | number;
+  readonly checkRunId?: number;
+  readonly description?: string;
 }
-
-/**
- * Combined action value type
- */
-type ParsedActionValue = ActionButtonValue | LegacyActionValue;
 
 // ==================== Helper Functions ====================
 
 /**
- * Type guard for new action value format
+ * Type guard for legacy action value format
  */
-const isActionButtonValue = (value: ParsedActionValue): value is ActionButtonValue =>
-  "actionType" in value && "repository" in value;
+const isLegacyActionValue = (value: unknown): value is LegacyActionValue =>
+  typeof value === "object" &&
+  value !== null &&
+  "actionId" in value &&
+  typeof (value as LegacyActionValue).actionId === "string";
 
 /**
- * Parses action value from Slack button action.
- * Handles both new and legacy formats.
+ * Parses a JSON action value string.
  */
-const parseActionValue = (action: ButtonAction): ParsedActionValue => {
-  if (!action.value) {
-    throw new ValidationError("Action value is missing");
-  }
+const parseActionValueJson = (value: string): unknown => {
   try {
-    return JSON.parse(action.value) as ParsedActionValue;
+    return JSON.parse(value) as unknown;
   } catch (error) {
     throw new ValidationError(`Failed to parse action value: ${getErrorMessage(error)}`);
   }
 };
 
 /**
- * Creates execution context from action button value
+ * Parses and retrieves action payload from Slack button action.
+ * Handles both new opaque ID format and legacy full payload format.
+ *
+ * @returns The stored action payload (retrieved from store or legacy value)
+ */
+const getActionPayload = (action: ButtonAction): StoredActionPayload => {
+  if (!action.value) {
+    throw new ValidationError("Action value is missing");
+  }
+
+  let opaqueValue: OpaqueActionValue | null = null;
+  try {
+    opaqueValue = parseOpaqueActionValue(action.value);
+  } catch (error) {
+    if (!(error instanceof ValidationError)) {
+      throw error;
+    }
+  }
+
+  if (opaqueValue) {
+    return retrieveActionPayload(opaqueValue);
+  }
+
+  const parsed = parseActionValueJson(action.value);
+
+  // Legacy format - convert to StoredActionPayload shape
+  if (isLegacyActionValue(parsed)) {
+    return {
+      actionType: parsed.actionType ?? "manual_investigation",
+      description: parsed.description ?? "Legacy action",
+      repository: parsed.repository ?? "unknown",
+      commitSha: parsed.commitSha ?? "unknown",
+      installationId: parsed.installationId ?? 0,
+      priority: parsed.priority ?? "medium",
+      checkRunId: parsed.checkRunId,
+      createdAt: Date.now(),
+      verificationToken: "legacy",
+    };
+  }
+
+  throw new ValidationError("Unknown action value format");
+};
+
+/**
+ * Extracts the opaque action ID from the action value (for cleanup).
+ */
+const extractOpaqueId = (action: ButtonAction): string | null => {
+  if (!action.value) {
+    return null;
+  }
+  try {
+    const opaqueValue = parseOpaqueActionValue(action.value);
+    return opaqueValue.id;
+  } catch (error) {
+    logger.debug("Failed to parse action value for opaque id", {
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
+
+/**
+ * Creates execution context from stored action payload
  */
 const createExecutionContext = (
-  value: ActionButtonValue,
+  payload: StoredActionPayload,
   approvedBy: string
 ): ActionExecutionContext => ({
-  installationId: value.installationId,
-  repository: value.repository,
-  commitSha: value.commitSha,
-  checkRunId: value.checkRunId,
+  installationId: payload.installationId,
+  repository: payload.repository,
+  commitSha: payload.commitSha,
+  checkRunId: payload.checkRunId,
   approvedBy,
   metadata: {
-    priority: value.priority,
-    description: value.description,
+    priority: payload.priority,
+    description: payload.description,
   },
 });
 
@@ -152,8 +204,111 @@ const persistActionStatus = async (
 // ==================== Action Handlers ====================
 
 /**
+ * Executes an action after retrieval from store.
+ * Handles both async (Redis queue) and sync execution.
+ */
+const executeStoredAction = async (
+  payload: StoredActionPayload,
+  opaqueId: string | null,
+  say: SayFn,
+  messageTs?: string
+): Promise<void> => {
+  // Create action proposal from stored payload
+  const actionProposal = {
+    id: opaqueId ?? `legacy_${payload.commitSha.substring(0, 8)}`,
+    eventId: `evt_${payload.commitSha.substring(0, 8)}`,
+    actionType: payload.actionType as ActionType,
+    description: payload.description,
+    confidence: 0.8,
+    safetyLevel: "low_risk" as const,
+    requiresApproval: true,
+    status: "approved" as const,
+  };
+
+  const context = createExecutionContext(payload, "slack-user");
+  const useAsync = await canUseAsyncExecution();
+
+  if (useAsync) {
+    // Async execution via Redis queue
+    const inProgressBlocks = formatProgressUpdate(
+      actionProposal.id,
+      "in_progress",
+      `Queued *${payload.actionType}* for execution...`
+    );
+
+    await say({
+      blocks: inProgressBlocks as SlackBlocks,
+      ...(messageTs && { thread_ts: messageTs }),
+    });
+
+    await enqueueAction(actionProposal, context);
+    await persistActionStatus(actionProposal.id, "approved", "slack-user");
+
+    logger.info("Action enqueued for async execution", {
+      actionId: actionProposal.id,
+      actionType: payload.actionType,
+    });
+
+    const queuedBlocks = formatProgressUpdate(
+      actionProposal.id,
+      "completed",
+      `Action *${payload.actionType}* queued for processing`
+    );
+
+    await say({
+      blocks: queuedBlocks as SlackBlocks,
+      ...(messageTs && { thread_ts: messageTs }),
+    });
+  } else {
+    // Sync execution
+    const inProgressBlocks = formatProgressUpdate(
+      actionProposal.id,
+      "in_progress",
+      `Executing *${payload.actionType}*...`
+    );
+
+    await say({
+      blocks: inProgressBlocks as SlackBlocks,
+      ...(messageTs && { thread_ts: messageTs }),
+    });
+
+    const result = await executeAction(actionProposal, context);
+    const executionStatus = result.success ? "executed" : "failed";
+    await persistActionStatus(actionProposal.id, executionStatus, "slack-user", {
+      success: result.success,
+      message: result.message,
+      duration: result.duration,
+    });
+
+    const { status, text } = formatResultMessage(
+      result.success,
+      payload.actionType,
+      result.message
+    );
+    const completedBlocks = formatProgressUpdate(actionProposal.id, status, text);
+
+    await say({
+      blocks: completedBlocks as SlackBlocks,
+      ...(messageTs && { thread_ts: messageTs }),
+    });
+
+    logger.info("Action executed synchronously", {
+      actionId: actionProposal.id,
+      actionType: payload.actionType,
+      success: result.success,
+      duration: result.duration,
+    });
+  }
+
+  // Clean up stored payload after execution
+  if (opaqueId) {
+    deleteActionPayload(opaqueId);
+  }
+};
+
+/**
  * Handles action approval.
- * Executes the action using the shared executor and reports result.
+ * Retrieves payload from server-side store and executes the action.
  */
 export const handleActionApproval = async (
   action: ButtonAction,
@@ -163,149 +318,27 @@ export const handleActionApproval = async (
 ): Promise<void> => {
   await ack();
 
-  const actionId = action.action_id;
-  logger.info("Action approval received", { action_id: actionId });
+  const slackActionId = action.action_id;
+  logger.info("Action approval received", { action_id: slackActionId });
 
   try {
-    const value = parseActionValue(action);
-
     if (!say) {
       logger.warn("Say function not available for action approval");
       return;
     }
 
-    // Handle new action button value format
-    if (isActionButtonValue(value)) {
-      // Create action proposal
-      const actionProposal = {
-        id: value.actionId,
-        eventId: `evt_${value.commitSha.substring(0, 8)}`,
-        actionType: value.actionType as ActionType,
-        description: value.description,
-        confidence: 0.8, // Default confidence for approved actions
-        safetyLevel: "low_risk" as const,
-        requiresApproval: true,
-        status: "approved" as const,
-      };
+    // Retrieve payload from store (or parse legacy format)
+    const payload = getActionPayload(action);
+    const opaqueId = extractOpaqueId(action);
 
-      // Create execution context
-      const context = createExecutionContext(value, "slack-user");
+    logger.debug("Action payload retrieved", {
+      actionType: payload.actionType,
+      repository: payload.repository,
+      opaqueId,
+    });
 
-      // Check if async execution is available
-      const useAsync = await canUseAsyncExecution();
-
-      if (useAsync) {
-        // Async execution via Redis queue
-        const inProgressBlocks = formatProgressUpdate(
-          value.actionId,
-          "in_progress",
-          `Queued *${value.actionType}* for execution...`
-        );
-
-        await say({
-          blocks: inProgressBlocks as SlackBlocks,
-          ...(messageTs && { thread_ts: messageTs }),
-        });
-
-        await enqueueAction(actionProposal, context);
-
-        // Persist approval status to database
-        await persistActionStatus(value.actionId, "approved", "slack-user");
-
-        logger.info("Action enqueued for async execution", {
-          actionId: value.actionId,
-          actionType: value.actionType,
-        });
-
-        // Note: Result will be published via pub/sub when processed
-        // For now, acknowledge the queue submission
-        const queuedBlocks = formatProgressUpdate(
-          value.actionId,
-          "completed",
-          `Action *${value.actionType}* queued for processing`
-        );
-
-        await say({
-          blocks: queuedBlocks as SlackBlocks,
-          ...(messageTs && { thread_ts: messageTs }),
-        });
-      } else {
-        // Sync execution (fallback when Redis unavailable)
-        const inProgressBlocks = formatProgressUpdate(
-          value.actionId,
-          "in_progress",
-          `Executing *${value.actionType}*...`
-        );
-
-        await say({
-          blocks: inProgressBlocks as SlackBlocks,
-          ...(messageTs && { thread_ts: messageTs }),
-        });
-
-        const result = await executeAction(actionProposal, context);
-
-        // Persist execution result to database
-        const executionStatus = result.success ? "executed" : "failed";
-        await persistActionStatus(value.actionId, executionStatus, "slack-user", {
-          success: result.success,
-          message: result.message,
-          duration: result.duration,
-        });
-
-        // Send completion update
-        const { status, text } = formatResultMessage(
-          result.success,
-          value.actionType,
-          result.message
-        );
-
-        const completedBlocks = formatProgressUpdate(value.actionId, status, text);
-
-        await say({
-          blocks: completedBlocks as SlackBlocks,
-          ...(messageTs && { thread_ts: messageTs }),
-        });
-
-        logger.info("Action executed synchronously", {
-          actionId: value.actionId,
-          actionType: value.actionType,
-          success: result.success,
-          duration: result.duration,
-        });
-      }
-    } else {
-      // Legacy format handling
-      const inProgressBlocks = formatProgressUpdate(
-        value.actionId,
-        "in_progress",
-        SLACK_BOT_MESSAGES.LEGACY_ACTION_IN_PROGRESS
-      );
-
-      await say({
-        blocks: inProgressBlocks as SlackBlocks,
-        ...(messageTs && { thread_ts: messageTs }),
-      });
-
-      // Legacy: just mark as completed after timeout
-      setTimeout(async () => {
-        try {
-          const completedBlocks = formatProgressUpdate(
-            value.actionId,
-            "completed",
-            SLACK_BOT_MESSAGES.LEGACY_ACTION_COMPLETED
-          );
-
-          await say({
-            blocks: completedBlocks as SlackBlocks,
-            ...(messageTs && { thread_ts: messageTs }),
-          });
-        } catch (timeoutError) {
-          logger.error("Error sending completion message", {
-            error: timeoutError instanceof Error ? timeoutError.message : "Unknown error",
-          });
-        }
-      }, SLACK_BOT_TIMEOUTS.LEGACY_ACTION_TIMEOUT_MS);
-    }
+    // Execute the action
+    await executeStoredAction(payload, opaqueId, say, messageTs);
   } catch (error) {
     const errorMessage = getErrorMessage(error);
 
@@ -317,7 +350,7 @@ export const handleActionApproval = async (
     if (say) {
       try {
         const errorBlocks = formatProgressUpdate(
-          actionId,
+          slackActionId,
           "failed",
           `Action failed: ${errorMessage}`
         );
@@ -328,7 +361,94 @@ export const handleActionApproval = async (
         });
       } catch (sayError) {
         logger.error("Failed to send error message to Slack", {
-          error: sayError instanceof Error ? sayError.message : "Unknown error",
+          error: getErrorMessage(sayError),
+        });
+      }
+    }
+  }
+};
+
+/**
+ * Handles action confirmation request.
+ * Shows a confirmation message before executing potentially dangerous actions.
+ */
+export const handleActionConfirmation = async (
+  action: ButtonAction,
+  ack: () => Promise<void>,
+  say: SayFn | undefined,
+  messageTs?: string
+): Promise<void> => {
+  await ack();
+
+  const slackActionId = action.action_id;
+  logger.info("Action confirmation requested", { action_id: slackActionId });
+
+  try {
+    if (!say) {
+      logger.warn("Say function not available for action confirmation");
+      return;
+    }
+
+    // Retrieve payload to show in confirmation
+    const payload = getActionPayload(action);
+
+    // Send confirmation prompt
+    const confirmationBlocks = [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `⚠️ *Confirm Action: ${payload.actionType}*\n\n${payload.description}\n\nRepository: \`${payload.repository}\``,
+        },
+      },
+      {
+        type: "actions",
+        block_id: "action_confirmation_block",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "✅ Confirm & Execute", emoji: true },
+            style: "primary",
+            value: action.value, // Pass through the same opaque value
+            action_id: `execute_confirmed_${slackActionId.replace("confirm_action_", "")}`,
+          },
+          {
+            type: "button",
+            text: { type: "plain_text", text: "❌ Cancel", emoji: true },
+            style: "danger",
+            value: action.value,
+            action_id: `cancel_action_${slackActionId.replace("confirm_action_", "")}`,
+          },
+        ],
+      },
+    ];
+
+    await say({
+      blocks: confirmationBlocks as SlackBlocks,
+      ...(messageTs && { thread_ts: messageTs }),
+    });
+
+    logger.info("Confirmation prompt sent", {
+      actionType: payload.actionType,
+      repository: payload.repository,
+    });
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+
+    logger.error("Error handling action confirmation", {
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    if (say) {
+      try {
+        await say({
+          text: `Failed to show confirmation: ${errorMessage}`,
+          ...(messageTs && { thread_ts: messageTs }),
+        });
+      } catch (sayError) {
+        logger.error("Failed to send error message to Slack", {
+          error: getErrorMessage(sayError),
         });
       }
     }
@@ -337,7 +457,7 @@ export const handleActionApproval = async (
 
 /**
  * Handles action rejection.
- * Logs the rejection and updates the message.
+ * Logs the rejection, cleans up stored payload, and updates the message.
  */
 export const handleActionRejection = async (
   action: ButtonAction,
@@ -347,19 +467,21 @@ export const handleActionRejection = async (
 ): Promise<void> => {
   await ack();
 
-  const actionId = action.action_id;
-  logger.info("Action rejected", { action_id: actionId });
+  const slackActionId = action.action_id;
+  logger.info("Action rejected", { action_id: slackActionId });
 
   try {
-    const value = parseActionValue(action);
+    // Try to get payload for logging (may fail if already expired)
+    const payload = getActionPayload(action);
+    const opaqueId = extractOpaqueId(action);
 
     if (!say) {
       logger.warn("Say function not available for action rejection");
       return;
     }
 
-    const displayId = isActionButtonValue(value) ? value.actionId : value.actionId;
-    const actionType = isActionButtonValue(value) ? value.actionType : "action";
+    const displayId = opaqueId ?? `legacy_${payload.commitSha.substring(0, 8)}`;
+    const { actionType } = payload;
 
     const rejectedBlocks = formatProgressUpdate(
       displayId,
