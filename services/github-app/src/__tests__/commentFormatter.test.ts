@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from "@jest/globals";
+import type { LLMAnalysisResult } from "@kenchi/shared";
 import {
   formatGitHubComment,
   formatAllClearComment,
@@ -78,6 +79,15 @@ describe("Comment Formatter", () => {
         oldVersion: "2.29.0",
       },
     ],
+    ...overrides,
+  });
+
+  const createMockFullAnalysis = (
+    overrides: Partial<LLMAnalysisResult> = {}
+  ): LLMAnalysisResult => ({
+    eventId: "evt_123",
+    summary: "Root cause summary",
+    analyzedAt: "2024-01-01T00:00:00.000Z",
     ...overrides,
   });
 
@@ -161,6 +171,17 @@ describe("Comment Formatter", () => {
       expect(comment).not.toContain("second sentence");
     });
 
+    it("should fallback to summary when no identified cause or analysis", async () => {
+      const analysis = createMockAnalysis({
+        identified_cause: undefined,
+        analysis: undefined,
+        summary: "Summary only root cause",
+      });
+      const comment = await formatGitHubComment(analysis);
+
+      expect(comment).toContain("> Summary only root cause");
+    });
+
     it("should include test failures subsection", async () => {
       const analysis = createMockAnalysis();
       const comment = await formatGitHubComment(analysis);
@@ -224,6 +245,26 @@ describe("Comment Formatter", () => {
 
       expect(comment).toContain("**Error Locations:**");
       expect(comment).toContain("`src/index.ts:42`");
+    });
+
+    it("should use AI code annotations when CI annotations are missing", async () => {
+      const analysis = createMockAnalysis({
+        annotations: undefined,
+        full_analysis: createMockFullAnalysis({
+          codeAnnotations: [
+            {
+              path: "src/app.ts",
+              line: 10,
+              level: "failure",
+              message: "Null reference",
+            },
+          ],
+        }),
+      });
+      const comment = await formatGitHubComment(analysis);
+
+      expect(comment).toContain("**Error Locations:**");
+      expect(comment).toContain("`src/app.ts:10`");
     });
 
     it("should only show failure-level annotations in error locations", async () => {
@@ -306,6 +347,18 @@ describe("Comment Formatter", () => {
       expect(comment).toContain("package0");
       expect(comment).toContain("...and");
       expect(comment).toContain("more changes");
+    });
+
+    it("should include secondary findings when provided", async () => {
+      const analysis = createMockAnalysis({
+        full_analysis: createMockFullAnalysis({
+          uncertainties: ["Secondary issue [log#2]"],
+        }),
+      });
+      const comment = await formatGitHubComment(analysis);
+
+      expect(comment).toContain("Secondary Findings");
+      expect(comment).toContain("Secondary issue [log#2]");
     });
 
     it("should include Impact section", async () => {
@@ -527,6 +580,19 @@ describe("Comment Formatter", () => {
       expect(comment).toContain("2m 30s");
     });
 
+    it("should include classification in metadata when available", async () => {
+      const analysis = createMockAnalysis({
+        full_analysis: createMockFullAnalysis({
+          category: "dependency",
+          phase: "build",
+        }),
+      });
+      const comment = await formatGitHubComment(analysis);
+
+      expect(comment).toContain("**Classification:**");
+      expect(comment).toContain("dependency / build");
+    });
+
     it("should not show metadata section when no metadata", async () => {
       const analysis = createMockAnalysis({
         checkName: undefined,
@@ -649,10 +715,22 @@ describe("Comment Formatter", () => {
       const analysis = createMockAnalysis({
         identified_cause: undefined,
         analysis: undefined,
+        summary: undefined,
       });
       const comment = formatAllClearComment(analysis);
 
       expect(comment).toContain("> No critical issues detected");
+    });
+
+    it("should fallback to summary when no cause or analysis", () => {
+      const analysis = createMockAnalysis({
+        identified_cause: undefined,
+        analysis: undefined,
+        summary: "Summary only success",
+      });
+      const comment = formatAllClearComment(analysis);
+
+      expect(comment).toContain("> Summary only success");
     });
 
     it("should show confidence percentage", () => {
@@ -868,7 +946,7 @@ describe("Comment Formatter", () => {
         dependencyChanges: undefined as unknown as AnalysisData["dependencyChanges"],
       };
 
-      await expect(formatGitHubComment(analysis)).resolves.toBeDefined();
+      expect(formatGitHubComment(analysis)).toBeDefined();
     });
   });
 
