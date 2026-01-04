@@ -14,6 +14,7 @@ export {
   defaultRateLimiter,
   createRedisRateLimiter,
   defaultRedisRateLimiter,
+  secureKeyGenerator,
   type RateLimitOptions,
   type RateLimitInfo,
 } from "./rateLimit.js";
