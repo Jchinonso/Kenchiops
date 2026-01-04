@@ -9,6 +9,8 @@ import type {
   EventPayload,
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
+  LLMSuggestedFix,
+  LLMAnalysisResult,
 } from "@kenchi/shared";
 
 /**
@@ -91,7 +93,7 @@ export interface SlackAttachment {
 }
 
 /**
- * CI Annotation from GitHub check run.
+ * CI Annotation from GitHub check run with optional suggested fix.
  */
 export interface CIAnnotation {
   readonly path: string;
@@ -100,6 +102,8 @@ export interface CIAnnotation {
   readonly level: "notice" | "warning" | "failure";
   readonly message: string;
   readonly title?: string;
+  /** AI-suggested fix for this issue */
+  readonly suggestedFix?: LLMSuggestedFix;
 }
 
 /**
@@ -148,9 +152,10 @@ export interface CIFailureAnalysis {
   readonly analysis: string;
   readonly identified_cause?: string;
   readonly recommended_actions?: readonly {
-    readonly priority: string;
+    readonly priority?: string | number;
     readonly description: string;
     readonly actionType?: string;
+    readonly reasoning?: string;
   }[];
   // Enriched context
   readonly checkName?: string;
@@ -169,6 +174,7 @@ export interface CIFailureAnalysis {
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
   readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+  readonly full_analysis?: LLMAnalysisResult;
 }
 
 /**
