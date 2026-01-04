@@ -73,6 +73,9 @@ export type {
   EvidenceReference,
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
+  // Failure Classification Types
+  FailureCategory,
+  PipelinePhase,
   // Action Proposal Types
   ActionProposal,
   ActionType,
