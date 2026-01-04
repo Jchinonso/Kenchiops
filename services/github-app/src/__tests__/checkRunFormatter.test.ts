@@ -248,8 +248,9 @@ describe("Check Run Formatter", () => {
       const content = buildEnrichedLogContent(webhook, context);
 
       expect(content).toContain("## CI Annotations (Errors & Warnings)");
+      expect(content).toContain("[anno#1]");
       expect(content).toContain("❌");
-      expect(content).toContain("`src/index.ts:10`");
+      expect(content).toContain("Path: src/index.ts:10");
       expect(content).toContain("Type error: expected string");
     });
 
@@ -275,7 +276,8 @@ describe("Check Run Formatter", () => {
       const content = buildEnrichedLogContent(webhook, context);
 
       expect(content).toContain("## Failed Tests");
-      expect(content).toContain("### ❌ should handle edge case");
+      expect(content).toContain("[test#1]");
+      expect(content).toContain("should handle edge case");
       expect(content).toContain("Expected true but got false");
     });
 
@@ -301,7 +303,7 @@ describe("Check Run Formatter", () => {
       const content = buildEnrichedLogContent(webhook, context);
 
       expect(content).toContain("## Build Config Changes");
-      expect(content).toContain("### tsconfig.json");
+      expect(content).toContain("[cfg#tsconfig_json] tsconfig.json");
       expect(content).toContain('"strict": true');
     });
 
@@ -321,9 +323,9 @@ describe("Check Run Formatter", () => {
       const content = buildEnrichedLogContent(webhook, context);
 
       expect(content).toContain("## Commit Info");
-      expect(content).toContain("**SHA:** abc123def456");
-      expect(content).toContain("**Author:** Test Author");
-      expect(content).toContain("**Message:** feat: add new feature");
+      expect(content).toContain("[commit#abc123def456] SHA: abc123def456");
+      expect(content).toContain("Author: Test Author");
+      expect(content).toContain("Message: feat: add new feature");
       expect(content).toContain("src/index.ts");
     });
 
@@ -343,7 +345,8 @@ describe("Check Run Formatter", () => {
       const content = buildEnrichedLogContent(webhook, context);
 
       expect(content).toContain("## Relevant Source Files");
-      expect(content).toContain("### src/index.ts");
+      expect(content).toContain("[src#");
+      expect(content).toContain("src/index.ts");
       expect(content).toContain("export const foo = 'bar'");
     });
 
@@ -361,7 +364,7 @@ describe("Check Run Formatter", () => {
       });
       const content = buildEnrichedLogContent(webhook, context);
 
-      expect(content).toContain("(lines 10-20)");
+      expect(content).toContain("[src#src_main_ts:10-20]");
     });
 
     it("should include PR comments section", () => {
@@ -370,7 +373,8 @@ describe("Check Run Formatter", () => {
       const content = buildEnrichedLogContent(webhook, context);
 
       expect(content).toContain("## Recent PR Discussion");
-      expect(content).toContain("**@commenter**");
+      expect(content).toContain("[comment#1]");
+      expect(content).toContain("@commenter");
       expect(content).toContain("Great work!");
     });
 
