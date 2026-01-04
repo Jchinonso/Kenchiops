@@ -187,7 +187,7 @@ export const recordCost = async (input: RecordCostInput): Promise<CostRecord> =>
     id,
     input.tenantId,
     input.operationType,
-    input.embeddingTier,
+    input.embeddingTier.toLowerCase(),
     input.tokenCount,
     costUsd.toFixed(8),
   ]);
