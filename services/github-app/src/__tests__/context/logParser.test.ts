@@ -521,13 +521,12 @@ FAIL src/utils.test.ts
         expect(failures.length).toBeGreaterThan(0);
       });
 
-      it("should provide generic error message for fallback extraction", () => {
+      it("should use failure marker when no error body is available", () => {
         const logs = `FAIL src/utils.test.ts`;
         const failures = extractTestFailures(logs);
 
         if (failures.length > 0) {
-          // Simplified extraction provides generic error
-          expect(failures[0].error).toBe("Test failed (see logs for details)");
+          expect(failures[0].error).toBe("FAIL src/utils.test.ts");
         }
       });
     });

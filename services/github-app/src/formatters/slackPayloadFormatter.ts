@@ -143,7 +143,9 @@ const toTitleCase = (snakeCaseString: string): string =>
  */
 const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): ConsolidatedTestFailure[] =>
   deduplicateByKey(
-    failures.flatMap((failure) => failure.testFailures ?? []),
+    [...failures.flatMap((failure) => failure.testFailures ?? [])].sort(
+      (left, right) => Number(Boolean(right.error)) - Number(Boolean(left.error))
+    ),
     (testFailure) => `${testFailure.testName}|${testFailure.file ?? ""}`
   ).map((testFailure) => normalizeTestFailure(testFailure));
 

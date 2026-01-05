@@ -62,6 +62,7 @@ export interface ConsolidatedTestFailure {
   readonly testName: string;
   readonly file?: string;
   readonly line?: number;
+  readonly error?: string;
 }
 
 /**

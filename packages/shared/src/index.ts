@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Kenchi Shared Package
  *
@@ -320,6 +321,11 @@ export {
 
 // OpenAI client
 export { OpenAIClient } from "./openaiClient/index.js";
+export {
+  splitEvidenceSections,
+  type EvidenceSectionBlock,
+  isGenericErrorLine,
+} from "./openaiClient/index.js";
 export {
   EmbeddingClient,
   getEmbeddingClient,
