@@ -12,6 +12,7 @@
  */
 
 export { OpenAIClient } from "./client.js";
+export { applyEvidenceGuardrails } from "./analysisGuardrails.js";
 export {
   EmbeddingClient,
   getEmbeddingClient,

@@ -161,6 +161,12 @@ export const FORMATTER_DISPLAY_LIMITS = {
   MIN_FIX_CONFIDENCE: 0.7,
   /** Maximum characters per display line in Slack to prevent overflow */
   SLACK_MAX_LINE_CHARS: 100,
+  /** Maximum characters for check names line to prevent Slack overflow */
+  SLACK_CHECK_NAMES_MAX_CHARS: 200,
+  /** Maximum root causes to display (top N highest confidence) */
+  MAX_ROOT_CAUSES: 3,
+  /** Maximum characters per root cause line */
+  MAX_CAUSE_LINE_CHARS: 200,
 } as const;
 
 // ==================== Retry Configuration ====================

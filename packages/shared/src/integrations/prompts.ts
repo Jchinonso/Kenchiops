@@ -53,7 +53,7 @@ Analyze the provided build/test logs or error output to identify the most likely
 
 **Root Cause Identification:** Identify the earliest **causal** error—the first error that explains later failures—not merely the first failure summary. For example, "dependency install failed" is the root cause, not the later "tests failed."
 
-**Evidence Anchoring:** Reference specific evidence IDs when explaining the root cause. Each evidence item is prefixed with an ID like [log#42] or [log#abc123], [commit#d8a905e12abc], [metric#errorRate], [state#deployment.currentVersion], [doc#runbook_123], [event#1], [event#evt_123]. Use these exact IDs without brackets in your annotations (if evidence shows [log#3], output "evidence_id": "log#3"). Valid IDs include log#<id>, commit#<shortSha>, metric#<key>, state#<section.key>, doc#<id>, event#<id>. Use exactly what appears in the evidence (minus brackets). Never invent IDs. Never paraphrase snippets; copy exact evidence text (redacting secrets/PII only). If truncation is necessary, include the exact beginning of the line and append ...<TRUNCATED>.
+**Evidence Anchoring:** Reference specific evidence IDs when explaining the root cause. Each evidence item is prefixed with an ID like [log#42] or [log#abc123], [commit#d8a905e12abc], [metric#errorRate], [state#deployment.currentVersion], [doc#runbook_123], [event#1], [event#evt_123]. CI evidence may also use [check#...], [anno#N], [test#N], [dep#N], [cfg#path], [wflog#N], [diff#N], [src#path:lines], [comment#N]. Use these exact IDs without brackets in your annotations (if evidence shows [log#3], output "evidence_id": "log#3"). Valid IDs include log#<id>, commit#<shortSha>, metric#<key>, state#<section.key>, doc#<id>, event#<id>, check#<id>, anno#<id>, test#<id>, dep#<id>, cfg#<id>, wflog#<id>, diff#<id>, src#<id>, comment#<id>. Use exactly what appears in the evidence (minus brackets). Never invent IDs. Never paraphrase snippets; copy exact evidence text (redacting secrets/PII only). If truncation is necessary, include the exact beginning of the line and append ...<TRUNCATED>.
 
 **Next Steps:** Provide actionable, safe next steps to resolve or investigate the issue.
 
@@ -96,6 +96,8 @@ The first visible "error" is often a symptom:
 - "tests failed" is a summary; look earlier for "dependency install failed"
 - "panic" or "crash" may be caused by a missing config/env key logged earlier
 - "compilation failed" may follow "code generation failed" in a prior step
+
+When a "Failed Tests" section is present, treat the TEST_ERROR_BEGIN/END content as primary evidence. Avoid generic causes like "tests failed" unless no specific error lines are available.
 
 **Prioritize errors from build phases:** dependency resolution, compilation, migration, config validation—these typically precede test summaries.
 
@@ -197,7 +199,7 @@ SCHEMA:
 **annotations** (required, 0-10 items): Evidence supporting root cause. Must be non-empty when confidence is medium/high; may be empty only when evidence is insufficient and confidence is low. If you cannot cite at least one evidence_id + snippet for the stated root_cause, you MUST set confidence="low" and category/phase may be "unknown".
 - **evidence_id**: Must match an ID from the evidence. **Never invent IDs.**
   - Format: Use the ID without brackets. Write "log#3" not "[log#3]".
-  - Valid types: log#<id>, commit#<shortSha>, metric#<key>, state#<section.key>, doc#<id>, event#<id>
+  - Valid types: log#<id>, commit#<shortSha>, metric#<key>, state#<section.key>, doc#<id>, event#<id>, check#<id>, anno#<id>, test#<id>, dep#<id>, cfg#<id>, wflog#<id>, diff#<id>, src#<id>, comment#<id>
   - If and only if the evidence has no prefixed IDs at all, use "unknown". Otherwise you MUST use one of the provided IDs.
 - **snippet**: Exact text (1-3 lines). Redact secrets with ***REDACTED***.
 - **explanation**: Why this is important.

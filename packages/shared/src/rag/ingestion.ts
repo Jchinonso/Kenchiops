@@ -132,15 +132,14 @@ export const ingestDiffChunks = async (input: IngestDiffInput): Promise<IngestDi
     }
 
     // Map chunks to database input format
-    const chunkInputs = mapDiffChunksToInputs(
-      chunkResult.chunks,
-      chunkResult.filePath,
-      input.repository,
-      input.prNumber,
-      input.commitSha,
-      input.hunkHeader,
-      input.tenantId
-    );
+    const chunkInputs = mapDiffChunksToInputs(chunkResult.chunks, {
+      filePath: chunkResult.filePath,
+      repository: input.repository,
+      prNumber: input.prNumber,
+      commitSha: input.commitSha,
+      hunkHeader: input.hunkHeader,
+      tenantId: input.tenantId,
+    });
 
     // Store chunks in database
     const createdChunks = await createDiffChunksBatch(chunkInputs);
@@ -269,17 +268,16 @@ export const ingestKnowledgeDoc = async (
     }
 
     // Map chunks to database input format
-    const chunkInputs = mapKnowledgeChunksToInputs(
-      chunkResult.chunks,
-      input.docType,
-      input.title,
-      null,
-      input.repository,
-      input.sourceUrl,
-      input.filePath,
-      input.tenantId,
-      input.metadata
-    );
+    const chunkInputs = mapKnowledgeChunksToInputs(chunkResult.chunks, {
+      docType: input.docType,
+      title: input.title,
+      parentId: null,
+      repository: input.repository,
+      sourceUrl: input.sourceUrl,
+      filePath: input.filePath,
+      tenantId: input.tenantId,
+      metadata: input.metadata,
+    });
 
     // Store chunks in database
     const createdDocs = await createKnowledgeDocsBatch(chunkInputs);
