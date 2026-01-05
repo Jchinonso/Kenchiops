@@ -34,6 +34,21 @@ export {
   AGGREGATION_KEYS,
 } from "./types.js";
 
+// Aggregator Helpers
+export {
+  formatShaForDisplay,
+  calculateAggregationTTL,
+  calculateDebounceTTL,
+  serializeFailure,
+  deserializeFailure,
+  buildMetadata,
+  reconstructAggregation,
+  parseAggregationKey,
+  buildAggregationKeys,
+  type FailureContext,
+  type AggregationMetadata,
+} from "./aggregatorHelpers.js";
+
 // Redis Aggregator
 export {
   addFailureToRedis,
@@ -48,5 +63,4 @@ export {
   deserializeQueuePayload,
   type AggregationReadyCallback,
   type ConsolidatedAnalysisPayload,
-  type FailureContext,
 } from "./redisAggregator.js";

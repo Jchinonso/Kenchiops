@@ -13,7 +13,18 @@ export {
   type QueryResult,
 } from "./client.js";
 
-// Tenant service
+// Tenant service types
+export {
+  rowToTenant,
+  extractTenant,
+  getStatusAfterGitHubInstall,
+  getStatusAfterSlackInstall,
+  RAG_BUDGET_DEFAULTS,
+  type TenantRow,
+  type TenantStatistics,
+} from "./tenantServiceTypes.js";
+
+// Tenant service operations
 export {
   findByGitHubInstallation,
   findByGitHubOrg,
@@ -32,7 +43,6 @@ export {
   updateSlackToken,
   getSlackCredentials,
   getTenantStatistics,
-  type TenantStatistics,
 } from "./tenantService.js";
 
 // RAG budget configuration

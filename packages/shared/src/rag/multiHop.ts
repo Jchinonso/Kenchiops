@@ -13,58 +13,14 @@ import {
   getBidirectionalRelationships,
   type IncidentRelationship,
 } from "../database/relationshipRepository.js";
-import { type KnowledgeDocRecord } from "../database/vectorTypes.js";
+
+// Import types used internally
+import type { GraphNode, MultiHopOptions, TraversalState, QueueItem } from "./multiHopTypes.js";
+
+// Re-export public types for external consumers
+export type { GraphNode, MultiHopResult, MultiHopOptions } from "./multiHopTypes.js";
 
 const logger = createLogger("rag-multi-hop");
-
-// ==================== Types ====================
-
-/**
- * Graph node representing a document with path information.
- */
-export interface GraphNode {
-  readonly docId: string;
-  readonly hopDepth: number;
-  readonly pathStrength: number;
-  readonly relationshipType: RelationshipType;
-}
-
-/**
- * Multi-hop search result combining document with graph metadata.
- */
-export interface MultiHopResult {
-  readonly doc: KnowledgeDocRecord;
-  readonly hopDepth: number;
-  readonly pathStrength: number;
-  readonly relationshipChain: readonly RelationshipType[];
-}
-
-/**
- * Options for multi-hop traversal.
- */
-export interface MultiHopOptions {
-  readonly maxDepth?: number;
-  readonly minStrength?: number;
-  readonly maxResults?: number;
-}
-
-/**
- * State for BFS traversal.
- */
-interface TraversalState {
-  readonly visited: Set<string>;
-  readonly nodes: readonly GraphNode[];
-}
-
-/**
- * Queue item for BFS processing.
- */
-interface QueueItem {
-  readonly docId: string;
-  readonly depth: number;
-  readonly pathStrength: number;
-  readonly relationshipChain: readonly RelationshipType[];
-}
 
 // ==================== Graph Traversal ====================
 

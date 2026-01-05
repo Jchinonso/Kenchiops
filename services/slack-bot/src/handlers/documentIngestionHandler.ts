@@ -6,6 +6,10 @@
  * 2. File uploads with @kenchi mention
  *
  * Documents are ingested into the RAG knowledge base for Q&A retrieval.
+ *
+ * This is the public API that re-exports from focused modules:
+ * - documentFileProcessor.ts: File processing utilities
+ * - documentModalBuilder.ts: Modal building
  */
 
 import type { SlashCommand, RespondFn } from "@slack/bolt";
@@ -14,7 +18,6 @@ import type { View } from "@slack/types";
 import {
   createLogger,
   getErrorMessage,
-  ExternalServiceError,
   ingestKnowledgeDoc,
   SLACK_ACTION_IDS,
   SLACK_BLOCK_IDS,
@@ -22,13 +25,25 @@ import {
   DOC_INGESTION_CONFIG,
   DOC_INGESTION_MESSAGES,
   isDocIngestionRequest,
-  UI_EMOJI,
   SLACK_UI_ERROR_MESSAGES,
-  DOC_INGESTION_ERROR_CODES,
   type KnowledgeDocType,
 } from "@kenchi/shared";
 import { toSlackSDKView } from "../types/slackTypes.js";
 import { buildAddDocumentModal } from "./documentModalBuilder.js";
+import {
+  type SlackFileInfo,
+  type FileProcessingContext,
+  processAllFilesWithContext,
+  formatIngestionResponse,
+} from "./documentFileProcessor.js";
+
+// Re-export types and utilities for consumers
+export type {
+  SlackFileInfo,
+  FileIngestionResult,
+  FileProcessingContext,
+} from "./documentFileProcessor.js";
+export { buildAddDocumentModal } from "./documentModalBuilder.js";
 
 const logger = createLogger("slack-bot");
 
@@ -45,17 +60,6 @@ interface DocumentModalValues {
 }
 
 /**
- * File info from Slack API
- */
-interface SlackFileInfo {
-  readonly id: string;
-  readonly name: string;
-  readonly filetype: string;
-  readonly size: number;
-  readonly url_private: string;
-}
-
-/**
  * Message with files attached
  */
 export interface MessageWithFiles {
@@ -67,30 +71,12 @@ export interface MessageWithFiles {
 }
 
 /**
- * File ingestion result
- */
-interface FileIngestionResult {
-  readonly filename: string;
-  readonly success: boolean;
-  readonly error?: string;
-  readonly chunks?: number;
-}
-
-/**
  * Modal values input type - matches Slack's ViewStateValue
  */
 type ModalValuesInput = Record<
   string,
   Record<string, { value?: string | null; selected_option?: { value: string } | null }>
 >;
-
-/**
- * Context for file processing
- */
-interface FileProcessingContext {
-  readonly userId: string;
-  readonly botToken: string;
-}
 
 /**
  * Say function type for Slack responses
@@ -100,7 +86,7 @@ type SayFunction = (text: string) => Promise<void>;
 // ==================== Command Handler ====================
 
 /**
- * Handle /kenchi add-doc command - opens the document modal
+ * Handle /kenchi add-doc command - opens the document modal.
  */
 export const handleAddDocCommand = async (
   command: SlashCommand,
@@ -140,7 +126,7 @@ export const handleAddDocCommand = async (
 // ==================== Modal Submission Handler ====================
 
 /**
- * Parse modal submission values
+ * Parse modal submission values.
  */
 const parseModalValues = (values: ModalValuesInput): DocumentModalValues => {
   const title = values[SLACK_BLOCK_IDS.DOC_TITLE]?.[SLACK_ACTION_IDS.DOC_TITLE]?.value ?? "";
@@ -155,7 +141,7 @@ const parseModalValues = (values: ModalValuesInput): DocumentModalValues => {
 };
 
 /**
- * Handle document modal submission
+ * Handle document modal submission.
  */
 export const handleDocumentModalSubmit = async (
   values: ModalValuesInput,
@@ -238,187 +224,10 @@ export const handleDocumentModalSubmit = async (
   }
 };
 
-// ==================== File Upload Helpers ====================
-
-/**
- * Check if a file extension is supported
- */
-const isSupportedExtension = (filename: string): boolean => {
-  const ext = filename.toLowerCase().slice(filename.lastIndexOf("."));
-  return DOC_INGESTION_CONFIG.SUPPORTED_EXTENSIONS.includes(
-    ext as (typeof DOC_INGESTION_CONFIG.SUPPORTED_EXTENSIONS)[number]
-  );
-};
-
-/**
- * Extract title from filename
- */
-const extractTitleFromFilename = (filename: string): string => {
-  const nameWithoutExt = filename.slice(0, filename.lastIndexOf("."));
-  return nameWithoutExt
-    .replace(/[-_]/g, " ")
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-};
-
-/**
- * Download file content from Slack
- */
-const downloadFileContent = async (fileUrl: string, botToken: string): Promise<string> => {
-  const response = await fetch(fileUrl, {
-    headers: {
-      Authorization: `Bearer ${botToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new ExternalServiceError("slack", `Failed to download file: ${response.statusText}`);
-  }
-
-  return response.text();
-};
-
-/**
- * Infer document type from filename
- */
-const inferDocTypeFromFilename = (filename: string): KnowledgeDocType => {
-  const lowerName = filename.toLowerCase();
-
-  const typePatterns: ReadonlyArray<{ pattern: RegExp; type: KnowledgeDocType }> = [
-    { pattern: /runbook|how[-_]?to/i, type: KNOWLEDGE_DOC_TYPES.RUNBOOK },
-    { pattern: /postmortem|incident|outage/i, type: KNOWLEDGE_DOC_TYPES.POSTMORTEM },
-    { pattern: /troubleshoot|debug|fix/i, type: KNOWLEDGE_DOC_TYPES.TROUBLESHOOTING },
-    { pattern: /known[-_]?issue|bug/i, type: KNOWLEDGE_DOC_TYPES.KNOWN_ISSUES },
-    { pattern: /sop|procedure|process/i, type: KNOWLEDGE_DOC_TYPES.SOP },
-    { pattern: /arch|design|system/i, type: KNOWLEDGE_DOC_TYPES.ARCHITECTURE },
-  ];
-
-  const matched = typePatterns.find(({ pattern }) => pattern.test(lowerName));
-  return matched?.type ?? KNOWLEDGE_DOC_TYPES.DOCUMENTATION;
-};
-
-/**
- * Get user-friendly error message for error code
- */
-const getErrorMessageForCode = (errorCode?: string): string => {
-  const errorCodeMap = Object.values(DOC_INGESTION_ERROR_CODES);
-  const matched = errorCodeMap.find((entry) => entry.code === errorCode);
-  return matched?.message ?? "An unexpected error occurred while processing the file.";
-};
-
-// ==================== File Processing ====================
-
-/**
- * Process a single file for ingestion
- */
-const processFileForIngestion = async (
-  file: SlackFileInfo,
-  context: FileProcessingContext
-): Promise<FileIngestionResult> => {
-  // Validate file extension
-  if (!isSupportedExtension(file.name)) {
-    return {
-      filename: file.name,
-      success: false,
-      error: DOC_INGESTION_ERROR_CODES.UNSUPPORTED_TYPE.code,
-    };
-  }
-
-  // Validate file size
-  if (file.size > DOC_INGESTION_CONFIG.MAX_FILE_SIZE_BYTES) {
-    return { filename: file.name, success: false, error: DOC_INGESTION_ERROR_CODES.TOO_LARGE.code };
-  }
-
-  try {
-    const content = await downloadFileContent(file.url_private, context.botToken);
-    const title = extractTitleFromFilename(file.name);
-    const docType = inferDocTypeFromFilename(file.name);
-
-    const result = await ingestKnowledgeDoc({
-      docType,
-      title,
-      content,
-      filePath: file.name,
-      metadata: {
-        submittedBy: context.userId,
-        submittedAt: new Date().toISOString(),
-        slackFileId: file.id,
-        source: "slack_file_upload",
-      },
-    });
-
-    logger.info("File ingested successfully", {
-      filename: file.name,
-      userId: context.userId,
-      chunksCreated: result.chunksCreated,
-    });
-
-    return { filename: file.name, success: true, chunks: result.chunksCreated };
-  } catch (error) {
-    logger.error("Failed to ingest file", {
-      filename: file.name,
-      error: getErrorMessage(error),
-    });
-
-    return {
-      filename: file.name,
-      success: false,
-      error: DOC_INGESTION_ERROR_CODES.PROCESSING_FAILED.code,
-    };
-  }
-};
-
-/**
- * Format ingestion results for Slack response
- */
-const formatIngestionResponse = (results: readonly FileIngestionResult[]): string => {
-  const successResults = results.filter((result) => result.success);
-  const failureResults = results.filter((result) => !result.success);
-
-  if (successResults.length > 0 && failureResults.length === 0) {
-    const totalChunks = successResults.reduce((sum, result) => sum + (result.chunks ?? 0), 0);
-    const fileList = successResults.map((result) => `• ${result.filename}`).join("\n");
-    return `${UI_EMOJI.success} Added ${successResults.length} document(s) to knowledge base (${totalChunks} chunks created):\n${fileList}`;
-  }
-
-  if (successResults.length > 0) {
-    const successList = successResults
-      .map((result) => `${UI_EMOJI.success} ${result.filename}`)
-      .join("\n");
-    const failList = failureResults
-      .map(
-        (result) =>
-          `${UI_EMOJI.failure} ${result.filename}: ${getErrorMessageForCode(result.error)}`
-      )
-      .join("\n");
-    return `Ingestion results:\n${successList}\n${failList}`;
-  }
-
-  const failList = results
-    .map((result) => `• ${result.filename}: ${getErrorMessageForCode(result.error)}`)
-    .join("\n");
-  return `${UI_EMOJI.failure} Failed to ingest files:\n${failList}`;
-};
-
-/**
- * Process all files with context
- */
-const processAllFilesWithContext = async (
-  files: readonly SlackFileInfo[],
-  context: FileProcessingContext
-): Promise<readonly FileIngestionResult[]> => {
-  const promises: Array<Promise<FileIngestionResult>> = [];
-  files.forEach((file) => {
-    promises.push(processFileForIngestion(file, context));
-  });
-  return Promise.all(promises);
-};
-
 // ==================== File Upload Handler ====================
 
 /**
- * Handle file upload with @kenchi mention for ingestion
+ * Handle file upload with @kenchi mention for ingestion.
  */
 export const handleFileUploadIngestion = async (
   message: MessageWithFiles,
@@ -456,12 +265,9 @@ export const handleFileUploadIngestion = async (
 // ==================== Check Functions ====================
 
 /**
- * Check if a message contains files and is requesting ingestion
+ * Check if a message contains files and is requesting ingestion.
  */
 export const shouldHandleFileIngestion = (message: MessageWithFiles, text: string): boolean => {
   const hasFiles = (message.files?.length ?? 0) > 0;
   return hasFiles && isDocIngestionRequest(text);
 };
-
-// Re-export modal builder for convenience
-export { buildAddDocumentModal } from "./documentModalBuilder.js";

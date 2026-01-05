@@ -12,6 +12,7 @@ import {
   FILE_REFERENCE_PATTERNS,
   EXCLUDED_PATH_PATTERNS,
   ERROR_INDICATORS,
+  LOG_PARSING_LIMITS,
   shouldExcludePath,
   deduplicateByKey,
   normalizeTestFailure,
@@ -147,59 +148,72 @@ const isAssertionMessage = (testName: string): boolean => {
   return ASSERTION_MESSAGE_PATTERNS.some((pattern) => pattern.test(trimmed));
 };
 
-const extractLineForFile = (text: string, filePath: string): number | undefined => {
-  const lines = text.split("\n");
-
-  for (const lineText of lines) {
-    const index = lineText.indexOf(filePath);
-    if (index === -1) {
-      continue;
+/**
+ * Extract line number from text for a given file path.
+ * Searches for the file path and extracts line numbers from common patterns.
+ */
+const extractLineFromSuffix = (suffix: string): number | undefined => {
+  // Try colon format: :123
+  const colonMatch = suffix.match(/:(\d+)/);
+  if (colonMatch) {
+    const parsedLine = parseInt(colonMatch[1], 10);
+    if (parsedLine > 0) {
+      return parsedLine;
     }
+  }
 
-    const suffix = lineText.slice(index + filePath.length);
-    const colonMatch = suffix.match(/:(\d+)/);
-    if (colonMatch) {
-      const line = parseInt(colonMatch[1], 10);
-      if (line > 0) {
-        return line;
-      }
-    }
-
-    const pythonMatch = suffix.match(/,\s*line\s*(\d+)/i);
-    if (pythonMatch) {
-      const line = parseInt(pythonMatch[1], 10);
-      if (line > 0) {
-        return line;
-      }
+  // Try Python format: , line 123
+  const pythonMatch = suffix.match(/,\s*line\s*(\d+)/i);
+  if (pythonMatch) {
+    const parsedLine = parseInt(pythonMatch[1], 10);
+    if (parsedLine > 0) {
+      return parsedLine;
     }
   }
 
   return undefined;
 };
 
+const extractLineForFile = (text: string, filePath: string): number | undefined => {
+  const lines = text.split("\n");
+
+  // Find the first line containing the file path and extract line number
+  const matchingLine = lines.find((lineText) => lineText.includes(filePath));
+  if (!matchingLine) {
+    return undefined;
+  }
+
+  const filePathIndex = matchingLine.indexOf(filePath);
+  const suffix = matchingLine.slice(filePathIndex + filePath.length);
+  return extractLineFromSuffix(suffix);
+};
+
 const pathsMatch = (left: string, right: string): boolean =>
   left === right || left.endsWith(right) || right.endsWith(left);
 
 const extractFileReferenceFromText = (text: string): FileReference | null => {
-  for (const pattern of FILE_REFERENCE_PATTERNS) {
+  // Try each pattern and find the first valid match with path and line
+  const patternResult = FILE_REFERENCE_PATTERNS.map((pattern) => {
     const regex = new RegExp(pattern.source, pattern.flags);
     const match = [...text.matchAll(regex)][0];
     if (!match) {
-      continue;
+      return null;
     }
 
-    const line = parseInt(match[2], 10);
-    if (match[1] && line > 0) {
-      return { path: match[1], line };
+    const lineNumber = parseInt(match[2], 10);
+    if (match[1] && lineNumber > 0) {
+      return { path: match[1], line: lineNumber };
     }
+    return null;
+  }).find((result) => result !== null);
+
+  if (patternResult) {
+    return patternResult;
   }
 
+  // Fallback to path-only match
   const pathOnlyMatch = text.match(FILE_PATH_ONLY_PATTERN);
-  if (pathOnlyMatch) {
-    return { path: pathOnlyMatch[1] };
-  }
-
-  return null;
+  return pathOnlyMatch ? { path: pathOnlyMatch[1] } : null;
 };
 
 /**
@@ -236,44 +250,67 @@ const ERROR_END_MARKERS = [
 ] as const;
 
 /**
+ * Accumulator state for error body extraction
+ */
+interface ErrorBodyAccumulator {
+  readonly lines: readonly string[];
+  readonly charCount: number;
+  readonly done: boolean;
+}
+
+/**
+ * Process a single line for error body extraction.
+ * Returns updated accumulator state.
+ */
+const processErrorLine = (
+  accumulator: ErrorBodyAccumulator,
+  line: string
+): ErrorBodyAccumulator => {
+  if (accumulator.done) {
+    return accumulator;
+  }
+
+  // Check if we've hit an end marker
+  const isEndMarker = ERROR_END_MARKERS.some((marker) => marker.test(line));
+  if (isEndMarker) {
+    return { ...accumulator, done: true };
+  }
+
+  // Check if we've exceeded the character limit
+  if (accumulator.charCount + line.length > MAX_ERROR_BODY_CHARS) {
+    const remaining = MAX_ERROR_BODY_CHARS - accumulator.charCount;
+    if (remaining > LOG_PARSING_LIMITS.MIN_TRUNCATION_CHARS) {
+      return {
+        lines: [...accumulator.lines, `${line.slice(0, remaining)}...`],
+        charCount: MAX_ERROR_BODY_CHARS,
+        done: true,
+      };
+    }
+    return { ...accumulator, done: true };
+  }
+
+  return {
+    lines: [...accumulator.lines, line],
+    charCount: accumulator.charCount + line.length + 1, // +1 for newline
+    done: false,
+  };
+};
+
+/**
  * Extract error body starting from a position in the logs.
  * Captures lines until an end marker or character limit is reached.
  */
 const extractErrorBody = (logs: string, startIndex: number): string => {
-  // Get the content after the match
   const remainingContent = logs.slice(startIndex);
-  const lines = remainingContent.split("\n");
-
-  const errorLines: string[] = [];
-  let charCount = 0;
+  const allLines = remainingContent.split("\n");
 
   // Skip the first line (contains the failure marker itself)
-  const linesToProcess = lines.slice(1, ERROR_CONTEXT_LINES + 1);
+  const linesToProcess = allLines.slice(1, ERROR_CONTEXT_LINES + 1);
 
-  for (const line of linesToProcess) {
-    // Check if we've hit an end marker
-    const isEndMarker = ERROR_END_MARKERS.some((marker) => marker.test(line));
-    if (isEndMarker) {
-      break;
-    }
-
-    // Stop if we've exceeded the character limit
-    if (charCount + line.length > MAX_ERROR_BODY_CHARS) {
-      // Add truncated line if there's room
-      const remaining = MAX_ERROR_BODY_CHARS - charCount;
-      if (remaining > 20) {
-        errorLines.push(`${line.slice(0, remaining)}...`);
-      }
-      break;
-    }
-
-    errorLines.push(line);
-    charCount += line.length + 1; // +1 for newline
-  }
+  const initialState: ErrorBodyAccumulator = { lines: [], charCount: 0, done: false };
+  const { lines: errorLines } = linesToProcess.reduce(processErrorLine, initialState);
 
   const errorBody = errorLines.join("\n").trim();
-
-  // Return captured error or fallback
   return errorBody.length > 0 ? errorBody : "Test failed (see logs for details)";
 };
 

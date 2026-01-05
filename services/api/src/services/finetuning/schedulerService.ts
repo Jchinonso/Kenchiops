@@ -149,6 +149,15 @@ const hasEnoughTimePassed = (): boolean => {
   return daysSinceLastJob >= currentConfig.minDaysBetweenJobs;
 };
 
+const recordAutoTriggeredJob = (jobId: string, fileId: string | undefined): void => {
+  state.lastJobTriggeredAt = Date.now();
+  state.trackedJobs.add(jobId);
+  logger.info("Auto-triggered fine-tuning job started", {
+    jobId,
+    fileId,
+  });
+};
+
 /**
  * Checks if it's time to run the auto-trigger check.
  */
@@ -211,12 +220,7 @@ const checkAutoTrigger = async (): Promise<void> => {
     });
 
     if (result.success && result.jobId) {
-      state.lastJobTriggeredAt = Date.now();
-      state.trackedJobs.add(result.jobId);
-      logger.info("Auto-triggered fine-tuning job started", {
-        jobId: result.jobId,
-        fileId: result.fileId,
-      });
+      recordAutoTriggeredJob(result.jobId, result.fileId);
     } else {
       logger.warn("Auto-triggered fine-tuning job failed to start", {
         error: result.error,

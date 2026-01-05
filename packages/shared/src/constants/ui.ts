@@ -76,6 +76,7 @@ export const UI_EMOJI = {
   target: "🎯",
   link: "🔗",
   branch: "🔀",
+  user: "👤",
 
   // Knowledge/documentation icons
   book: "📚",

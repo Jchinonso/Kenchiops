@@ -84,13 +84,15 @@ export const FILE_PATH_VALIDATION = {
 } as const;
 
 /**
- * Maximum number of test failures to extract from logs.
+ * Limits for log parsing operations.
  */
 export const LOG_PARSING_LIMITS = {
   /** Maximum test failures to extract - high limit to capture all before deduplication */
   MAX_TEST_FAILURES: 300,
   /** Maximum size for build config diff in characters */
   MAX_BUILD_CONFIG_DIFF_SIZE: 5000,
+  /** Minimum remaining characters to include a truncated line in error body */
+  MIN_TRUNCATION_CHARS: 20,
 } as const;
 
 /**

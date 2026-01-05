@@ -428,21 +428,23 @@ export const ingestLinkedCommitKnowledge = async (
  * Create a failure summary from an analyzed failure.
  * Utility for converting check run analysis into trackable format.
  */
-export const createFailureSummary = (
-  checkName: string,
-  conclusion: string,
-  identifiedCause: string,
-  analysis: string,
-  confidence: number,
-  errorPatterns?: readonly string[],
-  testFailures?: readonly string[]
-): FailureSummary => ({
-  checkName,
-  conclusion,
-  identifiedCause,
-  analysis,
-  confidence,
-  errorPatterns: errorPatterns ?? [],
-  testFailures: testFailures ?? [],
+interface FailureSummaryInput {
+  readonly checkName: string;
+  readonly conclusion: string;
+  readonly identifiedCause: string;
+  readonly analysis: string;
+  readonly confidence: number;
+  readonly errorPatterns?: readonly string[];
+  readonly testFailures?: readonly string[];
+}
+
+export const createFailureSummary = (input: FailureSummaryInput): FailureSummary => ({
+  checkName: input.checkName,
+  conclusion: input.conclusion,
+  identifiedCause: input.identifiedCause,
+  analysis: input.analysis,
+  confidence: input.confidence,
+  errorPatterns: input.errorPatterns ?? [],
+  testFailures: input.testFailures ?? [],
   timestamp: new Date().toISOString(),
 });

@@ -121,15 +121,14 @@ describe("RAG Ingestion Helpers", () => {
         },
       ];
 
-      const result = mapDiffChunksToInputs(
-        chunks,
-        "src/file.ts",
-        "owner/repo",
-        123,
-        "abc123",
-        "@@ -1,5 +1,5 @@",
-        "tenant-1"
-      );
+      const result = mapDiffChunksToInputs(chunks, {
+        filePath: "src/file.ts",
+        repository: "owner/repo",
+        prNumber: 123,
+        commitSha: "abc123",
+        hunkHeader: "@@ -1,5 +1,5 @@",
+        tenantId: "tenant-1",
+      });
 
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
@@ -154,7 +153,12 @@ describe("RAG Ingestion Helpers", () => {
         },
       ];
 
-      const result = mapDiffChunksToInputs(chunks, "file.ts", "repo", 1, "sha", undefined);
+      const result = mapDiffChunksToInputs(chunks, {
+        filePath: "file.ts",
+        repository: "repo",
+        prNumber: 1,
+        commitSha: "sha",
+      });
 
       expect(result[0].content).toContain("[REDACTED]");
       expect(result[0].content).not.toContain("SECRET_password123");
@@ -168,14 +172,13 @@ describe("RAG Ingestion Helpers", () => {
         },
       ];
 
-      const result = mapDiffChunksToInputs(
-        chunks,
-        "file.ts",
-        "repo",
-        1,
-        "sha"
+      const result = mapDiffChunksToInputs(chunks, {
+        filePath: "file.ts",
+        repository: "repo",
+        prNumber: 1,
+        commitSha: "sha",
         // No hunkHeader, no tenantId
-      );
+      });
 
       expect(result[0].hunkHeader).toBeUndefined();
       expect(result[0].tenantId).toBeUndefined();
@@ -189,17 +192,16 @@ describe("RAG Ingestion Helpers", () => {
         { content: "Knowledge content 2", metadata: { chunkIndex: 1 } },
       ];
 
-      const result = mapKnowledgeChunksToInputs(
-        chunks,
-        "troubleshooting",
-        "Fix Connection Issues",
-        "parent-123",
-        "owner/repo",
-        "https://docs.example.com",
-        "docs/fix.md",
-        "tenant-1",
-        { author: "developer" }
-      );
+      const result = mapKnowledgeChunksToInputs(chunks, {
+        docType: "troubleshooting",
+        title: "Fix Connection Issues",
+        parentId: "parent-123",
+        repository: "owner/repo",
+        sourceUrl: "https://docs.example.com",
+        filePath: "docs/fix.md",
+        tenantId: "tenant-1",
+        metadata: { author: "developer" },
+      });
 
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
@@ -222,7 +224,11 @@ describe("RAG Ingestion Helpers", () => {
     it("should handle null parentId", () => {
       const chunks = [{ content: "content", metadata: { chunkIndex: 0 } }];
 
-      const result = mapKnowledgeChunksToInputs(chunks, "runbook", "Title", null);
+      const result = mapKnowledgeChunksToInputs(chunks, {
+        docType: "runbook",
+        title: "Title",
+        parentId: null,
+      });
 
       expect(result[0].parentId).toBeUndefined();
     });
@@ -230,7 +236,11 @@ describe("RAG Ingestion Helpers", () => {
     it("should redact secrets in knowledge content", () => {
       const chunks = [{ content: "Use SECRET_apikey for auth", metadata: { chunkIndex: 0 } }];
 
-      const result = mapKnowledgeChunksToInputs(chunks, "documentation", "Auth Guide", null);
+      const result = mapKnowledgeChunksToInputs(chunks, {
+        docType: "documentation",
+        title: "Auth Guide",
+        parentId: null,
+      });
 
       expect(result[0].content).toContain("[REDACTED]");
     });
@@ -238,17 +248,12 @@ describe("RAG Ingestion Helpers", () => {
     it("should preserve original title in metadata", () => {
       const chunks = [{ content: "content", metadata: { chunkIndex: 0 } }];
 
-      const result = mapKnowledgeChunksToInputs(
-        chunks,
-        "runbook",
-        "Original Title",
-        null,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { customField: "value" }
-      );
+      const result = mapKnowledgeChunksToInputs(chunks, {
+        docType: "runbook",
+        title: "Original Title",
+        parentId: null,
+        metadata: { customField: "value" },
+      });
 
       expect(result[0].metadata).toEqual({
         customField: "value",

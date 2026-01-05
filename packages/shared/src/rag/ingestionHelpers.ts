@@ -45,58 +45,66 @@ export const redactContent = (content: string): string => redactSecrets(content)
 /**
  * Maps chunked diff result to database input format.
  */
+interface DiffChunkContext {
+  readonly filePath: string;
+  readonly repository: string;
+  readonly prNumber: number;
+  readonly commitSha: string;
+  readonly hunkHeader?: string;
+  readonly tenantId?: string;
+}
+
 export const mapDiffChunksToInputs = (
   chunks: ReadonlyArray<{
     content: string;
     metadata: { chunkIndex: number; startOffset: number; endOffset: number };
   }>,
-  filePath: string,
-  repository: string,
-  prNumber: number,
-  commitSha: string,
-  hunkHeader?: string,
-  tenantId?: string
+  context: DiffChunkContext
 ): readonly CreateDiffChunkInput[] =>
   chunks.map((chunk) => ({
-    repository,
-    prNumber,
-    commitSha,
-    filePath,
-    hunkHeader,
+    repository: context.repository,
+    prNumber: context.prNumber,
+    commitSha: context.commitSha,
+    filePath: context.filePath,
+    hunkHeader: context.hunkHeader,
     content: redactContent(chunk.content),
     chunkIndex: chunk.metadata.chunkIndex,
     startLine: chunk.metadata.startOffset,
     endLine: chunk.metadata.endOffset,
-    tenantId,
+    tenantId: context.tenantId,
   }));
 
 /**
  * Maps chunked knowledge doc result to database input format.
  */
+interface KnowledgeChunkContext {
+  readonly docType: KnowledgeDocType;
+  readonly title: string;
+  readonly parentId: string | null;
+  readonly repository?: string;
+  readonly sourceUrl?: string;
+  readonly filePath?: string;
+  readonly tenantId?: string;
+  readonly metadata?: Record<string, unknown>;
+}
+
 export const mapKnowledgeChunksToInputs = (
   chunks: ReadonlyArray<{ content: string; metadata: { chunkIndex: number } }>,
-  docType: KnowledgeDocType,
-  title: string,
-  parentId: string | null,
-  repository?: string,
-  sourceUrl?: string,
-  filePath?: string,
-  tenantId?: string,
-  metadata?: Record<string, unknown>
+  context: KnowledgeChunkContext
 ): readonly CreateKnowledgeDocInput[] =>
   chunks.map((chunk) => ({
-    repository,
-    parentId: parentId ?? undefined,
-    docType,
-    title,
+    repository: context.repository,
+    parentId: context.parentId ?? undefined,
+    docType: context.docType,
+    title: context.title,
     content: redactContent(chunk.content),
-    sourceUrl,
-    filePath,
+    sourceUrl: context.sourceUrl,
+    filePath: context.filePath,
     chunkIndex: chunk.metadata.chunkIndex,
-    tenantId,
+    tenantId: context.tenantId,
     metadata: {
-      ...metadata,
-      originalTitle: title,
+      ...context.metadata,
+      originalTitle: context.title,
     },
   }));
 

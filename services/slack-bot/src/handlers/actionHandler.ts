@@ -1,214 +1,49 @@
 /**
+ * Action Handler
+ *
  * Handlers for Slack action button interactions.
  * Processes approve/reject actions for CI failure recommended actions.
  * Uses the action executor from @kenchi/shared for safe action execution.
+ *
+ * This is the public API that re-exports from focused modules:
+ * - actionHandlerTypes.ts: Types and type guards
+ * - actionHandlerHelpers.ts: Helper functions
  */
 
-import type { ButtonAction, SayFn, SayArguments } from "@slack/bolt";
+import type { ButtonAction, SayFn } from "@slack/bolt";
 import {
   createLogger,
-  ValidationError,
   executeAction,
   enqueueAction,
-  isRedisHealthy,
-  updateActionProposalStatus,
   getErrorMessage,
-  parseOpaqueActionValue,
-  retrieveActionPayload,
   deleteActionPayload,
-  type ActionExecutionContext,
   type ActionType,
-  type StoredActionPayload,
-  type OpaqueActionValue,
 } from "@kenchi/shared";
 import { formatProgressUpdate } from "../formatters.js";
+import type { SlackBlocks, AckFn } from "./actionHandlerTypes.js";
+import {
+  getActionPayload,
+  extractOpaqueId,
+  createExecutionContext,
+  formatResultMessage,
+  canUseAsyncExecution,
+  persistActionStatus,
+} from "./actionHandlerHelpers.js";
 
-// Type for Slack blocks compatible with Bolt
-type SlackBlocks = NonNullable<SayArguments["blocks"]>;
+// Re-export types for consumers
+export type { SlackBlocks, LegacyActionValue, AckFn } from "./actionHandlerTypes.js";
+export { isLegacyActionValue } from "./actionHandlerTypes.js";
 
 const logger = createLogger("slack-bot");
 
-// ==================== Types ====================
-
-/**
- * Legacy action value format (for backward compatibility with old buttons)
- */
-interface LegacyActionValue {
-  readonly eventId?: string;
-  readonly actionId: string;
-  readonly actionType?: string;
-  readonly repository?: string;
-  readonly commitSha?: string;
-  readonly installationId?: number;
-  readonly priority?: string | number;
-  readonly checkRunId?: number;
-  readonly description?: string;
-}
-
-// ==================== Helper Functions ====================
-
-/**
- * Type guard for legacy action value format
- */
-const isLegacyActionValue = (value: unknown): value is LegacyActionValue =>
-  typeof value === "object" &&
-  value !== null &&
-  "actionId" in value &&
-  typeof (value as LegacyActionValue).actionId === "string";
-
-/**
- * Parses a JSON action value string.
- */
-const parseActionValueJson = (value: string): unknown => {
-  try {
-    return JSON.parse(value) as unknown;
-  } catch (error) {
-    throw new ValidationError(`Failed to parse action value: ${getErrorMessage(error)}`);
-  }
-};
-
-/**
- * Parses and retrieves action payload from Slack button action.
- * Handles both new opaque ID format and legacy full payload format.
- *
- * @returns The stored action payload (retrieved from store or legacy value)
- */
-const getActionPayload = (action: ButtonAction): StoredActionPayload => {
-  if (!action.value) {
-    throw new ValidationError("Action value is missing");
-  }
-
-  let opaqueValue: OpaqueActionValue | null = null;
-  try {
-    opaqueValue = parseOpaqueActionValue(action.value);
-  } catch (error) {
-    if (!(error instanceof ValidationError)) {
-      throw error;
-    }
-  }
-
-  if (opaqueValue) {
-    return retrieveActionPayload(opaqueValue);
-  }
-
-  const parsed = parseActionValueJson(action.value);
-
-  // Legacy format - convert to StoredActionPayload shape
-  if (isLegacyActionValue(parsed)) {
-    return {
-      actionType: parsed.actionType ?? "manual_investigation",
-      description: parsed.description ?? "Legacy action",
-      repository: parsed.repository ?? "unknown",
-      commitSha: parsed.commitSha ?? "unknown",
-      installationId: parsed.installationId ?? 0,
-      priority: parsed.priority ?? "medium",
-      checkRunId: parsed.checkRunId,
-      createdAt: Date.now(),
-      verificationToken: "legacy",
-    };
-  }
-
-  throw new ValidationError("Unknown action value format");
-};
-
-/**
- * Extracts the opaque action ID from the action value (for cleanup).
- */
-const extractOpaqueId = (action: ButtonAction): string | null => {
-  if (!action.value) {
-    return null;
-  }
-  try {
-    const opaqueValue = parseOpaqueActionValue(action.value);
-    return opaqueValue.id;
-  } catch (error) {
-    logger.debug("Failed to parse action value for opaque id", {
-      error: getErrorMessage(error),
-    });
-    return null;
-  }
-};
-
-/**
- * Creates execution context from stored action payload
- */
-const createExecutionContext = (
-  payload: StoredActionPayload,
-  approvedBy: string
-): ActionExecutionContext => ({
-  installationId: payload.installationId,
-  repository: payload.repository,
-  commitSha: payload.commitSha,
-  checkRunId: payload.checkRunId,
-  approvedBy,
-  metadata: {
-    priority: payload.priority,
-    description: payload.description,
-  },
-});
-
-/**
- * Format action result message based on success/failure
- */
-const formatResultMessage = (
-  success: boolean,
-  actionType: string,
-  message: string
-): { status: "completed" | "failed"; text: string } => ({
-  status: success ? "completed" : "failed",
-  text: success
-    ? `Action *${actionType}* executed successfully: ${message}`
-    : `Action *${actionType}* failed: ${message}`,
-});
-
-/**
- * Check if async execution via Redis is available
- */
-const canUseAsyncExecution = async (): Promise<boolean> => {
-  try {
-    return await isRedisHealthy();
-  } catch (error) {
-    logger.debug("Redis health check failed, using sync execution", {
-      error: getErrorMessage(error),
-    });
-    return false;
-  }
-};
-
-/**
- * Persists action status to database (non-blocking, logs errors)
- */
-const persistActionStatus = async (
-  actionId: string,
-  status: "approved" | "rejected" | "executed" | "failed",
-  approvedBy?: string,
-  executionResult?: Record<string, unknown>
-): Promise<void> => {
-  try {
-    await updateActionProposalStatus({
-      actionId,
-      status,
-      approvedBy,
-      executionResult,
-    });
-    logger.debug("Action status persisted", { actionId, status });
-  } catch (error) {
-    logger.warn("Failed to persist action status", {
-      actionId,
-      status,
-      error: getErrorMessage(error),
-    });
-  }
-};
-
-// ==================== Action Handlers ====================
+// ==================== Internal Functions ====================
 
 /**
  * Executes an action after retrieval from store.
  * Handles both async (Redis queue) and sync execution.
  */
 const executeStoredAction = async (
-  payload: StoredActionPayload,
+  payload: Awaited<ReturnType<typeof getActionPayload>>,
   opaqueId: string | null,
   say: SayFn,
   messageTs?: string
@@ -306,13 +141,15 @@ const executeStoredAction = async (
   }
 };
 
+// ==================== Public Handlers ====================
+
 /**
  * Handles action approval.
  * Retrieves payload from server-side store and executes the action.
  */
 export const handleActionApproval = async (
   action: ButtonAction,
-  ack: () => Promise<void>,
+  ack: AckFn,
   say: SayFn | undefined,
   messageTs?: string
 ): Promise<void> => {
@@ -374,7 +211,7 @@ export const handleActionApproval = async (
  */
 export const handleActionConfirmation = async (
   action: ButtonAction,
-  ack: () => Promise<void>,
+  ack: AckFn,
   say: SayFn | undefined,
   messageTs?: string
 ): Promise<void> => {
@@ -398,7 +235,7 @@ export const handleActionConfirmation = async (
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `⚠️ *Confirm Action: ${payload.actionType}*\n\n${payload.description}\n\nRepository: \`${payload.repository}\``,
+          text: `*Confirm Action: ${payload.actionType}*\n\n${payload.description}\n\nRepository: \`${payload.repository}\``,
         },
       },
       {
@@ -407,14 +244,14 @@ export const handleActionConfirmation = async (
         elements: [
           {
             type: "button",
-            text: { type: "plain_text", text: "✅ Confirm & Execute", emoji: true },
+            text: { type: "plain_text", text: "Confirm & Execute", emoji: true },
             style: "primary",
             value: action.value, // Pass through the same opaque value
             action_id: `execute_confirmed_${slackActionId.replace("confirm_action_", "")}`,
           },
           {
             type: "button",
-            text: { type: "plain_text", text: "❌ Cancel", emoji: true },
+            text: { type: "plain_text", text: "Cancel", emoji: true },
             style: "danger",
             value: action.value,
             action_id: `cancel_action_${slackActionId.replace("confirm_action_", "")}`,
@@ -461,7 +298,7 @@ export const handleActionConfirmation = async (
  */
 export const handleActionRejection = async (
   action: ButtonAction,
-  ack: () => Promise<void>,
+  ack: AckFn,
   say: SayFn | undefined,
   messageTs?: string
 ): Promise<void> => {

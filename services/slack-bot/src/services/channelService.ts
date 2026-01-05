@@ -54,7 +54,9 @@ export const resolveChannelId = async (
       limit: SLACK_API_LIMITS.CONVERSATIONS_LIST_LIMIT,
     });
 
-    const channel = result.channels?.find((c: SlackChannel) => c.name === channelName);
+    const channel = result.channels?.find(
+      (slackChannel: SlackChannel) => slackChannel.name === channelName
+    );
 
     if (!channel?.id) {
       throw new NotFoundError(`Channel "${channelName}" not found`);

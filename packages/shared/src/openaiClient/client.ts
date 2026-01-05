@@ -22,6 +22,7 @@ import {
 } from "../constants/index.js";
 import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
 import { buildAnalysisPrompt } from "../integrations/prompts.js";
+import { applyEvidenceGuardrails } from "./analysisGuardrails.js";
 import { validateResponse } from "./validation.js";
 import { manageTokenBudget } from "./tokenManager.js";
 import { handleOpenAIError } from "./errors.js";
@@ -120,7 +121,9 @@ export class OpenAIClient {
 
       this.logValidationResults(validation, event.id);
 
-      return this.enrichAnalysis(analysis, startTime);
+      const guardedAnalysis = applyEvidenceGuardrails(analysis, truncatedEvidence);
+
+      return this.enrichAnalysis(guardedAnalysis, startTime);
     } catch (error) {
       throw handleOpenAIError(error, this.clientConfig.timeout);
     }
