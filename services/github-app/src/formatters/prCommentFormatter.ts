@@ -33,6 +33,7 @@ interface ConsolidatedTestFailure {
   readonly testName: string;
   readonly file?: string;
   readonly line?: number;
+  readonly error?: string;
 }
 
 interface ConsolidatedAnnotation {
@@ -96,7 +97,9 @@ const extractValidFileLocation = (path: string, line: number): string | null => 
  */
 const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): ConsolidatedTestFailure[] =>
   deduplicateByKey(
-    failures.flatMap((failure) => failure.testFailures ?? []),
+    [...failures.flatMap((failure) => failure.testFailures ?? [])].sort(
+      (left, right) => Number(Boolean(right.error)) - Number(Boolean(left.error))
+    ),
     (testFailure) => `${testFailure.testName}|${testFailure.file ?? ""}`
   ).map((testFailure) => normalizeTestFailure(testFailure));
 
@@ -218,9 +221,12 @@ const buildAnnotationsSection = (
       testFailure.testName,
       GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH
     );
+    const normalizedError = testFailure.error ? normalizeAnnotationMessage(testFailure.error) : "";
+    const isPathOnly = testFailure.file && testFailure.file === testFailure.testName;
+    const isGenericName = testFailure.testName.trim().toLowerCase() === "test failed";
     const display =
-      testFailure.file && testFailure.file === testFailure.testName
-        ? "Test failed"
+      normalizedError && (isPathOnly || isGenericName)
+        ? `Test failed: ${normalizedError}`
         : `Test failed: ${testName}`;
 
     return {

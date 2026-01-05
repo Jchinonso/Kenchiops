@@ -108,9 +108,12 @@ const formatTestFailureEntry = (testFailure: ConsolidatedTestFailure): string | 
   }
 
   const truncatedTestName = truncateDisplay(testFailure.testName, 50);
+  const normalizedError = testFailure.error ? normalizeAnnotationMessage(testFailure.error) : "";
+  const isPathOnly = testFailure.file && testFailure.file === testFailure.testName;
+  const isGenericName = testFailure.testName.trim().toLowerCase() === "test failed";
   const display =
-    testFailure.file && testFailure.file === testFailure.testName
-      ? "Test failed"
+    normalizedError && (isPathOnly || isGenericName)
+      ? `Test failed: ${normalizedError}`
       : `Test failed: ${truncatedTestName}`;
   return `   ${UI_EMOJI.list} \`${location}\` — ${display}`;
 };

@@ -17,6 +17,7 @@ import {
   DEPENDENCY_EXCLUSIONS,
   FILE_PATH_IDENTIFIER,
   classifyFailureLine,
+  isGenericErrorLine,
   getFirstMeaningfulLine,
   findFirstInfraLine,
   formatEvidenceId,
@@ -68,6 +69,12 @@ export interface ParsedTextBlock {
   readonly lines: readonly string[];
 }
 
+export interface EvidenceSectionBlock {
+  readonly heading: string;
+  readonly content: string;
+  readonly fullText: string;
+}
+
 export interface EvidenceSections {
   readonly hasTests: boolean;
   readonly hasAnnotations: boolean;
@@ -111,6 +118,32 @@ const extractSection = (content: string, heading: string): string | null => {
     return null;
   }
   return match[1].replace(/^\s*-{3,}\s*$/gm, "").trim();
+};
+
+/**
+ * Splits evidence text into heading-based sections (e.g., "## Failed Tests").
+ */
+export const splitEvidenceSections = (content: string): EvidenceSectionBlock[] => {
+  const sectionPattern = /^##\s+(.+)$/gm;
+  const matches = [...content.matchAll(sectionPattern)];
+  if (matches.length === 0) {
+    return [];
+  }
+
+  return matches
+    .map((match, index) => {
+      const startIndex = match.index ?? 0;
+      const nextIndex = matches[index + 1]?.index ?? content.length;
+      const fullText = content.slice(startIndex, nextIndex).trim();
+      const heading = match[1]?.trim() || "Section";
+      const contentBody = fullText.replace(/^##\s+.*\n?/, "").trim();
+      return {
+        heading,
+        content: contentBody,
+        fullText,
+      };
+    })
+    .filter((section) => section.fullText.length > 0);
 };
 
 /**
@@ -226,6 +259,9 @@ const extractDependencyNames = (blocks: readonly ParsedTextBlock[]): string[] =>
   return uniqueTokens.filter((token) => !DEPENDENCY_EXCLUSIONS.has(token.toLowerCase()));
 };
 
+const hasMeaningfulErrorLine = (lines: readonly string[]): boolean =>
+  lines.some((line) => line.trim().length > 0 && !isGenericErrorLine(line));
+
 /**
  * Extracts config file paths from parsed blocks.
  */
@@ -324,12 +360,18 @@ export const extractEvidenceHighlights = (evidence: Evidence): EvidenceHighlight
   let primaryEvidenceId: string | undefined;
   let source: EvidenceHighlights["source"];
 
-  if (testFailures.length > 0) {
-    const primaryTest = testFailures[0];
-    primaryErrorLine = getFirstMeaningfulLine(primaryTest.errorLines);
-    primaryTestName = primaryTest.testName;
-    primaryFile = primaryTest.file;
-    primaryEvidenceId = formatEvidenceId("test", primaryTest.id);
+  const primaryTest = testFailures.find((failure) => hasMeaningfulErrorLine(failure.errorLines));
+  const fallbackTest = primaryTest ?? testFailures[0];
+  const shouldUseTest =
+    Boolean(fallbackTest) &&
+    (hasMeaningfulErrorLine(fallbackTest.errorLines) ||
+      (annotations.length === 0 && checkOutputs.length === 0 && workflowLogs.length === 0));
+
+  if (shouldUseTest && fallbackTest) {
+    primaryErrorLine = getFirstMeaningfulLine(fallbackTest.errorLines);
+    primaryTestName = fallbackTest.testName;
+    primaryFile = fallbackTest.file;
+    primaryEvidenceId = formatEvidenceId("test", fallbackTest.id);
     source = "test";
   } else if (annotations.length > 0) {
     const primaryAnnotation = annotations[0];

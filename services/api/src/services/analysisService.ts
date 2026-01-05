@@ -12,10 +12,6 @@ import {
   createLogger,
   generateEventId,
   createAnalysis,
-  type Event,
-  type Evidence,
-  type KnowledgeDocument,
-  type LLMAnalysisResult,
   LLMError,
   getErrorMessage,
   wrapError,
@@ -29,13 +25,75 @@ import {
   searchFromEventContext,
   selectModel,
   logModelSelection,
+  splitEvidenceSections,
+  sanitizeIdPart,
+  type Event,
+  type Evidence,
+  type KnowledgeDocument,
+  type LLMAnalysisResult,
   type RAGSearchResult,
   type EventQueryContext,
   type ModelSelectionResult,
+  type LogEntry,
 } from "@kenchi/shared";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
 const logger = createLogger(SERVICE_NAMES.API);
+
+const ERROR_SECTION_HEADINGS = new Set<string>([
+  "Failed Tests",
+  "CI Annotations (Errors & Warnings)",
+  "CI Check Output",
+  "Workflow Logs",
+]);
+
+const SECTION_SOURCE_OVERRIDES: Readonly<Record<string, string>> = {
+  "Failed Tests": "ci-tests",
+  "CI Annotations (Errors & Warnings)": "ci-annotations",
+  "CI Check Output": "ci-check",
+  "Workflow Logs": "ci-logs",
+  "Dependency Changes": "ci-deps",
+  "Build Config Changes": "ci-config",
+  "PR Diff": "ci-diff",
+  "Relevant Source Files": "ci-source",
+  "Commit Info": "ci-commit",
+  "Recent PR Discussion": "ci-comments",
+  "Pull Request": "ci-pr",
+  Overview: "ci-overview",
+} as const;
+
+const buildEvidenceLogs = (failureLog: string, collectedAt: string): LogEntry[] => {
+  const sections = splitEvidenceSections(failureLog);
+  if (sections.length === 0) {
+    return [
+      {
+        id: "raw_log",
+        level: LOG_LEVELS.ERROR,
+        message: failureLog,
+        timestamp: collectedAt,
+        source: EVIDENCE_SOURCES.CI,
+      },
+    ];
+  }
+
+  const baseTime = new Date(collectedAt).getTime();
+  return sections.map((section, index) => {
+    const { heading } = section;
+    const logLevel = ERROR_SECTION_HEADINGS.has(heading) ? LOG_LEVELS.ERROR : LOG_LEVELS.INFO;
+    const logId = sanitizeIdPart(heading);
+    const logSource = SECTION_SOURCE_OVERRIDES[heading] ?? EVIDENCE_SOURCES.CI;
+    const timestamp = new Date(baseTime + index * 1000).toISOString();
+    const message = section.content ? `## ${heading}\n${section.content}` : `## ${heading}`;
+
+    return {
+      id: logId,
+      level: logLevel,
+      message,
+      timestamp,
+      source: logSource,
+    };
+  });
+};
 
 /**
  * Singleton OpenAI client instance
@@ -195,6 +253,7 @@ const retrieveRelevantKnowledge = async (
  */
 export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext => {
   const eventId = generateEventId("evt");
+  const collectedAt = new Date().toISOString();
 
   const event: Event = {
     id: eventId,
@@ -212,15 +271,8 @@ export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext 
 
   const evidence: Evidence = {
     eventId,
-    logs: [
-      {
-        level: LOG_LEVELS.ERROR,
-        message: request.failure_log,
-        timestamp: new Date().toISOString(),
-        source: EVIDENCE_SOURCES.CI,
-      },
-    ],
-    collectedAt: new Date().toISOString(),
+    logs: buildEvidenceLogs(request.failure_log, collectedAt),
+    collectedAt,
   };
 
   return { event, evidence };

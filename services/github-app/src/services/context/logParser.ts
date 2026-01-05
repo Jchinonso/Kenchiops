@@ -16,6 +16,7 @@ import {
   shouldExcludePath,
   deduplicateByKey,
   normalizeTestFailure,
+  isGenericErrorLine,
 } from "@kenchi/shared";
 import type { FileReference, TestFailure } from "./types.js";
 
@@ -117,11 +118,19 @@ export const truncateWithContext = (content: string, maxSize: number): string =>
 
 // ==================== Test Failure Extraction ====================
 
-/** Maximum characters to capture for error body */
-const MAX_ERROR_BODY_CHARS = 800;
+/** Maximum characters to capture for error body (default pass) */
+const DEFAULT_ERROR_BODY_CHARS = 800;
 
-/** Number of lines to scan after a failure marker for error context */
-const ERROR_CONTEXT_LINES = 30;
+/** Maximum characters to capture for error body when fallback is generic */
+const EXTENDED_ERROR_BODY_CHARS = 2000;
+
+/** Number of lines to scan after a failure marker for error context (default pass) */
+const DEFAULT_ERROR_CONTEXT_LINES = 30;
+
+/** Number of lines to scan when fallback is generic */
+const EXTENDED_ERROR_CONTEXT_LINES = 80;
+
+const GENERIC_ERROR_BODY_FALLBACK = "Test failed (see logs for details)";
 
 /** Pattern to find a file path with separators but without line numbers */
 const FILE_PATH_ONLY_PATTERN = /([^\s:()]+[\\/][^\s:()]+\.[a-zA-Z0-9]+)(?=$|[\s:()])/;
@@ -262,56 +271,85 @@ interface ErrorBodyAccumulator {
  * Process a single line for error body extraction.
  * Returns updated accumulator state.
  */
-const processErrorLine = (
-  accumulator: ErrorBodyAccumulator,
-  line: string
-): ErrorBodyAccumulator => {
-  if (accumulator.done) {
-    return accumulator;
-  }
-
-  // Check if we've hit an end marker
-  const isEndMarker = ERROR_END_MARKERS.some((marker) => marker.test(line));
-  if (isEndMarker) {
-    return { ...accumulator, done: true };
-  }
-
-  // Check if we've exceeded the character limit
-  if (accumulator.charCount + line.length > MAX_ERROR_BODY_CHARS) {
-    const remaining = MAX_ERROR_BODY_CHARS - accumulator.charCount;
-    if (remaining > LOG_PARSING_LIMITS.MIN_TRUNCATION_CHARS) {
-      return {
-        lines: [...accumulator.lines, `${line.slice(0, remaining)}...`],
-        charCount: MAX_ERROR_BODY_CHARS,
-        done: true,
-      };
+const processErrorLine =
+  (maxChars: number) =>
+  (accumulator: ErrorBodyAccumulator, line: string): ErrorBodyAccumulator => {
+    if (accumulator.done) {
+      return accumulator;
     }
-    return { ...accumulator, done: true };
-  }
 
-  return {
-    lines: [...accumulator.lines, line],
-    charCount: accumulator.charCount + line.length + 1, // +1 for newline
-    done: false,
+    // Check if we've hit an end marker
+    const isEndMarker = ERROR_END_MARKERS.some((marker) => marker.test(line));
+    if (isEndMarker) {
+      return { ...accumulator, done: true };
+    }
+
+    // Check if we've exceeded the character limit
+    if (accumulator.charCount + line.length > maxChars) {
+      const remaining = maxChars - accumulator.charCount;
+      if (remaining > LOG_PARSING_LIMITS.MIN_TRUNCATION_CHARS) {
+        return {
+          lines: [...accumulator.lines, `${line.slice(0, remaining)}...`],
+          charCount: maxChars,
+          done: true,
+        };
+      }
+      return { ...accumulator, done: true };
+    }
+
+    return {
+      lines: [...accumulator.lines, line],
+      charCount: accumulator.charCount + line.length + 1, // +1 for newline
+      done: false,
+    };
   };
+
+const isGenericErrorBody = (errorBody: string): boolean => {
+  const trimmed = errorBody.trim();
+  if (!trimmed || trimmed === GENERIC_ERROR_BODY_FALLBACK) {
+    return true;
+  }
+  const lines = trimmed
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.length === 0 || lines.every((line) => isGenericErrorLine(line));
 };
 
 /**
  * Extract error body starting from a position in the logs.
  * Captures lines until an end marker or character limit is reached.
  */
-const extractErrorBody = (logs: string, startIndex: number): string => {
+const extractErrorBody = (logs: string, startIndex: number, failureLine?: string): string => {
   const remainingContent = logs.slice(startIndex);
   const allLines = remainingContent.split("\n");
+  const markerLine = failureLine?.trim() || "";
 
-  // Skip the first line (contains the failure marker itself)
-  const linesToProcess = allLines.slice(1, ERROR_CONTEXT_LINES + 1);
+  const linesToProcess = allLines.slice(0, DEFAULT_ERROR_CONTEXT_LINES);
 
   const initialState: ErrorBodyAccumulator = { lines: [], charCount: 0, done: false };
-  const { lines: errorLines } = linesToProcess.reduce(processErrorLine, initialState);
+  const { lines: errorLines } = linesToProcess.reduce(
+    processErrorLine(DEFAULT_ERROR_BODY_CHARS),
+    initialState
+  );
 
-  const errorBody = errorLines.join("\n").trim();
-  return errorBody.length > 0 ? errorBody : "Test failed (see logs for details)";
+  const combinedLines = markerLine ? [markerLine, ...errorLines] : [...errorLines];
+  const errorBody = combinedLines.join("\n").trim();
+  if (errorBody.length > 0 && !isGenericErrorBody(errorBody)) {
+    return errorBody;
+  }
+
+  const extendedLines = allLines.slice(0, EXTENDED_ERROR_CONTEXT_LINES);
+  const { lines: extendedErrorLines } = extendedLines.reduce(
+    processErrorLine(EXTENDED_ERROR_BODY_CHARS),
+    initialState
+  );
+  const extendedCombined = markerLine
+    ? [markerLine, ...extendedErrorLines]
+    : [...extendedErrorLines];
+  const extendedBody = extendedCombined.join("\n").trim();
+
+  return extendedBody.length > 0 ? extendedBody : GENERIC_ERROR_BODY_FALLBACK;
 };
 
 /**
@@ -346,7 +384,7 @@ export const extractTestFailures = (logs: string): TestFailure[] => {
 
       // Extract the error body starting from the match position
       const matchEndIndex = (match.index ?? 0) + match[0].length;
-      const errorBody = extractErrorBody(cleanLogs, matchEndIndex);
+      const errorBody = extractErrorBody(cleanLogs, matchEndIndex, match[0]);
 
       const normalized = normalizeTestFailure({ testName, file: undefined, line: undefined });
       const locationFromError = extractFileReferenceFromText(errorBody);

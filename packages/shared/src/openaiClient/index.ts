@@ -14,6 +14,11 @@
 export { OpenAIClient } from "./client.js";
 export { applyEvidenceGuardrails } from "./analysisGuardrails.js";
 export {
+  splitEvidenceSections,
+  type EvidenceSectionBlock,
+  isGenericErrorLine,
+} from "./analysisGuardrailsEvidence.js";
+export {
   EmbeddingClient,
   getEmbeddingClient,
   clearClientCache,

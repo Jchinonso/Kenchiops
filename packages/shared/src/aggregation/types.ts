@@ -49,6 +49,7 @@ export interface TestFailureInfo {
   readonly testName: string;
   readonly file?: string;
   readonly line?: number;
+  readonly error?: string;
 }
 
 /**
