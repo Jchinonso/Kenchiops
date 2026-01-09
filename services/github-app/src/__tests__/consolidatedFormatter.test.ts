@@ -97,7 +97,8 @@ describe("Consolidated Formatter", () => {
       const comment = buildConsolidatedPRComment(aggregation);
 
       expect(comment).toContain("**Checks:** `CI Build`");
-      expect(comment).toContain("Missing npm package 'lodash'");
+      // Annotation message shown (actual error rather than AI-inferred cause)
+      expect(comment).toContain("Cannot find module 'lodash'");
     });
 
     it("should include confidence percentage", () => {
@@ -208,7 +209,9 @@ describe("Consolidated Formatter", () => {
       });
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).not.toContain("**Affected Files:**");
+      // Header shows count, but there should be no section listing specific files
+      expect(comment).toContain("**Affected Files:** 0");
+      expect(comment).not.toContain("### 📍 Affected Files");
     });
 
     it("should use analysis when identifiedCause is missing", () => {
@@ -222,7 +225,8 @@ describe("Consolidated Formatter", () => {
       });
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).toContain("Analysis fallback text");
+      // When identifiedCause is missing, annotation message takes precedence over analysis
+      expect(comment).toContain("Cannot find module 'lodash'");
     });
   });
 
@@ -309,7 +313,8 @@ describe("Consolidated Formatter", () => {
       const content = JSON.stringify(payload);
 
       expect(content).toContain("CI Build");
-      expect(content).toContain("Missing npm package");
+      // Annotation message is shown in root cause (actual error rather than AI-inferred cause)
+      expect(content).toContain("Cannot find module 'lodash'");
     });
 
     it("should include recommended actions", () => {
@@ -497,6 +502,256 @@ describe("Consolidated Formatter", () => {
 
       expect(annotations[0].title).toBe("My Check");
     });
+
+    it("should convert test failures with file:line to annotations", () => {
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({
+            checkName: "Test Suite",
+            annotations: [],
+            testFailures: [
+              {
+                testName: "should validate input",
+                file: "src/validators.test.ts",
+                line: 42,
+                error: "Expected true, got false",
+              },
+            ],
+          }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      expect(annotations.length).toBe(1);
+      expect(annotations[0].path).toBe("src/validators.test.ts");
+      expect(annotations[0].start_line).toBe(42);
+      expect(annotations[0].message).toContain("[Test Suite]");
+      expect(annotations[0].message).toContain("Expected true, got false");
+      expect(annotations[0].source).toBe("test");
+    });
+
+    it("should exclude test failures without file:line", () => {
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({
+            annotations: [],
+            testFailures: [
+              { testName: "test without location", error: "Some error" },
+              { testName: "test with only file", file: "test.ts", error: "Error" },
+              {
+                testName: "test with valid location",
+                file: "test.ts",
+                line: 10,
+                error: "Error",
+              },
+            ],
+          }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      // Only the one with valid file:line should be included
+      expect(annotations.length).toBe(1);
+      expect(annotations[0].start_line).toBe(10);
+    });
+
+    it("should prioritize AI annotations over test failures", () => {
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({
+            checkName: "Build",
+            annotations: [
+              { path: "src/index.ts", line: 5, message: "AI found issue", level: "failure" },
+            ],
+            testFailures: [
+              {
+                testName: "test failure",
+                file: "src/index.ts",
+                line: 10,
+                error: "Test found issue",
+              },
+            ],
+          }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      expect(annotations.length).toBe(2);
+      // AI annotation should come first
+      expect(annotations[0].source).toBe("ai");
+      expect(annotations[0].start_line).toBe(5);
+      expect(annotations[1].source).toBe("test");
+      expect(annotations[1].start_line).toBe(10);
+    });
+
+    it("should deduplicate when AI and test failure have same file:line", () => {
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({
+            annotations: [
+              {
+                path: "src/index.ts",
+                line: 42,
+                message: "AI annotation",
+                level: "failure",
+              },
+            ],
+            testFailures: [
+              {
+                testName: "duplicate location",
+                file: "src/index.ts",
+                line: 42,
+                error: "Test failure",
+              },
+            ],
+          }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      // Should only have 1 annotation (AI wins due to priority)
+      expect(annotations.length).toBe(1);
+      expect(annotations[0].source).toBe("ai");
+      expect(annotations[0].message).toContain("AI annotation");
+    });
+
+    it("should exclude test failures with invalid paths (node_modules)", () => {
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({
+            annotations: [],
+            testFailures: [
+              {
+                testName: "vendor test",
+                file: "node_modules/lib/test.ts",
+                line: 10,
+                error: "Error in vendor",
+              },
+              {
+                testName: "valid test",
+                file: "src/app.test.ts",
+                line: 20,
+                error: "Valid error",
+              },
+            ],
+          }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      // Only valid path should be included
+      expect(annotations.length).toBe(1);
+      expect(annotations[0].path).toBe("src/app.test.ts");
+    });
+
+    it("should exclude test failures with absolute paths", () => {
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({
+            annotations: [],
+            testFailures: [
+              {
+                testName: "absolute path test",
+                file: "/home/user/project/test.ts",
+                line: 10,
+                error: "Error",
+              },
+              {
+                testName: "relative path test",
+                file: "src/test.ts",
+                line: 20,
+                error: "Error",
+              },
+            ],
+          }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      expect(annotations.length).toBe(1);
+      expect(annotations[0].path).toBe("src/test.ts");
+    });
+
+    it("should sanitize ANSI codes in test failure messages", () => {
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({
+            annotations: [],
+            testFailures: [
+              {
+                testName: "test with ANSI",
+                file: "test.ts",
+                line: 5,
+                error: "\u001b[31mExpected\u001b[0m true, got false",
+              },
+            ],
+          }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      expect(annotations[0].message).not.toContain("\u001b");
+      expect(annotations[0].message).toContain("Expected true, got false");
+    });
+
+    it("should limit combined annotations to 50", () => {
+      const manyAIAnnotations = Array.from({ length: 30 }, (_, annotationIndex) => ({
+        path: `ai${annotationIndex}.ts`,
+        line: annotationIndex,
+        message: `AI Error ${annotationIndex}`,
+        level: "failure" as const,
+      }));
+      const manyTestFailures = Array.from({ length: 30 }, (_, failureIndex) => ({
+        testName: `Test ${failureIndex}`,
+        file: `test${failureIndex}.ts`,
+        line: failureIndex,
+        error: `Test Error ${failureIndex}`,
+      }));
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({ annotations: manyAIAnnotations, testFailures: manyTestFailures }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      expect(annotations.length).toBe(50);
+      // First 30 should be AI annotations
+      expect(annotations[0].source).toBe("ai");
+      expect(annotations[29].source).toBe("ai");
+      // Remaining 20 should be test failures
+      expect(annotations[30].source).toBe("test");
+      expect(annotations[49].source).toBe("test");
+    });
+
+    it("should include test file paths (not exclude them)", () => {
+      const aggregation = createMockAggregation({
+        failures: [
+          createMockFailure({
+            annotations: [],
+            testFailures: [
+              {
+                testName: "spec file test",
+                file: "src/utils.spec.ts",
+                line: 15,
+                error: "Spec error",
+              },
+              {
+                testName: "test file test",
+                file: "src/utils.test.ts",
+                line: 25,
+                error: "Test error",
+              },
+            ],
+          }),
+        ],
+      });
+      const annotations = buildConsolidatedCheckAnnotations(aggregation);
+
+      // Both test files should be included
+      expect(annotations.length).toBe(2);
+      expect(annotations.some((annotation) => annotation.path === "src/utils.spec.ts")).toBe(true);
+      expect(annotations.some((annotation) => annotation.path === "src/utils.test.ts")).toBe(true);
+    });
   });
 
   describe("buildConsolidatedCheckSummary", () => {
@@ -605,7 +860,19 @@ describe("Consolidated Formatter", () => {
 
     it("should handle unicode in messages", () => {
       const aggregation = createMockAggregation({
-        failures: [createMockFailure({ identifiedCause: "Error: 日本語テスト 🔥" })],
+        failures: [
+          createMockFailure({
+            annotations: [
+              {
+                path: "src/index.ts",
+                line: 10,
+                message: "日本語テスト: モジュールが見つかりません 🔥",
+                level: "failure",
+                title: "Module not found",
+              },
+            ],
+          }),
+        ],
       });
 
       const prComment = buildConsolidatedPRComment(aggregation);

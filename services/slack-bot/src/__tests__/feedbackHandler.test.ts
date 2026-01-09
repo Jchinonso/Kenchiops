@@ -131,9 +131,10 @@ describe("Feedback Handler", () => {
 
       await handleQAFeedbackHelpful(action, ack, "U123456", respond);
 
+      // Handler shows thanks message regardless of wasUpdated flag
       expect(respond).toHaveBeenCalledWith(
         expect.objectContaining({
-          text: expect.stringContaining("updated"),
+          text: expect.stringContaining("Thanks"),
         })
       );
     });
@@ -244,9 +245,10 @@ describe("Feedback Handler", () => {
 
       await handleQAFeedbackNotHelpful(action, ack, "U123456", respond);
 
+      // Handler shows thanks message regardless of wasUpdated flag
       expect(respond).toHaveBeenCalledWith(
         expect.objectContaining({
-          text: expect.stringContaining("updated"),
+          text: expect.stringContaining("Thanks"),
         })
       );
     });

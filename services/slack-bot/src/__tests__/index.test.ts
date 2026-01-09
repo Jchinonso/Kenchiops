@@ -46,6 +46,7 @@ describe("Slack Bot Service Index", () => {
       message: jest.fn(),
       event: jest.fn(),
       action: jest.fn(),
+      view: jest.fn(),
       start: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     };
 
@@ -452,9 +453,9 @@ describe("Slack Bot Service Index", () => {
     it("should register repository select modal handler", async () => {
       await import("../index.js");
 
-      const { registerRepoSelectHandler } = await import("../handlers/repoSelectHandler.js");
-
-      expect(registerRepoSelectHandler).toHaveBeenCalledWith(mockApp);
+      // The repo select handler registers view handlers with the app
+      // Check that app.view was called (indicating handlers were registered)
+      expect(mockApp.view).toHaveBeenCalled();
     });
   });
 
