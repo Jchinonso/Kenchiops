@@ -43,6 +43,9 @@ jest.mock("@kenchi/shared", () => ({
         (next as (err: unknown) => void)(error);
       }
     },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 jest.mock("../config/appConfig.js", () => ({

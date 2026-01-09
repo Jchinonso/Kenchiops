@@ -13,6 +13,7 @@ import {
   isRedisHealthy,
   enqueueConsolidatedNotification,
   resilientPost,
+  getErrorMessage,
   KENCHI_BRANDING,
   type AggregatedFailures,
   type ConsolidatedPostResult,
@@ -23,6 +24,7 @@ import {
   buildConsolidatedCheckAnnotations,
   buildConsolidatedCheckSummary,
 } from "../../formatters/consolidatedFormatter.js";
+import { createFeedbackLinks } from "../../formatters/formatterUtils.js";
 import { postPRComment, createCheckRunWithAnnotations } from "../githubService.js";
 
 const logger = createLogger("github-app");
@@ -45,7 +47,7 @@ const postToPR = async (
   } catch (error) {
     logger.error("Failed to post consolidated comment to PR", {
       prNumber,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return false;
   }
@@ -113,7 +115,7 @@ const createCheckAnnotations = async (
 
     return { created: true, errors: [] };
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    const errorMsg = getErrorMessage(error);
     logger.error("Failed to create consolidated check annotations", { error: errorMsg });
     return { created: false, errors: [`Failed to create check annotations: ${errorMsg}`] };
   }
@@ -127,9 +129,11 @@ const postToGitHub = async (
   aggregation: AggregatedFailures
 ): Promise<{ prCommentsPosted: number; checkAnnotationsCreated: boolean; errors: string[] }> => {
   const { repository, installationId, pullRequestNumbers } = aggregation;
+  const analysisId = `${repository.fullName}:${aggregation.commitSha}`;
+  const feedbackLinks = await createFeedbackLinks(analysisId);
 
   // Build consolidated PR comment
-  const commentBody = buildConsolidatedPRComment(aggregation);
+  const commentBody = buildConsolidatedPRComment(aggregation, feedbackLinks ?? undefined);
 
   // Post PR comments
   const prResult = await postPRComments(
@@ -184,7 +188,7 @@ const postToSlack = async (
 
       return { success: true };
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      const errorMsg = getErrorMessage(error);
       logger.warn("Failed to enqueue Slack notification, falling back to direct HTTP", {
         error: errorMsg,
       });
@@ -214,7 +218,7 @@ const postToSlack = async (
 
     return { success: true };
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    const errorMsg = getErrorMessage(error);
     logger.error("Failed to post consolidated Slack message", {
       error: errorMsg,
     });

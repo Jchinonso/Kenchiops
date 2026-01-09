@@ -14,8 +14,11 @@ import {
   deleteMappingsForChannel,
   getMappedRepositories,
   fetchInstallationRepositories,
+  getErrorMessage,
 } from "@kenchi/shared";
 import { type SlackClient } from "../services/channelService.js";
+import { toSlackSDKView, type SlackBlock } from "../types/slackTypes.js";
+import type { View } from "@slack/types";
 import { buildRepoSelectModal, buildNoReposModal, type RepositoryOption } from "./modalBuilders.js";
 
 // Re-export modal constants and builders for backward compatibility
@@ -101,7 +104,7 @@ export const getAvailableRepositories = async (
     logger.error("Failed to fetch available repositories", {
       installationId,
       tenantId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return [];
   }
@@ -126,8 +129,7 @@ const buildWelcomeBlocks = (
   channelId: string,
   channelName: string,
   messageTs: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any[] => [
+): SlackBlock[] => [
   {
     type: "section",
     text: {
@@ -248,8 +250,7 @@ export const handleBotJoinedChannel = async (
 
     await client.views.open({
       trigger_id: triggerId,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      view: modalView as any,
+      view: toSlackSDKView(modalView) as View,
     });
 
     logger.info("Opened repository selection modal", {
@@ -259,7 +260,7 @@ export const handleBotJoinedChannel = async (
   } catch (error) {
     const errorDetails = error as { data?: { needed?: string; provided?: string } };
     logger.error("Failed to handle member_joined_channel event", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       channel: channelId,
       needed: errorDetails?.data?.needed,
       provided: errorDetails?.data?.provided,

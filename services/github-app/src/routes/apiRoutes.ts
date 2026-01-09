@@ -11,6 +11,7 @@ import {
   HTTP_STATUS,
   validate,
   validators,
+  getErrorMessage,
   KENCHI_BRANDING,
 } from "@kenchi/shared";
 import {
@@ -29,6 +30,7 @@ import {
 } from "../services/workflowService.js";
 import { appConfig } from "../config/appConfig.js";
 import { formatGitHubComment } from "../formatters/commentFormatter.js";
+import { createFeedbackLinks } from "../formatters/formatterUtils.js";
 
 const router = Router();
 const logger = createLogger("github-app");
@@ -69,7 +71,12 @@ router.post(
     }
 
     // Format the comment with all enriched context
-    const comment = formatGitHubComment({
+    const analysisId = analysis.headSha
+      ? `${repository}:${analysis.headSha}`
+      : analysis.full_analysis?.eventId;
+    const feedbackLinks = analysisId ? await createFeedbackLinks(analysisId) : null;
+
+    const comment = await formatGitHubComment({
       summary: analysis.analysis || analysis.summary,
       analysis: analysis.analysis,
       identified_cause: analysis.identified_cause,
@@ -83,11 +90,15 @@ router.post(
       prContext: analysis.prContext,
       workflowContext: analysis.workflowContext,
       dependencyChanges: analysis.dependencyChanges,
+      detectedDependencyChanges: analysis.detectedDependencyChanges,
+      detectedBuildConfigChanges: analysis.detectedBuildConfigChanges,
+      full_analysis: analysis.full_analysis,
+      feedbackLinks: feedbackLinks ?? undefined,
     });
 
     try {
       // Post the comment
-      await postPRComment(installationId, owner, repo, pr_number, comment);
+      await postPRComment(installationId, owner, repo, pr_number, comment, true);
 
       // Also create check run with annotations if we have any
       if (analysis.annotations && analysis.annotations.length > 0 && analysis.headSha) {
@@ -136,12 +147,12 @@ router.post(
       logger.error("Failed to post to GitHub", {
         repository,
         prNumber: pr_number,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
 
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         status: "error",
-        error: error instanceof Error ? error.message : "Failed to post to GitHub",
+        error: getErrorMessage(error),
       });
     }
   })
@@ -223,12 +234,12 @@ router.post(
       logger.error("Failed to create check run with annotations", {
         repository,
         headSha: head_sha,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
 
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         status: "error",
-        error: error instanceof Error ? error.message : "Failed to create check run",
+        error: getErrorMessage(error),
       });
     }
   })
@@ -268,11 +279,11 @@ router.get(
     } catch (error) {
       logger.error("Failed to fetch installation repositories", {
         installationId,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
 
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        error: error instanceof Error ? error.message : "Failed to fetch repositories",
+        error: getErrorMessage(error),
       });
     }
   })

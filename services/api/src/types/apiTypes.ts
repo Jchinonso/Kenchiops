@@ -13,6 +13,7 @@ export interface AnalyzeRequest {
   readonly failure_log: string;
   readonly repository: string;
   readonly commit?: string;
+  readonly tenant_id?: string;
 }
 
 /**

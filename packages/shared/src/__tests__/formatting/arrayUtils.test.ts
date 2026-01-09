@@ -212,7 +212,7 @@ describe("Array Utilities", () => {
     it("should filter and limit results", () => {
       const items = [1, 2, 3, 4, 5, 6];
 
-      const result = takeMatching(items, (n) => n % 2 === 0, 2);
+      const result = takeMatching(items, (num) => num % 2 === 0, 2);
 
       expect(result).toEqual([2, 4]);
     });
@@ -220,7 +220,7 @@ describe("Array Utilities", () => {
     it("should return empty array when no matches", () => {
       const items = [1, 3, 5, 7];
 
-      const result = takeMatching(items, (n) => n % 2 === 0, 2);
+      const result = takeMatching(items, (num) => num % 2 === 0, 2);
 
       expect(result).toEqual([]);
     });
@@ -228,7 +228,7 @@ describe("Array Utilities", () => {
     it("should return all matches when fewer than limit", () => {
       const items = [1, 2, 3, 4, 5];
 
-      const result = takeMatching(items, (n) => n > 3, 10);
+      const result = takeMatching(items, (num) => num > 3, 10);
 
       expect(result).toEqual([4, 5]);
     });

@@ -1,56 +1,49 @@
 /**
  * GitHub Service
  *
- * Handles GitHub API interactions and OpenAI analysis integration.
+ * Core GitHub API interaction layer with Octokit client management.
  * Uses caching for Octokit instances per installation.
+ *
+ * This is a barrel export that re-exports from focused modules:
+ * - githubAnalysis.ts: Event creation and OpenAI analysis
+ * - githubComments.ts: Comment management and PR interactions
  */
 
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import {
   createLogger,
-  OpenAIClient,
-  calculateConfidenceScore,
-  generateEventId,
-  type Event,
-  type Evidence,
-  type LLMAnalysisResult,
-  type ConfidenceScoreResult,
-  LLMError,
   ExternalServiceError,
   getErrorMessage,
   wrapError,
-  KENCHI_BRANDING,
   GITHUB_PAGINATION,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
-import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
 
 const logger = createLogger("github-app");
 
-/**
- * Cached Octokit instances per installation
- */
+// ==================== Re-exports ====================
+
+// Analysis functions
+export {
+  getOpenAIClient,
+  type AnalysisResult,
+  createEventFromPR,
+  createEventFromCheckRun,
+  createMinimalEvidence,
+  performAnalysis,
+} from "./githubAnalysis.js";
+
+// Comment functions
+export { deleteKenchiOpsComments, postPRComment } from "./githubComments.js";
+
+// ==================== Octokit Client Management ====================
+
+/** Cached Octokit instances per installation */
 const octokitCache = new Map<number, Octokit>();
 
 /**
- * Singleton OpenAI client
- */
-let openaiClientInstance: OpenAIClient | null = null;
-
-/**
- * Get or create the OpenAI client singleton
- */
-export const getOpenAIClient = (): OpenAIClient => {
-  if (!openaiClientInstance) {
-    openaiClientInstance = new OpenAIClient();
-    logger.info("OpenAI client initialized");
-  }
-  return openaiClientInstance;
-};
-
-/**
- * Get or create an authenticated Octokit instance for an installation
+ * Get or create an authenticated Octokit instance for an installation.
  */
 export const getOctokit = async (installationId: number): Promise<Octokit> => {
   // Check cache first
@@ -76,237 +69,7 @@ export const getOctokit = async (installationId: number): Promise<Octokit> => {
   return octokit;
 };
 
-/**
- * Analysis result with confidence scoring
- */
-export interface AnalysisResult {
-  readonly analysis: LLMAnalysisResult;
-  readonly confidence: ConfidenceScoreResult;
-  readonly event: Event;
-}
-
-/**
- * Create an Event from a pull request webhook
- */
-export const createEventFromPR = (webhook: PullRequestWebhook): Event => ({
-  id: generateEventId("pr"),
-  type: "MANUAL_TRIGGER",
-  source: "github",
-  timestamp: new Date().toISOString(),
-  severity: "medium",
-  title: `PR #${webhook.pull_request.number}: ${webhook.pull_request.title}`,
-  payload: {
-    action: webhook.action,
-    prNumber: webhook.pull_request.number,
-    title: webhook.pull_request.title,
-    body: webhook.pull_request.body || "",
-    repository: webhook.repository.full_name,
-    author: webhook.pull_request.user.login,
-    headSha: webhook.pull_request.head.sha,
-    baseBranch: webhook.pull_request.base.ref,
-    headBranch: webhook.pull_request.head.ref,
-  },
-  metadata: {
-    owner: webhook.repository.owner.login,
-    repo: webhook.repository.name,
-    installationId: webhook.installation?.id,
-  },
-});
-
-/**
- * Create an Event from a check run webhook
- */
-export const createEventFromCheckRun = (webhook: CheckRunWebhook): Event => ({
-  id: generateEventId("check"),
-  type: "CICD_FAILURE",
-  source: "github",
-  timestamp: new Date().toISOString(),
-  severity: "high",
-  title: `CI Failure: ${webhook.check_run.name}`,
-  payload: {
-    action: webhook.action,
-    checkName: webhook.check_run.name,
-    conclusion: webhook.check_run.conclusion,
-    repository: webhook.repository.full_name,
-    output: webhook.check_run.output,
-    headSha: webhook.check_run.head_sha,
-    pullRequestCount: webhook.check_run.pull_requests.length,
-  },
-  metadata: {
-    owner: webhook.repository.owner.login,
-    repo: webhook.repository.name,
-    installationId: webhook.installation?.id,
-    checkRunId: webhook.check_run.id,
-    headSha: webhook.check_run.head_sha,
-  },
-});
-
-/**
- * Create minimal evidence for analysis
- */
-export const createMinimalEvidence = (eventId: string): Evidence => ({
-  eventId,
-  collectedAt: new Date().toISOString(),
-  logs: [],
-});
-
-/**
- * Perform OpenAI analysis on an event
- */
-export const performAnalysis = async (event: Event): Promise<AnalysisResult> => {
-  const evidence = createMinimalEvidence(event.id);
-  const openaiClient = getOpenAIClient();
-
-  logger.info("Starting analysis", {
-    eventId: event.id,
-    type: event.type,
-  });
-
-  try {
-    const analysis = await openaiClient.analyzeIncident(event, evidence);
-    const confidence = calculateConfidenceScore(analysis, evidence);
-
-    logger.info("Analysis completed", {
-      eventId: event.id,
-      confidence: confidence.finalScore,
-      gating: confidence.gatingDecision,
-    });
-
-    return { analysis, confidence, event };
-  } catch (error) {
-    logger.error("Analysis failed", {
-      eventId: event.id,
-      error: getErrorMessage(error),
-    });
-
-    throw new LLMError(wrapError("Failed to analyze", error));
-  }
-};
-
-/**
- * Marker to identify KenchiOps comments (from centralized branding)
- */
-const KENCHIOPS_COMMENT_MARKER = KENCHI_BRANDING.COMMENT_MARKER;
-
-/**
- * Delete existing KenchiOps comments on a PR
- * This keeps the PR clean by removing outdated analysis comments
- */
-export const deleteKenchiOpsComments = async (
-  installationId: number,
-  owner: string,
-  repo: string,
-  prNumber: number
-): Promise<number> => {
-  try {
-    const octokit = await getOctokit(installationId);
-
-    logger.info("Checking for old KenchiOps comments to delete", {
-      owner,
-      repo,
-      prNumber,
-      marker: KENCHIOPS_COMMENT_MARKER,
-    });
-
-    // List all comments on the PR
-    const { data: comments } = await octokit.rest.issues.listComments({
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
-    });
-
-    logger.info("Found PR comments", {
-      owner,
-      repo,
-      prNumber,
-      totalComments: comments.length,
-    });
-
-    // Find KenchiOps comments (look for our marker in the body)
-    const kenchiOpsComments = comments.filter((comment) =>
-      comment.body?.includes(KENCHIOPS_COMMENT_MARKER)
-    );
-
-    // Delete each KenchiOps comment
-    await Promise.all(
-      kenchiOpsComments.map((comment) =>
-        octokit.rest.issues.deleteComment({
-          owner,
-          repo,
-          comment_id: comment.id,
-        })
-      )
-    );
-
-    if (kenchiOpsComments.length > 0) {
-      logger.info("Deleted old KenchiOps comments", {
-        owner,
-        repo,
-        prNumber,
-        deletedCount: kenchiOpsComments.length,
-      });
-    }
-
-    return kenchiOpsComments.length;
-  } catch (error) {
-    // Log but don't fail - cleanup is best-effort
-    logger.warn("Failed to delete old KenchiOps comments", {
-      owner,
-      repo,
-      prNumber,
-      error: getErrorMessage(error),
-    });
-    return 0;
-  }
-};
-
-/**
- * Post a comment on a pull request
- * Optionally deletes existing KenchiOps comments first
- */
-export const postPRComment = async (
-  installationId: number,
-  owner: string,
-  repo: string,
-  prNumber: number,
-  body: string,
-  deleteOldComments = false
-): Promise<void> => {
-  try {
-    const octokit = await getOctokit(installationId);
-
-    // Delete old KenchiOps comments if requested
-    if (deleteOldComments) {
-      await deleteKenchiOpsComments(installationId, owner, repo, prNumber);
-    }
-
-    await octokit.rest.issues.createComment({
-      owner,
-      repo,
-      issue_number: prNumber,
-      body,
-    });
-
-    logger.info("Posted PR comment", {
-      owner,
-      repo,
-      prNumber,
-    });
-  } catch (error) {
-    logger.error("Failed to post PR comment", {
-      owner,
-      repo,
-      prNumber,
-      error: getErrorMessage(error),
-    });
-
-    throw new ExternalServiceError("GitHub", wrapError("Failed to post comment", error), {
-      operation: "postPRComment",
-      metadata: { owner, repo, prNumber },
-    });
-  }
-};
+// ==================== Types ====================
 
 /**
  * Repository info returned from GitHub API
@@ -318,6 +81,43 @@ export interface RepositoryInfo {
   readonly private: boolean;
   readonly defaultBranch: string;
 }
+
+/**
+ * Annotation for a check run
+ */
+export interface CheckAnnotation {
+  readonly path: string;
+  readonly start_line: number;
+  readonly end_line: number;
+  readonly annotation_level: "notice" | "warning" | "failure";
+  readonly message: string;
+  readonly title?: string;
+}
+
+/**
+ * Options for creating a check run with annotations
+ */
+export interface CreateCheckRunOptions {
+  readonly installationId: number;
+  readonly owner: string;
+  readonly repo: string;
+  readonly headSha: string;
+  readonly name: string;
+  readonly summary: string;
+  readonly annotations: readonly CheckAnnotation[];
+}
+
+// ==================== Helper Functions ====================
+
+/**
+ * Split array into batches of specified size.
+ */
+const batchArray = <T>(array: T[], batchSize: number): T[][] => {
+  const batchCount = Math.ceil(array.length / batchSize);
+  return Array.from({ length: batchCount }, (_, batchIndex) =>
+    array.slice(batchIndex * batchSize, (batchIndex + 1) * batchSize)
+  );
+};
 
 /**
  * Recursively fetch all repositories using pagination.
@@ -352,8 +152,10 @@ const fetchRepositoriesPage = async (
   return fetchRepositoriesPage(octokit, page + 1, perPage, allRepos);
 };
 
+// ==================== Repository Functions ====================
+
 /**
- * Fetch all repositories accessible to a GitHub App installation
+ * Fetch all repositories accessible to a GitHub App installation.
  */
 export const getInstallationRepositories = async (
   installationId: number
@@ -388,49 +190,11 @@ export const getInstallationRepositories = async (
   }
 };
 
-/**
- * Annotation for a check run
- */
-export interface CheckAnnotation {
-  readonly path: string;
-  readonly start_line: number;
-  readonly end_line: number;
-  readonly annotation_level: "notice" | "warning" | "failure";
-  readonly message: string;
-  readonly title?: string;
-}
+// ==================== Check Run Functions ====================
 
 /**
- * Options for creating a check run with annotations
- */
-export interface CreateCheckRunOptions {
-  readonly installationId: number;
-  readonly owner: string;
-  readonly repo: string;
-  readonly headSha: string;
-  readonly name: string;
-  readonly summary: string;
-  readonly annotations: readonly CheckAnnotation[];
-}
-
-/**
- * GitHub API annotation batch size limit (from centralized pagination config)
- */
-const { MAX_ANNOTATIONS_PER_CALL } = GITHUB_PAGINATION;
-
-/**
- * Split array into batches of specified size
- */
-const batchArray = <T>(array: T[], batchSize: number): T[][] => {
-  const batchCount = Math.ceil(array.length / batchSize);
-  return Array.from({ length: batchCount }, (_, i) =>
-    array.slice(i * batchSize, (i + 1) * batchSize)
-  );
-};
-
-/**
- * Create a check run with annotations
- * This posts line-level feedback directly on the PR files
+ * Create a check run with annotations.
+ * This posts line-level feedback directly on the PR files.
  */
 export const createCheckRunWithAnnotations = async (
   options: CreateCheckRunOptions
@@ -441,7 +205,10 @@ export const createCheckRunWithAnnotations = async (
     const octokit = await getOctokit(installationId);
 
     // Split annotations into batches (GitHub limits to 50 per API call)
-    const annotationBatches = batchArray([...annotations], MAX_ANNOTATIONS_PER_CALL);
+    const annotationBatches = batchArray(
+      [...annotations],
+      GITHUB_PAGINATION.MAX_ANNOTATIONS_PER_CALL
+    );
 
     // Create the check run with first batch
     const { data: checkRun } = await octokit.rest.checks.create({

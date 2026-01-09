@@ -11,6 +11,8 @@ export const GITHUB_CONTEXT_LIMITS = {
   MAX_FILE_SIZE: 15000, // 15KB per file
   MAX_FILES: 10, // Maximum number of source files to fetch
   MAX_ANNOTATIONS: 50, // Maximum number of annotations - increased for full context
+  MAX_COMMENT_BODY_LENGTH: 2000, // 2KB per comment body for context extraction
+  MAX_RECENT_COMMENTS: 5, // Maximum recent comments to include in context
 } as const;
 
 /**
@@ -51,16 +53,54 @@ export const GITHUB_COMMENT_DISPLAY = {
   MAX_ERROR_LINE_LENGTH: 120,
   /** Maximum recommended actions to display */
   MAX_ACTIONS: 3,
+  /** Maximum length for a valid file path in annotations */
+  MAX_FILE_PATH_LENGTH: 200,
 } as const;
 
 /**
- * Maximum number of test failures to extract from logs.
+ * Patterns for validating and extracting file locations from annotation paths.
+ * Used to ensure annotation paths are actual file paths, not error text.
+ */
+export const FILE_PATH_VALIDATION = {
+  /**
+   * Pattern to extract path:line from strings.
+   * Handles: file.ext:42, file.ext:42:10, path/to/file.ext:42
+   */
+  LOCATION_PATTERN: /^([^\s:()]+\.[a-zA-Z0-9]{1,10}):(\d+)(?::\d+)?/,
+  /**
+   * Pattern to validate a string looks like a real file path.
+   * Requires: alphanumeric with dots, slashes, underscores, hyphens; ends with extension.
+   */
+  VALID_PATH_PATTERN: /^[a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]{1,10}$/,
+  /**
+   * Pattern to identify evidence ID prefixes in annotation titles.
+   * These should be stripped from display as they're internal identifiers.
+   */
+  EVIDENCE_TITLE_PATTERN: /^(check|anno|test|dep|cfg|wflog|diff|src|comment)#/i,
+  /**
+   * Pattern to strip evidence prefixes from messages (e.g., "[anno#1] message").
+   */
+  EVIDENCE_PREFIX_PATTERN: /^\s*\[[a-z]+#[^\]]+\]\s*/i,
+} as const;
+
+/**
+ * Limits for log parsing operations.
  */
 export const LOG_PARSING_LIMITS = {
   /** Maximum test failures to extract - high limit to capture all before deduplication */
   MAX_TEST_FAILURES: 300,
   /** Maximum size for build config diff in characters */
   MAX_BUILD_CONFIG_DIFF_SIZE: 5000,
+  /** Minimum remaining characters to include a truncated line in error body */
+  MIN_TRUNCATION_CHARS: 20,
+  /** Maximum characters to capture for error body (default pass) */
+  DEFAULT_ERROR_BODY_CHARS: 2000,
+  /** Maximum characters to capture for error body when fallback is generic */
+  EXTENDED_ERROR_BODY_CHARS: 4000,
+  /** Number of lines to scan after a failure marker for error context (default pass) */
+  DEFAULT_ERROR_CONTEXT_LINES: 50,
+  /** Number of lines to scan when fallback is generic */
+  EXTENDED_ERROR_CONTEXT_LINES: 100,
 } as const;
 
 /**
@@ -103,6 +143,8 @@ export const FILE_REFERENCE_PATTERNS = [
   /(?:^|[\s("'])([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+):(\d+)(?::\d+)?/gm,
   // TypeScript/C# compiler: path/file.ext(line,column)
   /([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)\((\d+),\d+\)/gm,
+  // Python traceback: File "path/file.py", line 12
+  /File\s+["']([^"']+\.[a-zA-Z0-9]+)["'],\s*line\s*(\d+)/gm,
 ] as const;
 
 /**
@@ -153,3 +195,34 @@ export const GITHUB_ANNOTATION_LEVEL = {
   WARNING: "warning",
   NOTICE: "notice",
 } as const;
+
+/**
+ * GitHub annotation display limits.
+ */
+export const GITHUB_ANNOTATION_LIMITS = {
+  /** Maximum title length for annotations */
+  MAX_TITLE_LENGTH: 100,
+  /** Maximum annotations per check run */
+  MAX_PER_CHECK_RUN: 50,
+  /** Maximum valid line number for annotations (reasonable upper bound) */
+  MAX_LINE_NUMBER: 1000000,
+} as const;
+
+/**
+ * Text sanitization patterns for annotation messages.
+ */
+export const TEXT_SANITIZATION_PATTERNS = {
+  /**
+   * Pattern to match ANSI escape codes for terminal colors/formatting.
+   * Matches SGR (Select Graphic Rendition) sequences and other control codes.
+   */
+  ANSI_ESCAPE_CODES:
+    // eslint-disable-next-line no-control-regex -- Intentional: matching ANSI escape sequences
+    /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
+} as const;
+
+/**
+ * Commit SHA display length for short format.
+ * Standard GitHub short SHA length (7 characters).
+ */
+export const SHORT_COMMIT_SHA_LENGTH = 7;

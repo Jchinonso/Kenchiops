@@ -483,7 +483,7 @@ describe("Channel Service", () => {
       const result = await getBotMemberChannels(mockClient);
 
       expect(result).toHaveLength(50);
-      expect(result.every((c) => c.is_member === true)).toBe(true);
+      expect(result.every((channel) => channel.is_member === true)).toBe(true);
     });
 
     it("should handle API errors", async () => {

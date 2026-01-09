@@ -117,6 +117,19 @@ export const truncateText = (text: string, maxLength: number): string => {
   return `${text.slice(0, maxLength - 3)}...`;
 };
 
+/**
+ * Sanitizes a dynamic value for use in evidence IDs.
+ *
+ * @param value - Raw value to sanitize
+ * @returns Sanitized string safe for evidence IDs
+ */
+export const sanitizeIdPart = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64) || "unknown";
+
 // ==================== Relative Time Formatting ====================
 
 /**

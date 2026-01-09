@@ -203,6 +203,185 @@ const wait = (ms: number): Promise<void> =>
 // ==================== Main Client ====================
 
 /**
+ * Request context for recursive retry attempts.
+ */
+interface RetryContext {
+  readonly url: string;
+  readonly method: HttpMethod;
+  readonly body?: unknown;
+  readonly timeout: number;
+  readonly maxRetries: number;
+  readonly initialRetryDelay: number;
+  readonly maxRetryDelay: number;
+  readonly headers: Record<string, string>;
+  readonly serviceKey: string;
+  readonly startTime: number;
+}
+
+/**
+ * Safely extracts response body text.
+ */
+const safeGetResponseText = async (response: Response): Promise<string> => {
+  try {
+    return await response.text();
+  } catch {
+    return "Unknown error";
+  }
+};
+
+/**
+ * Executes a single HTTP request attempt.
+ */
+const executeAttempt = async (
+  context: RetryContext
+): Promise<
+  { success: true; response: Response } | { success: false; error: Error; status: number }
+> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), context.timeout);
+
+  try {
+    const response = await fetch(context.url, {
+      method: context.method,
+      headers: { "Content-Type": "application/json", ...context.headers },
+      body: context.body ? JSON.stringify(context.body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return { success: true, response };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    const normalizedError = error instanceof Error ? error : new Error(String(error));
+    const finalError =
+      normalizedError.name === "AbortError"
+        ? new Error(`Request timeout after ${context.timeout}ms`)
+        : normalizedError;
+    return { success: false, error: finalError, status: 0 };
+  }
+};
+
+/**
+ * Logs retry attempt and waits for backoff delay.
+ */
+const logAndWaitForRetry = async (
+  context: RetryContext,
+  attempt: number,
+  errorInfo: { message: string; status?: number }
+): Promise<void> => {
+  const delay = calculateBackoff(attempt, context.initialRetryDelay, context.maxRetryDelay);
+  const errorDetails =
+    errorInfo.status === undefined ? { error: errorInfo.message } : { status: errorInfo.status };
+  logger.warn("Request failed, retrying", {
+    url: context.url,
+    ...errorDetails,
+    attempt,
+    maxRetries: context.maxRetries,
+    retryDelayMs: Math.round(delay),
+  });
+  await wait(delay);
+};
+
+/**
+ * Handles exhausted retries - logs and throws.
+ */
+const handleExhaustedRetries = (context: RetryContext, lastError: Error | undefined): never => {
+  recordFailure(context.serviceKey);
+  const duration = Date.now() - context.startTime;
+  logger.error("Request failed after all retries", {
+    url: context.url,
+    method: context.method,
+    error: lastError?.message,
+    totalAttempts: context.maxRetries + 1,
+    duration,
+  });
+  throw new ExternalServiceError(
+    context.serviceKey,
+    lastError?.message ?? `Request to ${context.url} failed`
+  );
+};
+
+/**
+ * Handles successful response - parses JSON and returns.
+ */
+const handleSuccess = async <T>(
+  context: RetryContext,
+  response: Response,
+  attempt: number
+): Promise<ResilientResponse<T>> => {
+  recordSuccess(context.serviceKey);
+  const data = (await response.json()) as T;
+  const duration = Date.now() - context.startTime;
+
+  logger.debug("Request succeeded", {
+    url: context.url,
+    method: context.method,
+    status: response.status,
+    duration,
+    retryCount: attempt - 1,
+  });
+
+  return { data, status: response.status, retryCount: attempt - 1, duration };
+};
+
+/**
+ * Determines if a retry should be attempted.
+ */
+const shouldRetry = (
+  status: number,
+  error: Error | undefined,
+  attempt: number,
+  maxRetries: number
+): boolean => isRetryableError(status, error) && attempt <= maxRetries;
+
+/**
+ * Recursive retry logic for resilient fetch.
+ */
+const attemptWithRetry = async <T>(
+  context: RetryContext,
+  attempt: number,
+  lastError: Error | undefined,
+  lastStatus: number
+): Promise<ResilientResponse<T>> => {
+  // Base case: all retries exhausted
+  if (attempt > context.maxRetries + 1) {
+    return handleExhaustedRetries(context, lastError);
+  }
+
+  const result = await executeAttempt(context);
+
+  // Handle network/fetch errors
+  if (!result.success) {
+    if (shouldRetry(lastStatus, result.error, attempt, context.maxRetries)) {
+      await logAndWaitForRetry(context, attempt, { message: result.error.message });
+      return attemptWithRetry<T>(context, attempt + 1, result.error, result.status);
+    }
+    // Non-retryable - skip to exhausted state
+    return attemptWithRetry<T>(context, context.maxRetries + 2, result.error, result.status);
+  }
+
+  const { response } = result;
+
+  // Handle HTTP errors
+  if (!response.ok) {
+    if (shouldRetry(response.status, undefined, attempt, context.maxRetries)) {
+      await logAndWaitForRetry(context, attempt, { message: "", status: response.status });
+      return attemptWithRetry<T>(
+        context,
+        attempt + 1,
+        new Error(`HTTP ${response.status}`),
+        response.status
+      );
+    }
+    // Non-retryable HTTP error
+    recordFailure(context.serviceKey);
+    const errorBody = await safeGetResponseText(response);
+    throw new ExternalServiceError(context.serviceKey, `HTTP ${response.status}: ${errorBody}`);
+  }
+
+  return handleSuccess<T>(context, response, attempt);
+};
+
+/**
  * Makes a resilient HTTP request with retry and circuit breaker
  */
 export const resilientFetch = async <T>(
@@ -221,7 +400,6 @@ export const resilientFetch = async <T>(
   } = options;
 
   const serviceKey = getServiceKey(url);
-  const startTime = Date.now();
 
   // Check circuit breaker
   if (!skipCircuitBreaker && isCircuitOpen(serviceKey)) {
@@ -231,109 +409,20 @@ export const resilientFetch = async <T>(
     );
   }
 
-  let lastError: Error | undefined;
-  let lastStatus = 0;
-
-  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-    try {
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          ...headers,
-        },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-      lastStatus = response.status;
-
-      if (!response.ok) {
-        // Check if retryable
-        if (isRetryableError(response.status) && attempt <= maxRetries) {
-          const delay = calculateBackoff(attempt, initialRetryDelay, maxRetryDelay);
-          logger.warn("Request failed, retrying", {
-            url,
-            status: response.status,
-            attempt,
-            maxRetries,
-            retryDelayMs: Math.round(delay),
-          });
-          await wait(delay);
-          continue;
-        }
-
-        // Non-retryable error
-        recordFailure(serviceKey);
-        const errorBody = await response.text().catch(() => "Unknown error");
-        throw new ExternalServiceError(serviceKey, `HTTP ${response.status}: ${errorBody}`);
-      }
-
-      // Success - reset circuit breaker
-      recordSuccess(serviceKey);
-
-      const data = (await response.json()) as T;
-      const duration = Date.now() - startTime;
-
-      logger.debug("Request succeeded", {
-        url,
-        method,
-        status: response.status,
-        duration,
-        retryCount: attempt - 1,
-      });
-
-      return {
-        data,
-        status: response.status,
-        retryCount: attempt - 1,
-        duration,
-      };
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-
-      // Handle abort (timeout)
-      if (lastError.name === "AbortError") {
-        lastError = new Error(`Request timeout after ${timeout}ms`);
-      }
-
-      // Check if retryable
-      if (isRetryableError(lastStatus, lastError) && attempt <= maxRetries) {
-        const delay = calculateBackoff(attempt, initialRetryDelay, maxRetryDelay);
-        logger.warn("Request error, retrying", {
-          url,
-          error: lastError.message,
-          attempt,
-          maxRetries,
-          retryDelayMs: Math.round(delay),
-        });
-        await wait(delay);
-        continue;
-      }
-
-      // Non-retryable or max retries exceeded
-      break;
-    }
-  }
-
-  // All retries exhausted
-  recordFailure(serviceKey);
-  const duration = Date.now() - startTime;
-
-  logger.error("Request failed after all retries", {
+  const context: RetryContext = {
     url,
     method,
-    error: lastError?.message,
-    totalAttempts: maxRetries + 1,
-    duration,
-  });
+    body,
+    timeout,
+    maxRetries,
+    initialRetryDelay,
+    maxRetryDelay,
+    headers,
+    serviceKey,
+    startTime: Date.now(),
+  };
 
-  throw new ExternalServiceError(serviceKey, lastError?.message ?? `Request to ${url} failed`);
+  return attemptWithRetry<T>(context, 1, undefined, 0);
 };
 
 // ==================== Convenience Methods ====================

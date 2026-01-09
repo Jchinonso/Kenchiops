@@ -153,7 +153,7 @@ describe("Modal Builders", () => {
       const repositories = [createMockRepositoryOption()];
       const modal = buildRepoSelectModal("C123456", "general", repositories);
 
-      const sectionBlock = modal.blocks.find((b) => b.type === "section");
+      const sectionBlock = modal.blocks.find((block) => block.type === "section");
       expect(sectionBlock).toBeDefined();
     });
 
@@ -161,7 +161,7 @@ describe("Modal Builders", () => {
       const repositories = [createMockRepositoryOption()];
       const modal = buildRepoSelectModal("C123456", "general", repositories);
 
-      const dividerBlock = modal.blocks.find((b) => b.type === "divider");
+      const dividerBlock = modal.blocks.find((block) => block.type === "divider");
       expect(dividerBlock).toBeDefined();
     });
 
@@ -169,7 +169,7 @@ describe("Modal Builders", () => {
       const repositories = [createMockRepositoryOption()];
       const modal = buildRepoSelectModal("C123456", "general", repositories);
 
-      const inputBlock = modal.blocks.find((b) => b.type === "input");
+      const inputBlock = modal.blocks.find((block) => block.type === "input");
       expect(inputBlock).toBeDefined();
     });
 
@@ -177,7 +177,7 @@ describe("Modal Builders", () => {
       const repositories = [createMockRepositoryOption()];
       const modal = buildRepoSelectModal("C123456", "general", repositories);
 
-      const contextBlock = modal.blocks.find((b) => b.type === "context");
+      const contextBlock = modal.blocks.find((block) => block.type === "context");
       expect(contextBlock).toBeDefined();
     });
 
@@ -227,7 +227,7 @@ describe("Modal Builders", () => {
 
       expect(modal.blocks.length).toBeGreaterThan(0);
       // Should still have input block but with empty options
-      const inputBlock = modal.blocks.find((b) => b.type === "input");
+      const inputBlock = modal.blocks.find((block) => block.type === "input");
       expect(inputBlock).toBeDefined();
     });
 
@@ -313,14 +313,14 @@ describe("Modal Builders", () => {
     it("should include section block with message", () => {
       const modal = buildNoReposModal("general");
 
-      const sectionBlock = modal.blocks.find((b) => b.type === "section");
+      const sectionBlock = modal.blocks.find((block) => block.type === "section");
       expect(sectionBlock).toBeDefined();
     });
 
     it("should include context block with explanation", () => {
       const modal = buildNoReposModal("general");
 
-      const contextBlock = modal.blocks.find((b) => b.type === "context");
+      const contextBlock = modal.blocks.find((block) => block.type === "context");
       expect(contextBlock).toBeDefined();
     });
 
@@ -408,7 +408,7 @@ describe("Modal Builders", () => {
       const mappings = [createMockRepositoryMapping()];
       const modal = buildUnconfigureModal(mappings);
 
-      const sectionBlock = modal.blocks.find((b) => b.type === "section");
+      const sectionBlock = modal.blocks.find((block) => block.type === "section");
       expect(sectionBlock).toBeDefined();
     });
 
@@ -416,7 +416,7 @@ describe("Modal Builders", () => {
       const mappings = [createMockRepositoryMapping()];
       const modal = buildUnconfigureModal(mappings);
 
-      const dividerBlock = modal.blocks.find((b) => b.type === "divider");
+      const dividerBlock = modal.blocks.find((block) => block.type === "divider");
       expect(dividerBlock).toBeDefined();
     });
 
@@ -424,7 +424,7 @@ describe("Modal Builders", () => {
       const mappings = [createMockRepositoryMapping()];
       const modal = buildUnconfigureModal(mappings);
 
-      const inputBlock = modal.blocks.find((b) => b.type === "input");
+      const inputBlock = modal.blocks.find((block) => block.type === "input");
       expect(inputBlock).toBeDefined();
     });
 
@@ -432,7 +432,7 @@ describe("Modal Builders", () => {
       const mappings = [createMockRepositoryMapping()];
       const modal = buildUnconfigureModal(mappings);
 
-      const contextBlock = modal.blocks.find((b) => b.type === "context");
+      const contextBlock = modal.blocks.find((block) => block.type === "context");
       expect(contextBlock).toBeDefined();
     });
 
@@ -522,7 +522,7 @@ describe("Modal Builders", () => {
 
       expect(modal.blocks.length).toBeGreaterThan(0);
       // Should still have input block but with empty options
-      const inputBlock = modal.blocks.find((b) => b.type === "input");
+      const inputBlock = modal.blocks.find((block) => block.type === "input");
       expect(inputBlock).toBeDefined();
     });
 
@@ -628,14 +628,14 @@ describe("Modal Builders", () => {
     it("should include section block with message", () => {
       const modal = buildNoConfiguredReposModal();
 
-      const sectionBlock = modal.blocks.find((b) => b.type === "section");
+      const sectionBlock = modal.blocks.find((block) => block.type === "section");
       expect(sectionBlock).toBeDefined();
     });
 
     it("should include context block with instructions", () => {
       const modal = buildNoConfiguredReposModal();
 
-      const contextBlock = modal.blocks.find((b) => b.type === "context");
+      const contextBlock = modal.blocks.find((block) => block.type === "context");
       expect(contextBlock).toBeDefined();
     });
 

@@ -8,11 +8,13 @@ import {
   postConsolidatedMessage,
   broadcastMessage,
 } from "../services/messageService.js";
+import { createAnalysisAttachments } from "../formatters/ciFailureFormatter.js";
 import type {
   SlackMessageRequest,
   ConsolidatedMessageRequest,
   SlackBroadcastRequest,
 } from "../types/slackTypes.js";
+import type { LLMAnalysisResult } from "@kenchi/shared";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
@@ -131,6 +133,11 @@ describe("Message Service", () => {
     });
 
     it("should format CI failure analysis", async () => {
+      const fullAnalysis: LLMAnalysisResult = {
+        eventId: "evt_123",
+        summary: "Root cause summary",
+        analyzedAt: "2024-01-01T00:00:00.000Z",
+      };
       const request: SlackMessageRequest = {
         channel: "C123456",
         analysis: {
@@ -140,12 +147,16 @@ describe("Message Service", () => {
           confidence: 0.85,
           identified_cause: "Missing dependency",
           recommended_actions: [],
+          full_analysis: fullAnalysis,
         },
       };
 
       const result = await postMessage(mockClient, request);
 
       expect(result.status).toBe("sent");
+      expect(createAnalysisAttachments).toHaveBeenCalledWith(
+        expect.objectContaining({ full_analysis: fullAnalysis })
+      );
     });
 
     it("should resolve channel name to ID", async () => {

@@ -17,6 +17,7 @@ import {
   performHealthCheck,
   livenessCheck,
   readinessCheck,
+  getErrorMessage,
 } from "@kenchi/shared";
 import type Bolt from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
@@ -77,7 +78,7 @@ const getClientForRequest = async (
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to get Slack client for tenant",
+      error: getErrorMessage(error),
     };
   }
 };

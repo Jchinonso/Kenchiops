@@ -59,6 +59,8 @@ export const SLACK_MODAL_CALLBACKS = {
   NO_REPOS: "no_repos_modal",
   /** No configured repositories modal */
   NO_CONFIGURED_REPOS: "no_configured_repos_modal",
+  /** Add document modal */
+  ADD_DOCUMENT: "add_document_modal",
 } as const;
 
 /**
@@ -89,10 +91,22 @@ export const SLACK_ACTION_IDS = {
   FEEDBACK_HELPFUL: "feedback_helpful",
   /** Feedback not helpful button */
   FEEDBACK_NOT_HELPFUL: "feedback_not_helpful",
+  /** RAG feedback helpful button */
+  RAG_FEEDBACK_HELPFUL: "rag_feedback_helpful",
+  /** RAG feedback not helpful button */
+  RAG_FEEDBACK_NOT_HELPFUL: "rag_feedback_not_helpful",
   /** Approve action prefix */
   APPROVE_PREFIX: "approve_action_",
   /** Reject action prefix */
   REJECT_PREFIX: "reject_action_",
+  /** Document title input */
+  DOC_TITLE: "doc_title_input",
+  /** Document type select */
+  DOC_TYPE: "doc_type_select",
+  /** Document content input */
+  DOC_CONTENT: "doc_content_input",
+  /** Document description input */
+  DOC_DESCRIPTION: "doc_description_input",
 } as const;
 
 /**
@@ -113,6 +127,14 @@ export const SLACK_BLOCK_IDS = {
   REPO_SELECT: "repo_select_block",
   /** Unconfigure selection block */
   UNCONFIGURE_SELECT: "unconfigure_select_block",
+  /** Document title input block */
+  DOC_TITLE: "doc_title_block",
+  /** Document type select block */
+  DOC_TYPE: "doc_type_block",
+  /** Document content input block */
+  DOC_CONTENT: "doc_content_block",
+  /** Document description input block */
+  DOC_DESCRIPTION: "doc_description_block",
 } as const;
 
 // ==================== OAuth Constants ====================
@@ -225,3 +247,46 @@ export const MESSAGE_STORE_CONFIG = {
   /** Max age for stored messages in milliseconds (1 hour) - cleanup stale entries */
   MAX_AGE_MS: TIME_CONSTANTS.MILLISECONDS_PER_MINUTE * 60,
 } as const;
+
+// ==================== Resolution Service ====================
+
+/**
+ * Resolution service configuration for tracking CI failure threads and detecting resolutions.
+ */
+export const RESOLUTION_SERVICE_CONFIG = {
+  /** Max age for tracked threads in milliseconds (7 days) */
+  MAX_THREAD_AGE_MS: TIME_CONSTANTS.MILLISECONDS_PER_DAY * 7,
+  /** Minimum messages before checking for resolution */
+  MIN_THREAD_MESSAGES: 2,
+  /** Cleanup interval in milliseconds (1 hour) */
+  CLEANUP_INTERVAL_MS: TIME_CONSTANTS.MILLISECONDS_PER_HOUR,
+} as const;
+
+// ==================== Analysis Context Store ====================
+
+/**
+ * Analysis context store configuration for lesson extraction from confirmed analyses.
+ */
+export const ANALYSIS_CONTEXT_STORE_CONFIG = {
+  /** Max age for stored context in milliseconds (24 hours) */
+  MAX_AGE_MS: TIME_CONSTANTS.MILLISECONDS_PER_DAY,
+  /** Cleanup interval in milliseconds (1 hour) */
+  CLEANUP_INTERVAL_MS: TIME_CONSTANTS.MILLISECONDS_PER_HOUR,
+} as const;
+
+// ==================== Feature Configurations (re-exported) ====================
+
+// Re-export Q&A and Document Ingestion configs from features module
+export {
+  QA_CONFIG,
+  QA_QUESTION_PATTERNS,
+  QA_ACTION_IDS,
+  QA_MESSAGES,
+  isQuestionLike,
+  DOC_INGESTION_CONFIG,
+  DOC_INGESTION_PATTERNS,
+  isDocIngestionRequest,
+  DOC_INGESTION_MESSAGES,
+  SLACK_UI_ERROR_MESSAGES,
+  DOC_INGESTION_ERROR_CODES,
+} from "./slackBotFeatures.js";

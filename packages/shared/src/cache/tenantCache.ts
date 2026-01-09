@@ -17,70 +17,20 @@ import {
 } from "./cacheClient.js";
 import { tenantCacheKeys, mappingCacheKeys } from "./cacheKeys.js";
 import { createLogger } from "../core/logger.js";
-import type { Tenant, RepositoryChannelMapping } from "../core/types.js";
+
+// Import from types module
+import type { CachedTenant, CachedMapping, CachedTenantStats } from "./tenantCacheTypes.js";
+
+// Re-export types and converters for backwards compatibility
+export {
+  toCachedTenant,
+  toCachedMapping,
+  type CachedTenant,
+  type CachedMapping,
+  type CachedTenantStats,
+} from "./tenantCacheTypes.js";
 
 const logger = createLogger("tenant-cache");
-
-// ==================== Types ====================
-
-/**
- * Cached tenant (subset of full tenant for cache efficiency)
- */
-export interface CachedTenant {
-  readonly id: string;
-  readonly githubInstallationId: number | null;
-  readonly githubOrg: string;
-  readonly slackWorkspaceId: string | null;
-  readonly slackTeamName: string | null;
-  readonly status: string;
-  readonly createdAt: string;
-}
-
-/**
- * Cached mapping info
- */
-export interface CachedMapping {
-  readonly id: string;
-  readonly tenantId: string;
-  readonly repository: string;
-  readonly slackChannelId: string;
-  readonly slackChannelName: string | null;
-}
-
-/**
- * Tenant statistics (cached separately due to volatility)
- */
-export interface CachedTenantStats {
-  readonly totalAlerts: number;
-  readonly lastAlertTime: string | null;
-  readonly mappingCount: number;
-}
-
-// ==================== Tenant Conversion ====================
-
-/**
- * Convert full tenant to cached tenant
- */
-export const toCachedTenant = (tenant: Tenant): CachedTenant => ({
-  id: tenant.id,
-  githubInstallationId: tenant.githubInstallationId,
-  githubOrg: tenant.githubOrg,
-  slackWorkspaceId: tenant.slackWorkspaceId,
-  slackTeamName: tenant.slackTeamName,
-  status: tenant.status,
-  createdAt: tenant.createdAt.toISOString(),
-});
-
-/**
- * Convert mapping to cached mapping
- */
-export const toCachedMapping = (mapping: RepositoryChannelMapping): CachedMapping => ({
-  id: mapping.id,
-  tenantId: mapping.tenantId,
-  repository: mapping.repository,
-  slackChannelId: mapping.slackChannelId,
-  slackChannelName: mapping.slackChannelName ?? null,
-});
 
 // ==================== Tenant Cache Operations ====================
 

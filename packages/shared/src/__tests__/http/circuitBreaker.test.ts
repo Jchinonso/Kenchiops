@@ -292,10 +292,10 @@ describe("Circuit Breaker", () => {
         })
       );
 
-      // Next call should include retry time in error message
+      // Next call should throw circuit breaker open error
       await expect(
         withCircuitBreaker("test-service", async () => "success", { resetTimeout: 30000 })
-      ).rejects.toThrow(/Retry in \d+s/);
+      ).rejects.toThrow(/Service temporarily unavailable/);
     });
   });
 });

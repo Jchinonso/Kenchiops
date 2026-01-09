@@ -182,12 +182,14 @@ export const fetchPRMetadata = async (
       ...new Set(reviews.map((review) => review.user?.login).filter(Boolean)),
     ] as string[];
 
-    // Extract recent comments (for context)
-    const recentComments = comments.slice(-5).map((comment) => ({
-      author: comment.user?.login || "unknown",
-      body: comment.body?.slice(0, 500) || "",
-      createdAt: comment.created_at,
-    }));
+    // Extract recent comments (for context) - full content, chunking handled downstream
+    const recentComments = comments
+      .slice(-GITHUB_CONTEXT_LIMITS.MAX_RECENT_COMMENTS)
+      .map((comment) => ({
+        author: comment.user?.login || "unknown",
+        body: comment.body ?? "",
+        createdAt: comment.created_at,
+      }));
 
     logger.info("Fetched PR metadata", {
       prNumber,
@@ -215,6 +217,52 @@ export const fetchPRMetadata = async (
       error: getErrorMessage(error),
     });
     return null;
+  }
+};
+
+/**
+ * Fetch commits for a PR.
+ *
+ * Returns commit messages for linked commit knowledge ingestion.
+ *
+ * @param installationId - GitHub App installation ID
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param prNumber - Pull request number
+ * @returns Array of commit messages
+ */
+export const fetchPRCommits = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<string[]> => {
+  try {
+    const octokit = await getOctokit(installationId);
+
+    const { data: commits } = await octokit.rest.pulls.listCommits({
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
+    });
+
+    const messages = commits
+      .map((commit) => commit.commit.message)
+      .filter((msg): msg is string => Boolean(msg));
+
+    logger.info("Fetched PR commits", {
+      prNumber,
+      commitCount: messages.length,
+    });
+
+    return messages;
+  } catch (error) {
+    logger.warn("Failed to fetch PR commits", {
+      prNumber,
+      error: getErrorMessage(error),
+    });
+    return [];
   }
 };
 

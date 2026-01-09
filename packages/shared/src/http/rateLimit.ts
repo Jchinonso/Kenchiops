@@ -6,218 +6,74 @@
  *
  * Falls back to in-memory store if Redis is unavailable.
  *
+ * Security features:
+ * - IP validation to prevent spoofing
+ * - Tenant-aware rate limiting for authenticated requests
+ * - Fingerprint fallback for requests without valid IP
+ * - Suspicious activity logging
+ *
+ * This module re-exports from focused sub-modules:
+ * - rateLimitTypes.ts: Type definitions and constants
+ * - rateLimitSecurity.ts: IP validation, fingerprinting, key generation
+ * - rateLimitStores.ts: Redis and in-memory storage backends
+ *
  * @module http/rateLimit
  */
 
 import type { Request, Response, NextFunction } from "express";
-import { AppError, RateLimitError } from "../core/errors.js";
+import crypto from "crypto";
+import {
+  AppError,
+  RateLimitError,
+  ExternalServiceError,
+  ValidationError,
+  getErrorMessage,
+} from "../core/errors.js";
 import { createLogger } from "../core/logger.js";
 import {
   RATE_LIMIT_CONSTANTS,
   TIME_CONSTANTS,
   HTTP_RESILIENCE_DEFAULTS,
-  REDIS_TTL_VALUES,
-  REDIS_SCAN,
   RATE_LIMIT_MESSAGES,
 } from "../constants/index.js";
 import { getRedisClient } from "../queue/redisClient.js";
 
+// Import from sub-modules
+import {
+  REDIS_RETRY_CONFIG,
+  MAX_RETRY_AFTER_SECONDS,
+  MIN_RETRY_AFTER_SECONDS,
+  MAX_TTL_MS,
+  MIN_WINDOW_MS,
+  MIN_MAX_REQUESTS,
+  MAX_MEMORY_STORE_ENTRIES,
+  MAX_REQUEST_COUNT,
+  CLEANUP_INTERVAL_REQUESTS,
+  type RateLimitOptions,
+  type RateLimitStore,
+  type RateLimitEntry,
+} from "./rateLimitTypes.js";
+import { secureKeyGenerator } from "./rateLimitSecurity.js";
+import { RedisRateLimitStore, InMemoryRateLimitStore } from "./rateLimitStores.js";
+
+// Re-export types and utilities
+export type { RateLimitOptions, RateLimitInfo } from "./rateLimitTypes.js";
+export { secureKeyGenerator } from "./rateLimitSecurity.js";
+
 const logger = createLogger("rate-limiter");
-
-// ==================== Types ====================
-
-/**
- * Rate limit entry for in-memory fallback.
- */
-interface RateLimitEntry {
-  readonly resetTime: number;
-  count: number;
-}
-
-/**
- * Rate limiter configuration options.
- */
-interface RateLimitOptions {
-  /** Time window in milliseconds */
-  readonly windowMs: number;
-  /** Maximum number of requests per window */
-  readonly max: number;
-  /** Custom error message */
-  readonly message?: string;
-  /** Function to generate rate limit key from request */
-  readonly keyGenerator?: (req: Request) => string;
-  /** Key prefix for Redis (default: "rl:") */
-  readonly keyPrefix?: string;
-  /** Skip rate limiting for certain requests */
-  readonly skip?: (req: Request) => boolean;
-}
-
-/**
- * Rate limit info returned after checking.
- */
-interface RateLimitInfo {
-  readonly current: number;
-  readonly remaining: number;
-  readonly resetTime: number;
-}
-
-// ==================== Rate Limiter Store Interface ====================
-
-/**
- * Abstract store interface for rate limit data.
- */
-interface RateLimitStore {
-  increment(key: string, windowMs: number): Promise<RateLimitInfo>;
-  reset(key: string): Promise<void>;
-  resetAll(): Promise<void>;
-}
-
-// ==================== Redis Store ====================
-
-/**
- * Redis-based rate limit store using sliding window counter.
- */
-class RedisRateLimitStore implements RateLimitStore {
-  private readonly keyPrefix: string;
-  private readonly max: number;
-
-  constructor(keyPrefix: string, max: number) {
-    this.keyPrefix = keyPrefix;
-    this.max = max;
-  }
-
-  async increment(key: string, windowMs: number): Promise<RateLimitInfo> {
-    const redis = getRedisClient();
-    const redisKey = `${this.keyPrefix}${key}`;
-
-    // Use MULTI/EXEC for atomic increment and expire
-    const pipeline = redis.multi();
-    pipeline.incr(redisKey);
-    pipeline.pttl(redisKey);
-
-    const results = await pipeline.exec();
-
-    if (!results) {
-      throw new Error("Redis pipeline failed");
-    }
-
-    const [[incrErr, current], [ttlErr, ttl]] = results as [
-      [Error | null, number],
-      [Error | null, number],
-    ];
-
-    if (incrErr) {
-      throw incrErr;
-    }
-    if (ttlErr) {
-      throw ttlErr;
-    }
-
-    // Set expiry on first request in window
-    if (ttl === REDIS_TTL_VALUES.NO_EXPIRY || ttl === REDIS_TTL_VALUES.KEY_NOT_FOUND) {
-      await redis.pexpire(redisKey, windowMs);
-    }
-
-    const resetTime = Date.now() + (ttl > 0 ? ttl : windowMs);
-
-    return {
-      current: current as number,
-      remaining: Math.max(0, this.max - (current as number)),
-      resetTime,
-    };
-  }
-
-  async reset(key: string): Promise<void> {
-    const redis = getRedisClient();
-    await redis.del(`${this.keyPrefix}${key}`);
-  }
-
-  async resetAll(): Promise<void> {
-    const redis = getRedisClient();
-    const pattern = `${this.keyPrefix}*`;
-
-    // Use SCAN for efficient key iteration
-    let cursor: string = REDIS_SCAN.INITIAL_CURSOR;
-    do {
-      const [nextCursor, keys] = await redis.scan(
-        cursor,
-        "MATCH",
-        pattern,
-        "COUNT",
-        REDIS_SCAN.BATCH_SIZE
-      );
-      cursor = nextCursor;
-
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
-    } while (cursor !== REDIS_SCAN.INITIAL_CURSOR);
-  }
-}
-
-// ==================== In-Memory Store (Fallback) ====================
-
-/**
- * In-memory rate limit store for fallback when Redis is unavailable.
- */
-class InMemoryRateLimitStore implements RateLimitStore {
-  private store: Map<string, RateLimitEntry> = new Map();
-  private readonly max: number;
-
-  constructor(max: number) {
-    this.max = max;
-  }
-
-  async increment(key: string, windowMs: number): Promise<RateLimitInfo> {
-    const now = Date.now();
-    const record = this.store.get(key);
-
-    // Clean up expired entries periodically
-    if (Math.random() < RATE_LIMIT_CONSTANTS.CLEANUP_PROBABILITY) {
-      this.cleanup(now);
-    }
-
-    if (!record || now > record.resetTime) {
-      // Create new window
-      const resetTime = now + windowMs;
-      this.store.set(key, { count: 1, resetTime });
-      return { current: 1, remaining: this.max - 1, resetTime };
-    }
-
-    record.count++;
-    return {
-      current: record.count,
-      remaining: Math.max(0, this.max - record.count),
-      resetTime: record.resetTime,
-    };
-  }
-
-  async reset(key: string): Promise<void> {
-    this.store.delete(key);
-  }
-
-  async resetAll(): Promise<void> {
-    this.store.clear();
-  }
-
-  private cleanup(now: number): void {
-    this.store.forEach((entry, key) => {
-      if (entry.resetTime < now) {
-        this.store.delete(key);
-      }
-    });
-  }
-}
-
-// ==================== Rate Limiter Class ====================
 
 /**
  * Rate limiter implementation with Redis backend and in-memory fallback.
+ * Includes automatic Redis reconnection with exponential backoff.
  */
 class RateLimiter {
   private redisStore: RedisRateLimitStore | null = null;
   private memoryStore: InMemoryRateLimitStore;
   private useRedis = true;
+  private redisFailedAt = 0;
+  private redisRetryDelay: number = REDIS_RETRY_CONFIG.INITIAL_DELAY_MS;
+  /** Flag to prevent concurrent Redis retry attempts */
+  private isRetryingRedis = false;
   private readonly windowMs: number;
   private readonly max: number;
   private readonly message: string;
@@ -226,10 +82,21 @@ class RateLimiter {
   private readonly skip?: (req: Request) => boolean;
 
   constructor(options: RateLimitOptions) {
+    // SECURITY: Validate configuration to prevent misconfiguration attacks
+    if (options.windowMs < MIN_WINDOW_MS) {
+      throw new ValidationError(`windowMs must be at least ${MIN_WINDOW_MS}ms`);
+    }
+    if (options.windowMs > MAX_TTL_MS) {
+      throw new ValidationError(`windowMs must not exceed ${MAX_TTL_MS}ms`);
+    }
+    if (options.max < MIN_MAX_REQUESTS) {
+      throw new ValidationError(`max must be at least ${MIN_MAX_REQUESTS}`);
+    }
+
     this.windowMs = options.windowMs;
     this.max = options.max;
     this.message = options.message ?? RATE_LIMIT_MESSAGES.TOO_MANY_REQUESTS;
-    this.keyGenerator = options.keyGenerator ?? ((req) => req.ip ?? "unknown");
+    this.keyGenerator = options.keyGenerator ?? secureKeyGenerator;
     this.keyPrefix = options.keyPrefix ?? "rl:";
     this.skip = options.skip;
 
@@ -245,13 +112,63 @@ class RateLimiter {
       this.redisStore = new RedisRateLimitStore(this.keyPrefix, this.max);
     } catch (error) {
       logger.warn("Redis unavailable for rate limiting, using in-memory fallback", {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
-      this.useRedis = false;
+      this.markRedisFailed();
     }
   }
 
+  private markRedisFailed(): void {
+    this.useRedis = false;
+    this.redisFailedAt = Date.now();
+  }
+
+  private shouldRetryRedis(): boolean {
+    // SECURITY: Prevent concurrent retry attempts (race condition fix)
+    if (this.useRedis || this.isRetryingRedis) {
+      return false;
+    }
+    const timeSinceFailure = Date.now() - this.redisFailedAt;
+    return timeSinceFailure >= this.redisRetryDelay;
+  }
+
+  private handleRedisRetryFailure(error: unknown): void {
+    // Increase backoff delay for next retry
+    this.redisRetryDelay = Math.min(
+      this.redisRetryDelay * REDIS_RETRY_CONFIG.BACKOFF_MULTIPLIER,
+      REDIS_RETRY_CONFIG.MAX_DELAY_MS
+    );
+    this.redisFailedAt = Date.now();
+    logger.debug("Redis retry failed, next attempt scheduled", {
+      delay: this.redisRetryDelay,
+      error: getErrorMessage(error),
+    });
+  }
+
   private getStore(): RateLimitStore {
+    // Try to reconnect to Redis with exponential backoff
+    if (!this.useRedis && this.shouldRetryRedis()) {
+      // Set flag to prevent concurrent retry attempts
+      this.isRetryingRedis = true;
+      try {
+        const redis = getRedisClient();
+        if (redis.status === "ready") {
+          logger.info("Redis connection restored for rate limiting");
+          this.useRedis = true;
+          this.redisRetryDelay = REDIS_RETRY_CONFIG.INITIAL_DELAY_MS;
+          this.isRetryingRedis = false;
+          if (!this.redisStore) {
+            this.redisStore = new RedisRateLimitStore(this.keyPrefix, this.max);
+          }
+          return this.redisStore;
+        }
+      } catch (error) {
+        this.handleRedisRetryFailure(error);
+      } finally {
+        this.isRetryingRedis = false;
+      }
+    }
+
     if (this.useRedis && this.redisStore) {
       try {
         // Check Redis client status synchronously (no ping, faster)
@@ -262,10 +179,12 @@ class RateLimiter {
         logger.warn("Redis not ready, falling back to in-memory rate limiting", {
           status: redis.status,
         });
-      } catch {
-        logger.warn("Redis connection lost, falling back to in-memory rate limiting");
+      } catch (error) {
+        logger.warn("Redis connection lost, falling back to in-memory rate limiting", {
+          error: getErrorMessage(error),
+        });
       }
-      this.useRedis = false;
+      this.markRedisFailed();
     }
     return this.memoryStore;
   }
@@ -273,36 +192,62 @@ class RateLimiter {
   readonly middleware =
     () =>
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-      // Check if this request should skip rate limiting
       if (this.skip?.(req)) {
         return next();
       }
 
       const key = this.keyGenerator(req);
+      let timeoutHandle: NodeJS.Timeout | null = null;
 
       try {
         const store = this.getStore();
 
-        // Add timeout to prevent indefinite hangs on Redis operations
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(
-            () => reject(new Error("Rate limit check timeout")),
+          timeoutHandle = setTimeout(
+            () => reject(new ExternalServiceError("rate-limit-store", "Rate limit check timeout")),
             HTTP_RESILIENCE_DEFAULTS.RATE_LIMIT_CHECK_TIMEOUT_MS
           );
         });
         const info = await Promise.race([store.increment(key, this.windowMs), timeoutPromise]);
 
-        // Set rate limit headers
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
+
+        // SECURITY: Validate rate limit info values are finite before setting headers
+        if (
+          !Number.isFinite(info.current) ||
+          !Number.isFinite(info.remaining) ||
+          !Number.isFinite(info.resetTime)
+        ) {
+          throw new ExternalServiceError(
+            "rate-limit-store",
+            "Rate limit store returned non-finite values"
+          );
+        }
+
+        // SECURITY: Validate and bound response header values
         res.setHeader("X-RateLimit-Limit", this.max);
-        res.setHeader("X-RateLimit-Remaining", info.remaining);
+        res.setHeader("X-RateLimit-Remaining", Math.max(0, info.remaining));
+
+        // Clamp reset time to reasonable bounds (within 24 hours from now)
+        const maxResetTime = Date.now() + MAX_TTL_MS;
+        const boundedResetTime = Math.min(Math.max(Date.now(), info.resetTime), maxResetTime);
         res.setHeader(
           "X-RateLimit-Reset",
-          Math.ceil(info.resetTime / TIME_CONSTANTS.MILLISECONDS_PER_SECOND)
+          Math.ceil(boundedResetTime / TIME_CONSTANTS.MILLISECONDS_PER_SECOND)
         );
 
         if (info.current > this.max) {
-          const retryAfterMs = info.resetTime - Date.now();
-          const retryAfterSec = Math.ceil(retryAfterMs / TIME_CONSTANTS.MILLISECONDS_PER_SECOND);
+          const retryAfterMs = Math.max(0, info.resetTime - Date.now());
+          const retryAfterSec = Math.min(
+            Math.max(
+              MIN_RETRY_AFTER_SECONDS,
+              Math.ceil(retryAfterMs / TIME_CONSTANTS.MILLISECONDS_PER_SECOND)
+            ),
+            MAX_RETRY_AFTER_SECONDS
+          );
           res.setHeader("Retry-After", retryAfterSec);
 
           throw new RateLimitError(this.message, retryAfterMs);
@@ -310,16 +255,33 @@ class RateLimiter {
 
         next();
       } catch (error) {
-        if (error instanceof AppError) {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+
+        const keyHash = crypto.createHash("sha256").update(key).digest("hex").slice(0, 8);
+        const errorMessage = getErrorMessage(error);
+
+        if (error instanceof RateLimitError) {
           throw error;
         }
 
-        // Log error but don't block request if rate limiting fails
-        logger.error("Rate limiting error, allowing request", {
-          error: error instanceof Error ? error.message : "Unknown error",
-          key,
+        if (error instanceof AppError) {
+          logger.error("Rate limiting error", {
+            error: errorMessage,
+            keyHash,
+          });
+          throw error;
+        }
+
+        logger.error("Rate limiting error, denying request for security", {
+          error: errorMessage,
+          keyHash,
         });
-        next();
+        throw new RateLimitError(
+          "Service temporarily unavailable, please try again",
+          TIME_CONSTANTS.MILLISECONDS_PER_SECOND
+        );
       }
     };
 
@@ -349,11 +311,10 @@ class RateLimiter {
   };
 }
 
-// ==================== Sync Rate Limiter (Backward Compatible) ====================
-
 /**
- * Synchronous rate limiter for backward compatibility.
+ * Synchronous rate limiter for backward compatibility (in-memory only).
  * Uses in-memory store only but provides sync middleware.
+ * Includes deterministic cleanup and max size protection.
  */
 class SyncRateLimiter {
   private store: Map<string, RateLimitEntry> = new Map();
@@ -361,12 +322,24 @@ class SyncRateLimiter {
   private readonly max: number;
   private readonly message: string;
   private readonly keyGenerator: (req: Request) => string;
+  private requestCount = 0;
 
   constructor(options: RateLimitOptions) {
+    // SECURITY: Validate configuration to prevent misconfiguration attacks
+    if (options.windowMs < MIN_WINDOW_MS) {
+      throw new ValidationError(`windowMs must be at least ${MIN_WINDOW_MS}ms`);
+    }
+    if (options.windowMs > MAX_TTL_MS) {
+      throw new ValidationError(`windowMs must not exceed ${MAX_TTL_MS}ms`);
+    }
+    if (options.max < MIN_MAX_REQUESTS) {
+      throw new ValidationError(`max must be at least ${MIN_MAX_REQUESTS}`);
+    }
+
     this.windowMs = options.windowMs;
     this.max = options.max;
     this.message = options.message ?? RATE_LIMIT_MESSAGES.TOO_MANY_REQUESTS;
-    this.keyGenerator = options.keyGenerator ?? ((req) => req.ip ?? "unknown");
+    this.keyGenerator = options.keyGenerator ?? secureKeyGenerator;
   }
 
   readonly middleware =
@@ -374,45 +347,61 @@ class SyncRateLimiter {
     (req: Request, _res: Response, next: NextFunction): void => {
       const key = this.keyGenerator(req);
       const now = Date.now();
-      const record = this.store.get(key);
+      // SECURITY: Use modulo to prevent integer overflow on long-running servers
+      this.requestCount = (this.requestCount + 1) % MAX_REQUEST_COUNT;
 
-      // Clean up expired entries periodically
-      if (Math.random() < RATE_LIMIT_CONSTANTS.CLEANUP_PROBABILITY) {
+      // Deterministic cleanup every N requests
+      const shouldCleanup =
+        this.requestCount % CLEANUP_INTERVAL_REQUESTS === 0 ||
+        this.store.size >= MAX_MEMORY_STORE_ENTRIES;
+
+      if (shouldCleanup) {
         this.cleanup(now);
       }
 
-      if (!record || now > record.resetTime) {
-        // Create new window
-        this.store.set(key, {
-          count: 1,
-          resetTime: now + this.windowMs,
-        });
+      // Check existing record first (handles existing keys even at capacity)
+      const record = this.store.get(key);
+
+      if (record && now <= record.resetTime) {
+        // Existing valid window
+        if (record.count >= this.max) {
+          const retryAfterMs = record.resetTime - now;
+          throw new RateLimitError(this.message, retryAfterMs);
+        }
+        record.count++;
         return next();
       }
 
-      if (record.count >= this.max) {
-        const retryAfterMs = record.resetTime - now;
-        throw new RateLimitError(this.message, retryAfterMs);
+      // Need new window - check capacity for new keys only
+      if (this.store.size >= MAX_MEMORY_STORE_ENTRIES && !record) {
+        // Store full and this is a new key - deny to prevent DoS
+        throw new RateLimitError("Service temporarily unavailable", this.windowMs);
       }
 
-      record.count++;
+      // Create new window
+      // SECURITY: Clamp resetTime to prevent integer overflow
+      this.store.set(key, {
+        count: 1,
+        resetTime: Math.min(now + this.windowMs, Number.MAX_SAFE_INTEGER),
+      });
       next();
     };
 
   private readonly cleanup = (now: number): void => {
-    this.store.forEach((entry, key) => {
+    const keysToDelete: string[] = [];
+    this.store.forEach((entry, entryKey) => {
       if (entry.resetTime < now) {
-        this.store.delete(key);
+        keysToDelete.push(entryKey);
       }
     });
+    keysToDelete.forEach((keyToDelete) => this.store.delete(keyToDelete));
   };
 
   readonly reset = (): void => {
     this.store.clear();
+    this.requestCount = 0;
   };
 }
-
-// ==================== Factory Functions ====================
 
 /**
  * Create a Redis-backed rate limiter middleware.
@@ -455,6 +444,3 @@ export const defaultRedisRateLimiter = createRedisRateLimiter({
   message: RATE_LIMIT_MESSAGES.TOO_MANY_REQUESTS,
   keyPrefix: "rl:default:",
 });
-
-// Re-export types
-export type { RateLimitOptions, RateLimitInfo };

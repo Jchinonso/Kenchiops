@@ -8,11 +8,16 @@
  */
 
 import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
-import type { LLMDetectedDependencyChange, LLMDetectedBuildConfigChange } from "../core/types.js";
+import type {
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
+  LLMSuggestedFix,
+} from "../core/types.js";
 
 // Re-export AI-extracted types from core (canonical definitions)
 export type { LLMDetectedDependencyChange as DetectedDependencyChange } from "../core/types.js";
 export type { LLMDetectedBuildConfigChange as DetectedBuildConfigChange } from "../core/types.js";
+export type { LLMSuggestedFix as SuggestedFix } from "../core/types.js";
 
 /**
  * AI-generated code annotation from analysis
@@ -23,6 +28,8 @@ export interface CodeAnnotation {
   readonly level: "failure" | "warning" | "notice";
   readonly message: string;
   readonly title?: string;
+  /** AI-suggested fix for this issue */
+  readonly suggestedFix?: LLMSuggestedFix;
 }
 
 /**
@@ -42,6 +49,19 @@ export interface TestFailureInfo {
   readonly testName: string;
   readonly file?: string;
   readonly line?: number;
+  readonly error?: string;
+}
+
+/**
+ * Related knowledge document from RAG retrieval
+ */
+export interface RelatedKnowledgeDoc {
+  readonly id: string;
+  readonly type: string;
+  readonly title: string;
+  readonly excerpt?: string;
+  readonly url?: string;
+  readonly similarity: number;
 }
 
 /**
@@ -61,6 +81,8 @@ export interface AnalyzedFailure {
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
   readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+  // RAG-retrieved related knowledge (Phase 2 - RAG Integration)
+  readonly relatedKnowledge?: readonly RelatedKnowledgeDoc[];
 }
 
 /**
@@ -80,6 +102,8 @@ export interface SerializedFailure {
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
   readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+  // RAG-retrieved related knowledge (Phase 2 - RAG Integration)
+  readonly relatedKnowledge?: readonly RelatedKnowledgeDoc[];
 }
 
 /**

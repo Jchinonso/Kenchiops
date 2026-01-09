@@ -20,79 +20,28 @@ import type {
 } from "../core/types.js";
 import { insertAuditLog } from "./tenantAudit.js";
 
+// Import from types module
+import {
+  rowToTenant,
+  extractTenant,
+  getStatusAfterGitHubInstall,
+  getStatusAfterSlackInstall,
+  type TenantRow,
+  type TenantStatistics,
+} from "./tenantServiceTypes.js";
+
+// Re-export types for backwards compatibility
+export {
+  rowToTenant,
+  RAG_BUDGET_DEFAULTS,
+  type TenantRow,
+  type TenantStatistics,
+} from "./tenantServiceTypes.js";
+
 // Re-export audit functions for backwards compatibility
 export { logAuditEvent, getAuditLog } from "./tenantAudit.js";
 
 const logger = createLogger("tenant-service");
-
-// ==================== Types ====================
-
-/**
- * Database row type for tenants table
- */
-interface TenantRow {
-  readonly id: string;
-  readonly github_org: string;
-  readonly github_installation_id: number | null;
-  readonly github_app_installed_at: Date | null;
-  readonly slack_workspace_id: string | null;
-  readonly slack_team_name: string | null;
-  readonly slack_bot_token: string | null;
-  readonly slack_bot_user_id: string | null;
-  readonly slack_app_installed_at: Date | null;
-  readonly status: TenantStatus;
-  readonly created_at: Date;
-  readonly updated_at: Date;
-}
-
-/**
- * Statistics for a tenant's activity
- */
-export interface TenantStatistics {
-  readonly failuresAnalyzedToday: number;
-  readonly totalAlertsSent: number;
-  readonly lastAlertTime: Date | null;
-}
-
-// ==================== Row Converters ====================
-
-/**
- * Convert database row to Tenant entity
- */
-const rowToTenant = (row: TenantRow): Tenant => ({
-  id: row.id,
-  githubOrg: row.github_org,
-  githubInstallationId: row.github_installation_id,
-  githubAppInstalledAt: row.github_app_installed_at,
-  slackWorkspaceId: row.slack_workspace_id,
-  slackTeamName: row.slack_team_name,
-  slackBotToken: row.slack_bot_token,
-  slackBotUserId: row.slack_bot_user_id,
-  slackAppInstalledAt: row.slack_app_installed_at,
-  status: row.status,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
-
-// ==================== Internal Helpers ====================
-
-/**
- * Extract first row from query result, converting to Tenant or null
- */
-const extractTenant = (rows: readonly TenantRow[]): Tenant | null =>
-  rows.length > 0 ? rowToTenant(rows[0]) : null;
-
-/**
- * Determine new status after GitHub installation
- */
-const getStatusAfterGitHubInstall = (hasSlack: boolean): TenantStatus =>
-  hasSlack ? TENANT_STATUS.ACTIVE : TENANT_STATUS.PENDING_SLACK;
-
-/**
- * Determine new status after Slack installation
- */
-const getStatusAfterSlackInstall = (hasGitHub: boolean): TenantStatus =>
-  hasGitHub ? TENANT_STATUS.ACTIVE : TENANT_STATUS.PENDING_GITHUB;
 
 // ==================== Lookup Methods ====================
 

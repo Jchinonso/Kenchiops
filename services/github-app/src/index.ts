@@ -20,10 +20,12 @@ import {
   waitForRedisConnection,
   config,
   EXPRESS_CONFIG,
+  SERVER_TIMEOUTS,
   startActionQueueWorker,
   createRedisRateLimiter,
   startAggregatorWorker,
   startAnalysisQueueProcessor,
+  getErrorMessage,
   DEFAULT_AGGREGATION_CONFIG,
   QUEUE_WORKER_DEFAULTS,
   AGGREGATION_DEFAULTS,
@@ -33,6 +35,12 @@ import {
   GITHUB_APP_TIMEOUTS,
   GITHUB_APP_DB_CONFIG,
   shouldSkipGitHubAppRateLimit,
+  RAG_JOB_INTERVALS,
+  // RAG streaming updates
+  checkStaleness,
+  cleanupExpired,
+  // Drift detection
+  runDriftDetectionWithAlerts,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
@@ -67,6 +75,10 @@ const githubRateLimiter = createRedisRateLimiter({
  */
 const createApp = (): express.Express => {
   const app = express();
+
+  // Trust first proxy (nginx/load balancer) for accurate client IP detection
+  // Required for rate limiting to work correctly behind reverse proxies
+  app.set("trust proxy", 1);
 
   // Capture raw body for webhook signature verification
   // This must come before express.json() so we have the original payload
@@ -104,7 +116,7 @@ const initializeDatabase = (): void => {
     logger.info("Database connection initialized");
   } catch (error) {
     logger.error("Failed to initialize database", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     throw error;
   }
@@ -172,6 +184,12 @@ const initializeFailureAggregator = (): void => {
 let stopActionQueueWorker: (() => void) | null = null;
 
 /**
+ * Interval IDs for RAG background jobs
+ */
+let ragCleanupIntervalId: NodeJS.Timeout | null = null;
+let driftDetectionIntervalId: NodeJS.Timeout | null = null;
+
+/**
  * Initialize action queue worker for async action processing
  */
 const initializeActionQueueWorker = async (): Promise<void> => {
@@ -189,9 +207,63 @@ const initializeActionQueueWorker = async (): Promise<void> => {
     logger.info("Action queue worker initialized");
   } catch (error) {
     logger.error("Failed to initialize action queue worker", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
   }
+};
+
+/**
+ * Initialize RAG background jobs for cleanup and drift detection
+ */
+const initializeRAGBackgroundJobs = (): void => {
+  // RAG Cleanup Job - runs every 24 hours
+  ragCleanupIntervalId = setInterval(async () => {
+    try {
+      // First check staleness
+      const staleness = await checkStaleness();
+      logger.info("RAG staleness check completed", {
+        staleDiffChunks: staleness.staleDiffChunks,
+        staleKnowledgeDocs: staleness.staleKnowledgeDocs,
+        expiredDiffChunks: staleness.expiredDiffChunks,
+        expiredKnowledgeDocs: staleness.expiredKnowledgeDocs,
+      });
+
+      // Then cleanup expired documents
+      const cleanup = await cleanupExpired();
+      logger.info("RAG cleanup completed", {
+        diffChunksDeleted: cleanup.diffChunksDeleted,
+        knowledgeDocsDeleted: cleanup.knowledgeDocsDeleted,
+        diffChunksMarkedStale: cleanup.diffChunksMarkedStale,
+        knowledgeDocsMarkedStale: cleanup.knowledgeDocsMarkedStale,
+      });
+    } catch (error) {
+      logger.error("RAG cleanup job failed", {
+        error: getErrorMessage(error),
+      });
+    }
+  }, RAG_JOB_INTERVALS.CLEANUP_MS);
+
+  // Drift Detection Job - runs every 24 hours
+  driftDetectionIntervalId = setInterval(async () => {
+    try {
+      const result = await runDriftDetectionWithAlerts();
+      logger.info("Drift detection completed", {
+        overallHealth: result.report.overallHealth,
+        alertsDispatched: result.alertsDispatched,
+        dispatchErrors: result.dispatchErrors,
+        metricsChecked: result.report.metrics.length,
+      });
+    } catch (error) {
+      logger.error("Drift detection job failed", {
+        error: getErrorMessage(error),
+      });
+    }
+  }, RAG_JOB_INTERVALS.DRIFT_DETECTION_MS);
+
+  logger.info("RAG background jobs initialized", {
+    cleanupIntervalMs: RAG_JOB_INTERVALS.CLEANUP_MS,
+    driftDetectionIntervalMs: RAG_JOB_INTERVALS.DRIFT_DETECTION_MS,
+  });
 };
 
 /**
@@ -216,6 +288,16 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
       if (stopAnalysisProcessor) {
         logger.info("Stopping analysis processor...");
         stopAnalysisProcessor();
+      }
+
+      // Stop RAG background jobs
+      if (ragCleanupIntervalId) {
+        logger.info("Stopping RAG cleanup job...");
+        clearInterval(ragCleanupIntervalId);
+      }
+      if (driftDetectionIntervalId) {
+        logger.info("Stopping drift detection job...");
+        clearInterval(driftDetectionIntervalId);
       }
 
       // Close database and Redis connections
@@ -249,7 +331,7 @@ const startServer = async (): Promise<void> => {
       logger.info("Redis connection ready");
     } catch (error) {
       logger.error("Failed to connect to Redis", {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
       });
       // Continue anyway - workers will handle reconnection
     }
@@ -261,6 +343,9 @@ const startServer = async (): Promise<void> => {
   // Initialize action queue worker for async action processing
   await initializeActionQueueWorker();
 
+  // Initialize RAG background jobs for cleanup and drift detection
+  initializeRAGBackgroundJobs();
+
   const app = createApp();
 
   const server = app.listen(appConfig.port, () => {
@@ -271,13 +356,17 @@ const startServer = async (): Promise<void> => {
     });
   });
 
+  // Configure server timeouts for slowloris attack protection
+  server.keepAliveTimeout = SERVER_TIMEOUTS.KEEP_ALIVE_MS;
+  server.headersTimeout = SERVER_TIMEOUTS.HEADERS_MS;
+
   setupGracefulShutdown(server);
 };
 
 // Start the server
 startServer().catch((error) => {
   logger.error("Failed to start server", {
-    error: error instanceof Error ? error.message : "Unknown error",
+    error: getErrorMessage(error),
   });
   process.exit(1);
 });

@@ -19,13 +19,13 @@ jest.mock("openai", () => {
 });
 
 // Helper to set mock response
-function setMockOpenAIResponse(response: any) {
-  (mockCreate as any).mockResolvedValueOnce(response);
+function setMockOpenAIResponse(response: unknown): void {
+  (mockCreate as jest.Mock).mockResolvedValueOnce(response);
 }
 
 // Helper to set mock error
-function setMockOpenAIError(error: any) {
-  (mockCreate as any).mockRejectedValueOnce(error);
+function setMockOpenAIError(error: unknown): void {
+  (mockCreate as jest.Mock).mockRejectedValueOnce(error);
 }
 
 describe("OpenAIClient", () => {
@@ -80,27 +80,19 @@ describe("OpenAIClient", () => {
           {
             message: {
               content: JSON.stringify({
-                summary: "Missing AUTH_SECRET environment variable",
-                identifiedCause: "AUTH_SECRET not configured",
+                root_cause: "AUTH_SECRET not configured",
                 confidence: "high",
-                reasoning: "Error log indicates AUTH_SECRET is not defined",
-                recommendedActions: [
+                category: "config",
+                phase: "build",
+                annotations: [
                   {
-                    actionType: "add_environment_variable",
-                    description: "Add AUTH_SECRET to environment",
-                    priority: "immediate",
+                    evidence_id: "log#1",
+                    snippet: "AUTH_SECRET is not defined",
+                    explanation: "Missing environment variable causes config error",
                   },
                 ],
-                uncertainties: [],
-                evidenceUsed: [
-                  {
-                    type: "log",
-                    reference: "Log entry at 10:00:00",
-                    relevance: "Shows missing variable",
-                  },
-                ],
-                relatedIncidents: [],
-                nextSteps: ["Add environment variable and redeploy"],
+                next_steps: ["Add AUTH_SECRET to environment"],
+                secondary_findings: [],
               }),
             },
           },
@@ -113,7 +105,7 @@ describe("OpenAIClient", () => {
 
       expect(result).toBeDefined();
       expect(result.eventId).toBe("evt_test123");
-      expect(result.summary).toBe("Missing AUTH_SECRET environment variable");
+      expect(result.summary).toBe("AUTH_SECRET not configured");
       expect(result.identifiedCause).toBe("AUTH_SECRET not configured");
       expect(result.confidence).toBe("high");
       expect(result.llmModel).toBeDefined();
@@ -131,13 +123,13 @@ describe("OpenAIClient", () => {
           {
             message: {
               content: JSON.stringify({
-                summary: "Test summary",
+                root_cause: "Test summary",
                 confidence: "medium",
-                recommendedActions: [],
-                uncertainties: [],
-                evidenceUsed: [],
-                relatedIncidents: [],
-                nextSteps: [],
+                category: "test",
+                phase: "test",
+                annotations: [],
+                next_steps: [],
+                secondary_findings: [],
               }),
             },
           },
@@ -190,19 +182,13 @@ describe("OpenAIClient", () => {
           {
             message: {
               content: JSON.stringify({
-                summary: "Database issue",
+                root_cause: "Database issue",
                 confidence: "high",
-                recommendedActions: [
-                  {
-                    actionType: "manual_investigation",
-                    description: "Drop the database and recreate it",
-                    priority: "immediate",
-                  },
-                ],
-                uncertainties: [],
-                evidenceUsed: [],
-                relatedIncidents: [],
-                nextSteps: [],
+                category: "runtime",
+                phase: "runtime",
+                annotations: [],
+                next_steps: ["Drop the database and recreate it"],
+                secondary_findings: [],
               }),
             },
           },
@@ -231,20 +217,13 @@ describe("OpenAIClient", () => {
           {
             message: {
               content: JSON.stringify({
-                summary: "Test summary",
+                root_cause: "Test summary",
                 confidence: "high",
-                reasoning: "Based on commit xyz9999 which introduced the bug",
-                recommendedActions: [],
-                uncertainties: [],
-                evidenceUsed: [
-                  {
-                    type: "commit",
-                    reference: "Commit xyz9999",
-                    relevance: "Introduced the issue",
-                  },
-                ],
-                relatedIncidents: [],
-                nextSteps: [],
+                category: "test",
+                phase: "test",
+                annotations: [],
+                next_steps: [],
+                secondary_findings: [],
               }),
             },
           },
@@ -255,18 +234,171 @@ describe("OpenAIClient", () => {
 
       const result = await client.analyzeIncident(mockEvent, mockEvidence);
 
-      // Analysis should complete despite validation warning about non-existent commit
+      // Analysis should complete even with minimal evidence references
       expect(result).toBeDefined();
       expect(result.summary).toBe("Test summary");
+    });
+
+    it("should replace generic causes and filter actions without evidence", async () => {
+      const failureLog = [
+        "## Failed Tests",
+        "[test#1] should initialize database pool",
+        "  File: services/api/src/__tests__/db.test.ts",
+        "TEST_ERROR_BEGIN",
+        "Database pool not initialized",
+        "TEST_ERROR_END",
+        "",
+        "[test#2] should warm cache",
+        "  File: services/api/src/__tests__/cache.test.ts",
+        "TEST_ERROR_BEGIN",
+        "Cache not primed",
+        "TEST_ERROR_END",
+      ].join("\n");
+
+      const evidenceWithFailures: Evidence = {
+        ...mockEvidence,
+        logs: [
+          {
+            level: "ERROR",
+            message: failureLog,
+            timestamp: "2025-12-17T10:00:00Z",
+            source: "ci",
+          },
+        ],
+      };
+
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                root_cause: "Test execution failed due to assertion errors in multiple test cases",
+                confidence: "medium",
+                category: "test",
+                phase: "test",
+                annotations: [],
+                next_steps: ["Review the implementation of registerRepoSelectHandler"],
+                secondary_findings: [],
+              }),
+            },
+          },
+        ],
+      };
+
+      setMockOpenAIResponse(mockResponse);
+
+      const result = await client.analyzeIncident(mockEvent, evidenceWithFailures);
+
+      expect(result.identifiedCause).toContain("Database pool not initialized");
+      expect(result.confidence).toBe("low");
+      expect(
+        result.recommendedActions?.some((action) =>
+          action.description.includes("registerRepoSelectHandler")
+        )
+      ).toBe(false);
+      expect(result.recommendedActions?.[0]?.description).toContain(
+        "Database pool not initialized"
+      );
+      expect(result.uncertainties ?? []).toEqual(
+        expect.arrayContaining([expect.stringContaining("test#2")])
+      );
+    });
+
+    it("should build cause from workflow logs with evidence id", async () => {
+      const workflowLog = [
+        "## Workflow Logs",
+        "[wflog#1] build-and-test",
+        "Step: install dependencies",
+        "Error: missing environment variable",
+      ].join("\n");
+
+      const evidenceWithWorkflow: Evidence = {
+        ...mockEvidence,
+        logs: [
+          {
+            level: "ERROR",
+            message: workflowLog,
+            timestamp: "2025-12-17T10:00:00Z",
+            source: "ci",
+          },
+        ],
+      };
+
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                root_cause: "CI build failed",
+                confidence: "medium",
+                category: "compile",
+                phase: "build",
+                annotations: [],
+                next_steps: [],
+                secondary_findings: [],
+              }),
+            },
+          },
+        ],
+      };
+
+      setMockOpenAIResponse(mockResponse);
+
+      const result = await client.analyzeIncident(mockEvent, evidenceWithWorkflow);
+
+      expect(result.identifiedCause).toContain("Workflow log shows");
+      expect(result.identifiedCause).toContain("wflog#1");
+    });
+
+    it("should flag infra signals and update category and phase", async () => {
+      const infraLog = ["No space left on device"].join("\n");
+
+      const evidenceWithInfra: Evidence = {
+        ...mockEvidence,
+        logs: [
+          {
+            level: "ERROR",
+            message: infraLog,
+            timestamp: "2025-12-17T10:00:00Z",
+            source: "ci",
+          },
+        ],
+      };
+
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                root_cause: "CI build failed",
+                confidence: "medium",
+                category: "test",
+                phase: "test",
+                annotations: [],
+                next_steps: [],
+                secondary_findings: [],
+              }),
+            },
+          },
+        ],
+      };
+
+      setMockOpenAIResponse(mockResponse);
+
+      const result = await client.analyzeIncident(mockEvent, evidenceWithInfra);
+
+      expect(result.identifiedCause).toContain("Infrastructure issue detected");
+      expect(result.category).toBe("infra");
+      expect(result.phase).toBe("build");
     });
 
     it("should truncate evidence when exceeding token budget", async () => {
       // Create evidence with lots of logs
       const largeEvidence: Evidence = {
         ...mockEvidence,
-        logs: Array.from({ length: 100 }, (_, i) => ({
+        logs: Array.from({ length: 100 }, (_unusedElement, logIndex) => ({
           level: "ERROR",
-          message: `Error message ${i}`.repeat(100),
+          message: `Error message ${logIndex}`.repeat(100),
           timestamp: "2025-12-17T10:00:00Z",
           source: "api",
         })),
@@ -277,13 +409,13 @@ describe("OpenAIClient", () => {
           {
             message: {
               content: JSON.stringify({
-                summary: "Test summary",
+                root_cause: "Test summary",
                 confidence: "medium",
-                recommendedActions: [],
-                uncertainties: [],
-                evidenceUsed: [],
-                relatedIncidents: [],
-                nextSteps: [],
+                category: "test",
+                phase: "test",
+                annotations: [],
+                next_steps: [],
+                secondary_findings: [],
               }),
             },
           },
@@ -304,13 +436,13 @@ describe("OpenAIClient", () => {
           {
             message: {
               content: JSON.stringify({
-                summary: "Test summary",
+                root_cause: "Test summary",
                 confidence: "medium",
-                recommendedActions: [],
-                uncertainties: [],
-                evidenceUsed: [],
-                relatedIncidents: [],
-                nextSteps: [],
+                category: "test",
+                phase: "test",
+                annotations: [],
+                next_steps: [],
+                secondary_findings: [],
               }),
             },
           },

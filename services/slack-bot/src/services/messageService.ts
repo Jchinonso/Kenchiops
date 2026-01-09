@@ -12,6 +12,7 @@ import {
   findByGitHubInstallation,
   findChannelForRepository,
 } from "@kenchi/shared";
+import { trackCIFailureThread } from "./resolutionService.js";
 import type {
   SlackMessageRequest,
   SlackMessagePostResponse,
@@ -247,6 +248,7 @@ export const postConsolidatedMessage = async (
     failureCount: failure_count,
     channel: channel ?? "(repository-based)",
     blockCount: payload.blocks.length,
+    blocksPreview: JSON.stringify(payload.blocks).slice(0, 3000),
   });
 
   // Cleanup old message store entries periodically
@@ -296,6 +298,15 @@ export const postConsolidatedMessage = async (
         channelId,
         timestamp: result.ts,
         postedAt: new Date(),
+      });
+
+      // Track thread for resolution detection
+      trackCIFailureThread({
+        channelId,
+        threadTs: result.ts,
+        repository,
+        commitSha: commit_sha,
+        checkNames: payload.metadata.checkNames,
       });
     }
 

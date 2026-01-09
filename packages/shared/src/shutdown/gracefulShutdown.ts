@@ -9,6 +9,7 @@
 
 import type { Server } from "http";
 import { createLogger } from "../core/logger.js";
+import { getErrorMessage } from "../core/errors.js";
 import { closeDatabase } from "../database/client.js";
 import { closeRedis } from "../queue/redisClient.js";
 
@@ -90,7 +91,7 @@ const executeCleanupHandlers = async (): Promise<void> => {
         await cleanupHandler();
       } catch (error) {
         logger.error("Cleanup handler failed", {
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: getErrorMessage(error),
         });
       }
     })
@@ -110,9 +111,9 @@ const closeInfrastructure = async (config: GracefulShutdownConfig): Promise<void
 
   if (config.closeDatabase !== false) {
     closePromises.push(
-      closeDatabase().catch((error) => {
+      closeDatabase().catch((error: unknown) => {
         logger.error("Failed to close database", {
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: getErrorMessage(error),
         });
       })
     );
@@ -120,9 +121,9 @@ const closeInfrastructure = async (config: GracefulShutdownConfig): Promise<void
 
   if (config.closeRedis !== false) {
     closePromises.push(
-      closeRedis().catch((error) => {
+      closeRedis().catch((error: unknown) => {
         logger.error("Failed to close Redis", {
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: getErrorMessage(error),
         });
       })
     );
@@ -196,7 +197,7 @@ const createShutdownHandler =
       process.exit(0);
     } catch (error) {
       logger.error("Error during graceful shutdown", {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: getErrorMessage(error),
         serviceName: config.serviceName,
       });
       clearTimeout(forceExitTimeout);

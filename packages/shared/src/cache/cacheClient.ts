@@ -9,7 +9,7 @@
 
 import { getRedisClient } from "../queue/redisClient.js";
 import { createLogger, withTimeout, getErrorMessage } from "../core/index.js";
-import { CACHE_TTL_SECONDS, REDIS_TIMEOUTS } from "../constants/index.js";
+import { CACHE_TTL_SECONDS, REDIS_TIMEOUTS, TIME_CONSTANTS } from "../constants/index.js";
 
 const logger = createLogger("cache");
 
@@ -50,7 +50,10 @@ export interface CacheStats {
   readonly hitRate: number;
 }
 
-// Re-export for backward compatibility
+/**
+ * Cache TTL constants re-exported for backward compatibility.
+ * @deprecated Import directly from `@kenchi/shared` constants instead.
+ */
 export const CACHE_TTL = CACHE_TTL_SECONDS;
 
 // ==================== Statistics Tracking ====================
@@ -87,7 +90,9 @@ const serialize = <T>(data: T, ttlSeconds: number): string => {
   const entry: CacheEntry<T> = {
     data,
     cachedAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + ttlSeconds * 1000).toISOString(),
+    expiresAt: new Date(
+      now.getTime() + ttlSeconds * TIME_CONSTANTS.MILLISECONDS_PER_SECOND
+    ).toISOString(),
   };
   return JSON.stringify(entry);
 };
@@ -289,9 +294,9 @@ export const cacheGetOrSet = async <T>(
   // Fetch fresh data
   const data = await fetcher();
 
-  // Cache the result (fire and forget)
-  cacheSet(key, data, options).catch(() => {
-    // Ignore cache set errors
+  // Cache the result (fire and forget with logged errors)
+  cacheSet(key, data, options).catch((error) => {
+    logger.debug("Cache set failed in getOrSet", { key, error: getErrorMessage(error) });
   });
 
   return data;
@@ -337,113 +342,5 @@ export const cacheGetMany = async <T>(keys: readonly string[]): Promise<Map<stri
       error: getErrorMessage(error),
     });
     return new Map();
-  }
-};
-
-// ==================== Hash Operations (for structured data) ====================
-
-/**
- * Set a hash field
- */
-export const cacheHashSet = async (
-  key: string,
-  field: string,
-  value: unknown,
-  ttlSeconds?: number
-): Promise<boolean> => {
-  try {
-    const client = getRedisClient();
-
-    if (client.status !== "ready") {
-      return false;
-    }
-
-    await withTimeout(
-      client.hset(key, field, JSON.stringify(value)),
-      REDIS_TIMEOUTS.CACHE_OPERATION_MS
-    );
-
-    if (ttlSeconds) {
-      await withTimeout(client.expire(key, ttlSeconds), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
-    }
-
-    return true;
-  } catch (error) {
-    logger.warn("Cache hash set failed", {
-      key,
-      field,
-      error: getErrorMessage(error),
-    });
-    return false;
-  }
-};
-
-/**
- * Get a hash field
- */
-export const cacheHashGet = async <T>(key: string, field: string): Promise<T | null> => {
-  try {
-    const client = getRedisClient();
-
-    if (client.status !== "ready") {
-      return null;
-    }
-
-    const raw = await withTimeout(client.hget(key, field), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
-
-    if (!raw) {
-      return null;
-    }
-
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Get all hash fields
- */
-export const cacheHashGetAll = async <T>(key: string): Promise<Record<string, T>> => {
-  try {
-    const client = getRedisClient();
-
-    if (client.status !== "ready") {
-      return {};
-    }
-
-    const raw = await withTimeout(client.hgetall(key), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
-
-    const result: Record<string, T> = {};
-
-    Object.entries(raw).forEach(([field, value]) => {
-      try {
-        result[field] = JSON.parse(value) as T;
-      } catch {
-        // Skip invalid entries
-      }
-    });
-
-    return result;
-  } catch {
-    return {};
-  }
-};
-
-/**
- * Delete a hash field
- */
-export const cacheHashDelete = async (key: string, field: string): Promise<boolean> => {
-  try {
-    const client = getRedisClient();
-
-    if (client.status !== "ready") {
-      return false;
-    }
-
-    const deleted = await withTimeout(client.hdel(key, field), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
-    return deleted > 0;
-  } catch {
-    return false;
   }
 };

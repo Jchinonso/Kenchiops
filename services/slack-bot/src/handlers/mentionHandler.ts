@@ -1,12 +1,20 @@
 /**
  * Handler for Slack app mentions.
- * Processes @kenchi mentions and returns AI analysis.
+ * Processes @kenchi mentions and returns AI analysis or Q&A responses.
  */
 
 import type { AppMentionEvent, SayFn, SayArguments } from "@slack/bolt";
-import { createLogger, TIME_CONSTANTS } from "@kenchi/shared";
+import {
+  createLogger,
+  TIME_CONSTANTS,
+  getErrorMessage,
+  UI_EMOJI,
+  isDocIngestionRequest,
+} from "@kenchi/shared";
 import { formatAnalysisMessage, formatErrorMessage } from "../formatters.js";
+import { formatQAResponse, formatQAErrorMessage } from "../formatters/qaFormatter.js";
 import { createEventFromMention, performAnalysis } from "../services/analysisService.js";
+import { shouldTriggerQA, performQASearch, generateQueryId } from "../services/qaService.js";
 import type { SlackBlock } from "../types/slackTypes.js";
 
 // Type for Slack blocks compatible with Bolt
@@ -30,7 +38,7 @@ const createFeedbackButtons = (eventId: string): SlackBlock[] => [
         type: "button",
         text: {
           type: "plain_text",
-          text: "👍 Helpful",
+          text: `${UI_EMOJI.thumbsUp} Helpful`,
           emoji: true,
         },
         style: "primary",
@@ -41,7 +49,7 @@ const createFeedbackButtons = (eventId: string): SlackBlock[] => [
         type: "button",
         text: {
           type: "plain_text",
-          text: "👎 Not helpful",
+          text: `${UI_EMOJI.thumbsDown} Not helpful`,
           emoji: true,
         },
         value: eventId,
@@ -52,7 +60,118 @@ const createFeedbackButtons = (eventId: string): SlackBlock[] => [
 ];
 
 /**
+ * Handles Q&A requests by searching the knowledge base.
+ */
+const handleQARequest = async (
+  query: string,
+  userId: string,
+  threadTs: string,
+  say: SayFn
+): Promise<void> => {
+  logger.info("Processing Q&A request", {
+    queryLength: query.length,
+    userId,
+  });
+
+  try {
+    const queryId = generateQueryId(query, userId);
+    const response = await performQASearch(query);
+
+    logger.info("Q&A search completed", {
+      queryId,
+      resultCount: response.results.length,
+      totalFound: response.totalFound,
+      cacheHit: response.cacheHit,
+    });
+
+    const blocks = formatQAResponse(response, queryId);
+
+    await say({
+      blocks: blocks as SlackBlocks,
+      thread_ts: threadTs,
+    });
+  } catch (error) {
+    logger.error("Q&A request failed", {
+      error: getErrorMessage(error),
+    });
+
+    const errorBlocks = formatQAErrorMessage(getErrorMessage(error));
+    await say({
+      blocks: errorBlocks as SlackBlocks,
+      thread_ts: threadTs,
+    });
+  }
+};
+
+/**
+ * Handles analysis requests using AI analysis.
+ */
+const handleAnalysisRequest = async (
+  query: string,
+  userId: string,
+  channel: string,
+  threadTs: string,
+  eventTs: string,
+  say: SayFn
+): Promise<void> => {
+  const timestamp = new Date(
+    parseFloat(eventTs) * TIME_CONSTANTS.MILLISECONDS_PER_SECOND
+  ).toISOString();
+
+  const analysisEvent = createEventFromMention(userId, channel, query, threadTs);
+
+  // Override timestamp with actual event timestamp
+  const eventWithCorrectTime = {
+    ...analysisEvent,
+    timestamp,
+  };
+
+  const { analysis, confidence } = await performAnalysis(eventWithCorrectTime);
+
+  logger.info("Mention analysis completed", {
+    eventId: analysisEvent.id,
+    confidence: confidence.finalScore,
+  });
+
+  const blocks = formatAnalysisMessage(analysis, confidence);
+
+  await say({
+    blocks: blocks as SlackBlocks,
+    thread_ts: eventTs,
+  });
+
+  const feedbackBlocks = createFeedbackButtons(analysisEvent.id);
+  await say({
+    blocks: feedbackBlocks as SlackBlocks,
+    thread_ts: eventTs,
+  });
+};
+
+/**
+ * Handles document ingestion requests.
+ * Guides user to use the slash command or file upload.
+ */
+const handleDocIngestionRequest = async (
+  query: string,
+  threadTs: string,
+  say: SayFn
+): Promise<void> => {
+  logger.info("Document ingestion request detected", { query: query.slice(0, 50) });
+
+  // Guide user to proper methods for adding documents
+  await say({
+    text:
+      `${UI_EMOJI.info} To add a document to the knowledge base:\n\n` +
+      `1. *Slash command:* Use \`/kenchi add-doc\` to open a form and paste content directly\n` +
+      `2. *File upload:* Upload a \`.md\` or \`.txt\` file to this channel and mention me with "ingest this"\n\n` +
+      `_Example: Upload a file, then type "@Kenchi ingest this"_`,
+    thread_ts: threadTs,
+  });
+};
+
+/**
  * Handles app mention events.
+ * Routes to Q&A for questions, document ingestion, or analysis for other requests.
  *
  * @param event - Slack app mention event
  * @param say - Function to send messages
@@ -66,48 +185,28 @@ export const handleAppMention = async (event: AppMentionEvent, say: SayFn): Prom
 
   try {
     const query = extractQueryFromMention(event.text);
-    const timestamp = new Date(
-      parseFloat(event.ts) * TIME_CONSTANTS.MILLISECONDS_PER_SECOND
-    ).toISOString();
-
-    // Ensure user is defined (required for analysis)
     const userId = event.user ?? "unknown";
+    const threadTs = event.thread_ts ?? event.ts;
 
-    const analysisEvent = createEventFromMention(
-      userId,
-      event.channel,
-      query,
-      event.thread_ts ?? event.ts
-    );
+    // Route to document ingestion guidance if requested
+    if (isDocIngestionRequest(query)) {
+      await handleDocIngestionRequest(query, threadTs, say);
+      return;
+    }
 
-    // Override timestamp with actual event timestamp
-    const eventWithCorrectTime = {
-      ...analysisEvent,
-      timestamp,
-    };
+    // Route to Q&A if the query looks like a question
+    if (shouldTriggerQA(query)) {
+      logger.info("Routing to Q&A handler", { query: query.slice(0, 50) });
+      await handleQARequest(query, userId, threadTs, say);
+      return;
+    }
 
-    const { analysis, confidence } = await performAnalysis(eventWithCorrectTime);
-
-    logger.info("Mention analysis completed", {
-      eventId: analysisEvent.id,
-      confidence: confidence.finalScore,
-    });
-
-    const blocks = formatAnalysisMessage(analysis, confidence);
-
-    await say({
-      blocks: blocks as SlackBlocks,
-      thread_ts: event.ts,
-    });
-
-    const feedbackBlocks = createFeedbackButtons(analysisEvent.id);
-    await say({
-      blocks: feedbackBlocks as SlackBlocks,
-      thread_ts: event.ts,
-    });
+    // Otherwise, perform AI analysis
+    logger.info("Routing to analysis handler", { query: query.slice(0, 50) });
+    await handleAnalysisRequest(query, userId, event.channel, threadTs, event.ts, say);
   } catch (error) {
     logger.error("Error processing app mention", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
 

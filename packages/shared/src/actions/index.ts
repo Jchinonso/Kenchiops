@@ -21,3 +21,15 @@ export {
   type ActionJobPayload,
   type ActionResultEvent,
 } from "./actionQueueProcessor.js";
+
+export {
+  storeActionPayload,
+  retrieveActionPayload,
+  deleteActionPayload,
+  parseOpaqueActionValue,
+  getActionStoreStats,
+  clearActionStore,
+  type StoredActionPayload,
+  type OpaqueActionValue,
+  type ActionVerificationContext,
+} from "./actionPayloadStore.js";

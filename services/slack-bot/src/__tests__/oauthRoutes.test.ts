@@ -33,6 +33,9 @@ jest.mock("@kenchi/shared", () => ({
   findByGitHubOrg: jest.fn(),
   linkSlackWorkspace: jest.fn(),
   createFromSlackInstall: jest.fn(),
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 // Mock crypto module - keep actual crypto for createHash (used by express/etag)

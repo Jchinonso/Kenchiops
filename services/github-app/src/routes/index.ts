@@ -9,6 +9,7 @@ import { healthRoutes } from "./healthRoutes.js";
 import { webhookRoutes } from "./webhookRoutes.js";
 import { apiRoutes } from "./apiRoutes.js";
 import { setupRoutes } from "./setupRoutes.js";
+import { feedbackRoutes } from "./feedbackRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -25,4 +26,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Setup routes (GitHub App post-installation redirect)
   app.use(setupRoutes);
+
+  // Feedback routes (signed URL feedback from PR comments)
+  app.use(feedbackRoutes);
 };

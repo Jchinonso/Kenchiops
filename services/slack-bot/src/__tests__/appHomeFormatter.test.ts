@@ -258,9 +258,9 @@ describe("App Home Formatter", () => {
       const view = buildAppHomeView(context);
 
       // Should not have connect button
-      const actionBlocks = view.blocks.filter((b) => b.type === "actions");
-      const hasConnectButton = actionBlocks.some((b) =>
-        JSON.stringify(b).includes("Connect GitHub")
+      const actionBlocks = view.blocks.filter((block) => block.type === "actions");
+      const hasConnectButton = actionBlocks.some((block) =>
+        JSON.stringify(block).includes("Connect GitHub")
       );
       expect(hasConnectButton).toBe(false);
     });
@@ -311,7 +311,7 @@ describe("App Home Formatter", () => {
       const context = createMockContext();
       const view = buildAppHomeView(context);
 
-      const dividers = view.blocks.filter((b) => b.type === "divider");
+      const dividers = view.blocks.filter((block) => block.type === "divider");
       expect(dividers.length).toBeGreaterThan(3);
     });
 
@@ -449,7 +449,7 @@ describe("App Home Formatter", () => {
     it("should have divider between header and content", () => {
       const view = buildErrorView("Error message");
 
-      const dividers = view.blocks.filter((b) => b.type === "divider");
+      const dividers = view.blocks.filter((block) => block.type === "divider");
       expect(dividers.length).toBeGreaterThan(0);
     });
   });

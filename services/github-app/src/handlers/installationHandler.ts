@@ -12,6 +12,7 @@ import {
   findByGitHubInstallation,
   suspend,
   activate,
+  getErrorMessage,
   type Tenant,
 } from "@kenchi/shared";
 import { GITHUB_INSTALLATION_ACTIONS, type InstallationWebhook } from "../types/githubTypes.js";
@@ -26,12 +27,6 @@ export interface InstallationHandlerResult {
   readonly message: string;
   readonly tenantId?: string;
 }
-
-/**
- * Extract error message from unknown error
- */
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Unknown error";
 
 /**
  * Build success result

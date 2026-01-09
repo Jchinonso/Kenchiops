@@ -17,13 +17,7 @@
 import { getRedisClient } from "../queue/redisClient.js";
 import { ciAnalysisQueue } from "../queue/messageQueue.js";
 import { createLogger, withTimeout, getErrorMessage } from "../core/index.js";
-import {
-  REDIS_TIMEOUTS,
-  REDIS_KEY_PREFIXES,
-  AGGREGATION_DEFAULTS,
-  DISPLAY_DEFAULTS,
-  REDIS_SCAN,
-} from "../constants/index.js";
+import { REDIS_TIMEOUTS, AGGREGATION_DEFAULTS, REDIS_SCAN } from "../constants/index.js";
 import {
   AGGREGATION_KEYS,
   DEFAULT_AGGREGATION_CONFIG,
@@ -31,133 +25,26 @@ import {
   type AggregationKey,
   type AggregationConfig,
   type AnalyzedFailure,
-  type SerializedFailure,
-  type RepositoryInfo,
-  type PRContext,
-  type WorkflowContext,
 } from "./types.js";
 
+// Import from helpers module
+import {
+  formatShaForDisplay,
+  calculateAggregationTTL,
+  calculateDebounceTTL,
+  serializeFailure,
+  deserializeFailure,
+  buildMetadata,
+  reconstructAggregation,
+  parseAggregationKey,
+  type FailureContext,
+  type AggregationMetadata,
+} from "./aggregatorHelpers.js";
+
+// Re-export types for backwards compatibility
+export type { FailureContext, AggregationMetadata } from "./aggregatorHelpers.js";
+
 const logger = createLogger("redis-aggregator");
-
-/** Regex pattern for parsing aggregation metadata keys */
-const AGGREGATION_KEY_PATTERN = new RegExp(
-  `^${REDIS_KEY_PREFIXES.AGGREGATION.replace(":", "\\:")}:(.+):([a-f0-9]+):meta$`
-);
-
-// ==================== Types ====================
-
-/**
- * Context for failure aggregation operations
- */
-export interface FailureContext {
-  readonly repositoryInfo: RepositoryInfo;
-  readonly installationId: number;
-  readonly pullRequestNumbers: readonly number[];
-  readonly prContext: PRContext | null;
-  readonly workflowContext: WorkflowContext | null;
-}
-
-/**
- * Metadata stored in Redis for an aggregation
- */
-interface AggregationMetadata {
-  readonly repositoryFullName: string;
-  readonly repositoryOwner: string;
-  readonly repositoryName: string;
-  readonly commitSha: string;
-  readonly installationId: number;
-  readonly pullRequestNumbers: string; // JSON array
-  readonly prContext: string | null; // JSON or null
-  readonly workflowContext: string | null; // JSON or null
-  readonly firstFailureAt: string; // ISO timestamp
-  readonly lastFailureAt: string; // ISO timestamp
-}
-
-// ==================== Helpers ====================
-
-/**
- * Format SHA for display logging
- */
-const formatShaForDisplay = (sha: string): string =>
-  sha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH);
-
-/**
- * Calculate TTL for aggregation keys (max wait + buffer)
- */
-const calculateAggregationTTL = (maxWaitMs: number): number =>
-  Math.ceil(maxWaitMs / 1000) + AGGREGATION_DEFAULTS.TTL_BUFFER_SECONDS;
-
-/**
- * Calculate debounce TTL in seconds
- */
-const calculateDebounceTTL = (debounceMs: number): number => Math.ceil(debounceMs / 1000);
-
-// ==================== Serialization ====================
-
-/**
- * Serialize a failure for Redis storage
- */
-const serializeFailure = (failure: AnalyzedFailure): string =>
-  JSON.stringify({
-    ...failure,
-    timestamp: failure.timestamp.toISOString(),
-  });
-
-/**
- * Deserialize a failure from Redis storage
- */
-const deserializeFailure = (data: string): AnalyzedFailure => {
-  const parsed = JSON.parse(data) as SerializedFailure;
-  return {
-    ...parsed,
-    timestamp: new Date(parsed.timestamp),
-  };
-};
-
-/**
- * Build metadata object for Redis storage
- */
-const buildMetadata = (
-  key: AggregationKey,
-  context: FailureContext,
-  firstFailureAt: Date,
-  lastFailureAt: Date
-): AggregationMetadata => ({
-  repositoryFullName: context.repositoryInfo.fullName,
-  repositoryOwner: context.repositoryInfo.owner,
-  repositoryName: context.repositoryInfo.name,
-  commitSha: key.commitSha,
-  installationId: context.installationId,
-  pullRequestNumbers: JSON.stringify(context.pullRequestNumbers),
-  prContext: context.prContext ? JSON.stringify(context.prContext) : null,
-  workflowContext: context.workflowContext ? JSON.stringify(context.workflowContext) : null,
-  firstFailureAt: firstFailureAt.toISOString(),
-  lastFailureAt: lastFailureAt.toISOString(),
-});
-
-/**
- * Reconstruct AggregatedFailures from Redis data
- */
-const reconstructAggregation = (
-  metadata: AggregationMetadata,
-  failures: AnalyzedFailure[]
-): AggregatedFailures => ({
-  commitSha: metadata.commitSha,
-  repository: {
-    fullName: metadata.repositoryFullName,
-    owner: metadata.repositoryOwner,
-    name: metadata.repositoryName,
-  },
-  installationId: metadata.installationId,
-  pullRequestNumbers: JSON.parse(metadata.pullRequestNumbers) as number[],
-  failures,
-  prContext: metadata.prContext ? (JSON.parse(metadata.prContext) as PRContext) : null,
-  workflowContext: metadata.workflowContext
-    ? (JSON.parse(metadata.workflowContext) as WorkflowContext)
-    : null,
-  firstFailureAt: new Date(metadata.firstFailureAt),
-  lastFailureAt: new Date(metadata.lastFailureAt),
-});
 
 // ==================== Redis Operations ====================
 
@@ -380,6 +267,69 @@ export const isMaxWaitExceeded = async (
 };
 
 /**
+ * Check if an aggregation key is ready to flush.
+ */
+const isKeyReadyToFlush = async (key: AggregationKey, maxWaitMs: number): Promise<boolean> => {
+  const [debounceExpired, maxWaitExceeded] = await Promise.all([
+    isDebounceExpired(key),
+    isMaxWaitExceeded(key, maxWaitMs),
+  ]);
+  return debounceExpired || maxWaitExceeded;
+};
+
+/**
+ * Filter keys to find those ready for processing.
+ * Uses flatMap to combine parse and filter in single pass.
+ */
+const filterReadyKeys = async (
+  metaKeys: readonly string[],
+  maxWaitMs: number
+): Promise<AggregationKey[]> => {
+  // Parse keys in single pass using flatMap (returns empty array for invalid keys)
+  const parsedKeys = metaKeys.flatMap((metaKey) => {
+    const parsed = parseAggregationKey(metaKey);
+    return parsed ? [parsed] : [];
+  });
+
+  // Check readiness in parallel
+  const readinessResults = await Promise.all(
+    parsedKeys.map(async (key) => ({
+      key,
+      isReady: await isKeyReadyToFlush(key, maxWaitMs),
+    }))
+  );
+
+  // Return only ready keys
+  return readinessResults.filter((result) => result.isReady).map((result) => result.key);
+};
+
+/**
+ * Recursive Redis SCAN for aggregation keys.
+ */
+const scanForAggregationKeys = async (
+  redis: ReturnType<typeof getRedisClient>,
+  cursor: string,
+  maxWaitMs: number,
+  accumulated: readonly AggregationKey[]
+): Promise<readonly AggregationKey[]> => {
+  const [nextCursor, keys] = await withTimeout(
+    redis.scan(cursor, "MATCH", AGGREGATION_KEYS.pattern, "COUNT", REDIS_SCAN.BATCH_SIZE),
+    REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+  );
+
+  const readyKeys = await filterReadyKeys(keys, maxWaitMs);
+  const allKeys = [...accumulated, ...readyKeys];
+
+  // Base case: cursor returned to initial position
+  if (nextCursor === REDIS_SCAN.INITIAL_CURSOR) {
+    return allKeys;
+  }
+
+  // Recursive case: continue scanning
+  return scanForAggregationKeys(redis, nextCursor, maxWaitMs, allKeys);
+};
+
+/**
  * Find all pending aggregations that are ready to flush
  */
 export const findReadyAggregations = async (
@@ -392,44 +342,20 @@ export const findReadyAggregations = async (
     return [];
   }
 
-  const readyKeys: AggregationKey[] = [];
-
   try {
-    // Scan for all metadata keys
-    let cursor: string = REDIS_SCAN.INITIAL_CURSOR;
-    do {
-      const [nextCursor, keys] = await withTimeout(
-        redis.scan(cursor, "MATCH", AGGREGATION_KEYS.pattern, "COUNT", REDIS_SCAN.BATCH_SIZE),
-        REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
-      );
-      cursor = nextCursor;
-
-      for (const metaKey of keys) {
-        // Extract repo:sha from key pattern
-        const match = metaKey.match(AGGREGATION_KEY_PATTERN);
-        if (!match) {
-          continue;
-        }
-
-        const [, repoFullName, commitSha] = match;
-        const key: AggregationKey = { repositoryFullName: repoFullName, commitSha };
-
-        // Check if ready to flush
-        const debounceExpired = await isDebounceExpired(key);
-        const maxWaitExceeded = await isMaxWaitExceeded(key, config.maxWaitMs);
-
-        if (debounceExpired || maxWaitExceeded) {
-          readyKeys.push(key);
-        }
-      }
-    } while (cursor !== REDIS_SCAN.INITIAL_CURSOR);
+    const readyKeys = await scanForAggregationKeys(
+      redis,
+      REDIS_SCAN.INITIAL_CURSOR,
+      config.maxWaitMs,
+      []
+    );
+    return [...readyKeys];
   } catch (error) {
     logger.error("Failed to find ready aggregations", {
       error: getErrorMessage(error),
     });
+    return [];
   }
-
-  return readyKeys;
 };
 
 /**
