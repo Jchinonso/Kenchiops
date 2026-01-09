@@ -1,5 +1,11 @@
 /**
  * UI, display, and formatting constants for Slack and GitHub.
+ *
+ * Design Principles:
+ * - Visual hierarchy through consistent spacing and typography
+ * - Clear status indication with semantic colors and icons
+ * - Scannable content with progressive disclosure
+ * - Cross-platform consistency (Slack Block Kit + GitHub Markdown)
  */
 
 /**
@@ -20,6 +26,8 @@ export const UI_CONSTANTS = {
   PERCENTAGE_MULTIPLIER: 100,
   MAX_ACTIONS_TO_DISPLAY: 3,
   ACTION_TIMEOUT_MS: 2000,
+  /** Number of segments in visual progress/confidence bars */
+  PROGRESS_BAR_SEGMENTS: 5,
 } as const;
 
 /**
@@ -68,6 +76,32 @@ export const UI_EMOJI = {
   target: "🎯",
   link: "🔗",
   branch: "🔀",
+  user: "👤",
+
+  // Knowledge/documentation icons
+  book: "📚",
+  history: "📜",
+  runbook: "📘",
+  postmortem: "📋",
+  troubleshooting: "🔧",
+  sop: "📝",
+  external: "🌐",
+  lesson: "🎓",
+  chat: "💬",
+  document: "📄",
+  mag: "🔎",
+  hourglass: "⏳",
+
+  // Number indicators for lists
+  num1: "1️⃣",
+  num2: "2️⃣",
+  num3: "3️⃣",
+  num4: "4️⃣",
+  num5: "5️⃣",
+
+  // Feedback icons
+  thumbsUp: "👍",
+  thumbsDown: "👎",
 } as const;
 
 /**
@@ -80,6 +114,32 @@ export const PRIORITY_EMOJI_MAP: Readonly<Record<string, string>> = {
   medium: UI_EMOJI.priorityMedium,
   low: UI_EMOJI.priorityLow,
 } as const;
+
+/**
+ * Document type emoji lookup table for Q&A results.
+ */
+export const DOC_TYPE_EMOJI_MAP: Readonly<Record<string, string>> = {
+  runbook: UI_EMOJI.runbook,
+  postmortem: UI_EMOJI.postmortem,
+  troubleshooting: UI_EMOJI.troubleshooting,
+  sop: UI_EMOJI.sop,
+  pr_fix: UI_EMOJI.branch,
+  slack_resolution: UI_EMOJI.chat,
+  analysis_lesson: UI_EMOJI.lesson,
+  pr_diff: UI_EMOJI.document,
+  external: UI_EMOJI.external,
+} as const;
+
+/**
+ * Number emoji lookup for result lists.
+ */
+export const NUMBER_EMOJI_LIST: readonly string[] = [
+  UI_EMOJI.num1,
+  UI_EMOJI.num2,
+  UI_EMOJI.num3,
+  UI_EMOJI.num4,
+  UI_EMOJI.num5,
+] as const;
 
 /**
  * Priority order lookup for sorting actions (lower = higher priority).

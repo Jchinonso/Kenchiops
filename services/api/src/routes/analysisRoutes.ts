@@ -56,6 +56,7 @@ router.post(
       failure_log: req.body.failure_log,
       repository: req.body.repository,
       commit: req.body.commit,
+      tenant_id: req.body.tenant_id,
     };
 
     const response = await performAnalysis(request);

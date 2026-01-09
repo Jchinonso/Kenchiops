@@ -23,6 +23,9 @@ jest.mock("@kenchi/shared", () => ({
   CONTEXT_FETCH_CONFIG: {
     CONTEXT_LINES: 10,
   },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 // Mock truncateWithContext

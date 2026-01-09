@@ -22,6 +22,7 @@ import {
 } from "../constants/index.js";
 import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
 import { buildAnalysisPrompt } from "../integrations/prompts.js";
+import { applyEvidenceGuardrails } from "./analysisGuardrails.js";
 import { validateResponse } from "./validation.js";
 import { manageTokenBudget } from "./tokenManager.js";
 import { handleOpenAIError } from "./errors.js";
@@ -120,7 +121,9 @@ export class OpenAIClient {
 
       this.logValidationResults(validation, event.id);
 
-      return this.enrichAnalysis(analysis, startTime);
+      const guardedAnalysis = applyEvidenceGuardrails(analysis, truncatedEvidence);
+
+      return this.enrichAnalysis(guardedAnalysis, startTime);
     } catch (error) {
       throw handleOpenAIError(error, this.clientConfig.timeout);
     }
@@ -137,19 +140,19 @@ export class OpenAIClient {
 
     // Count dependencies by ecosystem
     const ecosystemCounts = depChanges.reduce(
-      (acc, dep) => {
-        const ecosystem = dep.ecosystem ?? "unknown";
-        acc[ecosystem] = (acc[ecosystem] ?? 0) + 1;
-        return acc;
+      (counts, dependency) => {
+        const ecosystem = dependency.ecosystem ?? "unknown";
+        counts[ecosystem] = (counts[ecosystem] ?? 0) + 1;
+        return counts;
       },
       {} as Record<string, number>
     );
 
     // Count dependencies by change type
     const changeTypeCounts = depChanges.reduce(
-      (acc, dep) => {
-        acc[dep.type] = (acc[dep.type] ?? 0) + 1;
-        return acc;
+      (counts, dependency) => {
+        counts[dependency.type] = (counts[dependency.type] ?? 0) + 1;
+        return counts;
       },
       {} as Record<string, number>
     );

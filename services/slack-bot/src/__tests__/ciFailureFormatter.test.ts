@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from "@jest/globals";
+import type { LLMAnalysisResult } from "@kenchi/shared";
 import {
   formatCIFailureBlocks,
   createAnalysisAttachments,
@@ -37,6 +38,15 @@ describe("CI Failure Formatter", () => {
       },
     ],
     headSha: "abc123def456789",
+    ...overrides,
+  });
+
+  const createMockFullAnalysis = (
+    overrides: Partial<LLMAnalysisResult> = {}
+  ): LLMAnalysisResult => ({
+    eventId: "evt_123",
+    summary: "Root cause summary",
+    analyzedAt: "2024-01-01T00:00:00.000Z",
     ...overrides,
   });
 
@@ -96,7 +106,7 @@ describe("CI Failure Formatter", () => {
       const analysis = createMockAnalysis();
       const blocks = formatCIFailureBlocks(analysis);
 
-      const headerBlock = blocks.find((b) => b.type === "header");
+      const headerBlock = blocks.find((block) => block.type === "header");
       expect(headerBlock).toBeDefined();
       expect(JSON.stringify(headerBlock)).toContain("KenchiOps");
     });
@@ -156,6 +166,33 @@ describe("CI Failure Formatter", () => {
       expect(content).toContain("Build process encountered an error");
     });
 
+    it("should use AI identified cause when available", () => {
+      const analysis = createMockAnalysis({
+        identified_cause: undefined,
+        full_analysis: createMockFullAnalysis({
+          identifiedCause: "Dependency install failed",
+        }),
+      });
+      const blocks = formatCIFailureBlocks(analysis);
+      const content = JSON.stringify(blocks);
+
+      expect(content).toContain("Dependency install failed");
+    });
+
+    it("should fallback to AI summary when no cause or analysis", () => {
+      const analysis = createMockAnalysis({
+        identified_cause: undefined,
+        analysis: "",
+        full_analysis: createMockFullAnalysis({
+          summary: "Summary from AI",
+        }),
+      });
+      const blocks = formatCIFailureBlocks(analysis);
+      const content = JSON.stringify(blocks);
+
+      expect(content).toContain("Summary from AI");
+    });
+
     it("should include recommended actions section", () => {
       const analysis = createMockAnalysis();
       const blocks = formatCIFailureBlocks(analysis);
@@ -163,6 +200,22 @@ describe("CI Failure Formatter", () => {
 
       expect(content).toContain("Recommended:");
       expect(content).toContain("Fix type annotation");
+    });
+
+    it("should use AI recommended actions when local actions are missing", () => {
+      const analysis = createMockAnalysis({
+        recommended_actions: [],
+        full_analysis: createMockFullAnalysis({
+          recommendedActions: [
+            { description: "Check lockfile", actionType: "manual_investigation", priority: "high" },
+          ],
+        }),
+      });
+      const blocks = formatCIFailureBlocks(analysis);
+      const content = JSON.stringify(blocks);
+
+      expect(content).toContain("Recommended:");
+      expect(content).toContain("Check lockfile");
     });
 
     it("should show up to 3 recommended actions", () => {
@@ -271,7 +324,7 @@ describe("CI Failure Formatter", () => {
       const analysis = createMockAnalysis();
       const blocks = formatCIFailureBlocks(analysis);
 
-      const dividers = blocks.filter((b) => b.type === "divider");
+      const dividers = blocks.filter((block) => block.type === "divider");
       expect(dividers.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -279,7 +332,7 @@ describe("CI Failure Formatter", () => {
       const analysis = createMockAnalysis({ repository: "owner/repo" });
       const blocks = formatCIFailureBlocks(analysis);
 
-      const actionsBlock = blocks.find((b) => b.type === "actions");
+      const actionsBlock = blocks.find((block) => block.type === "actions");
       expect(actionsBlock).toBeDefined();
     });
 
@@ -307,6 +360,27 @@ describe("CI Failure Formatter", () => {
       const content = JSON.stringify(blocks);
 
       expect(content).toContain("Errors:");
+    });
+
+    it("should include errors section when only AI annotations are available", () => {
+      const analysis = createMockAnalysis({
+        annotations: undefined,
+        full_analysis: createMockFullAnalysis({
+          codeAnnotations: [
+            {
+              path: "src/app.ts",
+              line: 12,
+              level: "failure",
+              message: "Null reference",
+            },
+          ],
+        }),
+      });
+      const blocks = formatCIFailureBlocks(analysis);
+      const content = JSON.stringify(blocks);
+
+      expect(content).toContain("Errors:");
+      expect(content).toContain("Null reference");
     });
 
     it("should show errors section when many annotations present", () => {
@@ -362,6 +436,32 @@ describe("CI Failure Formatter", () => {
 
       expect(content).toContain("2 dependency changes");
     });
+
+    it("should include secondary findings when provided", () => {
+      const analysis = createMockAnalysis({
+        full_analysis: createMockFullAnalysis({
+          uncertainties: ["Secondary issue [log#2]"],
+        }),
+      });
+      const blocks = formatCIFailureBlocks(analysis);
+      const content = JSON.stringify(blocks);
+
+      expect(content).toContain("Secondary Findings");
+      expect(content).toContain("Secondary issue [log#2]");
+    });
+
+    it("should include classification in footer when available", () => {
+      const analysis = createMockAnalysis({
+        full_analysis: createMockFullAnalysis({
+          category: "dependency",
+          phase: "build",
+        }),
+      });
+      const blocks = formatCIFailureBlocks(analysis);
+      const content = JSON.stringify(blocks);
+
+      expect(content).toContain("dependency / build");
+    });
   });
 
   describe("createAnalysisAttachments", () => {
@@ -410,6 +510,32 @@ describe("CI Failure Formatter", () => {
       const attachments = createAnalysisAttachments(analysis);
 
       expect(attachments[0].fallback).toContain("Generic analysis text");
+    });
+
+    it("should use AI identified cause when available", () => {
+      const analysis = createMockAnalysis({
+        identified_cause: undefined,
+        analysis: "",
+        full_analysis: createMockFullAnalysis({
+          identifiedCause: "AI root cause",
+        }),
+      });
+      const attachments = createAnalysisAttachments(analysis);
+
+      expect(attachments[0].fallback).toContain("AI root cause");
+    });
+
+    it("should use AI summary when no cause or analysis", () => {
+      const analysis = createMockAnalysis({
+        identified_cause: undefined,
+        analysis: "",
+        full_analysis: createMockFullAnalysis({
+          summary: "AI summary",
+        }),
+      });
+      const attachments = createAnalysisAttachments(analysis);
+
+      expect(attachments[0].fallback).toContain("AI summary");
     });
 
     it("should include blocks in attachment", () => {

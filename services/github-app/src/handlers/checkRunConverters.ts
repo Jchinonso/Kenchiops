@@ -142,6 +142,7 @@ export const buildAnalyzedFailure = (
     testName: testFailure.testName,
     file: testFailure.file,
     line: testFailure.line,
+    error: testFailure.error,
   })),
   timestamp: new Date(),
   // AI-extracted structured data (Phase 4 - Language Agnostic)

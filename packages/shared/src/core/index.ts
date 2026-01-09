@@ -16,6 +16,11 @@ export {
   safeJsonParse,
   parseDbCount,
   generateEventId,
+  generateUrlSignature,
+  verifyUrlSignature,
+  generateFeedbackUrl,
+  parseFeedbackUrl,
+  type SignedUrlParams,
 } from "./utils.js";
 
 // Error handling
@@ -62,11 +67,15 @@ export type {
   // LLM Analysis Types
   LLMAnalysisResult,
   LLMCodeAnnotation,
+  LLMSuggestedFix,
   ImpactAssessment,
   LLMRecommendedAction,
   EvidenceReference,
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
+  // Failure Classification Types
+  FailureCategory,
+  PipelinePhase,
   // Action Proposal Types
   ActionProposal,
   ActionType,

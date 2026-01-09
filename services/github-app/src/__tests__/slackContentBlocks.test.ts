@@ -3,14 +3,12 @@
  */
 
 import {
-  buildTestFailuresBlock,
   buildAnnotationsBlock,
   buildCheckNamesBlock,
   buildRootCauseBlock,
   buildDependencyChangesBlock,
   buildConfigChangesBlock,
   buildActionsSummaryBlocks,
-  type ConsolidatedTestFailure,
   type ConsolidatedAnnotation,
 } from "../formatters/slackContentBlocks.js";
 import type {
@@ -21,71 +19,6 @@ import type {
 } from "@kenchi/shared";
 
 describe("slackContentBlocks", () => {
-  describe("buildTestFailuresBlock", () => {
-    it("should return null for empty test failures", () => {
-      const result = buildTestFailuresBlock([]);
-      expect(result).toBeNull();
-    });
-
-    it("should build block for single test failure", () => {
-      const failures: ConsolidatedTestFailure[] = [{ testName: "should pass validation" }];
-
-      const result = buildTestFailuresBlock(failures);
-
-      expect(result).not.toBeNull();
-      expect(result?.type).toBe("context");
-      expect(result?.elements?.[0].text).toContain("should pass validation");
-      expect(result?.elements?.[0].text).toContain("Failed Tests (1)");
-    });
-
-    it("should include file path when available", () => {
-      const failures: ConsolidatedTestFailure[] = [
-        { testName: "test1", file: "src/utils.test.ts" },
-      ];
-
-      const result = buildTestFailuresBlock(failures);
-
-      expect(result?.elements?.[0].text).toContain("src/utils.test.ts");
-    });
-
-    it("should include file path with line number when both available", () => {
-      const failures: ConsolidatedTestFailure[] = [
-        { testName: "test1", file: "src/utils.test.ts", line: 42 },
-      ];
-
-      const result = buildTestFailuresBlock(failures);
-
-      expect(result?.elements?.[0].text).toContain("src/utils.test.ts:42");
-    });
-
-    it("should show truncation message when exceeding display limit", () => {
-      // Create more failures than display limit (50)
-      const failures: ConsolidatedTestFailure[] = Array.from({ length: 55 }, (_, index) => ({
-        testName: `test${index + 1}`,
-      }));
-
-      const result = buildTestFailuresBlock(failures);
-
-      expect(result?.elements?.[0].text).toContain("...and");
-      expect(result?.elements?.[0].text).toContain("5 more");
-    });
-
-    it("should handle multiple test failures", () => {
-      const failures: ConsolidatedTestFailure[] = [
-        { testName: "test1" },
-        { testName: "test2" },
-        { testName: "test3" },
-      ];
-
-      const result = buildTestFailuresBlock(failures);
-
-      expect(result?.elements?.[0].text).toContain("test1");
-      expect(result?.elements?.[0].text).toContain("test2");
-      expect(result?.elements?.[0].text).toContain("test3");
-      expect(result?.elements?.[0].text).toContain("Failed Tests (3)");
-    });
-  });
-
   describe("buildAnnotationsBlock", () => {
     it("should return null for empty annotations", () => {
       const result = buildAnnotationsBlock([]);
@@ -105,8 +38,8 @@ describe("slackContentBlocks", () => {
       expect(result?.elements?.[0].text).toContain("Type error");
     });
 
-    it("should show truncation message when exceeding display limit", () => {
-      // Create more annotations than display limit (50)
+    it("should truncate annotations and show overflow count", () => {
+      // Create many annotations - should be truncated to display limit with "...and N more"
       const annotations: ConsolidatedAnnotation[] = Array.from({ length: 55 }, (_, index) => ({
         path: `src/file${index}.ts`,
         line: index + 1,
@@ -115,8 +48,14 @@ describe("slackContentBlocks", () => {
 
       const result = buildAnnotationsBlock(annotations);
 
-      expect(result?.elements?.[0].text).toContain("...and");
-      expect(result?.elements?.[0].text).toContain("5 more");
+      // Total count should show all 55
+      expect(result?.elements?.[0].text).toContain("Affected Files (55)");
+      // First entries should be shown
+      expect(result?.elements?.[0].text).toContain("src/file0.ts:1");
+      // Last entries should be truncated (display limit is 50)
+      expect(result?.elements?.[0].text).not.toContain("src/file54.ts:55");
+      // Overflow message should show
+      expect(result?.elements?.[0].text).toContain("...and 5 more");
     });
 
     it("should handle multiple annotations", () => {

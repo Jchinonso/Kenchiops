@@ -14,6 +14,7 @@ import {
   findBySlackWorkspace,
   findByGitHubInstallation,
   linkSlackWorkspace,
+  getErrorMessage,
 } from "@kenchi/shared";
 
 const router = Router();
@@ -207,7 +208,7 @@ router.get("/github/setup", async (req: Request, res: Response) => {
     res.status(HTTP_STATUS.OK).send(html);
   } catch (error) {
     logger.error("Error processing GitHub setup", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
       installationId: installationIdNum,
     });
 

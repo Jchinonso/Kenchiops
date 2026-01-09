@@ -4,7 +4,7 @@
  * Fetches annotations from GitHub check runs.
  */
 
-import { createLogger, GITHUB_CONTEXT_LIMITS } from "@kenchi/shared";
+import { createLogger, GITHUB_CONTEXT_LIMITS, getErrorMessage } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
 import type { CheckRunAnnotation } from "./types.js";
 
@@ -59,7 +59,7 @@ export const fetchCheckRunAnnotations = async (
   } catch (error) {
     logger.warn("Failed to fetch check run annotations", {
       checkRunId,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     return [];
   }

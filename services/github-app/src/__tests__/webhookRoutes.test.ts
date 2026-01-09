@@ -18,6 +18,9 @@ jest.mock("@kenchi/shared", () => ({
   HTTP_STATUS: {
     OK: 200,
   },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 jest.mock("../handlers/pullRequestHandler.js", () => ({
@@ -320,11 +323,18 @@ describe("Webhook Routes", () => {
     });
 
     it("should not call handlers for unknown events", async () => {
+      // Push events with non-default branch are ignored (no handlers called)
       await request(app)
         .post("/webhook/github")
         .set("X-GitHub-Event", "push")
         .set("X-GitHub-Delivery", "12345")
-        .send({});
+        .send({
+          ref: "refs/heads/feature-branch",
+          repository: {
+            full_name: "owner/repo",
+            default_branch: "main",
+          },
+        });
 
       expect(mockHandlePullRequest).not.toHaveBeenCalled();
       expect(mockHandleCheckRun).not.toHaveBeenCalled();

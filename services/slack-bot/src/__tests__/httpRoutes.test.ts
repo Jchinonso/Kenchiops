@@ -60,6 +60,9 @@ jest.mock("@kenchi/shared", () => ({
   ),
   livenessCheck: jest.fn(() => ({ status: "ok", timestamp: new Date().toISOString() })),
   readinessCheck: jest.fn(() => Promise.resolve({ ready: true })),
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 jest.mock("../services/messageService.js", () => ({

@@ -110,6 +110,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - API_URL=http://api:3000
       - SLACK_BOT_URL=http://slack-bot:3001
+      - GITHUB_APP_URL=${GITHUB_APP_URL:-}
     env_file:
       - .env
     ports:

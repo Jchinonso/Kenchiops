@@ -26,6 +26,9 @@ jest.mock("@kenchi/shared", () => ({
   deleteMappingsForChannel: jest.fn(() => Promise.resolve()),
   getMappedRepositories: jest.fn(() => Promise.resolve(new Set())),
   fetchInstallationRepositories: jest.fn(() => Promise.resolve([])),
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 jest.mock("../handlers/modalBuilders.js", () => ({
@@ -152,7 +155,7 @@ describe("Channel Handler", () => {
       const repos = await getAvailableRepositories(12345, "tenant-123");
 
       expect(repos).toHaveLength(2);
-      expect(repos.find((r) => r.fullName === "owner/repo2")).toBeUndefined();
+      expect(repos.find((repo) => repo.fullName === "owner/repo2")).toBeUndefined();
     });
 
     it("should return empty array on error", async () => {

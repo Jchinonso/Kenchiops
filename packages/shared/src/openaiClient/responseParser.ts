@@ -1,280 +1,127 @@
 /**
  * OpenAI Response Parser
  *
- * Parses and validates LLM responses into structured analysis results.
- * Handles JSON extraction, field validation, and safe type conversion.
+ * Parses and validates LLM responses from the language-agnostic
+ * incident analysis format into structured analysis results.
+ *
+ * New Schema:
+ * {
+ *   "root_cause": "...",
+ *   "confidence": "low|medium|high",
+ *   "annotations": [{ "evidence_id": "...", "snippet": "...", "explanation": "..." }],
+ *   "next_steps": ["..."],
+ *   "secondary_findings": [{ "issue": "...", "evidence_id": "..." }]
+ * }
  *
  * @module openaiClient/responseParser
  */
 
 import { LLMError } from "../core/errors.js";
 import { OPENAI_MESSAGES } from "../constants/index.js";
-import type { LLMAnalysisResult } from "../core/types.js";
+import type {
+  LLMAnalysisResult,
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
+} from "../core/types.js";
 
-// ==================== Types ====================
+// Import from validation sub-module
+import {
+  extractString,
+  extractArray,
+  parseAnnotations,
+  parseSecondaryFindings,
+  mapConfidence,
+  validateCategory,
+  validatePhase,
+} from "./responseParserValidation.js";
 
-/**
- * Raw annotation structure from AI response
- */
-interface RawAnnotation {
-  readonly path?: unknown;
-  readonly line?: unknown;
-  readonly level?: unknown;
-  readonly message?: unknown;
-  readonly title?: unknown;
-}
+// Re-export validation utilities for backwards compatibility
+export {
+  extractString,
+  extractOptionalString,
+  extractArray,
+  extractOptional,
+  normalizeInput,
+  extractFileLocation,
+  validateAnnotation,
+  parseAnnotations,
+  parseSecondaryFindings,
+  VALID_CONFIDENCE_LEVELS,
+  VALID_CATEGORIES,
+  VALID_PHASES,
+  mapConfidence,
+  validateCategory,
+  validatePhase,
+  type ConfidenceLevel,
+  type RawAnnotation,
+  type RawSecondaryFinding,
+} from "./responseParserValidation.js";
 
-/**
- * Raw dependency change structure from AI response
- */
-interface RawDependencyChange {
-  readonly name?: unknown;
-  readonly type?: unknown;
-  readonly oldVersion?: unknown;
-  readonly newVersion?: unknown;
-  readonly ecosystem?: unknown;
-}
-
-/**
- * Raw build config change structure from AI response
- */
-interface RawBuildConfigChange {
-  readonly file?: unknown;
-  readonly changeType?: unknown;
-  readonly summary?: unknown;
-}
-
-// ==================== Field Extractors ====================
-
-/**
- * Extracts a string field with a default value
- */
-export const extractString = <T extends string>(value: unknown, defaultValue: T): T =>
-  (typeof value === "string" && value.length > 0 ? value : defaultValue) as T;
+// ==================== JSON Extraction ====================
 
 /**
- * Extracts an optional string field
+ * Extracts the first balanced JSON object from text.
  */
-export const extractOptionalString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.length > 0 ? value : undefined;
-
-/**
- * Extracts an array field with a default value.
- * Returns mutable array for compatibility with existing LLMAnalysisResult types.
- */
-export const extractArray = <T>(value: unknown, defaultValue: T[]): T[] =>
-  Array.isArray(value) ? (value as T[]) : defaultValue;
-
-/**
- * Extracts an optional field with a default value
- */
-export const extractOptional = <T>(value: unknown, defaultValue: T | undefined): T | undefined =>
-  value !== null && value !== undefined ? (value as T) : defaultValue;
-
-// ==================== Annotation Parsing ====================
-
-/**
- * Valid annotation levels
- */
-const VALID_ANNOTATION_LEVELS = new Set(["failure", "warning", "notice"] as const);
-type AnnotationLevel = "failure" | "warning" | "notice";
-
-/**
- * Validates and normalizes a code annotation from AI response.
- *
- * @param annotation - Raw annotation object from AI
- * @returns Validated annotation or null if invalid
- */
-export const validateCodeAnnotation = (
-  annotation: unknown
-): NonNullable<LLMAnalysisResult["codeAnnotations"]>[number] | null => {
-  if (!annotation || typeof annotation !== "object") {
-    return null;
-  }
-
-  const ann = annotation as RawAnnotation;
-  const path = typeof ann.path === "string" ? ann.path : null;
-  const line = typeof ann.line === "number" ? ann.line : null;
-  const level = typeof ann.level === "string" ? ann.level : "warning";
-  const message = typeof ann.message === "string" ? ann.message : null;
-
-  // Path and message are required
-  if (!path || !message) {
-    return null;
-  }
-
-  const validLevel: AnnotationLevel = VALID_ANNOTATION_LEVELS.has(level as AnnotationLevel)
-    ? (level as AnnotationLevel)
-    : "warning";
-
-  return {
-    path,
-    line: line ?? 1,
-    level: validLevel,
-    message,
-    title: typeof ann.title === "string" ? ann.title : undefined,
+const extractBalancedJson = (responseContent: string): string | null => {
+  const initialState = {
+    depth: 0,
+    startIndex: -1,
+    endIndex: null as number | null,
+    isInString: false,
+    isEscaped: false,
   };
-};
 
-/**
- * Parses code annotations array from AI response.
- * Uses reduce for single-pass filtering to avoid nested iteration.
- *
- * @param rawAnnotations - Raw annotations array from AI
- * @returns Validated array of code annotations
- */
-export const parseCodeAnnotations = (
-  rawAnnotations: unknown
-): LLMAnalysisResult["codeAnnotations"] => {
-  if (!Array.isArray(rawAnnotations)) {
-    return [];
-  }
+  const result = Array.from(responseContent).reduce((state, char, index) => {
+    if (state.endIndex !== null) {
+      return state;
+    }
 
-  return rawAnnotations.reduce<NonNullable<LLMAnalysisResult["codeAnnotations"]>>(
-    (validated, annotation) => {
-      const result = validateCodeAnnotation(annotation);
-      if (result !== null) {
-        validated.push(result);
+    if (state.isInString) {
+      if (state.isEscaped) {
+        return { ...state, isEscaped: false };
       }
-      return validated;
-    },
-    []
-  );
-};
-
-// ==================== Dependency Change Parsing ====================
-
-/**
- * Valid dependency change types
- */
-const VALID_DEPENDENCY_TYPES = new Set(["added", "removed", "updated"] as const);
-type DependencyChangeType = "added" | "removed" | "updated";
-
-/**
- * Validates and normalizes a detected dependency change from AI response.
- *
- * @param change - Raw dependency change object from AI
- * @returns Validated dependency change or null if invalid
- */
-export const validateDependencyChange = (
-  change: unknown
-): NonNullable<LLMAnalysisResult["detectedDependencyChanges"]>[number] | null => {
-  if (!change || typeof change !== "object") {
-    return null;
-  }
-
-  const dep = change as RawDependencyChange;
-  const name = typeof dep.name === "string" ? dep.name : null;
-  const type = typeof dep.type === "string" ? dep.type : null;
-
-  if (!name || !type || !VALID_DEPENDENCY_TYPES.has(type as DependencyChangeType)) {
-    return null;
-  }
-
-  return {
-    name,
-    type: type as DependencyChangeType,
-    oldVersion: typeof dep.oldVersion === "string" ? dep.oldVersion : undefined,
-    newVersion: typeof dep.newVersion === "string" ? dep.newVersion : undefined,
-    ecosystem: typeof dep.ecosystem === "string" ? dep.ecosystem : undefined,
-  };
-};
-
-/**
- * Parses detected dependency changes array from AI response.
- * Uses reduce for single-pass filtering to avoid nested iteration.
- *
- * @param rawChanges - Raw dependency changes array from AI
- * @returns Validated array of dependency changes
- */
-export const parseDependencyChanges = (
-  rawChanges: unknown
-): LLMAnalysisResult["detectedDependencyChanges"] => {
-  if (!Array.isArray(rawChanges)) {
-    return [];
-  }
-
-  return rawChanges.reduce<NonNullable<LLMAnalysisResult["detectedDependencyChanges"]>>(
-    (validated, change) => {
-      const result = validateDependencyChange(change);
-      if (result !== null) {
-        validated.push(result);
+      if (char === "\\") {
+        return { ...state, isEscaped: true };
       }
-      return validated;
-    },
-    []
-  );
-};
-
-// ==================== Build Config Change Parsing ====================
-
-/**
- * Valid build config change types
- */
-const VALID_CONFIG_CHANGE_TYPES = new Set(["added", "modified", "deleted"] as const);
-type ConfigChangeType = "added" | "modified" | "deleted";
-
-/**
- * Validates and normalizes a detected build config change from AI response.
- *
- * @param change - Raw build config change object from AI
- * @returns Validated build config change or null if invalid
- */
-export const validateBuildConfigChange = (
-  change: unknown
-): NonNullable<LLMAnalysisResult["detectedBuildConfigChanges"]>[number] | null => {
-  if (!change || typeof change !== "object") {
-    return null;
-  }
-
-  const cfg = change as RawBuildConfigChange;
-  const file = typeof cfg.file === "string" ? cfg.file : null;
-  const changeType = typeof cfg.changeType === "string" ? cfg.changeType : null;
-  const summary = typeof cfg.summary === "string" ? cfg.summary : null;
-
-  if (
-    !file ||
-    !changeType ||
-    !summary ||
-    !VALID_CONFIG_CHANGE_TYPES.has(changeType as ConfigChangeType)
-  ) {
-    return null;
-  }
-
-  return {
-    file,
-    changeType: changeType as ConfigChangeType,
-    summary,
-  };
-};
-
-/**
- * Parses detected build config changes array from AI response.
- * Uses reduce for single-pass filtering to avoid nested iteration.
- *
- * @param rawChanges - Raw build config changes array from AI
- * @returns Validated array of build config changes
- */
-export const parseBuildConfigChanges = (
-  rawChanges: unknown
-): LLMAnalysisResult["detectedBuildConfigChanges"] => {
-  if (!Array.isArray(rawChanges)) {
-    return [];
-  }
-
-  return rawChanges.reduce<NonNullable<LLMAnalysisResult["detectedBuildConfigChanges"]>>(
-    (validated, change) => {
-      const result = validateBuildConfigChange(change);
-      if (result !== null) {
-        validated.push(result);
+      if (char === '"') {
+        return { ...state, isInString: false };
       }
-      return validated;
-    },
-    []
-  );
-};
+      return state;
+    }
 
-// ==================== Main Parser ====================
+    if (char === '"') {
+      return { ...state, isInString: true };
+    }
+
+    if (char === "{") {
+      return {
+        ...state,
+        depth: state.depth + 1,
+        startIndex: state.depth === 0 ? index : state.startIndex,
+      };
+    }
+
+    if (char === "}") {
+      if (state.depth > 0) {
+        const nextDepth = state.depth - 1;
+        const endIndex = nextDepth === 0 && state.startIndex !== -1 ? index : null;
+        return {
+          ...state,
+          depth: nextDepth,
+          endIndex,
+        };
+      }
+    }
+
+    return state;
+  }, initialState);
+
+  if (result.endIndex !== null && result.startIndex !== -1) {
+    return responseContent.slice(result.startIndex, result.endIndex + 1);
+  }
+
+  return null;
+};
 
 /**
  * Extracts JSON from response content (handles markdown-wrapped JSON).
@@ -284,12 +131,133 @@ export const parseBuildConfigChanges = (
  * @throws {LLMError} If no JSON is found
  */
 export const extractJsonFromResponse = (responseContent: string): string => {
-  const match = responseContent.match(/\{[\s\S]*\}/);
-  if (!match) {
+  const extracted = extractBalancedJson(responseContent);
+  if (!extracted) {
     throw new LLMError(OPENAI_MESSAGES.NO_JSON_FOUND);
   }
-  return match[0];
+  return extracted;
 };
+
+/**
+ * Attempts to parse a JSON object directly from a string.
+ */
+const normalizeJsonObject = (content: string): Record<string, unknown> | null => {
+  if (!content.startsWith("{")) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+/**
+ * Parses a JSON object from response content.
+ */
+const parseJsonObject = (responseContent: string): Record<string, unknown> => {
+  const trimmed = responseContent.trim();
+  const normalized = normalizeJsonObject(trimmed);
+
+  if (normalized) {
+    return normalized;
+  }
+
+  const jsonString = extractJsonFromResponse(trimmed);
+  return JSON.parse(jsonString) as Record<string, unknown>;
+};
+
+// ==================== Dependency/Config Change Parsing ====================
+
+const VALID_DEP_CHANGE_TYPES = new Set(["added", "removed", "updated"]);
+const VALID_CONFIG_CHANGE_TYPES = new Set(["added", "modified", "deleted"]);
+
+/**
+ * Validates and parses a single dependency change from raw input.
+ */
+const parseDependencyChange = (raw: unknown): LLMDetectedDependencyChange | null => {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const name = typeof obj.name === "string" ? obj.name : null;
+  const type =
+    typeof obj.type === "string" && VALID_DEP_CHANGE_TYPES.has(obj.type) ? obj.type : null;
+
+  if (!name || !type) {
+    return null;
+  }
+
+  return {
+    name,
+    type: type as LLMDetectedDependencyChange["type"],
+    oldVersion: typeof obj.oldVersion === "string" ? obj.oldVersion : undefined,
+    newVersion: typeof obj.newVersion === "string" ? obj.newVersion : undefined,
+    ecosystem: typeof obj.ecosystem === "string" ? obj.ecosystem : undefined,
+  };
+};
+
+/**
+ * Parses dependency changes array from parsed response.
+ */
+const parseDependencyChanges = (raw: unknown): readonly LLMDetectedDependencyChange[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item) => parseDependencyChange(item))
+    .filter((change): change is LLMDetectedDependencyChange => change !== null);
+};
+
+/**
+ * Validates and parses a single build config change from raw input.
+ */
+const parseBuildConfigChange = (raw: unknown): LLMDetectedBuildConfigChange | null => {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const file = typeof obj.file === "string" ? obj.file : null;
+  const changeType =
+    typeof obj.changeType === "string" && VALID_CONFIG_CHANGE_TYPES.has(obj.changeType)
+      ? obj.changeType
+      : null;
+  const summary = typeof obj.summary === "string" ? obj.summary : null;
+
+  if (!file || !changeType || !summary) {
+    return null;
+  }
+
+  return {
+    file,
+    changeType: changeType as LLMDetectedBuildConfigChange["changeType"],
+    summary,
+  };
+};
+
+/**
+ * Parses build config changes array from parsed response.
+ */
+const parseBuildConfigChanges = (raw: unknown): readonly LLMDetectedBuildConfigChange[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item) => parseBuildConfigChange(item))
+    .filter((change): change is LLMDetectedBuildConfigChange => change !== null);
+};
+
+// ==================== Main Parser ====================
 
 /**
  * Creates LLM analysis result from parsed JSON object.
@@ -301,31 +269,48 @@ export const extractJsonFromResponse = (responseContent: string): string => {
 export const createAnalysisFromParsed = (
   parsed: Record<string, unknown>,
   eventId: string
-): LLMAnalysisResult => ({
-  eventId,
-  summary: extractString(parsed.summary, OPENAI_MESSAGES.NO_SUMMARY),
-  identifiedCause: extractOptionalString(parsed.identifiedCause),
-  impactAssessment: extractOptional(
-    parsed.impactAssessment,
-    undefined
-  ) as LLMAnalysisResult["impactAssessment"],
-  confidence: extractString(parsed.confidence, "medium") as LLMAnalysisResult["confidence"],
-  confidenceScore: undefined, // Will be calculated by safety.ts
-  reasoning: extractString(parsed.reasoning, ""),
-  codeAnnotations: parseCodeAnnotations(parsed.codeAnnotations),
-  recommendedActions: extractArray(
-    parsed.recommendedActions,
-    []
-  ) as LLMAnalysisResult["recommendedActions"],
-  uncertainties: extractArray(parsed.uncertainties, []) as string[],
-  evidenceUsed: extractArray(parsed.evidenceUsed, []) as LLMAnalysisResult["evidenceUsed"],
-  relatedIncidents: extractArray(parsed.relatedIncidents, []) as string[],
-  nextSteps: extractArray(parsed.nextSteps, []) as string[],
-  analyzedAt: new Date().toISOString(),
-  // AI-extracted structured data
-  detectedDependencyChanges: parseDependencyChanges(parsed.detectedDependencyChanges),
-  detectedBuildConfigChanges: parseBuildConfigChanges(parsed.detectedBuildConfigChanges),
-});
+): LLMAnalysisResult => {
+  const rootCause = extractString(parsed.root_cause, OPENAI_MESSAGES.NO_SUMMARY);
+  const confidence = mapConfidence(parsed.confidence);
+  const category = validateCategory(parsed.category);
+  const phase = validatePhase(parsed.phase);
+  const annotations = parseAnnotations(parsed.annotations);
+  const nextSteps = extractArray(parsed.next_steps, []) as string[];
+  const secondaryFindings = parseSecondaryFindings(parsed.secondary_findings);
+
+  // Extract first sentence of root_cause as summary
+  const summaryMatch = rootCause.match(/^[^.!?\n]+[.!?]?/);
+  const summary = summaryMatch ? summaryMatch[0] : rootCause;
+
+  // Build reasoning with category and phase context
+  const reasoning = `[${category}/${phase}] ${rootCause}`;
+
+  return {
+    eventId,
+    summary,
+    identifiedCause: rootCause,
+    impactAssessment: undefined,
+    confidence,
+    confidenceScore: undefined, // Will be calculated by safety.ts
+    reasoning,
+    codeAnnotations: annotations,
+    recommendedActions: nextSteps.map((step, index) => ({
+      description: step,
+      priority: index === 0 ? "high" : "medium",
+      // Generate unique actionType per step to prevent over-aggressive deduplication
+      actionType: `llm_action_${index}_${step.slice(0, 20).replace(/\W+/g, "_").toLowerCase()}`,
+    })),
+    uncertainties: secondaryFindings,
+    evidenceUsed: [],
+    relatedIncidents: [],
+    nextSteps,
+    analyzedAt: new Date().toISOString(),
+    category,
+    phase,
+    detectedDependencyChanges: parseDependencyChanges(parsed.detectedDependencyChanges),
+    detectedBuildConfigChanges: parseBuildConfigChanges(parsed.detectedBuildConfigChanges),
+  };
+};
 
 /**
  * Parses OpenAI response and creates LLM analysis result.
@@ -339,7 +324,28 @@ export const parseOpenAIResponse = (
   responseContent: string,
   eventId: string
 ): LLMAnalysisResult => {
-  const jsonString = extractJsonFromResponse(responseContent);
-  const parsed = JSON.parse(jsonString) as Record<string, unknown>;
+  const parsed = parseJsonObject(responseContent);
   return createAnalysisFromParsed(parsed, eventId);
 };
+
+// ==================== Legacy Exports (for backwards compatibility) ====================
+
+/**
+ * @deprecated Use validateAnnotation instead
+ */
+export { validateAnnotation as validateSimplifiedAnnotation } from "./responseParserValidation.js";
+
+/**
+ * @deprecated Use parseAnnotations instead
+ */
+export { parseAnnotations as parseSimplifiedAnnotations } from "./responseParserValidation.js";
+
+/**
+ * @deprecated Use validateAnnotation instead
+ */
+export { validateAnnotation as validateCodeAnnotation } from "./responseParserValidation.js";
+
+/**
+ * @deprecated Use parseAnnotations instead
+ */
+export { parseAnnotations as parseCodeAnnotations } from "./responseParserValidation.js";

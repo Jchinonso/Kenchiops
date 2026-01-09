@@ -261,7 +261,20 @@ describe("Slack Payload Formatter", () => {
 
     it("should include root cause in consolidated view", () => {
       const aggregation = createAggregation({
-        failures: [createFailure({ checkName: "Unit Tests", identifiedCause: "Test failure" })],
+        failures: [
+          createFailure({
+            checkName: "Unit Tests",
+            identifiedCause: "TypeError: Cannot read property 'map' of undefined",
+            testFailures: [
+              {
+                testName: "test",
+                file: "services/api/src/__tests__/index.test.ts",
+                line: 10,
+                error: "TypeError: Cannot read property 'map' of undefined",
+              },
+            ],
+          }),
+        ],
       });
       const payload = buildConsolidatedSlackPayload(aggregation);
       const blocks = payload.blocks as Array<{
@@ -270,10 +283,10 @@ describe("Slack Payload Formatter", () => {
       }>;
 
       const rootCauseBlock = blocks.find(
-        (b) => b.type === "section" && b.text?.text?.includes("Root Cause")
+        (block) => block.type === "section" && block.text?.text?.includes("Root Cause")
       );
 
-      expect(rootCauseBlock?.text?.text).toContain("Test failure");
+      expect(rootCauseBlock?.text?.text).toContain("Cannot read property");
     });
 
     it("should include annotations when present", () => {
@@ -320,15 +333,19 @@ describe("Slack Payload Formatter", () => {
       expect(checksBlock?.text?.text).toContain("Check 4");
     });
 
-    it("should deduplicate test failures across multiple checks", () => {
+    it("should deduplicate test failures into Affected Files", () => {
       const failures = [
         createFailure({
           checkName: "Check 1",
-          testFailures: [{ testName: "should work", file: "test.ts" }],
+          testFailures: [
+            { testName: "should work", file: "test.ts", error: "Expected true but got false" },
+          ],
         }),
         createFailure({
           checkName: "Check 2",
-          testFailures: [{ testName: "should work", file: "test.ts" }], // Same test
+          testFailures: [
+            { testName: "should work", file: "test.ts", error: "Expected true but got false" },
+          ], // Same test
         }),
       ];
       const aggregation = createAggregation({ failures });
@@ -338,12 +355,51 @@ describe("Slack Payload Formatter", () => {
         elements?: Array<{ text: string }>;
       }>;
 
-      const testBlock = blocks.find(
-        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("Failed Tests"))
+      // Test failures are now shown in Affected Files section
+      const affectedBlock = blocks.find(
+        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("Affected Files"))
       );
 
-      // Should show count of 1 (deduplicated), not 2
-      expect(testBlock?.elements?.[0]?.text).toContain("Failed Tests (1)");
+      // Should show deduplicated test file
+      expect(affectedBlock?.elements?.[0]?.text).toContain("test.ts");
+    });
+
+    it("should treat basename-only test paths as the same file when a directory path exists", () => {
+      const failures = [
+        createFailure({
+          checkName: "Check 1",
+          testFailures: [
+            {
+              testName: "should work",
+              file: "tests/test_calc.py",
+              error: "AssertionError: expected 1 to equal 2",
+            },
+          ],
+        }),
+        createFailure({
+          checkName: "Check 2",
+          testFailures: [
+            {
+              testName: "should work",
+              file: "test_calc.py",
+              error: "AssertionError: expected 1 to equal 2",
+            },
+          ],
+        }),
+      ];
+      const aggregation = createAggregation({ failures });
+      const payload = buildConsolidatedSlackPayload(aggregation);
+      const blocks = payload.blocks as Array<{
+        type: string;
+        elements?: Array<{ text: string }>;
+      }>;
+
+      const affectedBlock = blocks.find(
+        (b) => b.type === "context" && b.elements?.some((e) => e.text?.includes("Affected Files"))
+      );
+
+      expect(affectedBlock?.elements?.[0]?.text).toContain("Affected Files (1)");
+      expect(affectedBlock?.elements?.[0]?.text).toContain("tests/test_calc.py");
     });
 
     it("should deduplicate annotations across multiple checks", () => {

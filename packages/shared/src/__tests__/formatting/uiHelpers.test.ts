@@ -8,6 +8,7 @@ import {
   getConfidenceColor,
   getConfidenceEmoji,
   truncateText,
+  sanitizeIdPart,
   formatRelativeTime,
   pluralize,
   getRepoName,
@@ -104,6 +105,27 @@ describe("UI Helpers", () => {
 
     it("should handle very short maxLength", () => {
       expect(truncateText("Hello", 4)).toBe("H...");
+    });
+  });
+
+  describe("sanitizeIdPart", () => {
+    it("should normalize case and replace unsafe characters", () => {
+      expect(sanitizeIdPart("Src/Main.ts")).toBe("src_main_ts");
+      expect(sanitizeIdPart("Feature:Auth@V2")).toBe("feature_auth_v2");
+    });
+
+    it("should trim leading/trailing underscores and cap length", () => {
+      const longInput = "A".repeat(100);
+      const sanitized = sanitizeIdPart(longInput);
+
+      expect(sanitized.length).toBeLessThanOrEqual(64);
+      expect(sanitized.startsWith("_")).toBe(false);
+      expect(sanitized.endsWith("_")).toBe(false);
+    });
+
+    it("should return fallback for empty or invalid input", () => {
+      expect(sanitizeIdPart("___")).toBe("unknown");
+      expect(sanitizeIdPart("   ")).toBe("unknown");
     });
   });
 
@@ -230,7 +252,7 @@ describe("UI Helpers", () => {
     });
 
     it("should use custom format function", () => {
-      const result = buildTruncatedList([1, 2, 3], (n) => `Item ${n}`, 5, "numbers");
+      const result = buildTruncatedList([1, 2, 3], (num) => `Item ${num}`, 5, "numbers");
 
       expect(result).toEqual(["Item 1", "Item 2", "Item 3"]);
     });
@@ -253,7 +275,7 @@ describe("UI Helpers", () => {
     });
 
     it("should use custom overflow label", () => {
-      const result = buildTruncatedList([1, 2, 3, 4], (n) => String(n), 2, "failures");
+      const result = buildTruncatedList([1, 2, 3, 4], (num) => String(num), 2, "failures");
 
       expect(result[2]).toContain("2 more failures");
     });

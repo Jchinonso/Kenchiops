@@ -22,6 +22,22 @@ jest.mock("@kenchi/shared", () => {
       warn: jest.fn(),
       debug: jest.fn(),
     })),
+    searchFromEventContext: jest.fn().mockResolvedValue({
+      diffChunks: [],
+      knowledgeDocs: [],
+      queryTokens: 10,
+      cacheHit: false,
+    }),
+    selectModel: jest.fn().mockReturnValue({
+      model: "gpt-4o-mini",
+      reason: "standard_analysis",
+    }),
+    logModelSelection: jest.fn(),
+    createAnalysis: jest.fn().mockResolvedValue({
+      id: "analysis_123",
+      eventId: "evt_test",
+      createdAt: new Date().toISOString(),
+    }),
   };
 });
 

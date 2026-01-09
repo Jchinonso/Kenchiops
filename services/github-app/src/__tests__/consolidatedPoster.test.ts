@@ -338,7 +338,7 @@ describe("Consolidated Poster Service", () => {
       const result = await postConsolidatedAnalysis(aggregation);
 
       expect(result.slackMessageSent).toBe(false);
-      expect(result.errors.some((e) => e.includes("Network error"))).toBe(true);
+      expect(result.errors.some((err) => err.includes("Network error"))).toBe(true);
     });
 
     it("should skip check annotations when none available", async () => {

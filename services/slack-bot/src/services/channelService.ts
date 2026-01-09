@@ -4,7 +4,13 @@
  * Provides channel resolution and lookup functionality for Slack.
  */
 
-import { logger, SLACK_CHANNEL_ID_PATTERN, SLACK_API_LIMITS, NotFoundError } from "@kenchi/shared";
+import {
+  logger,
+  SLACK_CHANNEL_ID_PATTERN,
+  SLACK_API_LIMITS,
+  NotFoundError,
+  getErrorMessage,
+} from "@kenchi/shared";
 import type Bolt from "@slack/bolt";
 
 type SlackApp = InstanceType<typeof Bolt.App>;
@@ -48,7 +54,9 @@ export const resolveChannelId = async (
       limit: SLACK_API_LIMITS.CONVERSATIONS_LIST_LIMIT,
     });
 
-    const channel = result.channels?.find((c: SlackChannel) => c.name === channelName);
+    const channel = result.channels?.find(
+      (slackChannel: SlackChannel) => slackChannel.name === channelName
+    );
 
     if (!channel?.id) {
       throw new NotFoundError(`Channel "${channelName}" not found`);
@@ -63,7 +71,7 @@ export const resolveChannelId = async (
   } catch (error) {
     logger.error("Failed to resolve channel name", {
       channelName,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: getErrorMessage(error),
     });
     throw error;
   }

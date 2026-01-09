@@ -9,6 +9,8 @@ import type {
   EventPayload,
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
+  LLMSuggestedFix,
+  LLMAnalysisResult,
 } from "@kenchi/shared";
 
 /**
@@ -91,7 +93,7 @@ export interface SlackAttachment {
 }
 
 /**
- * CI Annotation from GitHub check run.
+ * CI Annotation from GitHub check run with optional suggested fix.
  */
 export interface CIAnnotation {
   readonly path: string;
@@ -100,6 +102,8 @@ export interface CIAnnotation {
   readonly level: "notice" | "warning" | "failure";
   readonly message: string;
   readonly title?: string;
+  /** AI-suggested fix for this issue */
+  readonly suggestedFix?: LLMSuggestedFix;
 }
 
 /**
@@ -148,9 +152,10 @@ export interface CIFailureAnalysis {
   readonly analysis: string;
   readonly identified_cause?: string;
   readonly recommended_actions?: readonly {
-    readonly priority: string;
+    readonly priority?: string | number;
     readonly description: string;
     readonly actionType?: string;
+    readonly reasoning?: string;
   }[];
   // Enriched context
   readonly checkName?: string;
@@ -169,6 +174,7 @@ export interface CIFailureAnalysis {
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
   readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+  readonly full_analysis?: LLMAnalysisResult;
 }
 
 /**
@@ -305,6 +311,20 @@ export interface SlackStaticSelectElement {
   readonly action_id: string;
   readonly placeholder?: SlackPlainTextElement;
   readonly options: readonly SlackSelectOption[];
+  readonly initial_option?: SlackSelectOption;
+}
+
+/**
+ * Slack plain text input element
+ */
+export interface SlackPlainTextInputElement {
+  readonly type: "plain_text_input";
+  readonly action_id: string;
+  readonly placeholder?: SlackPlainTextElement;
+  readonly initial_value?: string;
+  readonly multiline?: boolean;
+  readonly min_length?: number;
+  readonly max_length?: number;
 }
 
 /**
@@ -334,8 +354,10 @@ export interface SlackButtonElement {
 export interface SlackInputBlock {
   readonly type: "input";
   readonly block_id: string;
-  readonly element: SlackStaticSelectElement;
+  readonly element: SlackStaticSelectElement | SlackPlainTextInputElement;
   readonly label: SlackPlainTextElement;
+  readonly hint?: SlackPlainTextElement;
+  readonly optional?: boolean;
 }
 
 /**
@@ -375,3 +397,22 @@ export interface SlackModalView {
   readonly close?: SlackPlainTextElement;
   readonly blocks: SlackModalBlock[];
 }
+
+/**
+ * Converts a SlackModalView to a format compatible with the Slack SDK's views.open() API.
+ * This handles the structural compatibility between our custom block types and Slack's
+ * AnyBlock[] expectation. Uses type assertion through unknown as our block types are
+ * structurally compatible with Slack's AnyBlock but TypeScript cannot verify this.
+ *
+ * @param view - The SlackModalView to convert
+ * @returns A view compatible with Slack SDK's ModalView type
+ */
+export const toSlackSDKView = (view: SlackModalView): unknown => ({
+  type: view.type,
+  callback_id: view.callback_id,
+  private_metadata: view.private_metadata,
+  title: view.title,
+  submit: view.submit,
+  close: view.close,
+  blocks: [...view.blocks],
+});

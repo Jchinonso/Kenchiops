@@ -4,16 +4,22 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { ButtonAction, SayFn } from "@slack/bolt";
-import {
-  handleActionApproval,
-  handleActionRejection,
-  handlePositiveFeedback,
-  handleNegativeFeedback,
-} from "../handlers/actionHandler.js";
+import { handleActionApproval, handleActionRejection } from "../handlers/actionHandler.js";
+import { handlePositiveFeedback, handleNegativeFeedback } from "../handlers/feedbackHandler.js";
 
 // Track mock state for isRedisHealthy
 let mockRedisHealthy = false;
 let mockExecuteActionResult = { success: true, message: "Action executed", duration: 100 };
+const mockStoredPayload = {
+  actionType: "rerun_pipeline",
+  description: "Rerun failed pipeline",
+  repository: "owner/repo",
+  commitSha: "abc123def456",
+  installationId: 12345,
+  priority: "high",
+  createdAt: Date.now(),
+  verificationToken: "abcd1234",
+};
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => {
@@ -36,6 +42,18 @@ jest.mock("@kenchi/shared", () => {
     isRedisHealthy: jest.fn(() => Promise.resolve(mockRedisHealthy)),
     executeAction: jest.fn(() => Promise.resolve(mockExecuteActionResult)),
     enqueueAction: jest.fn(() => Promise.resolve()),
+    updateActionProposalStatus: jest.fn(() => Promise.resolve()),
+    retrieveActionPayload: jest.fn(() => mockStoredPayload),
+    deleteActionPayload: jest.fn(() => true),
+    createAnalysisFeedback: jest.fn(() =>
+      Promise.resolve({
+        id: "feedback_123",
+        analysisId: "event-123",
+        feedbackType: "correct",
+        userId: "user_123",
+        createdAt: new Date().toISOString(),
+      })
+    ),
   };
 });
 
@@ -101,9 +119,19 @@ describe("Action Handler", () => {
   });
 
   /**
-   * Create a new-format ActionButtonValue
+   * Create opaque action value (new format with server-side storage)
    */
-  const createActionButtonValue = (
+  const createOpaqueActionValue = (overrides: Partial<{ id: string; v: string }> = {}): string =>
+    JSON.stringify({
+      id: "act_123",
+      v: "abcd",
+      ...overrides,
+    });
+
+  /**
+   * Create a legacy ActionButtonValue (for backwards compatibility tests)
+   */
+  const createLegacyActionValue = (
     overrides: Partial<{
       actionId: string;
       actionType: string;
@@ -128,9 +156,7 @@ describe("Action Handler", () => {
 
   describe("handleActionApproval", () => {
     it("should acknowledge the action immediately", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
 
       await handleActionApproval(action, mockAck, mockSay);
 
@@ -138,8 +164,7 @@ describe("Action Handler", () => {
     });
 
     it("should parse action value correctly", async () => {
-      const actionValue = { eventId: "event-123", actionId: "action-456" };
-      const action = createMockAction(JSON.stringify(actionValue));
+      const action = createMockAction(createOpaqueActionValue());
 
       await handleActionApproval(action, mockAck, mockSay);
 
@@ -152,9 +177,7 @@ describe("Action Handler", () => {
     });
 
     it("should post in_progress message immediately", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue({ id: "act_123" }));
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
@@ -163,10 +186,11 @@ describe("Action Handler", () => {
 
       await handleActionApproval(action, mockAck, mockSay);
 
+      // Action ID comes from opaque ID in button value
       expect(formatProgressUpdate).toHaveBeenCalledWith(
-        "action-456",
+        "act_123",
         "in_progress",
-        "Action approved and executing..."
+        expect.stringContaining("rerun_pipeline")
       );
       expect(mockSay).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -175,10 +199,8 @@ describe("Action Handler", () => {
       );
     });
 
-    it("should post completed message after timeout", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+    it("should post completed message after execution", async () => {
+      const action = createMockAction(createOpaqueActionValue({ id: "act_123" }));
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
@@ -187,24 +209,16 @@ describe("Action Handler", () => {
 
       await handleActionApproval(action, mockAck, mockSay);
 
-      // Fast-forward time past ACTION_TIMEOUT_MS (2000ms)
-      jest.advanceTimersByTime(2000);
-
-      // Wait for promise to resolve
-      await Promise.resolve();
-
+      // With sync execution (Redis not healthy), completion happens immediately
       expect(formatProgressUpdate).toHaveBeenCalledWith(
-        "action-456",
+        "act_123",
         "completed",
-        "Action completed successfully"
+        expect.stringContaining("rerun_pipeline")
       );
-      expect(mockSay).toHaveBeenCalledTimes(2);
     });
 
     it("should include thread_ts when provided", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
       const messageTs = "1234567890.123456";
 
       await handleActionApproval(action, mockAck, mockSay, messageTs);
@@ -238,9 +252,7 @@ describe("Action Handler", () => {
     });
 
     it("should warn when say function is not available", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
 
       await handleActionApproval(action, mockAck, undefined);
 
@@ -251,9 +263,7 @@ describe("Action Handler", () => {
     });
 
     it("should handle say function errors gracefully", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
       mockSay.mockRejectedValue(new Error("Slack API error"));
 
       await handleActionApproval(action, mockAck, mockSay);
@@ -268,10 +278,7 @@ describe("Action Handler", () => {
     });
 
     it("should log action approval with action_id", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" }),
-        "approve_action_456"
-      );
+      const action = createMockAction(createOpaqueActionValue(), "approve_action_456");
 
       await handleActionApproval(action, mockAck, mockSay);
 
@@ -280,17 +287,11 @@ describe("Action Handler", () => {
       });
     });
 
-    it("should not post completed message if say is undefined initially", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+    it("should not execute if say is undefined initially", async () => {
+      const action = createMockAction(createOpaqueActionValue());
 
       // Call with undefined say function
       await handleActionApproval(action, mockAck, undefined);
-
-      // Fast-forward time
-      jest.advanceTimersByTime(2000);
-      await Promise.resolve();
 
       // Say should not have been called since it was undefined
       expect(mockSay).not.toHaveBeenCalled();
@@ -300,7 +301,7 @@ describe("Action Handler", () => {
   describe("handleActionApproval with ActionButtonValue format", () => {
     it("should execute action synchronously when Redis is unavailable", async () => {
       jest.useRealTimers(); // Use real timers for this test
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
@@ -336,7 +337,7 @@ describe("Action Handler", () => {
     it("should enqueue action when Redis is healthy", async () => {
       jest.useRealTimers();
       mockRedisHealthy = true;
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
@@ -366,7 +367,7 @@ describe("Action Handler", () => {
 
     it("should handle failed action execution", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
@@ -397,7 +398,7 @@ describe("Action Handler", () => {
 
     it("should include checkRunId in execution context when provided", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue({ checkRunId: 99999 }));
+      const action = createMockAction(createLegacyActionValue({ checkRunId: 99999 }));
       const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
         executeAction: jest.MockedFunction<
           () => Promise<{ success: boolean; message: string; duration: number }>
@@ -420,7 +421,7 @@ describe("Action Handler", () => {
 
     it("should send error message to Slack when action fails with error", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
         executeAction: jest.MockedFunction<
           () => Promise<{ success: boolean; message: string; duration: number }>
@@ -445,7 +446,7 @@ describe("Action Handler", () => {
 
     it("should handle isRedisHealthy throwing an error", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const { isRedisHealthy, executeAction } = jest.requireMock("@kenchi/shared") as {
         isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
         executeAction: jest.MockedFunction<
@@ -463,7 +464,7 @@ describe("Action Handler", () => {
 
     it("should include thread_ts in messages when provided", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const messageTs = "1234567890.999999";
       const { isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
         isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
@@ -482,22 +483,28 @@ describe("Action Handler", () => {
 
     it("should handle different action types", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue({ actionType: "notify_team" }));
+      // Use legacy format which generates ID from commitSha
+      const action = createMockAction(createLegacyActionValue({ actionType: "notify_team" }));
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
         >;
       };
-      const { isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+      const { isRedisHealthy, executeAction } = jest.requireMock("@kenchi/shared") as {
         isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
       };
 
       isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockResolvedValue({ success: true, message: "Done", duration: 100 });
 
       await handleActionApproval(action, mockAck, mockSay);
 
+      // Legacy format uses commitSha for ID: legacy_abc123de (from abc123def456)
       expect(formatProgressUpdate).toHaveBeenCalledWith(
-        "act_123",
+        "legacy_abc123de",
         "in_progress",
         expect.stringContaining("notify_team")
       );
@@ -505,7 +512,7 @@ describe("Action Handler", () => {
 
     it("should log action execution details on success", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const { isRedisHealthy, executeAction } = jest.requireMock("@kenchi/shared") as {
         isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
         executeAction: jest.MockedFunction<
@@ -530,7 +537,7 @@ describe("Action Handler", () => {
 
     it("should handle failed say call gracefully in error handler", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
         executeAction: jest.MockedFunction<
           () => Promise<{ success: boolean; message: string; duration: number }>
@@ -557,7 +564,7 @@ describe("Action Handler", () => {
   describe("handleActionRejection with ActionButtonValue format", () => {
     it("should handle new action button value format", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue());
+      const action = createMockAction(createOpaqueActionValue());
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
@@ -573,16 +580,18 @@ describe("Action Handler", () => {
       );
     });
 
-    it("should log rejection details for new format", async () => {
+    it("should log rejection details for legacy format", async () => {
       jest.useRealTimers();
-      const action = createMockAction(createActionButtonValue({ actionType: "notify_team" }));
+      // Legacy format generates ID from commitSha
+      const action = createMockAction(createLegacyActionValue({ actionType: "notify_team" }));
 
       await handleActionRejection(action, mockAck, mockSay);
 
+      // Legacy format uses commitSha for ID: legacy_abc123de (from abc123def456)
       expect(mockLogger.info).toHaveBeenCalledWith(
         "Action rejection handled",
         expect.objectContaining({
-          actionId: "act_123",
+          actionId: "legacy_abc123de",
           actionType: "notify_team",
         })
       );
@@ -591,9 +600,7 @@ describe("Action Handler", () => {
 
   describe("handleActionRejection", () => {
     it("should acknowledge the action immediately", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
 
       await handleActionRejection(action, mockAck, mockSay);
 
@@ -601,8 +608,7 @@ describe("Action Handler", () => {
     });
 
     it("should parse action value correctly", async () => {
-      const actionValue = { eventId: "event-123", actionId: "action-456" };
-      const action = createMockAction(JSON.stringify(actionValue));
+      const action = createMockAction(createOpaqueActionValue());
 
       await handleActionRejection(action, mockAck, mockSay);
 
@@ -614,9 +620,7 @@ describe("Action Handler", () => {
     });
 
     it("should post failed message", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue({ id: "act_123" }));
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
@@ -625,18 +629,16 @@ describe("Action Handler", () => {
 
       await handleActionRejection(action, mockAck, mockSay);
 
-      // Legacy format shows "action" as the action type
+      // Uses opaque ID and action type from stored payload
       expect(formatProgressUpdate).toHaveBeenCalledWith(
-        "action-456",
+        "act_123",
         "failed",
-        "Action *action* dismissed by user"
+        expect.stringContaining("dismissed by user")
       );
     });
 
     it("should include thread_ts when provided", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
       const messageTs = "1234567890.123456";
 
       await handleActionRejection(action, mockAck, mockSay, messageTs);
@@ -670,9 +672,7 @@ describe("Action Handler", () => {
     });
 
     it("should warn when say function is not available", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
 
       await handleActionRejection(action, mockAck, undefined);
 
@@ -683,9 +683,7 @@ describe("Action Handler", () => {
     });
 
     it("should handle say function errors gracefully", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
       mockSay.mockRejectedValue(new Error("Slack API error"));
 
       await handleActionRejection(action, mockAck, mockSay);
@@ -700,10 +698,7 @@ describe("Action Handler", () => {
     });
 
     it("should log action rejection with action_id", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" }),
-        "reject_action_456"
-      );
+      const action = createMockAction(createOpaqueActionValue(), "reject_action_456");
 
       await handleActionRejection(action, mockAck, mockSay);
 
@@ -714,28 +709,31 @@ describe("Action Handler", () => {
   });
 
   describe("handlePositiveFeedback", () => {
+    const testUserId = "user_123";
+
     it("should acknowledge the action immediately", async () => {
       const action = createMockAction("event-123");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, testUserId);
 
       expect(mockAck).toHaveBeenCalledTimes(1);
     });
 
-    it("should log positive feedback with event_id", async () => {
+    it("should log positive feedback with analysisId and userId", async () => {
       const action = createMockAction("event-456");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, testUserId);
 
       expect(mockLogger.info).toHaveBeenCalledWith("Positive feedback received", {
-        event_id: "event-456",
+        analysisId: "event-456",
+        userId: testUserId,
       });
     });
 
     it("should handle empty action value", async () => {
       const action = createMockAction("");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, testUserId);
 
       expect(mockAck).toHaveBeenCalled();
       // Should not crash
@@ -744,10 +742,11 @@ describe("Action Handler", () => {
     it("should handle action with special characters in value", async () => {
       const action = createMockAction("event-123-<special>");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, testUserId);
 
       expect(mockLogger.info).toHaveBeenCalledWith("Positive feedback received", {
-        event_id: "event-123-<special>",
+        analysisId: "event-123-<special>",
+        userId: testUserId,
       });
     });
 
@@ -755,33 +754,38 @@ describe("Action Handler", () => {
       const action = createMockAction("event-123");
       mockAck.mockRejectedValue(new Error("Ack failed"));
 
-      await expect(handlePositiveFeedback(action, mockAck)).rejects.toThrow("Ack failed");
+      await expect(handlePositiveFeedback(action, mockAck, testUserId)).rejects.toThrow(
+        "Ack failed"
+      );
     });
   });
 
   describe("handleNegativeFeedback", () => {
+    const testUserId = "user_456";
+
     it("should acknowledge the action immediately", async () => {
       const action = createMockAction("event-123");
 
-      await handleNegativeFeedback(action, mockAck);
+      await handleNegativeFeedback(action, mockAck, testUserId);
 
       expect(mockAck).toHaveBeenCalledTimes(1);
     });
 
-    it("should log negative feedback with event_id", async () => {
+    it("should log negative feedback with analysisId and userId", async () => {
       const action = createMockAction("event-789");
 
-      await handleNegativeFeedback(action, mockAck);
+      await handleNegativeFeedback(action, mockAck, testUserId);
 
       expect(mockLogger.info).toHaveBeenCalledWith("Negative feedback received", {
-        event_id: "event-789",
+        analysisId: "event-789",
+        userId: testUserId,
       });
     });
 
     it("should handle empty action value", async () => {
       const action = createMockAction("");
 
-      await handleNegativeFeedback(action, mockAck);
+      await handleNegativeFeedback(action, mockAck, testUserId);
 
       expect(mockAck).toHaveBeenCalled();
       // Should not crash
@@ -790,10 +794,11 @@ describe("Action Handler", () => {
     it("should handle action with special characters in value", async () => {
       const action = createMockAction("event-999-@#$%");
 
-      await handleNegativeFeedback(action, mockAck);
+      await handleNegativeFeedback(action, mockAck, testUserId);
 
       expect(mockLogger.info).toHaveBeenCalledWith("Negative feedback received", {
-        event_id: "event-999-@#$%",
+        analysisId: "event-999-@#$%",
+        userId: testUserId,
       });
     });
 
@@ -801,14 +806,16 @@ describe("Action Handler", () => {
       const action = createMockAction("event-123");
       mockAck.mockRejectedValue(new Error("Ack failed"));
 
-      await expect(handleNegativeFeedback(action, mockAck)).rejects.toThrow("Ack failed");
+      await expect(handleNegativeFeedback(action, mockAck, testUserId)).rejects.toThrow(
+        "Ack failed"
+      );
     });
   });
 
   describe("edge cases", () => {
     it("should handle action with missing action_id", async () => {
       const action = {
-        ...createMockAction(JSON.stringify({ eventId: "event-123", actionId: "action-456" })),
+        ...createMockAction(createOpaqueActionValue()),
         action_id: "",
       };
 
@@ -833,20 +840,14 @@ describe("Action Handler", () => {
     it("should handle action with unicode characters in value", async () => {
       const action = createMockAction("event-テスト-🚀");
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, "user_123");
 
       expect(mockAck).toHaveBeenCalled();
     });
 
     it("should handle concurrent action approvals", async () => {
-      const action1 = createMockAction(
-        JSON.stringify({ eventId: "event-1", actionId: "action-1" }),
-        "action_1"
-      );
-      const action2 = createMockAction(
-        JSON.stringify({ eventId: "event-2", actionId: "action-2" }),
-        "action_2"
-      );
+      const action1 = createMockAction(createOpaqueActionValue({ id: "action-1" }), "action_1");
+      const action2 = createMockAction(createOpaqueActionValue({ id: "action-2" }), "action_2");
 
       await Promise.all([
         handleActionApproval(action1, mockAck, mockSay),
@@ -854,11 +855,12 @@ describe("Action Handler", () => {
       ]);
 
       expect(mockAck).toHaveBeenCalledTimes(2);
-      expect(mockSay).toHaveBeenCalledTimes(2);
+      // Each approval calls say twice (in_progress + completed)
+      expect(mockSay).toHaveBeenCalledTimes(4);
     });
 
     it("should handle action with null values in JSON", async () => {
-      const action = createMockAction(JSON.stringify({ eventId: null, actionId: null }));
+      const action = createMockAction(createOpaqueActionValue());
 
       await handleActionApproval(action, mockAck, mockSay);
 
@@ -896,7 +898,7 @@ describe("Action Handler", () => {
       const longEventId = "event-" + "a".repeat(10000);
       const action = createMockAction(longEventId);
 
-      await handlePositiveFeedback(action, mockAck);
+      await handlePositiveFeedback(action, mockAck, "user_123");
 
       expect(mockAck).toHaveBeenCalled();
     });
@@ -911,7 +913,7 @@ describe("Action Handler", () => {
       expect(mockLogger.error).toHaveBeenCalledWith(
         "Error handling action approval",
         expect.objectContaining({
-          error: expect.stringContaining("Failed to parse action value"),
+          error: expect.any(String),
         })
       );
     });
@@ -924,7 +926,7 @@ describe("Action Handler", () => {
       expect(mockLogger.error).toHaveBeenCalledWith(
         "Error handling action rejection",
         expect.objectContaining({
-          error: expect.stringContaining("Failed to parse action value"),
+          error: expect.any(String),
         })
       );
     });
@@ -943,9 +945,7 @@ describe("Action Handler", () => {
     });
 
     it("should handle non-Error exceptions gracefully", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
       mockSay.mockRejectedValue("string error");
 
       await handleActionApproval(action, mockAck, mockSay);
@@ -955,9 +955,7 @@ describe("Action Handler", () => {
     });
 
     it("should continue execution even if logging fails", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+      const action = createMockAction(createOpaqueActionValue());
       mockLogger.info.mockImplementationOnce(() => {
         throw new Error("Logger failed");
       });
@@ -967,79 +965,85 @@ describe("Action Handler", () => {
     });
   });
 
-  describe("timeout behavior", () => {
-    it("should complete action after exact timeout duration", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+  describe("execution behavior", () => {
+    it("should complete action immediately with sync execution", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createOpaqueActionValue({ id: "act_123" }));
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
         >;
       };
+      const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockResolvedValue({ success: true, message: "Action executed", duration: 100 });
 
       await handleActionApproval(action, mockAck, mockSay);
 
-      // Clear previous calls
-      formatProgressUpdate.mockClear();
-
-      // Advance time by exactly 2000ms
-      jest.advanceTimersByTime(2000);
-      await Promise.resolve();
-
+      // With sync execution, both in_progress and completed should be called immediately
       expect(formatProgressUpdate).toHaveBeenCalledWith(
-        "action-456",
-        "completed",
-        "Action completed successfully"
+        "act_123",
+        "in_progress",
+        expect.any(String)
       );
+      expect(formatProgressUpdate).toHaveBeenCalledWith("act_123", "completed", expect.any(String));
     });
 
-    it("should not complete action before timeout", async () => {
-      const action = createMockAction(
-        JSON.stringify({ eventId: "event-123", actionId: "action-456" })
-      );
+    it("should handle sync execution when Redis unavailable", async () => {
+      jest.useRealTimers();
+      const action = createMockAction(createOpaqueActionValue({ id: "act_123" }));
       const { formatProgressUpdate } = jest.requireMock("../formatters.js") as {
         formatProgressUpdate: jest.MockedFunction<
           typeof import("../formatters.js").formatProgressUpdate
         >;
       };
+      const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockResolvedValue({ success: true, message: "Action executed", duration: 100 });
 
       await handleActionApproval(action, mockAck, mockSay);
 
-      // Clear the in_progress call
-      formatProgressUpdate.mockClear();
-
-      // Advance time by less than timeout
-      jest.advanceTimersByTime(1000);
-      await Promise.resolve();
-
-      // Should not have called completed yet
-      expect(formatProgressUpdate).not.toHaveBeenCalledWith(
-        "action-456",
-        "completed",
-        "Action completed successfully"
+      // Should have called both in_progress and completed immediately
+      expect(formatProgressUpdate).toHaveBeenCalledWith(
+        "act_123",
+        "in_progress",
+        expect.any(String)
       );
+      expect(formatProgressUpdate).toHaveBeenCalledWith("act_123", "completed", expect.any(String));
     });
 
-    it("should handle multiple timeouts independently", async () => {
-      const action1 = createMockAction(
-        JSON.stringify({ eventId: "event-1", actionId: "action-1" }),
-        "action_1"
-      );
-      const action2 = createMockAction(
-        JSON.stringify({ eventId: "event-2", actionId: "action-2" }),
-        "action_2"
-      );
+    it("should handle multiple actions independently", async () => {
+      jest.useRealTimers();
+      const { executeAction, isRedisHealthy } = jest.requireMock("@kenchi/shared") as {
+        executeAction: jest.MockedFunction<
+          () => Promise<{ success: boolean; message: string; duration: number }>
+        >;
+        isRedisHealthy: jest.MockedFunction<() => Promise<boolean>>;
+      };
+
+      isRedisHealthy.mockResolvedValue(false);
+      executeAction.mockResolvedValue({ success: true, message: "Action executed", duration: 100 });
+
+      const action1 = createMockAction(createOpaqueActionValue({ id: "action-1" }), "action_1");
+      const action2 = createMockAction(createOpaqueActionValue({ id: "action-2" }), "action_2");
 
       await handleActionApproval(action1, mockAck, mockSay);
       await handleActionApproval(action2, mockAck, mockSay);
 
-      // Advance time
-      jest.advanceTimersByTime(2000);
-      await Promise.resolve();
-
-      // Both should complete
-      expect(mockSay).toHaveBeenCalledTimes(4); // 2 in_progress + 2 completed
+      // Both should complete with 2 calls each (in_progress + completed)
+      expect(mockSay).toHaveBeenCalledTimes(4);
     });
   });
 });

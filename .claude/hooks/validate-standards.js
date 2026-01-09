@@ -36,7 +36,7 @@ const EXCLUDED_PATHS = new Set([
  */
 const SHARED_UTILITIES = new Set([
   "createLogger",
-  "logger",
+  // Note: "logger" is NOT here because `const logger = createLogger(...)` is the correct pattern
   "config",
   "errorHandler",
   "asyncHandler",

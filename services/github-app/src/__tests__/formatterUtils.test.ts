@@ -7,6 +7,7 @@ import {
   getPriorityEmoji,
   getNumericPriority,
   calculateAverageConfidence,
+  calculateConfidenceWithUncertainty,
   getConfidenceEmoji,
   mergeRecommendedActions,
   DISPLAY_LIMITS,
@@ -117,6 +118,41 @@ describe("Formatter Utilities", () => {
     });
   });
 
+  describe("calculateConfidenceWithUncertainty", () => {
+    it("should not flag multiple services when only path variants differ", () => {
+      const analyzedFailures: AnalyzedFailure[] = [
+        {
+          checkRunId: 1,
+          checkName: "test",
+          conclusion: "failure",
+          confidence: 0.8,
+          analysis: "test",
+          identifiedCause: "test",
+          annotations: [],
+          recommendedActions: [],
+          testFailures: [{ testName: "test subtract", file: "tests/test_calc.py" }],
+          timestamp: new Date(),
+        },
+        {
+          checkRunId: 2,
+          checkName: "test",
+          conclusion: "failure",
+          confidence: 0.8,
+          analysis: "test",
+          identifiedCause: "test",
+          annotations: [],
+          recommendedActions: [],
+          testFailures: [{ testName: "test subtract", file: "test_calc.py" }],
+          timestamp: new Date(),
+        },
+      ];
+
+      const result = calculateConfidenceWithUncertainty(analyzedFailures);
+
+      expect(result.uncertainty).toBeUndefined();
+    });
+  });
+
   describe("getConfidenceEmoji", () => {
     it("should return green for high confidence", () => {
       expect(getConfidenceEmoji(70)).toBe("🟢");
@@ -149,7 +185,8 @@ describe("Formatter Utilities", () => {
     });
 
     const createAnalyzedFailureWithActions = (
-      recommendedActions: RecommendedAction[]
+      recommendedActions: RecommendedAction[],
+      servicePath?: string
     ): AnalyzedFailure => ({
       checkRunId: 12345,
       checkName: "test",
@@ -159,22 +196,27 @@ describe("Formatter Utilities", () => {
       identifiedCause: "test",
       annotations: [],
       recommendedActions,
-      testFailures: [],
+      // Include test failures with file path to associate with a service
+      testFailures: servicePath ? [{ testName: "test", file: servicePath }] : [],
       timestamp: new Date(),
     });
 
-    it("should merge actions from multiple failures", () => {
+    it("should merge actions from multiple failures in different services", () => {
+      // Actions from different services should both be included
       const analyzedFailures = [
-        createAnalyzedFailureWithActions([
-          createRecommendedActionWithPriority("Action 1", "high", "rerun_pipeline"),
-        ]),
-        createAnalyzedFailureWithActions([
-          createRecommendedActionWithPriority("Action 2", "medium", "notify_team"),
-        ]),
+        createAnalyzedFailureWithActions(
+          [createRecommendedActionWithPriority("Action 1", "high", "rerun_pipeline")],
+          "services/api/test.ts"
+        ),
+        createAnalyzedFailureWithActions(
+          [createRecommendedActionWithPriority("Action 2", "medium", "notify_team")],
+          "services/slack-bot/test.ts"
+        ),
       ];
 
       const mergedActions = mergeRecommendedActions(analyzedFailures);
 
+      // Should have 2 actions (one from each service)
       expect(mergedActions).toHaveLength(2);
     });
 
@@ -208,39 +250,49 @@ describe("Formatter Utilities", () => {
       expect(mergedActions).toHaveLength(1);
     });
 
-    it("should sort by priority", () => {
+    it("should sort by priority across services", () => {
+      // Actions from different services, sorted by priority
       const analyzedFailures = [
-        createAnalyzedFailureWithActions([
-          createRecommendedActionWithPriority("Low priority", "low", "notify_team"),
-        ]),
-        createAnalyzedFailureWithActions([
-          createRecommendedActionWithPriority("High priority", "high", "rerun_pipeline"),
-        ]),
-        createAnalyzedFailureWithActions([
-          createRecommendedActionWithPriority("Immediate", "immediate", "post_comment"),
-        ]),
+        createAnalyzedFailureWithActions(
+          [createRecommendedActionWithPriority("Low priority", "low", "notify_team")],
+          "services/api/test.ts"
+        ),
+        createAnalyzedFailureWithActions(
+          [createRecommendedActionWithPriority("High priority", "high", "rerun_pipeline")],
+          "services/slack-bot/test.ts"
+        ),
+        createAnalyzedFailureWithActions(
+          [createRecommendedActionWithPriority("Immediate", "immediate", "post_comment")],
+          "services/github-app/test.ts"
+        ),
       ];
 
       const mergedActions = mergeRecommendedActions(analyzedFailures);
 
-      expect(mergedActions[0].description).toBe("Immediate");
-      expect(mergedActions[1].description).toBe("High priority");
-      expect(mergedActions[2].description).toBe("Low priority");
+      // Should be sorted by priority (immediate > high > low)
+      expect(mergedActions[0].description).toContain("Immediate");
+      expect(mergedActions[1].description).toContain("High priority");
+      expect(mergedActions[2].description).toContain("Low priority");
     });
 
-    it("should limit to DISPLAY_LIMITS.recommendedActions", () => {
-      // Create 20 actions with unique actionTypes to avoid deduplication
-      const manyActions = Array.from({ length: 20 }, (_, actionIndex) =>
-        createRecommendedActionWithPriority(
-          `Action ${actionIndex}`,
-          "medium",
-          `action_type_${actionIndex}`
+    it("should limit to DISPLAY_LIMITS.recommendedActions across services", () => {
+      // Create failures in 20 different services, each with one action
+      const analyzedFailures = Array.from({ length: 20 }, (_, serviceIndex) =>
+        createAnalyzedFailureWithActions(
+          [
+            createRecommendedActionWithPriority(
+              `Action ${serviceIndex}`,
+              "medium",
+              `action_type_${serviceIndex}`
+            ),
+          ],
+          `services/service-${serviceIndex}/test.ts`
         )
       );
-      const analyzedFailures = [createAnalyzedFailureWithActions(manyActions)];
 
       const mergedActions = mergeRecommendedActions(analyzedFailures);
 
+      // Should be limited to DISPLAY_LIMITS.recommendedActions (10)
       expect(mergedActions).toHaveLength(DISPLAY_LIMITS.recommendedActions);
     });
 

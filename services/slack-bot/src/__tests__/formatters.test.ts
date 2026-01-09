@@ -52,17 +52,19 @@ describe("Slack Bot Formatters", () => {
 
     it("should include header block", () => {
       const blocks = formatAnalysisMessage(mockAnalysis, mockConfidence);
-      const headerBlock = blocks.find((b) => b.type === "header");
+      const headerBlock = blocks.find((block) => block.type === "header");
 
       expect(headerBlock).toBeDefined();
     });
 
     it("should include confidence information", () => {
       const blocks = formatAnalysisMessage(mockAnalysis, mockConfidence);
-      const sectionBlocks = blocks.filter((b) => b.type === "section");
+      const sectionBlocks = blocks.filter((block) => block.type === "section");
 
       // Check that at least one section contains confidence info
-      const hasConfidence = sectionBlocks.some((b) => JSON.stringify(b).includes("Confidence"));
+      const hasConfidence = sectionBlocks.some((block) =>
+        JSON.stringify(block).includes("Confidence")
+      );
 
       expect(hasConfidence).toBe(true);
     });
@@ -97,7 +99,7 @@ describe("Slack Bot Formatters", () => {
 
     it("should include footer with metadata", () => {
       const blocks = formatAnalysisMessage(mockAnalysis, mockConfidence);
-      const contextBlock = blocks.find((b) => b.type === "context");
+      const contextBlock = blocks.find((block) => block.type === "context");
 
       expect(contextBlock).toBeDefined();
     });
@@ -286,7 +288,7 @@ describe("Slack Bot Formatters", () => {
 
     it("should include dividers between sections", () => {
       const blocks = formatAnalysisMessage(mockAnalysis, mockConfidence);
-      const dividers = blocks.filter((b) => b.type === "divider");
+      const dividers = blocks.filter((block) => block.type === "divider");
 
       expect(dividers.length).toBeGreaterThan(0);
     });
@@ -349,7 +351,7 @@ describe("Slack Bot Formatters", () => {
       const blocks = formatActionButtons(safeActions, "evt_test");
 
       // Should only have divider and header, no action buttons
-      const actionBlocks = blocks.filter((b) => b.type === "actions");
+      const actionBlocks = blocks.filter((block) => block.type === "actions");
       expect(actionBlocks.length).toBe(0);
     });
 
@@ -371,7 +373,7 @@ describe("Slack Bot Formatters", () => {
       const blocks = formatActionButtons(manyActions, "evt_test");
 
       // Should limit to max actions
-      const actionBlocks = blocks.filter((b) => b.type === "actions");
+      const actionBlocks = blocks.filter((block) => block.type === "actions");
       expect(actionBlocks.length).toBeLessThanOrEqual(5);
     });
 
@@ -422,13 +424,13 @@ describe("Slack Bot Formatters", () => {
       const blocks = formatActionButtons(mixedActions, "evt_test");
 
       // Should only include the risky action
-      const actionBlocks = blocks.filter((b) => b.type === "actions");
+      const actionBlocks = blocks.filter((block) => block.type === "actions");
       expect(actionBlocks.length).toBe(1);
     });
 
     it("should include divider before actions", () => {
       const blocks = formatActionButtons(mockActions, "evt_test");
-      const dividers = blocks.filter((b) => b.type === "divider");
+      const dividers = blocks.filter((block) => block.type === "divider");
 
       expect(dividers.length).toBeGreaterThan(0);
     });
@@ -495,7 +497,7 @@ describe("Slack Bot Formatters", () => {
     it("should include context block with help text", () => {
       const error = new Error("Test error");
       const blocks = formatErrorMessage(error);
-      const contextBlock = blocks.find((b) => b.type === "context");
+      const contextBlock = blocks.find((block) => block.type === "context");
 
       expect(contextBlock).toBeDefined();
     });
@@ -586,7 +588,7 @@ describe("Slack Bot Formatters", () => {
 
     it("should include section block type", () => {
       const blocks = formatProgressUpdate("action_1", "pending", "Test");
-      const sectionBlock = blocks.find((b) => b.type === "section");
+      const sectionBlock = blocks.find((block) => block.type === "section");
 
       expect(sectionBlock).toBeDefined();
     });

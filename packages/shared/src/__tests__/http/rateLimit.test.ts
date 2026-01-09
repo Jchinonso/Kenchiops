@@ -37,11 +37,16 @@ jest.mock("../../queue/redisClient.js", () => ({
 
 describe("Rate Limiting", () => {
   // Mock Express objects
-  const createMockRequest = (ip = "127.0.0.1"): Request =>
+  // Use non-private IP and include headers for consistent fingerprinting
+  const createMockRequest = (ip = "203.0.113.1"): Request =>
     ({
       ip,
       method: "GET",
       path: "/test",
+      headers: {
+        "user-agent": "test-agent",
+      },
+      socket: {},
     }) as Request;
 
   const createMockResponse = (): Response => ({}) as Response;
@@ -138,8 +143,9 @@ describe("Rate Limiting", () => {
         const limiter = createRateLimiter({ windowMs: 60000, max: 2 });
         const middleware = limiter.middleware();
 
-        const req1 = createMockRequest("192.168.1.1");
-        const req2 = createMockRequest("192.168.1.2");
+        // Use non-private IPs for testing
+        const req1 = createMockRequest("203.0.113.1");
+        const req2 = createMockRequest("203.0.113.2");
         const res = createMockResponse();
         const next = createMockNext();
 
@@ -407,8 +413,9 @@ describe("Rate Limiting", () => {
         const limiter = createRateLimiter({ windowMs: 1000, max: 2 });
         const middleware = limiter.middleware();
 
-        const req1 = createMockRequest("192.168.1.1");
-        const req2 = createMockRequest("192.168.1.2");
+        // Use non-private IPs for testing
+        const req1 = createMockRequest("203.0.113.1");
+        const req2 = createMockRequest("203.0.113.2");
         const res = createMockResponse();
         const next = createMockNext();
 
@@ -420,7 +427,7 @@ describe("Rate Limiting", () => {
         jest.advanceTimersByTime(1001);
 
         // Trigger cleanup with a third IP
-        const req3 = createMockRequest("192.168.1.3");
+        const req3 = createMockRequest("203.0.113.3");
         middleware(req3, res, next);
 
         // After cleanup, old IPs should be able to make new requests
@@ -458,8 +465,9 @@ describe("Rate Limiting", () => {
         const limiter = createRateLimiter({ windowMs: 60000, max: 1 });
         const middleware = limiter.middleware();
 
-        const req1 = createMockRequest("192.168.1.1");
-        const req2 = createMockRequest("192.168.1.2");
+        // Use non-private IPs for testing
+        const req1 = createMockRequest("203.0.113.1");
+        const req2 = createMockRequest("203.0.113.2");
         const res = createMockResponse();
         const next = createMockNext();
 
@@ -518,7 +526,8 @@ describe("Rate Limiting", () => {
       it("should handle very short time window", () => {
         jest.useFakeTimers();
 
-        const limiter = createRateLimiter({ windowMs: 10, max: 2 });
+        // Minimum allowed windowMs is 100ms per security validation
+        const limiter = createRateLimiter({ windowMs: 100, max: 2 });
         const middleware = limiter.middleware();
 
         const req = createMockRequest();
@@ -530,7 +539,8 @@ describe("Rate Limiting", () => {
 
         expect(() => middleware(req, res, next)).toThrow(AppError);
 
-        jest.advanceTimersByTime(11);
+        // Advance past the 100ms window
+        jest.advanceTimersByTime(101);
 
         middleware(req, res, next);
         expect(next).toHaveBeenCalledTimes(3);

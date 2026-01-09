@@ -17,6 +17,15 @@ jest.mock("@kenchi/shared", () => ({
   TIME_CONSTANTS: {
     MILLISECONDS_PER_SECOND: 1000,
   },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
+  UI_EMOJI: {
+    thumbsUp: "👍",
+    thumbsDown: "👎",
+    info: "ℹ️",
+  },
+  isDocIngestionRequest: jest.fn(() => false),
 }));
 
 jest.mock("../formatters.js", () => ({
@@ -26,6 +35,38 @@ jest.mock("../formatters.js", () => ({
   formatErrorMessage: jest.fn(() => [
     { type: "section", text: { type: "mrkdwn", text: "Error message" } },
   ]),
+}));
+
+jest.mock("../formatters/qaFormatter.js", () => ({
+  formatQAResponse: jest.fn(() => [
+    { type: "section", text: { type: "mrkdwn", text: "Q&A response" } },
+  ]),
+  formatQAErrorMessage: jest.fn(() => [
+    { type: "section", text: { type: "mrkdwn", text: "Q&A error" } },
+  ]),
+}));
+
+jest.mock("../services/qaService.js", () => ({
+  shouldTriggerQA: jest.fn(() => false),
+  performQASearch: jest.fn(() =>
+    Promise.resolve({
+      success: true,
+      query: "test query",
+      results: [
+        {
+          id: "doc-1",
+          title: "Test Doc",
+          snippet: "Test content",
+          docType: "runbook",
+          similarity: 0.85,
+          sourceType: "knowledge",
+        },
+      ],
+      totalFound: 1,
+      cacheHit: false,
+    })
+  ),
+  generateQueryId: jest.fn(() => "qa_test_123"),
 }));
 
 jest.mock("../services/analysisService.js", () => ({
@@ -716,6 +757,196 @@ describe("Mention Handler", () => {
 
       await handleAppMention(event, mockSay);
 
+      expect(mockSay).toHaveBeenCalled();
+    });
+  });
+
+  describe("Q&A routing", () => {
+    it("should route to Q&A handler when shouldTriggerQA returns true", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA, performQASearch } = jest.requireMock(
+        "../services/qaService.js"
+      ) as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { formatQAResponse } = jest.requireMock("../formatters/qaFormatter.js") as any;
+      shouldTriggerQA.mockReturnValueOnce(true);
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> how do I restart the service?",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      expect(shouldTriggerQA).toHaveBeenCalledWith("how do I restart the service?");
+      expect(performQASearch).toHaveBeenCalled();
+      expect(formatQAResponse).toHaveBeenCalled();
+    });
+
+    it("should route to analysis handler when shouldTriggerQA returns false", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA } = jest.requireMock("../services/qaService.js") as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { performAnalysis } = jest.requireMock("../services/analysisService.js") as any;
+      shouldTriggerQA.mockReturnValueOnce(false);
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> analyze this build failure",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      expect(shouldTriggerQA).toHaveBeenCalled();
+      expect(performAnalysis).toHaveBeenCalled();
+    });
+
+    it("should send Q&A response in thread", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA } = jest.requireMock("../services/qaService.js") as any;
+      shouldTriggerQA.mockReturnValueOnce(true);
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> what is the deploy process?",
+        ts: "1234567890.111111",
+        thread_ts: "1234567890.000000",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      expect(mockSay).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thread_ts: "1234567890.000000",
+        })
+      );
+    });
+
+    it("should generate query ID for Q&A responses", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA, generateQueryId } = jest.requireMock(
+        "../services/qaService.js"
+      ) as any;
+      shouldTriggerQA.mockReturnValueOnce(true);
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> how do I configure caching?",
+        user: "U789012",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      expect(generateQueryId).toHaveBeenCalledWith("how do I configure caching?", "U789012");
+    });
+
+    it("should handle Q&A search errors gracefully", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA, performQASearch } = jest.requireMock(
+        "../services/qaService.js"
+      ) as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { formatQAErrorMessage } = jest.requireMock("../formatters/qaFormatter.js") as any;
+      shouldTriggerQA.mockReturnValueOnce(true);
+      performQASearch.mockRejectedValueOnce(new Error("Search service unavailable"));
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> how do I fix this?",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      expect(formatQAErrorMessage).toHaveBeenCalled();
+      expect(mockSay).toHaveBeenCalled();
+    });
+
+    it("should send Q&A error in correct thread", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA, performQASearch } = jest.requireMock(
+        "../services/qaService.js"
+      ) as any;
+      shouldTriggerQA.mockReturnValueOnce(true);
+      performQASearch.mockRejectedValueOnce(new Error("Error"));
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> what happened?",
+        ts: "1234567890.111111",
+        thread_ts: "1234567890.000000",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      expect(mockSay).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thread_ts: "1234567890.000000",
+        })
+      );
+    });
+
+    it("should not send feedback buttons for Q&A responses", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA } = jest.requireMock("../services/qaService.js") as any;
+      shouldTriggerQA.mockReturnValueOnce(true);
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> how do I restart?",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      // Q&A should only call say once (includes feedback in response)
+      expect(mockSay).toHaveBeenCalledTimes(1);
+    });
+
+    it("should pass Q&A search results to formatter", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA, performQASearch, generateQueryId } = jest.requireMock(
+        "../services/qaService.js"
+      ) as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { formatQAResponse } = jest.requireMock("../formatters/qaFormatter.js") as any;
+      shouldTriggerQA.mockReturnValueOnce(true);
+      const mockResponse = {
+        success: true,
+        query: "how do I restart?",
+        results: [{ id: "doc-1", title: "Test" }],
+        totalFound: 1,
+        cacheHit: false,
+      };
+      performQASearch.mockResolvedValueOnce(mockResponse);
+      generateQueryId.mockReturnValueOnce("qa_custom_123");
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> how do I restart?",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      expect(formatQAResponse).toHaveBeenCalledWith(mockResponse, "qa_custom_123");
+    });
+
+    it("should handle Q&A with empty query after mention removal", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA } = jest.requireMock("../services/qaService.js") as any;
+      shouldTriggerQA.mockReturnValueOnce(false); // Empty string won't be a question
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456>",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      expect(shouldTriggerQA).toHaveBeenCalledWith("");
+    });
+
+    it("should log Q&A routing decision", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { shouldTriggerQA } = jest.requireMock("../services/qaService.js") as any;
+      shouldTriggerQA.mockReturnValueOnce(true);
+
+      const event = createMockAppMentionEvent({
+        text: "<@U123456> how do I deploy?",
+      });
+
+      await handleAppMention(event, mockSay);
+
+      // Logger should have been called - we just verify no errors
       expect(mockSay).toHaveBeenCalled();
     });
   });

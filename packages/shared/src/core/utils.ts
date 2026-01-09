@@ -7,6 +7,7 @@
  */
 
 import { ID_GENERATION } from "../constants/core.js";
+import { FEEDBACK_URL_CONFIG } from "../constants/passiveLearning.js";
 
 // ==================== Promise Utilities ====================
 
@@ -119,4 +120,116 @@ export const generateEventId = (prefix: string = ID_GENERATION.DEFAULT_PREFIX): 
     .toString(36)
     .substring(ID_GENERATION.RANDOM_START_INDEX, ID_GENERATION.RANDOM_END_INDEX);
   return `${prefix}_${timestamp}_${random}`;
+};
+
+// ==================== Signed URL Utilities ====================
+
+/**
+ * Parameters for signed URL generation.
+ */
+export interface SignedUrlParams {
+  readonly analysisId: string;
+  readonly feedbackType: "correct" | "incorrect";
+  readonly expiresAt: number;
+}
+
+/**
+ * Generate HMAC-SHA256 signature for URL parameters.
+ *
+ * @param params - Parameters to sign
+ * @param secret - Secret key for signing
+ * @returns Base64url-encoded signature
+ */
+export const generateUrlSignature = async (
+  params: SignedUrlParams,
+  secret: string
+): Promise<string> => {
+  const { createHmac } = await import("crypto");
+  const data = `${params.analysisId}:${params.feedbackType}:${params.expiresAt}`;
+  const hmac = createHmac("sha256", secret);
+  hmac.update(data);
+  return hmac.digest("base64url");
+};
+
+/**
+ * Verify HMAC-SHA256 signature for URL parameters.
+ *
+ * @param params - Parameters that were signed
+ * @param signature - Signature to verify
+ * @param secret - Secret key used for signing
+ * @returns True if signature is valid
+ */
+export const verifyUrlSignature = async (
+  params: SignedUrlParams,
+  signature: string,
+  secret: string
+): Promise<boolean> => {
+  const expectedSignature = await generateUrlSignature(params, secret);
+  return signature === expectedSignature;
+};
+
+/**
+ * Generate a signed feedback URL.
+ *
+ * @param baseUrl - Base URL for the feedback endpoint
+ * @param analysisId - Analysis ID to provide feedback for
+ * @param feedbackType - Type of feedback (correct/incorrect)
+ * @param secret - Secret key for signing
+ * @param expiryMs - URL expiry time in milliseconds (default from config)
+ * @returns Signed feedback URL
+ */
+export const generateFeedbackUrl = async (
+  baseUrl: string,
+  analysisId: string,
+  feedbackType: "correct" | "incorrect",
+  secret: string,
+  expiryMs: number = FEEDBACK_URL_CONFIG.DEFAULT_EXPIRY_MS
+): Promise<string> => {
+  const expiresAt = Date.now() + expiryMs;
+  const params: SignedUrlParams = { analysisId, feedbackType, expiresAt };
+  const signature = await generateUrlSignature(params, secret);
+
+  const url = new URL(baseUrl);
+  url.searchParams.set("analysisId", analysisId);
+  url.searchParams.set("type", feedbackType);
+  url.searchParams.set("expires", expiresAt.toString());
+  url.searchParams.set("sig", signature);
+
+  return url.toString();
+};
+
+/**
+ * Parse and verify a signed feedback URL.
+ *
+ * @param url - URL to parse and verify
+ * @param secret - Secret key for verification
+ * @returns Parsed parameters if valid, null if invalid or expired
+ */
+export const parseFeedbackUrl = async (
+  url: string,
+  secret: string
+): Promise<SignedUrlParams | null> => {
+  const parsed = new URL(url);
+  const analysisId = parsed.searchParams.get("analysisId");
+  const feedbackType = parsed.searchParams.get("type");
+  const expiresStr = parsed.searchParams.get("expires");
+  const signature = parsed.searchParams.get("sig");
+
+  if (!analysisId || !feedbackType || !expiresStr || !signature) {
+    return null;
+  }
+
+  if (feedbackType !== "correct" && feedbackType !== "incorrect") {
+    return null;
+  }
+
+  const expiresAt = parseInt(expiresStr, 10);
+  if (isNaN(expiresAt) || expiresAt < Date.now()) {
+    return null;
+  }
+
+  const params: SignedUrlParams = { analysisId, feedbackType, expiresAt };
+  const isValid = await verifyUrlSignature(params, signature, secret);
+
+  return isValid ? params : null;
 };
