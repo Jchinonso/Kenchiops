@@ -27,7 +27,8 @@ interface SectionActionMatcher {
 
 /**
  * Patterns for generic causes that should be replaced with evidence-based causes.
- * Only exact/nearly-exact matches - avoid replacing legitimate detailed causes.
+ * Match causes that describe failures without specifying specific test names,
+ * file paths, or actual error messages.
  */
 const GENERIC_CAUSE_PATTERNS: readonly RegExp[] = [
   /^test execution failed\.?$/i,
@@ -36,6 +37,9 @@ const GENERIC_CAUSE_PATTERNS: readonly RegExp[] = [
   /^build failed\.?$/i,
   /^workflow failed\.?$/i,
   /^multiple tests? failed\.?$/i,
+  // Generic causes with vague qualifiers but no specific details
+  /^test execution failed due to (?:assertion errors?|test failures?|errors?)(?: in (?:multiple|several|various) test cases?)?\.?$/i,
+  /^(?:multiple|several) tests? failed due to (?:assertion errors?|errors?)\.?$/i,
 ];
 
 const ACTION_EVIDENCE_HINTS: readonly ActionEvidenceHint[] = [
@@ -131,7 +135,7 @@ const extractEvidenceIdentifiers = (text: string): string[] => {
     ...(text.match(FILE_PATH_IDENTIFIER) ?? []),
     ...contextualIdentifiers,
   ];
-  const uniqueIdentifiers = Array.from(new Set(rawIdentifiers.map((id) => id.trim())));
+  const uniqueIdentifiers = Array.from(new Set(rawIdentifiers.map((rawId) => rawId.trim())));
   return uniqueIdentifiers.filter((identifier) => identifier.length >= 4);
 };
 
