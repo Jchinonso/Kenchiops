@@ -19,13 +19,13 @@ jest.mock("openai", () => {
 });
 
 // Helper to set mock response
-function setMockOpenAIResponse(response: any) {
-  (mockCreate as any).mockResolvedValueOnce(response);
+function setMockOpenAIResponse(response: unknown): void {
+  (mockCreate as jest.Mock).mockResolvedValueOnce(response);
 }
 
 // Helper to set mock error
-function setMockOpenAIError(error: any) {
-  (mockCreate as any).mockRejectedValueOnce(error);
+function setMockOpenAIError(error: unknown): void {
+  (mockCreate as jest.Mock).mockRejectedValueOnce(error);
 }
 
 describe("OpenAIClient", () => {
@@ -396,9 +396,9 @@ describe("OpenAIClient", () => {
       // Create evidence with lots of logs
       const largeEvidence: Evidence = {
         ...mockEvidence,
-        logs: Array.from({ length: 100 }, (_, i) => ({
+        logs: Array.from({ length: 100 }, (_unusedElement, logIndex) => ({
           level: "ERROR",
-          message: `Error message ${i}`.repeat(100),
+          message: `Error message ${logIndex}`.repeat(100),
           timestamp: "2025-12-17T10:00:00Z",
           source: "api",
         })),
