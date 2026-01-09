@@ -9,6 +9,12 @@ import {
   GITHUB_COMMENT_DISPLAY,
   FILE_PATH_VALIDATION,
   FORMATTER_DISPLAY_LIMITS,
+  extractMeaningfulCause,
+  sanitizeTestFailureMessage,
+  generateTestEvidenceId,
+  generateAnnoEvidenceId,
+  partitionByFailureType,
+  countUniqueFiles,
   type AnalyzedFailure,
 } from "@kenchi/shared";
 import { DISPLAY_LIMITS } from "./formatterUtils.js";
@@ -64,22 +70,54 @@ const extractValidFileLocation = (path: string, line: number): string | null => 
 };
 
 /**
- * Normalizes annotation message for display
+ * Normalizes annotation/error message for display.
+ * Uses extractMeaningfulCause to find meaningful assertion details,
+ * filtering out useless content like matcher names and test runner markers.
  */
 const normalizeAnnotationMessage = (message: string): string => {
   const stripped = message.replace(FILE_PATH_VALIDATION.EVIDENCE_PREFIX_PATTERN, "").trim();
-  const lines = stripped.split("\n").map((messageLine) => messageLine.trim());
-  const firstLine =
-    lines.find((messageLine) => messageLine.length > 0 && !/^TEST_ERROR_/i.test(messageLine)) ?? "";
-  return truncateDisplay(firstLine, 60);
+  // Use extractMeaningfulCause which filters out useless content
+  // It already calls extractAssertionSnippet internally with proper filtering
+  const meaningful = extractMeaningfulCause(stripped);
+  if (meaningful && meaningful.length > 5) {
+    return truncateDisplay(meaningful, 60);
+  }
+  // Return empty string if no meaningful content (better than showing useless content)
+  return "";
 };
 
 /**
- * Formats an annotation entry showing error and fix compactly.
- * Shows: `path:line` - error (Fix: short fix)
- * Returns null if no valid file location.
+ * Formats a test failure entry with evidence ID.
+ * Test failures should be pre-normalized via normalizeTestFailure() at consolidation.
+ * Validates file paths to prevent error text from appearing in location.
  */
-const formatAnnotationEntry = (annotation: ConsolidatedAnnotation): string | null => {
+const formatTestFailureEntry = (
+  testFailure: ConsolidatedTestFailure,
+  index: number
+): string | null => {
+  const location = testFailure.file
+    ? extractValidFileLocation(testFailure.file, testFailure.line ?? 0)
+    : null;
+  if (!location) {
+    return null;
+  }
+
+  const normalizedError = testFailure.error ? sanitizeTestFailureMessage(testFailure.error) : "";
+  // Only show entry if we have meaningful error content
+  if (normalizedError.length === 0) {
+    return null;
+  }
+  const evidenceId = generateTestEvidenceId(index);
+  return `   ${UI_EMOJI.list} \`${location}\` — ${normalizedError} [${evidenceId}]`;
+};
+
+/**
+ * Formats an annotation entry with evidence ID.
+ */
+const formatAnnotationEntryWithId = (
+  annotation: ConsolidatedAnnotation,
+  index: number
+): string | null => {
   const location = extractValidFileLocation(annotation.path, annotation.line);
   if (!location) {
     return null;
@@ -90,40 +128,88 @@ const formatAnnotationEntry = (annotation: ConsolidatedAnnotation): string | nul
   const fixNote = annotation.suggestedFix
     ? ` _(Fix: ${normalizeAnnotationMessage(annotation.suggestedFix)})_`
     : "";
+  const evidenceId = generateAnnoEvidenceId(index);
 
-  return `   ${UI_EMOJI.list} \`${location}\` — ${errorSummary}${fixNote}`;
+  return `   ${UI_EMOJI.list} \`${location}\` — ${errorSummary}${fixNote} [${evidenceId}]`;
 };
 
 /**
- * Formats a test failure entry.
- * Test failures should be pre-normalized via normalizeTestFailure() at consolidation.
- * Validates file paths to prevent error text from appearing in location.
+ * Groups test failures by file path for compact display.
  */
-const formatTestFailureEntry = (testFailure: ConsolidatedTestFailure): string | null => {
-  const location = testFailure.file
-    ? extractValidFileLocation(testFailure.file, testFailure.line ?? 0)
-    : null;
-  if (!location) {
-    return null;
+interface GroupedFileEntry {
+  readonly file: string;
+  readonly failures: readonly ConsolidatedTestFailure[];
+}
+
+const MAX_ASSERTIONS_PER_FILE = 2;
+
+/**
+ * Groups test failures by file for more compact display.
+ * Filters out entries without valid file paths.
+ */
+const groupTestFailuresByFile = (
+  testFailures: readonly ConsolidatedTestFailure[]
+): GroupedFileEntry[] => {
+  const groups = new Map<string, ConsolidatedTestFailure[]>();
+
+  testFailures.forEach((testFailure) => {
+    // Skip failures without valid file paths - don't group as "unknown"
+    const { file } = testFailure;
+    if (!file || file === "unknown" || !extractValidFileLocation(file, testFailure.line ?? 0)) {
+      return;
+    }
+    const existing = groups.get(file) ?? [];
+    groups.set(file, [...existing, testFailure]);
+  });
+
+  return Array.from(groups.entries()).map(([file, failures]) => ({ file, failures }));
+};
+
+/**
+ * Formats a grouped file entry showing count if multiple assertions.
+ */
+const formatGroupedFileEntry = (group: GroupedFileEntry, startIndex: number): readonly string[] => {
+  const { file, failures } = group;
+
+  // If only one failure, format normally
+  if (failures.length === 1) {
+    const formatted = formatTestFailureEntry(failures[0], startIndex);
+    return formatted ? [formatted] : [];
   }
 
-  const truncatedTestName = truncateDisplay(testFailure.testName, 50);
-  const normalizedError = testFailure.error ? normalizeAnnotationMessage(testFailure.error) : "";
-  const isPathOnly = testFailure.file && testFailure.file === testFailure.testName;
-  const isGenericName = testFailure.testName.trim().toLowerCase() === "test failed";
-  const display =
-    normalizedError && (isPathOnly || isGenericName)
-      ? `Test failed: ${normalizedError}`
-      : `Test failed: ${truncatedTestName}`;
-  return `   ${UI_EMOJI.list} \`${location}\` — ${display}`;
+  // Multiple failures in same file - show file header with count, then individual errors
+  const lines: string[] = [];
+  const basePath = file;
+  const displayedFailures = failures.slice(0, MAX_ASSERTIONS_PER_FILE);
+
+  // Show file with assertion count
+  lines.push(`   ${UI_EMOJI.list} \`${basePath}\` (${failures.length} assertions)`);
+
+  // Show individual assertions (indented) - only show meaningful errors
+  displayedFailures.forEach((failure, failureIndex) => {
+    const normalizedError = failure.error ? sanitizeTestFailureMessage(failure.error) : "";
+    // Skip entries without meaningful error content - don't show "assertion failed"
+    if (normalizedError.length === 0) {
+      return;
+    }
+    const lineNum = failure.line ? `:${failure.line}` : "";
+    const evidenceId = generateTestEvidenceId(startIndex + failureIndex);
+    lines.push(`      - ${lineNum} ${normalizedError} [${evidenceId}]`);
+  });
+
+  if (failures.length > displayedFailures.length) {
+    lines.push(`      - _...and ${failures.length - displayedFailures.length} more assertions_`);
+  }
+
+  return lines;
 };
 
 // ==================== Block Builders ====================
 
 /**
- * Build consolidated affected files block
+ * Build consolidated affected files block with infra/assertion separation.
  * Combines annotations and test failures into a single unified view.
- * Applies display limits and shows "...and N more" for overflow.
+ * Groups same-file entries, adds evidence IDs, and separates infra issues.
  */
 export const buildAnnotationsBlock = (
   annotations: readonly ConsolidatedAnnotation[],
@@ -131,30 +217,87 @@ export const buildAnnotationsBlock = (
 ): SlackTextBlock | null => {
   const displayLimit = DISPLAY_LIMITS.slackAnnotationsPerCheck;
 
+  // Phase 8: Partition test failures into assertions vs infra/timeouts
+  const { assertions, timeouts, infra } = partitionByFailureType(testFailures);
+  const infraIssues = [...timeouts, ...infra];
+
+  // Format annotation entries with evidence IDs
   const formattedAnnotations = annotations
-    .map((annotation) => formatAnnotationEntry(annotation))
+    .map((annotation, annotationIndex) => formatAnnotationEntryWithId(annotation, annotationIndex))
     .filter((line): line is string => Boolean(line));
 
-  const formattedTestFailures = testFailures
-    .map((testFailure) => formatTestFailureEntry(testFailure))
+  // Phase 7: Group assertion failures by file
+  const groupedAssertions = groupTestFailuresByFile(assertions);
+  const assertionLines: string[] = [];
+  let testIndex = 0;
+  groupedAssertions.forEach((group) => {
+    const formatted = formatGroupedFileEntry(group, testIndex);
+    assertionLines.push(...formatted);
+    testIndex += group.failures.length;
+  });
+
+  // Format infra issues separately (with special icon)
+  const infraLines = infraIssues
+    .map((failure, failureIndex) => {
+      const location = failure.file
+        ? extractValidFileLocation(failure.file, failure.line ?? 0)
+        : null;
+      if (!location) {
+        return null;
+      }
+      const normalizedError = failure.error
+        ? sanitizeTestFailureMessage(failure.error)
+        : "Infrastructure issue";
+      const evidenceId = generateTestEvidenceId(testIndex + failureIndex);
+      return `   ${UI_EMOJI.warning} \`${location}\` — ${normalizedError} [${evidenceId}]`;
+    })
     .filter((line): line is string => Boolean(line));
 
-  const totalCount = formattedAnnotations.length + formattedTestFailures.length;
-  if (totalCount === 0) {
+  const totalDisplayLines = formattedAnnotations.length + assertionLines.length + infraLines.length;
+  const validAnnotations = annotations.filter((annotation) =>
+    Boolean(extractValidFileLocation(annotation.path, annotation.line))
+  );
+  const validTestFailures = testFailures.filter(
+    (failure) => failure.file && extractValidFileLocation(failure.file, failure.line ?? 0)
+  );
+  const uniqueFileCount = countUniqueFiles(validTestFailures, validAnnotations);
+  if (totalDisplayLines === 0) {
     return null;
   }
 
-  // Format annotation entries (prioritize these first)
-  const annotationLines = formattedAnnotations.slice(0, displayLimit);
+  // Build sections: infra first (if any), then annotations, then test failures
+  const sections: string[] = [];
+
+  // Show infra issues prominently at top
+  if (infraLines.length > 0) {
+    sections.push(`*${UI_EMOJI.warning} Infrastructure Issues (${infraLines.length}):*`);
+    sections.push(...infraLines.slice(0, Math.min(displayLimit, infraLines.length)));
+    if (infraLines.length > displayLimit) {
+      sections.push(`   _...and ${infraLines.length - displayLimit} more infra issues_`);
+    }
+    sections.push(""); // Empty line separator
+  }
+
+  // Calculate remaining slots after infra
+  const infraUsed = Math.min(infraLines.length, displayLimit);
+  const remainingAfterInfra = Math.max(0, displayLimit - infraUsed);
+
+  // Format annotation entries (prioritize these)
+  const annotationSlots = Math.min(formattedAnnotations.length, remainingAfterInfra);
+  if (annotationSlots > 0) {
+    sections.push(...formattedAnnotations.slice(0, annotationSlots));
+  }
 
   // Calculate remaining slots for test failures
-  const remainingSlots = Math.max(0, displayLimit - annotationLines.length);
-  const testFailureLines = formattedTestFailures.slice(0, remainingSlots);
+  const remainingSlots = Math.max(0, remainingAfterInfra - annotationSlots);
+  if (remainingSlots > 0 && assertionLines.length > 0) {
+    sections.push(...assertionLines.slice(0, remainingSlots));
+  }
 
-  const displayedLines = [...annotationLines, ...testFailureLines];
-  const displayedCount = displayedLines.length;
-  const overflowCount = totalCount - displayedCount;
-
+  // Calculate overflow
+  const displayedCount =
+    infraUsed + annotationSlots + Math.min(assertionLines.length, remainingSlots);
+  const overflowCount = totalDisplayLines - displayedCount;
   const moreText = overflowCount > 0 ? `\n   _...and ${overflowCount} more_` : "";
 
   return {
@@ -162,7 +305,9 @@ export const buildAnnotationsBlock = (
     elements: [
       {
         type: "mrkdwn",
-        text: `${UI_EMOJI.location} *Affected Files (${totalCount}):*\n${displayedLines.join("\n")}${moreText}`,
+        text: `${UI_EMOJI.location} *Affected Files (${uniqueFileCount}):*\n${sections.join(
+          "\n"
+        )}${moreText}`,
       },
     ],
   };

@@ -6,6 +6,15 @@ import {
   collectCIErrors,
   formatDependencyChange,
   formatDependencyChanges,
+  canonicalizeEvidencePaths,
+  countUniqueSuites,
+  countUniqueFiles,
+  clusterFailuresByService,
+  selectBestClusterCause,
+  scoreClusterSignal,
+  formatEvidenceLocation,
+  isLowSignalCause,
+  summarizeRootCauses,
 } from "../../formatting/ciFormatters.js";
 import type {
   CIAnnotation,
@@ -612,6 +621,174 @@ describe("CI Formatters", () => {
       const result = formatDependencyChange(deps[0]);
 
       expect(result).toContain("日本語パッケージ");
+    });
+  });
+
+  describe("canonicalizeEvidencePaths", () => {
+    it("should coalesce basename-only test paths to a single matching directory path", () => {
+      const testFailures: CITestFailure[] = [
+        { testName: "test subtract", file: "tests/test_calculator.py" },
+        { testName: "test subtract", file: "test_calculator.py" },
+      ];
+      const annotations: CIAnnotation[] = [];
+
+      const result = canonicalizeEvidencePaths(testFailures, annotations);
+      const files = result.testFailures
+        .map((failure) => failure.file)
+        .filter((file): file is string => Boolean(file));
+
+      expect(files).toEqual(["tests/test_calculator.py", "tests/test_calculator.py"]);
+    });
+  });
+
+  describe("countUniqueFiles/countUniqueSuites", () => {
+    it("should count a single suite when paths only differ by missing directory", () => {
+      const testFailures: CITestFailure[] = [
+        { testName: "test subtract", file: "tests/test_calculator.py" },
+        { testName: "test subtract", file: "test_calculator.py" },
+      ];
+
+      expect(countUniqueSuites(testFailures)).toBe(1);
+    });
+
+    it("should count a single file when annotations and tests point to the same basename", () => {
+      const testFailures: CITestFailure[] = [{ testName: "test subtract", file: "test_calc.py" }];
+      const annotations: CIAnnotation[] = [
+        {
+          path: "tests/test_calc.py",
+          startLine: 12,
+          level: "failure",
+          message: "assert 1 == 2",
+        },
+      ];
+
+      expect(countUniqueFiles(testFailures, annotations)).toBe(1);
+    });
+  });
+
+  describe("clusterFailuresByService", () => {
+    it("should group mismatched paths under a single service when basenames align", () => {
+      const failures = [
+        {
+          identifiedCause: "",
+          analysis: "",
+          testFailures: [
+            { file: "tests/test_calculator.py", line: 12, error: "assert 5 == 3" },
+            { file: "test_calculator.py", line: 18, error: "assert 10 == 7" },
+          ],
+          annotations: [],
+        },
+      ];
+
+      const clusters = clusterFailuresByService(failures);
+      expect(clusters.size).toBe(1);
+      expect(clusters.has("tests")).toBe(true);
+    });
+
+    it("should track primary file and test name for high-signal causes", () => {
+      const clusters = clusterFailuresByService([
+        {
+          identifiedCause: "",
+          analysis: "",
+          testFailures: [
+            {
+              testName: "should init db",
+              file: "src/db.test.ts",
+              line: 12,
+              error: "ValidationError: Database pool not initialized",
+            },
+          ],
+          annotations: [],
+        },
+      ]);
+
+      const cluster = clusters.get("src") ?? Array.from(clusters.values())[0];
+      expect(cluster?.primaryFile).toBe("src/db.test.ts");
+      expect(cluster?.primaryLine).toBe(12);
+      expect(cluster?.primaryTestName).toBe("should init db");
+    });
+  });
+
+  describe("selectBestClusterCause/scoreClusterSignal", () => {
+    it("should prefer higher-signal causes over generic assertions", () => {
+      const clusters = clusterFailuresByService([
+        {
+          identifiedCause: "",
+          analysis: "",
+          testFailures: [
+            { file: "src/test.ts", line: 10, error: "Expected: > 0" },
+            {
+              file: "src/test.ts",
+              line: 20,
+              error: "ValidationError: Database pool not initialized",
+            },
+          ],
+          annotations: [],
+        },
+      ]);
+
+      const cluster = clusters.get("src") ?? Array.from(clusters.values())[0];
+      expect(cluster).toBeDefined();
+      if (!cluster) {
+        return;
+      }
+
+      expect(selectBestClusterCause(cluster)).toContain("Database pool not initialized");
+      expect(scoreClusterSignal(cluster)).toBeGreaterThan(0);
+    });
+  });
+
+  describe("summarizeRootCauses", () => {
+    it("should return only high-signal entries and track low-signal clusters", () => {
+      // Use different services to create separate clusters
+      const summary = summarizeRootCauses([
+        {
+          identifiedCause: "",
+          analysis: "",
+          testFailures: [
+            {
+              testName: "test",
+              file: "services/api/src/db.test.ts",
+              line: 10,
+              error: "ValidationError: Database pool not initialized",
+            },
+          ],
+          annotations: [],
+        },
+        {
+          identifiedCause: "",
+          analysis: "",
+          testFailures: [
+            {
+              testName: "test",
+              file: "services/slack-bot/src/math.test.ts",
+              line: 12,
+              error: "Expected: > 0",
+            },
+          ],
+          annotations: [],
+        },
+      ]);
+
+      expect(summary.entries).toHaveLength(1);
+      expect(summary.entries[0]?.service).toContain("api");
+      expect(summary.lowSignalCount).toBe(1);
+      expect(summary.totalClusters).toBe(2);
+    });
+  });
+
+  describe("formatEvidenceLocation/isLowSignalCause", () => {
+    it("should format file locations with line numbers", () => {
+      expect(formatEvidenceLocation("src/index.ts", 42)).toBe("src/index.ts:42");
+      expect(formatEvidenceLocation("src/index.ts", undefined)).toBe("src/index.ts");
+      expect(formatEvidenceLocation(undefined, 10)).toBeNull();
+    });
+
+    it("should flag assertion-only causes as low signal", () => {
+      expect(isLowSignalCause("Expected: > 0")).toBe(true);
+      expect(isLowSignalCause('expected substring: "warning"')).toBe(true);
+      expect(isLowSignalCause("ValidationError: Database pool not initialized")).toBe(false);
+      expect(isLowSignalCause("Missing import statement")).toBe(false);
     });
   });
 });
