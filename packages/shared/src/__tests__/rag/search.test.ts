@@ -12,19 +12,40 @@ jest.mock("../../cache/cacheClient.js", () => ({
   cacheSet: jest.fn().mockResolvedValue(undefined),
 }));
 
+const mockEmbeddingClient = {
+  generateEmbedding: jest.fn().mockResolvedValue({
+    embedding: Array.from({ length: 1536 }, () => Math.random()),
+    tokenCount: 100,
+    model: "text-embedding-3-small",
+  }),
+};
+
 jest.mock("../../openaiClient/embedding.js", () => ({
-  EmbeddingClient: jest.fn().mockImplementation(() => ({
-    generateEmbedding: jest.fn().mockResolvedValue({
-      embedding: Array.from({ length: 1536 }, () => Math.random()),
-      tokenCount: 100,
-      model: "text-embedding-3-small",
-    }),
-  })),
+  EmbeddingClient: jest.fn().mockImplementation(() => mockEmbeddingClient),
+  getEmbeddingClient: jest.fn().mockReturnValue(mockEmbeddingClient),
 }));
 
 jest.mock("../../database/index.js", () => ({
   searchSimilarDiffChunks: jest.fn().mockResolvedValue([]),
   searchSimilarKnowledgeDocs: jest.fn().mockResolvedValue([]),
+  recordCost: jest.fn().mockResolvedValue(undefined),
+  batchIncrementKnowledgeDocHitCounts: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("../../database/costTrackingRepository.js", () => ({
+  recordCost: jest.fn().mockResolvedValue(undefined),
+  getBudgetStatus: jest.fn().mockResolvedValue({
+    status: "ok",
+    currentSpendUsd: 10,
+    budgetUsd: 100,
+    percentUsed: 10,
+    remainingUsd: 90,
+  }),
+}));
+
+jest.mock("../../database/tenantRagConfig.js", () => ({
+  getRAGBudgetConfig: jest.fn().mockResolvedValue(null),
+  updateRAGBudgetConfig: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../../security/index.js", () => ({
@@ -88,7 +109,10 @@ describe("RAG Search Module", () => {
       const cachedEmbedding = Array.from({ length: 1536 }, () => 0.5);
       (cacheGet as jest.Mock).mockResolvedValueOnce({
         hit: true,
-        data: cachedEmbedding,
+        data: {
+          embedding: cachedEmbedding,
+          tier: "STANDARD",
+        },
       });
 
       const query: DiffSearchQuery = {

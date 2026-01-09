@@ -6,20 +6,33 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import type { PullRequestWebhook } from "../types/githubTypes.js";
 import { GITHUB_PR_ACTIONS } from "../types/githubTypes.js";
 
-// Mock dependencies
-jest.mock("@kenchi/shared", () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  })),
-  getErrorMessage: jest.fn((error: unknown) =>
-    error instanceof Error ? error.message : String(error)
-  ),
+// Mock Octokit dependencies (must be before imports that use them)
+jest.mock("@octokit/rest", () => ({
+  Octokit: jest.fn(),
 }));
 
-// Import handlers
+jest.mock("@octokit/auth-app", () => ({
+  createAppAuth: jest.fn(),
+}));
+
+// Mock dependencies
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
+  return {
+    ...actual,
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
+    getErrorMessage: jest.fn((error: unknown) =>
+      error instanceof Error ? error.message : String(error)
+    ),
+  };
+});
+
+// Import handlers after mocks
 import { handlePullRequest, handlePullRequestOpened } from "../handlers/pullRequestHandler.js";
 
 describe("Pull Request Handler", () => {
