@@ -407,8 +407,9 @@ FAIL src/utils.test.ts
         `;
         const failures = extractTestFailures(logs);
 
+        // Now captures individual test names (● marker) before file-level markers
         expect(failures.length).toBeGreaterThan(0);
-        expect(failures[0].testName).toContain("src/utils.test.ts");
+        expect(failures[0].testName).toContain("Test Suite Name › should do something");
       });
 
       it("should extract pytest FAILED pattern", () => {
@@ -418,7 +419,9 @@ FAILED tests/test_main.py::test_function - AssertionError
         const failures = extractTestFailures(logs);
 
         expect(failures.length).toBeGreaterThan(0);
-        expect(failures[0].testName).toContain("test_main.py");
+        // After normalization, file is extracted and testName contains just the test function
+        expect(failures[0].testName).toContain("test_function");
+        expect(failures[0].file).toBe("tests/test_main.py");
       });
 
       it("should extract Go test FAIL pattern", () => {
@@ -526,7 +529,7 @@ FAIL src/utils.test.ts
         const failures = extractTestFailures(logs);
 
         if (failures.length > 0) {
-          expect(failures[0].error).toBe("FAIL src/utils.test.ts");
+          expect(failures[0].error).toBe("Test failed (see logs for details)");
         }
       });
     });
@@ -559,14 +562,12 @@ FAIL src/utils.test.ts
         `;
         const failures = extractTestFailures(logs);
 
-        if (failures.length > 0) {
-          // Should capture actual error body for AI analysis
-          expect(failures[0].error).toContain("Expected:");
-          expect(failures[0].error).toContain("Received:");
-          // File and line are not extracted from test name (normalizeTestFailure handles this)
-          expect(failures[0].file).toBeUndefined();
-          expect(failures[0].line).toBeUndefined();
-        }
+        // Now captures individual test names (● marker) with their error bodies
+        expect(failures.length).toBeGreaterThan(0);
+        expect(failures[0].testName).toContain("detailed test with complex assertion");
+        // Should capture actual error body for AI analysis
+        expect(failures[0].error).toContain("Expected:");
+        expect(failures[0].error).toContain("Received:");
       });
     });
   });

@@ -17,8 +17,11 @@ import {
   deduplicateByKey,
   normalizeTestFailure,
   isGenericErrorLine,
+  isTestFile,
 } from "@kenchi/shared";
 import type { FileReference, TestFailure } from "./types.js";
+
+const { DEFAULT_ERROR_CONTEXT_LINES, EXTENDED_ERROR_CONTEXT_LINES } = LOG_PARSING_LIMITS;
 
 const logger = createLogger("github-app");
 
@@ -118,18 +121,6 @@ export const truncateWithContext = (content: string, maxSize: number): string =>
 
 // ==================== Test Failure Extraction ====================
 
-/** Maximum characters to capture for error body (default pass) */
-const DEFAULT_ERROR_BODY_CHARS = 800;
-
-/** Maximum characters to capture for error body when fallback is generic */
-const EXTENDED_ERROR_BODY_CHARS = 2000;
-
-/** Number of lines to scan after a failure marker for error context (default pass) */
-const DEFAULT_ERROR_CONTEXT_LINES = 30;
-
-/** Number of lines to scan when fallback is generic */
-const EXTENDED_ERROR_CONTEXT_LINES = 80;
-
 const GENERIC_ERROR_BODY_FALLBACK = "Test failed (see logs for details)";
 
 /** Pattern to find a file path with separators but without line numbers */
@@ -155,6 +146,23 @@ const isAssertionMessage = (testName: string): boolean => {
   }
 
   return ASSERTION_MESSAGE_PATTERNS.some((pattern) => pattern.test(trimmed));
+};
+
+const isFileLevelTestName = (testName: string): boolean => {
+  const trimmed = testName.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (!trimmed.includes("/") && !trimmed.includes("\\")) {
+    return false;
+  }
+
+  if (trimmed.includes(" > ") || trimmed.includes("::")) {
+    return false;
+  }
+
+  return isTestFile(trimmed);
 };
 
 /**
@@ -229,8 +237,17 @@ const extractFileReferenceFromText = (text: string): FileReference | null => {
  * Universal test failure indicator patterns.
  * These are minimal patterns that work across all test frameworks.
  * Captures test identifier at match position for error body extraction.
+ *
+ * Note: Jest outputs both file-level markers (FAIL path.test.ts) and
+ * individual test markers (● TestSuite › TestCase). We capture both
+ * to get complete failure coverage.
  */
 const UNIVERSAL_FAILURE_PATTERNS = [
+  // Jest/Vitest individual test failure bullets (● TestSuite › TestCase or just ● TestName)
+  // This captures each individual failing test, not just the file
+  /●\s+([^\n]+\S)/gm,
+  // Jest/Vitest failure marker with test name (✕ test name) at line start
+  /^\s*✕\s+([^\n]+\S)/gm,
   // Generic FAIL/FAILED with file path
   /(?:FAIL(?:ED)?|✕|✗|×)\s+(\S+\.(?:test|spec)\.\w+)/gim,
   // pytest style: FAILED path/to/test.py::test_name
@@ -256,6 +273,7 @@ const ERROR_END_MARKERS = [
   /^test\s+\S+\s+\.\.\.\s+ok/i, // Rust test pass
   /^\s*✓\s/, // Jest pass marker
   /^\s*✕\s/, // Jest fail marker (next test)
+  /^\s*●\s/, // Jest bullet marker (next test's detailed error)
 ] as const;
 
 /**
@@ -329,7 +347,7 @@ const extractErrorBody = (logs: string, startIndex: number, failureLine?: string
 
   const initialState: ErrorBodyAccumulator = { lines: [], charCount: 0, done: false };
   const { lines: errorLines } = linesToProcess.reduce(
-    processErrorLine(DEFAULT_ERROR_BODY_CHARS),
+    processErrorLine(Number.POSITIVE_INFINITY),
     initialState
   );
 
@@ -341,7 +359,7 @@ const extractErrorBody = (logs: string, startIndex: number, failureLine?: string
 
   const extendedLines = allLines.slice(0, EXTENDED_ERROR_CONTEXT_LINES);
   const { lines: extendedErrorLines } = extendedLines.reduce(
-    processErrorLine(EXTENDED_ERROR_BODY_CHARS),
+    processErrorLine(Number.POSITIVE_INFINITY),
     initialState
   );
   const extendedCombined = markerLine
@@ -384,23 +402,29 @@ export const extractTestFailures = (logs: string): TestFailure[] => {
 
       // Extract the error body starting from the match position
       const matchEndIndex = (match.index ?? 0) + match[0].length;
-      const errorBody = extractErrorBody(cleanLogs, matchEndIndex, match[0]);
+      const markerLine = isFileLevelTestName(testName) ? "" : match[0];
+      const errorBody = extractErrorBody(
+        cleanLogs,
+        matchEndIndex,
+        markerLine.length > 0 ? markerLine : undefined
+      );
 
       const normalized = normalizeTestFailure({ testName, file: undefined, line: undefined });
       const locationFromError = extractFileReferenceFromText(errorBody);
-      const file = normalized.file ?? locationFromError?.path;
-      const lineFromFile = normalized.file
-        ? extractLineForFile(errorBody, normalized.file)
+      const fileFromTestName = isFileLevelTestName(normalized.testName)
+        ? normalized.testName
         : undefined;
+      const fileFromError =
+        locationFromError?.path && isTestFile(locationFromError.path)
+          ? locationFromError.path
+          : undefined;
+      const file = normalized.file ?? fileFromTestName ?? fileFromError;
+      const lineFromFile = file ? extractLineForFile(errorBody, file) : undefined;
       const line =
         lineFromFile ??
-        (normalized.file &&
-        locationFromError?.path &&
-        pathsMatch(normalized.file, locationFromError.path)
+        (file && locationFromError?.path && pathsMatch(file, locationFromError.path)
           ? locationFromError.line
-          : normalized.file
-            ? undefined
-            : locationFromError?.line);
+          : undefined);
       const finalTestName =
         file && isAssertionMessage(normalized.testName) ? "Test failed" : normalized.testName;
 
@@ -422,5 +446,19 @@ export const extractTestFailures = (logs: string): TestFailure[] => {
     });
   }
 
-  return failures;
+  const detailedFiles = new Set(
+    failures
+      .filter((failure) => failure.file && !isFileLevelTestName(failure.testName))
+      .map((failure) => failure.file ?? "")
+      .filter((file) => file.length > 0)
+  );
+
+  const filteredFailures = failures.filter((failure) => {
+    if (!failure.file || !isFileLevelTestName(failure.testName)) {
+      return true;
+    }
+    return !detailedFiles.has(failure.file);
+  });
+
+  return filteredFailures;
 };

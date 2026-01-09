@@ -13,9 +13,14 @@ import {
   UI_CONSTANTS,
   DEPENDENCY_EMOJI_MAP,
   FORMATTER_DISPLAY_LIMITS,
+  formatWithEvidenceId,
+  summarizeRootCauses,
+  isTestFile,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
   type RelatedKnowledgeDoc,
+  type AnalyzedFailure,
+  type RootCauseSummaryEntry,
 } from "@kenchi/shared";
 import { DISPLAY_LIMITS } from "./formatterUtils.js";
 import type { SlackTextBlock } from "./slackBlockTypes.js";
@@ -130,6 +135,118 @@ export const buildRootCauseBlock = (
   return {
     type: "section",
     text: { type: "mrkdwn", text: `*${UI_EMOJI.search} Root Cause:*\n${causeText}${moreText}` },
+  };
+};
+
+/**
+ * Formats a single cluster for display.
+ * Shows service name, unique file count, and top cause with evidence ID.
+ */
+const formatClusterEntry = (entry: RootCauseSummaryEntry): string => {
+  const countLabel = entry.fileCount === 1 ? "1 file" : `${entry.fileCount} files`;
+  const infraLabel = entry.isInfra ? ` ${UI_EMOJI.warning}` : "";
+  const locationSuffix = entry.location ? ` (${entry.location})` : "";
+  const evidenceTag = entry.evidenceIds[0] ?? "";
+  const causeLineLimit = FORMATTER_DISPLAY_LIMITS.MAX_CAUSE_LINE_CHARS;
+  const hasTestName = Boolean(entry.primaryTestName) && !isTestFile(entry.primaryTestName ?? "");
+  const causeDisplay = entry.cause
+    ? formatWithEvidenceId(
+        truncateDisplay(`${entry.cause}${locationSuffix}`, causeLineLimit),
+        evidenceTag
+      )
+    : hasTestName
+      ? formatWithEvidenceId(
+          truncateDisplay(
+            `Test failure in ${entry.primaryTestName}${locationSuffix}`,
+            causeLineLimit
+          ),
+          evidenceTag
+        )
+      : entry.location
+        ? formatWithEvidenceId(
+            truncateDisplay(`Failures in ${entry.location}`, causeLineLimit),
+            evidenceTag
+          )
+        : "See details below";
+
+  return `*${entry.service}* (${countLabel})${infraLabel}\n   ${causeDisplay}`;
+};
+
+/**
+ * Build clustered root cause analysis block.
+ * Groups causes by service/package for organized display.
+ * Shows top 3 clusters with evidence IDs.
+ *
+ * @param failures - Array of analyzed failures to cluster
+ * @returns Slack text block with clustered root causes
+ */
+export const buildClusteredRootCauseBlock = (
+  failures: readonly AnalyzedFailure[]
+): SlackTextBlock => {
+  // If no failures, provide fallback
+  if (failures.length === 0) {
+    return {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${UI_EMOJI.search} Root Cause:*\nCI check failed. Unable to determine specific root cause.`,
+      },
+    };
+  }
+
+  const summary = summarizeRootCauses(failures, {
+    maxEntries: FORMATTER_DISPLAY_LIMITS.MAX_ROOT_CAUSES,
+  });
+
+  if (summary.totalClusters === 0) {
+    return {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${UI_EMOJI.search} Root Cause:*\nCI check failed. Unable to determine specific root cause.`,
+      },
+    };
+  }
+
+  if (summary.entries.length === 0) {
+    const lowSignalText =
+      summary.lowSignalCount > 0
+        ? `\n_${summary.lowSignalCount} service${
+            summary.lowSignalCount === 1 ? "" : "s"
+          } with assertion-only failures_`
+        : "";
+    return {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${UI_EMOJI.search} Root Cause:*\nNo high-signal root cause detected. See affected files below.${lowSignalText}`,
+      },
+    };
+  }
+
+  // Check for infra issues to show warning
+  const infraWarning = summary.hasInfra
+    ? `\n\n${UI_EMOJI.warning} _Infrastructure issues detected (timeouts/resource limits)_`
+    : "";
+
+  // Format each cluster
+  const clusterText = summary.entries.map((entry) => formatClusterEntry(entry)).join("\n\n");
+
+  const lowSignalText =
+    summary.lowSignalCount > 0
+      ? `\n\n_${summary.lowSignalCount} service${
+          summary.lowSignalCount === 1 ? "" : "s"
+        } with assertion-only failures_`
+      : "";
+  const moreText =
+    summary.hiddenCount > 0 ? `\n\n_...and ${summary.hiddenCount} more services affected_` : "";
+
+  return {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*${UI_EMOJI.search} Root Cause:*\n\n${clusterText}${infraWarning}${lowSignalText}${moreText}`,
+    },
   };
 };
 

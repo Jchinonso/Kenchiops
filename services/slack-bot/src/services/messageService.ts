@@ -248,6 +248,7 @@ export const postConsolidatedMessage = async (
     failureCount: failure_count,
     channel: channel ?? "(repository-based)",
     blockCount: payload.blocks.length,
+    blocksPreview: JSON.stringify(payload.blocks).slice(0, 3000),
   });
 
   // Cleanup old message store entries periodically

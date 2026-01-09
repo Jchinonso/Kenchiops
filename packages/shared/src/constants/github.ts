@@ -93,6 +93,14 @@ export const LOG_PARSING_LIMITS = {
   MAX_BUILD_CONFIG_DIFF_SIZE: 5000,
   /** Minimum remaining characters to include a truncated line in error body */
   MIN_TRUNCATION_CHARS: 20,
+  /** Maximum characters to capture for error body (default pass) */
+  DEFAULT_ERROR_BODY_CHARS: 2000,
+  /** Maximum characters to capture for error body when fallback is generic */
+  EXTENDED_ERROR_BODY_CHARS: 4000,
+  /** Number of lines to scan after a failure marker for error context (default pass) */
+  DEFAULT_ERROR_CONTEXT_LINES: 50,
+  /** Number of lines to scan when fallback is generic */
+  EXTENDED_ERROR_CONTEXT_LINES: 100,
 } as const;
 
 /**
@@ -186,6 +194,31 @@ export const GITHUB_ANNOTATION_LEVEL = {
   FAILURE: "failure",
   WARNING: "warning",
   NOTICE: "notice",
+} as const;
+
+/**
+ * GitHub annotation display limits.
+ */
+export const GITHUB_ANNOTATION_LIMITS = {
+  /** Maximum title length for annotations */
+  MAX_TITLE_LENGTH: 100,
+  /** Maximum annotations per check run */
+  MAX_PER_CHECK_RUN: 50,
+  /** Maximum valid line number for annotations (reasonable upper bound) */
+  MAX_LINE_NUMBER: 1000000,
+} as const;
+
+/**
+ * Text sanitization patterns for annotation messages.
+ */
+export const TEXT_SANITIZATION_PATTERNS = {
+  /**
+   * Pattern to match ANSI escape codes for terminal colors/formatting.
+   * Matches SGR (Select Graphic Rendition) sequences and other control codes.
+   */
+  ANSI_ESCAPE_CODES:
+    // eslint-disable-next-line no-control-regex -- Intentional: matching ANSI escape sequences
+    /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
 } as const;
 
 /**

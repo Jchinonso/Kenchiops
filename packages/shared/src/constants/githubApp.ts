@@ -164,7 +164,7 @@ export const FORMATTER_DISPLAY_LIMITS = {
   /** Maximum characters for check names line to prevent Slack overflow */
   SLACK_CHECK_NAMES_MAX_CHARS: 200,
   /** Maximum root causes to display (top N highest confidence) */
-  MAX_ROOT_CAUSES: 3,
+  MAX_ROOT_CAUSES: 5,
   /** Maximum characters per root cause line */
   MAX_CAUSE_LINE_CHARS: 200,
 } as const;

@@ -1,14 +1,48 @@
 # GitHub App Service
 
-This service handles GitHub webhook events for PRs, CI checks, and other repository events.
+This service receives GitHub webhooks and orchestrates CI failure analysis for pull requests and check runs.
 
-## Features
+## Capabilities
 
-- Pull request webhook handling
-- CI check run webhook handling
-- GitHub API integration for posting comments
+- Webhook verification and routing for check_run, pull_request, installation, and push events
+- CI failure analysis pipeline (workflow logs, annotations, PR metadata/diff) forwarded to the API service
+- PR comments and check run annotations for single failures and consolidated runs
+- Redis-backed aggregation and action queue processing (optional)
+- Documentation ingestion for RAG on default-branch doc updates
+- Background RAG cleanup and drift detection jobs
+- Signed feedback links for analysis validation
+- Health, liveness, and readiness endpoints
 
-## Setup
+## Key Endpoints
+
+- `POST /webhook/github` (primary webhook endpoint)
+- `POST /webhook/check_run` (legacy)
+- `POST /webhook/pull_request` (legacy)
+- `GET /api/feedback` (signed feedback capture)
+- `GET /health`, `GET /live`, `GET /ready`
+
+## Configuration
+
+This service uses the shared config loader from `@kenchi/shared`. See the root `.env.example` for the full list.
+
+Minimum GitHub-specific variables:
+
+- `GITHUB_APP_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_WEBHOOK_SECRET`
+- `GITHUB_INSTALLATION_ID`
+
+Service integration variables:
+
+- `API_URL` (analysis service)
+- `SLACK_BOT_URL` (Slack notification delivery)
+
+Infrastructure variables:
+
+- `DATABASE_URL` (required)
+- `REDIS_URL` (optional; enables aggregation, action queues, and Slack delivery retries)
+
+## Running
 
 1. Install dependencies:
 
@@ -16,28 +50,26 @@ This service handles GitHub webhook events for PRs, CI checks, and other reposit
    npm install
    ```
 
-2. Configure environment variables (see root `.env.example`):
-   - `GITHUB_APP_ID`
-   - `GITHUB_APP_PRIVATE_KEY`
-   - `GITHUB_INSTALLATION_ID` (can be extracted from webhook payload)
+2. Start the service:
 
-3. Configure GitHub App webhook URL to point to this service
-
-4. Start the service:
    ```bash
+   npm run dev
+   ```
+
+   Or build + run:
+
+   ```bash
+   npm run build
    npm start
    ```
 
-## TODO
+## Webhook Setup
 
-- [ ] Implement OpenAI integration for PR analysis
-- [ ] Implement CI failure analysis with OpenAI
-- [ ] Add confidence scoring before posting comments
-- [ ] Extract installation ID from webhook payloads
-- [ ] Add retry logic for GitHub API calls
-- [ ] Implement issue creation for critical failures
-- [ ] Add integration tests
+Configure the GitHub App webhook URL to `POST /webhook/github` and set the webhook secret to
+match `GITHUB_WEBHOOK_SECRET`.
 
 ## Safety Notes
 
-**IMPORTANT**: The LLM provides analysis and suggestions only. All actual decisions and side-effects (like posting comments or creating issues) are handled by deterministic code after validation. Never execute LLM outputs directly.
+**IMPORTANT**: The LLM provides analysis and suggestions only. All actual decisions and side-effects
+(like posting comments or rerunning workflows) are handled by deterministic code after validation.
+Never execute LLM outputs directly.
