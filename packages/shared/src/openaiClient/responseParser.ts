@@ -18,7 +18,11 @@
 
 import { LLMError } from "../core/errors.js";
 import { OPENAI_MESSAGES } from "../constants/index.js";
-import type { LLMAnalysisResult } from "../core/types.js";
+import type {
+  LLMAnalysisResult,
+  LLMDetectedDependencyChange,
+  LLMDetectedBuildConfigChange,
+} from "../core/types.js";
 
 // Import from validation sub-module
 import {
@@ -169,6 +173,90 @@ const parseJsonObject = (responseContent: string): Record<string, unknown> => {
   return JSON.parse(jsonString) as Record<string, unknown>;
 };
 
+// ==================== Dependency/Config Change Parsing ====================
+
+const VALID_DEP_CHANGE_TYPES = new Set(["added", "removed", "updated"]);
+const VALID_CONFIG_CHANGE_TYPES = new Set(["added", "modified", "deleted"]);
+
+/**
+ * Validates and parses a single dependency change from raw input.
+ */
+const parseDependencyChange = (raw: unknown): LLMDetectedDependencyChange | null => {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const name = typeof obj.name === "string" ? obj.name : null;
+  const type =
+    typeof obj.type === "string" && VALID_DEP_CHANGE_TYPES.has(obj.type) ? obj.type : null;
+
+  if (!name || !type) {
+    return null;
+  }
+
+  return {
+    name,
+    type: type as LLMDetectedDependencyChange["type"],
+    oldVersion: typeof obj.oldVersion === "string" ? obj.oldVersion : undefined,
+    newVersion: typeof obj.newVersion === "string" ? obj.newVersion : undefined,
+    ecosystem: typeof obj.ecosystem === "string" ? obj.ecosystem : undefined,
+  };
+};
+
+/**
+ * Parses dependency changes array from parsed response.
+ */
+const parseDependencyChanges = (raw: unknown): readonly LLMDetectedDependencyChange[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item) => parseDependencyChange(item))
+    .filter((change): change is LLMDetectedDependencyChange => change !== null);
+};
+
+/**
+ * Validates and parses a single build config change from raw input.
+ */
+const parseBuildConfigChange = (raw: unknown): LLMDetectedBuildConfigChange | null => {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const file = typeof obj.file === "string" ? obj.file : null;
+  const changeType =
+    typeof obj.changeType === "string" && VALID_CONFIG_CHANGE_TYPES.has(obj.changeType)
+      ? obj.changeType
+      : null;
+  const summary = typeof obj.summary === "string" ? obj.summary : null;
+
+  if (!file || !changeType || !summary) {
+    return null;
+  }
+
+  return {
+    file,
+    changeType: changeType as LLMDetectedBuildConfigChange["changeType"],
+    summary,
+  };
+};
+
+/**
+ * Parses build config changes array from parsed response.
+ */
+const parseBuildConfigChanges = (raw: unknown): readonly LLMDetectedBuildConfigChange[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item) => parseBuildConfigChange(item))
+    .filter((change): change is LLMDetectedBuildConfigChange => change !== null);
+};
+
 // ==================== Main Parser ====================
 
 /**
@@ -219,8 +307,8 @@ export const createAnalysisFromParsed = (
     analyzedAt: new Date().toISOString(),
     category,
     phase,
-    detectedDependencyChanges: [],
-    detectedBuildConfigChanges: [],
+    detectedDependencyChanges: parseDependencyChanges(parsed.detectedDependencyChanges),
+    detectedBuildConfigChanges: parseBuildConfigChanges(parsed.detectedBuildConfigChanges),
   };
 };
 

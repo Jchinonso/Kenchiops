@@ -19,7 +19,7 @@ jest.mock("../../database/costTrackingRepository.js", () => ({
   getBudgetStatus: jest.fn(),
 }));
 
-jest.mock("../../database/tenantService.js", () => ({
+jest.mock("../../database/tenantRagConfig.js", () => ({
   getRAGBudgetConfig: jest.fn(),
   updateRAGBudgetConfig: jest.fn(),
 }));
@@ -41,7 +41,7 @@ import {
   recommendTier,
 } from "../../rag/costControls.js";
 import { recordCost, getBudgetStatus } from "../../database/costTrackingRepository.js";
-import { getRAGBudgetConfig } from "../../database/tenantService.js";
+import { getRAGBudgetConfig } from "../../database/tenantRagConfig.js";
 
 const mockRecordCost = recordCost as jest.MockedFunction<typeof recordCost>;
 const mockGetBudgetStatus = getBudgetStatus as jest.MockedFunction<typeof getBudgetStatus>;

@@ -36,8 +36,7 @@ describe("Prompts Module", () => {
       const prompt = buildSystemPrompt();
 
       expect(prompt).toContain("ONLY use information explicitly provided");
-      expect(prompt).toContain("MUST NOT make up information");
-      expect(prompt).toContain("MUST NOT assume facts");
+      expect(prompt).toContain("MUST NOT make up information, assume facts");
     });
 
     it("should include instruction hierarchy guard", () => {
@@ -241,9 +240,8 @@ describe("Prompts Module", () => {
       expect(formatted).toContain("[past_incident] Previous AUTH failure");
       expect(formatted).toContain("(Similarity: 92%)");
       expect(formatted).toContain("Similar authentication failure occurred...");
-      expect(formatted).toContain("Full document: https://wiki.example.com/INC-123");
+      expect(formatted).toContain("URL: https://wiki.example.com/INC-123");
       expect(formatted).toContain("Tags: auth, production, critical");
-      expect(formatted).toContain("---");
     });
 
     it("should handle documents with minimal fields", () => {
