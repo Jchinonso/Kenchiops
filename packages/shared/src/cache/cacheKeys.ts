@@ -134,11 +134,14 @@ export const mappingCacheKeys = {
 /**
  * AI analysis result cache key builders
  */
+const ANALYSIS_CACHE_VERSION = "v2";
+
 export const analysisCacheKeys = {
   /** Analysis by commit SHA and check name (uses full SHA for zero collision risk) */
   byCommitAndCheck: (repository: string, commitSha: string, checkName: string): string =>
     buildKey(
       CACHE_NAMESPACE.ANALYSIS,
+      ANALYSIS_CACHE_VERSION,
       "check",
       repository.replace("/", "-"),
       commitSha,
@@ -147,14 +150,27 @@ export const analysisCacheKeys = {
 
   /** Consolidated analysis for a commit (uses full SHA for zero collision risk) */
   byCommit: (repository: string, commitSha: string): string =>
-    buildKey(CACHE_NAMESPACE.ANALYSIS, "commit", repository.replace("/", "-"), commitSha),
+    buildKey(
+      CACHE_NAMESPACE.ANALYSIS,
+      ANALYSIS_CACHE_VERSION,
+      "commit",
+      repository.replace("/", "-"),
+      commitSha
+    ),
 
   /** Analysis by log hash (for deduplication) */
-  byLogHash: (logHash: string): string => buildKey(CACHE_NAMESPACE.ANALYSIS, "log", logHash),
+  byLogHash: (logHash: string): string =>
+    buildKey(CACHE_NAMESPACE.ANALYSIS, ANALYSIS_CACHE_VERSION, "log", logHash),
 
   /** Pattern for all analysis cache entries for a repository */
   repositoryPattern: (repository: string): string =>
-    buildKey(CACHE_NAMESPACE.ANALYSIS, "*", repository.replace("/", "-"), "*"),
+    buildKey(
+      CACHE_NAMESPACE.ANALYSIS,
+      ANALYSIS_CACHE_VERSION,
+      "*",
+      repository.replace("/", "-"),
+      "*"
+    ),
 } as const;
 
 // ==================== Token Cache Keys ====================

@@ -209,7 +209,8 @@ export const createAnalysisFromParsed = (
     recommendedActions: nextSteps.map((step, index) => ({
       description: step,
       priority: index === 0 ? "high" : "medium",
-      actionType: "manual_investigation",
+      // Generate unique actionType per step to prevent over-aggressive deduplication
+      actionType: `llm_action_${index}_${step.slice(0, 20).replace(/\W+/g, "_").toLowerCase()}`,
     })),
     uncertainties: secondaryFindings,
     evidenceUsed: [],

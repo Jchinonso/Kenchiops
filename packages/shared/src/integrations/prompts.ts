@@ -107,6 +107,11 @@ When a "Failed Tests" section is present, treat the TEST_ERROR_BEGIN/END content
 
 For parallel failures (e.g., lint and tests run concurrently), choose the one that blocks merge/deploy based on severity or gating. Put the other in secondary_findings. Do not rely on log ordering alone. If gating/severity is unknown, pick the failure with clearer evidence as root cause.
 
+### Evidence Grounding Rules
+- Never recommend a specific file, function, or module unless it appears verbatim in the evidence.
+- If multiple failures exist, select only 1–3 high-signal causes; put the rest in secondary_findings.
+- If the evidence lists N failing suites or files, do not claim more than N.
+
 ### Error Pattern Recognition
 Scan for: "ERROR", "Exception", "FAIL", "Traceback", "panic:", "thread '...' panicked"
 

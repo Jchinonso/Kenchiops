@@ -24,6 +24,7 @@ import {
   appendEvidenceTag,
   escapeRegExp,
   isBlockHeaderLine,
+  extractAssertionSnippet,
 } from "./evidencePatterns.js";
 
 // Re-export patterns for backwards compatibility
@@ -84,6 +85,16 @@ export interface EvidenceSections {
   readonly hasBuildConfigChanges: boolean;
 }
 
+/**
+ * Secondary test failure with extracted error snippet.
+ */
+export interface SecondaryTestFailure {
+  readonly testName: string;
+  readonly errorSnippet: string;
+  readonly file?: string;
+  readonly evidenceId?: string;
+}
+
 export interface EvidenceHighlights {
   readonly evidenceText: string;
   readonly testFailures: readonly ParsedTestFailure[];
@@ -97,6 +108,7 @@ export interface EvidenceHighlights {
   readonly secondaryFindings: readonly string[];
   readonly sections: EvidenceSections;
   readonly primaryErrorLine?: string;
+  readonly primaryErrorSnippet?: string;
   readonly primaryTestName?: string;
   readonly primaryFile?: string;
   readonly primaryLine?: number;
@@ -104,6 +116,7 @@ export interface EvidenceHighlights {
   readonly source?: "test" | "annotation" | "check" | "workflow" | "infra";
   readonly detectedCategory?: FailureCategory;
   readonly detectedPhase?: PipelinePhase;
+  readonly secondaryTestFailures?: readonly SecondaryTestFailure[];
 }
 
 // ==================== Section Parsing ====================
@@ -274,6 +287,35 @@ const extractConfigFiles = (blocks: readonly ParsedTextBlock[]): string[] => {
 };
 
 /**
+ * Extracts error snippet from test failure error lines.
+ */
+const extractTestErrorSnippet = (testFailure: ParsedTestFailure): string | null => {
+  const errorText = testFailure.errorLines.join("\n");
+  return extractAssertionSnippet(errorText);
+};
+
+/**
+ * Builds secondary test failures with extracted snippets.
+ */
+const buildSecondaryTestFailures = (
+  testFailures: readonly ParsedTestFailure[],
+  primaryEvidenceId?: string
+): SecondaryTestFailure[] => {
+  const primaryTestId = primaryEvidenceId?.startsWith("test#") ? primaryEvidenceId : undefined;
+
+  return testFailures
+    .filter((testFailure) => formatEvidenceId("test", testFailure.id) !== primaryTestId)
+    .slice(0, 5)
+    .map((testFailure) => ({
+      testName: testFailure.testName,
+      errorSnippet: extractTestErrorSnippet(testFailure) ?? "Test failed",
+      file: testFailure.file,
+      evidenceId: formatEvidenceId("test", testFailure.id),
+    }))
+    .filter((failure) => failure.errorSnippet !== "Test failed" || failure.file);
+};
+
+/**
  * Builds secondary findings from additional test failures and annotations.
  */
 const buildSecondaryFindings = (
@@ -406,6 +448,17 @@ export const extractEvidenceHighlights = (evidence: Evidence): EvidenceHighlight
 
   const secondaryFindings = buildSecondaryFindings(testFailures, annotations, primaryEvidenceId);
 
+  // Extract meaningful error snippet from primary test failure
+  const primaryErrorSnippet =
+    source === "test" && fallbackTest
+      ? extractTestErrorSnippet(fallbackTest)
+      : source === "annotation" && annotations.length > 0
+        ? extractAssertionSnippet(annotations[0].message)
+        : undefined;
+
+  // Build secondary test failures with snippets
+  const secondaryTestFailures = buildSecondaryTestFailures(testFailures, primaryEvidenceId);
+
   return {
     evidenceText,
     testFailures,
@@ -419,6 +472,7 @@ export const extractEvidenceHighlights = (evidence: Evidence): EvidenceHighlight
     secondaryFindings,
     sections,
     primaryErrorLine,
+    primaryErrorSnippet: primaryErrorSnippet ?? undefined,
     primaryTestName,
     primaryFile,
     primaryLine,
@@ -426,5 +480,6 @@ export const extractEvidenceHighlights = (evidence: Evidence): EvidenceHighlight
     source,
     detectedCategory,
     detectedPhase,
+    secondaryTestFailures: secondaryTestFailures.length > 0 ? secondaryTestFailures : undefined,
   };
 };

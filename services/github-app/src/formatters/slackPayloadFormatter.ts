@@ -9,25 +9,30 @@
 import {
   deduplicateByKey,
   UI_EMOJI,
+  UI_CONSTANTS,
   FORMATTER_DISPLAY_LIMITS,
   redactSecrets,
   storeActionPayload,
   normalizeTestFailure,
+  countUniqueSuites,
+  countUniqueFiles,
+  canonicalizeEvidencePaths,
   type AggregatedFailures,
   type AnalyzedFailure,
+  type CodeAnnotation,
   type RecommendedAction,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
 } from "@kenchi/shared";
 import {
-  calculateAverageConfidence,
+  calculateConfidenceWithUncertainty,
   mergeRecommendedActions,
   getConfidenceEmoji,
 } from "./formatterUtils.js";
 import {
   buildAnnotationsBlock,
   buildCheckNamesBlock,
-  buildRootCauseBlock,
+  buildClusteredRootCauseBlock,
   buildDependencyChangesBlock,
   buildConfigChangesBlock,
   buildRelatedKnowledgeBlock,
@@ -139,23 +144,37 @@ const toTitleCase = (snakeCaseString: string): string =>
 
 /**
  * Consolidate test failures across checks using Map-based deduplication.
- * Normalizes test identifiers to extract file paths from test names.
+ * Deduplicates by file:line to show each location once.
+ * Keeps the entry with the most informative error (sorted first).
  */
-const consolidateTestFailures = (failures: readonly AnalyzedFailure[]): ConsolidatedTestFailure[] =>
-  deduplicateByKey(
-    [...failures.flatMap((failure) => failure.testFailures ?? [])].sort(
-      (left, right) => Number(Boolean(right.error)) - Number(Boolean(left.error))
-    ),
-    (testFailure) => `${testFailure.testName}|${testFailure.file ?? ""}`
-  ).map((testFailure) => normalizeTestFailure(testFailure));
+const consolidateTestFailures = (
+  testFailures: readonly ConsolidatedTestFailure[]
+): ConsolidatedTestFailure[] => {
+  const allFailures = [...testFailures];
+
+  // Sort to prioritize entries with meaningful errors
+  const sorted = [...allFailures].sort(
+    (left, right) => Number(Boolean(right.error)) - Number(Boolean(left.error))
+  );
+
+  // Normalize first, then deduplicate by file:line
+  const normalized = sorted.map((testFailure) => normalizeTestFailure(testFailure));
+
+  return deduplicateByKey(normalized, (testFailure) => {
+    // Deduplicate by file:line to show each location once
+    const file = testFailure.file ?? "";
+    const line = testFailure.line ?? 0;
+    return file ? `${file}:${line}` : testFailure.testName;
+  });
+};
 
 /**
  * Consolidate annotations across checks using Map-based deduplication
  * Key includes message to preserve multiple errors on the same line
  */
-const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): ConsolidatedAnnotation[] =>
+const consolidateAnnotations = (annotations: readonly CodeAnnotation[]): ConsolidatedAnnotation[] =>
   deduplicateByKey(
-    failures.flatMap((failure) => failure.annotations),
+    annotations,
     (annotation) => `${annotation.path}:${annotation.line}:${annotation.message}`
   ).map((annotation) => ({
     path: annotation.path,
@@ -163,15 +182,6 @@ const consolidateAnnotations = (failures: readonly AnalyzedFailure[]): Consolida
     message: annotation.message,
     suggestedFix: annotation.suggestedFix?.description,
   }));
-
-/**
- * Extract unique causes from failures
- */
-const extractUniqueCauses = (failures: readonly AnalyzedFailure[]): string[] =>
-  deduplicateByKey(
-    failures.map((failure) => failure.identifiedCause ?? failure.analysis ?? "").filter(Boolean),
-    (cause) => cause
-  );
 
 /**
  * Consolidate detected dependency changes across failures
@@ -283,16 +293,44 @@ const buildActionBlocks = (
 // ==================== Header Block Builders ====================
 
 /**
- * Build header blocks with repository info
+ * Header block configuration.
  */
-const buildHeaderBlocks = (
-  repository: AggregatedFailures["repository"],
-  commitSha: string,
-  prContext: AggregatedFailures["prContext"],
-  confidencePercent: number
-): SlackTextBlock[] => {
+interface HeaderBlockConfig {
+  readonly repository: AggregatedFailures["repository"];
+  readonly commitSha: string;
+  readonly prContext: AggregatedFailures["prContext"];
+  readonly confidencePercent: number;
+  readonly uncertainty?: string;
+  readonly suiteCount: number;
+  readonly fileCount: number;
+}
+
+/**
+ * Build header blocks with repository info, suite/file counts, and uncertainty.
+ */
+const buildHeaderBlocks = (headerConfig: HeaderBlockConfig): SlackTextBlock[] => {
+  const {
+    repository,
+    commitSha,
+    prContext,
+    confidencePercent,
+    uncertainty,
+    suiteCount,
+    fileCount,
+  } = headerConfig;
   const repoUrl = `https://github.com/${repository.fullName}`;
   const commitUrl = `${repoUrl}/commit/${commitSha}`;
+
+  // Format confidence with uncertainty note if present
+  const confidenceText = uncertainty
+    ? `${getConfidenceEmoji(confidencePercent)} ${confidencePercent}%\n_${uncertainty}_`
+    : `${getConfidenceEmoji(confidencePercent)} ${confidencePercent}%`;
+
+  // Format suite/file counts (only show if we have test failures)
+  const suiteText =
+    suiteCount > 0
+      ? `*${UI_EMOJI.failure} Test Suites*\n${suiteCount} failed | ${fileCount} files`
+      : `*${UI_EMOJI.failure} Files*\n${fileCount} affected`;
 
   return [
     {
@@ -316,9 +354,13 @@ const buildHeaderBlocks = (
         },
         {
           type: "mrkdwn",
-          text: `*${UI_EMOJI.details} Confidence*\n${getConfidenceEmoji(confidencePercent)} ${confidencePercent}%`,
+          text: `*${UI_EMOJI.details} Confidence*\n${confidenceText}`,
         },
       ],
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: suiteText }],
     },
   ];
 };
@@ -347,20 +389,28 @@ const buildPRLinkBlock = (
 // ==================== Public API ====================
 
 /**
- * Build consolidated Slack payload from aggregated failures
+ * Build consolidated Slack payload from aggregated failures.
+ * Includes suite/file counts, multi-module uncertainty detection, and evidence IDs.
  */
 export const buildConsolidatedSlackPayload = (
   aggregation: AggregatedFailures
 ): ConsolidatedSlackPayload => {
   const { failures, commitSha, repository, prContext } = aggregation;
-  const avgConfidence = calculateAverageConfidence(failures);
+  // Phase 4: Calculate confidence with multi-module uncertainty detection
+  const { confidence, uncertainty } = calculateConfidenceWithUncertainty(failures);
   const mergedActions = mergeRecommendedActions(failures);
-  const confidencePercent = Math.round(avgConfidence * 100);
+  const confidencePercent = Math.round(confidence * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
 
   // Pre-compute consolidated data (O(n) with Map-based deduplication)
-  const testFailures = consolidateTestFailures(failures);
-  const annotations = consolidateAnnotations(failures);
-  const causes = extractUniqueCauses(failures);
+  const rawTestFailures = failures.flatMap((failure) => failure.testFailures ?? []);
+  const rawAnnotations = failures.flatMap((failure) => failure.annotations ?? []);
+  const { testFailures: canonicalTestFailures, annotations: canonicalAnnotations } =
+    canonicalizeEvidencePaths(rawTestFailures, rawAnnotations);
+  const testFailures = consolidateTestFailures(canonicalTestFailures);
+  const annotations = consolidateAnnotations(canonicalAnnotations);
+  // Phase 2: Calculate suite and file counts
+  const suiteCount = countUniqueSuites(testFailures);
+  const fileCount = countUniqueFiles(testFailures, annotations);
   // AI-extracted context (Phase 4 - Language Agnostic)
   const dependencyChanges = consolidateDependencyChanges(failures);
   const buildConfigChanges = consolidateBuildConfigChanges(failures);
@@ -372,16 +422,21 @@ export const buildConsolidatedSlackPayload = (
   // Analysis ID for feedback tracking
   const analysisId = `${repository.fullName}:${commitSha}`;
 
-  // Build all block sections
-  const headerBlocks = buildHeaderBlocks(repository, commitSha, prContext, confidencePercent);
+  // Build all block sections with suite/file counts and uncertainty
+  const headerBlocks = buildHeaderBlocks({
+    repository,
+    commitSha,
+    prContext,
+    confidencePercent,
+    uncertainty,
+    suiteCount,
+    fileCount,
+  });
   const prLinkBlock = buildPRLinkBlock(repository, prContext);
   // Combine test failures and annotations into unified Affected Files block
   const annotationsBlock = buildAnnotationsBlock(annotations, testFailures);
-  const rootCauseBlock = buildRootCauseBlock(
-    causes,
-    testFailures.length > 0,
-    annotations.length > 0
-  );
+  // Use clustered root cause block for per-service grouping with evidence IDs
+  const rootCauseBlock = buildClusteredRootCauseBlock(failures);
   // AI-extracted blocks
   const dependencyBlock = buildDependencyChangesBlock(dependencyChanges);
   const configBlock = buildConfigChangesBlock(buildConfigChanges);
@@ -434,7 +489,7 @@ export const buildConsolidatedSlackPayload = (
       commitSha,
       failureCount: failures.length,
       checkNames: failures.map((failure) => failure.checkName),
-      avgConfidence,
+      avgConfidence: confidence,
       isConsolidated: true,
     },
   };

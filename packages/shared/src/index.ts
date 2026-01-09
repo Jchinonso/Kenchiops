@@ -283,11 +283,56 @@ export {
   formatDependencyChange,
   formatDependencyChanges,
   normalizeTestFailure,
+  normalizeTestFilePath,
+  sanitizeTestFailureMessage,
+  canonicalizeEvidencePaths,
+  extractServiceFromPath,
+  groupByServicePath,
+  formatGroupedItems,
+  // Test file detection (language-agnostic)
+  isTestFile,
+  // Cause extraction (language-agnostic)
+  extractMeaningfulCause,
+  // Failure classification (Phase 8)
+  classifyTestFailure,
+  partitionByFailureType,
+  // Suite counting (Phase 2)
+  countUniqueSuites,
+  countUniqueFiles,
+  // Evidence ID helpers (Phase 5)
+  generateTestEvidenceId,
+  generateAnnoEvidenceId,
+  generateCheckEvidenceId,
+  formatWithEvidenceId,
+  formatEvidenceLocation,
+  // Failure clustering (Phase 1)
+  clusterFailuresByService,
+  selectBestClusterCause,
+  scoreClusterSignal,
+  isLowSignalCause,
+  isEvidenceBackedCluster,
+  summarizeRootCauses,
   type CIAnnotation,
   type CITestFailure,
   type CollectErrorsOptions,
   type DependencyChange,
   type DependencyChangeType,
+  type FailureClassificationType,
+  type PartitionedFailures,
+  type FailureCluster,
+  type RootCauseSummary,
+  type RootCauseSummaryEntry,
+} from "./formatting/index.js";
+export {
+  resolveIdentifiedCause,
+  resolveAnnotations,
+  resolveRecommendedActions,
+  resolveDependencyChanges,
+  resolveBuildConfigChanges,
+  type AnalysisLike,
+  type ResolvedAnnotation,
+  type ResolvedAction,
+  type ResolvedDependencyChange,
 } from "./formatting/index.js";
 
 // Integrations
@@ -325,6 +370,9 @@ export {
   splitEvidenceSections,
   type EvidenceSectionBlock,
   isGenericErrorLine,
+  extractAssertionSnippet,
+  ASSERTION_DETAIL_PATTERNS,
+  MAX_ASSERTION_SNIPPET_LENGTH,
 } from "./openaiClient/index.js";
 export {
   EmbeddingClient,

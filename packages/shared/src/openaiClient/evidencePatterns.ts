@@ -12,11 +12,25 @@ import type { FailureCategory, PipelinePhase } from "../core/types.js";
 
 /**
  * Generic error lines that provide little diagnostic value.
+ * These patterns are filtered out when searching for meaningful error messages.
+ * Includes test runner markers (FAIL, ●, ✕) that should be skipped to find actual assertions.
  */
 export const GENERIC_ERROR_LINE_PATTERNS: readonly RegExp[] = [
   /^test failed\b/i,
   /^assertionerror\b$/i,
   /^error\b$/i,
+  /^FAIL\s+/i,
+  /^●\s+/,
+  /^✕\s+/,
+  /^✓\s+/,
+  /^\s*at\s+/,
+  /^Tests?:\s+/i,
+  /^Time:\s+/i,
+  /^Ran\s+all\s+test/i,
+  /^console\.(log|warn|error)/i,
+  // File paths without meaningful error content
+  /^[\w-]+\/[\w-/]+\.(test|spec)\.\w+$/,
+  /^(services|packages|src|tests?)\/[\w-/]+\.\w+$/i,
 ];
 
 /**
@@ -129,6 +143,29 @@ export const DEPENDENCY_EXCLUSIONS = new Set([
   "package",
   "packages",
 ]);
+
+/**
+ * Patterns for extracting meaningful assertion details from test error bodies.
+ * These capture expected/received values and specific error messages.
+ */
+export const ASSERTION_DETAIL_PATTERNS: readonly RegExp[] = [
+  /Expected[:\s]+(.+?)(?:\n|Received|$)/is,
+  /Received[:\s]+(.+?)(?:\n|$)/is,
+  /AssertionError[:\s]+(.+?)(?:\n|$)/i,
+  /expect\(.+?\)\.(\w+)\(.+?\)/i,
+  /expected\s+['"`<](.+?)['"`>]\s+(?:to\s+)?(?:equal|be|match|contain)/i,
+  /but\s+(?:got|received|was)[:\s]+['"`<]?(.+?)['"`>]?(?:\n|$)/i,
+  /TypeError[:\s]+(.+?)(?:\n|$)/i,
+  /ReferenceError[:\s]+(.+?)(?:\n|$)/i,
+  /Cannot\s+read\s+propert(?:y|ies)\s+['"`]?(\w+)['"`]?\s+of\s+(\w+)/i,
+  /(\w+)\s+is\s+not\s+(?:a\s+)?(?:defined|function|object|array)/i,
+  /timeout\s+(?:of\s+)?(\d+)\s*m?s\s+exceeded/i,
+];
+
+/**
+ * Maximum length for extracted assertion snippets.
+ */
+export const MAX_ASSERTION_SNIPPET_LENGTH = 150;
 
 // ==================== Failure Classification ====================
 
@@ -244,4 +281,82 @@ export const isBlockHeaderLine = (line: string, prefix: string): boolean => {
     trimmed.startsWith(`- [${prefix}#`) ||
     trimmed.startsWith(`* [${prefix}#`)
   );
+};
+
+// ==================== Assertion Snippet Extraction ====================
+
+/**
+ * Truncates a snippet to the maximum length with ellipsis.
+ */
+const truncateSnippet = (text: string): string => {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= MAX_ASSERTION_SNIPPET_LENGTH) {
+    return cleaned;
+  }
+  return `${cleaned.slice(0, MAX_ASSERTION_SNIPPET_LENGTH - 3)}...`;
+};
+
+const stripCodeFrameFragment = (text: string): string => {
+  const match = text.match(/\b\d+\s*\|/);
+  if (!match || match.index === undefined) {
+    return text.trim();
+  }
+  const prefix = text.slice(0, match.index).trim();
+  if (prefix.length < 3 || /^\d+$/.test(prefix)) {
+    return "";
+  }
+  return prefix;
+};
+
+/**
+ * Attempts to extract a snippet from text using a single pattern.
+ */
+const tryPatternExtraction = (text: string, pattern: RegExp): string | null => {
+  const match = pattern.exec(text);
+  if (!match) {
+    return null;
+  }
+  const captured = match[1]?.trim() ?? match[0]?.trim();
+  const cleaned = captured ? stripCodeFrameFragment(captured) : "";
+  if (cleaned && cleaned.length > 5 && !isGenericErrorLine(cleaned)) {
+    return truncateSnippet(cleaned);
+  }
+  return null;
+};
+
+/**
+ * Extracts a meaningful assertion snippet from error text.
+ * Tries assertion patterns first, then falls back to first non-generic line.
+ *
+ * @param errorBody - The error body text to extract from
+ * @returns Extracted snippet or null if no meaningful content found
+ */
+export const extractAssertionSnippet = (errorBody: string): string | null => {
+  if (!errorBody || errorBody.trim().length === 0) {
+    return null;
+  }
+
+  const trimmedBody = errorBody.trim();
+
+  // Try assertion patterns using find to get first match
+  const patternMatch = ASSERTION_DETAIL_PATTERNS.map((pattern) =>
+    tryPatternExtraction(trimmedBody, pattern)
+  ).find((result) => result !== null);
+
+  if (patternMatch) {
+    return patternMatch;
+  }
+
+  // Fall back to first meaningful line
+  const lines = trimmedBody.split("\n").map((line) => line.trim());
+  const meaningfulLine = getFirstMeaningfulLine(lines);
+
+  if (meaningfulLine && meaningfulLine.length > 5) {
+    const cleaned = stripCodeFrameFragment(meaningfulLine);
+    if (cleaned.length > 5) {
+      return truncateSnippet(cleaned);
+    }
+  }
+
+  return null;
 };

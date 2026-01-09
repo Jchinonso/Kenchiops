@@ -25,15 +25,17 @@ interface SectionActionMatcher {
   readonly pattern: RegExp;
 }
 
+/**
+ * Patterns for generic causes that should be replaced with evidence-based causes.
+ * Only exact/nearly-exact matches - avoid replacing legitimate detailed causes.
+ */
 const GENERIC_CAUSE_PATTERNS: readonly RegExp[] = [
-  /\btest execution failed\b/i,
-  /\btests? (failed|failing)\b/i,
-  /\bassertion errors?\b/i,
-  /\bunmet expectations?\b/i,
-  /\bci (build|check|pipeline) failed\b/i,
-  /\bmultiple test cases\b/i,
-  /\bbuild failed\b/i,
-  /\bworkflow failed\b/i,
+  /^test execution failed\.?$/i,
+  /^tests? failed\.?$/i,
+  /^ci (build|check|pipeline) failed\.?$/i,
+  /^build failed\.?$/i,
+  /^workflow failed\.?$/i,
+  /^multiple tests? failed\.?$/i,
 ];
 
 const ACTION_EVIDENCE_HINTS: readonly ActionEvidenceHint[] = [
@@ -52,10 +54,26 @@ const ACTION_EVIDENCE_HINTS: readonly ActionEvidenceHint[] = [
   { action: /test|spec|assert/i, evidence: /test|assert|spec|failed tests|test error/i },
 ];
 
+/**
+ * Action types that should pass through without strict evidence matching.
+ * These are common investigative actions that are always relevant to failures.
+ */
+const ACTION_TYPE_WHITELIST = new Set([
+  "review_test",
+  "check_assertion",
+  "verify_expected",
+  "run_locally",
+  "add_logging",
+  "check_fixture",
+  "debug",
+  "review_logs",
+  "check_test",
+]);
+
 const SECTION_ACTION_MATCHERS: readonly SectionActionMatcher[] = [
   { key: "hasTests", pattern: /test|spec|assert/i },
   { key: "hasAnnotations", pattern: /annotation|stack trace|line/i },
-  { key: "hasCheckOutput", pattern: /check|ci/i },
+  { key: "hasCheckOutput", pattern: /check output|check run|ci check|check logs?/i },
   { key: "hasWorkflowLogs", pattern: /workflow|job|step|runner/i },
   { key: "hasDependencyChanges", pattern: /dependency|package|lockfile/i },
   { key: "hasBuildConfigChanges", pattern: /config|configuration|build/i },
@@ -92,16 +110,26 @@ const SIGNAL_ACTION_RULES: ReadonlyArray<{
 const CAMEL_CASE_IDENTIFIER = /\b[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*\b/g;
 const SNAKE_CASE_IDENTIFIER = /\b[a-z0-9]+_[a-z0-9_]+\b/g;
 const KEBAB_CASE_IDENTIFIER = /\b[a-z0-9]+(?:-[a-z0-9]+)+\b/g;
+const CONTEXTUAL_IDENTIFIER_PATTERNS: readonly RegExp[] = [
+  /\b([A-Za-z_][A-Za-z0-9_-]{2,})\s+(?:function|method|handler|service|module|class)\b/gi,
+  /\b(?:function|method|handler|service|module|class)\s+([A-Za-z_][A-Za-z0-9_-]{2,})\b/gi,
+];
 
 const appendEvidenceId = (text: string, evidenceId?: string): string =>
   evidenceId ? `${text} (evidence: ${evidenceId})` : text;
 
 const extractEvidenceIdentifiers = (text: string): string[] => {
+  const contextualIdentifiers = CONTEXTUAL_IDENTIFIER_PATTERNS.flatMap((pattern) =>
+    Array.from(text.matchAll(pattern))
+      .map((match) => match[1])
+      .filter((identifier): identifier is string => Boolean(identifier))
+  );
   const rawIdentifiers = [
     ...(text.match(CAMEL_CASE_IDENTIFIER) ?? []),
     ...(text.match(SNAKE_CASE_IDENTIFIER) ?? []),
     ...(text.match(KEBAB_CASE_IDENTIFIER) ?? []),
     ...(text.match(FILE_PATH_IDENTIFIER) ?? []),
+    ...contextualIdentifiers,
   ];
   const uniqueIdentifiers = Array.from(new Set(rawIdentifiers.map((id) => id.trim())));
   return uniqueIdentifiers.filter((identifier) => identifier.length >= 4);
@@ -125,11 +153,25 @@ const isActionEvidenceBacked = (
   evidenceText: string,
   highlights: EvidenceHighlights
 ): boolean => {
-  const identifiers = extractEvidenceIdentifiers(action.description);
-  if (identifiers.length > 0) {
-    return identifiers.every((identifier) => evidenceText.includes(identifier.toLowerCase()));
+  // Whitelisted action types always pass
+  if (action.actionType && ACTION_TYPE_WHITELIST.has(action.actionType.toLowerCase())) {
+    return true;
   }
 
+  // Check for identifier matches in evidence
+  const identifiers = extractEvidenceIdentifiers(action.description);
+  if (identifiers.length > 0) {
+    // Require at least one identifier to match (less strict than all)
+    const lowerEvidenceText = evidenceText.toLowerCase();
+    const hasAnyMatch = identifiers.some((identifier) =>
+      lowerEvidenceText.includes(identifier.toLowerCase())
+    );
+    if (hasAnyMatch) {
+      return true;
+    }
+  }
+
+  // Check hint patterns
   const hasHintMatch = ACTION_EVIDENCE_HINTS.some(
     (hint) => hint.action.test(action.description) && hint.evidence.test(evidenceText)
   );
@@ -164,18 +206,27 @@ const CAUSE_BUILDERS: Record<
   (highlights: EvidenceHighlights, errorLine: string) => string
 > = {
   test: (highlights, errorLine) => {
-    const testName = truncateText(highlights.primaryTestName ?? "failing test", 80);
+    const testName = truncateText(highlights.primaryTestName ?? "failing test", 60);
     const fileTag = highlights.primaryFile ? ` (${highlights.primaryFile})` : "";
+    // Prefer extracted error snippet over generic errorLine
+    const errorDetail = highlights.primaryErrorSnippet
+      ? truncateText(highlights.primaryErrorSnippet, 120)
+      : errorLine;
     return appendEvidenceId(
-      `Test failure in ${testName}${fileTag}: ${errorLine}`,
+      `Test failure in ${testName}${fileTag}: ${errorDetail}`,
       highlights.primaryEvidenceId
     );
   },
-  annotation: (highlights, errorLine) =>
-    appendEvidenceId(
-      `CI annotation at ${buildAnnotationLocation(highlights)}: ${errorLine}`,
+  annotation: (highlights, errorLine) => {
+    // Prefer extracted error snippet over generic errorLine
+    const errorDetail = highlights.primaryErrorSnippet
+      ? truncateText(highlights.primaryErrorSnippet, 120)
+      : errorLine;
+    return appendEvidenceId(
+      `CI annotation at ${buildAnnotationLocation(highlights)}: ${errorDetail}`,
       highlights.primaryEvidenceId
-    ),
+    );
+  },
   check: (highlights, errorLine) =>
     appendEvidenceId(`CI check output shows: ${errorLine}`, highlights.primaryEvidenceId),
   workflow: (highlights, errorLine) =>
@@ -195,30 +246,58 @@ export const buildEvidenceBasedCause = (highlights: EvidenceHighlights): string 
   return builder ? builder(highlights, errorLine) : null;
 };
 
-const createAction = (description: string, priority: "high" | "medium"): LLMRecommendedAction => ({
-  actionType: "manual_investigation",
+const createAction = (
+  description: string,
+  priority: "high" | "medium",
+  actionType: string = "manual_investigation"
+): LLMRecommendedAction => ({
+  actionType,
   description,
   priority,
 });
 
+/**
+ * Builds fallback actions when LLM-generated actions are insufficient.
+ * Uses evidence highlights to generate failure-specific recommendations.
+ * Each action type is unique to prevent over-aggressive deduplication.
+ *
+ * @param highlights - Extracted evidence highlights from analysis
+ * @returns Array of recommended actions (max 5)
+ */
 export const buildFallbackActions = (highlights: EvidenceHighlights): LLMRecommendedAction[] => {
-  const errorLine = highlights.primaryErrorLine
-    ? truncateText(highlights.primaryErrorLine, 140)
-    : "";
-  const primaryAction = errorLine
+  // Prefer error snippet over generic error line
+  const errorDetail = highlights.primaryErrorSnippet
+    ? truncateText(highlights.primaryErrorSnippet, 100)
+    : highlights.primaryErrorLine
+      ? truncateText(highlights.primaryErrorLine, 100)
+      : "";
+
+  const primaryAction = errorDetail
     ? createAction(
         appendEvidenceId(
           highlights.primaryTestName
-            ? `Review the failing test output for "${truncateText(
-                highlights.primaryTestName,
-                60
-              )}" and start with: ${errorLine}`
-            : `Review the first error line in the logs: ${errorLine}`,
+            ? `Fix assertion failure in "${truncateText(highlights.primaryTestName, 50)}": ${errorDetail}`
+            : `Review the error: ${errorDetail}`,
           highlights.primaryEvidenceId
         ),
-        "high"
+        "high",
+        `fix_primary_${highlights.primaryFile ?? "test"}`
       )
     : null;
+
+  // Build actions for secondary test failures with unique action types
+  const secondaryActions = (highlights.secondaryTestFailures ?? [])
+    .slice(0, 3)
+    .map((failure, index) =>
+      createAction(
+        appendEvidenceId(
+          `Review test failure in ${truncateText(failure.testName, 40)}: ${truncateText(failure.errorSnippet, 80)}`,
+          failure.evidenceId
+        ),
+        "medium",
+        `review_secondary_${index}_${failure.file ?? "test"}`
+      )
+    );
 
   const locationAction = highlights.primaryFile
     ? createAction(
@@ -226,14 +305,17 @@ export const buildFallbackActions = (highlights: EvidenceHighlights): LLMRecomme
           `Inspect ${buildAnnotationLocation(highlights)} referenced by the failure output.`,
           highlights.primaryEvidenceId
         ),
-        "medium"
+        "medium",
+        `inspect_location_${highlights.primaryFile}`
       )
     : null;
 
   const signalAction = SIGNAL_ACTION_RULES.find((rule) =>
     rule.pattern.test(highlights.evidenceText.toLowerCase())
   );
-  const signalActions = signalAction ? [createAction(signalAction.description, "medium")] : [];
+  const signalActions = signalAction
+    ? [createAction(signalAction.description, "medium", "fix_signal_issue")]
+    : [];
 
   const dependencyAction =
     highlights.dependencyNames.length > 0
@@ -242,7 +324,8 @@ export const buildFallbackActions = (highlights: EvidenceHighlights): LLMRecomme
             `Review dependency changes for ${highlights.dependencyNames.slice(0, 3).join(", ")}.`,
             formatEvidenceId("dep", highlights.dependencyChanges[0]?.id)
           ),
-          "medium"
+          "medium",
+          "review_dependencies"
         )
       : null;
 
@@ -253,13 +336,21 @@ export const buildFallbackActions = (highlights: EvidenceHighlights): LLMRecomme
             `Review build/config changes in ${highlights.configFiles.slice(0, 2).join(", ")}.`,
             formatEvidenceId("cfg", highlights.buildConfigChanges[0]?.id)
           ),
-          "medium"
+          "medium",
+          "review_config"
         )
       : null;
 
-  return [primaryAction, locationAction, ...signalActions, dependencyAction, configAction]
+  return [
+    primaryAction,
+    ...secondaryActions,
+    locationAction,
+    ...signalActions,
+    dependencyAction,
+    configAction,
+  ]
     .filter((action): action is LLMRecommendedAction => action !== null)
-    .slice(0, 3);
+    .slice(0, 5);
 };
 
 export const buildSummaryFromCause = (cause: string): string => {

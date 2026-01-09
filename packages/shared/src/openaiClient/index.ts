@@ -19,6 +19,11 @@ export {
   isGenericErrorLine,
 } from "./analysisGuardrailsEvidence.js";
 export {
+  extractAssertionSnippet,
+  ASSERTION_DETAIL_PATTERNS,
+  MAX_ASSERTION_SNIPPET_LENGTH,
+} from "./evidencePatterns.js";
+export {
   EmbeddingClient,
   getEmbeddingClient,
   clearClientCache,

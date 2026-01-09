@@ -128,6 +128,7 @@ export const postPRComment = async (
       owner,
       repo,
       prNumber,
+      bodyPreview: body.slice(0, 2000),
     });
   } catch (error) {
     logger.error("Failed to post PR comment", {

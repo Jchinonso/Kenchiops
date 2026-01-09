@@ -26,6 +26,7 @@ export { buildAnnotationsBlock, buildCheckNamesBlock } from "./slackAnnotationBl
 // Analysis blocks
 export {
   buildRootCauseBlock,
+  buildClusteredRootCauseBlock,
   buildDependencyChangesBlock,
   buildConfigChangesBlock,
   buildRelatedKnowledgeBlock,

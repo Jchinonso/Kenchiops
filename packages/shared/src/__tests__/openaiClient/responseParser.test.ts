@@ -84,7 +84,7 @@ describe("OpenAI responseParser", () => {
       annotations: [
         {
           evidence_id: "test_failure",
-          snippet: "Test failed: services/github-app/src/tests/commentFormatter.test.ts",
+          snippet: "Test failed: api/formatters/comment.test.ts",
           explanation: "Assertion mismatch in formatter output",
         },
       ],
@@ -95,9 +95,7 @@ describe("OpenAI responseParser", () => {
 
     const result = parseOpenAIResponse(content, "evt_annotation");
 
-    expect(result.codeAnnotations[0]?.path).toBe(
-      "services/github-app/src/tests/commentFormatter.test.ts"
-    );
+    expect(result.codeAnnotations[0]?.path).toBe("api/formatters/comment.test.ts");
     expect(result.codeAnnotations[0]?.line).toBe(0);
   });
 });
