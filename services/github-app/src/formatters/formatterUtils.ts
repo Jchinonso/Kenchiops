@@ -11,6 +11,7 @@ import {
   PRIORITY_ORDER,
   PRIORITY_ORDER_DEFAULT,
   GITHUB_COMMENT_TEMPLATES,
+  CONTEXT_CONFIDENCE_ADJUSTMENTS,
   config,
   generateFeedbackUrl,
   createLogger,
@@ -25,6 +26,7 @@ import {
   isEvidenceBackedCluster,
   isTestFile,
   truncateText,
+  classifyTestFailure,
   type AnalyzedFailure,
   type RecommendedAction,
   type FailureCluster,
@@ -37,7 +39,7 @@ import {
 export const DISPLAY_LIMITS = {
   annotationsPerCheck: 100,
   totalAnnotations: 150,
-  recommendedActions: 10,
+  recommendedActions: 5,
   checksToShow: 20,
   slackAnnotationsPerCheck: 50,
   slackMaxChecks: 10,
@@ -87,20 +89,13 @@ export interface ConfidenceResult {
   readonly uncertainty?: string;
 }
 
-/**
- * Minimum number of services to trigger multi-module uncertainty.
- */
-const MULTI_MODULE_THRESHOLD = 3;
+/** Minimum services threshold from shared constants */
+const { MULTI_SERVICE_THRESHOLD } = CONTEXT_CONFIDENCE_ADJUSTMENTS;
 
 /**
- * Confidence reduction factor for multi-module failures.
+ * Minimum confidence floor after adjustments.
  */
-const MULTI_MODULE_REDUCTION = 0.7;
-
-/**
- * Minimum confidence floor after reduction.
- */
-const CONFIDENCE_FLOOR = 0.3;
+const CONFIDENCE_FLOOR = 0.15;
 
 const GENERIC_ACTION_PATTERNS: readonly RegExp[] = [
   /^review (the )?failing tests?/i,
@@ -152,8 +147,56 @@ export const calculateAverageConfidence = (failures: readonly AnalyzedFailure[])
 };
 
 /**
- * Calculate confidence with multi-module detection.
- * Reduces confidence when failures span multiple independent services.
+ * Checks if failures have adequate file/line information.
+ */
+const hasAdequateFileInfo = (failures: readonly AnalyzedFailure[]): boolean => {
+  const allTestFailures = failures.flatMap((failure) => failure.testFailures ?? []);
+  if (allTestFailures.length === 0) {
+    return true; // No test failures to check
+  }
+  const withFileInfo = allTestFailures.filter(
+    (testFailure) => testFailure.file && testFailure.line
+  );
+  return withFileInfo.length >= allTestFailures.length / 2;
+};
+
+/**
+ * Checks if failures contain only generic error messages.
+ */
+const hasOnlyGenericErrors = (failures: readonly AnalyzedFailure[]): boolean => {
+  const allCauses = failures
+    .map((failure) => failure.identifiedCause)
+    .filter((cause): cause is string => Boolean(cause));
+  if (allCauses.length === 0) {
+    return true;
+  }
+  const genericIndicators = ["failed", "error occurred", "test failed", "assertion failed"];
+  return allCauses.every((cause) => {
+    const lowerCause = cause.toLowerCase();
+    return genericIndicators.some((indicator) => lowerCause.includes(indicator));
+  });
+};
+
+/**
+ * Checks if failures mix infrastructure issues with assertion failures.
+ */
+const hasInfraMixedWithAssertions = (failures: readonly AnalyzedFailure[]): boolean => {
+  const allTestFailures = failures.flatMap((failure) => failure.testFailures ?? []);
+  if (allTestFailures.length < 2) {
+    return false;
+  }
+  const classifications = allTestFailures.map((testFailure) => classifyTestFailure(testFailure));
+  const hasInfra = classifications.some(
+    (classification) => classification === "infra" || classification === "timeout"
+  );
+  const hasAssertions = classifications.some((classification) => classification === "assertion");
+  return hasInfra && hasAssertions;
+};
+
+/**
+ * Calculate confidence with context-based adjustments.
+ * Reduces confidence when failures span multiple services, lack file info,
+ * contain generic errors, or mix infrastructure with assertion failures.
  *
  * @param failures - Array of analyzed failures
  * @returns Confidence result with optional uncertainty message
@@ -167,13 +210,51 @@ export const calculateConfidenceWithUncertainty = (
 
   const baseConfidence = calculateAverageConfidence(failures);
   const affectedServices = extractAffectedServices(failures);
+  const uncertaintyReasons: string[] = [];
+  let adjustment = 0;
 
-  // Detect multi-module spread
-  if (affectedServices.size >= MULTI_MODULE_THRESHOLD) {
-    const reducedConfidence = Math.max(CONFIDENCE_FLOOR, baseConfidence * MULTI_MODULE_REDUCTION);
+  // Positive: Single service affected
+  if (affectedServices.size === 1) {
+    adjustment += CONTEXT_CONFIDENCE_ADJUSTMENTS.SINGLE_SERVICE_AFFECTED;
+  }
+
+  // Positive: Clear primary blocker (high confidence root cause identified)
+  const hasPrimaryBlocker = failures.some((failure) => failure.confidence >= 0.7);
+  if (hasPrimaryBlocker) {
+    adjustment += CONTEXT_CONFIDENCE_ADJUSTMENTS.PRIMARY_BLOCKER_IDENTIFIED;
+  }
+
+  // Negative: Multi-service spread adjustment
+  if (affectedServices.size >= MULTI_SERVICE_THRESHOLD) {
+    adjustment += CONTEXT_CONFIDENCE_ADJUSTMENTS.MULTI_SERVICE_SPREAD;
+    uncertaintyReasons.push(`${affectedServices.size} services affected`);
+  }
+
+  // Missing file/line information adjustment
+  if (!hasAdequateFileInfo(failures)) {
+    adjustment += CONTEXT_CONFIDENCE_ADJUSTMENTS.MISSING_FILE_LINE;
+    uncertaintyReasons.push("missing file locations");
+  }
+
+  // Generic error only adjustment
+  if (hasOnlyGenericErrors(failures)) {
+    adjustment += CONTEXT_CONFIDENCE_ADJUSTMENTS.GENERIC_ERROR_ONLY;
+    uncertaintyReasons.push("generic errors");
+  }
+
+  // Infrastructure mixed with assertions adjustment
+  if (hasInfraMixedWithAssertions(failures)) {
+    adjustment += CONTEXT_CONFIDENCE_ADJUSTMENTS.INFRA_MIXED_WITH_ASSERTIONS;
+    uncertaintyReasons.push("mixed infra/assertion failures");
+  }
+
+  // Apply adjustments with floor
+  const adjustedConfidence = Math.max(CONFIDENCE_FLOOR, baseConfidence + adjustment);
+
+  if (uncertaintyReasons.length > 0) {
     return {
-      confidence: reducedConfidence,
-      uncertainty: `${affectedServices.size} services affected`,
+      confidence: adjustedConfidence,
+      uncertainty: uncertaintyReasons.join(", "),
     };
   }
 

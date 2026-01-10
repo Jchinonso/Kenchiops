@@ -116,6 +116,12 @@ export interface PRContext {
   readonly branch: string;
   readonly baseBranch: string;
   readonly labels: readonly string[];
+  /** Changed files in the PR for failure correlation (Phase 6) */
+  readonly changedFiles?: readonly string[];
+  /** Commit message for linked issue extraction (Phase 6) */
+  readonly commitMessage?: string;
+  /** Base branch SHA for diff comparison (Phase 6) */
+  readonly baseBranchSha?: string;
 }
 
 /**

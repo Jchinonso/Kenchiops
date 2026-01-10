@@ -10,6 +10,9 @@ import {
   SLACK_COLORS,
   TIME_CONSTANTS,
   GITHUB_COMMENT_DISPLAY,
+  CONFIDENCE_DISPLAY_LABELS,
+  CONFIDENCE_DISPLAY_THRESHOLDS,
+  type ConfidenceRange,
 } from "../constants/index.js";
 
 // ==================== Lookup Tables ====================
@@ -84,6 +87,42 @@ export const getConfidenceLabel = (score: number): string =>
  */
 export const getConfidenceLabelParenthesized = (score: number): string =>
   `(${getConfidenceLabel(score)})`;
+
+/**
+ * Gets the confidence range key for display label lookup.
+ * Uses percentage-based thresholds from CONFIDENCE_DISPLAY_THRESHOLDS.
+ */
+const getConfidenceRangeForDisplay = (scorePercent: number): ConfidenceRange => {
+  if (scorePercent >= CONFIDENCE_DISPLAY_THRESHOLDS.HIGH) {
+    return "high";
+  }
+  if (scorePercent >= CONFIDENCE_DISPLAY_THRESHOLDS.MEDIUM) {
+    return "medium";
+  }
+  if (scorePercent >= CONFIDENCE_DISPLAY_THRESHOLDS.LOW) {
+    return "low";
+  }
+  return "very_low";
+};
+
+/**
+ * Formats a confidence score with human-readable label.
+ * Produces format: "72% (high certainty)" for Voice Guide compliance.
+ *
+ * @param score - Confidence score between 0 and 1
+ * @returns Formatted string like "72% (high certainty)"
+ *
+ * @example
+ * formatConfidenceWithLabel(0.72) // Returns: "72% (high certainty)"
+ * formatConfidenceWithLabel(0.45) // Returns: "45% (moderate certainty)"
+ * formatConfidenceWithLabel(0.25) // Returns: "25% (low certainty)"
+ */
+export const formatConfidenceWithLabel = (score: number): string => {
+  const percentage = Math.round(score * CONFIDENCE_DISPLAY_THRESHOLDS.PERCENTAGE_MULTIPLIER);
+  const range = getConfidenceRangeForDisplay(percentage);
+  const label = CONFIDENCE_DISPLAY_LABELS[range];
+  return `${percentage}% (${label})`;
+};
 
 /**
  * Gets the appropriate Slack color hex code based on confidence score.
