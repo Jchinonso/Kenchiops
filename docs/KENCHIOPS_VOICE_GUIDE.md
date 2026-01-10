@@ -317,6 +317,38 @@ Use these consistently:
 
 ---
 
+## Recommended Areas to Review (Format)
+
+Use this section name instead of "Recommended Actions" when presenting review-oriented guidance.
+
+**Rules:**
+
+- No checkboxes.
+- Each item has a short **title** line and a **detail** line.
+- Prefix the title with the priority emoji.
+- Include the service prefix in the title when available (e.g., `[api]`).
+- Detail line should use the full action sentence and append reasoning when provided.
+- Keep the list to 5 items max. Slack may truncate long lines; GitHub should show full text.
+
+**GitHub example:**
+
+```
+## 🛠️ Recommended Areas to Review
+
+1. **🟠 [api] Dependency changes in auth flow**
+   Review dependency changes for auth flow. Conflicts appeared after the lockfile update.
+```
+
+**Slack example:**
+
+```
+*🛠️ Recommended Areas to Review*
+1. *🟠 [api] Dependency changes in auth flow*
+   Review dependency changes for auth flow. Conflicts appeared after the lockfile update.
+```
+
+---
+
 ## PR Context Integration
 
 When PR context is available, incorporate:

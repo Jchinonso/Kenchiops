@@ -270,6 +270,9 @@ export {
   getFirstSentence,
   buildTruncatedList,
   formatConfidenceWithLabel,
+  buildReviewActionText,
+  type ReviewActionOptions,
+  type ReviewActionText,
 } from "./formatting/index.js";
 export {
   deduplicateByKey,

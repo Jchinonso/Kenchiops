@@ -446,7 +446,9 @@ describe("Slack Payload Formatter", () => {
         text?: { text: string };
       }>;
 
-      const actionsHeader = blocks.find((b) => b.text?.text?.includes("Recommended Actions"));
+      const actionsHeader = blocks.find((b) =>
+        b.text?.text?.includes("Recommended Areas to Review")
+      );
       const actionsBlock = blocks.find(
         (b) => b.type === "section" && b.text?.text?.includes("Fix the bug")
       );

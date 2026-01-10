@@ -11,7 +11,7 @@ import {
   buildCanonicalPathMap,
   resolveCanonicalPath,
 } from "./pathUtils.js";
-import { isTestFile } from "./testFailureUtils.js";
+import { isTestFile, normalizeTestFailure } from "./testFailureUtils.js";
 import {
   scoreCause,
   isLowSignalCause,
@@ -243,15 +243,59 @@ export const clusterFailuresByService = (
 
     // Process each test failure individually
     (failure.testFailures ?? []).forEach((testFailure) => {
-      if (!testFailure.file) {
+      const normalizedTestFailure =
+        !testFailure.file && testFailure.testName
+          ? normalizeTestFailure({
+              testName: testFailure.testName,
+              file: testFailure.file,
+              line: testFailure.line,
+              error: testFailure.error,
+            })
+          : testFailure;
+      const filePath = normalizedTestFailure.file;
+      const lineNumber = normalizedTestFailure.line ?? testFailure.line;
+      const testName = normalizedTestFailure.testName ?? testFailure.testName;
+
+      if (!filePath) {
+        const unlocatedKey = `unlocated:${testName ?? "unknown"}:${lineNumber ?? 0}`;
+        if (seenFileKeys.has(unlocatedKey)) {
+          return;
+        }
+        seenFileKeys.add(unlocatedKey);
+
+        const accumulator = accumulators.get("other") ?? createEmptyAccumulator("other");
+        const failureType = classifyTestFailure(normalizedTestFailure);
+        const isInfraOrTimeout = failureType === "infra" || failureType === "timeout";
+        const sanitizedError = normalizedTestFailure.error
+          ? sanitizeTestFailureMessage(normalizedTestFailure.error)
+          : "";
+        const meaningfulCause = sanitizedError
+          ? (extractMeaningfulCause(sanitizedError) ?? sanitizedError)
+          : null;
+        if (meaningfulCause) {
+          accumulator.causes.add(meaningfulCause);
+          updatePrimaryEvidence(accumulator, {
+            cause: meaningfulCause,
+            testName,
+          });
+        }
+
+        accumulator.testFailureCount += 1;
+        accumulator.evidenceIds.add(checkEvidenceId);
+        if (testName && !isTestFile(testName)) {
+          accumulator.primaryTestName = accumulator.primaryTestName ?? testName;
+        }
+        accumulator.isInfra = accumulator.isInfra || isInfraOrTimeout;
+
+        accumulators.set("other", accumulator);
         return;
       }
 
-      const normalizedFile = resolveCanonicalPath(testFailure.file, pathMap);
+      const normalizedFile = resolveCanonicalPath(filePath, pathMap);
       if (!FILE_PATH_VALIDATION.VALID_PATH_PATTERN.test(normalizedFile)) {
         return;
       }
-      const fileKey = `${normalizedFile}:${testFailure.line ?? 0}`;
+      const fileKey = `${normalizedFile}:${lineNumber ?? 0}`;
       if (seenFileKeys.has(fileKey)) {
         return;
       }
@@ -260,10 +304,12 @@ export const clusterFailuresByService = (
       const service = extractServiceFromPath(normalizedFile);
       const accumulator = accumulators.get(service) ?? createEmptyAccumulator(service);
 
-      const failureType = classifyTestFailure(testFailure);
+      const failureType = classifyTestFailure(normalizedTestFailure);
       const isInfraOrTimeout = failureType === "infra" || failureType === "timeout";
 
-      const sanitizedError = testFailure.error ? sanitizeTestFailureMessage(testFailure.error) : "";
+      const sanitizedError = normalizedTestFailure.error
+        ? sanitizeTestFailureMessage(normalizedTestFailure.error)
+        : "";
       const meaningfulCause = sanitizedError
         ? (extractMeaningfulCause(sanitizedError) ?? sanitizedError)
         : null;
@@ -272,24 +318,20 @@ export const clusterFailuresByService = (
         updatePrimaryEvidence(accumulator, {
           cause: meaningfulCause,
           file: normalizedFile,
-          line: testFailure.line,
-          testName: testFailure.testName,
+          line: lineNumber,
+          testName,
         });
       }
 
       accumulator.uniqueFiles.add(normalizedFile);
       accumulator.testFailureCount += 1;
       accumulator.evidenceIds.add(checkEvidenceId);
-      if (
-        !accumulator.primaryTestName &&
-        testFailure.testName &&
-        !isTestFile(testFailure.testName)
-      ) {
-        accumulator.primaryTestName = testFailure.testName;
+      if (!accumulator.primaryTestName && testName && !isTestFile(testName)) {
+        accumulator.primaryTestName = testName;
       }
       if (!accumulator.primaryFile) {
         accumulator.primaryFile = normalizedFile;
-        accumulator.primaryLine = testFailure.line;
+        accumulator.primaryLine = lineNumber;
       }
       accumulator.isInfra = accumulator.isInfra || isInfraOrTimeout;
 
@@ -385,12 +427,23 @@ export const summarizeRootCauses = (
   });
 
   const maxEntries = options?.maxEntries ?? FORMATTER_DISPLAY_LIMITS.MAX_ROOT_CAUSES;
-  const selected = sortedHighSignal.slice(0, maxEntries);
-  const hiddenCount = Math.max(0, sortedHighSignal.length - selected.length);
+  const useLowSignalFallback = sortedHighSignal.length === 0 && entriesWithSignal.length > 0;
+  const sortedFallback = useLowSignalFallback
+    ? entriesWithSignal.sort((left, right) => {
+        const scoreDiff = scoreClusterSignal(right.cluster) - scoreClusterSignal(left.cluster);
+        if (scoreDiff !== 0) {
+          return scoreDiff;
+        }
+        return right.cluster.uniqueFileCount - left.cluster.uniqueFileCount;
+      })
+    : sortedHighSignal;
+  const selected = sortedFallback.slice(0, maxEntries);
+  const hiddenCount = Math.max(0, sortedFallback.length - selected.length);
 
   const entries: RootCauseSummaryEntry[] = selected.map(({ cluster, bestCause }) => ({
     service: cluster.service,
-    cause: bestCause && !isLowSignalCause(bestCause) ? bestCause : undefined,
+    cause:
+      bestCause && (useLowSignalFallback || !isLowSignalCause(bestCause)) ? bestCause : undefined,
     location: formatEvidenceLocation(cluster.primaryFile, cluster.primaryLine),
     evidenceIds: cluster.evidenceIds,
     isInfra: cluster.isInfra,

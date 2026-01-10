@@ -135,7 +135,7 @@ describe("Consolidated Formatter", () => {
       const aggregation = createMockAggregation();
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).toContain("## 🛠️ Recommended Actions");
+      expect(comment).toContain("## 🛠️ Recommended Areas to Review");
       expect(comment).toContain("Run npm install");
     });
 
@@ -322,7 +322,7 @@ describe("Consolidated Formatter", () => {
       const payload = buildConsolidatedSlackPayload(aggregation);
       const content = JSON.stringify(payload);
 
-      expect(content).toContain("Recommended Actions");
+      expect(content).toContain("Recommended Areas to Review");
       expect(content).toContain("npm install");
     });
 

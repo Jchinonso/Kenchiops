@@ -18,6 +18,13 @@ export {
   buildTruncatedList,
 } from "./uiHelpers.js";
 
+// Action review formatting
+export {
+  buildReviewActionText,
+  type ReviewActionOptions,
+  type ReviewActionText,
+} from "./actionReview.js";
+
 // Array utilities
 export {
   deduplicateByKey,

@@ -25,6 +25,7 @@ import {
   correlatePRContext,
   buildPRContextSection,
   formatConfidenceWithLabel,
+  buildReviewActionText,
   type AggregatedFailures,
   type AnalyzedFailure,
   type RecommendedAction,
@@ -53,8 +54,15 @@ const LOW_SIGNAL_CAUSE_FALLBACK = "_No high-signal root cause detected. See Affe
 
 // ==================== Action Formatter ====================
 
-const formatAction = (action: RecommendedAction, index: number): string =>
-  `${index + 1}. ${getPriorityEmoji(action.priority)} ${action.description}`;
+const formatAction = (action: RecommendedAction, index: number): readonly string[] => {
+  const { servicePrefix, title, detail } = buildReviewActionText(
+    action.description,
+    action.reasoning
+  );
+  const titleLine = `${index + 1}. **${getPriorityEmoji(action.priority)} ${servicePrefix}${title}**`;
+  const detailLine = `   ${detail}`;
+  return [titleLine, detailLine];
+};
 
 // ==================== Header Section ====================
 
@@ -358,8 +366,11 @@ export const buildAnnotationsSection = (
   const allAssertionEntries = [...annotationEntries, ...assertionEntries].filter(
     (entry) => entry.location && entry.path
   );
+  const unlocatedAssertions = assertions.filter(
+    (failure) => !failure.file || !extractValidFileLocation(failure.file, failure.line ?? 0)
+  );
 
-  if (allAssertionEntries.length === 0) {
+  if (allAssertionEntries.length === 0 && unlocatedAssertions.length === 0) {
     return [];
   }
 
@@ -410,6 +421,30 @@ export const buildAnnotationsSection = (
     });
   });
 
+  if (unlocatedAssertions.length > 0) {
+    lines.push("");
+    lines.push(`**Unlocated Failures (${unlocatedAssertions.length})**`);
+    const displayedUnlocated = unlocatedAssertions.slice(0, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS);
+    displayedUnlocated.forEach((failure) => {
+      const testName = truncateText(failure.testName, GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH);
+      const normalizedError = failure.error
+        ? truncateText(
+            sanitizeTestFailureMessage(failure.error),
+            GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH
+          )
+        : "";
+      const evidenceIndex = assertions.indexOf(failure);
+      const evidenceTag = evidenceIndex >= 0 ? ` [${generateTestEvidenceId(evidenceIndex)}]` : "";
+      const display = normalizedError.length > 0 ? `${testName} — ${normalizedError}` : testName;
+      lines.push(`  - ${UI_EMOJI.failedFile} ${display}${evidenceTag}`);
+    });
+    if (unlocatedAssertions.length > displayedUnlocated.length) {
+      lines.push(
+        `  - _...and ${unlocatedAssertions.length - displayedUnlocated.length} more unlocated failures_`
+      );
+    }
+  }
+
   lines.push("");
   return lines;
 };
@@ -422,7 +457,17 @@ export const buildAnnotationsSection = (
 export const buildActionsSection = (actions: readonly RecommendedAction[]): string[] =>
   actions.length === 0
     ? []
-    : ["---", "", `## ${UI_EMOJI.tools} Recommended Actions`, "", ...actions.map(formatAction), ""];
+    : [
+        "---",
+        "",
+        `## ${UI_EMOJI.tools} Recommended Areas to Review`,
+        "",
+        ...actions.flatMap((action, index) => {
+          const actionLines = formatAction(action, index);
+          return index === 0 ? actionLines : ["", ...actionLines];
+        }),
+        "",
+      ];
 
 /**
  * Build feedback section with links

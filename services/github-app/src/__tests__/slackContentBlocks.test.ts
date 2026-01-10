@@ -331,7 +331,7 @@ describe("slackContentBlocks", () => {
 
       expect(result.length).toBe(3); // divider + header + actions
       expect(result[0].type).toBe("divider");
-      expect(result[1].text?.text).toContain("Recommended Actions");
+      expect(result[1].text?.text).toContain("Recommended Areas to Review");
       expect(result[2].text?.text).toContain("Rerun the failed pipeline");
     });
 

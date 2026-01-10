@@ -791,4 +791,27 @@ describe("CI Formatters", () => {
       expect(isLowSignalCause("Missing import statement")).toBe(false);
     });
   });
+
+  // INTENTIONALLY FAILING TESTS FOR CI TESTING
+  describe("Intentionally Failing Tests", () => {
+    it("should fail with wrong expected value", () => {
+      expect(1 + 1).toBe(3);
+    });
+
+    it("should fail with string mismatch", () => {
+      expect("hello").toBe("world");
+    });
+
+    it("should fail with array length mismatch", () => {
+      expect([1, 2, 3]).toHaveLength(5);
+    });
+
+    it("should fail with object property mismatch", () => {
+      expect({ name: "test" }).toEqual({ name: "different" });
+    });
+
+    it("should fail with type mismatch", () => {
+      expect(typeof "string").toBe("number");
+    });
+  });
 });

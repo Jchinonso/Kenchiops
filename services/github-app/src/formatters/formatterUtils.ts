@@ -12,6 +12,7 @@ import {
   PRIORITY_ORDER_DEFAULT,
   GITHUB_COMMENT_TEMPLATES,
   CONTEXT_CONFIDENCE_ADJUSTMENTS,
+  FILE_PATH_VALIDATION,
   config,
   generateFeedbackUrl,
   createLogger,
@@ -121,6 +122,43 @@ const buildServicePrefix = (service: string): string =>
 
 const buildClusterLocation = (cluster: FailureCluster): string | null =>
   formatEvidenceLocation(cluster.primaryFile, cluster.primaryLine);
+
+const containsFilePath = (description: string): boolean =>
+  description
+    .split(/\s+/)
+    .map((token) => token.replace(/[`(),.]/g, ""))
+    .some((token) => FILE_PATH_VALIDATION.VALID_PATH_PATTERN.test(token));
+
+const containsTestName = (description: string, testName?: string): boolean => {
+  if (!testName) {
+    return false;
+  }
+  return description.toLowerCase().includes(testName.toLowerCase());
+};
+
+const appendActionContext = (description: string, cluster?: FailureCluster): string => {
+  if (!cluster) {
+    return description;
+  }
+
+  const location = buildClusterLocation(cluster);
+  const hasLocationHint =
+    containsFilePath(description) || containsTestName(description, cluster.primaryTestName);
+  if (hasLocationHint) {
+    return description;
+  }
+
+  if (location) {
+    return `${description} (${location})`;
+  }
+
+  if (cluster.primaryTestName && !isTestFile(cluster.primaryTestName)) {
+    const testName = truncateText(cluster.primaryTestName, 80);
+    return `${description} (test: ${testName})`;
+  }
+
+  return description;
+};
 
 /**
  * Extracts unique services from failures for multi-module detection.
@@ -434,9 +472,10 @@ export const mergeRecommendedActions = (
 
         // Prefix with service name for clarity
         const servicePrefix = buildServicePrefix(service);
+        const contextualDescription = appendActionContext(topAction.description, cluster);
         mergedActions.push({
           ...topAction,
-          description: `${servicePrefix}${topAction.description}`,
+          description: `${servicePrefix}${contextualDescription}`,
         });
       }
     }

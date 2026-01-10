@@ -10,6 +10,7 @@
 import {
   UI_EMOJI,
   SLACK_ACTION_IDS,
+  buildReviewActionText,
   type RecommendedAction,
   type RelatedKnowledgeDoc,
 } from "@kenchi/shared";
@@ -103,15 +104,21 @@ export const buildActionsSummaryBlocks = (
 
   const actionText = actions
     .slice(0, DISPLAY_LIMITS.slackMaxChecks)
-    .map(
-      (action, actionIndex) =>
-        `${actionIndex + 1}. ${getPriorityEmoji(action.priority)} ${action.description}`
-    )
-    .join("\n");
+    .map((action, actionIndex) => {
+      const { servicePrefix, title, detail } = buildReviewActionText(
+        action.description,
+        action.reasoning
+      );
+      return `${actionIndex + 1}. *${getPriorityEmoji(action.priority)} ${servicePrefix}${title}*\n   ${detail}`;
+    })
+    .join("\n\n");
 
   return [
     { type: "divider" },
-    { type: "section", text: { type: "mrkdwn", text: `*${UI_EMOJI.tools} Recommended Actions*` } },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*${UI_EMOJI.tools} Recommended Areas to Review*` },
+    },
     { type: "section", text: { type: "mrkdwn", text: actionText } },
   ];
 };

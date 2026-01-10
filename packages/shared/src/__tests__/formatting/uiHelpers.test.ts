@@ -287,4 +287,19 @@ describe("UI Helpers", () => {
       expect(result).not.toContain(expect.stringContaining("more"));
     });
   });
+
+  // INTENTIONALLY FAILING TESTS FOR CI TESTING
+  describe("Intentionally Failing UI Helper Tests", () => {
+    it("should fail confidence label check", () => {
+      expect(getConfidenceLabel(0.9)).toBe("Low");
+    });
+
+    it("should fail color check", () => {
+      expect(getConfidenceColor(0.9)).toBe(SLACK_COLORS.danger);
+    });
+
+    it("should fail truncate check", () => {
+      expect(truncateText("hello world", 5)).toBe("hello world");
+    });
+  });
 });

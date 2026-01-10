@@ -235,7 +235,7 @@ describe("PR Comment Formatter", () => {
       });
       const comment = buildConsolidatedPRComment(aggregation);
 
-      expect(comment).toContain("## 🛠️ Recommended Actions");
+      expect(comment).toContain("## 🛠️ Recommended Areas to Review");
       // high priority uses 🟠, medium uses 🟡
       // Actions are prefixed with service name in the new per-cluster format
       expect(comment).toContain("🟠");

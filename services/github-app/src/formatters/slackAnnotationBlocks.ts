@@ -17,6 +17,7 @@ import {
   countUniqueFiles,
   detectFlakyTests,
   formatFlakyTestWarning,
+  truncateText,
   type AnalyzedFailure,
 } from "@kenchi/shared";
 import { DISPLAY_LIMITS } from "./formatterUtils.js";
@@ -237,7 +238,24 @@ export const buildAnnotationsBlock = (
     testIndex += group.failures.length;
   });
 
-  const totalDisplayLines = formattedAnnotations.length + assertionLines.length;
+  const unlocatedAssertions = assertions.filter(
+    (failure) => !failure.file || !extractValidFileLocation(failure.file, failure.line ?? 0)
+  );
+  const unlocatedLines = unlocatedAssertions.map((failure) => {
+    const testName = truncateText(
+      failure.testName,
+      FORMATTER_DISPLAY_LIMITS.SLACK_TEST_NAME_LENGTH
+    );
+    const normalizedError = failure.error ? sanitizeTestFailureMessage(failure.error) : "";
+    const display =
+      normalizedError.length > 0 ? `${testName} — ${normalizedError}` : testName || "Test failed";
+    const evidenceIndex = assertions.indexOf(failure);
+    const evidenceTag = evidenceIndex >= 0 ? ` [${generateTestEvidenceId(evidenceIndex)}]` : "";
+    return `   ${UI_EMOJI.failedFile} ${display}${evidenceTag}`;
+  });
+
+  const totalDisplayLines =
+    formattedAnnotations.length + assertionLines.length + unlocatedLines.length;
   const validAnnotations = annotations.filter((annotation) =>
     Boolean(extractValidFileLocation(annotation.path, annotation.line))
   );
@@ -265,8 +283,19 @@ export const buildAnnotationsBlock = (
     sections.push(...assertionLines.slice(0, remainingSlots));
   }
 
+  const remainingAfterAssertions = Math.max(
+    0,
+    remainingSlots - Math.min(assertionLines.length, remainingSlots)
+  );
+  if (remainingAfterAssertions > 0 && unlocatedLines.length > 0) {
+    sections.push(...unlocatedLines.slice(0, remainingAfterAssertions));
+  }
+
   // Calculate overflow
-  const displayedCount = annotationSlots + Math.min(assertionLines.length, remainingSlots);
+  const displayedCount =
+    annotationSlots +
+    Math.min(assertionLines.length, remainingSlots) +
+    Math.min(unlocatedLines.length, remainingAfterAssertions);
   const overflowCount = totalDisplayLines - displayedCount;
   const moreText = overflowCount > 0 ? `\n   _...and ${overflowCount} more_` : "";
 
