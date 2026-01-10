@@ -143,8 +143,6 @@ interface GroupedFileEntry {
   readonly failures: readonly ConsolidatedTestFailure[];
 }
 
-const MAX_ASSERTIONS_PER_FILE = 2;
-
 /**
  * Groups test failures by file for more compact display.
  * Filters out entries without valid file paths.
@@ -182,7 +180,7 @@ const formatGroupedFileEntry = (group: GroupedFileEntry, startIndex: number): re
   // Multiple failures in same file - show file header with count, then individual errors
   const lines: string[] = [];
   const basePath = file;
-  const displayedFailures = failures.slice(0, MAX_ASSERTIONS_PER_FILE);
+  const displayedFailures = failures.slice(0, GITHUB_COMMENT_DISPLAY.MAX_ASSERTIONS_PER_FILE);
 
   // Show file with assertion count
   lines.push(`   ${UI_EMOJI.list} \`${basePath}\` (${failures.length} assertions)`);

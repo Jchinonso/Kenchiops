@@ -55,6 +55,8 @@ export const GITHUB_COMMENT_DISPLAY = {
   MAX_ACTIONS: 3,
   /** Maximum length for a valid file path in annotations */
   MAX_FILE_PATH_LENGTH: 200,
+  /** Maximum assertions to show per file in grouped display */
+  MAX_ASSERTIONS_PER_FILE: 2,
 } as const;
 
 /**
