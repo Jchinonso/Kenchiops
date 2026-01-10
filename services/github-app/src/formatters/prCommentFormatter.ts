@@ -1,14 +1,19 @@
+/* eslint-disable max-lines */
 /**
  * PR Comment Formatter
  *
  * Formats aggregated CI failures into GitHub PR comments.
  * Produces clean, organized markdown output with consolidated failure details
  * and recommended actions.
+ *
+ * Note: This file exceeds the 500-line limit due to the comprehensive Voice Guide
+ * formatting requirements. The formatter handles multiple sections (header, checks,
+ * infrastructure, flaky warnings, at-a-glance, root cause, affected files, actions,
+ * PR context, feedback) each requiring dedicated helper functions.
  */
 
 import {
   UI_EMOJI,
-  UI_CONSTANTS,
   ANNOTATION_LEVEL_EMOJI_MAP,
   FORMATTER_DISPLAY_LIMITS,
   deduplicateByKey,
@@ -27,6 +32,13 @@ import {
   generateTestEvidenceId,
   generateAnnoEvidenceId,
   partitionByFailureType,
+  detectFlakyTests,
+  formatFlakyTestWarning,
+  selectMessageVariant,
+  correlatePRContext,
+  buildPRContextSection,
+  formatConfidenceWithLabel,
+  clusterFailuresByService,
   type AggregatedFailures,
   type AnalyzedFailure,
   type CodeAnnotation,
@@ -210,21 +222,28 @@ interface HeaderConfig {
   readonly uncertainty?: string;
   readonly suiteCount: number;
   readonly fileCount: number;
+  readonly serviceCount: number;
   readonly prContext: AggregatedFailures["prContext"];
 }
 
 /**
  * Build header section with suite/file counts and uncertainty display.
+ * Voice Guide format: "49% (moderate certainty)"
  */
 const buildHeader = (headerConfig: HeaderConfig): string[] => {
-  const { commitSha, failureCount, confidence, uncertainty, suiteCount, fileCount, prContext } =
-    headerConfig;
-  const confidencePercent = Math.round(confidence * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
+  const {
+    commitSha,
+    failureCount,
+    confidence,
+    uncertainty,
+    suiteCount,
+    fileCount,
+    serviceCount,
+    prContext,
+  } = headerConfig;
 
-  // Format confidence with uncertainty note if present
-  const confidenceText = uncertainty
-    ? `${confidencePercent}% _(${uncertainty})_`
-    : `${confidencePercent}%`;
+  // Voice Guide: Format confidence with label phrase (e.g., "72% (high certainty)")
+  const confidenceText = formatConfidenceWithLabel(confidence);
 
   // Format suite/file counts (only show suite count if we have test failures)
   const statsLine =
@@ -238,8 +257,14 @@ const buildHeader = (headerConfig: HeaderConfig): string[] => {
     `**Commit:** \`${commitSha.substring(0, 7)}\``,
     `**Failed Checks:** ${failureCount}`,
     statsLine,
+    `**Services Affected:** ${serviceCount}`,
     `**Overall Confidence:** ${confidenceText}`,
   ];
+
+  // Add uncertainty note if present (separate from confidence label)
+  if (uncertainty) {
+    lines.push(`_Note: ${uncertainty}_`);
+  }
 
   if (prContext) {
     lines.push(`**Branch:** \`${prContext.branch}\` → \`${prContext.baseBranch}\``);
@@ -257,8 +282,85 @@ const buildCheckNamesSection = (failures: readonly AnalyzedFailure[]): string[] 
     : ["", `**Checks:** ${failures.map((failure) => `\`${failure.checkName}\``).join(", ")}`, ""];
 
 /**
- * Build clustered root cause section with evidence IDs.
- * Groups causes by service/package for organized display.
+ * Build Infrastructure Issues section.
+ * Voice Guide: Display separately at the TOP, before At a Glance.
+ */
+const buildInfrastructureIssuesSection = (
+  testFailures: readonly ConsolidatedTestFailure[]
+): string[] => {
+  if (testFailures.length === 0) {
+    return [];
+  }
+
+  const { timeouts, infra } = partitionByFailureType(testFailures);
+  const infraIssues = [...timeouts, ...infra];
+
+  if (infraIssues.length === 0) {
+    return [];
+  }
+
+  const lines: string[] = [
+    "",
+    `> ${UI_EMOJI.infraWarning} **Infrastructure Issues (${infraIssues.length})**`,
+  ];
+
+  infraIssues.forEach((issue, issueIndex) => {
+    const file = issue.file ? `\`${issue.file}\`` : "Unknown location";
+    const error = issue.error
+      ? truncateText(issue.error, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)
+      : "Infrastructure issue";
+    const evidenceId = generateTestEvidenceId(issueIndex);
+    lines.push(`> - ${file} - ${error} [${evidenceId}]`);
+  });
+
+  lines.push("");
+  return lines;
+};
+
+/**
+ * Build "At a Glance" section with primary and secondary blockers.
+ * Voice Guide: 1-3 bullets, primary + secondary causes.
+ * Skipped for COMPACT variant (Voice Guide: COMPACT goes straight to Root Cause).
+ *
+ * @param failures - Array of analyzed failures
+ * @param variant - Message variant ("COMPACT" | "STANDARD" | "EXPANDED")
+ * @returns Array of markdown lines or empty array for COMPACT
+ */
+const buildAtAGlanceSection = (
+  failures: readonly AnalyzedFailure[],
+  variant: "COMPACT" | "STANDARD" | "EXPANDED"
+): string[] => {
+  // Voice Guide: COMPACT variant skips At a Glance, goes straight to Root Cause
+  if (variant === "COMPACT" || failures.length === 0) {
+    return [];
+  }
+
+  const summary = summarizeRootCauses(failures, { maxEntries: 3 });
+  if (summary.totalClusters === 0) {
+    return [];
+  }
+
+  const lines: string[] = ["", `### ${UI_EMOJI.search} What Failed (At a Glance)`, ""];
+
+  summary.entries.forEach((entry, entryIndex) => {
+    const label = entryIndex === 0 ? "**Primary:**" : "**Secondary:**";
+    const causeText = entry.cause
+      ? truncateText(entry.cause, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)
+      : `${entry.service} failures`;
+    lines.push(`- ${label} ${causeText}`);
+  });
+
+  lines.push("");
+  return lines;
+};
+
+/**
+ * Build clustered root cause section with Voice Guide numbered labels.
+ * Voice Guide format:
+ *   *1. Primary Root Cause (Fix First)*
+ *   **Service:** `slack-bot`
+ *   **Issue:** Jest fake timers not enabled
+ *   **Evidence:** `actionHandler.test.ts:101` [test#1]
  *
  * @param failures - Array of analyzed failures to cluster
  * @returns Array of markdown lines for the root cause section
@@ -287,38 +389,37 @@ const buildClusteredRootCauseSection = (failures: readonly AnalyzedFailure[]): s
     return lines;
   }
 
-  summary.entries.forEach((entry) => {
-    const fileLabel = entry.fileCount === 1 ? "file" : "files";
-    const evidenceDisplay =
-      entry.evidenceIds.length > 0 ? ` [${entry.evidenceIds.slice(0, 3).join(", ")}]` : "";
+  // Voice Guide: Use numbered labels with explicit field names
+  summary.entries.forEach((entry, entryIndex) => {
+    const clusterNumber = entryIndex + 1;
+    const clusterLabel =
+      entryIndex === 0
+        ? `**${clusterNumber}. Primary Root Cause (Fix First)**`
+        : `**${clusterNumber}. Secondary Cluster**`;
 
-    lines.push(`**${entry.service}** (${entry.fileCount} ${fileLabel})${evidenceDisplay}`);
+    lines.push(clusterLabel);
+    lines.push(`**Service:** \`${entry.service}\``);
 
-    const locationSuffix = entry.location ? ` (${entry.location})` : "";
-    if (entry.cause) {
-      const truncatedError = truncateText(
-        entry.cause,
-        GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH
-      );
-      lines.push(`  - ${truncatedError}${locationSuffix}`);
-      return;
+    // Build issue description from cause or test name
+    const issueText = entry.cause
+      ? truncateText(entry.cause, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)
+      : entry.primaryTestName && !isTestFile(entry.primaryTestName)
+        ? `Test failure in ${truncateText(entry.primaryTestName, GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH)}`
+        : entry.location
+          ? `Failures in ${entry.location}`
+          : "See affected files below";
+
+    lines.push(`**Issue:** ${issueText}`);
+
+    // Evidence with location and evidence ID
+    if (entry.location || entry.evidenceIds.length > 0) {
+      const evidenceTag =
+        entry.evidenceIds.length > 0 ? ` [${entry.evidenceIds.slice(0, 3).join(", ")}]` : "";
+      const locationDisplay = entry.location ? `\`${entry.location}\`` : "See below";
+      lines.push(`**Evidence:** ${locationDisplay}${evidenceTag}`);
     }
 
-    if (entry.primaryTestName && !isTestFile(entry.primaryTestName)) {
-      const testName = truncateText(
-        entry.primaryTestName,
-        GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH
-      );
-      lines.push(`  - Test failure in ${testName}${locationSuffix}`);
-      return;
-    }
-
-    if (entry.location) {
-      lines.push(`  - Failures in ${entry.location}`);
-      return;
-    }
-
-    lines.push("  - See details below");
+    lines.push(""); // Blank line between clusters
   });
 
   if (summary.hiddenCount > 0) {
@@ -394,9 +495,8 @@ const buildAnnotationsSection = (
   annotations: readonly ConsolidatedAnnotation[],
   testFailures: readonly ConsolidatedTestFailure[] = []
 ): string[] => {
-  // Partition test failures into assertions vs infra/timeout
-  const { assertions, timeouts, infra } = partitionByFailureType(testFailures);
-  const infraIssues = [...timeouts, ...infra];
+  // Partition test failures - only assertions shown here (infra displayed separately)
+  const { assertions } = partitionByFailureType(testFailures);
 
   // Build annotation entries with evidence IDs
   const annotationEntries: AffectedFileEntry[] = annotations.map((annotation, annotationIndex) => {
@@ -455,53 +555,19 @@ const buildAnnotationsSection = (
     };
   });
 
-  // Build infra issue entries with evidence IDs (continue numbering from assertions)
-  const infraEntries: AffectedFileEntry[] = infraIssues.map((testFailure, infraIndex) => {
-    const normalizedPath = testFailure.file ? normalizeTestFilePath(testFailure.file) : "";
-    const location = testFailure.file
-      ? extractValidFileLocation(testFailure.file, testFailure.line ?? 0)
-      : null;
-    const normalizedError = testFailure.error
-      ? truncateText(
-          sanitizeTestFailureMessage(testFailure.error),
-          GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH
-        )
-      : "Infrastructure issue";
-
-    return {
-      path: normalizedPath,
-      location,
-      display: normalizedError,
-      level: "failure" as CodeAnnotation["level"],
-      title: undefined,
-      evidenceId: generateTestEvidenceId(assertions.length + infraIndex),
-      isInfra: true,
-    };
-  });
+  // Infrastructure issues are displayed in a separate top-level section
+  // (buildInfrastructureIssuesSection) per Voice Guide requirements, not in Affected Files
 
   const allAssertionEntries = [...annotationEntries, ...assertionEntries].filter(
     (entry) => entry.location && entry.path
   );
-  const validInfraEntries = infraEntries.filter((entry) => entry.location && entry.path);
 
-  const totalEntries = allAssertionEntries.length + validInfraEntries.length;
-  if (totalEntries === 0) {
+  if (allAssertionEntries.length === 0) {
     return [];
   }
 
   const uniqueFileCount = countDisplayableFiles(annotations, testFailures);
   const lines: string[] = [`### ${UI_EMOJI.location} Affected Files (${uniqueFileCount})`, ""];
-
-  // Show infra issues prominently at top
-  if (validInfraEntries.length > 0) {
-    lines.push(`**${UI_EMOJI.warning} Infrastructure Issues (${validInfraEntries.length})**`);
-    validInfraEntries.forEach((entry) => {
-      const location = entry.location ? `\`${entry.location}\`` : "";
-      const evidenceTag = entry.evidenceId ? ` [${entry.evidenceId}]` : "";
-      lines.push(`  - ${UI_EMOJI.warning} ${location} - ${entry.display}${evidenceTag}`);
-    });
-    lines.push("");
-  }
 
   // Group assertion entries by service, then by file within service
   const serviceGroups = new Map<string, AffectedFileEntry[]>();
@@ -530,7 +596,9 @@ const buildAnnotationsSection = (
         // Multiple entries in same file - group with count
         const firstEntry = group.entries[0];
         const location = firstEntry.location?.split(":")[0] ?? group.file;
-        lines.push(`  - ${UI_EMOJI.failure} \`${location}\` (${group.entries.length} assertions)`);
+        lines.push(
+          `  - ${UI_EMOJI.failedFile} \`${location}\` (${group.entries.length} assertions)`
+        );
         const displayedEntries = group.entries.slice(0, MAX_ASSERTIONS_PER_FILE);
         displayedEntries.forEach((entry) => {
           const lineNum = entry.location?.includes(":") ? `:${entry.location.split(":")[1]}` : "";
@@ -566,6 +634,89 @@ const buildFeedbackSection = (feedbackLinks?: FeedbackLinks): string[] => {
   return ["---", "", ...formatFeedbackLinksContent(feedbackLinks), ""];
 };
 
+/**
+ * Build flaky test warning section if flaky tests are detected.
+ * Shows a prominent warning when tests show signs of intermittent failure patterns.
+ */
+const buildFlakyWarningSection = (testFailures: readonly ConsolidatedTestFailure[]): string[] => {
+  if (testFailures.length === 0) {
+    return [];
+  }
+
+  const flakyResult = detectFlakyTests(
+    testFailures.map((failure) => ({
+      testName: failure.testName,
+      file: failure.file,
+      error: failure.error,
+    }))
+  );
+
+  if (!flakyResult.hasFlakyTests) {
+    return [];
+  }
+
+  const warningMessage = formatFlakyTestWarning(flakyResult);
+  if (!warningMessage) {
+    return [];
+  }
+
+  return ["", warningMessage, ""];
+};
+
+/**
+ * Build PR context section showing linked issues and correlated changes.
+ * Only shows when meaningful correlation exists between changes and failures.
+ */
+const buildPRContextCorrelationSection = (
+  prContext: AggregatedFailures["prContext"],
+  failingTestFiles: readonly string[]
+): string[] => {
+  if (!prContext) {
+    return [];
+  }
+
+  const correlation = correlatePRContext(
+    prContext.commitMessage,
+    prContext.changedFiles,
+    failingTestFiles
+  );
+
+  if (!correlation.hasCorrelation) {
+    return [];
+  }
+
+  const contextLines = buildPRContextSection(
+    correlation.linkedIssues,
+    correlation.correlatedFailures
+  );
+  if (contextLines.length === 0) {
+    return [];
+  }
+
+  return ["", `## ${UI_EMOJI.link} PR Context`, "", ...contextLines, ""];
+};
+
+/**
+ * Build "View Full Report" link for expanded variant.
+ * Links to the GitHub commit checks page for comprehensive details.
+ */
+const buildFullReportLinkSection = (
+  repository: AggregatedFailures["repository"],
+  commitSha: string,
+  showLink: boolean
+): string[] => {
+  if (!showLink) {
+    return [];
+  }
+
+  const checksUrl = `https://github.com/${repository.fullName}/commit/${commitSha}/checks`;
+  return [
+    "",
+    `> ${UI_EMOJI.link} [View Full Report on GitHub](${checksUrl}) — Complete logs and annotations`,
+    "",
+  ];
+};
+
 // ==================== Public API ====================
 
 /**
@@ -581,7 +732,16 @@ export const buildConsolidatedPRComment = (
   aggregation: AggregatedFailures,
   feedbackLinks?: FeedbackLinks
 ): string => {
-  const { failures, commitSha, prContext } = aggregation;
+  const { failures, commitSha, prContext, repository } = aggregation;
+
+  // Phase 5: Select message variant based on failure complexity
+  const variantResult = selectMessageVariant(
+    failures.map((failure) => {
+      const firstTestPath = failure.testFailures?.[0]?.file;
+      const service = firstTestPath ? extractServiceFromPath(firstTestPath) : undefined;
+      return { checkName: failure.checkName, service };
+    })
+  );
 
   // Calculate confidence with multi-module uncertainty detection
   const { confidence, uncertainty } = calculateConfidenceWithUncertainty(failures);
@@ -595,9 +755,16 @@ export const buildConsolidatedPRComment = (
   const testFailures = consolidateTestFailures(canonicalTestFailures);
   const annotations = consolidateAnnotations(canonicalAnnotations);
 
-  // Calculate suite and file counts
+  // Calculate suite, file, and service counts
   const suiteCount = countUniqueSuites(testFailures);
   const fileCount = countDisplayableFiles(annotations, testFailures);
+  const serviceClusters = clusterFailuresByService(failures);
+  const serviceCount = serviceClusters.size;
+
+  // Extract failing test file paths for PR context correlation
+  const failingTestFiles = testFailures
+    .map((failure) => failure.file)
+    .filter((file): file is string => Boolean(file));
 
   // Build all sections (test failures consolidated into Affected Files)
   const lines: string[] = [
@@ -608,14 +775,20 @@ export const buildConsolidatedPRComment = (
       uncertainty,
       suiteCount,
       fileCount,
+      serviceCount,
       prContext,
     }),
     "",
     "---",
     ...buildCheckNamesSection(failures),
+    ...buildInfrastructureIssuesSection(testFailures),
+    ...buildFlakyWarningSection(testFailures),
+    ...buildPRContextCorrelationSection(prContext, failingTestFiles),
+    ...buildAtAGlanceSection(failures, variantResult.variant),
     ...buildClusteredRootCauseSection(failures),
     ...buildAnnotationsSection(annotations, testFailures),
     ...buildActionsSection(mergedActions),
+    ...buildFullReportLinkSection(repository, commitSha, variantResult.showFullReportLink),
     ...buildFeedbackSection(feedbackLinks),
     "---",
     "*Generated by KenchiOps DevOps Assistant*",

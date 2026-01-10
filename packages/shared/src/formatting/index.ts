@@ -6,6 +6,7 @@
 export {
   getConfidenceLabel,
   getConfidenceLabelParenthesized,
+  formatConfidenceWithLabel,
   getConfidenceColor,
   getConfidenceEmoji,
   truncateText,
@@ -37,6 +38,11 @@ export {
   sanitizeTestFailureMessage,
   canonicalizeEvidencePaths,
   extractServiceFromPath,
+  // Service name formatting
+  formatServiceNameKebab,
+  formatServiceNameTitle,
+  // Path stripping
+  stripAbsolutePaths,
   groupByServicePath,
   formatGroupedItems,
   // Test file detection (language-agnostic)
@@ -53,6 +59,8 @@ export {
   generateTestEvidenceId,
   generateAnnoEvidenceId,
   generateCheckEvidenceId,
+  generateLogEvidenceId,
+  generateDiffEvidenceId,
   formatWithEvidenceId,
   formatEvidenceLocation,
   // Phase 1: Failure clustering
@@ -86,3 +94,36 @@ export {
   type ResolvedAction,
   type ResolvedDependencyChange,
 } from "./analysisResolvers.js";
+
+// Flaky test detection
+export {
+  detectFlakyTests,
+  isTestPotentiallyFlaky,
+  formatFlakyTestWarning,
+  type FlakyTestInfo,
+  type FlakyTestResult,
+  type TestFailureInput,
+} from "./flakyTestDetection.js";
+
+// Message variants
+export {
+  selectMessageVariant,
+  truncateToLineLimit,
+  formatOverflowMessage,
+  getMaxRootCauses,
+  getMaxFilesPerService,
+  getMaxLines,
+  type VariantSelectionInput,
+  type VariantSelectionResult,
+  type TruncatedLines,
+} from "./messageVariants.js";
+
+// PR context correlation
+export {
+  extractLinkedIssues,
+  correlatePRChangesWithFailures,
+  buildPRContextSection,
+  correlatePRContext,
+  type CorrelatedFailure,
+  type PRCorrelationResult,
+} from "./prContextCorrelation.js";

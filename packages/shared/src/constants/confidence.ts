@@ -131,3 +131,50 @@ export const CONFIDENCE_MESSAGES: Readonly<Record<ConfidenceRange, string>> = {
   high: "High confidence",
   very_high: "Very high confidence",
 } as const;
+
+/**
+ * Human-readable confidence labels for display in messages.
+ * Used in format: "72% (high certainty)"
+ */
+export const CONFIDENCE_DISPLAY_LABELS: Readonly<Record<ConfidenceRange, string>> = {
+  very_low: "very low certainty",
+  low: "low certainty",
+  medium: "moderate certainty",
+  high: "high certainty",
+  very_high: "very high certainty",
+} as const;
+
+/**
+ * Context-based confidence adjustments for analysis quality.
+ * Applied when specific conditions reduce reliability.
+ */
+export const CONTEXT_CONFIDENCE_ADJUSTMENTS = {
+  /** Failures spread across 3+ services indicate cascading/unrelated issues */
+  MULTI_SERVICE_SPREAD: -0.15,
+  /** Minimum services to trigger multi-service spread adjustment */
+  MULTI_SERVICE_THRESHOLD: 3,
+  /** Missing file/line information reduces traceability */
+  MISSING_FILE_LINE: -0.15,
+  /** Only generic error messages without specific context */
+  GENERIC_ERROR_ONLY: -0.2,
+  /** Infrastructure issues mixed with assertion failures muddy the analysis */
+  INFRA_MIXED_WITH_ASSERTIONS: -0.1,
+  /** Clear primary blocker identified increases confidence */
+  PRIMARY_BLOCKER_IDENTIFIED: 0.1,
+  /** Single service affected increases confidence */
+  SINGLE_SERVICE_AFFECTED: 0.05,
+} as const;
+
+/**
+ * Thresholds for confidence display categorization (as percentages 0-100).
+ */
+export const CONFIDENCE_DISPLAY_THRESHOLDS = {
+  /** Above this is "high certainty" */
+  HIGH: 70,
+  /** Above this is "moderate certainty" */
+  MEDIUM: 40,
+  /** Above this is "low certainty", below is "very low certainty" */
+  LOW: 20,
+  /** Conversion factor for score (0-1) to percentage (0-100) */
+  PERCENTAGE_MULTIPLIER: 100,
+} as const;

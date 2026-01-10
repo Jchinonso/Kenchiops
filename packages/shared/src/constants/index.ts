@@ -19,6 +19,9 @@ export {
   MIN_LENGTHS,
   MIN_ACTIONS_FOR_BONUS,
   CONFIDENCE_MESSAGES,
+  CONFIDENCE_DISPLAY_LABELS,
+  CONTEXT_CONFIDENCE_ADJUSTMENTS,
+  CONFIDENCE_DISPLAY_THRESHOLDS,
   type ConfidenceRange,
 } from "./confidence.js";
 
@@ -111,6 +114,7 @@ export {
   GITHUB_ANNOTATION_LIMITS,
   TEXT_SANITIZATION_PATTERNS,
   SHORT_COMMIT_SHA_LENGTH,
+  PR_CONTEXT_CORRELATION,
 } from "./github.js";
 
 // OpenAI and text processing constants
@@ -301,9 +305,11 @@ export {
   GITHUB_COMMENT_TEMPLATES,
   SLACK_FAILURE_TEMPLATES,
   FORMATTER_DISPLAY_LIMITS,
+  MESSAGE_VARIANT_CONFIG,
   GITHUB_RETRY_CONFIG,
   GITHUB_PAGINATION,
   CONTEXT_FETCH_CONFIG,
+  type MessageVariant,
 } from "./githubApp.js";
 
 // Passive learning constants
@@ -319,3 +325,12 @@ export {
   KNOWLEDGE_GC_CONFIG,
   FEEDBACK_URL_CONFIG,
 } from "./passiveLearning.js";
+
+// Cause extraction pattern constants
+export {
+  CAUSE_EXTRACTION_LIMITS,
+  USELESS_CAUSE_PATTERNS,
+  CAUSE_SIGNAL_WEIGHTS,
+  CAUSE_WEAKNESS_WEIGHTS,
+  TEST_FILE_PATTERNS,
+} from "./causePatterns.js";

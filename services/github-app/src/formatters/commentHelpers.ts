@@ -69,7 +69,7 @@ export const resolveAnnotations = (analysis: AnalysisData): CIAnnotation[] => {
 export const formatTestFailure = (failure: CITestFailure): string => {
   const showLocation = failure.file && failure.file !== failure.testName;
   const location = showLocation ? ` in \`${failure.file}\`` : "";
-  return `- ${UI_EMOJI.failure} \`${truncateText(failure.testName, GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH)}\`${location}`;
+  return `- ${UI_EMOJI.failedFile} \`${truncateText(failure.testName, GITHUB_COMMENT_DISPLAY.MAX_TEST_NAME_LENGTH)}\`${location}`;
 };
 
 /**
