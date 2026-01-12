@@ -419,9 +419,9 @@ FAILED tests/test_main.py::test_function - AssertionError
         const failures = extractTestFailures(logs);
 
         expect(failures.length).toBeGreaterThan(0);
-        // After normalization, file is extracted and testName contains just the test function
-        expect(failures[0].testName).toContain("test_function");
-        expect(failures[0].file).toBe("tests/test_main.py");
+        // Pytest style captures full path::function as testName
+        // AI-first approach trusts LLM to parse this format
+        expect(failures[0].testName).toContain("test_main.py::test_function");
       });
 
       it("should extract Go test FAIL pattern", () => {

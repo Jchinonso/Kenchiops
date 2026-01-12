@@ -53,6 +53,10 @@ export interface Config {
   // Multi-tenant Configuration
   readonly MULTI_TENANT_MODE?: boolean;
 
+  // Feature Flags
+  /** Enable simplified CI analysis pipeline (Phase 1 of pipeline simplification) */
+  readonly SIMPLIFIED_PIPELINE_ENABLED?: boolean;
+
   // Service URLs (for inter-service communication)
   readonly API_URL: string;
   readonly SLACK_BOT_URL: string;
@@ -157,6 +161,9 @@ export const config: Config = {
 
   // Multi-tenant Configuration
   MULTI_TENANT_MODE: process.env.MULTI_TENANT_MODE === "true",
+
+  // Feature Flags
+  SIMPLIFIED_PIPELINE_ENABLED: process.env.SIMPLIFIED_PIPELINE_ENABLED === "true",
 
   // Service URLs (for inter-service communication)
   API_URL: process.env.API_URL || CONFIG_DEFAULTS.API_URL,

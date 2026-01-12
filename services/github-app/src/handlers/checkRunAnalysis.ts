@@ -1,60 +1,16 @@
 /**
  * Check Run Analysis Functions
  *
- * Analysis and context processing for CI failures.
- * Handles caching, API calls, and aggregation.
+ * Entry point for CI failure analysis. Routes to simplified pipeline.
+ * Posts results to GitHub PR comments and Slack.
  */
 
-import {
-  createLogger,
-  config,
-  resilientPost,
-  getCachedCheckAnalysis,
-  cacheCheckAnalysis,
-  buildCachedAnalysis,
-  generateLogHash,
-  getCachedAnalysisByLogHash,
-  cacheAnalysisByLogHash,
-  addFailureToRedis,
-  trackPRFailure,
-  createFailureSummary,
-  getErrorMessage,
-  findByGitHubInstallation,
-  type AggregationKey,
-  type FailureContext,
-} from "@kenchi/shared";
+import { createLogger, config, resilientPost, getErrorMessage } from "@kenchi/shared";
 import { GITHUB_CHECK_CONCLUSIONS, type CheckRunWebhook } from "../types/githubTypes.js";
-import {
-  gatherEnrichedContext,
-  fetchPRsByCommit,
-  type EnrichedContext,
-} from "../services/context/index.js";
-import { buildEnrichedLogContent } from "../formatters/checkRunFormatter.js";
-import {
-  type ApiAnalysis,
-  buildAnalyzedFailure,
-  buildRepositoryInfo,
-  buildPRContext,
-  buildWorkflowContext,
-  cachedToApiAnalysis,
-} from "./checkRunConverters.js";
+import { processSimplifiedAnalysis, type SimplifiedAnalysisResult } from "./simplifiedAnalysis.js";
+import { postPRComment } from "../services/githubComments.js";
 
 const logger = createLogger("github-app");
-
-// ==================== Types ====================
-
-/**
- * Context metadata for debugging
- */
-export interface ContextMetadata {
-  readonly hasWorkflowLogs: boolean;
-  readonly hasPRDiff: boolean;
-  readonly hasCommitInfo: boolean;
-  readonly hasPRMetadata: boolean;
-  readonly annotationsCount: number;
-  readonly testFailuresCount: number;
-  readonly sourceFilesCount: number;
-}
 
 // ==================== Constants ====================
 
@@ -67,272 +23,147 @@ export const SKIP_CONCLUSIONS: ReadonlySet<string> = new Set([
   GITHUB_CHECK_CONCLUSIONS.STALE,
 ]);
 
-// ==================== Helper Functions ====================
+// ==================== Posting Functions ====================
 
 /**
- * Build context metadata from enriched context.
+ * Post analysis result to GitHub PR comment.
  */
-export const buildContextMetadata = (context: EnrichedContext): ContextMetadata => ({
-  hasWorkflowLogs: !!context.workflowLogs,
-  hasPRDiff: !!context.prDiff,
-  hasCommitInfo: !!context.commitInfo,
-  hasPRMetadata: !!context.prMetadata,
-  annotationsCount: context.annotations.length,
-  testFailuresCount: context.testFailures.length,
-  sourceFilesCount: context.sourceFiles.length,
-});
+const postToGitHub = async (
+  webhook: CheckRunWebhook,
+  result: SimplifiedAnalysisResult
+): Promise<boolean> => {
+  const { check_run, repository, installation } = webhook;
+  const prNumber = check_run.pull_requests[0]?.number;
 
-// ==================== Analysis Functions ====================
-
-/**
- * Fetch analysis from cache or API service.
- * Uses multi-level caching: by check, then by log hash.
- */
-export const fetchAnalysis = async (
-  enrichedLog: string,
-  repositoryFullName: string,
-  commitSha: string,
-  checkName: string,
-  tenantId?: string
-): Promise<ApiAnalysis> => {
-  // Level 1: Check if we have cached analysis for this exact check
-  logger.info("Checking cache (level 1: by check)...");
-  const cachedByCheck = await getCachedCheckAnalysis(repositoryFullName, commitSha, checkName);
-  logger.info("Cache check (level 1) completed", { found: !!cachedByCheck });
-
-  if (cachedByCheck) {
-    logger.info("Analysis cache hit (by check)", {
-      repository: repositoryFullName,
-      commitSha: commitSha.substring(0, 7),
-      checkName,
+  if (!prNumber) {
+    logger.info("No PR associated with check run, skipping GitHub comment", {
+      repository: repository.full_name,
+      checkName: check_run.name,
     });
-    return cachedToApiAnalysis(cachedByCheck);
+    return true;
   }
 
-  // Level 2: Check if we have cached analysis for same log content
-  const logHash = generateLogHash(enrichedLog);
-  const cachedByLog = await getCachedAnalysisByLogHash(logHash);
-
-  if (cachedByLog) {
-    logger.info("Analysis cache hit (by log hash)", {
-      repository: repositoryFullName,
-      logHash,
+  if (!installation?.id) {
+    logger.warn("No installation ID, cannot post GitHub comment", {
+      repository: repository.full_name,
     });
-
-    // Cache by check for faster future lookups
-    await cacheCheckAnalysis({
-      ...cachedByLog,
-      repository: repositoryFullName,
-      commitSha,
-      checkName,
-    });
-
-    return cachedToApiAnalysis(cachedByLog);
+    return false;
   }
 
-  // Level 3: Fetch from API
-  const apiUrl = `${config.API_URL}/api/analyze`;
+  if (!result.githubComment?.body) {
+    logger.warn("No GitHub comment body generated", {
+      repository: repository.full_name,
+    });
+    return false;
+  }
 
-  const response = await resilientPost<ApiAnalysis>(apiUrl, {
-    failure_log: enrichedLog,
-    repository: repositoryFullName,
-    tenant_id: tenantId,
-  });
+  try {
+    await postPRComment(
+      installation.id,
+      repository.owner.login,
+      repository.name,
+      prNumber,
+      result.githubComment.body,
+      true // Delete old KenchiOps comments
+    );
 
-  logger.debug("Analysis API response", {
-    status: response.status,
-    retryCount: response.retryCount,
-    duration: response.duration,
-  });
+    logger.info("Posted CI failure analysis to GitHub PR", {
+      repository: repository.full_name,
+      prNumber,
+      checkName: check_run.name,
+    });
 
-  // Cache the result for future use
-  const cachedAnalysis = buildCachedAnalysis(
-    repositoryFullName,
-    commitSha,
-    checkName,
-    response.data
-  );
-
-  // Cache by both check and log hash (fire and forget)
-  void (async () => {
-    try {
-      await Promise.all([
-        cacheCheckAnalysis(cachedAnalysis),
-        cacheAnalysisByLogHash(logHash, cachedAnalysis),
-      ]);
-    } catch (error) {
-      logger.warn("Failed to cache analysis", {
-        error: getErrorMessage(error),
-      });
-    }
-  })();
-
-  return response.data;
+    return true;
+  } catch (error) {
+    logger.error("Failed to post GitHub comment", {
+      error: getErrorMessage(error),
+      repository: repository.full_name,
+      prNumber,
+    });
+    return false;
+  }
 };
 
 /**
- * Process CI failure: gather context, analyze, add to aggregator.
+ * Post analysis result to Slack.
+ */
+const postToSlack = async (
+  webhook: CheckRunWebhook,
+  result: SimplifiedAnalysisResult
+): Promise<boolean> => {
+  const { repository } = webhook;
+
+  if (!result.slackMessage) {
+    logger.warn("No Slack message generated", {
+      repository: repository.full_name,
+    });
+    return false;
+  }
+
+  try {
+    const slackUrl = `${config.SLACK_BOT_URL}/slack/message`;
+
+    await resilientPost<{ success: boolean }>(slackUrl, {
+      type: "ci_failure",
+      payload: result.slackMessage,
+    });
+
+    logger.info("Posted CI failure analysis to Slack", {
+      repository: repository.full_name,
+    });
+
+    return true;
+  } catch (error) {
+    logger.error("Failed to post Slack message", {
+      error: getErrorMessage(error),
+      repository: repository.full_name,
+    });
+    return false;
+  }
+};
+
+// ==================== Main Handler ====================
+
+/**
+ * Process CI failure using simplified analysis pipeline.
+ * Posts results to GitHub and Slack.
  *
- * @returns true if failure was successfully processed and added to aggregator
+ * @param webhook - The check run webhook payload
+ * @returns true if failure was successfully processed
  */
 export const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
-  const { check_run, repository, installation } = webhook;
+  const { check_run, repository } = webhook;
 
-  // Step 1: Gather enriched context from GitHub
-  logger.info("Gathering enriched context for CI failure", {
+  logger.info("Processing CI failure with simplified pipeline", {
     repository: repository.full_name,
     checkName: check_run.name,
     headSha: check_run.head_sha.substring(0, 7),
   });
 
-  const context = await gatherEnrichedContext(webhook);
+  const result = await processSimplifiedAnalysis(webhook);
 
-  // Skip if workflow was cancelled (job might show as "failure" but workflow was cancelled)
-  const workflowConclusion = context.workflowTiming?.conclusion;
-  if (workflowConclusion && SKIP_CONCLUSIONS.has(workflowConclusion)) {
-    logger.info("Skipping analysis - workflow was cancelled/skipped", {
+  if (!result.success) {
+    logger.warn("Simplified analysis failed", {
       repository: repository.full_name,
       checkName: check_run.name,
-      workflowConclusion,
+      error: result.error,
     });
     return false;
   }
 
-  const enrichedLog = buildEnrichedLogContent(webhook, context);
-  const contextMetadata = buildContextMetadata(context);
+  // Post to GitHub and Slack in parallel
+  const [githubSuccess, slackSuccess] = await Promise.all([
+    postToGitHub(webhook, result),
+    postToSlack(webhook, result),
+  ]);
 
-  // Find PRs if not in webhook
-  let pullRequestNumbers = check_run.pull_requests.map((pr) => pr.number);
-  if (pullRequestNumbers.length === 0 && installation?.id) {
-    pullRequestNumbers = await fetchPRsByCommit(
-      installation.id,
-      repository.owner.login,
-      repository.name,
-      check_run.head_sha
-    );
-  }
-
-  logger.info("Context gathered", {
+  logger.info("CI failure analysis posted", {
     repository: repository.full_name,
-    ...contextMetadata,
-    pullRequestCount: pullRequestNumbers.length,
+    checkName: check_run.name,
+    githubSuccess,
+    slackSuccess,
+    confidence: result.analysis?.confidence,
   });
 
-  // Step 2: Look up tenant for cost tracking
-  let tenantId: string | undefined;
-  if (installation?.id) {
-    try {
-      const tenant = await findByGitHubInstallation(installation.id);
-      tenantId = tenant?.id;
-      logger.debug("Tenant lookup for cost tracking", {
-        installationId: installation.id,
-        tenantId,
-        found: !!tenant,
-      });
-    } catch (error) {
-      logger.warn("Failed to look up tenant, continuing without cost tracking", {
-        installationId: installation.id,
-        error: getErrorMessage(error),
-      });
-    }
-  }
-
-  // Step 3: Get analysis (from cache or API)
-  logger.info("Fetching analysis from cache or API...", {
-    repository: repository.full_name,
-    commitSha: check_run.head_sha.substring(0, 7),
-    tenantId,
-  });
-
-  let analysis: ApiAnalysis;
-  try {
-    analysis = await fetchAnalysis(
-      enrichedLog,
-      repository.full_name,
-      check_run.head_sha,
-      check_run.name,
-      tenantId
-    );
-
-    const aiAnnotationCount = analysis.full_analysis?.codeAnnotations?.length ?? 0;
-    logger.info("Analysis received", {
-      repository: repository.full_name,
-      confidence: analysis.confidence,
-      aiAnnotationCount,
-      hasAIAnnotations: aiAnnotationCount > 0,
-    });
-  } catch (error) {
-    logger.error("Failed to get analysis", {
-      error: getErrorMessage(error),
-    });
-    return false;
-  }
-
-  // Step 4: Add to Redis aggregator (will be enqueued and posted consolidated later)
-  if (!installation?.id) {
-    logger.warn("No installation ID, skipping aggregation");
-    return false;
-  }
-
-  const aggregationKey: AggregationKey = {
-    repositoryFullName: repository.full_name,
-    commitSha: check_run.head_sha,
-  };
-
-  const analyzedFailure = buildAnalyzedFailure(check_run, analysis, context);
-  const repositoryInfo = buildRepositoryInfo(repository);
-  const prContext =
-    pullRequestNumbers.length > 0 ? buildPRContext(context, pullRequestNumbers[0]) : null;
-  const workflowContext = buildWorkflowContext(check_run.name, context);
-
-  const failureContext: FailureContext = {
-    repositoryInfo,
-    installationId: installation.id,
-    pullRequestNumbers,
-    prContext,
-    workflowContext,
-  };
-
-  try {
-    await addFailureToRedis(aggregationKey, analyzedFailure, failureContext);
-
-    logger.info("Failure added to Redis aggregator", {
-      repository: repository.full_name,
-      checkName: check_run.name,
-      commitSha: check_run.head_sha.substring(0, 7),
-    });
-
-    // Track failure for linked commit ingestion (when PR merges)
-    if (pullRequestNumbers.length > 0) {
-      const failureSummary = createFailureSummary({
-        checkName: check_run.name,
-        conclusion: check_run.conclusion ?? "failure",
-        identifiedCause: analysis.identified_cause ?? "",
-        analysis: analysis.analysis ?? "",
-        confidence: analysis.confidence ?? 0,
-        errorPatterns: context.annotations.map((annotation) => annotation.message),
-        testFailures: context.testFailures.map((testFailure) => testFailure.testName),
-      });
-
-      // Track for each associated PR
-      await Promise.all(
-        pullRequestNumbers.map((prNumber) =>
-          trackPRFailure(repository.full_name, prNumber, failureSummary)
-        )
-      );
-
-      logger.debug("Failure tracked for linked commit ingestion", {
-        repository: repository.full_name,
-        pullRequestNumbers,
-        checkName: check_run.name,
-      });
-    }
-
-    return true;
-  } catch (error) {
-    logger.error("Failed to add failure to Redis aggregator", {
-      error: getErrorMessage(error),
-    });
-    return false;
-  }
+  return githubSuccess || slackSuccess;
 };

@@ -89,8 +89,9 @@ describe("API Analysis Service", () => {
       expect(context.evidence).toBeDefined();
       expect(context.evidence.eventId).toBe(context.event.id);
       expect(context.evidence.logs).toHaveLength(1);
-      expect(context.evidence.logs![0].level).toBe("ERROR");
-      expect(context.evidence.logs![0].message).toBe("Error: Connection refused");
+      // Logs without markdown headings are wrapped in Overview section
+      expect(context.evidence.logs![0].level).toBe("INFO");
+      expect(context.evidence.logs![0].message).toBe("## Overview\nError: Connection refused");
     });
 
     it("should generate unique event IDs", () => {
@@ -140,7 +141,7 @@ describe("API Analysis Service", () => {
       expect(new Date(context.evidence.logs![0].timestamp!).getTime()).not.toBeNaN();
     });
 
-    it("should set log source to ci", () => {
+    it("should set log source based on section heading", () => {
       const request = {
         failure_log: "Error",
         repository: "test-repo",
@@ -148,7 +149,8 @@ describe("API Analysis Service", () => {
 
       const context = createAnalysisContext(request);
 
-      expect(context.evidence.logs![0].source).toBe("ci");
+      // Logs without markdown headings are in Overview section
+      expect(context.evidence.logs![0].source).toBe("ci-overview");
     });
 
     it("should handle empty failure log", () => {
@@ -171,7 +173,8 @@ describe("API Analysis Service", () => {
 
       const context = createAnalysisContext(request);
 
-      expect(context.evidence.logs![0].message).toBe(longLog);
+      // Long logs are wrapped in Overview section
+      expect(context.evidence.logs![0].message).toBe(`## Overview\n${longLog}`);
     });
 
     it("should handle special characters in repository name", () => {
@@ -439,7 +442,8 @@ describe("API Analysis Service", () => {
 
       const context = createAnalysisContext(request);
 
-      expect(context.evidence.logs![0].message).toBe("Error: 测试错误 🔥");
+      // Unicode logs are wrapped in Overview section
+      expect(context.evidence.logs![0].message).toBe("## Overview\nError: 测试错误 🔥");
     });
 
     it("should handle newlines in failure logs", () => {

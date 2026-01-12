@@ -12,9 +12,70 @@ import {
   findByGitHubInstallation,
 } from "@kenchi/shared";
 import { GITHUB_PR_ACTIONS, type PullRequestWebhook } from "../types/githubTypes.js";
-import { fetchPRDiff, fetchPRCommits } from "../services/context/prFetcher.js";
+import { getOctokit } from "../services/githubService.js";
 
 const logger = createLogger("github-app");
+
+// ==================== Helper Functions ====================
+
+/**
+ * Fetches the diff content for a PR.
+ */
+const fetchPRDiff = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<string | null> => {
+  try {
+    const octokit = await getOctokit(installationId);
+    const response = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+      mediaType: { format: "diff" },
+    });
+    // Response.data will be the diff string when using diff format
+    return response.data as unknown as string;
+  } catch (error) {
+    logger.warn("Failed to fetch PR diff", {
+      owner,
+      repo,
+      prNumber,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
+
+/**
+ * Fetches commit messages for a PR.
+ */
+const fetchPRCommits = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<readonly string[]> => {
+  try {
+    const octokit = await getOctokit(installationId);
+    const response = await octokit.rest.pulls.listCommits({
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    });
+    return response.data.map((commit) => commit.commit.message);
+  } catch (error) {
+    logger.warn("Failed to fetch PR commits", {
+      owner,
+      repo,
+      prNumber,
+      error: getErrorMessage(error),
+    });
+    return [];
+  }
+};
 
 /**
  * Result of handling a PR webhook

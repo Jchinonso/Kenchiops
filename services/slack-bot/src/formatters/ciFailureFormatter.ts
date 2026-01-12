@@ -27,8 +27,40 @@ import {
   createActionsBlock,
 } from "./ciFailureBlocks.js";
 import type { MessageAttachment } from "@slack/types";
-import { collectCIErrors, getConfidenceColor, UI_EMOJI } from "@kenchi/shared";
-import type { SlackBlock, CIFailureAnalysis } from "../types/slackTypes.js";
+import { getConfidenceColor, UI_EMOJI } from "@kenchi/shared";
+import type {
+  SlackBlock,
+  CIFailureAnalysis,
+  CIAnnotation,
+  TestFailure,
+} from "../types/slackTypes.js";
+
+// ==================== Inline Helper ====================
+
+/**
+ * Collect error messages from annotations and test failures.
+ */
+const collectCIErrors = (
+  annotations: readonly CIAnnotation[],
+  testFailures?: readonly TestFailure[]
+): readonly string[] => {
+  const errors: string[] = [];
+
+  // Collect from annotations (failure level indicates errors)
+  annotations
+    .filter((annotation) => annotation.level === "failure")
+    .forEach((annotation) => {
+      errors.push(annotation.message);
+    });
+
+  // Collect from test failures
+  testFailures?.forEach((failure) => {
+    const message = failure.error ?? failure.testName ?? "Test failed";
+    errors.push(message);
+  });
+
+  return errors;
+};
 
 // Re-export helper functions
 export { getPriorityEmoji } from "./ciFailureHelpers.js";
@@ -63,10 +95,8 @@ export const formatCIFailureBlocks = (analysis: CIFailureAnalysis): SlackBlock[]
   const dependencyChanges = resolveDependencyChanges(analysis);
   const buildConfigChanges = resolveBuildConfigChanges(analysis);
 
-  // Collect errors using shared utility
-  const errors = collectCIErrors(annotations, analysis.testFailures, {
-    includeEmoji: false,
-  });
+  // Collect errors from annotations and test failures
+  const errors = collectCIErrors(annotations, analysis.testFailures);
 
   // Build blocks array, filtering out nulls
   const blocks: SlackBlock[] = [
