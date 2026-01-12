@@ -1,10 +1,10 @@
 /**
  * Unit tests for Check Run Handler
  *
- * Tests the simplified CI failure analysis pipeline:
- * 1. Fetch workflow logs from GitHub
- * 2. Preprocess and send to LLM
- * 3. Return formatted outputs
+ * Tests the CI failure handling:
+ * 1. Routes failures to pending aggregation
+ * 2. Skips status checks and non-failure conclusions
+ * 3. Routes successes to passive learning
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
@@ -22,80 +22,10 @@ jest.mock("@kenchi/shared", () => {
       error: jest.fn(),
       debug: jest.fn(),
     })),
-    // Mock resilient HTTP client - prevent actual network calls
-    resilientPost: jest.fn(() =>
-      Promise.resolve({
-        data: {
-          root_cause: "Missing dependency",
-          confidence: "high",
-          category: "dependency",
-          phase: "dependency",
-          annotations: [],
-          next_steps: ["Run npm install"],
-        },
-        status: 200,
-        retryCount: 0,
-        duration: 100,
-      })
-    ),
-    preprocessLogsWithMetadata: jest.fn((logs: string) => ({
-      logs: logs.substring(0, 1000),
-      originalSize: logs.length,
-      processedSize: Math.min(logs.length, 1000),
-      wasTruncated: logs.length > 1000,
-      secretsRedacted: 0,
-    })),
-    formatGitHubComment: jest.fn(() => ({
-      markdown: "## Test Comment",
-      truncated: false,
-    })),
-    formatSlackMessage: jest.fn(() => ({
-      blocks: [],
-      text: "Test message",
-    })),
-    config: {
-      API_URL: "http://localhost:3001",
-    },
+    // Mock Redis aggregation
+    addPendingCheckToRedis: jest.fn(() => Promise.resolve()),
   };
 });
-
-// Mock githubService to prevent @octokit/auth-app ESM import issues
-jest.mock("../services/githubService.js", () => ({
-  getOctokit: jest.fn(() =>
-    Promise.resolve({
-      rest: {
-        repos: {
-          listPullRequestsAssociatedWithCommit: jest.fn(() =>
-            Promise.resolve({ data: [{ number: 123 }] })
-          ),
-        },
-        actions: {
-          listWorkflowRunsForRepo: jest.fn(() =>
-            Promise.resolve({
-              data: {
-                workflow_runs: [
-                  {
-                    id: 1,
-                    head_sha: "abc123def456789012345678901234567890abcd",
-                    logs_url: "https://api.github.com/logs",
-                  },
-                ],
-              },
-            })
-          ),
-          downloadWorkflowRunLogs: jest.fn(() => Promise.resolve({ data: "test log content" })),
-        },
-      },
-    })
-  ),
-  postPRComment: jest.fn(() => Promise.resolve()),
-  createCheckRunWithAnnotations: jest.fn(() => Promise.resolve()),
-}));
-
-// Mock workflow fetcher
-jest.mock("../services/context/workflowFetcher.js", () => ({
-  fetchWorkflowLogs: jest.fn(() => Promise.resolve("Error: Test failure log\nStack trace here")),
-}));
 
 // Mock success handler
 jest.mock("../handlers/checkRunSuccessHandler.js", () => ({
@@ -109,14 +39,11 @@ jest.mock("../handlers/checkRunSuccessHandler.js", () => ({
 
 // Import handlers after mocks
 import { handleCheckRun, handleCheckRunFailure } from "../handlers/checkRunHandler.js";
-import { fetchWorkflowLogs } from "../services/context/workflowFetcher.js";
-import { resilientPost, preprocessLogsWithMetadata } from "@kenchi/shared";
+import { addPendingCheckToRedis } from "@kenchi/shared";
 
 // Get the mocked functions
-const mockResilientPost = resilientPost as jest.MockedFunction<typeof resilientPost>;
-const mockFetchWorkflowLogs = fetchWorkflowLogs as jest.MockedFunction<typeof fetchWorkflowLogs>;
-const mockPreprocessLogs = preprocessLogsWithMetadata as jest.MockedFunction<
-  typeof preprocessLogsWithMetadata
+const mockAddPendingCheckToRedis = addPendingCheckToRedis as jest.MockedFunction<
+  typeof addPendingCheckToRedis
 >;
 
 describe("Check Run Handler", () => {
@@ -152,29 +79,7 @@ describe("Check Run Handler", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-
-    // Reset mocks to default implementations
-    mockFetchWorkflowLogs.mockResolvedValue("Error: Test failure log\nStack trace here");
-    mockResilientPost.mockResolvedValue({
-      data: {
-        root_cause: "Missing dependency",
-        confidence: "high",
-        category: "dependency",
-        phase: "dependency",
-        annotations: [],
-        next_steps: ["Run npm install"],
-      },
-      status: 200,
-      retryCount: 0,
-      duration: 100,
-    });
-    mockPreprocessLogs.mockReturnValue({
-      logs: "Error: Test failure log",
-      originalSize: 100,
-      processedSize: 100,
-      wasTruncated: false,
-      secretsRedacted: 0,
-    });
+    mockAddPendingCheckToRedis.mockResolvedValue(undefined);
   });
 
   describe("handleCheckRun", () => {
@@ -224,7 +129,7 @@ describe("Check Run Handler", () => {
       const result = await handleCheckRun(webhook);
 
       expect(result.handled).toBe(true);
-      expect(mockFetchWorkflowLogs).toHaveBeenCalled();
+      expect(mockAddPendingCheckToRedis).toHaveBeenCalled();
     });
 
     it("should skip neutral conclusions", async () => {
@@ -238,7 +143,7 @@ describe("Check Run Handler", () => {
       const result = await handleCheckRun(webhook);
 
       expect(result.handled).toBe(false);
-      expect(mockFetchWorkflowLogs).not.toHaveBeenCalled();
+      expect(mockAddPendingCheckToRedis).not.toHaveBeenCalled();
     });
 
     it("should skip cancelled conclusions", async () => {
@@ -256,135 +161,180 @@ describe("Check Run Handler", () => {
   });
 
   describe("handleCheckRunFailure", () => {
-    it("should fetch workflow logs", async () => {
+    it("should add pending check to Redis aggregation", async () => {
       const webhook = createMockWebhook();
       await handleCheckRunFailure(webhook);
 
-      expect(mockFetchWorkflowLogs).toHaveBeenCalledWith(
-        12345,
-        "testowner",
-        "testrepo",
-        "abc123def456789012345678901234567890abcd"
-      );
-    });
-
-    it("should preprocess logs before sending to API", async () => {
-      const webhook = createMockWebhook();
-      await handleCheckRunFailure(webhook);
-
-      expect(mockPreprocessLogs).toHaveBeenCalled();
-    });
-
-    it("should call API for analysis", async () => {
-      const webhook = createMockWebhook();
-      await handleCheckRunFailure(webhook);
-
-      expect(mockResilientPost).toHaveBeenCalledWith(
-        expect.stringContaining("analyze"),
+      expect(mockAddPendingCheckToRedis).toHaveBeenCalledWith(
         expect.objectContaining({
-          failure_log: expect.any(String),
-          repository: "testowner/testrepo",
+          repositoryFullName: "testowner/testrepo",
+          commitSha: "abc123def456789012345678901234567890abcd",
+        }),
+        expect.objectContaining({
+          checkRunId: 12345,
+          checkName: "CI Build",
+          conclusion: "failure",
+        }),
+        expect.objectContaining({
+          repositoryInfo: expect.objectContaining({
+            owner: "testowner",
+            name: "testrepo",
+          }),
+          installationId: 12345,
         })
       );
     });
 
-    it("should handle missing installation ID", async () => {
-      const webhook = createMockWebhook({ installation: undefined });
-      const result = await handleCheckRunFailure(webhook);
-
-      expect(result.handled).toBe(false);
-    });
-
-    it("should handle API errors gracefully", async () => {
-      mockResilientPost.mockRejectedValueOnce(new Error("API error"));
-
-      const webhook = createMockWebhook();
-      const result = await handleCheckRunFailure(webhook);
-
-      expect(result.handled).toBe(false);
-    });
-
-    it("should handle missing workflow logs", async () => {
-      mockFetchWorkflowLogs.mockResolvedValueOnce(null);
-
-      const webhook = createMockWebhook();
-      const result = await handleCheckRunFailure(webhook);
-
-      expect(result.handled).toBe(false);
-    });
-
-    it("should include repository info in API payload", async () => {
-      const webhook = createMockWebhook();
-      await handleCheckRunFailure(webhook);
-
-      expect(mockResilientPost).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          repository: "testowner/testrepo",
-          failure_log: expect.any(String),
-        })
-      );
-    });
-
-    it("should return success result when analysis succeeds", async () => {
+    it("should return success result when added to aggregation", async () => {
       const webhook = createMockWebhook();
       const result = await handleCheckRunFailure(webhook);
 
       expect(result.handled).toBe(true);
       expect(result.eventId).toContain("12345");
+      expect(result.message).toContain("aggregator");
     });
 
-    it("should handle network errors", async () => {
-      mockResilientPost.mockRejectedValueOnce(new Error("Network error"));
+    it("should handle Redis errors gracefully", async () => {
+      mockAddPendingCheckToRedis.mockRejectedValueOnce(new Error("Redis error"));
 
       const webhook = createMockWebhook();
       const result = await handleCheckRunFailure(webhook);
 
       expect(result.handled).toBe(false);
     });
-  });
 
-  describe("simplified analysis pipeline", () => {
-    it("should call workflow fetcher with correct parameters", async () => {
-      const webhook = createMockWebhook();
-      await handleCheckRunFailure(webhook);
-
-      expect(mockFetchWorkflowLogs).toHaveBeenCalledWith(
-        12345, // installation ID
-        "testowner", // owner
-        "testrepo", // repo
-        "abc123def456789012345678901234567890abcd" // head SHA
-      );
-    });
-
-    it("should send preprocessed logs to API", async () => {
-      mockPreprocessLogs.mockReturnValue({
-        logs: "preprocessed log content",
-        originalSize: 1000,
-        processedSize: 500,
-        wasTruncated: true,
-        secretsRedacted: 2,
+    it("should skip status checks like CI Success", async () => {
+      const webhook = createMockWebhook({
+        check_run: {
+          ...createMockWebhook().check_run,
+          name: "CI Success",
+        },
       });
 
-      const webhook = createMockWebhook();
+      const result = await handleCheckRunFailure(webhook);
+
+      // Status checks are skipped but return success (not actual failures)
+      expect(result.handled).toBe(true);
+      expect(mockAddPendingCheckToRedis).not.toHaveBeenCalled();
+    });
+
+    it("should skip ci-status checks", async () => {
+      const webhook = createMockWebhook({
+        check_run: {
+          ...createMockWebhook().check_run,
+          name: "ci-status",
+        },
+      });
+
       await handleCheckRunFailure(webhook);
 
-      expect(mockResilientPost).toHaveBeenCalledWith(
-        expect.any(String),
+      expect(mockAddPendingCheckToRedis).not.toHaveBeenCalled();
+    });
+
+    it("should process actual failure checks like Build", async () => {
+      const webhook = createMockWebhook({
+        check_run: {
+          ...createMockWebhook().check_run,
+          name: "Build",
+        },
+      });
+
+      await handleCheckRunFailure(webhook);
+
+      expect(mockAddPendingCheckToRedis).toHaveBeenCalled();
+    });
+
+    it("should process Test check failures", async () => {
+      const webhook = createMockWebhook({
+        check_run: {
+          ...createMockWebhook().check_run,
+          name: "Test",
+        },
+      });
+
+      await handleCheckRunFailure(webhook);
+
+      expect(mockAddPendingCheckToRedis).toHaveBeenCalled();
+    });
+
+    it("should include PR numbers in context", async () => {
+      const webhook = createMockWebhook({
+        check_run: {
+          ...createMockWebhook().check_run,
+          pull_requests: [
+            { number: 123, head: { sha: "abc", ref: "feat" }, base: { sha: "def", ref: "main" } },
+            { number: 456, head: { sha: "ghi", ref: "fix" }, base: { sha: "jkl", ref: "main" } },
+          ],
+        },
+      });
+
+      await handleCheckRunFailure(webhook);
+
+      expect(mockAddPendingCheckToRedis).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
         expect.objectContaining({
-          failure_log: "preprocessed log content",
+          pullRequestNumbers: [123, 456],
         })
       );
     });
+  });
 
-    it("should handle empty logs gracefully", async () => {
-      mockFetchWorkflowLogs.mockResolvedValueOnce("");
+  describe("status check filtering", () => {
+    const statusCheckNames = [
+      "CI Success",
+      "ci-success",
+      "CI_Success",
+      "ci status",
+      "CI-Status",
+      "all checks",
+      "All-Checks",
+      "status check",
+      "Status-Check",
+      "branch protection",
+      "Branch-Protection",
+      "required checks",
+      "Required-Checks",
+    ];
 
-      const webhook = createMockWebhook();
-      const result = await handleCheckRunFailure(webhook);
+    it.each(statusCheckNames)("should skip status check: %s", async (checkName) => {
+      const webhook = createMockWebhook({
+        check_run: {
+          ...createMockWebhook().check_run,
+          name: checkName,
+        },
+      });
 
-      // Empty logs should fail gracefully
-      expect(result.handled).toBe(false);
+      await handleCheckRunFailure(webhook);
+
+      expect(mockAddPendingCheckToRedis).not.toHaveBeenCalled();
     });
+
+    const actualFailureCheckNames = [
+      "Build",
+      "Test",
+      "Lint",
+      "Type Check",
+      "Code Quality",
+      "Integration Tests",
+      "Unit Tests",
+      "E2E Tests",
+    ];
+
+    it.each(actualFailureCheckNames)(
+      "should process actual failure check: %s",
+      async (checkName) => {
+        const webhook = createMockWebhook({
+          check_run: {
+            ...createMockWebhook().check_run,
+            name: checkName,
+          },
+        });
+
+        await handleCheckRunFailure(webhook);
+
+        expect(mockAddPendingCheckToRedis).toHaveBeenCalled();
+      }
+    );
   });
 });

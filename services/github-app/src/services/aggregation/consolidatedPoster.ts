@@ -49,6 +49,7 @@ interface SlackBlockElement {
   readonly text: { readonly type: "plain_text"; readonly text: string };
   readonly url?: string;
   readonly action_id?: string;
+  readonly value?: string;
 }
 
 interface SlackPayload {
@@ -139,6 +140,8 @@ const buildConsolidatedSlackPayload = (aggregation: AggregatedFailures): SlackPa
   const shortSha = aggregation.commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH);
   const failureCount = aggregation.failures.length;
   const repository = aggregation.repository.fullName;
+  // Build analysisId for feedback tracking (format: repository:commitSha)
+  const analysisId = `${repository}:${aggregation.commitSha}`;
 
   const blocks: SlackBlock[] = [
     {
@@ -210,11 +213,13 @@ const buildConsolidatedSlackPayload = (aggregation: AggregatedFailures): SlackPa
       type: "button",
       text: { type: "plain_text", text: `${UI_EMOJI.thumbsUp} Yes` },
       action_id: "feedback_helpful",
+      value: analysisId,
     },
     {
       type: "button",
       text: { type: "plain_text", text: `${UI_EMOJI.thumbsDown} No` },
       action_id: "feedback_not_helpful",
+      value: analysisId,
     },
   ];
 
