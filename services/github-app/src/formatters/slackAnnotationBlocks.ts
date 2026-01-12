@@ -15,6 +15,8 @@ import {
   generateAnnoEvidenceId,
   partitionByFailureType,
   countUniqueFiles,
+  detectFlakyTests,
+  formatFlakyTestWarning,
   type AnalyzedFailure,
 } from "@kenchi/shared";
 import { DISPLAY_LIMITS } from "./formatterUtils.js";
@@ -141,8 +143,6 @@ interface GroupedFileEntry {
   readonly failures: readonly ConsolidatedTestFailure[];
 }
 
-const MAX_ASSERTIONS_PER_FILE = 2;
-
 /**
  * Groups test failures by file for more compact display.
  * Filters out entries without valid file paths.
@@ -180,7 +180,7 @@ const formatGroupedFileEntry = (group: GroupedFileEntry, startIndex: number): re
   // Multiple failures in same file - show file header with count, then individual errors
   const lines: string[] = [];
   const basePath = file;
-  const displayedFailures = failures.slice(0, MAX_ASSERTIONS_PER_FILE);
+  const displayedFailures = failures.slice(0, GITHUB_COMMENT_DISPLAY.MAX_ASSERTIONS_PER_FILE);
 
   // Show file with assertion count
   lines.push(`   ${UI_EMOJI.list} \`${basePath}\` (${failures.length} assertions)`);
@@ -207,9 +207,10 @@ const formatGroupedFileEntry = (group: GroupedFileEntry, startIndex: number): re
 // ==================== Block Builders ====================
 
 /**
- * Build consolidated affected files block with infra/assertion separation.
+ * Build consolidated affected files block for assertion failures and annotations.
  * Combines annotations and test failures into a single unified view.
- * Groups same-file entries, adds evidence IDs, and separates infra issues.
+ * Groups same-file entries and adds evidence IDs.
+ * Note: Infrastructure issues are displayed in a separate top-level block.
  */
 export const buildAnnotationsBlock = (
   annotations: readonly ConsolidatedAnnotation[],
@@ -217,16 +218,16 @@ export const buildAnnotationsBlock = (
 ): SlackTextBlock | null => {
   const displayLimit = DISPLAY_LIMITS.slackAnnotationsPerCheck;
 
-  // Phase 8: Partition test failures into assertions vs infra/timeouts
-  const { assertions, timeouts, infra } = partitionByFailureType(testFailures);
-  const infraIssues = [...timeouts, ...infra];
+  // Partition test failures - only show assertion failures here
+  // Infrastructure issues are displayed in a separate buildInfrastructureIssuesBlock
+  const { assertions } = partitionByFailureType(testFailures);
 
   // Format annotation entries with evidence IDs
   const formattedAnnotations = annotations
     .map((annotation, annotationIndex) => formatAnnotationEntryWithId(annotation, annotationIndex))
     .filter((line): line is string => Boolean(line));
 
-  // Phase 7: Group assertion failures by file
+  // Group assertion failures by file for compact display
   const groupedAssertions = groupTestFailuresByFile(assertions);
   const assertionLines: string[] = [];
   let testIndex = 0;
@@ -236,67 +237,36 @@ export const buildAnnotationsBlock = (
     testIndex += group.failures.length;
   });
 
-  // Format infra issues separately (with special icon)
-  const infraLines = infraIssues
-    .map((failure, failureIndex) => {
-      const location = failure.file
-        ? extractValidFileLocation(failure.file, failure.line ?? 0)
-        : null;
-      if (!location) {
-        return null;
-      }
-      const normalizedError = failure.error
-        ? sanitizeTestFailureMessage(failure.error)
-        : "Infrastructure issue";
-      const evidenceId = generateTestEvidenceId(testIndex + failureIndex);
-      return `   ${UI_EMOJI.warning} \`${location}\` — ${normalizedError} [${evidenceId}]`;
-    })
-    .filter((line): line is string => Boolean(line));
-
-  const totalDisplayLines = formattedAnnotations.length + assertionLines.length + infraLines.length;
+  const totalDisplayLines = formattedAnnotations.length + assertionLines.length;
   const validAnnotations = annotations.filter((annotation) =>
     Boolean(extractValidFileLocation(annotation.path, annotation.line))
   );
-  const validTestFailures = testFailures.filter(
+  // Only count assertion failures for file count (infra shown separately)
+  const validAssertions = assertions.filter(
     (failure) => failure.file && extractValidFileLocation(failure.file, failure.line ?? 0)
   );
-  const uniqueFileCount = countUniqueFiles(validTestFailures, validAnnotations);
+  const uniqueFileCount = countUniqueFiles(validAssertions, validAnnotations);
   if (totalDisplayLines === 0) {
     return null;
   }
 
-  // Build sections: infra first (if any), then annotations, then test failures
+  // Build sections: annotations first, then assertion failures
   const sections: string[] = [];
 
-  // Show infra issues prominently at top
-  if (infraLines.length > 0) {
-    sections.push(`*${UI_EMOJI.warning} Infrastructure Issues (${infraLines.length}):*`);
-    sections.push(...infraLines.slice(0, Math.min(displayLimit, infraLines.length)));
-    if (infraLines.length > displayLimit) {
-      sections.push(`   _...and ${infraLines.length - displayLimit} more infra issues_`);
-    }
-    sections.push(""); // Empty line separator
-  }
-
-  // Calculate remaining slots after infra
-  const infraUsed = Math.min(infraLines.length, displayLimit);
-  const remainingAfterInfra = Math.max(0, displayLimit - infraUsed);
-
   // Format annotation entries (prioritize these)
-  const annotationSlots = Math.min(formattedAnnotations.length, remainingAfterInfra);
+  const annotationSlots = Math.min(formattedAnnotations.length, displayLimit);
   if (annotationSlots > 0) {
     sections.push(...formattedAnnotations.slice(0, annotationSlots));
   }
 
-  // Calculate remaining slots for test failures
-  const remainingSlots = Math.max(0, remainingAfterInfra - annotationSlots);
+  // Calculate remaining slots for assertion failures
+  const remainingSlots = Math.max(0, displayLimit - annotationSlots);
   if (remainingSlots > 0 && assertionLines.length > 0) {
     sections.push(...assertionLines.slice(0, remainingSlots));
   }
 
   // Calculate overflow
-  const displayedCount =
-    infraUsed + annotationSlots + Math.min(assertionLines.length, remainingSlots);
+  const displayedCount = annotationSlots + Math.min(assertionLines.length, remainingSlots);
   const overflowCount = totalDisplayLines - displayedCount;
   const moreText = overflowCount > 0 ? `\n   _...and ${overflowCount} more_` : "";
 
@@ -340,5 +310,107 @@ export const buildCheckNamesBlock = (failures: readonly AnalyzedFailure[]): Slac
       type: "mrkdwn",
       text: `*Checks:* ${truncatedText}`,
     },
+  };
+};
+
+/**
+ * Build infrastructure issues block as a separate top-level section.
+ * Voice Guide requires infra issues to appear BEFORE At a Glance section.
+ *
+ * @param testFailures - Array of test failures to partition
+ * @returns Infrastructure issues block or null if no infra issues
+ */
+export const buildInfrastructureIssuesBlock = (
+  testFailures: readonly ConsolidatedTestFailure[]
+): SlackTextBlock | null => {
+  if (testFailures.length === 0) {
+    return null;
+  }
+
+  // Partition test failures to extract infrastructure issues
+  const { timeouts, infra } = partitionByFailureType(testFailures);
+  const infraIssues = [...timeouts, ...infra];
+
+  if (infraIssues.length === 0) {
+    return null;
+  }
+
+  const displayLimit = DISPLAY_LIMITS.slackAnnotationsPerCheck;
+  const displayedIssues = infraIssues.slice(0, displayLimit);
+
+  // Format infra issues with warning icon and evidence IDs
+  const infraLines = displayedIssues
+    .map((failure, failureIndex) => {
+      const location = failure.file
+        ? extractValidFileLocation(failure.file, failure.line ?? 0)
+        : null;
+      const locationDisplay = location ? `\`${location}\`` : "Unknown location";
+      const normalizedError = failure.error
+        ? sanitizeTestFailureMessage(failure.error)
+        : "Infrastructure issue";
+      const evidenceId = generateTestEvidenceId(failureIndex);
+      return `   ${UI_EMOJI.warning} ${locationDisplay} — ${normalizedError} [${evidenceId}]`;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  if (infraLines.length === 0) {
+    return null;
+  }
+
+  const overflowCount = infraIssues.length - displayedIssues.length;
+  const moreText =
+    overflowCount > 0 ? `\n   _...and ${overflowCount} more infrastructure issues_` : "";
+
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `${UI_EMOJI.infraWarning} *Infrastructure Issues (${infraIssues.length}):*\n${infraLines.join("\n")}${moreText}`,
+      },
+    ],
+  };
+};
+
+/**
+ * Build flaky test warning block if flaky tests are detected.
+ * Shows a prominent warning when tests show signs of intermittent failure patterns.
+ *
+ * @param testFailures - Array of test failures to check
+ * @returns Warning block or null if no flaky tests detected
+ */
+export const buildFlakyTestWarningBlock = (
+  testFailures: readonly ConsolidatedTestFailure[]
+): SlackTextBlock | null => {
+  if (testFailures.length === 0) {
+    return null;
+  }
+
+  // Convert to format expected by detectFlakyTests
+  const flakyResult = detectFlakyTests(
+    testFailures.map((failure) => ({
+      testName: failure.testName ?? failure.file ?? "unknown",
+      file: failure.file,
+      error: failure.error,
+    }))
+  );
+
+  if (!flakyResult.hasFlakyTests) {
+    return null;
+  }
+
+  const warningMessage = formatFlakyTestWarning(flakyResult);
+  if (!warningMessage) {
+    return null;
+  }
+
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: warningMessage,
+      },
+    ],
   };
 };

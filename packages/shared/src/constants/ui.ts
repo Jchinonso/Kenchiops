@@ -39,6 +39,10 @@ export const UI_EMOJI = {
   failure: "❌",
   success: "✅",
   warning: "⚠️",
+  /** Voice Guide: Use "!!" for infrastructure issues */
+  infraWarning: "!!",
+  /** Voice Guide: Use "x" for failed file entries */
+  failedFile: "x",
 
   // Confidence levels (ordered high to low)
   confidenceHigh: "🟢",

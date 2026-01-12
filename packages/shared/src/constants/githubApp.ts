@@ -169,6 +169,47 @@ export const FORMATTER_DISPLAY_LIMITS = {
   MAX_CAUSE_LINE_CHARS: 200,
 } as const;
 
+// ==================== Message Variant Configuration ====================
+
+/**
+ * Message variant configurations for different failure complexity levels.
+ * Determines how much detail to show based on failure count and service spread.
+ */
+export const MESSAGE_VARIANT_CONFIG = {
+  /** Compact format: ≤5 failures, single service - minimal, focused output */
+  COMPACT: {
+    MAX_FAILURES: 5,
+    MAX_SERVICES: 1,
+    MAX_LINES: 20,
+    MAX_ROOT_CAUSES: 2,
+    MAX_FILES_PER_SERVICE: 3,
+    INCLUDE_FULL_REPORT_LINK: false,
+  },
+  /** Standard format: 6-20 failures, 2-3 services - balanced detail */
+  STANDARD: {
+    MAX_FAILURES: 20,
+    MAX_SERVICES: 3,
+    MAX_LINES: 50,
+    MAX_ROOT_CAUSES: 3,
+    MAX_FILES_PER_SERVICE: 5,
+    INCLUDE_FULL_REPORT_LINK: false,
+  },
+  /** Expanded format: 20+ failures, 4+ services - comprehensive with link */
+  EXPANDED: {
+    MAX_FAILURES: Infinity,
+    MAX_SERVICES: Infinity,
+    MAX_LINES: 60,
+    MAX_ROOT_CAUSES: 3,
+    MAX_FILES_PER_SERVICE: 5,
+    INCLUDE_FULL_REPORT_LINK: true,
+  },
+} as const;
+
+/**
+ * Message variant type.
+ */
+export type MessageVariant = keyof typeof MESSAGE_VARIANT_CONFIG;
+
 // ==================== Retry Configuration ====================
 
 /**

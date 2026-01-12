@@ -269,6 +269,7 @@ export {
   getRepoName,
   getFirstSentence,
   buildTruncatedList,
+  formatConfidenceWithLabel,
 } from "./formatting/index.js";
 export {
   deduplicateByKey,
@@ -287,6 +288,11 @@ export {
   sanitizeTestFailureMessage,
   canonicalizeEvidencePaths,
   extractServiceFromPath,
+  // Service name formatting
+  formatServiceNameKebab,
+  formatServiceNameTitle,
+  // Path stripping
+  stripAbsolutePaths,
   groupByServicePath,
   formatGroupedItems,
   // Test file detection (language-agnostic)
@@ -303,6 +309,8 @@ export {
   generateTestEvidenceId,
   generateAnnoEvidenceId,
   generateCheckEvidenceId,
+  generateLogEvidenceId,
+  generateDiffEvidenceId,
   formatWithEvidenceId,
   formatEvidenceLocation,
   // Failure clustering (Phase 1)
@@ -333,6 +341,33 @@ export {
   type ResolvedAnnotation,
   type ResolvedAction,
   type ResolvedDependencyChange,
+} from "./formatting/index.js";
+export {
+  detectFlakyTests,
+  isTestPotentiallyFlaky,
+  formatFlakyTestWarning,
+  type FlakyTestInfo,
+  type FlakyTestResult,
+  type TestFailureInput,
+} from "./formatting/index.js";
+export {
+  selectMessageVariant,
+  truncateToLineLimit,
+  formatOverflowMessage,
+  getMaxRootCauses,
+  getMaxFilesPerService,
+  getMaxLines,
+  type VariantSelectionInput,
+  type VariantSelectionResult,
+  type TruncatedLines,
+} from "./formatting/index.js";
+export {
+  extractLinkedIssues,
+  correlatePRChangesWithFailures,
+  buildPRContextSection,
+  correlatePRContext,
+  type CorrelatedFailure,
+  type PRCorrelationResult,
 } from "./formatting/index.js";
 
 // Integrations

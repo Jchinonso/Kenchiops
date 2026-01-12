@@ -13,9 +13,10 @@ import {
   UI_CONSTANTS,
   DEPENDENCY_EMOJI_MAP,
   FORMATTER_DISPLAY_LIMITS,
-  formatWithEvidenceId,
+  GITHUB_COMMENT_DISPLAY,
   summarizeRootCauses,
   isTestFile,
+  truncateText,
   type LLMDetectedDependencyChange,
   type LLMDetectedBuildConfigChange,
   type RelatedKnowledgeDoc,
@@ -139,37 +140,86 @@ export const buildRootCauseBlock = (
 };
 
 /**
- * Formats a single cluster for display.
- * Shows service name, unique file count, and top cause with evidence ID.
+ * Formats a single cluster for display using Voice Guide numbered format.
+ * Voice Guide format:
+ *   *1. Primary Root Cause (Fix First)*
+ *   *Service:* `slack-bot`
+ *   *Issue:* Jest fake timers not enabled
+ *   *Evidence:* `actionHandler.test.ts:101` [test#1]
+ *
+ * @param entry - Root cause summary entry
+ * @param entryIndex - Index of this entry (0-based)
+ * @returns Formatted cluster string for Slack
  */
-const formatClusterEntry = (entry: RootCauseSummaryEntry): string => {
-  const countLabel = entry.fileCount === 1 ? "1 file" : `${entry.fileCount} files`;
+const formatClusterEntry = (entry: RootCauseSummaryEntry, entryIndex: number): string => {
+  const clusterNumber = entryIndex + 1;
+  const clusterLabel =
+    entryIndex === 0
+      ? `*${clusterNumber}. Primary Root Cause (Fix First)*`
+      : `*${clusterNumber}. Secondary Cluster*`;
+
   const infraLabel = entry.isInfra ? ` ${UI_EMOJI.warning}` : "";
-  const locationSuffix = entry.location ? ` (${entry.location})` : "";
-  const evidenceTag = entry.evidenceIds[0] ?? "";
   const causeLineLimit = FORMATTER_DISPLAY_LIMITS.MAX_CAUSE_LINE_CHARS;
   const hasTestName = Boolean(entry.primaryTestName) && !isTestFile(entry.primaryTestName ?? "");
-  const causeDisplay = entry.cause
-    ? formatWithEvidenceId(
-        truncateDisplay(`${entry.cause}${locationSuffix}`, causeLineLimit),
-        evidenceTag
-      )
-    : hasTestName
-      ? formatWithEvidenceId(
-          truncateDisplay(
-            `Test failure in ${entry.primaryTestName}${locationSuffix}`,
-            causeLineLimit
-          ),
-          evidenceTag
-        )
-      : entry.location
-        ? formatWithEvidenceId(
-            truncateDisplay(`Failures in ${entry.location}`, causeLineLimit),
-            evidenceTag
-          )
-        : "See details below";
 
-  return `*${entry.service}* (${countLabel})${infraLabel}\n   ${causeDisplay}`;
+  // Build issue description from cause or test name
+  const issueText = entry.cause
+    ? truncateDisplay(entry.cause, causeLineLimit)
+    : hasTestName
+      ? `Test failure in ${truncateDisplay(entry.primaryTestName ?? "", causeLineLimit - 20)}`
+      : entry.location
+        ? `Failures in ${entry.location}`
+        : "See affected files below";
+
+  // Build evidence line with location and evidence ID
+  const evidenceTag =
+    entry.evidenceIds.length > 0 ? ` [${entry.evidenceIds.slice(0, 3).join(", ")}]` : "";
+  const evidenceLine =
+    entry.location || entry.evidenceIds.length > 0
+      ? `\n*Evidence:* ${entry.location ? `\`${entry.location}\`` : "See below"}${evidenceTag}`
+      : "";
+
+  return `${clusterLabel}${infraLabel}\n*Service:* \`${entry.service}\`\n*Issue:* ${issueText}${evidenceLine}`;
+};
+
+/**
+ * Build "At a Glance" section block with primary and secondary blockers.
+ * Voice Guide: 1-3 bullets summarizing primary and secondary causes.
+ * Skipped for COMPACT variant (Voice Guide: COMPACT goes straight to Root Cause).
+ *
+ * @param failures - Array of analyzed failures
+ * @param variant - Message variant ("COMPACT" | "STANDARD" | "EXPANDED")
+ * @returns Slack text block with at-a-glance summary or null if no failures/COMPACT
+ */
+export const buildAtAGlanceBlock = (
+  failures: readonly AnalyzedFailure[],
+  variant: "COMPACT" | "STANDARD" | "EXPANDED" = "STANDARD"
+): SlackTextBlock | null => {
+  // Voice Guide: COMPACT variant skips At a Glance, goes straight to Root Cause
+  if (variant === "COMPACT" || failures.length === 0) {
+    return null;
+  }
+
+  const summary = summarizeRootCauses(failures, { maxEntries: 3 });
+  if (summary.totalClusters === 0 || summary.entries.length === 0) {
+    return null;
+  }
+
+  const bullets = summary.entries.map((entry, entryIndex) => {
+    const label = entryIndex === 0 ? "*Primary:*" : "*Secondary:*";
+    const causeText = entry.cause
+      ? truncateText(entry.cause, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH)
+      : `${entry.service} failures`;
+    return `${label} ${causeText}`;
+  });
+
+  return {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*${UI_EMOJI.search} What Failed (At a Glance)*\n${bullets.join("\n")}`,
+    },
+  };
 };
 
 /**
@@ -226,11 +276,13 @@ export const buildClusteredRootCauseBlock = (
 
   // Check for infra issues to show warning
   const infraWarning = summary.hasInfra
-    ? `\n\n${UI_EMOJI.warning} _Infrastructure issues detected (timeouts/resource limits)_`
+    ? `\n\n${UI_EMOJI.infraWarning} _Infrastructure issues detected (timeouts/resource limits)_`
     : "";
 
-  // Format each cluster
-  const clusterText = summary.entries.map((entry) => formatClusterEntry(entry)).join("\n\n");
+  // Format each cluster with Voice Guide numbered labels
+  const clusterText = summary.entries
+    .map((entry, entryIndex) => formatClusterEntry(entry, entryIndex))
+    .join("\n\n");
 
   const lowSignalText =
     summary.lowSignalCount > 0

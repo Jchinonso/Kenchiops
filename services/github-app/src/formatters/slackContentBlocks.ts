@@ -21,11 +21,17 @@ export type {
 } from "./slackBlockTypes.js";
 
 // Annotation blocks
-export { buildAnnotationsBlock, buildCheckNamesBlock } from "./slackAnnotationBlocks.js";
+export {
+  buildAnnotationsBlock,
+  buildCheckNamesBlock,
+  buildInfrastructureIssuesBlock,
+  buildFlakyTestWarningBlock,
+} from "./slackAnnotationBlocks.js";
 
 // Analysis blocks
 export {
   buildRootCauseBlock,
+  buildAtAGlanceBlock,
   buildClusteredRootCauseBlock,
   buildDependencyChangesBlock,
   buildConfigChangesBlock,

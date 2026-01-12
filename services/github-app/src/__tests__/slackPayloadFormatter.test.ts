@@ -71,6 +71,7 @@ describe("Slack Payload Formatter", () => {
         checkNames: ["CI Build"],
         avgConfidence: 0.85,
         isConsolidated: true,
+        messageVariant: "COMPACT",
       });
     });
 
@@ -492,6 +493,7 @@ describe("Slack Payload Formatter", () => {
         checkNames: [],
         avgConfidence: 0,
         isConsolidated: true,
+        messageVariant: "COMPACT",
       });
     });
   });
