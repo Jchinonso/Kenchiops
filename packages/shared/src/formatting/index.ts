@@ -134,3 +134,8 @@ export {
   type CorrelatedFailure,
   type PRCorrelationResult,
 } from "./prContextCorrelation.js";
+
+// INTENTIONAL TYPE ERROR FOR CI TESTING
+const numberValue: number = "this is a string"; // Type 'string' is not assignable to type 'number'
+/** Intentional type error export for CI testing. */
+export const typeErrorTest = numberValue;
