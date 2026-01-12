@@ -148,6 +148,169 @@ export const fetchWorkflowLogs = async (
 };
 
 /**
+ * Job logs result containing job name and log content
+ */
+export interface JobLogsResult {
+  readonly jobName: string;
+  readonly jobId: number;
+  readonly logs: string;
+}
+
+/**
+ * Combined logs result for all failed jobs
+ */
+export interface AllFailedJobsLogs {
+  readonly workflowName: string;
+  readonly workflowRunId: number;
+  readonly jobs: readonly JobLogsResult[];
+  /** Combined logs with job name headers for LLM analysis */
+  readonly combinedLogs: string;
+}
+
+/**
+ * Fetch logs for ALL failed jobs in a workflow run.
+ *
+ * Unlike fetchWorkflowLogs which only fetches the first failed job,
+ * this function fetches logs for all failed jobs and combines them
+ * with headers so the LLM can analyze them together.
+ *
+ * @param installationId - GitHub App installation ID
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param headSha - Commit SHA to find workflow runs for
+ * @returns All failed job logs combined or null if unavailable
+ */
+export const fetchAllFailedJobsLogs = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  headSha: string
+): Promise<AllFailedJobsLogs | null> => {
+  try {
+    const octokit = await getOctokit(installationId);
+
+    // Find workflow runs for this commit
+    const { data: workflowRuns } = await octokit.rest.actions.listWorkflowRunsForRepo({
+      owner,
+      repo,
+      head_sha: headSha,
+      per_page: 10,
+    });
+
+    if (workflowRuns.workflow_runs.length === 0) {
+      logger.warn("No workflow runs found for commit", { owner, repo, headSha });
+      return null;
+    }
+
+    // Get the failed workflow run
+    const failedRun = workflowRuns.workflow_runs.find((run) => run.conclusion === "failure");
+    if (!failedRun) {
+      logger.info("No failed workflow run found", { owner, repo, headSha });
+      return null;
+    }
+
+    logger.info("Found failed workflow run", {
+      owner,
+      repo,
+      headSha,
+      workflowName: failedRun.name,
+      runId: failedRun.id,
+    });
+
+    // Get all jobs for this workflow run
+    const { data: jobs } = await octokit.rest.actions.listJobsForWorkflowRun({
+      owner,
+      repo,
+      run_id: failedRun.id,
+    });
+
+    // Find all failed jobs
+    const failedJobs = jobs.jobs.filter((job) => job.conclusion === "failure");
+    if (failedJobs.length === 0) {
+      logger.info("No failed jobs found in workflow run", { runId: failedRun.id });
+      return null;
+    }
+
+    logger.info("Found failed jobs", {
+      runId: failedRun.id,
+      failedJobCount: failedJobs.length,
+      failedJobNames: failedJobs.map((job) => job.name),
+    });
+
+    // Fetch logs for each failed job in parallel
+    const jobLogsPromises = failedJobs.map(async (job): Promise<JobLogsResult | null> => {
+      try {
+        const { data: logs } = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+          owner,
+          repo,
+          job_id: job.id,
+        });
+
+        const logContent = typeof logs === "string" ? logs : String(logs);
+        logger.info("Fetched job logs", {
+          jobId: job.id,
+          jobName: job.name,
+          logSize: logContent.length,
+        });
+
+        return {
+          jobName: job.name,
+          jobId: job.id,
+          logs: logContent,
+        };
+      } catch (logError) {
+        logger.warn("Could not fetch logs for job", {
+          jobId: job.id,
+          jobName: job.name,
+          error: getErrorMessage(logError),
+        });
+        return null;
+      }
+    });
+
+    const jobLogsResults = await Promise.all(jobLogsPromises);
+    const successfulLogs = jobLogsResults.filter(
+      (result): result is JobLogsResult => result !== null
+    );
+
+    if (successfulLogs.length === 0) {
+      logger.warn("Could not fetch logs for any failed job", { runId: failedRun.id });
+      return null;
+    }
+
+    // Combine all logs with headers
+    const combinedLogs = successfulLogs
+      .map(
+        (jobLog) =>
+          `${"=".repeat(80)}\n` +
+          `JOB: ${jobLog.jobName} (ID: ${jobLog.jobId})\n` +
+          `${"=".repeat(80)}\n\n` +
+          `${jobLog.logs}\n`
+      )
+      .join("\n");
+
+    logger.info("Combined all failed job logs", {
+      workflowName: failedRun.name,
+      totalJobs: successfulLogs.length,
+      combinedLogSize: combinedLogs.length,
+    });
+
+    return {
+      workflowName: failedRun.name || "Unknown workflow",
+      workflowRunId: failedRun.id,
+      jobs: successfulLogs,
+      combinedLogs,
+    };
+  } catch (error) {
+    logger.warn("Failed to fetch all failed job logs", {
+      headSha,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
+
+/**
  * Fetch workflow timing information.
  *
  * Gets timing data for the workflow run including start time,

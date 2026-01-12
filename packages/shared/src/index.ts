@@ -533,6 +533,9 @@ export {
   type TestFailureInfo,
   type RelatedKnowledgeDoc,
   type SuggestedFix,
+  type PendingCheckRun,
+  type SerializedPendingCheckRun,
+  type PendingAggregation,
   type AnalyzedFailure,
   type SerializedFailure,
   type PRContext,
@@ -545,6 +548,7 @@ export {
   type AggregationReadyCallback,
   type ConsolidatedAnalysisPayload,
   type FailureContext,
+  type PendingCheckContext,
   // Utilities
   serializeAggregationKey,
   deserializeAggregationKey,
@@ -552,16 +556,22 @@ export {
   AGGREGATION_KEYS,
   // Redis operations
   addFailureToRedis,
+  addPendingCheckToRedis,
   getAggregationFromRedis,
+  getPendingAggregationFromRedis,
   deleteAggregationFromRedis,
   isDebounceExpired,
   isMaxWaitExceeded,
   findReadyAggregations,
   enqueueAggregation,
+  enqueuePendingAggregation,
   // Workers
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   deserializeQueuePayload,
+  // Payload types
+  type PendingAggregationPayload,
+  type PendingAnalysisCallback,
 } from "./aggregation/index.js";
 
 // Health check utilities

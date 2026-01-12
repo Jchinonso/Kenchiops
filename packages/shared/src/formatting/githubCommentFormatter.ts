@@ -7,7 +7,6 @@
 
 import type { LLMAnalysisResult, LLMCodeAnnotation } from "../core/types.js";
 import { SHORT_COMMIT_SHA_LENGTH, UI_CONSTANTS } from "../constants/index.js";
-import { truncateText } from "./uiHelpers.js";
 import type { OutputContext, GitHubCommentOutput } from "./outputFormatterTypes.js";
 
 // ==================== Constants ====================
@@ -17,9 +16,6 @@ const MAX_ANNOTATIONS_PER_SERVICE = 5;
 
 /** Maximum next steps to display */
 const MAX_NEXT_STEPS_DISPLAY = 5;
-
-/** Maximum snippet length for display */
-const MAX_SNIPPET_LENGTH = 150;
 
 /** Confidence level descriptions */
 const CONFIDENCE_DESCRIPTIONS: Record<string, string> = {
@@ -162,9 +158,8 @@ const formatAnnotationItem = (annotation: LLMCodeAnnotation): string => {
   const location = path ? `\`${path}${line}\`` : "";
 
   const message = annotation.message || annotation.title || "";
-  const truncatedMessage = truncateText(message, MAX_SNIPPET_LENGTH);
 
-  return location ? `- ❌ ${location}\n  ${truncatedMessage}` : `- ❌ ${truncatedMessage}`;
+  return location ? `- ❌ ${location}\n  ${message}` : `- ❌ ${message}`;
 };
 
 /**

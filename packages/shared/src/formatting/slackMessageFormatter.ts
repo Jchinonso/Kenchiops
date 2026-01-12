@@ -6,12 +6,7 @@
  */
 
 import type { LLMAnalysisResult } from "../core/types.js";
-import {
-  GITHUB_COMMENT_DISPLAY,
-  SHORT_COMMIT_SHA_LENGTH,
-  UI_CONSTANTS,
-} from "../constants/index.js";
-import { truncateText } from "./uiHelpers.js";
+import { SHORT_COMMIT_SHA_LENGTH, UI_CONSTANTS } from "../constants/index.js";
 import type {
   OutputContext,
   SlackMessageOutput,
@@ -77,13 +72,12 @@ const formatSummary = (context: OutputContext, analysis: LLMAnalysisResult): Sla
  */
 const formatRootCause = (analysis: LLMAnalysisResult): SlackBlock => {
   const cause = analysis.identifiedCause ?? analysis.summary ?? "Unknown";
-  const truncatedCause = truncateText(cause, GITHUB_COMMENT_DISPLAY.MAX_ANNOTATION_MESSAGE_LENGTH);
 
   return {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*🔍 Root Cause:*\n${truncatedCause}`,
+      text: `*🔍 Root Cause:*\n${cause}`,
     },
   };
 };
@@ -101,7 +95,7 @@ const formatTopIssues = (analysis: LLMAnalysisResult): SlackBlock | null => {
   const issueLines = topIssues.map((annotation, index) => {
     const icon = index === 0 ? "🔴" : "🟡";
     const message = annotation.message || annotation.title || "Unknown issue";
-    return `${icon} ${truncateText(message, 60)}`;
+    return `${icon} ${message}`;
   });
 
   return {
@@ -124,7 +118,7 @@ const formatNextSteps = (analysis: LLMAnalysisResult): SlackBlock | null => {
   }
 
   const displaySteps = steps.slice(0, 3);
-  const stepText = displaySteps.map((step) => `• ${truncateText(step, 80)}`).join("\n");
+  const stepText = displaySteps.map((step) => `• ${step}`).join("\n");
 
   return {
     type: "section",
