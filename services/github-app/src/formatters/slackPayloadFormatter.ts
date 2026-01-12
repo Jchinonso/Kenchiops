@@ -17,6 +17,10 @@ import {
   countUniqueSuites,
   countUniqueFiles,
   canonicalizeEvidencePaths,
+  selectMessageVariant,
+  extractServiceFromPath,
+  formatConfidenceWithLabel,
+  clusterFailuresByService,
   type AggregatedFailures,
   type AnalyzedFailure,
   type CodeAnnotation,
@@ -32,6 +36,9 @@ import {
 import {
   buildAnnotationsBlock,
   buildCheckNamesBlock,
+  buildInfrastructureIssuesBlock,
+  buildFlakyTestWarningBlock,
+  buildAtAGlanceBlock,
   buildClusteredRootCauseBlock,
   buildDependencyChangesBlock,
   buildConfigChangesBlock,
@@ -59,6 +66,7 @@ export interface ConsolidatedSlackPayload {
     readonly checkNames: readonly string[];
     readonly avgConfidence: number;
     readonly isConsolidated: boolean;
+    readonly messageVariant: "COMPACT" | "STANDARD" | "EXPANDED";
   };
 }
 
@@ -299,38 +307,43 @@ interface HeaderBlockConfig {
   readonly repository: AggregatedFailures["repository"];
   readonly commitSha: string;
   readonly prContext: AggregatedFailures["prContext"];
-  readonly confidencePercent: number;
+  readonly confidence: number;
   readonly uncertainty?: string;
   readonly suiteCount: number;
   readonly fileCount: number;
+  readonly serviceCount: number;
 }
 
 /**
  * Build header blocks with repository info, suite/file counts, and uncertainty.
+ * Voice Guide format: "72% (high certainty)"
  */
 const buildHeaderBlocks = (headerConfig: HeaderBlockConfig): SlackTextBlock[] => {
   const {
     repository,
     commitSha,
     prContext,
-    confidencePercent,
+    confidence,
     uncertainty,
     suiteCount,
     fileCount,
+    serviceCount,
   } = headerConfig;
   const repoUrl = `https://github.com/${repository.fullName}`;
   const commitUrl = `${repoUrl}/commit/${commitSha}`;
 
-  // Format confidence with uncertainty note if present
+  // Voice Guide: Format confidence with label phrase (e.g., "72% (high certainty)")
+  const confidencePercent = Math.round(confidence * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
+  const confidenceLabel = formatConfidenceWithLabel(confidence);
   const confidenceText = uncertainty
-    ? `${getConfidenceEmoji(confidencePercent)} ${confidencePercent}%\n_${uncertainty}_`
-    : `${getConfidenceEmoji(confidencePercent)} ${confidencePercent}%`;
+    ? `${getConfidenceEmoji(confidencePercent)} ${confidenceLabel}\n_${uncertainty}_`
+    : `${getConfidenceEmoji(confidencePercent)} ${confidenceLabel}`;
 
   // Format suite/file counts (only show if we have test failures)
   const suiteText =
     suiteCount > 0
-      ? `*${UI_EMOJI.failure} Test Suites*\n${suiteCount} failed | ${fileCount} files`
-      : `*${UI_EMOJI.failure} Files*\n${fileCount} affected`;
+      ? `*${UI_EMOJI.failure} Test Suites*\n${suiteCount} failed | ${fileCount} files | ${serviceCount} services`
+      : `*${UI_EMOJI.failure} Files*\n${fileCount} affected | ${serviceCount} services`;
 
   return [
     {
@@ -386,6 +399,26 @@ const buildPRLinkBlock = (
   };
 };
 
+/**
+ * Build "View Full Report" link block for expanded variant.
+ * Links to the GitHub Actions run page for comprehensive details.
+ */
+const buildFullReportLinkBlock = (
+  repository: AggregatedFailures["repository"],
+  commitSha: string
+): SlackTextBlock => {
+  const actionsUrl = `https://github.com/${repository.fullName}/commit/${commitSha}/checks`;
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `${UI_EMOJI.link} <${actionsUrl}|View Full Report on GitHub> — _Complete logs and annotations_`,
+      },
+    ],
+  };
+};
+
 // ==================== Public API ====================
 
 /**
@@ -396,10 +429,20 @@ export const buildConsolidatedSlackPayload = (
   aggregation: AggregatedFailures
 ): ConsolidatedSlackPayload => {
   const { failures, commitSha, repository, prContext } = aggregation;
+
+  // Phase 5: Select message variant based on failure complexity
+  // Derive service from first test failure path for each check
+  const variantResult = selectMessageVariant(
+    failures.map((failure) => {
+      const firstTestPath = failure.testFailures?.[0]?.file;
+      const service = firstTestPath ? extractServiceFromPath(firstTestPath) : undefined;
+      return { checkName: failure.checkName, service };
+    })
+  );
+
   // Phase 4: Calculate confidence with multi-module uncertainty detection
   const { confidence, uncertainty } = calculateConfidenceWithUncertainty(failures);
   const mergedActions = mergeRecommendedActions(failures);
-  const confidencePercent = Math.round(confidence * UI_CONSTANTS.PERCENTAGE_MULTIPLIER);
 
   // Pre-compute consolidated data (O(n) with Map-based deduplication)
   const rawTestFailures = failures.flatMap((failure) => failure.testFailures ?? []);
@@ -408,9 +451,11 @@ export const buildConsolidatedSlackPayload = (
     canonicalizeEvidencePaths(rawTestFailures, rawAnnotations);
   const testFailures = consolidateTestFailures(canonicalTestFailures);
   const annotations = consolidateAnnotations(canonicalAnnotations);
-  // Phase 2: Calculate suite and file counts
+  // Phase 2: Calculate suite, file, and service counts
   const suiteCount = countUniqueSuites(testFailures);
   const fileCount = countUniqueFiles(testFailures, annotations);
+  const serviceClusters = clusterFailuresByService(failures);
+  const serviceCount = serviceClusters.size;
   // AI-extracted context (Phase 4 - Language Agnostic)
   const dependencyChanges = consolidateDependencyChanges(failures);
   const buildConfigChanges = consolidateBuildConfigChanges(failures);
@@ -427,14 +472,21 @@ export const buildConsolidatedSlackPayload = (
     repository,
     commitSha,
     prContext,
-    confidencePercent,
+    confidence,
     uncertainty,
     suiteCount,
     fileCount,
+    serviceCount,
   });
   const prLinkBlock = buildPRLinkBlock(repository, prContext);
+  // Voice Guide: Infrastructure issues as separate top-level section BEFORE At a Glance
+  const infrastructureBlock = buildInfrastructureIssuesBlock(testFailures);
+  // Voice Guide: Flaky test warnings after infrastructure issues
+  const flakyWarningBlock = buildFlakyTestWarningBlock(testFailures);
   // Combine test failures and annotations into unified Affected Files block
   const annotationsBlock = buildAnnotationsBlock(annotations, testFailures);
+  // Build "At a Glance" summary block (Voice Guide) - skipped for COMPACT variant
+  const atAGlanceBlock = buildAtAGlanceBlock(failures, variantResult.variant);
   // Use clustered root cause block for per-service grouping with evidence IDs
   const rootCauseBlock = buildClusteredRootCauseBlock(failures);
   // AI-extracted blocks
@@ -446,8 +498,13 @@ export const buildConsolidatedSlackPayload = (
   const ragFeedbackBlock = buildRAGFeedbackButtonsBlock(relatedKnowledge, analysisId);
   // Analysis feedback buttons (always shown for passive learning)
   const analysisFeedbackBlock = buildAnalysisFeedbackButtonsBlock(analysisId);
+  // Phase 5: Full report link for expanded variant
+  const fullReportBlock = variantResult.showFullReportLink
+    ? buildFullReportLinkBlock(repository, commitSha)
+    : null;
 
   // Combine blocks using array spread with filter for optional blocks
+  // Voice Guide order: Header → Failed Checks → Infrastructure → Flaky Warnings → At a Glance → Root Cause → Affected Files
   const blocks: SlackBlock[] = [
     ...headerBlocks,
     ...(prLinkBlock ? [prLinkBlock] : []),
@@ -457,6 +514,11 @@ export const buildConsolidatedSlackPayload = (
       text: { type: "mrkdwn", text: `*${UI_EMOJI.failure} Failed Checks (${failures.length})*` },
     },
     ...(failures.length > 0 ? [buildCheckNamesBlock(failures)] : []),
+    // Voice Guide: Infrastructure issues BEFORE At a Glance
+    ...(infrastructureBlock ? [infrastructureBlock] : []),
+    // Voice Guide: Flaky warnings after infrastructure
+    ...(flakyWarningBlock ? [flakyWarningBlock] : []),
+    ...(atAGlanceBlock ? [atAGlanceBlock] : []),
     rootCauseBlock,
     ...(annotationsBlock ? [annotationsBlock] : []),
     ...(dependencyBlock ? [dependencyBlock] : []),
@@ -466,6 +528,7 @@ export const buildConsolidatedSlackPayload = (
     analysisFeedbackBlock,
     ...buildActionsSummaryBlocks(mergedActions),
     ...buildActionBlocks(mergedActions, aggregation),
+    ...(fullReportBlock ? [fullReportBlock] : []),
     { type: "divider" },
     {
       type: "context",
@@ -491,6 +554,7 @@ export const buildConsolidatedSlackPayload = (
       checkNames: failures.map((failure) => failure.checkName),
       avgConfidence: confidence,
       isConsolidated: true,
+      messageVariant: variantResult.variant,
     },
   };
 };

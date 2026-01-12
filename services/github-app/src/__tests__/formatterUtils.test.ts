@@ -130,7 +130,7 @@ describe("Formatter Utilities", () => {
           identifiedCause: "test",
           annotations: [],
           recommendedActions: [],
-          testFailures: [{ testName: "test subtract", file: "tests/test_calc.py" }],
+          testFailures: [{ testName: "test subtract", file: "tests/test_calc.py", line: 10 }],
           timestamp: new Date(),
         },
         {
@@ -142,13 +142,14 @@ describe("Formatter Utilities", () => {
           identifiedCause: "test",
           annotations: [],
           recommendedActions: [],
-          testFailures: [{ testName: "test subtract", file: "test_calc.py" }],
+          testFailures: [{ testName: "test subtract", file: "test_calc.py", line: 10 }],
           timestamp: new Date(),
         },
       ];
 
       const result = calculateConfidenceWithUncertainty(analyzedFailures);
 
+      // No multi-service spread since files are just path variants of the same test
       expect(result.uncertainty).toBeUndefined();
     });
   });
@@ -331,7 +332,7 @@ describe("Formatter Utilities", () => {
     it("should have correct DISPLAY_LIMITS values", () => {
       expect(DISPLAY_LIMITS.annotationsPerCheck).toBe(100);
       expect(DISPLAY_LIMITS.totalAnnotations).toBe(150);
-      expect(DISPLAY_LIMITS.recommendedActions).toBe(10);
+      expect(DISPLAY_LIMITS.recommendedActions).toBe(5);
       expect(DISPLAY_LIMITS.checksToShow).toBe(20);
       expect(DISPLAY_LIMITS.slackAnnotationsPerCheck).toBe(50);
       expect(DISPLAY_LIMITS.slackMaxChecks).toBe(10);

@@ -47,14 +47,16 @@ export const GITHUB_COMMENT_DISPLAY = {
   MAX_TEST_NAME_LENGTH: 60,
   /** Maximum length for first test in summary */
   MAX_SUMMARY_TEST_LENGTH: 40,
-  /** Maximum length for annotation message */
-  MAX_ANNOTATION_MESSAGE_LENGTH: 80,
+  /** Maximum length for annotation message (increased for better context) */
+  MAX_ANNOTATION_MESSAGE_LENGTH: 150,
   /** Maximum length for error line in code block */
   MAX_ERROR_LINE_LENGTH: 120,
   /** Maximum recommended actions to display */
   MAX_ACTIONS: 3,
   /** Maximum length for a valid file path in annotations */
   MAX_FILE_PATH_LENGTH: 200,
+  /** Maximum assertions to show per file in grouped display */
+  MAX_ASSERTIONS_PER_FILE: 2,
 } as const;
 
 /**
@@ -226,3 +228,26 @@ export const TEXT_SANITIZATION_PATTERNS = {
  * Standard GitHub short SHA length (7 characters).
  */
 export const SHORT_COMMIT_SHA_LENGTH = 7;
+
+/**
+ * PR context correlation configuration.
+ * Controls file correlation scoring and display limits.
+ */
+export const PR_CONTEXT_CORRELATION = {
+  /** Maximum correlated changes to display */
+  MAX_CORRELATIONS_DISPLAYED: 3,
+  /** Minimum correlation score to include (0-1 scale) */
+  MIN_CORRELATION_SCORE: 0.1,
+  /** Score weight for matching base file names */
+  SCORE_SAME_BASE_NAME: 0.6,
+  /** Score weight for same directory */
+  SCORE_SAME_DIRECTORY: 0.3,
+  /** Score weight for parent/child directory relationship */
+  SCORE_PARENT_CHILD_DIR: 0.15,
+  /** Score weight for same service */
+  SCORE_SAME_SERVICE: 0.1,
+  /** Maximum correlation score cap */
+  MAX_SCORE: 1,
+  /** Percentage multiplier for display */
+  PERCENTAGE_MULTIPLIER: 100,
+} as const;
