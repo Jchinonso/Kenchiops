@@ -13,6 +13,9 @@ import {
   validators,
   getErrorMessage,
   KENCHI_BRANDING,
+  formatGitHubComment,
+  type OutputContext,
+  type LLMAnalysisResult,
 } from "@kenchi/shared";
 import {
   postPRComment,
@@ -29,8 +32,6 @@ import {
   type RerunResult,
 } from "../services/workflowService.js";
 import { appConfig } from "../config/appConfig.js";
-import { formatGitHubComment } from "../formatters/commentFormatter.js";
-import { createFeedbackLinks } from "../formatters/formatterUtils.js";
 
 const router = Router();
 const logger = createLogger("github-app");
@@ -70,31 +71,36 @@ router.post(
       return;
     }
 
-    // Format the comment with all enriched context
-    const analysisId = analysis.headSha
-      ? `${repository}:${analysis.headSha}`
-      : analysis.full_analysis?.eventId;
-    const feedbackLinks = analysisId ? await createFeedbackLinks(analysisId) : null;
+    // Convert to LLMAnalysisResult format for simplified formatter
+    const llmAnalysis: LLMAnalysisResult = {
+      eventId: analysis.full_analysis?.eventId ?? `${repository}:${analysis.headSha ?? "unknown"}`,
+      summary: analysis.analysis ?? analysis.summary ?? "CI failure analyzed",
+      identifiedCause: analysis.identified_cause,
+      confidence:
+        analysis.confidence >= 0.7 ? "high" : analysis.confidence >= 0.4 ? "medium" : "low",
+      confidenceScore: analysis.confidence ?? 0.5,
+      recommendedActions: analysis.recommended_actions,
+      codeAnnotations: analysis.annotations?.map(
+        (ann: { path: string; line: number; level: string; message: string; title?: string }) => ({
+          path: ann.path,
+          line: ann.line,
+          level: ann.level as "failure" | "warning" | "notice",
+          message: ann.message,
+          title: ann.title,
+        })
+      ),
+      analyzedAt: new Date().toISOString(),
+    };
 
-    const comment = await formatGitHubComment({
-      summary: analysis.analysis || analysis.summary,
-      analysis: analysis.analysis,
-      identified_cause: analysis.identified_cause,
-      confidence: analysis.confidence || 0.5,
-      recommended_actions: analysis.recommended_actions,
+    // Create output context
+    const context: OutputContext = {
       repository,
-      checkName: analysis.checkName,
-      headSha: analysis.headSha,
-      annotations: analysis.annotations,
-      testFailures: analysis.testFailures,
-      prContext: analysis.prContext,
-      workflowContext: analysis.workflowContext,
-      dependencyChanges: analysis.dependencyChanges,
-      detectedDependencyChanges: analysis.detectedDependencyChanges,
-      detectedBuildConfigChanges: analysis.detectedBuildConfigChanges,
-      full_analysis: analysis.full_analysis,
-      feedbackLinks: feedbackLinks ?? undefined,
-    });
+      commitSha: analysis.headSha ?? "unknown",
+      checkName: analysis.checkName ?? "CI Check",
+    };
+
+    // Format using simplified formatter
+    const { body: comment } = formatGitHubComment(llmAnalysis, context);
 
     try {
       // Post the comment

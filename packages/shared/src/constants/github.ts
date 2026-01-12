@@ -89,6 +89,10 @@ export const FILE_PATH_VALIDATION = {
  * Limits for log parsing operations.
  */
 export const LOG_PARSING_LIMITS = {
+  /** Maximum log size for simplified pipeline preprocessing (50KB) */
+  MAX_LOG_SIZE: 50000,
+  /** Default position when no error indicator is found in logs */
+  DEFAULT_ERROR_POSITION: 0,
   /** Maximum test failures to extract - high limit to capture all before deduplication */
   MAX_TEST_FAILURES: 300,
   /** Maximum size for build config diff in characters */
@@ -211,7 +215,7 @@ export const GITHUB_ANNOTATION_LIMITS = {
 } as const;
 
 /**
- * Text sanitization patterns for annotation messages.
+ * Text sanitization patterns for annotation messages and log preprocessing.
  */
 export const TEXT_SANITIZATION_PATTERNS = {
   /**
@@ -221,6 +225,17 @@ export const TEXT_SANITIZATION_PATTERNS = {
   ANSI_ESCAPE_CODES:
     // eslint-disable-next-line no-control-regex -- Intentional: matching ANSI escape sequences
     /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
+  /**
+   * Simple ANSI escape pattern for log preprocessing.
+   * Matches ESC[...m sequences commonly used for colors.
+   */
+  // eslint-disable-next-line no-control-regex -- Intentional: matching ANSI escape sequences
+  ANSI_SIMPLE: /\x1b\[[0-9;]*m/g,
+  /**
+   * CI timestamp pattern for GitHub Actions logs.
+   * Matches ISO 8601 timestamps at line starts: 2025-12-28T17:31:34.1659529Z
+   */
+  CI_TIMESTAMP: /^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/gm,
 } as const;
 
 /**

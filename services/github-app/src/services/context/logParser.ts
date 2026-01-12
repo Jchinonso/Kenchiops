@@ -15,11 +15,66 @@ import {
   LOG_PARSING_LIMITS,
   shouldExcludePath,
   deduplicateByKey,
-  normalizeTestFailure,
-  isGenericErrorLine,
-  isTestFile,
 } from "@kenchi/shared";
 import type { FileReference, TestFailure } from "./types.js";
+
+// ==================== Inline Helpers (simplified from deleted modules) ====================
+
+/** Test file extensions */
+const TEST_FILE_EXTENSIONS = new Set([
+  ".test.ts",
+  ".test.js",
+  ".spec.ts",
+  ".spec.js",
+  ".test.tsx",
+  ".test.jsx",
+]);
+
+/**
+ * Check if a file path appears to be a test file.
+ */
+const isTestFile = (filePath: string): boolean => {
+  const lowerPath = filePath.toLowerCase();
+  return [...TEST_FILE_EXTENSIONS].some((ext) => lowerPath.endsWith(ext));
+};
+
+/** Patterns that indicate a generic/unhelpful error line */
+const GENERIC_ERROR_PATTERNS = [
+  /^at\s+/i, // Stack trace line
+  /^\s*\d+\s*\|/, // Line number marker
+  /^Error:\s*$/i, // Empty error
+  /^[A-Z][a-z]+Error:\s*$/i, // Empty typed error
+];
+
+/**
+ * Check if a line is a generic/unhelpful error line.
+ */
+const isGenericErrorLine = (line: string): boolean => {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return true;
+  }
+  return GENERIC_ERROR_PATTERNS.some((pattern) => pattern.test(trimmed));
+};
+
+interface NormalizedTestFailure {
+  readonly testName: string;
+  readonly file?: string;
+  readonly line?: number;
+}
+
+/**
+ * Normalize test failure information.
+ */
+const normalizeTestFailure = (failure: {
+  testName: string;
+  file?: string;
+  line?: number;
+}): NormalizedTestFailure => ({
+  testName: failure.testName.trim(),
+  file: failure.file?.trim(),
+  line: failure.line,
+});
 
 const { DEFAULT_ERROR_CONTEXT_LINES, EXTENDED_ERROR_CONTEXT_LINES } = LOG_PARSING_LIMITS;
 

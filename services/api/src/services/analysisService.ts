@@ -25,7 +25,6 @@ import {
   searchFromEventContext,
   selectModel,
   logModelSelection,
-  splitEvidenceSections,
   sanitizeIdPart,
   type Event,
   type Evidence,
@@ -39,6 +38,56 @@ import {
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
 const logger = createLogger(SERVICE_NAMES.API);
+
+// ==================== Section Splitting ====================
+
+interface EvidenceSection {
+  readonly heading: string;
+  readonly content: string;
+}
+
+/**
+ * Splits evidence log content into sections by markdown headings.
+ */
+const splitEvidenceSections = (content: string): readonly EvidenceSection[] => {
+  if (!content.trim()) {
+    return [];
+  }
+
+  const lines = content.split("\n");
+  const sections: EvidenceSection[] = [];
+  let currentHeading = "Overview";
+  let currentLines: string[] = [];
+
+  lines.forEach((line) => {
+    const headingMatch = line.match(/^##\s+(.+)$/);
+    if (headingMatch) {
+      // Save previous section if it has content
+      if (currentLines.length > 0 || sections.length === 0) {
+        sections.push({
+          heading: currentHeading,
+          content: currentLines.join("\n").trim(),
+        });
+      }
+      currentHeading = headingMatch[1].trim();
+      currentLines = [];
+    } else {
+      currentLines.push(line);
+    }
+  });
+
+  // Save final section
+  if (currentLines.length > 0) {
+    sections.push({
+      heading: currentHeading,
+      content: currentLines.join("\n").trim(),
+    });
+  }
+
+  return sections.filter((section) => section.content.length > 0);
+};
+
+// ==================== Constants ====================
 
 const ERROR_SECTION_HEADINGS = new Set<string>([
   "Failed Tests",

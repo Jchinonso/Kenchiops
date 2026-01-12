@@ -1,8 +1,10 @@
 /**
  * Context module.
  *
- * Provides utilities for gathering enriched context from GitHub
+ * Provides utilities for gathering context from GitHub
  * for AI-assisted CI failure analysis.
+ *
+ * Simplified pipeline: Only workflow log fetching is needed.
  */
 
 // Re-export types
@@ -20,18 +22,11 @@ export type {
   EnrichedContext,
 } from "./types.js";
 
-// Re-export main aggregator function
-export { gatherEnrichedContext } from "./contextAggregator.js";
-
-// Re-export individual fetchers for testing and direct use
+// Workflow log fetching (used by simplified pipeline)
 export { fetchWorkflowLogs, fetchWorkflowTiming } from "./workflowFetcher.js";
-export {
-  fetchPRDiff,
-  fetchPRMetadata,
-  fetchChangedFiles,
-  fetchPRsByCommit,
-  fetchPRCommits,
-} from "./prFetcher.js";
-export { fetchCommitInfo, fetchSourceFile, fetchRepositoryMetadata } from "./commitFetcher.js";
+
+// Annotation fetching (used for GitHub check annotations)
 export { fetchCheckRunAnnotations } from "./annotationFetcher.js";
+
+// Log parsing utilities
 export { extractFileReferences, extractTestFailures, truncateWithContext } from "./logParser.js";

@@ -1,5 +1,7 @@
 /**
  * Formatting module - UI helpers and display utilities.
+ *
+ * Simplified exports after pipeline refactor.
  */
 
 // UI helpers
@@ -28,58 +30,21 @@ export {
   takeMatching,
 } from "./arrayUtils.js";
 
-// CI formatters
+// CI formatters - path utilities and dependency formatting
 export {
-  collectCIErrors,
   formatDependencyChange,
   formatDependencyChanges,
-  normalizeTestFailure,
   normalizeTestFilePath,
-  sanitizeTestFailureMessage,
+  extractValidFileLocation,
   canonicalizeEvidencePaths,
   extractServiceFromPath,
-  // Service name formatting
   formatServiceNameKebab,
   formatServiceNameTitle,
-  // Path stripping
   stripAbsolutePaths,
   groupByServicePath,
   formatGroupedItems,
-  // Test file detection (language-agnostic)
-  isTestFile,
-  // Cause extraction (language-agnostic)
-  extractMeaningfulCause,
-  // Phase 8: Failure classification
-  classifyTestFailure,
-  partitionByFailureType,
-  // Phase 2: Suite counting
-  countUniqueSuites,
-  countUniqueFiles,
-  // Phase 5: Evidence ID helpers
-  generateTestEvidenceId,
-  generateAnnoEvidenceId,
-  generateCheckEvidenceId,
-  generateLogEvidenceId,
-  generateDiffEvidenceId,
-  formatWithEvidenceId,
-  formatEvidenceLocation,
-  // Phase 1: Failure clustering
-  clusterFailuresByService,
-  selectBestClusterCause,
-  scoreClusterSignal,
-  isLowSignalCause,
-  isEvidenceBackedCluster,
-  summarizeRootCauses,
-  type CIAnnotation,
-  type CITestFailure,
-  type CollectErrorsOptions,
   type DependencyChange,
   type DependencyChangeType,
-  type FailureClassificationType,
-  type PartitionedFailures,
-  type FailureCluster,
-  type RootCauseSummary,
-  type RootCauseSummaryEntry,
 } from "./ciFormatters.js";
 
 // Analysis resolvers
@@ -95,35 +60,28 @@ export {
   type ResolvedDependencyChange,
 } from "./analysisResolvers.js";
 
-// Flaky test detection
+// Action review formatting
 export {
-  detectFlakyTests,
-  isTestPotentiallyFlaky,
-  formatFlakyTestWarning,
-  type FlakyTestInfo,
-  type FlakyTestResult,
-  type TestFailureInput,
-} from "./flakyTestDetection.js";
+  buildReviewActionText,
+  type ReviewActionOptions,
+  type ReviewActionText,
+} from "./actionReview.js";
 
-// Message variants
+// Simplified pipeline: Log preprocessing
 export {
-  selectMessageVariant,
-  truncateToLineLimit,
-  formatOverflowMessage,
-  getMaxRootCauses,
-  getMaxFilesPerService,
-  getMaxLines,
-  type VariantSelectionInput,
-  type VariantSelectionResult,
-  type TruncatedLines,
-} from "./messageVariants.js";
+  stripAnsiCodes,
+  stripCITimestamps,
+  truncateWithErrorContext,
+  preprocessLogs,
+  preprocessLogsWithMetadata,
+  type PreprocessResult,
+} from "./logPreprocessor.js";
 
-// PR context correlation
+// Simplified pipeline: Output formatting
 export {
-  extractLinkedIssues,
-  correlatePRChangesWithFailures,
-  buildPRContextSection,
-  correlatePRContext,
-  type CorrelatedFailure,
-  type PRCorrelationResult,
-} from "./prContextCorrelation.js";
+  formatGitHubComment,
+  formatSlackMessage,
+  type OutputContext,
+  type GitHubCommentOutput,
+  type SlackMessageOutput,
+} from "./outputFormatter.js";
