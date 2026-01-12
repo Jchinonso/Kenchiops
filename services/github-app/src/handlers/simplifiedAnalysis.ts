@@ -57,30 +57,45 @@ interface SimplifiedAnalysisMetadata {
  * API response structure from the analysis service.
  */
 interface AnalysisApiResponse {
-  readonly root_cause?: string;
+  readonly analysis?: string;
+  readonly identified_cause?: string;
+  readonly confidence?: number;
+  readonly recommended_actions?: readonly RecommendedActionResponse[];
+  readonly full_analysis?: FullAnalysisResponse;
+}
+
+/**
+ * Recommended action from API response.
+ */
+interface RecommendedActionResponse {
+  readonly actionType?: string;
+  readonly description?: string;
+  readonly reasoning?: string;
+  readonly priority?: string;
+}
+
+/**
+ * Full analysis from API response.
+ */
+interface FullAnalysisResponse {
+  readonly summary?: string;
+  readonly identifiedCause?: string;
   readonly confidence?: string;
   readonly category?: string;
   readonly phase?: string;
-  readonly annotations?: readonly AnalysisAnnotation[];
-  readonly next_steps?: readonly string[];
-  readonly secondary_findings?: readonly SecondaryFinding[];
+  readonly codeAnnotations?: readonly AnalysisAnnotation[];
+  readonly nextSteps?: readonly string[];
 }
 
 /**
  * Annotation from API response.
  */
 interface AnalysisAnnotation {
-  readonly evidence_id?: string;
-  readonly snippet?: string;
-  readonly explanation?: string;
-}
-
-/**
- * Secondary finding from API response.
- */
-interface SecondaryFinding {
-  readonly issue?: string;
-  readonly evidence_id?: string;
+  readonly path?: string;
+  readonly line?: number;
+  readonly level?: string;
+  readonly message?: string;
+  readonly title?: string;
 }
 
 // ==================== Converters ====================
@@ -100,28 +115,43 @@ const confidenceToScore = (confidence: string | undefined): number => {
 
 /**
  * Convert API response to LLMAnalysisResult type.
+ * Uses full_analysis for detailed fields, falls back to top-level fields.
  */
 const convertApiResponse = (
   apiResponse: AnalysisApiResponse,
   eventId: string
-): LLMAnalysisResult => ({
-  eventId,
-  summary: apiResponse.root_cause ?? "Unknown failure",
-  identifiedCause: apiResponse.root_cause,
-  confidence: (apiResponse.confidence as LLMAnalysisResult["confidence"]) ?? "low",
-  confidenceScore: confidenceToScore(apiResponse.confidence),
-  category: (apiResponse.category as LLMAnalysisResult["category"]) ?? "unknown",
-  phase: (apiResponse.phase as LLMAnalysisResult["phase"]) ?? "unknown",
-  codeAnnotations: apiResponse.annotations?.map((annotation) => ({
-    path: "",
-    line: 0,
-    level: "failure" as const,
-    message: annotation.explanation ?? "",
-    title: annotation.snippet,
-  })),
-  nextSteps: apiResponse.next_steps ? [...apiResponse.next_steps] : [],
-  analyzedAt: new Date().toISOString(),
-});
+): LLMAnalysisResult => {
+  const fullAnalysis = apiResponse.full_analysis;
+  const identifiedCause =
+    apiResponse.identified_cause ?? fullAnalysis?.identifiedCause ?? apiResponse.analysis;
+  const confidenceLevel = fullAnalysis?.confidence ?? "medium";
+  const numericConfidence = apiResponse.confidence ?? confidenceToScore(confidenceLevel);
+
+  return {
+    eventId,
+    summary: identifiedCause ?? "Unknown failure",
+    identifiedCause,
+    confidence: confidenceLevel as LLMAnalysisResult["confidence"],
+    confidenceScore: numericConfidence,
+    category: (fullAnalysis?.category as LLMAnalysisResult["category"]) ?? "unknown",
+    phase: (fullAnalysis?.phase as LLMAnalysisResult["phase"]) ?? "unknown",
+    codeAnnotations: fullAnalysis?.codeAnnotations?.map((annotation) => ({
+      path: annotation.path ?? "",
+      line: annotation.line ?? 0,
+      level: (annotation.level as "failure" | "warning" | "notice") ?? "failure",
+      message: annotation.message ?? "",
+      title: annotation.title,
+    })),
+    nextSteps: fullAnalysis?.nextSteps ?? [],
+    recommendedActions: apiResponse.recommended_actions?.map((action) => ({
+      actionType: action.actionType ?? "fix",
+      description: action.description ?? "",
+      reasoning: action.reasoning,
+      priority: action.priority as "immediate" | "high" | "medium" | "low" | undefined,
+    })),
+    analyzedAt: new Date().toISOString(),
+  };
+};
 
 // ==================== Main Handler ====================
 

@@ -45,6 +45,7 @@ import {
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { postConsolidatedAnalysis } from "./services/aggregation/consolidatedPoster.js";
+import { processCombinedAnalysis } from "./handlers/combinedAnalysis.js";
 
 const logger = createLogger("github-app");
 
@@ -166,9 +167,11 @@ const initializeFailureAggregator = (): void => {
   );
 
   // Start the analysis queue processor (processes enqueued aggregations)
+  // Handles both legacy flow (pre-analyzed) and new flow (pending checks for combined analysis)
   stopAnalysisProcessor = startAnalysisQueueProcessor(postConsolidatedAnalysis, {
     pollIntervalMs: QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
     maxConcurrent: QUEUE_WORKER_DEFAULTS.SLACK_MAX_CONCURRENT,
+    onPendingReady: processCombinedAnalysis,
   });
 
   logger.info("Redis failure aggregator initialized", {

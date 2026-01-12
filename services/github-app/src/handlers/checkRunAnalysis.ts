@@ -1,14 +1,19 @@
 /**
  * Check Run Analysis Functions
  *
- * Entry point for CI failure analysis. Routes to simplified pipeline.
- * Posts results to GitHub PR comments and Slack.
+ * Entry point for CI failure handling. Collects pending check info
+ * for aggregation. Analysis is deferred until all checks are collected.
  */
 
-import { createLogger, config, resilientPost, getErrorMessage } from "@kenchi/shared";
+import {
+  createLogger,
+  getErrorMessage,
+  addPendingCheckToRedis,
+  type PendingCheckRun,
+  type PendingCheckContext,
+  type AggregationKey,
+} from "@kenchi/shared";
 import { GITHUB_CHECK_CONCLUSIONS, type CheckRunWebhook } from "../types/githubTypes.js";
-import { processSimplifiedAnalysis, type SimplifiedAnalysisResult } from "./simplifiedAnalysis.js";
-import { postPRComment } from "../services/githubComments.js";
 
 const logger = createLogger("github-app");
 
@@ -23,147 +28,109 @@ export const SKIP_CONCLUSIONS: ReadonlySet<string> = new Set([
   GITHUB_CHECK_CONCLUSIONS.STALE,
 ]);
 
-// ==================== Posting Functions ====================
+/**
+ * Check names that are status/summary checks and should be skipped.
+ * These checks aggregate other check results and have no actual failure logs.
+ */
+const STATUS_CHECK_PATTERNS: readonly RegExp[] = [
+  /^ci[\s-_]?success$/i,
+  /^ci[\s-_]?status$/i,
+  /^all[\s-_]?checks/i,
+  /^status[\s-_]?check/i,
+  /^branch[\s-_]?protection/i,
+  /^required[\s-_]?checks/i,
+];
 
 /**
- * Post analysis result to GitHub PR comment.
+ * Check if a check name is a status/summary check that should be skipped.
  */
-const postToGitHub = async (
-  webhook: CheckRunWebhook,
-  result: SimplifiedAnalysisResult
-): Promise<boolean> => {
-  const { check_run, repository, installation } = webhook;
-  const prNumber = check_run.pull_requests[0]?.number;
+const isStatusCheck = (checkName: string): boolean =>
+  STATUS_CHECK_PATTERNS.some((pattern) => pattern.test(checkName));
 
-  if (!prNumber) {
-    logger.info("No PR associated with check run, skipping GitHub comment", {
-      repository: repository.full_name,
-      checkName: check_run.name,
-    });
-    return true;
-  }
-
-  if (!installation?.id) {
-    logger.warn("No installation ID, cannot post GitHub comment", {
-      repository: repository.full_name,
-    });
-    return false;
-  }
-
-  if (!result.githubComment?.body) {
-    logger.warn("No GitHub comment body generated", {
-      repository: repository.full_name,
-    });
-    return false;
-  }
-
-  try {
-    await postPRComment(
-      installation.id,
-      repository.owner.login,
-      repository.name,
-      prNumber,
-      result.githubComment.body,
-      true // Delete old KenchiOps comments
-    );
-
-    logger.info("Posted CI failure analysis to GitHub PR", {
-      repository: repository.full_name,
-      prNumber,
-      checkName: check_run.name,
-    });
-
-    return true;
-  } catch (error) {
-    logger.error("Failed to post GitHub comment", {
-      error: getErrorMessage(error),
-      repository: repository.full_name,
-      prNumber,
-    });
-    return false;
-  }
-};
+// ==================== Helpers ====================
 
 /**
- * Post analysis result to Slack.
+ * Build aggregation key from webhook.
  */
-const postToSlack = async (
-  webhook: CheckRunWebhook,
-  result: SimplifiedAnalysisResult
-): Promise<boolean> => {
-  const { repository } = webhook;
+const buildAggregationKey = (webhook: CheckRunWebhook): AggregationKey => ({
+  repositoryFullName: webhook.repository.full_name,
+  commitSha: webhook.check_run.head_sha,
+});
 
-  if (!result.slackMessage) {
-    logger.warn("No Slack message generated", {
-      repository: repository.full_name,
-    });
-    return false;
-  }
+/**
+ * Build pending check from webhook.
+ */
+const buildPendingCheck = (webhook: CheckRunWebhook): PendingCheckRun => ({
+  checkRunId: webhook.check_run.id,
+  checkName: webhook.check_run.name,
+  conclusion: webhook.check_run.conclusion || "failure",
+  timestamp: new Date(),
+});
 
-  try {
-    const slackUrl = `${config.SLACK_BOT_URL}/slack/message`;
+/**
+ * Build pending check context from webhook.
+ */
+const buildPendingCheckContext = (webhook: CheckRunWebhook): PendingCheckContext => {
+  const { repository, installation, check_run } = webhook;
 
-    await resilientPost<{ success: boolean }>(slackUrl, {
-      type: "ci_failure",
-      payload: result.slackMessage,
-    });
-
-    logger.info("Posted CI failure analysis to Slack", {
-      repository: repository.full_name,
-    });
-
-    return true;
-  } catch (error) {
-    logger.error("Failed to post Slack message", {
-      error: getErrorMessage(error),
-      repository: repository.full_name,
-    });
-    return false;
-  }
+  return {
+    repositoryInfo: {
+      owner: repository.owner.login,
+      name: repository.name,
+      fullName: repository.full_name,
+    },
+    installationId: installation?.id ?? 0,
+    pullRequestNumbers: check_run.pull_requests.map((pr) => pr.number),
+  };
 };
 
 // ==================== Main Handler ====================
 
 /**
- * Process CI failure using simplified analysis pipeline.
- * Posts results to GitHub and Slack.
+ * Process CI failure by adding to pending aggregation.
+ * Analysis is deferred until all checks for the commit are collected.
  *
  * @param webhook - The check run webhook payload
- * @returns true if failure was successfully processed
+ * @returns true if check was successfully added to aggregation
  */
 export const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolean> => {
   const { check_run, repository } = webhook;
 
-  logger.info("Processing CI failure with simplified pipeline", {
+  // Skip status/summary checks that have no actual failure logs
+  if (isStatusCheck(check_run.name)) {
+    logger.info("Skipping status check (no actual failure logs)", {
+      repository: repository.full_name,
+      checkName: check_run.name,
+    });
+    return true;
+  }
+
+  logger.info("Adding CI failure to pending aggregation", {
     repository: repository.full_name,
     checkName: check_run.name,
     headSha: check_run.head_sha.substring(0, 7),
   });
 
-  const result = await processSimplifiedAnalysis(webhook);
+  try {
+    const aggregationKey = buildAggregationKey(webhook);
+    const pendingCheck = buildPendingCheck(webhook);
+    const context = buildPendingCheckContext(webhook);
 
-  if (!result.success) {
-    logger.warn("Simplified analysis failed", {
+    await addPendingCheckToRedis(aggregationKey, pendingCheck, context);
+
+    logger.info("CI failure added to pending aggregation", {
       repository: repository.full_name,
       checkName: check_run.name,
-      error: result.error,
+      checkRunId: check_run.id,
+    });
+
+    return true;
+  } catch (error) {
+    logger.error("Failed to add failure to pending aggregation", {
+      error: getErrorMessage(error),
+      repository: repository.full_name,
+      checkName: check_run.name,
     });
     return false;
   }
-
-  // Post to GitHub and Slack in parallel
-  const [githubSuccess, slackSuccess] = await Promise.all([
-    postToGitHub(webhook, result),
-    postToSlack(webhook, result),
-  ]);
-
-  logger.info("CI failure analysis posted", {
-    repository: repository.full_name,
-    checkName: check_run.name,
-    githubSuccess,
-    slackSuccess,
-    confidence: result.analysis?.confidence,
-  });
-
-  return githubSuccess || slackSuccess;
 };

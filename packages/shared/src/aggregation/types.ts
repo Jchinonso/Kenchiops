@@ -65,6 +65,39 @@ export interface RelatedKnowledgeDoc {
 }
 
 /**
+ * Pending check run waiting for aggregation (before analysis)
+ */
+export interface PendingCheckRun {
+  readonly checkRunId: number;
+  readonly checkName: string;
+  readonly conclusion: string;
+  readonly timestamp: Date;
+}
+
+/**
+ * Serializable version of PendingCheckRun for Redis storage
+ */
+export interface SerializedPendingCheckRun {
+  readonly checkRunId: number;
+  readonly checkName: string;
+  readonly conclusion: string;
+  readonly timestamp: string; // ISO string instead of Date
+}
+
+/**
+ * Aggregated pending checks for a single commit (before analysis)
+ */
+export interface PendingAggregation {
+  readonly commitSha: string;
+  readonly repository: RepositoryInfo;
+  readonly installationId: number;
+  readonly pullRequestNumbers: readonly number[];
+  readonly pendingChecks: readonly PendingCheckRun[];
+  readonly firstFailureAt: Date;
+  readonly lastFailureAt: Date;
+}
+
+/**
  * Result of analyzing a single check run failure
  */
 export interface AnalyzedFailure {

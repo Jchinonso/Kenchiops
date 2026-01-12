@@ -107,6 +107,8 @@ export const SLACK_ACTION_IDS = {
   DOC_CONTENT: "doc_content_input",
   /** Document description input */
   DOC_DESCRIPTION: "doc_description_input",
+  /** Search knowledge base button */
+  SEARCH_KNOWLEDGE: "search_knowledge",
 } as const;
 
 /**
