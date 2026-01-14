@@ -71,11 +71,18 @@ export {
 export {
   stripAnsiCodes,
   stripCITimestamps,
+  stripCIGroupMarkers,
   truncateWithErrorContext,
   preprocessLogs,
   preprocessLogsWithMetadata,
+  detectTestFramework,
+  detectTestFrameworkSimple,
   type PreprocessResult,
+  type TestFrameworkInfo,
 } from "./logPreprocessor.js";
+
+// Anchor selection for log truncation
+export { findBestAnchor, findBestErrorPosition, type AnchorResult } from "./anchorSelection.js";
 
 // Simplified pipeline: Output formatting
 export {

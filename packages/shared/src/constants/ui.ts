@@ -106,6 +106,13 @@ export const UI_EMOJI = {
   // Feedback icons
   thumbsUp: "👍",
   thumbsDown: "👎",
+
+  // Status/change indicators
+  new: "🆕",
+  sparkles: "✨",
+
+  // Suggestion/hint icons
+  suggestion: "💡",
 } as const;
 
 /**

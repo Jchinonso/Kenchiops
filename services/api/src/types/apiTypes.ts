@@ -7,6 +7,15 @@
 import type { Event, Evidence, LLMAnalysisResult, HealthStatus } from "@kenchi/shared";
 
 /**
+ * Detected test framework hint from log preprocessing.
+ */
+export interface TestFrameworkRequest {
+  readonly name: string;
+  readonly language: string;
+  readonly assertion_hint: string;
+}
+
+/**
  * CI failure analysis request payload
  */
 export interface AnalyzeRequest {
@@ -14,6 +23,8 @@ export interface AnalyzeRequest {
   readonly repository: string;
   readonly commit?: string;
   readonly tenant_id?: string;
+  /** Detected test framework for assertion parsing hints */
+  readonly test_framework?: TestFrameworkRequest;
 }
 
 /**

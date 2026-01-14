@@ -11,7 +11,7 @@
  * IMPORTANT: This module treats LLM outputs as untrusted and validates
  * all references against provided evidence.
  *
- * @module openaiClient/validation
+ * @module llm/validation
  */
 
 import type {
@@ -179,7 +179,7 @@ const EVIDENCE_VALIDATORS: Readonly<Record<string, EvidenceValidator>> = {
 
   document: (ref, _context, lookups) => {
     const refLower = ref.toLowerCase();
-    // O(1) Set lookup using pre-computed titles
+    // Use Array.from() for Set iteration (avoids downlevelIteration requirement)
     return Array.from(lookups.documentTitles).some((title) => refLower.includes(title));
   },
 };
@@ -211,16 +211,10 @@ const extractCommitSHAs = (text: string): string[] => {
  * Uses pre-compiled combined pattern for single and double quotes.
  */
 const extractQuotedText = (text: string): string[] => {
-  const quoted: string[] = [];
   // Reset lastIndex for global regex reuse
   QUOTED_TEXT_PATTERN.lastIndex = 0;
-
-  let match: RegExpExecArray | null;
-  while ((match = QUOTED_TEXT_PATTERN.exec(text)) !== null) {
-    quoted.push(match[1]);
-  }
-
-  return quoted;
+  // Use Array.from() with matchAll to avoid while loop and push (avoids downlevelIteration requirement)
+  return Array.from(text.matchAll(QUOTED_TEXT_PATTERN), (match) => match[1]);
 };
 
 /**
@@ -246,7 +240,7 @@ const generatePrefixLengths = (
   maxLength: number
 ): readonly number[] => {
   const maxLen = Math.min(shaLength, maxLength);
-  return Array.from({ length: maxLen - minLength + 1 }, (_, i) => minLength + i);
+  return Array.from({ length: maxLen - minLength + 1 }, (_, index) => minLength + index);
 };
 
 /**

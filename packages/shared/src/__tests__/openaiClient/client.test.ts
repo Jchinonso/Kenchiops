@@ -321,7 +321,7 @@ describe("OpenAIClient", () => {
               content: JSON.stringify({
                 root_cause: "CI build failed",
                 confidence: "medium",
-                category: "compile",
+                category: "build",
                 phase: "build",
                 annotations: [],
                 next_steps: [],

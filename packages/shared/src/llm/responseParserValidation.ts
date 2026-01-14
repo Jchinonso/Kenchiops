@@ -4,7 +4,7 @@
  * Field extractors, annotation parsing, and validation utilities
  * for LLM response processing.
  *
- * @module openaiClient/responseParserValidation
+ * @module llm/responseParserValidation
  */
 
 import type {
@@ -171,13 +171,32 @@ export const parseAnnotations = (rawAnnotations: unknown): LLMCodeAnnotation[] =
     return [];
   }
 
-  return rawAnnotations.reduce<LLMCodeAnnotation[]>((validated, annotation) => {
-    const result = validateAnnotation(annotation);
-    if (result !== null) {
-      validated.push(result);
-    }
-    return validated;
-  }, []);
+  return rawAnnotations
+    .map((annotation) => validateAnnotation(annotation))
+    .filter((result): result is LLMCodeAnnotation => result !== null);
+};
+
+/**
+ * Formats a single secondary finding into a string.
+ *
+ * @param finding - Raw finding from AI response
+ * @returns Formatted finding string or null if invalid
+ */
+const formatSecondaryFinding = (finding: unknown): string | null => {
+  if (!finding || typeof finding !== "object") {
+    return null;
+  }
+
+  const rawFinding = finding as RawSecondaryFinding;
+  const issue = typeof rawFinding.issue === "string" ? rawFinding.issue : null;
+
+  if (!issue) {
+    return null;
+  }
+
+  const evidenceId =
+    typeof rawFinding.evidence_id === "string" ? ` [${rawFinding.evidence_id}]` : "";
+  return `${issue}${evidenceId}`;
 };
 
 /**
@@ -191,18 +210,9 @@ export const parseSecondaryFindings = (rawFindings: unknown): string[] => {
     return [];
   }
 
-  return rawFindings.reduce<string[]>((findings, finding) => {
-    if (finding && typeof finding === "object") {
-      const rawFinding = finding as RawSecondaryFinding;
-      const issue = typeof rawFinding.issue === "string" ? rawFinding.issue : null;
-      const evidenceId =
-        typeof rawFinding.evidence_id === "string" ? ` [${rawFinding.evidence_id}]` : "";
-      if (issue) {
-        findings.push(`${issue}${evidenceId}`);
-      }
-    }
-    return findings;
-  }, []);
+  return rawFindings
+    .map((finding) => formatSecondaryFinding(finding))
+    .filter((result): result is string => result !== null);
 };
 
 // ==================== Validation Sets and Functions ====================
@@ -216,9 +226,9 @@ export type ConfidenceLevel = "low" | "medium" | "high";
 /**
  * Valid failure categories
  */
-export const VALID_CATEGORIES: ReadonlySet<FailureCategory> = new Set([
+export const VALID_CATEGORIES: ReadonlySet<FailureCategory> = new Set<FailureCategory>([
   "dependency",
-  "compile",
+  "build",
   "test",
   "runtime",
   "config",
@@ -229,7 +239,7 @@ export const VALID_CATEGORIES: ReadonlySet<FailureCategory> = new Set([
 /**
  * Valid pipeline phases
  */
-export const VALID_PHASES: ReadonlySet<PipelinePhase> = new Set([
+export const VALID_PHASES: ReadonlySet<PipelinePhase> = new Set<PipelinePhase>([
   "dependency",
   "build",
   "test",

@@ -28,7 +28,7 @@ jest.mock("@kenchi/shared", () => {
       Promise.resolve({
         data: {
           root_cause: "Redis connection failed due to DNS resolution error (ENOTFOUND)",
-          confidence: "high",
+          confidence: 0.9, // Numeric confidence for top-level
           category: "infra",
           phase: "test",
           annotations: [
@@ -43,6 +43,29 @@ jest.mock("@kenchi/shared", () => {
             "Check DNS resolution for redis.local",
           ],
           secondary_findings: [],
+          // Full analysis fields with string confidence
+          full_analysis: {
+            confidence: "high",
+            category: "infra",
+            phase: "test",
+            identifiedCause: "Redis connection failed due to DNS resolution error (ENOTFOUND)",
+            nextSteps: [
+              "Verify Redis host is correctly configured",
+              "Check DNS resolution for redis.local",
+            ],
+          },
+          recommended_actions: [
+            {
+              actionType: "fix",
+              description: "Verify Redis host is correctly configured",
+              priority: "high",
+            },
+            {
+              actionType: "investigate",
+              description: "Check DNS resolution for redis.local",
+              priority: "medium",
+            },
+          ],
         },
         status: 200,
         retryCount: 0,

@@ -37,7 +37,7 @@ jest.mock("../../cache/cacheClient.js", () => ({
   cacheSet: jest.fn(),
 }));
 
-jest.mock("../../openaiClient/embedding.js", () => ({
+jest.mock("../../llm/providers/openai/embedding.js", () => ({
   getEmbeddingClient: jest.fn(),
 }));
 

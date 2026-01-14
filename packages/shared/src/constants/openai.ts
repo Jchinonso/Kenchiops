@@ -15,7 +15,7 @@ export const OPENAI_DEFAULTS = {
  * OpenAI API configuration constants.
  */
 export const OPENAI_CONSTANTS = {
-  MAX_PROMPT_TOKENS: 8000,
+  MAX_PROMPT_TOKENS: 48000, // Increased from 24000 to capture all test failures (GPT-4 has 128K context)
   MAX_RETRIES: 3,
   DEFAULT_TIMEOUT_MS: 90000,
   TOKEN_BUFFER: 1000,

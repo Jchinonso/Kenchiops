@@ -6,55 +6,28 @@
  * Used for RAG (Retrieval-Augmented Generation) to enable semantic search over
  * code diffs, documentation, and incident history.
  *
- * Architecture note: Provider-agnostic interface supports future LLM integrations.
- * The tier abstraction allows swapping embedding providers without changing consumers.
- *
- * @module openaiClient/embedding
+ * @module llm/providers/openai/embedding
  */
 
 import OpenAI from "openai";
-import { config } from "../core/config.js";
-import { logger } from "../core/logger.js";
-import { ExternalServiceError, getErrorMessage } from "../core/errors.js";
+import { config } from "../../../core/config.js";
+import { logger } from "../../../core/logger.js";
+import { ExternalServiceError, getErrorMessage } from "../../../core/errors.js";
 import {
   EMBEDDING_CONFIG,
   OPENAI_CONSTANTS,
   EMBEDDING_TIERS,
   type EmbeddingTierName,
-} from "../constants/index.js";
-import { withCircuitBreaker, getCircuitStatus, SERVICE_KEYS } from "../http/circuitBreaker.js";
+} from "../../../constants/index.js";
+import {
+  withCircuitBreaker,
+  getCircuitStatus,
+  SERVICE_KEYS,
+} from "../../../http/circuitBreaker.js";
+import type { EmbeddingResult, BatchEmbeddingResult, EmbeddingProvider } from "../../types.js";
 
-/**
- * Result of an embedding operation.
- */
-export interface EmbeddingResult {
-  /** The generated embedding vector */
-  readonly embedding: readonly number[];
-  /** Token count used for this embedding */
-  readonly tokenCount: number;
-  /** Model used for embedding */
-  readonly model: string;
-  /** Tier used for this embedding */
-  readonly tier: EmbeddingTierName;
-  /** Embedding dimension */
-  readonly dimension: number;
-}
-
-/**
- * Result of a batch embedding operation.
- */
-export interface BatchEmbeddingResult {
-  /** Array of embeddings in the same order as input texts */
-  readonly embeddings: ReadonlyArray<readonly number[]>;
-  /** Total token count used across all embeddings */
-  readonly totalTokens: number;
-  /** Model used for embedding */
-  readonly model: string;
-  /** Tier used for this embedding */
-  readonly tier: EmbeddingTierName;
-  /** Embedding dimension */
-  readonly dimension: number;
-}
+// Re-export types for backward compatibility
+export type { EmbeddingResult, BatchEmbeddingResult, EmbeddingProvider };
 
 /**
  * OpenAI client configuration for embeddings.
@@ -356,18 +329,7 @@ export const clearClientCache = (): void => {
   clientCache.clear();
 };
 
-// ==================== Provider-Agnostic Interface ====================
-
-/**
- * Provider-agnostic embedding interface.
- * Supports future integration of other LLM providers.
- */
-export interface EmbeddingProvider {
-  readonly generateEmbedding: (text: string) => Promise<EmbeddingResult>;
-  readonly generateBatchEmbeddings: (texts: readonly string[]) => Promise<BatchEmbeddingResult>;
-  readonly getTier: () => EmbeddingTierName;
-  readonly getDimension: () => number;
-}
+// ==================== Provider Factory ====================
 
 /**
  * Creates an embedding provider for the specified tier.

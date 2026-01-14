@@ -27,6 +27,3 @@ export { fetchWorkflowLogs, fetchWorkflowTiming } from "./workflowFetcher.js";
 
 // Annotation fetching (used for GitHub check annotations)
 export { fetchCheckRunAnnotations } from "./annotationFetcher.js";
-
-// Log parsing utilities
-export { extractFileReferences, extractTestFailures, truncateWithContext } from "./logParser.js";

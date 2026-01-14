@@ -12,12 +12,14 @@ import type {
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
   LLMSuggestedFix,
+  LLMLintError,
 } from "../core/types.js";
 
 // Re-export AI-extracted types from core (canonical definitions)
 export type { LLMDetectedDependencyChange as DetectedDependencyChange } from "../core/types.js";
 export type { LLMDetectedBuildConfigChange as DetectedBuildConfigChange } from "../core/types.js";
 export type { LLMSuggestedFix as SuggestedFix } from "../core/types.js";
+export type { LLMLintError as LintErrorInfo } from "../core/types.js";
 
 /**
  * AI-generated code annotation from analysis
@@ -43,13 +45,18 @@ export interface RecommendedAction {
 }
 
 /**
- * Individual test failure info for display
+ * Individual test failure info for display.
+ * Includes expected/actual values for assertion failures.
  */
 export interface TestFailureInfo {
   readonly testName: string;
   readonly file?: string;
   readonly line?: number;
   readonly error?: string;
+  /** Expected value from assertion (from LLM extraction) */
+  readonly expected?: string | null;
+  /** Actual/received value from assertion (from LLM extraction) */
+  readonly actual?: string | null;
 }
 
 /**
@@ -110,6 +117,7 @@ export interface AnalyzedFailure {
   readonly annotations: readonly CodeAnnotation[];
   readonly recommendedActions: readonly RecommendedAction[];
   readonly testFailures: readonly TestFailureInfo[];
+  readonly lintErrors?: readonly LLMLintError[];
   readonly timestamp: Date;
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
@@ -131,6 +139,7 @@ export interface SerializedFailure {
   readonly annotations: readonly CodeAnnotation[];
   readonly recommendedActions: readonly RecommendedAction[];
   readonly testFailures: readonly TestFailureInfo[];
+  readonly lintErrors?: readonly LLMLintError[];
   readonly timestamp: string; // ISO string instead of Date
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
