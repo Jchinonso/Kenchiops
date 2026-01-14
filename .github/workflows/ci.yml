@@ -78,8 +78,8 @@ jobs:
       - name: Build shared package
         run: npm run build:shared
 
-      - name: Run tests with coverage
-        run: npm run test:coverage
+      - name: Run tests
+        run: npm run test
         env:
           # Provide dummy values for required env vars during tests
           NODE_ENV: test
