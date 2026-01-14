@@ -5,9 +5,6 @@
 // GitHub App client
 export { fetchInstallationRepositories } from "./githubAppClient.js";
 
-// Vector store
-export { VectorStore, InMemoryVectorStore } from "./vectorStore.js";
-
 // LLM prompts
 export {
   buildSystemPrompt,
@@ -36,3 +33,6 @@ export {
   type FocusArea,
   type VerbosityLevel,
 } from "./tenantPromptConfig.js";
+
+// Vector store for RAG
+export { VectorStore, InMemoryVectorStore } from "./vectorStore.js";

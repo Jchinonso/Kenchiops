@@ -5,6 +5,8 @@
  * for consistent handling of file paths across formatters.
  */
 
+import { FILE_PATH_VALIDATION, GITHUB_COMMENT_DISPLAY } from "../constants/index.js";
+
 // ==================== Path Normalization ====================
 
 /**
@@ -30,6 +32,41 @@ export const normalizeTestFilePath = (path: string): string =>
 export const normalizeEvidencePath = (path: string): string => {
   const normalized = normalizeTestFilePath(path.trim());
   return normalized.startsWith("./") ? normalized.slice(2) : normalized;
+};
+
+/**
+ * Extracts and validates file location from annotation/test failure path and line.
+ * Returns null if the path doesn't look like a valid file path.
+ * Handles cases where error text is accidentally included in the path field.
+ *
+ * @param path - Raw path string from annotation or failure
+ * @param line - Line number from annotation or failure
+ * @returns Formatted location string (e.g., "src/index.ts:42") or null if invalid
+ */
+export const extractValidFileLocation = (path: string, line: number): string | null => {
+  if (!path || path === "unknown" || path.length > GITHUB_COMMENT_DISPLAY.MAX_FILE_PATH_LENGTH) {
+    return null;
+  }
+
+  const trimmedPath = path.trim();
+
+  // Try to extract file:line pattern from the path itself (handles embedded line numbers)
+  const embeddedMatch = trimmedPath.match(FILE_PATH_VALIDATION.LOCATION_PATTERN);
+  if (embeddedMatch) {
+    const extractedPath = embeddedMatch[1];
+    const extractedLine = parseInt(embeddedMatch[2], 10);
+    if (FILE_PATH_VALIDATION.VALID_PATH_PATTERN.test(extractedPath)) {
+      return `${extractedPath}:${extractedLine}`;
+    }
+  }
+
+  // Validate the path looks like a real file path (not error text)
+  if (!FILE_PATH_VALIDATION.VALID_PATH_PATTERN.test(trimmedPath)) {
+    return null;
+  }
+
+  // Return path with line if valid
+  return line > 0 ? `${trimmedPath}:${line}` : trimmedPath;
 };
 
 // ==================== Service Path Grouping ====================

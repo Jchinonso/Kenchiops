@@ -98,6 +98,10 @@ jest.mock("@kenchi/shared", () => ({
   isEvidenceBackedCluster: jest.fn(() => true),
   isTestFile: jest.fn(() => true),
   truncateText: jest.fn((text: string) => text),
+  formatGitHubComment: jest.fn(() => ({
+    body: "## KenchiOps CI Failure Analysis\n\nTest comment body",
+    annotations: [],
+  })),
   validate:
     (schema: { body?: Record<string, unknown> }) =>
     (req: Request, res: Response, next: () => void) => {
@@ -158,10 +162,6 @@ jest.mock("../config/appConfig.js", () => ({
   },
 }));
 
-jest.mock("../formatters/commentFormatter.js", () => ({
-  formatGitHubComment: jest.fn(() => "Formatted comment"),
-}));
-
 // Import after mocks
 import { apiRoutes } from "../routes/apiRoutes.js";
 import {
@@ -169,7 +169,6 @@ import {
   createCheckRunWithAnnotations,
   getInstallationRepositories,
 } from "../services/githubService.js";
-import { formatGitHubComment } from "../formatters/commentFormatter.js";
 
 const mockPostPRComment = postPRComment as jest.MockedFunction<typeof postPRComment>;
 const mockCreateCheckRunWithAnnotations = createCheckRunWithAnnotations as jest.MockedFunction<
@@ -177,9 +176,6 @@ const mockCreateCheckRunWithAnnotations = createCheckRunWithAnnotations as jest.
 >;
 const mockGetInstallationRepositories = getInstallationRepositories as jest.MockedFunction<
   typeof getInstallationRepositories
->;
-const mockFormatGitHubComment = formatGitHubComment as jest.MockedFunction<
-  typeof formatGitHubComment
 >;
 
 describe("API Routes", () => {
@@ -193,7 +189,6 @@ describe("API Routes", () => {
     app.use(express.json());
     app.use(apiRoutes);
 
-    mockFormatGitHubComment.mockReturnValue("Formatted comment");
     mockPostPRComment.mockResolvedValue();
     mockCreateCheckRunWithAnnotations.mockResolvedValue();
     mockGetInstallationRepositories.mockResolvedValue([
@@ -237,13 +232,14 @@ describe("API Routes", () => {
     it("should format comment with analysis data", async () => {
       await request(app).post("/api/github/comment").send(validBody);
 
-      expect(mockFormatGitHubComment).toHaveBeenCalledWith(
-        expect.objectContaining({
-          summary: "Test analysis",
-          identified_cause: "Test cause",
-          confidence: 0.85,
-          repository: "testowner/testrepo",
-        })
+      // Verify the formatted comment was posted
+      expect(mockPostPRComment).toHaveBeenCalledWith(
+        12345,
+        "testowner",
+        "testrepo",
+        123,
+        expect.stringContaining("CI Failure Analysis"),
+        true
       );
     });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { extractJsonFromResponse, parseOpenAIResponse } from "../../openaiClient/responseParser.js";
+import { extractJsonFromResponse, parseOpenAIResponse } from "../../llm/responseParser.js";
 
 describe("OpenAI responseParser", () => {
   it("should extract JSON from wrapped content", () => {
@@ -42,7 +42,7 @@ describe("OpenAI responseParser", () => {
     const payload = {
       root_cause: "Type mismatch in build step",
       confidence: "HIGH",
-      category: "COMPILE",
+      category: "BUILD",
       phase: "BUILD",
       annotations: [],
       next_steps: [],
@@ -53,7 +53,7 @@ describe("OpenAI responseParser", () => {
     const result = parseOpenAIResponse(content, "evt_test");
 
     expect(result.confidence).toBe("high");
-    expect(result.category).toBe("compile");
+    expect(result.category).toBe("build");
     expect(result.phase).toBe("build");
   });
 

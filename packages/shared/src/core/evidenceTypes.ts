@@ -3,6 +3,19 @@
  * Defines structures for logs, metrics, git history, and system state.
  */
 
+/**
+ * Detected test framework information for LLM assertion parsing hints.
+ * Re-exported from formatting module for use in Evidence.
+ */
+export interface TestFrameworkHint {
+  /** Framework name (e.g., "pytest", "jest", "cargo-test") */
+  readonly name: string;
+  /** Programming language (e.g., "Python", "JavaScript/TypeScript") */
+  readonly language: string;
+  /** How expected/actual values are labeled in this framework */
+  readonly assertionHint: string;
+}
+
 export interface LogEntry {
   /** Optional stable ID for cross-run traceability (e.g., hash of timestamp+source+message) */
   id?: string;
@@ -92,12 +105,14 @@ export interface RelatedEvent {
 
 export interface Evidence {
   eventId: string;
-  logs?: LogEntry[];
+  logs?: readonly LogEntry[];
   metrics?: Metrics;
-  gitHistory?: GitCommit[];
+  gitHistory?: readonly GitCommit[];
   systemState?: SystemState;
-  relatedDocs?: KnowledgeDocument[];
-  relatedEvents?: RelatedEvent[];
+  relatedDocs?: readonly KnowledgeDocument[];
+  relatedEvents?: readonly RelatedEvent[];
+  /** Detected test framework for assertion parsing hints */
+  testFramework?: TestFrameworkHint;
   collectedAt: string;
   collectionDuration?: number;
 }

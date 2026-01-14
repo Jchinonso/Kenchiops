@@ -64,6 +64,7 @@ export type {
   SystemState,
   KnowledgeDocument,
   RelatedEvent,
+  TestFrameworkHint,
   // LLM Analysis Types
   LLMAnalysisResult,
   LLMCodeAnnotation,
@@ -73,6 +74,8 @@ export type {
   EvidenceReference,
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
+  LLMTestFailure,
+  LLMLintError,
   // Failure Classification Types
   FailureCategory,
   PipelinePhase,

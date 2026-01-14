@@ -396,11 +396,71 @@ const matched = errorHandlers.find(({ condition }) => condition(error));
 return matched?.handler() ?? new Error("Unknown error");
 ```
 
+**Avoid array mutation with push:**
+
+- **Never use `array.push()`** - mutates the original array
+- **Use spread operator** `[...existing, newItem]` to add items
+- **Use `concat()`** for combining arrays
+- **Return new arrays** from `map()`, `filter()`, `reduce()`
+- **Build arrays declaratively** using functional patterns
+
+```typescript
+// ❌ Mutable pattern with push
+const results: string[] = [];
+for (const item of items) {
+  if (item.valid) {
+    results.push(item.name);
+  }
+}
+
+// ✅ Immutable functional pattern
+const results = items.filter((item) => item.valid).map((item) => item.name);
+
+// ❌ Building array with push in reduce
+const grouped = items.reduce((accumulator, item) => {
+  if (!accumulator[item.type]) {
+    accumulator[item.type] = [];
+  }
+  accumulator[item.type].push(item); // Mutation!
+  return accumulator;
+}, {});
+
+// ✅ Immutable reduce pattern
+const grouped = items.reduce(
+  (accumulator, item) => ({
+    ...accumulator,
+    [item.type]: [...(accumulator[item.type] ?? []), item],
+  }),
+  {} as Record<string, Item[]>
+);
+
+// ❌ Conditional push
+const sections: string[] = [];
+if (hasHeader) sections.push(header);
+if (hasBody) sections.push(body);
+if (hasFooter) sections.push(footer);
+
+// ✅ Filter out undefined/null
+const sections = [
+  hasHeader ? header : null,
+  hasBody ? body : null,
+  hasFooter ? footer : null,
+].filter((section): section is string => section !== null);
+
+// ✅ Or use spread with conditional
+const sections = [
+  ...(hasHeader ? [header] : []),
+  ...(hasBody ? [body] : []),
+  ...(hasFooter ? [footer] : []),
+];
+```
+
 **Target metrics:**
 
 - **For loops**: 0 (use functional array methods)
 - **If statements**: Minimize (use lookup tables, handler patterns, early returns)
 - **While loops**: 0 (use recursion or functional patterns)
+- **Array.push()**: 0 (use spread, concat, or functional methods)
 
 ---
 

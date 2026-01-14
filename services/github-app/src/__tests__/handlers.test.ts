@@ -42,11 +42,6 @@ jest.mock("../services/githubService.js", () => ({
   postPRComment: jest.fn(() => Promise.resolve()),
 }));
 
-// Mock the comment formatter
-jest.mock("../formatters/commentFormatter.js", () => ({
-  formatGitHubComment: jest.fn(() => "## ❌ KenchiOps — CI Failure Analysis\n\nTest comment"),
-}));
-
 describe("GitHub App Handlers", () => {
   describe("Pull Request Handler", () => {
     const mockPRWebhook: PullRequestWebhook = {

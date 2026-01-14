@@ -11,7 +11,7 @@ import { createLogger } from "../core/logger.js";
 import { getErrorMessage, NotFoundError } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
 import { cacheGet, cacheSet } from "../cache/cacheClient.js";
-import { getEmbeddingClient } from "../openaiClient/embedding.js";
+import { getEmbeddingClient } from "../llm/providers/openai/embedding.js";
 import type { EmbeddingTierName } from "../constants/index.js";
 import {
   recordCost,
@@ -269,24 +269,26 @@ export const getQueryEmbedding = async (
   try {
     const result = await embeddingClient.generateEmbedding(queryText);
     const latencyMs = Date.now() - startTime;
+    // Cast tier since OpenAI returns EmbeddingTierName
+    const tier = result.tier as EmbeddingTierName;
 
     // Record metrics
     recordEmbeddingOperation(result.tokenCount, latencyMs, true);
 
     // Cache in both places for efficiency
-    const cacheData = { embedding: result.embedding, tier: result.tier };
+    const cacheData = { embedding: result.embedding, tier };
     await cacheSet(cacheKey, cacheData, {
       ttlSeconds: SEARCH_CONSTANTS.EMBEDDING_CACHE_TTL_SECONDS,
     });
 
     // Also cache in cost control cache (in-memory, faster)
     if (tenantId) {
-      cacheEmbedding(queryText, result.embedding, result.tier, tenantId);
+      cacheEmbedding(queryText, result.embedding, tier, tenantId);
 
       // Record query cost for the tenant (fire-and-forget)
       void (async () => {
         try {
-          await recordQueryCost(tenantId, result.tier, result.tokenCount);
+          await recordQueryCost(tenantId, tier, result.tokenCount);
         } catch (costError) {
           logger.warn("Failed to record query cost", { error: getErrorMessage(costError) });
         }
@@ -295,7 +297,7 @@ export const getQueryEmbedding = async (
 
     logger.debug("Generated and cached query embedding", {
       cacheKey,
-      tier: result.tier,
+      tier,
       dimension: result.dimension,
       tokens: result.tokenCount,
       latencyMs,
@@ -304,7 +306,7 @@ export const getQueryEmbedding = async (
     return {
       embedding: result.embedding,
       cacheHit: false,
-      tier: result.tier,
+      tier,
       dimension: result.dimension,
     };
   } catch (error) {

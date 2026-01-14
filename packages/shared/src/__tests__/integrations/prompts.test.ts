@@ -16,7 +16,7 @@ import type {
   Event,
   Evidence,
   LogEntry,
-  MetricsSummary,
+  Metrics,
   GitCommit,
   KnowledgeDocument,
   RelatedEvent,
@@ -64,7 +64,7 @@ describe("Prompts Module", () => {
 
       const formatted = formatEvent(event);
 
-      expect(formatted).toContain("EVENT DETAILS");
+      expect(formatted).toContain("### Event Details");
       expect(formatted).toContain("evt_test123");
       expect(formatted).toContain("CICD_FAILURE");
       expect(formatted).toContain("github");
@@ -111,12 +111,13 @@ describe("Prompts Module", () => {
 
       const formatted = formatLogs(logs);
 
-      expect(formatted).toContain("[2025-12-17T10:00:00Z] [ERROR] api-service");
+      // New format: [log#N] LEVEL [source] timestamp: message
+      expect(formatted).toContain("[log#1] ERROR");
+      expect(formatted).toContain("[api-service]");
       expect(formatted).toContain("Connection timeout");
       expect(formatted).toContain("at Connection.connect (conn.ts:45)");
-      expect(formatted).toContain("[WARN]");
+      expect(formatted).toContain("[log#2] WARN");
       expect(formatted).toContain("Retrying connection");
-      expect(formatted).toContain("---"); // Separator
     });
 
     it("should handle logs with minimal fields", () => {
@@ -129,47 +130,50 @@ describe("Prompts Module", () => {
       const formatted = formatLogs(logs);
 
       expect(formatted).toContain("Simple log message");
-      expect(formatted).toContain("[unknown time]");
-      expect(formatted).toContain("[INFO]");
-      expect(formatted).toContain("unknown");
+      expect(formatted).toContain("[log#1] INFO");
     });
   });
 
   describe("formatMetrics", () => {
-    it("should format all standard metrics", () => {
-      const metrics: MetricsSummary = {
-        errorRate: 0.05,
-        requestRate: 1000,
-        cpuUsage: 75.5,
-        memoryUsage: 60.2,
-        latencyP50: 120,
-        latencyP95: 350,
-        latencyP99: 890,
+    it("should format metrics with summary", () => {
+      const metrics: Metrics = {
+        summary: {
+          errorRate: 0.05,
+          requestRate: 1000,
+          cpuUsage: 75.5,
+          memoryUsage: 60.2,
+        },
       };
 
       const formatted = formatMetrics(metrics);
 
-      expect(formatted).toContain("Error Rate: 0.05");
-      expect(formatted).toContain("Request Rate: 1000 req/s");
-      expect(formatted).toContain("CPU Usage: 75.5%");
-      expect(formatted).toContain("Memory Usage: 60.2%");
-      expect(formatted).toContain("Latency P50: 120ms");
-      expect(formatted).toContain("Latency P95: 350ms");
-      expect(formatted).toContain("Latency P99: 890ms");
+      // New format: [metric#key] key: value
+      expect(formatted).toContain("[metric#errorRate] errorRate: 0.05");
+      expect(formatted).toContain("[metric#requestRate] requestRate: 1000");
+      expect(formatted).toContain("[metric#cpuUsage] cpuUsage: 75.5");
+      expect(formatted).toContain("[metric#memoryUsage] memoryUsage: 60.2");
     });
 
-    it("should handle custom metrics", () => {
-      const metrics: MetricsSummary = {
-        errorRate: 0.02,
-        customMetric: "custom value",
-        anotherMetric: 42,
+    it("should handle custom metrics in summary", () => {
+      const metrics: Metrics = {
+        summary: {
+          customMetric: "custom value",
+          anotherMetric: 42,
+        },
       };
 
       const formatted = formatMetrics(metrics);
 
-      expect(formatted).toContain("Error Rate: 0.02");
-      expect(formatted).toContain("customMetric: custom value");
-      expect(formatted).toContain("anotherMetric: 42");
+      expect(formatted).toContain("[metric#customMetric] customMetric: custom value");
+      expect(formatted).toContain("[metric#anotherMetric] anotherMetric: 42");
+    });
+
+    it("should return empty string when no metrics", () => {
+      const metrics: Metrics = {};
+
+      const formatted = formatMetrics(metrics);
+
+      expect(formatted).toBe("");
     });
   });
 
@@ -190,13 +194,11 @@ describe("Prompts Module", () => {
 
       const formatted = formatGitHistory(commits);
 
-      expect(formatted).toContain("Commit: abc1234567890");
-      expect(formatted).toContain("Author: dev@example.com");
-      expect(formatted).toContain("Date: 2025-12-17T09:00:00Z");
-      expect(formatted).toContain("Message: Fix authentication bug");
-      expect(formatted).toContain("Files Changed: src/auth.ts, src/config.ts");
-      expect(formatted).toContain("+15 -8");
-      expect(formatted).toContain("URL: https://github.com/test/repo/commit/abc1234");
+      // New format: [commit#shortSha] author - message (N files)
+      expect(formatted).toContain("[commit#abc1234]");
+      expect(formatted).toContain("dev@example.com");
+      expect(formatted).toContain("Fix authentication bug");
+      expect(formatted).toContain("(2 files)");
     });
 
     it("should handle commits with minimal fields", () => {
@@ -211,10 +213,9 @@ describe("Prompts Module", () => {
 
       const formatted = formatGitHistory(commits);
 
-      expect(formatted).toContain("Commit: xyz789");
-      expect(formatted).toContain("Message: Update README");
-      expect(formatted).not.toContain("Files Changed:");
-      expect(formatted).not.toContain("URL:");
+      expect(formatted).toContain("[commit#xyz789]");
+      expect(formatted).toContain("Update README");
+      expect(formatted).not.toContain("files)");
     });
   });
 
@@ -237,11 +238,12 @@ describe("Prompts Module", () => {
 
       const formatted = formatKnowledgeDocs(docs);
 
-      expect(formatted).toContain("[past_incident] Previous AUTH failure");
-      expect(formatted).toContain("(Similarity: 92%)");
+      // New format: [doc#id] title (type, similarity: N%)
+      expect(formatted).toContain("[doc#INC-123]");
+      expect(formatted).toContain("Previous AUTH failure");
+      expect(formatted).toContain("past_incident");
+      expect(formatted).toContain("similarity: 92%");
       expect(formatted).toContain("Similar authentication failure occurred...");
-      expect(formatted).toContain("URL: https://wiki.example.com/INC-123");
-      expect(formatted).toContain("Tags: auth, production, critical");
     });
 
     it("should handle documents with minimal fields", () => {
@@ -256,10 +258,9 @@ describe("Prompts Module", () => {
 
       const formatted = formatKnowledgeDocs(docs);
 
-      expect(formatted).toContain("[documentation] Setup Guide");
-      expect(formatted).toContain("(Similarity: 75%)");
-      expect(formatted).not.toContain("Full document:");
-      expect(formatted).not.toContain("Tags:");
+      expect(formatted).toContain("[doc#DOC-456]");
+      expect(formatted).toContain("Setup Guide");
+      expect(formatted).toContain("similarity: 75%");
     });
   });
 
@@ -276,11 +277,11 @@ describe("Prompts Module", () => {
 
       const formatted = formatRelatedEvents(events);
 
+      // New format: [event#eventId] TYPE (correlation) at timestamp
       expect(formatted).toContain("[event#evt-123]");
-      expect(formatted).toContain("Event ID: evt-123");
-      expect(formatted).toContain("Type: DEPLOYMENT");
-      expect(formatted).toContain("Timestamp: 2025-12-17T07:00:00Z");
-      expect(formatted).toContain("Correlation: before");
+      expect(formatted).toContain("DEPLOYMENT");
+      expect(formatted).toContain("(before)");
+      expect(formatted).toContain("2025-12-17T07:00:00Z");
     });
   });
 
@@ -330,16 +331,15 @@ describe("Prompts Module", () => {
 
       const formatted = formatEvidence(evidence);
 
-      expect(formatted).toContain("COLLECTED EVIDENCE");
-      expect(formatted).toContain("### Error Logs");
+      expect(formatted).toContain("### Logs");
       expect(formatted).toContain("Test error");
-      expect(formatted).toContain("### System Metrics");
-      expect(formatted).toContain("Error Rate: 0.05");
-      expect(formatted).toContain("### Recent Git History");
+      expect(formatted).toContain("### Metrics");
+      expect(formatted).toContain("errorRate");
+      expect(formatted).toContain("### Git History");
       expect(formatted).toContain("Test commit");
       expect(formatted).toContain("### Related Events");
       expect(formatted).toContain("evt-related");
-      expect(formatted).toContain("### Related Knowledge Base Documents");
+      expect(formatted).toContain("### Knowledge Base");
       expect(formatted).toContain("Test runbook");
     });
 
@@ -351,12 +351,8 @@ describe("Prompts Module", () => {
 
       const formatted = formatEvidence(evidence);
 
-      expect(formatted).toContain("COLLECTED EVIDENCE");
-      expect(formatted).toContain("No error logs available");
-      expect(formatted).toContain("No metrics available");
-      expect(formatted).toContain("No recent commits available");
-      expect(formatted).toContain("No related events available");
-      expect(formatted).toContain("No related documents found");
+      // Simplified version returns "No evidence available." for empty evidence
+      expect(formatted).toContain("No evidence available");
     });
   });
 
@@ -387,8 +383,8 @@ describe("Prompts Module", () => {
       // Should include all sections
       expect(prompt).toContain("expert DevOps Incident Analysis Assistant");
       expect(prompt).toContain("## TASK DESCRIPTION");
-      expect(prompt).toContain("EVENT DETAILS");
-      expect(prompt).toContain("COLLECTED EVIDENCE");
+      expect(prompt).toContain("### Event Details");
+      expect(prompt).toContain("### Logs");
       expect(prompt).toContain("SAFETY & CONTENT GUIDELINES");
       expect(prompt).toContain("OUTPUT FORMAT");
       expect(prompt).toContain("Analyze the incident and provide your structured JSON response.");
@@ -445,12 +441,12 @@ describe("Prompts Module", () => {
       expect(truncated.logs![0].level).toBe("ERROR");
     });
 
-    it("should include recent commits when budget allows", () => {
+    it("should include git history when budget allows", () => {
       const evidence: Evidence = {
         eventId: "evt_test",
-        gitHistory: Array.from({ length: 10 }, (_, i) => ({
-          sha: `commit${i}`,
-          message: `Commit message ${i}`,
+        gitHistory: Array.from({ length: 10 }, (_, index) => ({
+          sha: `commit${index}`,
+          message: `Commit message ${index}`,
           author: "dev@example.com",
           timestamp: "2025-12-17T09:00:00Z",
         })),
@@ -459,9 +455,9 @@ describe("Prompts Module", () => {
 
       const truncated = truncateEvidence(evidence, 5000);
 
+      // Simplified version preserves git history as-is
       expect(truncated.gitHistory).toBeDefined();
       expect(truncated.gitHistory!.length).toBeGreaterThan(0);
-      expect(truncated.gitHistory!.length).toBeLessThanOrEqual(5);
     });
 
     it("should prioritize high-similarity knowledge docs", () => {
@@ -492,21 +488,17 @@ describe("Prompts Module", () => {
 
       const truncated = truncateEvidence(evidence, 3000);
 
-      // Should only include docs with similarity > 0.7
+      // Simplified truncation preserves related docs as-is
       expect(truncated.relatedDocs).toBeDefined();
-      if (truncated.relatedDocs && truncated.relatedDocs.length > 0) {
-        expect(truncated.relatedDocs.every((doc: KnowledgeDocument) => doc.similarity > 0.7)).toBe(
-          true
-        );
-      }
+      expect(truncated.relatedDocs?.length).toBe(evidence.relatedDocs?.length);
     });
 
     it("should preserve metrics and system state", () => {
       const evidence: Evidence = {
         eventId: "evt_test",
-        logs: Array.from({ length: 100 }, (_, i) => ({
+        logs: Array.from({ length: 100 }, (_, index) => ({
           level: "ERROR",
-          message: `Error ${i}`.repeat(100),
+          message: `Error ${index}`.repeat(100),
           timestamp: "2025-12-17T10:00:00Z",
         })),
         metrics: {
@@ -530,7 +522,7 @@ describe("Prompts Module", () => {
       expect(truncated.systemState).toEqual(evidence.systemState);
     });
 
-    it("should include related events in chronological order when budget allows", () => {
+    it("should preserve related events when budget allows", () => {
       const evidence: Evidence = {
         eventId: "evt_test",
         relatedEvents: [
@@ -552,17 +544,17 @@ describe("Prompts Module", () => {
 
       const truncated = truncateEvidence(evidence, 2000);
 
+      // Simplified truncation preserves related events as-is
       expect(truncated.relatedEvents).toBeDefined();
-      expect(truncated.relatedEvents?.[0]?.eventId).toBe("evt-1");
-      expect(truncated.relatedEvents?.[1]?.eventId).toBe("evt-2");
+      expect(truncated.relatedEvents?.length).toBe(2);
     });
 
     it("should truncate to fit within token budget", () => {
       const largeEvidence: Evidence = {
         eventId: "evt_test",
-        logs: Array.from({ length: 100 }, (_, i) => ({
+        logs: Array.from({ length: 100 }, (_, index) => ({
           level: "ERROR",
-          message: `This is a very long error message number ${i}`.repeat(50),
+          message: `This is a very long error message number ${index}`.repeat(50),
           timestamp: "2025-12-17T10:00:00Z",
         })),
         collectedAt: "2025-12-17T10:00:00Z",

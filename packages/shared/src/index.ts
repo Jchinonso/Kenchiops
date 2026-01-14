@@ -60,6 +60,7 @@ export type {
   SystemState,
   KnowledgeDocument,
   RelatedEvent,
+  TestFrameworkHint,
   // LLM Analysis Types
   LLMAnalysisResult,
   LLMCodeAnnotation,
@@ -69,6 +70,8 @@ export type {
   EvidenceReference,
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
+  LLMTestFailure,
+  LLMLintError,
   // Failure Classification Types
   FailureCategory,
   PipelinePhase,
@@ -280,56 +283,19 @@ export {
   takeMatching,
 } from "./formatting/index.js";
 export {
-  collectCIErrors,
   formatDependencyChange,
   formatDependencyChanges,
-  normalizeTestFailure,
   normalizeTestFilePath,
-  sanitizeTestFailureMessage,
+  extractValidFileLocation,
   canonicalizeEvidencePaths,
   extractServiceFromPath,
-  // Service name formatting
   formatServiceNameKebab,
   formatServiceNameTitle,
-  // Path stripping
   stripAbsolutePaths,
   groupByServicePath,
   formatGroupedItems,
-  // Test file detection (language-agnostic)
-  isTestFile,
-  // Cause extraction (language-agnostic)
-  extractMeaningfulCause,
-  // Failure classification (Phase 8)
-  classifyTestFailure,
-  partitionByFailureType,
-  // Suite counting (Phase 2)
-  countUniqueSuites,
-  countUniqueFiles,
-  // Evidence ID helpers (Phase 5)
-  generateTestEvidenceId,
-  generateAnnoEvidenceId,
-  generateCheckEvidenceId,
-  generateLogEvidenceId,
-  generateDiffEvidenceId,
-  formatWithEvidenceId,
-  formatEvidenceLocation,
-  // Failure clustering (Phase 1)
-  clusterFailuresByService,
-  selectBestClusterCause,
-  scoreClusterSignal,
-  isLowSignalCause,
-  isEvidenceBackedCluster,
-  summarizeRootCauses,
-  type CIAnnotation,
-  type CITestFailure,
-  type CollectErrorsOptions,
   type DependencyChange,
   type DependencyChangeType,
-  type FailureClassificationType,
-  type PartitionedFailures,
-  type FailureCluster,
-  type RootCauseSummary,
-  type RootCauseSummaryEntry,
 } from "./formatting/index.js";
 export {
   resolveIdentifiedCause,
@@ -342,37 +308,34 @@ export {
   type ResolvedAction,
   type ResolvedDependencyChange,
 } from "./formatting/index.js";
+// Action review formatting
 export {
-  detectFlakyTests,
-  isTestPotentiallyFlaky,
-  formatFlakyTestWarning,
-  type FlakyTestInfo,
-  type FlakyTestResult,
-  type TestFailureInput,
+  buildReviewActionText,
+  type ReviewActionOptions,
+  type ReviewActionText,
 } from "./formatting/index.js";
+// Simplified pipeline: Log preprocessing
 export {
-  selectMessageVariant,
-  truncateToLineLimit,
-  formatOverflowMessage,
-  getMaxRootCauses,
-  getMaxFilesPerService,
-  getMaxLines,
-  type VariantSelectionInput,
-  type VariantSelectionResult,
-  type TruncatedLines,
+  stripAnsiCodes,
+  stripCITimestamps,
+  truncateWithErrorContext,
+  preprocessLogs,
+  preprocessLogsWithMetadata,
+  detectTestFramework,
+  type PreprocessResult,
+  type TestFrameworkInfo,
 } from "./formatting/index.js";
+// Simplified pipeline: Output formatting
 export {
-  extractLinkedIssues,
-  correlatePRChangesWithFailures,
-  buildPRContextSection,
-  correlatePRContext,
-  type CorrelatedFailure,
-  type PRCorrelationResult,
+  formatGitHubComment,
+  formatSlackMessage,
+  type OutputContext,
+  type GitHubCommentOutput,
+  type SlackMessageOutput,
 } from "./formatting/index.js";
 
 // Integrations
 export { fetchInstallationRepositories } from "./integrations/index.js";
-export { VectorStore, InMemoryVectorStore } from "./integrations/index.js";
 export {
   buildSystemPrompt,
   buildAnalysisPrompt,
@@ -398,17 +361,19 @@ export {
   type FocusArea,
   type VerbosityLevel,
 } from "./integrations/index.js";
+export { VectorStore, InMemoryVectorStore } from "./integrations/index.js";
 
-// OpenAI client
-export { OpenAIClient } from "./openaiClient/index.js";
-export {
-  splitEvidenceSections,
-  type EvidenceSectionBlock,
-  isGenericErrorLine,
-  extractAssertionSnippet,
-  ASSERTION_DETAIL_PATTERNS,
-  MAX_ASSERTION_SNIPPET_LENGTH,
-} from "./openaiClient/index.js";
+// LLM module (provider-agnostic)
+export type {
+  LLMAnalysisProvider,
+  LLMProviderConfig,
+  AnalysisProviderConfig,
+  EmbeddingProviderConfig,
+  LLMProviderName,
+} from "./llm/index.js";
+
+// OpenAI client (via llm module)
+export { OpenAIClient } from "./llm/index.js";
 export {
   EmbeddingClient,
   getEmbeddingClient,
@@ -417,7 +382,7 @@ export {
   type EmbeddingResult,
   type BatchEmbeddingResult,
   type EmbeddingProvider,
-} from "./openaiClient/index.js";
+} from "./llm/index.js";
 
 // Safety and confidence scoring
 export {
@@ -582,6 +547,9 @@ export {
   type TestFailureInfo,
   type RelatedKnowledgeDoc,
   type SuggestedFix,
+  type PendingCheckRun,
+  type SerializedPendingCheckRun,
+  type PendingAggregation,
   type AnalyzedFailure,
   type SerializedFailure,
   type PRContext,
@@ -594,6 +562,7 @@ export {
   type AggregationReadyCallback,
   type ConsolidatedAnalysisPayload,
   type FailureContext,
+  type PendingCheckContext,
   // Utilities
   serializeAggregationKey,
   deserializeAggregationKey,
@@ -601,16 +570,22 @@ export {
   AGGREGATION_KEYS,
   // Redis operations
   addFailureToRedis,
+  addPendingCheckToRedis,
   getAggregationFromRedis,
+  getPendingAggregationFromRedis,
   deleteAggregationFromRedis,
   isDebounceExpired,
   isMaxWaitExceeded,
   findReadyAggregations,
   enqueueAggregation,
+  enqueuePendingAggregation,
   // Workers
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   deserializeQueuePayload,
+  // Payload types
+  type PendingAggregationPayload,
+  type PendingAnalysisCallback,
 } from "./aggregation/index.js";
 
 // Health check utilities
