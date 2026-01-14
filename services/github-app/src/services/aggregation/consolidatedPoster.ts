@@ -14,24 +14,55 @@ import {
   enqueueConsolidatedNotification,
   resilientPost,
   getErrorMessage,
+  generateFeedbackUrl,
   KENCHI_BRANDING,
+  SHORT_COMMIT_SHA_LENGTH,
   type AggregatedFailures,
   type ConsolidatedPostResult,
 } from "@kenchi/shared";
 import {
+  postPRComment,
+  createCheckRunWithAnnotations,
+  type CheckAnnotation,
+} from "../githubService.js";
+import {
+  type FeedbackLinks,
   buildConsolidatedPRComment,
   buildConsolidatedSlackPayload,
   buildConsolidatedCheckAnnotations,
   buildConsolidatedCheckSummary,
-} from "../../formatters/consolidatedFormatter.js";
-import { createFeedbackLinks } from "../../formatters/formatterUtils.js";
-import { postPRComment, createCheckRunWithAnnotations } from "../githubService.js";
+} from "../formatters/index.js";
 
 const logger = createLogger("github-app");
 
+// ==================== Feedback Links ====================
+
 /**
- * Post consolidated analysis to a single PR
- * Deletes old KenchiOps comments first to keep PR clean
+ * Create feedback links for the comment.
+ */
+const createFeedbackLinks = async (analysisId: string): Promise<FeedbackLinks | null> => {
+  const webhookSecret = config.GITHUB_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return null;
+  }
+
+  try {
+    const baseUrl = `${config.GITHUB_APP_URL}/api/feedback`;
+    const [correctUrl, incorrectUrl] = await Promise.all([
+      generateFeedbackUrl(baseUrl, analysisId, "correct", webhookSecret),
+      generateFeedbackUrl(baseUrl, analysisId, "incorrect", webhookSecret),
+    ]);
+    return { correctUrl, incorrectUrl };
+  } catch {
+    return null;
+  }
+};
+
+// ==================== GitHub Posting ====================
+
+/**
+ * Post consolidated analysis to a single PR.
+ * Deletes old KenchiOps comments first to keep PR clean.
  */
 const postToPR = async (
   installationId: number,
@@ -41,7 +72,6 @@ const postToPR = async (
   commentBody: string
 ): Promise<boolean> => {
   try {
-    // Delete old comments and post new one (deleteOldComments = true)
     await postPRComment(installationId, owner, repo, prNumber, commentBody, true);
     return true;
   } catch (error) {
@@ -86,7 +116,7 @@ const postPRComments = async (
  */
 const createCheckAnnotations = async (
   aggregation: AggregatedFailures,
-  annotations: ReturnType<typeof buildConsolidatedCheckAnnotations>
+  annotations: CheckAnnotation[]
 ): Promise<{ created: boolean; errors: string[] }> => {
   if (annotations.length === 0) {
     return { created: false, errors: [] };
@@ -123,7 +153,6 @@ const createCheckAnnotations = async (
 
 /**
  * Post consolidated analysis to GitHub (PR comments and check annotations).
- * Uses functional composition - no let declarations.
  */
 const postToGitHub = async (
   aggregation: AggregatedFailures
@@ -163,6 +192,19 @@ const postToGitHub = async (
   };
 };
 
+// ==================== Slack Posting ====================
+
+/**
+ * Check if Redis is available, with error handling.
+ */
+const checkRedisAvailability = async (): Promise<boolean> => {
+  try {
+    return await isRedisHealthy();
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Post consolidated analysis to Slack via message queue.
  * Falls back to direct HTTP if Redis is unavailable.
@@ -173,10 +215,9 @@ const postToSlack = async (
   const slackPayload = buildConsolidatedSlackPayload(aggregation);
 
   // Check if Redis is available for queue-based delivery
-  const redisAvailable = await isRedisHealthy().catch(() => false);
+  const redisAvailable = await checkRedisAvailability();
 
   if (redisAvailable) {
-    // Queue-based delivery (preferred - reliable with retries)
     try {
       const messageId = await enqueueConsolidatedNotification(aggregation, slackPayload);
 
@@ -226,8 +267,10 @@ const postToSlack = async (
   }
 };
 
+// ==================== Main Export ====================
+
 /**
- * Post consolidated analysis to all channels (GitHub + Slack)
+ * Post consolidated analysis to all channels (GitHub + Slack).
  *
  * This is the main callback for the FailureAggregator.
  */
@@ -238,7 +281,7 @@ export const postConsolidatedAnalysis = async (
 
   logger.info("Posting consolidated analysis", {
     repository: aggregation.repository.fullName,
-    commitSha: aggregation.commitSha.substring(0, 7),
+    commitSha: aggregation.commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH),
     failureCount: aggregation.failures.length,
     checkNames: aggregation.failures.map((failure) => failure.checkName),
     prCount: aggregation.pullRequestNumbers.length,

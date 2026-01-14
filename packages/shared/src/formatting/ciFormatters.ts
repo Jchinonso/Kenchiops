@@ -1,8 +1,8 @@
 /**
  * CI Failure Formatting Utilities
  *
- * Barrel export for CI failure formatting functions.
- * Re-exports from focused modules for backwards compatibility.
+ * Simplified formatting functions for CI failure analysis.
+ * Complex test failure extraction and clustering removed - LLM handles this now.
  */
 
 import { DEPENDENCY_EMOJI_MAP } from "../constants/index.js";
@@ -11,6 +11,7 @@ import { DEPENDENCY_EMOJI_MAP } from "../constants/index.js";
 export {
   normalizeTestFilePath,
   normalizeEvidencePath,
+  extractValidFileLocation,
   extractServiceFromPath,
   formatServiceNameKebab,
   formatServiceNameTitle,
@@ -22,55 +23,6 @@ export {
   canonicalizeEvidencePaths,
   stripAbsolutePaths,
 } from "./pathUtils.js";
-
-// ==================== Re-exports from testFailureUtils ====================
-export type { CIAnnotation, CITestFailure, CollectErrorsOptions } from "./testFailureUtils.js";
-export {
-  normalizeTestFailure,
-  collectCIErrors,
-  isTestFile,
-  countUniqueSuites,
-  countUniqueFiles,
-} from "./testFailureUtils.js";
-
-// ==================== Re-exports from causeExtraction ====================
-export {
-  isCauseUseless,
-  scoreCause,
-  isLowSignalCause,
-  extractMeaningfulCause,
-  sanitizeTestFailureMessage,
-} from "./causeExtraction.js";
-
-// ==================== Re-exports from evidenceIds ====================
-export {
-  generateTestEvidenceId,
-  generateAnnoEvidenceId,
-  generateCheckEvidenceId,
-  generateLogEvidenceId,
-  generateDiffEvidenceId,
-  formatWithEvidenceId,
-  formatEvidenceLocation,
-} from "./evidenceIds.js";
-
-// ==================== Re-exports from failureClassification ====================
-export type { FailureClassificationType, PartitionedFailures } from "./failureClassification.js";
-export { classifyTestFailure, partitionByFailureType } from "./failureClassification.js";
-
-// ==================== Re-exports from failureClustering ====================
-export type {
-  FailureCluster,
-  RootCauseSummaryEntry,
-  RootCauseSummary,
-  ClusterableFailure,
-} from "./failureClustering.js";
-export {
-  isEvidenceBackedCluster,
-  selectBestClusterCause,
-  scoreClusterSignal,
-  clusterFailuresByService,
-  summarizeRootCauses,
-} from "./failureClustering.js";
 
 // ==================== Dependency Formatting ====================
 

@@ -24,10 +24,39 @@ import {
   GITHUB_CHECK_CONCLUSIONS,
   type CheckRunWebhook,
 } from "../types/githubTypes.js";
-import { fetchPRsByCommit } from "../services/context/prFetcher.js";
 import { getOctokit } from "../services/githubService.js";
 
 const successLogger = createLogger("github-app-success-handler");
+
+// ==================== Helper Functions ====================
+
+/**
+ * Fetches PR numbers associated with a commit.
+ */
+const fetchPRsByCommit = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  commitSha: string
+): Promise<readonly number[]> => {
+  try {
+    const octokit = await getOctokit(installationId);
+    const response = await octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+      owner,
+      repo,
+      commit_sha: commitSha,
+    });
+    return response.data.map((pr) => pr.number);
+  } catch (error) {
+    successLogger.warn("Failed to fetch PRs by commit", {
+      owner,
+      repo,
+      commitSha: commitSha.substring(0, 7),
+      error: getErrorMessage(error),
+    });
+    return [];
+  }
+};
 
 // ==================== Types ====================
 

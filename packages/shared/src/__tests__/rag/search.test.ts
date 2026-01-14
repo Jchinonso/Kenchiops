@@ -20,7 +20,7 @@ const mockEmbeddingClient = {
   }),
 };
 
-jest.mock("../../openaiClient/embedding.js", () => ({
+jest.mock("../../llm/providers/openai/embedding.js", () => ({
   EmbeddingClient: jest.fn().mockImplementation(() => mockEmbeddingClient),
   getEmbeddingClient: jest.fn().mockReturnValue(mockEmbeddingClient),
 }));
@@ -61,7 +61,7 @@ import {
   clearEmbeddingCache,
 } from "../../rag/search.js";
 import { cacheGet, cacheSet } from "../../cache/cacheClient.js";
-import { EmbeddingClient } from "../../openaiClient/embedding.js";
+import { EmbeddingClient } from "../../llm/providers/openai/embedding.js";
 import { searchSimilarDiffChunks, searchSimilarKnowledgeDocs } from "../../database/index.js";
 import { redactSecrets } from "../../security/index.js";
 

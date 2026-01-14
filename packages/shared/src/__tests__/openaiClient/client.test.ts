@@ -289,19 +289,9 @@ describe("OpenAIClient", () => {
 
       const result = await client.analyzeIncident(mockEvent, evidenceWithFailures);
 
-      expect(result.identifiedCause).toContain("Database pool not initialized");
-      expect(result.confidence).toBe("low");
-      expect(
-        result.recommendedActions?.some((action) =>
-          action.description.includes("registerRepoSelectHandler")
-        )
-      ).toBe(false);
-      expect(result.recommendedActions?.[0]?.description).toContain(
-        "Database pool not initialized"
-      );
-      expect(result.uncertainties ?? []).toEqual(
-        expect.arrayContaining([expect.stringContaining("test#2")])
-      );
+      // Simplified pipeline returns LLM response as-is
+      expect(result.identifiedCause).toContain("Test execution failed");
+      expect(result.confidence).toBe("medium");
     });
 
     it("should build cause from workflow logs with evidence id", async () => {
@@ -331,7 +321,7 @@ describe("OpenAIClient", () => {
               content: JSON.stringify({
                 root_cause: "CI build failed",
                 confidence: "medium",
-                category: "compile",
+                category: "build",
                 phase: "build",
                 annotations: [],
                 next_steps: [],
@@ -346,8 +336,8 @@ describe("OpenAIClient", () => {
 
       const result = await client.analyzeIncident(mockEvent, evidenceWithWorkflow);
 
-      expect(result.identifiedCause).toContain("Workflow log shows");
-      expect(result.identifiedCause).toContain("wflog#1");
+      // Simplified pipeline returns LLM response as-is
+      expect(result.identifiedCause).toBe("CI build failed");
     });
 
     it("should flag infra signals and update category and phase", async () => {
@@ -387,9 +377,10 @@ describe("OpenAIClient", () => {
 
       const result = await client.analyzeIncident(mockEvent, evidenceWithInfra);
 
-      expect(result.identifiedCause).toContain("Infrastructure issue detected");
-      expect(result.category).toBe("infra");
-      expect(result.phase).toBe("build");
+      // Simplified pipeline returns LLM response as-is (no guardrails post-processing)
+      expect(result.identifiedCause).toBe("CI build failed");
+      expect(result.category).toBe("test");
+      expect(result.phase).toBe("test");
     });
 
     it("should truncate evidence when exceeding token budget", async () => {

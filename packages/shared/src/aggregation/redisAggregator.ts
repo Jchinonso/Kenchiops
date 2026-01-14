@@ -25,6 +25,9 @@ import {
   type AggregationKey,
   type AggregationConfig,
   type AnalyzedFailure,
+  type PendingCheckRun,
+  type PendingAggregation,
+  type RepositoryInfo,
 } from "./types.js";
 
 // Import from helpers module
@@ -130,6 +133,186 @@ export const addFailureToRedis = async (
       commitSha: formatShaForDisplay(key.commitSha),
       error: getErrorMessage(error),
     });
+  }
+};
+
+/**
+ * Serialize a pending check for Redis storage
+ */
+const serializePendingCheck = (check: PendingCheckRun): string =>
+  JSON.stringify({
+    checkRunId: check.checkRunId,
+    checkName: check.checkName,
+    conclusion: check.conclusion,
+    timestamp: check.timestamp.toISOString(),
+  });
+
+/**
+ * Deserialize a pending check from Redis storage
+ */
+const deserializePendingCheck = (data: string): PendingCheckRun => {
+  const parsed = JSON.parse(data);
+  return {
+    checkRunId: parsed.checkRunId,
+    checkName: parsed.checkName,
+    conclusion: parsed.conclusion,
+    timestamp: new Date(parsed.timestamp),
+  };
+};
+
+/**
+ * Context for pending check aggregation
+ */
+export interface PendingCheckContext {
+  readonly repositoryInfo: RepositoryInfo;
+  readonly installationId: number;
+  readonly pullRequestNumbers: readonly number[];
+}
+
+/**
+ * Add a pending check to Redis aggregation (without analysis).
+ * Analysis will be performed when all checks are collected.
+ */
+export const addPendingCheckToRedis = async (
+  key: AggregationKey,
+  pendingCheck: PendingCheckRun,
+  context: PendingCheckContext,
+  config: AggregationConfig = DEFAULT_AGGREGATION_CONFIG
+): Promise<void> => {
+  const redis = getRedisClient();
+
+  if (redis.status !== "ready") {
+    logger.warn("Redis not ready for pending check aggregation", { status: redis.status });
+    return;
+  }
+
+  const failuresKey = AGGREGATION_KEYS.failures(key);
+  const metadataKey = AGGREGATION_KEYS.metadata(key);
+  const debounceKey = AGGREGATION_KEYS.debounce(key);
+
+  const now = new Date();
+  const serializedCheck = serializePendingCheck(pendingCheck);
+  const checkRunIdStr = String(pendingCheck.checkRunId);
+
+  try {
+    const existingMeta = await withTimeout(
+      redis.hgetall(metadataKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    );
+    const isNew = Object.keys(existingMeta).length === 0;
+
+    const currentCount = await withTimeout(
+      redis.hlen(failuresKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    );
+    if (currentCount >= config.maxFailuresPerCommit) {
+      logger.warn("Max pending checks reached for aggregation", {
+        commitSha: formatShaForDisplay(key.commitSha),
+        maxFailures: config.maxFailuresPerCommit,
+        currentCount,
+      });
+      return;
+    }
+
+    // Build metadata using context
+    const metadata = buildMetadata(
+      key,
+      {
+        repositoryInfo: context.repositoryInfo,
+        installationId: context.installationId,
+        pullRequestNumbers: context.pullRequestNumbers,
+        prContext: null,
+        workflowContext: null,
+      },
+      isNew ? now : new Date(existingMeta.firstFailureAt || now.toISOString()),
+      now
+    );
+
+    const ttlSeconds = calculateAggregationTTL(config.maxWaitMs);
+    const debounceSeconds = calculateDebounceTTL(config.debounceMs);
+
+    const pipeline = redis.pipeline();
+    pipeline.hset(failuresKey, checkRunIdStr, serializedCheck);
+    pipeline.hset(metadataKey, metadata as unknown as Record<string, string>);
+    pipeline.expire(failuresKey, ttlSeconds);
+    pipeline.expire(metadataKey, ttlSeconds);
+    pipeline.set(debounceKey, AGGREGATION_DEFAULTS.DEBOUNCE_MARKER, "EX", debounceSeconds);
+
+    await withTimeout(pipeline.exec(), REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS);
+
+    logger.info("Pending check added to Redis aggregation", {
+      repository: key.repositoryFullName,
+      commitSha: formatShaForDisplay(key.commitSha),
+      checkName: pendingCheck.checkName,
+      isNewAggregation: isNew,
+      totalPendingChecks: currentCount + 1,
+    });
+  } catch (error) {
+    logger.error("Failed to add pending check to Redis aggregation", {
+      repository: key.repositoryFullName,
+      commitSha: formatShaForDisplay(key.commitSha),
+      error: getErrorMessage(error),
+    });
+  }
+};
+
+/**
+ * Get pending aggregation from Redis (checks without analysis)
+ */
+export const getPendingAggregationFromRedis = async (
+  key: AggregationKey
+): Promise<PendingAggregation | null> => {
+  const redis = getRedisClient();
+
+  if (redis.status !== "ready") {
+    logger.warn("Redis not ready for getPendingAggregation", { status: redis.status });
+    return null;
+  }
+
+  const failuresKey = AGGREGATION_KEYS.failures(key);
+  const metadataKey = AGGREGATION_KEYS.metadata(key);
+
+  try {
+    const metadata = (await withTimeout(
+      redis.hgetall(metadataKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    )) as unknown as Record<string, string>;
+
+    if (!metadata || !metadata.commitSha) {
+      return null;
+    }
+
+    const checksData = await withTimeout(
+      redis.hgetall(failuresKey),
+      REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
+    );
+    const pendingChecks = Object.values(checksData).map(deserializePendingCheck);
+
+    if (pendingChecks.length === 0) {
+      return null;
+    }
+
+    const prNumbers = metadata.pullRequestNumbers ? JSON.parse(metadata.pullRequestNumbers) : [];
+
+    return {
+      commitSha: metadata.commitSha,
+      repository: {
+        fullName: metadata.repositoryFullName || key.repositoryFullName,
+        owner: metadata.repositoryOwner || "",
+        name: metadata.repositoryName || "",
+      },
+      installationId: parseInt(metadata.installationId || "0", 10),
+      pullRequestNumbers: prNumbers,
+      pendingChecks,
+      firstFailureAt: new Date(metadata.firstFailureAt),
+      lastFailureAt: new Date(metadata.lastFailureAt),
+    };
+  } catch (error) {
+    logger.error("Failed to get pending aggregation from Redis", {
+      repository: key.repositoryFullName,
+      error: getErrorMessage(error),
+    });
+    return null;
   }
 };
 
@@ -400,6 +583,77 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
   return messageId;
 };
 
+/**
+ * Payload for pending aggregation jobs (checks without analysis)
+ */
+export interface PendingAggregationPayload {
+  readonly pendingAggregation: {
+    readonly commitSha: string;
+    readonly repository: RepositoryInfo;
+    readonly installationId: number;
+    readonly pullRequestNumbers: readonly number[];
+    readonly pendingChecks: ReadonlyArray<{
+      readonly checkRunId: number;
+      readonly checkName: string;
+      readonly conclusion: string;
+      readonly timestamp: string;
+    }>;
+    readonly firstFailureAt: string;
+    readonly lastFailureAt: string;
+  };
+}
+
+/**
+ * Enqueue a pending aggregation for combined analysis.
+ * Unlike enqueueAggregation, this enqueues pending checks that haven't been analyzed yet.
+ * The analysis will be performed by fetching all logs and calling the LLM once.
+ */
+export const enqueuePendingAggregation = async (key: AggregationKey): Promise<string | null> => {
+  const pendingAgg = await getPendingAggregationFromRedis(key);
+
+  if (!pendingAgg || pendingAgg.pendingChecks.length === 0) {
+    logger.warn("No pending aggregation data to enqueue", {
+      repository: key.repositoryFullName,
+      commitSha: formatShaForDisplay(key.commitSha),
+    });
+    await deleteAggregationFromRedis(key);
+    return null;
+  }
+
+  // Enqueue to CI analysis queue with pending payload
+  const payload: PendingAggregationPayload = {
+    pendingAggregation: {
+      commitSha: pendingAgg.commitSha,
+      repository: pendingAgg.repository,
+      installationId: pendingAgg.installationId,
+      pullRequestNumbers: [...pendingAgg.pullRequestNumbers],
+      pendingChecks: pendingAgg.pendingChecks.map((check) => ({
+        checkRunId: check.checkRunId,
+        checkName: check.checkName,
+        conclusion: check.conclusion,
+        timestamp: check.timestamp.toISOString(),
+      })),
+      firstFailureAt: pendingAgg.firstFailureAt.toISOString(),
+      lastFailureAt: pendingAgg.lastFailureAt.toISOString(),
+    },
+  };
+
+  const messageId = await ciAnalysisQueue.enqueue("pending_analysis", payload);
+
+  // Delete from Redis after enqueueing
+  await deleteAggregationFromRedis(key);
+
+  logger.info("Pending aggregation enqueued for combined analysis", {
+    repository: key.repositoryFullName,
+    commitSha: formatShaForDisplay(key.commitSha),
+    messageId,
+    pendingCheckCount: pendingAgg.pendingChecks.length,
+    checkNames: pendingAgg.pendingChecks.map((check) => check.checkName),
+  });
+
+  return messageId;
+};
+
 // ==================== Re-exports from extracted modules ====================
 
 // Re-export worker and processor from their dedicated modules
@@ -409,4 +663,5 @@ export {
   deserializeQueuePayload,
   type ConsolidatedAnalysisPayload,
   type AggregationReadyCallback,
+  type PendingAnalysisCallback,
 } from "./analysisQueueProcessor.js";

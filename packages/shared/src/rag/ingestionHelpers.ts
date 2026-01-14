@@ -10,7 +10,7 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
-import { getEmbeddingClient, type EmbeddingClient } from "../openaiClient/embedding.js";
+import { getEmbeddingClient, type EmbeddingClient } from "../llm/providers/openai/embedding.js";
 import type { EmbeddingTierName, KnowledgeDocType } from "../constants/index.js";
 import {
   updateDiffChunkEmbedding,
@@ -160,7 +160,7 @@ export const embedPendingDiffChunks = async (
   const contents = chunks.map((chunk) => chunk.content);
 
   // Estimate tokens for tier selection (rough: ~4 chars per token)
-  const estimatedTokens = Math.ceil(contents.reduce((sum, c) => sum + c.length, 0) / 4);
+  const estimatedTokens = Math.ceil(contents.reduce((sum, content) => sum + content.length, 0) / 4);
 
   // Select tier based on budget
   const selectedTier = await selectTierForIngestion(tenantId, estimatedTokens);
@@ -169,8 +169,9 @@ export const embedPendingDiffChunks = async (
   try {
     const batchResult = await tieredClient.generateBatchEmbeddings(contents);
 
-    // Use actual model and tier from result
-    const { model, tier } = batchResult;
+    // Use actual model and tier from result (cast tier since OpenAI returns EmbeddingTierName)
+    const { model } = batchResult;
+    const tier = batchResult.tier as EmbeddingTierName;
 
     // Process each embedding result using forEach with async
     await Promise.all(
@@ -225,7 +226,7 @@ export const embedPendingKnowledgeDocs = async (
   const contents = docs.map((doc) => doc.content);
 
   // Estimate tokens for tier selection (rough: ~4 chars per token)
-  const estimatedTokens = Math.ceil(contents.reduce((sum, c) => sum + c.length, 0) / 4);
+  const estimatedTokens = Math.ceil(contents.reduce((sum, content) => sum + content.length, 0) / 4);
 
   // Select tier based on budget
   const selectedTier = await selectTierForIngestion(tenantId, estimatedTokens);
@@ -234,8 +235,9 @@ export const embedPendingKnowledgeDocs = async (
   try {
     const batchResult = await tieredClient.generateBatchEmbeddings(contents);
 
-    // Use actual model and tier from result
-    const { model, tier } = batchResult;
+    // Use actual model and tier from result (cast tier since OpenAI returns EmbeddingTierName)
+    const { model } = batchResult;
+    const tier = batchResult.tier as EmbeddingTierName;
 
     // Process each embedding in parallel
     await Promise.all(

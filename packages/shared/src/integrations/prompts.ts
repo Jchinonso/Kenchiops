@@ -8,21 +8,248 @@
  * @module integrations/prompts
  */
 
-import type { Event, Evidence } from "../core/types.js";
-import { formatEvent, formatEvidence } from "./promptFormatters.js";
+import type {
+  Event,
+  Evidence,
+  LogEntry,
+  Metrics,
+  GitCommit,
+  RelatedEvent,
+  KnowledgeDocument,
+} from "../core/types.js";
 
-// Re-export formatters for backwards compatibility
-export {
-  formatEvent,
-  formatEvidence,
-  formatLogs,
-  formatMetrics,
-  formatGitHistory,
-  formatRelatedEvents,
-  formatKnowledgeDocs,
-} from "./promptFormatters.js";
+// ==================== Token Estimation ====================
 
-export { estimateTokens, truncateEvidence } from "./promptTokenManager.js";
+/** Approximate characters per token for GPT models */
+const CHARS_PER_TOKEN = 4;
+
+/**
+ * Estimates token count for a string.
+ *
+ * @param text - Text to estimate tokens for
+ * @returns Estimated token count
+ */
+export const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN);
+
+/**
+ * Truncates evidence to fit within a token budget.
+ *
+ * @param evidence - Evidence to truncate
+ * @param maxTokens - Maximum token budget
+ * @returns Truncated evidence
+ */
+export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidence => {
+  const formatted = formatEvidence(evidence);
+  const currentTokens = estimateTokens(formatted);
+
+  if (currentTokens <= maxTokens) {
+    return evidence;
+  }
+
+  // Calculate reduction ratio
+  const ratio = maxTokens / currentTokens;
+
+  // Truncate logs if they exist
+  const truncatedLogs = evidence.logs
+    ? evidence.logs.slice(0, Math.max(1, Math.floor(evidence.logs.length * ratio)))
+    : undefined;
+
+  return {
+    ...evidence,
+    logs: truncatedLogs,
+  };
+};
+
+// ==================== Evidence Formatters ====================
+
+/**
+ * Formats log entries for the prompt.
+ *
+ * @param logs - Log entries to format
+ * @returns Formatted log string
+ */
+export const formatLogs = (logs: readonly LogEntry[]): string => {
+  if (logs.length === 0) {
+    return "";
+  }
+
+  const formattedEntries = logs.map((logEntry, index) => {
+    const id = logEntry.id ?? index + 1;
+    const level = logEntry.level ?? "INFO";
+    const source = logEntry.source ? ` [${logEntry.source}]` : "";
+    const timestamp = logEntry.timestamp ? ` ${logEntry.timestamp}` : "";
+    const stack = logEntry.stackTrace ? `\n${logEntry.stackTrace}` : "";
+
+    return `[log#${id}] ${level}${source}${timestamp}: ${logEntry.message}${stack}`;
+  });
+
+  return `### Logs\n${formattedEntries.join("\n")}`;
+};
+
+/**
+ * Formats metrics for the prompt.
+ *
+ * @param metrics - Metrics to format
+ * @returns Formatted metrics string
+ */
+export const formatMetrics = (metrics: Metrics): string => {
+  const lines: string[] = [];
+
+  if (metrics.timeRange) {
+    lines.push(`Time Range: ${metrics.timeRange.start} to ${metrics.timeRange.end}`);
+  }
+
+  if (metrics.summary) {
+    const summaryEntries = Object.entries(metrics.summary)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => `[metric#${key}] ${key}: ${value}`);
+    lines.push(...summaryEntries);
+  }
+
+  if (metrics.timeSeries && metrics.timeSeries.length > 0) {
+    metrics.timeSeries.forEach((series) => {
+      const values = series.values
+        .slice(-5)
+        .map((dataPoint) => dataPoint.value)
+        .join(", ");
+      lines.push(
+        `[metric#${series.metricName}] ${series.metricName}: ${values}${series.unit ? ` ${series.unit}` : ""}`
+      );
+    });
+  }
+
+  return lines.length > 0 ? `### Metrics\n${lines.join("\n")}` : "";
+};
+
+/**
+ * Formats git history for the prompt.
+ *
+ * @param commits - Git commits to format
+ * @returns Formatted git history string
+ */
+export const formatGitHistory = (commits: readonly GitCommit[]): string => {
+  if (commits.length === 0) {
+    return "";
+  }
+
+  const formattedCommits = commits.map((commit) => {
+    const shortSha = commit.sha.substring(0, 7);
+    const files = commit.filesChanged ? ` (${commit.filesChanged.length} files)` : "";
+    return `[commit#${shortSha}] ${commit.author} - ${commit.message}${files}`;
+  });
+
+  return `### Git History\n${formattedCommits.join("\n")}`;
+};
+
+/**
+ * Formats related events for the prompt.
+ *
+ * @param events - Related events to format
+ * @returns Formatted related events string
+ */
+export const formatRelatedEvents = (events: readonly RelatedEvent[]): string => {
+  if (events.length === 0) {
+    return "";
+  }
+
+  const formattedEvents = events.map(
+    (relatedEvent) =>
+      `[event#${relatedEvent.eventId}] ${relatedEvent.type} (${relatedEvent.correlation}) at ${relatedEvent.timestamp}`
+  );
+
+  return `### Related Events\n${formattedEvents.join("\n")}`;
+};
+
+/**
+ * Formats knowledge documents for the prompt.
+ *
+ * @param docs - Knowledge documents to format
+ * @returns Formatted knowledge docs string
+ */
+export const formatKnowledgeDocs = (docs: readonly KnowledgeDocument[]): string => {
+  if (docs.length === 0) {
+    return "";
+  }
+
+  const formattedDocs = docs.map((doc) => {
+    const excerpt = doc.excerpt ? `\n  ${doc.excerpt}` : "";
+    return `[doc#${doc.id}] ${doc.title} (${doc.type}, similarity: ${(doc.similarity * 100).toFixed(0)}%)${excerpt}`;
+  });
+
+  return `### Knowledge Base\n${formattedDocs.join("\n")}`;
+};
+
+// ==================== Main Formatters ====================
+
+/**
+ * Formats an event for inclusion in the analysis prompt.
+ *
+ * @param event - Event to format
+ * @returns Formatted event string
+ */
+export const formatEvent = (event: Event): string => {
+  const lines = [
+    `### Event Details`,
+    `- **ID**: ${event.id}`,
+    `- **Type**: ${event.type}`,
+    `- **Source**: ${event.source}`,
+    `- **Timestamp**: ${event.timestamp}`,
+  ];
+
+  if (event.severity) {
+    lines.push(`- **Severity**: ${event.severity}`);
+  }
+
+  if (event.title) {
+    lines.push(`- **Title**: ${event.title}`);
+  }
+
+  // Include payload fields
+  const payloadLines = Object.entries(event.payload)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `- **${key}**: ${String(value)}`);
+
+  if (payloadLines.length > 0) {
+    lines.push("", "### Payload", ...payloadLines);
+  }
+
+  return lines.join("\n");
+};
+
+/**
+ * Formats evidence for inclusion in the analysis prompt.
+ *
+ * @param evidence - Evidence to format
+ * @returns Formatted evidence string
+ */
+export const formatEvidence = (evidence: Evidence): string => {
+  const sections: string[] = [];
+
+  if (evidence.logs && evidence.logs.length > 0) {
+    sections.push(formatLogs(evidence.logs));
+  }
+
+  if (evidence.metrics) {
+    const metricsSection = formatMetrics(evidence.metrics);
+    if (metricsSection) {
+      sections.push(metricsSection);
+    }
+  }
+
+  if (evidence.gitHistory && evidence.gitHistory.length > 0) {
+    sections.push(formatGitHistory(evidence.gitHistory));
+  }
+
+  if (evidence.relatedEvents && evidence.relatedEvents.length > 0) {
+    sections.push(formatRelatedEvents(evidence.relatedEvents));
+  }
+
+  if (evidence.relatedDocs && evidence.relatedDocs.length > 0) {
+    sections.push(formatKnowledgeDocs(evidence.relatedDocs));
+  }
+
+  return sections.length > 0 ? sections.join("\n\n") : "No evidence available.";
+};
 
 // ==================== System Prompt (Role & Context) ====================
 
@@ -84,6 +311,50 @@ Prompt injection guard:
 **Safe Recommendations:** Next steps must be read-only or reversible by default. Avoid production-affecting steps (restart, rollback, delete) unless evidence clearly indicates necessity and it's standard practice.
 
 **Missing Evidence:** If logs do not contain a specific error message, set confidence="low", category="unknown", and request missing logs or context in next_steps.`;
+
+// ==================== Critical Test Failure Rules ====================
+
+/**
+ * Builds the critical test failure rules section.
+ * These rules ensure correct expected/actual extraction and prevent
+ * incorrectly blaming implementation when tests may be wrong.
+ */
+const buildCriticalTestFailureRulesSection = (): string =>
+  `## CRITICAL TEST FAILURE RULES
+
+These rules are NON-NEGOTIABLE when analyzing test failures:
+
+### A) Expected vs Actual Extraction
+When test output shows explicit labels:
+- "Expected: X" / "Want: X" / "should be: X" → EXPECTED value
+- "Received: Y" / "Actual: Y" / "Got: Y" / "but was: Y" → ACTUAL value
+
+When output shows bare assertions (assert A == B, assertEqual(A, B)):
+- LEFT operand = ACTUAL (the computed/returned value)
+- RIGHT operand = EXPECTED (the test's expected value)
+- Example: "assert 2 == 3" → actual=2, expected=3
+- Example: "AssertionError: 0 != 5" → actual=0, expected=5
+
+### B) Intentional / Invalid Expectation Detection
+You may classify a test as "intentionally failing" or "wrong expected value" ONLY if there is EXPLICIT evidence such as:
+- Suite/test names containing: "Intentionally Failing", "Expected to fail", "Deliberate failure"
+- Comments or messages like: "BUG: Wrong expected value", "intentional", "should fail"
+- A clear marker in the test output indicating intent (e.g., section headings)
+
+If and only if explicit intent evidence exists:
+- Root cause = incorrect/intentional test expectations (not implementation)
+- confidence = high (since intent is explicit)
+
+If explicit intent evidence does NOT exist:
+- Treat failures as normal assertion mismatches
+- Do NOT claim "intentional" just because values seem incorrect
+- Use neutral language: "assertion mismatch" rather than "implementation bug"
+
+### C) Do NOT Blame Implementation by Default
+- Never claim "implementation bug" unless evidence proves it (traceback to source, failing logic shown, or consistent incorrect outputs)
+- Prefer neutral language when ambiguous: "Assertion mismatch between expected and actual values"
+- Both implementation AND test expectations could be wrong—do not assume which
+- Focus on describing WHAT failed, not WHO is at fault`;
 
 // ==================== Analysis Guidelines (Heuristics) ====================
 
@@ -148,6 +419,18 @@ Examples (for illustration—do not assume incident language from these):
 ### Filter Noise
 Ignore verbose debug info, unrelated warnings, and success messages unless they provide context.
 
+### Handling Structured Log Output
+If the logs contain JSON-formatted output from structured loggers like:
+  {"level":3,"message":"Redis error","metadata":{...}}
+
+Extract the human-readable message field and explain it in plain English.
+Do NOT copy raw JSON into root_cause or annotations.
+Summarize what the JSON tells you:
+- Good: "Redis connection failed due to DNS resolution error (ENOTFOUND)"
+- Bad: {"level":3,"message":"Redis error","timestamp":"..."}
+
+If the root cause comes from JSON logs, the annotation snippet should be the extracted message, not the full JSON object.
+
 ### Be Precise
 - If uncertain: "The likely cause is X based on evidence Y"
 - Never fabricate details not in logs
@@ -184,7 +467,7 @@ SCHEMA:
 {
   "root_cause": "Brief summary of the earliest causal error",
   "confidence": "low|medium|high",
-  "category": "dependency|compile|test|runtime|config|infra|unknown",
+  "category": "dependency|build|test|runtime|config|infra|unknown",
   "phase": "dependency|build|test|deploy|runtime|unknown",
   "annotations": [
     {
@@ -193,7 +476,29 @@ SCHEMA:
       "explanation": "Why this matters"
     }
   ],
+  "test_failures": [
+    {
+      "test_name": "full::test::name or TestClass.testMethod",
+      "file": "path/to/file.ext",
+      "line": 123,
+      "expected": "expected value from assertion",
+      "actual": "actual/received value from assertion",
+      "error_message": "Brief error description"
+    }
+  ],
+  "lint_errors": [
+    {
+      "code": "unused_variable or error_code",
+      "message": "Specific error message from compiler/linter",
+      "file": "path/to/file.ext",
+      "line": 123,
+      "column": 5,
+      "symbol": "variable_name or function_name",
+      "suggestion": "Suggested fix if available"
+    }
+  ],
   "next_steps": ["Actionable step 1", "Actionable step 2"],
+  "test_command": "command to run failing tests locally (e.g., cargo test, npm test, pytest)",
   "secondary_findings": [
     { "issue": "Description of independent issue", "evidence_id": "log#N" }
   ]
@@ -204,9 +509,21 @@ SCHEMA:
 **root_cause** (required): One-line summary of earliest causal error.
 
 **confidence** (required): Based on evidence clarity:
-- **high**: File + line + clear error + single plausible cause
-- **medium**: Clear error but multiple plausible causes OR incomplete trace
-- **low**: Generic failure, no location, missing context, timeouts
+- **high**: ALL of the following must be true:
+  - Explicit expected vs actual values shown AND
+  - Root cause is directly supported by cited snippets AND
+  - File + line + clear error message available AND
+  - Single plausible cause (no ambiguity)
+  - If "intentional/wrong expected" markers exist, confidence MUST be high
+- **medium**: Clear failures visible but:
+  - Unclear whether tests or implementation changed OR
+  - Multiple plausible causes OR
+  - Incomplete stack trace
+- **low**: Any of the following:
+  - Generic "tests failed" without specifics
+  - Missing detail or no assertion lines
+  - Timeouts or infrastructure issues without clear cause
+  - No file/line location available
 Confidence must match annotation strength:
 - For **high** confidence, include at least one annotation snippet that contains an explicit error marker (ERROR/Exception/panic/Traceback) and a location (file:line) or other clear causal indicator. Otherwise, cap confidence at "medium".
 Confidence alignment:
@@ -216,7 +533,7 @@ Confidence alignment:
 
 **category** (required): Type of failure:
 - dependency: Package/module resolution failures
-- compile: Syntax, type, or build errors
+- build: Compilation, transpilation, or build system errors
 - test: Assertion or test execution failures
 - runtime: Exceptions during execution
 - config: Environment variables, settings, schema issues
@@ -253,6 +570,110 @@ ID NORMALIZATION:
 
 **next_steps** (required, 1-5 items): Actionable diagnostic or fix steps. Must be safe and reversible. next_steps must contain at least 1 item even when confidence="low".
 
+**test_command** (optional, include when category="test"): Shell command to run the failing tests locally. Base this on the detected test framework. Examples:
+- For Rust (cargo-test): "cargo test"
+- For JavaScript (jest): "npm test" or "npm test -- --testPathPattern=..."
+- For Python (pytest): "pytest path/to/test.py"
+- For Go: "go test -v ./..."
+- For Java (JUnit/Maven): "mvn test"
+Do NOT include if the framework is unknown or if there are no test failures.
+
+**test_failures** (required when category="test", empty otherwise): Structured test failure details. For each failing test, extract:
+- **test_name** (required): Full test name including module/class path
+- **file** (optional): File path where test is defined
+- **line** (optional): Line number where failure occurred
+- **expected** (required for assertion failures): What the test expected/wanted
+- **actual** (required for assertion failures): What the code actually produced
+- **error_message** (required): Brief error description
+
+UNIVERSAL ASSERTION PARSING RULES:
+The key challenge is identifying which value is "expected" vs "actual". Use these rules in order:
+
+1. **EXPLICIT LABELS** (highest priority) - If the output explicitly labels values:
+   - "Expected:", "expected:", "Want:", "want:", "should be:", "must be:" → EXPECTED
+   - "Actual:", "actual:", "Received:", "received:", "Got:", "got:", "but was:", "but got:" → ACTUAL
+   - Example: "Expected: 5, Received: 3" → expected=5, actual=3
+   - Example: "want: true, got: false" → expected=true, actual=false
+
+2. **LABELED PAIRS** - Framework-specific labeled pairs:
+   - "left:" / "right:" → left=ACTUAL, right=EXPECTED (Rust convention)
+   - "first:" / "second:" → first=ACTUAL, second=EXPECTED
+   - Example: "left: 2, right: 3" → actual=2, expected=3
+
+3. **BARE ASSERTIONS** (assert X == Y, assertEqual(X, Y), etc.) - When NO explicit labels exist:
+   - In equality assertions: LEFT operand = ACTUAL, RIGHT operand = EXPECTED
+   - This follows the common convention: assert actual_result == expected_value
+   - Example: "assert 2 == 3" → actual=2, expected=3
+   - Example: "assertEqual(12, 11)" → actual=12, expected=11
+   - Example: "AssertionError: 0 != 5" → actual=0, expected=5
+
+4. **SEMANTIC ANALYSIS** - When patterns are unclear, use context:
+   - Computed/returned values are typically ACTUAL
+   - Literal/hardcoded values in tests are typically EXPECTED
+   - Variable names like "result", "output", "response" suggest ACTUAL
+   - Variable names like "expected", "want", "target" suggest EXPECTED
+
+5. **UNKNOWN FRAMEWORK** - For any unrecognized test framework:
+   - Look for comparison operators: ==, !=, ===, !==, eq, ne, equals
+   - Look for assertion function patterns: assert*, expect*, should*, must*
+   - Apply rule #3 (left=actual, right=expected) as default
+   - If truly ambiguous, extract both values and note in error_message
+
+EXAMPLES across languages/frameworks:
+- "assert 2 == 3" → actual="2", expected="3"
+- "ASSERT_EQ(result, 10)" → actual="result", expected="10"
+- "expect(value).toBe(5)" → actual="value", expected="5"
+- "AssertionError: 'foo' != 'bar'" → actual="foo", expected="bar"
+- "Expected true but was false" → actual="false", expected="true"
+- "assertion failed: x == y (left=1, right=2)" → actual="1", expected="2"
+
+CRITICAL RULES:
+- Extract ALL failing tests, not just the first one
+- If test failure is not an assertion (exception, timeout, crash), set expected/actual to null
+- DO NOT hallucinate values - only extract what is explicitly shown
+- When in doubt, include the raw comparison in error_message for transparency
+
+**lint_errors** (required when category="build", empty otherwise): Structured lint/compile error details. For each error, extract:
+- **code** (required): Error code/rule name from compiler/linter
+- **message** (required): The specific error message
+- **file** (required): File path where error occurred
+- **line** (required): Line number
+- **column** (optional): Column number if available
+- **symbol** (required when applicable): The specific identifier (variable, function, type, import) causing the error
+- **suggestion** (optional): Suggested fix if the tool provides one
+
+UNIVERSAL LINT/COMPILE ERROR PARSING:
+
+1. **ERROR CODE EXTRACTION** - Look for these patterns:
+   - Bracketed codes: [E0425], [W0611], [no-unused-vars], [unused_variable]
+   - Prefixed codes: error[E0425], warning[W0611], E501, F401
+   - Rule names: no-unused-vars, unused-imports, dead_code
+   - If no code exists, derive from error type: "type_error", "syntax_error", "undefined_reference"
+
+2. **LOCATION EXTRACTION** - Common patterns:
+   - "file.ext:line:column" or "file.ext:line"
+   - "--> path/to/file.ext:15:9"
+   - "at file.ext line 15"
+   - "in file.ext (line 15, column 9)"
+
+3. **SYMBOL EXTRACTION** - The specific identifier causing the error:
+   - "unused variable: \`x\`" → symbol="x"
+   - "'foo' is not defined" → symbol="foo"
+   - "cannot find value \`result\`" → symbol="result"
+   - "Module 'xyz' has no member 'abc'" → symbol="abc"
+   - Look for quoted/backticked identifiers in the message
+
+4. **SUGGESTION EXTRACTION** - If the tool suggests a fix:
+   - "help: consider using \`_x\`" → suggestion="consider using \`_x\`"
+   - "Did you mean 'bar'?" → suggestion="Did you mean 'bar'?"
+   - "try adding \`mut\`" → suggestion="try adding \`mut\`"
+
+CRITICAL RULES:
+- Extract ALL errors, not just the first one
+- Each error should be a separate entry, even if they share the same code
+- Preserve the exact symbol name as shown in the output
+- If multiple errors occur on the same line, create separate entries for each
+
 **secondary_findings** (required, can be empty): Independent issues unrelated to root cause. Prefer up to 3 secondary_findings. Each has:
 - **issue**: Description
 - **evidence_id**: Reference
@@ -283,7 +704,47 @@ EXAMPLE (do not assume incident language from this):
   "secondary_findings": []
 }
 
-Ensure valid JSON. Double-quoted keys. Properly escaped strings.`;
+Ensure valid JSON. Double-quoted keys. Properly escaped strings.
+
+## FINAL SELF-CHECK
+
+Before responding, verify:
+1. Did I incorrectly label non-intentional tests as intentional? (Only use "intentional" if explicit markers exist)
+2. Did I cite exact lines proving intent (suite name/comment) if claiming intentional failure?
+3. Did I select a SINGLE root cause and place other failures in secondary_findings?
+4. Did I copy snippets VERBATIM from the evidence (not paraphrased)?
+5. Did I use neutral language ("assertion mismatch") rather than blaming implementation?
+6. Does my confidence level match the evidence strength per the rules above?
+7. Are all evidence_id values actually present in the provided evidence?`;
+
+// ==================== Test Framework Hint ====================
+
+/**
+ * Builds a test framework hint section if framework was detected.
+ * Provides the LLM with specific guidance on parsing assertions.
+ *
+ * @param evidence - Evidence containing optional test framework info
+ * @returns Framework hint section or empty string
+ */
+const buildTestFrameworkHint = (evidence: Evidence): string => {
+  if (!evidence.testFramework) {
+    return "";
+  }
+
+  const { name, language, assertionHint } = evidence.testFramework;
+
+  return `## DETECTED TEST FRAMEWORK
+
+The logs indicate this is a **${name}** test suite (${language}).
+
+**Assertion parsing hint:** ${assertionHint}
+
+Use this hint to correctly identify expected vs actual values in test failures. This takes precedence over the generic rules when parsing ${name} output.
+
+---
+
+`;
+};
 
 // ==================== Main Prompt Builder ====================
 
@@ -298,10 +759,12 @@ export const buildAnalysisPrompt = (event: Event, evidence: Evidence): string =>
   const systemPrompt = buildSystemPrompt();
   const taskSection = buildTaskSection();
   const safetySection = buildSafetySection();
+  const criticalTestRulesSection = buildCriticalTestFailureRulesSection();
   const analysisGuidelinesSection = buildAnalysisGuidelinesSection();
   const outputFormatSection = buildOutputFormatSection();
   const eventSection = formatEvent(event);
   const evidenceSection = formatEvidence(evidence);
+  const frameworkHint = buildTestFrameworkHint(evidence);
 
   return `${systemPrompt}
 
@@ -309,13 +772,15 @@ ${taskSection}
 
 ${safetySection}
 
+${criticalTestRulesSection}
+
 ${analysisGuidelinesSection}
 
 ${outputFormatSection}
 
 ---
 
-## INCIDENT DATA
+${frameworkHint}## INCIDENT DATA
 
 ${eventSection}
 

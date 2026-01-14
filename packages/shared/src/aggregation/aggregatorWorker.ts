@@ -10,7 +10,7 @@
 import { createLogger, delay, getErrorMessage } from "../core/index.js";
 import { QUEUE_WORKER_DEFAULTS } from "../constants/index.js";
 import { DEFAULT_AGGREGATION_CONFIG, type AggregationConfig } from "./types.js";
-import { findReadyAggregations, enqueueAggregation } from "./redisAggregator.js";
+import { findReadyAggregations, enqueuePendingAggregation } from "./redisAggregator.js";
 
 const logger = createLogger("aggregator-worker");
 
@@ -34,8 +34,8 @@ const createPollingLoop = (
       if (readyKeys.length > 0) {
         logger.info("Found ready aggregations", { count: readyKeys.length });
 
-        // Enqueue all ready aggregations in parallel
-        await Promise.all(readyKeys.map(enqueueAggregation));
+        // Enqueue all ready pending aggregations for combined analysis
+        await Promise.all(readyKeys.map(enqueuePendingAggregation));
       }
     } catch (error) {
       logger.error("Aggregator worker error", {

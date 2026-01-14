@@ -1,0 +1,173 @@
+/**
+ * LLM Provider Types
+ *
+ * Provider-agnostic interfaces for LLM integrations.
+ * Implementations can be swapped without changing consumer code.
+ *
+ * @module llm/types
+ */
+
+import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
+
+// ==================== Analysis Provider ====================
+
+/**
+ * Provider-agnostic interface for LLM analysis.
+ * Implementations: OpenAI, Anthropic, Google, etc.
+ */
+export interface LLMAnalysisProvider {
+  /**
+   * Analyzes an incident using the LLM.
+   *
+   * @param event - The incident event to analyze
+   * @param evidence - Collected evidence about the incident
+   * @returns Structured analysis result
+   */
+  readonly analyzeIncident: (event: Event, evidence: Evidence) => Promise<LLMAnalysisResult>;
+
+  /**
+   * Checks if the provider is available (e.g., circuit breaker not open).
+   */
+  readonly isAvailable: () => boolean;
+}
+
+// ==================== Embedding Provider ====================
+
+/**
+ * Result of a single embedding operation.
+ */
+export interface EmbeddingResult {
+  /** The generated embedding vector */
+  readonly embedding: readonly number[];
+  /** Token count used for this embedding */
+  readonly tokenCount: number;
+  /** Model used for embedding */
+  readonly model: string;
+  /** Tier used for this embedding */
+  readonly tier: string;
+  /** Embedding dimension */
+  readonly dimension: number;
+}
+
+/**
+ * Result of a batch embedding operation.
+ */
+export interface BatchEmbeddingResult {
+  /** Array of embeddings in the same order as input texts */
+  readonly embeddings: ReadonlyArray<readonly number[]>;
+  /** Total token count used across all embeddings */
+  readonly totalTokens: number;
+  /** Model used for embedding */
+  readonly model: string;
+  /** Tier used for this embedding */
+  readonly tier: string;
+  /** Embedding dimension */
+  readonly dimension: number;
+}
+
+/**
+ * Provider-agnostic interface for embedding generation.
+ * Implementations: OpenAI, Cohere, local models, etc.
+ */
+export interface EmbeddingProvider {
+  /**
+   * Generates a vector embedding for a single text.
+   *
+   * @param text - The text to embed
+   * @returns Promise resolving to the embedding result
+   */
+  readonly generateEmbedding: (text: string) => Promise<EmbeddingResult>;
+
+  /**
+   * Generates vector embeddings for multiple texts in a single operation.
+   *
+   * @param texts - Array of texts to embed
+   * @returns Promise resolving to batch embedding result
+   */
+  readonly generateBatchEmbeddings: (texts: readonly string[]) => Promise<BatchEmbeddingResult>;
+
+  /**
+   * Gets the tier/quality level for this provider.
+   */
+  readonly getTier: () => string;
+
+  /**
+   * Gets the embedding dimension for this provider.
+   */
+  readonly getDimension: () => number;
+
+  /**
+   * Checks if the provider is available.
+   */
+  readonly isAvailable?: () => boolean;
+}
+
+// ==================== Provider Configuration ====================
+
+/**
+ * Base configuration for LLM providers.
+ */
+export interface LLMProviderConfig {
+  /** API key for authentication */
+  readonly apiKey: string;
+  /** Request timeout in milliseconds */
+  readonly timeout: number;
+  /** Maximum retry attempts */
+  readonly maxRetries?: number;
+}
+
+/**
+ * Configuration for analysis providers.
+ */
+export interface AnalysisProviderConfig extends LLMProviderConfig {
+  /** Model identifier */
+  readonly model: string;
+  /** Maximum tokens for response */
+  readonly maxTokens: number;
+  /** Temperature for response generation */
+  readonly temperature: number;
+}
+
+/**
+ * Configuration for embedding providers.
+ */
+export interface EmbeddingProviderConfig extends LLMProviderConfig {
+  /** Model identifier */
+  readonly model: string;
+  /** Embedding dimension */
+  readonly dimension: number;
+  /** Maximum batch size */
+  readonly maxBatchSize: number;
+}
+
+// ==================== Provider Factory ====================
+
+/**
+ * Factory function type for creating LLM analysis providers.
+ */
+export type AnalysisProviderFactory = (
+  config?: Partial<AnalysisProviderConfig>
+) => LLMAnalysisProvider;
+
+/**
+ * Factory function type for creating embedding providers.
+ */
+export type EmbeddingProviderFactory = (
+  config?: Partial<EmbeddingProviderConfig>
+) => EmbeddingProvider;
+
+// ==================== Provider Registry ====================
+
+/**
+ * Supported LLM provider names.
+ */
+export type LLMProviderName = "openai" | "anthropic" | "gemini" | "local";
+
+/**
+ * Registry entry for a provider.
+ */
+export interface ProviderRegistryEntry {
+  readonly name: LLMProviderName;
+  readonly createAnalysisProvider?: AnalysisProviderFactory;
+  readonly createEmbeddingProvider?: EmbeddingProviderFactory;
+}

@@ -18,8 +18,7 @@ import { handleCheckRunSuccess } from "./checkRunSuccessHandler.js";
 import { processCIFailure } from "./checkRunAnalysis.js";
 
 // Re-export analysis functions for consumers
-export { fetchAnalysis, processCIFailure, SKIP_CONCLUSIONS } from "./checkRunAnalysis.js";
-export type { ContextMetadata } from "./checkRunAnalysis.js";
+export { processCIFailure, SKIP_CONCLUSIONS } from "./checkRunAnalysis.js";
 
 const logger = createLogger("github-app");
 

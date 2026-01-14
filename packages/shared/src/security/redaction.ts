@@ -197,18 +197,34 @@ export const redactObject = <T extends Record<string, unknown>>(
 };
 
 /**
+ * Safely test a regex against text.
+ * Reset lastIndex before testing to avoid global regex state issues.
+ * Global regexes modify lastIndex after .test(), causing alternating results.
+ *
+ * @param regex - The regex to test
+ * @param text - The text to test against
+ * @returns true if the pattern matches
+ */
+const safeRegexTest = (regex: RegExp, text: string): boolean => {
+  regex.lastIndex = 0; // Reset state for global regexes
+  return regex.test(text);
+};
+
+/**
  * Check if text contains any secrets that should be redacted.
  * Uses .some() for early exit on first match.
+ * Safe for global regexes - resets lastIndex before each test.
  *
  * @param text - The text to check
  * @returns true if secrets were detected
  */
 export const containsSecrets = (text: string): boolean =>
-  isValidString(text) && COMPILED_PATTERNS.some(({ regex }) => regex.test(text));
+  isValidString(text) && COMPILED_PATTERNS.some(({ regex }) => safeRegexTest(regex, text));
 
 /**
  * Get the types of secrets detected in text.
  * Useful for security auditing.
+ * Safe for global regexes - resets lastIndex before each test.
  *
  * @param text - The text to scan
  * @returns Array of detected secret type names
@@ -219,7 +235,10 @@ export const detectSecretTypes = (text: string): string[] => {
   }
 
   // Use pre-compiled patterns and filter in single pass
-  return COMPILED_PATTERNS.filter(({ regex }) => regex.test(text)).map(({ name }) => name);
+  // Safe test avoids global regex lastIndex issues
+  return COMPILED_PATTERNS.filter(({ regex }) => safeRegexTest(regex, text)).map(
+    ({ name }) => name
+  );
 };
 
 /**

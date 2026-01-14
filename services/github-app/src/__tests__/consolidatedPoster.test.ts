@@ -33,25 +33,6 @@ jest.mock("@kenchi/shared", () => {
   };
 });
 
-jest.mock("../formatters/consolidatedFormatter.js", () => ({
-  buildConsolidatedPRComment: jest.fn(() => "## Consolidated PR Comment\nTest content"),
-  buildConsolidatedSlackPayload: jest.fn(() => ({
-    blocks: [{ type: "section", text: { type: "mrkdwn", text: "Test" } }],
-    text: "CI Failure notification",
-  })),
-  buildConsolidatedCheckAnnotations: jest.fn(() => [
-    {
-      path: "src/index.ts",
-      start_line: 10,
-      end_line: 10,
-      annotation_level: "failure",
-      message: "Test error",
-      title: "Error",
-    },
-  ]),
-  buildConsolidatedCheckSummary: jest.fn(() => "## Summary\nTest summary"),
-}));
-
 // Mock github service with module-level mocks
 jest.mock("../services/githubService.js", () => ({
   postPRComment: jest.fn(),
@@ -342,13 +323,17 @@ describe("Consolidated Poster Service", () => {
     });
 
     it("should skip check annotations when none available", async () => {
-      const { buildConsolidatedCheckAnnotations } = jest.requireMock(
-        "../formatters/consolidatedFormatter.js"
-      ) as { buildConsolidatedCheckAnnotations: jest.Mock };
-      buildConsolidatedCheckAnnotations.mockReturnValue([]);
-
+      // Create aggregation with failures that have no annotations
       const aggregation = createMockAggregation();
-      await postConsolidatedAnalysis(aggregation);
+      const aggregationWithNoAnnotations = {
+        ...aggregation,
+        failures: aggregation.failures.map((failure) => ({
+          ...failure,
+          annotations: [], // No annotations
+        })),
+      };
+
+      await postConsolidatedAnalysis(aggregationWithNoAnnotations);
 
       expect(mockCreateCheckRunWithAnnotations).not.toHaveBeenCalled();
     });
