@@ -498,6 +498,7 @@ SCHEMA:
     }
   ],
   "next_steps": ["Actionable step 1", "Actionable step 2"],
+  "test_command": "command to run failing tests locally (e.g., cargo test, npm test, pytest)",
   "secondary_findings": [
     { "issue": "Description of independent issue", "evidence_id": "log#N" }
   ]
@@ -568,6 +569,14 @@ ID NORMALIZATION:
 - Never include brackets in evidence_id.
 
 **next_steps** (required, 1-5 items): Actionable diagnostic or fix steps. Must be safe and reversible. next_steps must contain at least 1 item even when confidence="low".
+
+**test_command** (optional, include when category="test"): Shell command to run the failing tests locally. Base this on the detected test framework. Examples:
+- For Rust (cargo-test): "cargo test"
+- For JavaScript (jest): "npm test" or "npm test -- --testPathPattern=..."
+- For Python (pytest): "pytest path/to/test.py"
+- For Go: "go test -v ./..."
+- For Java (JUnit/Maven): "mvn test"
+Do NOT include if the framework is unknown or if there are no test failures.
 
 **test_failures** (required when category="test", empty otherwise): Structured test failure details. For each failing test, extract:
 - **test_name** (required): Full test name including module/class path

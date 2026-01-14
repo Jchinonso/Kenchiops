@@ -118,6 +118,8 @@ export interface AnalyzedFailure {
   readonly recommendedActions: readonly RecommendedAction[];
   readonly testFailures: readonly TestFailureInfo[];
   readonly lintErrors?: readonly LLMLintError[];
+  /** Command to run failing tests locally (LLM-generated based on detected framework) */
+  readonly testCommand?: string;
   readonly timestamp: Date;
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
@@ -140,6 +142,8 @@ export interface SerializedFailure {
   readonly recommendedActions: readonly RecommendedAction[];
   readonly testFailures: readonly TestFailureInfo[];
   readonly lintErrors?: readonly LLMLintError[];
+  /** Command to run failing tests locally (LLM-generated based on detected framework) */
+  readonly testCommand?: string;
   readonly timestamp: string; // ISO string instead of Date
   // AI-extracted structured data (Phase 4 - Language Agnostic)
   readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
