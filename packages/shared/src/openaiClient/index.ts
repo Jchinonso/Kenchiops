@@ -1,26 +1,29 @@
 /**
- * OpenAIClient Module - Exports all OpenAI-related functionality
+ * OpenAIClient Module - Backward Compatibility Re-exports
  *
- * This module provides:
- * - OpenAIClient: Main API client for OpenAI integration
- * - EmbeddingClient: Vector embedding generation for RAG
- * - Validation: Anti-hallucination checks and response validation
- * - Token Management: Budget management and evidence truncation
- * - Error Handling: Error enrichment utilities
+ * @deprecated Import from `@kenchi/shared/llm` instead.
+ * This module re-exports from the new llm module for backward compatibility.
  *
- * Note: For delay/sleep functionality, use `delay` from `core/utils.js`
+ * Migration guide:
+ * - `import { OpenAIClient } from "@kenchi/shared/openaiClient"` →
+ *   `import { OpenAIClient } from "@kenchi/shared/llm"`
  */
 
-export { OpenAIClient } from "./client.js";
+// Re-export everything from llm module for backward compatibility
 export {
+  // OpenAI Provider
+  OpenAIClient,
   EmbeddingClient,
   getEmbeddingClient,
   clearClientCache,
   createEmbeddingProvider,
+  handleOpenAIError,
+  // Types
   type EmbeddingResult,
   type BatchEmbeddingResult,
   type EmbeddingProvider,
-} from "./embedding.js";
-export { validateResponse } from "./validation.js";
-export { manageTokenBudget } from "./tokenManager.js";
-export { handleOpenAIError } from "./errors.js";
+  // Validation
+  validateResponse,
+  // Token Management
+  manageTokenBudget,
+} from "../llm/index.js";

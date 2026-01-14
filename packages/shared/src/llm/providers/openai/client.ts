@@ -7,27 +7,32 @@
  * - Deterministic application logic is responsible for validating and deciding
  *   whether to act on any suggestion.
  *
- * @module openaiClient/client
+ * @module llm/providers/openai/client
  */
 
 import OpenAI from "openai";
-import { config } from "../core/config.js";
-import { logger } from "../core/logger.js";
-import { LLMError, getErrorMessage, ExternalServiceError } from "../core/errors.js";
+import { config } from "../../../core/config.js";
+import { logger } from "../../../core/logger.js";
+import { LLMError, getErrorMessage, ExternalServiceError } from "../../../core/errors.js";
 import {
   OPENAI_DEFAULTS,
   OPENAI_CONSTANTS,
   TIME_CONSTANTS,
   OPENAI_MESSAGES,
-} from "../constants/index.js";
-import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
-import { buildAnalysisPrompt } from "../integrations/prompts.js";
-import { validateResponse } from "./validation.js";
-import { manageTokenBudget } from "./tokenManager.js";
+} from "../../../constants/index.js";
+import type { Event, Evidence, LLMAnalysisResult } from "../../../core/types.js";
+import { buildAnalysisPrompt } from "../../../integrations/prompts.js";
+import { validateResponse } from "../../validation.js";
+import { manageTokenBudget } from "../../tokenManager.js";
 import { handleOpenAIError } from "./errors.js";
-import { parseOpenAIResponse } from "./responseParser.js";
-import { delay } from "../core/utils.js";
-import { withCircuitBreaker, getCircuitStatus, SERVICE_KEYS } from "../http/circuitBreaker.js";
+import { parseOpenAIResponse } from "../../responseParser.js";
+import { delay } from "../../../core/utils.js";
+import {
+  withCircuitBreaker,
+  getCircuitStatus,
+  SERVICE_KEYS,
+} from "../../../http/circuitBreaker.js";
+import type { LLMAnalysisProvider } from "../../types.js";
 
 /**
  * OpenAI client configuration.
@@ -63,7 +68,7 @@ const createClientConfig = (): OpenAIConfig =>
     timeout: config.OPENAI_TIMEOUT_MS || OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
   }) as const;
 
-export class OpenAIClient {
+export class OpenAIClient implements LLMAnalysisProvider {
   private readonly client: OpenAI;
   private readonly clientConfig: OpenAIConfig;
 
@@ -89,12 +94,20 @@ export class OpenAIClient {
 
   /**
    * Checks if the OpenAI service is available (circuit not open).
+   * Static version for convenience.
    *
    * @returns True if service is available
    */
   static isAvailable(): boolean {
     return !getCircuitStatus(SERVICE_KEYS.OPENAI).isOpen;
   }
+
+  /**
+   * Instance method to check availability (implements LLMAnalysisProvider).
+   *
+   * @returns True if service is available
+   */
+  readonly isAvailable = (): boolean => OpenAIClient.isAvailable();
 
   /**
    * Analyzes an incident using OpenAI API with proper prompt construction,
@@ -225,7 +238,7 @@ export class OpenAIClient {
   ): void => {
     this.validationLoggers
       .filter(({ condition }) => condition(validation))
-      .map(({ log }) => log(validation, eventId));
+      .forEach(({ log }) => log(validation, eventId));
   };
 
   /**

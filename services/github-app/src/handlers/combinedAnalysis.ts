@@ -1,14 +1,14 @@
 /**
- * Combined CI Failure Analysis Handler
+ * Per-Job CI Failure Analysis Handler
  *
  * Processes pending aggregations by:
  * 1. Fetching logs for ALL failed jobs
- * 2. Sending combined logs to a single LLM call
+ * 2. Sending each job's logs to the LLM separately (in parallel)
  * 3. Converting results to AggregatedFailures format
  * 4. Posting using consolidatedPoster
  *
- * This is the new approach that analyzes all failures together
- * instead of analyzing each check separately.
+ * Each job gets its own LLM analysis call to ensure specific,
+ * accurate analysis for each failure type (tests, linting, formatting, etc.).
  */
 
 import {
@@ -21,6 +21,8 @@ import {
   type AggregatedFailures,
   type AnalyzedFailure,
   type ConsolidatedPostResult,
+  type TestFailureInfo,
+  type LLMLintError,
 } from "@kenchi/shared";
 import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
@@ -30,28 +32,33 @@ const logger = createLogger("github-app");
 // ==================== Types ====================
 
 /**
- * Combined analysis API response structure.
- * The LLM analyzes all jobs together and returns per-job results.
+ * Per-job API response structure.
+ * Each job gets its own LLM analysis call.
+ * full_analysis contains the LLMAnalysisResult with testFailures already in camelCase.
  */
-interface CombinedAnalysisApiResponse {
+interface PerJobAnalysisApiResponse {
   readonly analysis?: string;
   readonly identified_cause?: string;
-  readonly confidence?: number;
-  readonly job_analyses?: readonly JobAnalysis[];
-  readonly overall_summary?: string;
+  readonly confidence?: number | string;
   readonly recommended_actions?: readonly RecommendedActionResponse[];
+  readonly annotations?: readonly AnalysisAnnotation[];
+  readonly full_analysis?: {
+    readonly testFailures?: readonly TestFailureInfo[];
+    readonly lintErrors?: readonly LLMLintError[];
+  };
 }
 
 /**
- * Per-job analysis from the LLM.
+ * Result of analyzing a single job.
  */
-interface JobAnalysis {
-  readonly job_name: string;
-  readonly identified_cause?: string;
-  readonly confidence?: string;
-  readonly category?: string;
-  readonly annotations?: readonly AnalysisAnnotation[];
-  readonly next_steps?: readonly string[];
+interface JobAnalysisResult {
+  readonly jobName: string;
+  readonly jobLogs: string;
+  readonly response: PerJobAnalysisApiResponse;
+  /** LLM-extracted test failures with expected/actual values */
+  readonly testFailures: readonly TestFailureInfo[];
+  /** LLM-extracted lint/compile errors with specific symbols */
+  readonly lintErrors: readonly LLMLintError[];
 }
 
 /**
@@ -78,9 +85,12 @@ interface AnalysisAnnotation {
 // ==================== Helpers ====================
 
 /**
- * Map confidence string to numeric score.
+ * Map confidence to numeric score (handles both string and number).
  */
-const confidenceToScore = (confidence: string | undefined): number => {
+const confidenceToScore = (confidence: string | number | undefined): number => {
+  if (typeof confidence === "number") {
+    return confidence;
+  }
   const confidenceScores: Record<string, number> = {
     high: 0.9,
     medium: 0.6,
@@ -102,64 +112,157 @@ const convertRecommendedActions = (
   })) ?? [];
 
 /**
- * Convert job analysis to AnalyzedFailure.
+ * Extract LLM test failures from API response.
+ * The API already returns testFailures in the correct format (camelCase).
  */
-const convertJobAnalysisToFailure = (
-  jobAnalysis: JobAnalysis,
+const extractTestFailures = (response: PerJobAnalysisApiResponse): readonly TestFailureInfo[] =>
+  response.full_analysis?.testFailures ?? [];
+
+/**
+ * Extract LLM lint errors from API response.
+ * The API returns lintErrors in the correct format (camelCase).
+ */
+const extractLintErrors = (response: PerJobAnalysisApiResponse): readonly LLMLintError[] =>
+  response.full_analysis?.lintErrors ?? [];
+
+/**
+ * Convert per-job analysis result to AnalyzedFailure.
+ * Uses LLM-extracted test failures with expected/actual values.
+ */
+const convertJobResultToFailure = (
+  result: JobAnalysisResult,
   checkRunId: number,
-  timestamp: Date,
-  overallActions: readonly RecommendedActionResponse[] | undefined
+  checkName: string,
+  timestamp: Date
 ): AnalyzedFailure => {
-  // Use job-specific next_steps if available, otherwise fall back to overall actions
-  const jobActions = jobAnalysis.next_steps?.map((step) => ({
-    description: step,
-    priority: "medium" as string,
-  }));
-  const recommendedActions =
-    jobActions && jobActions.length > 0 ? jobActions : convertRecommendedActions(overallActions);
+  const { response } = result;
+  const identifiedCause = response.identified_cause ?? response.analysis ?? "Unknown failure";
 
   return {
     checkRunId,
-    checkName: jobAnalysis.job_name,
+    checkName,
     conclusion: "failure",
-    confidence: confidenceToScore(jobAnalysis.confidence),
-    identifiedCause: jobAnalysis.identified_cause ?? "Unknown failure",
-    analysis: jobAnalysis.identified_cause ?? "Unknown failure",
+    confidence: confidenceToScore(response.confidence),
+    identifiedCause,
+    analysis: identifiedCause,
     annotations:
-      jobAnalysis.annotations?.map((annotation) => ({
+      response.annotations?.map((annotation) => ({
         path: annotation.path ?? "",
         line: annotation.line ?? 0,
         level: (annotation.level as "failure" | "warning" | "notice") ?? "failure",
         message: annotation.message ?? "",
         title: annotation.title,
       })) ?? [],
-    recommendedActions,
-    testFailures: [],
+    recommendedActions: convertRecommendedActions(response.recommended_actions),
+    testFailures: result.testFailures,
+    lintErrors: result.lintErrors,
     timestamp,
   };
 };
 
 /**
- * Create a fallback failure when we can't find per-job analysis.
+ * Generate a summary from extracted test failures.
+ * Only used when we have structured test data to summarize.
+ */
+const summarizeTestFailures = (testFailures: readonly TestFailureInfo[]): string | null => {
+  if (testFailures.length === 0) {
+    return null;
+  }
+
+  const uniqueFiles = [...new Set(testFailures.map((failure) => failure.file).filter(Boolean))];
+  const fileInfo =
+    uniqueFiles.length > 0
+      ? ` in ${uniqueFiles
+          .slice(0, 2)
+          .map((filePath) => `\`${filePath?.split("/").pop()}\``)
+          .join(", ")}${uniqueFiles.length > 2 ? " and more" : ""}`
+      : "";
+
+  return `${testFailures.length} test${testFailures.length > 1 ? "s" : ""} failed${fileInfo}`;
+};
+
+/**
+ * Create a fallback failure when LLM analysis fails.
+ * Returns empty test failures - LLM is the source of truth.
  */
 const createFallbackFailure = (
   checkName: string,
   checkRunId: number,
-  overallCause: string,
   timestamp: Date,
-  overallActions: readonly RecommendedActionResponse[] | undefined
+  errorMessage: string
 ): AnalyzedFailure => ({
   checkRunId,
   checkName,
   conclusion: "failure",
-  confidence: 0.5,
-  identifiedCause: overallCause,
-  analysis: overallCause,
+  confidence: 0.3,
+  identifiedCause: errorMessage,
+  analysis: errorMessage,
   annotations: [],
-  recommendedActions: convertRecommendedActions(overallActions),
+  recommendedActions: [],
   testFailures: [],
+  lintErrors: [],
   timestamp,
 });
+
+/**
+ * Analyze a single job's logs via LLM API.
+ * LLM extracts test failures with expected/actual values.
+ */
+const analyzeJobLogs = async (
+  jobName: string,
+  jobLogs: string,
+  repository: string,
+  apiUrl: string
+): Promise<JobAnalysisResult> => {
+  const preprocessed = preprocessLogsWithMetadata(jobLogs);
+
+  logger.info("Analyzing job logs via LLM", {
+    jobName,
+    repository,
+    originalSize: preprocessed.originalSize,
+    processedSize: preprocessed.processedSize,
+    detectedFramework: preprocessed.testFramework?.name,
+  });
+
+  // Build request payload with optional framework hint
+  const requestPayload: Record<string, unknown> = {
+    failure_log: preprocessed.logs,
+    repository,
+    job_name: jobName,
+  };
+
+  // Include framework hint if detected
+  if (preprocessed.testFramework) {
+    requestPayload.test_framework = {
+      name: preprocessed.testFramework.name,
+      language: preprocessed.testFramework.language,
+      assertion_hint: preprocessed.testFramework.assertionHint,
+    };
+  }
+
+  const response = await resilientPost<PerJobAnalysisApiResponse>(apiUrl, requestPayload);
+
+  // Extract LLM test failures with expected/actual values
+  const testFailures = extractTestFailures(response.data);
+
+  // Extract LLM lint errors with specific symbols
+  const lintErrors = extractLintErrors(response.data);
+
+  logger.info("LLM analysis complete", {
+    jobName,
+    repository,
+    testFailureCount: testFailures.length,
+    lintErrorCount: lintErrors.length,
+  });
+
+  return {
+    jobName,
+    jobLogs,
+    response: response.data,
+    testFailures,
+    lintErrors,
+  };
+};
 
 /**
  * Deserialize pending aggregation payload from queue.
@@ -200,7 +303,43 @@ const deserializePendingPayload = (
 // ==================== Main Handler ====================
 
 /**
- * Process pending aggregation with combined analysis.
+ * Result type for per-job analysis with optional error info.
+ */
+type AnalysisResultWithError = JobAnalysisResult & { failed?: true; error?: string };
+
+/**
+ * Analyze a single job with error handling.
+ * Returns a result object with failed flag if analysis fails.
+ */
+const analyzeJobWithErrorHandling = async (
+  job: { jobName: string; logs: string },
+  repository: string,
+  apiUrl: string
+): Promise<AnalysisResultWithError> => {
+  try {
+    return await analyzeJobLogs(job.jobName, job.logs, repository, apiUrl);
+  } catch (error) {
+    logger.error("Failed to analyze job", {
+      jobName: job.jobName,
+      error: getErrorMessage(error),
+    });
+    return {
+      jobName: job.jobName,
+      jobLogs: job.logs,
+      response: {} as PerJobAnalysisApiResponse,
+      testFailures: [],
+      lintErrors: [],
+      failed: true,
+      error: getErrorMessage(error),
+    };
+  }
+};
+
+/**
+ * Process pending aggregation with per-job analysis.
+ *
+ * Each job's logs are analyzed separately via LLM to ensure
+ * specific, accurate analysis for each failure type.
  *
  * @param payload - The pending aggregation payload from queue
  * @returns Consolidated post result
@@ -211,7 +350,7 @@ export const processCombinedAnalysis = async (
   const pending = deserializePendingPayload(payload);
   const { repository, installationId, commitSha } = pending;
 
-  logger.info("Starting combined analysis for pending aggregation", {
+  logger.info("Starting per-job analysis for pending aggregation", {
     repository: repository.fullName,
     commitSha: commitSha.substring(0, 7),
     pendingCheckCount: pending.pendingChecks.length,
@@ -228,7 +367,7 @@ export const processCombinedAnalysis = async (
     );
 
     if (!allJobsLogs) {
-      logger.warn("No workflow logs available for combined analysis", {
+      logger.warn("No workflow logs available for analysis", {
         repository: repository.fullName,
         commitSha: commitSha.substring(0, 7),
       });
@@ -246,77 +385,75 @@ export const processCombinedAnalysis = async (
       repository: repository.fullName,
       workflowName: allJobsLogs.workflowName,
       jobCount: allJobsLogs.jobs.length,
-      combinedLogSize: allJobsLogs.combinedLogs.length,
     });
 
-    // Step 2: Preprocess combined logs
-    const preprocessed = preprocessLogsWithMetadata(allJobsLogs.combinedLogs);
-
-    logger.info("Preprocessed combined logs", {
-      repository: repository.fullName,
-      originalSize: preprocessed.originalSize,
-      processedSize: preprocessed.processedSize,
-      wasTruncated: preprocessed.wasTruncated,
-    });
-
-    // Step 3: Send to LLM for combined analysis
     const apiUrl = `${config.API_URL}/api/analyze`;
 
-    logger.info("Sending combined logs to LLM", {
+    // Step 2: Analyze each job separately (in parallel)
+    logger.info("Analyzing jobs in parallel", {
       repository: repository.fullName,
-      apiUrl,
-      logSize: preprocessed.processedSize,
       jobCount: allJobsLogs.jobs.length,
+      jobNames: allJobsLogs.jobs.map((job) => job.jobName),
     });
 
-    const response = await resilientPost<CombinedAnalysisApiResponse>(apiUrl, {
-      failure_log: preprocessed.logs,
+    // Analyze all jobs in parallel with error handling
+    const analysisResults = await Promise.all(
+      allJobsLogs.jobs.map((job) => analyzeJobWithErrorHandling(job, repository.fullName, apiUrl))
+    );
+
+    // Create a map of job name to analysis result
+    const analysisMap = new Map<string, AnalysisResultWithError>();
+    analysisResults.forEach((result) => {
+      analysisMap.set(result.jobName.toLowerCase(), result);
+    });
+
+    logger.info("All job analyses complete", {
       repository: repository.fullName,
-      combined_analysis: true,
-      job_names: allJobsLogs.jobs.map((job) => job.jobName),
+      successCount: analysisResults.filter((result) => !result.failed).length,
+      failedCount: analysisResults.filter((result) => result.failed).length,
     });
 
-    const apiResponse = response.data;
-
-    // Step 4: Convert API response to AggregatedFailures
-    const overallCause =
-      apiResponse.overall_summary ??
-      apiResponse.identified_cause ??
-      apiResponse.analysis ??
-      "Unknown failure";
-
-    // Get overall recommended actions from API response
-    const overallActions = apiResponse.recommended_actions;
-
-    // Map each pending check to an analyzed failure
+    // Step 3: Map each pending check to its analysis
     const failures: AnalyzedFailure[] = pending.pendingChecks.map((check) => {
-      // Try to find matching job analysis
-      const jobAnalysis = apiResponse.job_analyses?.find(
-        (analysis) =>
-          analysis.job_name.toLowerCase() === check.checkName.toLowerCase() ||
-          check.checkName.toLowerCase().includes(analysis.job_name.toLowerCase())
-      );
+      // Try to find matching analysis by check name
+      const analysisResult = analysisMap.get(check.checkName.toLowerCase());
 
-      if (jobAnalysis) {
-        return convertJobAnalysisToFailure(
-          jobAnalysis,
+      if (analysisResult && !analysisResult.failed) {
+        return convertJobResultToFailure(
+          analysisResult,
           check.checkRunId,
-          check.timestamp,
-          overallActions
+          check.checkName,
+          check.timestamp
         );
       }
 
-      // Fallback: use overall analysis for this check
-      return createFallbackFailure(
-        check.checkName,
-        check.checkRunId,
-        overallCause,
-        check.timestamp,
-        overallActions
+      // If no analysis found, try to find by partial match
+      const partialMatch = [...analysisMap.entries()].find(
+        ([jobName]) =>
+          check.checkName.toLowerCase().includes(jobName) ||
+          jobName.includes(check.checkName.toLowerCase())
       );
+
+      if (partialMatch && !partialMatch[1].failed) {
+        return convertJobResultToFailure(
+          partialMatch[1],
+          check.checkRunId,
+          check.checkName,
+          check.timestamp
+        );
+      }
+
+      // Fallback: create failure with error or generic message
+      // LLM is the source of truth - if it returned test failures, use them
+      const llmTestFailures = analysisResult?.testFailures ?? [];
+      const errorMsg = analysisResult?.error
+        ? `Analysis failed: ${analysisResult.error}`
+        : (summarizeTestFailures(llmTestFailures) ?? "CI check failed - see logs for details");
+
+      return createFallbackFailure(check.checkName, check.checkRunId, check.timestamp, errorMsg);
     });
 
-    // Build the aggregated failures object
+    // Step 4: Build the aggregated failures object
     const aggregation: AggregatedFailures = {
       commitSha,
       repository,
@@ -332,17 +469,16 @@ export const processCombinedAnalysis = async (
       lastFailureAt: pending.lastFailureAt,
     };
 
-    logger.info("Combined analysis complete, posting results", {
+    logger.info("Per-job analysis complete, posting results", {
       repository: repository.fullName,
       commitSha: commitSha.substring(0, 7),
       failureCount: failures.length,
-      confidence: apiResponse.confidence,
     });
 
     // Step 5: Post using existing consolidated poster
     return await postConsolidatedAnalysis(aggregation);
   } catch (error) {
-    logger.error("Combined analysis failed", {
+    logger.error("Per-job analysis failed", {
       error: getErrorMessage(error),
       repository: repository.fullName,
       commitSha: commitSha.substring(0, 7),

@@ -84,18 +84,19 @@ Third line`);
     it("should not truncate content under max size", () => {
       const input = "Short content";
       const result = truncateWithErrorContext(input, 1000);
-      expect(result).toBe("Short content");
-      expect(result).not.toContain("[truncated]");
+      expect(result.content).toBe("Short content");
+      expect(result.content).not.toContain("[truncated]");
+      expect(result.anchorInfo).toBeDefined();
     });
 
     it("should truncate content over max size", () => {
       const longContent = "A".repeat(60000);
       const result = truncateWithErrorContext(longContent, 50000);
-      expect(result.length).toBeLessThanOrEqual(50000 + 50); // Allow for markers
-      expect(result).toContain("[truncated]");
+      expect(result.content.length).toBeLessThanOrEqual(50000 + 50); // Allow for markers
+      expect(result.content).toContain("[truncated]");
     });
 
-    it("should center truncation on first error indicator", () => {
+    it("should center truncation on error indicator", () => {
       const prefix = "A".repeat(60000);
       const error = "ERROR: test failed";
       const suffix = "B".repeat(60000);
@@ -103,15 +104,16 @@ Third line`);
 
       const result = truncateWithErrorContext(input, 50000);
 
-      expect(result).toContain("ERROR: test failed");
+      expect(result.content).toContain("ERROR: test failed");
     });
 
-    it("should handle content with multiple error indicators", () => {
+    it("should handle content with multiple error indicators using tiered selection", () => {
       const input = "A".repeat(30000) + "FAILED" + "B".repeat(30000) + "ERROR" + "C".repeat(30000);
       const result = truncateWithErrorContext(input, 50000);
 
-      // Should center on first error indicator (FAILED)
-      expect(result).toContain("FAILED");
+      // Tiered selection prefers LATEST match within same tier
+      expect(result.content).toContain("ERROR");
+      expect(result.anchorInfo.totalMatches).toBeGreaterThan(0);
     });
 
     it("should handle content without error indicators", () => {
@@ -119,15 +121,23 @@ Third line`);
       const result = truncateWithErrorContext(input, 50000);
 
       // Should truncate from start when no error indicator found
-      expect(result.length).toBeLessThanOrEqual(50000 + 50);
-      expect(result).not.toContain("[truncated]...\n"); // No prefix marker at start
+      expect(result.content.length).toBeLessThanOrEqual(50000 + 50);
+      expect(result.anchorInfo.tier).toBe(-1); // Fallback tier
     });
 
     it("should use default max size from constants", () => {
       const longContent = "A".repeat(LOG_PARSING_LIMITS.MAX_LOG_SIZE + 10000);
       const result = truncateWithErrorContext(longContent);
 
-      expect(result.length).toBeLessThanOrEqual(LOG_PARSING_LIMITS.MAX_LOG_SIZE + 50);
+      expect(result.content.length).toBeLessThanOrEqual(LOG_PARSING_LIMITS.MAX_LOG_SIZE + 50);
+    });
+
+    it("should return anchor info with tier information", () => {
+      const input = "A".repeat(10000) + "##[error] Job failed" + "B".repeat(10000);
+      const result = truncateWithErrorContext(input, 50000);
+
+      expect(result.anchorInfo.tier).toBe(1); // Tier 1 CI boundary
+      expect(result.anchorInfo.totalMatches).toBeGreaterThan(0);
     });
   });
 
@@ -164,6 +174,72 @@ Third line`);
       const result = preprocessLogs(input, 10000);
 
       expect(result).toContain("ERROR: Critical failure");
+    });
+  });
+
+  describe("Tier-Aware Window Weights", () => {
+    it("should allocate more context BEFORE for CI boundary markers (tier 1)", () => {
+      // CI boundary markers (##[error]) indicate the error is BEFORE the marker
+      // so we want 70% context before, 30% after
+      const beforeContent = "A".repeat(40000);
+      const errorMarker = "##[error] Job failed";
+      const afterContent = "B".repeat(40000);
+      const content = beforeContent + errorMarker + afterContent;
+
+      const result = truncateWithErrorContext(content, 10000);
+
+      // With 70% before fraction, we should have more A's than B's
+      const aCount = (result.content.match(/A/g) ?? []).length;
+      const bCount = (result.content.match(/B/g) ?? []).length;
+
+      // A's should be significantly more than B's (about 7:3 ratio)
+      expect(aCount).toBeGreaterThan(bCount);
+    });
+
+    it("should allocate more context AFTER for stack traces (tier 3)", () => {
+      // Stack traces need more context after (the stack itself continues)
+      // so we want 40% before, 60% after
+      const beforeContent = "X".repeat(40000);
+      const stackTrace = "Traceback (most recent call last):";
+      const afterContent = "Y".repeat(40000);
+      const content = beforeContent + stackTrace + afterContent;
+
+      const result = truncateWithErrorContext(content, 10000);
+
+      // With 40% before fraction, we should have more Y's than X's
+      const xCount = (result.content.match(/X/g) ?? []).length;
+      const yCount = (result.content.match(/Y/g) ?? []).length;
+
+      // Y's should be more than X's (about 4:6 ratio)
+      expect(yCount).toBeGreaterThan(xCount);
+    });
+
+    it("should use balanced 50/50 for fallback tier", () => {
+      // Generic ERROR/FAILED fallback uses balanced window
+      const beforeContent = "M".repeat(40000);
+      const errorWord = "Generic ERROR message";
+      const afterContent = "N".repeat(40000);
+      const content = beforeContent + errorWord + afterContent;
+
+      const result = truncateWithErrorContext(content, 10000);
+
+      const mCount = (result.content.match(/M/g) ?? []).length;
+      const nCount = (result.content.match(/N/g) ?? []).length;
+
+      // Should be roughly balanced (within 20% of each other)
+      const ratio = mCount / (mCount + nCount);
+      expect(ratio).toBeGreaterThan(0.35);
+      expect(ratio).toBeLessThan(0.65);
+    });
+
+    it("should return tier information in anchor info", () => {
+      const ciContent = "A".repeat(1000) + "##[error] Failed" + "B".repeat(1000);
+      const result = truncateWithErrorContext(ciContent, 50000);
+      expect(result.anchorInfo.tier).toBe(1);
+
+      const infraContent = "X".repeat(1000) + "Killed" + "Y".repeat(1000);
+      const infraResult = truncateWithErrorContext(infraContent, 50000);
+      expect(infraResult.anchorInfo.tier).toBe(2);
     });
   });
 

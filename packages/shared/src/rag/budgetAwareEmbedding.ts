@@ -110,7 +110,7 @@ export const generateBudgetAwareEmbedding = async (
   }
 
   // Import dynamically to avoid circular dependency
-  const { getEmbeddingClient } = await import("../openaiClient/embedding.js");
+  const { getEmbeddingClient } = await import("../llm/providers/openai/embedding.js");
 
   // Get client for selected tier and generate embedding
   const client = getEmbeddingClient(tierSelection.selectedTier);
@@ -131,7 +131,7 @@ export const generateBudgetAwareEmbedding = async (
     embedding: result.embedding,
     tokenCount: result.tokenCount,
     model: result.model,
-    tier: result.tier,
+    tier: result.tier as EmbeddingTierName,
     dimension: result.dimension,
     tierSelectionReason: tierSelection.reason,
     budgetStatus: tierSelection.budgetStatus,
@@ -162,7 +162,7 @@ export const generateBatchBudgetAwareEmbeddings = async (
   }
 
   // Import dynamically to avoid circular dependency
-  const { getEmbeddingClient } = await import("../openaiClient/embedding.js");
+  const { getEmbeddingClient } = await import("../llm/providers/openai/embedding.js");
 
   // Get client for selected tier and generate embeddings
   const client = getEmbeddingClient(tierSelection.selectedTier);
@@ -184,7 +184,7 @@ export const generateBatchBudgetAwareEmbeddings = async (
     embeddings: result.embeddings,
     totalTokens: result.totalTokens,
     model: result.model,
-    tier: result.tier,
+    tier: result.tier as EmbeddingTierName,
     dimension: result.dimension,
     tierSelectionReason: tierSelection.reason,
     budgetStatus: tierSelection.budgetStatus,

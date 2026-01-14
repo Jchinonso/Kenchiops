@@ -318,10 +318,19 @@ export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext 
     },
   };
 
+  // Build base evidence
   const evidence: Evidence = {
     eventId,
     logs: buildEvidenceLogs(request.failure_log, collectedAt),
     collectedAt,
+    // Include test framework hint if detected by preprocessor
+    testFramework: request.test_framework
+      ? {
+          name: request.test_framework.name,
+          language: request.test_framework.language,
+          assertionHint: request.test_framework.assertion_hint,
+        }
+      : undefined,
   };
 
   return { event, evidence };

@@ -24,7 +24,7 @@ jest.mock("../../security/index.js", () => ({
   redactSecrets: jest.fn((text: string) => text.replace(/SECRET_\w+/gi, "[REDACTED]")),
 }));
 
-jest.mock("../../openaiClient/embedding.js", () => ({
+jest.mock("../../llm/providers/openai/embedding.js", () => ({
   getEmbeddingClient: jest.fn(() => ({
     generateBatchEmbeddings: jest.fn(),
   })),
@@ -51,7 +51,7 @@ import {
   embedPendingKnowledgeDocs,
   INGESTION_DEFAULTS,
 } from "../../rag/ingestionHelpers.js";
-import { getEmbeddingClient } from "../../openaiClient/embedding.js";
+import { getEmbeddingClient } from "../../llm/providers/openai/embedding.js";
 import {
   getDiffChunksWithoutEmbeddings,
   updateDiffChunkEmbedding,

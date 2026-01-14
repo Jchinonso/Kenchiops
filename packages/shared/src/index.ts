@@ -60,6 +60,7 @@ export type {
   SystemState,
   KnowledgeDocument,
   RelatedEvent,
+  TestFrameworkHint,
   // LLM Analysis Types
   LLMAnalysisResult,
   LLMCodeAnnotation,
@@ -69,6 +70,8 @@ export type {
   EvidenceReference,
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
+  LLMTestFailure,
+  LLMLintError,
   // Failure Classification Types
   FailureCategory,
   PipelinePhase,
@@ -318,7 +321,9 @@ export {
   truncateWithErrorContext,
   preprocessLogs,
   preprocessLogsWithMetadata,
+  detectTestFramework,
   type PreprocessResult,
+  type TestFrameworkInfo,
 } from "./formatting/index.js";
 // Simplified pipeline: Output formatting
 export {
@@ -358,8 +363,17 @@ export {
 } from "./integrations/index.js";
 export { VectorStore, InMemoryVectorStore } from "./integrations/index.js";
 
-// OpenAI client
-export { OpenAIClient } from "./openaiClient/index.js";
+// LLM module (provider-agnostic)
+export type {
+  LLMAnalysisProvider,
+  LLMProviderConfig,
+  AnalysisProviderConfig,
+  EmbeddingProviderConfig,
+  LLMProviderName,
+} from "./llm/index.js";
+
+// OpenAI client (via llm module)
+export { OpenAIClient } from "./llm/index.js";
 export {
   EmbeddingClient,
   getEmbeddingClient,
@@ -368,7 +382,7 @@ export {
   type EmbeddingResult,
   type BatchEmbeddingResult,
   type EmbeddingProvider,
-} from "./openaiClient/index.js";
+} from "./llm/index.js";
 
 // Safety and confidence scoring
 export {

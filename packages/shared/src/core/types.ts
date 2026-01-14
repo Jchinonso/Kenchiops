@@ -83,6 +83,7 @@ export type {
   KnowledgeDocument,
   RelatedEvent,
   Evidence,
+  TestFrameworkHint,
 } from "./evidenceTypes.js";
 
 // ==================== LLM Analysis Result Types ====================
@@ -160,10 +161,50 @@ export interface LLMDetectedBuildConfigChange {
   readonly summary: string; // Brief description of what changed
 }
 
+/**
+ * Structured test failure extracted by LLM analysis.
+ * Contains expected/actual values for assertion failures.
+ */
+export interface LLMTestFailure {
+  /** Full test name including module/class path */
+  readonly testName: string;
+  /** File path where test is defined */
+  readonly file?: string;
+  /** Line number where failure occurred */
+  readonly line?: number;
+  /** Expected value from assertion (null if not an assertion failure) */
+  readonly expected?: string | null;
+  /** Actual/received value from assertion (null if not an assertion failure) */
+  readonly actual?: string | null;
+  /** Brief error description or assertion message */
+  readonly error: string;
+}
+
+/**
+ * Structured lint/compile error extracted by LLM analysis.
+ * Contains specific variable/function names and locations.
+ */
+export interface LLMLintError {
+  /** Error code from compiler/linter (e.g., "unused_variable", "E0425", "no-unused-vars") */
+  readonly code: string;
+  /** The specific error message */
+  readonly message: string;
+  /** File path where error occurred */
+  readonly file: string;
+  /** Line number */
+  readonly line: number;
+  /** Column number if available */
+  readonly column?: number;
+  /** The specific variable, function, type, or import name causing the error */
+  readonly symbol?: string;
+  /** Suggested fix from the compiler/linter if available */
+  readonly suggestion?: string;
+}
+
 /** Failure category classification */
 export type FailureCategory =
   | "dependency"
-  | "compile"
+  | "build"
   | "test"
   | "runtime"
   | "config"
@@ -202,6 +243,10 @@ export interface LLMAnalysisResult {
   detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
   /** Build config changes detected from PR diff (any build system) */
   detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+  /** Structured test failures extracted by LLM with expected/actual values */
+  testFailures?: readonly LLMTestFailure[];
+  /** Structured lint/compile errors extracted by LLM with specific symbols */
+  lintErrors?: readonly LLMLintError[];
 }
 
 // ==================== Action Proposal Types ====================

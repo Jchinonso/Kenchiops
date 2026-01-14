@@ -5,7 +5,7 @@
  * prompts fit within model token limits. Optimized to minimize prompt
  * building operations while ensuring accurate token counting.
  *
- * @module openaiClient/tokenManager
+ * @module llm/tokenManager
  */
 
 import type { Event, Evidence } from "../core/types.js";

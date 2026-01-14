@@ -4,10 +4,10 @@
  * Provides error handling utilities for OpenAI API interactions,
  * including error enrichment and retry delay utilities.
  *
- * @module openaiClient/errors
+ * @module llm/providers/openai/errors
  */
 
-import { HTTP_STATUS, OPENAI_CONSTANTS } from "../constants/index.js";
+import { HTTP_STATUS, OPENAI_CONSTANTS } from "../../../constants/index.js";
 
 /**
  * Type definition for OpenAI API error responses.
