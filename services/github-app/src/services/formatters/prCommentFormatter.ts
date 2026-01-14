@@ -136,8 +136,14 @@ export const buildTestFileGroup = (
 /**
  * Build the test failures section.
  * Works with any test framework - LLM already filters real failures.
+ *
+ * @param testFailures - Array of test failures to display
+ * @param testCommand - LLM-generated command to run failing tests locally
  */
-export const buildTestFailuresSection = (testFailures: readonly TestFailureInfo[]): string[] => {
+export const buildTestFailuresSection = (
+  testFailures: readonly TestFailureInfo[],
+  testCommand?: string
+): string[] => {
   if (testFailures.length === 0) {
     return [];
   }
@@ -159,24 +165,18 @@ export const buildTestFailuresSection = (testFailures: readonly TestFailureInfo[
   const breakdown = categorizeFailures(testFailures);
   const breakdownLines = generateErrorBreakdownVisual(breakdown);
 
-  // Build quick copy test command
-  const uniqueTestFiles = [...failuresByFile.keys()]
-    .filter((filePath) => filePath !== "Unknown file")
-    .map((filePath) => filePath.split("/").pop())
-    .filter(Boolean);
-
-  const testCommandSection =
-    uniqueTestFiles.length > 0
-      ? [
-          `<details><summary>${UI_EMOJI.info} <strong>Run failing tests locally</strong></summary>`,
-          "",
-          "```bash",
-          `npm test -- --testPathPattern="${uniqueTestFiles.length === 1 ? uniqueTestFiles[0] : `(${uniqueTestFiles.join("|")})`}"`,
-          "```",
-          "</details>",
-          "",
-        ]
-      : [];
+  // Build quick copy test command section using LLM-provided command
+  const testCommandSection = testCommand
+    ? [
+        `<details><summary>${UI_EMOJI.info} <strong>Run failing tests locally</strong></summary>`,
+        "",
+        "```bash",
+        testCommand,
+        "```",
+        "</details>",
+        "",
+      ]
+    : [];
 
   return [
     `${UI_EMOJI.new} **New failures introduced in this PR**`,
@@ -328,7 +328,7 @@ export const buildFailureSection = (failure: AggregatedFailures["failures"][numb
     : `> ${failure.identifiedCause ?? failure.analysis ?? "Unknown error"}`;
 
   const testFailuresSection = failure.testFailures?.length
-    ? buildTestFailuresSection(failure.testFailures)
+    ? buildTestFailuresSection(failure.testFailures, failure.testCommand)
     : [];
 
   const lintErrorsSection = failure.lintErrors?.length

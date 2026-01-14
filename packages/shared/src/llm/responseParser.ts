@@ -234,6 +234,12 @@ export const createAnalysisFromParsed = (
   const testFailures = parseTestFailures(parsed.test_failures);
   const lintErrors = parseLintErrors(parsed.lint_errors);
 
+  // Extract test command if provided (LLM-generated based on detected framework)
+  const testCommand =
+    typeof parsed.test_command === "string" && parsed.test_command.trim()
+      ? parsed.test_command.trim()
+      : undefined;
+
   // Debug logging
   logTestFailureExtraction(eventId, parsed.test_failures, testFailures, category, phase);
   logLintErrorExtraction(eventId, lintErrors);
@@ -259,6 +265,7 @@ export const createAnalysisFromParsed = (
     detectedBuildConfigChanges: parseBuildConfigChanges(parsed.detectedBuildConfigChanges),
     testFailures: testFailures.length > 0 ? testFailures : undefined,
     lintErrors: lintErrors.length > 0 ? lintErrors : undefined,
+    testCommand,
   };
 };
 

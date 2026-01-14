@@ -45,6 +45,8 @@ interface PerJobAnalysisApiResponse {
   readonly full_analysis?: {
     readonly testFailures?: readonly TestFailureInfo[];
     readonly lintErrors?: readonly LLMLintError[];
+    /** Command to run failing tests locally (LLM-generated based on detected framework) */
+    readonly testCommand?: string;
   };
 }
 
@@ -59,6 +61,8 @@ interface JobAnalysisResult {
   readonly testFailures: readonly TestFailureInfo[];
   /** LLM-extracted lint/compile errors with specific symbols */
   readonly lintErrors: readonly LLMLintError[];
+  /** Command to run failing tests locally (LLM-generated based on detected framework) */
+  readonly testCommand?: string;
 }
 
 /**
@@ -126,6 +130,13 @@ const extractLintErrors = (response: PerJobAnalysisApiResponse): readonly LLMLin
   response.full_analysis?.lintErrors ?? [];
 
 /**
+ * Extract test command from API response.
+ * The LLM generates this based on detected framework.
+ */
+const extractTestCommand = (response: PerJobAnalysisApiResponse): string | undefined =>
+  response.full_analysis?.testCommand;
+
+/**
  * Convert per-job analysis result to AnalyzedFailure.
  * Uses LLM-extracted test failures with expected/actual values.
  */
@@ -156,6 +167,7 @@ const convertJobResultToFailure = (
     recommendedActions: convertRecommendedActions(response.recommended_actions),
     testFailures: result.testFailures,
     lintErrors: result.lintErrors,
+    testCommand: result.testCommand,
     timestamp,
   };
 };
@@ -248,11 +260,15 @@ const analyzeJobLogs = async (
   // Extract LLM lint errors with specific symbols
   const lintErrors = extractLintErrors(response.data);
 
+  // Extract LLM-generated test command
+  const testCommand = extractTestCommand(response.data);
+
   logger.info("LLM analysis complete", {
     jobName,
     repository,
     testFailureCount: testFailures.length,
     lintErrorCount: lintErrors.length,
+    testCommand,
   });
 
   return {
@@ -261,6 +277,7 @@ const analyzeJobLogs = async (
     response: response.data,
     testFailures,
     lintErrors,
+    testCommand,
   };
 };
 

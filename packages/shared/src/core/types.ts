@@ -247,6 +247,8 @@ export interface LLMAnalysisResult {
   testFailures?: readonly LLMTestFailure[];
   /** Structured lint/compile errors extracted by LLM with specific symbols */
   lintErrors?: readonly LLMLintError[];
+  /** Command to run failing tests locally (LLM-generated based on detected framework) */
+  testCommand?: string;
 }
 
 // ==================== Action Proposal Types ====================
