@@ -172,7 +172,8 @@ describe("Artifact Aggregator (Stage 3)", () => {
 
     it("should return correct priority for ci_boundary", () => {
       const score = computePriorityScore(ARTIFACT_TYPES.CI_BOUNDARY);
-      expect(score).toBe(8);
+      // CI_BOUNDARY has low priority (3) - it's only used when no specific artifact is found
+      expect(score).toBe(3);
     });
 
     it("should return correct priority for stack_trace", () => {
