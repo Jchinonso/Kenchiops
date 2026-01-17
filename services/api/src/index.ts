@@ -21,6 +21,7 @@ import {
   cleanupExpired,
   runDriftDetectionWithAlerts,
   triggerReembedding,
+  syncDueSources,
   getErrorMessage,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
@@ -47,6 +48,9 @@ let driftIntervalId: NodeJS.Timeout | null = null;
 
 /** Reference to re-embedding interval for cleanup on shutdown */
 let reembedIntervalId: NodeJS.Timeout | null = null;
+
+/** Reference to external sync interval for cleanup on shutdown */
+let externalSyncIntervalId: NodeJS.Timeout | null = null;
 
 /**
  * Run RAG cleanup task and log results.
@@ -184,6 +188,50 @@ const stopReembedScheduler = (): void => {
 };
 
 /**
+ * Run external source sync task and log results.
+ * This is called periodically to sync due external sources.
+ */
+const runExternalSyncTask = async (): Promise<void> => {
+  try {
+    logger.info("Running scheduled external source sync");
+    const result = await syncDueSources();
+    logger.info("Scheduled external source sync complete", {
+      sourcesProcessed: result.sourcesProcessed,
+      totalDocsIngested: result.totalDocsIngested,
+      totalErrors: result.totalErrors,
+    });
+  } catch (error) {
+    logger.error("Scheduled external source sync failed", { error: getErrorMessage(error) });
+  }
+};
+
+/**
+ * Start the periodic external source sync scheduler.
+ * Runs every 6 hours to sync due external sources.
+ */
+const startExternalSyncScheduler = (): void => {
+  // Run immediately on startup, then every 6 hours
+  void runExternalSyncTask();
+  externalSyncIntervalId = setInterval(() => {
+    void runExternalSyncTask();
+  }, RAG_JOB_INTERVALS.EXTERNAL_SYNC_MS);
+  logger.info("External source sync scheduler started", {
+    intervalMs: RAG_JOB_INTERVALS.EXTERNAL_SYNC_MS,
+  });
+};
+
+/**
+ * Stop the external sync scheduler.
+ */
+const stopExternalSyncScheduler = (): void => {
+  if (externalSyncIntervalId) {
+    clearInterval(externalSyncIntervalId);
+    externalSyncIntervalId = null;
+    logger.info("External source sync scheduler stopped");
+  }
+};
+
+/**
  * Redis-backed rate limiter: 100 requests per minute per IP.
  * Falls back to in-memory if Redis is unavailable.
  * Skips health check endpoints for monitoring.
@@ -262,6 +310,10 @@ const startServer = async (): Promise<void> => {
   // Start re-embedding scheduler and register for graceful shutdown
   startReembedScheduler();
   registerCleanupHandler(stopReembedScheduler);
+
+  // Start external source sync scheduler and register for graceful shutdown
+  startExternalSyncScheduler();
+  registerCleanupHandler(stopExternalSyncScheduler);
 
   // Start fine-tuning job scheduler and register for graceful shutdown
   startScheduler();

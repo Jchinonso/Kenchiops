@@ -8,8 +8,7 @@
  */
 
 import { query } from "./client.js";
-import { createLogger } from "../core/logger.js";
-import { generateEventId } from "../core/utils.js";
+import { createLogger, generateEventId } from "../core/index.js";
 
 const logger = createLogger("analysis-repository");
 
@@ -29,6 +28,8 @@ export interface CreateAnalysisInput {
   readonly fullAnalysis: Record<string, unknown>;
   readonly tenantId?: string;
   readonly modelVersionId?: string;
+  /** Links to feedback via repo:commit format (e.g., "owner/repo:sha") */
+  readonly aggregationKey?: string;
 }
 
 /**
@@ -46,6 +47,8 @@ export interface AnalysisRecord {
   readonly fullAnalysis: Record<string, unknown>;
   readonly tenantId: string | null;
   readonly modelVersionId: string | null;
+  /** Links to feedback via repo:commit format (e.g., "owner/repo:sha") */
+  readonly aggregationKey: string | null;
   readonly createdAt: Date;
 }
 
@@ -53,18 +56,19 @@ export interface AnalysisRecord {
  * Database row type for analyses.
  */
 interface AnalysisRow {
-  id: string;
-  event_id: string | null;
-  summary: string;
-  identified_cause: string | null;
-  diagnosis_confidence: number;
-  action_confidence: number | null;
-  confidence_signals: Record<string, unknown> | null;
-  recommended_actions: string[] | null;
-  full_analysis: Record<string, unknown>;
-  tenant_id: string | null;
-  model_version_id: string | null;
-  created_at: Date;
+  readonly id: string;
+  readonly event_id: string | null;
+  readonly summary: string;
+  readonly identified_cause: string | null;
+  readonly diagnosis_confidence: number;
+  readonly action_confidence: number | null;
+  readonly confidence_signals: Record<string, unknown> | null;
+  readonly recommended_actions: string[] | null;
+  readonly full_analysis: Record<string, unknown>;
+  readonly tenant_id: string | null;
+  readonly model_version_id: string | null;
+  readonly aggregation_key: string | null;
+  readonly created_at: Date;
 }
 
 // ==================== SQL Queries ====================
@@ -74,9 +78,9 @@ const ANALYSIS_QUERIES = {
     INSERT INTO analyses (
       id, event_id, summary, identified_cause, diagnosis_confidence,
       action_confidence, confidence_signals, recommended_actions,
-      full_analysis, tenant_id, model_version_id
+      full_analysis, tenant_id, model_version_id, aggregation_key
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     RETURNING *
   `,
 
@@ -118,6 +122,7 @@ const mapRowToRecord = (row: AnalysisRow): AnalysisRecord => ({
   fullAnalysis: row.full_analysis,
   tenantId: row.tenant_id,
   modelVersionId: row.model_version_id,
+  aggregationKey: row.aggregation_key,
   createdAt: row.created_at,
 });
 
@@ -144,6 +149,7 @@ export const createAnalysis = async (input: CreateAnalysisInput): Promise<Analys
     JSON.stringify(input.fullAnalysis),
     input.tenantId ?? null,
     input.modelVersionId ?? null,
+    input.aggregationKey ?? null,
   ]);
 
   const record = mapRowToRecord(result.rows[0]);

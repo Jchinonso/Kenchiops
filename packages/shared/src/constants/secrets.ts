@@ -13,6 +13,8 @@ export const REDACTION_PLACEHOLDER = "[REDACTED]" as const;
 export const REDACTION_DEFAULTS = {
   /** Maximum depth for object traversal during redaction */
   MAX_DEPTH: 10,
+  /** Maximum input size for redaction (5MB) to prevent ReDoS attacks */
+  MAX_INPUT_SIZE: 5 * 1024 * 1024,
 } as const;
 
 /**
@@ -175,6 +177,133 @@ export const SECRET_PATTERNS: Readonly<SecretPattern[]> = [
   {
     name: "Basic Auth",
     pattern: /\bBasic\s+([A-Za-z0-9+/=]{20,})\b/g,
+  },
+  // ==========================================================================
+  // Cloud Provider Tokens
+  // ==========================================================================
+  // Google Cloud / GCP
+  {
+    name: "GCP API Key",
+    pattern: /\bAIza[A-Za-z0-9_-]{35}\b/g,
+  },
+  {
+    name: "GCP Service Account Key",
+    pattern: /"private_key":\s*"-----BEGIN[^"]+-----"/g,
+  },
+  // Azure
+  {
+    name: "Azure Storage Connection String",
+    pattern: /DefaultEndpointsProtocol=https;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]{20,};/g,
+  },
+  {
+    name: "Azure SAS Token",
+    pattern: /[?&]sig=[A-Za-z0-9%+/=]+/g,
+  },
+  {
+    name: "Azure AD Client Secret",
+    pattern: /\b([a-zA-Z0-9~._-]{34,})\b(?=.*(?:azure|client.?secret|tenant))/gi,
+  },
+  // ==========================================================================
+  // CI/CD Platform Tokens
+  // ==========================================================================
+  // CircleCI
+  {
+    name: "CircleCI Token",
+    pattern: /\b(circle[_-]?token)[=:]["']?([A-Fa-f0-9]{40})["']?/gi,
+  },
+  // Travis CI
+  {
+    name: "Travis CI Token",
+    pattern: /\b(travis[_-]?token)[=:]["']?([A-Za-z0-9]{22})["']?/gi,
+  },
+  // GitLab
+  {
+    name: "GitLab Personal Access Token",
+    pattern: /\bglpat-[A-Za-z0-9_-]{20}\b/g,
+  },
+  {
+    name: "GitLab CI Job Token",
+    pattern: /\b(CI_JOB_TOKEN)[=:]["']?([A-Za-z0-9_-]{20,})["']?/gi,
+  },
+  // ==========================================================================
+  // Platform-as-a-Service Tokens
+  // ==========================================================================
+  // Heroku
+  {
+    name: "Heroku API Key",
+    pattern:
+      /\b(heroku[_-]?api[_-]?key)[=:]["']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']?/gi,
+  },
+  // Vercel
+  {
+    name: "Vercel Token",
+    pattern: /\b(vercel[_-]?token)[=:]["']?([A-Za-z0-9]{24})["']?/gi,
+  },
+  // Netlify
+  {
+    name: "Netlify Token",
+    pattern: /\b(netlify[_-]?token|netlify[_-]?auth[_-]?token)[=:]["']?([A-Za-z0-9_-]{40,})["']?/gi,
+  },
+  // ==========================================================================
+  // Container Registry Tokens
+  // ==========================================================================
+  // Docker Hub
+  {
+    name: "Docker Hub Token",
+    pattern: /\b(dckr_pat_[A-Za-z0-9_-]{20,})\b/g,
+  },
+  {
+    name: "Docker Config Auth",
+    pattern: /"auth":\s*"([A-Za-z0-9+/=]{20,})"/g,
+  },
+  // ==========================================================================
+  // CI Environment Variable Patterns
+  // ==========================================================================
+  // Generic secret in env var format
+  {
+    name: "Secret Environment Variable",
+    pattern:
+      /\b([A-Z_]*(?:SECRET|TOKEN|KEY|PASS|CREDENTIAL|AUTH)[A-Z_]*)[=:]["']?([^\s"']{16,})["']?/g,
+  },
+  // Masked GitHub Actions secrets
+  {
+    name: "GitHub Actions Secret Reference",
+    pattern: /\$\{\{\s*secrets\.[A-Z_]+\s*\}\}/g,
+  },
+  // ==========================================================================
+  // Additional Webhook/API Secrets
+  // ==========================================================================
+  // Webhook URLs with tokens
+  {
+    name: "Webhook URL with Token",
+    pattern: /https:\/\/hooks\.[^\s]+\/services\/[A-Z0-9]+\/[A-Z0-9]+\/[A-Za-z0-9]+/gi,
+  },
+  // Discord webhooks
+  {
+    name: "Discord Webhook",
+    pattern: /https:\/\/discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+/g,
+  },
+  // Datadog API Key
+  {
+    name: "Datadog API Key",
+    pattern: /\b(dd[_-]?api[_-]?key|datadog[_-]?api[_-]?key)[=:]["']?([a-f0-9]{32})["']?/gi,
+  },
+  // Sentry DSN
+  {
+    name: "Sentry DSN",
+    pattern: /https:\/\/[a-f0-9]{32}@[^/]+\.ingest\.sentry\.io\/\d+/g,
+  },
+  // ==========================================================================
+  // Generic High-Entropy Secrets
+  // ==========================================================================
+  // Hex strings (32/64 chars) often used for secrets
+  {
+    name: "Hex Secret 32",
+    pattern: /\b([A-Z_]*(?:SECRET|KEY|TOKEN|HASH|SALT)[A-Z_]*)[=:]["']?([a-f0-9]{32})["']?/gi,
+  },
+  {
+    name: "Hex Secret 64",
+    pattern: /\b([A-Z_]*(?:SECRET|KEY|TOKEN|HASH)[A-Z_]*)[=:]["']?([a-f0-9]{64})["']?/gi,
   },
 ] as const;
 
