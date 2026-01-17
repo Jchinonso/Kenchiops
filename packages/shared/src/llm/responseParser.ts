@@ -183,16 +183,43 @@ const generateActionType = (stepDescription: string, stepIndex: number): string 
 type ActionPriority = "immediate" | "high" | "medium" | "low";
 
 /**
+ * Normalizes a step item to a string description.
+ * Handles both string format and object format (e.g., { description: "..." }).
+ */
+const normalizeStepToString = (step: unknown): string => {
+  if (typeof step === "string") {
+    return step;
+  }
+  if (step !== null && typeof step === "object") {
+    const stepObj = step as Record<string, unknown>;
+    if (typeof stepObj.description === "string") {
+      return stepObj.description;
+    }
+    if (typeof stepObj.step === "string") {
+      return stepObj.step;
+    }
+    if (typeof stepObj.action === "string") {
+      return stepObj.action;
+    }
+  }
+  return String(step);
+};
+
+/**
  * Maps next steps to recommended actions with priorities.
+ * Handles both string[] and object[] formats from LLM responses.
  */
 const mapNextStepsToActions = (
-  nextSteps: readonly string[]
+  nextSteps: readonly unknown[]
 ): ReadonlyArray<{ description: string; priority: ActionPriority; actionType: string }> =>
-  nextSteps.map((stepDescription, stepIndex) => ({
-    description: stepDescription,
-    priority: (stepIndex === 0 ? "high" : "medium") as ActionPriority,
-    actionType: generateActionType(stepDescription, stepIndex),
-  }));
+  nextSteps.map((step, stepIndex) => {
+    const stepDescription = normalizeStepToString(step);
+    return {
+      description: stepDescription,
+      priority: (stepIndex === 0 ? "high" : "medium") as ActionPriority,
+      actionType: generateActionType(stepDescription, stepIndex),
+    };
+  });
 
 // ==================== Summary Extraction ====================
 
@@ -223,7 +250,8 @@ export const createAnalysisFromParsed = (
   const category = validateCategory(parsed.category);
   const phase = validatePhase(parsed.phase);
   const annotations = parseAnnotations(parsed.annotations);
-  const nextSteps = extractArray(parsed.next_steps, []) as string[];
+  const rawNextSteps = extractArray(parsed.next_steps, []) as unknown[];
+  const nextSteps = rawNextSteps.map(normalizeStepToString);
   const secondaryFindings = parseSecondaryFindings(parsed.secondary_findings);
 
   // Extract summary and build reasoning
