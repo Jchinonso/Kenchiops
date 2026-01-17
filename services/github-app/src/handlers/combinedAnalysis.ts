@@ -17,12 +17,17 @@ import {
   resilientPost,
   getErrorMessage,
   preprocessLogsWithMetadata,
+  // V1.1: Chunking pipeline for improved preprocessing and line mapping
+  sanitizeForChunkingWithMapping,
+  getOriginalLineNumber,
   type PendingAggregationPayload,
   type AggregatedFailures,
   type AnalyzedFailure,
   type ConsolidatedPostResult,
   type TestFailureInfo,
   type LLMLintError,
+  type LineMapping,
+  type SanitizationResultWithMapping,
 } from "@kenchi/shared";
 import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
@@ -63,6 +68,8 @@ interface JobAnalysisResult {
   readonly lintErrors: readonly LLMLintError[];
   /** Command to run failing tests locally (LLM-generated based on detected framework) */
   readonly testCommand?: string;
+  /** V1.1: Line mappings for original line number recovery */
+  readonly lineMappings: readonly LineMapping[];
 }
 
 /**
@@ -139,6 +146,8 @@ const extractTestCommand = (response: PerJobAnalysisApiResponse): string | undef
 /**
  * Convert per-job analysis result to AnalyzedFailure.
  * Uses LLM-extracted test failures with expected/actual values.
+ *
+ * V1.1: Uses line mappings to recover original line numbers for annotations.
  */
 const convertJobResultToFailure = (
   result: JobAnalysisResult,
@@ -146,7 +155,7 @@ const convertJobResultToFailure = (
   checkName: string,
   timestamp: Date
 ): AnalyzedFailure => {
-  const { response } = result;
+  const { response, lineMappings } = result;
   const identifiedCause = response.identified_cause ?? response.analysis ?? "Unknown failure";
 
   return {
@@ -157,13 +166,21 @@ const convertJobResultToFailure = (
     identifiedCause,
     analysis: identifiedCause,
     annotations:
-      response.annotations?.map((annotation) => ({
-        path: annotation.path ?? "",
-        line: annotation.line ?? 0,
-        level: (annotation.level as "failure" | "warning" | "notice") ?? "failure",
-        message: annotation.message ?? "",
-        title: annotation.title,
-      })) ?? [],
+      response.annotations?.map((annotation) => {
+        const sanitizedLine = annotation.line ?? 0;
+        // V1.1: Recover original line number using line mappings
+        const originalLineNumber =
+          sanitizedLine > 0 ? getOriginalLineNumber(lineMappings, sanitizedLine) : null;
+
+        return {
+          path: annotation.path ?? "",
+          line: sanitizedLine,
+          level: (annotation.level as "failure" | "warning" | "notice") ?? "failure",
+          message: annotation.message ?? "",
+          title: annotation.title,
+          original_line_number: originalLineNumber,
+        };
+      }) ?? [],
     recommendedActions: convertRecommendedActions(response.recommended_actions),
     testFailures: result.testFailures,
     lintErrors: result.lintErrors,
@@ -219,6 +236,9 @@ const createFallbackFailure = (
 /**
  * Analyze a single job's logs via LLM API.
  * LLM extracts test failures with expected/actual values.
+ *
+ * V1.1: Uses chunking pipeline preprocessing with line mapping for
+ * original line number recovery in annotations.
  */
 const analyzeJobLogs = async (
   jobName: string,
@@ -226,29 +246,38 @@ const analyzeJobLogs = async (
   repository: string,
   apiUrl: string
 ): Promise<JobAnalysisResult> => {
-  const preprocessed = preprocessLogsWithMetadata(jobLogs);
+  // V1.1: Use chunking pipeline preprocessing for better size reduction and line mapping
+  const sanitized: SanitizationResultWithMapping = sanitizeForChunkingWithMapping(jobLogs);
+
+  // Also get test framework detection from legacy preprocessor
+  const legacyPreprocessed = preprocessLogsWithMetadata(jobLogs);
 
   logger.info("Analyzing job logs via LLM", {
     jobName,
     repository,
-    originalSize: preprocessed.originalSize,
-    processedSize: preprocessed.processedSize,
-    detectedFramework: preprocessed.testFramework?.name,
+    originalSize: sanitized.originalSize,
+    processedSize: sanitized.finalSize,
+    reductionPercent: sanitized.reductionPercent,
+    secretsRedacted: sanitized.secretsRedacted,
+    linesCollapsed: sanitized.linesCollapsed,
+    progressLinesRemoved: sanitized.progressLinesRemoved,
+    lineMappingsCount: sanitized.lineMappings.length,
+    detectedFramework: legacyPreprocessed.testFramework?.name,
   });
 
   // Build request payload with optional framework hint
   const requestPayload: Record<string, unknown> = {
-    failure_log: preprocessed.logs,
+    failure_log: sanitized.text,
     repository,
     job_name: jobName,
   };
 
   // Include framework hint if detected
-  if (preprocessed.testFramework) {
+  if (legacyPreprocessed.testFramework) {
     requestPayload.test_framework = {
-      name: preprocessed.testFramework.name,
-      language: preprocessed.testFramework.language,
-      assertion_hint: preprocessed.testFramework.assertionHint,
+      name: legacyPreprocessed.testFramework.name,
+      language: legacyPreprocessed.testFramework.language,
+      assertion_hint: legacyPreprocessed.testFramework.assertionHint,
     };
   }
 
@@ -278,6 +307,7 @@ const analyzeJobLogs = async (
     testFailures,
     lintErrors,
     testCommand,
+    lineMappings: sanitized.lineMappings,
   };
 };
 
@@ -346,6 +376,7 @@ const analyzeJobWithErrorHandling = async (
       response: {} as PerJobAnalysisApiResponse,
       testFailures: [],
       lintErrors: [],
+      lineMappings: [],
       failed: true,
       error: getErrorMessage(error),
     };

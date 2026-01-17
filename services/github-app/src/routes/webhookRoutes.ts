@@ -247,38 +247,37 @@ const handleUnknownEvent = (eventType: string, deliveryId: string, res: Response
 /**
  * Unified GitHub webhook handler
  * GitHub sends all events to this single endpoint with X-GitHub-Event header
- * POST /webhook/github
+ * Endpoint: POST /api/github/webhook
  */
-router.post(
-  "/webhook/github",
-  verifyGitHubWebhook,
-  asyncHandler(async (req: Request, res: Response) => {
-    const eventType = req.headers["x-github-event"] as string;
-    const deliveryId = req.headers["x-github-delivery"] as string;
+const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => {
+  const eventType = req.headers["x-github-event"] as string;
+  const deliveryId = req.headers["x-github-delivery"] as string;
 
-    logger.info("Received GitHub webhook", {
-      eventType,
-      deliveryId,
-    });
+  logger.info("Received GitHub webhook", {
+    eventType,
+    deliveryId,
+  });
 
-    // Handle ping separately (no async processing needed)
-    if (eventType === "ping") {
-      handlePing(deliveryId, res);
-      return;
-    }
+  // Handle ping separately (no async processing needed)
+  if (eventType === "ping") {
+    handlePing(deliveryId, res);
+    return;
+  }
 
-    // Look up handler in table
-    const handler = eventHandlers[eventType];
-    if (!handler) {
-      handleUnknownEvent(eventType, deliveryId, res);
-      return;
-    }
+  // Look up handler in table
+  const handler = eventHandlers[eventType];
+  if (!handler) {
+    handleUnknownEvent(eventType, deliveryId, res);
+    return;
+  }
 
-    // Execute handler and format response
-    const result = await handler.handle(req.body);
-    res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
-  })
-);
+  // Execute handler and format response
+  const result = await handler.handle(req.body);
+  res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
+});
+
+// Main webhook endpoint (full path: /api/github/webhook)
+router.post("/webhook", verifyGitHubWebhook, handleGitHubWebhook);
 
 /**
  * Handle pull request webhook (legacy endpoint)

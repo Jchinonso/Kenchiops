@@ -120,22 +120,16 @@ export const cacheEmbedding = (
  * Clears expired cache entries.
  */
 export const clearExpiredCache = (): number => {
-  let cleared = 0;
-  const keysToDelete: string[] = [];
+  // Filter keys to identify expired entries using immutable pattern
+  const keysToDelete = [...queryCache.entries()]
+    .filter(([, entry]) => isExpired(entry))
+    .map(([cacheKey]) => cacheKey);
 
-  queryCache.forEach((entry, key) => {
-    if (isExpired(entry)) {
-      keysToDelete.push(key);
-    }
-  });
+  // Delete expired entries
+  keysToDelete.forEach((cacheKey) => queryCache.delete(cacheKey));
 
-  keysToDelete.forEach((key) => {
-    queryCache.delete(key);
-    cleared++;
-  });
-
-  logger.debug("Cleared expired cache entries", { cleared });
-  return cleared;
+  logger.debug("Cleared expired cache entries", { cleared: keysToDelete.length });
+  return keysToDelete.length;
 };
 
 /**
@@ -146,6 +140,21 @@ export const clearCache = (): void => {
   cacheHits = 0;
   cacheMisses = 0;
   logger.info("Cache cleared");
+};
+
+/**
+ * Clears cache entries for a specific tenant.
+ *
+ * @param tenantId - The tenant ID to clear cache for
+ * @returns Number of entries cleared
+ */
+export const clearCacheForTenant = (tenantId: string): number => {
+  const keysToDelete = [...queryCache.keys()].filter((cacheKey) =>
+    cacheKey.startsWith(`${tenantId}:`)
+  );
+  keysToDelete.forEach((cacheKey) => queryCache.delete(cacheKey));
+  logger.info("Cleared tenant cache entries", { tenantId, cleared: keysToDelete.length });
+  return keysToDelete.length;
 };
 
 /**

@@ -39,7 +39,7 @@ kenchi/
 - **Middleware**: `errorHandler`, `asyncHandler`, `requestLogger`
 - **Validation**: `validate`, `validators`, `ValidationSchema`
 - **Rate Limiting**: `createRateLimiter`, `defaultRateLimiter`
-- **AI/ML**: `OpenAIClient`, `VectorStore`, `InMemoryVectorStore`
+- **AI/ML**: `OpenAIClient`
 - **Safety**: `calculateConfidenceScore`, `determineActionGating`, `confidenceScore`, `shouldActOnResult`
 - **Security**: `redactSecrets`, `redactSecretsWithStats`, `redactObject`, `isForbiddenField`, `containsSecrets`, `detectSecretTypes`, `createCustomRedactor`, `RedactionResult`
 - **Prompts**: `buildSystemPrompt`, `buildAnalysisPrompt`, `formatEvent`, `formatEvidence`, `formatLogs`, `formatMetrics`, `formatGitHistory`, `formatKnowledgeDocs`, `estimateTokens`, `truncateEvidence`

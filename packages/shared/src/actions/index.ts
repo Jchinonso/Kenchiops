@@ -5,22 +5,38 @@
  * Exports executor functions and types for use across services.
  */
 
+// ==================== Types ====================
+
+export type {
+  ActionExecutionContext,
+  ActionExecutionResult,
+  StoredActionPayload,
+  OpaqueActionValue,
+  ActionVerificationContext,
+  ActionStoreStats,
+  ActionJobPayload,
+  ActionResultEvent,
+  QueueStats,
+} from "./actionTypes.js";
+
+// ==================== Executor ====================
+
 export {
   executeAction,
   validateActionExecution,
   isActionExecutable,
   getExecutableActionTypes,
-  type ActionExecutionContext,
-  type ActionExecutionResult,
 } from "./actionExecutor.js";
+
+// ==================== Queue Processor ====================
 
 export {
   enqueueAction,
   startActionQueueWorker,
   getActionQueueStats,
-  type ActionJobPayload,
-  type ActionResultEvent,
 } from "./actionQueueProcessor.js";
+
+// ==================== Payload Store ====================
 
 export {
   storeActionPayload,
@@ -29,7 +45,4 @@ export {
   parseOpaqueActionValue,
   getActionStoreStats,
   clearActionStore,
-  type StoredActionPayload,
-  type OpaqueActionValue,
-  type ActionVerificationContext,
 } from "./actionPayloadStore.js";

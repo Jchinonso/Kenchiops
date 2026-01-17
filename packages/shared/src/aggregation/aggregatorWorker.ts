@@ -10,21 +10,34 @@
 import { createLogger, delay, getErrorMessage } from "../core/index.js";
 import { QUEUE_WORKER_DEFAULTS } from "../constants/index.js";
 import { DEFAULT_AGGREGATION_CONFIG, type AggregationConfig } from "./types.js";
-import { findReadyAggregations, enqueuePendingAggregation } from "./redisAggregator.js";
+import { findReadyAggregations } from "./aggregationScanner.js";
+import { enqueuePendingAggregation } from "./aggregationEnqueuer.js";
 
 const logger = createLogger("aggregator-worker");
 
-/**
- * Recursive polling function that continues until stopped.
- * Uses tail recursion pattern to avoid while loops.
- */
+// ==================== Types ====================
+
+/** Mutable state for controlling worker lifecycle. */
+interface WorkerState {
+  running: boolean;
+}
+
+/** Function to stop the worker gracefully. */
+export type StopFunction = () => void;
+
+/** Async function that polls and recurses until stopped. */
+type PollingLoop = () => Promise<void>;
+
+// ==================== Polling Loop ====================
+
+/** Creates recursive polling loop that processes ready aggregations. */
 const createPollingLoop = (
   config: AggregationConfig,
   pollIntervalMs: number,
-  isRunning: () => boolean
-): (() => Promise<void>) => {
+  state: WorkerState
+): PollingLoop => {
   const poll = async (): Promise<void> => {
-    if (!isRunning()) {
+    if (!state.running) {
       return;
     }
 
@@ -33,48 +46,40 @@ const createPollingLoop = (
 
       if (readyKeys.length > 0) {
         logger.info("Found ready aggregations", { count: readyKeys.length });
-
-        // Enqueue all ready pending aggregations for combined analysis
         await Promise.all(readyKeys.map(enqueuePendingAggregation));
       }
     } catch (error) {
-      logger.error("Aggregator worker error", {
-        error: getErrorMessage(error),
-      });
+      logger.error("Aggregator worker error", { error: getErrorMessage(error) });
     }
 
-    // Schedule next poll if still running
-    if (isRunning()) {
-      await delay(pollIntervalMs);
-      await poll();
+    if (!state.running) {
+      return;
     }
+
+    await delay(pollIntervalMs);
+    return poll();
   };
 
   return poll;
 };
 
-/**
- * Starts the aggregator worker that checks for ready aggregations
- * and enqueues them for processing.
- *
- * The worker runs continuously, polling Redis at the specified interval
- * to find aggregations where the debounce period has expired or max
- * wait time has been exceeded.
- *
- * @param config - Aggregation configuration (debounce, max wait, etc.)
- * @param pollIntervalMs - How often to check for ready aggregations
- * @returns Stop function to gracefully shutdown the worker
- *
- * @example
- * const stopWorker = startAggregatorWorker();
- * // Later, to stop:
- * stopWorker();
- */
+// ==================== Worker ====================
+
+/** Runs the polling loop with error boundary. */
+const runPollingLoop = async (poll: PollingLoop): Promise<void> => {
+  try {
+    await poll();
+  } catch (error) {
+    logger.error("Aggregator worker fatal error", { error: getErrorMessage(error) });
+  }
+};
+
+/** Starts the aggregator worker. Returns a stop function for graceful shutdown. */
 export const startAggregatorWorker = (
   config: AggregationConfig = DEFAULT_AGGREGATION_CONFIG,
   pollIntervalMs: number = QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS
-): (() => void) => {
-  let isRunning = true;
+): StopFunction => {
+  const state: WorkerState = { running: true };
 
   logger.info("Starting Redis aggregator worker", {
     pollIntervalMs,
@@ -82,25 +87,11 @@ export const startAggregatorWorker = (
     maxWaitMs: config.maxWaitMs,
   });
 
-  const poll = createPollingLoop(config, pollIntervalMs, () => isRunning);
+  const poll = createPollingLoop(config, pollIntervalMs, state);
+  void runPollingLoop(poll);
 
-  // Start polling with error boundary
-  const startPolling = async (): Promise<void> => {
-    try {
-      await poll();
-    } catch (error) {
-      logger.error("Aggregator worker fatal error", {
-        error: getErrorMessage(error),
-      });
-    }
-  };
-
-  // Fire and forget - starts the async loop
-  void startPolling();
-
-  // Return stop function for graceful shutdown
   return (): void => {
-    isRunning = false;
+    state.running = false;
     logger.info("Aggregator worker stopping");
   };
 };
