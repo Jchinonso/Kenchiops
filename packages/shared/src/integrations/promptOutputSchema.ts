@@ -142,13 +142,13 @@ ID NORMALIZATION:
 - If evidence contains "[log#abc]", output "log#abc".
 - Never include brackets in evidence_id.
 
-**next_steps** (required, 1-5 items): Actionable diagnostic or fix steps. Must be safe and reversible. next_steps must contain at least 1 item even when confidence="low".
+**next_steps** (required, 1-7 items): Actionable diagnostic or fix steps. Must be safe and reversible. next_steps must contain at least 1 item even when confidence="low".
 
 GLOBAL PRIORITIZATION RULES - next_steps must be a SINGLE ranked list across ALL failure categories:
 
-**Priority 1 (Fix merge gates FIRST)**:
-- Format checks (cargo fmt, prettier, black) - these often gate merges
-- Lint/clippy errors - these also gate merges in most CI setups
+**Priority 1 (Fix merge gates FIRST)** - ONLY include if corresponding evidence exists:
+- Format checks (cargo fmt, prettier, black) - only if format errors in logs
+- Lint/clippy errors - only if lint artifacts present
 - Compile/build errors - must pass before tests can run
 
 **Priority 2 (Fix functional bugs)**:
@@ -157,6 +157,12 @@ GLOBAL PRIORITIZATION RULES - next_steps must be a SINGLE ranked list across ALL
 - Configuration issues
 
 STRUCTURE each next_step with: action, reason, and priority number.
+
+ANTI-HALLUCINATION RULE (CRITICAL):
+- Do NOT invent function names, variable names, or code expressions
+- Only use identifiers that appear VERBATIM in evidence (log messages, test names, file paths)
+- If function name is unknown, use: "[file path] (around line N): inspect the functions touched in this PR"
+- If pattern is clear but function unknown: "Off-by-one pattern in tests::test_add - check the function under test"
 
 CRITICAL FOR TEST FAILURES - Provide SURGICAL recommendations based on patterns:
 
@@ -187,9 +193,10 @@ LOCAL COMMANDS - Include a "Run locally" block when applicable:
 - For Python: \`black .\`, \`ruff check .\`, \`pytest\`
 
 DO NOT give generic advice like "review expected vs actual values" - the developer can see those. TELL THEM:
-- Which function has the bug
+- Which function has the bug (ONLY if function name appears in evidence)
 - What the pattern means (off-by-one, sign inversion, etc.)
-- What specific code change is likely needed
+- What specific code change is likely needed (ONLY if you can infer it from evidence)
+- If function name is NOT in evidence, describe: file + line range + pattern observed
 
 **test_command** (optional, include when category="test"): Shell command to run the failing tests locally. Base this on the detected test framework. Examples:
 - For Rust (cargo-test): "cargo test"
