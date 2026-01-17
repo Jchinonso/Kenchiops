@@ -14,202 +14,181 @@ import {
   type QueueMessage,
   type ProcessResult,
 } from "../queue/index.js";
-import {
-  executeAction,
-  type ActionExecutionContext,
-  type ActionExecutionResult,
-} from "./actionExecutor.js";
+import { executeAction } from "./actionExecutor.js";
 import { createLogger, isRetryableError, delay, getErrorMessage } from "../core/index.js";
 import { RETRYABLE_ERROR_PATTERNS, QUEUE_WORKER_DEFAULTS } from "../constants/index.js";
-import type { ActionType, ActionProposal } from "../core/types.js";
+import type { ActionProposal } from "../core/types.js";
+import type {
+  ActionExecutionContext,
+  ActionJobPayload,
+  ActionResultEvent,
+  QueueStats,
+} from "./actionTypes.js";
+
+// Re-export types for backwards compatibility
+export type { ActionJobPayload, ActionResultEvent, QueueStats } from "./actionTypes.js";
 
 const logger = createLogger("action-queue");
 
-// ==================== Types ====================
-
-/**
- * Action job payload for queue
- */
-export interface ActionJobPayload {
-  readonly action: ActionProposal;
-  readonly context: ActionExecutionContext;
-  readonly callbackChannel?: string;
-}
-
-/**
- * Action result event for pub/sub
- */
-export interface ActionResultEvent {
-  readonly actionId: string;
-  readonly actionType: ActionType;
-  readonly result: ActionExecutionResult;
-  readonly queuedAt: string;
-  readonly processedAt: string;
-}
-
 // ==================== Queue Operations ====================
 
-/**
- * Enqueues an action for async processing
- */
+/** Enqueues an action for async processing, returns message ID. */
 export const enqueueAction = async (
   action: ActionProposal,
   context: ActionExecutionContext,
   callbackChannel?: string
 ): Promise<string> => {
-  const payload: ActionJobPayload = {
-    action,
-    context,
-    callbackChannel,
+  const payload: ActionJobPayload = { action, context, callbackChannel };
+  const metadata = {
+    actionId: action.id,
+    actionType: action.actionType,
+    repository: context.repository,
   };
 
-  const messageId = await githubActionQueue.enqueue("execute_action", payload, {
-    actionId: action.id,
-    actionType: action.actionType,
-    repository: context.repository,
-  });
-
-  logger.info("Action enqueued", {
-    messageId,
-    actionId: action.id,
-    actionType: action.actionType,
-    repository: context.repository,
-  });
-
-  return messageId;
+  try {
+    const messageId = await githubActionQueue.enqueue("execute_action", payload, metadata);
+    logger.info("Action enqueued", { messageId, ...metadata });
+    return messageId;
+  } catch (error) {
+    logger.error("Failed to enqueue action", { ...metadata, error: getErrorMessage(error) });
+    throw error;
+  }
 };
 
-/**
- * Processes a single action job from the queue
- */
+/** Check if error is retryable using shared patterns. */
+const checkRetryable = (error?: string): boolean =>
+  isRetryableError(error, RETRYABLE_ERROR_PATTERNS);
+
+/** Builds a ProcessResult with retry determination. */
+const buildProcessResult = (success: boolean, error?: string): ProcessResult => ({
+  success,
+  error,
+  shouldRetry: !success && checkRetryable(error),
+});
+
+/** Processes a single action job from the queue. */
 const processActionJob = async (
   message: QueueMessage<ActionJobPayload>
 ): Promise<ProcessResult> => {
   const { action, context, callbackChannel } = message.payload;
-  const queuedAt = message.timestamp;
+  const jobContext = { messageId: message.id, actionId: action.id };
 
   logger.info("Processing action job", {
-    messageId: message.id,
-    actionId: action.id,
+    ...jobContext,
     actionType: action.actionType,
     retryCount: message.retryCount,
   });
 
   try {
-    // Execute the action
     const result = await executeAction(action, context);
-    const processedAt = new Date().toISOString();
 
-    // Publish result to pub/sub for real-time updates
     const resultEvent: ActionResultEvent = {
       actionId: action.id,
       actionType: action.actionType,
       result,
-      queuedAt,
-      processedAt,
+      queuedAt: message.timestamp,
+      processedAt: new Date().toISOString(),
     };
 
     await publish(callbackChannel ?? CHANNELS.ACTION_EVENTS, "action_completed", resultEvent);
 
     logger.info("Action job completed", {
-      messageId: message.id,
-      actionId: action.id,
+      ...jobContext,
       success: result.success,
       duration: result.duration,
     });
 
-    return {
-      success: result.success,
-      error: result.error,
-      shouldRetry: !result.success && checkRetryable(result.error),
-    };
+    return buildProcessResult(result.success, result.error);
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-
-    logger.error("Action job failed", {
-      messageId: message.id,
-      actionId: action.id,
-      error: errorMessage,
-    });
-
-    return {
-      success: false,
-      error: errorMessage,
-      shouldRetry: checkRetryable(errorMessage),
-    };
+    logger.error("Action job failed", { ...jobContext, error: errorMessage });
+    return buildProcessResult(false, errorMessage);
   }
 };
 
-/**
- * Check if error is retryable using shared patterns
- */
-const checkRetryable = (error?: string): boolean =>
-  isRetryableError(error, RETRYABLE_ERROR_PATTERNS);
-
 // ==================== Worker Functions ====================
 
-/**
- * Starts the action queue worker
- * Continuously processes jobs from the queue
- */
-export const startActionQueueWorker = async (
-  options: { pollIntervalMs?: number; maxConcurrent?: number } = {}
-): Promise<() => void> => {
+interface WorkerOptions {
+  readonly pollIntervalMs?: number;
+  readonly maxConcurrent?: number;
+}
+
+interface WorkerState {
+  running: boolean;
+  activeJobs: number;
+}
+
+type WorkerLoop = () => Promise<void>;
+
+/** Recursive worker loop - processes jobs until stopped. */
+const createProcessLoop = (
+  state: WorkerState,
+  maxConcurrent: number,
+  pollIntervalMs: number
+): WorkerLoop => {
+  const loop = async (): Promise<void> => {
+    if (!state.running) {
+      return;
+    }
+
+    if (state.activeJobs >= maxConcurrent) {
+      await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);
+      return loop();
+    }
+
+    try {
+      state.activeJobs++;
+      await githubActionQueue.process(processActionJob);
+    } finally {
+      state.activeJobs--;
+    }
+
+    await delay(pollIntervalMs);
+    return loop();
+  };
+
+  return loop;
+};
+
+/** Runs all workers with error handling. */
+const runWorkers = async (workers: readonly WorkerLoop[]): Promise<void> => {
+  try {
+    await Promise.all(workers.map((worker): Promise<void> => worker()));
+  } catch (error) {
+    logger.error("Action queue worker error", { error: getErrorMessage(error) });
+  }
+};
+
+/** Starts the action queue worker. Returns a stop function. */
+export const startActionQueueWorker = async (options: WorkerOptions = {}): Promise<() => void> => {
   const {
     pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
     maxConcurrent = QUEUE_WORKER_DEFAULTS.MAX_CONCURRENT,
   } = options;
-  let running = true;
-  const isRunning = (): boolean => running;
-  let activeJobs = 0;
 
-  logger.info("Starting action queue worker", {
-    pollIntervalMs,
-    maxConcurrent,
-  });
+  const state: WorkerState = { running: true, activeJobs: 0 };
 
-  const processLoop = async (): Promise<void> => {
-    while (isRunning()) {
-      // Wait if at max concurrency
-      if (activeJobs >= maxConcurrent) {
-        await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);
-        continue;
-      }
+  logger.info("Starting action queue worker", { pollIntervalMs, maxConcurrent });
 
-      try {
-        activeJobs++;
-        await githubActionQueue.process(processActionJob);
-      } finally {
-        activeJobs--;
-      }
+  const workers = Array.from(
+    { length: maxConcurrent },
+    (): WorkerLoop => createProcessLoop(state, maxConcurrent, pollIntervalMs)
+  );
 
-      // Small delay between processing attempts
-      await delay(pollIntervalMs);
-    }
-  };
+  void runWorkers(workers);
 
-  // Start multiple concurrent workers
-  const workers = Array.from({ length: maxConcurrent }, () => processLoop());
-
-  // Don't await - let them run in background
-  Promise.all(workers).catch((error) => {
-    logger.error("Action queue worker error", {
-      error: getErrorMessage(error),
-    });
-  });
-
-  // Return stop function
-  return () => {
-    running = false;
+  return (): void => {
+    state.running = false;
     logger.info("Action queue worker stopping");
   };
 };
 
-/**
- * Gets queue statistics
- */
-export const getActionQueueStats = async (): Promise<{
-  pending: number;
-  processing: number;
-  dead: number;
-}> => githubActionQueue.getStats();
+/** Returns queue statistics for monitoring. */
+export const getActionQueueStats = async (): Promise<QueueStats> => {
+  try {
+    return await githubActionQueue.getStats();
+  } catch (error) {
+    logger.error("Failed to get action queue stats", { error: getErrorMessage(error) });
+    return { pending: 0, processing: 0, dead: 0 };
+  }
+};

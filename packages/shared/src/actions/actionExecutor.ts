@@ -8,55 +8,16 @@
  */
 
 import type { ActionType, ActionProposal, ExecutionResult } from "../core/types.js";
-import { createLogger, ExternalServiceError, getErrorMessage } from "../core/index.js";
+import { createLogger, getErrorMessage } from "../core/index.js";
 import { config } from "../core/config.js";
 import { resilientPost } from "../http/resilientClient.js";
 import { ACTION_MESSAGES } from "../constants/index.js";
+import type { ActionExecutionContext, ActionExecutionResult } from "./actionTypes.js";
+
+// Re-export types for backwards compatibility
+export type { ActionExecutionContext, ActionExecutionResult } from "./actionTypes.js";
 
 const logger = createLogger("action-executor");
-
-// ==================== Types ====================
-
-/**
- * Context provided to action executors.
- * Contains all information needed to execute an action.
- */
-export interface ActionExecutionContext {
-  /** GitHub installation ID for API access */
-  readonly installationId: number;
-  /** Repository full name (owner/repo) */
-  readonly repository: string;
-  /** Slack channel ID for notifications */
-  readonly channelId?: string;
-  /** Slack thread timestamp for threaded replies */
-  readonly threadTs?: string;
-  /** Commit SHA associated with the action */
-  readonly commitSha?: string;
-  /** PR number if action is related to a PR */
-  readonly prNumber?: number;
-  /** Check run ID for rerunning specific checks */
-  readonly checkRunId?: number;
-  /** Workflow run ID for rerunning workflows */
-  readonly workflowRunId?: number;
-  /** User who approved the action */
-  readonly approvedBy?: string;
-  /** Additional context-specific data */
-  readonly metadata?: Readonly<Record<string, unknown>>;
-}
-
-/**
- * Result of an action execution.
- */
-export interface ActionExecutionResult {
-  readonly success: boolean;
-  readonly actionId: string;
-  readonly actionType: ActionType;
-  readonly message: string;
-  readonly output?: string;
-  readonly error?: string;
-  readonly executedAt: string;
-  readonly duration?: number;
-}
 
 /**
  * Action executor function type.
@@ -102,7 +63,7 @@ const executeRerunPipeline: ActionExecutor = async (action, context) => {
   }
 
   try {
-    const rerunUrl = `${config.GITHUB_APP_URL}/api/actions/rerun`;
+    const rerunUrl = `${config.GITHUB_APP_URL}/api/github/actions/rerun`;
 
     const response = await resilientPost<RerunResponse>(rerunUrl, {
       installationId: context.installationId,
@@ -270,26 +231,21 @@ const ACTION_EXECUTORS: Readonly<Record<ActionType, ActionExecutor>> = {
 
 // ==================== Public API ====================
 
-/**
- * Checks if an action type is executable.
- */
-export const isActionExecutable = (actionType: ActionType): boolean => {
-  const executor = ACTION_EXECUTORS[actionType];
-  return executor !== executeNotImplemented;
+/** Checks if an action type has a real executor (not a placeholder). */
+export const isActionExecutable = (actionType: ActionType): boolean =>
+  ACTION_EXECUTORS[actionType] !== executeNotImplemented;
+
+/** Returns all action types that have real executors. */
+export const getExecutableActionTypes = (): readonly ActionType[] => {
+  const actionTypes = Object.entries(ACTION_EXECUTORS)
+    .filter(([, executor]) => executor !== executeNotImplemented)
+    .map(([actionType]) => actionType as ActionType);
+  return actionTypes;
 };
 
 /**
- * Gets the list of currently executable action types.
- */
-export const getExecutableActionTypes = (): readonly ActionType[] =>
-  (Object.keys(ACTION_EXECUTORS) as ActionType[]).filter(isActionExecutable);
-
-/**
  * Executes an action using the appropriate executor.
- *
- * @param action - The action proposal to execute
- * @param context - Execution context with required metadata
- * @returns Execution result with success/failure status
+ * Dispatches to the registered handler and wraps the result with metadata.
  */
 export const executeAction = async (
   action: ActionProposal,
@@ -297,20 +253,21 @@ export const executeAction = async (
 ): Promise<ActionExecutionResult> => {
   const startTime = Date.now();
 
+  const buildResult = (result: ExecutionResult & { success: boolean }): ActionExecutionResult => ({
+    success: result.success,
+    actionId: action.id,
+    actionType: action.actionType,
+    message: result.message ?? ACTION_MESSAGES.ACTION_COMPLETED,
+    output: result.output,
+    error: result.error,
+    executedAt: new Date().toISOString(),
+    duration: Date.now() - startTime,
+  });
+
   try {
     const executor = ACTION_EXECUTORS[action.actionType];
     const result = await executor(action, context);
-
-    const executionResult: ActionExecutionResult = {
-      success: result.success,
-      actionId: action.id,
-      actionType: action.actionType,
-      message: result.message ?? ACTION_MESSAGES.ACTION_COMPLETED,
-      output: result.output,
-      error: result.error,
-      executedAt: new Date().toISOString(),
-      duration: Date.now() - startTime,
-    };
+    const executionResult = buildResult(result);
 
     logger.info("Action execution completed", {
       actionId: action.id,
@@ -322,43 +279,43 @@ export const executeAction = async (
     return executionResult;
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    const isExternalError = error instanceof ExternalServiceError;
 
     logger.error("Action execution failed", {
       actionId: action.id,
       actionType: action.actionType,
       error: errorMessage,
-      isExternalError,
     });
 
-    return {
+    return buildResult({
       success: false,
-      actionId: action.id,
-      actionType: action.actionType,
       message: ACTION_MESSAGES.EXECUTION_FAILED,
       error: errorMessage,
-      executedAt: new Date().toISOString(),
-      duration: Date.now() - startTime,
-    };
+    });
   }
 };
 
+type ValidationResult = { valid: boolean; reason?: string };
+
+/** Validation rules for action execution, checked in order. */
+const VALIDATION_RULES: ReadonlyArray<{
+  check: (action: ActionProposal) => boolean;
+  reason: (action: ActionProposal) => string;
+}> = [
+  {
+    check: (action) => action.requiresApproval && action.status !== "approved",
+    reason: () => "Action requires approval",
+  },
+  {
+    check: (action) => !isActionExecutable(action.actionType),
+    reason: (action) => `Action type '${action.actionType}' not yet implemented`,
+  },
+];
+
 /**
  * Validates that an action can be executed.
- * Checks safety level, approval status, and executor availability.
+ * Checks approval status and executor availability using rule-based validation.
  */
-export const validateActionExecution = (
-  action: ActionProposal
-): { valid: boolean; reason?: string } => {
-  // Check if action requires approval but isn't approved
-  if (action.requiresApproval && action.status !== "approved") {
-    return { valid: false, reason: "Action requires approval" };
-  }
-
-  // Check if action type has an executor
-  if (!isActionExecutable(action.actionType)) {
-    return { valid: false, reason: `Action type '${action.actionType}' not yet implemented` };
-  }
-
-  return { valid: true };
+export const validateActionExecution = (action: ActionProposal): ValidationResult => {
+  const failedRule = VALIDATION_RULES.find((rule) => rule.check(action));
+  return failedRule ? { valid: false, reason: failedRule.reason(action) } : { valid: true };
 };
