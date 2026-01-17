@@ -98,10 +98,10 @@ describe("Webhook Routes", () => {
     });
   });
 
-  describe("POST /webhook/github - unified endpoint", () => {
+  describe("POST /webhook - unified endpoint", () => {
     it("should handle ping events", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "ping")
         .set("X-GitHub-Delivery", "12345")
         .send({ zen: "Keep it simple" });
@@ -113,7 +113,7 @@ describe("Webhook Routes", () => {
 
     it("should handle pull_request events", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "pull_request")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "opened" });
@@ -125,7 +125,7 @@ describe("Webhook Routes", () => {
 
     it("should handle check_run events", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "check_run")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "completed" });
@@ -137,7 +137,7 @@ describe("Webhook Routes", () => {
 
     it("should handle installation events", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "installation")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "created" });
@@ -149,7 +149,7 @@ describe("Webhook Routes", () => {
 
     it("should ignore unknown event types", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "unknown_event")
         .set("X-GitHub-Delivery", "12345")
         .send({});
@@ -161,7 +161,7 @@ describe("Webhook Routes", () => {
 
     it("should include eventId in response for handled events", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "check_run")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "completed" });
@@ -171,7 +171,7 @@ describe("Webhook Routes", () => {
 
     it("should include tenantId for installation events", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "installation")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "created" });
@@ -186,7 +186,7 @@ describe("Webhook Routes", () => {
       });
 
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "check_run")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "created" });
@@ -283,7 +283,7 @@ describe("Webhook Routes", () => {
   describe("error handling", () => {
     it("should handle missing event type header", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Delivery", "12345")
         .send({});
 
@@ -302,7 +302,7 @@ describe("Webhook Routes", () => {
       };
 
       await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "pull_request")
         .set("X-GitHub-Delivery", "12345")
         .send(webhookBody);
@@ -312,7 +312,7 @@ describe("Webhook Routes", () => {
 
     it("should not call handlers for ping events", async () => {
       await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "ping")
         .set("X-GitHub-Delivery", "12345")
         .send({});
@@ -325,7 +325,7 @@ describe("Webhook Routes", () => {
     it("should not call handlers for unknown events", async () => {
       // Push events with non-default branch are ignored (no handlers called)
       await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "push")
         .set("X-GitHub-Delivery", "12345")
         .send({
@@ -345,7 +345,7 @@ describe("Webhook Routes", () => {
   describe("response formatting", () => {
     it("should format PR response correctly", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "pull_request")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "opened" });
@@ -359,7 +359,7 @@ describe("Webhook Routes", () => {
 
     it("should format installation response correctly", async () => {
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "installation")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "created" });
@@ -378,7 +378,7 @@ describe("Webhook Routes", () => {
       });
 
       const response = await request(app)
-        .post("/webhook/github")
+        .post("/webhook")
         .set("X-GitHub-Event", "check_run")
         .set("X-GitHub-Delivery", "12345")
         .send({ action: "completed" });

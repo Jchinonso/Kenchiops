@@ -22,7 +22,9 @@ export {
   CONFIDENCE_DISPLAY_LABELS,
   CONTEXT_CONFIDENCE_ADJUSTMENTS,
   CONFIDENCE_DISPLAY_THRESHOLDS,
+  CONFIDENCE_LEVEL_THRESHOLDS,
   type ConfidenceRange,
+  type DerivedConfidenceLevel,
 } from "./confidence.js";
 
 // HTTP and error constants
@@ -123,6 +125,14 @@ export {
   PR_CONTEXT_CORRELATION,
 } from "./github.js";
 
+// Evidence parsing constants
+export {
+  ERROR_SECTION_HEADINGS,
+  SECTION_SOURCE_OVERRIDES,
+  EVIDENCE_LOG_TIMING,
+  EVIDENCE_TEXT_LIMITS,
+} from "./evidence.js";
+
 // OpenAI and text processing constants
 export {
   OPENAI_DEFAULTS,
@@ -149,6 +159,7 @@ export {
   CHUNKING_CONFIG,
   VECTOR_SIMILARITY_THRESHOLDS,
   KNOWLEDGE_DOC_TYPES,
+  AUTO_DETECT_RELATIONSHIP_DOC_TYPES,
   RELATIONSHIP_TYPES,
   MULTI_HOP_CONFIG,
   RELATIONSHIP_DETECTION_CONFIG,
@@ -169,6 +180,8 @@ export {
   type TechStackTag,
   type EmbeddingTierName,
   type RAGMetricType,
+  type EvidenceKnowledgeDocType,
+  RAG_TO_EVIDENCE_DOC_TYPE_MAP,
 } from "./ragConstants.js";
 
 // Secret detection constants
@@ -212,6 +225,8 @@ export {
   CONFIG_DEFAULTS,
   VALID_NODE_ENVS,
   PARSE_INT_RADIX,
+  HEX_RADIX,
+  HEX_BYTE_WIDTH,
   HTTP_RESILIENCE_DEFAULTS,
   RETRYABLE_HTTP_STATUS_CODES,
   RETRYABLE_NETWORK_ERRORS,
@@ -340,3 +355,36 @@ export {
   CAUSE_WEAKNESS_WEIGHTS,
   TEST_FILE_PATTERNS,
 } from "./causePatterns.js";
+
+// Chunking pipeline constants
+export {
+  TOKEN_ESTIMATION,
+  CHUNKING_DEFAULTS,
+  PROTECTED_ZONE_PATTERNS,
+  NATURAL_BOUNDARY_PATTERNS,
+  EXTRACTION_DEFAULTS,
+  ARTIFACT_TYPES,
+  ARTIFACT_PRIORITY_WEIGHTS,
+  ARTIFACT_SEVERITY,
+  ARTIFACT_CONFIDENCE,
+  CHUNKING_AGGREGATION_DEFAULTS,
+  PRIMARY_FAILURE_CONFIG,
+  CAUSALITY_TYPE_ORDER,
+  STACKTRACE_INDICATORS,
+  DEGRADED_MODE_CONFIG,
+  DEGRADED_MODE_PROMPT,
+  CI_PLATFORMS,
+  CI_PLATFORM_DETECTION_PATTERNS,
+  LINE_COLLAPSE_CONFIG,
+  LINE_NUMBER_CONFIG,
+  PERCENTAGE_CONFIG,
+  PROGRESS_INDICATOR_PATTERNS,
+  BOUNDARY_TYPES,
+  PROTECTED_ZONE_TYPES,
+  type ArtifactType,
+  type ArtifactSeverity,
+  type ArtifactConfidence,
+  type BoundaryType,
+  type ProtectedZoneType,
+  type CIPlatformType,
+} from "./chunkingPipeline.js";

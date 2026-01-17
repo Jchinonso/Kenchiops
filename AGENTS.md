@@ -37,7 +37,7 @@ Always import these from `@kenchi/shared`, never create duplicates:
 - **Middleware**: `errorHandler`, `asyncHandler`, `requestLogger`
 - **Validation**: `validate`, `validators`, `ValidationSchema`
 - **Rate Limiting**: `createRateLimiter`, `defaultRateLimiter`
-- **AI/ML**: `OpenAIClient`, `VectorStore`, `InMemoryVectorStore`
+- **AI/ML**: `OpenAIClient`
 - **Types**: `LLMAnalysisResult`, `WebhookEvent`, `CIFailureEvent`, `SlackMessageEvent`, `GitHubPREvent`
 
 ## Monorepo Structure

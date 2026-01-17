@@ -184,10 +184,10 @@ describe("API Routes", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Create Express app with routes
+    // Create Express app with routes (mount under /api/github like production)
     app = express();
     app.use(express.json());
-    app.use(apiRoutes);
+    app.use("/api/github", apiRoutes);
 
     mockPostPRComment.mockResolvedValue();
     mockCreateCheckRunWithAnnotations.mockResolvedValue();
@@ -478,9 +478,9 @@ describe("API Routes", () => {
     });
   });
 
-  describe("GET /api/installations/:installationId/repositories", () => {
+  describe("GET /api/github/installations/:installationId/repositories", () => {
     it("should fetch repositories for installation", async () => {
-      const response = await request(app).get("/api/installations/12345/repositories");
+      const response = await request(app).get("/api/github/installations/12345/repositories");
 
       expect(response.status).toBe(200);
       expect(response.body.repositories).toHaveLength(1);
@@ -492,28 +492,28 @@ describe("API Routes", () => {
     });
 
     it("should include total count in response", async () => {
-      const response = await request(app).get("/api/installations/12345/repositories");
+      const response = await request(app).get("/api/github/installations/12345/repositories");
 
       expect(response.body.total).toBe(1);
       expect(response.body.installationId).toBe(12345);
     });
 
     it("should reject invalid installation ID", async () => {
-      const response = await request(app).get("/api/installations/invalid/repositories");
+      const response = await request(app).get("/api/github/installations/invalid/repositories");
 
       expect(response.status).toBe(400);
       expect(response.body.error).toContain("Invalid installation ID");
     });
 
     it("should reject negative installation ID", async () => {
-      const response = await request(app).get("/api/installations/-1/repositories");
+      const response = await request(app).get("/api/github/installations/-1/repositories");
 
       expect(response.status).toBe(400);
       expect(response.body.error).toContain("Invalid installation ID");
     });
 
     it("should reject zero installation ID", async () => {
-      const response = await request(app).get("/api/installations/0/repositories");
+      const response = await request(app).get("/api/github/installations/0/repositories");
 
       expect(response.status).toBe(400);
     });
@@ -521,7 +521,7 @@ describe("API Routes", () => {
     it("should handle GitHub API errors", async () => {
       mockGetInstallationRepositories.mockRejectedValue(new Error("GitHub API error"));
 
-      const response = await request(app).get("/api/installations/12345/repositories");
+      const response = await request(app).get("/api/github/installations/12345/repositories");
 
       expect(response.status).toBe(500);
       expect(response.body.error).toContain("GitHub API error");
@@ -530,7 +530,7 @@ describe("API Routes", () => {
     it("should handle empty repository list", async () => {
       mockGetInstallationRepositories.mockResolvedValue([]);
 
-      const response = await request(app).get("/api/installations/12345/repositories");
+      const response = await request(app).get("/api/github/installations/12345/repositories");
 
       expect(response.status).toBe(200);
       expect(response.body.total).toBe(0);
@@ -538,7 +538,7 @@ describe("API Routes", () => {
     });
 
     it("should handle large installation IDs", async () => {
-      const response = await request(app).get("/api/installations/999999999/repositories");
+      const response = await request(app).get("/api/github/installations/999999999/repositories");
 
       expect(response.status).toBe(200);
       expect(mockGetInstallationRepositories).toHaveBeenCalledWith(999999999);

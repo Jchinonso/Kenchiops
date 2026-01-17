@@ -170,7 +170,23 @@ b3BlbnNzaC1rZXktdjEAAAAABG5vbmU
       const result = redactSecretsWithStats("Normal log message");
       expect(result.redactedCount).toBe(0);
       expect(result.redactedTypes).toHaveLength(0);
+      expect(result.redactedTypeCounts).toEqual({});
       expect(result.text).toBe("Normal log message");
+    });
+
+    it("should return per-type counts in redactedTypeCounts", () => {
+      // Note: GitHub PAT pattern requires exactly 36 characters after 'ghp_'
+      const text = `
+        First token: ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789
+        Second token: ghp_XyZ9876543210AbCdEfGhIjKlMnOpQrStUvW
+        OpenAI key: sk-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ
+      `;
+      const result = redactSecretsWithStats(text);
+
+      expect(result.redactedTypeCounts).toBeDefined();
+      expect(result.redactedTypeCounts["GitHub Personal Access Token"]).toBe(2);
+      expect(result.redactedTypeCounts["OpenAI API Key"]).toBe(1);
+      expect(result.redactedCount).toBe(3);
     });
   });
 
@@ -237,22 +253,25 @@ b3BlbnNzaC1rZXktdjEAAAAABG5vbmU
           },
         },
       };
-      const result = redactObject(obj) as typeof obj;
-      expect(result.user.name).toBe("John");
-      // password is a forbidden field - replaced entirely
-      expect(result.user.credentials.password).toBe(REDACTION_PLACEHOLDER);
+      const result = redactObject(obj);
+      const user = result.user as Record<string, unknown>;
+      const credentials = user.credentials as Record<string, unknown>;
+      expect(user.name).toBe("John");
+      // password is a forbidden field - masked (key retained, value replaced)
+      expect(credentials.password).toBe(REDACTION_PLACEHOLDER);
       // githubToken value contains a GitHub token - redacted by pattern matching
-      expect(result.user.credentials.githubToken).toContain(REDACTION_PLACEHOLDER);
-      expect(result.user.credentials.githubToken).not.toContain("ghp_");
+      expect(credentials.githubToken).toContain(REDACTION_PLACEHOLDER);
+      expect(credentials.githubToken).not.toContain("ghp_");
     });
 
     it("should handle arrays", () => {
       const obj = {
         tokens: ["ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789", "normal_value"],
       };
-      const result = redactObject(obj) as typeof obj;
-      expect(result.tokens[0]).toContain(REDACTION_PLACEHOLDER);
-      expect(result.tokens[1]).toBe("normal_value");
+      const result = redactObject(obj);
+      const tokens = result.tokens as string[];
+      expect(tokens[0]).toContain(REDACTION_PLACEHOLDER);
+      expect(tokens[1]).toBe("normal_value");
     });
 
     it("should handle null and undefined values", () => {
@@ -331,6 +350,160 @@ b3BlbnNzaC1rZXktdjEAAAAABG5vbmU
       expect(result).not.toContain("CUSTOM_SECRET_ABC1234567");
       expect(result).not.toContain("ghp_");
       expect((result.match(/\[REDACTED\]/g) || []).length).toBe(2);
+    });
+  });
+
+  // ==========================================================================
+  // New Pattern Tests - Cloud Providers & CI/CD Platforms
+  // ==========================================================================
+  describe("Cloud Provider Tokens", () => {
+    it("should redact GCP API keys", () => {
+      const text = "Using GCP key AIzaSyBcdefghijklmnopqrstuvwxyz012345678";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("AIzaSy");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact Azure Storage connection strings", () => {
+      const text =
+        "DefaultEndpointsProtocol=https;AccountName=mystorageaccount;AccountKey=abc123def456ghi789jkl012mno345pqr678stu901vwx234yz5678ABCDEFGHIJKLMNOPQRST==;";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("AccountKey=");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact Azure SAS tokens", () => {
+      const text =
+        "Blob URL: https://storage.blob.core.windows.net/container?sv=2021-06-08&ss=b&srt=co&sig=abc123%2Bdef456%3D";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("sig=abc123");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+  });
+
+  describe("CI/CD Platform Tokens", () => {
+    it("should redact CircleCI tokens", () => {
+      const text = "CIRCLE_TOKEN=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("a1b2c3d4e5f6");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact GitLab Personal Access Tokens", () => {
+      const text = "export GITLAB_TOKEN=glpat-abcdefghij1234567890";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("glpat-");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact GitLab CI Job tokens", () => {
+      const text = "CI_JOB_TOKEN=abcdefghijklmnopqrstuvwxyz";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("abcdefghijklmnopqrstuvwxyz");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+  });
+
+  describe("PaaS Platform Tokens", () => {
+    it("should redact Heroku API keys", () => {
+      const text = "HEROKU_API_KEY=a1b2c3d4-e5f6-a1b2-c3d4-e5f6a1b2c3d4";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("a1b2c3d4-e5f6");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact Vercel tokens", () => {
+      const text = "vercel_token=abc123XYZ789def456GHI012";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("abc123XYZ789");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact Netlify tokens", () => {
+      const text = "netlify_auth_token=abcdefghijklmnopqrstuvwxyz0123456789ABCD";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("abcdefghijklmnopqrstuvwxyz");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+  });
+
+  describe("Container Registry Tokens", () => {
+    it("should redact Docker Hub PAT tokens", () => {
+      const text = "Using token dckr_pat_ABC123def456GHI789jkl012m";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("dckr_pat_");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact Docker config auth", () => {
+      const text =
+        '{"auths":{"https://index.docker.io/v1/":{"auth":"dXNlcm5hbWU6cGFzc3dvcmQxMjM="}}}';
+      const result = redactSecrets(text);
+      expect(result).not.toContain("dXNlcm5hbWU6cGFzc3dvcmQxMjM=");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+  });
+
+  describe("Webhook URLs and API Secrets", () => {
+    it("should redact Discord webhooks", () => {
+      const text =
+        "Webhook: https://discord.com/api/webhooks/1234567890/abcdefghijklmnop_QRSTUVWXYZ";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("/webhooks/1234567890/");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact Slack webhook URLs", () => {
+      const text =
+        "SLACK_WEBHOOK=https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("/services/T00000000");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact Datadog API keys", () => {
+      const text = "DD_API_KEY=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("a1b2c3d4e5f6");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact Sentry DSNs", () => {
+      const text =
+        "SENTRY_DSN=https://a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4@o123456.ingest.sentry.io/7654321";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4@");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+  });
+
+  describe("Generic Environment Variable Secrets", () => {
+    it("should redact generic SECRET_* environment variables", () => {
+      const text = "MY_SECRET_KEY=abcdefghijklmnopqrstuvwxyz";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("abcdefghijklmnopqrstuvwxyz");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact generic *_TOKEN environment variables", () => {
+      const text = "AUTH_TOKEN=abcdefghijklmnopqrstuvwxyz";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("abcdefghijklmnopqrstuvwxyz");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact hex secrets with KEY/SECRET suffix", () => {
+      const text = "ENCRYPTION_KEY=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("a1b2c3d4e5f6");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("should redact 64-char hex secrets", () => {
+      const text = "HASH_SECRET=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4";
+      const result = redactSecrets(text);
+      expect(result).not.toContain("a1b2c3d4e5f6");
+      expect(result).toContain(REDACTION_PLACEHOLDER);
     });
   });
 

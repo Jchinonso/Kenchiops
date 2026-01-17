@@ -178,3 +178,16 @@ export const CONFIDENCE_DISPLAY_THRESHOLDS = {
   /** Conversion factor for score (0-1) to percentage (0-100) */
   PERCENTAGE_MULTIPLIER: 100,
 } as const;
+
+/**
+ * Confidence level derivation thresholds.
+ * Used to convert numeric confidence scores to categorical levels.
+ */
+export const CONFIDENCE_LEVEL_THRESHOLDS = [
+  { minScore: 0.8, level: "high" as const },
+  { minScore: 0.5, level: "medium" as const },
+  { minScore: 0, level: "low" as const },
+] as const;
+
+/** Type for confidence level derived from thresholds. */
+export type DerivedConfidenceLevel = (typeof CONFIDENCE_LEVEL_THRESHOLDS)[number]["level"];

@@ -10,6 +10,27 @@ import type {
 jest.mock("../../cache/cacheClient.js", () => ({
   cacheGet: jest.fn().mockResolvedValue({ hit: false, data: null }),
   cacheSet: jest.fn().mockResolvedValue(undefined),
+  cacheDeletePattern: jest.fn().mockResolvedValue(5),
+}));
+
+jest.mock("../../rag/costControls.js", () => ({
+  clearCacheForTenant: jest.fn().mockReturnValue(3),
+  getCachedEmbedding: jest.fn().mockReturnValue(null),
+  cacheEmbedding: jest.fn(),
+  selectEmbeddingTier: jest.fn().mockResolvedValue({
+    selectedTier: "STANDARD",
+    model: "text-embedding-3-small",
+    dimension: 1536,
+    reason: "Default tier selection",
+    budgetStatus: {
+      status: "ok",
+      currentSpendUsd: 10,
+      budgetUsd: 100,
+      percentUsed: 10,
+      remainingUsd: 90,
+    },
+  }),
+  recordQueryCost: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockEmbeddingClient = {
@@ -341,9 +362,13 @@ describe("RAG Search Module", () => {
   });
 
   describe("clearEmbeddingCache", () => {
-    it("should log cache clear request", async () => {
-      // This function currently just logs (pattern deletion not implemented)
-      await expect(clearEmbeddingCache("tenant-1")).resolves.not.toThrow();
+    it("should clear both Redis and in-memory cache for tenant", async () => {
+      const result = await clearEmbeddingCache("tenant-1");
+
+      expect(result).toEqual({
+        redisCleared: 5,
+        memoryCleared: 3,
+      });
     });
   });
 

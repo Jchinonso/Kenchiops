@@ -28,6 +28,7 @@ export {
   cacheEmbedding,
   clearExpiredCache,
   clearCache,
+  clearCacheForTenant,
   getCacheStats,
   clearTenantConfigCache,
   setTenantTierConfig,

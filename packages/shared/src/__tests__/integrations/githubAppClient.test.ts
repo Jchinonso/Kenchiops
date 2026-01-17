@@ -81,7 +81,7 @@ describe("githubAppClient", () => {
 
         expect(mockFetch).toHaveBeenCalledTimes(1);
         expect(mockFetch).toHaveBeenCalledWith(
-          `${mockGitHubAppUrl}/api/installations/${mockInstallationId}/repositories`,
+          `${mockGitHubAppUrl}/api/github/installations/${mockInstallationId}/repositories`,
           {
             method: "GET",
             headers: {
@@ -558,7 +558,7 @@ describe("githubAppClient", () => {
         const result = await fetchInstallationRepositories(0);
 
         expect(mockFetch).toHaveBeenCalledWith(
-          `${mockGitHubAppUrl}/api/installations/0/repositories`,
+          `${mockGitHubAppUrl}/api/github/installations/0/repositories`,
           expect.any(Object)
         );
         expect(result).toEqual([]);
@@ -578,7 +578,7 @@ describe("githubAppClient", () => {
         const result = await fetchInstallationRepositories(largeId);
 
         expect(mockFetch).toHaveBeenCalledWith(
-          `${mockGitHubAppUrl}/api/installations/${largeId}/repositories`,
+          `${mockGitHubAppUrl}/api/github/installations/${largeId}/repositories`,
           expect.any(Object)
         );
         expect(result).toEqual([]);
@@ -641,7 +641,7 @@ describe("githubAppClient", () => {
         await fetchInstallationRepositories(mockInstallationId);
 
         expect(mockFetch).toHaveBeenCalledWith(
-          `${mockGitHubAppUrl}/api/installations/${mockInstallationId}/repositories`,
+          `${mockGitHubAppUrl}/api/github/installations/${mockInstallationId}/repositories`,
           expect.any(Object)
         );
       });
