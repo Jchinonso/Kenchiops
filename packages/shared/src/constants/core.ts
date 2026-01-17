@@ -84,6 +84,16 @@ export const VALID_NODE_ENVS = ["development", "production", "test"] as const;
 export const PARSE_INT_RADIX = 10;
 
 /**
+ * Radix for hex string conversion
+ */
+export const HEX_RADIX = 16;
+
+/**
+ * Byte width for hex string padding (2 chars per byte)
+ */
+export const HEX_BYTE_WIDTH = 2;
+
+/**
  * ID generation configuration
  */
 export const ID_GENERATION = {

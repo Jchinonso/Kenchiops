@@ -18,6 +18,12 @@ export {
   formatKnowledgeDocs,
   estimateTokens,
   truncateEvidence,
+  // Stage 4 chunking pipeline exports
+  buildAnalysisFromArtifacts,
+  getFinalAnalyzerPromptTemplate,
+  validateAnalysisEvidenceIds,
+  validateConfidenceRequirements,
+  extractValidEvidenceIds,
 } from "./prompts.js";
 
 // Tenant prompt configuration
@@ -33,6 +39,3 @@ export {
   type FocusArea,
   type VerbosityLevel,
 } from "./tenantPromptConfig.js";
-
-// Vector store for RAG
-export { VectorStore, InMemoryVectorStore } from "./vectorStore.js";

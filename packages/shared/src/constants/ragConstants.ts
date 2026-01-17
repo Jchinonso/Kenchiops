@@ -75,6 +75,17 @@ export const KNOWLEDGE_DOC_TYPES = {
 export type KnowledgeDocType = (typeof KNOWLEDGE_DOC_TYPES)[keyof typeof KNOWLEDGE_DOC_TYPES];
 
 /**
+ * Document types that auto-detect relationships on ingestion.
+ * These produce high-value relationship graphs for multi-hop RAG.
+ */
+export const AUTO_DETECT_RELATIONSHIP_DOC_TYPES: readonly KnowledgeDocType[] = [
+  KNOWLEDGE_DOC_TYPES.POSTMORTEM,
+  KNOWLEDGE_DOC_TYPES.ANALYSIS_LESSON,
+  KNOWLEDGE_DOC_TYPES.LINKED_FIX,
+  KNOWLEDGE_DOC_TYPES.PR_FIX_COMMENT,
+] as const;
+
+/**
  * Relationship types for Multi-Hop RAG graph traversal.
  */
 export const RELATIONSHIP_TYPES = {
@@ -224,6 +235,7 @@ export const RAG_JOB_INTERVALS = {
   CLEANUP_MS: 24 * 60 * 60 * 1000,
   DRIFT_DETECTION_MS: 24 * 60 * 60 * 1000,
   REEMBED_CHECK_MS: 6 * 60 * 60 * 1000,
+  EXTERNAL_SYNC_MS: 6 * 60 * 60 * 1000,
 } as const;
 
 /**
@@ -303,3 +315,38 @@ export const RAG_METRIC_TYPES = {
 } as const;
 
 export type RAGMetricType = (typeof RAG_METRIC_TYPES)[keyof typeof RAG_METRIC_TYPES];
+
+/**
+ * Evidence knowledge document type for mapping.
+ */
+export type EvidenceKnowledgeDocType =
+  | "runbook"
+  | "past_incident"
+  | "documentation"
+  | "best_practice"
+  | "playbook";
+
+/**
+ * Maps RAG document types to Evidence KnowledgeDocument types.
+ * Used when transforming RAG search results to Evidence format.
+ */
+export const RAG_TO_EVIDENCE_DOC_TYPE_MAP: Readonly<Record<string, EvidenceKnowledgeDocType>> = {
+  runbook: "runbook",
+  postmortem: "past_incident",
+  known_issues: "past_incident",
+  troubleshooting: "runbook",
+  sop: "runbook",
+  documentation: "documentation",
+  api_docs: "documentation",
+  architecture: "documentation",
+  readme: "documentation",
+  changelog: "documentation",
+  ci_cd: "best_practice",
+  deployment: "playbook",
+  testing: "best_practice",
+  infrastructure: "documentation",
+  config_guide: "documentation",
+  database: "documentation",
+  onboarding: "documentation",
+  external: "documentation",
+} as const;

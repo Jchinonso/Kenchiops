@@ -8,7 +8,7 @@
 export const OPENAI_DEFAULTS = {
   TEMPERATURE: 0.1,
   MODEL: "gpt-4-turbo-2024-04-09",
-  MAX_TOKENS: 4096,
+  MAX_TOKENS: 8192,
 } as const;
 
 /**

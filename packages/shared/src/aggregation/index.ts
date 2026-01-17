@@ -7,7 +7,8 @@
  * @module aggregation
  */
 
-// Types
+// ==================== Types ====================
+
 export type {
   CodeAnnotation,
   RecommendedAction,
@@ -37,7 +38,12 @@ export {
   AGGREGATION_KEYS,
 } from "./types.js";
 
-// Aggregator Helpers
+// ==================== Internal Types ====================
+
+export type { PendingCheckContext } from "./aggregatorTypes.js";
+
+// ==================== Aggregator Helpers ====================
+
 export {
   formatShaForDisplay,
   calculateAggregationTTL,
@@ -48,28 +54,51 @@ export {
   reconstructAggregation,
   parseAggregationKey,
   buildAggregationKeys,
+  isRedisReady,
+  type RedisClient,
   type FailureContext,
   type AggregationMetadata,
+  type AggregationKeySet,
 } from "./aggregatorHelpers.js";
 
-// Redis Aggregator
+// ==================== Write Operations ====================
+
+export { addFailureToRedis, addPendingCheckToRedis } from "./aggregatorWrite.js";
+
+// ==================== Read Operations ====================
+
+export { getAggregationFromRedis, getPendingAggregationFromRedis } from "./aggregatorRead.js";
+
+// ==================== Delete Operations ====================
+
+export { deleteAggregationFromRedis } from "./redisAggregator.js";
+
+// ==================== Scanner ====================
+
 export {
-  addFailureToRedis,
-  addPendingCheckToRedis,
-  getAggregationFromRedis,
-  getPendingAggregationFromRedis,
-  deleteAggregationFromRedis,
   isDebounceExpired,
   isMaxWaitExceeded,
   findReadyAggregations,
+} from "./aggregationScanner.js";
+
+// ==================== Enqueuer ====================
+
+export {
   enqueueAggregation,
   enqueuePendingAggregation,
-  startAggregatorWorker,
+  type PendingAggregationPayload,
+} from "./aggregationEnqueuer.js";
+
+// ==================== Worker ====================
+
+export { startAggregatorWorker } from "./aggregatorWorker.js";
+
+// ==================== Queue Processor ====================
+
+export {
   startAnalysisQueueProcessor,
   deserializeQueuePayload,
-  type PendingCheckContext,
+  type ConsolidatedAnalysisPayload,
   type AggregationReadyCallback,
   type PendingAnalysisCallback,
-  type ConsolidatedAnalysisPayload,
-  type PendingAggregationPayload,
-} from "./redisAggregator.js";
+} from "./analysisQueueProcessor.js";

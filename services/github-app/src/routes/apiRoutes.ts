@@ -41,7 +41,7 @@ const logger = createLogger("github-app");
  * Post a comment to a GitHub PR
  */
 router.post(
-  "/api/github/comment",
+  "/comment",
   validate({
     body: {
       repository: (value) => validators.required(value) && validators.string(value),
@@ -169,7 +169,7 @@ router.post(
  * Create a check run with annotations for line-level feedback
  */
 router.post(
-  "/api/github/annotations",
+  "/annotations",
   validate({
     body: {
       repository: (value) => validators.required(value) && validators.string(value),
@@ -256,7 +256,7 @@ router.post(
  * Fetch all repositories accessible to a GitHub App installation
  */
 router.get(
-  "/api/installations/:installationId/repositories",
+  "/installations/:installationId/repositories",
   asyncHandler(async (req: Request, res: Response) => {
     const installationIdParam = req.params.installationId;
 
@@ -376,7 +376,7 @@ const attemptCheckRunRerun = async (
  * Called by the action executor in the shared package
  */
 router.post(
-  "/api/actions/rerun",
+  "/actions/rerun",
   validate({
     body: {
       installationId: (value) => validators.required(value) && typeof value === "number",

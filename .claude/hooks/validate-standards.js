@@ -46,8 +46,6 @@ const SHARED_UTILITIES = new Set([
   "createRateLimiter",
   "defaultRateLimiter",
   "OpenAIClient",
-  "VectorStore",
-  "InMemoryVectorStore",
   "confidenceScore",
   "shouldActOnResult",
   "deduplicateByKey",

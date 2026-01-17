@@ -2,16 +2,20 @@
  * Unit tests for formatting/logPreprocessor.ts
  *
  * Tests the simplified log preprocessing pipeline for CI failure analysis.
+ * Includes multi-platform CI support: GitHub Actions, GitLab CI, CircleCI, Jenkins, Azure DevOps.
  */
 import { describe, it, expect } from "@jest/globals";
 import {
   stripAnsiCodes,
   stripCITimestamps,
+  stripCIGroupMarkers,
+  stripCITimestampsForPlatform,
+  stripCIGroupMarkersForPlatform,
   truncateWithErrorContext,
   preprocessLogs,
   preprocessLogsWithMetadata,
 } from "../../formatting/logPreprocessor.js";
-import { LOG_PARSING_LIMITS } from "../../constants/index.js";
+import { LOG_PARSING_LIMITS, TEXT_SANITIZATION_PATTERNS } from "../../constants/index.js";
 
 describe("Log Preprocessor", () => {
   describe("stripAnsiCodes", () => {
@@ -287,6 +291,317 @@ Third line`);
       expect(result.processedSize).toBe(0);
       expect(result.wasTruncated).toBe(false);
       expect(result.secretsRedacted).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // Multi-Platform CI Timestamp Tests
+  // ==========================================================================
+  describe("Multi-Platform CI Timestamps", () => {
+    describe("GitHub Actions timestamps", () => {
+      it("should strip ISO 8601 timestamps with high precision", () => {
+        const input = "2026-01-16T10:30:45.1659529Z npm test";
+        const result = stripCITimestamps(input);
+        expect(result).toBe("npm test");
+      });
+
+      it("should strip timestamps with varying fractional precision", () => {
+        const input = `2026-01-16T10:30:45.1Z Step 1
+2026-01-16T10:30:46.12Z Step 2
+2026-01-16T10:30:47.123Z Step 3
+2026-01-16T10:30:48.1234567Z Step 4`;
+        const result = stripCITimestamps(input);
+        expect(result).toBe(`Step 1
+Step 2
+Step 3
+Step 4`);
+      });
+    });
+
+    describe("GitLab CI timestamps", () => {
+      it("should strip bracketed datetime format", () => {
+        const input = "[2026-01-16 10:30:45] Running tests";
+        const result = stripCITimestamps(input);
+        expect(result).toBe("Running tests");
+      });
+
+      it("should strip space-separated datetime format", () => {
+        const input = "2026-01-16 10:30:45.123 Executing script";
+        const result = stripCITimestamps(input);
+        expect(result).toBe("Executing script");
+      });
+
+      it("should strip GitLab timestamps from multiple lines", () => {
+        const input = `[2026-01-16 10:30:45] Line 1
+2026-01-16 10:30:46.789 Line 2`;
+        const result = stripCITimestamps(input);
+        expect(result).toBe(`Line 1
+Line 2`);
+      });
+    });
+
+    describe("CircleCI timestamps", () => {
+      it("should strip HH:MM:SS time prefix", () => {
+        const input = "10:30:45 Running step";
+        const result = stripCITimestamps(input);
+        expect(result).toBe("Running step");
+      });
+
+      it("should strip CircleCI timestamps from multiple lines", () => {
+        const input = `10:30:45 Step 1
+10:30:46 Step 2
+10:30:47 Step 3`;
+        const result = stripCITimestamps(input);
+        expect(result).toBe(`Step 1
+Step 2
+Step 3`);
+      });
+    });
+
+    describe("Jenkins timestamps", () => {
+      it("should strip bracketed ISO 8601 timestamps", () => {
+        const input = "[2026-01-16T10:30:45.123Z] Building project";
+        const result = stripCITimestamps(input);
+        expect(result).toBe("Building project");
+      });
+
+      it("should strip Timestamper plugin format", () => {
+        const input = "[2026-01-16 10:30:45] Running mvn test";
+        const result = stripCITimestamps(input);
+        expect(result).toBe("Running mvn test");
+      });
+    });
+
+    describe("Azure DevOps timestamps", () => {
+      it("should strip high-precision ISO 8601 timestamps", () => {
+        const input = "2026-01-16T10:30:45.1234567Z ##[section]Starting";
+        const result = stripCITimestamps(input);
+        expect(result).toBe("##[section]Starting");
+      });
+    });
+
+    describe("Platform-specific stripping", () => {
+      it("should strip only GitHub timestamps when platform specified", () => {
+        const githubLine = "2026-01-16T10:30:45.123Z GitHub log";
+        const circleciLine = "10:30:45 CircleCI log";
+
+        const githubResult = stripCITimestampsForPlatform(githubLine, "github");
+        const circleciResult = stripCITimestampsForPlatform(circleciLine, "github");
+
+        expect(githubResult).toBe("GitHub log");
+        expect(circleciResult).toBe("10:30:45 CircleCI log"); // Not stripped
+      });
+
+      it("should strip only CircleCI timestamps when platform specified", () => {
+        const circleciLine = "10:30:45 CircleCI log";
+        const githubLine = "2026-01-16T10:30:45.123Z GitHub log";
+
+        const circleciResult = stripCITimestampsForPlatform(circleciLine, "circleci");
+        const githubResult = stripCITimestampsForPlatform(githubLine, "circleci");
+
+        expect(circleciResult).toBe("CircleCI log");
+        expect(githubResult).toBe("2026-01-16T10:30:45.123Z GitHub log"); // Not stripped
+      });
+    });
+  });
+
+  // ==========================================================================
+  // Multi-Platform CI Group Markers Tests
+  // ==========================================================================
+  describe("Multi-Platform CI Group Markers", () => {
+    describe("GitHub Actions group markers", () => {
+      it("should strip ##[group] markers", () => {
+        const input = `##[group]Running tests
+npm test
+##[endgroup]`;
+        const result = stripCIGroupMarkers(input);
+        expect(result).toBe(`
+npm test
+`);
+      });
+    });
+
+    describe("GitLab CI section markers", () => {
+      it("should strip section_start markers", () => {
+        const input = "section_start:1642332645:build_script\nBuilding...";
+        const result = stripCIGroupMarkers(input);
+        expect(result).toBe("\nBuilding...");
+      });
+
+      it("should strip section_end markers", () => {
+        const input = "Done building\nsection_end:1642332650:build_script";
+        const result = stripCIGroupMarkers(input);
+        expect(result).toBe("Done building\n");
+      });
+    });
+
+    describe("CircleCI markers", () => {
+      it("should strip shell invocation lines", () => {
+        const input = `#!/bin/bash -eo pipefail
+npm test`;
+        const result = stripCIGroupMarkers(input);
+        expect(result).toBe(`
+npm test`);
+      });
+
+      it("should preserve step headers as they contain useful context", () => {
+        const input = `Spin up environment
+Setting up...
+Checkout code
+Cloning repo...`;
+        const result = stripCIGroupMarkers(input);
+        // Step headers are preserved - they may contain useful context
+        expect(result).toBe(`Spin up environment
+Setting up...
+Checkout code
+Cloning repo...`);
+      });
+    });
+
+    describe("Jenkins pipeline markers", () => {
+      it("should strip [Pipeline] markers", () => {
+        const input = `[Pipeline] Start of Pipeline
+[Pipeline] node
+Running on agent
+[Pipeline] End of Pipeline`;
+        const result = stripCIGroupMarkers(input);
+        expect(result).toBe(`
+
+Running on agent
+`);
+      });
+
+      it("should preserve error messages that happen to mention Pipeline", () => {
+        const input = "[Pipeline] Error: Something failed\nActual error content";
+        const result = stripCIGroupMarkers(input);
+        // Non-standard [Pipeline] lines with errors are preserved
+        expect(result).toBe("[Pipeline] Error: Something failed\nActual error content");
+      });
+    });
+
+    describe("Azure DevOps markers", () => {
+      it("should strip ##[section] markers", () => {
+        const input = `##[section]Starting: Build
+Building project...
+##[section]Finishing: Build`;
+        const result = stripCIGroupMarkers(input);
+        expect(result).toBe(`
+Building project...
+`);
+      });
+
+      it("should strip ##[command] markers", () => {
+        const input = `##[command]"C:\\agent\\dotnet.exe" build
+Building...`;
+        const result = stripCIGroupMarkers(input);
+        expect(result).toBe(`
+Building...`);
+      });
+
+      it("should preserve log level markers as they contain diagnostic info", () => {
+        const input = `##[debug]Debug info
+##[warning]Warning message
+##[error]Error occurred
+Actual content`;
+        const result = stripCIGroupMarkers(input);
+        // Log level markers (debug/warning/error) are preserved for diagnostics
+        expect(result).toBe(`##[debug]Debug info
+##[warning]Warning message
+##[error]Error occurred
+Actual content`);
+      });
+    });
+
+    describe("Platform-specific group marker stripping", () => {
+      it("should strip only GitHub markers when platform specified", () => {
+        const githubMarker = "##[group]Test Group";
+        const azureMarker = "##[section]Starting";
+
+        const githubResult = stripCIGroupMarkersForPlatform(githubMarker, "github");
+        const azureResult = stripCIGroupMarkersForPlatform(azureMarker, "github");
+
+        expect(githubResult).toBe("");
+        expect(azureResult).toBe("##[section]Starting"); // Not stripped
+      });
+
+      it("should strip only Jenkins markers when platform specified", () => {
+        const jenkinsMarker = "[Pipeline] Stage";
+        const gitlabMarker = "section_start:123:test";
+
+        const jenkinsResult = stripCIGroupMarkersForPlatform(jenkinsMarker, "jenkins");
+        const gitlabResult = stripCIGroupMarkersForPlatform(gitlabMarker, "jenkins");
+
+        expect(jenkinsResult).toBe("");
+        expect(gitlabResult).toBe("section_start:123:test"); // Not stripped
+      });
+    });
+  });
+
+  // ==========================================================================
+  // Pattern Constant Tests
+  // ==========================================================================
+  describe("TEXT_SANITIZATION_PATTERNS", () => {
+    it("should have all platform-specific timestamp patterns defined", () => {
+      expect(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_GITHUB).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_GITLAB).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_CIRCLECI).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_JENKINS).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_AZURE).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_ALL).toBeDefined();
+    });
+
+    it("should have all platform-specific group patterns defined", () => {
+      expect(TEXT_SANITIZATION_PATTERNS.CI_GROUP_GITHUB).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_GROUP_GITLAB).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_GROUP_CIRCLECI).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_GROUP_JENKINS).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_GROUP_AZURE).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_GROUP_ALL).toBeDefined();
+    });
+
+    it("should have deprecated patterns for backward compatibility", () => {
+      expect(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP).toBeDefined();
+      expect(TEXT_SANITIZATION_PATTERNS.CI_GROUP_MARKERS).toBeDefined();
+    });
+  });
+
+  // ==========================================================================
+  // Integration Tests with Mixed Platforms
+  // ==========================================================================
+  describe("Mixed Platform Log Processing", () => {
+    it("should handle logs with mixed timestamp formats", () => {
+      const mixedLog = `2026-01-16T10:30:45.123Z GitHub line
+10:30:46 CircleCI line
+[2026-01-16 10:30:47] GitLab line
+[Pipeline] Start of Pipeline
+##[group]GitHub group
+section_start:123:test`;
+
+      const result = preprocessLogs(mixedLog);
+
+      expect(result).toContain("GitHub line");
+      expect(result).toContain("CircleCI line");
+      expect(result).toContain("GitLab line");
+      expect(result).not.toContain("2026-01-16T");
+      expect(result).not.toContain("[Pipeline] Start of Pipeline");
+      expect(result).not.toContain("##[group]");
+    });
+
+    it("should preserve actual error content while stripping CI noise", () => {
+      const logWithError = `2026-01-16T10:30:45.123Z ##[group]Run Tests
+10:30:46 Executing npm test
+[Pipeline] Error: Module not found
+TypeError: Cannot read property 'foo' of undefined
+    at Object.<anonymous> (src/test.ts:42:15)
+##[endgroup]
+section_end:123:test`;
+
+      const result = preprocessLogs(logWithError);
+
+      // [Pipeline] Error lines are preserved (not a standard Pipeline marker)
+      expect(result).toContain("[Pipeline] Error: Module not found");
+      expect(result).toContain("TypeError: Cannot read property 'foo' of undefined");
+      expect(result).toContain("at Object.<anonymous> (src/test.ts:42:15)");
     });
   });
 });

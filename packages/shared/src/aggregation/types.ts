@@ -32,6 +32,11 @@ export interface CodeAnnotation {
   readonly title?: string;
   /** AI-suggested fix for this issue */
   readonly suggestedFix?: LLMSuggestedFix;
+  /**
+   * V1.1: Original line number in raw log before preprocessing.
+   * Enables accurate line references when logs are sanitized/chunked.
+   */
+  readonly original_line_number?: number | null;
 }
 
 /**

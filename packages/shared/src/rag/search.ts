@@ -29,8 +29,11 @@ import {
   toRerankableResult,
   fromRerankedResult,
   buildQueryFromContext,
+  SEARCH_CONSTANTS,
   type EventQueryContext,
 } from "./searchHelpers.js";
+import { cacheDeletePattern } from "../cache/cacheClient.js";
+import { clearCacheForTenant } from "./costControls.js";
 
 // Re-export types and helpers for external use
 export { EventQueryContext } from "./searchHelpers.js";
@@ -387,13 +390,23 @@ export const searchFromEventContext = async (
 
 /**
  * Clears cached embeddings for a tenant.
- * Useful when re-processing or debugging.
+ * Clears both Redis cache and in-memory cache.
  *
  * @param tenantId - Tenant ID to clear cache for
+ * @returns Object with counts of cleared entries from each cache
  */
-export const clearEmbeddingCache = async (tenantId: string): Promise<void> => {
-  // Note: This would require pattern-based deletion which isn't implemented
-  // in the basic cache client. For now, we just log the intent.
-  logger.info("Embedding cache clear requested", { tenantId });
-  // Implementation would use cacheDeletePattern when available
+export const clearEmbeddingCache = async (
+  tenantId: string
+): Promise<{ redisCleared: number; memoryCleared: number }> => {
+  logger.info("Clearing embedding cache for tenant", { tenantId });
+
+  // Clear Redis cache using pattern matching
+  const pattern = `${SEARCH_CONSTANTS.CACHE_KEY_PREFIX}${tenantId}:*`;
+  const redisCleared = await cacheDeletePattern(pattern);
+
+  // Clear in-memory cache
+  const memoryCleared = clearCacheForTenant(tenantId);
+
+  logger.info("Embedding cache cleared", { tenantId, redisCleared, memoryCleared });
+  return { redisCleared, memoryCleared };
 };

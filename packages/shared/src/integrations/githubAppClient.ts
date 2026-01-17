@@ -51,7 +51,7 @@ const transformRepository = (
 export const fetchInstallationRepositories = async (
   installationId: number
 ): Promise<GitHubRepository[]> => {
-  const url = `${config.GITHUB_APP_URL}/api/installations/${installationId}/repositories`;
+  const url = `${config.GITHUB_APP_URL}/api/github/installations/${installationId}/repositories`;
 
   logger.info("Fetching installation repositories", {
     installationId,

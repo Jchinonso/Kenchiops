@@ -2,16 +2,15 @@
  * CI Analysis Queue Processor
  *
  * Processes consolidated analysis jobs from the message queue.
- * Supports two types of payloads:
- * - ConsolidatedAnalysisPayload: Pre-analyzed failures (legacy flow)
- * - PendingAggregationPayload: Pending checks that need combined analysis (new flow)
+ * Supports two payload types: ConsolidatedAnalysisPayload (legacy) and
+ * PendingAggregationPayload (new combined analysis flow).
  *
  * @module aggregation/analysisQueueProcessor
  */
 
 import { ciAnalysisQueue } from "../queue/messageQueue.js";
 import { createLogger, delay, getErrorMessage } from "../core/index.js";
-import { QUEUE_WORKER_DEFAULTS, DISPLAY_DEFAULTS } from "../constants/index.js";
+import { QUEUE_WORKER_DEFAULTS } from "../constants/index.js";
 import type {
   AggregatedFailures,
   SerializedFailure,
@@ -20,27 +19,31 @@ import type {
   WorkflowContext,
   ConsolidatedPostResult,
 } from "./types.js";
-import type { PendingAggregationPayload } from "./redisAggregator.js";
+import type { PendingAggregationPayload } from "./aggregationEnqueuer.js";
+import { formatShaForDisplay } from "./aggregatorHelpers.js";
 
 const logger = createLogger("analysis-queue-processor");
 
-/**
- * Callback type for when aggregation is ready to be posted (pre-analyzed)
- */
+// ==================== Constants ====================
+
+const DEFAULT_MAX_CONCURRENT = 3;
+
+// ==================== Types ====================
+
+/** Callback for pre-analyzed aggregation (legacy flow). */
 export type AggregationReadyCallback = (
   aggregation: AggregatedFailures
 ) => Promise<ConsolidatedPostResult>;
 
-/**
- * Callback type for when pending aggregation needs combined analysis
- */
+/** Callback for pending aggregation needing combined analysis (new flow). */
 export type PendingAnalysisCallback = (
   payload: PendingAggregationPayload
 ) => Promise<ConsolidatedPostResult>;
 
-/**
- * Payload structure for consolidated analysis jobs
- */
+/** Function to stop the processor gracefully. */
+export type StopFunction = () => void;
+
+/** Payload structure for consolidated analysis jobs. */
 export interface ConsolidatedAnalysisPayload {
   readonly aggregation: {
     readonly commitSha: string;
@@ -55,15 +58,35 @@ export interface ConsolidatedAnalysisPayload {
   };
 }
 
-/**
- * Format SHA for display logging
- */
-const formatShaForDisplay = (sha: string): string =>
-  sha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH);
+/** Configuration options for the analysis queue processor. */
+export interface AnalysisQueueProcessorOptions {
+  readonly pollIntervalMs?: number;
+  readonly maxConcurrent?: number;
+  readonly onPendingReady?: PendingAnalysisCallback;
+}
 
-/**
- * Deserialize aggregation from queue payload
- */
+/** Process result from queue handler. */
+interface ProcessResult {
+  readonly success: boolean;
+  readonly error?: string;
+  readonly shouldRetry?: boolean;
+}
+
+/** Queue message structure. */
+interface QueueMessage {
+  readonly id: string;
+  readonly payload: unknown;
+}
+
+/** Mutable state for controlling worker lifecycle. */
+interface WorkerState {
+  running: boolean;
+  activeJobs: number;
+}
+
+// ==================== Helpers ====================
+
+/** Deserializes aggregation from queue payload (converts ISO strings to Dates). */
 export const deserializeQueuePayload = (
   payload: ConsolidatedAnalysisPayload
 ): AggregatedFailures => ({
@@ -76,198 +99,187 @@ export const deserializeQueuePayload = (
   lastFailureAt: new Date(payload.aggregation.lastFailureAt),
 });
 
-/**
- * Process result from queue handler
- */
-interface ProcessResult {
-  readonly success: boolean;
-  readonly error?: string;
-  readonly shouldRetry?: boolean;
-}
+// ==================== Type Guards ====================
 
-/**
- * Check if payload is a pending aggregation (new flow)
- */
+/** Type guard for non-null object. */
+const isNonNullObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/** Type guard for PendingAggregationPayload. */
 const isPendingAggregationPayload = (payload: unknown): payload is PendingAggregationPayload =>
-  typeof payload === "object" &&
-  payload !== null &&
+  isNonNullObject(payload) &&
   "pendingAggregation" in payload &&
-  typeof (payload as PendingAggregationPayload).pendingAggregation === "object";
+  isNonNullObject(payload.pendingAggregation);
 
-/**
- * Check if payload is a consolidated analysis (legacy flow)
- */
+/** Type guard for ConsolidatedAnalysisPayload. */
 const isConsolidatedAnalysisPayload = (payload: unknown): payload is ConsolidatedAnalysisPayload =>
-  typeof payload === "object" &&
-  payload !== null &&
+  isNonNullObject(payload) &&
   "aggregation" in payload &&
-  typeof (payload as ConsolidatedAnalysisPayload).aggregation === "object" &&
-  "failures" in (payload as ConsolidatedAnalysisPayload).aggregation;
+  isNonNullObject(payload.aggregation) &&
+  "failures" in payload.aggregation;
 
-/**
- * Creates a message processor function for the queue
- * Handles both pending aggregation (new flow) and consolidated analysis (legacy flow)
- */
+// ==================== Message Processing ====================
+
+type MessageProcessor = (message: QueueMessage) => Promise<ProcessResult>;
+
+/** Logs completion and returns ProcessResult. */
+const logCompletionAndReturn = (
+  messageId: string,
+  analysisType: string,
+  result: ConsolidatedPostResult
+): ProcessResult => {
+  logger.info(`${analysisType} completed`, {
+    messageId,
+    success: result.success,
+    prCommentsPosted: result.prCommentsPosted,
+    slackMessageSent: result.slackMessageSent,
+  });
+  return { success: result.success };
+};
+
+/** Logs error and returns failed ProcessResult. */
+const logErrorAndReturn = (
+  messageId: string,
+  analysisType: string,
+  error: unknown
+): ProcessResult => {
+  const errorMessage = getErrorMessage(error);
+  logger.error(`Failed to process ${analysisType}`, { messageId, error: errorMessage });
+  return { success: false, error: errorMessage, shouldRetry: true };
+};
+
+/** Processes pending aggregation payload (new combined analysis flow). */
+const processPendingPayload = async (
+  message: QueueMessage,
+  payload: PendingAggregationPayload,
+  onPendingReady?: PendingAnalysisCallback
+): Promise<ProcessResult> => {
+  if (!onPendingReady) {
+    logger.error("Received pending aggregation but no handler configured", {
+      messageId: message.id,
+    });
+    return { success: false, error: "No pending analysis handler", shouldRetry: false };
+  }
+
+  const pending = payload.pendingAggregation;
+  logger.info("Processing pending aggregation for combined analysis", {
+    messageId: message.id,
+    repository: pending.repository.fullName,
+    commitSha: formatShaForDisplay(pending.commitSha),
+    pendingCheckCount: pending.pendingChecks.length,
+  });
+
+  try {
+    const result = await onPendingReady(payload);
+    return logCompletionAndReturn(message.id, "Combined analysis", result);
+  } catch (error) {
+    return logErrorAndReturn(message.id, "combined analysis", error);
+  }
+};
+
+/** Processes consolidated analysis payload (legacy flow). */
+const processConsolidatedPayload = async (
+  message: QueueMessage,
+  payload: ConsolidatedAnalysisPayload,
+  onReady: AggregationReadyCallback
+): Promise<ProcessResult> => {
+  const aggregation = deserializeQueuePayload(payload);
+
+  logger.info("Processing consolidated analysis", {
+    messageId: message.id,
+    repository: aggregation.repository.fullName,
+    commitSha: formatShaForDisplay(aggregation.commitSha),
+    failureCount: aggregation.failures.length,
+  });
+
+  try {
+    const result = await onReady(aggregation);
+    return logCompletionAndReturn(message.id, "Consolidated analysis", result);
+  } catch (error) {
+    return logErrorAndReturn(message.id, "consolidated analysis", error);
+  }
+};
+
+/** Creates a message processor that routes to appropriate handler based on payload type. */
 const createMessageProcessor =
-  (
-    onReady: AggregationReadyCallback,
-    onPendingReady?: PendingAnalysisCallback
-  ): ((message: { id: string; payload: unknown }) => Promise<ProcessResult>) =>
-  async (message): Promise<ProcessResult> => {
+  (onReady: AggregationReadyCallback, onPendingReady?: PendingAnalysisCallback): MessageProcessor =>
+  async (message: QueueMessage): Promise<ProcessResult> => {
     const { payload } = message;
 
-    // Handle pending aggregation (new combined analysis flow)
     if (isPendingAggregationPayload(payload)) {
-      if (!onPendingReady) {
-        logger.error("Received pending aggregation but no handler configured", {
-          messageId: message.id,
-        });
-        return { success: false, error: "No pending analysis handler", shouldRetry: false };
-      }
-
-      const pending = payload.pendingAggregation;
-      logger.info("Processing pending aggregation for combined analysis", {
-        messageId: message.id,
-        repository: pending.repository.fullName,
-        commitSha: formatShaForDisplay(pending.commitSha),
-        pendingCheckCount: pending.pendingChecks.length,
-      });
-
-      try {
-        const result = await onPendingReady(payload);
-
-        logger.info("Combined analysis completed", {
-          messageId: message.id,
-          success: result.success,
-          prCommentsPosted: result.prCommentsPosted,
-          slackMessageSent: result.slackMessageSent,
-        });
-
-        return { success: result.success };
-      } catch (error) {
-        const errorMessage = getErrorMessage(error);
-        logger.error("Failed to process combined analysis", {
-          messageId: message.id,
-          error: errorMessage,
-        });
-        return { success: false, error: errorMessage, shouldRetry: true };
-      }
+      return processPendingPayload(message, payload, onPendingReady);
     }
 
-    // Handle consolidated analysis (legacy flow with pre-analyzed failures)
     if (isConsolidatedAnalysisPayload(payload)) {
-      const aggregation = deserializeQueuePayload(payload);
-
-      logger.info("Processing consolidated analysis", {
-        messageId: message.id,
-        repository: aggregation.repository.fullName,
-        commitSha: formatShaForDisplay(aggregation.commitSha),
-        failureCount: aggregation.failures.length,
-      });
-
-      try {
-        const result = await onReady(aggregation);
-
-        logger.info("Consolidated analysis completed", {
-          messageId: message.id,
-          success: result.success,
-          prCommentsPosted: result.prCommentsPosted,
-          slackMessageSent: result.slackMessageSent,
-        });
-
-        return { success: result.success };
-      } catch (error) {
-        const errorMessage = getErrorMessage(error);
-        logger.error("Failed to process consolidated analysis", {
-          messageId: message.id,
-          error: errorMessage,
-        });
-        return { success: false, error: errorMessage, shouldRetry: true };
-      }
+      return processConsolidatedPayload(message, payload, onReady);
     }
 
-    // Unknown payload type
     logger.error("Unknown queue payload type", { messageId: message.id });
     return { success: false, error: "Unknown payload type", shouldRetry: false };
   };
 
-/**
- * Creates a worker loop using recursive pattern
- */
+// ==================== Worker Loop ====================
+
+type WorkerLoop = () => Promise<void>;
+
+/** Creates a recursive worker loop that processes messages until stopped. */
 const createWorkerLoop = (
-  processMessage: (message: { id: string; payload: unknown }) => Promise<ProcessResult>,
+  processMessage: MessageProcessor,
+  state: WorkerState,
   pollIntervalMs: number,
-  isRunning: () => boolean,
-  getActiveJobs: () => number,
-  setActiveJobs: (updater: (current: number) => number) => void,
   maxConcurrent: number
-): (() => Promise<void>) => {
-  const processLoop = async (): Promise<void> => {
-    if (!isRunning()) {
+): WorkerLoop => {
+  const loop = async (): Promise<void> => {
+    if (!state.running) {
       return;
     }
 
-    // Throttle if at max concurrency
-    if (getActiveJobs() >= maxConcurrent) {
+    if (state.activeJobs >= maxConcurrent) {
       await delay(QUEUE_WORKER_DEFAULTS.CONCURRENCY_THROTTLE_MS);
-      await processLoop();
-      return;
+      return loop();
     }
 
     try {
-      setActiveJobs((current) => current + 1);
+      state.activeJobs++;
       await ciAnalysisQueue.process(processMessage);
     } finally {
-      setActiveJobs((current) => current - 1);
+      state.activeJobs--;
     }
 
-    // Continue processing if still running
-    if (isRunning()) {
-      await delay(pollIntervalMs);
-      await processLoop();
+    if (!state.running) {
+      return;
     }
+
+    await delay(pollIntervalMs);
+    return loop();
   };
 
-  return processLoop;
+  return loop;
 };
 
-/**
- * Starts the CI analysis queue processor.
- * Processes both consolidated and pending analysis jobs.
- *
- * @param onReady - Callback invoked when pre-analyzed aggregation is ready (legacy flow)
- * @param options - Processor configuration including optional pending analysis handler
- * @returns Stop function to gracefully shutdown the processor
- *
- * @example
- * const stopProcessor = startAnalysisQueueProcessor(
- *   async (aggregation) => {
- *     // Handle pre-analyzed failures (legacy)
- *     return await postConsolidatedAnalysis(aggregation);
- *   },
- *   {
- *     onPendingReady: async (payload) => {
- *       // Handle pending checks that need combined analysis (new flow)
- *       return await processCombinedAnalysis(payload);
- *     },
- *   }
- * );
- */
+/** Runs all workers with error handling. */
+const runWorkers = async (workers: readonly WorkerLoop[]): Promise<void> => {
+  try {
+    await Promise.all(workers.map((worker): Promise<void> => worker()));
+  } catch (error) {
+    logger.error("Analysis queue processor error", { error: getErrorMessage(error) });
+  }
+};
+
+// ==================== Public API ====================
+
+/** Starts the CI analysis queue processor. Returns a stop function for graceful shutdown. */
 export const startAnalysisQueueProcessor = (
   onReady: AggregationReadyCallback,
-  options: {
-    pollIntervalMs?: number;
-    maxConcurrent?: number;
-    onPendingReady?: PendingAnalysisCallback;
-  } = {}
-): (() => void) => {
+  options: AnalysisQueueProcessorOptions = {}
+): StopFunction => {
   const {
     pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
-    maxConcurrent = 3,
+    maxConcurrent = DEFAULT_MAX_CONCURRENT,
     onPendingReady,
   } = options;
-  let isRunning = true;
-  let activeJobs = 0;
+
+  const state: WorkerState = { running: true, activeJobs: 0 };
 
   logger.info("Starting CI analysis queue processor", {
     pollIntervalMs,
@@ -276,35 +288,14 @@ export const startAnalysisQueueProcessor = (
   });
 
   const processMessage = createMessageProcessor(onReady, onPendingReady);
+  const workerLoop = createWorkerLoop(processMessage, state, pollIntervalMs, maxConcurrent);
 
-  const workerLoop = createWorkerLoop(
-    processMessage,
-    pollIntervalMs,
-    () => isRunning,
-    () => activeJobs,
-    (updater) => {
-      activeJobs = updater(activeJobs);
-    },
-    maxConcurrent
-  );
+  const workers: readonly WorkerLoop[] = Array(maxConcurrent).fill(workerLoop);
 
-  // Start worker instances
-  const startWorkers = async (): Promise<void> => {
-    const workerPromises = Array.from({ length: maxConcurrent }, () => workerLoop());
-    try {
-      await Promise.all(workerPromises);
-    } catch (error) {
-      logger.error("Analysis queue processor error", {
-        error: getErrorMessage(error),
-      });
-    }
-  };
-
-  // Fire and forget
-  void startWorkers();
+  void runWorkers(workers);
 
   return (): void => {
-    isRunning = false;
+    state.running = false;
     logger.info("Analysis queue processor stopping");
   };
 };

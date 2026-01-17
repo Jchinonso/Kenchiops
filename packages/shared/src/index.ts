@@ -322,8 +322,90 @@ export {
   preprocessLogs,
   preprocessLogsWithMetadata,
   detectTestFramework,
+  // V1.1: Chunking pipeline preprocessing with line mapping
+  sanitizeForChunking,
+  sanitizeForChunkingWithMapping,
+  getOriginalLineNumber,
+  collapseRepeatedLines,
+  removeProgressIndicators,
   type PreprocessResult,
   type TestFrameworkInfo,
+  type SanitizationResult,
+  type SanitizationResultWithMapping,
+  type LineMapping,
+} from "./formatting/index.js";
+// Chunking pipeline - Stage 1: Smart chunking
+export {
+  estimateTokens as estimateChunkTokens,
+  estimateTokensForLines,
+  detectCIPlatform,
+  detectProtectedZones,
+  findNaturalBoundaries,
+  chunkLog,
+  normalizeChunkingOptions,
+} from "./formatting/index.js";
+// Chunking pipeline - Stage 2: Per-chunk extraction
+export {
+  buildChunkExtractorSystemPrompt,
+  buildChunkExtractorPrompt,
+  parseExtractionResponse,
+  normalizeExtractionOptions,
+  extractFromChunk,
+  extractFromAllChunks,
+  generateAssertionHash,
+  CHUNK_EXTRACTOR_PROMPT_TEMPLATE,
+  type ExtractorFunction,
+} from "./formatting/index.js";
+// Chunking pipeline - Stage 3: Aggregation and ranking
+export {
+  computeArtifactSignature,
+  computeArtifactSignatureSync,
+  computeAbsoluteEvidenceId,
+  computePriorityScore,
+  createRankedArtifact,
+  deduplicateArtifacts,
+  sortArtifactsByPriority,
+  detectCommonFramework,
+  aggregateArtifacts,
+  checkAggregationViability,
+  createEmptyAggregatedEvidence,
+  determinePrimaryFailure,
+  createDegradedResult,
+  // V1.1: Degraded mode analysis
+  sampleLogForDegradedMode,
+  buildDegradedModePrompt,
+  analyzeDegradedMode,
+  // V1.1: Line mapping composition
+  getSanitizedLineNumber,
+  composeLineMappings,
+} from "./formatting/index.js";
+// Chunking pipeline types (prefixed to avoid conflicts with RAG/finetuning types)
+export type {
+  ChunkingOptions as LogChunkingOptions,
+  ProtectedZone,
+  ChunkResult,
+  ChunkingResult,
+  ExtractionOptions as ArtifactExtractionOptions,
+  ExtractedArtifact,
+  ExtractionResult as ArtifactExtractionResult,
+  BatchExtractionResult,
+  ArtifactSignature,
+  RankedArtifact,
+  AggregatedEvidence,
+  BuildMetadata,
+  FileAnnotation,
+  RecommendedAction as ChunkingRecommendedAction,
+  SecondaryFinding,
+  TestFailureDetail,
+  LintErrorDetail,
+  RootCause,
+  AnalysisMetadata,
+  AnalysisResponse as ChunkingAnalysisResponse,
+  PipelineConfig,
+  PipelineResult,
+  PipelineError,
+  PrimaryFailure,
+  DegradedModeAnalyzer,
 } from "./formatting/index.js";
 // Simplified pipeline: Output formatting
 export {
@@ -361,7 +443,6 @@ export {
   type FocusArea,
   type VerbosityLevel,
 } from "./integrations/index.js";
-export { VectorStore, InMemoryVectorStore } from "./integrations/index.js";
 
 // LLM module (provider-agnostic)
 export type {
@@ -426,6 +507,8 @@ export {
   type StoredActionPayload,
   type OpaqueActionValue,
   type ActionVerificationContext,
+  type ActionStoreStats,
+  type QueueStats,
 } from "./actions/index.js";
 
 // Constants (re-export all)
