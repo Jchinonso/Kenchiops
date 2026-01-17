@@ -102,11 +102,16 @@ CRITICAL RULES:
 - Output ONLY valid JSON. No markdown, no code fences, no prose before or after the JSON.
 
 NEXT_STEPS MUST BE SURGICAL:
-- Priority 1: Fix merge gates FIRST (format, lint, build)
+- Priority 1: Fix merge gates FIRST (format, lint, build) - ONLY if corresponding artifacts exist
 - Priority 2: Fix functional bugs (tests, runtime)
-- Name SPECIFIC functions and SPECIFIC patterns
+- Name SPECIFIC functions and patterns ONLY if they appear verbatim in artifacts
 - Never give generic advice like "review the code" or "check for off-by-one"
-- Instead: "The add function returns a+b+1 - remove the extra increment"
+
+ANTI-HALLUCINATION RULE (CRITICAL):
+- Do NOT invent function names, variable names, or code expressions
+- Only use identifiers that appear VERBATIM in artifact message, snippet, test_name, or file path
+- If function name is unknown, use: "[file path] (around line N): inspect arithmetic functions"
+- If pattern is clear but function is unknown: "Off-by-one pattern in test_add - check the function under test"
 
 SELF-CHECK BEFORE OUTPUT:
 - Verify every evidence_id in your response matches an artifact id exactly
@@ -142,7 +147,7 @@ annotations (required, array - may be empty):
   evidence_id: string - must match an artifact id exactly
   severity: "error" | "warning"
 
-next_steps (required, 1-5 items) - GLOBALLY PRIORITIZED across all failure categories:
+next_steps (required, 1-7 items) - GLOBALLY PRIORITIZED across all failure categories:
   action: string - SPECIFIC action to take (not generic advice)
   reason: string - why this helps (cite evidence)
   safe: boolean
