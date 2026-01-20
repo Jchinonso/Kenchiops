@@ -41,6 +41,8 @@ import {
   cleanupExpired,
   // Drift detection
   runDriftDetectionWithAlerts,
+  type WorkerControl,
+  type ProcessorControl,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
@@ -124,14 +126,14 @@ const initializeDatabase = (): void => {
 };
 
 /**
- * Stop function for aggregator worker
+ * Control for aggregator worker
  */
-let stopAggregatorWorker: (() => void) | null = null;
+let aggregatorWorkerControl: WorkerControl | null = null;
 
 /**
- * Stop function for analysis queue processor
+ * Control for analysis queue processor
  */
-let stopAnalysisProcessor: (() => void) | null = null;
+let analysisProcessorControl: ProcessorControl | null = null;
 
 /**
  * Initialize Redis-based failure aggregator for consolidated CI failure analysis
@@ -161,14 +163,14 @@ const initializeFailureAggregator = (): void => {
   };
 
   // Start the aggregator worker (checks for ready aggregations and enqueues them)
-  stopAggregatorWorker = startAggregatorWorker(
-    aggregationConfig,
-    QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS
-  );
+  aggregatorWorkerControl = startAggregatorWorker({
+    config: aggregationConfig,
+    pollIntervalMs: QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS,
+  });
 
   // Start the analysis queue processor (processes enqueued aggregations)
   // Handles both legacy flow (pre-analyzed) and new flow (pending checks for combined analysis)
-  stopAnalysisProcessor = startAnalysisQueueProcessor(postConsolidatedAnalysis, {
+  analysisProcessorControl = startAnalysisQueueProcessor(postConsolidatedAnalysis, {
     pollIntervalMs: QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
     maxConcurrent: QUEUE_WORKER_DEFAULTS.SLACK_MAX_CONCURRENT,
     onPendingReady: processCombinedAnalysis,
@@ -284,13 +286,13 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
       }
 
       // Stop aggregator workers (Redis state persists, will be processed on restart)
-      if (stopAggregatorWorker) {
+      if (aggregatorWorkerControl) {
         logger.info("Stopping aggregator worker...");
-        stopAggregatorWorker();
+        aggregatorWorkerControl.stop();
       }
-      if (stopAnalysisProcessor) {
+      if (analysisProcessorControl) {
         logger.info("Stopping analysis processor...");
-        stopAnalysisProcessor();
+        analysisProcessorControl.stop();
       }
 
       // Stop RAG background jobs
