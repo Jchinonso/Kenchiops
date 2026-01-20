@@ -297,6 +297,34 @@ export class CircuitBreakerOpenError extends ExternalServiceError {
   }
 }
 
+/**
+ * Error for concurrency queue timeout.
+ * Thrown when an operation waits too long for a concurrency slot.
+ */
+export class QueueTimeoutError extends AppError {
+  public readonly queueTimeoutMs: number;
+  public readonly queueLength: number;
+
+  constructor(queueTimeoutMs: number, queueLength: number, context: ErrorContext = {}) {
+    super(
+      `Concurrency limiter queue timeout after ${queueTimeoutMs}ms`,
+      ERROR_CODES.EXTERNAL_SERVICE_ERROR,
+      HTTP_STATUS.SERVICE_UNAVAILABLE,
+      true,
+      {
+        ...context,
+        retryable: true,
+        retryAfterMs: queueTimeoutMs,
+        suggestion:
+          context.suggestion ?? "The system is under high load. Please try again in a moment.",
+        metadata: { queueTimeoutMs, queueLength, ...context.metadata },
+      }
+    );
+    this.queueTimeoutMs = queueTimeoutMs;
+    this.queueLength = queueLength;
+  }
+}
+
 // ==================== Type Guards ====================
 
 /**

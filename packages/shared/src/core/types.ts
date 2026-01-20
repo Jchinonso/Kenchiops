@@ -786,6 +786,12 @@ export interface Config {
 
   // Redis Configuration
   readonly REDIS_URL: string;
+
+  // LLM Concurrency Configuration
+  /** Maximum parallel LLM requests during batch analysis */
+  readonly LLM_MAX_CONCURRENT_ANALYSIS?: number;
+  /** Maximum time to wait in queue before timeout (ms) */
+  readonly LLM_QUEUE_TIMEOUT_MS?: number;
 }
 
 // ==================== Error Types ====================
@@ -817,4 +823,71 @@ export interface RetryInfo {
   readonly retryable: boolean;
   /** When to retry (milliseconds). */
   readonly retryAfterMs?: number;
+}
+
+// ==================== Concurrency Types ====================
+/** Configuration for creating a concurrency limiter. */
+export interface ConcurrencyLimiterConfig {
+  readonly maxConcurrent: number;
+  readonly queueTimeoutMs?: number;
+}
+/** Semaphore-based concurrency limiter. */
+export interface ConcurrencyLimiter {
+  acquire(): Promise<void>;
+  release(): void;
+  availableSlots(): number;
+  queueLength(): number;
+  maxConcurrent(): number;
+}
+/** @internal */
+export interface PendingWaiter {
+  readonly resolve: () => void;
+  readonly reject: (error: Error) => void;
+  readonly timeoutId: NodeJS.Timeout;
+  resolved: boolean;
+}
+
+// ==================== Health Check Types ====================
+
+/** Health status values. */
+export type HealthStatus = "healthy" | "degraded" | "unhealthy";
+
+/** Individual component health check result. */
+export interface ComponentHealth {
+  readonly name: string;
+  readonly status: HealthStatus;
+  readonly message?: string;
+  readonly latencyMs?: number;
+  readonly details?: Record<string, unknown>;
+}
+
+/** Memory health information. */
+export interface MemoryHealth {
+  readonly heapUsed: number;
+  readonly heapTotal: number;
+  readonly heapUsedPercent: number;
+  readonly rss: number;
+  readonly external: number;
+}
+
+/** Overall service health response. */
+export interface ServiceHealth {
+  readonly status: HealthStatus;
+  readonly service: string;
+  readonly version: string;
+  readonly timestamp: string;
+  readonly uptime: number;
+  readonly environment: string;
+  readonly components: readonly ComponentHealth[];
+  readonly memory: MemoryHealth;
+}
+
+/** Configuration for health check. */
+export interface HealthCheckConfig {
+  readonly serviceName: string;
+  readonly version: string;
+  readonly environment: string;
+  readonly includeDatabase?: boolean;
+  readonly includeRedis?: boolean;
+  readonly includeCircuitBreakers?: boolean;
 }

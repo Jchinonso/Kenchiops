@@ -258,6 +258,9 @@ export {
   ID_GENERATION,
 } from "./core.js";
 
+// LLM concurrency constants
+export { LLM_CONCURRENCY_DEFAULTS } from "./llmConcurrency.js";
+
 // Redis constants
 export {
   REDIS_STATUS,

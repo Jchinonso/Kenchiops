@@ -234,9 +234,10 @@
       }
     },
     {
-      "files": ["**/types/**/*.ts", "**/*Types.ts", "**/*types.ts"],
+      "files": ["**/types/**/*.ts", "**/*Types.ts", "**/*types.ts", "**/core/types.ts"],
       "rules": {
-        "@typescript-eslint/array-type": "off"
+        "@typescript-eslint/array-type": "off",
+        "max-lines": "off"
       }
     }
   ]

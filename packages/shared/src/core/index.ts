@@ -23,6 +23,16 @@ export {
   type SignedUrlParams,
 } from "./utils.js";
 
+// Concurrency control
+export {
+  createConcurrencyLimiter,
+  mapWithConcurrency,
+  withConcurrencyLimit,
+  isQueueTimeoutError,
+  type ConcurrencyLimiterConfig,
+  type ConcurrencyLimiter,
+} from "./concurrency.js";
+
 // Error handling
 export {
   AppError,
@@ -34,6 +44,7 @@ export {
   LLMError,
   RateLimitError,
   CircuitBreakerOpenError,
+  QueueTimeoutError,
   isAppError,
   isRetryableAppError,
   isExternalServiceError,
@@ -108,4 +119,10 @@ export type {
   CIFailureEvent,
   SlackMessageEvent,
   GitHubPREvent,
+  // Health Check Types
+  HealthStatus,
+  ComponentHealth,
+  MemoryHealth,
+  ServiceHealth,
+  HealthCheckConfig,
 } from "./types.js";

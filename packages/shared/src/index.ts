@@ -23,6 +23,14 @@ export {
   type SignedUrlParams,
 } from "./core/index.js";
 export {
+  createConcurrencyLimiter,
+  mapWithConcurrency,
+  withConcurrencyLimit,
+  isQueueTimeoutError,
+  type ConcurrencyLimiterConfig,
+  type ConcurrencyLimiter,
+} from "./core/index.js";
+export {
   AppError,
   ValidationError,
   AuthenticationError,
@@ -32,6 +40,7 @@ export {
   LLMError,
   RateLimitError,
   CircuitBreakerOpenError,
+  QueueTimeoutError,
   isAppError,
   isRetryableAppError,
   isExternalServiceError,

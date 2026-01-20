@@ -17,6 +17,8 @@ import {
   resilientPost,
   getErrorMessage,
   preprocessLogsWithMetadata,
+  mapWithConcurrency,
+  LLM_CONCURRENCY_DEFAULTS,
   // V1.1: Chunking pipeline for improved preprocessing and line mapping
   sanitizeForChunkingWithMapping,
   getOriginalLineNumber,
@@ -437,16 +439,23 @@ export const processCombinedAnalysis = async (
 
     const apiUrl = `${config.API_URL}/api/analyze`;
 
-    // Step 2: Analyze each job separately (in parallel)
-    logger.info("Analyzing jobs in parallel", {
+    // Step 2: Analyze each job separately (with concurrency limit)
+    const maxConcurrent =
+      config.LLM_MAX_CONCURRENT_ANALYSIS ?? LLM_CONCURRENCY_DEFAULTS.MAX_CONCURRENT_ANALYSIS;
+
+    logger.info("Analyzing jobs with concurrency limit", {
       repository: repository.fullName,
       jobCount: allJobsLogs.jobs.length,
+      maxConcurrent,
       jobNames: allJobsLogs.jobs.map((job) => job.jobName),
     });
 
-    // Analyze all jobs in parallel with error handling
-    const analysisResults = await Promise.all(
-      allJobsLogs.jobs.map((job) => analyzeJobWithErrorHandling(job, repository.fullName, apiUrl))
+    // Analyze all jobs with concurrency limiting to avoid rate limits
+    const analysisResults = await mapWithConcurrency(
+      allJobsLogs.jobs,
+      (job) => analyzeJobWithErrorHandling(job, repository.fullName, apiUrl),
+      maxConcurrent,
+      config.LLM_QUEUE_TIMEOUT_MS
     );
 
     // Create a map of job name to analysis result
