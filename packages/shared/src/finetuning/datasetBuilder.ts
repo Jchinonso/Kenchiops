@@ -10,7 +10,7 @@
 import { createLogger } from "../core/logger.js";
 import { redactSecrets } from "../security/redaction.js";
 import type { LLMAnalysisResult, Evidence, Event, ActionProposal } from "../core/types.js";
-import type { FeedbackRecord, FeedbackType } from "../database/feedbackRepository.js";
+import type { FeedbackRecord, FeedbackType } from "../database/index.js";
 
 const logger = createLogger("dataset-builder");
 
