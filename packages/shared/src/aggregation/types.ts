@@ -97,6 +97,21 @@ export interface SerializedPendingCheckRun {
 }
 
 /**
+ * Payload for pending aggregation jobs (checks without analysis).
+ */
+export interface PendingAggregationPayload {
+  readonly pendingAggregation: {
+    readonly commitSha: string;
+    readonly repository: RepositoryInfo;
+    readonly installationId: number;
+    readonly pullRequestNumbers: readonly number[];
+    readonly pendingChecks: readonly SerializedPendingCheckRun[];
+    readonly firstFailureAt: string;
+    readonly lastFailureAt: string;
+  };
+}
+
+/**
  * Aggregated pending checks for a single commit (before analysis)
  */
 export interface PendingAggregation {
@@ -280,3 +295,184 @@ export const AGGREGATION_KEYS = {
   /** Pattern to find all aggregation keys */
   pattern: `${REDIS_KEY_PREFIXES.AGGREGATION}:*:meta`,
 } as const;
+
+/**
+ * Context for failure aggregation operations.
+ */
+export interface FailureContext {
+  readonly repositoryInfo: RepositoryInfo;
+  readonly installationId: number;
+  readonly pullRequestNumbers: readonly number[];
+  readonly prContext: PRContext | null;
+  readonly workflowContext: WorkflowContext | null;
+}
+
+/**
+ * Metadata stored in Redis for an aggregation (JSON-serialized fields).
+ */
+export interface AggregationMetadata {
+  readonly repositoryFullName: string;
+  readonly repositoryOwner: string;
+  readonly repositoryName: string;
+  readonly commitSha: string;
+  readonly installationId: number;
+  readonly pullRequestNumbers: string;
+  readonly prContext: string | null;
+  readonly workflowContext: string | null;
+  readonly firstFailureAt: string;
+  readonly lastFailureAt: string;
+}
+
+/**
+ * Redis key set for an aggregation.
+ */
+export interface AggregationKeySet {
+  readonly failuresKey: string;
+  readonly metadataKey: string;
+  readonly debounceKey: string;
+}
+
+/**
+ * Readiness check result for an aggregation key.
+ */
+export interface ReadinessResult {
+  readonly key: AggregationKey;
+  readonly isReady: boolean;
+}
+
+/**
+ * Context for pending check aggregation.
+ */
+export interface PendingCheckContext {
+  readonly repositoryInfo: RepositoryInfo;
+  readonly installationId: number;
+  readonly pullRequestNumbers: readonly number[];
+}
+
+/**
+ * Serialized pending check structure for Redis storage.
+ */
+export interface SerializedPendingCheckData {
+  readonly checkRunId: number;
+  readonly checkName: string;
+  readonly conclusion: string;
+  readonly timestamp: string;
+}
+
+/**
+ * Log context for aggregation operations.
+ */
+export interface AggregationLogContext extends Record<string, unknown> {
+  readonly repository: string;
+  readonly commitSha: string;
+}
+
+// ==================== Queue Processor Types ====================
+
+/**
+ * Callback for pre-analyzed aggregation (legacy flow).
+ */
+export type AggregationReadyCallback = (
+  aggregation: AggregatedFailures
+) => Promise<ConsolidatedPostResult>;
+
+/**
+ * Callback for pending aggregation needing combined analysis (new flow).
+ */
+export type PendingAnalysisCallback = (
+  payload: PendingAggregationPayload
+) => Promise<ConsolidatedPostResult>;
+
+/**
+ * Callback invoked when the processor encounters an error.
+ * Use for external health monitoring and alerting.
+ */
+export type ProcessorErrorCallback = (error: string, context?: Record<string, unknown>) => void;
+
+/**
+ * Stats for monitoring processor health.
+ */
+export interface ProcessorStats {
+  readonly totalProcessed: number;
+  readonly totalErrors: number;
+  readonly lastProcessedAt: Date | null;
+  readonly lastErrorAt: Date | null;
+  readonly isRunning: boolean;
+}
+
+/**
+ * Control interface for managing the processor.
+ */
+export interface ProcessorControl {
+  /** Stops the processor gracefully. */
+  readonly stop: () => void;
+  /** Returns current processor statistics. */
+  readonly getStats: () => ProcessorStats;
+}
+
+/**
+ * Payload structure for consolidated analysis jobs.
+ */
+export interface ConsolidatedAnalysisPayload {
+  readonly aggregation: {
+    readonly commitSha: string;
+    readonly repository: RepositoryInfo;
+    readonly installationId: number;
+    readonly pullRequestNumbers: readonly number[];
+    readonly failures: readonly SerializedFailure[];
+    readonly prContext: PRContext | null;
+    readonly workflowContext: WorkflowContext | null;
+    readonly firstFailureAt: string;
+    readonly lastFailureAt: string;
+  };
+}
+
+/**
+ * Configuration options for the analysis queue processor.
+ */
+export interface AnalysisQueueProcessorOptions {
+  readonly pollIntervalMs?: number;
+  readonly maxConcurrent?: number;
+  readonly onPendingReady?: PendingAnalysisCallback;
+  /** Optional callback for processor errors (for health monitoring). */
+  readonly onError?: ProcessorErrorCallback;
+}
+
+// ==================== Aggregator Worker Types ====================
+
+/**
+ * Callback invoked when the worker encounters an error.
+ * Use for external health monitoring and alerting.
+ */
+export type WorkerErrorCallback = (error: string, context?: Record<string, unknown>) => void;
+
+/**
+ * Stats for monitoring worker health.
+ */
+export interface WorkerStats {
+  readonly totalProcessed: number;
+  readonly totalErrors: number;
+  readonly lastPollAt: Date | null;
+  readonly lastErrorAt: Date | null;
+  readonly isRunning: boolean;
+}
+
+/**
+ * Control interface for managing the worker.
+ */
+export interface WorkerControl {
+  /** Stops the worker gracefully. */
+  readonly stop: () => void;
+  /** Returns current worker statistics. */
+  readonly getStats: () => WorkerStats;
+}
+
+/**
+ * Options for configuring the aggregator worker.
+ */
+export interface AggregatorWorkerOptions {
+  readonly config?: AggregationConfig;
+  readonly pollIntervalMs?: number;
+  /** Optional callback for worker errors (for health monitoring). */
+  readonly onError?: WorkerErrorCallback;
+}

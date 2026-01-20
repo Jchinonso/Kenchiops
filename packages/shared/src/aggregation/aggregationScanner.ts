@@ -9,12 +9,13 @@
 
 import { getRedisClient } from "../queue/redisClient.js";
 import { createLogger, withTimeout, getErrorMessage } from "../core/index.js";
-import { REDIS_TIMEOUTS, REDIS_SCAN } from "../constants/index.js";
+import { AGGREGATION_METADATA_FIELDS, REDIS_SCAN, REDIS_TIMEOUTS } from "../constants/index.js";
 import {
   AGGREGATION_KEYS,
   DEFAULT_AGGREGATION_CONFIG,
-  type AggregationKey,
   type AggregationConfig,
+  type AggregationKey,
+  type ReadinessResult,
 } from "./types.js";
 import {
   parseAggregationKey,
@@ -24,14 +25,6 @@ import {
 } from "./aggregatorHelpers.js";
 
 const logger = createLogger("aggregation-scanner");
-
-// ==================== Types ====================
-
-/** Readiness check result for an aggregation key. */
-interface ReadinessResult {
-  readonly key: AggregationKey;
-  readonly isReady: boolean;
-}
 
 // ==================== Readiness Checks ====================
 
@@ -70,7 +63,7 @@ export const isMaxWaitExceeded = async (
   try {
     const { metadataKey } = buildAggregationKeys(key);
     const firstFailureAt = await withTimeout(
-      redis.hget(metadataKey, "firstFailureAt"),
+      redis.hget(metadataKey, AGGREGATION_METADATA_FIELDS.FIRST_FAILURE_AT),
       REDIS_TIMEOUTS.AGGREGATION_OPERATION_MS
     );
 
@@ -116,7 +109,9 @@ const filterReadyKeys = async (
     )
   );
 
-  return readinessResults.flatMap((result) => (result.isReady ? [result.key] : []));
+  return readinessResults.flatMap((readinessResult) =>
+    readinessResult.isReady ? [readinessResult.key] : []
+  );
 };
 
 /** Recursive Redis SCAN for aggregation keys. */

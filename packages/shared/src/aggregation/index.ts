@@ -40,7 +40,7 @@ export {
 
 // ==================== Internal Types ====================
 
-export type { PendingCheckContext } from "./aggregatorTypes.js";
+export type { PendingCheckContext } from "./types.js";
 
 // ==================== Aggregator Helpers ====================
 
@@ -67,7 +67,13 @@ export { addFailureToRedis, addPendingCheckToRedis } from "./aggregatorWrite.js"
 
 // ==================== Read Operations ====================
 
-export { getAggregationFromRedis, getPendingAggregationFromRedis } from "./aggregatorRead.js";
+export {
+  getAggregationFromRedis,
+  getPendingAggregationFromRedis,
+  getAggregationResult,
+  getPendingAggregationResult,
+  type AggregationReadResult,
+} from "./aggregatorRead.js";
 
 // ==================== Delete Operations ====================
 
@@ -91,7 +97,13 @@ export {
 
 // ==================== Worker ====================
 
-export { startAggregatorWorker } from "./aggregatorWorker.js";
+export {
+  startAggregatorWorker,
+  type WorkerErrorCallback,
+  type WorkerStats,
+  type WorkerControl,
+  type AggregatorWorkerOptions,
+} from "./aggregatorWorker.js";
 
 // ==================== Queue Processor ====================
 
@@ -101,4 +113,8 @@ export {
   type ConsolidatedAnalysisPayload,
   type AggregationReadyCallback,
   type PendingAnalysisCallback,
+  type ProcessorErrorCallback,
+  type ProcessorStats,
+  type ProcessorControl,
+  type AnalysisQueueProcessorOptions,
 } from "./analysisQueueProcessor.js";

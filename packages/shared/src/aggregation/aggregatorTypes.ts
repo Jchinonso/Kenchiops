@@ -1,13 +1,14 @@
 /**
  * Internal Types for Redis Aggregator
  *
- * Type definitions used internally by the aggregation module.
- * These are not exported from the main aggregation index.
+ * Type definitions used internally by the aggregation operations.
+ * These types depend on implementation details and are not exported from the main index.
  *
  * @module aggregation/aggregatorTypes
  */
 
-import type { RepositoryInfo, AggregationKey, AggregationConfig } from "./types.js";
+import type { ProcessResult as QueueProcessResult } from "../queue/messageQueue.js";
+import type { AggregationKey, AggregationConfig } from "./types.js";
 import type {
   FailureContext,
   AggregationKeySet,
@@ -15,28 +16,18 @@ import type {
   RedisClient,
 } from "./aggregatorHelpers.js";
 
-// ==================== Public Context Types ====================
+// Re-export types for backwards compatibility
+export type {
+  PendingCheckContext,
+  SerializedPendingCheckData,
+  AggregationLogContext,
+} from "./types.js";
 
-/** Context for pending check aggregation. */
-export interface PendingCheckContext {
-  readonly repositoryInfo: RepositoryInfo;
-  readonly installationId: number;
-  readonly pullRequestNumbers: readonly number[];
-}
+// ==================== Write Operation Types ====================
 
-// ==================== Serialization Types ====================
-
-/** Serialized pending check structure for Redis storage. */
-export interface SerializedPendingCheckData {
-  readonly checkRunId: number;
-  readonly checkName: string;
-  readonly conclusion: string;
-  readonly timestamp: string;
-}
-
-// ==================== Internal Operation Types ====================
-
-/** Parameters for adding an item to aggregation. */
+/**
+ * Parameters for adding an item to aggregation.
+ */
 export interface AddToAggregationParams {
   readonly key: AggregationKey;
   readonly checkRunId: number;
@@ -47,13 +38,9 @@ export interface AddToAggregationParams {
   readonly itemType: "failure" | "pending_check";
 }
 
-/** Log context for aggregation operations. */
-export interface AggregationLogContext extends Record<string, unknown> {
-  readonly repository: string;
-  readonly commitSha: string;
-}
-
-/** Options for executing aggregation pipeline. */
+/**
+ * Options for executing aggregation pipeline.
+ */
 export interface PipelineOptions {
   readonly redis: RedisClient;
   readonly keys: AggregationKeySet;
@@ -64,10 +51,34 @@ export interface PipelineOptions {
   readonly debounceSeconds: number;
 }
 
-// ==================== Constants ====================
+// ==================== Queue Processor Internal Types ====================
 
-/** Radix for parseInt operations. */
-export const RADIX_DECIMAL = 10;
+/**
+ * Queue message structure for processing.
+ */
+export interface QueueMessage {
+  readonly id: string;
+  readonly payload: unknown;
+}
 
-/** Default installation ID when not provided. */
-export const DEFAULT_INSTALLATION_ID = "0";
+/**
+ * Mutable state for controlling worker lifecycle.
+ */
+export interface ProcessorWorkerState {
+  running: boolean;
+  activeJobs: number;
+  totalProcessed: number;
+  totalErrors: number;
+  lastProcessedAt: Date | null;
+  lastErrorAt: Date | null;
+}
+
+/**
+ * Async function that polls and recurses until stopped.
+ */
+export type WorkerLoop = () => Promise<void>;
+
+/**
+ * Message processor function type.
+ */
+export type MessageProcessor = (message: QueueMessage) => Promise<QueueProcessResult>;

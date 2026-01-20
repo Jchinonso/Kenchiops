@@ -8,81 +8,57 @@
  * @module aggregation/analysisQueueProcessor
  */
 
-import { ciAnalysisQueue } from "../queue/messageQueue.js";
+import {
+  ciAnalysisQueue,
+  type ProcessResult as QueueProcessResult,
+} from "../queue/messageQueue.js";
 import { createLogger, delay, getErrorMessage } from "../core/index.js";
 import { QUEUE_WORKER_DEFAULTS } from "../constants/index.js";
 import type {
   AggregatedFailures,
-  SerializedFailure,
-  RepositoryInfo,
-  PRContext,
-  WorkflowContext,
   ConsolidatedPostResult,
+  PendingAggregationPayload,
+  ConsolidatedAnalysisPayload,
+  AggregationReadyCallback,
+  PendingAnalysisCallback,
+  ProcessorErrorCallback,
+  ProcessorStats,
+  ProcessorControl,
+  AnalysisQueueProcessorOptions,
 } from "./types.js";
-import type { PendingAggregationPayload } from "./aggregationEnqueuer.js";
+import type {
+  QueueMessage,
+  ProcessorWorkerState,
+  WorkerLoop,
+  MessageProcessor,
+} from "./aggregatorTypes.js";
 import { formatShaForDisplay } from "./aggregatorHelpers.js";
 
 const logger = createLogger("analysis-queue-processor");
 
-// ==================== Constants ====================
+// ==================== Re-exports for Backwards Compatibility ====================
 
-const DEFAULT_MAX_CONCURRENT = 3;
+export type {
+  AggregationReadyCallback,
+  PendingAnalysisCallback,
+  ConsolidatedAnalysisPayload,
+  AnalysisQueueProcessorOptions,
+  ProcessorErrorCallback,
+  ProcessorStats,
+  ProcessorControl,
+} from "./types.js";
 
-// ==================== Types ====================
+// ==================== Result Constructors ====================
 
-/** Callback for pre-analyzed aggregation (legacy flow). */
-export type AggregationReadyCallback = (
-  aggregation: AggregatedFailures
-) => Promise<ConsolidatedPostResult>;
+/** Creates a success result. */
+const successResult = (): QueueProcessResult => ({ success: true });
 
-/** Callback for pending aggregation needing combined analysis (new flow). */
-export type PendingAnalysisCallback = (
-  payload: PendingAggregationPayload
-) => Promise<ConsolidatedPostResult>;
-
-/** Function to stop the processor gracefully. */
-export type StopFunction = () => void;
-
-/** Payload structure for consolidated analysis jobs. */
-export interface ConsolidatedAnalysisPayload {
-  readonly aggregation: {
-    readonly commitSha: string;
-    readonly repository: RepositoryInfo;
-    readonly installationId: number;
-    readonly pullRequestNumbers: readonly number[];
-    readonly failures: readonly SerializedFailure[];
-    readonly prContext: PRContext | null;
-    readonly workflowContext: WorkflowContext | null;
-    readonly firstFailureAt: string;
-    readonly lastFailureAt: string;
-  };
-}
-
-/** Configuration options for the analysis queue processor. */
-export interface AnalysisQueueProcessorOptions {
-  readonly pollIntervalMs?: number;
-  readonly maxConcurrent?: number;
-  readonly onPendingReady?: PendingAnalysisCallback;
-}
-
-/** Process result from queue handler. */
-interface ProcessResult {
-  readonly success: boolean;
-  readonly error?: string;
-  readonly shouldRetry?: boolean;
-}
-
-/** Queue message structure. */
-interface QueueMessage {
-  readonly id: string;
-  readonly payload: unknown;
-}
-
-/** Mutable state for controlling worker lifecycle. */
-interface WorkerState {
-  running: boolean;
-  activeJobs: number;
-}
+/** Creates an error result. */
+const errorResult = (error: string, shouldRetry: boolean): QueueProcessResult => ({
+  success: false,
+  error,
+  shouldRetry,
+});
 
 // ==================== Helpers ====================
 
@@ -120,60 +96,84 @@ const isConsolidatedAnalysisPayload = (payload: unknown): payload is Consolidate
 
 // ==================== Message Processing ====================
 
-type MessageProcessor = (message: QueueMessage) => Promise<ProcessResult>;
-
-/** Logs completion and returns ProcessResult. */
-const logCompletionAndReturn = (
+/** Handles successful processing and updates state. */
+const handleSuccess = (
   messageId: string,
   analysisType: string,
-  result: ConsolidatedPostResult
-): ProcessResult => {
+  result: ConsolidatedPostResult,
+  state: ProcessorWorkerState
+): QueueProcessResult => {
+  state.totalProcessed++;
+  state.lastProcessedAt = new Date();
+
   logger.info(`${analysisType} completed`, {
     messageId,
     success: result.success,
     prCommentsPosted: result.prCommentsPosted,
     slackMessageSent: result.slackMessageSent,
   });
-  return { success: result.success };
+
+  return successResult();
 };
 
-/** Logs error and returns failed ProcessResult. */
-const logErrorAndReturn = (
+/** Handles error and updates state. */
+const handleError = (
   messageId: string,
   analysisType: string,
-  error: unknown
-): ProcessResult => {
-  const errorMessage = getErrorMessage(error);
+  caughtError: unknown,
+  state: ProcessorWorkerState,
+  onError?: ProcessorErrorCallback,
+  context?: Record<string, unknown>
+): QueueProcessResult => {
+  const errorMessage = getErrorMessage(caughtError);
+  state.totalErrors++;
+  state.lastErrorAt = new Date();
+
   logger.error(`Failed to process ${analysisType}`, { messageId, error: errorMessage });
-  return { success: false, error: errorMessage, shouldRetry: true };
+  onError?.(errorMessage, { messageId, analysisType, ...context });
+
+  return errorResult(errorMessage, true);
 };
 
 /** Processes pending aggregation payload (new combined analysis flow). */
 const processPendingPayload = async (
   message: QueueMessage,
   payload: PendingAggregationPayload,
-  onPendingReady?: PendingAnalysisCallback
-): Promise<ProcessResult> => {
+  state: ProcessorWorkerState,
+  onPendingReady?: PendingAnalysisCallback,
+  onError?: ProcessorErrorCallback
+): Promise<QueueProcessResult> => {
   if (!onPendingReady) {
+    const errorMessage = "No pending analysis handler configured";
+    state.totalErrors++;
+    state.lastErrorAt = new Date();
+
     logger.error("Received pending aggregation but no handler configured", {
       messageId: message.id,
     });
-    return { success: false, error: "No pending analysis handler", shouldRetry: false };
+    onError?.(errorMessage, { messageId: message.id, phase: "handler_missing" });
+
+    return errorResult(errorMessage, false);
   }
 
   const pending = payload.pendingAggregation;
+  const context = {
+    repository: pending.repository.fullName,
+    commitSha: pending.commitSha,
+    pendingCheckCount: pending.pendingChecks.length,
+  };
+
   logger.info("Processing pending aggregation for combined analysis", {
     messageId: message.id,
-    repository: pending.repository.fullName,
+    ...context,
     commitSha: formatShaForDisplay(pending.commitSha),
-    pendingCheckCount: pending.pendingChecks.length,
   });
 
   try {
     const result = await onPendingReady(payload);
-    return logCompletionAndReturn(message.id, "Combined analysis", result);
-  } catch (error) {
-    return logErrorAndReturn(message.id, "combined analysis", error);
+    return handleSuccess(message.id, "Combined analysis", result, state);
+  } catch (caughtError) {
+    return handleError(message.id, "combined analysis", caughtError, state, onError, context);
   }
 };
 
@@ -181,53 +181,69 @@ const processPendingPayload = async (
 const processConsolidatedPayload = async (
   message: QueueMessage,
   payload: ConsolidatedAnalysisPayload,
-  onReady: AggregationReadyCallback
-): Promise<ProcessResult> => {
+  state: ProcessorWorkerState,
+  onReady: AggregationReadyCallback,
+  onError?: ProcessorErrorCallback
+): Promise<QueueProcessResult> => {
   const aggregation = deserializeQueuePayload(payload);
+  const context = {
+    repository: aggregation.repository.fullName,
+    commitSha: aggregation.commitSha,
+    failureCount: aggregation.failures.length,
+  };
 
   logger.info("Processing consolidated analysis", {
     messageId: message.id,
-    repository: aggregation.repository.fullName,
+    ...context,
     commitSha: formatShaForDisplay(aggregation.commitSha),
-    failureCount: aggregation.failures.length,
   });
 
   try {
     const result = await onReady(aggregation);
-    return logCompletionAndReturn(message.id, "Consolidated analysis", result);
-  } catch (error) {
-    return logErrorAndReturn(message.id, "consolidated analysis", error);
+    return handleSuccess(message.id, "Consolidated analysis", result, state);
+  } catch (caughtError) {
+    return handleError(message.id, "consolidated analysis", caughtError, state, onError, context);
   }
 };
 
 /** Creates a message processor that routes to appropriate handler based on payload type. */
 const createMessageProcessor =
-  (onReady: AggregationReadyCallback, onPendingReady?: PendingAnalysisCallback): MessageProcessor =>
-  async (message: QueueMessage): Promise<ProcessResult> => {
+  (
+    onReady: AggregationReadyCallback,
+    state: ProcessorWorkerState,
+    onPendingReady?: PendingAnalysisCallback,
+    onError?: ProcessorErrorCallback
+  ): MessageProcessor =>
+  async (message: QueueMessage): Promise<QueueProcessResult> => {
     const { payload } = message;
 
     if (isPendingAggregationPayload(payload)) {
-      return processPendingPayload(message, payload, onPendingReady);
+      return processPendingPayload(message, payload, state, onPendingReady, onError);
     }
 
     if (isConsolidatedAnalysisPayload(payload)) {
-      return processConsolidatedPayload(message, payload, onReady);
+      return processConsolidatedPayload(message, payload, state, onReady, onError);
     }
 
+    const errorMessage = "Unknown payload type";
+    state.totalErrors++;
+    state.lastErrorAt = new Date();
+
     logger.error("Unknown queue payload type", { messageId: message.id });
-    return { success: false, error: "Unknown payload type", shouldRetry: false };
+    onError?.(errorMessage, { messageId: message.id, phase: "payload_validation" });
+
+    return errorResult(errorMessage, false);
   };
 
 // ==================== Worker Loop ====================
 
-type WorkerLoop = () => Promise<void>;
-
 /** Creates a recursive worker loop that processes messages until stopped. */
 const createWorkerLoop = (
   processMessage: MessageProcessor,
-  state: WorkerState,
+  state: ProcessorWorkerState,
   pollIntervalMs: number,
-  maxConcurrent: number
+  maxConcurrent: number,
+  onError?: ProcessorErrorCallback
 ): WorkerLoop => {
   const loop = async (): Promise<void> => {
     if (!state.running) {
@@ -242,6 +258,12 @@ const createWorkerLoop = (
     try {
       state.activeJobs++;
       await ciAnalysisQueue.process(processMessage);
+    } catch (caughtError) {
+      const errorMessage = getErrorMessage(caughtError);
+      state.totalErrors++;
+      state.lastErrorAt = new Date();
+      logger.error("Worker loop error", { error: errorMessage });
+      onError?.(errorMessage, { phase: "worker_loop" });
     } finally {
       state.activeJobs--;
     }
@@ -258,28 +280,56 @@ const createWorkerLoop = (
 };
 
 /** Runs all workers with error handling. */
-const runWorkers = async (workers: readonly WorkerLoop[]): Promise<void> => {
+const runWorkers = async (
+  workers: readonly WorkerLoop[],
+  state: ProcessorWorkerState,
+  onError?: ProcessorErrorCallback
+): Promise<void> => {
   try {
     await Promise.all(workers.map((worker): Promise<void> => worker()));
-  } catch (error) {
-    logger.error("Analysis queue processor error", { error: getErrorMessage(error) });
+  } catch (caughtError) {
+    const errorMessage = getErrorMessage(caughtError);
+    state.totalErrors++;
+    state.lastErrorAt = new Date();
+    logger.error("Analysis queue processor fatal error", { error: errorMessage });
+    onError?.(errorMessage, { phase: "fatal" });
   }
 };
 
+/** Creates a stats snapshot from current worker state. */
+const createStatsSnapshot = (state: ProcessorWorkerState): ProcessorStats => ({
+  totalProcessed: state.totalProcessed,
+  totalErrors: state.totalErrors,
+  lastProcessedAt: state.lastProcessedAt,
+  lastErrorAt: state.lastErrorAt,
+  isRunning: state.running,
+});
+
 // ==================== Public API ====================
 
-/** Starts the CI analysis queue processor. Returns a stop function for graceful shutdown. */
+/**
+ * Starts the CI analysis queue processor.
+ * Returns a control object for stopping and monitoring the processor.
+ */
 export const startAnalysisQueueProcessor = (
   onReady: AggregationReadyCallback,
   options: AnalysisQueueProcessorOptions = {}
-): StopFunction => {
+): ProcessorControl => {
   const {
     pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
-    maxConcurrent = DEFAULT_MAX_CONCURRENT,
+    maxConcurrent = QUEUE_WORKER_DEFAULTS.ANALYSIS_MAX_CONCURRENT,
     onPendingReady,
+    onError,
   } = options;
 
-  const state: WorkerState = { running: true, activeJobs: 0 };
+  const state: ProcessorWorkerState = {
+    running: true,
+    activeJobs: 0,
+    totalProcessed: 0,
+    totalErrors: 0,
+    lastProcessedAt: null,
+    lastErrorAt: null,
+  };
 
   logger.info("Starting CI analysis queue processor", {
     pollIntervalMs,
@@ -287,15 +337,27 @@ export const startAnalysisQueueProcessor = (
     hasPendingHandler: Boolean(onPendingReady),
   });
 
-  const processMessage = createMessageProcessor(onReady, onPendingReady);
-  const workerLoop = createWorkerLoop(processMessage, state, pollIntervalMs, maxConcurrent);
+  const processMessage = createMessageProcessor(onReady, state, onPendingReady, onError);
+  const workerLoop = createWorkerLoop(
+    processMessage,
+    state,
+    pollIntervalMs,
+    maxConcurrent,
+    onError
+  );
 
-  const workers: readonly WorkerLoop[] = Array(maxConcurrent).fill(workerLoop);
+  const workers = Array.from({ length: maxConcurrent }, (): WorkerLoop => workerLoop);
 
-  void runWorkers(workers);
+  void runWorkers(workers, state, onError);
 
-  return (): void => {
-    state.running = false;
-    logger.info("Analysis queue processor stopping");
+  return {
+    stop: (): void => {
+      state.running = false;
+      logger.info("Analysis queue processor stopping", {
+        totalProcessed: state.totalProcessed,
+        totalErrors: state.totalErrors,
+      });
+    },
+    getStats: (): ProcessorStats => createStatsSnapshot(state),
   };
 };
