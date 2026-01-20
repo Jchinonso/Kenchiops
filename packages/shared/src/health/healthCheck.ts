@@ -12,7 +12,7 @@
  * @module health/healthCheck
  */
 
-import { isDatabaseHealthy } from "../database/client.js";
+import { isDatabaseHealthy } from "../database/client/index.js";
 import { isRedisHealthy } from "../queue/redisClient.js";
 import { getCircuitStatus, SERVICE_KEYS } from "../http/circuitBreaker.js";
 import { createLogger } from "../core/logger.js";

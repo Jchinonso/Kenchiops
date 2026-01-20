@@ -9,7 +9,7 @@
 
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
-import { query } from "../database/client.js";
+import { query } from "../database/client/index.js";
 import { TTL_POLICIES, KNOWLEDGE_DOC_TYPES, type KnowledgeDocType } from "../constants/index.js";
 import { ingestDiffChunks, ingestKnowledgeDoc } from "./ingestion.js";
 

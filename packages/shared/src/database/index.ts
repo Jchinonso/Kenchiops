@@ -11,7 +11,7 @@ export {
   closeDatabase,
   isDatabaseHealthy,
   type QueryResult,
-} from "./client.js";
+} from "./client/index.js";
 
 // Tenant module
 export {

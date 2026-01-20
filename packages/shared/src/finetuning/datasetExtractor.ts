@@ -9,7 +9,7 @@
 
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
-import { query } from "../database/client.js";
+import { query } from "../database/client/index.js";
 import { DATASET_THRESHOLDS, EXTRACTION_QUERIES, VALIDATION_CHECKS } from "../constants/index.js";
 import {
   buildTrainingExample,

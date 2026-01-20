@@ -5,23 +5,24 @@
  * Uses the pg library with connection pooling and automatic
  * transaction management.
  *
- * @module database/client
+ * @module database/client/client
  */
 
 import pg from "pg";
-import { createLogger } from "../core/logger.js";
-import { ValidationError, getErrorMessage } from "../core/errors.js";
-import { DATABASE_POOL_DEFAULTS, QUERY_LOGGING, TRANSACTION_COMMANDS } from "../constants/index.js";
-import type {
-  ConfigValidationRule,
-  DatabaseConfig,
-  QueryResult,
-  QueryMetadata,
-  TransactionFunction,
-} from "./clientTypes.js";
-
-// Re-export types for backward compatibility
-export type { QueryResult } from "./clientTypes.js";
+import { createLogger } from "../../core/logger.js";
+import { ValidationError, getErrorMessage } from "../../core/errors.js";
+import {
+  DATABASE_POOL_DEFAULTS,
+  QUERY_LOGGING,
+  TRANSACTION_COMMANDS,
+} from "../../constants/index.js";
+import type { DatabaseConfig, QueryResult, TransactionFunction } from "./types.js";
+import {
+  validateConfig,
+  validateQueryText,
+  createQueryMetadata,
+  calculateDuration,
+} from "./helpers.js";
 
 const { Pool } = pg;
 
@@ -39,95 +40,7 @@ const POOL_EVENTS = {
 
 let pool: pg.Pool | null = null;
 
-// ==================== Input Validation ====================
-
-/** Validation rules for database configuration. */
-const CONFIG_VALIDATION_RULES: readonly ConfigValidationRule[] = [
-  {
-    field: "connectionString",
-    isInvalid: (config) => config.connectionString.trim().length === 0,
-    message: "Database connection string cannot be empty",
-  },
-  {
-    field: "maxConnections",
-    isInvalid: (config) => config.maxConnections !== undefined && config.maxConnections < 1,
-    message: "Max connections must be at least 1",
-    getValue: (config) => config.maxConnections,
-  },
-  {
-    field: "idleTimeoutMs",
-    isInvalid: (config) => config.idleTimeoutMs !== undefined && config.idleTimeoutMs < 0,
-    message: "Idle timeout cannot be negative",
-    getValue: (config) => config.idleTimeoutMs,
-  },
-  {
-    field: "connectionTimeoutMs",
-    isInvalid: (config) =>
-      config.connectionTimeoutMs !== undefined && config.connectionTimeoutMs < 0,
-    message: "Connection timeout cannot be negative",
-    getValue: (config) => config.connectionTimeoutMs,
-  },
-];
-
-/**
- * Validates database configuration.
- *
- * @throws ValidationError if configuration is invalid
- */
-const validateConfig = (config: DatabaseConfig): void => {
-  const failedRule = CONFIG_VALIDATION_RULES.find((rule) => rule.isInvalid(config));
-
-  if (failedRule === undefined) {
-    return;
-  }
-
-  const metadata: Record<string, unknown> = { field: failedRule.field };
-
-  if (failedRule.getValue !== undefined) {
-    metadata.value = failedRule.getValue(config);
-  }
-
-  throw new ValidationError(failedRule.message, {
-    operation: "validateConfig",
-    metadata,
-  });
-};
-
-/**
- * Validates query text is non-empty.
- *
- * @throws ValidationError if query text is empty
- */
-const validateQueryText = (text: string): void => {
-  if (text.trim().length === 0) {
-    throw new ValidationError("Query text cannot be empty", {
-      operation: "validateQueryText",
-    });
-  }
-};
-
 // ==================== Internal Helpers ====================
-
-/**
- * Truncates query text for safe logging.
- */
-const truncateQueryForLog = (text: string): string =>
-  text.substring(0, QUERY_LOGGING.MAX_QUERY_LENGTH);
-
-/**
- * Creates query metadata object for logging.
- */
-const createQueryMetadata = (
-  text: string,
-  duration: number,
-  rowCount?: number | null,
-  error?: string
-): QueryMetadata => ({
-  query: truncateQueryForLog(text),
-  duration,
-  ...(rowCount !== undefined && { rowCount }),
-  ...(error !== undefined && { error }),
-});
 
 /**
  * Ensures pool is initialized.
@@ -155,11 +68,6 @@ const registerPoolEventHandlers = (dbPool: pg.Pool): void => {
     logger.debug("New database connection established");
   });
 };
-
-/**
- * Calculates duration from start time.
- */
-const calculateDuration = (startTime: number): number => Date.now() - startTime;
 
 /**
  * Executes rollback safely, logging any errors.

@@ -10,7 +10,7 @@
 import type { Server } from "http";
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
-import { closeDatabase } from "../database/client.js";
+import { closeDatabase } from "../database/client/index.js";
 import { closeRedis } from "../queue/redisClient.js";
 
 const logger = createLogger("graceful-shutdown");

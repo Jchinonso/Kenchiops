@@ -103,7 +103,7 @@ export { parseEmbeddingVector, parseJsonbField, formatEmbeddingVector } from "./
 export type { VectorSearchFilters, VectorSearchResult } from "./vector/types.js";
 
 // Database client
-export { query, transaction } from "./client.js";
+export { query, transaction } from "./client/client.js";
 
 // Finetuning types (for model version repository)
 export type {

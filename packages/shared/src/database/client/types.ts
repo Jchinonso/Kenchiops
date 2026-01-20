@@ -3,7 +3,7 @@
  *
  * Type definitions for database connection and query operations.
  *
- * @module database/clientTypes
+ * @module database/client/types
  */
 
 import type pg from "pg";
