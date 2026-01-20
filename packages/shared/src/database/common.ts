@@ -111,7 +111,7 @@ export type {
   ModelMetadata,
   ModelFeatureFlags,
   ABTestConfig,
-} from "../finetuning/modelVersioning.js";
+} from "../finetuning/types.js";
 
 // RAG types (for feedback repository)
 export type { RAGRelevance } from "../rag/evaluation.js";

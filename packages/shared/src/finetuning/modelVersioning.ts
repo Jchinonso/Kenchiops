@@ -9,88 +9,9 @@
 
 import { createLogger } from "../core/logger.js";
 import { OPENAI_DEFAULTS, MODEL_VERSIONING } from "../constants/index.js";
+import type { ModelVersion, ModelFeatureFlags, ModelSelectionResult } from "./types.js";
 
 const logger = createLogger("model-versioning");
-
-// ==================== Types ====================
-
-/**
- * Model version configuration.
- */
-export interface ModelVersion {
-  readonly id: string;
-  readonly name: string;
-  readonly modelId: string;
-  readonly description?: string;
-  readonly createdAt: string;
-  readonly isBaseline: boolean;
-  readonly metadata?: ModelMetadata;
-}
-
-/**
- * Model metadata for tracking provenance.
- */
-export interface ModelMetadata {
-  readonly trainingDatasetId?: string;
-  readonly trainingExamplesCount?: number;
-  readonly evaluationMetrics?: EvaluationMetrics;
-  readonly parentModelId?: string;
-}
-
-/**
- * Model evaluation metrics.
- */
-export interface EvaluationMetrics {
-  readonly accuracy?: number;
-  readonly helpfulRate?: number;
-  readonly recallAt5?: number;
-  readonly mrr?: number;
-  readonly humanReviewScore?: number;
-}
-
-/**
- * Feature flag configuration for model selection.
- */
-export interface ModelFeatureFlags {
-  readonly defaultModelVersion: string;
-  readonly rollbackEnabled: boolean;
-  readonly rollbackModelVersion: string;
-  readonly abTestEnabled: boolean;
-  readonly abTestConfig?: ABTestConfig;
-  readonly tenantOverrides?: Record<string, string>;
-}
-
-/**
- * A/B test configuration.
- */
-export interface ABTestConfig {
-  readonly controlVersion: string;
-  readonly treatmentVersion: string;
-  readonly treatmentPercentage: number;
-  readonly startedAt: string;
-  readonly endAt?: string;
-}
-
-/**
- * Model selection result.
- */
-export interface ModelSelectionResult {
-  readonly modelId: string;
-  readonly versionId: string;
-  readonly reason: ModelSelectionReason;
-  readonly isABTest: boolean;
-  readonly abTestGroup?: "control" | "treatment";
-}
-
-/**
- * Reason for model selection.
- */
-export type ModelSelectionReason =
-  | "default"
-  | "tenant_override"
-  | "ab_test_control"
-  | "ab_test_treatment"
-  | "rollback";
 
 // ==================== Default Configuration ====================
 

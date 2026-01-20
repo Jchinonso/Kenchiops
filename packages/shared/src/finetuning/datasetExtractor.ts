@@ -17,23 +17,25 @@ import {
   calculateDatasetStats,
   toJSONL,
   logDatasetStats,
-  type TrainingExampleInput,
-  type DatasetBuildOptions,
 } from "./datasetBuilder.js";
 import {
   mapRowToEvent,
   mapRowToAnalysis,
   mapRowToFeedback,
   createMinimalEvidence,
-  type AnalysisRow,
-  type FeedbackRow,
-  type ExtractionOptions,
-  type ExtractionResult,
-} from "./datasetExtractorTypes.js";
+} from "./helpers.js";
+import type {
+  TrainingExampleInput,
+  DatasetBuildOptions,
+  AnalysisRow,
+  ExtractorFeedbackRow,
+  ExtractionOptions,
+  ExtractionResult,
+} from "./types.js";
 import type { FeedbackRecord } from "../database/index.js";
 
 // Re-export types for backward compatibility
-export type { ExtractionOptions, ExtractionResult } from "./datasetExtractorTypes.js";
+export type { ExtractionOptions, ExtractionResult } from "./types.js";
 
 const logger = createLogger("dataset-extractor");
 
@@ -90,7 +92,7 @@ const extractFeedbackForAnalyses = async (
   }
 
   try {
-    const result = await query<FeedbackRow>(EXTRACTION_QUERIES.GET_FEEDBACK_FOR_ANALYSES, [
+    const result = await query<ExtractorFeedbackRow>(EXTRACTION_QUERIES.GET_FEEDBACK_FOR_ANALYSES, [
       aggregationKeys,
     ]);
 

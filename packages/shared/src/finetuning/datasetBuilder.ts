@@ -9,91 +9,18 @@
 
 import { createLogger } from "../core/logger.js";
 import { redactSecrets } from "../security/redaction.js";
-import type { LLMAnalysisResult, Evidence, Event, ActionProposal } from "../core/types.js";
+import type { LLMAnalysisResult, Evidence } from "../core/types.js";
 import type { FeedbackRecord, FeedbackType } from "../database/index.js";
+import type {
+  TrainingExample,
+  TrainingExampleInput,
+  DatasetStats,
+  DatasetBuildOptions,
+  FeedbackQualityLabel,
+  OpenAITrainingRow,
+} from "./types.js";
 
 const logger = createLogger("dataset-builder");
-
-// ==================== Types ====================
-
-/**
- * Training example for fine-tuning.
- */
-export interface TrainingExample {
-  readonly id: string;
-  readonly eventType: string;
-  readonly evidenceSummary: string;
-  readonly analysisOutput: string;
-  readonly feedbackLabel: FeedbackQualityLabel;
-  readonly metadata: TrainingExampleMetadata;
-}
-
-/**
- * Quality label derived from feedback.
- */
-export type FeedbackQualityLabel = "positive" | "negative" | "neutral" | "unlabeled";
-
-/**
- * Metadata for training example provenance.
- */
-export interface TrainingExampleMetadata {
-  readonly analysisId: string;
-  readonly eventId: string;
-  readonly confidenceScore: number;
-  readonly feedbackCount: number;
-  readonly ragDocsUsed: number;
-  readonly actionsProposed: number;
-  readonly createdAt: string;
-}
-
-/**
- * OpenAI fine-tuning format (chat completion).
- */
-export interface OpenAITrainingRow {
-  readonly messages: readonly OpenAIMessage[];
-}
-
-/**
- * OpenAI message in chat format.
- */
-interface OpenAIMessage {
-  readonly role: "system" | "user" | "assistant";
-  readonly content: string;
-}
-
-/**
- * Input for building a training example.
- */
-export interface TrainingExampleInput {
-  readonly event: Event;
-  readonly evidence: Evidence;
-  readonly analysis: LLMAnalysisResult;
-  readonly feedback: readonly FeedbackRecord[];
-  readonly actions?: readonly ActionProposal[];
-}
-
-/**
- * Dataset statistics.
- */
-export interface DatasetStats {
-  readonly totalExamples: number;
-  readonly positiveExamples: number;
-  readonly negativeExamples: number;
-  readonly neutralExamples: number;
-  readonly unlabeledExamples: number;
-  readonly averageConfidence: number;
-  readonly eventTypeDistribution: Record<string, number>;
-}
-
-/**
- * Options for dataset building.
- */
-export interface DatasetBuildOptions {
-  readonly includeUnlabeled?: boolean;
-  readonly minConfidence?: number;
-  readonly maxExamples?: number;
-  readonly eventTypes?: readonly string[];
-}
 
 // ==================== Feedback Quality Mapping ====================
 
@@ -136,18 +63,6 @@ const determineFeedbackLabel = (feedback: readonly FeedbackRecord[]): FeedbackQu
 };
 
 // ==================== Anonymization ====================
-
-/**
- * Anonymizes event data for training.
- * @internal Reserved for future use in advanced anonymization.
- */
-const _anonymizeEvent = (event: Event): string =>
-  JSON.stringify({
-    type: event.type,
-    severity: event.severity,
-    title: redactSecrets(event.title ?? ""),
-    source: event.source,
-  });
 
 /**
  * Summarizes evidence for training (anonymized).

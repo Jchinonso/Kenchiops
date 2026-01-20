@@ -17,6 +17,14 @@ import {
   FINE_TUNING_STATUS,
   type FineTuningStatus,
 } from "../constants/index.js";
+import type {
+  FineTuningJobOptions,
+  FineTuningJobResult,
+  FileUploadOptions,
+  FileUploadResult,
+  FineTuningWorkflowResult,
+  ProgressCallback,
+} from "./types.js";
 
 const logger = createLogger("fine-tuning-client");
 
@@ -29,76 +37,6 @@ const TERMINAL_STATUSES: readonly FineTuningStatus[] = [
   FINE_TUNING_STATUS.FAILED,
   FINE_TUNING_STATUS.CANCELLED,
 ];
-
-// ==================== Types ====================
-
-/**
- * Options for creating a fine-tuning job.
- */
-export interface FineTuningJobOptions {
-  /** Training file ID from OpenAI Files API */
-  readonly trainingFileId: string;
-  /** Optional validation file ID */
-  readonly validationFileId?: string;
-  /** Base model to fine-tune */
-  readonly model?: string;
-  /** Number of epochs to train */
-  readonly epochs?: number;
-  /** Learning rate multiplier */
-  readonly learningRateMultiplier?: number;
-  /** Batch size */
-  readonly batchSize?: number;
-  /** Optional suffix for the fine-tuned model name */
-  readonly suffix?: string;
-}
-
-/**
- * Result of creating a fine-tuning job.
- */
-export interface FineTuningJobResult {
-  readonly jobId: string;
-  readonly status: FineTuningStatus;
-  readonly model: string;
-  readonly trainingFileId: string;
-  readonly validationFileId?: string;
-  readonly createdAt: string;
-  readonly fineTunedModel?: string;
-  readonly error?: string;
-}
-
-/**
- * Options for uploading a training file.
- */
-export interface FileUploadOptions {
-  /** JSONL content to upload */
-  readonly content: string;
-  /** Optional filename */
-  readonly filename?: string;
-}
-
-/**
- * Result of uploading a file.
- */
-export interface FileUploadResult {
-  readonly fileId: string;
-  readonly filename: string;
-  readonly bytes: number;
-  readonly createdAt: string;
-  readonly purpose: string;
-}
-
-/**
- * Fine-tuning workflow result.
- */
-export interface FineTuningWorkflowResult {
-  readonly job: FineTuningJobResult;
-  readonly fileId: string;
-}
-
-/**
- * Callback type for progress updates.
- */
-export type ProgressCallback = (job: FineTuningJobResult) => void;
 
 // ==================== Client Creation ====================
 
