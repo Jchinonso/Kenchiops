@@ -61,16 +61,8 @@ const generateVerificationToken = (): string =>
 // ==================== Store Maintenance ====================
 
 /** Deletes multiple entries from the store by their IDs */
-const deleteEntriesById = (entryIds: readonly string[]): number => {
-  let deletedCount = 0;
-  entryIds.map((entryId) => {
-    if (payloadStore.delete(entryId)) {
-      deletedCount += 1;
-    }
-    return entryId;
-  });
-  return deletedCount;
-};
+const deleteEntriesById = (entryIds: readonly string[]): number =>
+  entryIds.filter((entryId) => payloadStore.delete(entryId)).length;
 
 /** Removes expired entries from the store and returns count removed */
 const cleanupExpiredEntries = (): number => {

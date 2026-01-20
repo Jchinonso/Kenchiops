@@ -119,7 +119,7 @@ const executeNotifyTeam: ActionExecutor = async (action, context) => {
     channelId: context.channelId,
   });
 
-  // TODO: Implement actual Slack notification
+  // TODO: [#60] Implement actual Slack notification
   // This would post a message to the team's Slack channel
   return {
     success: true,
@@ -146,7 +146,7 @@ const executePostComment: ActionExecutor = async (action, context) => {
     };
   }
 
-  // TODO: Implement actual GitHub PR comment
+  // TODO: [#61] Implement actual GitHub PR comment
   return {
     success: true,
     message: `Comment posted to PR #${context.prNumber}`,
@@ -181,7 +181,7 @@ const executeRunDiagnostic: ActionExecutor = async (action, context) => {
     repository: context.repository,
   });
 
-  // TODO: Implement actual diagnostic execution
+  // TODO: [#62] Implement actual diagnostic execution
   return {
     success: true,
     message: "Diagnostic run completed",
