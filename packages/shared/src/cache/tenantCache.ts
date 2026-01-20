@@ -1,8 +1,8 @@
 /**
- * Tenant and Mapping Cache
+ * Tenant Cache
  *
- * Caches tenant data and repository-channel mappings to reduce
- * database load for frequently accessed multi-tenant data.
+ * Caches tenant data to reduce database load for frequently
+ * accessed multi-tenant data.
  *
  * @module cache/tenantCache
  */
@@ -17,9 +17,13 @@ import {
 } from "./cacheClient.js";
 import { tenantCacheKeys, mappingCacheKeys } from "./cacheKeys.js";
 import { createLogger } from "../core/logger.js";
-
-// Import from types module
-import type { CachedTenant, CachedMapping, CachedTenantStats } from "./tenantCacheTypes.js";
+import type {
+  CachedTenant,
+  CachedTenantStats,
+  CacheResult,
+  TenantFetcher,
+  TenantStatsFetcher,
+} from "./types.js";
 
 // Re-export types and converters for backwards compatibility
 export {
@@ -28,306 +32,294 @@ export {
   type CachedTenant,
   type CachedMapping,
   type CachedTenantStats,
-} from "./tenantCacheTypes.js";
+} from "./types.js";
+
+// Re-export mapping cache operations for backwards compatibility
+export {
+  getCachedChannelForRepo,
+  cacheChannelForRepo,
+  getOrFetchChannelForRepo,
+  getCachedMappingsForChannel,
+  cacheMappingsForChannel,
+  getOrFetchMappingsForChannel,
+  getCachedAllMappingsForTenant,
+  cacheAllMappingsForTenant,
+  getOrFetchAllMappingsForTenant,
+  invalidateMappingCache,
+  invalidateRepositoryMapping,
+  invalidateChannelMappings,
+} from "./mappingCache.js";
 
 const logger = createLogger("tenant-cache");
 
-// ==================== Tenant Cache Operations ====================
+// ==================== Helper Functions ====================
 
 /**
- * Get cached tenant by ID
+ * Extracts data from cache result.
+ */
+const extractCacheData = <T>(result: CacheResult<T>): T | null => result.data;
+
+// ==================== Tenant by ID ====================
+
+/**
+ * Get cached tenant by ID.
+ *
+ * @param tenantId - Tenant identifier
+ * @returns Cached tenant or null if not found
  */
 export const getCachedTenantById = async (tenantId: string): Promise<CachedTenant | null> => {
-  const result = await cacheGet<CachedTenant>(tenantCacheKeys.byId(tenantId));
-  return result.data;
+  const cacheKey = tenantCacheKeys.byId(tenantId);
+  const result = await cacheGet<CachedTenant>(cacheKey);
+
+  return extractCacheData(result);
 };
 
 /**
- * Cache tenant by ID
+ * Cache tenant by ID.
+ *
+ * @param tenant - Tenant data to cache
  */
 export const cacheTenantById = async (tenant: CachedTenant): Promise<void> => {
-  await cacheSet(tenantCacheKeys.byId(tenant.id), tenant, { ttlSeconds: CACHE_TTL.MEDIUM });
+  const cacheKey = tenantCacheKeys.byId(tenant.id);
+
+  await cacheSet(cacheKey, tenant, { ttlSeconds: CACHE_TTL.MEDIUM });
 };
 
 /**
- * Get or fetch tenant by ID
+ * Get cached tenant by ID or fetch and cache if not found.
+ *
+ * @param tenantId - Tenant identifier
+ * @param fetcher - Function to fetch tenant if not cached
+ * @returns Cached or freshly fetched tenant, or null if not found
  */
 export const getOrFetchTenantById = async (
   tenantId: string,
-  fetcher: () => Promise<CachedTenant | null>
+  fetcher: TenantFetcher
 ): Promise<CachedTenant | null> => {
   const cached = await getCachedTenantById(tenantId);
+
   if (cached) {
     return cached;
   }
 
-  const tenant = await fetcher();
-  if (tenant) {
-    await cacheTenantById(tenant);
+  const fresh = await fetcher();
+
+  if (fresh) {
+    await cacheTenantById(fresh);
   }
-  return tenant;
+
+  return fresh;
 };
 
+// ==================== Tenant by Installation ====================
+
 /**
- * Get cached tenant by GitHub installation ID
+ * Get cached tenant by GitHub installation ID.
+ *
+ * @param installationId - GitHub installation identifier
+ * @returns Cached tenant or null if not found
  */
 export const getCachedTenantByInstallation = async (
   installationId: number
 ): Promise<CachedTenant | null> => {
-  const result = await cacheGet<CachedTenant>(tenantCacheKeys.byInstallation(installationId));
-  return result.data;
+  const cacheKey = tenantCacheKeys.byInstallation(installationId);
+  const result = await cacheGet<CachedTenant>(cacheKey);
+
+  return extractCacheData(result);
 };
 
 /**
- * Cache tenant by GitHub installation ID
+ * Cache tenant by GitHub installation ID.
+ *
+ * @param installationId - GitHub installation identifier
+ * @param tenant - Tenant data to cache
  */
 export const cacheTenantByInstallation = async (
   installationId: number,
   tenant: CachedTenant
 ): Promise<void> => {
-  await cacheSet(tenantCacheKeys.byInstallation(installationId), tenant, {
-    ttlSeconds: CACHE_TTL.MEDIUM,
-  });
+  const cacheKey = tenantCacheKeys.byInstallation(installationId);
+
+  await cacheSet(cacheKey, tenant, { ttlSeconds: CACHE_TTL.MEDIUM });
 
   // Also cache by ID for consistency
   await cacheTenantById(tenant);
 };
 
 /**
- * Get or fetch tenant by installation ID
+ * Get cached tenant by installation ID or fetch and cache if not found.
+ *
+ * @param installationId - GitHub installation identifier
+ * @param fetcher - Function to fetch tenant if not cached
+ * @returns Cached or freshly fetched tenant, or null if not found
  */
 export const getOrFetchTenantByInstallation = async (
   installationId: number,
-  fetcher: () => Promise<CachedTenant | null>
+  fetcher: TenantFetcher
 ): Promise<CachedTenant | null> => {
   const cached = await getCachedTenantByInstallation(installationId);
+
   if (cached) {
     return cached;
   }
 
-  const tenant = await fetcher();
-  if (tenant) {
-    await cacheTenantByInstallation(installationId, tenant);
+  const fresh = await fetcher();
+
+  if (fresh) {
+    await cacheTenantByInstallation(installationId, fresh);
   }
-  return tenant;
+
+  return fresh;
 };
 
+// ==================== Tenant by Slack Workspace ====================
+
 /**
- * Get cached tenant by Slack workspace ID
+ * Get cached tenant by Slack workspace ID.
+ *
+ * @param workspaceId - Slack workspace identifier
+ * @returns Cached tenant or null if not found
  */
 export const getCachedTenantBySlackWorkspace = async (
   workspaceId: string
 ): Promise<CachedTenant | null> => {
-  const result = await cacheGet<CachedTenant>(tenantCacheKeys.bySlackWorkspace(workspaceId));
-  return result.data;
+  const cacheKey = tenantCacheKeys.bySlackWorkspace(workspaceId);
+  const result = await cacheGet<CachedTenant>(cacheKey);
+
+  return extractCacheData(result);
 };
 
 /**
- * Cache tenant by Slack workspace ID
+ * Cache tenant by Slack workspace ID.
+ *
+ * @param workspaceId - Slack workspace identifier
+ * @param tenant - Tenant data to cache
  */
 export const cacheTenantBySlackWorkspace = async (
   workspaceId: string,
   tenant: CachedTenant
 ): Promise<void> => {
-  await cacheSet(tenantCacheKeys.bySlackWorkspace(workspaceId), tenant, {
-    ttlSeconds: CACHE_TTL.MEDIUM,
-  });
+  const cacheKey = tenantCacheKeys.bySlackWorkspace(workspaceId);
+
+  await cacheSet(cacheKey, tenant, { ttlSeconds: CACHE_TTL.MEDIUM });
 
   // Also cache by ID for consistency
   await cacheTenantById(tenant);
 };
 
 /**
- * Get or fetch tenant by Slack workspace
+ * Get cached tenant by Slack workspace or fetch and cache if not found.
+ *
+ * @param workspaceId - Slack workspace identifier
+ * @param fetcher - Function to fetch tenant if not cached
+ * @returns Cached or freshly fetched tenant, or null if not found
  */
 export const getOrFetchTenantBySlackWorkspace = async (
   workspaceId: string,
-  fetcher: () => Promise<CachedTenant | null>
+  fetcher: TenantFetcher
 ): Promise<CachedTenant | null> => {
   const cached = await getCachedTenantBySlackWorkspace(workspaceId);
+
   if (cached) {
     return cached;
   }
 
-  const tenant = await fetcher();
-  if (tenant) {
-    await cacheTenantBySlackWorkspace(workspaceId, tenant);
+  const fresh = await fetcher();
+
+  if (fresh) {
+    await cacheTenantBySlackWorkspace(workspaceId, fresh);
   }
-  return tenant;
+
+  return fresh;
 };
 
+// ==================== Tenant by GitHub Org ====================
+
 /**
- * Get cached tenant by GitHub org name
+ * Get cached tenant by GitHub org name.
+ *
+ * @param orgName - GitHub organization name
+ * @returns Cached tenant or null if not found
  */
 export const getCachedTenantByGitHubOrg = async (orgName: string): Promise<CachedTenant | null> => {
-  const result = await cacheGet<CachedTenant>(tenantCacheKeys.byGitHubOrg(orgName));
-  return result.data;
+  const cacheKey = tenantCacheKeys.byGitHubOrg(orgName);
+  const result = await cacheGet<CachedTenant>(cacheKey);
+
+  return extractCacheData(result);
 };
 
 /**
- * Cache tenant by GitHub org name
+ * Cache tenant by GitHub org name.
+ *
+ * @param orgName - GitHub organization name
+ * @param tenant - Tenant data to cache
  */
 export const cacheTenantByGitHubOrg = async (
   orgName: string,
   tenant: CachedTenant
 ): Promise<void> => {
-  await cacheSet(tenantCacheKeys.byGitHubOrg(orgName), tenant, { ttlSeconds: CACHE_TTL.MEDIUM });
+  const cacheKey = tenantCacheKeys.byGitHubOrg(orgName);
+
+  await cacheSet(cacheKey, tenant, { ttlSeconds: CACHE_TTL.MEDIUM });
 
   // Also cache by ID for consistency
   await cacheTenantById(tenant);
 };
 
-// ==================== Tenant Statistics Cache ====================
+// ==================== Tenant Statistics ====================
 
 /**
- * Get cached tenant statistics
+ * Get cached tenant statistics.
+ *
+ * @param tenantId - Tenant identifier
+ * @returns Cached statistics or null if not found
  */
 export const getCachedTenantStats = async (tenantId: string): Promise<CachedTenantStats | null> => {
-  const result = await cacheGet<CachedTenantStats>(tenantCacheKeys.statistics(tenantId));
-  return result.data;
+  const cacheKey = tenantCacheKeys.statistics(tenantId);
+  const result = await cacheGet<CachedTenantStats>(cacheKey);
+
+  return extractCacheData(result);
 };
 
 /**
- * Cache tenant statistics
+ * Cache tenant statistics.
+ *
+ * @param tenantId - Tenant identifier
+ * @param tenantStats - Statistics data to cache
  */
 export const cacheTenantStats = async (
   tenantId: string,
-  stats: CachedTenantStats
+  tenantStats: CachedTenantStats
 ): Promise<void> => {
+  const cacheKey = tenantCacheKeys.statistics(tenantId);
+
   // Stats are more volatile, use shorter TTL
-  await cacheSet(tenantCacheKeys.statistics(tenantId), stats, { ttlSeconds: CACHE_TTL.SHORT });
+  await cacheSet(cacheKey, tenantStats, { ttlSeconds: CACHE_TTL.SHORT });
 };
 
 /**
- * Get or fetch tenant statistics
+ * Get cached tenant statistics or fetch and cache if not found.
+ *
+ * @param tenantId - Tenant identifier
+ * @param fetcher - Function to fetch statistics if not cached
+ * @returns Cached or freshly fetched statistics
  */
 export const getOrFetchTenantStats = async (
   tenantId: string,
-  fetcher: () => Promise<CachedTenantStats>
-): Promise<CachedTenantStats> =>
-  cacheGetOrSet(tenantCacheKeys.statistics(tenantId), fetcher, { ttlSeconds: CACHE_TTL.SHORT });
+  fetcher: TenantStatsFetcher
+): Promise<CachedTenantStats> => {
+  const cacheKey = tenantCacheKeys.statistics(tenantId);
 
-// ==================== Mapping Cache Operations ====================
-
-/**
- * Get cached channel for repository
- */
-export const getCachedChannelForRepo = async (
-  tenantId: string,
-  repository: string
-): Promise<CachedMapping | null> => {
-  const result = await cacheGet<CachedMapping>(
-    mappingCacheKeys.channelForRepo(tenantId, repository)
-  );
-  return result.data;
+  return cacheGetOrSet(cacheKey, fetcher, { ttlSeconds: CACHE_TTL.SHORT });
 };
-
-/**
- * Cache channel for repository
- */
-export const cacheChannelForRepo = async (
-  tenantId: string,
-  repository: string,
-  mapping: CachedMapping
-): Promise<void> => {
-  await cacheSet(mappingCacheKeys.channelForRepo(tenantId, repository), mapping, {
-    ttlSeconds: CACHE_TTL.MEDIUM,
-  });
-};
-
-/**
- * Get or fetch channel for repository
- */
-export const getOrFetchChannelForRepo = async (
-  tenantId: string,
-  repository: string,
-  fetcher: () => Promise<CachedMapping | null>
-): Promise<CachedMapping | null> => {
-  const cached = await getCachedChannelForRepo(tenantId, repository);
-  if (cached) {
-    return cached;
-  }
-
-  const mapping = await fetcher();
-  if (mapping) {
-    await cacheChannelForRepo(tenantId, repository, mapping);
-  }
-  return mapping;
-};
-
-/**
- * Get cached mappings for channel
- */
-export const getCachedMappingsForChannel = async (
-  tenantId: string,
-  channelId: string
-): Promise<readonly CachedMapping[] | null> => {
-  const result = await cacheGet<readonly CachedMapping[]>(
-    mappingCacheKeys.mappingsForChannel(tenantId, channelId)
-  );
-  return result.data;
-};
-
-/**
- * Cache mappings for channel
- */
-export const cacheMappingsForChannel = async (
-  tenantId: string,
-  channelId: string,
-  mappings: readonly CachedMapping[]
-): Promise<void> => {
-  await cacheSet(mappingCacheKeys.mappingsForChannel(tenantId, channelId), mappings, {
-    ttlSeconds: CACHE_TTL.MEDIUM,
-  });
-};
-
-/**
- * Get or fetch mappings for channel
- */
-export const getOrFetchMappingsForChannel = async (
-  tenantId: string,
-  channelId: string,
-  fetcher: () => Promise<readonly CachedMapping[]>
-): Promise<readonly CachedMapping[]> =>
-  cacheGetOrSet(mappingCacheKeys.mappingsForChannel(tenantId, channelId), fetcher, {
-    ttlSeconds: CACHE_TTL.MEDIUM,
-  });
-
-/**
- * Get cached all mappings for tenant
- */
-export const getCachedAllMappingsForTenant = async (
-  tenantId: string
-): Promise<readonly CachedMapping[] | null> => {
-  const result = await cacheGet<readonly CachedMapping[]>(mappingCacheKeys.allForTenant(tenantId));
-  return result.data;
-};
-
-/**
- * Cache all mappings for tenant
- */
-export const cacheAllMappingsForTenant = async (
-  tenantId: string,
-  mappings: readonly CachedMapping[]
-): Promise<void> => {
-  await cacheSet(mappingCacheKeys.allForTenant(tenantId), mappings, {
-    ttlSeconds: CACHE_TTL.MEDIUM,
-  });
-};
-
-/**
- * Get or fetch all mappings for tenant
- */
-export const getOrFetchAllMappingsForTenant = async (
-  tenantId: string,
-  fetcher: () => Promise<readonly CachedMapping[]>
-): Promise<readonly CachedMapping[]> =>
-  cacheGetOrSet(mappingCacheKeys.allForTenant(tenantId), fetcher, { ttlSeconds: CACHE_TTL.MEDIUM });
 
 // ==================== Cache Invalidation ====================
 
 /**
- * Invalidate all cache entries for a tenant
+ * Invalidate all cache entries for a tenant.
+ *
+ * @param tenantId - Tenant identifier
+ * @returns Total number of cache entries deleted
  */
 export const invalidateTenantCache = async (tenantId: string): Promise<number> => {
   const [tenantDeleted, mappingDeleted] = await Promise.all([
@@ -335,74 +327,42 @@ export const invalidateTenantCache = async (tenantId: string): Promise<number> =
     cacheDeletePattern(mappingCacheKeys.tenantPattern(tenantId)),
   ]);
 
-  const total = tenantDeleted + mappingDeleted;
+  const totalDeleted = tenantDeleted + mappingDeleted;
 
-  logger.info("Invalidated tenant cache", {
-    tenantId,
-    entriesDeleted: total,
-  });
+  logger.info("Invalidated tenant cache", { tenantId, entriesDeleted: totalDeleted });
 
-  return total;
+  return totalDeleted;
 };
 
 /**
- * Invalidate tenant by ID
+ * Invalidate tenant cache by ID.
+ *
+ * @param tenantId - Tenant identifier
  */
 export const invalidateTenantById = async (tenantId: string): Promise<void> => {
-  await cacheDelete(tenantCacheKeys.byId(tenantId));
+  const cacheKey = tenantCacheKeys.byId(tenantId);
+
+  await cacheDelete(cacheKey);
 };
 
 /**
- * Invalidate tenant by installation ID
+ * Invalidate tenant cache by installation ID.
+ *
+ * @param installationId - GitHub installation identifier
  */
 export const invalidateTenantByInstallation = async (installationId: number): Promise<void> => {
-  await cacheDelete(tenantCacheKeys.byInstallation(installationId));
+  const cacheKey = tenantCacheKeys.byInstallation(installationId);
+
+  await cacheDelete(cacheKey);
 };
 
 /**
- * Invalidate tenant by Slack workspace
+ * Invalidate tenant cache by Slack workspace.
+ *
+ * @param workspaceId - Slack workspace identifier
  */
 export const invalidateTenantBySlackWorkspace = async (workspaceId: string): Promise<void> => {
-  await cacheDelete(tenantCacheKeys.bySlackWorkspace(workspaceId));
-};
+  const cacheKey = tenantCacheKeys.bySlackWorkspace(workspaceId);
 
-/**
- * Invalidate mapping cache for a tenant
- */
-export const invalidateMappingCache = async (tenantId: string): Promise<number> => {
-  const deleted = await cacheDeletePattern(mappingCacheKeys.tenantPattern(tenantId));
-
-  logger.info("Invalidated mapping cache", {
-    tenantId,
-    entriesDeleted: deleted,
-  });
-
-  return deleted;
-};
-
-/**
- * Invalidate specific repository mapping
- */
-export const invalidateRepositoryMapping = async (
-  tenantId: string,
-  repository: string
-): Promise<void> => {
-  await Promise.all([
-    cacheDelete(mappingCacheKeys.channelForRepo(tenantId, repository)),
-    cacheDelete(mappingCacheKeys.allForTenant(tenantId)),
-    cacheDelete(mappingCacheKeys.isMapped(tenantId, repository)),
-  ]);
-};
-
-/**
- * Invalidate channel mappings
- */
-export const invalidateChannelMappings = async (
-  tenantId: string,
-  channelId: string
-): Promise<void> => {
-  await Promise.all([
-    cacheDelete(mappingCacheKeys.mappingsForChannel(tenantId, channelId)),
-    cacheDelete(mappingCacheKeys.allForTenant(tenantId)),
-  ]);
+  await cacheDelete(cacheKey);
 };

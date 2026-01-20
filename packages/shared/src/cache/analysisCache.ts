@@ -14,60 +14,95 @@ import {
   cacheDelete,
   cacheDeletePattern,
   cacheGetOrSet,
+  cacheExists,
   CACHE_TTL,
 } from "./cacheClient.js";
 import { analysisCacheKeys } from "./cacheKeys.js";
 import { createLogger } from "../core/logger.js";
-import { DISPLAY_DEFAULTS } from "../constants/index.js";
-import type { CodeAnnotation, RecommendedAction } from "../aggregation/types.js";
+import {
+  DISPLAY_DEFAULTS,
+  PLACEHOLDER_CONFIDENCE_SCORE,
+  LOG_NORMALIZATION_PATTERNS,
+  ANALYSIS_HASH_ALGORITHM,
+} from "../constants/index.js";
+import type {
+  CachedAnalysis,
+  CachedConsolidatedAnalysis,
+  CachedAnnotation,
+  CachedAction,
+  AnalysisApiResponse,
+  CacheResult,
+  CheckAnalysisFetcher,
+  ConsolidatedAnalysisFetcher,
+  AnnotationLevel,
+} from "./types.js";
+
+// Re-export types for backward compatibility
+export type {
+  CachedAnnotation,
+  CachedAction,
+  CachedAnalysis,
+  CachedConsolidatedAnalysis,
+  CacheOperationResult,
+  CacheWriteResult,
+  AnalysisApiResponse,
+  AnalysisCacheLogContext,
+} from "./types.js";
 
 const logger = createLogger("analysis-cache");
 
-// Re-export types under cache-specific names for backward compatibility
-export type CachedAnnotation = CodeAnnotation;
-export type CachedAction = RecommendedAction;
+// ==================== Helper Functions ====================
 
 /**
- * Cached analysis result
+ * Extracts data from cache result.
  */
-export interface CachedAnalysis {
-  readonly repository: string;
-  readonly commitSha: string;
-  readonly checkName: string;
-  readonly confidence: number;
-  readonly identifiedCause: string;
-  readonly analysis: string;
-  readonly annotations: readonly CachedAnnotation[];
-  readonly recommendedActions: readonly CachedAction[];
-  readonly analyzedAt: string;
-}
+const extractCacheData = <T>(result: CacheResult<T>): T | null => result.data;
 
 /**
- * Consolidated analysis for a commit
+ * Truncates SHA for display in logs.
  */
-export interface CachedConsolidatedAnalysis {
-  readonly repository: string;
-  readonly commitSha: string;
-  readonly checkCount: number;
-  readonly analyses: readonly CachedAnalysis[];
-  readonly consolidatedAt: string;
-}
+const truncateSha = (sha: string): string => sha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH);
+
+/**
+ * Logs analysis cache operation for debugging.
+ */
+const logAnalysisCacheOperation = (
+  operation: string,
+  repository: string,
+  commitSha: string,
+  checkName?: string,
+  extraContext?: Record<string, unknown>
+): void => {
+  logger.debug(`Analysis cache ${operation}`, {
+    repository,
+    commitSha: truncateSha(commitSha),
+    ...(checkName && { checkName }),
+    ...extraContext,
+  });
+};
 
 // ==================== Hash Generation ====================
 
 /**
- * Generate a hash of the log content for deduplication
+ * Generate a hash of the log content for deduplication.
+ *
+ * Normalizes log content by removing timestamps, SHA hashes, and
+ * excess whitespace before hashing to identify semantically
+ * identical logs.
+ *
+ * @param logContent - Raw log content to hash
+ * @returns Truncated hash of normalized content
  */
 export const generateLogHash = (logContent: string): string => {
   // Normalize the log content to handle minor variations
   const normalized = logContent
-    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/g, "") // Remove timestamps
-    .replace(/\b[0-9a-f]{40}\b/g, "") // Remove SHA hashes
-    .replace(/\s+/g, " ") // Normalize whitespace
+    .replace(LOG_NORMALIZATION_PATTERNS.TIMESTAMP, "") // Remove timestamps
+    .replace(LOG_NORMALIZATION_PATTERNS.FULL_SHA, "") // Remove SHA hashes
+    .replace(LOG_NORMALIZATION_PATTERNS.WHITESPACE, " ") // Normalize whitespace
     .trim();
 
   return crypto
-    .createHash("sha256")
+    .createHash(ANALYSIS_HASH_ALGORITHM)
     .update(normalized)
     .digest("hex")
     .substring(0, DISPLAY_DEFAULTS.LOG_HASH_LENGTH);
@@ -76,116 +111,157 @@ export const generateLogHash = (logContent: string): string => {
 // ==================== Single Check Analysis Cache ====================
 
 /**
- * Get cached analysis for a specific check
+ * Get cached analysis for a specific check.
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @param commitSha - Git commit SHA
+ * @param checkName - Name of the CI check
+ * @returns Cached analysis or null if not found
  */
 export const getCachedCheckAnalysis = async (
   repository: string,
   commitSha: string,
   checkName: string
 ): Promise<CachedAnalysis | null> => {
-  const result = await cacheGet<CachedAnalysis>(
-    analysisCacheKeys.byCommitAndCheck(repository, commitSha, checkName)
-  );
-  return result.data;
+  const cacheKey = analysisCacheKeys.byCommitAndCheck(repository, commitSha, checkName);
+  const result = await cacheGet<CachedAnalysis>(cacheKey);
+
+  return extractCacheData(result);
 };
 
 /**
- * Cache analysis for a specific check
+ * Cache analysis for a specific check.
+ *
+ * @param analysis - Analysis data to cache
  */
 export const cacheCheckAnalysis = async (analysis: CachedAnalysis): Promise<void> => {
-  await cacheSet(
-    analysisCacheKeys.byCommitAndCheck(analysis.repository, analysis.commitSha, analysis.checkName),
-    analysis,
-    { ttlSeconds: CACHE_TTL.LONG }
+  const cacheKey = analysisCacheKeys.byCommitAndCheck(
+    analysis.repository,
+    analysis.commitSha,
+    analysis.checkName
   );
 
-  logger.debug("Cached check analysis", {
-    repository: analysis.repository,
-    commitSha: analysis.commitSha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH),
-    checkName: analysis.checkName,
-    confidence: analysis.confidence,
-  });
+  await cacheSet(cacheKey, analysis, { ttlSeconds: CACHE_TTL.LONG });
+
+  logAnalysisCacheOperation(
+    "set:check",
+    analysis.repository,
+    analysis.commitSha,
+    analysis.checkName,
+    {
+      confidence: analysis.confidence,
+    }
+  );
 };
 
 /**
- * Get or fetch analysis for a specific check
+ * Get or fetch analysis for a specific check.
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @param commitSha - Git commit SHA
+ * @param checkName - Name of the CI check
+ * @param fetcher - Function to fetch analysis if not cached
+ * @returns Cached or freshly fetched analysis
  */
 export const getOrFetchCheckAnalysis = async (
   repository: string,
   commitSha: string,
   checkName: string,
-  fetcher: () => Promise<CachedAnalysis>
-): Promise<CachedAnalysis> =>
-  cacheGetOrSet(analysisCacheKeys.byCommitAndCheck(repository, commitSha, checkName), fetcher, {
-    ttlSeconds: CACHE_TTL.LONG,
-  });
+  fetcher: CheckAnalysisFetcher
+): Promise<CachedAnalysis> => {
+  const cacheKey = analysisCacheKeys.byCommitAndCheck(repository, commitSha, checkName);
+
+  return cacheGetOrSet(cacheKey, fetcher, { ttlSeconds: CACHE_TTL.LONG });
+};
 
 // ==================== Consolidated Analysis Cache ====================
 
 /**
- * Get cached consolidated analysis for a commit
+ * Get cached consolidated analysis for a commit.
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @param commitSha - Git commit SHA
+ * @returns Cached consolidated analysis or null if not found
  */
 export const getCachedConsolidatedAnalysis = async (
   repository: string,
   commitSha: string
 ): Promise<CachedConsolidatedAnalysis | null> => {
-  const result = await cacheGet<CachedConsolidatedAnalysis>(
-    analysisCacheKeys.byCommit(repository, commitSha)
-  );
-  return result.data;
+  const cacheKey = analysisCacheKeys.byCommit(repository, commitSha);
+  const result = await cacheGet<CachedConsolidatedAnalysis>(cacheKey);
+
+  return extractCacheData(result);
 };
 
 /**
- * Cache consolidated analysis for a commit
+ * Cache consolidated analysis for a commit.
+ *
+ * @param analysis - Consolidated analysis data to cache
  */
 export const cacheConsolidatedAnalysis = async (
   analysis: CachedConsolidatedAnalysis
 ): Promise<void> => {
-  await cacheSet(analysisCacheKeys.byCommit(analysis.repository, analysis.commitSha), analysis, {
-    ttlSeconds: CACHE_TTL.LONG,
-  });
+  const cacheKey = analysisCacheKeys.byCommit(analysis.repository, analysis.commitSha);
 
-  logger.debug("Cached consolidated analysis", {
-    repository: analysis.repository,
-    commitSha: analysis.commitSha.substring(0, DISPLAY_DEFAULTS.SHA_DISPLAY_LENGTH),
-    checkCount: analysis.checkCount,
-  });
+  await cacheSet(cacheKey, analysis, { ttlSeconds: CACHE_TTL.LONG });
+
+  logAnalysisCacheOperation(
+    "set:consolidated",
+    analysis.repository,
+    analysis.commitSha,
+    undefined,
+    { checkCount: analysis.checkCount }
+  );
 };
 
 /**
- * Get or fetch consolidated analysis
+ * Get or fetch consolidated analysis.
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @param commitSha - Git commit SHA
+ * @param fetcher - Function to fetch consolidated analysis if not cached
+ * @returns Cached or freshly fetched consolidated analysis
  */
 export const getOrFetchConsolidatedAnalysis = async (
   repository: string,
   commitSha: string,
-  fetcher: () => Promise<CachedConsolidatedAnalysis>
-): Promise<CachedConsolidatedAnalysis> =>
-  cacheGetOrSet(analysisCacheKeys.byCommit(repository, commitSha), fetcher, {
-    ttlSeconds: CACHE_TTL.LONG,
-  });
+  fetcher: ConsolidatedAnalysisFetcher
+): Promise<CachedConsolidatedAnalysis> => {
+  const cacheKey = analysisCacheKeys.byCommit(repository, commitSha);
+
+  return cacheGetOrSet(cacheKey, fetcher, { ttlSeconds: CACHE_TTL.LONG });
+};
 
 // ==================== Log Hash Deduplication ====================
 
 /**
- * Check if analysis exists for a log hash
+ * Check if analysis exists for a log hash.
+ *
+ * @param logHash - Hash of the log content
+ * @returns Cached analysis or null if not found
  */
 export const getCachedAnalysisByLogHash = async (
   logHash: string
 ): Promise<CachedAnalysis | null> => {
-  const result = await cacheGet<CachedAnalysis>(analysisCacheKeys.byLogHash(logHash));
-  return result.data;
+  const cacheKey = analysisCacheKeys.byLogHash(logHash);
+  const result = await cacheGet<CachedAnalysis>(cacheKey);
+
+  return extractCacheData(result);
 };
 
 /**
- * Cache analysis by log hash for deduplication
+ * Cache analysis by log hash for deduplication.
+ *
+ * @param logHash - Hash of the log content
+ * @param analysis - Analysis data to cache
  */
 export const cacheAnalysisByLogHash = async (
   logHash: string,
   analysis: CachedAnalysis
 ): Promise<void> => {
-  await cacheSet(analysisCacheKeys.byLogHash(logHash), analysis, {
-    ttlSeconds: CACHE_TTL.EXTENDED,
-  });
+  const cacheKey = analysisCacheKeys.byLogHash(logHash);
+
+  await cacheSet(cacheKey, analysis, { ttlSeconds: CACHE_TTL.EXTENDED });
 
   logger.debug("Cached analysis by log hash", {
     logHash,
@@ -195,16 +271,21 @@ export const cacheAnalysisByLogHash = async (
 };
 
 /**
- * Get or fetch analysis by log hash
- * Used to avoid re-analyzing identical log content
+ * Get or fetch analysis by log hash.
+ * Used to avoid re-analyzing identical log content.
+ *
+ * @param logContent - Raw log content to hash and look up
+ * @param fetcher - Function to fetch analysis if not cached
+ * @returns Cached or freshly fetched analysis
  */
 export const getOrFetchAnalysisByLogHash = async (
   logContent: string,
-  fetcher: () => Promise<CachedAnalysis>
+  fetcher: CheckAnalysisFetcher
 ): Promise<CachedAnalysis> => {
   const logHash = generateLogHash(logContent);
 
   const cached = await getCachedAnalysisByLogHash(logHash);
+
   if (cached) {
     logger.info("Analysis cache hit by log hash", {
       logHash,
@@ -223,61 +304,75 @@ export const getOrFetchAnalysisByLogHash = async (
 // ==================== Analysis Result Helpers ====================
 
 /**
- * Build a cached analysis from API response
+ * Maps API annotation to cached annotation format.
+ */
+const mapAnnotation = (annotation: {
+  readonly path: string;
+  readonly line: number;
+  readonly level: AnnotationLevel;
+  readonly message: string;
+  readonly title?: string;
+}): CachedAnnotation => ({
+  path: annotation.path,
+  line: annotation.line,
+  level: annotation.level,
+  message: annotation.message,
+  title: annotation.title,
+});
+
+/**
+ * Maps API action to cached action format.
+ */
+const mapAction = (action: {
+  readonly description: string;
+  readonly priority: string | number;
+  readonly actionType?: string;
+  readonly reasoning?: string;
+}): CachedAction => ({
+  description: action.description,
+  priority: action.priority,
+  actionType: action.actionType,
+  reasoning: action.reasoning,
+});
+
+/**
+ * Build a cached analysis from API response.
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @param commitSha - Git commit SHA
+ * @param checkName - Name of the CI check
+ * @param apiResponse - Raw API response from analysis service
+ * @returns Formatted cached analysis object
  */
 export const buildCachedAnalysis = (
   repository: string,
   commitSha: string,
   checkName: string,
-  apiResponse: {
-    confidence?: number;
-    identified_cause?: string;
-    analysis?: string;
-    recommended_actions?: ReadonlyArray<{
-      description: string;
-      priority: string | number;
-      actionType?: string;
-      reasoning?: string;
-    }>;
-    full_analysis?: {
-      codeAnnotations?: ReadonlyArray<{
-        path: string;
-        line: number;
-        level: "failure" | "warning" | "notice";
-        message: string;
-        title?: string;
-      }>;
-    };
-  }
-): CachedAnalysis => ({
-  repository,
-  commitSha,
-  checkName,
-  confidence: apiResponse.confidence ?? 0.5,
-  identifiedCause: apiResponse.identified_cause ?? "",
-  analysis: apiResponse.analysis ?? "Analysis unavailable",
-  annotations:
-    apiResponse.full_analysis?.codeAnnotations?.map((annotation) => ({
-      path: annotation.path,
-      line: annotation.line,
-      level: annotation.level,
-      message: annotation.message,
-      title: annotation.title,
-    })) ?? [],
-  recommendedActions:
-    apiResponse.recommended_actions?.map((action) => ({
-      description: action.description,
-      priority: action.priority,
-      actionType: action.actionType,
-      reasoning: action.reasoning,
-    })) ?? [],
-  analyzedAt: new Date().toISOString(),
-});
+  apiResponse: AnalysisApiResponse
+): CachedAnalysis => {
+  const annotations = apiResponse.full_analysis?.codeAnnotations?.map(mapAnnotation) ?? [];
+  const recommendedActions = apiResponse.recommended_actions?.map(mapAction) ?? [];
+
+  return {
+    repository,
+    commitSha,
+    checkName,
+    confidence: apiResponse.confidence ?? PLACEHOLDER_CONFIDENCE_SCORE,
+    identifiedCause: apiResponse.identified_cause ?? "",
+    analysis: apiResponse.analysis ?? "Analysis unavailable",
+    annotations,
+    recommendedActions,
+    analyzedAt: new Date().toISOString(),
+  };
+};
 
 // ==================== Cache Invalidation ====================
 
 /**
- * Invalidate all analysis cache entries for a repository
+ * Invalidate all analysis cache entries for a repository.
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @returns Number of cache entries deleted
  */
 export const invalidateRepositoryAnalysisCache = async (repository: string): Promise<number> => {
   const deleted = await cacheDeletePattern(analysisCacheKeys.repositoryPattern(repository));
@@ -291,54 +386,77 @@ export const invalidateRepositoryAnalysisCache = async (repository: string): Pro
 };
 
 /**
- * Invalidate analysis for a specific commit
+ * Invalidate analysis for a specific commit.
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @param commitSha - Git commit SHA
  */
 export const invalidateCommitAnalysis = async (
   repository: string,
   commitSha: string
 ): Promise<void> => {
-  await cacheDelete(analysisCacheKeys.byCommit(repository, commitSha));
+  const cacheKey = analysisCacheKeys.byCommit(repository, commitSha);
+
+  await cacheDelete(cacheKey);
 };
 
 /**
- * Invalidate analysis for a specific check
+ * Invalidate analysis for a specific check.
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @param commitSha - Git commit SHA
+ * @param checkName - Name of the CI check
  */
 export const invalidateCheckAnalysis = async (
   repository: string,
   commitSha: string,
   checkName: string
 ): Promise<void> => {
-  await cacheDelete(analysisCacheKeys.byCommitAndCheck(repository, commitSha, checkName));
+  const cacheKey = analysisCacheKeys.byCommitAndCheck(repository, commitSha, checkName);
+
+  await cacheDelete(cacheKey);
 };
 
 /**
- * Invalidate analysis by log hash
+ * Invalidate analysis by log hash.
+ *
+ * @param logHash - Hash of the log content
  */
 export const invalidateLogHashAnalysis = async (logHash: string): Promise<void> => {
-  await cacheDelete(analysisCacheKeys.byLogHash(logHash));
+  const cacheKey = analysisCacheKeys.byLogHash(logHash);
+
+  await cacheDelete(cacheKey);
 };
 
 // ==================== Cache Statistics ====================
 
 /**
- * Check if analysis exists in cache (without retrieving)
+ * Check if analysis exists in cache (without retrieving).
+ *
+ * @param repository - Repository full name (owner/repo)
+ * @param commitSha - Git commit SHA
+ * @param checkName - Name of the CI check
+ * @returns True if analysis exists in cache
  */
 export const hasAnalysisInCache = async (
   repository: string,
   commitSha: string,
   checkName: string
 ): Promise<boolean> => {
-  const result = await cacheGet<CachedAnalysis>(
-    analysisCacheKeys.byCommitAndCheck(repository, commitSha, checkName)
-  );
-  return result.hit;
+  const cacheKey = analysisCacheKeys.byCommitAndCheck(repository, commitSha, checkName);
+
+  return cacheExists(cacheKey);
 };
 
 /**
- * Check if log hash exists in cache
+ * Check if log hash exists in cache.
+ *
+ * @param logContent - Raw log content to check
+ * @returns True if log hash exists in cache
  */
 export const hasLogHashInCache = async (logContent: string): Promise<boolean> => {
   const logHash = generateLogHash(logContent);
-  const result = await cacheGet<CachedAnalysis>(analysisCacheKeys.byLogHash(logHash));
-  return result.hit;
+  const cacheKey = analysisCacheKeys.byLogHash(logHash);
+
+  return cacheExists(cacheKey);
 };
