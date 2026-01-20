@@ -31,11 +31,11 @@ jest.mock("../../core/logger.js", () => ({
 }));
 
 describe("Tenant Service", () => {
-  let tenantService: typeof import("../../database/tenantService.js");
+  let tenantService: typeof import("../../database/tenant/index.js");
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    tenantService = await import("../../database/tenantService.js");
+    tenantService = await import("../../database/tenant/index.js");
   });
 
   const mockTenantRow = {

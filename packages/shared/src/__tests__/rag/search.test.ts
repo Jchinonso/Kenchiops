@@ -53,7 +53,7 @@ jest.mock("../../database/index.js", () => ({
   batchIncrementKnowledgeDocHitCounts: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock("../../database/costTrackingRepository.js", () => ({
+jest.mock("../../database/costTracking/repository.js", () => ({
   recordCost: jest.fn().mockResolvedValue(undefined),
   getBudgetStatus: jest.fn().mockResolvedValue({
     status: "ok",
@@ -64,7 +64,7 @@ jest.mock("../../database/costTrackingRepository.js", () => ({
   }),
 }));
 
-jest.mock("../../database/tenantRagConfig.js", () => ({
+jest.mock("../../database/tenant/ragConfig.js", () => ({
   getRAGBudgetConfig: jest.fn().mockResolvedValue(null),
   updateRAGBudgetConfig: jest.fn().mockResolvedValue(undefined),
 }));

@@ -12,7 +12,7 @@ import {
   type TrainingExampleInput,
 } from "../../finetuning/datasetBuilder.js";
 import type { Event, Evidence, LLMAnalysisResult } from "../../core/types.js";
-import type { FeedbackRecord } from "../../database/feedbackRepository.js";
+import type { FeedbackRecord } from "../../database/index.js";
 
 // ==================== Test Fixtures ====================
 
