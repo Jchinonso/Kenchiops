@@ -142,6 +142,7 @@ export {
   SHA_PATTERN,
   SHA_PATTERN_SINGLE,
   QUOTED_TEXT_PATTERN,
+  LOG_NORMALIZATION_PATTERNS,
   OPENAI_MESSAGES,
   TENANT_PROMPT_LIMITS,
   MODEL_VERSIONING,
@@ -205,7 +206,12 @@ export {
 export { DATABASE_POOL_DEFAULTS, QUERY_LOGGING, TRANSACTION_COMMANDS } from "./database.js";
 
 // Action executor constants
-export { ACTION_MESSAGES } from "./actions.js";
+export {
+  ACTION_MESSAGES,
+  ACTION_STORE_CONFIG,
+  ACTION_TOKEN_CONFIG,
+  ACTION_CHAR_SETS,
+} from "./actions.js";
 
 // Tenant constants
 export {
@@ -213,11 +219,26 @@ export {
   AUDIT_ACTIONS,
   AUDIT_DEFAULTS,
   TENANT_DEFAULTS,
+  RAG_BUDGET_DEFAULTS,
   TENANT_QUERIES,
   AUDIT_QUERIES,
   TENANT_FIELD_MAP,
   AUDIT_FIELD_MAP,
 } from "./tenant.js";
+
+// Action proposal constants
+export {
+  ACTION_PROPOSAL_DEFAULTS,
+  ACTION_PROPOSAL_QUERIES,
+  VALID_ACTION_PROPOSAL_STATUSES,
+  MIN_STATS_WINDOW_MINUTES,
+} from "./actionProposal.js";
+
+// Analysis constants
+export { ANALYSIS_DEFAULTS, ANALYSIS_QUERIES } from "./analysis.js";
+
+// Cost tracking constants
+export { COST_TRACKING_DEFAULTS, COST_TRACKING_QUERIES } from "./costTracking.js";
 
 // Core module constants
 export {
@@ -248,8 +269,20 @@ export {
   REDIS_KEY_PREFIXES,
   CACHE_KEY_STRUCTURE,
   CACHE_NAMESPACES,
+  ANALYSIS_HASH_ALGORITHM,
+  ANALYSIS_CACHE_VERSION,
+  CACHE_KEY_SEGMENT_INDICES,
+  MIN_CACHE_KEY_SEGMENTS,
+  CACHE_KEY_SEPARATOR,
+  REPO_SLASH_REPLACEMENT,
+  CHECK_NAME_WHITESPACE_PATTERN,
+  REDIS_READY_STATUS,
+  REDIS_KEY_EXISTS,
+  CACHE_TTL_ERROR_DEFAULT,
   QUEUE_WORKER_DEFAULTS,
   AGGREGATION_DEFAULTS,
+  AGGREGATION_KEY_PATTERN,
+  AGGREGATION_METADATA_FIELDS,
   DISPLAY_DEFAULTS,
   RETRY_DEFAULTS,
   QUEUE_CONFIG,
@@ -388,3 +421,36 @@ export {
   type ProtectedZoneType,
   type CIPlatformType,
 } from "./chunkingPipeline.js";
+
+// Diff chunk constants
+export { DIFF_CHUNK_DEFAULTS, DIFF_CHUNK_QUERIES } from "./diffChunk.js";
+
+// External source constants
+export { EXTERNAL_SOURCE_DEFAULTS, EXTERNAL_SOURCE_QUERIES } from "./externalSource.js";
+
+// Feedback constants
+export { FEEDBACK_DEFAULTS, FEEDBACK_QUERIES } from "./feedback.js";
+
+// Dataset extractor constants
+export { EXTRACTION_QUERIES, VALIDATION_CHECKS } from "./datasetExtractor.js";
+
+// Knowledge document hit tracking constants
+export { HIT_TRACKING_DEFAULTS, HIT_TRACKING_QUERIES } from "./knowledgeDocHitTracking.js";
+
+// Knowledge document repository constants
+export { KNOWLEDGE_DOC_DEFAULTS, KNOWLEDGE_DOC_QUERIES } from "./knowledgeDocRepository.js";
+
+// Metrics history constants
+export { METRICS_HISTORY_DEFAULTS, METRICS_HISTORY_QUERIES } from "./metricsHistory.js";
+
+// Model version constants
+export { MODEL_VERSION_DEFAULTS, MODEL_VERSION_QUERIES } from "./modelVersion.js";
+
+// Relationship constants
+export { RELATIONSHIP_DEFAULTS, RELATIONSHIP_QUERIES } from "./relationship.js";
+
+// Test case constants
+export { TEST_CASE_DEFAULTS, TEST_CASE_QUERIES } from "./testCase.js";
+
+// Repository channel constants
+export { REPOSITORY_CHANNEL_QUERIES } from "./repositoryChannel.js";

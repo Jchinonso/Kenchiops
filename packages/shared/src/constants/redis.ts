@@ -172,6 +172,50 @@ export const CACHE_NAMESPACES = {
 
 export type CacheNamespace = (typeof CACHE_NAMESPACES)[keyof typeof CACHE_NAMESPACES];
 
+// ==================== Cache Algorithm Constants ====================
+
+/** Hash algorithm used for log content deduplication in analysis cache. */
+export const ANALYSIS_HASH_ALGORITHM = "sha256";
+
+/** Analysis cache key version for schema changes. */
+export const ANALYSIS_CACHE_VERSION = "v2";
+
+// ==================== Cache Key Parsing Constants ====================
+
+/**
+ * Index positions in cache key segments.
+ * Key format: "kenchi:cache:namespace:part1:part2:..."
+ */
+export const CACHE_KEY_SEGMENT_INDICES = {
+  ROOT_PREFIX: 0,
+  CACHE_PREFIX: 1,
+  NAMESPACE: 2,
+  PARTS_START: 3,
+} as const;
+
+/** Minimum number of segments for a valid cache key (root:cache:namespace). */
+export const MIN_CACHE_KEY_SEGMENTS = 3;
+
+/** Separator used in cache keys. */
+export const CACHE_KEY_SEPARATOR = ":";
+
+/** Replacement character for slashes in repository names. */
+export const REPO_SLASH_REPLACEMENT = "-";
+
+/** Pattern to normalize whitespace in check names. */
+export const CHECK_NAME_WHITESPACE_PATTERN = /\s+/g;
+
+// ==================== Cache Client Constants ====================
+
+/** Expected Redis client status when ready for operations. */
+export const REDIS_READY_STATUS = "ready";
+
+/** Redis EXISTS command returns 1 when key exists. */
+export const REDIS_KEY_EXISTS = 1;
+
+/** Default TTL return value on error or when client not ready. */
+export const CACHE_TTL_ERROR_DEFAULT = -1;
+
 // ==================== Worker Defaults ====================
 
 /**
@@ -186,6 +230,8 @@ export const QUEUE_WORKER_DEFAULTS = {
   MAX_CONCURRENT: 5,
   /** Slack notification worker max concurrent */
   SLACK_MAX_CONCURRENT: 3,
+  /** Analysis queue processor max concurrent */
+  ANALYSIS_MAX_CONCURRENT: 3,
   /** Concurrency throttle delay in milliseconds */
   CONCURRENCY_THROTTLE_MS: 100,
 } as const;
@@ -206,6 +252,24 @@ export const AGGREGATION_DEFAULTS = {
   TTL_BUFFER_SECONDS: 60,
   /** Debounce marker value stored in Redis */
   DEBOUNCE_MARKER: "1",
+  /** Default installation ID when not provided in metadata */
+  DEFAULT_INSTALLATION_ID: "0",
+} as const;
+
+/**
+ * Regex pattern for parsing aggregation metadata keys.
+ * Matches format: kenchi:agg:{repo}:{sha}:meta
+ */
+export const AGGREGATION_KEY_PATTERN = new RegExp(
+  `^${REDIS_KEY_PREFIXES.AGGREGATION.replace(":", "\\:")}:(.+):([a-f0-9]+):meta$`
+);
+
+/**
+ * Aggregation metadata field names for Redis hash operations.
+ */
+export const AGGREGATION_METADATA_FIELDS = {
+  FIRST_FAILURE_AT: "firstFailureAt",
+  LAST_FAILURE_AT: "lastFailureAt",
 } as const;
 
 // ==================== Display Defaults ====================

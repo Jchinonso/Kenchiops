@@ -70,6 +70,19 @@ export const SHA_PATTERN_SINGLE = /\b[0-9a-f]{6,40}\b/i;
 export const QUOTED_TEXT_PATTERN = /["']([^"']+)["']/g;
 
 /**
+ * Log normalization patterns for content deduplication.
+ * Used to remove volatile data before hashing log content.
+ */
+export const LOG_NORMALIZATION_PATTERNS = {
+  /** ISO 8601 timestamp pattern (YYYY-MM-DDTHH:MM:SS) */
+  TIMESTAMP: /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/g,
+  /** Full 40-character git SHA hash */
+  FULL_SHA: /\b[0-9a-f]{40}\b/g,
+  /** Excessive whitespace normalization */
+  WHITESPACE: /\s+/g,
+} as const;
+
+/**
  * OpenAI-related error and default messages.
  */
 export const OPENAI_MESSAGES = {
