@@ -30,6 +30,16 @@ export type { ActionJobPayload, ActionResultEvent, QueueStats } from "./actionTy
 
 const logger = createLogger("action-queue");
 
+// ==================== Result Types ====================
+
+/**
+ * Result type for queue stats operations.
+ * Distinguishes between success and error states.
+ */
+export type QueueStatsResult =
+  | { readonly status: "success"; readonly stats: QueueStats }
+  | { readonly status: "error"; readonly error: string };
+
 // ==================== Queue Operations ====================
 
 /** Enqueues an action for async processing, returns message ID. */
@@ -108,9 +118,16 @@ const processActionJob = async (
 
 // ==================== Worker Functions ====================
 
+/**
+ * Callback invoked when a worker encounters an error.
+ */
+export type WorkerErrorCallback = (error: string) => void;
+
 interface WorkerOptions {
   readonly pollIntervalMs?: number;
   readonly maxConcurrent?: number;
+  /** Optional callback for worker errors (for health monitoring). */
+  readonly onError?: WorkerErrorCallback;
 }
 
 interface WorkerState {
@@ -150,12 +167,17 @@ const createProcessLoop = (
   return loop;
 };
 
-/** Runs all workers with error handling. */
-const runWorkers = async (workers: readonly WorkerLoop[]): Promise<void> => {
+/** Runs all workers with error handling and optional callback. */
+const runWorkers = async (
+  workers: readonly WorkerLoop[],
+  onError?: WorkerErrorCallback
+): Promise<void> => {
   try {
     await Promise.all(workers.map((worker): Promise<void> => worker()));
-  } catch (error) {
-    logger.error("Action queue worker error", { error: getErrorMessage(error) });
+  } catch (caughtError) {
+    const errorMessage = getErrorMessage(caughtError);
+    logger.error("Action queue worker error", { error: errorMessage });
+    onError?.(errorMessage);
   }
 };
 
@@ -164,6 +186,7 @@ export const startActionQueueWorker = async (options: WorkerOptions = {}): Promi
   const {
     pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
     maxConcurrent = QUEUE_WORKER_DEFAULTS.MAX_CONCURRENT,
+    onError,
   } = options;
 
   const state: WorkerState = { running: true, activeJobs: 0 };
@@ -175,7 +198,7 @@ export const startActionQueueWorker = async (options: WorkerOptions = {}): Promi
     (): WorkerLoop => createProcessLoop(state, maxConcurrent, pollIntervalMs)
   );
 
-  void runWorkers(workers);
+  void runWorkers(workers, onError);
 
   return (): void => {
     state.running = false;
@@ -183,12 +206,26 @@ export const startActionQueueWorker = async (options: WorkerOptions = {}): Promi
   };
 };
 
-/** Returns queue statistics for monitoring. */
-export const getActionQueueStats = async (): Promise<QueueStats> => {
+/**
+ * Returns queue statistics with explicit result status.
+ * Distinguishes between success and error states.
+ */
+export const getActionQueueStatsResult = async (): Promise<QueueStatsResult> => {
   try {
-    return await githubActionQueue.getStats();
-  } catch (error) {
-    logger.error("Failed to get action queue stats", { error: getErrorMessage(error) });
-    return { pending: 0, processing: 0, dead: 0 };
+    const stats = await githubActionQueue.getStats();
+    return { status: "success", stats };
+  } catch (caughtError) {
+    const errorMessage = getErrorMessage(caughtError);
+    logger.error("Failed to get action queue stats", { error: errorMessage });
+    return { status: "error", error: errorMessage };
   }
+};
+
+/**
+ * Returns queue statistics for monitoring.
+ * @deprecated Use getActionQueueStatsResult for explicit error handling.
+ */
+export const getActionQueueStats = async (): Promise<QueueStats> => {
+  const result = await getActionQueueStatsResult();
+  return result.status === "success" ? result.stats : { pending: 0, processing: 0, dead: 0 };
 };
