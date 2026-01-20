@@ -10,7 +10,7 @@
 
 import { createLogger } from "../core/logger.js";
 import type { EmbeddingTierName } from "../constants/index.js";
-import type { BudgetStatus } from "../database/costTrackingRepository.js";
+import type { BudgetStatus } from "../database/index.js";
 import { selectEmbeddingTier, recordEmbeddingCost } from "./costControls.js";
 
 const logger = createLogger("rag-budget-embedding");

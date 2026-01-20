@@ -15,7 +15,7 @@ import {
   TECH_STACK_TAGS,
   type TechStackTag,
 } from "../constants/index.js";
-import type { ExternalSource } from "../database/externalSourceRepository.js";
+import type { ExternalSource } from "../database/index.js";
 import {
   registerConnector,
   type ExternalDocument,

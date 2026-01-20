@@ -14,7 +14,7 @@ import {
   validateExpectedDocIds,
   type RAGTestCase,
   type TestResultInput,
-} from "../database/testCaseRepository.js";
+} from "../database/index.js";
 import { searchDiffChunks, searchKnowledgeDocs } from "./search.js";
 import { calculateRecallAtK, calculateMRR, type RetrievalResult } from "./evaluation.js";
 import type { TestCaseResult, MetricAlertThreshold } from "./driftDetectionTypes.js";

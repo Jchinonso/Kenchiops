@@ -13,12 +13,12 @@ import {
   RAG_METRIC_TYPES,
   type RAGMetricType,
 } from "../constants/index.js";
-import { getActiveTestCases } from "../database/testCaseRepository.js";
 import {
+  getActiveTestCases,
   recordMetric,
   detectDrift,
   getAllBaselines,
-} from "../database/metricsHistoryRepository.js";
+} from "../database/index.js";
 
 // Import from metrics sub-module
 import { METRIC_ALERT_THRESHOLDS, runTestCasesRecursive } from "./driftDetectionMetrics.js";

@@ -20,7 +20,7 @@ import {
   getSourcesDueForSync,
   updateSyncStatus,
   type ExternalSource,
-} from "../database/externalSourceRepository.js";
+} from "../database/index.js";
 import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
 
 const logger = createLogger("rag-external-knowledge");

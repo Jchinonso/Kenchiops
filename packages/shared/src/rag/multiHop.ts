@@ -9,10 +9,7 @@
 
 import { createLogger } from "../core/logger.js";
 import { MULTI_HOP_CONFIG, type RelationshipType } from "../constants/index.js";
-import {
-  getBidirectionalRelationships,
-  type IncidentRelationship,
-} from "../database/relationshipRepository.js";
+import { getBidirectionalRelationships, type IncidentRelationship } from "../database/index.js";
 
 // Import types used internally
 import type { GraphNode, MultiHopOptions, TraversalState, QueueItem } from "./multiHopTypes.js";

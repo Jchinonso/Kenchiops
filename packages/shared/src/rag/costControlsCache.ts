@@ -13,7 +13,7 @@ import {
   CACHE_TTL_SECONDS,
   type EmbeddingTierName,
 } from "../constants/index.js";
-import { getRAGBudgetConfig } from "../database/tenantRagConfig.js";
+import { getRAGBudgetConfig } from "../database/index.js";
 
 const logger = createLogger("rag-cost-controls");
 
@@ -198,11 +198,11 @@ export const clearTenantConfigCache = (tenantId: string): void => {
 
 /**
  * Sets tier configuration for a tenant (updates database).
- * For backwards compatibility - prefer using updateRAGBudgetConfig from tenantRagConfig.
+ * For backwards compatibility - prefer using updateRAGBudgetConfig from database/tenant.
  */
 export const setTenantTierConfig = async (config: TenantTierConfig): Promise<void> => {
   // Import dynamically to avoid circular dependency
-  const { updateRAGBudgetConfig } = await import("../database/tenantRagConfig.js");
+  const { updateRAGBudgetConfig } = await import("../database/tenant/index.js");
 
   await updateRAGBudgetConfig({
     tenantId: config.tenantId,

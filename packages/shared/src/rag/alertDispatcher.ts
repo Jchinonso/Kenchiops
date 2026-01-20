@@ -10,7 +10,7 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { enqueueSystemAlert } from "../queue/slackNotificationProcessor.js";
-import { findById } from "../database/tenantService.js";
+import { findById } from "../database/index.js";
 import type { DriftAlert, DriftReport } from "./driftDetection.js";
 import type { RAGMetricType } from "../constants/index.js";
 

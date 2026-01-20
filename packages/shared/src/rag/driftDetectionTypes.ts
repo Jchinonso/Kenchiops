@@ -7,7 +7,7 @@
  */
 
 import type { RAGMetricType } from "../constants/index.js";
-import type { MetricBaseline } from "../database/metricsHistoryRepository.js";
+import type { MetricBaseline } from "../database/index.js";
 
 /**
  * Test suite execution result.

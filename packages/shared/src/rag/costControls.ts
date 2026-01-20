@@ -13,11 +13,7 @@ import {
   EMBEDDING_TIERS,
   type EmbeddingTierName,
 } from "../constants/index.js";
-import {
-  recordCost,
-  getBudgetStatus,
-  type BudgetStatus,
-} from "../database/costTrackingRepository.js";
+import { recordCost, getBudgetStatus, type BudgetStatus } from "../database/index.js";
 
 // Import only what's used internally
 import { getTenantTierConfig } from "./costControlsCache.js";

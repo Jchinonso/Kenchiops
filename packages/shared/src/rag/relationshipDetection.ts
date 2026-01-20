@@ -14,10 +14,7 @@ import {
   RELATIONSHIP_DETECTION_CONFIG,
   type RelationshipType,
 } from "../constants/index.js";
-import {
-  createRelationshipsBatch,
-  type CreateRelationshipInput,
-} from "../database/relationshipRepository.js";
+import { createRelationshipsBatch, type CreateRelationshipInput } from "../database/index.js";
 import { searchKnowledgeDocs } from "./search.js";
 
 const logger = createLogger("rag-relationship-detection");

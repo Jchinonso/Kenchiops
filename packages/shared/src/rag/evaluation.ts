@@ -14,7 +14,7 @@ import { getErrorMessage } from "../core/errors.js";
 import {
   createRAGFeedback as dbCreateRAGFeedback,
   getRAGFeedbackMetrics as dbGetRAGFeedbackMetrics,
-} from "../database/feedbackRepository.js";
+} from "../database/index.js";
 
 const logger = createLogger("rag-evaluation");
 

@@ -10,11 +10,7 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { RAG_TEST_CASE_CONFIG } from "../constants/index.js";
-import {
-  createTestCase,
-  getActiveTestCases,
-  type CreateTestCaseInput,
-} from "../database/testCaseRepository.js";
+import { createTestCase, getActiveTestCases, type CreateTestCaseInput } from "../database/index.js";
 
 const logger = createLogger("rag-test-case-seeding");
 
