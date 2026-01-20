@@ -107,6 +107,10 @@ export const MEMORY_THRESHOLDS = {
   WARNING: 95,
   /** Heap usage percentage that triggers unhealthy status */
   CRITICAL: 99,
+  /** Bytes per megabyte for memory conversions */
+  BYTES_PER_MB: 1024 * 1024,
+  /** Multiplier to convert decimal to percentage */
+  PERCENT_MULTIPLIER: 100,
 } as const;
 
 /**

@@ -23,11 +23,6 @@ import type {
 
 export type { HealthStatus, ComponentHealth, MemoryHealth, ServiceHealth, HealthCheckConfig };
 
-// ==================== Constants ====================
-
-const BYTES_PER_MB = 1024 * 1024;
-const PERCENT_MULTIPLIER = 100;
-
 // ==================== Memory Health ====================
 
 /**
@@ -35,6 +30,7 @@ const PERCENT_MULTIPLIER = 100;
  */
 export const getMemoryHealth = (): MemoryHealth => {
   const usage = process.memoryUsage();
+  const { BYTES_PER_MB, PERCENT_MULTIPLIER } = MEMORY_THRESHOLDS;
   const heapUsedPercent = Math.round((usage.heapUsed / usage.heapTotal) * PERCENT_MULTIPLIER);
 
   return {
