@@ -2,12 +2,11 @@
  * Action Module Types
  *
  * Consolidated type definitions for the actions module.
- * Internal types remain in their respective implementation files.
  *
- * @module actions/actionTypes
+ * @module actions/types
  */
 
-import type { ActionType, ActionProposal } from "../core/types.js";
+import type { ActionType, ActionProposal, ExecutionResult } from "../core/types.js";
 
 // ==================== Execution Types ====================
 
@@ -111,3 +110,82 @@ export interface QueueStats {
   readonly processing: number;
   readonly dead: number;
 }
+
+/**
+ * Result type for queue stats operations.
+ * Distinguishes between success and error states.
+ */
+export type QueueStatsResult =
+  | { readonly status: "success"; readonly stats: QueueStats }
+  | { readonly status: "error"; readonly error: string };
+
+// ==================== Executor Types ====================
+
+/**
+ * Action executor function type.
+ * Each action type has a corresponding executor.
+ */
+export type ActionExecutor = (
+  action: ActionProposal,
+  context: ActionExecutionContext
+) => Promise<ExecutionResult>;
+
+/** Response from GitHub App rerun endpoint. */
+export interface RerunResponse {
+  readonly success: boolean;
+  readonly message: string;
+  readonly runId?: number;
+  readonly error?: string;
+}
+
+/** Validation result for action execution. */
+export type ValidationResult = { valid: boolean; reason?: string };
+
+// ==================== Payload Store Internal Types ====================
+
+/** Internal store entry with expiration. */
+export interface StoredEntry {
+  readonly payload: StoredActionPayload;
+  readonly expiresAt: number;
+}
+
+/** Verification rule definition. */
+export interface VerificationRule {
+  readonly shouldReject: (
+    entry: StoredEntry,
+    opaqueValue: OpaqueActionValue,
+    context?: ActionVerificationContext
+  ) => boolean;
+  readonly reject: (
+    entry: StoredEntry,
+    opaqueValue: OpaqueActionValue,
+    context?: ActionVerificationContext
+  ) => never;
+}
+
+/** Result type for safe JSON parsing. */
+export type ParseResult<T> =
+  | { readonly success: true; readonly data: T }
+  | { readonly success: false };
+
+// ==================== Queue Worker Types ====================
+
+/** Worker configuration options. */
+export interface WorkerOptions {
+  readonly pollIntervalMs?: number;
+  readonly maxConcurrent?: number;
+  /** Optional callback for worker errors (for health monitoring). */
+  readonly onError?: WorkerErrorCallback;
+}
+
+/** Worker state tracking. */
+export interface WorkerState {
+  running: boolean;
+  activeJobs: number;
+}
+
+/** Worker loop function type. */
+export type WorkerLoop = () => Promise<void>;
+
+/** Callback invoked when a worker encounters an error. */
+export type WorkerErrorCallback = (error: string) => void;

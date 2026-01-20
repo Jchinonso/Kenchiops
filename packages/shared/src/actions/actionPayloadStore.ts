@@ -18,7 +18,10 @@ import type {
   OpaqueActionValue,
   ActionVerificationContext,
   ActionStoreStats,
-} from "./actionTypes.js";
+  StoredEntry,
+  VerificationRule,
+  ParseResult,
+} from "./types.js";
 
 // Re-export types for backwards compatibility
 export type {
@@ -26,16 +29,9 @@ export type {
   OpaqueActionValue,
   ActionVerificationContext,
   ActionStoreStats,
-} from "./actionTypes.js";
+} from "./types.js";
 
 const logger = createLogger("action-store");
-
-// ==================== Types ====================
-
-interface StoredEntry {
-  readonly payload: StoredActionPayload;
-  readonly expiresAt: number;
-}
 
 // ==================== Store State ====================
 
@@ -137,20 +133,6 @@ const handleContextMismatch = (
   throw new ValidationError("Action context verification failed");
 };
 
-/** Verification rule definition */
-interface VerificationRule {
-  readonly shouldReject: (
-    entry: StoredEntry,
-    opaqueValue: OpaqueActionValue,
-    context?: ActionVerificationContext
-  ) => boolean;
-  readonly reject: (
-    entry: StoredEntry,
-    opaqueValue: OpaqueActionValue,
-    context?: ActionVerificationContext
-  ) => never;
-}
-
 /** Verification rules applied in order */
 const VERIFICATION_RULES: readonly VerificationRule[] = [
   {
@@ -213,9 +195,6 @@ const isOpaqueActionValue = (value: unknown): value is OpaqueActionValue => {
   const candidate = value as Record<string, unknown>;
   return typeof candidate.id === "string" && typeof candidate.v === "string";
 };
-
-/** Result type for safe JSON parsing */
-type ParseResult<T> = { readonly success: true; readonly data: T } | { readonly success: false };
 
 /** Safely parses JSON without throwing */
 const safeJsonParse = (jsonString: string): ParseResult<unknown> => {

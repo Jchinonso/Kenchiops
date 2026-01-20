@@ -12,33 +12,18 @@ import { createLogger, getErrorMessage } from "../core/index.js";
 import { config } from "../core/config.js";
 import { resilientPost } from "../http/resilientClient.js";
 import { ACTION_MESSAGES } from "../constants/index.js";
-import type { ActionExecutionContext, ActionExecutionResult } from "./actionTypes.js";
+import type {
+  ActionExecutionContext,
+  ActionExecutionResult,
+  ActionExecutor,
+  RerunResponse,
+  ValidationResult,
+} from "./types.js";
 
 // Re-export types for backwards compatibility
-export type { ActionExecutionContext, ActionExecutionResult } from "./actionTypes.js";
+export type { ActionExecutionContext, ActionExecutionResult } from "./types.js";
 
 const logger = createLogger("action-executor");
-
-/**
- * Action executor function type.
- * Each action type has a corresponding executor.
- */
-type ActionExecutor = (
-  action: ActionProposal,
-  context: ActionExecutionContext
-) => Promise<ExecutionResult>;
-
-// ==================== Action Executors ====================
-
-/**
- * Response from GitHub App rerun endpoint
- */
-interface RerunResponse {
-  readonly success: boolean;
-  readonly message: string;
-  readonly runId?: number;
-  readonly error?: string;
-}
 
 /**
  * Executes a pipeline rerun action.
@@ -266,8 +251,6 @@ export const executeAction = async (
     });
   }
 };
-
-type ValidationResult = { valid: boolean; reason?: string };
 
 /** Validation rules for action execution, checked in order. */
 const VALIDATION_RULES: ReadonlyArray<{

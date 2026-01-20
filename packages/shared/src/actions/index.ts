@@ -8,16 +8,30 @@
 // ==================== Types ====================
 
 export type {
+  // Execution types
   ActionExecutionContext,
   ActionExecutionResult,
+  ActionExecutor,
+  RerunResponse,
+  ValidationResult,
+  // Payload store types
   StoredActionPayload,
   OpaqueActionValue,
   ActionVerificationContext,
   ActionStoreStats,
+  StoredEntry,
+  VerificationRule,
+  ParseResult,
+  // Queue types
   ActionJobPayload,
   ActionResultEvent,
   QueueStats,
-} from "./actionTypes.js";
+  QueueStatsResult,
+  WorkerOptions,
+  WorkerState,
+  WorkerLoop,
+  WorkerErrorCallback,
+} from "./types.js";
 
 // ==================== Executor ====================
 

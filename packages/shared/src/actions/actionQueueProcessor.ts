@@ -23,22 +23,17 @@ import type {
   ActionJobPayload,
   ActionResultEvent,
   QueueStats,
-} from "./actionTypes.js";
+  QueueStatsResult,
+  WorkerOptions,
+  WorkerState,
+  WorkerLoop,
+  WorkerErrorCallback,
+} from "./types.js";
 
 // Re-export types for backwards compatibility
-export type { ActionJobPayload, ActionResultEvent, QueueStats } from "./actionTypes.js";
+export type { ActionJobPayload, ActionResultEvent, QueueStats, QueueStatsResult } from "./types.js";
 
 const logger = createLogger("action-queue");
-
-// ==================== Result Types ====================
-
-/**
- * Result type for queue stats operations.
- * Distinguishes between success and error states.
- */
-export type QueueStatsResult =
-  | { readonly status: "success"; readonly stats: QueueStats }
-  | { readonly status: "error"; readonly error: string };
 
 // ==================== Queue Operations ====================
 
@@ -117,25 +112,6 @@ const processActionJob = async (
 };
 
 // ==================== Worker Functions ====================
-
-/**
- * Callback invoked when a worker encounters an error.
- */
-export type WorkerErrorCallback = (error: string) => void;
-
-interface WorkerOptions {
-  readonly pollIntervalMs?: number;
-  readonly maxConcurrent?: number;
-  /** Optional callback for worker errors (for health monitoring). */
-  readonly onError?: WorkerErrorCallback;
-}
-
-interface WorkerState {
-  running: boolean;
-  activeJobs: number;
-}
-
-type WorkerLoop = () => Promise<void>;
 
 /** Recursive worker loop - processes jobs until stopped. */
 const createProcessLoop = (
