@@ -9,7 +9,13 @@
 
 import { createLogger } from "../core/logger.js";
 import { OPENAI_DEFAULTS, MODEL_VERSIONING } from "../constants/index.js";
-import type { ModelVersion, ModelFeatureFlags, ModelSelectionResult } from "./types.js";
+import type {
+  ModelVersion,
+  ModelFeatureFlags,
+  ModelSelectionResult,
+  ModelSelectionContext,
+  ModelSelectionHandler,
+} from "./types.js";
 
 const logger = createLogger("model-versioning");
 
@@ -216,61 +222,94 @@ const getABTestGroup = (tenantId: string, treatmentPercentage: number): "control
 };
 
 /**
+ * Returns the default model selection result.
+ * Defined before handlers as it's used as fallback in A/B test handler.
+ */
+const getDefaultModelResult = (context: ModelSelectionContext): ModelSelectionResult => {
+  const version = context.getVersion(context.flags.defaultModelVersion);
+  return {
+    modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
+    versionId: context.flags.defaultModelVersion,
+    reason: "default",
+    isABTest: false,
+  };
+};
+
+/** Ordered handlers for model selection (first match wins). */
+const MODEL_SELECTION_HANDLERS: readonly ModelSelectionHandler[] = [
+  {
+    // Rollback (highest priority)
+    condition: (context) => context.isInRollback && context.flags.rollbackEnabled,
+    getResult: (context) => {
+      const version = context.getVersion(context.flags.rollbackModelVersion);
+      return {
+        modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
+        versionId: context.flags.rollbackModelVersion,
+        reason: "rollback",
+        isABTest: false,
+      };
+    },
+  },
+  {
+    // Tenant override
+    condition: (context) => {
+      const versionId = context.flags.tenantOverrides?.[context.tenantId];
+      return versionId !== undefined && context.getVersion(versionId) !== undefined;
+    },
+    getResult: (context) => {
+      const versionId = context.flags.tenantOverrides?.[context.tenantId] ?? "";
+      const version = context.getVersion(versionId);
+      return {
+        modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
+        versionId,
+        reason: "tenant_override",
+        isABTest: false,
+      };
+    },
+  },
+  {
+    // A/B test
+    condition: (context) => context.flags.abTestEnabled && context.flags.abTestConfig !== undefined,
+    getResult: (context) => {
+      const { abTestConfig } = context.flags;
+      if (!abTestConfig) {
+        return getDefaultModelResult(context);
+      }
+      const { controlVersion, treatmentVersion, treatmentPercentage } = abTestConfig;
+      const group = getABTestGroup(context.tenantId, treatmentPercentage);
+      const versionId = group === "treatment" ? treatmentVersion : controlVersion;
+      const version = context.getVersion(versionId);
+      return {
+        modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
+        versionId,
+        reason: group === "treatment" ? "ab_test_treatment" : "ab_test_control",
+        isABTest: true,
+        abTestGroup: group,
+      };
+    },
+  },
+];
+
+/**
+ * Creates the model selection context for handlers.
+ */
+const createSelectionContext = (tenantId: string): ModelSelectionContext => ({
+  tenantId,
+  isInRollback,
+  flags: currentFlags,
+  getVersion: (versionId: string) => modelVersions.get(versionId),
+});
+
+/**
  * Selects the appropriate model for a request.
  *
  * @param tenantId - Tenant identifier
  * @returns Model selection result
  */
 export const selectModel = (tenantId: string): ModelSelectionResult => {
-  // Check rollback first (highest priority)
-  if (isInRollback && currentFlags.rollbackEnabled) {
-    const version = modelVersions.get(currentFlags.rollbackModelVersion);
-    return {
-      modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
-      versionId: currentFlags.rollbackModelVersion,
-      reason: "rollback",
-      isABTest: false,
-    };
-  }
-
-  // Check tenant override
-  if (currentFlags.tenantOverrides?.[tenantId]) {
-    const versionId = currentFlags.tenantOverrides[tenantId];
-    const version = modelVersions.get(versionId);
-    if (version) {
-      return {
-        modelId: version.modelId,
-        versionId,
-        reason: "tenant_override",
-        isABTest: false,
-      };
-    }
-  }
-
-  // Check A/B test
-  if (currentFlags.abTestEnabled && currentFlags.abTestConfig) {
-    const { controlVersion, treatmentVersion, treatmentPercentage } = currentFlags.abTestConfig;
-    const group = getABTestGroup(tenantId, treatmentPercentage);
-    const versionId = group === "treatment" ? treatmentVersion : controlVersion;
-    const version = modelVersions.get(versionId);
-
-    return {
-      modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
-      versionId,
-      reason: group === "treatment" ? "ab_test_treatment" : "ab_test_control",
-      isABTest: true,
-      abTestGroup: group,
-    };
-  }
-
-  // Default model
-  const version = modelVersions.get(currentFlags.defaultModelVersion);
-  return {
-    modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
-    versionId: currentFlags.defaultModelVersion,
-    reason: "default",
-    isABTest: false,
-  };
+  const context = createSelectionContext(tenantId);
+  const matchedHandler = MODEL_SELECTION_HANDLERS.find((handler) => handler.condition(context));
+  return matchedHandler?.getResult(context) ?? getDefaultModelResult(context);
 };
 
 /**

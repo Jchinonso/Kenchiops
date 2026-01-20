@@ -13,12 +13,17 @@ export type {
   TrainingExampleInput,
   DatasetStats,
   DatasetBuildOptions,
+  FeedbackCounts,
+  FeedbackLabelHandler,
+  EvidenceSummarizer,
+  FilterCondition,
   // Dataset Extractor Types
   AnalysisRow,
   ExtractorFeedbackRow,
   ExtractionOptions,
   ExtractionResult,
   ValidationCheck,
+  DatasetValidationResult,
   // Fine-Tuning Client Types
   FineTuningJobOptions,
   FineTuningJobResult,
@@ -26,6 +31,7 @@ export type {
   FileUploadResult,
   FineTuningWorkflowResult,
   ProgressCallback,
+  TerminalStatusHandler,
   // Model Versioning Types
   ModelVersion,
   ModelMetadata,
@@ -34,6 +40,8 @@ export type {
   ABTestConfig,
   ModelSelectionResult,
   ModelSelectionReason,
+  ModelSelectionContext,
+  ModelSelectionHandler,
 } from "./types.js";
 
 // Dataset Builder Functions

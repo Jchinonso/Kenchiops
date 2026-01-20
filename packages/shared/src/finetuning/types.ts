@@ -14,18 +14,6 @@ import type { FineTuningStatus } from "../constants/index.js";
 // ==================== Dataset Builder Types ====================
 
 /**
- * Training example for fine-tuning.
- */
-export interface TrainingExample {
-  readonly id: string;
-  readonly eventType: string;
-  readonly evidenceSummary: string;
-  readonly analysisOutput: string;
-  readonly feedbackLabel: FeedbackQualityLabel;
-  readonly metadata: TrainingExampleMetadata;
-}
-
-/**
  * Quality label derived from feedback.
  */
 export type FeedbackQualityLabel = "positive" | "negative" | "neutral" | "unlabeled";
@@ -41,6 +29,60 @@ export interface TrainingExampleMetadata {
   readonly ragDocsUsed: number;
   readonly actionsProposed: number;
   readonly createdAt: string;
+}
+
+/**
+ * Training example for fine-tuning.
+ */
+export interface TrainingExample {
+  readonly id: string;
+  readonly eventType: string;
+  readonly evidenceSummary: string;
+  readonly analysisOutput: string;
+  readonly feedbackLabel: FeedbackQualityLabel;
+  readonly metadata: TrainingExampleMetadata;
+}
+
+/**
+ * Options for dataset building.
+ */
+export interface DatasetBuildOptions {
+  readonly includeUnlabeled?: boolean;
+  readonly minConfidence?: number;
+  readonly maxExamples?: number;
+  readonly eventTypes?: readonly string[];
+}
+
+/**
+ * Feedback category counts for majority voting.
+ */
+export interface FeedbackCounts {
+  readonly positive: number;
+  readonly negative: number;
+  readonly neutral: number;
+}
+
+/**
+ * Handler for determining feedback label based on counts.
+ */
+export interface FeedbackLabelHandler {
+  readonly condition: (counts: FeedbackCounts) => boolean;
+  readonly label: FeedbackQualityLabel;
+}
+
+/**
+ * Evidence summarizer handler.
+ */
+export interface EvidenceSummarizer {
+  readonly getData: (evidence: Evidence) => readonly unknown[] | undefined;
+  readonly format: (evidence: Evidence, data: readonly unknown[]) => string;
+}
+
+/**
+ * Filter condition for training examples.
+ */
+export interface FilterCondition {
+  readonly shouldExclude: (example: TrainingExample, options: DatasetBuildOptions) => boolean;
 }
 
 /**
@@ -80,16 +122,6 @@ export interface DatasetStats {
   readonly unlabeledExamples: number;
   readonly averageConfidence: number;
   readonly eventTypeDistribution: Record<string, number>;
-}
-
-/**
- * Options for dataset building.
- */
-export interface DatasetBuildOptions {
-  readonly includeUnlabeled?: boolean;
-  readonly minConfidence?: number;
-  readonly maxExamples?: number;
-  readonly eventTypes?: readonly string[];
 }
 
 // ==================== Dataset Extractor Types ====================
@@ -150,6 +182,14 @@ export interface ExtractionResult {
 export interface ValidationCheck {
   readonly condition: (result: ExtractionResult, labeledTotal: number) => boolean;
   readonly message: (result: ExtractionResult, labeledTotal: number) => string;
+}
+
+/**
+ * Result of dataset validation.
+ */
+export interface DatasetValidationResult {
+  readonly valid: boolean;
+  readonly issues: readonly string[];
 }
 
 // ==================== Fine-Tuning Client Types ====================
@@ -222,6 +262,14 @@ export interface FineTuningWorkflowResult {
  */
 export type ProgressCallback = (job: FineTuningJobResult) => void;
 
+/**
+ * Handler for terminal job status processing.
+ */
+export interface TerminalStatusHandler {
+  readonly status: FineTuningStatus;
+  readonly handle: (job: FineTuningJobResult) => FineTuningJobResult;
+}
+
 // ==================== Model Versioning Types ====================
 
 /**
@@ -290,6 +338,24 @@ export interface ModelSelectionResult {
   readonly reason: ModelSelectionReason;
   readonly isABTest: boolean;
   readonly abTestGroup?: "control" | "treatment";
+}
+
+/**
+ * Context for model selection handlers.
+ */
+export interface ModelSelectionContext {
+  readonly tenantId: string;
+  readonly isInRollback: boolean;
+  readonly flags: ModelFeatureFlags;
+  readonly getVersion: (versionId: string) => ModelVersion | undefined;
+}
+
+/**
+ * Handler for model selection strategy.
+ */
+export interface ModelSelectionHandler {
+  readonly condition: (context: ModelSelectionContext) => boolean;
+  readonly getResult: (context: ModelSelectionContext) => ModelSelectionResult;
 }
 
 /**

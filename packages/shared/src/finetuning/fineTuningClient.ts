@@ -24,6 +24,7 @@ import type {
   FileUploadResult,
   FineTuningWorkflowResult,
   ProgressCallback,
+  TerminalStatusHandler,
 } from "./types.js";
 
 const logger = createLogger("fine-tuning-client");
@@ -257,6 +258,37 @@ const pollDelay = (): Promise<void> =>
     setTimeout(resolve, FINE_TUNING_CONFIG.POLL_INTERVAL_MS);
   });
 
+/** Handlers for terminal job statuses. */
+const TERMINAL_STATUS_HANDLERS: readonly TerminalStatusHandler[] = [
+  {
+    status: FINE_TUNING_STATUS.FAILED,
+    handle: (job) => {
+      throw new ExternalServiceError(
+        SERVICE_NAME,
+        `Fine-tuning job failed: ${job.error ?? "Unknown error"}`
+      );
+    },
+  },
+  {
+    status: FINE_TUNING_STATUS.SUCCEEDED,
+    handle: (job) => job,
+  },
+  {
+    status: FINE_TUNING_STATUS.CANCELLED,
+    handle: (job) => job,
+  },
+];
+
+/**
+ * Processes a job in terminal state using handler lookup.
+ */
+const processTerminalJob = (job: FineTuningJobResult): FineTuningJobResult => {
+  const handler = TERMINAL_STATUS_HANDLERS.find(
+    (terminalHandler) => terminalHandler.status === job.status
+  );
+  return handler?.handle(job) ?? job;
+};
+
 /**
  * Waits for a fine-tuning job to complete.
  *
@@ -285,13 +317,7 @@ export const waitForFineTuningJob = async (
     onProgress?.(job);
 
     if (isTerminalStatus(job.status)) {
-      if (job.status === FINE_TUNING_STATUS.FAILED) {
-        throw new ExternalServiceError(
-          SERVICE_NAME,
-          `Fine-tuning job failed: ${job.error ?? "Unknown error"}`
-        );
-      }
-      return job;
+      return processTerminalJob(job);
     }
 
     logger.debug("Polling fine-tuning job", { jobId, status: job.status, attempt: attempts });

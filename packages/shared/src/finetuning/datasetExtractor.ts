@@ -31,6 +31,7 @@ import type {
   ExtractorFeedbackRow,
   ExtractionOptions,
   ExtractionResult,
+  DatasetValidationResult,
 } from "./types.js";
 import type { FeedbackRecord } from "../database/index.js";
 
@@ -213,9 +214,7 @@ export const extractTrainingDataset = async (
  * @param result - Extraction result to validate
  * @returns Validation result with validity flag and issues array
  */
-export const validateExtractedDataset = (
-  result: ExtractionResult
-): { readonly valid: boolean; readonly issues: readonly string[] } => {
+export const validateExtractedDataset = (result: ExtractionResult): DatasetValidationResult => {
   const { positiveExamples, negativeExamples } = result.stats;
   const labeledTotal = positiveExamples + negativeExamples;
 
