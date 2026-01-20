@@ -3,133 +3,153 @@
  *
  * Centralized configuration loader with validation.
  * All services should import from this module instead of reading process.env directly.
+ *
+ * @module core/config
  */
 
 import dotenv from "dotenv";
 import { ValidationError } from "./errors.js";
 import { CONFIG_DEFAULTS, VALID_NODE_ENVS, PARSE_INT_RADIX } from "../constants/index.js";
+import type { Config, NodeEnvironment } from "./types.js";
 
 // Load environment variables once, at process start.
 dotenv.config();
 
-// ==================== Types ====================
+/** Re-export Config type for backward compatibility. */
+export type { Config, NodeEnvironment };
 
-/**
- * Application configuration interface.
- */
-export interface Config {
-  // OpenAI Configuration
-  readonly OPENAI_API_KEY: string;
-  readonly OPENAI_MODEL?: string;
-  readonly OPENAI_MAX_TOKENS?: number;
-  readonly OPENAI_TEMPERATURE?: number;
-  readonly OPENAI_TIMEOUT_MS?: number;
+// ==================== Constants ====================
 
-  // Slack Configuration (single-tenant mode - tokens in env vars)
-  readonly SLACK_BOT_TOKEN: string;
-  readonly SLACK_SIGNING_SECRET: string;
-  readonly SLACK_APP_LEVEL_TOKEN: string;
+/** String value representing boolean true in environment variables. */
+const ENV_BOOLEAN_TRUE = "true";
 
-  // Slack OAuth Configuration (multi-tenant mode - tokens in database)
-  readonly SLACK_CLIENT_ID?: string;
-  readonly SLACK_CLIENT_SECRET?: string;
-  readonly SLACK_REDIRECT_URI?: string;
+// ==================== Parsing Result Types ====================
 
-  // GitHub Configuration
-  readonly GITHUB_APP_ID: string;
-  readonly GITHUB_APP_PRIVATE_KEY: string;
-  readonly GITHUB_INSTALLATION_ID: string;
-  readonly GITHUB_WEBHOOK_SECRET: string;
-  readonly GITHUB_APP_SLUG?: string;
-
-  // Database Configuration
-  readonly DATABASE_URL: string;
-  readonly VECTOR_DB_URL: string;
-
-  // General Configuration
-  readonly NODE_ENV: "development" | "production" | "test";
-  readonly PORT: number;
-
-  // Multi-tenant Configuration
-  readonly MULTI_TENANT_MODE?: boolean;
-
-  // Feature Flags
-  /** Enable simplified CI analysis pipeline (Phase 1 of pipeline simplification) */
-  readonly SIMPLIFIED_PIPELINE_ENABLED?: boolean;
-
-  // Service URLs (for inter-service communication)
-  readonly API_URL: string;
-  readonly SLACK_BOT_URL: string;
-  readonly GITHUB_APP_URL: string;
-
-  // Redis Configuration
-  readonly REDIS_URL: string;
-}
+/** Result of parsing a numeric value from environment variable. */
+type ParseNumericResult =
+  | { readonly success: true; readonly value: number }
+  | { readonly success: false };
 
 // ==================== Parser Helpers ====================
 
 /**
- * Parses integer from environment variable with validation.
+ * Parses an integer from a string value.
+ * Returns a discriminated union for explicit success/failure handling.
  */
-const parseIntEnv = (value: string | undefined, defaultValue: number): number => {
-  if (!value) {
+const parseInteger = (value: string): ParseNumericResult => {
+  const parsed = parseInt(value, PARSE_INT_RADIX);
+  return Number.isNaN(parsed) ? { success: false } : { success: true, value: parsed };
+};
+
+/**
+ * Parses a float from a string value.
+ * Returns a discriminated union for explicit success/failure handling.
+ */
+const parseFloating = (value: string): ParseNumericResult => {
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? { success: false } : { success: true, value: parsed };
+};
+
+/**
+ * Checks if an environment variable value is empty or undefined.
+ */
+const isEmptyEnvValue = (value: string | undefined): value is undefined | "" =>
+  value === undefined || value === "";
+
+/**
+ * Parses an integer environment variable with a default fallback.
+ */
+const parseIntegerEnv = (value: string | undefined, defaultValue: number): number => {
+  if (isEmptyEnvValue(value)) {
     return defaultValue;
   }
-  const parsed = parseInt(value, PARSE_INT_RADIX);
-  return Number.isNaN(parsed) ? defaultValue : parsed;
+  const result = parseInteger(value);
+  return result.success ? result.value : defaultValue;
 };
 
 /**
- * Parses float from environment variable with validation.
+ * Parses an optional integer environment variable.
+ * Returns undefined if not set, default value if set but invalid.
  */
-const parseFloatEnv = (value: string | undefined): number | undefined => {
-  if (!value) {
+const parseOptionalIntegerEnv = (
+  value: string | undefined,
+  defaultValue: number
+): number | undefined => {
+  if (isEmptyEnvValue(value)) {
     return undefined;
   }
-  const parsed = parseFloat(value);
-  return Number.isNaN(parsed) ? undefined : parsed;
+  const result = parseInteger(value);
+  return result.success ? result.value : defaultValue;
 };
 
 /**
- * Validates required environment variable.
+ * Parses an optional float environment variable.
+ * Returns undefined if not set or invalid.
+ */
+const parseOptionalFloatEnv = (value: string | undefined): number | undefined => {
+  if (isEmptyEnvValue(value)) {
+    return undefined;
+  }
+  const result = parseFloating(value);
+  return result.success ? result.value : undefined;
+};
+
+/**
+ * Parses a boolean environment variable.
+ * Only "true" (case-sensitive) is considered true.
+ */
+const parseBooleanEnv = (value: string | undefined): boolean => value === ENV_BOOLEAN_TRUE;
+
+/**
+ * Retrieves an optional string environment variable with a default fallback.
+ */
+const getOptionalEnv = (value: string | undefined, defaultValue: string): string =>
+  isEmptyEnvValue(value) ? defaultValue : value;
+
+// ==================== Validation Helpers ====================
+
+/**
+ * Validates and retrieves a required environment variable.
+ * Throws ValidationError if the variable is not set or empty.
  */
 const requireEnv = (key: string, value: string | undefined): string => {
-  if (!value || value.trim() === "") {
+  if (value === undefined || value.trim() === "") {
     throw new ValidationError(`Required environment variable ${key} is not set`);
   }
   return value;
 };
 
 /**
- * Validates NODE_ENV value.
+ * Validates NODE_ENV value against allowed values.
+ * Returns default if invalid or not set.
  */
-const validateNodeEnv = (value: string | undefined): Config["NODE_ENV"] => {
-  const env = (value || CONFIG_DEFAULTS.NODE_ENV) as Config["NODE_ENV"];
-  return VALID_NODE_ENVS.includes(env) ? env : CONFIG_DEFAULTS.NODE_ENV;
-};
+const validateNodeEnv = (value: string | undefined): NodeEnvironment => {
+  const defaultEnv = CONFIG_DEFAULTS.NODE_ENV as NodeEnvironment;
 
-/**
- * Parse optional integer with default if undefined.
- */
-const parseOptionalInt = (value: string | undefined, defaultValue: number): number | undefined =>
-  value ? parseIntEnv(value, defaultValue) : undefined;
+  if (isEmptyEnvValue(value)) {
+    return defaultEnv;
+  }
+
+  const isValidEnv = VALID_NODE_ENVS.includes(value as NodeEnvironment);
+  return isValidEnv ? (value as NodeEnvironment) : defaultEnv;
+};
 
 // ==================== Configuration ====================
 
 /**
- * Centralized configuration loader with validation.
- * Throws error if required variables are missing.
+ * Centralized application configuration with validation.
+ * Throws ValidationError if required variables are missing.
  */
 export const config: Config = {
   // OpenAI Configuration
   OPENAI_API_KEY: requireEnv("OPENAI_API_KEY", process.env.OPENAI_API_KEY),
   OPENAI_MODEL: process.env.OPENAI_MODEL,
-  OPENAI_MAX_TOKENS: parseOptionalInt(
+  OPENAI_MAX_TOKENS: parseOptionalIntegerEnv(
     process.env.OPENAI_MAX_TOKENS,
     CONFIG_DEFAULTS.OPENAI_MAX_TOKENS
   ),
-  OPENAI_TEMPERATURE: parseFloatEnv(process.env.OPENAI_TEMPERATURE),
-  OPENAI_TIMEOUT_MS: parseOptionalInt(
+  OPENAI_TEMPERATURE: parseOptionalFloatEnv(process.env.OPENAI_TEMPERATURE),
+  OPENAI_TIMEOUT_MS: parseOptionalIntegerEnv(
     process.env.OPENAI_TIMEOUT_MS,
     CONFIG_DEFAULTS.OPENAI_TIMEOUT_MS
   ),
@@ -149,7 +169,7 @@ export const config: Config = {
   GITHUB_APP_PRIVATE_KEY: requireEnv("GITHUB_APP_PRIVATE_KEY", process.env.GITHUB_APP_PRIVATE_KEY),
   GITHUB_INSTALLATION_ID: requireEnv("GITHUB_INSTALLATION_ID", process.env.GITHUB_INSTALLATION_ID),
   GITHUB_WEBHOOK_SECRET: requireEnv("GITHUB_WEBHOOK_SECRET", process.env.GITHUB_WEBHOOK_SECRET),
-  GITHUB_APP_SLUG: process.env.GITHUB_APP_SLUG || CONFIG_DEFAULTS.GITHUB_APP_SLUG,
+  GITHUB_APP_SLUG: getOptionalEnv(process.env.GITHUB_APP_SLUG, CONFIG_DEFAULTS.GITHUB_APP_SLUG),
 
   // Database Configuration
   DATABASE_URL: requireEnv("DATABASE_URL", process.env.DATABASE_URL),
@@ -157,19 +177,19 @@ export const config: Config = {
 
   // General Configuration
   NODE_ENV: validateNodeEnv(process.env.NODE_ENV),
-  PORT: parseIntEnv(process.env.PORT, CONFIG_DEFAULTS.PORT),
+  PORT: parseIntegerEnv(process.env.PORT, CONFIG_DEFAULTS.PORT),
 
   // Multi-tenant Configuration
-  MULTI_TENANT_MODE: process.env.MULTI_TENANT_MODE === "true",
+  MULTI_TENANT_MODE: parseBooleanEnv(process.env.MULTI_TENANT_MODE),
 
   // Feature Flags
-  SIMPLIFIED_PIPELINE_ENABLED: process.env.SIMPLIFIED_PIPELINE_ENABLED === "true",
+  SIMPLIFIED_PIPELINE_ENABLED: parseBooleanEnv(process.env.SIMPLIFIED_PIPELINE_ENABLED),
 
   // Service URLs (for inter-service communication)
-  API_URL: process.env.API_URL || CONFIG_DEFAULTS.API_URL,
-  SLACK_BOT_URL: process.env.SLACK_BOT_URL || CONFIG_DEFAULTS.SLACK_BOT_URL,
-  GITHUB_APP_URL: process.env.GITHUB_APP_URL || CONFIG_DEFAULTS.GITHUB_APP_URL,
+  API_URL: getOptionalEnv(process.env.API_URL, CONFIG_DEFAULTS.API_URL),
+  SLACK_BOT_URL: getOptionalEnv(process.env.SLACK_BOT_URL, CONFIG_DEFAULTS.SLACK_BOT_URL),
+  GITHUB_APP_URL: getOptionalEnv(process.env.GITHUB_APP_URL, CONFIG_DEFAULTS.GITHUB_APP_URL),
 
   // Redis Configuration
-  REDIS_URL: process.env.REDIS_URL || CONFIG_DEFAULTS.REDIS_URL,
+  REDIS_URL: getOptionalEnv(process.env.REDIS_URL, CONFIG_DEFAULTS.REDIS_URL),
 } as const;

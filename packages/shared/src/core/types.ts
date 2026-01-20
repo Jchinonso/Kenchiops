@@ -72,19 +72,197 @@ export interface Event {
 }
 
 // ==================== Evidence Types ====================
-// Re-exported from evidenceTypes.ts for convenience
-export type {
-  LogEntry,
-  TimeSeriesMetric,
-  MetricsSummary,
-  Metrics,
-  GitCommit,
-  SystemState,
-  KnowledgeDocument,
-  RelatedEvent,
-  Evidence,
-  TestFrameworkHint,
-} from "./evidenceTypes.js";
+
+/**
+ * Detected test framework information for LLM assertion parsing hints.
+ */
+export interface TestFrameworkHint {
+  /** Framework name (e.g., "pytest", "jest", "cargo-test"). */
+  readonly name: string;
+  /** Programming language (e.g., "Python", "JavaScript/TypeScript"). */
+  readonly language: string;
+  /** How expected/actual values are labeled in this framework. */
+  readonly assertionHint: string;
+}
+
+/** Log level severity values. */
+export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
+
+/**
+ * Log entry from CI/CD or application logs.
+ */
+export interface LogEntry {
+  /** Optional stable ID for cross-run traceability. */
+  readonly id?: string;
+  /** Source of the log (e.g., service name, job name). */
+  readonly source?: string;
+  /** ISO timestamp of the log entry. */
+  readonly timestamp?: string;
+  /** Log level severity. */
+  readonly level?: LogLevel;
+  /** Log message content. */
+  readonly message: string;
+  /** Stack trace if available. */
+  readonly stackTrace?: string;
+  /** Additional metadata. */
+  readonly metadata?: Record<string, unknown>;
+}
+
+/**
+ * Time series metric data point.
+ */
+export interface TimeSeriesDataPoint {
+  readonly timestamp: string;
+  readonly value: number;
+}
+
+/**
+ * Time series metric with multiple data points.
+ */
+export interface TimeSeriesMetric {
+  readonly metricName: string;
+  readonly values: readonly TimeSeriesDataPoint[];
+  readonly unit?: string;
+}
+
+/**
+ * Summary statistics for metrics.
+ */
+export interface MetricsSummary {
+  readonly errorRate?: number;
+  readonly requestRate?: number;
+  readonly cpuUsage?: number;
+  readonly memoryUsage?: number;
+  readonly latencyP50?: number;
+  readonly latencyP95?: number;
+  readonly latencyP99?: number;
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Time range for metrics collection.
+ */
+export interface MetricsTimeRange {
+  readonly start: string;
+  readonly end: string;
+}
+
+/**
+ * Collected metrics with time series and summary data.
+ */
+export interface Metrics {
+  readonly timeRange?: MetricsTimeRange;
+  readonly timeSeries?: readonly TimeSeriesMetric[];
+  readonly summary?: MetricsSummary;
+}
+
+/**
+ * Git commit information.
+ */
+export interface GitCommit {
+  readonly sha: string;
+  readonly message: string;
+  readonly author: string;
+  readonly timestamp: string;
+  readonly filesChanged?: readonly string[];
+  readonly additions?: number;
+  readonly deletions?: number;
+  readonly url?: string;
+}
+
+/** Service health status values. */
+export type ServiceHealthStatus = "healthy" | "degraded" | "down" | "unknown";
+
+/** Dependency status values. */
+export type DependencyStatus = "up" | "down" | "degraded";
+
+/**
+ * Deployment status information.
+ */
+export interface DeploymentStatus {
+  readonly currentVersion?: string;
+  readonly previousVersion?: string;
+  readonly deployedAt?: string;
+  readonly deployedBy?: string;
+}
+
+/**
+ * Dependency health information.
+ */
+export interface DependencyHealth {
+  readonly name: string;
+  readonly status: DependencyStatus;
+  readonly responseTime?: number;
+}
+
+/**
+ * Current system state for context.
+ */
+export interface SystemState {
+  readonly deploymentStatus?: DeploymentStatus;
+  readonly serviceHealth?: Record<string, ServiceHealthStatus>;
+  readonly dependencies?: readonly DependencyHealth[];
+}
+
+/** Knowledge document type values. */
+export type KnowledgeDocumentType =
+  | "runbook"
+  | "past_incident"
+  | "documentation"
+  | "best_practice"
+  | "playbook";
+
+/**
+ * Knowledge document metadata.
+ */
+export interface KnowledgeDocumentMetadata {
+  readonly createdAt?: string;
+  readonly updatedAt?: string;
+  readonly tags?: readonly string[];
+}
+
+/**
+ * Knowledge document from RAG retrieval.
+ */
+export interface KnowledgeDocument {
+  readonly id: string;
+  readonly type: KnowledgeDocumentType;
+  readonly title: string;
+  readonly excerpt?: string;
+  readonly similarity: number;
+  readonly url?: string;
+  readonly metadata?: KnowledgeDocumentMetadata;
+}
+
+/** Event correlation timing values. */
+export type EventCorrelation = "before" | "after" | "concurrent";
+
+/**
+ * Related event for correlation analysis.
+ */
+export interface RelatedEvent {
+  readonly eventId: string;
+  readonly type: string;
+  readonly timestamp: string;
+  readonly correlation: EventCorrelation;
+}
+
+/**
+ * Evidence collected for event analysis.
+ */
+export interface Evidence {
+  readonly eventId: string;
+  readonly logs?: readonly LogEntry[];
+  readonly metrics?: Metrics;
+  readonly gitHistory?: readonly GitCommit[];
+  readonly systemState?: SystemState;
+  readonly relatedDocs?: readonly KnowledgeDocument[];
+  readonly relatedEvents?: readonly RelatedEvent[];
+  /** Detected test framework for assertion parsing hints. */
+  readonly testFramework?: TestFrameworkHint;
+  readonly collectedAt: string;
+  readonly collectionDuration?: number;
+}
 
 // ==================== LLM Analysis Result Types ====================
 
@@ -357,13 +535,75 @@ export interface ValidationResult {
   warnings: string[];
 }
 
-// Re-export legacy webhook types for backward compatibility
-export type {
-  WebhookEvent,
-  CIFailureEvent,
-  SlackMessageEvent,
-  GitHubPREvent,
-} from "./webhookTypes.js";
+// ==================== Legacy Webhook Types ====================
+// These types are kept for backward compatibility with existing services.
+// New code should prefer the Event/Evidence/LLMAnalysisResult types.
+
+/**
+ * Generic webhook event from external sources.
+ * @deprecated Use Event type instead for new code.
+ */
+export interface WebhookEvent {
+  readonly source: string;
+  readonly type: string;
+  readonly payload: Record<string, unknown>;
+  readonly timestamp?: string;
+}
+
+/**
+ * CI failure event from GitHub Actions or similar CI systems.
+ * @deprecated Use Event with type="CICD_FAILURE" instead.
+ */
+export interface CIFailureEvent {
+  readonly repository: string;
+  readonly branch: string;
+  readonly commit: string;
+  readonly failureLog: string;
+  readonly jobName?: string;
+  readonly timestamp: string;
+}
+
+/**
+ * Slack message event for interactive messages.
+ * @deprecated Use Event with source="slack" instead.
+ */
+export interface SlackMessageEvent {
+  readonly channel: string;
+  readonly user: string;
+  readonly text: string;
+  readonly timestamp: string;
+  readonly threadTs?: string;
+}
+
+/**
+ * GitHub repository info in PR event.
+ */
+export interface GitHubPREventRepository {
+  readonly full_name: string;
+  readonly owner: { readonly login: string };
+  readonly name: string;
+}
+
+/**
+ * GitHub pull request info in PR event.
+ */
+export interface GitHubPREventPullRequest {
+  readonly number: number;
+  readonly title: string;
+  readonly body?: string;
+  readonly head: { readonly sha: string; readonly ref: string };
+  readonly base: { readonly ref: string };
+}
+
+/**
+ * GitHub pull request event.
+ * @deprecated Use Event with source="github" instead.
+ */
+export interface GitHubPREvent {
+  readonly action: string;
+  readonly repository: GitHubPREventRepository;
+  readonly pull_request: GitHubPREventPullRequest;
+}
 
 // ==================== Multi-Tenant Types ====================
 
@@ -489,4 +729,93 @@ export interface GitHubRepository {
   readonly owner: string;
   readonly private: boolean;
   readonly defaultBranch: string;
+}
+
+// ==================== Configuration Types ====================
+
+/** Valid Node.js environment values. */
+export type NodeEnvironment = "development" | "production" | "test";
+
+/**
+ * Application configuration interface.
+ * Centralized configuration with type-safe environment variable parsing.
+ */
+export interface Config {
+  // OpenAI Configuration
+  readonly OPENAI_API_KEY: string;
+  readonly OPENAI_MODEL?: string;
+  readonly OPENAI_MAX_TOKENS?: number;
+  readonly OPENAI_TEMPERATURE?: number;
+  readonly OPENAI_TIMEOUT_MS?: number;
+
+  // Slack Configuration (single-tenant mode - tokens in env vars)
+  readonly SLACK_BOT_TOKEN: string;
+  readonly SLACK_SIGNING_SECRET: string;
+  readonly SLACK_APP_LEVEL_TOKEN: string;
+
+  // Slack OAuth Configuration (multi-tenant mode - tokens in database)
+  readonly SLACK_CLIENT_ID?: string;
+  readonly SLACK_CLIENT_SECRET?: string;
+  readonly SLACK_REDIRECT_URI?: string;
+
+  // GitHub Configuration
+  readonly GITHUB_APP_ID: string;
+  readonly GITHUB_APP_PRIVATE_KEY: string;
+  readonly GITHUB_INSTALLATION_ID: string;
+  readonly GITHUB_WEBHOOK_SECRET: string;
+  readonly GITHUB_APP_SLUG?: string;
+
+  // Database Configuration
+  readonly DATABASE_URL: string;
+  readonly VECTOR_DB_URL: string;
+
+  // General Configuration
+  readonly NODE_ENV: NodeEnvironment;
+  readonly PORT: number;
+
+  // Multi-tenant Configuration
+  readonly MULTI_TENANT_MODE?: boolean;
+
+  // Feature Flags
+  /** Enable simplified CI analysis pipeline (Phase 1 of pipeline simplification) */
+  readonly SIMPLIFIED_PIPELINE_ENABLED?: boolean;
+
+  // Service URLs (for inter-service communication)
+  readonly API_URL: string;
+  readonly SLACK_BOT_URL: string;
+  readonly GITHUB_APP_URL: string;
+
+  // Redis Configuration
+  readonly REDIS_URL: string;
+}
+
+// ==================== Error Types ====================
+
+/**
+ * Error context for enriched error reporting.
+ * Provides structured metadata for logging and debugging.
+ */
+export interface ErrorContext {
+  /** What operation was being performed. */
+  readonly operation?: string;
+  /** Correlation ID for distributed tracing. */
+  readonly correlationId?: string;
+  /** Whether the error is retryable. */
+  readonly retryable?: boolean;
+  /** When to retry (milliseconds). */
+  readonly retryAfterMs?: number;
+  /** User-friendly suggestion for resolution. */
+  readonly suggestion?: string;
+  /** Additional metadata for logging. */
+  readonly metadata?: Record<string, unknown>;
+}
+
+/**
+ * Retry information extracted from errors.
+ */
+export interface RetryInfo {
+  /** Whether the error is retryable. */
+  readonly retryable: boolean;
+  /** When to retry (milliseconds). */
+  readonly retryAfterMs?: number;
 }

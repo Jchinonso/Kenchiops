@@ -14,27 +14,96 @@ import {
   HTTP_STATUS,
   DEFAULT_ERROR_MESSAGES,
   EXTERNAL_SERVICE_NAMES,
+  TIME_CONSTANTS,
 } from "../constants/index.js";
+import type { ErrorContext, RetryInfo } from "./types.js";
 
-// ==================== Types ====================
+/** Re-export types for backward compatibility. */
+export type { ErrorContext, RetryInfo };
+
+// ==================== Default Suggestions ====================
+
+/** Default user-friendly suggestions for error types. */
+const DEFAULT_SUGGESTIONS = {
+  VALIDATION: "Please check your input and try again",
+  AUTHENTICATION: "Please check your credentials and try again",
+  AUTHORIZATION: "Contact your administrator for access",
+  NOT_FOUND: "Please verify the resource exists and check the identifier.",
+  AI_SERVICE:
+    "The AI analysis service is temporarily unavailable. Please try again in a few moments.",
+  EXTERNAL_SERVICE: "The service encountered an issue. Please try again in a few moments.",
+} as const;
+
+/** Default operation name for LLM errors. */
+const DEFAULT_LLM_OPERATION = "AI analysis";
+
+/** Default message for unknown errors. */
+const UNKNOWN_ERROR_MESSAGE = "Unknown error";
+
+/** Default retry info for non-retryable errors. */
+const DEFAULT_RETRY_INFO: RetryInfo = { retryable: false };
+
+/** Default service name when not provided. */
+const DEFAULT_SERVICE_NAME = "external";
+
+// ==================== Validation Helpers ====================
 
 /**
- * Error context for enriched error reporting.
+ * Ensures a string value is non-empty, returning default if empty.
  */
-export interface ErrorContext {
-  /** What operation was being performed */
-  readonly operation?: string;
-  /** Correlation ID for tracing */
-  readonly correlationId?: string;
-  /** Whether the error is retryable */
-  readonly retryable?: boolean;
-  /** When to retry (milliseconds) */
-  readonly retryAfterMs?: number;
-  /** User-friendly suggestion */
-  readonly suggestion?: string;
-  /** Additional metadata */
-  readonly metadata?: Record<string, unknown>;
-}
+const ensureNonEmptyString = (value: string, defaultValue: string): string =>
+  value.trim().length > 0 ? value : defaultValue;
+
+/**
+ * Safely converts milliseconds to positive seconds, rounded up.
+ */
+const millisecondsToSeconds = (milliseconds: number): number => {
+  const safeMs = Math.max(0, milliseconds);
+  return Math.ceil(safeMs / TIME_CONSTANTS.MILLISECONDS_PER_SECOND);
+};
+
+// ==================== Message Builders ====================
+
+/**
+ * Creates a retry suggestion message with the given delay.
+ */
+const createRetrySuggestion = (retryAfterMs: number): string =>
+  `Please try again in ${millisecondsToSeconds(retryAfterMs)} seconds`;
+
+/**
+ * Creates a service unavailable suggestion message.
+ */
+const createServiceUnavailableSuggestion = (retryAfterMs: number): string =>
+  `The service is experiencing issues. Please try again in ${millisecondsToSeconds(retryAfterMs)} seconds`;
+
+/**
+ * Creates an external service suggestion message.
+ */
+const createExternalServiceSuggestion = (service: string): string => {
+  const safeName = ensureNonEmptyString(service, DEFAULT_SERVICE_NAME);
+  return `The ${safeName} service encountered an issue. Please try again in a few moments.`;
+};
+
+/**
+ * Creates an external service error message.
+ */
+const createExternalServiceMessage = (service: string, message: string): string => {
+  const safeName = ensureNonEmptyString(service, DEFAULT_SERVICE_NAME);
+  const safeMessage = ensureNonEmptyString(message, UNKNOWN_ERROR_MESSAGE);
+  return `External service error (${safeName}): ${safeMessage}`;
+};
+
+// ==================== Stack Trace Helper ====================
+
+/**
+ * Captures stack trace if available (V8 environments only).
+ * Safely handles environments where captureStackTrace is unavailable.
+ */
+const captureStackTraceIfAvailable = (error: Error, constructor: NewableFunction): void => {
+  if (typeof Error.captureStackTrace === "function") {
+    Error.captureStackTrace(error, constructor);
+  }
+};
 
 // ==================== Base Error ====================
 
@@ -52,7 +121,7 @@ export class AppError extends Error {
   public readonly retryAfterMs?: number;
   public readonly suggestion?: string;
   public readonly metadata?: Record<string, unknown>;
-  public readonly cause?: Error;
+  public override readonly cause?: Error;
 
   constructor(
     message: string,
@@ -73,14 +142,14 @@ export class AppError extends Error {
     this.suggestion = context.suggestion;
     this.metadata = context.metadata;
 
-    Error.captureStackTrace(this, this.constructor);
+    captureStackTraceIfAvailable(this, this.constructor);
   }
 
   /**
    * Creates a user-friendly error message including suggestion if available.
    */
   toUserMessage(): string {
-    return this.suggestion ? `${this.message}. ${this.suggestion}` : this.message;
+    return this.suggestion === undefined ? this.message : `${this.message}. ${this.suggestion}`;
   }
 
   /**
@@ -112,13 +181,13 @@ export class ValidationError extends AppError {
   constructor(message: string, context: ErrorContext = {}) {
     super(message, ERROR_CODES.VALIDATION_ERROR, HTTP_STATUS.BAD_REQUEST, true, {
       ...context,
-      suggestion: context.suggestion ?? "Please check your input and try again",
+      suggestion: context.suggestion ?? DEFAULT_SUGGESTIONS.VALIDATION,
     });
   }
 }
 
 /**
- * Error for authentication/authorization failures.
+ * Error for authentication failures.
  */
 export class AuthenticationError extends AppError {
   constructor(
@@ -127,7 +196,7 @@ export class AuthenticationError extends AppError {
   ) {
     super(message, ERROR_CODES.AUTHENTICATION_ERROR, HTTP_STATUS.UNAUTHORIZED, true, {
       ...context,
-      suggestion: context.suggestion ?? "Please check your credentials and try again",
+      suggestion: context.suggestion ?? DEFAULT_SUGGESTIONS.AUTHENTICATION,
     });
   }
 }
@@ -142,7 +211,7 @@ export class AuthorizationError extends AppError {
   ) {
     super(message, ERROR_CODES.AUTHORIZATION_ERROR, HTTP_STATUS.FORBIDDEN, true, {
       ...context,
-      suggestion: context.suggestion ?? "Contact your administrator for access",
+      suggestion: context.suggestion ?? DEFAULT_SUGGESTIONS.AUTHORIZATION,
     });
   }
 }
@@ -157,8 +226,7 @@ export class NotFoundError extends AppError {
   ) {
     super(message, ERROR_CODES.NOT_FOUND, HTTP_STATUS.NOT_FOUND, true, {
       ...context,
-      suggestion:
-        context.suggestion ?? "Please verify the resource exists and check the identifier.",
+      suggestion: context.suggestion ?? DEFAULT_SUGGESTIONS.NOT_FOUND,
     });
   }
 }
@@ -170,20 +238,19 @@ export class ExternalServiceError extends AppError {
   public readonly service: string;
 
   constructor(service: string, message: string, context: ErrorContext = {}) {
+    const safeService = ensureNonEmptyString(service, DEFAULT_SERVICE_NAME);
     super(
-      `External service error (${service}): ${message}`,
+      createExternalServiceMessage(safeService, message),
       ERROR_CODES.EXTERNAL_SERVICE_ERROR,
       HTTP_STATUS.BAD_GATEWAY,
       true,
       {
         ...context,
-        suggestion:
-          context.suggestion ??
-          `The ${service} service encountered an issue. Please try again in a few moments.`,
-        metadata: { service, ...context.metadata },
+        suggestion: context.suggestion ?? createExternalServiceSuggestion(safeService),
+        metadata: { service: safeService, ...context.metadata },
       }
     );
-    this.service = service;
+    this.service = safeService;
   }
 }
 
@@ -194,10 +261,8 @@ export class LLMError extends ExternalServiceError {
   constructor(message: string, context: ErrorContext = {}) {
     super(EXTERNAL_SERVICE_NAMES.OPENAI, message, {
       ...context,
-      operation: context.operation ?? "AI analysis",
-      suggestion:
-        context.suggestion ??
-        "The AI analysis service is temporarily unavailable. Please try again in a few moments.",
+      operation: context.operation ?? DEFAULT_LLM_OPERATION,
+      suggestion: context.suggestion ?? DEFAULT_SUGGESTIONS.AI_SERVICE,
     });
   }
 }
@@ -207,12 +272,12 @@ export class LLMError extends ExternalServiceError {
  */
 export class RateLimitError extends AppError {
   constructor(message: string, retryAfterMs: number, context: ErrorContext = {}) {
-    super(message, ERROR_CODES.EXTERNAL_SERVICE_ERROR, 429, true, {
+    const safeRetryMs = Math.max(0, retryAfterMs);
+    super(message, ERROR_CODES.EXTERNAL_SERVICE_ERROR, HTTP_STATUS.TOO_MANY_REQUESTS, true, {
       ...context,
       retryable: true,
-      retryAfterMs,
-      suggestion:
-        context.suggestion ?? `Please try again in ${Math.ceil(retryAfterMs / 1000)} seconds`,
+      retryAfterMs: safeRetryMs,
+      suggestion: context.suggestion ?? createRetrySuggestion(safeRetryMs),
     });
   }
 }
@@ -222,11 +287,12 @@ export class RateLimitError extends AppError {
  */
 export class CircuitBreakerOpenError extends ExternalServiceError {
   constructor(service: string, retryAfterMs: number, context: ErrorContext = {}) {
-    super(service, `Service temporarily unavailable`, {
+    const safeRetryMs = Math.max(0, retryAfterMs);
+    super(service, "Service temporarily unavailable", {
       ...context,
       retryable: true,
-      retryAfterMs,
-      suggestion: `The service is experiencing issues. Please try again in ${Math.ceil(retryAfterMs / 1000)} seconds`,
+      retryAfterMs: safeRetryMs,
+      suggestion: context.suggestion ?? createServiceUnavailableSuggestion(safeRetryMs),
     });
   }
 }
@@ -253,40 +319,36 @@ export const isExternalServiceError = (error: unknown): error is ExternalService
 // ==================== Error Extraction ====================
 
 /**
- * Extract error message from unknown error.
+ * Extracts error message from unknown error.
  * Safely handles Error instances and unknown types.
  */
 export const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Unknown error";
+  error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE;
 
 /**
- * Extract user-friendly message from error.
+ * Extracts user-friendly message from error.
  * Uses suggestion if available for AppErrors.
  */
-export const getUserFriendlyMessage = (error: unknown): string => {
-  if (isAppError(error)) {
-    return error.toUserMessage();
-  }
-  return getErrorMessage(error);
-};
+export const getUserFriendlyMessage = (error: unknown): string =>
+  isAppError(error) ? error.toUserMessage() : getErrorMessage(error);
 
 /**
- * Extract retry information from error.
+ * Extracts retry information from error.
  */
-export const getRetryInfo = (error: unknown): { retryable: boolean; retryAfterMs?: number } => {
+export const getRetryInfo = (error: unknown): RetryInfo => {
   if (isAppError(error)) {
     return {
       retryable: error.retryable,
       retryAfterMs: error.retryAfterMs,
     };
   }
-  return { retryable: false };
+  return DEFAULT_RETRY_INFO;
 };
 
 // ==================== Error Formatting ====================
 
 /**
- * Format error for logging with consistent structure.
+ * Formats error for logging with consistent structure.
  * Returns an object suitable for structured logging.
  */
 export const formatErrorForLog = (error: unknown): Record<string, unknown> => {
@@ -306,11 +368,13 @@ export const formatErrorForLog = (error: unknown): Record<string, unknown> => {
 };
 
 /**
- * Wrap error with context message.
+ * Wraps error with context message.
  * Useful for re-throwing with additional context.
  */
-export const wrapError = (context: string, error: unknown): string =>
-  `${context}: ${getErrorMessage(error)}`;
+export const wrapError = (context: string, error: unknown): string => {
+  const safeContext = ensureNonEmptyString(context, "Error");
+  return `${safeContext}: ${getErrorMessage(error)}`;
+};
 
 /**
  * Creates a new AppError from an existing error with additional context.
