@@ -4,53 +4,643 @@
 
 TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of concerns with shared package for all common functionality.
 
-## Project Guidelines
+---
 
-### Code Style
+## Rules of the Road (Quick Reference)
 
-- **Write code like a principal engineer** - every line should reflect senior-level craftsmanship
-- **Prioritize readability and maintainability** - code is read more than written
-- **Include comprehensive error handling** - anticipate and handle all failure modes
-- **Write meaningful comments for complex logic** - explain the "why", not the "what"
+### 10 Hard Rules (Non-Negotiable)
 
-### Architecture Principles
+1. **Check `@kenchi/shared` first** - never duplicate utilities, errors, types, or constants
+2. **Typed errors only** - use `ValidationError`, `NotFoundError`, `ExternalServiceError`, etc. Exception: `invariant()` for programmer bugs
+3. **Structured logging only** - use `createLogger(scope, context)`, never `console.*`
+4. **No vendor SDKs in services** - services depend on port interfaces, adapters contain SDK calls
+5. **All outbound calls need**: timeout, structured logs, error classification. Use shared `httpClient` utilities (exceptions require explicit comment + ticket)
+6. **Every handler must**: validate → call service → map response (mapping lives at the boundary)
+7. **RequestContext propagation** - pass `{ requestId, tenantId }` from handler → service → adapter. Every async function doing I/O accepts `context` as last param (except pure helpers/mappers)
+8. **No unbounded logs** - use `redactSecrets()` and `truncate()` before logging any external data
+9. **Log errors at the correct boundary** - see Error Logging Boundaries section
+10. **No empty catch blocks** - always log or rethrow with context
 
-- **Follow SOLID principles**:
-  - Single Responsibility: one reason to change per module
-  - Open/Closed: extend behavior without modifying existing code
-  - Liskov Substitution: subtypes must be substitutable
-  - Interface Segregation: prefer small, focused interfaces
-  - Dependency Inversion: depend on abstractions, not concretions
-- **Prefer composition over inheritance** - build complex behavior from simple pieces
-- **Keep functions small and focused** - each function does one thing well
+### 10 Preferred Patterns (With Exceptions)
 
-### Testing
+1. **Array methods for transforms** - `for...of` allowed for early-exit/streaming/perf
+2. **Lookup tables for stable mappings** - `if/else` allowed when clearer (2-3 conditions)
+3. **Immutable data flow** - local mutation allowed when it improves clarity/perf
+4. **Early returns** - reduce nesting, fail fast
+5. **Small functions** - single responsibility, <50 lines ideal
+6. **Explicit types** - on function params/returns, avoid `any`
+7. **Async/await** - not Promise chains
+8. **Parallel execution** - `Promise.all()` for independent operations
+9. **Descriptive names** - no single-letter params in public APIs; `i`/`j` allowed in local loops only
+10. **JSDoc for public APIs** - skip for obvious internal functions
 
-- **Write tests for all new functionality** - no untested code in production
-- **Aim for high coverage on critical paths** - prioritize business logic and error handling
+### 5 Allowed Exceptions
 
-### Code Standards
+1. **For loops**: streaming, early-break, parsing, performance-critical hot paths
+2. **Local mutation**: inside function scope when clearer than spread/reduce
+3. **If/else chains**: when more readable than lookup tables (2-3 conditions)
+4. **Plain Error**: only via `invariant(condition, msg)` for "should never happen" programmer bugs
+5. **any type**: only when interfacing with untyped libraries (must cast immediately)
 
-- **Follow engineering principles** in `docs/engineering-standards.md`
-- **Write production-quality code** with proper error handling, logging, and observability
-- **Use structured logging** - always use logger from `@kenchi/shared`, never `console.*`
-- **Handle all error paths** - no empty catch blocks, always log or rethrow
-- **Reference tickets in TODOs** - format: `// TODO: [#123] description`
+---
+
+## Request Context
+
+### Type Definition
+
+```typescript
+// packages/shared/src/types/request.ts
+export interface RequestContext {
+  readonly requestId: string; // UUID generated per request
+  readonly tenantId: string; // From auth/header (or "system" for jobs)
+  readonly actor?: string; // User/service identity
+  readonly traceId?: string; // OpenTelemetry trace ID if available
+}
+
+// Express augmentation (in shared or service types)
+declare global {
+  namespace Express {
+    interface Request {
+      context: RequestContext;
+    }
+  }
+}
+```
+
+**Rule:** No `as any` for `req.context`. Use the Express augmentation above.
+
+### HTTP Entrypoints
+
+```typescript
+app.use((req, res, next) => {
+  req.context = {
+    requestId: crypto.randomUUID(),
+    tenantId: extractTenantId(req),
+  };
+  next();
+});
+```
+
+### Non-HTTP Entrypoints (Jobs, Cron, Queue Consumers)
+
+```typescript
+const processJob = async (job: Job) => {
+  const context: RequestContext = {
+    requestId: crypto.randomUUID(),
+    tenantId: job.tenantId ?? "system",
+    actor: "worker",
+  };
+
+  const logger = createLogger("job-processor", context);
+  await handleJob(job, context);
+};
+```
+
+**Rule:** Every entrypoint (HTTP, webhook, cron, queue) must create and propagate `RequestContext`.
+
+---
+
+## Shared HTTP Client Contract
+
+### Response Shape
+
+`httpClient` returns a consistent response object:
+
+```typescript
+interface HttpResponse<T> {
+  status: number;
+  data: T;
+  headers: Record<string, string>;
+}
+
+// Usage
+const response = await httpClient.get<User>("/users/123", { context });
+// response.status = 200
+// response.data = { id: "123", name: "..." }
+```
+
+### Error Classification
+
+`classifyHttpError()` standardizes error handling:
+
+```typescript
+interface ClassifiedError {
+  statusCode: number | undefined;
+  category: "retryable" | "non_retryable" | "auth_config" | "unknown";
+  retryable: boolean;
+  message: string;
+}
+
+// Usage in adapters
+catch (error) {
+  const classified = classifyHttpError(error);
+  logger.error("External call failed", {
+    ...classified,
+    provider: "github",
+    operation: "createCheckRun",
+    durationMs,
+    ...context,
+  });
+  throw new ExternalServiceError("github", classified.message, {
+    retryable: classified.retryable,
+  });
+}
+```
+
+### Timing
+
+Use shared timer for consistency:
+
+```typescript
+import { startTimer } from "@kenchi/shared";
+
+const timer = startTimer();
+const response = await httpClient.get(url, { context });
+const durationMs = timer.elapsedMs();
+```
+
+Or consistently use `Date.now()`:
+
+```typescript
+const startTime = Date.now();
+// ... operation
+const durationMs = Date.now() - startTime;
+```
+
+**Rule:** Pick one timing pattern per codebase and use it everywhere.
+
+---
+
+## Error Logging Boundaries
+
+**Who logs what:**
+
+| Layer                | Logs                                                                                                   | Throws                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| **Adapters**         | External call failures with: provider, operation, durationMs, statusCode, context                      | `ExternalServiceError` with retryable flag |
+| **Repositories**     | Nothing (silent)                                                                                       | Typed DB errors with metadata              |
+| **Services**         | Business lifecycle (info/warn). Only log errors when catching to add business context before wrapping. | Typed errors (`NotFoundError`, etc.)       |
+| **Error Middleware** | Only unexpected errors (`!isAppError()`)                                                               | N/A - returns HTTP response                |
+
+### Provider & Operation Naming
+
+**Provider keys** (use consistently in all logs):
+
+```typescript
+type Provider = "github" | "slack" | "openai" | "postgres" | "redis";
+```
+
+**Operation names** (camelCase, verb + noun):
+
+```typescript
+// ✅ Consistent naming
+("createCheckRun", "postMessage", "generateCompletion", "fetchPullRequest");
+
+// ❌ Inconsistent
+("check_run_create", "post-message", "PR.fetch");
+```
+
+### Adapter Logging (Mandatory Fields)
+
+```typescript
+// Every outbound call log MUST include these fields
+logger.info("GitHub API call completed", {
+  provider: "github", // Required
+  operation: "createCheckRun", // Required
+  durationMs, // Required
+  statusCode: response.status, // Required (if available)
+  ...context, // Required (requestId, tenantId)
+});
+
+// On failure, also include classified error info:
+logger.error("GitHub API call failed", {
+  provider: "github",
+  operation: "createCheckRun",
+  durationMs,
+  statusCode: classified.statusCode,
+  category: classified.category,
+  retryable: classified.retryable,
+  ...context,
+});
+```
+
+---
+
+## Secrets & PII Policy
+
+### Hard Rules
+
+- `redactSecrets()` **must** run on any string/object derived from external sources before logging
+- **Never log**: tokens, API keys, secrets, passwords, email addresses, phone numbers, access tokens
+- Webhook payloads: extract only the fields you need, never log raw body
+
+### Enforcement
+
+```typescript
+// ❌ WRONG - raw external data
+logger.info("Webhook received", { body: req.body });
+logger.info("User data", { user: externalUser });
+
+// ✅ CORRECT - sanitized
+logger.info("Webhook received", {
+  type: payload.type,
+  action: payload.action,
+  prNumber: payload.pull_request?.number,
+});
+
+// If you must log more, sanitize first
+logger.debug("Payload details", {
+  body: truncate(redactSecrets(payload), 1000),
+});
+```
+
+---
+
+## Architecture Boundaries
+
+### Dependency Direction Rules
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Routes / Handlers                         │
+│        (HTTP concerns, validation, response mapping)         │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ depends on
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Services                                │
+│              (Business logic, orchestration)                 │
+│         Depends on PORTS (interfaces), not adapters          │
+└───────────┬─────────────────────────────────────┬───────────┘
+            │ depends on                           │ depends on
+            ▼                                      ▼
+┌───────────────────────┐          ┌──────────────────────────┐
+│    Repositories       │          │   Adapters (via Ports)   │
+│   (Data access)       │          │  (GitHub, Slack, OpenAI) │
+└───────────────────────┘          └──────────────────────────┘
+```
+
+**Rules:**
+
+- Routes/handlers → depend on services
+- Services → depend on port interfaces + repositories
+- Repositories → depend on db client only, return domain objects (never raw rows)
+- Adapters → implement port interfaces, contain vendor SDK calls
+- **Never**: vendor SDK imports in services, business logic in handlers
+
+### Repository Contract
+
+```typescript
+// ✅ CORRECT - repository returns domain object
+class AnalysisRepository {
+  async findById(id: string): Promise<Analysis | null> {
+    const row = await query<AnalysisRow>(SQL, [id]);
+    return row ? mapRowToAnalysis(row) : null; // Mapping happens HERE
+  }
+}
+
+// ❌ WRONG - leaking DB row types to service
+async findById(id: string): Promise<AnalysisRow | null> { ... }
+```
+
+**Rule:** Row → domain mapping lives in repository/helpers. Services never see snake_case.
+
+### Port Interface Contract
+
+```typescript
+// ✅ CORRECT - Kenchi-defined types only
+interface GitHubChecksPort {
+  createCheckRun(input: CreateCheckRunInput, context: RequestContext): Promise<CheckRun>;
+}
+
+// ❌ WRONG - vendor types in interface
+interface GitHubChecksPort {
+  createCheckRun(input: Octokit.ChecksCreateParams): Promise<Octokit.ChecksCreateResponse>;
+}
+```
+
+**Rule:** Adapters translate Kenchi types ↔ vendor types internally. Vendor types never cross port boundaries.
+
+### Composition Root
+
+```
+services/*/src/container.ts    # Dependency wiring lives here
+```
+
+```typescript
+export const createContainer = (config: Config) => {
+  const octokit = new Octokit({ auth: config.githubToken });
+  const githubChecks = new GitHubChecksAdapter(octokit);
+
+  return {
+    analysisService: new AnalysisService(githubChecks),
+  };
+};
+```
+
+**Rule:** Services receive dependencies via constructor. No `new Adapter()` inside services.
+
+---
+
+## Request Lifecycle
+
+```typescript
+export const handleCreateAnalysis = asyncHandler(async (req, res) => {
+  // 1. Validate input
+  const input = validateCreateAnalysisInput(req.body);
+
+  // 2. Call service with context
+  const result = await analysisService.create(input, req.context);
+
+  // 3. Map domain → DTO at boundary
+  const response = mapAnalysisToResponse(result);
+
+  // 4. Return typed response
+  res.status(201).json(response);
+});
+```
+
+**Rules:**
+
+- Mapping lives at the handler boundary (domain → DTO)
+- Services return domain objects, never HTTP response shapes
+- Never skip validation
+- Never mix HTTP concerns with business logic
+
+---
+
+## Idempotency & Replay Protection
+
+### Webhook Replay Protection
+
+All state-changing webhook handlers must store the delivery ID and short-circuit duplicates:
+
+```typescript
+export const handleWebhook = asyncHandler(async (req, res) => {
+  const deliveryId = req.headers["x-github-delivery"]; // or x-slack-event-id
+
+  // Check for duplicate BEFORE doing work
+  const alreadyProcessed = await idempotencyStore.exists(deliveryId);
+  if (alreadyProcessed) {
+    logger.info("Duplicate webhook, skipping", { deliveryId, ...req.context });
+    return res.status(200).json({ status: "duplicate" });
+  }
+
+  // Process the webhook
+  await processWebhook(req.body, req.context);
+
+  // Mark as processed
+  await idempotencyStore.set(deliveryId, { processedAt: new Date() });
+
+  res.status(200).json({ status: "processed" });
+});
+```
+
+### Idempotency Store Requirements
+
+```typescript
+// packages/shared/src/idempotency/store.ts
+interface IdempotencyStore {
+  exists(key: string): Promise<boolean>;
+  set(key: string, metadata: IdempotencyMetadata, ttlDays?: number): Promise<void>;
+  get(key: string): Promise<IdempotencyMetadata | null>;
+}
+
+// Default TTL: 7-30 days (matches typical webhook replay windows)
+const DEFAULT_TTL_DAYS = 7;
+```
+
+**Rules:**
+
+- Store delivery IDs with TTL (7-30 days) to prevent unbounded growth
+- Use `@kenchi/shared/idempotency` if multiple services need replay protection
+- No automatic retry for non-idempotent operations unless idempotency key is present
+
+### Retry with Idempotency Keys
+
+```typescript
+// ❌ WRONG - retrying POST without idempotency
+await withRetry(() => httpClient.post("/actions", data));
+
+// ✅ CORRECT - idempotency key present
+await withRetry(() =>
+  httpClient.post("/actions", data, {
+    headers: { "Idempotency-Key": idempotencyKey },
+  })
+);
+```
+
+---
+
+## Error Classification & Design for Failure
+
+### Error Categories
+
+| Category          | Examples                                    | Action             |
+| ----------------- | ------------------------------------------- | ------------------ |
+| **Retryable**     | 429, 5xx, network timeout, connection reset | Retry with backoff |
+| **Non-retryable** | 400, 404, 422, validation errors            | Fail immediately   |
+| **Auth/Config**   | 401, 403, invalid credentials               | Alert, don't retry |
+
+### ExternalServiceError Pattern
+
+```typescript
+throw new ExternalServiceError("github", "Failed to create check run", {
+  metadata: {
+    operation: "createCheckRun",
+    statusCode: response.status,
+    owner,
+    repo,
+  },
+  retryable: response.status >= 500 || response.status === 429,
+});
+```
+
+### Invariants (Programmer Bugs)
+
+```typescript
+import { invariant, assertUnreachable } from "@kenchi/shared";
+
+invariant(user !== null, "User must exist after authentication");
+
+function handleStatus(status: Status): string {
+  switch (status) {
+    case "pending":
+      return "Waiting";
+    case "active":
+      return "Running";
+    case "completed":
+      return "Done";
+    default:
+      assertUnreachable(status);
+  }
+}
+```
+
+---
+
+## Concurrency & Retry Policy
+
+### Timeouts (Required)
+
+```typescript
+// Shared httpClient has default 30s timeout
+const response = await httpClient.get(url, { context });
+
+// Override if needed
+const response = await httpClient.get(url, { context, timeout: 60_000 });
+```
+
+### Retry Config
+
+```typescript
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 30_000,
+  backoffMultiplier: 2,
+  retryableStatuses: [429, 500, 502, 503, 504],
+} as const;
+```
+
+---
+
+## Public API & DTO Rules
+
+### Separate Domain from DTOs
+
+```typescript
+// Internal domain type (rich, may change)
+interface Analysis {
+  id: string;
+  tenantId: string;
+  internalScore: number;
+  createdAt: Date;
+}
+
+// Public DTO (stable contract)
+interface AnalysisResponse {
+  id: string;
+  score: number;
+  createdAt: string; // ISO string for JSON
+}
+```
+
+### Mapping Lives at the Boundary
+
+- **Handler boundary**: domain → DTO (for responses)
+- **Repository boundary**: row → domain (for DB results)
+
+**Rule:** Services work with domain objects only. Never raw rows, never DTOs.
+
+---
+
+## Observability Requirements
+
+### Required Fields for External Calls
+
+| Field        | Required   | Description                                 |
+| ------------ | ---------- | ------------------------------------------- |
+| `provider`   | Yes        | "github", "slack", "openai", "postgres"     |
+| `operation`  | Yes        | camelCase: "createCheckRun", "postMessage"  |
+| `durationMs` | Yes        | Time taken for the call                     |
+| `statusCode` | Yes\*      | HTTP status (\*if available)                |
+| `category`   | On failure | "retryable", "non_retryable", "auth_config" |
+| `retryable`  | On failure | Whether error is retryable                  |
+| `requestId`  | Yes        | From context                                |
+| `tenantId`   | Yes        | From context                                |
+
+---
+
+## Code Review Bar
+
+**These will fail code review:**
+
+- [ ] Business logic inside route handler
+- [ ] Direct fetch/SDK call in adapter (must use shared httpClient)
+- [ ] Vendor SDK imported in service layer
+- [ ] Vendor types in port interfaces
+- [ ] Service instantiates adapter (must use composition root)
+- [ ] Repository returns raw DB rows (must return domain objects)
+- [ ] Unbounded log payloads (must use truncate/redact)
+- [ ] External call log missing durationMs or context spread
+- [ ] No timeout on outbound requests
+- [ ] `throw new Error()` instead of typed errors (except invariant)
+- [ ] New utility in service that should be in shared
+- [ ] Missing RequestContext (including in background jobs)
+- [ ] `as any` for `req.context` (use Express augmentation)
+- [ ] Service logging errors that adapter already logged
+- [ ] `console.log` in committed code
+- [ ] `any` type without immediate type guard
+- [ ] Retry on non-idempotent operation without idempotency key
+- [ ] Webhook handler without replay protection (delivery ID check)
+- [ ] Idempotency store without TTL
+- [ ] DTO mapping inside service (must be at handler boundary)
+- [ ] Logging email, tokens, or PII
+
+---
+
+## Automated Enforcement
+
+### ESLint Rules
+
+```javascript
+// .eslintrc.js
+{
+  "rules": {
+    // Ban console.* except in /scripts
+    "no-console": ["error", { "allow": [] }],
+
+    // Ban direct fetch/axios and vendor SDKs in services
+    "no-restricted-imports": ["error", {
+      "patterns": [
+        { "group": ["node-fetch", "axios"], "message": "Use @kenchi/shared httpClient" },
+        { "group": ["@octokit/*", "@slack/*", "openai"], "message": "Vendor SDKs not allowed in services. Use adapters." }
+      ]
+    }]
+  },
+  "overrides": [
+    { "files": ["**/adapters/**"], "rules": { "no-restricted-imports": "off" } },
+    { "files": ["**/scripts/**"], "rules": { "no-console": "off" } }
+  ]
+}
+```
+
+### CI Checks
+
+- **No duplicate constants**: grep for patterns that should be in constants.ts
+- **Barrel exports**: new shared modules must be exported from index.ts
+- **Type coverage**: maintain minimum threshold (e.g., 95%)
+
+---
 
 ## Monorepo Structure
 
 ```
 kenchi/
-├── packages/shared/     # ALL shared code goes here
+├── packages/shared/
 │   └── src/
-│       ├── index.ts     # Check this FIRST for available exports
-│       ├── config.ts, logger.ts, errors.ts, middleware.ts, validation.ts, types.ts
-├── services/            # Service-specific code ONLY
+│       ├── index.ts              # Barrel exports (check FIRST)
+│       ├── core/                 # Config, logger, errors
+│       ├── database/             # Repositories, types
+│       ├── constants.ts          # ALL constants (single file)
+│       ├── http/                 # httpClient, retry, timeout utilities
+│       ├── idempotency/          # Replay protection store
+│       └── types/                # Shared type definitions + Express augmentation
+├── services/
 │   ├── api/
+│   │   └── src/
+│   │       ├── container.ts      # Composition root
+│   │       ├── routes/           # HTTP handlers
+│   │       ├── services/         # Business logic
+│   │       ├── ports/            # Interface definitions
+│       │   └── adapters/         # External integrations
 │   ├── slack-bot/
 │   └── github-app/
-└── docs/                # Documentation
+└── docs/
 ```
+
+---
 
 ## Zero Duplication Policy
 
@@ -59,526 +649,245 @@ kenchi/
 1. Check `packages/shared/src/index.ts` for existing exports
 2. Search codebase for similar functionality
 3. If it exists, import from `@kenchi/shared`
-4. If it doesn't exist and is reusable, add to shared package first
+4. If reusable, add to shared package first
 
-**Before creating ANY new file:**
+**Shared Utility Promotion Rule:**
 
-1. Search for existing files with similar purpose
-2. Extend existing files rather than creating new parallel ones
-3. Never create a second file for the same concern (e.g., two formatters, two validators)
-4. If similar file exists, add your function there instead
-5. Consolidate related functionality into single, focused files
+If a helper is used twice OR is clearly domain-invariant, promote it to shared within the same PR.
 
-**Decision Rules:**
+---
 
-- Used in 2+ services → shared
-- Domain invariant (logger, errors, config) → shared
-- Integration adapter (Slack/GitHub-specific) → service
-- Tiny one-off helper → service
+## Database Module Organization
 
-## Available Shared Utilities
-
-**Always import from `@kenchi/shared`:**
-
-- **Config**: `config`, `Config`
-- **Logging**: `logger`, `createLogger`, `LogLevel`
-- **Errors**: `AppError`, `ValidationError`, `AuthenticationError`, `NotFoundError`, `ExternalServiceError`, `LLMError`, `isAppError`
-- **Middleware**: `errorHandler`, `asyncHandler`, `requestLogger`
-- **Validation**: `validate`, `validators`, `ValidationSchema`
-- **Rate Limiting**: `createRateLimiter`, `defaultRateLimiter`
-- **AI/ML**: `OpenAIClient`
-- **Safety**: `confidenceScore`, `shouldActOnResult`
-- **Types**: `LLMAnalysisResult`, `WebhookEvent`, `CIFailureEvent`, `SlackMessageEvent`, `GitHubPREvent`
-
-## Code Patterns
-
-```typescript
-// ✅ CORRECT
-import { createLogger, config, errorHandler } from '@kenchi/shared';
-import type { WebhookEvent } from '@kenchi/shared';
-const logger = createLogger('api');
-
-// ❌ WRONG - Never do these
-const logger = { info: () => {}, error: () => {} };  // Hand-rolled logger
-class ValidationError extends Error { ... }          // Duplicate error class
-interface WebhookEvent { ... }                       // Duplicate type
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;   // Constants in wrong place
+```
+packages/shared/src/database/<module>/
+├── types.ts       # Type definitions (required)
+├── helpers.ts     # Validation, row mappers, constants (required)
+├── repository.ts  # Database operations (optional)
+└── index.ts       # Barrel exports (required)
 ```
 
-## File Organization
+**Import Pattern (within shared package):**
 
-**Shared Package** (`packages/shared/src/`):
+```typescript
+// ✅ CORRECT - relative imports within shared
+import { ValidationError, SOME_CONSTANT } from "../common.js";
 
-- All utilities, helpers, formatters, middleware, clients
-- Cross-service types (events, core domain, public DTOs)
-- **ALL constants/enums** in `constants.ts`
-
-**Services** (`services/*/src/`):
-
-- Entry point (`index.ts`), routes, handlers
-- Service-specific business logic and integrations
-- Integration-specific types only
-
-## Constants Rule
-
-**ALL constants must be in `packages/shared/src/constants.ts`:**
-
-- Regex patterns, arrays, Sets, Maps, numeric thresholds
-- Configuration objects, string constants
-- Use `as const` for immutability
+// ❌ WRONG - never self-reference the package
+import { ValidationError } from "@kenchi/shared";
+```
 
 ---
 
 ## TypeScript Standards
 
-### Types
-
-- **Explicit types** on function parameters and returns
-- **Use `unknown`** instead of `any`, with type guards
-- **Use `readonly`** for immutable data
-- **Discriminated unions** for event types with `type` field
-- **Separate imports**: `import type { X }` for types, `import { Y }` for values
-
-### Type Guards
-
-```typescript
-function isWebhookEvent(data: unknown): data is WebhookEvent {
-  return typeof data === "object" && data !== null && "type" in data;
-}
-```
-
-### Avoid
-
-- `any` type - defeats type safety
-- Unnecessary type assertions (`as`)
-- Inline complex types - use type aliases
+- Explicit types on function parameters and returns
+- `unknown` instead of `any`, with type guards
+- `readonly` for immutable data
+- `import type` for type-only imports
+- Discriminated unions for event types
 
 ---
 
 ## Error Handling
 
-### Error Classes
+| Error Class            | HTTP | Use Case                    |
+| ---------------------- | ---- | --------------------------- |
+| `ValidationError`      | 400  | Invalid input               |
+| `AuthenticationError`  | 401  | Missing/invalid credentials |
+| `AuthorizationError`   | 403  | Insufficient permissions    |
+| `NotFoundError`        | 404  | Resource doesn't exist      |
+| `ExternalServiceError` | 502  | External API failures       |
+| `RateLimitError`       | 429  | Rate limiting               |
 
-**Always use custom error classes from `@kenchi/shared`:**
+---
 
-| Error Class               | HTTP Code | Use Case                              |
-| ------------------------- | --------- | ------------------------------------- |
-| `ValidationError`         | 400       | Invalid input, malformed data         |
-| `AuthenticationError`     | 401       | Missing or invalid credentials        |
-| `AuthorizationError`      | 403       | Insufficient permissions              |
-| `NotFoundError`           | 404       | Resource doesn't exist                |
-| `ExternalServiceError`    | 502       | External API failures (GitHub, Slack) |
-| `LLMError`                | 502       | OpenAI-specific failures              |
-| `RateLimitError`          | 429       | Rate limiting                         |
-| `CircuitBreakerOpenError` | 502       | Circuit breaker open state            |
+## Code Style Preferences
 
-```typescript
-// ❌ WRONG - Generic Error
-throw new Error("Tenant not found");
-throw new Error("GitHub API failed");
-
-// ✅ CORRECT - Typed errors with context
-throw new NotFoundError("Tenant not found", { metadata: { tenantId } });
-throw new ExternalServiceError("github", `API error: ${status}`);
-```
-
-### Error Message Extraction
-
-**Always use `getErrorMessage()` for extracting error messages:**
+### Loops & Conditionals
 
 ```typescript
-// ❌ WRONG - Manual type checking
-logger.error("Failed", { error: error instanceof Error ? error.message : "Unknown" });
+// ✅ Preferred: Array methods for transforms
+const activeUsers = users.filter((user) => user.isActive);
 
-// ✅ CORRECT - Use shared utility
-import { getErrorMessage } from "@kenchi/shared";
-logger.error("Failed", { error: getErrorMessage(error) });
-```
-
-### Promise Error Handling
-
-**Always handle promise rejections:**
-
-```typescript
-// ❌ WRONG - Unhandled promise rejection
-somePromise.then(() => { ... });
-
-// ✅ CORRECT - Handle errors
-somePromise.then(() => { ... }).catch((error) => {
-  logger.error("Operation failed", { error: getErrorMessage(error) });
-});
-
-// ✅ BETTER - Use async/await with try-catch
-try {
-  await somePromise;
-} catch (error) {
-  logger.error("Operation failed", { error: getErrorMessage(error) });
-}
-```
-
-### Catch Blocks
-
-**Never have empty catch blocks - always log or rethrow:**
-
-```typescript
-// ❌ WRONG - Silent failure
-try { ... } catch { }
-try { ... } catch (error) { }
-
-// ✅ CORRECT - Log the error
-try { ... } catch (error) {
-  logger.error("Operation failed", { error: getErrorMessage(error) });
+// ✅ Allowed: for...of for early exit
+for (const item of items) {
+  if (item.isMatch) return item;
 }
 
-// ✅ CORRECT - Rethrow with context
-try { ... } catch (error) {
-  throw new ExternalServiceError("github", wrapError("Failed to fetch PR", error));
-}
+// ✅ Allowed: Simple if/else when clearer (2-3 conditions)
+if (count === 0) return "none";
+else if (count === 1) return "single";
+else return "multiple";
+```
 
-// ✅ ACCEPTABLE - Health checks returning boolean (intentionally silent)
-const isHealthy = async (): Promise<boolean> => {
-  try {
-    await ping();
-    return true;
-  } catch {
-    return false;  // Intentionally silent - health check pattern
+### Mutation
+
+```typescript
+// ✅ Preferred: Immutable patterns
+const updated = { ...original, newField: value };
+
+// ✅ Allowed: Local mutation for clarity/perf
+const results: Item[] = [];
+for (const raw of rawItems) {
+  const parsed = parseItem(raw);
+  if (parsed.isValid) {
+    results.push(parsed);
   }
+}
+return results;
+```
+
+---
+
+## Templates
+
+### Route Handler
+
+```typescript
+export const handleOperation = asyncHandler(async (req, res) => {
+  const input = validateInput(req.body);
+  const result = await service.operation(input, req.context);
+  res.status(200).json(mapToResponse(result));
+});
+```
+
+### Service Method
+
+```typescript
+export const performOperation = async (
+  input: OperationInput,
+  context: RequestContext
+): Promise<OperationResult> => {
+  validateOperationInput(input);
+  const logger = createLogger("operation-service", context);
+
+  const data = await repository.fetch(input.id);
+  if (!data) {
+    throw new NotFoundError("Resource not found", { metadata: { id: input.id } });
+  }
+
+  const result = await externalAdapter.process(data, context);
+
+  logger.info("Operation completed", { operationId: input.id });
+  return result;
 };
 ```
 
-### Error Context
-
-**Include relevant context in errors:**
+### Adapter
 
 ```typescript
-throw new ValidationError("Invalid input", {
-  operation: "createUser",
-  metadata: { field: "email", value: input.email },
-});
+export class ExternalServiceAdapter implements ExternalServicePort {
+  constructor(private readonly httpClient: HttpClient) {}
 
-throw new ExternalServiceError("slack", "Failed to post message", {
-  metadata: { channel, teamId },
-  retryable: true,
-});
-```
+  async fetchData(id: string, context: RequestContext): Promise<Data> {
+    const logger = createLogger("external-adapter", context);
+    const startTime = Date.now();
 
-### Result Types
+    try {
+      const response = await this.httpClient.get<VendorResponse>(`/data/${id}`, { context });
+      const durationMs = Date.now() - startTime;
 
-**Use Result types for expected errors:**
+      logger.info("External call completed", {
+        provider: "external",
+        operation: "fetchData",
+        durationMs,
+        statusCode: response.status,
+        ...context,
+      });
 
-```typescript
-type Result<T, E = string> = { success: true; data: T } | { success: false; error: E };
+      return mapVendorResponseToData(response.data);
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const classified = classifyHttpError(error);
 
-const parseConfig = (input: unknown): Result<Config> => {
-  if (!isValidConfig(input)) {
-    return { success: false, error: "Invalid configuration" };
-  }
-  return { success: true, data: input as Config };
-};
-```
+      logger.error("External call failed", {
+        provider: "external",
+        operation: "fetchData",
+        durationMs,
+        statusCode: classified.statusCode,
+        category: classified.category,
+        retryable: classified.retryable,
+        ...context,
+      });
 
-### Middleware Error Handling
-
-- Let `errorHandler` middleware handle unexpected errors
-- Use `asyncHandler` wrapper for async route handlers
-- Use Map/Set for O(1) error lookups instead of if-else chains
-
----
-
-## Async Patterns
-
-- **Always use async/await**, not Promise chains
-- **Parallel execution** with `Promise.all()` for independent operations
-- **Try-finally** for resource cleanup
-- **AbortController** for cancellable operations
-
-```typescript
-// ✅ Parallel
-const [user, profile] = await Promise.all([fetchUser(), fetchProfile()]);
-
-// ❌ Sequential (slow)
-const user = await fetchUser();
-const profile = await fetchProfile();
-```
-
----
-
-## Functions & Classes
-
-- **Arrow functions** by default
-- **Function declarations** for overloads, generators, type guards
-- **Small, focused functions** - single responsibility
-- **Pure functions** when possible - no side effects
-- **Composition over inheritance**
-- **Dependency injection** - pass dependencies to constructors
-
----
-
-## Performance Rules
-
-### Data Structures
-
-- **Set** for membership testing (O(1) vs O(n) for arrays)
-- **Map** for key-value lookups
-- **Pre-compute** lookup structures once, reuse
-
-### Optimization
-
-- **Early exits** - return as soon as possible
-- **Batch operations** - avoid N+1 queries
-- **Lazy evaluation** - defer expensive operations
-- **Streaming** for large data - don't load everything into memory
-- **Parallelize** independent async operations
-
-### Avoid
-
-- Nested loops when better data structures work
-- Repeated computations (toLowerCase, regex) in loops
-- `Array.from(set).some()` - iterate Set directly
-- Recreating constants/patterns in methods
-
-```typescript
-// ✅ Pre-compiled regex at class level
-private static readonly PATTERN = /dangerous/i;
-
-// ❌ Recreated every call
-private validate() { const pattern = /dangerous/i; }
-```
-
-### Code Quality Optimization
-
-**Minimize conditional statements and loops:**
-
-- **Replace `for` loops with functional array methods**: Use `forEach`, `map`, `filter`, `some`, `find`, `reduce` instead of imperative loops
-- **Replace multiple `if` statements with lookup tables**: Use Maps, Records, or arrays with `find()` for decision logic
-- **Use handler patterns**: Replace if-else chains with handler lookup tables
-- **Prefer functional patterns**: Use `?.` (optional chaining), `??` (nullish coalescing), and array methods
-
-```typescript
-// ❌ Multiple if statements
-if (range === "very_low") return "block";
-if (range === "low") return "require_approval";
-if (range === "medium") return "require_approval";
-return "auto_approve";
-
-// ✅ Lookup table with handler pattern
-const RANGE_HANDLERS: Record<ConfidenceRange, Handler> = {
-  very_low: handleVeryLow,
-  low: handleLow,
-  medium: handleMedium,
-  high: handleHigh,
-} as const;
-return RANGE_HANDLERS[range](...);
-
-// ❌ For loop
-for (const item of items) {
-  if (item.valid) {
-    results.push(item);
+      throw new ExternalServiceError("external", "Failed to fetch data", {
+        metadata: { id, durationMs },
+        retryable: classified.retryable,
+      });
+    }
   }
 }
-
-// ✅ Functional array method
-const results = items.filter(item => item.valid);
-
-// ❌ Multiple if statements
-if (error.status === 400) return new Error("Bad request");
-if (error.status === 401) return new Error("Unauthorized");
-if (error.status === 429) return new Error("Rate limited");
-return new Error("Unknown error");
-
-// ✅ Handler array with find()
-const errorHandlers = [
-  { condition: (e) => e.status === 400, handler: () => new Error("Bad request") },
-  { condition: (e) => e.status === 401, handler: () => new Error("Unauthorized") },
-  { condition: (e) => e.status === 429, handler: () => new Error("Rate limited") },
-] as const;
-const matched = errorHandlers.find(({ condition }) => condition(error));
-return matched?.handler() ?? new Error("Unknown error");
 ```
 
-**Avoid array mutation with push:**
+---
 
-- **Never use `array.push()`** - mutates the original array
-- **Use spread operator** `[...existing, newItem]` to add items
-- **Use `concat()`** for combining arrays
-- **Return new arrays** from `map()`, `filter()`, `reduce()`
-- **Build arrays declaratively** using functional patterns
+## Definition of Done (New Modules)
+
+Before merging new module/feature:
+
+- [ ] Tests included (unit + integration for critical paths)
+- [ ] Structured logs include requestId/tenantId (spread `...context`)
+- [ ] External call logs include durationMs
+- [ ] New exports added to shared barrel (`index.ts`)
+- [ ] Uses shared httpClient for outbound calls
+- [ ] Error classification (retryable/non-retryable) for external calls
+- [ ] RequestContext propagated through all layers
+- [ ] No vendor SDK imports in service layer
+- [ ] No vendor types in port interfaces
+- [ ] Repository returns domain objects (not rows)
+- [ ] DTO mapping at handler boundary only
+- [ ] Webhook handlers have replay protection with TTL
+- [ ] Secrets/PII never logged
+- [ ] Docs updated if public behavior changes
+
+---
+
+## Available Shared Utilities
 
 ```typescript
-// ❌ Mutable pattern with push
-const results: string[] = [];
-for (const item of items) {
-  if (item.valid) {
-    results.push(item.name);
-  }
-}
+import {
+  // Config
+  config,
 
-// ✅ Immutable functional pattern
-const results = items.filter((item) => item.valid).map((item) => item.name);
+  // Logging
+  createLogger,
 
-// ❌ Building array with push in reduce
-const grouped = items.reduce((accumulator, item) => {
-  if (!accumulator[item.type]) {
-    accumulator[item.type] = [];
-  }
-  accumulator[item.type].push(item); // Mutation!
-  return accumulator;
-}, {});
+  // Errors
+  ValidationError,
+  NotFoundError,
+  ExternalServiceError,
+  getErrorMessage,
+  invariant,
+  assertUnreachable,
 
-// ✅ Immutable reduce pattern
-const grouped = items.reduce(
-  (accumulator, item) => ({
-    ...accumulator,
-    [item.type]: [...(accumulator[item.type] ?? []), item],
-  }),
-  {} as Record<string, Item[]>
-);
+  // HTTP utilities
+  httpClient,
+  fetchWithTimeout,
+  withRetry,
+  classifyHttpError,
+  startTimer,
 
-// ❌ Conditional push
-const sections: string[] = [];
-if (hasHeader) sections.push(header);
-if (hasBody) sections.push(body);
-if (hasFooter) sections.push(footer);
+  // Sanitization
+  redactSecrets,
+  truncate,
 
-// ✅ Filter out undefined/null
-const sections = [
-  hasHeader ? header : null,
-  hasBody ? body : null,
-  hasFooter ? footer : null,
-].filter((section): section is string => section !== null);
+  // Idempotency
+  idempotencyStore,
 
-// ✅ Or use spread with conditional
-const sections = [
-  ...(hasHeader ? [header] : []),
-  ...(hasBody ? [body] : []),
-  ...(hasFooter ? [footer] : []),
-];
+  // Middleware
+  errorHandler,
+  asyncHandler,
+
+  // Types
+  type RequestContext,
+  type HttpResponse,
+  type ClassifiedError,
+  type WebhookEvent,
+} from "@kenchi/shared";
 ```
 
-**Target metrics:**
-
-- **For loops**: 0 (use functional array methods)
-- **If statements**: Minimize (use lookup tables, handler patterns, early returns)
-- **While loops**: 0 (use recursion or functional patterns)
-- **Array.push()**: 0 (use spread, concat, or functional methods)
-
 ---
-
-## Security
-
-- **Validate all inputs** with type guards
-- **Sanitize user input** - trim, limit length, remove dangerous chars
-- **Never commit secrets** - use environment variables
-- **Validate env vars** on startup
-
----
-
-## Testing
-
-- **Descriptive test names**: `should validate event before processing`
-- **AAA pattern**: Arrange, Act, Assert
-- **Type-safe mocks**: `jest.Mocked<Logger>`
-- **Separate unit/integration tests**
-
----
-
-## Code Organization
-
-### Module Size
-
-- Utility: 50-150 lines
-- Service/Handler: 150-300 lines
-- **Maximum**: 500 lines - split if larger
-
-### Naming
-
-- **Variables**: descriptive (`userEmailAddress` not `ue`)
-- **Functions**: verb + noun (`validateUserEmail`, `fetchUserById`)
-- **Booleans**: `is/has/should/can` prefix
-- **Constants**: `UPPER_SNAKE_CASE`
-- **Callback parameters**: descriptive names, never single letters (applies to both array method callbacks and standalone callback functions)
-
-```typescript
-// ❌ Single-letter callback parameters in array methods
-failures.map((f) => f.checkName);
-annotations.filter((a) => a.level === "failure");
-items.reduce((acc, item) => acc + item.value, 0);
-actions.sort((a, b) => a.priority - b.priority);
-thresholds.find((t) => value >= t.min);
-
-// ✅ Descriptive callback parameters in array methods
-failures.map((failure) => failure.checkName);
-annotations.filter((annotation) => annotation.level === "failure");
-items.reduce((accumulator, currentItem) => accumulator + currentItem.value, 0);
-actions.sort((firstAction, secondAction) => firstAction.priority - secondAction.priority);
-thresholds.find((threshold) => value >= threshold.min);
-
-// ❌ Single-letter parameters in callback functions
-const createFailure = (c: number): AnalyzedFailure => ({...});
-const formatItem = (i: Item) => `${i.name}`;
-const handleError = (e: Error) => console.log(e);
-
-// ✅ Descriptive parameters in callback functions
-const createAnalyzedFailureWithConfidence = (confidenceScore: number): AnalyzedFailure => ({...});
-const formatItem = (item: Item) => `${item.name}`;
-const handleError = (error: Error) => console.log(error);
-```
-
-### Structure
-
-- One concept per file
-- Group related functionality in folders
-- Use index files for clean exports
-- Consistent folder structure across services
-
----
-
-## Separation of Concerns
-
-### Layered Architecture
-
-```
-Routes (presentation) → Services (business logic) → Repositories (data access)
-```
-
-- **Routes**: HTTP handling, validation, delegates to services
-- **Services**: Business logic only, no HTTP concerns
-- **Repositories**: Data access only
-
-### Rules
-
-- Business logic NOT in route handlers
-- Data access NOT in services (use repositories)
-- Validation in separate layer
-- Error handling in middleware
-- Configuration in separate module
-- Dependencies flow inward (routes → services → repos)
-- No circular dependencies
-- Services don't import other services
-
----
-
-## Documentation
-
-- **JSDoc for public APIs** with `@param`, `@returns`, `@throws`, `@example`
-- **Don't over-document** - code should be self-explanatory
-- **Update docs** when changing code
-
----
-
-## Checklist
-
-Before committing:
-
-- [ ] Checked `@kenchi/shared` for existing utilities
-- [ ] No code duplication
-- [ ] Types explicit, no `any`
-- [ ] Errors use shared classes
-- [ ] Constants in `constants.ts`
-- [ ] Module under 500 lines
-- [ ] Functions small and focused
-- [ ] Layers properly separated
-- [ ] Tests written
 
 ## References
 
