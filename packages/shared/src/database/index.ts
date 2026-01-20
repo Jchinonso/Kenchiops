@@ -13,24 +13,27 @@ export {
   type QueryResult,
 } from "./client.js";
 
-// Tenant service types
+// Tenant module
 export {
+  // Row mappers
   rowToTenant,
   extractTenant,
   getStatusAfterGitHubInstall,
   getStatusAfterSlackInstall,
-  RAG_BUDGET_DEFAULTS,
+  // Types
   type TenantRow,
   type TenantStatistics,
-} from "./tenantServiceTypes.js";
-
-// Tenant service operations
-export {
+  type TenantRAGBudgetConfig,
+  type UpdateRAGBudgetInput,
+  // Lookup operations
   findByGitHubInstallation,
   findByGitHubOrg,
   findBySlackWorkspace,
   findById,
   getActiveTenants,
+  getTenantStatistics,
+  getSlackCredentials,
+  // Lifecycle operations
   createFromGitHubInstall,
   linkSlackWorkspace,
   createFromSlackInstall,
@@ -38,22 +41,16 @@ export {
   suspend,
   deleteTenant,
   handleGitHubUninstall,
+  updateSlackToken,
+  // Audit operations
   logAuditEvent,
   getAuditLog,
-  updateSlackToken,
-  getSlackCredentials,
-  getTenantStatistics,
-} from "./tenantService.js";
-
-// RAG budget configuration
-export {
+  // RAG budget configuration
   getRAGBudgetConfig,
   updateRAGBudgetConfig,
-  type TenantRAGBudgetConfig,
-  type UpdateRAGBudgetInput,
-} from "./tenantRagConfig.js";
+} from "./tenant/index.js";
 
-// Repository channel service
+// Repository channel module
 export {
   findChannelForRepository,
   findMappingsForChannel,
@@ -63,20 +60,18 @@ export {
   deleteMapping,
   deleteMappingsForChannel,
   isMapped,
-} from "./repositoryChannelService.js";
+} from "./repositoryChannel/index.js";
 
-// Vector types
+// Vector types (shared)
+export type { VectorSearchResult, VectorSearchFilters } from "./vectorTypes.js";
+
+// Diff chunk module
 export {
   type DiffChunk,
   type CreateDiffChunkInput,
-  type KnowledgeDocRecord,
-  type CreateKnowledgeDocInput,
-  type VectorSearchResult,
-  type VectorSearchFilters,
-} from "./vectorTypes.js";
-
-// Diff chunk repository
-export {
+  type DiffChunkRow,
+  type DiffChunkSimilarityRow,
+  mapRowToDiffChunk,
   createDiffChunk,
   createDiffChunksBatch,
   searchSimilarDiffChunks,
@@ -85,10 +80,15 @@ export {
   deleteDiffChunksByPR,
   deleteDiffChunksByTenant,
   getDiffChunkCount,
-} from "./diffChunkRepository.js";
+} from "./diffChunk/index.js";
 
-// Knowledge document repository
+// Knowledge document module
 export {
+  type KnowledgeDocRecord,
+  type CreateKnowledgeDocInput,
+  type KnowledgeDocRow,
+  type KnowledgeDocSimilarityRow,
+  mapRowToKnowledgeDoc,
   createKnowledgeDoc,
   createKnowledgeDocsBatch,
   searchSimilarKnowledgeDocs,
@@ -99,17 +99,13 @@ export {
   getDocsNeedingReembedding,
   getKnowledgeDocsByType,
   getKnowledgeDocCountsByType,
-} from "./knowledgeDocRepository.js";
-
-// Knowledge document hit tracking
-export {
   getKnowledgeDocById,
   incrementKnowledgeDocHitCount,
   batchIncrementKnowledgeDocHitCounts,
   recordKnowledgeDocNegativeFeedback,
-} from "./knowledgeDocHitTracking.js";
+} from "./knowledgeDoc/index.js";
 
-// Feedback repository
+// Feedback module
 export {
   createRAGFeedback,
   createAnalysisFeedback,
@@ -126,9 +122,9 @@ export {
   type CreateQAFeedbackInput,
   type FeedbackRecord,
   type RAGFeedbackMetrics,
-} from "./feedbackRepository.js";
+} from "./feedback/index.js";
 
-// Analysis repository
+// Analysis module
 export {
   createAnalysis,
   getAnalysisById,
@@ -137,9 +133,9 @@ export {
   countAnalysesByModelVersion,
   type CreateAnalysisInput,
   type AnalysisRecord,
-} from "./analysisRepository.js";
+} from "./analysis/index.js";
 
-// Action proposal repository
+// Action proposal module
 export {
   updateActionProposalStatus,
   getActionProposalById,
@@ -149,9 +145,9 @@ export {
   type UpdateActionStatusInput,
   type ActionProposalRecord,
   type ActionApprovalStats,
-} from "./actionProposalRepository.js";
+} from "./actionProposal/index.js";
 
-// Model version repository
+// Model version module
 export {
   createModelVersion,
   getModelVersionById,
@@ -164,9 +160,9 @@ export {
   updateTenantOverrides,
   type CreateModelVersionInput,
   type SaveFeatureFlagsInput,
-} from "./modelVersionRepository.js";
+} from "./modelVersion/index.js";
 
-// Relationship repository (Multi-Hop RAG)
+// Relationship module (Multi-Hop RAG)
 export {
   createRelationship,
   createRelationshipsBatch,
@@ -181,9 +177,9 @@ export {
   getRelationshipTypeDistribution,
   type IncidentRelationship,
   type CreateRelationshipInput,
-} from "./relationshipRepository.js";
+} from "./relationship/index.js";
 
-// External source repository (Cross-Repo Knowledge)
+// External source module (Cross-Repo Knowledge)
 export {
   createExternalSource,
   getExternalSourceById,
@@ -199,9 +195,9 @@ export {
   type ExternalSource,
   type CreateExternalSourceInput,
   type UpdateExternalSourceInput,
-} from "./externalSourceRepository.js";
+} from "./externalSource/index.js";
 
-// Test case repository (Automated QA)
+// Test case module (Automated QA)
 export {
   createTestCase,
   getTestCaseById,
@@ -219,9 +215,9 @@ export {
   validateExpectedDocIds,
   validateTestCase,
   type ValidateExpectedDocIdsResult,
-} from "./testCaseRepository.js";
+} from "./testCase/index.js";
 
-// Metrics history repository (Drift Detection)
+// Metrics history module (Drift Detection)
 export {
   recordMetric,
   getRecentMetrics,
@@ -235,9 +231,9 @@ export {
   type RecordMetricInput,
   type MetricBaseline,
   type DriftDetectionResult,
-} from "./metricsHistoryRepository.js";
+} from "./metricsHistory/index.js";
 
-// Cost tracking repository (Cost Controls)
+// Cost tracking module (Cost Controls)
 export {
   recordCost,
   getMonthlyCostSummary,
@@ -249,4 +245,4 @@ export {
   type RecordCostInput,
   type CostSummary,
   type BudgetStatus,
-} from "./costTrackingRepository.js";
+} from "./costTracking/index.js";
