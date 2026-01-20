@@ -13,6 +13,7 @@ import { AGGREGATION_DEFAULTS, PARSE_INT_RADIX, REDIS_TIMEOUTS } from "../consta
 import {
   type AggregatedFailures,
   type AggregationKey,
+  type AggregationReadResult,
   type PendingAggregation,
   type PendingCheckRun,
   type SerializedPendingCheckData,
@@ -28,16 +29,10 @@ import { buildLogContext } from "./aggregatorWrite.js";
 
 const logger = createLogger("redis-aggregator");
 
-// ==================== Result Types ====================
+// Re-export type for backward compatibility
+export type { AggregationReadResult } from "./types.js";
 
-/**
- * Result type for aggregation read operations.
- * Distinguishes between success, not found, and error states.
- */
-export type AggregationReadResult<T> =
-  | { readonly status: "success"; readonly data: T }
-  | { readonly status: "not_found" }
-  | { readonly status: "error"; readonly error: string };
+// ==================== Result Constructors ====================
 
 /** Creates a success result. */
 const success = <T>(data: T): AggregationReadResult<T> => ({ status: "success", data });

@@ -14,25 +14,19 @@ import {
   type RAGMetricType,
 } from "../common.js";
 import type {
-  RecordMetricInput,
-  MetricBaseline,
-  DriftDetectionResult,
-  MetricsHistoryRow,
   BaselineRow,
-  TrendRow,
   CountRow,
+  DriftDetectionResult,
+  MetricBaseline,
+  MetricsHistoryRow,
   RAGMetricHistory,
+  RecordMetricInput,
+  RecordMetricValidationRule,
   TrendDataPoint,
+  TrendRow,
 } from "./types.js";
 
 // ==================== Validation Rules ====================
-
-/** Validation rule for RecordMetricInput. */
-interface RecordMetricValidationRule {
-  readonly isInvalid: (input: RecordMetricInput) => boolean;
-  readonly getMessage: () => string;
-  readonly field: string;
-}
 
 /** Validation rules for metric recording. */
 const RECORD_METRIC_VALIDATION_RULES: readonly RecordMetricValidationRule[] = [

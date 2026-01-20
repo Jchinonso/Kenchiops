@@ -68,3 +68,14 @@ export interface CreateRelationshipInput {
   readonly metadata?: Record<string, unknown>;
   readonly createdBy?: string;
 }
+
+// ==================== Validation Types ====================
+
+/**
+ * Validation rule for CreateRelationshipInput.
+ */
+export interface CreateRelationshipValidationRule {
+  readonly isInvalid: (input: CreateRelationshipInput) => boolean;
+  readonly getMessage: () => string;
+  readonly field: string;
+}

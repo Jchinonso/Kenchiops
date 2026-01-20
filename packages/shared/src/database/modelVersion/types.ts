@@ -85,3 +85,23 @@ export interface SaveFeatureFlagsInput {
  * Feature flags with rollback state.
  */
 export type FeatureFlagsWithRollback = ModelFeatureFlags & { readonly rollbackActive: boolean };
+
+// ==================== Validation Types ====================
+
+/**
+ * Validation rule for CreateModelVersionInput.
+ */
+export interface CreateModelVersionValidationRule {
+  readonly isInvalid: (input: CreateModelVersionInput) => boolean;
+  readonly getMessage: () => string;
+  readonly field: string;
+}
+
+/**
+ * A/B test configuration values extracted from row.
+ */
+export interface ABTestConfigValues {
+  readonly controlVersion: string;
+  readonly treatmentVersion: string;
+  readonly treatmentPercentage: number;
+}

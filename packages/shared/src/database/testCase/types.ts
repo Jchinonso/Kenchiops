@@ -97,3 +97,14 @@ export interface ValidateExpectedDocIdsResult {
   readonly existingIds: readonly string[];
   readonly missingIds: readonly string[];
 }
+
+// ==================== Validation Types ====================
+
+/**
+ * Validation rule for CreateTestCaseInput.
+ */
+export interface CreateTestCaseValidationRule {
+  readonly isInvalid: (input: CreateTestCaseInput) => boolean;
+  readonly getMessage: () => string;
+  readonly field: string;
+}

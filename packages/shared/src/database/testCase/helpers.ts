@@ -8,22 +8,12 @@
 
 import { ValidationError } from "../common.js";
 import type {
-  TestCaseRow,
-  RAGTestCase,
   CreateTestCaseInput,
+  CreateTestCaseValidationRule,
+  RAGTestCase,
+  TestCaseRow,
   ValidateExpectedDocIdsResult,
 } from "./types.js";
-
-// ==================== Validation Rule Types ====================
-
-/**
- * Validation rule for CreateTestCaseInput.
- */
-interface CreateTestCaseValidationRule {
-  readonly isInvalid: (input: CreateTestCaseInput) => boolean;
-  readonly getMessage: () => string;
-  readonly field: string;
-}
 
 // ==================== Validation Rules ====================
 

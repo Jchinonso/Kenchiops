@@ -6,7 +6,6 @@
  * @module aggregation/aggregatorHelpers
  */
 
-import type { getRedisClient } from "../queue/redisClient.js";
 import {
   AGGREGATION_DEFAULTS,
   AGGREGATION_KEY_PATTERN,
@@ -22,20 +21,21 @@ import {
   type AnalyzedFailure,
   type FailureContext,
   type PRContext,
+  type RedisClient,
   type SerializedFailure,
   type WorkflowContext,
 } from "./types.js";
 
 // Re-export types for backwards compatibility
-export type { FailureContext, AggregationMetadata, AggregationKeySet } from "./types.js";
+export type {
+  FailureContext,
+  AggregationMetadata,
+  AggregationKeySet,
+  RedisClient,
+} from "./types.js";
 
 // Re-export constant for backwards compatibility
 export { AGGREGATION_KEY_PATTERN } from "../constants/index.js";
-
-// ==================== Types ====================
-
-/** Redis client type from getRedisClient. */
-export type RedisClient = ReturnType<typeof getRedisClient>;
 
 // ==================== Redis Helpers ====================
 

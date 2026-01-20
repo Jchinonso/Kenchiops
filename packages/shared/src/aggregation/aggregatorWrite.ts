@@ -14,11 +14,15 @@ import {
   DEFAULT_AGGREGATION_CONFIG,
   type AggregationConfig,
   type AggregationKey,
+  type AggregationKeySet,
   type AggregationLogContext,
   type AnalyzedFailure,
+  type FailureContext,
   type PendingCheckContext,
   type PendingCheckRun,
   type SerializedPendingCheckData,
+  type AddToAggregationParams,
+  type PipelineOptions,
 } from "./types.js";
 import {
   formatShaForDisplay,
@@ -28,10 +32,7 @@ import {
   buildMetadata,
   buildAggregationKeys,
   isRedisReady,
-  type AggregationKeySet,
-  type FailureContext,
 } from "./aggregatorHelpers.js";
-import { type AddToAggregationParams, type PipelineOptions } from "./aggregatorTypes.js";
 
 const logger = createLogger("redis-aggregator");
 

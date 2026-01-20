@@ -16,19 +16,20 @@ import {
   type EmbeddingTierName,
 } from "../common.js";
 import type {
-  CostTrackingRow,
-  MonthlySummaryRow,
-  TierBreakdownRow,
-  DailyCostRow,
-  TopConsumerRow,
-  CostRecord,
-  CostOperationType,
-  TierCostBreakdown,
-  CostSummary,
-  DailyCostEntry,
-  TopConsumerEntry,
   BudgetStatusLevel,
+  CostInputValidationRule,
+  CostOperationType,
+  CostRecord,
+  CostSummary,
+  CostTrackingRow,
+  DailyCostEntry,
+  DailyCostRow,
+  MonthlySummaryRow,
   RecordCostInput,
+  TierBreakdownRow,
+  TierCostBreakdown,
+  TopConsumerEntry,
+  TopConsumerRow,
 } from "./types.js";
 
 // ==================== Validation Constants ====================
@@ -54,15 +55,7 @@ export const BUDGET_STATUS_THRESHOLDS: ReadonlyArray<{
   { minPercent: COST_CONTROL_CONFIG.BUDGET_ALERT_THRESHOLD_PERCENT, status: "warning" },
 ];
 
-// ==================== Validation Rule Types ====================
-
-/** Validation rule for RecordCostInput fields. */
-interface CostInputValidationRule {
-  readonly field: keyof RecordCostInput;
-  readonly isInvalid: (input: RecordCostInput) => boolean;
-  readonly message: string;
-  readonly getValue?: (input: RecordCostInput) => unknown;
-}
+// ==================== Validation Rules ====================
 
 /** Validation rules for RecordCostInput. */
 const COST_INPUT_VALIDATION_RULES: readonly CostInputValidationRule[] = [

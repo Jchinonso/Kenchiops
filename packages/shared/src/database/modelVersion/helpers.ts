@@ -13,21 +13,16 @@ import {
   type ABTestConfig,
 } from "../common.js";
 import type {
+  ABTestConfigValues,
   CreateModelVersionInput,
-  SaveFeatureFlagsInput,
-  ModelVersionRow,
+  CreateModelVersionValidationRule,
   FeatureFlagsRow,
   FeatureFlagsWithRollback,
+  ModelVersionRow,
+  SaveFeatureFlagsInput,
 } from "./types.js";
 
 // ==================== Validation Rules ====================
-
-/** Validation rule for CreateModelVersionInput. */
-interface CreateModelVersionValidationRule {
-  readonly isInvalid: (input: CreateModelVersionInput) => boolean;
-  readonly getMessage: () => string;
-  readonly field: string;
-}
 
 /** Validation rules for creating model versions. */
 const CREATE_MODEL_VERSION_VALIDATION_RULES: readonly CreateModelVersionValidationRule[] = [
@@ -159,17 +154,8 @@ const buildModelMetadata = (row: ModelVersionRow): ModelMetadata | undefined => 
 };
 
 /**
- * Extracts A/B test config values from row.
- * Returns null if config is incomplete.
- */
-interface ABTestConfigValues {
-  readonly controlVersion: string;
-  readonly treatmentVersion: string;
-  readonly treatmentPercentage: number;
-}
-
-/**
  * Extracts A/B test configuration from row if valid.
+ * Returns null if config is incomplete.
  */
 const extractABTestConfigValues = (row: FeatureFlagsRow): ABTestConfigValues | null => {
   const controlVersion = row.ab_test_control_version;

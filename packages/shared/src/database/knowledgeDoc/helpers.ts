@@ -17,7 +17,7 @@ import {
   type VectorSearchFilters,
   type KnowledgeDocType,
 } from "../common.js";
-import type { KnowledgeDocRow, KnowledgeDocRecord } from "./types.js";
+import type { KnowledgeDocFilterHandler, KnowledgeDocRecord, KnowledgeDocRow } from "./types.js";
 
 // ==================== Input Validation ====================
 
@@ -115,14 +115,8 @@ export const validateIds = (ids: readonly string[], fieldName: string): void => 
 
 // ==================== Query Builders ====================
 
-/** Filter handler for building search conditions. */
-interface FilterHandler {
-  readonly key: keyof VectorSearchFilters;
-  readonly column: string;
-}
-
 /** Filter handlers for knowledge doc search. */
-const FILTER_HANDLERS: readonly FilterHandler[] = [
+const FILTER_HANDLERS: readonly KnowledgeDocFilterHandler[] = [
   { key: "tenantId", column: "tenant_id" },
   { key: "docType", column: "doc_type" },
 ];

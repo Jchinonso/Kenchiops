@@ -9,19 +9,13 @@
 import { ValidationError, RELATIONSHIP_TYPES, type RelationshipType } from "../common.js";
 import type {
   CreateRelationshipInput,
+  CreateRelationshipValidationRule,
+  IncidentRelationship,
   RelationshipRow,
   RelationshipTypeCountRow,
-  IncidentRelationship,
 } from "./types.js";
 
 // ==================== Validation Rules ====================
-
-/** Validation rule for CreateRelationshipInput. */
-interface CreateRelationshipValidationRule {
-  readonly isInvalid: (input: CreateRelationshipInput) => boolean;
-  readonly getMessage: () => string;
-  readonly field: string;
-}
 
 /**
  * Validates that a relationship type is valid.

@@ -7,6 +7,8 @@
  * @module database/diffChunk/types
  */
 
+import type { VectorSearchFilters } from "../common.js";
+
 // ==================== Domain Types ====================
 
 /**
@@ -84,4 +86,32 @@ export interface DiffChunkRow {
  */
 export interface DiffChunkSimilarityRow extends DiffChunkRow {
   readonly similarity: number;
+}
+
+// ==================== Validation Types ====================
+
+/**
+ * Validation rule for CreateDiffChunkInput fields.
+ */
+export interface DiffChunkInputValidationRule {
+  readonly field: keyof CreateDiffChunkInput;
+  readonly isInvalid: (input: CreateDiffChunkInput) => boolean;
+  readonly message: string;
+  readonly getValue?: (input: CreateDiffChunkInput) => unknown;
+}
+
+/**
+ * Filter handler configuration for search conditions.
+ */
+export interface DiffChunkFilterHandler {
+  readonly key: keyof VectorSearchFilters;
+  readonly column: string;
+}
+
+/**
+ * Result of building search conditions.
+ */
+export interface SearchConditionsResult {
+  readonly conditions: readonly string[];
+  readonly params: readonly unknown[];
 }

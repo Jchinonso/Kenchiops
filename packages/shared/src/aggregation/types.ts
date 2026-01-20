@@ -8,6 +8,7 @@
  */
 
 import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
+import type { getRedisClient } from "../queue/redisClient.js";
 import type {
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
@@ -476,3 +477,106 @@ export interface AggregatorWorkerOptions {
   /** Optional callback for worker errors (for health monitoring). */
   readonly onError?: WorkerErrorCallback;
 }
+
+// ==================== Internal Aggregator Types ====================
+
+/**
+ * Redis client type from getRedisClient.
+ */
+export type RedisClient = ReturnType<typeof getRedisClient>;
+
+/**
+ * Parameters for adding an item to aggregation.
+ */
+export interface AddToAggregationParams {
+  readonly key: AggregationKey;
+  readonly checkRunId: number;
+  readonly checkName: string;
+  readonly serializedData: string;
+  readonly failureContext: FailureContext;
+  readonly config: AggregationConfig;
+  readonly itemType: "failure" | "pending_check";
+}
+
+/**
+ * Options for executing aggregation pipeline.
+ */
+export interface PipelineOptions {
+  readonly redis: RedisClient;
+  readonly keys: AggregationKeySet;
+  readonly checkRunIdStr: string;
+  readonly serializedData: string;
+  readonly metadata: AggregationMetadata;
+  readonly ttlSeconds: number;
+  readonly debounceSeconds: number;
+}
+
+// ==================== Queue Processor Internal Types ====================
+
+/**
+ * Queue message structure for processing.
+ */
+export interface QueueMessage {
+  readonly id: string;
+  readonly payload: unknown;
+  readonly timestamp: string;
+  readonly retryCount?: number;
+}
+
+/**
+ * Mutable state for controlling worker lifecycle.
+ */
+export interface ProcessorWorkerState {
+  running: boolean;
+  activeJobs: number;
+  totalProcessed: number;
+  totalErrors: number;
+  lastProcessedAt: Date | null;
+  lastErrorAt: Date | null;
+}
+
+/**
+ * Async function that polls and recurses until stopped.
+ */
+export type WorkerLoop = () => Promise<void>;
+
+/**
+ * Message processor function type.
+ */
+export type MessageProcessor = (
+  message: QueueMessage
+) => Promise<import("../queue/messageQueue.js").ProcessResult>;
+
+// ==================== Aggregator Worker Internal Types ====================
+
+/**
+ * Mutable state for controlling aggregator worker lifecycle.
+ */
+export interface AggregatorWorkerState {
+  running: boolean;
+  totalProcessed: number;
+  totalErrors: number;
+  lastPollAt: Date | null;
+  lastErrorAt: Date | null;
+}
+
+/**
+ * Alias for WorkerLoop used in aggregator polling.
+ */
+export type PollingLoop = WorkerLoop;
+
+/**
+ * Result of enqueueing a single aggregation.
+ */
+export type AggregationEnqueueResult =
+  | { readonly status: "success"; readonly key: AggregationKey }
+  | { readonly status: "error"; readonly key: AggregationKey; readonly error: string };
+
+/**
+ * Result type for aggregation read operations.
+ * Distinguishes between success, not found, and error states.
+ */
+export type AggregationReadResult<T> =
+  | { readonly status: "success"; readonly data: T }
+  | { readonly status: "not_found" }
+  | { readonly status: "error"; readonly error: string };

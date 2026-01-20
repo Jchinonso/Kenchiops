@@ -106,3 +106,14 @@ export interface TrendDataPoint {
   readonly day: string;
   readonly avgValue: number;
 }
+
+// ==================== Validation Types ====================
+
+/**
+ * Validation rule for RecordMetricInput.
+ */
+export interface RecordMetricValidationRule {
+  readonly isInvalid: (input: RecordMetricInput) => boolean;
+  readonly getMessage: () => string;
+  readonly field: string;
+}

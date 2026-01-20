@@ -153,3 +153,15 @@ export interface TopConsumerEntry {
   readonly cost: number;
   readonly tokens: number;
 }
+
+// ==================== Validation Types ====================
+
+/**
+ * Validation rule for RecordCostInput fields.
+ */
+export interface CostInputValidationRule {
+  readonly field: keyof RecordCostInput;
+  readonly isInvalid: (input: RecordCostInput) => boolean;
+  readonly message: string;
+  readonly getValue?: (input: RecordCostInput) => unknown;
+}

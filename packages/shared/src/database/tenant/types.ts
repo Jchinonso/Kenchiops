@@ -6,7 +6,13 @@
  * @module database/tenant/types
  */
 
-import type { TenantStatus, TenantEmbeddingTier, TenantAuditAction } from "../common.js";
+import type {
+  CreateTenantFromGitHub,
+  LinkSlackWorkspace,
+  TenantAuditAction,
+  TenantEmbeddingTier,
+  TenantStatus,
+} from "../common.js";
 
 // ==================== Tenant Row Types ====================
 
@@ -94,4 +100,33 @@ export interface UpdateQueryResult {
   readonly query: string;
   readonly values: ReadonlyArray<string | number | boolean>;
   readonly hasUpdates: boolean;
+}
+
+// ==================== Validation Types ====================
+
+/**
+ * Validation rule for CreateTenantFromGitHub.
+ */
+export interface GitHubInstallValidationRule {
+  readonly isInvalid: (input: CreateTenantFromGitHub) => boolean;
+  readonly getMessage: () => string;
+  readonly field: string;
+}
+
+/**
+ * Validation rule for LinkSlackWorkspace.
+ */
+export interface SlackLinkValidationRule {
+  readonly isInvalid: (input: LinkSlackWorkspace) => boolean;
+  readonly getMessage: () => string;
+  readonly field: string;
+}
+
+/**
+ * Validation rule for UpdateRAGBudgetInput.
+ */
+export interface UpdateRAGBudgetValidationRule {
+  readonly isInvalid: (input: UpdateRAGBudgetInput) => boolean;
+  readonly getMessage: () => string;
+  readonly field: string;
 }

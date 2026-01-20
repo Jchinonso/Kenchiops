@@ -7,7 +7,7 @@
  * @module database/knowledgeDoc/types
  */
 
-import type { KnowledgeDocType } from "../common.js";
+import type { KnowledgeDocType, VectorSearchFilters } from "../common.js";
 
 // ==================== Domain Types ====================
 
@@ -85,4 +85,14 @@ export interface KnowledgeDocRow {
  */
 export interface KnowledgeDocSimilarityRow extends KnowledgeDocRow {
   readonly similarity: number;
+}
+
+// ==================== Query Builder Types ====================
+
+/**
+ * Filter handler for building search conditions.
+ */
+export interface KnowledgeDocFilterHandler {
+  readonly key: keyof VectorSearchFilters;
+  readonly column: string;
 }

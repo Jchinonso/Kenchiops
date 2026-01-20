@@ -13,6 +13,7 @@ import { createLogger } from "../core/logger.js";
 import { ValidationError, getErrorMessage } from "../core/errors.js";
 import { DATABASE_POOL_DEFAULTS, QUERY_LOGGING, TRANSACTION_COMMANDS } from "../constants/index.js";
 import type {
+  ConfigValidationRule,
   DatabaseConfig,
   QueryResult,
   QueryMetadata,
@@ -39,14 +40,6 @@ const POOL_EVENTS = {
 let pool: pg.Pool | null = null;
 
 // ==================== Input Validation ====================
-
-/** Validation rule for database configuration fields. */
-interface ConfigValidationRule {
-  readonly field: keyof DatabaseConfig;
-  readonly isInvalid: (config: DatabaseConfig) => boolean;
-  readonly message: string;
-  readonly getValue?: (config: DatabaseConfig) => unknown;
-}
 
 /** Validation rules for database configuration. */
 const CONFIG_VALIDATION_RULES: readonly ConfigValidationRule[] = [

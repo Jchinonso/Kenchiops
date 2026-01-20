@@ -25,13 +25,11 @@ import type {
   ProcessorStats,
   ProcessorControl,
   AnalysisQueueProcessorOptions,
-} from "./types.js";
-import type {
   QueueMessage,
   ProcessorWorkerState,
   WorkerLoop,
   MessageProcessor,
-} from "./aggregatorTypes.js";
+} from "./types.js";
 import { formatShaForDisplay } from "./aggregatorHelpers.js";
 
 const logger = createLogger("analysis-queue-processor");

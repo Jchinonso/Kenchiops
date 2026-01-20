@@ -12,11 +12,14 @@ import { QUEUE_WORKER_DEFAULTS } from "../constants/index.js";
 import {
   DEFAULT_AGGREGATION_CONFIG,
   type AggregationConfig,
+  type AggregationEnqueueResult,
   type AggregationKey,
+  type AggregatorWorkerOptions,
+  type AggregatorWorkerState,
+  type PollingLoop,
+  type WorkerControl,
   type WorkerErrorCallback,
   type WorkerStats,
-  type WorkerControl,
-  type AggregatorWorkerOptions,
 } from "./types.js";
 import { findReadyAggregations } from "./aggregationScanner.js";
 import { enqueuePendingAggregation } from "./aggregationEnqueuer.js";
@@ -32,29 +35,10 @@ export type {
   AggregatorWorkerOptions,
 } from "./types.js";
 
-// ==================== Internal Types ====================
-
-/** Mutable state for controlling worker lifecycle. */
-interface WorkerState {
-  running: boolean;
-  totalProcessed: number;
-  totalErrors: number;
-  lastPollAt: Date | null;
-  lastErrorAt: Date | null;
-}
-
-/** Async function that polls and recurses until stopped. */
-type PollingLoop = () => Promise<void>;
-
-/** Result of enqueueing a single aggregation. */
-type EnqueueResult =
-  | { readonly status: "success"; readonly key: AggregationKey }
-  | { readonly status: "error"; readonly key: AggregationKey; readonly error: string };
-
 // ==================== Enqueue Operations ====================
 
 /** Enqueues a single aggregation with error capture. */
-const enqueueWithErrorCapture = async (key: AggregationKey): Promise<EnqueueResult> => {
+const enqueueWithErrorCapture = async (key: AggregationKey): Promise<AggregationEnqueueResult> => {
   try {
     await enqueuePendingAggregation(key);
     return { status: "success", key };
@@ -66,14 +50,15 @@ const enqueueWithErrorCapture = async (key: AggregationKey): Promise<EnqueueResu
 /** Processes all ready aggregations, handling individual failures gracefully. */
 const processReadyAggregations = async (
   readyKeys: readonly AggregationKey[],
-  state: WorkerState,
+  state: AggregatorWorkerState,
   onError?: WorkerErrorCallback
 ): Promise<void> => {
   const results = await Promise.all(readyKeys.map(enqueueWithErrorCapture));
 
   const successCount = results.filter((result) => result.status === "success").length;
   const failures = results.filter(
-    (result): result is Extract<EnqueueResult, { status: "error" }> => result.status === "error"
+    (result): result is Extract<AggregationEnqueueResult, { status: "error" }> =>
+      result.status === "error"
   );
 
   state.totalProcessed += successCount;
@@ -109,7 +94,7 @@ const processReadyAggregations = async (
 const createPollingLoop = (
   config: AggregationConfig,
   pollIntervalMs: number,
-  state: WorkerState,
+  state: AggregatorWorkerState,
   onError?: WorkerErrorCallback
 ): PollingLoop => {
   const poll = async (): Promise<void> => {
@@ -150,7 +135,7 @@ const createPollingLoop = (
 /** Runs the polling loop with error boundary. */
 const runPollingLoop = async (
   poll: PollingLoop,
-  state: WorkerState,
+  state: AggregatorWorkerState,
   onError?: WorkerErrorCallback
 ): Promise<void> => {
   try {
@@ -165,7 +150,7 @@ const runPollingLoop = async (
 };
 
 /** Creates a stats snapshot from current worker state. */
-const createStatsSnapshot = (state: WorkerState): WorkerStats => ({
+const createStatsSnapshot = (state: AggregatorWorkerState): WorkerStats => ({
   totalProcessed: state.totalProcessed,
   totalErrors: state.totalErrors,
   lastPollAt: state.lastPollAt,
@@ -184,7 +169,7 @@ export const startAggregatorWorker = (options: AggregatorWorkerOptions = {}): Wo
     onError,
   } = options;
 
-  const state: WorkerState = {
+  const state: AggregatorWorkerState = {
     running: true,
     totalProcessed: 0,
     totalErrors: 0,

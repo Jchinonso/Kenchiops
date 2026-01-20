@@ -47,3 +47,13 @@ export type QueryMetadata = Record<string, unknown> & {
  * Transaction function signature.
  */
 export type TransactionFunction<T> = (client: pg.PoolClient) => Promise<T>;
+
+/**
+ * Validation rule for database configuration fields.
+ */
+export interface ConfigValidationRule {
+  readonly field: keyof DatabaseConfig;
+  readonly isInvalid: (config: DatabaseConfig) => boolean;
+  readonly message: string;
+  readonly getValue?: (config: DatabaseConfig) => unknown;
+}

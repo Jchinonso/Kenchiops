@@ -17,7 +17,14 @@ import {
   parseJsonbField,
   type VectorSearchFilters,
 } from "../common.js";
-import type { CreateDiffChunkInput, DiffChunkRow, DiffChunk } from "./types.js";
+import type {
+  CreateDiffChunkInput,
+  DiffChunk,
+  DiffChunkFilterHandler,
+  DiffChunkInputValidationRule,
+  DiffChunkRow,
+  SearchConditionsResult,
+} from "./types.js";
 
 // ==================== Input Validation ====================
 
@@ -48,14 +55,6 @@ export const validatePositiveNumber = (value: number, fieldName: string, minimum
     });
   }
 };
-
-/** Validation rule for CreateDiffChunkInput fields. */
-interface DiffChunkInputValidationRule {
-  readonly field: keyof CreateDiffChunkInput;
-  readonly isInvalid: (input: CreateDiffChunkInput) => boolean;
-  readonly message: string;
-  readonly getValue?: (input: CreateDiffChunkInput) => unknown;
-}
 
 /** Validation rules for CreateDiffChunkInput. */
 const CREATE_INPUT_VALIDATION_RULES: readonly DiffChunkInputValidationRule[] = [
@@ -114,25 +113,16 @@ export const validateCreateInput = (input: CreateDiffChunkInput): void => {
 
 // ==================== Query Builders ====================
 
-/** Filter handler configuration for search conditions. */
-interface FilterHandler {
-  readonly key: keyof VectorSearchFilters;
-  readonly column: string;
-}
-
 /** Filter handlers for building WHERE clauses. */
-const FILTER_HANDLERS: readonly FilterHandler[] = [
+const FILTER_HANDLERS: readonly DiffChunkFilterHandler[] = [
   { key: "tenantId", column: "tenant_id" },
   { key: "repository", column: "repository" },
   { key: "prNumber", column: "pr_number" },
   { key: "filePath", column: "file_path" },
 ];
 
-/** Result of building search conditions. */
-export interface SearchConditionsResult {
-  readonly conditions: readonly string[];
-  readonly params: readonly unknown[];
-}
+// Re-export type for backwards compatibility
+export type { SearchConditionsResult } from "./types.js";
 
 /**
  * Builds WHERE clause conditions for similarity search.

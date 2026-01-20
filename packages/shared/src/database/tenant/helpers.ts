@@ -18,33 +18,16 @@ import {
   type TenantAuditEntry,
 } from "../common.js";
 import type {
-  TenantRow,
   AuditRow,
-  UpdateRAGBudgetInput,
-  UpdateQueryResult,
   FieldMapping,
+  GitHubInstallValidationRule,
+  SlackLinkValidationRule,
   TenantRAGBudgetConfig,
+  TenantRow,
+  UpdateQueryResult,
+  UpdateRAGBudgetInput,
+  UpdateRAGBudgetValidationRule,
 } from "./types.js";
-
-// ==================== Validation Rule Types ====================
-
-interface GitHubInstallValidationRule {
-  readonly isInvalid: (input: CreateTenantFromGitHub) => boolean;
-  readonly getMessage: () => string;
-  readonly field: string;
-}
-
-interface SlackLinkValidationRule {
-  readonly isInvalid: (input: LinkSlackWorkspace) => boolean;
-  readonly getMessage: () => string;
-  readonly field: string;
-}
-
-interface UpdateRAGBudgetValidationRule {
-  readonly isInvalid: (input: UpdateRAGBudgetInput) => boolean;
-  readonly getMessage: () => string;
-  readonly field: string;
-}
 
 // ==================== Validation Rules ====================
 
