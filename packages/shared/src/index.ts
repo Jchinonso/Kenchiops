@@ -570,6 +570,11 @@ export {
   getCachedPullRequestDiff,
   cachePullRequestDiff,
   getOrFetchPullRequestDiff,
+  getOrFetchPullRequestCommits,
+  getOrFetchPullRequestFiles,
+  getOrFetchPullRequestComments,
+  getOrFetchCommitPullRequests,
+  getOrFetchCheckAnnotations,
   // Tenant cache
   toCachedTenant,
   toCachedMapping,
@@ -620,6 +625,9 @@ export {
   type CachedAnalysis,
   type CachedAnnotation,
   type CachedAction,
+  type CachedComment,
+  type CachedPRReference,
+  type CachedCheckAnnotation,
 } from "./cache/index.js";
 
 // Redis-based aggregation
@@ -669,6 +677,9 @@ export {
   // Payload types
   type PendingAggregationPayload,
   type PendingAnalysisCallback,
+  // Worker control types
+  type WorkerControl,
+  type ProcessorControl,
 } from "./aggregation/index.js";
 
 // Health check utilities
