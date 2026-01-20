@@ -9,7 +9,7 @@ import {
   detectProtectedZoneStart,
   continuesProtectedZone,
   detectProtectedZones,
-} from "../../formatting/logProtectedZones.js";
+} from "../../formatting/chunking/index.js";
 import { PROTECTED_ZONE_TYPES } from "../../constants/index.js";
 
 describe("Log Protected Zones", () => {

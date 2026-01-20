@@ -11,8 +11,8 @@ import {
   truncateWithErrorContext,
   stripAnsiCodes,
   stripCITimestamps,
-} from "../../formatting/logPreprocessor.js";
-import { findBestAnchor } from "../../formatting/anchorSelection.js";
+  findBestAnchor,
+} from "../../formatting/preprocessing/index.js";
 import { redactSecretsWithStats, containsSecrets } from "../../security/redaction.js";
 
 describe("Regression Tests: Truncation Anchoring", () => {

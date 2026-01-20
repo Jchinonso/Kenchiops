@@ -11,7 +11,7 @@ import type { CreateRepositoryChannelMapping } from "../../core/types.js";
 const mockQuery = jest.fn<() => Promise<any>>();
 
 // Mock database client
-jest.mock("../../database/client.js", () => ({
+jest.mock("../../database/client/client.js", () => ({
   query: mockQuery,
 }));
 
@@ -28,11 +28,11 @@ jest.mock("../../core/logger.js", () => ({
 }));
 
 describe("Repository Channel Service", () => {
-  let repoChannelService: typeof import("../../database/repositoryChannelService.js");
+  let repoChannelService: typeof import("../../database/repositoryChannel/service.js");
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    repoChannelService = await import("../../database/repositoryChannelService.js");
+    repoChannelService = await import("../../database/repositoryChannel/service.js");
   });
 
   const mockMappingRow = {

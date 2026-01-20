@@ -7,11 +7,8 @@
  * @module integrations/promptArtifactAnalysis
  */
 
-import type {
-  AggregatedEvidence,
-  BuildMetadata,
-  RankedArtifact,
-} from "../formatting/chunkingTypes.js";
+import type { AggregatedEvidence, RankedArtifact } from "../formatting/aggregation/index.js";
+import type { BuildMetadata } from "../formatting/analysis/index.js";
 
 // ==================== Artifact Formatters ====================
 

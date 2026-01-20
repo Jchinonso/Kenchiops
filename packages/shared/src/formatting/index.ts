@@ -1,11 +1,21 @@
 /**
- * Formatting module - UI helpers and display utilities.
+ * Formatting Module
  *
- * Simplified exports after pipeline refactor.
+ * Organized submodules for CI log analysis pipeline:
+ * - preprocessing: Log sanitization, anchor selection, test framework detection
+ * - chunking: Log chunking and protected zone detection
+ * - extraction: Artifact extraction from chunks
+ * - aggregation: Artifact ranking, deduplication, and aggregation
+ * - analysis: Analysis types and field resolvers
+ * - output: GitHub and Slack formatters
+ *
+ * @module formatting
  */
 
-// UI helpers
+// ==================== Common Module ====================
+
 export {
+  // UI Helpers
   getConfidenceLabel,
   getConfidenceLabelParenthesized,
   formatConfidenceWithLabel,
@@ -18,57 +28,52 @@ export {
   getRepoName,
   getFirstSentence,
   buildTruncatedList,
-} from "./uiHelpers.js";
-
-// Array utilities
-export {
+  // Array Helpers
   deduplicateByKey,
   containsAny,
   startsWithAny,
   shouldExcludePath,
   groupBy,
   takeMatching,
-} from "./arrayUtils.js";
-
-// CI formatters - path utilities and dependency formatting
-export {
-  formatDependencyChange,
-  formatDependencyChanges,
+  // Path Helpers
   normalizeTestFilePath,
+  normalizeEvidencePath,
   extractValidFileLocation,
-  canonicalizeEvidencePaths,
   extractServiceFromPath,
   formatServiceNameKebab,
   formatServiceNameTitle,
-  stripAbsolutePaths,
   groupByServicePath,
   formatGroupedItems,
-  type DependencyChange,
-  type DependencyChangeType,
-} from "./ciFormatters.js";
-
-// Analysis resolvers
-export {
-  resolveIdentifiedCause,
-  resolveAnnotations,
-  resolveRecommendedActions,
-  resolveDependencyChanges,
-  resolveBuildConfigChanges,
-  type AnalysisLike,
-  type ResolvedAnnotation,
-  type ResolvedAction,
-  type ResolvedDependencyChange,
-} from "./analysisResolvers.js";
-
-// Action review formatting
-export {
+  getPathBasename,
+  buildCanonicalPathMap,
+  resolveCanonicalPath,
+  canonicalizeEvidencePaths,
+  stripAbsolutePaths,
+  // Dependency Formatters
+  formatDependencyChange,
+  formatDependencyChanges,
+  // Action Review
   buildReviewActionText,
+  // Types
+  type ThresholdEntry,
+  type TimeUnit,
   type ReviewActionOptions,
   type ReviewActionText,
-} from "./actionReview.js";
+  type DependencyChangeType,
+  type DependencyChange,
+} from "./common/index.js";
 
-// Simplified pipeline: Log preprocessing
+// ==================== Preprocessing Module ====================
+
 export {
+  // Anchor selection
+  ANCHOR_TIERS,
+  findBestAnchor,
+  findBestErrorPosition,
+  // Test framework detection
+  detectTestFramework,
+  detectTestFrameworkSimple,
+  // Preprocessor
   stripAnsiCodes,
   stripCITimestamps,
   stripCIGroupMarkers,
@@ -77,113 +82,149 @@ export {
   truncateWithErrorContext,
   preprocessLogs,
   preprocessLogsWithMetadata,
-  detectTestFramework,
-  detectTestFrameworkSimple,
-  // MODIFIED FOR CHUNKING PIPELINE: New Stage 0 preprocessing exports
   collapseRepeatedLines,
   removeProgressIndicators,
   sanitizeForChunking,
-  // V1.1: Line mapping support for original line number recovery
+  // Line mapping helpers
   sanitizeForChunkingWithMapping,
   getOriginalLineNumber,
   getSanitizedLineNumber,
   composeLineMappings,
+  // Types
   type CIPlatform,
-  type PreprocessResult,
+  type TieredMatch,
+  type AnchorResult,
   type TestFrameworkInfo,
+  type PreprocessResult,
   type CollapseOptions,
   type CollapseResult,
   type ProgressRemovalOptions,
   type ProgressRemovalResult,
   type SanitizationResult,
   type SanitizationResultWithMapping,
-  type LineMapping,
-} from "./logPreprocessor.js";
+} from "./preprocessing/index.js";
 
-// Anchor selection for log truncation
-export { findBestAnchor, findBestErrorPosition, type AnchorResult } from "./anchorSelection.js";
+// ==================== Chunking Module ====================
 
-// Chunking pipeline - Stage 1
 export {
+  // Helpers
   estimateTokens,
   estimateTokensForLines,
   detectCIPlatform,
-  detectProtectedZones,
   findNaturalBoundaries,
-  chunkLog,
   normalizeChunkingOptions,
-} from "./logChunking.js";
+  // Protected zones
+  detectProtectedZones,
+  // Chunker
+  chunkLog,
+  // Types
+  type ChunkingOptions,
+  type ProtectedZone,
+  type ChunkResult,
+  type ChunkingResult,
+  type LineMapping,
+} from "./chunking/index.js";
 
-// Chunking pipeline - Stage 2
+// ==================== Extraction Module ====================
+
 export {
+  // Helpers
+  generateAssertionHash,
+  normalizeExtractionOptions,
   buildChunkExtractorSystemPrompt,
   buildChunkExtractorPrompt,
+  CHUNK_EXTRACTOR_PROMPT_TEMPLATE,
+  // Parser
   parseExtractionResponse,
-  normalizeExtractionOptions,
+  // Extractor
   extractFromChunk,
   extractFromAllChunks,
-  CHUNK_EXTRACTOR_PROMPT_TEMPLATE,
-  // V1.1: Assertion hash for deduplication discrimination
-  generateAssertionHash,
+  // Types
   type ExtractorFunction,
-} from "./chunkExtractor.js";
+  type ExtractionOptions,
+  type ExtractedArtifact,
+  type ExtractionResult,
+  type BatchExtractionResult,
+  type PrimaryFailure,
+} from "./extraction/index.js";
 
-// Chunking pipeline - Stage 3
+// ==================== Aggregation Module ====================
+
 export {
+  // Signature
   computeArtifactSignature,
   computeArtifactSignatureSync,
   computeAbsoluteEvidenceId,
+  // Ranking
   computePriorityScore,
   createRankedArtifact,
   deduplicateArtifacts,
   sortArtifactsByPriority,
   detectCommonFramework,
-  aggregateArtifacts,
-  checkAggregationViability,
-  createEmptyAggregatedEvidence,
-  // V1.1: Primary failure determination and degraded mode
+  // Primary failure
   determinePrimaryFailure,
+  // Aggregator
   createDegradedResult,
   sampleLogForDegradedMode,
   buildDegradedModePrompt,
   analyzeDegradedMode,
+  aggregateArtifacts,
+  checkAggregationViability,
+  createEmptyAggregatedEvidence,
+  // Types
   type DegradedModeAnalyzer,
-} from "./artifactAggregator.js";
+  type ArtifactSignature,
+  type RankedArtifact,
+  type AggregatedEvidence,
+} from "./aggregation/index.js";
 
-// Chunking pipeline types
-export type {
-  ChunkingOptions,
-  ProtectedZone,
-  ChunkResult,
-  ChunkingResult,
-  ExtractionOptions,
-  ExtractedArtifact,
-  ExtractionResult,
-  BatchExtractionResult,
-  ArtifactSignature,
-  RankedArtifact,
-  AggregatedEvidence,
-  BuildMetadata,
-  FileAnnotation,
-  RecommendedAction,
-  SecondaryFinding,
-  TestFailureDetail,
-  LintErrorDetail,
-  RootCause,
-  AnalysisMetadata,
-  AnalysisResponse,
-  PipelineConfig,
-  PipelineResult,
-  PipelineError,
-  // V1.1: New types for line mapping and primary failure
-  PrimaryFailure,
-} from "./chunkingTypes.js";
+// ==================== Analysis Module ====================
 
-// Simplified pipeline: Output formatting
 export {
+  // Resolvers
+  resolveIdentifiedCause,
+  resolveAnnotations,
+  resolveRecommendedActions,
+  resolveDependencyChanges,
+  resolveBuildConfigChanges,
+  // Types
+  type AnalysisLike,
+  type ResolvedAnnotation,
+  type ResolvedAction,
+  type ResolvedDependencyChange,
+  type AnalysisResponse,
+  type BuildMetadata,
+  type FileAnnotation,
+  type RecommendedAction,
+  type SecondaryFinding,
+  type TestFailureDetail,
+  type LintErrorDetail,
+  type RootCause,
+  type AnalysisMetadata,
+  type FailureCategory,
+  type ConfidenceLevel,
+} from "./analysis/index.js";
+
+// ==================== Output Module ====================
+
+export {
+  // Formatters
   formatGitHubComment,
   formatSlackMessage,
+  // Types
   type OutputContext,
   type GitHubCommentOutput,
+  type SlackTextElement,
+  type SlackBlockElement,
+  type SlackBlock,
   type SlackMessageOutput,
-} from "./outputFormatter.js";
+} from "./output/index.js";
+
+// ==================== Pipeline Module ====================
+
+export type {
+  PipelineConfig,
+  PipelineResult,
+  PipelineErrorCode,
+  PipelineError,
+} from "./pipeline/index.js";

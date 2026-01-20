@@ -13,7 +13,7 @@ import {
   extractOptionalFields,
   validateArtifact,
   parseExtractionResponse,
-} from "../../formatting/chunkExtractionParser.js";
+} from "../../formatting/extraction/index.js";
 import { ARTIFACT_TYPES, ARTIFACT_SEVERITY, ARTIFACT_CONFIDENCE } from "../../constants/index.js";
 
 describe("Chunk Extraction Parser", () => {

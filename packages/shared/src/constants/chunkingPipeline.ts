@@ -62,6 +62,16 @@ export const CHUNKING_DEFAULTS = {
 // ==================== Protected Zone Detection ====================
 
 /**
+ * Configuration for protected zone detection.
+ */
+export const PROTECTED_ZONE_CONFIG = {
+  /** Maximum characters to include in zone description */
+  MAX_DESCRIPTION_LENGTH: 80,
+  /** Number of lines to look ahead for context */
+  LOOKAHEAD_LINES: 10,
+} as const;
+
+/**
  * Patterns for detecting protected zones that should not be split.
  * These represent logical units that lose meaning when broken apart.
  */
@@ -144,6 +154,16 @@ export const NATURAL_BOUNDARY_PATTERNS = {
 } as const;
 
 // ==================== Extraction Configuration ====================
+
+/**
+ * Configuration for assertion hash generation.
+ */
+export const ASSERTION_HASH_CONFIG = {
+  /** Hash algorithm to use */
+  ALGORITHM: "sha256",
+  /** Length of hash to return (first N hex characters) */
+  HASH_LENGTH: 16,
+} as const;
 
 /**
  * Chunk extraction configuration for Stage 2.
@@ -522,3 +542,73 @@ export const PROTECTED_ZONE_TYPES = {
 } as const;
 
 export type ProtectedZoneType = (typeof PROTECTED_ZONE_TYPES)[keyof typeof PROTECTED_ZONE_TYPES];
+
+// ==================== Evidence ID Parsing ====================
+
+/**
+ * Pattern for parsing evidence IDs with named capture groups.
+ * Matches format: chunk#<chunkId>:L<startLine>-L<endLine>
+ */
+export const EVIDENCE_ID_PATTERN = /chunk#(?<chunkId>\d+):L(?<startLine>\d+)-L(?<endLine>\d+)/;
+
+// ==================== Anchor Selection Configuration ====================
+
+/**
+ * Truncation marker for truncated log content.
+ */
+export const TRUNCATION_MARKER = "... [truncated] ..." as const;
+
+/**
+ * Anchor tier weights for log truncation.
+ * Higher tier = higher priority (lower number).
+ */
+export const ANCHOR_TIERS = {
+  /** Test summary at end of output (highest priority) */
+  SUMMARY: 0,
+  /** Explicit CI failure boundaries (##[error], exit codes) */
+  CI_BOUNDARY: 1,
+  /** Infrastructure killers (OOM, timeout, disk full, DNS) */
+  INFRA_KILLER: 2,
+  /** Stack traces, exceptions, assertions */
+  STACK_TRACE: 3,
+  /** Generic error indicators (ERROR level, build failures) */
+  GENERIC_ERROR: 4,
+  /** Simple string fallback (ERROR, FAILED) */
+  FALLBACK: -1,
+} as const;
+
+/**
+ * Test/run summary patterns - language-agnostic structural markers.
+ * These patterns detect "end-of-run summary" lines across common CI runners.
+ * Kept generic: match structural shapes, not specific framework output.
+ */
+export const TEST_SUMMARY_PATTERNS: readonly RegExp[] = [
+  // Jest/Vitest style: "Tests: X failed", "Test Suites: X failed"
+  /Tests?(?:\s+Suites?)?:\s*\d+\s+(?:failed|passed)/gi,
+  // pytest style: "===== X failed, Y passed in Zs =====" (structural equals bars)
+  /={3,}\s*\d+\s+(?:failed|passed).*={3,}/gi,
+  // Generic count summaries: "X failed, Y passed" or "X failures, Y successes"
+  /\d+\s+(?:failed|failures?),?\s+\d+\s+(?:passed|success)/gi,
+  // Go test style: "FAIL\t<pkg>" at end, or "ok\t<pkg>"
+  /^(?:FAIL|ok)\t\S+\s+[\d.]+s$/gim,
+  // Rust/cargo style: "test result: FAILED" or "test result: ok"
+  /test result:\s*(?:FAILED|ok)\.\s+\d+\s+passed/gi,
+  // Generic "X tests?, Y failures?" summaries
+  /\d+\s+tests?,\s*\d+\s+(?:failures?|errors?)/gi,
+  // CI runner summaries: "Ran X tests" type lines
+  /Ran\s+\d+\s+tests?\s+in\s+[\d.]+/gi,
+] as const;
+
+// ==================== Test Framework Detection Configuration ====================
+
+/**
+ * Confidence score adjustments for test framework detection.
+ */
+export const TEST_FRAMEWORK_CONFIDENCE = {
+  /** Bonus for each additional pattern match */
+  MULTI_MATCH_BONUS: 0.1,
+  /** Maximum confidence cap */
+  MAX_CONFIDENCE: 0.95,
+  /** Minimum confidence threshold */
+  MIN_CONFIDENCE: 0.5,
+} as const;

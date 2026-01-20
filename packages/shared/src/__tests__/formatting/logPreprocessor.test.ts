@@ -14,7 +14,7 @@ import {
   truncateWithErrorContext,
   preprocessLogs,
   preprocessLogsWithMetadata,
-} from "../../formatting/logPreprocessor.js";
+} from "../../formatting/preprocessing/index.js";
 import { LOG_PARSING_LIMITS, TEXT_SANITIZATION_PATTERNS } from "../../constants/index.js";
 
 describe("Log Preprocessor", () => {

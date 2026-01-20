@@ -9,8 +9,8 @@ import {
   computeArtifactSignature,
   computeArtifactSignatureSync,
   computeAbsoluteEvidenceId,
-} from "../../formatting/artifactSignature.js";
-import type { ExtractedArtifact } from "../../formatting/chunkingTypes.js";
+} from "../../formatting/aggregation/index.js";
+import type { ExtractedArtifact } from "../../formatting/extraction/index.js";
 import { ARTIFACT_TYPES, ARTIFACT_SEVERITY, ARTIFACT_CONFIDENCE } from "../../constants/index.js";
 
 describe("Artifact Signature", () => {

@@ -167,6 +167,37 @@ export const FORMATTER_DISPLAY_LIMITS = {
   MAX_ROOT_CAUSES: 5,
   /** Maximum characters per root cause line */
   MAX_CAUSE_LINE_CHARS: 200,
+  /** Maximum annotations to display per service in GitHub comments */
+  MAX_ANNOTATIONS_PER_SERVICE: 5,
+  /** Maximum next steps to display in formatted output */
+  MAX_NEXT_STEPS_DISPLAY: 5,
+  /** Maximum top issues to display in Slack messages */
+  MAX_TOP_ISSUES_DISPLAY: 3,
+  /** Maximum quick actions to display in Slack messages */
+  MAX_QUICK_ACTIONS_DISPLAY: 3,
+} as const;
+
+/**
+ * Confidence level descriptions for human-readable output.
+ */
+export const CONFIDENCE_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  high: "high certainty",
+  medium: "moderate certainty",
+  low: "low certainty",
+  unknown: "uncertain",
+} as const;
+
+/**
+ * Category emoji mapping for visual indicators.
+ */
+export const CATEGORY_EMOJI: Readonly<Record<string, string>> = {
+  test: "🧪",
+  build: "🔨",
+  dependency: "📦",
+  config: "⚙️",
+  infra: "🏗️",
+  runtime: "💥",
+  unknown: "❓",
 } as const;
 
 // ==================== Message Variant Configuration ====================

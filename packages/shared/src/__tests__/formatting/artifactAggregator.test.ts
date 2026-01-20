@@ -17,13 +17,13 @@ import {
   aggregateArtifacts,
   checkAggregationViability,
   createEmptyAggregatedEvidence,
-} from "../../formatting/artifactAggregator.js";
+} from "../../formatting/aggregation/index.js";
 import type {
   ExtractedArtifact,
   ExtractionResult,
   BatchExtractionResult,
-  ChunkResult,
-} from "../../formatting/chunkingTypes.js";
+} from "../../formatting/extraction/index.js";
+import type { ChunkResult } from "../../formatting/chunking/index.js";
 import {
   ARTIFACT_TYPES,
   ARTIFACT_SEVERITY,

@@ -9,7 +9,7 @@ import {
   shouldExcludePath,
   groupBy,
   takeMatching,
-} from "../../formatting/arrayUtils.js";
+} from "../../formatting/index.js";
 
 describe("Array Utilities", () => {
   describe("deduplicateByKey", () => {

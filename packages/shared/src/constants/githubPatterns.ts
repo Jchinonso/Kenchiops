@@ -199,3 +199,76 @@ export const FILE_REFERENCE_PATTERNS = [
  * AI can parse diffs from any package manager format without maintenance.
  * See docs/LANGUAGE_AGNOSTIC_MIGRATION.md for details.
  */
+
+// ==================== Path Processing Constants ====================
+
+/**
+ * Directory prefixes to skip when extracting module name from file paths.
+ * These are generic patterns found across many languages and project structures.
+ */
+export const SKIP_DIRECTORY_PREFIXES = new Set([
+  ".",
+  "..",
+  "src",
+  "lib",
+  "test",
+  "tests",
+  "spec",
+  "specs",
+  "__tests__",
+  "__mocks__",
+  "e2e",
+  "integration",
+  "unit",
+  "fixtures",
+  "mocks",
+  "dist",
+  "build",
+  "out",
+  "bin",
+]);
+
+/**
+ * Directories to skip when stripping absolute paths.
+ * These are user/system directories that should be removed.
+ */
+export const ABSOLUTE_PATH_SKIP_DIRS = new Set([
+  "home",
+  "Users",
+  "var",
+  "tmp",
+  "opt",
+  "usr",
+  "Projects",
+  "Dev",
+  "Documents",
+  "workspace",
+]);
+
+/**
+ * Pattern to match common absolute path prefixes.
+ * Handles Unix (/home/, /Users/, /var/, /tmp/) and Windows (C:\, D:\) paths.
+ */
+export const ABSOLUTE_PATH_PATTERN =
+  /(?:\/(?:home|Users|var|tmp|opt|usr)\/[^\s:]+\/|[A-Z]:\\(?:Users|Projects|Dev)\\[^\s:]+\\)/g;
+
+// ==================== Action Review Patterns ====================
+
+/**
+ * Patterns for action review text processing.
+ */
+export const ACTION_REVIEW_PATTERNS = {
+  /** Pattern to match service prefix in action descriptions */
+  SERVICE_PREFIX: /^\[([^\]]+)\]\s*/,
+  /** Pattern to match evidence tags in action text */
+  EVIDENCE_TAG: /\s*\[(?:test|anno|check|log|diff|dep|cfg|wflog|src|comment)#[^\]]+\]\s*/gi,
+  /** Pattern to match evidence in parentheses */
+  EVIDENCE_PAREN: /\s*\(evidence:\s*[a-z]+#[^)]+\)\s*/gi,
+  /** Pattern to match evidence IDs */
+  EVIDENCE_ID: /\b(?:test|anno|check|log|diff|dep|cfg|wflog|src|comment)#\d+\b/gi,
+  /** Pattern to match review action prefixes */
+  REVIEW_PREFIX:
+    /^(review|inspect|check|verify|investigate|address|start with|confirm|ensure|re-?run|run|align|compare|consider|look into|fix|correct|update|change|set|add|remove|replace|adjust|rename)\b/i,
+  /** Pattern to match title prefix to strip */
+  TITLE_PREFIX: /^start with[:\s]*/i,
+} as const;

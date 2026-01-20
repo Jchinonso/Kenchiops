@@ -11,12 +11,9 @@ import {
   deduplicateArtifacts,
   sortArtifactsByPriority,
   detectCommonFramework,
-} from "../../formatting/artifactRanking.js";
-import type {
-  ExtractedArtifact,
-  ExtractionResult,
-  RankedArtifact,
-} from "../../formatting/chunkingTypes.js";
+  type RankedArtifact,
+} from "../../formatting/aggregation/index.js";
+import type { ExtractedArtifact, ExtractionResult } from "../../formatting/extraction/index.js";
 import {
   ARTIFACT_TYPES,
   ARTIFACT_SEVERITY,
