@@ -1,10 +1,10 @@
 /**
- * Vector Utilities
+ * Vector Helpers
  *
  * Shared utility functions for vector embedding operations.
  * Used by diff chunk and knowledge document type mappers.
  *
- * @module database/vectorUtils
+ * @module database/vector/helpers
  */
 
 // ==================== Parsing Functions ====================

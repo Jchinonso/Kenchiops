@@ -63,7 +63,7 @@ export {
 } from "./repositoryChannel/index.js";
 
 // Vector types (shared)
-export type { VectorSearchResult, VectorSearchFilters } from "./vectorTypes.js";
+export type { VectorSearchResult, VectorSearchFilters } from "./vector/index.js";
 
 // Diff chunk module
 export {

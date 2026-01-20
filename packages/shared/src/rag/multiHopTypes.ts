@@ -7,7 +7,7 @@
  */
 
 import type { RelationshipType } from "../constants/index.js";
-import type { KnowledgeDocRecord } from "../database/vectorTypes.js";
+import type { KnowledgeDocRecord } from "../database/knowledgeDoc/types.js";
 
 // ==================== Types ====================
 

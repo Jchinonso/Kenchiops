@@ -6,8 +6,8 @@
  * @module database/vector
  */
 
-// Types - re-export from existing root-level files
-export type { VectorSearchResult, VectorSearchFilters } from "../vectorTypes.js";
+// Types
+export type { VectorSearchResult, VectorSearchFilters } from "./types.js";
 
-// Utilities - re-export from existing root-level files
-export { parseEmbeddingVector, parseJsonbField, formatEmbeddingVector } from "../vectorUtils.js";
+// Helpers
+export { parseEmbeddingVector, parseJsonbField, formatEmbeddingVector } from "./helpers.js";

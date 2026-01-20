@@ -18,7 +18,7 @@ import {
   batchIncrementKnowledgeDocHitCounts,
   type VectorSearchResult,
 } from "../database/index.js";
-import { type KnowledgeDocRecord } from "../database/vectorTypes.js";
+import { type KnowledgeDocRecord } from "../database/knowledgeDoc/types.js";
 import { recordEmbeddingOperation } from "./metrics.js";
 import { estimateTokenCount } from "./chunking.js";
 import { type RerankableResult, type RerankedResult } from "./reranker.js";

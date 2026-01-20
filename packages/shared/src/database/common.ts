@@ -97,10 +97,10 @@ export {
 } from "../constants/index.js";
 
 // Vector utilities
-export { parseEmbeddingVector, parseJsonbField, formatEmbeddingVector } from "./vectorUtils.js";
+export { parseEmbeddingVector, parseJsonbField, formatEmbeddingVector } from "./vector/helpers.js";
 
 // Vector types
-export type { VectorSearchFilters, VectorSearchResult } from "./vectorTypes.js";
+export type { VectorSearchFilters, VectorSearchResult } from "./vector/types.js";
 
 // Database client
 export { query, transaction } from "./client.js";

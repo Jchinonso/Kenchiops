@@ -16,7 +16,7 @@ import {
   type VectorSearchResult,
   type VectorSearchFilters,
 } from "../database/index.js";
-import { type KnowledgeDocRecord } from "../database/vectorTypes.js";
+import { type KnowledgeDocRecord } from "../database/knowledgeDoc/types.js";
 import { VECTOR_SIMILARITY_THRESHOLDS } from "../constants/index.js";
 import { estimateTokenCount } from "./chunking.js";
 import { fullRerank, type QueryContext } from "./reranker.js";
