@@ -442,7 +442,6 @@ export type ActionType =
   | "run_diagnostic"
   | "update_documentation"
   | "create_ticket"
-  | "post_comment"
   | "execute_runbook"
   | "manual_investigation";
 

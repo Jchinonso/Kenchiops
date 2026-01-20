@@ -128,32 +128,6 @@ const executeNotifyTeam: ActionExecutor = async (action, context) => {
 };
 
 /**
- * Executes a PR comment action.
- * Posts a comment on the associated pull request.
- */
-const executePostComment: ActionExecutor = async (action, context) => {
-  logger.info("Executing post comment action", {
-    actionId: action.id,
-    repository: context.repository,
-    prNumber: context.prNumber,
-  });
-
-  if (!context.prNumber) {
-    return {
-      success: false,
-      message: ACTION_MESSAGES.MISSING_PR_NUMBER,
-      error: "Missing prNumber in context",
-    };
-  }
-
-  // TODO: [#61] Implement actual GitHub PR comment
-  return {
-    success: true,
-    message: `Comment posted to PR #${context.prNumber}`,
-  };
-};
-
-/**
  * Executes a manual investigation action.
  * Logs the investigation requirement and notifies relevant parties.
  */
@@ -215,7 +189,6 @@ const executeNotImplemented: ActionExecutor = async (action, _context) => {
 const ACTION_EXECUTORS: Readonly<Record<ActionType, ActionExecutor>> = {
   rerun_pipeline: executeRerunPipeline,
   notify_team: executeNotifyTeam,
-  post_comment: executePostComment,
   manual_investigation: executeManualInvestigation,
   run_diagnostic: executeRunDiagnostic,
   // Placeholder executors for future implementation
