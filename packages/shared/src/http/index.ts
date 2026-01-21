@@ -2,6 +2,9 @@
  * HTTP module - Express middleware, validation, and resilient client utilities.
  */
 
+// Types
+export type { CircuitBreakerConfig, CircuitBreakerStatus } from "./types.js";
+
 // Middleware
 export { errorHandler, asyncHandler, requestLogger } from "./middleware.js";
 
@@ -27,8 +30,6 @@ export {
   resetAllCircuits,
   getAllCircuitStatus,
   SERVICE_KEYS,
-  type CircuitBreakerConfig,
-  type CircuitBreakerStatus,
 } from "./circuitBreaker.js";
 
 // Resilient HTTP client with retry and circuit breaker
