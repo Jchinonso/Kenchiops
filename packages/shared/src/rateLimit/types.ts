@@ -3,7 +3,7 @@
  *
  * Type definitions and security constants for rate limiting middleware.
  *
- * @module http/rateLimitTypes
+ * @module rateLimit/types
  */
 
 import type { Request } from "express";

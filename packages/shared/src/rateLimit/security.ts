@@ -10,7 +10,7 @@
  * - Fingerprint fallback for requests without valid IP
  * - Suspicious activity logging
  *
- * @module http/rateLimitSecurity
+ * @module rateLimit/security
  */
 
 import type { Request } from "express";
@@ -27,7 +27,7 @@ import {
   IPV4_MAX_OCTET,
   IDENTITY_HEADER_MAX_LENGTH,
   type TLSSocket,
-} from "./rateLimitTypes.js";
+} from "./types.js";
 
 const logger = createLogger("rate-limiter");
 

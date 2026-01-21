@@ -38,3 +38,53 @@ export interface CircuitBreakerStatus {
   readonly isOpen: boolean;
   readonly lastFailure: number | null;
 }
+
+// ==================== Resilient Client Types ====================
+
+/** HTTP methods supported by the resilient client. */
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/** Configuration options for resilient HTTP requests. */
+export interface ResilientRequestOptions {
+  /** Request timeout in milliseconds. */
+  readonly timeout?: number;
+  /** Maximum retry attempts. */
+  readonly maxRetries?: number;
+  /** Initial retry delay in milliseconds. */
+  readonly initialRetryDelay?: number;
+  /** Maximum retry delay in milliseconds. */
+  readonly maxRetryDelay?: number;
+  /** Additional headers. */
+  readonly headers?: Record<string, string>;
+  /** Whether to skip circuit breaker check. */
+  readonly skipCircuitBreaker?: boolean;
+}
+
+/** Response from resilient HTTP client. */
+export interface ResilientResponse<T> {
+  readonly data: T;
+  readonly status: number;
+  readonly retryCount: number;
+  readonly duration: number;
+}
+
+/** Internal circuit state tracking for resilient client. */
+export interface ResilientCircuitState {
+  failures: number;
+  lastFailure: number;
+  isOpen: boolean;
+}
+
+/** Request context for recursive retry attempts. */
+export interface RetryContext {
+  readonly url: string;
+  readonly method: HttpMethod;
+  readonly body?: unknown;
+  readonly timeout: number;
+  readonly maxRetries: number;
+  readonly initialRetryDelay: number;
+  readonly maxRetryDelay: number;
+  readonly headers: Record<string, string>;
+  readonly serviceKey: string;
+  readonly startTime: number;
+}

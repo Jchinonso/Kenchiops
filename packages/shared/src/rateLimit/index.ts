@@ -13,11 +13,11 @@
  * - Suspicious activity logging
  *
  * This module re-exports from focused sub-modules:
- * - rateLimitTypes.ts: Type definitions and constants
- * - rateLimitSecurity.ts: IP validation, fingerprinting, key generation
- * - rateLimitStores.ts: Redis and in-memory storage backends
+ * - types.ts: Type definitions and constants
+ * - security.ts: IP validation, fingerprinting, key generation
+ * - stores.ts: Redis and in-memory storage backends
  *
- * @module http/rateLimit
+ * @module rateLimit
  */
 
 import type { Request, Response, NextFunction } from "express";
@@ -52,13 +52,13 @@ import {
   type RateLimitOptions,
   type RateLimitStore,
   type RateLimitEntry,
-} from "./rateLimitTypes.js";
-import { secureKeyGenerator } from "./rateLimitSecurity.js";
-import { RedisRateLimitStore, InMemoryRateLimitStore } from "./rateLimitStores.js";
+} from "./types.js";
+import { secureKeyGenerator } from "./security.js";
+import { RedisRateLimitStore, InMemoryRateLimitStore } from "./stores.js";
 
 // Re-export types and utilities
-export type { RateLimitOptions, RateLimitInfo } from "./rateLimitTypes.js";
-export { secureKeyGenerator } from "./rateLimitSecurity.js";
+export type { RateLimitOptions, RateLimitInfo } from "./types.js";
+export { secureKeyGenerator } from "./security.js";
 
 const logger = createLogger("rate-limiter");
 

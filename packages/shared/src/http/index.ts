@@ -11,7 +11,7 @@ export { errorHandler, asyncHandler, requestLogger } from "./middleware.js";
 // Validation
 export { validate, validators, type Validator, type ValidationSchema } from "./validation.js";
 
-// Rate limiting
+// Rate limiting (re-exported from rateLimit module)
 export {
   createRateLimiter,
   defaultRateLimiter,
@@ -20,7 +20,7 @@ export {
   secureKeyGenerator,
   type RateLimitOptions,
   type RateLimitInfo,
-} from "./rateLimit.js";
+} from "../rateLimit/index.js";
 
 // Generic circuit breaker pattern
 export {

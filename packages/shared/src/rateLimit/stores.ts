@@ -8,7 +8,7 @@
  * - In-memory fallback with memory exhaustion protection
  * - Deterministic cleanup to avoid probabilistic issues
  *
- * @module http/rateLimitStores
+ * @module rateLimit/stores
  */
 
 import { ExternalServiceError, getErrorMessage } from "../core/errors.js";
@@ -23,7 +23,7 @@ import {
   type RateLimitStore,
   type RateLimitInfo,
   type RateLimitEntry,
-} from "./rateLimitTypes.js";
+} from "./types.js";
 
 const logger = createLogger("rate-limiter");
 
