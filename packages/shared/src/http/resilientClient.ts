@@ -17,70 +17,35 @@ import {
   RETRYABLE_HTTP_STATUS_CODES,
   RETRYABLE_NETWORK_ERRORS,
 } from "../constants/index.js";
+import type {
+  HttpMethod,
+  ResilientCircuitState,
+  ResilientRequestOptions,
+  ResilientResponse,
+  RetryContext,
+} from "./types.js";
+
+export type { ResilientRequestOptions, ResilientResponse };
 
 const logger = createLogger("resilient-http");
-
-// ==================== Types ====================
-
-/**
- * HTTP methods supported by the client
- */
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-
-/**
- * Configuration options for resilient HTTP requests
- */
-export interface ResilientRequestOptions {
-  /** Request timeout in milliseconds */
-  readonly timeout?: number;
-  /** Maximum retry attempts */
-  readonly maxRetries?: number;
-  /** Initial retry delay in milliseconds */
-  readonly initialRetryDelay?: number;
-  /** Maximum retry delay in milliseconds */
-  readonly maxRetryDelay?: number;
-  /** Additional headers */
-  readonly headers?: Record<string, string>;
-  /** Whether to skip circuit breaker check */
-  readonly skipCircuitBreaker?: boolean;
-}
-
-/**
- * Response from resilient HTTP client
- */
-export interface ResilientResponse<T> {
-  readonly data: T;
-  readonly status: number;
-  readonly retryCount: number;
-  readonly duration: number;
-}
-
-/**
- * Circuit breaker state
- */
-interface CircuitState {
-  failures: number;
-  lastFailure: number;
-  isOpen: boolean;
-}
 
 // ==================== Circuit Breaker ====================
 
 /**
  * Circuit breaker registry - tracks state per service
  */
-const circuitBreakers = new Map<string, CircuitState>();
+const circuitBreakers = new Map<string, ResilientCircuitState>();
 
 /**
  * Gets or creates circuit breaker state for a service
  */
-const getCircuitState = (serviceKey: string): CircuitState => {
+const getCircuitState = (serviceKey: string): ResilientCircuitState => {
   const existing = circuitBreakers.get(serviceKey);
   if (existing) {
     return existing;
   }
 
-  const initial: CircuitState = { failures: 0, lastFailure: 0, isOpen: false };
+  const initial: ResilientCircuitState = { failures: 0, lastFailure: 0, isOpen: false };
   circuitBreakers.set(serviceKey, initial);
   return initial;
 };
@@ -109,14 +74,16 @@ const isCircuitOpen = (serviceKey: string): boolean => {
 
   // Check if reset timeout has passed
   const timeSinceFailure = Date.now() - state.lastFailure;
-  if (timeSinceFailure >= HTTP_RESILIENCE_DEFAULTS.CIRCUIT_BREAKER_RESET_MS) {
-    // Half-open state - allow one request through
-    state.isOpen = false;
-    logger.info("Circuit breaker half-open, allowing request", { serviceKey });
-    return false;
+  const shouldReset = timeSinceFailure >= HTTP_RESILIENCE_DEFAULTS.CIRCUIT_BREAKER_RESET_MS;
+
+  if (!shouldReset) {
+    return true;
   }
 
-  return true;
+  // Half-open state - allow one request through
+  state.isOpen = false;
+  logger.info("Circuit breaker half-open, allowing request", { serviceKey });
+  return false;
 };
 
 /**
@@ -181,7 +148,10 @@ const isRetryableError = (status: number, error?: Error): boolean => {
   // Network errors are retryable
   if (error) {
     const message = error.message.toLowerCase();
-    if (RETRYABLE_NETWORK_ERRORS.some((errorPattern) => message.includes(errorPattern))) {
+    const isNetworkError = RETRYABLE_NETWORK_ERRORS.some((errorPattern) =>
+      message.includes(errorPattern)
+    );
+    if (isNetworkError) {
       return true;
     }
   }
@@ -201,22 +171,6 @@ const wait = (ms: number): Promise<void> =>
   });
 
 // ==================== Main Client ====================
-
-/**
- * Request context for recursive retry attempts.
- */
-interface RetryContext {
-  readonly url: string;
-  readonly method: HttpMethod;
-  readonly body?: unknown;
-  readonly timeout: number;
-  readonly maxRetries: number;
-  readonly initialRetryDelay: number;
-  readonly maxRetryDelay: number;
-  readonly headers: Record<string, string>;
-  readonly serviceKey: string;
-  readonly startTime: number;
-}
 
 /**
  * Safely extracts response body text.
@@ -286,13 +240,13 @@ const logAndWaitForRetry = async (
  */
 const handleExhaustedRetries = (context: RetryContext, lastError: Error | undefined): never => {
   recordFailure(context.serviceKey);
-  const duration = Date.now() - context.startTime;
+  const durationMs = Date.now() - context.startTime;
   logger.error("Request failed after all retries", {
     url: context.url,
     method: context.method,
     error: lastError?.message,
     totalAttempts: context.maxRetries + 1,
-    duration,
+    durationMs,
   });
   throw new ExternalServiceError(
     context.serviceKey,
@@ -310,17 +264,17 @@ const handleSuccess = async <T>(
 ): Promise<ResilientResponse<T>> => {
   recordSuccess(context.serviceKey);
   const data = (await response.json()) as T;
-  const duration = Date.now() - context.startTime;
+  const durationMs = Date.now() - context.startTime;
 
   logger.debug("Request succeeded", {
     url: context.url,
     method: context.method,
     status: response.status,
-    duration,
+    durationMs,
     retryCount: attempt - 1,
   });
 
-  return { data, status: response.status, retryCount: attempt - 1, duration };
+  return { data, status: response.status, retryCount: attempt - 1, duration: durationMs };
 };
 
 /**
