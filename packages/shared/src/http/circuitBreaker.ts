@@ -107,23 +107,18 @@ const shouldTransitionToHalfOpen = (
 const canExecute = (serviceKey: string, config: Required<CircuitBreakerConfig>): boolean => {
   const record = getCircuitRecord(serviceKey);
 
-  // Closed circuit - always allow
-  if (record.state === "closed") {
-    return true;
-  }
-
-  // Half-open circuit - allow probe request
-  if (record.state === "half-open") {
+  // Closed or half-open circuits allow execution
+  if (record.state === "closed" || record.state === "half-open") {
     return true;
   }
 
   // Open circuit - check if ready for half-open transition
-  if (shouldTransitionToHalfOpen(record, config)) {
-    stateTransitions.toHalfOpen(record, serviceKey);
-    return true;
+  if (!shouldTransitionToHalfOpen(record, config)) {
+    return false;
   }
 
-  return false;
+  stateTransitions.toHalfOpen(record, serviceKey);
+  return true;
 };
 
 /**
