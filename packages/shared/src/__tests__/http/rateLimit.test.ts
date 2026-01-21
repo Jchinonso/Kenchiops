@@ -9,7 +9,7 @@ import {
   defaultRateLimiter,
   createRedisRateLimiter,
   defaultRedisRateLimiter,
-} from "../../http/rateLimit.js";
+} from "../../rateLimit/index.js";
 import { AppError, RateLimitError } from "../../core/errors.js";
 import { RATE_LIMIT_CONSTANTS } from "../../constants/index.js";
 
