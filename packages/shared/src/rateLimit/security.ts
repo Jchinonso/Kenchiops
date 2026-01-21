@@ -53,51 +53,63 @@ export const isValidIPv4 = (ip: string): boolean => {
   });
 };
 
+// ==================== IPv6 Validation Helpers ====================
+
+const IPV6_MAX_GROUPS = 8;
+const IPV6_VALID_CHARS = /^[0-9a-fA-F:]+$/;
+const IPV6_HEX_ONLY = /^[0-9a-fA-F]+$/;
+
+const hasValidIPv6Structure = (ip: string): boolean =>
+  ip.includes(":") && IPV6_VALID_CHARS.test(ip) && !ip.includes(":::");
+
+const countDoubleColons = (ip: string): number => (ip.match(/::/g) ?? []).length;
+
 /**
- * Validates an IPv6 address format (strict validation).
- * SECURITY: Rejects leading zeros per RFC 5952 to prevent bypass attacks.
+ * Validates IPv6 group count based on compression.
+ */
+const hasValidGroupCount = (groups: string[], hasCompression: boolean): boolean => {
+  if (hasCompression) {
+    return groups.length <= IPV6_MAX_GROUPS;
+  }
+  return groups.length === IPV6_MAX_GROUPS;
+};
+
+/**
+ * Validates a single IPv6 group per RFC 5952.
+ * Rejects leading zeros to prevent bypass attacks.
+ */
+const isValidIPv6Group = (group: string): boolean => {
+  if (group.length === 0) {
+    return true;
+  } // Empty allowed for ::
+  if (group.length > 4) {
+    return false;
+  }
+  if (group.length > 1 && group[0] === "0") {
+    return false;
+  } // No leading zeros
+  return IPV6_HEX_ONLY.test(group);
+};
+
+/**
+ * Validates an IPv6 address format (strict validation per RFC 5952).
  */
 export const isValidIPv6 = (ip: string): boolean => {
-  // Must contain at least one colon and only valid hex chars and colons
-  if (!ip.includes(":") || !/^[0-9a-fA-F:]+$/.test(ip)) {
+  if (!hasValidIPv6Structure(ip)) {
     return false;
   }
-  // Reject triple colons
-  if (ip.includes(":::")) {
-    return false;
-  }
-  // SECURITY: Only ONE double-colon allowed in IPv6
-  const doubleColonMatches = ip.match(/::/g);
-  const doubleColonCount = doubleColonMatches ? doubleColonMatches.length : 0;
+
+  const doubleColonCount = countDoubleColons(ip);
   if (doubleColonCount > 1) {
     return false;
   }
-  // Split and validate groups
+
   const groups = ip.split(":");
-  // IPv6 has max 8 groups, but :: can represent missing groups
-  const hasDoubleColon = doubleColonCount === 1;
-  if (!hasDoubleColon && groups.length !== 8) {
+  if (!hasValidGroupCount(groups, doubleColonCount === 1)) {
     return false;
   }
-  if (hasDoubleColon && groups.length > 8) {
-    return false;
-  }
-  // Each group must be 1-4 hex chars (empty allowed for ::)
-  // SECURITY: Reject leading zeros (except single "0") per RFC 5952
-  // This prevents bypass attacks like "0fe80::1" vs "fe80::1"
-  return groups.every((group) => {
-    if (group.length === 0) {
-      return true; // Empty group allowed for ::
-    }
-    if (group.length > 4) {
-      return false;
-    }
-    // Reject leading zeros (e.g., "01", "001") but allow single "0"
-    if (group.length > 1 && group[0] === "0") {
-      return false;
-    }
-    return /^[0-9a-fA-F]+$/.test(group);
-  });
+
+  return groups.every(isValidIPv6Group);
 };
 
 /**
@@ -187,7 +199,7 @@ export const sanitizeIdentity = (value: string | string[] | undefined): string |
  * Identity header extraction configuration.
  * Order determines priority - first match wins.
  */
-const IDENTITY_EXTRACTORS = [
+const IDENTITY_CONFIG = [
   { header: IDENTITY_HEADERS.TENANT_ID, prefix: "tenant" },
   { header: IDENTITY_HEADERS.INSTALLATION_ID, prefix: "install" },
   { header: IDENTITY_HEADERS.CLIENT_ID, prefix: "client" },
@@ -199,21 +211,19 @@ const IDENTITY_EXTRACTORS = [
  * Returns null if no valid identity headers are present.
  */
 export const extractIdentity = (req: Request): string | null => {
-  if (!req.headers) {
+  const { headers } = req;
+  if (!headers) {
     return null;
   }
 
-  const matched = IDENTITY_EXTRACTORS.find(({ header }) => {
-    const value = sanitizeIdentity(req.headers[header]);
-    return value !== null;
-  });
-
-  if (!matched) {
-    return null;
+  for (const { header, prefix } of IDENTITY_CONFIG) {
+    const value = sanitizeIdentity(headers[header]);
+    if (value) {
+      return `${prefix}:${value}`;
+    }
   }
 
-  const value = sanitizeIdentity(req.headers[matched.header]);
-  return value ? `${matched.prefix}:${value}` : null;
+  return null;
 };
 
 // ==================== Secure Key Generator ====================
