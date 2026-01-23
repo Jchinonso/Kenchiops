@@ -2,15 +2,15 @@
  * Consistency checking module for confidence scoring.
  * Ensures recommended actions address the identified root cause.
  *
- * @module safety/consistency
+ * @module safety/scoring/consistency
  */
 
-import type { LLMAnalysisResult } from "../core/types.js";
+import type { LLMAnalysisResult } from "../../core/types.js";
 import {
   CONSISTENCY_ADJUSTMENTS,
   RELEVANCE_THRESHOLDS,
   RELEVANCE_RULES,
-} from "../constants/index.js";
+} from "../../constants/index.js";
 
 /**
  * Checks if action matches cause based on relevance rules.

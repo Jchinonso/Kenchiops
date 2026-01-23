@@ -1,9 +1,11 @@
 /**
  * Uncertainty detection module for confidence scoring.
  * Detects hedging language and uncertainty markers in LLM outputs.
+ *
+ * @module safety/validation/uncertaintyDetection
  */
 
-import { UNCERTAINTY_PENALTIES, UNCERTAINTY_PATTERNS } from "../constants/index.js";
+import { UNCERTAINTY_PENALTIES, UNCERTAINTY_PATTERNS } from "../../constants/index.js";
 
 /**
  * Detects hedging language and uncertainty markers in text.

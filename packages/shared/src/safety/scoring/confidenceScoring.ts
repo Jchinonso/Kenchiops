@@ -2,17 +2,20 @@
  * Main confidence scoring module.
  * Calculates 6-factor confidence scores for LLM analysis results.
  *
- * @module safety/confidenceScoring
+ * @module safety/scoring/confidenceScoring
  */
 
-import type { LLMAnalysisResult, Evidence, ConfidenceScoreResult } from "../core/types.js";
-import { detectUncertainty } from "./uncertaintyDetection.js";
-import { calculateEvidenceAlignment, assessCompleteness } from "./evidenceValidation.js";
-import { validateAgainstKnowledgeBase } from "./knowledgeValidation.js";
+import type { LLMAnalysisResult, Evidence, ConfidenceScoreResult } from "../../core/types.js";
+import { detectUncertainty } from "../validation/uncertaintyDetection.js";
+import {
+  calculateEvidenceAlignment,
+  assessCompleteness,
+} from "../validation/evidenceValidation.js";
+import { validateAgainstKnowledgeBase } from "../validation/knowledgeValidation.js";
 import { checkConsistency } from "./consistency.js";
-import { determineGatingDecision } from "./actionGating.js";
-import { clampConfidenceScore, formatAdjustment, formatScore } from "./helpers.js";
-import { BASE_CONFIDENCE_SCORES } from "../constants/index.js";
+import { determineGatingDecision } from "../gating/actionGating.js";
+import { clampConfidenceScore, formatAdjustment, formatScore } from "../helpers.js";
+import { BASE_CONFIDENCE_SCORES } from "../../constants/index.js";
 
 /**
  * LLM confidence level to base score mapping.

@@ -1,10 +1,12 @@
 /**
  * Knowledge base validation module for confidence scoring.
  * Validates analysis against past incidents in the knowledge base.
+ *
+ * @module safety/validation/knowledgeValidation
  */
 
-import type { LLMAnalysisResult, Evidence } from "../core/types.js";
-import { SIMILARITY_THRESHOLDS, VALIDATION_ADJUSTMENTS } from "../constants/index.js";
+import type { LLMAnalysisResult, Evidence } from "../../core/types.js";
+import { SIMILARITY_THRESHOLDS, VALIDATION_ADJUSTMENTS } from "../../constants/index.js";
 
 /**
  * Finds the best matching incident by similarity.

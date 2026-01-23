@@ -2,10 +2,10 @@
  * Evidence validation module for confidence scoring.
  * Validates that LLM analysis aligns with provided evidence and assesses completeness.
  *
- * @module safety/evidenceValidation
+ * @module safety/validation/evidenceValidation
  */
 
-import type { LLMAnalysisResult, Evidence } from "../core/types.js";
+import type { LLMAnalysisResult, Evidence } from "../../core/types.js";
 import {
   ALIGNMENT_ADJUSTMENTS,
   SIMILARITY_THRESHOLDS,
@@ -15,9 +15,9 @@ import {
   COMPLETENESS_ADJUSTMENTS,
   MIN_LENGTHS,
   MIN_ACTIONS_FOR_BONUS,
-} from "../constants/index.js";
-import type { AlignmentCheck, CompletenessCheck } from "./types.js";
-import { containsKeyword } from "./helpers.js";
+} from "../../constants/index.js";
+import type { AlignmentCheck, CompletenessCheck } from "../types.js";
+import { containsKeyword } from "../helpers.js";
 
 /**
  * Checks if reasoning contains metric keywords.

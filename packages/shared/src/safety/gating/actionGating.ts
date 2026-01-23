@@ -2,10 +2,10 @@
  * Action gating module for confidence-based approval workflows.
  * Determines whether actions should be auto-approved, require approval, or be blocked.
  *
- * @module safety/actionGating
+ * @module safety/gating/actionGating
  */
 
-import type { ActionProposal, SafetyLevel } from "../core/types.js";
+import type { ActionProposal, SafetyLevel } from "../../core/types.js";
 import {
   CONFIDENCE_THRESHOLDS,
   AUTO_APPROVABLE_SAFETY_LEVELS,
@@ -13,12 +13,12 @@ import {
   CONFIDENCE_MESSAGES,
   SAFETY_MESSAGES,
   type ConfidenceRange,
-} from "../constants/index.js";
-import type { GatingDecision, ActionGatingResult, ThresholdEntry } from "./types.js";
-import { clampConfidenceScore } from "./helpers.js";
+} from "../../constants/index.js";
+import type { GatingDecision, ActionGatingResult, ThresholdEntry } from "../types.js";
+import { clampConfidenceScore } from "../helpers.js";
 
 // Re-export types for consumers
-export type { GatingDecision, ActionGatingResult } from "./types.js";
+export type { GatingDecision, ActionGatingResult } from "../types.js";
 
 /**
  * Confidence range lookup table (ascending order - returns first match).

@@ -10,10 +10,10 @@
  * @module safety
  */
 
-// Type exports
-// Backward compatibility imports
+// ==================== Type Exports ====================
+// ==================== Backward Compatibility ====================
 import type { LLMAnalysisResult, Evidence } from "../core/types.js";
-import { calculateConfidenceScore } from "./confidenceScoring.js";
+import { calculateConfidenceScore } from "./scoring/confidenceScoring.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD, PLACEHOLDER_CONFIDENCE_SCORE } from "../constants/index.js";
 
 export type {
@@ -27,7 +27,7 @@ export type {
   ConfidenceRange,
 } from "./types.js";
 
-// Helper exports
+// ==================== Helper Exports ====================
 export {
   clampConfidenceScore,
   formatAdjustment,
@@ -36,27 +36,116 @@ export {
   containsKeyword,
 } from "./helpers.js";
 
-// Main function exports
-export { calculateConfidenceScore, getBaseScore } from "./confidenceScoring.js";
-export { determineActionGating, determineGatingDecision } from "./actionGating.js";
+// ==================== Scoring Module ====================
+export { calculateConfidenceScore, getBaseScore } from "./scoring/confidenceScoring.js";
+export { checkConsistency } from "./scoring/consistency.js";
+export {
+  assessActionRisk,
+  isHighRiskAction,
+  isIrreversibleAction,
+  getRiskScoreConstants,
+  type ActionRiskScore,
+  type RiskAssessmentRule,
+  type RiskScoreConstants,
+  type BlastRadius,
+  type Reversibility,
+  type DataImpact,
+} from "./scoring/riskScoring.js";
 
-// Sub-module exports for internal/advanced use
-export { detectUncertainty } from "./uncertaintyDetection.js";
-export { calculateEvidenceAlignment, assessCompleteness } from "./evidenceValidation.js";
-export { validateAgainstKnowledgeBase } from "./knowledgeValidation.js";
-export { checkConsistency } from "./consistency.js";
+// ==================== Validation Module ====================
+export { detectUncertainty } from "./validation/uncertaintyDetection.js";
+export { calculateEvidenceAlignment, assessCompleteness } from "./validation/evidenceValidation.js";
+export { validateAgainstKnowledgeBase } from "./validation/knowledgeValidation.js";
+export {
+  sanitizeLLMOutput,
+  validateCommand,
+  hasCodeInjection,
+  sanitizeFilePath,
+  redactSecrets,
+  type SanitizationResult,
+  type CommandValidationResult,
+} from "./validation/sanitization.js";
+export {
+  checkForHallucinations,
+  isLikelyHallucinated,
+  getHallucinationRiskLevel,
+  type HallucinationCheckResult,
+  type HallucinationIndicator,
+  type HallucinationIndicatorType,
+} from "./validation/hallucination.js";
+
+// ==================== Gating Module ====================
+export { determineActionGating, determineGatingDecision } from "./gating/actionGating.js";
+export {
+  detectPromptInjection,
+  hasInjectionAttempt,
+  shouldBlockInput,
+  sanitizeInjectionAttempts,
+  getInjectionSeverity,
+  type InjectionDetectionResult,
+  type InjectionMatch,
+  type InjectionPatternType,
+  type InjectionRecommendation,
+} from "./gating/promptInjection.js";
+export {
+  checkRestrictions,
+  isActionRestricted,
+  activateRestriction,
+  deactivateRestriction,
+  getManualRestrictions,
+  clearAllManualRestrictions,
+  addRestrictionRule,
+  removeRestrictionRule,
+  getRestrictionRules,
+  activateIncidentMode,
+  activateDeploymentFreeze,
+  isInIncidentMode,
+  type RestrictionCheckResult,
+  type ActiveRestriction,
+  type RestrictionType,
+  type RestrictionRule,
+  type ScheduleConfig,
+  type RestrictionContext,
+} from "./gating/restrictions.js";
+
+// ==================== Audit Module ====================
+export {
+  recordAuditEntry,
+  recordActionProposal,
+  recordInjectionDetection,
+  recordHallucinationDetection,
+  recordRestrictionApplied,
+  recordRiskAssessment,
+  queryAuditEntries,
+  countAuditEntries,
+  getRecentAuditEntries,
+  getAuditEntriesForRequest,
+  getBlockedActions,
+  setAuditStore,
+  getAuditStore,
+  resetAuditStore,
+  createInMemoryAuditStore,
+  type SafetyAuditEntry,
+  type SafetyRequestContext,
+  type SafetyEventType,
+  type AuditSeverity,
+  type AuditDecision,
+  type CreateAuditEntryInput,
+  type AuditQueryOptions,
+  type AuditStore,
+} from "./audit/audit.js";
 
 /**
  * Calculate confidence score for a result (backward compatible).
  *
  * @param result - LLM analysis result or any object
  * @returns Confidence score between 0 and 1, or 0 if invalid
+ * @deprecated Use calculateConfidenceScore instead
  */
 export const confidenceScore = (result: unknown): number => {
   if (!result || typeof result !== "object") {
     return 0;
   }
-  // TODO: Implement proper validation and scoring
   return PLACEHOLDER_CONFIDENCE_SCORE;
 };
 
@@ -66,12 +155,12 @@ export const confidenceScore = (result: unknown): number => {
  * @param result - LLM analysis result
  * @param threshold - Minimum confidence threshold (default: 0.7)
  * @returns True if confidence meets threshold
+ * @deprecated Use calculateConfidenceScore and check finalScore directly
  */
 export const shouldActOnResult = (
   result: LLMAnalysisResult,
   threshold: number = DEFAULT_CONFIDENCE_THRESHOLD
 ): boolean => {
-  // Use minimal evidence for backward compatibility
   const minimalEvidence: Evidence = {
     eventId: result.eventId,
     collectedAt: new Date().toISOString(),
