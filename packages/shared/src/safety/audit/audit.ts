@@ -10,8 +10,6 @@
 import type {
   SafetyAuditEntry,
   SafetyRequestContext,
-  SafetyEventType,
-  AuditSeverity,
   AuditDecision,
   CreateAuditEntryInput,
   AuditQueryOptions,
@@ -29,6 +27,64 @@ const DEFAULT_QUERY_LIMIT = 100;
  * Maximum in-memory entries (for default store).
  */
 const MAX_IN_MEMORY_ENTRIES = 10000;
+
+// ==================== Filter Configuration ====================
+
+/**
+ * Filter configuration for query options.
+ * Maps option keys to their filter predicates.
+ */
+const QUERY_FILTERS: ReadonlyArray<{
+  readonly shouldApply: (options: AuditQueryOptions) => boolean;
+  readonly createPredicate: (options: AuditQueryOptions) => (entry: SafetyAuditEntry) => boolean;
+}> = [
+  // Array-based filters (eventTypes, severities, decisions)
+  {
+    shouldApply: (options) => Boolean(options.eventTypes?.length),
+    createPredicate: (options) => {
+      const set = new Set(options.eventTypes);
+      return (entry) => set.has(entry.eventType);
+    },
+  },
+  {
+    shouldApply: (options) => Boolean(options.severities?.length),
+    createPredicate: (options) => {
+      const set = new Set(options.severities);
+      return (entry) => set.has(entry.severity);
+    },
+  },
+  {
+    shouldApply: (options) => Boolean(options.decisions?.length),
+    createPredicate: (options) => {
+      const set = new Set(options.decisions);
+      return (entry) => set.has(entry.decision);
+    },
+  },
+  // Request context filters
+  {
+    shouldApply: (options) => Boolean(options.tenantId),
+    createPredicate: (options) => (entry) => entry.requestContext?.tenantId === options.tenantId,
+  },
+  {
+    shouldApply: (options) => Boolean(options.requestId),
+    createPredicate: (options) => (entry) => entry.requestContext?.requestId === options.requestId,
+  },
+  // Date range filters
+  {
+    shouldApply: (options) => options.fromDate !== undefined,
+    createPredicate: (options) => {
+      const fromDate = options.fromDate as Date;
+      return (entry) => entry.timestamp >= fromDate;
+    },
+  },
+  {
+    shouldApply: (options) => options.toDate !== undefined,
+    createPredicate: (options) => {
+      const toDate = options.toDate as Date;
+      return (entry) => entry.timestamp <= toDate;
+    },
+  },
+];
 
 // ==================== In-Memory Store ====================
 
@@ -49,52 +105,23 @@ class InMemoryAuditStore implements AuditStore {
   }
 
   async query(options: AuditQueryOptions): Promise<readonly SafetyAuditEntry[]> {
-    let filtered = this.entries;
-
-    // Apply filters
-    if (options.eventTypes && options.eventTypes.length > 0) {
-      const eventTypeSet = new Set(options.eventTypes);
-      filtered = filtered.filter((entry) => eventTypeSet.has(entry.eventType));
-    }
-
-    if (options.severities && options.severities.length > 0) {
-      const severitySet = new Set(options.severities);
-      filtered = filtered.filter((entry) => severitySet.has(entry.severity));
-    }
-
-    if (options.decisions && options.decisions.length > 0) {
-      const decisionSet = new Set(options.decisions);
-      filtered = filtered.filter((entry) => decisionSet.has(entry.decision));
-    }
-
-    if (options.tenantId) {
-      filtered = filtered.filter((entry) => entry.requestContext?.tenantId === options.tenantId);
-    }
-
-    if (options.requestId) {
-      filtered = filtered.filter((entry) => entry.requestContext?.requestId === options.requestId);
-    }
-
-    if (options.fromDate) {
-      const { fromDate } = options;
-      filtered = filtered.filter((entry) => entry.timestamp >= fromDate);
-    }
-
-    if (options.toDate) {
-      const { toDate } = options;
-      filtered = filtered.filter((entry) => entry.timestamp <= toDate);
-    }
-
-    // Sort by timestamp descending (newest first)
-    filtered = [...filtered].sort(
-      (entryA, entryB) => entryB.timestamp.getTime() - entryA.timestamp.getTime()
+    // Build predicates from filter configuration
+    const predicates = QUERY_FILTERS.filter((filter) => filter.shouldApply(options)).map((filter) =>
+      filter.createPredicate(options)
     );
 
-    // Apply pagination
+    // Apply all filters in a single pass
+    const filtered = this.entries.filter((entry) =>
+      predicates.every((predicate) => predicate(entry))
+    );
+
+    // Sort by timestamp descending (newest first) and apply pagination
     const offset = options.offset ?? 0;
     const limit = options.limit ?? DEFAULT_QUERY_LIMIT;
 
-    return filtered.slice(offset, offset + limit);
+    return filtered
+      .sort((entryA, entryB) => entryB.timestamp.getTime() - entryA.timestamp.getTime())
+      .slice(offset, offset + limit);
   }
 
   async count(options: AuditQueryOptions): Promise<number> {
@@ -378,10 +405,8 @@ export const createInMemoryAuditStore = (): AuditStore & {
 export type {
   SafetyAuditEntry,
   SafetyRequestContext,
-  SafetyEventType,
-  AuditSeverity,
   AuditDecision,
   CreateAuditEntryInput,
   AuditQueryOptions,
   AuditStore,
-};
+} from "../types.js";
