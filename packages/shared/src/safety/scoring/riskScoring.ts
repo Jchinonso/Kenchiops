@@ -8,53 +8,13 @@
  */
 
 import type { ActionProposal } from "../../core/types.js";
-
-// ==================== Types ====================
-
-/**
- * Blast radius of an action - how many systems/services are affected.
- */
-export type BlastRadius = "single_service" | "multiple_services" | "infrastructure";
-
-/**
- * How easily an action can be reversed.
- */
-export type Reversibility = "instant" | "minutes" | "manual_only" | "irreversible";
-
-/**
- * Impact on data.
- */
-export type DataImpact = "none" | "read_only" | "write" | "destructive";
-
-/**
- * Complete risk assessment for an action.
- */
-export interface ActionRiskScore {
-  /** How many systems are affected */
-  readonly blastRadius: BlastRadius;
-  /** How easily the action can be undone */
-  readonly reversibility: Reversibility;
-  /** Impact on data */
-  readonly dataImpact: DataImpact;
-  /** Composite risk score (0-1, higher = more risky) */
-  readonly score: number;
-  /** Human-readable risk summary */
-  readonly summary: string;
-}
-
-/**
- * Configuration for risk assessment rules.
- */
-export interface RiskAssessmentRule {
-  /** Action types that match this rule */
-  readonly actionTypes: ReadonlySet<string>;
-  /** Default blast radius for these actions */
-  readonly blastRadius: BlastRadius;
-  /** Default reversibility for these actions */
-  readonly reversibility: Reversibility;
-  /** Default data impact for these actions */
-  readonly dataImpact: DataImpact;
-}
+import type {
+  BlastRadius,
+  Reversibility,
+  DataImpact,
+  ActionRiskScore,
+  RiskAssessmentRule,
+} from "../types.js";
 
 // ==================== Constants ====================
 
@@ -242,6 +202,18 @@ const generateSummary = (
   return parts.join(", ");
 };
 
+// ==================== Types ====================
+
+/**
+ * Risk score constants structure.
+ */
+export interface RiskScoreConstants {
+  readonly weights: typeof RISK_WEIGHTS;
+  readonly blastRadiusScores: typeof BLAST_RADIUS_SCORES;
+  readonly reversibilityScores: typeof REVERSIBILITY_SCORES;
+  readonly dataImpactScores: typeof DATA_IMPACT_SCORES;
+}
+
 // ==================== Exports ====================
 
 /**
@@ -286,16 +258,6 @@ export const isHighRiskAction = (action: ActionProposal): boolean =>
  */
 export const isIrreversibleAction = (action: ActionProposal): boolean =>
   assessActionRisk(action).reversibility === "irreversible";
-
-/**
- * Risk score constants structure.
- */
-export interface RiskScoreConstants {
-  readonly weights: typeof RISK_WEIGHTS;
-  readonly blastRadiusScores: typeof BLAST_RADIUS_SCORES;
-  readonly reversibilityScores: typeof REVERSIBILITY_SCORES;
-  readonly dataImpactScores: typeof DATA_IMPACT_SCORES;
-}
 
 /**
  * Gets risk score constants for external configuration.

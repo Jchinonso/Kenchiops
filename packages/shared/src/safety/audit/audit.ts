@@ -7,127 +7,16 @@
  * @module safety/audit/audit
  */
 
-// ==================== Types ====================
-
-/**
- * A safety audit entry.
- */
-export interface SafetyAuditEntry {
-  /** Unique identifier */
-  readonly id: string;
-  /** When the entry was created */
-  readonly timestamp: Date;
-  /** Type of audit event */
-  readonly eventType: SafetyEventType;
-  /** Severity level */
-  readonly severity: AuditSeverity;
-  /** Associated action (if applicable) */
-  readonly actionType?: string;
-  /** Decision made */
-  readonly decision: AuditDecision;
-  /** Confidence score (if applicable) */
-  readonly confidenceScore?: number;
-  /** Risk score (if applicable) */
-  readonly riskScore?: number;
-  /** Human-readable summary */
-  readonly summary: string;
-  /** Additional context */
-  readonly context: Readonly<Record<string, unknown>>;
-  /** Request context (requestId, tenantId) */
-  readonly requestContext?: SafetyRequestContext;
-}
-
-/**
- * Minimal request context for audit entries.
- */
-export interface SafetyRequestContext {
-  readonly requestId: string;
-  readonly tenantId: string;
-  readonly actor?: string;
-}
-
-/**
- * Types of safety events.
- */
-export type SafetyEventType =
-  | "action_proposed"
-  | "action_approved"
-  | "action_blocked"
-  | "action_executed"
-  | "confidence_check"
-  | "injection_detected"
-  | "hallucination_detected"
-  | "restriction_applied"
-  | "restriction_overridden"
-  | "sanitization_applied"
-  | "risk_assessment";
-
-/**
- * Audit entry severity levels.
- */
-export type AuditSeverity = "info" | "warning" | "error" | "critical";
-
-/**
- * Decision recorded in audit.
- */
-export type AuditDecision =
-  | "allowed"
-  | "blocked"
-  | "requires_approval"
-  | "auto_approved"
-  | "sanitized"
-  | "flagged";
-
-/**
- * Input for creating an audit entry.
- */
-export interface CreateAuditEntryInput {
-  readonly eventType: SafetyEventType;
-  readonly severity: AuditSeverity;
-  readonly decision: AuditDecision;
-  readonly summary: string;
-  readonly actionType?: string;
-  readonly confidenceScore?: number;
-  readonly riskScore?: number;
-  readonly context?: Record<string, unknown>;
-  readonly requestContext?: SafetyRequestContext;
-}
-
-/**
- * Query options for retrieving audit entries.
- */
-export interface AuditQueryOptions {
-  /** Filter by event types */
-  readonly eventTypes?: readonly SafetyEventType[];
-  /** Filter by severity levels */
-  readonly severities?: readonly AuditSeverity[];
-  /** Filter by decisions */
-  readonly decisions?: readonly AuditDecision[];
-  /** Filter by tenant */
-  readonly tenantId?: string;
-  /** Filter by request */
-  readonly requestId?: string;
-  /** Start of time range */
-  readonly fromDate?: Date;
-  /** End of time range */
-  readonly toDate?: Date;
-  /** Maximum entries to return */
-  readonly limit?: number;
-  /** Offset for pagination */
-  readonly offset?: number;
-}
-
-/**
- * Audit store interface for pluggable backends.
- */
-export interface AuditStore {
-  /** Appends an entry to the audit log */
-  append(entry: SafetyAuditEntry): Promise<void>;
-  /** Queries entries based on options */
-  query(options: AuditQueryOptions): Promise<readonly SafetyAuditEntry[]>;
-  /** Gets entry count matching options */
-  count(options: AuditQueryOptions): Promise<number>;
-}
+import type {
+  SafetyAuditEntry,
+  SafetyRequestContext,
+  SafetyEventType,
+  AuditSeverity,
+  AuditDecision,
+  CreateAuditEntryInput,
+  AuditQueryOptions,
+  AuditStore,
+} from "../types.js";
 
 // ==================== Constants ====================
 
@@ -484,3 +373,15 @@ export const createInMemoryAuditStore = (): AuditStore & {
   clear(): void;
   getAll(): readonly SafetyAuditEntry[];
 } => new InMemoryAuditStore();
+
+// Re-export types for consumers that import from this module directly
+export type {
+  SafetyAuditEntry,
+  SafetyRequestContext,
+  SafetyEventType,
+  AuditSeverity,
+  AuditDecision,
+  CreateAuditEntryInput,
+  AuditQueryOptions,
+  AuditStore,
+};

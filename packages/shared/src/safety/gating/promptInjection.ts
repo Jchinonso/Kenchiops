@@ -7,53 +7,12 @@
  * @module safety/gating/promptInjection
  */
 
-// ==================== Types ====================
-
-/**
- * Result of prompt injection detection.
- */
-export interface InjectionDetectionResult {
-  /** Whether injection was detected */
-  readonly isInjection: boolean;
-  /** Risk score (0-1, higher = more likely injection) */
-  readonly riskScore: number;
-  /** Types of injection patterns detected */
-  readonly detectedPatterns: readonly InjectionPatternType[];
-  /** Specific matches found */
-  readonly matches: readonly InjectionMatch[];
-  /** Recommended action */
-  readonly recommendation: InjectionRecommendation;
-}
-
-/**
- * A specific injection pattern match.
- */
-export interface InjectionMatch {
-  /** Type of pattern */
-  readonly type: InjectionPatternType;
-  /** Matched text (truncated for safety) */
-  readonly matchedText: string;
-  /** Severity of this match */
-  readonly severity: "low" | "medium" | "high" | "critical";
-}
-
-/**
- * Types of prompt injection patterns.
- */
-export type InjectionPatternType =
-  | "instruction_override"
-  | "role_hijacking"
-  | "delimiter_escape"
-  | "encoded_payload"
-  | "jailbreak_attempt"
-  | "system_prompt_leak"
-  | "recursive_injection"
-  | "context_manipulation";
-
-/**
- * Recommended action after detection.
- */
-export type InjectionRecommendation = "allow" | "sanitize" | "block" | "review";
+import type {
+  InjectionDetectionResult,
+  InjectionMatch,
+  InjectionPatternType,
+  InjectionRecommendation,
+} from "../types.js";
 
 // ==================== Constants ====================
 

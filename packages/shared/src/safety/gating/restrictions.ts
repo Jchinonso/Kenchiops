@@ -7,90 +7,14 @@
  * @module safety/gating/restrictions
  */
 
-// ==================== Types ====================
-
-/**
- * Result of restriction check.
- */
-export interface RestrictionCheckResult {
-  /** Whether the action is allowed */
-  readonly isAllowed: boolean;
-  /** Active restrictions that apply */
-  readonly activeRestrictions: readonly ActiveRestriction[];
-  /** When restrictions will lift (if applicable) */
-  readonly restrictedUntil?: Date;
-  /** Human-readable explanation */
-  readonly reason: string;
-}
-
-/**
- * An active restriction.
- */
-export interface ActiveRestriction {
-  /** Type of restriction */
-  readonly type: RestrictionType;
-  /** Name/description of the restriction */
-  readonly name: string;
-  /** When it started */
-  readonly startedAt: Date;
-  /** When it ends (undefined = indefinite) */
-  readonly endsAt?: Date;
-}
-
-/**
- * Types of restrictions.
- */
-export type RestrictionType =
-  | "maintenance_window"
-  | "freeze_period"
-  | "incident_mode"
-  | "off_hours"
-  | "rate_limit"
-  | "manual_override";
-
-/**
- * Restriction rule configuration.
- */
-export interface RestrictionRule {
-  /** Unique identifier */
-  readonly id: string;
-  /** Type of restriction */
-  readonly type: RestrictionType;
-  /** Human-readable name */
-  readonly name: string;
-  /** Whether this rule is currently enabled */
-  readonly enabled: boolean;
-  /** Schedule configuration (if time-based) */
-  readonly schedule?: ScheduleConfig;
-  /** Action types this restriction applies to (empty = all) */
-  readonly affectedActions: readonly string[];
-}
-
-/**
- * Schedule configuration for time-based restrictions.
- */
-export interface ScheduleConfig {
-  /** Days of week (0 = Sunday, 6 = Saturday) */
-  readonly daysOfWeek?: readonly number[];
-  /** Start hour (0-23) in UTC */
-  readonly startHour: number;
-  /** End hour (0-23) in UTC */
-  readonly endHour: number;
-  /** Timezone override (default: UTC) */
-  readonly timezone?: string;
-}
-
-/**
- * Context for checking restrictions.
- */
-export interface RestrictionContext {
-  /** Current timestamp (for testing, defaults to now) */
-  readonly now?: Date;
-  /** Action type being checked */
-  readonly actionType?: string;
-  /** Whether to ignore certain restriction types */
-  readonly ignoreTypes?: readonly RestrictionType[];
-}
+import type {
+  RestrictionCheckResult,
+  ActiveRestriction,
+  RestrictionType,
+  RestrictionRule,
+  ScheduleConfig,
+  RestrictionContext,
+} from "../types.js";
 
 // ==================== Constants ====================
 

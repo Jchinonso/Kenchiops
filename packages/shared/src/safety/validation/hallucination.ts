@@ -7,48 +7,11 @@
  * @module safety/validation/hallucination
  */
 
-// ==================== Types ====================
-
-/**
- * Result of hallucination detection analysis.
- */
-export interface HallucinationCheckResult {
-  /** Overall hallucination risk score (0-1, higher = more likely hallucinated) */
-  readonly riskScore: number;
-  /** Whether content is likely hallucinated (score >= threshold) */
-  readonly isLikelyHallucinated: boolean;
-  /** Specific indicators detected */
-  readonly indicators: readonly HallucinationIndicator[];
-  /** Claims that could not be verified against evidence */
-  readonly unverifiedClaims: readonly string[];
-  /** Confidence in the detection result */
-  readonly detectionConfidence: "high" | "medium" | "low";
-}
-
-/**
- * A specific hallucination indicator found in text.
- */
-export interface HallucinationIndicator {
-  /** Type of indicator */
-  readonly type: HallucinationIndicatorType;
-  /** Text that triggered this indicator */
-  readonly matchedText: string;
-  /** Weight contribution to risk score */
-  readonly weight: number;
-}
-
-/**
- * Types of hallucination indicators.
- */
-export type HallucinationIndicatorType =
-  | "fabricated_statistic"
-  | "specific_claim_without_source"
-  | "overly_precise"
-  | "contradiction"
-  | "temporal_impossibility"
-  | "nonexistent_reference"
-  | "confident_uncertainty"
-  | "invented_quote";
+import type {
+  HallucinationCheckResult,
+  HallucinationIndicator,
+  HallucinationIndicatorType,
+} from "../types.js";
 
 // ==================== Constants ====================
 

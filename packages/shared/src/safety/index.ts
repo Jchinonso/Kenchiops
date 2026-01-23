@@ -10,13 +10,14 @@
  * @module safety
  */
 
-// ==================== Type Exports ====================
-// ==================== Backward Compatibility ====================
 import type { LLMAnalysisResult, Evidence } from "../core/types.js";
 import { calculateConfidenceScore } from "./scoring/confidenceScoring.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD, PLACEHOLDER_CONFIDENCE_SCORE } from "../constants/index.js";
 
+// ==================== Type Exports ====================
+// All types are centralized in types.ts
 export type {
+  // Gating types
   GatingDecision,
   ActionGatingResult,
   AlignmentCheck,
@@ -25,6 +26,40 @@ export type {
   LLMAnalysisLike,
   EvidenceLike,
   ConfidenceRange,
+  // Risk scoring types
+  BlastRadius,
+  Reversibility,
+  DataImpact,
+  ActionRiskScore,
+  RiskAssessmentRule,
+  // Sanitization types
+  SanitizationResult,
+  CommandValidationResult,
+  // Hallucination detection types
+  HallucinationCheckResult,
+  HallucinationIndicator,
+  HallucinationIndicatorType,
+  // Prompt injection types
+  InjectionDetectionResult,
+  InjectionMatch,
+  InjectionPatternType,
+  InjectionRecommendation,
+  // Restriction types
+  RestrictionCheckResult,
+  ActiveRestriction,
+  RestrictionType,
+  RestrictionRule,
+  ScheduleConfig,
+  RestrictionContext,
+  // Audit types
+  SafetyAuditEntry,
+  SafetyRequestContext,
+  SafetyEventType,
+  AuditSeverity,
+  AuditDecision,
+  CreateAuditEntryInput,
+  AuditQueryOptions,
+  AuditStore,
 } from "./types.js";
 
 // ==================== Helper Exports ====================
@@ -44,12 +79,7 @@ export {
   isHighRiskAction,
   isIrreversibleAction,
   getRiskScoreConstants,
-  type ActionRiskScore,
-  type RiskAssessmentRule,
   type RiskScoreConstants,
-  type BlastRadius,
-  type Reversibility,
-  type DataImpact,
 } from "./scoring/riskScoring.js";
 
 // ==================== Validation Module ====================
@@ -62,16 +92,11 @@ export {
   hasCodeInjection,
   sanitizeFilePath,
   redactSecrets,
-  type SanitizationResult,
-  type CommandValidationResult,
 } from "./validation/sanitization.js";
 export {
   checkForHallucinations,
   isLikelyHallucinated,
   getHallucinationRiskLevel,
-  type HallucinationCheckResult,
-  type HallucinationIndicator,
-  type HallucinationIndicatorType,
 } from "./validation/hallucination.js";
 
 // ==================== Gating Module ====================
@@ -82,10 +107,6 @@ export {
   shouldBlockInput,
   sanitizeInjectionAttempts,
   getInjectionSeverity,
-  type InjectionDetectionResult,
-  type InjectionMatch,
-  type InjectionPatternType,
-  type InjectionRecommendation,
 } from "./gating/promptInjection.js";
 export {
   checkRestrictions,
@@ -100,12 +121,6 @@ export {
   activateIncidentMode,
   activateDeploymentFreeze,
   isInIncidentMode,
-  type RestrictionCheckResult,
-  type ActiveRestriction,
-  type RestrictionType,
-  type RestrictionRule,
-  type ScheduleConfig,
-  type RestrictionContext,
 } from "./gating/restrictions.js";
 
 // ==================== Audit Module ====================
@@ -125,14 +140,6 @@ export {
   getAuditStore,
   resetAuditStore,
   createInMemoryAuditStore,
-  type SafetyAuditEntry,
-  type SafetyRequestContext,
-  type SafetyEventType,
-  type AuditSeverity,
-  type AuditDecision,
-  type CreateAuditEntryInput,
-  type AuditQueryOptions,
-  type AuditStore,
 } from "./audit/audit.js";
 
 /**

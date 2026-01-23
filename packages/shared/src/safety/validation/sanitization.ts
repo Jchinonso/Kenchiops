@@ -7,33 +7,7 @@
  * @module safety/validation/sanitization
  */
 
-// ==================== Types ====================
-
-/**
- * Result of sanitization operation.
- */
-export interface SanitizationResult {
-  /** Sanitized output */
-  readonly sanitized: string;
-  /** Whether any modifications were made */
-  readonly wasModified: boolean;
-  /** Types of sanitization applied */
-  readonly appliedRules: readonly string[];
-  /** Warnings about potentially dangerous content */
-  readonly warnings: readonly string[];
-}
-
-/**
- * Result of command validation.
- */
-export interface CommandValidationResult {
-  /** Whether the command is safe to execute */
-  readonly isSafe: boolean;
-  /** Detected dangerous patterns */
-  readonly risks: readonly string[];
-  /** Suggested safer alternative (if applicable) */
-  readonly alternative?: string;
-}
+import type { SanitizationResult, CommandValidationResult } from "../types.js";
 
 // ==================== Constants ====================
 
