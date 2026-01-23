@@ -15,46 +15,13 @@ import type {
   ActionRiskScore,
   RiskAssessmentRule,
 } from "../types.js";
-
-// ==================== Constants ====================
-
-/**
- * Weight factors for composite score calculation.
- */
-const RISK_WEIGHTS = {
-  BLAST_RADIUS: 0.35,
-  REVERSIBILITY: 0.4,
-  DATA_IMPACT: 0.25,
-} as const;
-
-/**
- * Numeric scores for blast radius levels.
- */
-const BLAST_RADIUS_SCORES: Readonly<Record<BlastRadius, number>> = {
-  single_service: 0.2,
-  multiple_services: 0.6,
-  infrastructure: 1.0,
-} as const;
-
-/**
- * Numeric scores for reversibility levels.
- */
-const REVERSIBILITY_SCORES: Readonly<Record<Reversibility, number>> = {
-  instant: 0.1,
-  minutes: 0.4,
-  manual_only: 0.7,
-  irreversible: 1.0,
-} as const;
-
-/**
- * Numeric scores for data impact levels.
- */
-const DATA_IMPACT_SCORES: Readonly<Record<DataImpact, number>> = {
-  none: 0.0,
-  read_only: 0.2,
-  write: 0.6,
-  destructive: 1.0,
-} as const;
+import {
+  ACTION_RISK_WEIGHTS,
+  BLAST_RADIUS_SCORES,
+  REVERSIBILITY_SCORES,
+  DATA_IMPACT_SCORES,
+  DEFAULT_ACTION_RISK,
+} from "../../constants/safety.js";
 
 /**
  * Risk assessment rules by action type category.
@@ -121,15 +88,6 @@ const RISK_RULES: readonly RiskAssessmentRule[] = [
   },
 ] as const;
 
-/**
- * Default risk assessment for unknown action types.
- */
-const DEFAULT_RISK: Omit<ActionRiskScore, "score" | "summary"> = {
-  blastRadius: "single_service",
-  reversibility: "minutes",
-  dataImpact: "write",
-} as const;
-
 // ==================== Core Functions ====================
 
 /**
@@ -156,9 +114,9 @@ const calculateCompositeScore = (
   reversibility: Reversibility,
   dataImpact: DataImpact
 ): number => {
-  const blastScore = BLAST_RADIUS_SCORES[blastRadius] * RISK_WEIGHTS.BLAST_RADIUS;
-  const reverseScore = REVERSIBILITY_SCORES[reversibility] * RISK_WEIGHTS.REVERSIBILITY;
-  const dataScore = DATA_IMPACT_SCORES[dataImpact] * RISK_WEIGHTS.DATA_IMPACT;
+  const blastScore = BLAST_RADIUS_SCORES[blastRadius] * ACTION_RISK_WEIGHTS.BLAST_RADIUS;
+  const reverseScore = REVERSIBILITY_SCORES[reversibility] * ACTION_RISK_WEIGHTS.REVERSIBILITY;
+  const dataScore = DATA_IMPACT_SCORES[dataImpact] * ACTION_RISK_WEIGHTS.DATA_IMPACT;
 
   return Math.min(1, blastScore + reverseScore + dataScore);
 };
@@ -208,7 +166,7 @@ const generateSummary = (
  * Risk score constants structure.
  */
 export interface RiskScoreConstants {
-  readonly weights: typeof RISK_WEIGHTS;
+  readonly weights: typeof ACTION_RISK_WEIGHTS;
   readonly blastRadiusScores: typeof BLAST_RADIUS_SCORES;
   readonly reversibilityScores: typeof REVERSIBILITY_SCORES;
   readonly dataImpactScores: typeof DATA_IMPACT_SCORES;
@@ -225,9 +183,9 @@ export interface RiskScoreConstants {
 export const assessActionRisk = (action: ActionProposal): ActionRiskScore => {
   const rule = findRiskRule(action.actionType);
 
-  const blastRadius = rule?.blastRadius ?? DEFAULT_RISK.blastRadius;
-  const reversibility = rule?.reversibility ?? DEFAULT_RISK.reversibility;
-  const dataImpact = rule?.dataImpact ?? DEFAULT_RISK.dataImpact;
+  const blastRadius = rule?.blastRadius ?? DEFAULT_ACTION_RISK.blastRadius;
+  const reversibility = rule?.reversibility ?? DEFAULT_ACTION_RISK.reversibility;
+  const dataImpact = rule?.dataImpact ?? DEFAULT_ACTION_RISK.dataImpact;
 
   const score = calculateCompositeScore(blastRadius, reversibility, dataImpact);
   const summary = generateSummary(score, blastRadius, reversibility, dataImpact);
@@ -263,7 +221,7 @@ export const isIrreversibleAction = (action: ActionProposal): boolean =>
  * Gets risk score constants for external configuration.
  */
 export const getRiskScoreConstants = (): RiskScoreConstants => ({
-  weights: RISK_WEIGHTS,
+  weights: ACTION_RISK_WEIGHTS,
   blastRadiusScores: BLAST_RADIUS_SCORES,
   reversibilityScores: REVERSIBILITY_SCORES,
   dataImpactScores: DATA_IMPACT_SCORES,

@@ -13,6 +13,7 @@ import type {
   InjectionPatternType,
   InjectionRecommendation,
 } from "../types.js";
+import { INJECTION_RISK_THRESHOLDS } from "../../constants/safety.js";
 
 // ==================== Constants ====================
 
@@ -180,15 +181,6 @@ const INJECTION_PATTERNS: ReadonlyArray<{
   },
 ] as const;
 
-/**
- * Risk thresholds for recommendations.
- */
-const RISK_THRESHOLDS = {
-  ALLOW: 0.2,
-  SANITIZE: 0.5,
-  BLOCK: 0.75,
-} as const;
-
 // ==================== Core Functions ====================
 
 /**
@@ -265,17 +257,17 @@ const determineRecommendation = (
     return "block";
   }
 
-  if (riskScore >= RISK_THRESHOLDS.BLOCK) {
+  if (riskScore >= INJECTION_RISK_THRESHOLDS.BLOCK) {
     return "block";
   }
 
-  if (riskScore >= RISK_THRESHOLDS.SANITIZE) {
+  if (riskScore >= INJECTION_RISK_THRESHOLDS.SANITIZE) {
     // Multiple high severity = block
     const highCount = matches.filter((match) => match.severity === "high").length;
     return highCount >= 2 ? "block" : "review";
   }
 
-  if (riskScore >= RISK_THRESHOLDS.ALLOW) {
+  if (riskScore >= INJECTION_RISK_THRESHOLDS.ALLOW) {
     return "sanitize";
   }
 
@@ -307,7 +299,7 @@ export const detectPromptInjection = (input: string): InjectionDetectionResult =
   const recommendation = determineRecommendation(riskScore, matches);
 
   return {
-    isInjection: riskScore >= RISK_THRESHOLDS.SANITIZE,
+    isInjection: riskScore >= INJECTION_RISK_THRESHOLDS.SANITIZE,
     riskScore,
     detectedPatterns,
     matches,

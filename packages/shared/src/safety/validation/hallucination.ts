@@ -12,13 +12,12 @@ import type {
   HallucinationIndicator,
   HallucinationIndicatorType,
 } from "../types.js";
+import {
+  HALLUCINATION_DEFAULT_THRESHOLD,
+  HALLUCINATION_RISK_WEIGHTS,
+} from "../../constants/safety.js";
 
 // ==================== Constants ====================
-
-/**
- * Default threshold for marking content as likely hallucinated.
- */
-const DEFAULT_HALLUCINATION_THRESHOLD = 0.6;
 
 /**
  * Patterns that indicate potential hallucinations.
@@ -81,18 +80,6 @@ const HALLUCINATION_PATTERNS: ReadonlyArray<{
     weight: 0.4,
   },
 ] as const;
-
-/**
- * Weight factors for risk score calculation.
- */
-const RISK_WEIGHTS = {
-  /** Weight for pattern-based indicators */
-  PATTERN_INDICATORS: 0.4,
-  /** Weight for unverified claims */
-  UNVERIFIED_CLAIMS: 0.35,
-  /** Weight for text characteristics */
-  TEXT_CHARACTERISTICS: 0.25,
-} as const;
 
 // ==================== Core Functions ====================
 
@@ -273,7 +260,7 @@ export const checkForHallucinations = (
     threshold?: number;
   } = {}
 ): HallucinationCheckResult => {
-  const { evidence = [], threshold = DEFAULT_HALLUCINATION_THRESHOLD } = options;
+  const { evidence = [], threshold = HALLUCINATION_DEFAULT_THRESHOLD } = options;
 
   if (!text || text.trim().length === 0) {
     return {
@@ -309,9 +296,9 @@ export const checkForHallucinations = (
   // Calculate weighted risk score
   const riskScore = Math.min(
     1,
-    indicatorScore * RISK_WEIGHTS.PATTERN_INDICATORS +
-      unverifiedScore * RISK_WEIGHTS.UNVERIFIED_CLAIMS +
-      textScore * RISK_WEIGHTS.TEXT_CHARACTERISTICS
+    indicatorScore * HALLUCINATION_RISK_WEIGHTS.PATTERN_INDICATORS +
+      unverifiedScore * HALLUCINATION_RISK_WEIGHTS.UNVERIFIED_CLAIMS +
+      textScore * HALLUCINATION_RISK_WEIGHTS.TEXT_CHARACTERISTICS
   );
 
   return {
