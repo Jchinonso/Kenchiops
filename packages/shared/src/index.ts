@@ -242,9 +242,109 @@ export {
   defaultRateLimiter,
   createRedisRateLimiter,
   defaultRedisRateLimiter,
+  createRateLimitMiddleware,
+  createProductionRateLimitMiddleware,
   type RateLimitOptions,
   type RateLimitInfo,
+  type RateLimitMiddlewareConfig,
 } from "./http/index.js";
+
+// Rate limiting - full module exports
+export {
+  // Security utilities
+  secureKeyGenerator,
+  createKeyGenerator,
+  getClientIP,
+  validateIP,
+  isValidIPv4,
+  isValidIPv6,
+  getIPVersion,
+  isPrivateIP,
+  createRequestFingerprint,
+  extractIdentity,
+  sanitizeIdentity,
+  type ClientIPOptions,
+  type SecureKeyOptions,
+} from "./rateLimit/index.js";
+export {
+  // Burst detection
+  BurstDetector,
+  createBurstDetector,
+  defaultBurstDetector,
+} from "./rateLimit/index.js";
+export {
+  // Bot detection
+  BotDetector,
+  createBotDetector,
+  defaultBotDetector,
+  isBot,
+  isSuspiciousBot,
+  shouldBlockBot,
+} from "./rateLimit/index.js";
+export {
+  // Geographic restrictions
+  GeoRestriction,
+  createGeoAllowlist,
+  createGeoBlocklist,
+  getCountryCode,
+} from "./rateLimit/index.js";
+export {
+  // API key validation
+  ApiKeyValidator,
+  createApiKeyValidator,
+  defaultApiKeyValidator,
+  extractApiKey,
+  apiKeyRateLimitKey,
+} from "./rateLimit/index.js";
+export {
+  // Per-endpoint limits
+  EndpointLimiter,
+  createEndpointLimiter,
+  createEndpointLimiterWithDefaults,
+  COMMON_ENDPOINT_LIMITS,
+} from "./rateLimit/index.js";
+export {
+  // Request signature verification
+  SignatureVerifier,
+  createSignatureVerifier,
+  createSimpleSignatureVerifier,
+} from "./rateLimit/index.js";
+export {
+  // Rate limit constants
+  BURST_DETECTION_DEFAULTS,
+  BOT_PATTERNS,
+  BOT_DETECTION_DEFAULTS,
+  GEO_RESTRICTION_DEFAULTS,
+  API_KEY_DEFAULTS,
+  ENDPOINT_LIMIT_DEFAULTS,
+  SIGNATURE_DEFAULTS,
+  CLOUDFLARE_IPV4_CIDRS,
+} from "./rateLimit/index.js";
+export type {
+  // Rate limit types
+  FallbackBehavior,
+  TrustedProxyConfig,
+  BurstDetectionConfig,
+  BurstDetectionResult,
+  BotDetectionConfig,
+  BotDetectionResult,
+  BotCategory,
+  GeoRestrictionConfig,
+  GeoRestrictionResult,
+  GeoCategory,
+  GeoReasonCode,
+  ApiKeyConfig,
+  ApiKeyLimit,
+  ApiKeyValidationResult,
+  EndpointLimitConfig,
+  EndpointLimitsConfig,
+  EndpointLimitResult,
+  EndpointMatchMode,
+  SignatureConfig,
+  SignatureVerificationResult,
+  SignedField,
+  SecurityContext,
+} from "./rateLimit/index.js";
 export {
   resilientFetch,
   resilientGet,
@@ -476,10 +576,110 @@ export {
 
 // Safety and confidence scoring
 export {
+  // Core scoring
   calculateConfidenceScore,
+  getBaseScore,
+  checkConsistency,
   determineActionGating,
+  determineGatingDecision,
   confidenceScore,
   shouldActOnResult,
+  // Helpers
+  clampConfidenceScore,
+  formatAdjustment,
+  formatScore,
+  normalizeText,
+  containsKeyword,
+  // Risk scoring
+  assessActionRisk,
+  isHighRiskAction,
+  isIrreversibleAction,
+  getRiskScoreConstants,
+  // Validation
+  detectUncertainty,
+  calculateEvidenceAlignment,
+  assessCompleteness,
+  validateAgainstKnowledgeBase,
+  sanitizeLLMOutput,
+  validateCommand,
+  hasCodeInjection,
+  sanitizeFilePath,
+  // Hallucination detection
+  checkForHallucinations,
+  isLikelyHallucinated,
+  getHallucinationRiskLevel,
+  // Prompt injection detection
+  detectPromptInjection,
+  hasInjectionAttempt,
+  shouldBlockInput,
+  sanitizeInjectionAttempts,
+  getInjectionSeverity,
+  // Restrictions
+  checkRestrictions,
+  isActionRestricted,
+  activateRestriction,
+  deactivateRestriction,
+  getManualRestrictions,
+  clearAllManualRestrictions,
+  addRestrictionRule,
+  removeRestrictionRule,
+  getRestrictionRules,
+  activateIncidentMode,
+  activateDeploymentFreeze,
+  isInIncidentMode,
+  // Audit
+  recordAuditEntry,
+  recordActionProposal,
+  recordInjectionDetection,
+  recordHallucinationDetection,
+  recordRestrictionApplied,
+  recordRiskAssessment,
+  queryAuditEntries,
+  countAuditEntries,
+  getRecentAuditEntries,
+  getAuditEntriesForRequest,
+  getBlockedActions,
+  setAuditStore,
+  getAuditStore,
+  resetAuditStore,
+  createInMemoryAuditStore,
+  // Types
+  type GatingDecision,
+  type ActionGatingResult,
+  type AlignmentCheck,
+  type CompletenessCheck,
+  type ThresholdEntry,
+  type LLMAnalysisLike,
+  type EvidenceLike,
+  type ConfidenceRange,
+  type BlastRadius,
+  type Reversibility,
+  type DataImpact,
+  type ActionRiskScore,
+  type RiskAssessmentRule,
+  type RiskScoreConstants,
+  type CommandValidationResult,
+  type HallucinationCheckResult,
+  type HallucinationIndicator,
+  type HallucinationIndicatorType,
+  type InjectionDetectionResult,
+  type InjectionMatch,
+  type InjectionPatternType,
+  type InjectionRecommendation,
+  type RestrictionCheckResult,
+  type ActiveRestriction,
+  type RestrictionType,
+  type RestrictionRule,
+  type ScheduleConfig,
+  type RestrictionContext,
+  type SafetyAuditEntry,
+  type SafetyRequestContext,
+  type SafetyEventType,
+  type AuditSeverity,
+  type AuditDecision,
+  type CreateAuditEntryInput,
+  type AuditQueryOptions,
+  type AuditStore,
 } from "./safety/index.js";
 
 // Security utilities
