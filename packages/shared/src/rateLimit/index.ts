@@ -57,8 +57,118 @@ import { secureKeyGenerator } from "./security.js";
 import { RedisRateLimitStore, InMemoryRateLimitStore } from "./stores.js";
 
 // Re-export types and utilities
-export type { RateLimitOptions, RateLimitInfo } from "./types.js";
-export { secureKeyGenerator } from "./security.js";
+export type {
+  RateLimitOptions,
+  RateLimitInfo,
+  FallbackBehavior,
+  TrustedProxyConfig,
+  BurstDetectionConfig,
+  BurstDetectionResult,
+  BotDetectionConfig,
+  BotDetectionResult,
+  BotCategory,
+  GeoRestrictionConfig,
+  GeoRestrictionResult,
+  GeoCategory,
+  GeoReasonCode,
+  ApiKeyConfig,
+  ApiKeyLimit,
+  ApiKeyValidationResult,
+  EndpointLimitConfig,
+  EndpointLimitsConfig,
+  EndpointLimitResult,
+  EndpointMatchMode,
+  SignatureConfig,
+  SignatureVerificationResult,
+  SignedField,
+  SignatureAlgorithm,
+  PathSource,
+  SignaturePayloadOptions,
+  SignOptions,
+} from "./types.js";
+
+export {
+  BURST_DETECTION_DEFAULTS,
+  BOT_PATTERNS,
+  BOT_DETECTION_DEFAULTS,
+  GEO_RESTRICTION_DEFAULTS,
+  API_KEY_DEFAULTS,
+  ENDPOINT_LIMIT_DEFAULTS,
+  SIGNATURE_DEFAULTS,
+  CLOUDFLARE_IPV4_CIDRS,
+  ALLOWED_SIGNATURE_ALGORITHMS,
+  SIGNATURE_HEX_LENGTHS,
+} from "./types.js";
+
+export {
+  secureKeyGenerator,
+  createKeyGenerator,
+  getClientIP,
+  validateIP,
+  isValidIPv4,
+  isValidIPv6,
+  getIPVersion,
+  isPrivateIP,
+  createRequestFingerprint,
+  extractIdentity,
+  sanitizeIdentity,
+  type ClientIPOptions,
+  type SecureKeyOptions,
+} from "./security.js";
+
+// Burst Detection
+export { BurstDetector, createBurstDetector, defaultBurstDetector } from "./burstDetection.js";
+
+// Bot Detection
+export {
+  BotDetector,
+  createBotDetector,
+  defaultBotDetector,
+  isBot,
+  isSuspiciousBot,
+  shouldBlockBot,
+} from "./botDetection.js";
+
+// Geographic Restrictions
+export {
+  GeoRestriction,
+  createGeoAllowlist,
+  createGeoBlocklist,
+  getCountryCode,
+} from "./geoRestriction.js";
+
+// API Key Validation
+export {
+  ApiKeyValidator,
+  createApiKeyValidator,
+  defaultApiKeyValidator,
+  extractApiKey,
+  apiKeyRateLimitKey,
+} from "./apiKey.js";
+
+// Per-Endpoint Limits
+export {
+  EndpointLimiter,
+  createEndpointLimiter,
+  createEndpointLimiterWithDefaults,
+  COMMON_ENDPOINT_LIMITS,
+} from "./endpointLimits.js";
+
+// Request Signature Verification
+export {
+  SignatureVerifier,
+  createSignatureVerifier,
+  createSimpleSignatureVerifier,
+  captureRawBody,
+} from "./requestSignature.js";
+
+// Composable Rate Limit Middleware
+export {
+  createRateLimitMiddleware,
+  createProductionRateLimitMiddleware,
+  type RateLimitMiddlewareConfig,
+  type SecurityContext,
+} from "./middleware.js";
 
 const logger = createLogger("rate-limiter");
 
@@ -76,6 +186,7 @@ class RateLimiter {
   private isRetryingRedis = false;
   private readonly windowMs: number;
   private readonly max: number;
+  private readonly maxResolver?: (req: Request) => number;
   private readonly message: string;
   private readonly keyGenerator: (req: Request) => string;
   private readonly keyPrefix: string;
@@ -95,6 +206,7 @@ class RateLimiter {
 
     this.windowMs = options.windowMs;
     this.max = options.max;
+    this.maxResolver = options.maxResolver;
     this.message = options.message ?? RATE_LIMIT_MESSAGES.TOO_MANY_REQUESTS;
     this.keyGenerator = options.keyGenerator ?? secureKeyGenerator;
     this.keyPrefix = options.keyPrefix ?? "rl:";
@@ -148,45 +260,65 @@ class RateLimiter {
   private getStore(): RateLimitStore {
     // Try to reconnect to Redis with exponential backoff
     if (!this.useRedis && this.shouldRetryRedis()) {
-      // Set flag to prevent concurrent retry attempts
-      this.isRetryingRedis = true;
-      try {
-        const redis = getRedisClient();
-        if (redis.status === "ready") {
-          logger.info("Redis connection restored for rate limiting");
-          this.useRedis = true;
-          this.redisRetryDelay = REDIS_RETRY_CONFIG.INITIAL_DELAY_MS;
-          this.isRetryingRedis = false;
-          if (!this.redisStore) {
-            this.redisStore = new RedisRateLimitStore(this.keyPrefix, this.max);
-          }
-          return this.redisStore;
-        }
-      } catch (error) {
-        this.handleRedisRetryFailure(error);
-      } finally {
-        this.isRetryingRedis = false;
+      const store = this.tryReconnectRedis();
+      if (store) {
+        return store;
       }
     }
 
+    // Check if Redis is available
     if (this.useRedis && this.redisStore) {
-      try {
-        // Check Redis client status synchronously (no ping, faster)
-        const redis = getRedisClient();
-        if (redis.status === "ready") {
-          return this.redisStore;
-        }
-        logger.warn("Redis not ready, falling back to in-memory rate limiting", {
-          status: redis.status,
-        });
-      } catch (error) {
-        logger.warn("Redis connection lost, falling back to in-memory rate limiting", {
-          error: getErrorMessage(error),
-        });
+      const store = this.tryGetRedisStore();
+      if (store) {
+        return store;
       }
-      this.markRedisFailed();
     }
+
     return this.memoryStore;
+  }
+
+  private tryReconnectRedis(): RateLimitStore | null {
+    this.isRetryingRedis = true;
+    try {
+      const redis = getRedisClient();
+      if (redis.status !== "ready") {
+        return null;
+      }
+
+      logger.info("Redis connection restored for rate limiting");
+      this.useRedis = true;
+      this.redisRetryDelay = REDIS_RETRY_CONFIG.INITIAL_DELAY_MS;
+
+      if (!this.redisStore) {
+        this.redisStore = new RedisRateLimitStore(this.keyPrefix, this.max);
+      }
+      return this.redisStore;
+    } catch (error) {
+      this.handleRedisRetryFailure(error);
+      return null;
+    } finally {
+      this.isRetryingRedis = false;
+    }
+  }
+
+  private tryGetRedisStore(): RateLimitStore | null {
+    try {
+      const redis = getRedisClient();
+      if (redis.status === "ready") {
+        return this.redisStore;
+      }
+
+      logger.warn("Redis not ready, falling back to in-memory rate limiting", {
+        status: redis.status,
+      });
+    } catch (error) {
+      logger.warn("Redis connection lost, falling back to in-memory rate limiting", {
+        error: getErrorMessage(error),
+      });
+    }
+
+    this.markRedisFailed();
+    return null;
   }
 
   readonly middleware =
@@ -198,6 +330,10 @@ class RateLimiter {
 
       const key = this.keyGenerator(req);
       let timeoutHandle: NodeJS.Timeout | null = null;
+
+      // Compute effective max: use resolver if provided, otherwise static max
+      // SECURITY: Clamp to minimum of 1 to prevent bypass
+      const effectiveMax = Math.max(1, this.maxResolver ? this.maxResolver(req) : this.max);
 
       try {
         const store = this.getStore();
@@ -227,9 +363,12 @@ class RateLimiter {
           );
         }
 
+        // Compute remaining based on effective max (not store's static max)
+        const effectiveRemaining = Math.max(0, effectiveMax - info.current);
+
         // SECURITY: Validate and bound response header values
-        res.setHeader("X-RateLimit-Limit", this.max);
-        res.setHeader("X-RateLimit-Remaining", Math.max(0, info.remaining));
+        res.setHeader("X-RateLimit-Limit", effectiveMax);
+        res.setHeader("X-RateLimit-Remaining", effectiveRemaining);
 
         // Clamp reset time to reasonable bounds (within 24 hours from now)
         const maxResetTime = Date.now() + MAX_TTL_MS;
@@ -239,7 +378,8 @@ class RateLimiter {
           Math.ceil(boundedResetTime / TIME_CONSTANTS.MILLISECONDS_PER_SECOND)
         );
 
-        if (info.current > this.max) {
+        // Use effectiveMax for enforcement (enables dynamic per-request limits)
+        if (info.current > effectiveMax) {
           const retryAfterMs = Math.max(0, info.resetTime - Date.now());
           const retryAfterSec = Math.min(
             Math.max(
@@ -361,13 +501,16 @@ class SyncRateLimiter {
 
       // Check existing record first (handles existing keys even at capacity)
       const record = this.store.get(key);
+      const hasValidRecord = record && now <= record.resetTime;
 
-      if (record && now <= record.resetTime) {
-        // Existing valid window
-        if (record.count >= this.max) {
-          const retryAfterMs = record.resetTime - now;
-          throw new RateLimitError(this.message, retryAfterMs);
-        }
+      // Check rate limit for valid existing record
+      if (hasValidRecord && record.count >= this.max) {
+        const retryAfterMs = record.resetTime - now;
+        throw new RateLimitError(this.message, retryAfterMs);
+      }
+
+      // Increment existing valid record
+      if (hasValidRecord) {
         record.count++;
         return next();
       }
@@ -389,12 +532,14 @@ class SyncRateLimiter {
 
   private readonly cleanup = (now: number): void => {
     const keysToDelete: string[] = [];
-    this.store.forEach((entry, entryKey) => {
+    for (const [entryKey, entry] of this.store) {
       if (entry.resetTime < now) {
         keysToDelete.push(entryKey);
       }
-    });
-    keysToDelete.forEach((keyToDelete) => this.store.delete(keyToDelete));
+    }
+    for (const keyToDelete of keysToDelete) {
+      this.store.delete(keyToDelete);
+    }
   };
 
   readonly reset = (): void => {

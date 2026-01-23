@@ -1,245 +1,318 @@
 /**
  * Rate Limiting Security Utilities
  *
- * IP validation, fingerprinting, and secure key generation
- * for rate limiting middleware.
- *
- * Security features:
- * - IP validation to prevent spoofing
- * - Tenant-aware rate limiting for authenticated requests
- * - Fingerprint fallback for requests without valid IP
- * - Suspicious activity logging
+ * Secure key generation for rate limiting middleware with:
+ * - IP validation using Node.js net module
+ * - Tenant-aware rate limiting via req.context
+ * - Conservative fingerprint fallback (no random entropy)
+ * - Trusted proxy resolver support
+ * - Private socket IP tagging for metrics
  *
  * @module rateLimit/security
  */
 
 import type { Request } from "express";
 import crypto from "crypto";
+import net from "net";
 import { createLogger } from "../core/logger.js";
 import {
-  IDENTITY_HEADERS,
   PRIVATE_IP_PATTERNS,
-  FINGERPRINT_MAX_LENGTH,
   FINGERPRINT_HASH_LENGTH,
-  FINGERPRINT_SECONDARY_LENGTH,
-  FINGERPRINT_SHORT_LENGTH,
   VALID_IDENTITY_PATTERN,
-  IPV4_MAX_OCTET,
   IDENTITY_HEADER_MAX_LENGTH,
+  UNKNOWN_CLIENT_BUCKET,
+  KEY_PREFIX,
+  KEY_SEPARATOR,
+  IPV4_MAPPED_PREFIX,
+  FINGERPRINT_HEADERS,
+  CONTEXT_IDENTITY_SOURCES,
+  HEADER_IDENTITY_SOURCES,
+  LOG_HASH_PREFIX_LENGTH,
   type TLSSocket,
+  type ClientIPOptions,
+  type SecureKeyOptions,
+  type RequestWithContext,
+  type IPSource,
+  type ResolvedIP,
 } from "./types.js";
+
+// Re-export types for convenience
+export type { ClientIPOptions, SecureKeyOptions, RequestWithContext };
 
 const logger = createLogger("rate-limiter");
 
-// ==================== IP Validation Functions ====================
+/** Hashes a value for privacy-safe logging. Returns truncated SHA-256 hash or "unknown". */
+const hashForLog = (value: string | undefined): string => {
+  if (!value) {
+    return "unknown";
+  }
+  return crypto.createHash("sha256").update(value).digest("hex").slice(0, LOG_HASH_PREFIX_LENGTH);
+};
 
-/**
- * Checks if an IP address is a private/internal address.
- */
+// ============================================================================
+// IP Normalization & Validation
+// ============================================================================
+
+/** Strips zone identifiers from IPv6 addresses (e.g., fe80::1%eth0 -> fe80::1). */
+const stripZoneIdentifier = (ip: string): string => {
+  const zoneIndex = ip.indexOf("%");
+  return zoneIndex === -1 ? ip : ip.slice(0, zoneIndex);
+};
+
+/** Strips IPv4-mapped IPv6 prefix (e.g., ::ffff:192.168.1.1 -> 192.168.1.1). */
+const stripIPv4MappedPrefix = (ip: string): string =>
+  ip.startsWith(IPV4_MAPPED_PREFIX) ? ip.slice(IPV4_MAPPED_PREFIX.length) : ip;
+
+/** Normalizes an IP address by stripping zone identifiers and IPv4-mapped prefixes. */
+const normalizeIP = (ip: string): string => stripZoneIdentifier(stripIPv4MappedPrefix(ip));
+
+/** Checks if an IP address is private/internal. */
 export const isPrivateIP = (ip: string): boolean =>
   PRIVATE_IP_PATTERNS.some((pattern) => pattern.test(ip));
 
-/**
- * Validates an IPv4 address format and octet values.
- */
-export const isValidIPv4 = (ip: string): boolean => {
-  const parts = ip.split(".");
-  if (parts.length !== 4) {
-    return false;
-  }
-  return parts.every((part) => {
-    const num = parseInt(part, 10);
-    return !isNaN(num) && num >= 0 && num <= IPV4_MAX_OCTET && part === String(num);
-  });
-};
+/** Returns the IP version (4 or 6) if valid, 0 if invalid. Uses same normalization as validateIP. */
+export const getIPVersion = (ip: string): 0 | 4 | 6 => net.isIP(normalizeIP(ip)) as 0 | 4 | 6;
 
-// ==================== IPv6 Validation Helpers ====================
+/** Validates an IPv4 address format. */
+export const isValidIPv4 = (ip: string): boolean => getIPVersion(ip) === 4;
 
-const IPV6_MAX_GROUPS = 8;
-const IPV6_VALID_CHARS = /^[0-9a-fA-F:]+$/;
-const IPV6_HEX_ONLY = /^[0-9a-fA-F]+$/;
-
-const hasValidIPv6Structure = (ip: string): boolean =>
-  ip.includes(":") && IPV6_VALID_CHARS.test(ip) && !ip.includes(":::");
-
-const countDoubleColons = (ip: string): number => (ip.match(/::/g) ?? []).length;
+/** Validates an IPv6 address format. */
+export const isValidIPv6 = (ip: string): boolean => getIPVersion(ip) === 6;
 
 /**
- * Validates IPv6 group count based on compression.
+ * Validates and normalizes an IP address for rate limiting.
+ * @returns Normalized IP or null if invalid/rejected
  */
-const hasValidGroupCount = (groups: string[], hasCompression: boolean): boolean => {
-  if (hasCompression) {
-    return groups.length <= IPV6_MAX_GROUPS;
-  }
-  return groups.length === IPV6_MAX_GROUPS;
-};
-
-/**
- * Validates a single IPv6 group per RFC 5952.
- * Rejects leading zeros to prevent bypass attacks.
- */
-const isValidIPv6Group = (group: string): boolean => {
-  if (group.length === 0) {
-    return true;
-  } // Empty allowed for ::
-  if (group.length > 4) {
-    return false;
-  }
-  if (group.length > 1 && group[0] === "0") {
-    return false;
-  } // No leading zeros
-  return IPV6_HEX_ONLY.test(group);
-};
-
-/**
- * Validates an IPv6 address format (strict validation per RFC 5952).
- */
-export const isValidIPv6 = (ip: string): boolean => {
-  if (!hasValidIPv6Structure(ip)) {
-    return false;
-  }
-
-  const doubleColonCount = countDoubleColons(ip);
-  if (doubleColonCount > 1) {
-    return false;
-  }
-
-  const groups = ip.split(":");
-  if (!hasValidGroupCount(groups, doubleColonCount === 1)) {
-    return false;
-  }
-
-  return groups.every(isValidIPv6Group);
-};
-
-/**
- * Validates and sanitizes an IP address for use as a rate limit key.
- * Returns null if the IP is invalid or private.
- */
-export const validateIP = (ip: string | undefined): string | null => {
+export const validateIP = (ip: string | undefined, rejectPrivate = true): string | null => {
   if (!ip) {
     return null;
   }
 
-  // Validate IP format
-  const isValid = isValidIPv4(ip) || isValidIPv6(ip);
+  const normalized = normalizeIP(ip);
+  const isValid = net.isIP(normalized) !== 0;
+
   if (!isValid) {
-    logger.warn("Invalid IP format detected", { ip: ip.slice(0, 50) });
+    logger.warn("Invalid IP format", { ipHash: hashForLog(ip), source: "validateIP" });
     return null;
   }
 
-  // Reject private IPs for rate limiting (they could be proxies)
-  if (isPrivateIP(ip)) {
-    return null;
-  }
-
-  return ip;
+  const shouldReject = rejectPrivate && isPrivateIP(normalized);
+  return shouldReject ? null : normalized;
 };
 
-// ==================== Fingerprinting Functions ====================
+// ============================================================================
+// IP Resolution
+// ============================================================================
 
-/**
- * Creates a cryptographic fingerprint for rate limiting when IP is unavailable.
- * Uses a SHA hash of multiple request characteristics to create a
- * collision-resistant identifier that's harder to spoof than raw headers.
- *
- * SECURITY: Adds random entropy when headers are missing to prevent
- * collision attacks where attackers send minimal requests.
- */
-export const createRequestFingerprint = (req: Request): string => {
-  const headers = req.headers ?? {};
-  const userAgent = headers["user-agent"]?.slice(0, FINGERPRINT_MAX_LENGTH) ?? "";
-  const acceptLang = headers["accept-language"]?.slice(0, FINGERPRINT_SECONDARY_LENGTH) ?? "";
-  const acceptEnc = headers["accept-encoding"]?.slice(0, FINGERPRINT_SECONDARY_LENGTH) ?? "";
-  const accept = headers.accept?.slice(0, FINGERPRINT_SECONDARY_LENGTH) ?? "";
-  const connection = headers.connection?.slice(0, FINGERPRINT_SHORT_LENGTH) ?? "";
-  // Include TLS cipher if available for additional entropy
-  const tlsCipher = (req.socket as TLSSocket | undefined)?.getCipher?.()?.name ?? "";
+/** Creates a ResolvedIP object with metadata. */
+const createResolvedIP = (ip: string, source: IPSource): ResolvedIP => ({
+  ip,
+  source,
+  isPrivate: isPrivateIP(ip),
+});
 
-  const components = [userAgent, acceptLang, acceptEnc, accept, connection, tlsCipher];
+/** Attempts to validate an IP and create a ResolvedIP if valid. */
+const tryResolveIP = (
+  ip: string | undefined,
+  source: IPSource,
+  rejectPrivate: boolean
+): ResolvedIP | null => {
+  const validated = validateIP(ip, rejectPrivate);
+  return validated ? createResolvedIP(validated, source) : null;
+};
 
-  // SECURITY: If all headers are empty/missing, add random entropy to prevent
-  // fingerprint collision attacks where attackers send minimal headers
-  const hasEntropy = components.some((component) => component.length > 0);
-  if (!hasEntropy) {
-    // Add timestamp and random value for unique fingerprint per request
-    components.push(`entropy:${Date.now()}:${crypto.randomBytes(8).toString("hex")}`);
+/** Resolves socket IP with special handling for private IPs. */
+const resolveSocketIP = (
+  socketAddress: string | undefined,
+  rejectPrivate: boolean
+): ResolvedIP | null => {
+  if (!socketAddress) {
+    return null;
   }
 
+  const normalized = normalizeIP(socketAddress);
+  if (net.isIP(normalized) === 0) {
+    return null;
+  }
+
+  const ipIsPrivate = isPrivateIP(normalized);
+  if (rejectPrivate && ipIsPrivate) {
+    return null;
+  }
+
+  return { ip: normalized, source: "socket", isPrivate: ipIsPrivate };
+};
+
+/**
+ * Resolves client IP from request with source metadata.
+ * Priority: clientIP option > req.ip > socket.remoteAddress
+ */
+const resolveClientIP = (req: Request, options: ClientIPOptions): ResolvedIP | null => {
+  const { clientIP, rejectPrivateIP = true, useSocketAddress = false } = options;
+
+  // Try sources in priority order, return first valid result
+  return (
+    tryResolveIP(clientIP, "client", rejectPrivateIP) ??
+    tryResolveIP(req.ip, "express", rejectPrivateIP) ??
+    (useSocketAddress ? resolveSocketIP(req.socket?.remoteAddress, rejectPrivateIP) : null)
+  );
+};
+
+/** Gets the key prefix for an IP based on its source. */
+const getIPKeyPrefix = (resolved: ResolvedIP): string =>
+  resolved.source === "socket" && resolved.isPrivate ? KEY_PREFIX.PROXY_IP : KEY_PREFIX.IP;
+
+/**
+ * Gets the client IP from request.
+ * SECURITY: In Express, req.ip depends on trust proxy config.
+ */
+export const getClientIP = (req: Request, options: ClientIPOptions = {}): string | null =>
+  resolveClientIP(req, options)?.ip ?? null;
+
+// ============================================================================
+// Fingerprinting
+// ============================================================================
+
+/** Extracts a header value with length limit. Handles string[] by joining with comma. */
+const extractHeader = (headers: Request["headers"], name: string, maxLength: number): string => {
+  const value = headers[name];
+  const str = Array.isArray(value) ? value.join(",") : value;
+  return typeof str === "string" ? str.slice(0, maxLength) : "";
+};
+
+/** Extracts fingerprint components from request headers. */
+const extractFingerprintComponents = (req: Request): string[] => {
+  const headers = req.headers ?? {};
+  const headerComponents = FINGERPRINT_HEADERS.map(({ name, maxLength }) =>
+    extractHeader(headers, name, maxLength)
+  );
+  const tlsCipher = (req.socket as TLSSocket | undefined)?.getCipher?.()?.name ?? "";
+  return [...headerComponents, tlsCipher];
+};
+
+/** Hashes components into a fingerprint string. */
+const hashComponents = (components: string[]): string => {
   const hash = crypto
     .createHash("sha256")
-    .update(components.join("|"))
+    .update(components.join(KEY_SEPARATOR))
     .digest("hex")
     .slice(0, FINGERPRINT_HASH_LENGTH);
-
-  return `fp:${hash}`;
+  return `${KEY_PREFIX.FINGERPRINT}:${hash}`;
 };
 
-// ==================== Identity Extraction Functions ====================
+/**
+ * Creates a cryptographic fingerprint for rate limiting.
+ * SECURITY: Returns shared bucket when no headers present to prevent bypass.
+ */
+export const createRequestFingerprint = (req: Request): string => {
+  const components = extractFingerprintComponents(req);
+  const hasEntropy = components.some((component) => component.length > 0);
+
+  if (!hasEntropy) {
+    logger.warn("No fingerprint entropy, using shared bucket", {
+      path: req.path,
+      remoteAddressHash: hashForLog(req.socket?.remoteAddress),
+    });
+    return UNKNOWN_CLIENT_BUCKET;
+  }
+
+  return hashComponents(components);
+};
+
+// ============================================================================
+// Identity Extraction
+// ============================================================================
 
 /**
- * Validates and sanitizes an identity header value.
- * Only allows alphanumeric characters, dashes, and underscores.
- * SECURITY: Normalizes to lowercase to prevent case-based bypass attacks.
+ * Sanitizes an identity value for use in rate limit keys.
+ * SECURITY: Normalizes to lowercase to prevent case-based bypass.
  */
-export const sanitizeIdentity = (value: string | string[] | undefined): string | null => {
+export const sanitizeIdentity = (
+  value: string | string[] | undefined,
+  source?: string
+): string | null => {
   if (typeof value !== "string" || value.length === 0) {
     return null;
   }
-  // Normalize to lowercase to prevent case-based bypass (HTTP headers are case-insensitive)
+
   const normalized = value.slice(0, IDENTITY_HEADER_MAX_LENGTH).toLowerCase();
-  if (!VALID_IDENTITY_PATTERN.test(normalized)) {
-    logger.warn("Invalid identity header format detected");
+  const isValid = VALID_IDENTITY_PATTERN.test(normalized);
+
+  if (!isValid) {
+    logger.warn("Invalid identity format", {
+      source: source ?? "unknown",
+      reason: "pattern_mismatch",
+    });
     return null;
   }
+
   return normalized;
 };
 
-/**
- * Identity header extraction configuration.
- * Order determines priority - first match wins.
- */
-const IDENTITY_CONFIG = [
-  { header: IDENTITY_HEADERS.TENANT_ID, prefix: "tenant" },
-  { header: IDENTITY_HEADERS.INSTALLATION_ID, prefix: "install" },
-  { header: IDENTITY_HEADERS.CLIENT_ID, prefix: "client" },
-] as const;
+/** Formats a sanitized identity value with its prefix. */
+const formatIdentity = (
+  value: string | string[] | undefined,
+  source: string,
+  prefix: string
+): string | null => {
+  const sanitized = sanitizeIdentity(value, source);
+  return sanitized ? `${prefix}:${sanitized}` : null;
+};
 
-/**
- * Extracts tenant/installation identity from request headers.
- * Validates format to prevent Redis key injection.
- * Returns null if no valid identity headers are present.
- */
-export const extractIdentity = (req: Request): string | null => {
-  const { headers } = req;
-  if (!headers) {
-    return null;
-  }
-
-  for (const { header, prefix } of IDENTITY_CONFIG) {
-    const value = sanitizeIdentity(headers[header]);
-    if (value) {
-      return `${prefix}:${value}`;
+/** Finds the first valid identity from a list of sources. */
+const findIdentity = <T extends { prefix: string }>(
+  sources: readonly T[],
+  getValue: (source: T) => string | string[] | undefined,
+  getSource: (source: T) => string
+): string | null => {
+  for (const source of sources) {
+    const identity = formatIdentity(getValue(source), getSource(source), source.prefix);
+    if (identity) {
+      return identity;
     }
   }
-
   return null;
 };
 
-// ==================== Secure Key Generator ====================
-
 /**
- * Builds rate limit key from identity and location components.
+ * Extracts tenant/user identity from request.
+ * Priority: req.context (auth middleware) > headers (webhooks/edge)
  */
-const buildRateLimitKey = (identity: string | null, location: string, req: Request): string => {
+export const extractIdentity = (req: RequestWithContext): string | null =>
+  findIdentity(
+    CONTEXT_IDENTITY_SOURCES,
+    (source) => req.context?.[source.field],
+    (source) => `context:${source.field}`
+  ) ??
+  (req.headers
+    ? findIdentity(
+        HEADER_IDENTITY_SOURCES,
+        (source) => req.headers[source.header],
+        (source) => `header:${source.header}`
+      )
+    : null);
+
+// ============================================================================
+// Key Generation
+// ============================================================================
+
+/** Determines the location component of a rate limit key. */
+const resolveLocationKey = (req: Request, options: SecureKeyOptions): string => {
+  const resolved = resolveClientIP(req, options);
+  return resolved ? `${getIPKeyPrefix(resolved)}:${resolved.ip}` : createRequestFingerprint(req);
+};
+
+/** Builds a rate limit key from identity and location. */
+const buildKey = (identity: string | null, location: string, req: Request): string => {
   if (identity) {
-    return `${identity}|${location}`;
+    return `${identity}${KEY_SEPARATOR}${location}`;
   }
 
-  // No identity - log for monitoring if using fingerprint
-  if (location.startsWith("fp:")) {
-    logger.debug("Using fingerprint for rate limiting - no valid IP", {
+  // Log fingerprint usage for monitoring
+  if (location.startsWith(`${KEY_PREFIX.FINGERPRINT}:`)) {
+    logger.debug("Rate limiting without identity", {
       path: req.path,
+      bucket: location === UNKNOWN_CLIENT_BUCKET ? "unknown" : "fingerprint",
       hasXForwardedFor: !!req.headers?.["x-forwarded-for"],
     });
   }
@@ -248,23 +321,32 @@ const buildRateLimitKey = (identity: string | null, location: string, req: Reque
 };
 
 /**
- * Secure key generator that prevents IP spoofing and identity abuse attacks.
+ * Generates a secure rate limit key.
  *
- * SECURITY: Identity headers are COMBINED with IP/fingerprint to prevent
- * attackers from abusing arbitrary tenant IDs to exhaust other tenants' quotas.
+ * SECURITY: Combines identity with IP/fingerprint to prevent:
+ * - IP spoofing attacks
+ * - Tenant quota exhaustion attacks
  *
- * Key structure:
- * - With identity + IP: "tenant:abc|ip:1.2.3.4"
- * - With identity + fingerprint: "tenant:abc|fp:hash"
- * - IP only: "ip:1.2.3.4"
- * - Fingerprint only: "fp:hash"
+ * Key formats:
+ * - tenant:abc|ip:1.2.3.4 (identity + public IP)
+ * - tenant:abc|proxy_ip:10.0.0.1 (identity + private socket IP)
+ * - tenant:abc|fp:hash (identity + fingerprint)
+ * - ip:1.2.3.4 (IP only)
+ * - fp:unknown (no identifiers - conservative bucket)
  */
-export const secureKeyGenerator = (req: Request): string => {
-  const identity = extractIdentity(req);
-  const validatedIP = validateIP(req.ip);
+export const secureKeyGenerator = (req: Request, options: SecureKeyOptions = {}): string =>
+  buildKey(extractIdentity(req), resolveLocationKey(req, options), req);
 
-  // Determine location component: prefer validated IP, fallback to fingerprint
-  const location = validatedIP ? `ip:${validatedIP}` : createRequestFingerprint(req);
-
-  return buildRateLimitKey(identity, location, req);
-};
+/**
+ * Creates a key generator with pre-configured options.
+ *
+ * @example
+ * const keyGenerator = createKeyGenerator({
+ *   clientIP: resolvedClientIP,
+ *   rejectPrivateIP: false,
+ * });
+ */
+export const createKeyGenerator =
+  (options: SecureKeyOptions): ((req: Request) => string) =>
+  (req) =>
+    secureKeyGenerator(req, options);
