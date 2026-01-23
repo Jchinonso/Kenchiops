@@ -58,6 +58,22 @@ export const REDIS_SCAN = {
   BATCH_SIZE: 100,
 } as const;
 
+// ==================== Lua Scripts ====================
+
+/**
+ * Lua script for atomic rate limit increment.
+ * SECURITY: Prevents TTL race condition by atomically incrementing and setting expiry.
+ * Returns: [current_count, ttl_in_ms]
+ */
+export const RATE_LIMIT_LUA_SCRIPT = `
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('PTTL', KEYS[1])
+return {current, ttl}
+`;
+
 // ==================== Timeouts ====================
 
 /**

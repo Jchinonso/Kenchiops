@@ -33,7 +33,7 @@ export type {
   ActionRiskScore,
   RiskAssessmentRule,
   // Sanitization types
-  SanitizationResult,
+  OutputSanitizationResult,
   CommandValidationResult,
   // Hallucination detection types
   HallucinationCheckResult,

@@ -658,6 +658,7 @@ export {
   type ActionRiskScore,
   type RiskAssessmentRule,
   type RiskScoreConstants,
+  type OutputSanitizationResult,
   type CommandValidationResult,
   type HallucinationCheckResult,
   type HallucinationIndicator,

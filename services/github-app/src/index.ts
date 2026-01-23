@@ -22,7 +22,7 @@ import {
   EXPRESS_CONFIG,
   SERVER_TIMEOUTS,
   startActionQueueWorker,
-  createRedisRateLimiter,
+  createRateLimitMiddleware,
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   getErrorMessage,
@@ -61,16 +61,32 @@ declare module "express-serve-static-core" {
 }
 
 /**
- * Redis-backed rate limiter for GitHub webhooks.
+ * Redis-backed rate limiter with security features for GitHub webhooks.
  * Higher limit since webhooks can come in bursts during CI activity.
  * Skips health check endpoints for monitoring.
+ *
+ * Security features enabled:
+ * - Bot detection (signal-based, not blocking - GitHub sends webhooks)
+ * - Burst detection (higher threshold for webhook bursts)
  */
-const githubRateLimiter = createRedisRateLimiter({
-  windowMs: GITHUB_APP_RATE_LIMITS.WINDOW_MS,
-  max: GITHUB_APP_RATE_LIMITS.MAX_REQUESTS,
-  message: GITHUB_APP_MESSAGES.RATE_LIMIT_EXCEEDED,
-  keyPrefix: GITHUB_APP_RATE_LIMITS.KEY_PREFIX,
+const githubRateLimiter = createRateLimitMiddleware({
+  rateLimit: {
+    windowMs: GITHUB_APP_RATE_LIMITS.WINDOW_MS,
+    max: GITHUB_APP_RATE_LIMITS.MAX_REQUESTS,
+    message: GITHUB_APP_MESSAGES.RATE_LIMIT_EXCEEDED,
+    keyPrefix: GITHUB_APP_RATE_LIMITS.KEY_PREFIX,
+  },
   skip: (req) => shouldSkipGitHubAppRateLimit(req.path),
+  botDetection: {
+    blockMalicious: false, // Signal-based, not blocking
+    botRateMultiplier: 1, // Don't penalize webhooks from GitHub
+  },
+  burstDetection: {
+    maxBurst: 50, // Higher threshold for webhook bursts
+    rateMultiplier: 0.75, // Mild penalty (75% of normal rate)
+    blockOnBurst: false, // Don't block legitimate webhook bursts
+  },
+  distributedFallback: "fail", // Fail-safe when Redis unavailable
 });
 
 /**

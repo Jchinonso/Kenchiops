@@ -17,9 +17,12 @@ export {
   defaultRateLimiter,
   createRedisRateLimiter,
   defaultRedisRateLimiter,
+  createRateLimitMiddleware,
+  createProductionRateLimitMiddleware,
   secureKeyGenerator,
   type RateLimitOptions,
   type RateLimitInfo,
+  type RateLimitMiddlewareConfig,
 } from "../rateLimit/index.js";
 
 // Generic circuit breaker pattern

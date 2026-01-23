@@ -13,7 +13,7 @@ import {
   createLogger,
   errorHandler,
   requestLogger,
-  createRedisRateLimiter,
+  createRateLimitMiddleware,
   setupGracefulShutdown,
   registerCleanupHandler,
   initDatabase,
@@ -232,16 +232,32 @@ const stopExternalSyncScheduler = (): void => {
 };
 
 /**
- * Redis-backed rate limiter: 100 requests per minute per IP.
+ * Redis-backed rate limiter with security features: 100 requests per minute per IP.
  * Falls back to in-memory if Redis is unavailable.
  * Skips health check endpoints for monitoring.
+ *
+ * Security features enabled:
+ * - Bot detection (signal-based, not blocking by default)
+ * - Burst detection (penalty-based, not blocking by default)
  */
-const apiRateLimiter = createRedisRateLimiter({
-  windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
-  max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
-  message: API_MESSAGES.RATE_LIMIT_EXCEEDED,
-  keyPrefix: API_REDIS_PREFIXES.RATE_LIMIT,
+const apiRateLimiter = createRateLimitMiddleware({
+  rateLimit: {
+    windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
+    max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
+    message: API_MESSAGES.RATE_LIMIT_EXCEEDED,
+    keyPrefix: API_REDIS_PREFIXES.RATE_LIMIT,
+  },
   skip: (req) => shouldSkipRateLimit(req.path),
+  botDetection: {
+    blockMalicious: false, // Signal-based, not blocking
+    botRateMultiplier: 0.5, // Bots get half the rate limit
+  },
+  burstDetection: {
+    maxBurst: 10,
+    rateMultiplier: 0.5, // Burst users get rate limit halved
+    blockOnBurst: false, // Penalty-based, not blocking
+  },
+  distributedFallback: "fail", // Fail-safe when Redis unavailable
 });
 
 /**

@@ -7,7 +7,7 @@
  * @module safety/validation/sanitization
  */
 
-import type { SanitizationResult, CommandValidationResult } from "../types.js";
+import type { OutputSanitizationResult, CommandValidationResult } from "../types.js";
 
 // ==================== Constants ====================
 
@@ -174,7 +174,7 @@ export const sanitizeLLMOutput = (
     escapeHtml?: boolean;
     redactSecrets?: boolean;
   } = {}
-): SanitizationResult => {
+): OutputSanitizationResult => {
   const { escapeHtml: shouldEscapeHtml = true, redactSecrets = true } = options;
 
   const appliedRules: string[] = [];

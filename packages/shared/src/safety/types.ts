@@ -163,7 +163,7 @@ export interface RiskAssessmentRule {
 /**
  * Result of sanitization operation.
  */
-export interface SanitizationResult {
+export interface OutputSanitizationResult {
   /** Sanitized output */
   readonly sanitized: string;
   /** Whether any modifications were made */

@@ -21,7 +21,7 @@ import {
   closeRedis,
   waitForRedisConnection,
   isSocketModeDisconnectError,
-  createRedisRateLimiter,
+  createRateLimitMiddleware,
   startSlackNotificationWorker,
   getErrorMessage,
   SLACK_BOT_RATE_LIMITS,
@@ -164,13 +164,28 @@ const startService = async (): Promise<void> => {
 
     expressApp.use(express.json({ limit: EXPRESS_CONFIG.SLACK_BOT_JSON_LIMIT }));
 
-    // Redis-backed rate limiter for HTTP endpoints
-    const httpRateLimiter = createRedisRateLimiter({
-      windowMs: SLACK_BOT_RATE_LIMITS.WINDOW_MS,
-      max: SLACK_BOT_RATE_LIMITS.MAX_REQUESTS,
-      message: SLACK_BOT_MESSAGES.RATE_LIMIT_EXCEEDED,
-      keyPrefix: SLACK_BOT_RATE_LIMITS.KEY_PREFIX,
+    // Redis-backed rate limiter with security features for HTTP endpoints
+    // Security features enabled:
+    // - Bot detection (signal-based, not blocking - Slack sends events)
+    // - Burst detection (moderate threshold for Slack events)
+    const httpRateLimiter = createRateLimitMiddleware({
+      rateLimit: {
+        windowMs: SLACK_BOT_RATE_LIMITS.WINDOW_MS,
+        max: SLACK_BOT_RATE_LIMITS.MAX_REQUESTS,
+        message: SLACK_BOT_MESSAGES.RATE_LIMIT_EXCEEDED,
+        keyPrefix: SLACK_BOT_RATE_LIMITS.KEY_PREFIX,
+      },
       skip: (req) => shouldSkipSlackBotRateLimit(req.path),
+      botDetection: {
+        blockMalicious: false, // Signal-based, not blocking
+        botRateMultiplier: 1, // Don't penalize Slack events
+      },
+      burstDetection: {
+        maxBurst: 20, // Moderate threshold for Slack event bursts
+        rateMultiplier: 0.75, // Mild penalty (75% of normal rate)
+        blockOnBurst: false, // Don't block legitimate event bursts
+      },
+      distributedFallback: "fail", // Fail-safe when Redis unavailable
     });
     expressApp.use(httpRateLimiter.middleware());
 
