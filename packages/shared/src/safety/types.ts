@@ -23,12 +23,23 @@ export type GatingDecision = "auto_approve" | "require_approval" | "block";
 
 /**
  * Result of action gating evaluation.
+ *
+ * Semantic states:
+ * - block:            requiresApproval=false, canExecute=false
+ * - require_approval: requiresApproval=true,  canExecute=true
+ * - auto_approve:     requiresApproval=false, canExecute=true
  */
 export interface ActionGatingResult {
-  /** Whether the action requires human approval */
+  /**
+   * Whether human approval is required before execution.
+   * False when blocked (approval can't help) or auto-approved.
+   */
   readonly requiresApproval: boolean;
-  /** Whether the action can be executed (even if approval needed) */
-  readonly autoExecutable: boolean;
+  /**
+   * Whether the action is permitted to execute at all.
+   * False only when blocked due to very low confidence or invalid action.
+   */
+  readonly canExecute: boolean;
   /** Human-readable explanation of the gating decision */
   readonly message: string;
 }

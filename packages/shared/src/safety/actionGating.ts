@@ -36,12 +36,13 @@ const CONFIDENCE_RANGE_THRESHOLDS: readonly ThresholdEntry[] = [
 const DEFAULT_CONFIDENCE_RANGE: ConfidenceRange = "very_high";
 
 /**
- * Validates that action has required properties.
+ * Validates that action has a valid safety level.
+ * Note: Only checks safetyLevel field, not other ActionProposal properties.
  *
  * @param action - Action proposal to validate
- * @returns True if action is valid
+ * @returns True if action has a valid safety level
  */
-const isValidAction = (action: unknown): action is ActionProposal =>
+const hasValidSafetyLevel = (action: unknown): action is ActionProposal =>
   typeof action === "object" &&
   action !== null &&
   typeof (action as Record<string, unknown>).safetyLevel === "string" &&
@@ -60,14 +61,18 @@ const getConfidenceRange = (score: number): ConfidenceRange => {
 
 /**
  * Creates a gating result object.
+ *
+ * @param requiresApproval - Whether human approval gate exists
+ * @param canExecute - Whether execution is permitted at all
+ * @param message - Human-readable explanation
  */
 const createGatingResult = (
   requiresApproval: boolean,
-  autoExecutable: boolean,
+  canExecute: boolean,
   message: string
 ): ActionGatingResult => ({
   requiresApproval,
-  autoExecutable,
+  canExecute,
   message,
 });
 
@@ -111,7 +116,8 @@ const HIGH_CONFIDENCE_MESSAGE_TEMPLATES: Readonly<
 > = {
   auto_approve: (baseMessage: string) => `${baseMessage} with safe/low-risk action. Auto-approved.`,
   medium_risk: (baseMessage: string) => `${baseMessage} but medium risk. Approval required.`,
-  high_risk: () => "High/dangerous risk. Always requires approval.",
+  high_risk: (baseMessage: string) =>
+    `${baseMessage} but high/dangerous risk. Always requires approval.`,
 } as const;
 
 /**
@@ -153,9 +159,10 @@ type RangeHandler = (
 
 /**
  * Handles very low confidence range - blocks all actions.
+ * requiresApproval=false because approval can't help when blocked.
  */
 const handleVeryLowRange: RangeHandler = () =>
-  createGatingResult(true, false, CONFIDENCE_MESSAGES.very_low);
+  createGatingResult(false, false, CONFIDENCE_MESSAGES.very_low);
 
 /**
  * Handles low/medium confidence ranges - requires approval but allows execution.
@@ -189,9 +196,10 @@ const RANGE_HANDLERS: Readonly<Record<ConfidenceRange, RangeHandler>> = {
 
 /**
  * Invalid action gating result.
+ * requiresApproval=false because approval can't help when blocked.
  */
 const INVALID_ACTION_RESULT: ActionGatingResult = createGatingResult(
-  true,
+  false,
   false,
   SAFETY_MESSAGES.INVALID_ACTION
 );
@@ -210,8 +218,8 @@ export const determineActionGating = (
   action: ActionProposal,
   confidenceScore: number
 ): ActionGatingResult => {
-  // Early return for invalid actions
-  if (!isValidAction(action)) {
+  // Early return for actions without valid safety level
+  if (!hasValidSafetyLevel(action)) {
     return INVALID_ACTION_RESULT;
   }
 

@@ -373,8 +373,9 @@ describe("Safety - Confidence Scoring", () => {
 
       const result = determineActionGating(action, 0.2);
 
-      expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(false);
+      // Block state: requiresApproval=false (approval can't help), canExecute=false
+      expect(result.requiresApproval).toBe(false);
+      expect(result.canExecute).toBe(false);
       expect(result.message).toContain("Very low confidence");
     });
 
@@ -392,7 +393,7 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.4);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(true);
+      expect(result.canExecute).toBe(true);
       expect(result.message).toContain("Low confidence");
     });
 
@@ -410,7 +411,7 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.6);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(true);
+      expect(result.canExecute).toBe(true);
       expect(result.message).toContain("Medium confidence");
     });
 
@@ -428,7 +429,7 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.75);
 
       expect(result.requiresApproval).toBe(false);
-      expect(result.autoExecutable).toBe(true);
+      expect(result.canExecute).toBe(true);
       expect(result.message).toContain("High confidence");
       expect(result.message).toContain("Auto-approved");
     });
@@ -447,7 +448,7 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.75);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(true);
+      expect(result.canExecute).toBe(true);
       expect(result.message).toContain("medium risk");
       expect(result.message).toContain("Approval required");
     });
@@ -477,9 +478,9 @@ describe("Safety - Confidence Scoring", () => {
       const lowRiskResult = determineActionGating(lowRiskAction, 0.9);
 
       expect(safeResult.requiresApproval).toBe(false);
-      expect(safeResult.autoExecutable).toBe(true);
+      expect(safeResult.canExecute).toBe(true);
       expect(lowRiskResult.requiresApproval).toBe(false);
-      expect(lowRiskResult.autoExecutable).toBe(true);
+      expect(lowRiskResult.canExecute).toBe(true);
     });
 
     it("should require approval for medium-risk actions even with very high confidence", () => {
@@ -496,7 +497,7 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.9);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(true);
+      expect(result.canExecute).toBe(true);
       expect(result.message).toContain("medium risk");
     });
 
