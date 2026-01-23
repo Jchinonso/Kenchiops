@@ -77,35 +77,31 @@ const createGatingResult = (
 });
 
 /**
- * Gating decision lookup table based on confidence thresholds.
- * Returns first matching decision based on score thresholds.
+ * Maps confidence ranges to base gating decisions.
+ * Single source of truth - derived from ranges, not duplicate thresholds.
+ *
+ * Note: High/very_high map to "auto_approve" as a base, but safety level
+ * may override this to "require_approval" in determineActionGating.
  */
-const GATING_DECISION_THRESHOLDS: ReadonlyArray<{
-  readonly threshold: number;
-  readonly decision: GatingDecision;
-}> = [
-  { threshold: CONFIDENCE_THRESHOLDS.VERY_LOW, decision: "block" },
-  { threshold: CONFIDENCE_THRESHOLDS.MEDIUM, decision: "require_approval" },
-] as const;
+const RANGE_TO_DECISION: Readonly<Record<ConfidenceRange, GatingDecision>> = {
+  very_low: "block",
+  low: "require_approval",
+  medium: "require_approval",
+  high: "auto_approve",
+  very_high: "auto_approve",
+} as const;
 
 /**
- * Default gating decision for high confidence scores.
- */
-const DEFAULT_GATING_DECISION: GatingDecision = "auto_approve";
-
-/**
- * Determines basic gating decision based on confidence score.
- * Robust: Validates and clamps input to handle edge cases.
+ * Determines basic gating decision based on confidence score alone.
+ * Does NOT consider action safety level - use determineActionGating for that.
  *
  * @param confidenceScore - Confidence score from analysis (0-1, will be clamped if invalid)
- * @returns Basic gating decision
+ * @returns Basic gating decision (before safety level overrides)
  */
 export const determineGatingDecision = (confidenceScore: number): GatingDecision => {
   const clampedScore = clampConfidenceScore(confidenceScore);
-  const matchedDecision = GATING_DECISION_THRESHOLDS.find(
-    ({ threshold }) => clampedScore < threshold
-  );
-  return matchedDecision?.decision ?? DEFAULT_GATING_DECISION;
+  const range = getConfidenceRange(clampedScore);
+  return RANGE_TO_DECISION[range];
 };
 
 /**
@@ -161,21 +157,21 @@ type RangeHandler = (
  * Handles very low confidence range - blocks all actions.
  * requiresApproval=false because approval can't help when blocked.
  */
-const handleVeryLowRange: RangeHandler = () =>
+const handleVeryLowRange: RangeHandler = (_range, _safetyLevel, _clampedScore) =>
   createGatingResult(false, false, CONFIDENCE_MESSAGES.very_low);
 
 /**
  * Handles low/medium confidence ranges - requires approval but allows execution.
  */
-const handleLowMediumRange: RangeHandler = (range) =>
+const handleLowMediumRange: RangeHandler = (range, _safetyLevel, _clampedScore) =>
   createGatingResult(true, true, CONFIDENCE_MESSAGES[range]);
 
 /**
  * Handles high/very high confidence ranges - checks safety level for auto-approval.
  */
-const handleHighRange: RangeHandler = (range, safetyLevel) => {
-  const canAutoApprove =
-    VALID_SAFETY_LEVELS.has(safetyLevel) && AUTO_APPROVABLE_SAFETY_LEVELS.has(safetyLevel);
+const handleHighRange: RangeHandler = (range, safetyLevel, _clampedScore) => {
+  // safetyLevel already validated by hasValidSafetyLevel before reaching handlers
+  const canAutoApprove = AUTO_APPROVABLE_SAFETY_LEVELS.has(safetyLevel);
   return createGatingResult(
     !canAutoApprove,
     true,
@@ -207,18 +203,19 @@ const INVALID_ACTION_RESULT: ActionGatingResult = createGatingResult(
 /**
  * Determines action gating for a specific action proposal.
  * Combines confidence score with action safety level.
- * Robust: Validates inputs and handles edge cases defensively.
- * Optimized with lookup structures and functional patterns.
  *
- * @param action - Action proposal to evaluate
+ * Accepts `unknown` for boundary safety - validates internally.
+ * Use at service boundaries where runtime data may be untyped.
+ *
+ * @param action - Action proposal to evaluate (validated internally)
  * @param confidenceScore - Confidence score from analysis (0-1, will be clamped if invalid)
  * @returns Gating decision with approval requirements
  */
 export const determineActionGating = (
-  action: ActionProposal,
+  action: unknown,
   confidenceScore: number
 ): ActionGatingResult => {
-  // Early return for actions without valid safety level
+  // Validate action has required safetyLevel
   if (!hasValidSafetyLevel(action)) {
     return INVALID_ACTION_RESULT;
   }
