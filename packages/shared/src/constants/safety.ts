@@ -92,3 +92,15 @@ export const AUTO_APPROVABLE_SAFETY_LEVELS: Readonly<Set<string>> = new Set(["sa
 export const SAFETY_MESSAGES = {
   INVALID_ACTION: "Invalid action proposal. Manual review required.",
 } as const;
+
+// ==================== Audit Constants ====================
+
+/**
+ * Default limit for audit queries.
+ */
+export const AUDIT_DEFAULT_QUERY_LIMIT = 100;
+
+/**
+ * Maximum in-memory audit entries (for default store).
+ */
+export const AUDIT_MAX_IN_MEMORY_ENTRIES = 10000;

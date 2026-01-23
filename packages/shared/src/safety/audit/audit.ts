@@ -15,18 +15,7 @@ import type {
   AuditQueryOptions,
   AuditStore,
 } from "../types.js";
-
-// ==================== Constants ====================
-
-/**
- * Default limit for queries.
- */
-const DEFAULT_QUERY_LIMIT = 100;
-
-/**
- * Maximum in-memory entries (for default store).
- */
-const MAX_IN_MEMORY_ENTRIES = 10000;
+import { AUDIT_DEFAULT_QUERY_LIMIT, AUDIT_MAX_IN_MEMORY_ENTRIES } from "../../constants/safety.js";
 
 // ==================== Filter Configuration ====================
 
@@ -99,8 +88,8 @@ class InMemoryAuditStore implements AuditStore {
     this.entries.push(entry);
 
     // Trim old entries if over limit
-    if (this.entries.length > MAX_IN_MEMORY_ENTRIES) {
-      this.entries = this.entries.slice(-MAX_IN_MEMORY_ENTRIES);
+    if (this.entries.length > AUDIT_MAX_IN_MEMORY_ENTRIES) {
+      this.entries = this.entries.slice(-AUDIT_MAX_IN_MEMORY_ENTRIES);
     }
   }
 
@@ -117,7 +106,7 @@ class InMemoryAuditStore implements AuditStore {
 
     // Sort by timestamp descending (newest first) and apply pagination
     const offset = options.offset ?? 0;
-    const limit = options.limit ?? DEFAULT_QUERY_LIMIT;
+    const limit = options.limit ?? AUDIT_DEFAULT_QUERY_LIMIT;
 
     return filtered
       .sort((entryA, entryB) => entryB.timestamp.getTime() - entryA.timestamp.getTime())
