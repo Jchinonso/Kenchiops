@@ -6,7 +6,6 @@
  */
 
 import type { ActionProposal, SafetyLevel } from "../core/types.js";
-import { clampConfidenceScore } from "./confidenceUtils.js";
 import {
   CONFIDENCE_THRESHOLDS,
   AUTO_APPROVABLE_SAFETY_LEVELS,
@@ -15,29 +14,11 @@ import {
   SAFETY_MESSAGES,
   type ConfidenceRange,
 } from "../constants/index.js";
+import type { GatingDecision, ActionGatingResult, ThresholdEntry } from "./types.js";
+import { clampConfidenceScore } from "./helpers.js";
 
-/**
- * Gating decision type.
- */
-type GatingDecision = "auto_approve" | "require_approval" | "block";
-
-/**
- * Action gating result type.
- */
-export type ActionGatingResult = {
-  readonly requiresApproval: boolean;
-  readonly autoExecutable: boolean;
-  readonly message: string;
-};
-
-/**
- * Threshold entry for confidence range lookup.
- * Sorted in ascending order for first-match logic.
- */
-interface ThresholdEntry {
-  readonly threshold: number;
-  readonly range: ConfidenceRange;
-}
+// Re-export types for consumers
+export type { GatingDecision, ActionGatingResult } from "./types.js";
 
 /**
  * Confidence range lookup table (ascending order - returns first match).

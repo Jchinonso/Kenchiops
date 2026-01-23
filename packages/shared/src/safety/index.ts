@@ -6,18 +6,41 @@
  * - The AI (LLM) is treated as an untrusted helper.
  * - Its outputs must always be validated by deterministic logic before taking any side-effecting action.
  * - Confidence scores are computed deterministically, NOT self-reported by the LLM.
+ *
+ * @module safety
  */
 
-// Main exports
-// Backward compatibility functions
+// Type exports
+// Backward compatibility imports
 import type { LLMAnalysisResult, Evidence } from "../core/types.js";
 import { calculateConfidenceScore } from "./confidenceScoring.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD, PLACEHOLDER_CONFIDENCE_SCORE } from "../constants/index.js";
 
-export { calculateConfidenceScore } from "./confidenceScoring.js";
-export { determineActionGating } from "./actionGating.js";
+export type {
+  GatingDecision,
+  ActionGatingResult,
+  AlignmentCheck,
+  CompletenessCheck,
+  ThresholdEntry,
+  LLMAnalysisLike,
+  EvidenceLike,
+  ConfidenceRange,
+} from "./types.js";
 
-// Re-exports for internal use (if needed by other safety modules)
+// Helper exports
+export {
+  clampConfidenceScore,
+  formatAdjustment,
+  formatScore,
+  normalizeText,
+  containsKeyword,
+} from "./helpers.js";
+
+// Main function exports
+export { calculateConfidenceScore, getBaseScore } from "./confidenceScoring.js";
+export { determineActionGating, determineGatingDecision } from "./actionGating.js";
+
+// Sub-module exports for internal/advanced use
 export { detectUncertainty } from "./uncertaintyDetection.js";
 export { calculateEvidenceAlignment, assessCompleteness } from "./evidenceValidation.js";
 export { validateAgainstKnowledgeBase } from "./knowledgeValidation.js";

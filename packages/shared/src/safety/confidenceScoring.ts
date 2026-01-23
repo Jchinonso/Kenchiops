@@ -1,6 +1,8 @@
 /**
  * Main confidence scoring module.
  * Calculates 6-factor confidence scores for LLM analysis results.
+ *
+ * @module safety/confidenceScoring
  */
 
 import type { LLMAnalysisResult, Evidence, ConfidenceScoreResult } from "../core/types.js";
@@ -9,8 +11,8 @@ import { calculateEvidenceAlignment, assessCompleteness } from "./evidenceValida
 import { validateAgainstKnowledgeBase } from "./knowledgeValidation.js";
 import { checkConsistency } from "./consistency.js";
 import { determineGatingDecision } from "./actionGating.js";
-import { clampConfidenceScore } from "./confidenceUtils.js";
-import { BASE_CONFIDENCE_SCORES, DISPLAY_DEFAULTS } from "../constants/index.js";
+import { clampConfidenceScore, formatAdjustment, formatScore } from "./helpers.js";
+import { BASE_CONFIDENCE_SCORES } from "../constants/index.js";
 
 /**
  * LLM confidence level to base score mapping.
@@ -35,18 +37,6 @@ export const getBaseScore = (llmConfidence?: string): number => {
   }
 
   return CONFIDENCE_LEVEL_MAP.get(llmConfidence) ?? BASE_CONFIDENCE_SCORES.DEFAULT;
-};
-
-/**
- * Formats adjustment value for reasoning output.
- */
-const formatAdjustment = (value: number, label: string): string => {
-  if (value === 0) {
-    return "";
-  }
-
-  const sign = value > 0 ? "+" : "";
-  return `${label}: ${sign}${value.toFixed(DISPLAY_DEFAULTS.SCORE_DECIMAL_PRECISION)}`;
 };
 
 /**
@@ -104,7 +94,7 @@ export const calculateConfidenceScore = (
 
   // Generate reasoning
   const reasoning: string[] = [
-    `Base score: ${baseScore.toFixed(DISPLAY_DEFAULTS.SCORE_DECIMAL_PRECISION)} (from LLM confidence: ${analysis.confidence || "medium"})`,
+    `Base score: ${formatScore(baseScore)} (from LLM confidence: ${analysis.confidence || "medium"})`,
     formatAdjustment(uncertaintyAdjustment, "Uncertainty adjustment"),
     formatAdjustment(evidenceAlignment, "Evidence alignment"),
     formatAdjustment(completeness, "Completeness"),
@@ -112,9 +102,7 @@ export const calculateConfidenceScore = (
     formatAdjustment(consistency, "Consistency"),
   ].filter(Boolean);
 
-  reasoning.push(
-    `Final confidence score: ${finalScore.toFixed(DISPLAY_DEFAULTS.SCORE_DECIMAL_PRECISION)}`
-  );
+  reasoning.push(`Final confidence score: ${formatScore(finalScore)}`);
 
   // Determine action gating decision
   const gatingDecision = determineGatingDecision(finalScore);

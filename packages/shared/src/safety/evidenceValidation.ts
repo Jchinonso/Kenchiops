@@ -1,6 +1,8 @@
 /**
  * Evidence validation module for confidence scoring.
  * Validates that LLM analysis aligns with provided evidence and assesses completeness.
+ *
+ * @module safety/evidenceValidation
  */
 
 import type { LLMAnalysisResult, Evidence } from "../core/types.js";
@@ -14,23 +16,14 @@ import {
   MIN_LENGTHS,
   MIN_ACTIONS_FOR_BONUS,
 } from "../constants/index.js";
+import type { AlignmentCheck, CompletenessCheck } from "./types.js";
+import { containsKeyword } from "./helpers.js";
 
 /**
  * Checks if reasoning contains metric keywords.
- * Uses Array.from() with .some() for Set iteration.
  */
-const hasMetricsReference = (reasoning: string): boolean => {
-  const normalized = reasoning.toLowerCase();
-  return Array.from(METRIC_KEYWORDS).some((keyword) => normalized.includes(keyword));
-};
-
-/**
- * Alignment check configuration for data-driven validation.
- */
-interface AlignmentCheck {
-  readonly condition: (analysis: LLMAnalysisResult, evidence: Evidence) => boolean;
-  readonly adjustment: number;
-}
+const hasMetricsReference = (reasoning: string): boolean =>
+  containsKeyword(reasoning, METRIC_KEYWORDS);
 
 /**
  * Alignment checks configuration - data-driven approach.
@@ -112,25 +105,15 @@ export const calculateEvidenceAlignment = (
 
 /**
  * Checks if cause is valid (not "unknown" or too short).
- * Uses Array.from() with .some() for Set iteration.
  */
 const isValidCause = (cause?: string): boolean => {
   if (!cause || cause.length <= MIN_LENGTHS.CAUSE) {
     return false;
   }
 
-  const normalized = cause.toLowerCase();
   // Return false if any invalid keyword is found
-  return !Array.from(INVALID_CAUSE_KEYWORDS).some((keyword) => normalized.includes(keyword));
+  return !containsKeyword(cause, INVALID_CAUSE_KEYWORDS);
 };
-
-/**
- * Completeness check configuration for data-driven validation.
- */
-interface CompletenessCheck {
-  readonly condition: (analysis: LLMAnalysisResult) => boolean;
-  readonly adjustment: number;
-}
 
 /**
  * Completeness checks configuration - data-driven approach.
