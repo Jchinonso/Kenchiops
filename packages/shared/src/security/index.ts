@@ -15,8 +15,15 @@ export {
   containsSecrets,
   detectSecretTypes,
   createCustomRedactor,
-  type RedactionResult,
 } from "./redaction.js";
+
+export type {
+  RedactionResult,
+  RedactionOptions,
+  ObjectRedactionOptions,
+  CustomRedactionResult,
+  CustomRedactor,
+} from "./types.js";
 
 // Re-export constants for convenience
 export {
