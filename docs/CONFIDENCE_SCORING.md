@@ -4,15 +4,16 @@
 
 1. [Executive Summary](#executive-summary)
 2. [Architecture Overview](#architecture-overview)
-3. [Six-Factor Scoring Algorithm](#six-factor-scoring-algorithm)
-4. [Evidence Definition](#evidence-definition)
-5. [Uncertainty Detection](#uncertainty-detection)
-6. [Action Gating Rules](#action-gating-rules)
-7. [Feedback Collection](#feedback-collection)
-8. [Calibration & Accuracy Tracking](#calibration--accuracy-tracking)
-9. [Storage & Persistence](#storage--persistence)
-10. [Implementation Phases](#implementation-phases)
-11. [Deliverables Checklist](#deliverables-checklist)
+3. [Technical Contracts](#technical-contracts)
+4. [Six-Factor Scoring Algorithm](#six-factor-scoring-algorithm)
+5. [Evidence Definition](#evidence-definition)
+6. [Uncertainty Detection](#uncertainty-detection)
+7. [Action Gating Rules](#action-gating-rules)
+8. [Configuration Reference](#configuration-reference)
+9. [Feedback Collection](#feedback-collection)
+10. [Calibration & Accuracy Tracking](#calibration--accuracy-tracking)
+11. [Storage & Persistence](#storage--persistence)
+12. [Related Systems](#related-systems)
 
 ---
 
@@ -53,12 +54,35 @@ Confidence scoring is a **deterministic process** that evaluates the quality and
 │                   (Deterministic)                               │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Factor 1: Base Score          ──► LLM's stated confidence      │
-│  Factor 2: Uncertainty         ──► Hedging language detection   │
-│  Factor 3: Evidence Alignment  ──► Does analysis match data?    │
-│  Factor 4: Completeness        ──► Is analysis thorough?        │
-│  Factor 5: Knowledge Base      ──► Similar past incidents?      │
-│  Factor 6: Consistency         ──► Do recommendations fit?      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 1. Base Score (from LLM stated confidence)              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                         │                                       │
+│                         ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 2. Raw Factors (5 independent assessments)              │   │
+│  │    - Uncertainty, Evidence, Completeness, KB, Consistency│   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                         │                                       │
+│                         ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 3. Bounded Factors (clamped to FACTOR_BOUNDS)           │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                         │                                       │
+│                         ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 4. Weighted Factors (multiplied by FACTOR_WEIGHTS)      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                         │                                       │
+│                         ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 5. Weighted Adjustment (sum, clamped to guard rail)     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                         │                                       │
+│                         ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 6. Final Score = Base + Adjustment (clamped [0,1])      │   │
+│  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
 └────────────────────────┬────────────────────────────────────────┘
                          │
@@ -76,11 +100,78 @@ Confidence scoring is a **deterministic process** that evaluates the quality and
 
 ---
 
+## Technical Contracts
+
+### Scoring Math Contract
+
+The confidence scoring follows a deterministic, auditable formula:
+
+```
+1. baseScore = BASE_CONFIDENCE_SCORES[llmConfidenceLevel] ?? 0.5
+
+2. rawFactors = {
+     uncertainty:            detectUncertainty(analysisText),
+     evidenceAlignment:      calculateEvidenceAlignment(analysis, evidence),
+     completeness:           assessCompleteness(analysis),
+     knowledgeBaseValidation: validateAgainstKnowledgeBase(analysis, evidence),
+     consistency:            checkConsistency(analysis)
+   }
+
+3. boundedFactors = {
+     for each factor:
+       clamp(rawFactor, FACTOR_BOUNDS[factor].min, FACTOR_BOUNDS[factor].max)
+   }
+
+4. weightedFactors = {
+     for each factor:
+       boundedFactor × FACTOR_WEIGHTS[factor]
+   }
+
+5. rawWeightedSum = Σ(weightedFactors)
+
+6. weightedAdjustment = clamp(rawWeightedSum, MAX_WEIGHTED_ADJUSTMENT.min, MAX_WEIGHTED_ADJUSTMENT.max)
+
+7. rawScore = baseScore + weightedAdjustment
+
+8. cappedScore = isEmptyAnalysis ? min(rawScore, EMPTY_ANALYSIS_MAX_SCORE) : rawScore
+
+9. finalScore = clamp(cappedScore, 0, 1)
+```
+
+**Key Invariants:**
+
+- Scores are ALWAYS in [0, 1] range
+- Each factor is bounded BEFORE weighting (prevents buggy factors from dominating)
+- Weighted sum has a guard rail (prevents config mistakes)
+- Empty analysis caps at 0.3 (not actionable without content)
+- NaN/Infinity from factors are converted to 0 (fail-safe)
+
+**Numeric Precision:**
+
+- All intermediate math uses IEEE-754 double precision
+- Scores are displayed with 2-3 decimal places for debugging
+- Gating decisions use the unrounded finalScore
+
+### Safety Features
+
+| Feature                        | Purpose                                                |
+| ------------------------------ | ------------------------------------------------------ |
+| Factor bounds                  | Prevents any single factor from dominating             |
+| NaN/Infinity handling          | Converts to 0, logs warning for upstream bug detection |
+| Weighted adjustment guard rail | Caps total adjustment to [-0.5, +0.5]                  |
+| Empty analysis cap             | Scores without content capped at 0.3                   |
+| Scoring version                | Audit traceability (`confidence_v2`)                   |
+| Full breakdown                 | Raw/bounded/weighted values for debugging              |
+
+---
+
 ## Six-Factor Scoring Algorithm
 
 ### Factor 1: Base Score (Starting Point)
 
-The LLM provides a confidence level in its response. This is the starting point, adjusted by subsequent factors.
+The LLM provides a confidence level in its response. This is the starting point.
+
+**Constants:** `BASE_CONFIDENCE_SCORES` in `constants/confidence.ts`
 
 | LLM Stated Level | Base Score | Description                          |
 | ---------------- | ---------- | ------------------------------------ |
@@ -89,23 +180,35 @@ The LLM provides a confidence level in its response. This is the starting point,
 | `medium`         | 0.60       | LLM has moderate confidence          |
 | `low`            | 0.40       | LLM acknowledges uncertainty         |
 | `very_low`       | 0.20       | LLM is very uncertain                |
-| Not provided     | 0.50       | Default to medium                    |
+| Not provided     | 0.50       | Default when not specified           |
+
+**Unknown values:** If the LLM provides an unrecognized confidence level, the system:
+
+1. Uses the default (0.50)
+2. Logs the unknown value (sanitized, truncated to 64 chars) for upstream bug detection
 
 ---
 
 ### Factor 2: Uncertainty Detection
 
-Scans the LLM's text for hedging language that indicates uncertainty, even if it stated high confidence.
+Scans the LLM's text for hedging language that indicates uncertainty.
 
-See [Uncertainty Detection](#uncertainty-detection) section for complete phrase lists.
+**Weight:** 0.15 | **Bounds:** [-0.3, 0]
 
-| Penalty Level | Score Adjustment | When Applied                                              |
-| ------------- | ---------------- | --------------------------------------------------------- |
-| Strong        | -0.15 to -0.20   | "Cannot determine", "Unknown", "Insufficient information" |
-| Moderate      | -0.08 to -0.12   | "Possibly", "Might be", "Could be", "Perhaps"             |
-| Mild          | -0.03 to -0.05   | "Appears to", "Seems like", "Probably"                    |
+**Constants:** `UNCERTAINTY_PENALTIES`, `UNCERTAINTY_PATTERNS` in `constants/safety.ts`
 
-**Maximum total penalty: -0.30**
+| Penalty Level | Raw Adjustment | Patterns                                                                                               |
+| ------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| Strong        | -0.15          | "cannot determine", "unknown", "insufficient information", "not sure", "unclear", "unable to identify" |
+| Moderate      | -0.10          | "possibly", "might be", "could be", "may be", "potentially", "perhaps"                                 |
+| Mild          | -0.05          | "appears to", "seems like", "suggests that", "probably"                                                |
+
+**Detection behavior:**
+
+- Patterns are checked in severity order (strongest first)
+- **First match wins** - returns the penalty for the first matching pattern
+- Case-insensitive matching with word boundaries
+- Maximum penalty: -0.30 (from bounds)
 
 ---
 
@@ -113,13 +216,22 @@ See [Uncertainty Detection](#uncertainty-detection) section for complete phrase 
 
 Verifies that the LLM's identified cause is supported by actual evidence.
 
-See [Evidence Definition](#evidence-definition) section for what counts as evidence.
+**Weight:** 0.30 | **Bounds:** [-0.4, +0.4]
 
-| Alignment Level | Score Adjustment | Criteria                                                      |
-| --------------- | ---------------- | ------------------------------------------------------------- |
-| Strong          | +0.10 to +0.15   | Cause directly quotes error logs, similar past incident found |
-| Partial         | +0.05            | Some evidence supports cause, indirect correlation            |
-| None            | -0.15 to -0.20   | Cause not in evidence, contradicts available data             |
+**Constants:** `ALIGNMENT_ADJUSTMENTS`, `MATCHING_CONFIG` in `constants/confidence.ts`
+
+| Check               | Raw Adjustment | Criteria                                                  |
+| ------------------- | -------------- | --------------------------------------------------------- |
+| Log Reference       | +0.15          | Cause contains text from error logs (≥30 char prefix)     |
+| Commit Reference    | +0.10          | Reasoning references specific commit SHAs (7 char prefix) |
+| Past Incident Match | +0.15          | High-similarity (>85%) past incident exists               |
+| Metrics Correlation | +0.05          | Reasoning references metrics with numeric values          |
+| No Alignment        | -0.15          | Cause identified but no evidence supports it              |
+
+**Penalty conditions:**
+
+- Penalty only applied when: (1) no checks passed, (2) cause was identified, (3) evidence has surfaces to measure against
+- This avoids penalizing novel issues with no available evidence
 
 ---
 
@@ -127,14 +239,18 @@ See [Evidence Definition](#evidence-definition) section for what counts as evide
 
 Evaluates whether the analysis is thorough and detailed.
 
-| Criteria                                                       | Score Adjustment |
-| -------------------------------------------------------------- | ---------------- |
-| Root cause identified and explained (>20 chars, not "unknown") | +0.03            |
-| Substantial reasoning provided (>100 chars)                    | +0.03            |
-| Multiple recommended actions (≥2)                              | +0.02            |
-| Impact assessment included                                     | +0.02            |
-| Uncertainties explicitly listed (transparency bonus)           | +0.03            |
-| Missing root cause AND reasoning                               | -0.15            |
+**Weight:** 0.15 | **Bounds:** [-0.2, +0.2]
+
+**Constants:** `COMPLETENESS_ADJUSTMENTS`, `MIN_LENGTHS` in `constants/confidence.ts`
+
+| Check                 | Raw Adjustment | Criteria                                                 |
+| --------------------- | -------------- | -------------------------------------------------------- |
+| Cause Identified      | +0.03          | Root cause >20 chars, not "unknown"                      |
+| Substantial Reasoning | +0.03          | Reasoning >100 chars                                     |
+| Multiple Actions      | +0.02          | ≥2 recommended actions                                   |
+| Impact Assessment     | +0.02          | Impact assessment provided                               |
+| Uncertainties Listed  | +0.03          | Explicit uncertainty acknowledgment (transparency bonus) |
+| Minimal Analysis      | -0.15          | Missing BOTH cause AND reasoning                         |
 
 ---
 
@@ -142,11 +258,15 @@ Evaluates whether the analysis is thorough and detailed.
 
 Boosts confidence if analysis aligns with known patterns from past incidents.
 
-| Scenario                                                 | Score Adjustment |
-| -------------------------------------------------------- | ---------------- |
-| High-similarity past incident (>85%) + LLM references it | +0.10            |
-| Medium-similarity past incident (70-85%)                 | +0.05            |
-| No similar incidents found                               | 0 (neutral)      |
+**Weight:** 0.25 | **Bounds:** [-0.3, +0.3]
+
+**Constants:** `VALIDATION_ADJUSTMENTS`, `SIMILARITY_THRESHOLDS` in `constants/confidence.ts`
+
+| Scenario       | Raw Adjustment | Criteria                                            |
+| -------------- | -------------- | --------------------------------------------------- |
+| Strong Match   | +0.10          | >85% similarity incident AND LLM references it      |
+| Moderate Match | +0.05          | >70% similarity incident exists                     |
+| No Match       | 0              | No similar incidents found (neutral, not penalized) |
 
 ---
 
@@ -154,32 +274,30 @@ Boosts confidence if analysis aligns with known patterns from past incidents.
 
 Ensures recommendations logically address the identified cause.
 
-| Scenario                                  | Score Adjustment |
-| ----------------------------------------- | ---------------- |
-| ≥50% of actions clearly relevant to cause | +0.05            |
-| Actions don't address stated cause        | -0.10            |
-| No cause or no actions to compare         | 0 (neutral)      |
+**Weight:** 0.15 | **Bounds:** [-0.2, +0.2]
 
----
+**Constants:** `CONSISTENCY_ADJUSTMENTS`, `RELEVANCE_RULES`, `SHOTGUN_LIST_THRESHOLDS` in `constants/`
 
-### Score Calculation Summary
+| Scenario               | Raw Adjustment | Criteria                                          |
+| ---------------------- | -------------- | ------------------------------------------------- |
+| High Relevance         | +0.05          | ≥50% of actions clearly relevant to cause         |
+| Partial Relevance      | 0              | Some actions relevant, but <50%                   |
+| No Relevance           | -0.10          | Actions don't address stated cause                |
+| Missing Data           | -0.05          | No cause or no actions to compare                 |
+| Generic Only           | -0.05          | Only generic actions (check logs, restart, etc.)  |
+| Shotgun + No Relevance | -0.15          | ≥4 actions with <25% relevance (combined penalty) |
 
-```
-Final Score = Base Score
-            + Uncertainty Adjustment (max -0.30)
-            + Evidence Alignment (-0.20 to +0.20)
-            + Completeness (-0.15 to +0.13)
-            + Knowledge Base Validation (0 to +0.10)
-            + Consistency (-0.10 to +0.05)
+**Relevance matching:**
 
-Clamped to range [0.0, 1.0]
-```
+- Uses keyword-based rules mapping cause keywords to action keywords
+- Example: cause contains "secret" → actions containing "environment", "config", "add" are relevant
+- Generic remediation keywords ("check", "logs", "restart") get partial credit
 
 ---
 
 ## Evidence Definition
 
-Evidence is the factual data available to validate LLM analysis. This section defines what counts as evidence and how alignment is measured.
+Evidence is the factual data available to validate LLM analysis.
 
 ### Evidence Categories
 
@@ -193,99 +311,150 @@ Evidence is the factual data available to validate LLM analysis. This section de
 | **Metrics**       | System measurements                  | Error rate, latency, CPU/memory usage     |
 | **PR Context**    | Pull request information             | PR number, title, author, branch          |
 
-### Evidence Alignment Checks
+### Evidence Type Definition
 
-| Check               | What It Validates                                   | Score Impact  |
-| ------------------- | --------------------------------------------------- | ------------- |
-| Log Reference       | Does cause contain text from error logs?            | +0.15 if yes  |
-| Commit Reference    | Does analysis reference specific commit SHAs?       | +0.10 if yes  |
-| Past Incident Match | Is there a high-similarity (>85%) past incident?    | +0.15 if yes  |
-| Metrics Correlation | Does analysis reference metrics that are anomalous? | +0.05 if yes  |
-| No Evidence Found   | Cause makes claims not in evidence                  | -0.15 penalty |
-
-### Evidence Quality Indicators
-
-| Quality Level      | Characteristics                                                   |
-| ------------------ | ----------------------------------------------------------------- |
-| **High Quality**   | Clear error messages, specific file/line references, reproducible |
-| **Medium Quality** | Generic errors, partial stack traces, some context                |
-| **Low Quality**    | No logs available, timeout without details, cancelled jobs        |
+```typescript
+interface Evidence {
+  eventId: string;
+  logs?: Array<{ message: string; level?: string; timestamp?: string }>;
+  gitHistory?: Array<{ sha: string; message: string; author?: string }>;
+  relatedDocs?: Array<{ id: string; type: string; similarity: number }>;
+  metrics?: { summary?: string };
+  annotations?: Array<{ path: string; line?: number; message: string }>;
+}
+```
 
 ---
 
 ## Uncertainty Detection
 
-### Expanded Phrase Categories
+### Pattern Configuration
 
-#### Strong Uncertainty (Penalty: -0.15 to -0.20)
+Patterns are defined in `UNCERTAINTY_PATTERNS` (constants/safety.ts) as regex with associated penalties:
 
-| Category             | Phrases                                                     |
-| -------------------- | ----------------------------------------------------------- |
-| Explicit Uncertainty | "I'm not sure", "It's unclear", "Cannot determine"          |
-| Information Gaps     | "Insufficient information", "Unable to identify", "Unknown" |
-| Negations            | "Don't know", "Not certain", "No way to tell"               |
-| Inability            | "Cannot confirm", "Unable to verify", "No evidence"         |
-
-#### Moderate Uncertainty (Penalty: -0.08 to -0.12)
-
-| Category          | Phrases                                                  |
-| ----------------- | -------------------------------------------------------- |
-| Possibility       | "Possibly", "Might be", "Could be", "May be"             |
-| Speculation       | "Potentially", "Perhaps", "Presumably"                   |
-| Conditional       | "If this is the case", "Assuming that", "In some cases"  |
-| Frequency Hedging | "Sometimes", "Occasionally", "Often" (without specifics) |
-
-#### Mild Hedging (Penalty: -0.03 to -0.05)
-
-| Category    | Phrases                                            |
-| ----------- | -------------------------------------------------- |
-| Appearance  | "Appears to be", "Seems like", "Looks like"        |
-| Suggestion  | "Suggests that", "Indicates possible", "Points to" |
-| Probability | "Probably", "Likely", "Most likely"                |
-| Inference   | "Based on this", "From what I can see"             |
+```typescript
+export const UNCERTAINTY_PATTERNS: Readonly<UncertaintyPattern[]> = [
+  {
+    pattern:
+      /\b(not sure|unclear|cannot determine|insufficient information|unable to identify|unknown)\b/gi,
+    penalty: UNCERTAINTY_PENALTIES.STRONG, // -0.15
+  },
+  {
+    pattern: /\b(possibly|might be|could be|may be|potentially|perhaps)\b/gi,
+    penalty: UNCERTAINTY_PENALTIES.MODERATE, // -0.10
+  },
+  {
+    pattern: /\b(appears to|seems like|suggests that|probably)\b/gi,
+    penalty: UNCERTAINTY_PENALTIES.MILD, // -0.05
+  },
+];
+```
 
 ### Detection Rules
 
-1. **Case Insensitive**: All phrase matching is case-insensitive
-2. **Word Boundaries**: Match whole phrases, not substrings
-3. **Cumulative Penalty**: Multiple hedging phrases stack, capped at -0.30
-4. **Context Aware**: Phrases in quotes or code blocks may be ignored (future enhancement)
+1. **Case Insensitive**: All matching is case-insensitive (`/gi` flag)
+2. **Word Boundaries**: `\b` ensures whole words, not substrings
+3. **First Match Wins**: Returns penalty for first matching pattern (ordered by severity)
+4. **Capped at Bounds**: Final value clamped to [-0.3, 0]
 
 ---
 
 ## Action Gating Rules
 
+### Confidence Thresholds
+
+**Constants:** `CONFIDENCE_THRESHOLDS` in `constants/confidence.ts`
+
+| Threshold  | Value | Range Below            |
+| ---------- | ----- | ---------------------- |
+| `VERY_LOW` | 0.30  | 0.00 - 0.29: Very Low  |
+| `LOW`      | 0.50  | 0.30 - 0.49: Low       |
+| `MEDIUM`   | 0.70  | 0.50 - 0.69: Medium    |
+| `HIGH`     | 0.85  | 0.70 - 0.84: High      |
+| (above)    | -     | 0.85 - 1.00: Very High |
+
+**Boundary semantics:** Thresholds are exclusive upper bounds. Score equal to threshold falls into next higher range.
+
+- Score 0.30 → Low (not Very Low)
+- Score 0.70 → High (not Medium)
+
 ### Decision Matrix
 
-| Confidence    | Risk Level  | Decision                   | Rationale                                        |
-| ------------- | ----------- | -------------------------- | ------------------------------------------------ |
-| **0.85-1.0**  | Safe        | Auto-approve               | Very high confidence + safe = automatic          |
-| **0.85-1.0**  | Low Risk    | Auto-approve               | Very high confidence allows low-risk automation  |
-| **0.85-1.0**  | Medium Risk | Require approval           | Even high confidence needs check for medium risk |
-| **0.85-1.0**  | High Risk   | Require approval           | Always require approval for high-risk            |
-| **0.70-0.84** | Safe        | Auto-approve               | High confidence + safe = automatic               |
-| **0.70-0.84** | Low+ Risk   | Require approval           | Need human confirmation                          |
-| **0.50-0.69** | Any         | Require approval           | Medium confidence always needs approval          |
-| **0.30-0.49** | Any         | Require approval + Warning | Low confidence, warn user explicitly             |
-| **0.00-0.29** | Any         | Block                      | Very low confidence, manual review only          |
+| Confidence Range | Safety Level   | Decision         | Rationale                               |
+| ---------------- | -------------- | ---------------- | --------------------------------------- |
+| **0.85-1.0**     | safe, low_risk | Auto-approve     | Very high confidence + safe action      |
+| **0.85-1.0**     | medium_risk+   | Require approval | High confidence but risky action        |
+| **0.70-0.84**    | safe, low_risk | Auto-approve     | High confidence + safe action           |
+| **0.70-0.84**    | medium_risk+   | Require approval | Need human check for risky action       |
+| **0.50-0.69**    | Any            | Require approval | Medium confidence always needs check    |
+| **0.30-0.49**    | Any            | Require approval | Low confidence, explicit warning shown  |
+| **0.00-0.29**    | Any            | Block            | Very low confidence, manual review only |
 
-### Risk Level Definitions
+### Auto-Approvable Safety Levels
 
-| Risk Level      | Examples                            | Reversible? |
-| --------------- | ----------------------------------- | ----------- |
-| **Safe**        | Post comment, send notification     | Yes, easily |
-| **Low Risk**    | Rerun pipeline, add label           | Yes         |
-| **Medium Risk** | Create branch, update config        | Mostly      |
-| **High Risk**   | Deploy, rollback, modify production | Difficult   |
-| **Dangerous**   | Delete resources, force push        | No          |
+**Constants:** `AUTO_APPROVABLE_SAFETY_LEVELS` in `constants/safety.ts`
 
-### Tenant-Configurable Thresholds
+```typescript
+export const AUTO_APPROVABLE_SAFETY_LEVELS: Readonly<Set<string>> = new Set(["safe", "low_risk"]);
+```
 
-| Setting                | Default | Description                                     |
-| ---------------------- | ------- | ----------------------------------------------- |
-| Auto-approve threshold | 0.75    | Minimum score for auto-approval of safe actions |
-| Block threshold        | 0.30    | Score below which all actions are blocked       |
-| Warning threshold      | 0.50    | Score below which warnings are shown            |
+Only `safe` and `low_risk` actions can be auto-approved (with sufficient confidence).
+
+---
+
+## Configuration Reference
+
+All constants are defined in `packages/shared/src/constants/confidence.ts`.
+
+### Factor Weights
+
+```typescript
+export const FACTOR_WEIGHTS = {
+  uncertainty: 0.15,
+  evidenceAlignment: 0.3,
+  completeness: 0.15,
+  knowledgeBaseValidation: 0.25,
+  consistency: 0.15,
+} as const;
+// Sum: 1.0
+```
+
+### Factor Bounds
+
+```typescript
+export const FACTOR_BOUNDS = {
+  uncertainty: { min: -0.3, max: 0 },
+  evidenceAlignment: { min: -0.4, max: 0.4 },
+  completeness: { min: -0.2, max: 0.2 },
+  knowledgeBaseValidation: { min: -0.3, max: 0.3 },
+  consistency: { min: -0.2, max: 0.2 },
+} as const;
+```
+
+### Guard Rails
+
+```typescript
+export const MAX_WEIGHTED_ADJUSTMENT = {
+  min: -0.5,
+  max: 0.5,
+} as const;
+
+export const EMPTY_ANALYSIS_MAX_SCORE = 0.3;
+
+export const TEXT_LIMITS = {
+  MAX_ANALYSIS_TEXT_LENGTH: 20_000,
+} as const;
+
+export const LOG_VALUE_MAX_LENGTH = 64;
+```
+
+### Scoring Version
+
+```typescript
+export const SCORING_VERSION = "confidence_v2" as const;
+```
+
+Included in all score results for audit traceability. Increment when scoring logic changes materially.
 
 ---
 
@@ -305,23 +474,16 @@ Capture user feedback on analysis quality through Slack message reactions.
 
 ### Feedback Data Model
 
-| Field                | Type     | Description                              |
-| -------------------- | -------- | ---------------------------------------- |
-| `analysis_id`        | String   | Reference to original analysis           |
-| `event_id`           | String   | Original CI event ID                     |
-| `confidence_score`   | Number   | Score at time of analysis                |
-| `user_feedback`      | Enum     | correct, incorrect, uncertain            |
-| `action_taken`       | Boolean  | Whether user executed action             |
-| `action_outcome`     | Enum     | success, failed, cancelled               |
-| `feedback_timestamp` | DateTime | When feedback was received               |
-| `feedback_user`      | String   | Slack user ID (anonymized for analytics) |
-
-### Feedback Collection Points
-
-1. **Slack Message Reactions**: Monitor reactions on analysis messages
-2. **Action Approval/Rejection**: Track which actions users approve vs reject
-3. **Post-Action Outcome**: Did the executed action resolve the issue?
-4. **Explicit Rating**: Optional "Rate this analysis" button in Slack
+| Field                | Type     | Description                    |
+| -------------------- | -------- | ------------------------------ |
+| `analysis_id`        | String   | Reference to original analysis |
+| `event_id`           | String   | Original CI event ID           |
+| `confidence_score`   | Number   | Score at time of analysis      |
+| `user_feedback`      | Enum     | correct, incorrect, uncertain  |
+| `action_taken`       | Boolean  | Whether user executed action   |
+| `action_outcome`     | Enum     | success, failed, cancelled     |
+| `feedback_timestamp` | DateTime | When feedback was received     |
+| `feedback_user`      | String   | Slack user ID (anonymized)     |
 
 ---
 
@@ -329,14 +491,12 @@ Capture user feedback on analysis quality through Slack message reactions.
 
 ### Metrics to Track
 
-| Metric                         | Description                          | Target                  |
-| ------------------------------ | ------------------------------------ | ----------------------- |
-| **Accuracy by Bucket**         | % correct per confidence range       | See calibration goals   |
-| **False Positive Rate**        | High confidence but wrong            | <5% for 0.85+ scores    |
-| **False Negative Rate**        | Low confidence but correct           | <20% for 0.3-0.5 scores |
-| **Action Success Rate**        | Auto-approved actions that succeeded | >95%                    |
-| **Avg Confidence (Correct)**   | Mean score when analysis was correct | Track trend             |
-| **Avg Confidence (Incorrect)** | Mean score when analysis was wrong   | Should be lower         |
+| Metric                  | Description                          | Target                  |
+| ----------------------- | ------------------------------------ | ----------------------- |
+| **Accuracy by Bucket**  | % correct per confidence range       | See calibration goals   |
+| **False Positive Rate** | High confidence but wrong            | <5% for 0.85+ scores    |
+| **False Negative Rate** | Low confidence but correct           | <20% for 0.3-0.5 scores |
+| **Action Success Rate** | Auto-approved actions that succeeded | >95%                    |
 
 ### Calibration Goals
 
@@ -352,160 +512,116 @@ A well-calibrated system should have accuracy match confidence:
 
 ### Calibration Indicators
 
-| Indicator             | Meaning                      | Action                |
-| --------------------- | ---------------------------- | --------------------- |
-| Accuracy < Confidence | System is **overconfident**  | Increase penalties    |
-| Accuracy > Confidence | System is **underconfident** | Relax penalties       |
-| High variance         | Inconsistent predictions     | Review factor weights |
-
-### Calibration Process
-
-1. **Collect Data**: Gather feedback for ≥100 analyses per confidence bucket
-2. **Calculate Accuracy**: Compare predictions to actual outcomes
-3. **Identify Bias**: Which factors are over/under-penalizing?
-4. **Adjust Weights**: Modify factor penalties/bonuses
-5. **Validate**: Test new weights on historical data
-6. **Deploy**: Roll out with feature flag, monitor
-7. **Repeat**: Continuous calibration cycle
+| Indicator             | Meaning                      | Action                               |
+| --------------------- | ---------------------------- | ------------------------------------ |
+| Accuracy < Confidence | System is **overconfident**  | Increase penalties or reduce weights |
+| Accuracy > Confidence | System is **underconfident** | Relax penalties or increase weights  |
+| High variance         | Inconsistent predictions     | Review factor weights and bounds     |
 
 ---
 
 ## Storage & Persistence
 
+### Confidence Score Result Type
+
+```typescript
+interface ConfidenceScoreResult {
+  finalScore: number;
+  breakdown: {
+    baseScore: number;
+    raw: FactorValues; // Raw factor outputs
+    bounded: FactorValues; // After clamping to bounds
+    weighted: FactorValues; // After applying weights
+    totals: {
+      weightedAdjustment: number;
+      rawScore: number;
+      cappedScore: number;
+      finalScore: number;
+    };
+  };
+  reasoning: string[]; // Human-readable explanation per step
+  gatingDecision: GatingDecision;
+  scoringVersion: string; // "confidence_v2"
+}
+```
+
 ### Redis Caching (Short-term)
 
-| Key Pattern                          | TTL      | Purpose                              |
-| ------------------------------------ | -------- | ------------------------------------ |
-| `confidence:{event_id}`              | 24 hours | Cache recent scores for quick lookup |
-| `confidence:breakdown:{analysis_id}` | 24 hours | Store factor breakdown               |
-| `feedback:pending:{message_ts}`      | 7 days   | Track messages awaiting feedback     |
+| Key Pattern                          | TTL      | Purpose                          |
+| ------------------------------------ | -------- | -------------------------------- |
+| `confidence:{event_id}`              | 24 hours | Cache recent scores              |
+| `confidence:breakdown:{analysis_id}` | 24 hours | Store factor breakdown           |
+| `feedback:pending:{message_ts}`      | 7 days   | Track messages awaiting feedback |
 
 ### Database Persistence (Long-term)
 
-#### Confidence Records Table
-
-| Column               | Type      | Description                         |
-| -------------------- | --------- | ----------------------------------- |
-| `id`                 | UUID      | Primary key                         |
-| `analysis_id`        | UUID      | Foreign key to analysis             |
-| `event_id`           | String    | CI event identifier                 |
-| `final_score`        | Decimal   | Computed confidence (0.0-1.0)       |
-| `breakdown`          | JSONB     | Factor-by-factor scores             |
-| `hedging_phrases`    | Array     | Detected uncertainty phrases        |
-| `evidence_alignment` | String    | strong, partial, none               |
-| `outcome`            | Enum      | correct, incorrect, uncertain, null |
-| `created_at`         | Timestamp | When score was computed             |
-| `feedback_at`        | Timestamp | When feedback was received          |
-
-#### Analytics Views
-
-| View                      | Purpose                          |
-| ------------------------- | -------------------------------- |
-| `confidence_distribution` | Score histogram for dashboards   |
-| `calibration_by_bucket`   | Accuracy per confidence range    |
-| `factor_impact`           | Which factors most affect scores |
-| `trend_over_time`         | Is accuracy improving?           |
+| Column            | Type         | Description                           |
+| ----------------- | ------------ | ------------------------------------- |
+| `id`              | UUID         | Primary key                           |
+| `analysis_id`     | UUID         | Foreign key to analysis               |
+| `event_id`        | String       | CI event identifier                   |
+| `final_score`     | DECIMAL(5,4) | Computed confidence (0.0-1.0)         |
+| `breakdown`       | JSONB        | Factor-by-factor breakdown            |
+| `gating_decision` | VARCHAR(20)  | auto_approve, require_approval, block |
+| `scoring_version` | VARCHAR(20)  | Algorithm version                     |
+| `created_at`      | TIMESTAMPTZ  | When score was computed               |
+| `feedback_at`     | TIMESTAMPTZ  | When feedback was received            |
+| `outcome`         | VARCHAR(20)  | correct, incorrect, uncertain, null   |
 
 ---
 
-## Implementation Phases
+## Related Systems
 
-### Phase 0: Foundation (Week 1)
+Confidence scoring is one part of Kenchi's two-dimensional safety model:
 
-| Task          | Description                     | Deliverable           |
-| ------------- | ------------------------------- | --------------------- |
-| Code Audit    | Map implementation to this spec | Gap analysis document |
-| Schema Design | Design confidence records table | Migration script      |
-| Logging Setup | Structured logs for all factors | Enhanced logging      |
-| Test Coverage | Unit tests for each factor      | >90% coverage         |
+- **Confidence Scoring** (this document): Evaluates _analysis reliability_ - can we trust the AI's recommendation?
+- **Risk Scoring**: Evaluates _action danger_ - how impactful is this action?
 
-### Phase 1: Factor Enhancements (Week 2-3)
+Both scores are combined to make gating decisions:
 
-| Task                | Description                                  | Deliverable            |
-| ------------------- | -------------------------------------------- | ---------------------- |
-| Uncertainty Upgrade | Expand hedging detection (see section above) | Config-driven patterns |
-| Evidence Alignment  | Implement cross-checks (see section above)   | Alignment module       |
-| Completeness Checks | Validate required fields                     | Field validation       |
-| Knowledge Base Hook | Prepare for RAG integration                  | Interface definition   |
+```typescript
+// High risk + low confidence = block
+// Low risk + high confidence = auto-approve
+// Mixed = require approval
 
-### Phase 2: Integration (Week 4)
+const safetyCheck = await performCombinedSafetyCheck(action, {
+  tenantId,
+  environment: "production",
+});
 
-| Task                 | Description                              | Deliverable        |
-| -------------------- | ---------------------------------------- | ------------------ |
-| Slack/GitHub Display | Show confidence in notifications         | Updated formatters |
-| Tenant Configuration | Per-tenant threshold overrides           | Admin settings     |
-| API Endpoints        | Query score history                      | REST endpoints     |
-| Approval UX          | Show confidence context in Slack buttons | UI updates         |
+if (!safetyCheck.isAllowed) {
+  // Blocked by risk or confidence
+}
+```
 
-### Phase 3: Feedback Loop (Week 5-6)
-
-| Task              | Description                    | Deliverable       |
-| ----------------- | ------------------------------ | ----------------- |
-| Reaction Tracking | Capture Slack reactions        | Event handlers    |
-| Outcome Storage   | Persist feedback data          | Database updates  |
-| Calibration Job   | Analyze accuracy vs confidence | Scheduled job     |
-| Dashboard         | Visualize calibration metrics  | Grafana/analytics |
-
-### Phase 4: Advanced (Post Week 6)
-
-| Task              | Description                           | Deliverable      |
-| ----------------- | ------------------------------------- | ---------------- |
-| Multi-LLM Signals | Aggregate scores from multiple models | Ensemble scoring |
-| Model Profiles    | Per-model bias adjustments            | Config profiles  |
-| Context-Aware     | Adjust by incident type/severity      | Dynamic weights  |
-| Explainability    | Human-readable breakdown              | Debug view       |
-| Resilience        | Handle missing factors gracefully     | Fallback logic   |
-
----
-
-## Deliverables Checklist
-
-### Phase 0
-
-- [ ] Schema migration for confidence persistence
-- [ ] Enhanced logging with factor breakdown
-- [ ] Unit test coverage >90% for safety module
-- [ ] Snapshot tests for score stability
-
-### Phase 1
-
-- [ ] Expanded hedging phrase detection (40+ patterns)
-- [ ] Evidence alignment module with concrete checks
-- [ ] Completeness validation for required fields
-- [ ] Documentation update with new weights
-
-### Phase 2
-
-- [ ] Confidence display in Slack/GitHub messages
-- [ ] Tenant-configurable thresholds
-- [ ] API endpoint for score history
-- [ ] Approval UX with confidence context
-
-### Phase 3
-
-- [ ] Slack reaction tracking for feedback
-- [ ] Outcome storage in database
-- [ ] Calibration job with accuracy calculation
-- [ ] Dashboard for calibration metrics
-
-### Phase 4
-
-- [ ] Multi-LLM score aggregation
-- [ ] Per-model bias configuration
-- [ ] Context-aware factor weights
-- [ ] Human-readable score explanation
-- [ ] Graceful handling of missing factors
+For full details on risk scoring and integration, see [CONTEXT_AWARE_RISK_SCORING.md](./CONTEXT_AWARE_RISK_SCORING.md).
 
 ---
 
 ## References
 
+- [CONTEXT_AWARE_RISK_SCORING.md](./CONTEXT_AWARE_RISK_SCORING.md) - Risk scoring system
 - [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md) - Overall system design
 - [DATA_MODELS.md](./DATA_MODELS.md) - Data structure definitions
-- [PROMPT_TEMPLATES.md](./PROMPT_TEMPLATES.md) - LLM prompt engineering
 
 ---
 
-**Document Version**: 2.0
-**Last Updated**: 2025-12-29
-**Merged From**: CONFIDENCE_SCORING.md v1.0, CONFIDENCE_IMPLEMENTATION_PLAN.md
+## Code Locations
+
+| Component                 | Path                                                                |
+| ------------------------- | ------------------------------------------------------------------- |
+| Main scoring function     | `packages/shared/src/safety/scoring/confidenceScoring/scoring.ts`   |
+| Factor processing         | `packages/shared/src/safety/scoring/confidenceScoring/factors.ts`   |
+| Base score mapping        | `packages/shared/src/safety/scoring/confidenceScoring/baseScore.ts` |
+| Uncertainty detection     | `packages/shared/src/safety/validation/uncertaintyDetection.ts`     |
+| Evidence alignment        | `packages/shared/src/safety/validation/evidenceValidation.ts`       |
+| Knowledge base validation | `packages/shared/src/safety/validation/knowledgeValidation.ts`      |
+| Consistency checking      | `packages/shared/src/safety/scoring/consistency/`                   |
+| Action gating             | `packages/shared/src/safety/gating/actionGating.ts`                 |
+| Constants                 | `packages/shared/src/constants/confidence.ts`                       |
+
+---
+
+**Document Version**: 3.0
+**Last Updated**: 2026-01-27
+**Status**: Reflects actual code implementation
