@@ -11,11 +11,21 @@ import type {
   HallucinationCheckResult,
   HallucinationIndicator,
   HallucinationIndicatorType,
+  HallucinationConfidenceLevel,
+  HallucinationRiskLevel,
+  ConfidenceContext,
+  ConfidenceRule,
+  RiskLevelThreshold,
 } from "../types.js";
 import {
   HALLUCINATION_DEFAULT_THRESHOLD,
   HALLUCINATION_RISK_WEIGHTS,
 } from "../../constants/safety.js";
+import {
+  HALLUCINATION_CONFIG,
+  HALLUCINATION_TEXT_THRESHOLDS,
+  CLAIM_STOPWORDS,
+} from "../../constants/validation.js";
 
 // ==================== Constants ====================
 
@@ -27,19 +37,8 @@ const HALLUCINATION_PATTERNS: ReadonlyArray<{
   readonly type: HallucinationIndicatorType;
   readonly weight: number;
 }> = [
-  // Fabricated statistics with suspiciously precise numbers
-  {
-    pattern: /\b(?:exactly|precisely)\s+\d+(?:\.\d+)?%/gi,
-    type: "overly_precise",
-    weight: 0.3,
-  },
-  {
-    pattern: /\b\d+\.\d{3,}%/g,
-    type: "overly_precise",
-    weight: 0.25,
-  },
-
-  // Specific claims without attribution
+  { pattern: /\b(?:exactly|precisely)\s+\d+(?:\.\d+)?%/gi, type: "overly_precise", weight: 0.3 },
+  { pattern: /\b\d+\.\d{3,}%/g, type: "overly_precise", weight: 0.25 },
   {
     pattern: /(?:studies?\s+(?:show|prove|confirm)|research\s+(?:indicates|suggests))\s+that/gi,
     type: "specific_claim_without_source",
@@ -50,294 +49,269 @@ const HALLUCINATION_PATTERNS: ReadonlyArray<{
     type: "specific_claim_without_source",
     weight: 0.15,
   },
-
-  // Invented quotes
   {
     pattern: /(?:said|stated|wrote|noted)\s*[,:]?\s*[""][^""]{50,}[""]/gi,
     type: "invented_quote",
     weight: 0.35,
   },
-
-  // Confident statements about uncertain topics
   {
     pattern: /\b(?:definitely|certainly|absolutely|undoubtedly)\s+(?:will|would|is|are)\b/gi,
     type: "confident_uncertainty",
     weight: 0.2,
   },
-
-  // Nonexistent references (common fabrication patterns)
   {
     pattern:
       /(?:published\s+in|appeared\s+in)\s+(?:the\s+)?[A-Z][a-z]+\s+(?:Journal|Review|Quarterly)/gi,
     type: "nonexistent_reference",
     weight: 0.25,
   },
-
-  // Temporal impossibilities (future events stated as past)
-  {
-    pattern: /in\s+20(?:2[5-9]|[3-9]\d)\s+(?:it\s+)?(?:was|had|became)/gi,
-    type: "temporal_impossibility",
-    weight: 0.4,
-  },
 ] as const;
 
-// ==================== Core Functions ====================
-
 /**
- * Detects hallucination indicators in text using pattern matching.
- *
- * @param text - Text to analyze
- * @returns Array of detected indicators
+ * Patterns for extracting factual claims from text.
  */
-const detectPatternIndicators = (text: string): HallucinationIndicator[] => {
-  const indicators: HallucinationIndicator[] = [];
+const CLAIM_PATTERNS: readonly RegExp[] = [
+  /[^.!?]*\b(?:is|are|was|were|has|have|had)\s+(?:a|an|the)?\s*[^.!?]+[.!?]/gi,
+  /[^.!?]*\b(?:shows?|proves?|indicates?|suggests?|demonstrates?)\s+[^.!?]+[.!?]/gi,
+  /[^.!?]*\b(?:caused?|results?\s+in|leads?\s+to)\s+[^.!?]+[.!?]/gi,
+  /[^.!?]*\b(?:run|execute|use|install|configure|set|add|create|delete|remove)\s+[^.!?]+[.!?]/gi,
+] as const;
 
-  for (const { pattern, type, weight } of HALLUCINATION_PATTERNS) {
-    // Reset regex state for global patterns
-    pattern.lastIndex = 0;
-    const matches = text.match(pattern);
+/** Temporal pattern for detecting future years in past tense */
+const TEMPORAL_PATTERN = /in\s+(20\d{2})\s+(?:it\s+)?(?:was|had|became)/gi;
 
-    if (matches) {
-      for (const match of matches) {
-        indicators.push({
-          type,
-          matchedText: match.slice(0, 100), // Truncate long matches
-          weight,
-        });
-      }
-    }
-  }
+/** Confidence level thresholds */
+const CONFIDENCE_THRESHOLDS = { HIGH: 2, MEDIUM: 1 } as const;
 
-  return indicators;
+// ==================== Pure Helper Functions ====================
+
+/** Truncates text to max length */
+const truncate = (text: string, maxLength: number): string =>
+  text.length > maxLength ? text.slice(0, maxLength) : text;
+
+/** Clamps value between 0 and 1 */
+const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+
+/** Calculates ratio safely (returns 0 if denominator is 0) */
+const safeRatio = (numerator: number, denominator: number): number =>
+  denominator > 0 ? numerator / denominator : 0;
+
+/** Safely matches pattern against text, resetting state */
+const matchAll = (text: string, pattern: RegExp): string[] => {
+  pattern.lastIndex = 0;
+  return text.match(pattern) ?? [];
 };
 
-/**
- * Extracts claims from text that should be verified against evidence.
- *
- * @param text - Text to extract claims from
- * @returns Array of claim strings
- */
-const extractClaims = (text: string): string[] => {
-  const claims: string[] = [];
-
-  // Extract sentences that make factual claims
-  const claimPatterns = [
-    /[^.!?]*\b(?:is|are|was|were|has|have|had)\s+(?:a|an|the)?\s*[^.!?]+[.!?]/gi,
-    /[^.!?]*\b(?:shows?|proves?|indicates?|suggests?|demonstrates?)\s+[^.!?]+[.!?]/gi,
-    /[^.!?]*\b(?:caused?|results?\s+in|leads?\s+to)\s+[^.!?]+[.!?]/gi,
-  ];
-
-  for (const pattern of claimPatterns) {
-    pattern.lastIndex = 0;
-    const matches = text.match(pattern);
-    if (matches) {
-      for (const match of matches) {
-        const trimmed = match.trim();
-        if (trimmed.length > 20 && trimmed.length < 500) {
-          claims.push(trimmed);
-        }
-      }
-    }
+/** Executes regex globally and returns all match results */
+const execAll = (text: string, pattern: RegExp): RegExpExecArray[] => {
+  pattern.lastIndex = 0;
+  const results: RegExpExecArray[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    results.push(match);
   }
-
-  // Deduplicate
-  return [...new Set(claims)];
+  return results;
 };
 
-/**
- * Checks if a claim is supported by provided evidence.
- *
- * @param claim - Claim to verify
- * @param evidence - Evidence strings to check against
- * @returns True if claim appears supported
- */
+/** Creates indicator with truncated matched text */
+const createIndicator = (
+  type: HallucinationIndicatorType,
+  matchedText: string,
+  weight: number
+): HallucinationIndicator => ({
+  type,
+  matchedText: truncate(matchedText, HALLUCINATION_CONFIG.MATCH_TEXT_TRUNCATE_LENGTH),
+  weight,
+});
+
+/** Checks if word is significant (not a stopword and long enough) */
+const isSignificantWord = (word: string): boolean =>
+  word.length > HALLUCINATION_CONFIG.MIN_SIGNIFICANT_WORD_LENGTH && !CLAIM_STOPWORDS.has(word);
+
+/** Extracts significant words from text */
+const extractSignificantWords = (text: string): string[] =>
+  text.toLowerCase().split(/\s+/).filter(isSignificantWord);
+
+/** Counts words appearing in target text */
+const countMatchingWords = (words: readonly string[], target: string): number =>
+  words.filter((word) => target.includes(word)).length;
+
+/** Checks if claim length is within valid bounds */
+const isValidClaimLength = (claim: string): boolean =>
+  claim.length > HALLUCINATION_CONFIG.MIN_CLAIM_LENGTH &&
+  claim.length < HALLUCINATION_CONFIG.MAX_CLAIM_LENGTH;
+
+/** Sums weights of indicators */
+const sumWeights = (indicators: readonly HallucinationIndicator[]): number =>
+  indicators.reduce((sum, { weight }) => sum + weight, 0);
+
+/** Counts pattern matches in text */
+const countMatches = (text: string, pattern: RegExp): number => matchAll(text, pattern).length;
+
+/** Calculates average sentence length */
+const getAvgSentenceLength = (text: string): number =>
+  text.length / Math.max(1, text.split(/[.!?]/).length);
+
+// ==================== Text Analysis Predicates ====================
+
+const hasSuspiciouslyLongSentences = (text: string): boolean =>
+  getAvgSentenceLength(text) > HALLUCINATION_TEXT_THRESHOLDS.SUSPICIOUS_AVG_SENTENCE_LENGTH;
+
+const hasHighNumberDensity = (text: string): boolean =>
+  countMatches(text, /\d+/g) / (text.length / 100) >
+  HALLUCINATION_TEXT_THRESHOLDS.SUSPICIOUS_NUMBER_DENSITY;
+
+const hasManyDateReferences = (text: string): boolean =>
+  countMatches(text, /\b(?:19|20)\d{2}\b/g) > HALLUCINATION_TEXT_THRESHOLDS.SUSPICIOUS_DATE_COUNT;
+
+/** Text characteristic checks with score contributions */
+const TEXT_CHECKS: ReadonlyArray<{ check: (text: string) => boolean; score: number }> = [
+  { check: hasSuspiciouslyLongSentences, score: 0.1 },
+  { check: hasHighNumberDensity, score: 0.15 },
+  { check: hasManyDateReferences, score: 0.1 },
+];
+
+// ==================== Core Detection Functions ====================
+
+/** Detects temporal impossibilities (future years stated in past tense) */
+const detectTemporalImpossibilities = (text: string): HallucinationIndicator[] => {
+  const currentYear = new Date().getFullYear();
+  return execAll(text, TEMPORAL_PATTERN)
+    .filter((match) => parseInt(match[1], 10) > currentYear)
+    .map((match) => createIndicator("temporal_impossibility", match[0], 0.4));
+};
+
+/** Detects hallucination indicators using pattern matching */
+const detectPatternIndicators = (text: string): HallucinationIndicator[] => [
+  ...HALLUCINATION_PATTERNS.flatMap(({ pattern, type, weight }) =>
+    matchAll(text, pattern).map((match) => createIndicator(type, match, weight))
+  ),
+  ...detectTemporalImpossibilities(text),
+];
+
+/** Extracts unique claims from text within valid length bounds */
+const extractClaims = (text: string): string[] => [
+  ...new Set(
+    CLAIM_PATTERNS.flatMap((pattern) => matchAll(text, pattern))
+      .map((match) => match.trim())
+      .filter(isValidClaimLength)
+  ),
+];
+
+/** Checks if claim is supported by any evidence item */
 const isClaimSupported = (claim: string, evidence: readonly string[]): boolean => {
-  if (evidence.length === 0) {
-    return false;
-  }
-
-  const claimWords = claim
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((word) => word.length > 4);
-
-  // Check if significant words from claim appear in evidence
-  const significantWordThreshold = Math.min(3, Math.ceil(claimWords.length * 0.3));
-
-  for (const evidenceItem of evidence) {
-    const evidenceLower = evidenceItem.toLowerCase();
-    let matchedWords = 0;
-
-    for (const word of claimWords) {
-      if (evidenceLower.includes(word)) {
-        matchedWords++;
-        if (matchedWords >= significantWordThreshold) {
-          return true;
-        }
-      }
-    }
-  }
-
-  return false;
+  const words = extractSignificantWords(claim);
+  const threshold = Math.min(
+    HALLUCINATION_CONFIG.MIN_MATCHED_WORDS,
+    Math.ceil(words.length * HALLUCINATION_CONFIG.CLAIM_SUPPORT_WORD_RATIO)
+  );
+  return evidence.some((item) => countMatchingWords(words, item.toLowerCase()) >= threshold);
 };
 
-/**
- * Calculates text characteristic score for hallucination risk.
- *
- * @param text - Text to analyze
- * @returns Score between 0-1
- */
-const calculateTextCharacteristicScore = (text: string): number => {
-  let score = 0;
+/** Calculates text characteristic score */
+const calculateTextScore = (text: string): number =>
+  clamp01(
+    TEXT_CHECKS.filter(({ check }) => check(text)).reduce((sum, { score }) => sum + score, 0)
+  );
 
-  // Very long text without breaks is suspicious
-  const avgSentenceLength = text.length / (text.split(/[.!?]/).length || 1);
-  if (avgSentenceLength > 150) {
-    score += 0.1;
-  }
+/** Calculates weighted risk score from components */
+const calculateRiskScore = (indicator: number, unverified: number, text: number): number =>
+  clamp01(
+    indicator * HALLUCINATION_RISK_WEIGHTS.PATTERN_INDICATORS +
+      unverified * HALLUCINATION_RISK_WEIGHTS.UNVERIFIED_CLAIMS +
+      text * HALLUCINATION_RISK_WEIGHTS.TEXT_CHARACTERISTICS
+  );
 
-  // High density of numbers can indicate fabrication
-  const numberDensity = (text.match(/\d+/g)?.length ?? 0) / (text.length / 100);
-  if (numberDensity > 2) {
-    score += 0.15;
-  }
+const hasSignal = (ctx: ConfidenceContext, threshold: number): boolean =>
+  ctx.indicatorCount >= threshold || (ctx.unverifiedCount >= threshold && ctx.hasEvidence);
 
-  // Multiple specific dates/years
-  const dateMatches = text.match(/\b(?:19|20)\d{2}\b/g);
-  if (dateMatches && dateMatches.length > 3) {
-    score += 0.1;
-  }
+const CONFIDENCE_RULES: readonly ConfidenceRule[] = [
+  {
+    level: "low",
+    check: (ctx) => ctx.textLength < HALLUCINATION_TEXT_THRESHOLDS.MIN_RELIABLE_TEXT_LENGTH,
+  },
+  { level: "high", check: (ctx) => hasSignal(ctx, CONFIDENCE_THRESHOLDS.HIGH) },
+  { level: "medium", check: (ctx) => hasSignal(ctx, CONFIDENCE_THRESHOLDS.MEDIUM) },
+];
 
-  return Math.min(1, score);
-};
-
-/**
- * Determines detection confidence based on analysis quality.
- *
- * @param indicatorCount - Number of indicators found
- * @param evidenceProvided - Whether evidence was provided
- * @param textLength - Length of analyzed text
- * @returns Confidence level
- */
+/** Determines confidence level based on detection quality */
 const determineConfidence = (
   indicatorCount: number,
-  evidenceProvided: boolean,
+  unverifiedCount: number,
+  hasEvidence: boolean,
   textLength: number
-): "high" | "medium" | "low" => {
-  // Short text is harder to analyze reliably
-  if (textLength < 100) {
-    return "low";
-  }
-
-  // Multiple indicators and evidence = high confidence
-  if (indicatorCount >= 2 && evidenceProvided) {
-    return "high";
-  }
-
-  // Some indicators or evidence = medium
-  if (indicatorCount >= 1 || evidenceProvided) {
-    return "medium";
-  }
-
-  return "low";
+): HallucinationConfidenceLevel => {
+  const ctx: ConfidenceContext = { indicatorCount, unverifiedCount, hasEvidence, textLength };
+  return CONFIDENCE_RULES.find(({ check }) => check(ctx))?.level ?? "low";
 };
+
+/** Creates empty result for invalid input */
+const createEmptyResult = (): HallucinationCheckResult => ({
+  riskScore: 0,
+  isLikelyHallucinated: false,
+  indicators: [],
+  unverifiedClaims: [],
+  detectionConfidence: "low",
+});
 
 // ==================== Exports ====================
 
 /**
  * Checks text for potential hallucinations.
- *
- * @param text - LLM output text to check
- * @param options - Check options
- * @returns Hallucination check result
  */
 export const checkForHallucinations = (
   text: string,
-  options: {
-    /** Evidence strings to verify claims against */
-    evidence?: readonly string[];
-    /** Risk threshold for marking as likely hallucinated (default: 0.6) */
-    threshold?: number;
-  } = {}
+  options: { evidence?: readonly string[]; threshold?: number } = {}
 ): HallucinationCheckResult => {
   const { evidence = [], threshold = HALLUCINATION_DEFAULT_THRESHOLD } = options;
 
-  if (!text || text.trim().length === 0) {
-    return {
-      riskScore: 0,
-      isLikelyHallucinated: false,
-      indicators: [],
-      unverifiedClaims: [],
-      detectionConfidence: "low",
-    };
+  if (!text?.trim()) {
+    return createEmptyResult();
   }
 
-  // Detect pattern-based indicators
-  const indicators = detectPatternIndicators(text);
-
-  // Extract and verify claims
-  const claims = extractClaims(text);
+  const truncatedText = truncate(text, HALLUCINATION_CONFIG.MAX_TEXT_LENGTH);
+  const indicators = detectPatternIndicators(truncatedText);
+  const claims = extractClaims(truncatedText);
   const unverifiedClaims = claims.filter((claim) => !isClaimSupported(claim, evidence));
 
-  // Calculate component scores
-  const indicatorScore =
-    indicators.length > 0
-      ? Math.min(
-          1,
-          indicators.reduce((sum, ind) => sum + ind.weight, 0)
-        )
-      : 0;
-
-  const unverifiedScore =
-    claims.length > 0 ? unverifiedClaims.length / claims.length : evidence.length > 0 ? 0 : 0.3;
-
-  const textScore = calculateTextCharacteristicScore(text);
-
-  // Calculate weighted risk score
-  const riskScore = Math.min(
-    1,
-    indicatorScore * HALLUCINATION_RISK_WEIGHTS.PATTERN_INDICATORS +
-      unverifiedScore * HALLUCINATION_RISK_WEIGHTS.UNVERIFIED_CLAIMS +
-      textScore * HALLUCINATION_RISK_WEIGHTS.TEXT_CHARACTERISTICS
-  );
+  const indicatorScore = clamp01(sumWeights(indicators));
+  const unverifiedScore = safeRatio(unverifiedClaims.length, claims.length);
+  const textScore = calculateTextScore(truncatedText);
+  const riskScore = calculateRiskScore(indicatorScore, unverifiedScore, textScore);
 
   return {
     riskScore,
     isLikelyHallucinated: riskScore >= threshold,
     indicators,
     unverifiedClaims,
-    detectionConfidence: determineConfidence(indicators.length, evidence.length > 0, text.length),
+    detectionConfidence: determineConfidence(
+      indicators.length,
+      unverifiedClaims.length,
+      evidence.length > 0,
+      text.length
+    ),
   };
 };
 
 /**
- * Quick check if text is likely hallucinated (above default threshold).
- *
- * @param text - Text to check
- * @param evidence - Optional evidence to verify against
- * @returns True if likely hallucinated
+ * Quick check if text is likely hallucinated.
  */
 export const isLikelyHallucinated = (text: string, evidence?: readonly string[]): boolean =>
   checkForHallucinations(text, { evidence }).isLikelyHallucinated;
 
+/** Risk level thresholds (checked in order, first match wins) */
+const RISK_LEVEL_THRESHOLDS: readonly RiskLevelThreshold[] = [
+  { maxScore: 0.3, level: "low" },
+  { maxScore: 0.6, level: "medium" },
+];
+
 /**
- * Gets hallucination risk level as a simple category.
- *
- * @param text - Text to analyze
- * @param evidence - Optional evidence to verify against
- * @returns Risk level category
+ * Gets hallucination risk level as a category.
  */
 export const getHallucinationRiskLevel = (
   text: string,
   evidence?: readonly string[]
-): "low" | "medium" | "high" => {
+): HallucinationRiskLevel => {
   const { riskScore } = checkForHallucinations(text, { evidence });
-
-  if (riskScore < 0.3) {
-    return "low";
-  }
-  if (riskScore < 0.6) {
-    return "medium";
-  }
-  return "high";
+  return RISK_LEVEL_THRESHOLDS.find(({ maxScore }) => riskScore < maxScore)?.level ?? "high";
 };
