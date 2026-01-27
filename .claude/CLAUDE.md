@@ -8,18 +8,19 @@ TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of conc
 
 ## Rules of the Road (Quick Reference)
 
-### 10 Hard Rules (Non-Negotiable)
+### 11 Hard Rules (Non-Negotiable)
 
 1. **Check `@kenchi/shared` first** - never duplicate utilities, errors, types, or constants
-2. **Typed errors only** - use `ValidationError`, `NotFoundError`, `ExternalServiceError`, etc. Exception: `invariant()` for programmer bugs
-3. **Structured logging only** - use `createLogger(scope, context)`, never `console.*`
-4. **No vendor SDKs in services** - services depend on port interfaces, adapters contain SDK calls
-5. **All outbound calls need**: timeout, structured logs, error classification. Use shared `httpClient` utilities (exceptions require explicit comment + ticket)
-6. **Every handler must**: validate → call service → map response (mapping lives at the boundary)
-7. **RequestContext propagation** - pass `{ requestId, tenantId }` from handler → service → adapter. Every async function doing I/O accepts `context` as last param (except pure helpers/mappers)
-8. **No unbounded logs** - use `redactSecrets()` and `truncate()` before logging any external data
-9. **Log errors at the correct boundary** - see Error Logging Boundaries section
-10. **No empty catch blocks** - always log or rethrow with context
+2. **Types in types.ts only** - never define interfaces/types inline in module files. All types go in the module's `types.ts` file and are exported from the barrel
+3. **Typed errors only** - use `ValidationError`, `NotFoundError`, `ExternalServiceError`, etc. Exception: `invariant()` for programmer bugs
+4. **Structured logging only** - use `createLogger(scope, context)`, never `console.*`
+5. **No vendor SDKs in services** - services depend on port interfaces, adapters contain SDK calls
+6. **All outbound calls need**: timeout, structured logs, error classification. Use shared `httpClient` utilities (exceptions require explicit comment + ticket)
+7. **Every handler must**: validate → call service → map response (mapping lives at the boundary)
+8. **RequestContext propagation** - pass `{ requestId, tenantId }` from handler → service → adapter. Every async function doing I/O accepts `context` as last param (except pure helpers/mappers)
+9. **No unbounded logs** - use `redactSecrets()` and `truncate()` before logging any external data
+10. **Log errors at the correct boundary** - see Error Logging Boundaries section
+11. **No empty catch blocks** - always log or rethrow with context
 
 ### 10 Preferred Patterns (With Exceptions)
 
@@ -657,7 +658,42 @@ If a helper is used twice OR is clearly domain-invariant, promote it to shared w
 
 ---
 
-## Database Module Organization
+## Module Organization
+
+### General Module Structure
+
+All modules with types must follow this structure:
+
+```
+packages/shared/src/<domain>/<module>/
+├── types.ts       # Type definitions (REQUIRED - all interfaces/types go here)
+├── helpers.ts     # Pure utility functions, constants (optional)
+├── <feature>.ts   # Feature implementation (imports types from types.ts)
+└── index.ts       # Barrel exports (required)
+```
+
+**Type Location Rule:**
+
+```typescript
+// ❌ WRONG - types defined inline in module file
+interface MyResult {
+  readonly value: number;
+}
+
+const calculate = (): MyResult => { ... }
+
+// ✅ CORRECT - types in types.ts, imported where needed
+// In types.ts:
+export interface MyResult {
+  readonly value: number;
+}
+
+// In feature.ts:
+import type { MyResult } from "./types.js";
+const calculate = (): MyResult => { ... }
+```
+
+### Database Module Structure
 
 ```
 packages/shared/src/database/<module>/
@@ -672,6 +708,7 @@ packages/shared/src/database/<module>/
 ```typescript
 // ✅ CORRECT - relative imports within shared
 import { ValidationError, SOME_CONSTANT } from "../common.js";
+import type { MyType } from "./types.js";
 
 // ❌ WRONG - never self-reference the package
 import { ValidationError } from "@kenchi/shared";
