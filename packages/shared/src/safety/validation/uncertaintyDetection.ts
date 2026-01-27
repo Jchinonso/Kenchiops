@@ -6,6 +6,7 @@
  */
 
 import { UNCERTAINTY_PENALTIES, UNCERTAINTY_PATTERNS } from "../../constants/index.js";
+import { INPUT_VALIDATION_LIMITS } from "../../constants/validation.js";
 
 /**
  * Detects hedging language and uncertainty markers in text.
@@ -19,10 +20,20 @@ export const detectUncertainty = (text: string): number => {
     return 0;
   }
 
-  const normalizedText = text.toLowerCase();
+  // Truncate input to prevent DoS from very large inputs
+  const truncatedText =
+    text.length > INPUT_VALIDATION_LIMITS.MAX_UNCERTAINTY_TEXT_LENGTH
+      ? text.slice(0, INPUT_VALIDATION_LIMITS.MAX_UNCERTAINTY_TEXT_LENGTH)
+      : text;
+
+  const normalizedText = truncatedText.toLowerCase();
 
   // Find first matching pattern (patterns ordered by severity, strongest first)
-  const matchedPattern = UNCERTAINTY_PATTERNS.find(({ pattern }) => pattern.test(normalizedText));
+  // Reset lastIndex for global patterns to avoid state bugs across calls
+  const matchedPattern = UNCERTAINTY_PATTERNS.find(({ pattern }) => {
+    pattern.lastIndex = 0;
+    return pattern.test(normalizedText);
+  });
 
   // Return matched penalty or 0, capped at maximum
   const penalty = matchedPattern?.penalty ?? 0;
