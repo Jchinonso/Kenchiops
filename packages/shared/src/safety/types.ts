@@ -8,6 +8,8 @@
  */
 
 import type { ConfidenceRange } from "../constants/index.js";
+import type { ContextualActionRiskAssessment } from "./scoring/riskScoring/types.js";
+import type { SafetyLevel } from "../core/types.js";
 
 // ==================== Gating Types ====================
 
@@ -50,6 +52,97 @@ export interface ThresholdEntry {
   readonly threshold: number;
   /** Confidence range category */
   readonly range: ConfidenceRange;
+}
+
+/**
+ * Result of base score determination with reasoning.
+ * Used by confidence scoring to track why a particular base score was chosen.
+ */
+export interface BaseScoreResult {
+  /** The determined base score */
+  readonly score: number;
+  /** Human-readable explanation of how the score was determined */
+  readonly reasoning: string;
+}
+
+/**
+ * Raw factor values from each scoring module (before clamping).
+ */
+export interface RawFactors {
+  readonly uncertainty: number;
+  readonly evidenceAlignment: number;
+  readonly completeness: number;
+  readonly knowledgeBaseValidation: number;
+  readonly consistency: number;
+}
+
+/**
+ * Bounded factor values after clamping.
+ * Each factor is clamped to its defined bounds to prevent mis-implementation.
+ */
+export interface BoundedFactors {
+  readonly uncertainty: number;
+  readonly evidenceAlignment: number;
+  readonly completeness: number;
+  readonly knowledgeBaseValidation: number;
+  readonly consistency: number;
+}
+
+/**
+ * Weighted factor contributions (what actually changes the score).
+ */
+export interface WeightedFactors {
+  readonly uncertainty: number;
+  readonly evidenceAlignment: number;
+  readonly completeness: number;
+  readonly knowledgeBaseValidation: number;
+  readonly consistency: number;
+}
+
+// ==================== Consistency Types ====================
+
+/**
+ * Precomputed rule with normalized keywords for efficient matching.
+ * Used by consistency checking for cause-action relevance.
+ */
+export interface NormalizedRule {
+  readonly causeKeywords: readonly string[];
+  readonly actionKeywords: readonly string[];
+}
+
+/**
+ * Result of relevance calculation between actions and cause.
+ */
+export interface RelevanceResult {
+  /** Ratio of effective relevant actions (0 to 1) */
+  readonly ratio: number;
+  /** Count of specifically relevant actions */
+  readonly relevantCount: number;
+  /** Count of generic remediation actions */
+  readonly genericCount: number;
+  /** Effective relevant count (relevant + 0.5 * generic) */
+  readonly effectiveRelevant: number;
+  /** Total actions */
+  readonly totalCount: number;
+}
+
+/**
+ * Detailed consistency evaluation result for debugging and testing.
+ * Exposes internal metrics without changing the scoring contract.
+ */
+export interface ConsistencyEvaluation {
+  /** The adjustment value that would be returned by checkConsistency */
+  readonly adjustment: number;
+  /** Relevance metrics (null if missing data) */
+  readonly relevance: RelevanceResult | null;
+  /** Which decision branch was taken */
+  readonly decision:
+    | "missing_data"
+    | "shotgun"
+    | "high_relevance"
+    | "generic_only"
+    | "no_relevance"
+    | "partial_relevance";
 }
 
 // ==================== Validation Check Types ====================
@@ -130,6 +223,7 @@ export type DataImpact = "none" | "read_only" | "write" | "destructive";
 
 /**
  * Complete risk assessment for an action.
+ * @deprecated Use ActionRiskAssessment from riskScoring module for new code.
  */
 export interface ActionRiskScore {
   /** How many systems are affected */
@@ -142,6 +236,10 @@ export interface ActionRiskScore {
   readonly score: number;
   /** Human-readable risk summary */
   readonly summary: string;
+  /** Categorized risk level */
+  readonly riskLevel?: "low" | "moderate" | "high" | "critical";
+  /** Which rule category matched (for audit/debug) */
+  readonly matchedRule?: string;
 }
 
 /**
@@ -182,11 +280,49 @@ export interface CommandValidationResult {
   readonly isSafe: boolean;
   /** Detected dangerous patterns */
   readonly risks: readonly string[];
+  /** Categorized risk level */
+  readonly riskLevel: "low" | "medium" | "high" | "critical";
   /** Suggested safer alternative (if applicable) */
   readonly alternative?: string;
 }
 
 // ==================== Hallucination Detection Types ====================
+
+/**
+ * Confidence level for hallucination detection.
+ */
+export type HallucinationConfidenceLevel = "high" | "medium" | "low";
+
+/**
+ * Risk level category for hallucination assessment.
+ */
+export type HallucinationRiskLevel = "low" | "medium" | "high";
+
+/**
+ * Context for confidence level determination.
+ */
+export interface ConfidenceContext {
+  readonly indicatorCount: number;
+  readonly unverifiedCount: number;
+  readonly hasEvidence: boolean;
+  readonly textLength: number;
+}
+
+/**
+ * Rule for determining confidence level.
+ */
+export interface ConfidenceRule {
+  readonly level: HallucinationConfidenceLevel;
+  readonly check: (ctx: ConfidenceContext) => boolean;
+}
+
+/**
+ * Threshold entry for risk level lookup.
+ */
+export interface RiskLevelThreshold {
+  readonly maxScore: number;
+  readonly level: HallucinationRiskLevel;
+}
 
 /**
  * Types of hallucination indicators.
@@ -250,15 +386,38 @@ export type InjectionPatternType =
 export type InjectionRecommendation = "allow" | "sanitize" | "block" | "review";
 
 /**
+ * Pattern definition with unique ID for accurate weight lookup.
+ */
+export interface InjectionPattern {
+  readonly id: string;
+  readonly pattern: RegExp;
+  readonly type: InjectionPatternType;
+  readonly severity: "low" | "medium" | "high" | "critical";
+  readonly weight: number;
+  /** If true, pattern only counts when paired with instruction-related context */
+  readonly requiresInstructionContext?: boolean;
+}
+
+/**
  * A specific injection pattern match.
  */
 export interface InjectionMatch {
+  /** Unique pattern identifier */
+  readonly patternId: string;
   /** Type of pattern */
   readonly type: InjectionPatternType;
   /** Matched text (truncated for safety) */
   readonly matchedText: string;
+  /** Full length of the original match (before truncation) */
+  readonly matchLength: number;
   /** Severity of this match */
   readonly severity: "low" | "medium" | "high" | "critical";
+  /** Pattern weight for scoring */
+  readonly weight: number;
+  /** Start index in original text (-1 if unknown) */
+  readonly index: number;
+  /** Whether match was in a code fence (lower confidence) */
+  readonly inCodeFence: boolean;
 }
 
 /**
@@ -483,6 +642,58 @@ export interface AuditStore {
   /** Gets entry count matching options */
   count(options: AuditQueryOptions): Promise<number>;
 }
+
+// ==================== Combined Safety Check Types ====================
+
+/**
+ * Context for block check evaluation.
+ */
+export interface BlockCheckContext {
+  readonly restrictionCheck: RestrictionCheckResult;
+  readonly riskScore: number;
+}
+
+/**
+ * Result of a single block check.
+ */
+export interface BlockReason {
+  readonly isBlocked: boolean;
+  readonly reason?: string;
+}
+
+/**
+ * Block check evaluation result.
+ */
+export interface BlockEvaluationResult {
+  readonly isAllowed: boolean;
+  readonly blockedReason?: string;
+}
+
+/**
+ * Combined result of risk assessment and restriction check.
+ * Provides complete safety decision with all relevant details.
+ */
+export interface CombinedSafetyCheckResult {
+  /** Whether the action is allowed to proceed */
+  readonly isAllowed: boolean;
+  /** Full contextual risk assessment */
+  readonly riskAssessment: ContextualActionRiskAssessment;
+  /** Restriction check result */
+  readonly restrictionCheck: RestrictionCheckResult;
+  /** Reason if action is blocked (undefined if allowed) */
+  readonly blockedReason?: string;
+  /** Whether action requires approval */
+  readonly requiresApproval: boolean;
+  /** Whether action requires additional approval (e.g., during incident mode) */
+  readonly requiresAdditionalApproval: boolean;
+}
+
+// ==================== Action Gating Types ====================
+
+/**
+ * Handler function for processing confidence ranges in gating decisions.
+ */
+export type RangeHandler = (range: ConfidenceRange, safetyLevel: SafetyLevel) => ActionGatingResult;
 
 // ==================== Re-exports ====================
 
