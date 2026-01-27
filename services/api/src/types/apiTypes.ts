@@ -120,6 +120,49 @@ export interface CompareModelsRequestBody {
   readonly tenantId?: string;
 }
 
+// ==================== Config Types ====================
+
+/**
+ * API service configuration interface
+ */
+export interface ApiConfig {
+  readonly port: number;
+  readonly environment: string;
+  readonly serviceName: string;
+  readonly version: string;
+  readonly databaseUrl: string;
+}
+
+// ==================== Feedback Types ====================
+
+/**
+ * Feedback counts by type.
+ */
+export interface FeedbackCounts {
+  readonly helpful: number;
+  readonly not_helpful: number;
+  readonly neutral: number;
+}
+
+// ==================== Evidence Types ====================
+
+/**
+ * Represents a section in the evidence log.
+ */
+export interface EvidenceSection {
+  readonly heading: string;
+  readonly content: string;
+}
+
+/**
+ * Intermediate state for section parsing.
+ */
+export interface SectionAccumulator {
+  readonly sections: readonly EvidenceSection[];
+  readonly currentHeading: string;
+  readonly currentLines: readonly string[];
+}
+
 // ==================== Risk Rules Types ====================
 
 /**

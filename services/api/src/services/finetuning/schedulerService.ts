@@ -16,37 +16,18 @@ import {
   FINE_TUNING_STATUS,
   FINE_TUNING_CONFIG,
   FINE_TUNING_SCHEDULER,
+  SERVICE_NAMES,
   type FineTuningJobResult,
 } from "@kenchi/shared";
+import type {
+  SchedulerConfig,
+  SchedulerState,
+  SchedulerStatus,
+} from "../../types/fineTuningTypes.js";
 import { handleJobCompletion, startFineTuningJob } from "./jobService.js";
 import { getFineTuningStats } from "./statsService.js";
 
-const logger = createLogger("finetuning-scheduler");
-
-// ==================== Types ====================
-
-/**
- * Scheduler configuration.
- */
-interface SchedulerConfig {
-  readonly pollIntervalMs: number;
-  readonly maxConcurrentPolls: number;
-  readonly autoTriggerEnabled: boolean;
-  readonly autoTriggerCheckIntervalMs: number;
-  readonly minDaysBetweenJobs: number;
-}
-
-/**
- * Scheduler state.
- */
-interface SchedulerState {
-  isRunning: boolean;
-  intervalId: NodeJS.Timeout | null;
-  trackedJobs: Set<string>;
-  processedCompletions: Set<string>;
-  lastAutoTriggerCheck: number;
-  lastJobTriggeredAt: number | null;
-}
+const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Constants ====================
 
@@ -345,14 +326,7 @@ export const trackJob = (jobId: string): void => {
  *
  * @returns Scheduler status
  */
-export const getSchedulerStatus = (): {
-  readonly isRunning: boolean;
-  readonly trackedJobCount: number;
-  readonly processedCompletionCount: number;
-  readonly autoTriggerEnabled: boolean;
-  readonly lastAutoTriggerCheck: string | null;
-  readonly lastJobTriggeredAt: string | null;
-} => ({
+export const getSchedulerStatus = (): SchedulerStatus => ({
   isRunning: state.isRunning,
   trackedJobCount: state.trackedJobs.size,
   processedCompletionCount: state.processedCompletions.size,

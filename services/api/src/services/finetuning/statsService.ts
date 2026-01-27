@@ -12,30 +12,13 @@ import {
   listFineTuningJobs,
   FINE_TUNING_STATUS,
   FINE_TUNING_READINESS,
+  SERVICE_NAMES,
 } from "@kenchi/shared";
+import type { FineTuningStats } from "../../types/fineTuningTypes.js";
 import { countFeedbackByType, countFeedbackSinceDate } from "../feedbackStatsService.js";
 import { getModelVersions } from "./modelService.js";
 
-const logger = createLogger("stats-service");
-
-// ==================== Types ====================
-
-/**
- * Fine-tuning statistics.
- */
-export interface FineTuningStats {
-  readonly totalFeedback: number;
-  readonly positiveFeedback: number;
-  readonly negativeFeedback: number;
-  readonly feedbackLast7Days: number;
-  readonly feedbackLast30Days: number;
-  readonly activeModelVersions: number;
-  readonly pendingJobs: number;
-  readonly completedJobs: number;
-  readonly lastJobCompletedAt?: string;
-  readonly readyForTraining: boolean;
-  readonly readyReason?: string;
-}
+const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Helper Functions ====================
 

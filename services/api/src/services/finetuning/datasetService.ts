@@ -10,34 +10,15 @@ import {
   createLogger,
   extractTrainingDataset,
   validateExtractedDataset,
+  SERVICE_NAMES,
   type ExtractionOptions,
-  type ExtractionResult,
 } from "@kenchi/shared";
+import type {
+  ExtractDatasetOptions,
+  ExtendedExtractionResult,
+} from "../../types/fineTuningTypes.js";
 
-const logger = createLogger("dataset-service");
-
-// ==================== Types ====================
-
-/**
- * Options for extracting dataset.
- */
-export interface ExtractDatasetOptions {
-  readonly tenantId?: string;
-  readonly startDate?: Date;
-  readonly endDate?: Date;
-  readonly minFeedbackCount?: number;
-  readonly limit?: number;
-}
-
-/**
- * Extended extraction result with validation.
- */
-export interface ExtendedExtractionResult extends ExtractionResult {
-  readonly validation: {
-    readonly valid: boolean;
-    readonly issues: readonly string[];
-  };
-}
+const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Public API ====================
 

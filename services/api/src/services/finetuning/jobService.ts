@@ -16,38 +16,13 @@ import {
   registerModelVersion,
   createModelVersion,
   FINE_TUNING_STATUS,
+  SERVICE_NAMES,
   type FineTuningJobResult,
-  type DatasetStats,
 } from "@kenchi/shared";
+import type { StartJobOptions, StartJobResult } from "../../types/fineTuningTypes.js";
 import { extractDataset } from "./datasetService.js";
 
-const logger = createLogger("job-service");
-
-// ==================== Types ====================
-
-/**
- * Options for starting a fine-tuning job.
- */
-export interface StartJobOptions {
-  readonly tenantId?: string;
-  readonly epochs?: number;
-  readonly suffix?: string;
-  readonly dryRun?: boolean;
-}
-
-/**
- * Result of starting a fine-tuning job.
- */
-export interface StartJobResult {
-  readonly success: boolean;
-  readonly jobId?: string;
-  readonly status?: string;
-  readonly fileId?: string;
-  readonly model?: string;
-  readonly datasetStats?: DatasetStats;
-  readonly error?: string;
-  readonly validationIssues?: readonly string[];
-}
+const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Public API ====================
 

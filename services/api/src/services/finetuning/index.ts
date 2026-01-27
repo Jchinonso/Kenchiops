@@ -6,11 +6,24 @@
  * @module services/finetuning
  */
 
-export {
-  extractDataset,
-  type ExtractDatasetOptions,
-  type ExtendedExtractionResult,
-} from "./datasetService.js";
+// Re-export types from types file
+export type {
+  ExtractDatasetOptions,
+  ExtendedExtractionResult,
+  StartJobOptions,
+  StartJobResult,
+  ABTestOptions,
+  FineTuningStats,
+  ModelEvaluationMetrics,
+  ABTestComparisonResult,
+  EvaluationOptions,
+  SchedulerConfig,
+  SchedulerState,
+  SchedulerStatus,
+} from "../../types/fineTuningTypes.js";
+
+// Export functions from services
+export { extractDataset } from "./datasetService.js";
 
 export {
   startFineTuningJob,
@@ -18,8 +31,6 @@ export {
   cancelJob,
   listJobs,
   handleJobCompletion,
-  type StartJobOptions,
-  type StartJobResult,
 } from "./jobService.js";
 
 export {
@@ -28,10 +39,9 @@ export {
   activateModel,
   rollbackToBaseline,
   configureABTest,
-  type ABTestOptions,
 } from "./modelService.js";
 
-export { getFineTuningStats, type FineTuningStats } from "./statsService.js";
+export { getFineTuningStats } from "./statsService.js";
 
 export {
   startScheduler,
@@ -41,11 +51,4 @@ export {
   cleanupProcessedCompletions,
 } from "./schedulerService.js";
 
-export {
-  evaluateModel,
-  compareModels,
-  getEvaluationHistory,
-  type ModelEvaluationMetrics,
-  type ABTestComparisonResult,
-  type EvaluationOptions,
-} from "./evaluationService.js";
+export { evaluateModel, compareModels, getEvaluationHistory } from "./evaluationService.js";

@@ -7,54 +7,20 @@
  * @module services/finetuning/evaluationService
  */
 
-import { createLogger, getErrorMessage, query, FINE_TUNING_READINESS } from "@kenchi/shared";
+import {
+  createLogger,
+  getErrorMessage,
+  query,
+  FINE_TUNING_READINESS,
+  SERVICE_NAMES,
+} from "@kenchi/shared";
+import type {
+  ModelEvaluationMetrics,
+  ABTestComparisonResult,
+  EvaluationOptions,
+} from "../../types/fineTuningTypes.js";
 
-const logger = createLogger("evaluation-service");
-
-// ==================== Types ====================
-
-/**
- * Evaluation metrics for a model.
- */
-export interface ModelEvaluationMetrics {
-  readonly modelVersionId: string;
-  readonly totalAnalyses: number;
-  readonly totalFeedback: number;
-  readonly positiveRate: number;
-  readonly negativeRate: number;
-  readonly neutralRate: number;
-  readonly averageConfidenceScore: number;
-  readonly evaluatedAt: string;
-}
-
-/**
- * A/B test comparison result.
- */
-export interface ABTestComparisonResult {
-  readonly control: ModelEvaluationMetrics;
-  readonly treatment: ModelEvaluationMetrics;
-  readonly improvement: {
-    readonly positiveRateDelta: number;
-    readonly confidenceScoreDelta: number;
-    readonly isSignificant: boolean;
-  };
-  readonly sampleSize: {
-    readonly control: number;
-    readonly treatment: number;
-    readonly totalRequired: number;
-  };
-  readonly recommendation: "keep_treatment" | "keep_control" | "continue_testing";
-}
-
-/**
- * Evaluation run options.
- */
-export interface EvaluationOptions {
-  readonly modelVersionId: string;
-  readonly tenantId?: string;
-  readonly startDate?: Date;
-  readonly endDate?: Date;
-}
+const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== SQL Queries ====================
 

@@ -30,12 +30,13 @@ import {
   API_REDIS_PREFIXES,
   shouldSkipRateLimit,
   SERVER_TIMEOUTS,
+  SERVICE_NAMES,
 } from "@kenchi/shared";
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 
-const logger = createLogger("api");
+const logger = createLogger(SERVICE_NAMES.API);
 
 /** Default shutdown timeout in milliseconds */
 const SHUTDOWN_TIMEOUT_MS = 30000;
