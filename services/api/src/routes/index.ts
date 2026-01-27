@@ -11,6 +11,7 @@ import { eventRoutes } from "./eventRoutes.js";
 import { analysisRoutes } from "./analysisRoutes.js";
 import { ragRoutes } from "./rag/index.js";
 import { fineTuningRoutes } from "./fineTuningRoutes.js";
+import { riskRulesRoutes } from "./riskRulesRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -33,4 +34,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Fine-tuning routes
   app.use(fineTuningRoutes);
+
+  // Risk rules routes (custom risk rules management)
+  app.use(riskRulesRoutes);
 };
