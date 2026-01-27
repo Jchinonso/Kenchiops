@@ -510,13 +510,53 @@ export interface ActionProposal {
 
 // ==================== Confidence Scoring Types ====================
 
+/**
+ * LLM confidence level - typed union to prevent silent fallback to default.
+ * Used for base score mapping in confidence scoring.
+ */
+export type LLMConfidenceLevel = "very_low" | "low" | "medium" | "high" | "very_high";
+
+/**
+ * Factor values at each stage of processing.
+ * Enables end-to-end traceability for debugging.
+ */
+export interface FactorValues {
+  readonly uncertainty: number;
+  readonly evidenceAlignment: number;
+  readonly completeness: number;
+  readonly knowledgeBaseValidation: number;
+  readonly consistency: number;
+}
+
+/**
+ * Score totals at each stage of computation.
+ */
+export interface ScoreTotals {
+  /** Sum of weighted factor contributions */
+  readonly weightedAdjustment: number;
+  /** Base + weighted adjustment (before empty analysis cap) */
+  readonly rawScore: number;
+  /** After empty analysis cap (before final clamp) */
+  readonly cappedScore: number;
+  /** Final score after [0,1] clamp */
+  readonly finalScore: number;
+}
+
+/**
+ * Comprehensive breakdown for debugging and audit.
+ * Shows values at each processing stage.
+ */
 export interface ConfidenceScoreBreakdown {
-  baseScore: number;
-  uncertaintyAdjustment: number;
-  evidenceAlignment: number;
-  completeness: number;
-  knowledgeBaseValidation: number;
-  consistency: number;
+  /** LLM confidence level mapped to base score */
+  readonly baseScore: number;
+  /** Raw factor outputs from each module */
+  readonly raw: FactorValues;
+  /** After clamping to factor bounds */
+  readonly bounded: FactorValues;
+  /** After applying weights (what actually changed the score) */
+  readonly weighted: FactorValues;
+  /** Score totals at each stage */
+  readonly totals: ScoreTotals;
 }
 
 export interface ConfidenceScoreResult {
@@ -524,6 +564,8 @@ export interface ConfidenceScoreResult {
   breakdown: ConfidenceScoreBreakdown;
   reasoning: string[];
   gatingDecision: "auto_approve" | "require_approval" | "block";
+  /** Scoring algorithm version for audit traceability */
+  scoringVersion: string;
 }
 
 // ==================== Validation Types ====================

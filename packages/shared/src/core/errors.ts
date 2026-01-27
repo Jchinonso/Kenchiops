@@ -425,3 +425,43 @@ export const enrichError = (error: unknown, context: ErrorContext): AppError => 
     context
   );
 };
+
+// ==================== Invariant Assertions ====================
+
+/**
+ * Asserts a condition is truthy. Throws plain Error for programmer bugs.
+ * Use for "should never happen" conditions that indicate a code defect.
+ *
+ * @param condition - Condition to check
+ * @param message - Error message if condition is falsy
+ * @throws Error if condition is falsy
+ *
+ * @example
+ * invariant(user !== null, "User must exist after authentication");
+ */
+export function invariant(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(`Invariant violation: ${message}`);
+  }
+}
+
+/**
+ * Exhaustive type checking helper for switch statements.
+ * Ensures all union members are handled at compile time.
+ *
+ * @param value - Should be `never` if all cases are handled
+ * @throws Error at runtime if called (indicates unhandled case)
+ *
+ * @example
+ * function handleStatus(status: "pending" | "active" | "completed"): string {
+ *   switch (status) {
+ *     case "pending": return "Waiting";
+ *     case "active": return "Running";
+ *     case "completed": return "Done";
+ *     default: assertUnreachable(status);
+ *   }
+ * }
+ */
+export function assertUnreachable(value: never): never {
+  throw new Error(`Unhandled case: ${JSON.stringify(value)}`);
+}

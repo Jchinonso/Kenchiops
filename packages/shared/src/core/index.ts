@@ -54,6 +54,8 @@ export {
   formatErrorForLog,
   wrapError,
   enrichError,
+  invariant,
+  assertUnreachable,
   type ErrorContext,
 } from "./errors.js";
 
@@ -101,6 +103,7 @@ export type {
   // Confidence Scoring Types
   ConfidenceScoreBreakdown,
   ConfidenceScoreResult,
+  LLMConfidenceLevel,
   // Validation Types
   ValidationResult,
   // Multi-Tenant Types
