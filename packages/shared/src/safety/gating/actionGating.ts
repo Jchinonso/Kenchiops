@@ -14,21 +14,51 @@ import {
   SAFETY_MESSAGES,
   type ConfidenceRange,
 } from "../../constants/index.js";
-import type { GatingDecision, ActionGatingResult, ThresholdEntry } from "../types.js";
+import type { GatingDecision, ActionGatingResult, ThresholdEntry, RangeHandler } from "../types.js";
 import { clampConfidenceScore } from "../helpers.js";
+import { invariant } from "../../core/errors.js";
 
 // Re-export types for consumers
 export type { GatingDecision, ActionGatingResult } from "../types.js";
 
 /**
  * Confidence range lookup table (ascending order - returns first match).
+ * Frozen to prevent runtime mutation of safety-critical config.
  */
-const CONFIDENCE_RANGE_THRESHOLDS: readonly ThresholdEntry[] = [
-  { threshold: CONFIDENCE_THRESHOLDS.VERY_LOW, range: "very_low" },
-  { threshold: CONFIDENCE_THRESHOLDS.LOW, range: "low" },
-  { threshold: CONFIDENCE_THRESHOLDS.MEDIUM, range: "medium" },
-  { threshold: CONFIDENCE_THRESHOLDS.HIGH, range: "high" },
-] as const;
+const CONFIDENCE_RANGE_THRESHOLDS: readonly ThresholdEntry[] = Object.freeze(
+  [
+    { threshold: CONFIDENCE_THRESHOLDS.VERY_LOW, range: "very_low" as const },
+    { threshold: CONFIDENCE_THRESHOLDS.LOW, range: "low" as const },
+    { threshold: CONFIDENCE_THRESHOLDS.MEDIUM, range: "medium" as const },
+    { threshold: CONFIDENCE_THRESHOLDS.HIGH, range: "high" as const },
+  ].map(Object.freeze)
+) as readonly ThresholdEntry[];
+
+// Dev-time validation: thresholds must be valid confidence scores in [0,1] and strictly ascending
+for (let i = 0; i < CONFIDENCE_RANGE_THRESHOLDS.length; i++) {
+  const { threshold, range } = CONFIDENCE_RANGE_THRESHOLDS[i];
+
+  // Validate each threshold is a valid confidence score
+  invariant(
+    Number.isFinite(threshold) && threshold >= 0 && threshold <= 1,
+    `Threshold for "${range}" must be in [0,1], got: ${threshold}`
+  );
+
+  // Validate ascending order (skip first entry)
+  if (i > 0) {
+    const prev = CONFIDENCE_RANGE_THRESHOLDS[i - 1].threshold;
+    invariant(
+      threshold > prev,
+      `CONFIDENCE_RANGE_THRESHOLDS must be ascending: "${range}" (${threshold}) <= previous (${prev})`
+    );
+  }
+}
+
+// Ensure HIGH threshold < 1 so very_high range is reachable for scores near 1.0
+invariant(
+  CONFIDENCE_THRESHOLDS.HIGH < 1,
+  `HIGH threshold must be < 1 to allow very_high range, got: ${CONFIDENCE_THRESHOLDS.HIGH}`
+);
 
 /**
  * Default confidence range for scores above all thresholds.
@@ -50,6 +80,10 @@ const hasValidSafetyLevel = (action: unknown): action is ActionProposal =>
 
 /**
  * Determines confidence range from score using functional lookup.
+ *
+ * Boundary semantics: Thresholds are exclusive upper bounds.
+ * Scores equal to a threshold fall into the next higher range.
+ * Example: score=0.3 is NOT < 0.3, so it's "low" not "very_low".
  *
  * @param score - Confidence score (already validated/clamped)
  * @returns Confidence range category
@@ -105,28 +139,35 @@ export const determineGatingDecision = (confidenceScore: number): GatingDecision
 };
 
 /**
- * Message templates for high confidence ranges with safety level context.
+ * Safety level to risk description mapping (grammatically correct for "with X action").
+ * Single source of truth - message reflects actual safetyLevel, not derived state.
+ * This prevents drift if AUTO_APPROVABLE_SAFETY_LEVELS changes.
  */
-const HIGH_CONFIDENCE_MESSAGE_TEMPLATES: Readonly<
-  Record<"auto_approve" | "medium_risk" | "high_risk", (baseMessage: string) => string>
-> = {
-  auto_approve: (baseMessage: string) => `${baseMessage} with safe/low-risk action. Auto-approved.`,
-  medium_risk: (baseMessage: string) => `${baseMessage} but medium risk. Approval required.`,
-  high_risk: (baseMessage: string) =>
-    `${baseMessage} but high/dangerous risk. Always requires approval.`,
-} as const;
+const SAFETY_LEVEL_DESCRIPTIONS: Readonly<Record<SafetyLevel, string>> = Object.freeze({
+  safe: "a safe",
+  low_risk: "a low-risk",
+  medium_risk: "a medium-risk",
+  high_risk: "a high-risk",
+  dangerous: "a dangerous",
+});
 
 /**
- * Determines message context key based on safety level and auto-approval status.
+ * Gets risk description for a safety level with fail-stop guarantee.
+ * Throws if SafetyLevel type is ever loosened and an unhandled value appears.
  */
-const getMessageContext = (
-  safetyLevel: SafetyLevel,
-  canAutoApprove: boolean
-): keyof typeof HIGH_CONFIDENCE_MESSAGE_TEMPLATES =>
-  canAutoApprove ? "auto_approve" : safetyLevel === "medium_risk" ? "medium_risk" : "high_risk";
+const getRiskDescription = (safetyLevel: SafetyLevel): string => {
+  // Use hasOwnProperty.call to avoid prototype chain (universally compatible)
+  invariant(
+    Object.prototype.hasOwnProperty.call(SAFETY_LEVEL_DESCRIPTIONS, safetyLevel),
+    `Unhandled safetyLevel: ${safetyLevel}`
+  );
+  return SAFETY_LEVEL_DESCRIPTIONS[safetyLevel];
+};
 
 /**
  * Message factory for high confidence ranges with safety level context.
+ * Composes message from: confidence base + safety description + approval status.
+ * This approach prevents message/config drift by deriving from safetyLevel directly.
  *
  * @param range - Confidence range (high or very_high)
  * @param safetyLevel - Action safety level
@@ -139,37 +180,28 @@ const createHighConfidenceMessage = (
   canAutoApprove: boolean
 ): string => {
   const baseMessage = CONFIDENCE_MESSAGES[range];
-  const context = getMessageContext(safetyLevel, canAutoApprove);
-  return HIGH_CONFIDENCE_MESSAGE_TEMPLATES[context](baseMessage);
+  const riskDescription = getRiskDescription(safetyLevel);
+  const approvalStatus = canAutoApprove ? "Auto-approved." : "Approval required.";
+  return `${baseMessage} with ${riskDescription} action. ${approvalStatus}`;
 };
-
-/**
- * Range-based gating handlers.
- * Each handler processes a specific confidence range and returns a gating result.
- */
-type RangeHandler = (
-  range: ConfidenceRange,
-  safetyLevel: SafetyLevel,
-  clampedScore: number
-) => ActionGatingResult;
 
 /**
  * Handles very low confidence range - blocks all actions.
  * requiresApproval=false because approval can't help when blocked.
  */
-const handleVeryLowRange: RangeHandler = (_range, _safetyLevel, _clampedScore) =>
+const handleVeryLowRange: RangeHandler = () =>
   createGatingResult(false, false, CONFIDENCE_MESSAGES.very_low);
 
 /**
  * Handles low/medium confidence ranges - requires approval but allows execution.
  */
-const handleLowMediumRange: RangeHandler = (range, _safetyLevel, _clampedScore) =>
+const handleLowMediumRange: RangeHandler = (range) =>
   createGatingResult(true, true, CONFIDENCE_MESSAGES[range]);
 
 /**
  * Handles high/very high confidence ranges - checks safety level for auto-approval.
  */
-const handleHighRange: RangeHandler = (range, safetyLevel, _clampedScore) => {
+const handleHighRange: RangeHandler = (range, safetyLevel) => {
   // safetyLevel already validated by hasValidSafetyLevel before reaching handlers
   const canAutoApprove = AUTO_APPROVABLE_SAFETY_LEVELS.has(safetyLevel);
   return createGatingResult(
@@ -193,11 +225,10 @@ const RANGE_HANDLERS: Readonly<Record<ConfidenceRange, RangeHandler>> = {
 /**
  * Invalid action gating result.
  * requiresApproval=false because approval can't help when blocked.
+ * Frozen to prevent runtime mutation.
  */
-const INVALID_ACTION_RESULT: ActionGatingResult = createGatingResult(
-  false,
-  false,
-  SAFETY_MESSAGES.INVALID_ACTION
+const INVALID_ACTION_RESULT: ActionGatingResult = Object.freeze(
+  createGatingResult(false, false, SAFETY_MESSAGES.INVALID_ACTION)
 );
 
 /**
@@ -224,5 +255,5 @@ export const determineActionGating = (
   const range = getConfidenceRange(clampedScore);
   const handler = RANGE_HANDLERS[range];
 
-  return handler(range, action.safetyLevel, clampedScore);
+  return handler(range, action.safetyLevel);
 };
