@@ -7,6 +7,7 @@
  * @module safety/audit/audit
  */
 
+import crypto from "crypto";
 import type {
   SafetyAuditEntry,
   SafetyRequestContext,
@@ -15,7 +16,11 @@ import type {
   AuditQueryOptions,
   AuditStore,
 } from "../types.js";
-import { AUDIT_DEFAULT_QUERY_LIMIT, AUDIT_MAX_IN_MEMORY_ENTRIES } from "../../constants/safety.js";
+import {
+  AUDIT_DEFAULT_QUERY_LIMIT,
+  AUDIT_MAX_IN_MEMORY_ENTRIES,
+  AUDIT_MAX_PATTERNS_IN_SUMMARY,
+} from "../../constants/safety.js";
 
 // ==================== Filter Configuration ====================
 
@@ -58,28 +63,52 @@ const QUERY_FILTERS: ReadonlyArray<{
     shouldApply: (options) => Boolean(options.requestId),
     createPredicate: (options) => (entry) => entry.requestContext?.requestId === options.requestId,
   },
-  // Date range filters
+  // Date range filters (parse once in createPredicate, return no-op if invalid)
   {
     shouldApply: (options) => options.fromDate !== undefined,
     createPredicate: (options) => {
-      const fromDate = options.fromDate as Date;
+      const fromDate = toDate(options.fromDate);
+      if (!fromDate) {
+        return () => true;
+      }
       return (entry) => entry.timestamp >= fromDate;
     },
   },
   {
     shouldApply: (options) => options.toDate !== undefined,
     createPredicate: (options) => {
-      const toDate = options.toDate as Date;
-      return (entry) => entry.timestamp <= toDate;
+      const endDate = toDate(options.toDate);
+      if (!endDate) {
+        return () => true;
+      }
+      return (entry) => entry.timestamp <= endDate;
     },
   },
 ];
+
+/**
+ * Defensively converts a value to a Date.
+ * Returns null for invalid or unparseable values (safer than defaulting to "now").
+ */
+const toDate = (value: unknown): Date | null => {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+};
 
 // ==================== In-Memory Store ====================
 
 /**
  * Simple in-memory audit store for development/testing.
  * In production, use a persistent store implementation.
+ *
+ * Note: Entries are stored in chronological order (oldest first).
+ * For "newest first" queries, we iterate from the end.
  */
 class InMemoryAuditStore implements AuditStore {
   private entries: SafetyAuditEntry[] = [];
@@ -93,29 +122,53 @@ class InMemoryAuditStore implements AuditStore {
     }
   }
 
-  async query(options: AuditQueryOptions): Promise<readonly SafetyAuditEntry[]> {
+  /**
+   * Filters entries based on query options.
+   * Returns entries directly when no predicates (private method, safe to share reference).
+   */
+  private filterEntries(options: AuditQueryOptions): readonly SafetyAuditEntry[] {
     // Build predicates from filter configuration
     const predicates = QUERY_FILTERS.filter((filter) => filter.shouldApply(options)).map((filter) =>
       filter.createPredicate(options)
     );
 
+    // No filters = return entries directly (private method, safe)
+    if (predicates.length === 0) {
+      return this.entries;
+    }
+
     // Apply all filters in a single pass
-    const filtered = this.entries.filter((entry) =>
-      predicates.every((predicate) => predicate(entry))
-    );
+    return this.entries.filter((entry) => predicates.every((predicate) => predicate(entry)));
+  }
 
-    // Sort by timestamp descending (newest first) and apply pagination
-    const offset = options.offset ?? 0;
-    const limit = options.limit ?? AUDIT_DEFAULT_QUERY_LIMIT;
+  async query(options: AuditQueryOptions): Promise<readonly SafetyAuditEntry[]> {
+    const filtered = this.filterEntries(options);
+    // Clamp offset/limit to avoid odd behavior with negative values
+    const offset = Math.max(0, options.offset ?? 0);
+    const limit = Math.max(0, options.limit ?? AUDIT_DEFAULT_QUERY_LIMIT);
 
-    return filtered
-      .sort((entryA, entryB) => entryB.timestamp.getTime() - entryA.timestamp.getTime())
-      .slice(offset, offset + limit);
+    // Iterate backwards (newest first) and collect until offset + limit
+    // This avoids copying the entire array with slice().reverse()
+    const result: SafetyAuditEntry[] = [];
+    let skipped = 0;
+
+    for (let i = filtered.length - 1; i >= 0; i--) {
+      if (skipped < offset) {
+        skipped++;
+        continue;
+      }
+      result.push(filtered[i]);
+      if (result.length >= limit) {
+        break;
+      }
+    }
+
+    return result;
   }
 
   async count(options: AuditQueryOptions): Promise<number> {
-    const results = await this.query({ ...options, limit: undefined, offset: undefined });
-    return results.length;
+    // Use filterEntries directly - no pagination, no sorting
+    return this.filterEntries(options).length;
   }
 
   /** Clears all entries (for testing) */
@@ -136,36 +189,68 @@ class InMemoryAuditStore implements AuditStore {
  */
 let auditStore: AuditStore = new InMemoryAuditStore();
 
-/**
- * Counter for generating unique IDs.
- */
-let idCounter = 0;
-
 // ==================== Core Functions ====================
 
 /**
- * Generates a unique audit entry ID.
+ * Generates a unique audit entry ID using crypto.randomUUID().
+ * Prefixed with "audit_" for easy identification.
  *
  * @returns Unique ID string
  */
-const generateId = (): string => {
-  idCounter++;
-  const timestamp = Date.now().toString(36);
-  const counter = idCounter.toString(36).padStart(4, "0");
-  const random = Math.random().toString(36).substring(2, 6);
-  return `audit_${timestamp}_${counter}_${random}`;
+const generateId = (): string => `audit_${crypto.randomUUID()}`;
+
+/**
+ * Deep freezes an object for immutability.
+ * Uses WeakSet to handle cyclic references safely.
+ * Skips Date objects (freezing them is unnecessary and can cause issues).
+ */
+const deepFreeze = <T extends object>(
+  obj: T,
+  seen: WeakSet<object> = new WeakSet()
+): Readonly<T> => {
+  if (seen.has(obj)) {
+    return obj;
+  }
+  seen.add(obj);
+
+  Object.freeze(obj);
+
+  for (const value of Object.values(obj)) {
+    if (!value || typeof value !== "object") {
+      continue;
+    }
+    if (value instanceof Date) {
+      continue;
+    } // Skip Dates
+    if (Object.isFrozen(value)) {
+      continue;
+    }
+    deepFreeze(value as object, seen);
+  }
+
+  return obj;
 };
 
 // ==================== Exports ====================
 
 /**
- * Creates and records an audit entry.
+ * Creates and records an immutable audit entry.
+ * Entry and all nested objects are frozen to prevent mutation.
  *
  * @param input - Entry input data
- * @returns The created audit entry
+ * @returns The created audit entry (frozen)
  */
 export const recordAuditEntry = async (input: CreateAuditEntryInput): Promise<SafetyAuditEntry> => {
-  const entry: SafetyAuditEntry = {
+  // Defensive copy and freeze requestContext
+  const frozenRequestContext = input.requestContext
+    ? Object.freeze({ ...input.requestContext })
+    : undefined;
+
+  // Defensive copy and deep freeze context (freeze empty object too for consistency)
+  const frozenContext = input.context ? deepFreeze({ ...input.context }) : Object.freeze({});
+
+  // Create and freeze the entire entry
+  const entry: SafetyAuditEntry = Object.freeze({
     id: generateId(),
     timestamp: new Date(),
     eventType: input.eventType,
@@ -175,9 +260,9 @@ export const recordAuditEntry = async (input: CreateAuditEntryInput): Promise<Sa
     actionType: input.actionType,
     confidenceScore: input.confidenceScore,
     riskScore: input.riskScore,
-    context: Object.freeze(input.context ?? {}),
-    requestContext: input.requestContext,
-  };
+    context: frozenContext,
+    requestContext: frozenRequestContext,
+  });
 
   await auditStore.append(entry);
   return entry;
@@ -222,16 +307,24 @@ export const recordInjectionDetection = async (
   patterns: readonly string[],
   blocked: boolean,
   requestContext?: SafetyRequestContext
-): Promise<SafetyAuditEntry> =>
-  recordAuditEntry({
+): Promise<SafetyAuditEntry> => {
+  // Truncate patterns in summary to prevent huge log entries
+  const displayPatterns = patterns.slice(0, AUDIT_MAX_PATTERNS_IN_SUMMARY);
+  const patternsSummary =
+    patterns.length > AUDIT_MAX_PATTERNS_IN_SUMMARY
+      ? `${displayPatterns.join(", ")} (+${patterns.length - AUDIT_MAX_PATTERNS_IN_SUMMARY} more)`
+      : patterns.join(", ");
+
+  return recordAuditEntry({
     eventType: "injection_detected",
     severity: blocked ? "error" : "warning",
     decision: blocked ? "blocked" : "flagged",
-    summary: `Injection attempt detected (risk: ${(riskScore * 100).toFixed(0)}%, patterns: ${patterns.join(", ")})`,
+    summary: `Injection attempt detected (risk: ${(riskScore * 100).toFixed(0)}%, patterns: ${patternsSummary})`,
     riskScore,
-    context: { patterns },
+    context: { patterns: [...patterns] }, // Copy array for immutability
     requestContext,
   });
+};
 
 /**
  * Records a hallucination detection event.
@@ -377,7 +470,6 @@ export const getAuditStore = (): AuditStore => auditStore;
  */
 export const resetAuditStore = (): void => {
   auditStore = new InMemoryAuditStore();
-  idCounter = 0;
 };
 
 /**
