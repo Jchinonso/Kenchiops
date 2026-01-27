@@ -50,6 +50,8 @@ export {
   formatErrorForLog,
   wrapError,
   enrichError,
+  invariant,
+  assertUnreachable,
   type ErrorContext,
 } from "./core/index.js";
 export type {
@@ -95,6 +97,7 @@ export type {
   // Confidence Scoring Types
   ConfidenceScoreBreakdown,
   ConfidenceScoreResult,
+  LLMConfidenceLevel,
   // Validation Types
   ValidationResult,
   // Multi-Tenant Types
@@ -232,6 +235,18 @@ export {
   countAnalysesByModelVersion,
   type CreateAnalysisInput,
   type AnalysisRecord,
+} from "./database/index.js";
+
+// Risk rules repository operations
+export {
+  createCustomRiskRule,
+  getCustomRiskRules,
+  getCustomRiskRuleById,
+  updateCustomRiskRule,
+  deleteCustomRiskRule,
+  queryRiskAssessments,
+  // Note: recordRiskAssessment is exported from safety/audit for general audit
+  // The store pattern (via assessActionRiskWithContext) handles risk assessment recording
 } from "./database/index.js";
 
 // HTTP utilities
@@ -590,11 +605,27 @@ export {
   formatScore,
   normalizeText,
   containsKeyword,
-  // Risk scoring
+  // Risk scoring (basic)
   assessActionRisk,
   isHighRiskAction,
   isIrreversibleAction,
   getRiskScoreConstants,
+  // Risk scoring (contextual)
+  assessActionRiskWithContext,
+  isActionBlocked,
+  isCurrentlyOffHours,
+  setRiskIncidentMode,
+  resolveContext,
+  // Risk rules store
+  getRiskRulesStore,
+  setRiskRulesStore,
+  resetRiskRulesStore,
+  createInMemoryRiskRulesStore,
+  InMemoryRiskRulesStore,
+  // Combined safety check
+  performCombinedSafetyCheck,
+  isActionSafetyBlocked,
+  getSafetyBlockReason,
   // Validation
   detectUncertainty,
   calculateEvidenceAlignment,
@@ -681,6 +712,22 @@ export {
   type CreateAuditEntryInput,
   type AuditQueryOptions,
   type AuditStore,
+  // Contextual risk types
+  type RiskAssessmentContext,
+  type ResolvedRiskContext,
+  type ContextualActionRiskAssessment,
+  type ApprovalRequirements,
+  type CombinedSafetyCheckResult,
+  // Risk rules store types
+  type RiskRulesStore,
+  type CustomRiskRule,
+  type RiskAssessmentRecord,
+  type CreateCustomRiskRuleInput,
+  type UpdateCustomRiskRuleInput,
+  type CreateRiskAssessmentInput,
+  type RiskRulesQueryOptions,
+  type RiskAssessmentsQueryOptions,
+  type RiskEnvironment,
 } from "./safety/index.js";
 
 // Security utilities
