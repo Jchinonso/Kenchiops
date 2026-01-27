@@ -47,6 +47,8 @@ export const MATCHING_CONFIG = {
   COMMIT_PREFIX_LENGTH: 7,
   LOG_PREFIX_LENGTH: 50,
   LOG_COMPARISON_PREFIX_LENGTH: 30,
+  /** Minimum log message length for alignment matching (short messages can cause false positives) */
+  MIN_LOG_MESSAGE_LENGTH: 20,
   SHA_PREFIX_MIN_LENGTH: 6,
   SHA_PREFIX_MAX_LENGTH: 12,
   QUOTED_TEXT_MIN_LENGTH: 10,

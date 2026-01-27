@@ -49,6 +49,7 @@ export const INVALID_CAUSE_KEYWORDS: Readonly<Set<string>> = new Set(["unknown"]
 
 /**
  * Cause-action relevance mapping configuration type.
+ * Keywords should be normalized (lowercase, single words).
  */
 export type RelevanceRule = {
   readonly causeKeywords: readonly string[];
@@ -57,28 +58,84 @@ export type RelevanceRule = {
 
 /**
  * Relevance rules for matching causes to actions.
+ * Keywords are pre-normalized (lowercase) for efficient matching.
+ * Expanded with synonyms to reduce false negatives.
  */
 export const RELEVANCE_RULES: Readonly<RelevanceRule[]> = [
   {
-    causeKeywords: ["secret", "env"],
-    actionKeywords: ["environment"],
+    // Environment variable / secret issues
+    causeKeywords: [
+      "secret",
+      "env",
+      "environment",
+      "variable",
+      "credential",
+      "token",
+      "key",
+      "auth",
+    ],
+    actionKeywords: ["environment", "secret", "variable", "credential", "config", "add", "set"],
   },
   {
-    causeKeywords: ["deploy"],
-    actionKeywords: ["rollback"],
+    // Deployment / release issues
+    causeKeywords: ["deploy", "deployment", "release", "version", "upgrade"],
+    actionKeywords: ["rollback", "revert", "deploy", "redeploy", "release"],
   },
   {
-    causeKeywords: ["config"],
-    actionKeywords: ["configuration"],
+    // Configuration issues
+    causeKeywords: ["config", "configuration", "setting", "settings", "parameter"],
+    actionKeywords: ["configuration", "config", "setting", "update", "fix", "correct"],
   },
   {
-    causeKeywords: ["test"],
-    actionKeywords: ["rerun", "test"],
+    // Test failures
+    causeKeywords: ["test", "tests", "testing", "assertion", "spec", "unit", "integration"],
+    actionKeywords: ["rerun", "test", "fix", "update", "retry"],
   },
   {
-    causeKeywords: ["pipeline"],
-    actionKeywords: ["rerun", "pipeline"],
+    // Pipeline / CI issues
+    causeKeywords: ["pipeline", "ci", "build", "workflow", "job", "action"],
+    actionKeywords: ["rerun", "pipeline", "rebuild", "retry", "trigger"],
   },
+  {
+    // Dependency issues
+    causeKeywords: ["dependency", "dependencies", "package", "module", "library", "npm", "yarn"],
+    actionKeywords: ["install", "update", "upgrade", "dependency", "package", "fix"],
+  },
+  {
+    // Database / data issues
+    causeKeywords: ["database", "db", "data", "migration", "schema", "query"],
+    actionKeywords: ["migrate", "rollback", "fix", "update", "database", "query"],
+  },
+  {
+    // Network / connectivity issues
+    causeKeywords: ["network", "connection", "timeout", "dns", "connectivity", "socket"],
+    actionKeywords: ["retry", "restart", "check", "network", "connection"],
+  },
+  {
+    // Resource / capacity issues
+    causeKeywords: ["memory", "cpu", "disk", "resource", "capacity", "limit", "quota"],
+    actionKeywords: ["scale", "increase", "limit", "resource", "restart"],
+  },
+  {
+    // Permission / access issues
+    causeKeywords: ["permission", "access", "denied", "forbidden", "unauthorized", "role"],
+    actionKeywords: ["permission", "access", "grant", "role", "fix"],
+  },
+] as const;
+
+/**
+ * Generic remediation actions that provide partial relevance credit.
+ * These are common actions that may be relevant to many cause types.
+ */
+export const GENERIC_REMEDIATION_KEYWORDS: Readonly<string[]> = [
+  "check",
+  "logs",
+  "investigate",
+  "review",
+  "restart",
+  "notify",
+  "escalate",
+  "monitor",
 ] as const;
 
 /**
@@ -105,16 +162,38 @@ export const AUDIT_DEFAULT_QUERY_LIMIT = 100;
  */
 export const AUDIT_MAX_IN_MEMORY_ENTRIES = 10000;
 
+/**
+ * Maximum patterns to include in injection detection summary.
+ * Prevents huge log entries when many patterns are detected.
+ */
+export const AUDIT_MAX_PATTERNS_IN_SUMMARY = 5;
+
 // ==================== Prompt Injection Constants ====================
 
 /**
  * Risk thresholds for prompt injection detection.
+ * Named as minimums for clarity: score >= threshold triggers that action.
+ * Order: REVIEW_MIN < SANITIZE_MIN < BLOCK_MIN
  */
 export const INJECTION_RISK_THRESHOLDS = {
-  ALLOW: 0.2,
-  SANITIZE: 0.5,
-  BLOCK: 0.75,
+  /** Minimum score to trigger review (flag for human review) */
+  REVIEW_MIN: 0.2,
+  /** Minimum score to trigger sanitization */
+  SANITIZE_MIN: 0.5,
+  /** Minimum score to block input entirely */
+  BLOCK_MIN: 0.75,
 } as const;
+
+/**
+ * Maximum weight contribution per pattern type to prevent score saturation.
+ */
+export const INJECTION_MAX_WEIGHT_PER_TYPE = 1.2;
+
+/**
+ * Weight multiplier for matches found in code fences.
+ * Lower because these are often benign (pasted logs, code examples).
+ */
+export const INJECTION_CODE_FENCE_WEIGHT_MULTIPLIER = 0.3;
 
 // ==================== Hallucination Detection Constants ====================
 
@@ -183,3 +262,105 @@ export const DEFAULT_ACTION_RISK = {
   reversibility: "minutes",
   dataImpact: "write",
 } as const;
+
+/**
+ * Risk level thresholds for categorization.
+ * Aligned with gating thresholds for consistency.
+ */
+export const RISK_LEVEL_THRESHOLDS = {
+  /** Below this is "low" risk */
+  LOW: 0.3,
+  /** Below this is "moderate" risk */
+  MODERATE: 0.5,
+  /** Below this is "high" risk, at or above is "critical" */
+  HIGH: 0.7,
+} as const;
+
+/**
+ * Risk level categories.
+ */
+export type RiskLevel = "low" | "moderate" | "high" | "critical";
+
+/**
+ * Rule category identifiers for audit/debug.
+ */
+export type RiskRuleCategory =
+  | "notification"
+  | "investigation"
+  | "service_restart"
+  | "configuration"
+  | "deployment"
+  | "database"
+  | "infrastructure"
+  | "default";
+
+// ==================== Context Multipliers ====================
+
+/**
+ * Default multipliers for context-aware risk scoring.
+ * Applied when custom rules don't specify custom multipliers.
+ */
+export const CONTEXT_MULTIPLIERS = {
+  /** Multiplier for production environment actions */
+  PRODUCTION: 1.3,
+  /** Multiplier when incident mode is active */
+  INCIDENT_MODE: 1.5,
+  /** Multiplier during off-hours (weekends, nights) */
+  OFF_HOURS: 1.2,
+} as const;
+
+/**
+ * Off-hours detection configuration.
+ * Uses UTC to ensure consistent behavior across timezones.
+ *
+ * NOTE: Off-hours are currently evaluated in UTC. Tenant-local business
+ * hours are a planned enhancement. Until then, tenants in different
+ * timezones may experience incorrect off-hours classification.
+ */
+export const OFF_HOURS_CONFIG = {
+  /** Start of night hours (UTC) */
+  NIGHT_START_HOUR: 22,
+  /** End of night hours (UTC) */
+  NIGHT_END_HOUR: 6,
+  /** Weekend days (0 = Sunday, 6 = Saturday) */
+  WEEKEND_DAYS: [0, 6] as readonly number[],
+} as const;
+
+// ==================== Platform Baseline Thresholds ====================
+
+/**
+ * Platform baseline thresholds representing maximum leniency.
+ * Tenants can only move thresholds DOWN (more strict), never UP (more lenient).
+ *
+ * These are CEILINGS on leniency, not floors on strictness.
+ * A tenant rule with blockThreshold: 0.95 would be clamped to 0.9.
+ *
+ * Enforcement: effectiveThreshold = min(rule ?? 1.0, platformMax)
+ */
+export const PLATFORM_THRESHOLDS = {
+  /** Maximum block threshold allowed - rules cannot be more lenient than this */
+  MAX_BLOCK_THRESHOLD: 0.9,
+  /** Maximum approval threshold allowed - rules cannot be more lenient than this */
+  MAX_APPROVAL_THRESHOLD: 0.5,
+} as const;
+
+/**
+ * Guard rail for context multiplier products.
+ * Prevents extreme multiplier combinations from always saturating to 1.0.
+ *
+ * Example: Without guard rail, production(1.3) × incident(1.5) × offHours(1.2) = 2.34x
+ * A base score of 0.5 would become 1.17, clamped to 1.0.
+ * With guard rail at 3.0, the multiplier is capped first.
+ */
+export const CONTEXT_MULTIPLIER_BOUNDS = {
+  /** Minimum multiplier (no context should reduce risk) */
+  MIN: 1.0,
+  /** Maximum multiplier (prevents saturation) */
+  MAX: 3.0,
+} as const;
+
+/**
+ * Risk scoring version for audit traceability.
+ * Increment when scoring logic changes materially.
+ */
+export const RISK_SCORING_VERSION = "risk_v1" as const;
