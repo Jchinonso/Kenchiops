@@ -11,7 +11,7 @@
  */
 
 import type { LLMAnalysisResult, Evidence } from "../core/types.js";
-import { calculateConfidenceScore } from "./scoring/confidenceScoring.js";
+import { calculateConfidenceScore } from "./scoring/confidenceScoring/index.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD, PLACEHOLDER_CONFIDENCE_SCORE } from "../constants/index.js";
 
 // ==================== Type Exports ====================
@@ -26,6 +26,15 @@ export type {
   LLMAnalysisLike,
   EvidenceLike,
   ConfidenceRange,
+  // Confidence scoring types
+  BaseScoreResult,
+  RawFactors,
+  BoundedFactors,
+  WeightedFactors,
+  // Consistency types
+  NormalizedRule,
+  RelevanceResult,
+  ConsistencyEvaluation,
   // Risk scoring types
   BlastRadius,
   Reversibility,
@@ -68,36 +77,83 @@ export {
   formatAdjustment,
   formatScore,
   normalizeText,
+  tokenize,
+  tokensContainAny,
   containsKeyword,
 } from "./helpers.js";
 
 // ==================== Scoring Module ====================
-export { calculateConfidenceScore, getBaseScore } from "./scoring/confidenceScoring.js";
-export { checkConsistency } from "./scoring/consistency.js";
+export { calculateConfidenceScore, getBaseScore } from "./scoring/confidenceScoring/index.js";
+export { checkConsistency, evaluateConsistency } from "./scoring/consistency/index.js";
 export {
+  // Basic risk assessment (no context)
   assessActionRisk,
   isHighRiskAction,
   isIrreversibleAction,
+  actionRequiresManualRollback,
+  isHighRisk,
+  requiresManualRollback,
   getRiskScoreConstants,
   type RiskScoreConstants,
-} from "./scoring/riskScoring.js";
+  type ActionRiskAssessment,
+  // Contextual risk assessment
+  assessActionRiskWithContext,
+  isActionBlocked,
+  isCurrentlyOffHours,
+  setIncidentMode as setRiskIncidentMode,
+  resolveContext,
+  // Store management
+  getRiskRulesStore,
+  setRiskRulesStore,
+  resetRiskRulesStore,
+  createInMemoryRiskRulesStore,
+  InMemoryRiskRulesStore,
+  // Context types
+  type RiskAssessmentContext,
+  type ResolvedRiskContext,
+  type ContextualActionRiskAssessment,
+  type ApprovalRequirements,
+  // Store types
+  type RiskRulesStore,
+  type CustomRiskRule,
+  type RiskAssessmentRecord,
+  type CreateCustomRiskRuleInput,
+  type UpdateCustomRiskRuleInput,
+  type CreateRiskAssessmentInput,
+  type RiskRulesQueryOptions,
+  type RiskAssessmentsQueryOptions,
+  type RiskEnvironment,
+} from "./scoring/riskScoring/index.js";
+
+// ==================== Combined Safety Check ====================
+export {
+  performCombinedSafetyCheck,
+  isActionSafetyBlocked,
+  getSafetyBlockReason,
+  type CombinedSafetyCheckResult,
+} from "./combinedSafetyCheck.js";
 
 // ==================== Validation Module ====================
-export { detectUncertainty } from "./validation/uncertaintyDetection.js";
-export { calculateEvidenceAlignment, assessCompleteness } from "./validation/evidenceValidation.js";
-export { validateAgainstKnowledgeBase } from "./validation/knowledgeValidation.js";
+// Re-export all validation functions from the barrel file
 export {
+  // Uncertainty detection
+  detectUncertainty,
+  // Evidence validation
+  calculateEvidenceAlignment,
+  assessCompleteness,
+  // Knowledge base validation
+  validateAgainstKnowledgeBase,
+  // Hallucination detection
+  checkForHallucinations,
+  isLikelyHallucinated,
+  getHallucinationRiskLevel,
+  // Output sanitization
   sanitizeLLMOutput,
   validateCommand,
   hasCodeInjection,
   sanitizeFilePath,
   redactSecrets,
-} from "./validation/sanitization.js";
-export {
-  checkForHallucinations,
-  isLikelyHallucinated,
-  getHallucinationRiskLevel,
-} from "./validation/hallucination.js";
+} from "./validation/index.js";
 
 // ==================== Gating Module ====================
 export { determineActionGating, determineGatingDecision } from "./gating/actionGating.js";
