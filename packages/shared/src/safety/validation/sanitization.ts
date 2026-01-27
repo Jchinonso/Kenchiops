@@ -8,6 +8,7 @@
  */
 
 import type { OutputSanitizationResult, CommandValidationResult } from "../types.js";
+import { SANITIZATION_CONFIG, COMMAND_RISK_THRESHOLDS } from "../../constants/validation.js";
 
 // ==================== Constants ====================
 
@@ -43,8 +44,8 @@ const DANGEROUS_SHELL_PATTERNS: ReadonlyArray<{
   { pattern: /\bmkfs/, name: "filesystem_format", severity: "high" },
   { pattern: /\bchmod\s+777/, name: "open_permissions", severity: "high" },
   { pattern: /\bchown\s+-R/, name: "recursive_chown", severity: "medium" },
-  { pattern: /\bcurl\s+.*\|\s*(?:ba)?sh/, name: "curl_pipe_shell", severity: "high" },
-  { pattern: /\bwget\s+.*\|\s*(?:ba)?sh/, name: "wget_pipe_shell", severity: "high" },
+  { pattern: /\bcurl\s+.{1,500}\|\s*(?:ba)?sh/, name: "curl_pipe_shell", severity: "high" },
+  { pattern: /\bwget\s+.{1,500}\|\s*(?:ba)?sh/, name: "wget_pipe_shell", severity: "high" },
   { pattern: /\beval\s/, name: "eval_command", severity: "high" },
   { pattern: /\bexec\s/, name: "exec_command", severity: "high" },
 ] as const;
@@ -69,6 +70,30 @@ const SENSITIVE_DATA_PATTERNS: ReadonlyArray<{
     pattern: /AKIA[0-9A-Z]{16}/g,
     replacement: "[REDACTED_AWS_KEY]",
     name: "aws_key",
+  },
+  // GitHub tokens (ghp_, ghu_, gho_, ghs_, ghr_)
+  {
+    pattern: /gh[pousr]_[A-Za-z0-9_]{36,}/g,
+    replacement: "[REDACTED_GITHUB_TOKEN]",
+    name: "github_token",
+  },
+  // Slack tokens (xoxb-, xoxa-, xoxp-, xoxr-)
+  {
+    pattern: /xox[barp]-[A-Za-z0-9-]{24,}/g,
+    replacement: "[REDACTED_SLACK_TOKEN]",
+    name: "slack_token",
+  },
+  // Google API keys
+  {
+    pattern: /AIza[A-Za-z0-9_-]{35}/g,
+    replacement: "[REDACTED_GOOGLE_KEY]",
+    name: "google_key",
+  },
+  // Stripe keys
+  {
+    pattern: /sk_(?:live|test)_[A-Za-z0-9]{24,}/g,
+    replacement: "[REDACTED_STRIPE_KEY]",
+    name: "stripe_key",
   },
   // Private keys
   {
@@ -138,25 +163,35 @@ const escapeHtml = (text: string): string =>
 const detectXssPatterns = (text: string): string[] =>
   XSS_PATTERNS.filter(({ pattern }) => pattern.test(text)).map(({ name }) => name);
 
+/** Result of redacting sensitive data */
+interface RedactSensitiveResult {
+  readonly text: string;
+  readonly appliedRules: readonly string[];
+}
+
 /**
  * Redacts sensitive data from text.
  *
  * @param text - Text to redact
  * @returns Object with redacted text and applied rules
  */
-const redactSensitiveData = (text: string): { text: string; appliedRules: string[] } => {
-  const appliedRules: string[] = [];
-  let result = text;
-
-  for (const { pattern, replacement, name } of SENSITIVE_DATA_PATTERNS) {
-    if (pattern.test(result)) {
-      appliedRules.push(name);
-      result = result.replace(pattern, replacement);
-    }
-  }
-
-  return { text: result, appliedRules };
-};
+const redactSensitiveData = (text: string): RedactSensitiveResult =>
+  SENSITIVE_DATA_PATTERNS.reduce<RedactSensitiveResult>(
+    (accumulator, { pattern, replacement, name }) => {
+      // Reset regex state for global patterns to avoid state bugs across calls
+      pattern.lastIndex = 0;
+      if (!pattern.test(accumulator.text)) {
+        return accumulator;
+      }
+      // Reset again before replace since test() advanced lastIndex
+      pattern.lastIndex = 0;
+      return {
+        text: accumulator.text.replace(pattern, replacement),
+        appliedRules: [...accumulator.appliedRules, name],
+      };
+    },
+    { text, appliedRules: [] }
+  );
 
 // ==================== Exports ====================
 
@@ -175,11 +210,34 @@ export const sanitizeLLMOutput = (
     redactSecrets?: boolean;
   } = {}
 ): OutputSanitizationResult => {
+  // Handle empty or invalid input
+  if (!output || output.length === 0) {
+    return {
+      sanitized: "",
+      wasModified: false,
+      appliedRules: [],
+      warnings: [],
+    };
+  }
+
   const { escapeHtml: shouldEscapeHtml = true, redactSecrets = true } = options;
+
+  // Truncate input to prevent DoS from very large inputs
+  const truncatedOutput =
+    output.length > SANITIZATION_CONFIG.MAX_INPUT_LENGTH
+      ? output.slice(0, SANITIZATION_CONFIG.MAX_INPUT_LENGTH)
+      : output;
 
   const appliedRules: string[] = [];
   const warnings: string[] = [];
-  let sanitized = output;
+
+  if (truncatedOutput.length < output.length) {
+    warnings.push(
+      `Input truncated from ${output.length} to ${SANITIZATION_CONFIG.MAX_INPUT_LENGTH} characters`
+    );
+  }
+
+  let sanitized = truncatedOutput;
 
   // Detect XSS patterns
   const xssPatterns = detectXssPatterns(sanitized);
@@ -221,19 +279,56 @@ export const sanitizeLLMOutput = (
  * @returns Validation result
  */
 export const validateCommand = (command: string): CommandValidationResult => {
-  const risks: string[] = [];
-
-  for (const { pattern, name, severity } of DANGEROUS_SHELL_PATTERNS) {
-    if (pattern.test(command)) {
-      risks.push(`${name} (${severity})`);
-    }
+  // Handle empty or invalid input
+  if (!command || command.trim().length === 0) {
+    return {
+      isSafe: false,
+      risks: ["empty_command"],
+      riskLevel: "low",
+      alternative: "Provide a non-empty command",
+    };
   }
 
+  // Truncate command to prevent DoS
+  const truncatedCommand =
+    command.length > SANITIZATION_CONFIG.MAX_COMMAND_LENGTH
+      ? command.slice(0, SANITIZATION_CONFIG.MAX_COMMAND_LENGTH)
+      : command;
+
+  const truncationRisks: readonly string[] =
+    truncatedCommand.length < command.length ? ["command_truncated"] : [];
+
+  const patternRisks = DANGEROUS_SHELL_PATTERNS.filter(({ pattern }) => {
+    // Reset regex state for global patterns
+    pattern.lastIndex = 0;
+    return pattern.test(truncatedCommand);
+  }).map(({ name, severity }) => `${name} (${severity})`);
+
+  const risks = [...truncationRisks, ...patternRisks];
+
   const highRisks = risks.filter((risk) => risk.includes("(high)"));
+  const mediumRisks = risks.filter((risk) => risk.includes("(medium)"));
+
+  // Risk level lookup table - first match wins
+  const getRiskLevel = (): "low" | "medium" | "high" | "critical" => {
+    if (highRisks.length >= COMMAND_RISK_THRESHOLDS.CRITICAL_HIGH_RISK_COUNT) {
+      return "critical";
+    }
+    if (highRisks.length === 1) {
+      return "high";
+    }
+    if (mediumRisks.length > 0) {
+      return "medium";
+    }
+    return "low";
+  };
+
+  const riskLevel = getRiskLevel();
 
   return {
     isSafe: highRisks.length === 0,
     risks,
+    riskLevel,
     alternative:
       highRisks.length > 0 ? "Consider breaking this into separate, simpler commands" : undefined,
   };
@@ -246,38 +341,80 @@ export const validateCommand = (command: string): CommandValidationResult => {
  * @returns True if injection detected
  */
 export const hasCodeInjection = (input: string): boolean => {
+  // Handle empty or invalid input
+  if (!input || input.length === 0) {
+    return false;
+  }
+
+  // Truncate input to prevent DoS
+  const truncatedInput =
+    input.length > SANITIZATION_CONFIG.MAX_INPUT_LENGTH
+      ? input.slice(0, SANITIZATION_CONFIG.MAX_INPUT_LENGTH)
+      : input;
+
+  // Bounded patterns to prevent excessive backtracking on hostile input
   const injectionPatterns = [
-    /\$\{.*\}/, // Template literals
-    /\$\(.*\)/, // Command substitution
-    /`[^`]+`/, // Backtick execution
+    /\$\{.{1,200}\}/, // Template literals (bounded)
+    /\$\(.{1,200}\)/, // Command substitution (bounded)
+    /`[^`]{1,200}`/, // Backtick execution (bounded)
     /;\s*(?:rm|dd|mkfs|chmod|chown|curl|wget)\s/, // Dangerous command chaining
     /\beval\s*\(/, // eval()
     /\bnew\s+Function\s*\(/, // new Function()
     /\bexec\s*\(/, // exec()
   ];
 
-  return injectionPatterns.some((pattern) => pattern.test(input));
+  return injectionPatterns.some((pattern) => pattern.test(truncatedInput));
 };
 
 /**
  * Sanitizes a file path to prevent path traversal.
+ * Uses segment-based detection to catch traversal attempts.
  *
- * @param path - File path to sanitize
+ * @param path - File path to sanitize (relative paths only)
  * @returns Sanitized path or null if unsafe
  */
 export const sanitizeFilePath = (path: string): string | null => {
-  // Remove null bytes
-  const clean = path.replace(/\0/g, "");
-
-  // Check for path traversal
-  if (clean.includes("..") || clean.startsWith("/") || /^[a-zA-Z]:/.test(clean)) {
+  // Handle empty or invalid input
+  if (!path || path.length === 0) {
     return null;
   }
 
-  // Remove potentially dangerous characters
+  // Reject paths that exceed maximum length
+  if (path.length > SANITIZATION_CONFIG.MAX_PATH_LENGTH) {
+    return null;
+  }
+
+  // Remove null bytes
+  const clean = path.replace(/\0/g, "");
+
+  // Reject absolute paths (Unix or Windows)
+  if (clean.startsWith("/") || /^[a-zA-Z]:/.test(clean)) {
+    return null;
+  }
+
+  // Split into segments and check each one for traversal
+  const segments = clean.split(/[/\\]/);
+  const hasTraversal = segments.some((segment) => segment === ".." || segment === ".");
+
+  if (hasTraversal) {
+    return null;
+  }
+
+  // Remove potentially dangerous characters from the path
   const sanitized = clean.replace(/[<>:"|?*]/g, "");
 
-  return sanitized.length > 0 ? sanitized : null;
+  // Reject empty paths or paths that become empty after sanitization
+  if (sanitized.length === 0) {
+    return null;
+  }
+
+  // Re-check segments after sanitization to ensure no empty segments
+  const sanitizedSegments = sanitized.split(/[/\\]/).filter((segment) => segment.length > 0);
+  if (sanitizedSegments.length === 0) {
+    return null;
+  }
+
+  return sanitizedSegments.join("/");
 };
 
 /**
@@ -287,4 +424,17 @@ export const sanitizeFilePath = (path: string): string | null => {
  * @param text - Text containing potential secrets
  * @returns Text with secrets redacted
  */
-export const redactSecrets = (text: string): string => redactSensitiveData(text).text;
+export const redactSecrets = (text: string): string => {
+  // Handle empty or invalid input
+  if (!text || text.length === 0) {
+    return "";
+  }
+
+  // Truncate input to prevent DoS
+  const truncatedText =
+    text.length > SANITIZATION_CONFIG.MAX_INPUT_LENGTH
+      ? text.slice(0, SANITIZATION_CONFIG.MAX_INPUT_LENGTH)
+      : text;
+
+  return redactSensitiveData(truncatedText).text;
+};
