@@ -246,3 +246,56 @@ export {
   type CostSummary,
   type BudgetStatus,
 } from "./costTracking/index.js";
+
+// Risk rules module (Context-Aware Risk Scoring)
+export {
+  // Types
+  type RiskEnvironment,
+  type CustomRiskRule,
+  type RiskAssessmentRecord,
+  type CreateCustomRiskRuleInput,
+  type UpdateCustomRiskRuleInput,
+  type CreateRiskAssessmentInput,
+  type RiskRulesQueryOptions,
+  type RiskAssessmentsQueryOptions,
+  type CustomRiskRuleRow,
+  type RiskAssessmentRow,
+  type RiskRuleValidationRule,
+  type RiskAssessmentValidationRule,
+  type RiskRulesStore,
+  // Constants
+  VALID_ENVIRONMENTS,
+  VALID_BLAST_RADIUS,
+  VALID_REVERSIBILITY,
+  VALID_DATA_IMPACT,
+  VALID_RISK_LEVELS,
+  RISK_RULE_DEFAULTS,
+  // Validation
+  validateCreateRiskRuleInput,
+  validateUpdateRiskRuleInput,
+  validateRiskAssessmentInput,
+  validateRiskRulesQueryOptions,
+  validateAssessmentsQueryOptions,
+  // Mappers
+  mapRowToCustomRiskRule,
+  mapRowToRiskAssessment,
+  extractFirstRule,
+  mapRowsToRules,
+  mapRowsToAssessments,
+  // Helpers
+  sanitizeForLogging,
+  createRuleLogContext,
+  matchesActionType,
+  matchesEnvironment,
+  filterRulesByContext,
+  generateRuleId,
+  generateAssessmentId,
+  // Repository
+  createCustomRiskRule,
+  getCustomRiskRules,
+  getCustomRiskRuleById,
+  updateCustomRiskRule,
+  deleteCustomRiskRule,
+  recordRiskAssessment,
+  queryRiskAssessments,
+} from "./riskRules/index.js";
