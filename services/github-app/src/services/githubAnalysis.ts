@@ -16,6 +16,10 @@ import {
   LLMError,
   getErrorMessage,
   wrapError,
+  // Safety features
+  checkForHallucinations,
+  recordHallucinationDetection,
+  type SafetyRequestContext,
 } from "@kenchi/shared";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
 
@@ -119,8 +123,15 @@ export const createMinimalEvidence = (eventId: string): Evidence => ({
 
 /**
  * Perform OpenAI analysis on an event.
+ * Includes hallucination detection for safety.
  */
 export const performAnalysis = async (event: Event): Promise<AnalysisResult> => {
+  // Build safety context for audit logging early
+  const safetyContext: SafetyRequestContext = {
+    requestId: event.id,
+    tenantId: "github",
+    actor: "system",
+  };
   const evidence = createMinimalEvidence(event.id);
   const openaiClient = getOpenAIClient();
 
@@ -133,10 +144,38 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
     const analysis = await openaiClient.analyzeIncident(event, evidence);
     const confidence = calculateConfidenceScore(analysis, evidence);
 
+    // Check for hallucinations in the analysis using summary and reasoning
+    const textToCheck = [analysis.summary, analysis.reasoning, analysis.identifiedCause]
+      .filter(Boolean)
+      .join(" ");
+    const hallucinationCheck = checkForHallucinations(textToCheck);
+
+    if (hallucinationCheck.isLikelyHallucinated) {
+      logger.warn("Potential hallucination detected in analysis", {
+        eventId: event.id,
+        riskScore: hallucinationCheck.riskScore,
+        indicatorCount: hallucinationCheck.indicators.length,
+      });
+
+      // Record hallucination detection in audit log
+      try {
+        await recordHallucinationDetection(
+          hallucinationCheck.riskScore,
+          hallucinationCheck.indicators.length,
+          safetyContext
+        );
+      } catch (auditError) {
+        logger.error("Failed to record hallucination audit", {
+          error: getErrorMessage(auditError),
+        });
+      }
+    }
+
     logger.info("Analysis completed", {
       eventId: event.id,
       confidence: confidence.finalScore,
       gating: confidence.gatingDecision,
+      hallucinationRisk: hallucinationCheck.riskScore,
     });
 
     return { analysis, confidence, event };
