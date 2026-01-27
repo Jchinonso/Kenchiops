@@ -24,25 +24,10 @@ import {
   evaluateModel,
   compareModels,
 } from "../services/finetuning/index.js";
+import type { ABTestConfigRequestBody, CompareModelsRequestBody } from "../types/apiTypes.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
-
-// ==================== Request Types ====================
-
-/** Request body for configuring A/B test */
-interface ABTestConfigRequestBody {
-  readonly controlVersion: string;
-  readonly treatmentVersion: string;
-  readonly treatmentPercentage: number;
-}
-
-/** Request body for comparing models */
-interface CompareModelsRequestBody {
-  readonly controlVersionId: string;
-  readonly treatmentVersionId: string;
-  readonly tenantId?: string;
-}
 
 // ==================== Validation Rules ====================
 

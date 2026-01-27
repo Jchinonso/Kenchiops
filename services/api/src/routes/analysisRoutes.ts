@@ -17,19 +17,10 @@ import {
   API_ROUTES,
 } from "@kenchi/shared";
 import { performAnalysis } from "../services/analysisService.js";
+import type { AnalyzeRequest } from "../types/apiTypes.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
-
-// ==================== Request Types ====================
-
-/** Shape of analyze request body */
-interface AnalyzeRequestBody {
-  readonly failure_log: string;
-  readonly repository: string;
-  readonly commit?: string;
-  readonly tenant_id?: string;
-}
 
 // ==================== Validation Rules ====================
 
@@ -49,7 +40,7 @@ const validateRequiredString = (fieldValue: unknown): boolean | string => {
  */
 const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const body = req.body as AnalyzeRequestBody;
+  const body = req.body as AnalyzeRequest;
 
   const response = await performAnalysis({
     failure_log: body.failure_log,

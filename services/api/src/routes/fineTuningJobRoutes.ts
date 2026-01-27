@@ -25,19 +25,10 @@ import {
   stopScheduler,
   getSchedulerStatus,
 } from "../services/finetuning/index.js";
+import type { StartJobRequestBody } from "../types/apiTypes.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
-
-// ==================== Request Types ====================
-
-/** Request body for starting a fine-tuning job */
-interface StartJobRequestBody {
-  readonly tenantId?: string;
-  readonly epochs?: number;
-  readonly suffix?: string;
-  readonly dryRun?: boolean;
-}
 
 // ==================== Validation Rules ====================
 

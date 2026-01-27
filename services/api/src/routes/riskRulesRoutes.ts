@@ -22,9 +22,6 @@ import {
   type UpdateCustomRiskRuleInput,
   type RiskRulesQueryOptions,
   type RiskAssessmentsQueryOptions,
-  type BlastRadius,
-  type Reversibility,
-  type DataImpact,
   createCustomRiskRule,
   getCustomRiskRules,
   getCustomRiskRuleById,
@@ -32,52 +29,10 @@ import {
   deleteCustomRiskRule,
   queryRiskAssessments,
 } from "@kenchi/shared";
+import type { CreateRiskRuleRequestBody, UpdateRiskRuleRequestBody } from "../types/apiTypes.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
-
-// ==================== Request Types ====================
-
-/** Request body for creating a risk rule */
-interface CreateRiskRuleRequestBody {
-  readonly tenantId: string;
-  readonly name: string;
-  readonly description?: string;
-  readonly actionTypes: readonly string[];
-  readonly environment?: "production" | "staging" | "development";
-  readonly blastRadius?: BlastRadius;
-  readonly reversibility?: Reversibility;
-  readonly dataImpact?: DataImpact;
-  readonly scoreModifier?: number;
-  readonly productionMultiplier?: number;
-  readonly incidentModeMultiplier?: number;
-  readonly offHoursMultiplier?: number;
-  readonly requireApprovalThreshold?: number;
-  readonly blockThreshold?: number;
-  readonly enabled?: boolean;
-  readonly priority?: number;
-  readonly createdBy?: string;
-}
-
-/** Request body for updating a risk rule */
-interface UpdateRiskRuleRequestBody {
-  readonly tenantId: string;
-  readonly name?: string;
-  readonly description?: string;
-  readonly actionTypes?: readonly string[];
-  readonly environment?: "production" | "staging" | "development";
-  readonly blastRadius?: BlastRadius | null;
-  readonly reversibility?: Reversibility | null;
-  readonly dataImpact?: DataImpact | null;
-  readonly scoreModifier?: number;
-  readonly productionMultiplier?: number;
-  readonly incidentModeMultiplier?: number;
-  readonly offHoursMultiplier?: number;
-  readonly requireApprovalThreshold?: number;
-  readonly blockThreshold?: number;
-  readonly enabled?: boolean;
-  readonly priority?: number;
-}
 
 // ==================== Validation Rules ====================
 

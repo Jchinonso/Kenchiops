@@ -16,20 +16,10 @@ import {
   SERVICE_NAMES,
 } from "@kenchi/shared";
 import { extractDataset, getFineTuningStats } from "../services/finetuning/index.js";
+import type { ExtractDatasetRequestBody } from "../types/apiTypes.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
-
-// ==================== Request Types ====================
-
-/** Request body for dataset extraction */
-interface ExtractDatasetRequestBody {
-  readonly tenantId?: string;
-  readonly startDate?: string;
-  readonly endDate?: string;
-  readonly minFeedbackCount?: number;
-  readonly limit?: number;
-}
 
 // ==================== Validation Rules ====================
 

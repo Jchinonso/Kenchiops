@@ -4,7 +4,17 @@
  * Types specific to the API service
  */
 
-import type { Event, Evidence, LLMAnalysisResult, HealthStatus } from "@kenchi/shared";
+import type {
+  Event,
+  Evidence,
+  LLMAnalysisResult,
+  HealthStatus,
+  BlastRadius,
+  Reversibility,
+  DataImpact,
+} from "@kenchi/shared";
+
+// ==================== Analysis Types ====================
 
 /**
  * Detected test framework hint from log preprocessing.
@@ -63,4 +73,96 @@ export interface HealthResponse {
   readonly timestamp: string;
   readonly uptime: number;
   readonly environment: string;
+}
+
+// ==================== Fine-Tuning Dataset Types ====================
+
+/**
+ * Request body for dataset extraction
+ */
+export interface ExtractDatasetRequestBody {
+  readonly tenantId?: string;
+  readonly startDate?: string;
+  readonly endDate?: string;
+  readonly minFeedbackCount?: number;
+  readonly limit?: number;
+}
+
+// ==================== Fine-Tuning Job Types ====================
+
+/**
+ * Request body for starting a fine-tuning job
+ */
+export interface StartJobRequestBody {
+  readonly tenantId?: string;
+  readonly epochs?: number;
+  readonly suffix?: string;
+  readonly dryRun?: boolean;
+}
+
+// ==================== Fine-Tuning Model Types ====================
+
+/**
+ * Request body for configuring A/B test
+ */
+export interface ABTestConfigRequestBody {
+  readonly controlVersion: string;
+  readonly treatmentVersion: string;
+  readonly treatmentPercentage: number;
+}
+
+/**
+ * Request body for comparing models
+ */
+export interface CompareModelsRequestBody {
+  readonly controlVersionId: string;
+  readonly treatmentVersionId: string;
+  readonly tenantId?: string;
+}
+
+// ==================== Risk Rules Types ====================
+
+/**
+ * Request body for creating a risk rule
+ */
+export interface CreateRiskRuleRequestBody {
+  readonly tenantId: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly actionTypes: readonly string[];
+  readonly environment?: "production" | "staging" | "development";
+  readonly blastRadius?: BlastRadius;
+  readonly reversibility?: Reversibility;
+  readonly dataImpact?: DataImpact;
+  readonly scoreModifier?: number;
+  readonly productionMultiplier?: number;
+  readonly incidentModeMultiplier?: number;
+  readonly offHoursMultiplier?: number;
+  readonly requireApprovalThreshold?: number;
+  readonly blockThreshold?: number;
+  readonly enabled?: boolean;
+  readonly priority?: number;
+  readonly createdBy?: string;
+}
+
+/**
+ * Request body for updating a risk rule
+ */
+export interface UpdateRiskRuleRequestBody {
+  readonly tenantId: string;
+  readonly name?: string;
+  readonly description?: string;
+  readonly actionTypes?: readonly string[];
+  readonly environment?: "production" | "staging" | "development";
+  readonly blastRadius?: BlastRadius | null;
+  readonly reversibility?: Reversibility | null;
+  readonly dataImpact?: DataImpact | null;
+  readonly scoreModifier?: number;
+  readonly productionMultiplier?: number;
+  readonly incidentModeMultiplier?: number;
+  readonly offHoursMultiplier?: number;
+  readonly requireApprovalThreshold?: number;
+  readonly blockThreshold?: number;
+  readonly enabled?: boolean;
+  readonly priority?: number;
 }
