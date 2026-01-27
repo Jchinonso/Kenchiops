@@ -7,7 +7,7 @@
  * @module routes/riskRulesRoutes
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   validate,
@@ -17,10 +17,14 @@ import {
   SERVICE_NAMES,
   ValidationError,
   NotFoundError,
+  API_PAGINATION_DEFAULTS,
   type CreateCustomRiskRuleInput,
   type UpdateCustomRiskRuleInput,
   type RiskRulesQueryOptions,
   type RiskAssessmentsQueryOptions,
+  type BlastRadius,
+  type Reversibility,
+  type DataImpact,
   createCustomRiskRule,
   getCustomRiskRules,
   getCustomRiskRuleById,
@@ -32,7 +36,70 @@ import {
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
 
-// ==================== Validation Helpers ====================
+// ==================== Request Types ====================
+
+/** Request body for creating a risk rule */
+interface CreateRiskRuleRequestBody {
+  readonly tenantId: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly actionTypes: readonly string[];
+  readonly environment?: "production" | "staging" | "development";
+  readonly blastRadius?: BlastRadius;
+  readonly reversibility?: Reversibility;
+  readonly dataImpact?: DataImpact;
+  readonly scoreModifier?: number;
+  readonly productionMultiplier?: number;
+  readonly incidentModeMultiplier?: number;
+  readonly offHoursMultiplier?: number;
+  readonly requireApprovalThreshold?: number;
+  readonly blockThreshold?: number;
+  readonly enabled?: boolean;
+  readonly priority?: number;
+  readonly createdBy?: string;
+}
+
+/** Request body for updating a risk rule */
+interface UpdateRiskRuleRequestBody {
+  readonly tenantId: string;
+  readonly name?: string;
+  readonly description?: string;
+  readonly actionTypes?: readonly string[];
+  readonly environment?: "production" | "staging" | "development";
+  readonly blastRadius?: BlastRadius | null;
+  readonly reversibility?: Reversibility | null;
+  readonly dataImpact?: DataImpact | null;
+  readonly scoreModifier?: number;
+  readonly productionMultiplier?: number;
+  readonly incidentModeMultiplier?: number;
+  readonly offHoursMultiplier?: number;
+  readonly requireApprovalThreshold?: number;
+  readonly blockThreshold?: number;
+  readonly enabled?: boolean;
+  readonly priority?: number;
+}
+
+// ==================== Validation Rules ====================
+
+/** Validation rule: required string */
+const validateRequiredString = (fieldValue: unknown): boolean | string => {
+  const requiredResult = validators.required(fieldValue);
+  if (requiredResult !== true) {
+    return requiredResult;
+  }
+  return validators.string(fieldValue);
+};
+
+/** Validation rule: required array */
+const validateRequiredArray = (fieldValue: unknown): boolean | string => {
+  const requiredResult = validators.required(fieldValue);
+  if (requiredResult !== true) {
+    return requiredResult;
+  }
+  return Array.isArray(fieldValue) || "Must be an array";
+};
+
+// ==================== Utility Functions ====================
 
 /**
  * Extracts tenant ID from request.
@@ -90,248 +157,253 @@ const parseOptionalDate = (value: unknown): Date | undefined => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
-// ==================== Rule Routes ====================
+// ==================== Route Handlers ====================
 
 /**
- * GET /api/risk-rules
- *
- * Lists custom risk rules for a tenant with optional filtering.
+ * Handles listing custom risk rules for a tenant.
  */
-router.get(
-  "/api/risk-rules",
-  asyncHandler(async (req, res) => {
-    const tenantId = extractTenantId(req);
+const handleListRiskRules = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const tenantId = extractTenantId(req);
 
-    const options: RiskRulesQueryOptions = {
-      tenantId,
-      actionType: req.query.actionType as string | undefined,
-      environment: req.query.environment as "production" | "staging" | "development" | undefined,
-      enabledOnly: parseOptionalBoolean(req.query.enabledOnly) ?? true,
-      limit: parseOptionalInt(req.query.limit, 100),
-      offset: parseOptionalInt(req.query.offset, 0),
-    };
+  const options: RiskRulesQueryOptions = {
+    tenantId,
+    actionType: req.query.actionType as string | undefined,
+    environment: req.query.environment as "production" | "staging" | "development" | undefined,
+    enabledOnly: parseOptionalBoolean(req.query.enabledOnly) ?? true,
+    limit: parseOptionalInt(req.query.limit, API_PAGINATION_DEFAULTS.DEFAULT_LIMIT),
+    offset: parseOptionalInt(req.query.offset, API_PAGINATION_DEFAULTS.DEFAULT_OFFSET),
+  };
 
-    logger.info("Listing risk rules", {
-      tenantId,
-      actionType: options.actionType,
-      environment: options.environment,
+  const rules = await getCustomRiskRules(options);
+
+  logger.info("Risk rules listed", {
+    tenantId,
+    actionType: options.actionType,
+    environment: options.environment,
+    count: rules.length,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    rules,
+    count: rules.length,
+    tenantId,
+  });
+};
+
+/**
+ * Handles getting a specific risk rule by ID.
+ */
+const handleGetRiskRuleById = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const tenantId = extractTenantId(req);
+  const { ruleId } = req.params;
+
+  if (!ruleId || typeof ruleId !== "string") {
+    throw new ValidationError("Rule ID is required", {
+      operation: "getRuleById",
+      metadata: { field: "ruleId" },
     });
+  }
 
-    const rules = await getCustomRiskRules(options);
+  const rule = await getCustomRiskRuleById(ruleId, tenantId);
 
-    res.status(HTTP_STATUS.OK).json({
-      rules,
-      count: rules.length,
-      tenantId,
+  if (!rule) {
+    throw new NotFoundError("Risk rule not found", {
+      metadata: { ruleId, tenantId },
     });
-  })
-);
+  }
+
+  logger.info("Risk rule retrieved", {
+    ruleId,
+    tenantId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({ rule });
+};
 
 /**
- * GET /api/risk-rules/:ruleId
- *
- * Gets a specific risk rule by ID.
+ * Handles creating a new custom risk rule.
  */
-router.get(
-  "/api/risk-rules/:ruleId",
-  asyncHandler(async (req, res) => {
-    const tenantId = extractTenantId(req);
-    const { ruleId } = req.params;
+const handleCreateRiskRule = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const body = req.body as CreateRiskRuleRequestBody;
 
-    if (!ruleId || typeof ruleId !== "string") {
-      throw new ValidationError("Rule ID is required", {
-        operation: "getRuleById",
-        metadata: { field: "ruleId" },
-      });
-    }
+  const input: CreateCustomRiskRuleInput = {
+    tenantId: body.tenantId,
+    name: body.name,
+    description: body.description,
+    actionTypes: body.actionTypes,
+    environment: body.environment,
+    blastRadius: body.blastRadius,
+    reversibility: body.reversibility,
+    dataImpact: body.dataImpact,
+    scoreModifier: body.scoreModifier,
+    productionMultiplier: body.productionMultiplier,
+    incidentModeMultiplier: body.incidentModeMultiplier,
+    offHoursMultiplier: body.offHoursMultiplier,
+    requireApprovalThreshold: body.requireApprovalThreshold,
+    blockThreshold: body.blockThreshold,
+    enabled: body.enabled,
+    priority: body.priority,
+    createdBy: body.createdBy,
+  };
 
-    logger.info("Getting risk rule", { ruleId, tenantId });
+  const rule = await createCustomRiskRule(input);
 
-    const rule = await getCustomRiskRuleById(ruleId, tenantId);
+  logger.info("Risk rule created", {
+    ruleId: rule.id,
+    tenantId: rule.tenantId,
+    name: rule.name,
+    actionTypesCount: input.actionTypes.length,
+    durationMs: Date.now() - startTime,
+  });
 
-    if (!rule) {
-      throw new NotFoundError("Risk rule not found", {
-        metadata: { ruleId, tenantId },
-      });
-    }
-
-    res.status(HTTP_STATUS.OK).json({ rule });
-  })
-);
+  res.status(HTTP_STATUS.CREATED).json({ rule });
+};
 
 /**
- * POST /api/risk-rules
- *
- * Creates a new custom risk rule.
+ * Handles updating an existing risk rule.
  */
+const handleUpdateRiskRule = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const tenantId = extractTenantId(req);
+  const { ruleId } = req.params;
+  const body = req.body as UpdateRiskRuleRequestBody;
+
+  if (!ruleId || typeof ruleId !== "string") {
+    throw new ValidationError("Rule ID is required", {
+      operation: "updateRule",
+      metadata: { field: "ruleId" },
+    });
+  }
+
+  const input: UpdateCustomRiskRuleInput = {
+    name: body.name,
+    description: body.description,
+    actionTypes: body.actionTypes,
+    environment: body.environment,
+    blastRadius: body.blastRadius,
+    reversibility: body.reversibility,
+    dataImpact: body.dataImpact,
+    scoreModifier: body.scoreModifier,
+    productionMultiplier: body.productionMultiplier,
+    incidentModeMultiplier: body.incidentModeMultiplier,
+    offHoursMultiplier: body.offHoursMultiplier,
+    requireApprovalThreshold: body.requireApprovalThreshold,
+    blockThreshold: body.blockThreshold,
+    enabled: body.enabled,
+    priority: body.priority,
+  };
+
+  const rule = await updateCustomRiskRule(ruleId, tenantId, input);
+
+  logger.info("Risk rule updated", {
+    ruleId: rule.id,
+    tenantId: rule.tenantId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({ rule });
+};
+
+/**
+ * Handles deleting a risk rule.
+ */
+const handleDeleteRiskRule = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const tenantId = extractTenantId(req);
+  const { ruleId } = req.params;
+
+  if (!ruleId || typeof ruleId !== "string") {
+    throw new ValidationError("Rule ID is required", {
+      operation: "deleteRule",
+      metadata: { field: "ruleId" },
+    });
+  }
+
+  const deleted = await deleteCustomRiskRule(ruleId, tenantId);
+
+  if (!deleted) {
+    throw new NotFoundError("Risk rule not found", {
+      metadata: { ruleId, tenantId },
+    });
+  }
+
+  logger.info("Risk rule deleted", {
+    ruleId,
+    tenantId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.NO_CONTENT).send();
+};
+
+/**
+ * Handles querying risk assessment audit trail.
+ */
+const handleQueryRiskAssessments = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const tenantId = extractTenantId(req);
+
+  const options: RiskAssessmentsQueryOptions = {
+    tenantId,
+    actionProposalId: req.query.actionProposalId as string | undefined,
+    actionType: req.query.actionType as string | undefined,
+    fromDate: parseOptionalDate(req.query.fromDate),
+    toDate: parseOptionalDate(req.query.toDate),
+    limit: parseOptionalInt(req.query.limit, API_PAGINATION_DEFAULTS.DEFAULT_LIMIT),
+    offset: parseOptionalInt(req.query.offset, API_PAGINATION_DEFAULTS.DEFAULT_OFFSET),
+  };
+
+  const assessments = await queryRiskAssessments(options);
+
+  logger.info("Risk assessments queried", {
+    tenantId,
+    actionType: options.actionType,
+    fromDate: options.fromDate,
+    toDate: options.toDate,
+    count: assessments.length,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    assessments,
+    count: assessments.length,
+    tenantId,
+  });
+};
+
+// ==================== Route Definitions ====================
+
+/** GET /api/risk-rules - List custom risk rules for a tenant */
+router.get("/api/risk-rules", asyncHandler(handleListRiskRules));
+
+/** GET /api/risk-rules/:ruleId - Get a specific risk rule by ID */
+router.get("/api/risk-rules/:ruleId", asyncHandler(handleGetRiskRuleById));
+
+/** POST /api/risk-rules - Create a new custom risk rule */
 router.post(
   "/api/risk-rules",
   validate({
     body: {
-      tenantId: (value) => validators.required(value) && validators.string(value),
-      name: (value) => validators.required(value) && validators.string(value),
-      actionTypes: (value) => validators.required(value) && Array.isArray(value),
+      tenantId: validateRequiredString,
+      name: validateRequiredString,
+      actionTypes: validateRequiredArray,
     },
   }),
-  asyncHandler(async (req, res) => {
-    const input: CreateCustomRiskRuleInput = {
-      tenantId: req.body.tenantId,
-      name: req.body.name,
-      description: req.body.description,
-      actionTypes: req.body.actionTypes,
-      environment: req.body.environment,
-      blastRadius: req.body.blastRadius,
-      reversibility: req.body.reversibility,
-      dataImpact: req.body.dataImpact,
-      scoreModifier: req.body.scoreModifier,
-      productionMultiplier: req.body.productionMultiplier,
-      incidentModeMultiplier: req.body.incidentModeMultiplier,
-      offHoursMultiplier: req.body.offHoursMultiplier,
-      requireApprovalThreshold: req.body.requireApprovalThreshold,
-      blockThreshold: req.body.blockThreshold,
-      enabled: req.body.enabled,
-      priority: req.body.priority,
-      createdBy: req.body.createdBy,
-    };
-
-    logger.info("Creating risk rule", {
-      tenantId: input.tenantId,
-      name: input.name,
-      actionTypesCount: input.actionTypes.length,
-    });
-
-    const rule = await createCustomRiskRule(input);
-
-    logger.info("Created risk rule", {
-      ruleId: rule.id,
-      tenantId: rule.tenantId,
-      name: rule.name,
-    });
-
-    res.status(HTTP_STATUS.CREATED).json({ rule });
-  })
+  asyncHandler(handleCreateRiskRule)
 );
 
-/**
- * PATCH /api/risk-rules/:ruleId
- *
- * Updates an existing risk rule.
- */
-router.patch(
-  "/api/risk-rules/:ruleId",
-  asyncHandler(async (req, res) => {
-    const tenantId = extractTenantId(req);
-    const { ruleId } = req.params;
+/** PATCH /api/risk-rules/:ruleId - Update an existing risk rule */
+router.patch("/api/risk-rules/:ruleId", asyncHandler(handleUpdateRiskRule));
 
-    if (!ruleId || typeof ruleId !== "string") {
-      throw new ValidationError("Rule ID is required", {
-        operation: "updateRule",
-        metadata: { field: "ruleId" },
-      });
-    }
+/** DELETE /api/risk-rules/:ruleId - Delete a risk rule */
+router.delete("/api/risk-rules/:ruleId", asyncHandler(handleDeleteRiskRule));
 
-    const input: UpdateCustomRiskRuleInput = {
-      name: req.body.name,
-      description: req.body.description,
-      actionTypes: req.body.actionTypes,
-      environment: req.body.environment,
-      blastRadius: req.body.blastRadius,
-      reversibility: req.body.reversibility,
-      dataImpact: req.body.dataImpact,
-      scoreModifier: req.body.scoreModifier,
-      productionMultiplier: req.body.productionMultiplier,
-      incidentModeMultiplier: req.body.incidentModeMultiplier,
-      offHoursMultiplier: req.body.offHoursMultiplier,
-      requireApprovalThreshold: req.body.requireApprovalThreshold,
-      blockThreshold: req.body.blockThreshold,
-      enabled: req.body.enabled,
-      priority: req.body.priority,
-    };
-
-    logger.info("Updating risk rule", { ruleId, tenantId });
-
-    const rule = await updateCustomRiskRule(ruleId, tenantId, input);
-
-    logger.info("Updated risk rule", {
-      ruleId: rule.id,
-      tenantId: rule.tenantId,
-    });
-
-    res.status(HTTP_STATUS.OK).json({ rule });
-  })
-);
-
-/**
- * DELETE /api/risk-rules/:ruleId
- *
- * Deletes a risk rule.
- */
-router.delete(
-  "/api/risk-rules/:ruleId",
-  asyncHandler(async (req, res) => {
-    const tenantId = extractTenantId(req);
-    const { ruleId } = req.params;
-
-    if (!ruleId || typeof ruleId !== "string") {
-      throw new ValidationError("Rule ID is required", {
-        operation: "deleteRule",
-        metadata: { field: "ruleId" },
-      });
-    }
-
-    logger.info("Deleting risk rule", { ruleId, tenantId });
-
-    const deleted = await deleteCustomRiskRule(ruleId, tenantId);
-
-    if (!deleted) {
-      throw new NotFoundError("Risk rule not found", {
-        metadata: { ruleId, tenantId },
-      });
-    }
-
-    logger.info("Deleted risk rule", { ruleId, tenantId });
-
-    res.status(HTTP_STATUS.NO_CONTENT).send();
-  })
-);
-
-// ==================== Assessment Routes ====================
-
-/**
- * GET /api/risk-assessments
- *
- * Queries risk assessment audit trail.
- */
-router.get(
-  "/api/risk-assessments",
-  asyncHandler(async (req, res) => {
-    const tenantId = extractTenantId(req);
-
-    const options: RiskAssessmentsQueryOptions = {
-      tenantId,
-      actionProposalId: req.query.actionProposalId as string | undefined,
-      actionType: req.query.actionType as string | undefined,
-      fromDate: parseOptionalDate(req.query.fromDate),
-      toDate: parseOptionalDate(req.query.toDate),
-      limit: parseOptionalInt(req.query.limit, 100),
-      offset: parseOptionalInt(req.query.offset, 0),
-    };
-
-    logger.info("Querying risk assessments", {
-      tenantId,
-      actionType: options.actionType,
-      fromDate: options.fromDate,
-      toDate: options.toDate,
-    });
-
-    const assessments = await queryRiskAssessments(options);
-
-    res.status(HTTP_STATUS.OK).json({
-      assessments,
-      count: assessments.length,
-      tenantId,
-    });
-  })
-);
+/** GET /api/risk-assessments - Query risk assessment audit trail */
+router.get("/api/risk-assessments", asyncHandler(handleQueryRiskAssessments));
 
 export { router as riskRulesRoutes };

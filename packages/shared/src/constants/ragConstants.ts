@@ -246,6 +246,13 @@ export const RAG_EVALUATION_CONFIG = {
 } as const;
 
 /**
+ * RAG API query defaults.
+ */
+export const RAG_QUERY_DEFAULTS = {
+  STALE_DOCS_LIMIT: 100,
+} as const;
+
+/**
  * RAG test case configuration.
  */
 export const RAG_TEST_CASE_CONFIG = {
@@ -298,7 +305,13 @@ export const COST_CONTROL_CONFIG = {
   DEFAULT_COST_RETENTION_DAYS: 90,
   DEFAULT_TOP_CONSUMERS_LIMIT: 10,
   MS_PER_SECOND: 1000,
+  DAYS_IN_MONTH: 30,
 } as const;
+
+/**
+ * Valid embedding tier names as a Set for O(1) validation.
+ */
+export const VALID_EMBEDDING_TIERS: ReadonlySet<string> = new Set(["LIGHT", "STANDARD", "PREMIUM"]);
 
 /**
  * RAG metric types for tracking.

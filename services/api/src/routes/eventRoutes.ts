@@ -1,10 +1,12 @@
 /**
  * Event Routes
  *
- * Handles event ingestion and processing
+ * Handles event ingestion and processing.
+ *
+ * @module routes/eventRoutes
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   createLogger,
@@ -21,39 +23,51 @@ import {
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
 
+// ==================== Validation Rules ====================
+
+/** Validation rule: required string */
+const validateRequiredString = (fieldValue: unknown): boolean | string => {
+  const requiredResult = validators.required(fieldValue);
+  if (requiredResult !== true) {
+    return requiredResult;
+  }
+  return validators.string(fieldValue);
+};
+
+// ==================== Route Handlers ====================
+
 /**
- * Event ingestion endpoint
- * POST /events
- *
- * TODO: Store events in database or queue
- * TODO: Trigger analysis workflows
+ * Handles event ingestion requests.
  */
+const handleEventIngestion = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const event = req.body as WebhookEvent;
+
+  logger.info("Event ingested", {
+    source: event.source,
+    type: event.type,
+    timestamp: event.timestamp,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    status: API_RESPONSE_STATUS.ACCEPTED,
+    message: API_MESSAGES.EVENT_PROCESSING_PENDING,
+  });
+};
+
+// ==================== Route Definitions ====================
+
+/** POST /events - Event ingestion endpoint */
 router.post(
   API_ROUTES.EVENTS,
   validate({
     body: {
-      source: (value) => validators.required(value) && validators.string(value),
-      type: (value) => validators.required(value) && validators.string(value),
+      source: validateRequiredString,
+      type: validateRequiredString,
     },
   }),
-  asyncHandler(async (req, res) => {
-    const event = req.body as WebhookEvent;
-
-    logger.info("Event received", {
-      source: event.source,
-      type: event.type,
-      timestamp: event.timestamp,
-    });
-
-    // TODO: Validate event schema
-    // TODO: Store in database/vector store
-    // TODO: Trigger appropriate analysis workflow
-
-    res.status(HTTP_STATUS.OK).json({
-      status: API_RESPONSE_STATUS.ACCEPTED,
-      message: API_MESSAGES.EVENT_PROCESSING_PENDING,
-    });
-  })
+  asyncHandler(handleEventIngestion)
 );
 
 export { router as eventRoutes };

@@ -137,6 +137,8 @@ export const FINE_TUNING_CONFIG = {
   MAX_POLL_ATTEMPTS: 120,
   TIMESTAMP_MULTIPLIER: 1000,
   DEFAULT_JOB_LIST_LIMIT: 10,
+  /** Default limit for job listing in API routes */
+  API_DEFAULT_JOBS_LIMIT: 20,
 } as const;
 
 /**

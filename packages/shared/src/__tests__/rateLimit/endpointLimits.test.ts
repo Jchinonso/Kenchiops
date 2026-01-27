@@ -16,9 +16,15 @@ describe("EndpointLimiter", () => {
   describe("resolve", () => {
     const limiter = createEndpointLimiter({
       endpoints: [
-        { pattern: "/api/auth/login", methods: ["POST"], max: 5, windowMs: 60000 },
-        { pattern: /^\/api\/users\/\d+$/, max: 100, windowMs: 60000 },
-        { pattern: "/health", max: 1000, windowMs: 1000, skipAuth: true },
+        {
+          id: "auth-login",
+          pattern: "/api/auth/login",
+          methods: ["POST"],
+          max: 5,
+          windowMs: 60000,
+        },
+        { id: "users", pattern: /^\/api\/users\/\d+$/, max: 100, windowMs: 60000 },
+        { id: "health", pattern: "/health", max: 1000, windowMs: 1000, allowAnonymous: true },
       ],
       defaultLimit: { max: 50, windowMs: 60000 },
     });
@@ -27,7 +33,7 @@ describe("EndpointLimiter", () => {
       const result = limiter.resolve(createMockRequest("/api/auth/login", "POST"));
 
       expect(result.matched).toBe(true);
-      expect(result.endpoint).toBe("/api/auth/login");
+      expect(result.endpoint).toBe("auth-login");
       expect(result.limit).toEqual({ max: 5, windowMs: 60000 });
     });
 
@@ -53,11 +59,11 @@ describe("EndpointLimiter", () => {
       expect(result.limit).toEqual({ max: 50, windowMs: 60000 });
     });
 
-    it("should return skipAuth flag", () => {
+    it("should return allowAnonymous flag", () => {
       const result = limiter.resolve(createMockRequest("/health"));
 
       expect(result.matched).toBe(true);
-      expect(result.skipAuth).toBe(true);
+      expect(result.allowAnonymous).toBe(true);
     });
 
     it("should match path prefix", () => {
@@ -65,15 +71,21 @@ describe("EndpointLimiter", () => {
       const result = limiter.resolve(createMockRequest("/api/auth/login/subpath", "POST"));
 
       expect(result.matched).toBe(true);
-      expect(result.endpoint).toBe("/api/auth/login");
+      expect(result.endpoint).toBe("auth-login");
     });
   });
 
   describe("method matching", () => {
     const limiter = createEndpointLimiter({
       endpoints: [
-        { pattern: "/resource", methods: ["GET", "POST"], max: 100, windowMs: 60000 },
-        { pattern: "/open", max: 200, windowMs: 60000 }, // No methods = all methods
+        {
+          id: "resource",
+          pattern: "/resource",
+          methods: ["GET", "POST"],
+          max: 100,
+          windowMs: 60000,
+        },
+        { id: "open", pattern: "/open", max: 200, windowMs: 60000 }, // No methods = all methods
       ],
       defaultLimit: { max: 50, windowMs: 60000 },
     });
@@ -98,7 +110,7 @@ describe("EndpointLimiter", () => {
 
   describe("getLimitForPath", () => {
     const limiter = createEndpointLimiter({
-      endpoints: [{ pattern: "/api/test", max: 10, windowMs: 1000 }],
+      endpoints: [{ id: "api-test", pattern: "/api/test", max: 10, windowMs: 1000 }],
       defaultLimit: { max: 100, windowMs: 60000 },
     });
 
@@ -114,7 +126,9 @@ describe("EndpointLimiter", () => {
 
     it("should accept method parameter", () => {
       const limiter2 = createEndpointLimiter({
-        endpoints: [{ pattern: "/resource", methods: ["POST"], max: 5, windowMs: 1000 }],
+        endpoints: [
+          { id: "resource", pattern: "/resource", methods: ["POST"], max: 5, windowMs: 1000 },
+        ],
         defaultLimit: { max: 100, windowMs: 60000 },
       });
 
@@ -125,13 +139,13 @@ describe("EndpointLimiter", () => {
 
   describe("generateKey", () => {
     const limiter = createEndpointLimiter({
-      endpoints: [{ pattern: "/api/special", max: 10, windowMs: 1000 }],
+      endpoints: [{ id: "api-special", pattern: "/api/special", max: 10, windowMs: 1000 }],
       defaultLimit: { max: 100, windowMs: 60000 },
     });
 
     it("should include endpoint in key for matched paths", () => {
       const key = limiter.generateKey(createMockRequest("/api/special"), "user:123");
-      expect(key).toBe("endpoint:/api/special|user:123");
+      expect(key).toBe("endpoint:api-special|user:123");
     });
 
     it("should return base key for unmatched paths", () => {
@@ -155,18 +169,18 @@ describe("EndpointLimiter", () => {
       expect(loginEndpoint?.methods).toContain("POST");
     });
 
-    it("should include health endpoint with skipAuth", () => {
+    it("should include health endpoint with allowAnonymous", () => {
       const healthEndpoint = COMMON_ENDPOINT_LIMITS.find((e) => e.pattern === "/health");
       expect(healthEndpoint).toBeDefined();
-      expect(healthEndpoint?.skipAuth).toBe(true);
+      expect(healthEndpoint?.allowAnonymous).toBe(true);
     });
 
-    it("should include webhook endpoint with skipAuth", () => {
+    it("should include webhook endpoint with allowAnonymous", () => {
       const webhookEndpoint = COMMON_ENDPOINT_LIMITS.find(
         (e) => e.pattern instanceof RegExp && e.pattern.source.includes("webhook")
       );
       expect(webhookEndpoint).toBeDefined();
-      expect(webhookEndpoint?.skipAuth).toBe(true);
+      expect(webhookEndpoint?.allowAnonymous).toBe(true);
     });
   });
 
@@ -176,12 +190,12 @@ describe("EndpointLimiter", () => {
 
       const healthResult = limiter.resolve(createMockRequest("/health"));
       expect(healthResult.matched).toBe(true);
-      expect(healthResult.skipAuth).toBe(true);
+      expect(healthResult.allowAnonymous).toBe(true);
     });
 
     it("should prepend custom endpoints", () => {
       const limiter = createEndpointLimiterWithDefaults([
-        { pattern: "/custom", max: 1, windowMs: 1000 },
+        { id: "custom", pattern: "/custom", max: 1, windowMs: 1000 },
       ]);
 
       const customResult = limiter.resolve(createMockRequest("/custom"));
@@ -201,8 +215,8 @@ describe("EndpointLimiter", () => {
     it("should match first matching endpoint", () => {
       const limiter = createEndpointLimiter({
         endpoints: [
-          { pattern: "/api", max: 10, windowMs: 1000 },
-          { pattern: "/api/specific", max: 5, windowMs: 1000 },
+          { id: "api", pattern: "/api", max: 10, windowMs: 1000 },
+          { id: "api-specific", pattern: "/api/specific", max: 5, windowMs: 1000 },
         ],
         defaultLimit: { max: 100, windowMs: 60000 },
       });
@@ -215,8 +229,8 @@ describe("EndpointLimiter", () => {
     it("should allow more specific patterns first", () => {
       const limiter = createEndpointLimiter({
         endpoints: [
-          { pattern: "/api/specific", max: 5, windowMs: 1000 },
-          { pattern: "/api", max: 10, windowMs: 1000 },
+          { id: "api-specific", pattern: "/api/specific", max: 5, windowMs: 1000 },
+          { id: "api", pattern: "/api", max: 10, windowMs: 1000 },
         ],
         defaultLimit: { max: 100, windowMs: 60000 },
       });

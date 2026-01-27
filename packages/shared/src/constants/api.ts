@@ -188,3 +188,13 @@ export const API_REQUEST_FIELDS = {
  * @returns True if the path should skip rate limiting
  */
 export const shouldSkipRateLimit = (path: string): boolean => RATE_LIMIT_SKIP_PATHS.has(path);
+
+/**
+ * Default pagination values for API routes.
+ */
+export const API_PAGINATION_DEFAULTS = {
+  /** Default limit for list queries */
+  DEFAULT_LIMIT: 100,
+  /** Default offset for list queries */
+  DEFAULT_OFFSET: 0,
+} as const;

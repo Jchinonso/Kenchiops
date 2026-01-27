@@ -2,9 +2,11 @@
  * Fine-Tuning Model Routes
  *
  * API endpoints for managing model versions, evaluation, and A/B testing.
+ *
+ * @module routes/fineTuningModelRoutes
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   validate,
@@ -26,196 +28,282 @@ import {
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
 
-// ==================== Model Version Endpoints ====================
+// ==================== Request Types ====================
+
+/** Request body for configuring A/B test */
+interface ABTestConfigRequestBody {
+  readonly controlVersion: string;
+  readonly treatmentVersion: string;
+  readonly treatmentPercentage: number;
+}
+
+/** Request body for comparing models */
+interface CompareModelsRequestBody {
+  readonly controlVersionId: string;
+  readonly treatmentVersionId: string;
+  readonly tenantId?: string;
+}
+
+// ==================== Validation Rules ====================
+
+/** Validation rule: required string */
+const validateRequiredString = (fieldValue: unknown): boolean | string => {
+  const requiredResult = validators.required(fieldValue);
+  if (requiredResult !== true) {
+    return requiredResult;
+  }
+  return validators.string(fieldValue);
+};
+
+/** Validation rule: required number */
+const validateRequiredNumber = (fieldValue: unknown): boolean | string => {
+  const requiredResult = validators.required(fieldValue);
+  if (requiredResult !== true) {
+    return requiredResult;
+  }
+  return validators.number(fieldValue);
+};
+
+/** Validation rule: optional string */
+const validateOptionalString = (fieldValue: unknown): boolean | string =>
+  fieldValue === undefined || validators.string(fieldValue);
+
+// ==================== Route Handlers ====================
 
 /**
- * Get all model versions
- * GET /api/fine-tuning/models
+ * Handles getting all model versions.
  */
-router.get(
-  "/api/fine-tuning/models",
-  asyncHandler(async (req, res) => {
-    logger.info("Getting model versions");
+const handleGetModelVersions = async (_req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
 
-    const versions = await getModelVersions();
+  const versions = await getModelVersions();
 
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: versions,
+  logger.info("Model versions retrieved", {
+    count: versions.length,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: versions,
+  });
+};
+
+/**
+ * Handles getting active model for a tenant.
+ */
+const handleGetActiveModel = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const tenantId = req.query.tenantId as string | undefined;
+
+  const result = await getActiveModel(tenantId);
+
+  logger.info("Active model retrieved", {
+    tenantId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: result,
+  });
+};
+
+/**
+ * Handles activating a model version.
+ */
+const handleActivateModel = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { versionId } = req.params;
+
+  const success = await activateModel(versionId);
+
+  if (!success) {
+    logger.info("Model activation failed", {
+      versionId,
+      durationMs: Date.now() - startTime,
     });
-  })
-);
 
-/**
- * Get active model for tenant
- * GET /api/fine-tuning/models/active
- */
-router.get(
-  "/api/fine-tuning/models/active",
-  asyncHandler(async (req, res) => {
-    const tenantId = req.query.tenantId as string | undefined;
-
-    logger.info("Getting active model", { tenantId });
-
-    const result = await getActiveModel(tenantId);
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: result,
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "Failed to activate model",
     });
-  })
-);
+    return;
+  }
+
+  logger.info("Model activated", {
+    versionId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "Model activated",
+  });
+};
 
 /**
- * Activate a model version
- * POST /api/fine-tuning/models/:versionId/activate
+ * Handles rolling back to baseline model.
  */
-router.post(
-  "/api/fine-tuning/models/:versionId/activate",
-  asyncHandler(async (req, res) => {
-    const { versionId } = req.params;
+const handleRollbackToBaseline = async (_req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
 
-    logger.info("Activating model version", { versionId });
+  const success = await rollbackToBaseline();
 
-    const success = await activateModel(versionId);
-
-    if (!success) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "Failed to activate model",
-      });
-      return;
-    }
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      message: "Model activated",
+  if (!success) {
+    logger.info("Rollback to baseline failed", {
+      durationMs: Date.now() - startTime,
     });
-  })
-);
 
-/**
- * Rollback to baseline model
- * POST /api/fine-tuning/models/rollback
- */
-router.post(
-  "/api/fine-tuning/models/rollback",
-  asyncHandler(async (req, res) => {
-    logger.info("Rolling back to baseline model");
-
-    const success = await rollbackToBaseline();
-
-    if (!success) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "Failed to rollback",
-      });
-      return;
-    }
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      message: "Rolled back to baseline model",
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "Failed to rollback",
     });
-  })
-);
+    return;
+  }
+
+  logger.info("Rolled back to baseline model", {
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "Rolled back to baseline model",
+  });
+};
 
 /**
- * Configure A/B test
- * POST /api/fine-tuning/models/ab-test
+ * Handles configuring an A/B test.
  */
+const handleConfigureABTest = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const body = req.body as ABTestConfigRequestBody;
+
+  const success = await configureABTest({
+    controlVersion: body.controlVersion,
+    treatmentVersion: body.treatmentVersion,
+    treatmentPercentage: body.treatmentPercentage,
+  });
+
+  if (!success) {
+    logger.info("A/B test configuration failed", {
+      controlVersion: body.controlVersion,
+      treatmentVersion: body.treatmentVersion,
+      durationMs: Date.now() - startTime,
+    });
+
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "Failed to configure A/B test",
+    });
+    return;
+  }
+
+  logger.info("A/B test configured", {
+    controlVersion: body.controlVersion,
+    treatmentVersion: body.treatmentVersion,
+    treatmentPercentage: body.treatmentPercentage,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "A/B test configured",
+  });
+};
+
+/**
+ * Handles evaluating a model version.
+ */
+const handleEvaluateModel = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { versionId } = req.params;
+  const tenantId = req.query.tenantId as string | undefined;
+
+  const metrics = await evaluateModel({
+    modelVersionId: versionId,
+    tenantId,
+  });
+
+  logger.info("Model evaluated", {
+    versionId,
+    tenantId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: metrics,
+  });
+};
+
+/**
+ * Handles comparing two model versions.
+ */
+const handleCompareModels = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const body = req.body as CompareModelsRequestBody;
+
+  const comparison = await compareModels(
+    body.controlVersionId,
+    body.treatmentVersionId,
+    body.tenantId
+  );
+
+  logger.info("Models compared", {
+    controlVersionId: body.controlVersionId,
+    treatmentVersionId: body.treatmentVersionId,
+    tenantId: body.tenantId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: comparison,
+  });
+};
+
+// ==================== Route Definitions ====================
+
+/** GET /api/fine-tuning/models - Get all model versions */
+router.get("/api/fine-tuning/models", asyncHandler(handleGetModelVersions));
+
+/** GET /api/fine-tuning/models/active - Get active model for tenant */
+router.get("/api/fine-tuning/models/active", asyncHandler(handleGetActiveModel));
+
+/** POST /api/fine-tuning/models/:versionId/activate - Activate a model version */
+router.post("/api/fine-tuning/models/:versionId/activate", asyncHandler(handleActivateModel));
+
+/** POST /api/fine-tuning/models/rollback - Rollback to baseline model */
+router.post("/api/fine-tuning/models/rollback", asyncHandler(handleRollbackToBaseline));
+
+/** POST /api/fine-tuning/models/ab-test - Configure A/B test */
 router.post(
   "/api/fine-tuning/models/ab-test",
   validate({
     body: {
-      controlVersion: (value) => validators.required(value) && validators.string(value),
-      treatmentVersion: (value) => validators.required(value) && validators.string(value),
-      treatmentPercentage: (value) => validators.required(value) && validators.number(value),
+      controlVersion: validateRequiredString,
+      treatmentVersion: validateRequiredString,
+      treatmentPercentage: validateRequiredNumber,
     },
   }),
-  asyncHandler(async (req, res) => {
-    logger.info("Configuring A/B test", {
-      controlVersion: req.body.controlVersion,
-      treatmentVersion: req.body.treatmentVersion,
-      treatmentPercentage: req.body.treatmentPercentage,
-    });
-
-    const success = await configureABTest({
-      controlVersion: req.body.controlVersion,
-      treatmentVersion: req.body.treatmentVersion,
-      treatmentPercentage: req.body.treatmentPercentage,
-    });
-
-    if (!success) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "Failed to configure A/B test",
-      });
-      return;
-    }
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      message: "A/B test configured",
-    });
-  })
+  asyncHandler(handleConfigureABTest)
 );
 
-// ==================== Evaluation Endpoints ====================
+/** GET /api/fine-tuning/evaluate/:versionId - Evaluate a model version */
+router.get("/api/fine-tuning/evaluate/:versionId", asyncHandler(handleEvaluateModel));
 
-/**
- * Evaluate a model version
- * GET /api/fine-tuning/evaluate/:versionId
- */
-router.get(
-  "/api/fine-tuning/evaluate/:versionId",
-  asyncHandler(async (req, res) => {
-    const { versionId } = req.params;
-    const tenantId = req.query.tenantId as string | undefined;
-
-    logger.info("Evaluating model version", { versionId, tenantId });
-
-    const metrics = await evaluateModel({
-      modelVersionId: versionId,
-      tenantId,
-    });
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: metrics,
-    });
-  })
-);
-
-/**
- * Compare two model versions (A/B test)
- * POST /api/fine-tuning/compare
- */
+/** POST /api/fine-tuning/compare - Compare two model versions */
 router.post(
   "/api/fine-tuning/compare",
   validate({
     body: {
-      controlVersionId: (value) => validators.required(value) && validators.string(value),
-      treatmentVersionId: (value) => validators.required(value) && validators.string(value),
-      tenantId: (value) => !value || validators.string(value),
+      controlVersionId: validateRequiredString,
+      treatmentVersionId: validateRequiredString,
+      tenantId: validateOptionalString,
     },
   }),
-  asyncHandler(async (req, res) => {
-    const { controlVersionId, treatmentVersionId, tenantId } = req.body;
-
-    logger.info("Comparing model versions", {
-      controlVersionId,
-      treatmentVersionId,
-      tenantId,
-    });
-
-    const comparison = await compareModels(controlVersionId, treatmentVersionId, tenantId);
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: comparison,
-    });
-  })
+  asyncHandler(handleCompareModels)
 );
 
 export { router as fineTuningModelRoutes };

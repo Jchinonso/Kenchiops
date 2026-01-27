@@ -4,7 +4,7 @@
  * @module routes/rag/costRoutes
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   validate,
@@ -13,6 +13,8 @@ import {
   createLogger,
   SERVICE_NAMES,
   API_ROUTES,
+  COST_CONTROL_CONFIG,
+  VALID_EMBEDDING_TIERS,
   type EmbeddingTierName,
   getTenantTierConfig,
   setTenantTierConfig,
@@ -23,211 +25,311 @@ import {
   estimateMonthlyCost,
   recommendTier,
 } from "@kenchi/shared";
+import type {
+  UpdateTierConfigRequestBody,
+  CacheClearRequestBody,
+  CostEstimateRequestBody,
+  CacheClearResponse,
+  CostEstimateResponse,
+  CostStatsResponse,
+} from "./types.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
 
-const VALID_TIERS = ["LIGHT", "STANDARD", "PREMIUM"];
-const DAYS_IN_MONTH = 30;
+// ==================== Type Guards ====================
+
+/** Type guard for valid embedding tier */
+const isValidTier = (value: unknown): value is EmbeddingTierName =>
+  typeof value === "string" && VALID_EMBEDDING_TIERS.has(value);
+
+// ==================== Validation Rules ====================
+
+/** Validation rule: optional valid tier */
+const validateOptionalTier = (fieldValue: unknown): boolean | string =>
+  fieldValue === undefined || isValidTier(fieldValue) || "Invalid embedding tier";
+
+/** Validation rule: optional non-negative number */
+const validateOptionalNonNegativeNumber = (fieldValue: unknown): boolean | string =>
+  fieldValue === undefined ||
+  (typeof fieldValue === "number" && fieldValue >= 0) ||
+  "Must be a non-negative number";
+
+/** Validation rule: optional boolean */
+const validateOptionalBoolean = (fieldValue: unknown): boolean | string =>
+  fieldValue === undefined || typeof fieldValue === "boolean" || "Must be a boolean";
+
+/** Validation rule: required positive number */
+const validateRequiredPositiveNumber = (fieldValue: unknown): boolean | string => {
+  const requiredResult = validators.required(fieldValue);
+  if (requiredResult !== true) {
+    return requiredResult;
+  }
+  return (typeof fieldValue === "number" && fieldValue > 0) || "Must be a positive number";
+};
+
+// ==================== Response Builders ====================
+
+/** Builds cache clear response */
+const buildCacheClearResponse = (type: "expired" | "full", cleared?: number): CacheClearResponse =>
+  type === "expired" ? { cleared, type } : { type };
+
+/** Builds cost estimate response */
+const buildCostEstimateResponse = (
+  tokenCount: number,
+  tier: string,
+  estimatedCostUsd: number,
+  monthlyProjection?: number,
+  recommendation?: unknown
+): CostEstimateResponse => ({
+  tokenCount,
+  tier,
+  estimatedCostUsd,
+  ...(monthlyProjection !== undefined && { monthlyProjection }),
+  ...(recommendation !== undefined && { recommendation }),
+});
+
+/** Builds cost stats response */
+const buildCostStatsResponse = (
+  tenantId: string,
+  tierConfig: unknown,
+  cacheStats: unknown
+): CostStatsResponse => ({
+  tenantId,
+  tierConfig,
+  cacheStats,
+});
+
+// ==================== Route Handlers ====================
 
 /**
- * GET /api/rag/tenant/:tenantId/tier - Get tenant tier config
+ * Handles tenant tier config retrieval.
  */
-router.get(
-  API_ROUTES.RAG_TENANT_TIER,
-  asyncHandler(async (req, res) => {
-    const { tenantId } = req.params;
+const handleGetTierConfig = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { tenantId } = req.params;
 
-    if (!tenantId) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "tenantId is required",
-      });
-      return;
-    }
+  if (!tenantId) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "tenantId is required",
+    });
+    return;
+  }
 
-    logger.info("Fetching tenant tier config", { tenantId });
+  const tierConfig = await getTenantTierConfig(tenantId);
 
-    const tierConfig = await getTenantTierConfig(tenantId);
+  logger.info("Tenant tier config retrieved", {
+    tenantId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: tierConfig,
+  });
+};
+
+/**
+ * Handles tenant tier config update.
+ */
+const handleUpdateTierConfig = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { tenantId } = req.params;
+  const body = req.body as UpdateTierConfigRequestBody;
+
+  if (!tenantId) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "tenantId is required",
+    });
+    return;
+  }
+
+  const currentConfig = await getTenantTierConfig(tenantId);
+  const updatedConfig = {
+    tenantId,
+    preferredTier: (body.preferredTier as EmbeddingTierName) ?? currentConfig.preferredTier,
+    monthlyBudgetUsd: body.monthlyBudgetUsd ?? currentConfig.monthlyBudgetUsd,
+    allowPremium: body.allowPremium ?? currentConfig.allowPremium,
+    degradeOnBudgetWarning: body.degradeOnBudgetWarning ?? currentConfig.degradeOnBudgetWarning,
+  };
+
+  await setTenantTierConfig(updatedConfig);
+
+  logger.info("Tenant tier config updated", {
+    tenantId,
+    preferredTier: updatedConfig.preferredTier,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: updatedConfig,
+  });
+};
+
+/**
+ * Handles cache statistics retrieval.
+ */
+const handleGetCacheStats = async (_req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+
+  const stats = getRAGCacheStats();
+
+  logger.info("Cache stats retrieved", {
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: stats,
+  });
+};
+
+/**
+ * Handles cache clear operations.
+ */
+const handleClearCache = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const body = req.body as CacheClearRequestBody;
+
+  if (body.expiredOnly) {
+    const cleared = clearExpiredCache();
+
+    logger.info("Expired cache cleared", {
+      cleared,
+      durationMs: Date.now() - startTime,
+    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
-      data: tierConfig,
+      data: buildCacheClearResponse("expired", cleared),
     });
-  })
-);
+  } else {
+    clearCache();
+
+    logger.info("Full cache cleared", {
+      durationMs: Date.now() - startTime,
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: buildCacheClearResponse("full"),
+    });
+  }
+};
 
 /**
- * PUT /api/rag/tenant/:tenantId/tier - Update tenant tier config
+ * Handles cost estimation requests.
  */
+const handleCostEstimate = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const body = req.body as CostEstimateRequestBody;
+
+  const selectedTier = (body.tier as EmbeddingTierName) ?? "STANDARD";
+  const estimatedCost = estimateEmbeddingCost(body.tokenCount, selectedTier);
+
+  let monthlyProjection: number | undefined;
+  let recommendation: unknown | undefined;
+
+  if (body.dailyTokens) {
+    monthlyProjection = estimateMonthlyCost(body.dailyTokens, selectedTier);
+  }
+
+  if (body.monthlyBudget && body.dailyTokens) {
+    const expectedMonthlyTokens = body.dailyTokens * COST_CONTROL_CONFIG.DAYS_IN_MONTH;
+    recommendation = recommendTier(body.monthlyBudget, expectedMonthlyTokens);
+  }
+
+  logger.info("Cost estimate calculated", {
+    tokenCount: body.tokenCount,
+    tier: selectedTier,
+    estimatedCost,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: buildCostEstimateResponse(
+      body.tokenCount,
+      selectedTier,
+      estimatedCost,
+      monthlyProjection,
+      recommendation
+    ),
+  });
+};
+
+/**
+ * Handles cost stats retrieval.
+ */
+const handleGetCostStats = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const tenantId = req.query.tenantId as string | undefined;
+
+  if (!tenantId) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "tenantId query parameter is required",
+    });
+    return;
+  }
+
+  const [tierConfig, cacheStats] = await Promise.all([
+    getTenantTierConfig(tenantId),
+    Promise.resolve(getRAGCacheStats()),
+  ]);
+
+  logger.info("Cost stats retrieved", {
+    tenantId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: buildCostStatsResponse(tenantId, tierConfig, cacheStats),
+  });
+};
+
+// ==================== Route Definitions ====================
+
+/** GET /api/rag/tenant/:tenantId/tier - Get tenant tier config */
+router.get(API_ROUTES.RAG_TENANT_TIER, asyncHandler(handleGetTierConfig));
+
+/** PUT /api/rag/tenant/:tenantId/tier - Update tenant tier config */
 router.put(
   API_ROUTES.RAG_TENANT_TIER,
   validate({
     body: {
-      preferredTier: (value) => !value || VALID_TIERS.includes(value as string),
-      monthlyBudgetUsd: (value) => value === undefined || (typeof value === "number" && value >= 0),
-      allowPremium: (value) => value === undefined || typeof value === "boolean",
-      degradeOnBudgetWarning: (value) => value === undefined || typeof value === "boolean",
+      preferredTier: validateOptionalTier,
+      monthlyBudgetUsd: validateOptionalNonNegativeNumber,
+      allowPremium: validateOptionalBoolean,
+      degradeOnBudgetWarning: validateOptionalBoolean,
     },
   }),
-  asyncHandler(async (req, res) => {
-    const { tenantId } = req.params;
-    const body = req.body as {
-      preferredTier?: EmbeddingTierName;
-      monthlyBudgetUsd?: number;
-      allowPremium?: boolean;
-      degradeOnBudgetWarning?: boolean;
-    };
-
-    if (!tenantId) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "tenantId is required",
-      });
-      return;
-    }
-
-    logger.info("Updating tenant tier config", { tenantId, ...body });
-
-    const currentConfig = await getTenantTierConfig(tenantId);
-    const updatedConfig = {
-      tenantId,
-      preferredTier: body.preferredTier ?? currentConfig.preferredTier,
-      monthlyBudgetUsd: body.monthlyBudgetUsd ?? currentConfig.monthlyBudgetUsd,
-      allowPremium: body.allowPremium ?? currentConfig.allowPremium,
-      degradeOnBudgetWarning: body.degradeOnBudgetWarning ?? currentConfig.degradeOnBudgetWarning,
-    };
-
-    await setTenantTierConfig(updatedConfig);
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: updatedConfig,
-    });
-  })
+  asyncHandler(handleUpdateTierConfig)
 );
 
-/**
- * GET /api/rag/cache/stats - Get cache statistics
- */
-router.get(
-  API_ROUTES.RAG_CACHE_STATS,
-  asyncHandler(async (_req, res) => {
-    logger.info("Fetching cache stats");
+/** GET /api/rag/cache/stats - Get cache statistics */
+router.get(API_ROUTES.RAG_CACHE_STATS, asyncHandler(handleGetCacheStats));
 
-    const stats = getRAGCacheStats();
+/** POST /api/rag/cache/clear - Clear cache */
+router.post(API_ROUTES.RAG_CACHE_CLEAR, asyncHandler(handleClearCache));
 
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: stats,
-    });
-  })
-);
-
-/**
- * POST /api/rag/cache/clear - Clear cache
- */
-router.post(
-  API_ROUTES.RAG_CACHE_CLEAR,
-  asyncHandler(async (req, res) => {
-    const { expiredOnly } = req.body as { expiredOnly?: boolean };
-
-    logger.info("Clearing cache", { expiredOnly });
-
-    if (expiredOnly) {
-      const cleared = clearExpiredCache();
-      res.status(HTTP_STATUS.OK).json({
-        success: true,
-        data: { cleared, type: "expired" },
-      });
-    } else {
-      clearCache();
-      res.status(HTTP_STATUS.OK).json({
-        success: true,
-        data: { type: "full" },
-      });
-    }
-  })
-);
-
-/**
- * POST /api/rag/cost/estimate - Estimate embedding costs
- */
+/** POST /api/rag/cost/estimate - Estimate embedding costs */
 router.post(
   API_ROUTES.RAG_COST_ESTIMATE,
   validate({
     body: {
-      tokenCount: (value) => validators.required(value) && typeof value === "number" && value > 0,
-      tier: (value) => !value || VALID_TIERS.includes(value as string),
+      tokenCount: validateRequiredPositiveNumber,
+      tier: validateOptionalTier,
     },
   }),
-  asyncHandler(async (req, res) => {
-    const { tokenCount, tier, dailyTokens, monthlyBudget } = req.body as {
-      tokenCount: number;
-      tier?: EmbeddingTierName;
-      dailyTokens?: number;
-      monthlyBudget?: number;
-    };
-
-    logger.info("Estimating costs", { tokenCount, tier });
-
-    const selectedTier = tier ?? "STANDARD";
-    const estimatedCost = estimateEmbeddingCost(tokenCount, selectedTier);
-
-    const response: Record<string, unknown> = {
-      tokenCount,
-      tier: selectedTier,
-      estimatedCostUsd: estimatedCost,
-    };
-
-    if (dailyTokens) {
-      response.monthlyProjection = estimateMonthlyCost(dailyTokens, selectedTier);
-    }
-
-    if (monthlyBudget && dailyTokens) {
-      const expectedMonthlyTokens = dailyTokens * DAYS_IN_MONTH;
-      response.recommendation = recommendTier(monthlyBudget, expectedMonthlyTokens);
-    }
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: response,
-    });
-  })
+  asyncHandler(handleCostEstimate)
 );
 
-/**
- * GET /api/rag/cost-stats - Get cost tracking stats
- */
-router.get(
-  API_ROUTES.RAG_COST_STATS,
-  asyncHandler(async (req, res) => {
-    const tenantId = req.query.tenantId as string | undefined;
-
-    if (!tenantId) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "tenantId query parameter is required",
-      });
-      return;
-    }
-
-    logger.info("Fetching cost stats", { tenantId });
-
-    const [tierConfig, cacheStats] = await Promise.all([
-      getTenantTierConfig(tenantId),
-      Promise.resolve(getRAGCacheStats()),
-    ]);
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: {
-        tenantId,
-        tierConfig,
-        cacheStats,
-      },
-    });
-  })
-);
+/** GET /api/rag/cost-stats - Get cost tracking stats */
+router.get(API_ROUTES.RAG_COST_STATS, asyncHandler(handleGetCostStats));
 
 export { router as ragCostRoutes };
