@@ -58,22 +58,75 @@ export const formatScore = (score: number): string =>
 // ==================== Text Analysis Helpers ====================
 
 /**
- * Normalizes text for comparison (lowercase, trimmed).
+ * Pattern for splitting text into tokens.
+ * Splits on whitespace, punctuation, underscores, and hyphens.
+ * This ensures compound terms like "auth_secret" become ["auth", "secret"].
+ */
+const TOKEN_SPLIT_PATTERN = /[\s,.;:!?()[\]{}'"<>_-]+/;
+
+/**
+ * Pattern for collapsing multiple whitespace characters.
+ */
+const WHITESPACE_COLLAPSE_PATTERN = /\s+/g;
+
+/**
+ * Normalizes text for comparison.
+ * - Trims leading/trailing whitespace
+ * - Lowercases
+ * - Collapses multiple whitespace to single space
  *
  * @param text - Text to normalize
  * @returns Normalized text or empty string
  */
-export const normalizeText = (text: string | undefined | null): string =>
-  text?.toLowerCase().trim() ?? "";
+export const normalizeText = (text: string | undefined | null): string => {
+  if (text === undefined || text === null) {
+    return "";
+  }
+  return text.toLowerCase().trim().replace(WHITESPACE_COLLAPSE_PATTERN, " ");
+};
+
+/**
+ * Tokenizes text into words for word-boundary-safe matching.
+ * Splits on whitespace and punctuation, filters empty tokens.
+ *
+ * @param text - Text to tokenize (should already be normalized)
+ * @returns Array of lowercase tokens
+ */
+export const tokenize = (text: string): readonly string[] =>
+  text.split(TOKEN_SPLIT_PATTERN).filter((token) => token.length > 0);
+
+/**
+ * Checks if any token in the text matches any keyword (word-boundary-safe).
+ * Avoids false positives like "ram" matching "program".
+ *
+ * @param tokens - Tokenized text (from tokenize())
+ * @param keywords - Keywords to match against
+ * @returns True if any token matches any keyword
+ */
+export const tokensContainAny = (
+  tokens: readonly string[],
+  keywords: readonly string[]
+): boolean => {
+  const keywordSet = new Set(keywords);
+  return tokens.some((token) => keywordSet.has(token));
+};
 
 /**
  * Checks if normalized text contains any keyword from a set.
+ * Uses substring matching (may have false positives).
  *
  * @param text - Text to search in
  * @param keywords - Set of keywords to find
  * @returns True if any keyword found
+ * @deprecated Use tokensContainAny() for word-boundary-safe matching
  */
 export const containsKeyword = (text: string, keywords: ReadonlySet<string>): boolean => {
   const normalized = normalizeText(text);
-  return Array.from(keywords).some((keyword) => normalized.includes(keyword));
+  // for...of allowed for early-exit per CLAUDE.md
+  for (const keyword of keywords) {
+    if (normalized.includes(keyword)) {
+      return true;
+    }
+  }
+  return false;
 };
