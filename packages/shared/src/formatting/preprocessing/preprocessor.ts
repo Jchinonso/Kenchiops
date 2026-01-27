@@ -11,7 +11,8 @@
  * @module formatting/preprocessing/preprocessor
  */
 
-import { redactSecretsWithStats, type RedactionResult } from "../../security/redaction.js";
+import { redactSecretsWithStats } from "../../security/redaction.js";
+import type { RedactionResult } from "../../security/types.js";
 import {
   LOG_PARSING_LIMITS,
   TEXT_SANITIZATION_PATTERNS,
