@@ -10,7 +10,10 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
-import { getEmbeddingClient, type EmbeddingClient } from "../llm/providers/openai/embedding.js";
+import {
+  getEmbeddingClient,
+  type EmbeddingClient,
+} from "../llm/providers/llmProvider/embedding.js";
 import { INGESTION_DEFAULTS, type EmbeddingTierName } from "../constants/index.js";
 import {
   updateDiffChunkEmbedding,

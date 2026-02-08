@@ -5,7 +5,7 @@
  * Uses caching for Octokit instances per installation.
  *
  * This is a barrel export that re-exports from focused modules:
- * - githubAnalysis.ts: Event creation and OpenAI analysis
+ * - githubAnalysis.ts: Event creation and LLM analysis
  * - githubComments.ts: Comment management and PR interactions
  */
 
@@ -26,7 +26,7 @@ const logger = createLogger("github-app");
 
 // Analysis functions
 export {
-  getOpenAIClient,
+  getLLMClient,
   type AnalysisResult,
   createEventFromPR,
   createEventFromCheckRun,

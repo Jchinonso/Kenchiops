@@ -1,12 +1,12 @@
 /**
  * GitHub Analysis Functions
  *
- * Event creation and OpenAI analysis functions for GitHub webhooks.
+ * Event creation and LLM analysis functions for GitHub webhooks.
  */
 
 import {
   createLogger,
-  OpenAIClient,
+  LLMClient,
   calculateConfidenceScore,
   generateEventId,
   type Event,
@@ -27,18 +27,18 @@ const logger = createLogger("github-app");
 
 // ==================== Singleton Client ====================
 
-/** Singleton OpenAI client */
-let openaiClientInstance: OpenAIClient | null = null;
+/** Singleton LLM client */
+let llmClientInstance: LLMClient | null = null;
 
 /**
- * Get or create the OpenAI client singleton.
+ * Get or create the LLM client singleton.
  */
-export const getOpenAIClient = (): OpenAIClient => {
-  if (!openaiClientInstance) {
-    openaiClientInstance = new OpenAIClient();
-    logger.info("OpenAI client initialized");
+export const getLLMClient = (): LLMClient => {
+  if (!llmClientInstance) {
+    llmClientInstance = new LLMClient();
+    logger.info("LLM client initialized");
   }
-  return openaiClientInstance;
+  return llmClientInstance;
 };
 
 // ==================== Types ====================
@@ -122,7 +122,7 @@ export const createMinimalEvidence = (eventId: string): Evidence => ({
 // ==================== Analysis ====================
 
 /**
- * Perform OpenAI analysis on an event.
+ * Perform LLM analysis on an event.
  * Includes hallucination detection for safety.
  */
 export const performAnalysis = async (event: Event): Promise<AnalysisResult> => {
@@ -133,7 +133,7 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
     actor: "system",
   };
   const evidence = createMinimalEvidence(event.id);
-  const openaiClient = getOpenAIClient();
+  const llmClient = getLLMClient();
 
   logger.info("Starting analysis", {
     eventId: event.id,
@@ -141,7 +141,7 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
   });
 
   try {
-    const analysis = await openaiClient.analyzeIncident(event, evidence);
+    const analysis = await llmClient.analyzeIncident(event, evidence);
     const confidence = calculateConfidenceScore(analysis, evidence);
 
     // Check for hallucinations in the analysis using summary and reasoning

@@ -1,13 +1,13 @@
 /**
  * Analysis Service
  *
- * Handles CI failure analysis using OpenAI.
- * Uses singleton pattern for OpenAI client to enable connection reuse.
+ * Handles CI failure analysis using LLM.
+ * Uses singleton pattern for LLM client to enable connection reuse.
  * Integrates RAG for retrieving relevant knowledge documents.
  */
 
 import {
-  OpenAIClient,
+  LLMClient,
   calculateConfidenceScore,
   createLogger,
   generateEventId,
@@ -43,22 +43,22 @@ import {
 
 const logger = createLogger(SERVICE_NAMES.API);
 
-// ==================== OpenAI Client Singleton ====================
+// ==================== LLM Client Singleton ====================
 
 /**
- * Singleton OpenAI client instance
+ * Singleton LLM client instance
  */
-let openaiClientInstance: OpenAIClient | null = null;
+let llmClientInstance: LLMClient | null = null;
 
 /**
- * Get or create the OpenAI client singleton
+ * Get or create the LLM client singleton
  */
-const getOpenAIClient = (): OpenAIClient => {
-  if (!openaiClientInstance) {
-    openaiClientInstance = new OpenAIClient();
-    logger.info("OpenAI client initialized");
+const getLLMClient = (): LLMClient => {
+  if (!llmClientInstance) {
+    llmClientInstance = new LLMClient();
+    logger.info("LLM client initialized");
   }
-  return openaiClientInstance;
+  return llmClientInstance;
 };
 
 // ==================== Analysis Context ====================
@@ -117,13 +117,13 @@ export const analyzeFailure = async (
   context: RequestContext
 ): Promise<LLMAnalysisResult> => {
   const logContext = { ...context };
-  const openaiClient = getOpenAIClient();
+  const llmClient = getLLMClient();
 
   try {
-    const result = await openaiClient.analyzeIncident(event, evidence);
+    const result = await llmClient.analyzeIncident(event, evidence);
     return result;
   } catch (error) {
-    logger.error("OpenAI analysis failed", {
+    logger.error("LLM analysis failed", {
       eventId: event.id,
       error: getErrorMessage(error),
       ...logContext,

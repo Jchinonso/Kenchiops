@@ -173,12 +173,12 @@ export interface ProviderRegistryEntry {
   readonly createEmbeddingProvider?: EmbeddingProviderFactory;
 }
 
-// ==================== OpenAI Client Types ====================
+// ==================== LLM Client Types ====================
 
 /**
- * OpenAI client configuration.
+ * LLM client configuration.
  */
-export interface OpenAIConfig {
+export interface LLMConfig {
   readonly model: string;
   readonly maxTokens: number;
   readonly temperature: number;
@@ -188,7 +188,7 @@ export interface OpenAIConfig {
 // ==================== Embedding Client Types ====================
 
 /**
- * OpenAI client configuration for embeddings.
+ * LLM client configuration for embeddings.
  */
 export interface EmbeddingClientConfig {
   readonly model: string;

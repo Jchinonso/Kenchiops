@@ -9,7 +9,7 @@
 
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
-import { getEmbeddingClient } from "../llm/providers/openai/embedding.js";
+import { getEmbeddingClient } from "../llm/providers/llmProvider/embedding.js";
 import { chunkDiff } from "./chunking.js";
 import { chunkByDocType } from "./docTypeChunking.js";
 import { recordIngestionOperation } from "./metrics.js";

@@ -12,7 +12,7 @@ import { config } from "../core/config.js";
 import { createLogger } from "../core/logger.js";
 import { ExternalServiceError, getErrorMessage } from "../core/errors.js";
 import {
-  OPENAI_CONSTANTS,
+  LLM_CONSTANTS,
   FINE_TUNING_CONFIG,
   FINE_TUNING_STATUS,
   type FineTuningStatus,
@@ -47,7 +47,7 @@ const TERMINAL_STATUSES: readonly FineTuningStatus[] = [
 const createFineTuningClient = (): OpenAI =>
   new OpenAI({
     apiKey: config.OPENAI_API_KEY,
-    timeout: OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
+    timeout: LLM_CONSTANTS.DEFAULT_TIMEOUT_MS,
   });
 
 // ==================== Helper Functions ====================

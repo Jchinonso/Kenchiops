@@ -13,7 +13,7 @@ jest.mock("@kenchi/shared", () => {
   const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
-    OpenAIClient: jest.fn().mockImplementation(() => ({
+    LLMClient: jest.fn().mockImplementation(() => ({
       analyzeIncident: mockAnalyzeIncident,
     })),
     createLogger: jest.fn(() => ({

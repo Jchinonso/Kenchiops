@@ -1,17 +1,17 @@
 /**
- * OpenAI Provider Types
+ * LLM Provider Types
  *
- * Type definitions for OpenAI error handling and API interactions.
+ * Type definitions for LLM error handling and API interactions.
  *
- * @module llm/providers/openai/types
+ * @module llm/providers/llmProvider/types
  */
 
 import type { LLMError } from "../../../core/errors.js";
 
 /**
- * Type definition for OpenAI API error responses.
+ * Type definition for LLM API error responses.
  */
-export interface OpenAIErrorLike {
+export interface LLMErrorLike {
   readonly status?: number;
   readonly code?: string;
   readonly message?: string;
@@ -25,4 +25,4 @@ export type ErrorMessageFactory = (message?: string) => string;
 /**
  * Error handler function type.
  */
-export type ErrorHandler = (error: OpenAIErrorLike, timeout: number) => LLMError | null;
+export type ErrorHandler = (error: LLMErrorLike, timeout: number) => LLMError | null;

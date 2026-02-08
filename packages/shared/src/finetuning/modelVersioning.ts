@@ -9,7 +9,7 @@
 
 import { createLogger } from "../core/logger.js";
 import { config } from "../core/config.js";
-import { OPENAI_DEFAULTS, OPENROUTER_DEFAULTS, MODEL_VERSIONING } from "../constants/index.js";
+import { LLM_DEFAULTS, OPENROUTER_DEFAULTS, MODEL_VERSIONING } from "../constants/index.js";
 import type {
   ModelVersion,
   ModelFeatureFlags,
@@ -29,7 +29,7 @@ const logger = createLogger("model-versioning");
 const getConfiguredModel = (): string =>
   config.LLM_MODEL ||
   config.OPENAI_MODEL ||
-  (config.LLM_PROVIDER === "openrouter" ? OPENROUTER_DEFAULTS.MODEL : OPENAI_DEFAULTS.MODEL);
+  (config.LLM_PROVIDER === "openrouter" ? OPENROUTER_DEFAULTS.MODEL : LLM_DEFAULTS.MODEL);
 
 // ==================== Default Configuration ====================
 

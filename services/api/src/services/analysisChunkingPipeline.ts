@@ -17,7 +17,7 @@ import {
   SERVICE_NAMES,
   ARTIFACT_TYPES,
   config,
-  OPENAI_DEFAULTS,
+  LLM_DEFAULTS,
   // Chunking pipeline imports - Stage 1
   chunkLog,
   // Chunking pipeline imports - Stage 2
@@ -31,7 +31,7 @@ import {
   type RequestContext,
   type AggregatedEvidence,
 } from "@kenchi/shared";
-import { createOpenAIExtractor } from "../adapters/openaiExtraction.js";
+import { createLLMExtractor } from "../adapters/llmExtraction.js";
 
 const logger = createLogger(SERVICE_NAMES.API);
 
@@ -46,7 +46,7 @@ const getExtractionModel = (): string =>
   config.EXTRACTION_MODEL ||
   (config.LLM_PROVIDER === "openrouter"
     ? "google/gemini-2.5-flash"
-    : config.LLM_MODEL || OPENAI_DEFAULTS.MODEL);
+    : config.LLM_MODEL || LLM_DEFAULTS.MODEL);
 
 /**
  * Configuration for chunking pipeline.
@@ -107,7 +107,7 @@ export const executeChunkingPipeline = async (
     ...logContext,
   });
 
-  const extractor = createOpenAIExtractor();
+  const extractor = createLLMExtractor();
   const batchResult = await extractFromAllChunks(chunkingResult.chunks, extractor, {
     concurrency: CHUNKING_PIPELINE_CONFIG.EXTRACTION_CONCURRENCY,
     timeoutMs: CHUNKING_PIPELINE_CONFIG.EXTRACTION_TIMEOUT_MS,

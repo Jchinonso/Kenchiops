@@ -9,7 +9,7 @@
  */
 
 import { LLMError } from "../core/errors.js";
-import { OPENAI_MESSAGES } from "../constants/index.js";
+import { LLM_MESSAGES } from "../constants/index.js";
 import type { JsonExtractionState } from "./types.js";
 
 // ==================== JSON Extraction State Machine ====================
@@ -131,7 +131,7 @@ const extractBalancedJson = (responseContent: string): string | null => {
 export const extractJsonFromResponse = (responseContent: string): string => {
   const extracted = extractBalancedJson(responseContent);
   if (!extracted) {
-    throw new LLMError(OPENAI_MESSAGES.NO_JSON_FOUND);
+    throw new LLMError(LLM_MESSAGES.NO_JSON_FOUND);
   }
   return extracted;
 };

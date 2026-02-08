@@ -17,7 +17,7 @@
  */
 
 import { createLogger } from "../core/logger.js";
-import { OPENAI_MESSAGES } from "../constants/index.js";
+import { LLM_MESSAGES } from "../constants/index.js";
 import type { LLMAnalysisResult } from "../core/types.js";
 import type { TestFailureLogShape, LintErrorLogShape, ActionPriority } from "./types.js";
 
@@ -227,7 +227,7 @@ export const createAnalysisFromParsed = (
   eventId: string
 ): LLMAnalysisResult => {
   // Extract core fields
-  const rootCause = extractString(parsed.root_cause, OPENAI_MESSAGES.NO_SUMMARY);
+  const rootCause = extractString(parsed.root_cause, LLM_MESSAGES.NO_SUMMARY);
   const confidence = mapConfidence(parsed.confidence);
   const category = validateCategory(parsed.category);
   const phase = validatePhase(parsed.phase);

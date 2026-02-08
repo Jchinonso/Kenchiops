@@ -1,20 +1,20 @@
 /**
- * OpenAI Error Handling Module
+ * LLM Error Handling Module
  *
- * Provides error handling utilities for OpenAI API interactions,
+ * Provides error handling utilities for LLM API interactions,
  * including error enrichment and retry delay utilities.
  *
- * @module llm/providers/openai/errors
+ * @module llm/providers/llmProvider/errors
  */
 
-import { HTTP_STATUS, OPENAI_CONSTANTS } from "../../../constants/index.js";
+import { HTTP_STATUS, LLM_CONSTANTS } from "../../../constants/index.js";
 import { LLMError } from "../../../core/errors.js";
-import type { OpenAIErrorLike, ErrorMessageFactory, ErrorHandler } from "./types.js";
+import type { LLMErrorLike, ErrorMessageFactory, ErrorHandler } from "./types.js";
 
 /**
  * Type guard for error-like objects.
  */
-const isErrorLike = (error: unknown): error is OpenAIErrorLike =>
+const isErrorLike = (error: unknown): error is LLMErrorLike =>
   typeof error === "object" && error !== null;
 
 /**
@@ -23,15 +23,12 @@ const isErrorLike = (error: unknown): error is OpenAIErrorLike =>
 const STATUS_ERROR_MESSAGES: Readonly<Map<number, ErrorMessageFactory>> = new Map([
   [
     HTTP_STATUS.BAD_REQUEST,
-    (message?: string) => `OpenAI request invalid: ${message ?? "Bad request"}`,
+    (message?: string) => `LLM request invalid: ${message ?? "Bad request"}`,
   ],
+  [HTTP_STATUS.UNAUTHORIZED, () => "LLM authentication failed. Check API key configuration."],
   [
-    HTTP_STATUS.UNAUTHORIZED,
-    () => "OpenAI authentication failed. Check OPENAI_API_KEY configuration.",
-  ],
-  [
-    OPENAI_CONSTANTS.RATE_LIMIT_STATUS_CODE,
-    () => "OpenAI rate limit exceeded after retries. Please try again later.",
+    LLM_CONSTANTS.RATE_LIMIT_STATUS_CODE,
+    () => "LLM rate limit exceeded after retries. Please try again later.",
   ],
 ]);
 
@@ -43,7 +40,7 @@ const TIMEOUT_ERROR_CODES: Readonly<Set<string>> = new Set(["ECONNABORTED", "ETI
 /**
  * Default error message for unknown errors.
  */
-const DEFAULT_ERROR_MESSAGE = "Unknown OpenAI error occurred";
+const DEFAULT_ERROR_MESSAGE = "Unknown LLM error occurred";
 
 /**
  * Handles HTTP status code errors.
@@ -51,7 +48,7 @@ const DEFAULT_ERROR_MESSAGE = "Unknown OpenAI error occurred";
  * @param error - Error object with status code
  * @returns Error instance if status code is handled, null otherwise
  */
-const handleStatusError = (error: OpenAIErrorLike): LLMError | null => {
+const handleStatusError = (error: LLMErrorLike): LLMError | null => {
   if (error.status === undefined) {
     return null;
   }
@@ -66,10 +63,10 @@ const handleStatusError = (error: OpenAIErrorLike): LLMError | null => {
  * @param timeout - Timeout value in milliseconds
  * @returns Error instance if timeout error, null otherwise
  */
-const handleTimeoutError = (error: OpenAIErrorLike, timeout: number): LLMError | null => {
+const handleTimeoutError = (error: LLMErrorLike, timeout: number): LLMError | null => {
   const isTimeout = error.code !== undefined && TIMEOUT_ERROR_CODES.has(error.code);
   return isTimeout
-    ? new LLMError(`OpenAI request timed out after ${timeout}ms`, { retryable: true })
+    ? new LLMError(`LLM request timed out after ${timeout}ms`, { retryable: true })
     : null;
 };
 
@@ -79,8 +76,8 @@ const handleTimeoutError = (error: OpenAIErrorLike, timeout: number): LLMError |
  * @param error - Error object with message
  * @returns Error instance if message exists, null otherwise
  */
-const handleMessageError = (error: OpenAIErrorLike): LLMError | null =>
-  error.message ? new LLMError(`OpenAI error: ${error.message}`) : null;
+const handleMessageError = (error: LLMErrorLike): LLMError | null =>
+  error.message ? new LLMError(`LLM error: ${error.message}`) : null;
 
 /**
  * Array of error handlers in priority order.
@@ -93,7 +90,7 @@ const errorHandlers: readonly ErrorHandler[] = [
 ] as const;
 
 /**
- * Handles and enriches errors from OpenAI API.
+ * Handles and enriches errors from LLM API.
  *
  * Uses a functional approach with an array of error handlers that are
  * checked sequentially until one can handle the error.
@@ -105,13 +102,13 @@ const errorHandlers: readonly ErrorHandler[] = [
  * @example
  * ```typescript
  * try {
- *   await openaiClient.chat.completions.create(...);
+ *   await llmClient.chat.completions.create(...);
  * } catch (error) {
- *   throw handleOpenAIError(error, 30000);
+ *   throw handleLLMError(error, 30000);
  * }
  * ```
  */
-export const handleOpenAIError = (error: unknown, timeout: number): LLMError => {
+export const handleLLMError = (error: unknown, timeout: number): LLMError => {
   // Early return for non-error-like objects
   if (!isErrorLike(error)) {
     return new LLMError(DEFAULT_ERROR_MESSAGE);

@@ -27,7 +27,7 @@ export type {
   EmbeddingProviderFactory,
   LLMProviderName,
   ProviderRegistryEntry,
-  OpenAIConfig,
+  LLMConfig,
   EmbeddingClientConfig,
   TokenEstimate,
   RawAnnotation,
@@ -88,14 +88,13 @@ export { validateResponse } from "./validation.js";
 
 export { manageTokenBudget } from "./tokenManager.js";
 
-// ==================== OpenAI Provider (backward compatibility) ====================
+// ==================== LLM Provider ====================
 
-// Re-export OpenAI provider for backward compatibility
 export {
-  OpenAIClient,
+  LLMClient,
   EmbeddingClient,
   getEmbeddingClient,
   clearClientCache,
   createEmbeddingProvider,
-  handleOpenAIError,
-} from "./providers/openai/index.js";
+  handleLLMError,
+} from "./providers/llmProvider/index.js";

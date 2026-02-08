@@ -16,7 +16,7 @@ import type {
   PROTECTED_ZONE_TYPES,
 } from "./chunkingPipeline.js";
 import type { MESSAGE_VARIANT_CONFIG } from "./githubApp.js";
-import type { FINE_TUNING_STATUS } from "./openai.js";
+import type { FINE_TUNING_STATUS } from "./llm.js";
 import type {
   EVENT_TYPES,
   EVENT_SOURCES,

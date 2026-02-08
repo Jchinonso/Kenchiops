@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import { OpenAIClient } from "../../openaiClient/index.js";
+import { LLMClient } from "../../llm/index.js";
 import type { Event, Evidence } from "../../core/types.js";
 
 // Mock OpenAI SDK
@@ -393,11 +393,11 @@ const createMockAIResponse = (
 // ============================================================================
 
 describe("Multi-Language AI Extraction", () => {
-  let client: OpenAIClient;
+  let client: LLMClient;
 
   beforeEach(() => {
     mockCreate.mockClear();
-    client = new OpenAIClient();
+    client = new LLMClient();
   });
 
   describe("Python (pip/poetry)", () => {

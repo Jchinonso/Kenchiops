@@ -612,8 +612,8 @@ export type {
   LLMProviderName,
 } from "./llm/index.js";
 
-// OpenAI client (via llm module)
-export { OpenAIClient } from "./llm/index.js";
+// LLM client (via llm module)
+export { LLMClient } from "./llm/index.js";
 export {
   EmbeddingClient,
   getEmbeddingClient,

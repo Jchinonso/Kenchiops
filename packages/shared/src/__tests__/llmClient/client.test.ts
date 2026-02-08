@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import { OpenAIClient } from "../../openaiClient/index.js";
+import { LLMClient } from "../../llm/index.js";
 import type { Event, Evidence } from "../../core/types.js";
 
 // Mock OpenAI SDK
@@ -28,14 +28,14 @@ function setMockOpenAIError(error: unknown): void {
   (mockCreate as jest.Mock).mockRejectedValueOnce(error);
 }
 
-describe("OpenAIClient", () => {
-  let client: OpenAIClient;
+describe("LLMClient", () => {
+  let client: LLMClient;
   let mockEvent: Event;
   let mockEvidence: Evidence;
 
   beforeEach(() => {
     mockCreate.mockClear();
-    client = new OpenAIClient();
+    client = new LLMClient();
 
     mockEvent = {
       id: "evt_test123",

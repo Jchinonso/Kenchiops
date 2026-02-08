@@ -51,7 +51,7 @@ import {
   embedPendingKnowledgeDocs,
   INGESTION_DEFAULTS,
 } from "../../rag/ingestionHelpers.js";
-import { getEmbeddingClient } from "../../llm/providers/openai/embedding.js";
+import { getEmbeddingClient } from "../../llm/providers/llmProvider/embedding.js";
 import {
   getDiffChunksWithoutEmbeddings,
   updateDiffChunkEmbedding,

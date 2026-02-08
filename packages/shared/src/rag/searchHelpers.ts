@@ -11,7 +11,7 @@ import { createLogger } from "../core/logger.js";
 import { getErrorMessage, NotFoundError } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
 import { cacheGet, cacheSet } from "../cache/cacheClient.js";
-import { getEmbeddingClient } from "../llm/providers/openai/embedding.js";
+import { getEmbeddingClient } from "../llm/providers/llmProvider/embedding.js";
 import { SEARCH_CONSTANTS, type EmbeddingTierName } from "../constants/index.js";
 import {
   recordCost,

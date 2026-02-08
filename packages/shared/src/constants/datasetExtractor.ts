@@ -6,7 +6,7 @@
  * @module constants/datasetExtractor
  */
 
-import { DATASET_THRESHOLDS } from "./openai.js";
+import { DATASET_THRESHOLDS } from "./llm.js";
 import { CONFIDENCE_DISPLAY_THRESHOLDS } from "./confidence.js";
 import type { ExtractionResult, ValidationCheck } from "../finetuning/types.js";
 

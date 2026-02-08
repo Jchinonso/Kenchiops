@@ -1,12 +1,12 @@
 /**
- * OpenAI Embedding Client
+ * Embedding Client
  *
- * Provides vector embedding generation using OpenAI's embedding models.
+ * Provides vector embedding generation using OpenAI-compatible APIs.
  * Supports tiered models (LIGHT, STANDARD, PREMIUM) for cost optimization.
  * Used for RAG (Retrieval-Augmented Generation) to enable semantic search over
  * code diffs, documentation, and incident history.
  *
- * @module llm/providers/openai/embedding
+ * @module llm/providers/llmProvider/embedding
  */
 
 import OpenAI from "openai";
@@ -15,7 +15,7 @@ import { createLogger } from "../../../core/logger.js";
 import { ExternalServiceError, getErrorMessage } from "../../../core/errors.js";
 import {
   EMBEDDING_CONFIG,
-  OPENAI_CONSTANTS,
+  LLM_CONSTANTS,
   EMBEDDING_TIERS,
   OPENROUTER_DEFAULTS,
   type EmbeddingTierName,
@@ -62,7 +62,7 @@ const getEffectiveBaseUrl = (): string | undefined => {
  * Note: Embedding models may vary by provider. OpenRouter may not support
  * all OpenAI embedding models (text-embedding-3-small/large).
  */
-const createOpenAIClient = (): OpenAI => {
+const createLLMClient = (): OpenAI => {
   const baseURL = getEffectiveBaseUrl();
   return new OpenAI({
     apiKey: config.OPENAI_API_KEY,
@@ -143,7 +143,7 @@ export class EmbeddingClient {
   private readonly clientConfig: EmbeddingClientConfig;
 
   constructor(tier: EmbeddingTierName = "STANDARD") {
-    this.client = createOpenAIClient();
+    this.client = createLLMClient();
     this.clientConfig = createClientConfig(tier);
 
     logger.info("Embedding client initialized", {
@@ -286,8 +286,8 @@ export class EmbeddingClient {
           dimensions: this.clientConfig.dimension,
         }),
       {
-        threshold: OPENAI_CONSTANTS.CIRCUIT_BREAKER_THRESHOLD,
-        resetTimeout: OPENAI_CONSTANTS.CIRCUIT_BREAKER_RESET_MS,
+        threshold: LLM_CONSTANTS.CIRCUIT_BREAKER_THRESHOLD,
+        resetTimeout: LLM_CONSTANTS.CIRCUIT_BREAKER_RESET_MS,
       }
     );
 

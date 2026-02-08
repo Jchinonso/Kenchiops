@@ -1,11 +1,11 @@
 /**
- * OpenAI Extraction Adapter
+ * LLM Extraction Adapter
  *
- * Wraps OpenAI SDK for chunk extraction operations.
+ * Wraps OpenAI-compatible SDK for chunk extraction operations.
  * Supports OpenRouter and other OpenAI-compatible providers.
  * Keeps vendor SDK out of the service layer per CLAUDE.md.
  *
- * @module adapters/openaiExtraction
+ * @module adapters/llmExtraction
  */
 
 import OpenAI from "openai";
@@ -85,7 +85,7 @@ const withHardTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> 
 /**
  * Creates an extractor function for chunk artifact extraction.
  */
-export const createOpenAIExtractor = (): ExtractorFunction => {
+export const createLLMExtractor = (): ExtractorFunction => {
   const client = getClient();
 
   return async (

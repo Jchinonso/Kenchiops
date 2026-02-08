@@ -1,11 +1,11 @@
 /**
- * OpenAI and LLM provider constants.
+ * LLM provider constants.
  */
 
 /**
- * OpenAI API configuration defaults.
+ * LLM API configuration defaults (for direct OpenAI-compatible APIs).
  */
-export const OPENAI_DEFAULTS = {
+export const LLM_DEFAULTS = {
   TEMPERATURE: 0.0, // Zero temperature for deterministic output
   MODEL: "gpt-4-turbo-2024-04-09",
   MAX_TOKENS: 16384, // Model max is 16K completion tokens
@@ -23,9 +23,9 @@ export const OPENROUTER_DEFAULTS = {
 } as const;
 
 /**
- * OpenAI API configuration constants.
+ * LLM API configuration constants.
  */
-export const OPENAI_CONSTANTS = {
+export const LLM_CONSTANTS = {
   MAX_PROMPT_TOKENS: 128000, // Conservative limit; Gemini 2.5 Flash supports 1M context
   MAX_RETRIES: 3,
   DEFAULT_TIMEOUT_MS: 90000,
@@ -96,13 +96,13 @@ export const LOG_NORMALIZATION_PATTERNS = {
 } as const;
 
 /**
- * OpenAI-related error and default messages.
+ * LLM-related error and default messages.
  */
-export const OPENAI_MESSAGES = {
-  NO_CONTENT: "No content in OpenAI response",
+export const LLM_MESSAGES = {
+  NO_CONTENT: "No content in LLM response",
   NO_JSON_FOUND: "No JSON found in response",
   NO_SUMMARY: "No summary provided",
-  UNKNOWN_ERROR: "Unknown OpenAI error occurred",
+  UNKNOWN_ERROR: "Unknown LLM error occurred",
 } as const;
 
 /**

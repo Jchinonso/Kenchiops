@@ -10,7 +10,7 @@ jest.mock("@kenchi/shared", () => {
   const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
-    OpenAIClient: jest.fn().mockImplementation(() => ({
+    LLMClient: jest.fn().mockImplementation(() => ({
       analyzeIncident: jest.fn(),
     })),
     calculateConfidenceScore: jest.fn(),
@@ -30,7 +30,7 @@ jest.mock("@kenchi/shared", () => {
 
 // Import after mock
 import {
-  getOpenAIClient,
+  getLLMClient,
   createEventFromCommand,
   createEventFromMention,
   createMinimalEvidence,
@@ -42,23 +42,23 @@ describe("Analysis Service", () => {
     jest.clearAllMocks();
   });
 
-  describe("getOpenAIClient", () => {
+  describe("getLLMClient", () => {
     it("should create and return OpenAI client instance", () => {
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       expect(client).toBeDefined();
       expect(client.analyzeIncident).toBeDefined();
     });
 
     it("should return same instance on subsequent calls (singleton pattern)", () => {
-      const client1 = getOpenAIClient();
-      const client2 = getOpenAIClient();
+      const client1 = getLLMClient();
+      const client2 = getLLMClient();
 
       expect(client1).toBe(client2);
     });
 
     it("should have analyzeIncident method", () => {
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       expect(client.analyzeIncident).toBeDefined();
       expect(typeof client.analyzeIncident).toBe("function");
@@ -362,7 +362,7 @@ describe("Analysis Service", () => {
 
     it("should perform analysis successfully", async () => {
       const event = createMockEvent();
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest
@@ -379,7 +379,7 @@ describe("Analysis Service", () => {
 
     it("should call OpenAI client with event and evidence", async () => {
       const event = createMockEvent();
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest
@@ -400,7 +400,7 @@ describe("Analysis Service", () => {
     it("should call calculateConfidenceScore with analysis and evidence", async () => {
       const event = createMockEvent();
       const mockAnalysis = createMockAnalysisResult();
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(mockAnalysis);
@@ -422,7 +422,7 @@ describe("Analysis Service", () => {
       const event = createMockEvent();
       const mockAnalysis = createMockAnalysisResult();
       const mockConfidence = createMockConfidenceScore();
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(mockAnalysis);
@@ -440,7 +440,7 @@ describe("Analysis Service", () => {
 
     it("should include confidence finalScore in result", async () => {
       const event = createMockEvent();
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest
@@ -455,7 +455,7 @@ describe("Analysis Service", () => {
 
     it("should include gatingDecision in result", async () => {
       const event = createMockEvent();
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest
@@ -473,7 +473,7 @@ describe("Analysis Service", () => {
     it("should throw LLMError when OpenAI client fails", async () => {
       const event = createMockEvent();
       const error = new Error("OpenAI API error");
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockRejectedValue(error);
@@ -491,7 +491,7 @@ describe("Analysis Service", () => {
     it("should handle OpenAI timeout errors", async () => {
       const event = createMockEvent();
       const timeoutError = new Error("Request timeout");
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockRejectedValue(timeoutError);
@@ -502,7 +502,7 @@ describe("Analysis Service", () => {
     it("should handle OpenAI rate limit errors", async () => {
       const event = createMockEvent();
       const rateLimitError = new Error("Rate limit exceeded");
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockRejectedValue(rateLimitError);
@@ -516,7 +516,7 @@ describe("Analysis Service", () => {
         eventId: "evt_123",
         // Missing required fields
       } as unknown as LLMAnalysisResult;
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(malformedAnalysis);
@@ -533,7 +533,7 @@ describe("Analysis Service", () => {
       const lowConfidenceAnalysis = createMockAnalysisResult();
       lowConfidenceAnalysis.confidence = "very_low";
       lowConfidenceAnalysis.confidenceScore = 0.15;
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(lowConfidenceAnalysis);
@@ -565,7 +565,7 @@ describe("Analysis Service", () => {
       const highConfidenceAnalysis = createMockAnalysisResult();
       highConfidenceAnalysis.confidence = "very_high";
       highConfidenceAnalysis.confidenceScore = 0.95;
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(highConfidenceAnalysis);
@@ -599,7 +599,7 @@ describe("Analysis Service", () => {
         "Unable to determine exact cause",
         "Multiple potential root causes",
       ];
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(uncertainAnalysis);
@@ -621,7 +621,7 @@ describe("Analysis Service", () => {
           message: "Type error on line 42",
         },
       ];
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(analysisWithAnnotations);
@@ -652,7 +652,7 @@ describe("Analysis Service", () => {
           priority: "medium",
         },
       ];
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockResolvedValue(analysisWithActions);
@@ -665,7 +665,7 @@ describe("Analysis Service", () => {
 
     it("should handle non-Error objects thrown by OpenAI client", async () => {
       const event = createMockEvent();
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest.fn<any>().mockRejectedValue("String error");
@@ -679,7 +679,7 @@ describe("Analysis Service", () => {
         triggeredBy: "U123456",
         environment: "production",
       };
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest
@@ -695,7 +695,7 @@ describe("Analysis Service", () => {
     it("should work with different event types", async () => {
       const cicdEvent = createMockEvent();
       cicdEvent.type = "CICD_FAILURE";
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest
@@ -710,7 +710,7 @@ describe("Analysis Service", () => {
     it("should work with different severity levels", async () => {
       const criticalEvent = createMockEvent();
       criticalEvent.severity = "critical";
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any).analyzeIncident = jest
