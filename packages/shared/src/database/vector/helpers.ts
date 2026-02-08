@@ -39,6 +39,7 @@ export const parseJsonbField = (
   try {
     return JSON.parse(value) as Record<string, unknown>;
   } catch {
+    // Intentional: returns null for malformed JSON metadata — callers handle the null case
     return null;
   }
 };

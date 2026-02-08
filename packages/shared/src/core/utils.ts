@@ -83,6 +83,7 @@ export const safeJsonParse = <T>(json: string): T | null => {
   try {
     return JSON.parse(json) as T;
   } catch {
+    // Intentional: returns null for malformed JSON — callers handle the null case
     return null;
   }
 };

@@ -56,6 +56,7 @@ const getServiceKey = (url: string): string => {
     const parsed = new URL(url);
     return `${parsed.protocol}//${parsed.host}`;
   } catch {
+    // Intentional: falls back to raw URL string for invalid URLs
     return url;
   }
 };
@@ -177,6 +178,7 @@ const safeGetResponseText = async (response: Response): Promise<string> => {
   try {
     return await response.text();
   } catch {
+    // Intentional: response body may be unreadable; return fallback string
     return "Unknown error";
   }
 };
