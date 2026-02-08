@@ -786,6 +786,7 @@ export {
   enqueueAction,
   startActionQueueWorker,
   getActionQueueStats,
+  getActionQueueStatsResult,
   storeActionPayload,
   retrieveActionPayload,
   deleteActionPayload,
@@ -800,7 +801,7 @@ export {
   type OpaqueActionValue,
   type ActionVerificationContext,
   type ActionStoreStats,
-  type QueueStats,
+  type QueueStatsResult,
 } from "./actions/index.js";
 
 // Constants (re-export all)
