@@ -247,9 +247,22 @@ export const parseTestFailures = (raw: unknown): readonly LLMTestFailure[] => {
     return [];
   }
 
-  return raw
+  const parsed = raw
     .map((rawItem) => parseTestFailure(rawItem))
     .filter((failure): failure is LLMTestFailure => failure !== null);
+
+  // Deduplicate by (testName, file) to prevent LLM re-extraction inflation.
+  // The LLM sees formatted pipeline artifacts as evidence text and often
+  // re-extracts the same failure multiple times from overlapping context.
+  const seen = new Set<string>();
+  return parsed.filter((failure) => {
+    const key = `${failure.testName}::${failure.file ?? ""}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 };
 
 // ==================== Lint Error Parsing ====================
