@@ -35,6 +35,18 @@ export interface AnalyzeRequest {
   readonly tenant_id?: string;
   /** Detected test framework for assertion parsing hints */
   readonly test_framework?: TestFrameworkRequest;
+  /** Workflow identifier */
+  readonly workflow_id?: string;
+  /** CI platform (github, gitlab, circleci, etc.) */
+  readonly ci_platform?: string;
+  /** Git branch name */
+  readonly branch?: string;
+  /** Pull request number */
+  readonly pr_number?: number;
+  /** Workflow SHA for fingerprinting */
+  readonly workflow_sha?: string;
+  /** Exit code from CI job */
+  readonly exit_code?: number;
 }
 
 /**

@@ -28,6 +28,7 @@ import {
   type Evidence,
   type LLMAnalysisResult,
   type ModelSelectionResult,
+  type RequestContext,
 } from "@kenchi/shared";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
@@ -105,11 +106,17 @@ export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext 
 
 /**
  * Analyze CI failure using OpenAI
+ *
+ * @param event - The event to analyze
+ * @param evidence - Evidence collected for the analysis
+ * @param context - Request context for tracing
  */
 export const analyzeFailure = async (
   event: Event,
-  evidence: Evidence
+  evidence: Evidence,
+  context: RequestContext
 ): Promise<LLMAnalysisResult> => {
+  const logContext = { ...context };
   const openaiClient = getOpenAIClient();
 
   try {
@@ -119,6 +126,7 @@ export const analyzeFailure = async (
     logger.error("OpenAI analysis failed", {
       eventId: event.id,
       error: getErrorMessage(error),
+      ...logContext,
     });
     throw new LLMError(wrapError("Failed to analyze CI failure", error));
   }
@@ -169,8 +177,16 @@ const selectAnalysisModel = (tenantId?: string): ModelSelectionResult => {
  *
  * For small logs (below TOKEN_THRESHOLD):
  * - Direct analysis using existing flow
+ *
+ *
+ * @param request - Analysis request with log content and metadata
+ * @param context - Request context for tracing and tenant identification
  */
-export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeResponse> => {
+export const performAnalysis = async (
+  request: AnalyzeRequest,
+  context: RequestContext
+): Promise<AnalyzeResponse> => {
+  const logContext = { ...context };
   const { event, evidence: baseEvidence } = createAnalysisContext(request);
 
   // Select model version for this analysis (Phase 3 fine-tuning integration)
@@ -180,15 +196,16 @@ export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeR
   const estimatedTokens = estimateChunkTokens(request.failure_log);
   const useChunkingPipeline = estimatedTokens > CHUNKING_PIPELINE_CONFIG.TOKEN_THRESHOLD;
 
-  logger.info("CI failure analysis requested", {
+  logger.info("Starting CI failure analysis", {
     eventId: event.id,
     repository: request.repository,
-    tenantId: request.tenant_id,
+    workflowId: request.workflow_id,
     modelVersionId: modelSelection.versionId,
     modelId: modelSelection.modelId,
     selectionReason: modelSelection.reason,
     estimatedTokens,
     useChunkingPipeline,
+    ...logContext,
   });
 
   // Retrieve relevant knowledge documents via RAG (Phase 2 integration)
@@ -196,7 +213,8 @@ export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeR
   const relatedDocs = await retrieveRelevantKnowledge(
     request.repository,
     request.failure_log,
-    request.tenant_id
+    request.tenant_id,
+    context
   );
 
   let enrichedEvidence: Evidence;
@@ -207,12 +225,14 @@ export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeR
       eventId: event.id,
       repository: request.repository,
       estimatedTokens,
+      ...logContext,
     });
 
     try {
       const aggregatedEvidence = await executeChunkingPipeline(
         request.failure_log,
-        request.repository
+        request.repository,
+        context
       );
 
       // Convert aggregated evidence to standard Evidence format
@@ -229,16 +249,30 @@ export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeR
         testFramework: baseEvidence.testFramework,
       };
 
+      // Count artifacts by type and test_name presence for debugging
+      const artifactsByType = aggregatedEvidence.artifacts.reduce(
+        (acc, a) => {
+          acc[a.type] = (acc[a.type] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
+      const artifactsWithTestName = aggregatedEvidence.artifacts.filter((a) => a.testName).length;
+
       logger.info("Chunking pipeline evidence prepared", {
         eventId: event.id,
         artifactCount: aggregatedEvidence.artifacts.length,
+        artifactsByType,
+        artifactsWithTestName,
         degradedMode: aggregatedEvidence.degraded_mode,
+        ...logContext,
       });
     } catch (pipelineError) {
       logger.warn("Chunking pipeline failed, falling back to direct analysis", {
         eventId: event.id,
         repository: request.repository,
         error: getErrorMessage(pipelineError),
+        ...logContext,
       });
 
       enrichedEvidence = {
@@ -254,13 +288,14 @@ export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeR
     };
   }
 
-  logger.info("Evidence enriched with RAG context", {
+  logger.info("Evidence enriched with RAG documents", {
     eventId: event.id,
     relatedDocsCount: relatedDocs.length,
     usedChunkingPipeline: useChunkingPipeline,
+    ...logContext,
   });
 
-  const analysisResult = await analyzeFailure(event, enrichedEvidence);
+  const analysisResult = await analyzeFailure(event, enrichedEvidence, context);
   const confidenceResult = calculateConfidenceScore(analysisResult, enrichedEvidence);
 
   // Persist analysis to database for evaluation and fine-tuning
@@ -288,6 +323,7 @@ export const performAnalysis = async (request: AnalyzeRequest): Promise<AnalyzeR
     confidence: confidenceResult.finalScore,
     hasActions: (analysisResult.recommendedActions?.length ?? 0) > 0,
     ragDocsUsed: relatedDocs.length,
+    ...logContext,
   });
 
   return formatAnalysisResponse(analysisResult, enrichedEvidence, request.repository);
