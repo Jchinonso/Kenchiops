@@ -16,12 +16,13 @@ import type {
   RelatedEvent,
   KnowledgeDocument,
 } from "../core/types.js";
-import { ARTIFACT_TYPES } from "../constants/index.js";
-
-// ==================== Token Estimation ====================
-
-/** Approximate characters per token for GPT models */
-const CHARS_PER_TOKEN = 4;
+import {
+  ARTIFACT_TYPES,
+  CHARS_PER_TOKEN,
+  MAX_SNIPPET_LENGTH_TRUNCATED,
+  SHORT_COMMIT_SHA_LENGTH,
+  PERCENTAGE_MULTIPLIER,
+} from "../constants/index.js";
 
 /**
  * Estimates token count for a string.
@@ -30,9 +31,6 @@ const CHARS_PER_TOKEN = 4;
  * @returns Estimated token count
  */
 export const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN);
-
-/** Maximum snippet length when truncating evidence */
-const MAX_SNIPPET_LENGTH_TRUNCATED = 500;
 
 /**
  * Checks if a log entry represents a test_failure artifact.
@@ -219,9 +217,6 @@ export const formatMetrics = (metrics: Metrics): string => {
 
 // ==================== Git History Formatter ====================
 
-/** Length of short SHA for display */
-const SHORT_SHA_LENGTH = 7;
-
 /**
  * Formats git history for the prompt.
  *
@@ -234,7 +229,7 @@ export const formatGitHistory = (commits: readonly GitCommit[]): string => {
   }
 
   const formattedCommits = commits.map((commit) => {
-    const shortSha = commit.sha.substring(0, SHORT_SHA_LENGTH);
+    const shortSha = commit.sha.substring(0, SHORT_COMMIT_SHA_LENGTH);
     const files = commit.filesChanged ? ` (${commit.filesChanged.length} files)` : "";
     return `[commit#${shortSha}] ${commit.author} - ${commit.message}${files}`;
   });
@@ -264,9 +259,6 @@ export const formatRelatedEvents = (events: readonly RelatedEvent[]): string => 
 };
 
 // ==================== Knowledge Docs Formatter ====================
-
-/** Percentage multiplier for similarity display */
-const PERCENTAGE_MULTIPLIER = 100;
 
 /**
  * Formats knowledge documents for the prompt.

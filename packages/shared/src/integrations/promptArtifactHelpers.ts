@@ -9,26 +9,16 @@
 
 import type { RankedArtifact } from "../formatting/aggregation/index.js";
 import type { BuildMetadata } from "../formatting/analysis/index.js";
+import {
+  MAX_MESSAGE_LENGTH,
+  MAX_SNIPPET_LENGTH,
+  MAX_RAW_LOG_PREVIEW_LENGTH,
+  TRUNCATE_HEAD_RATIO,
+  MIN_MIDDLE_TRUNCATE_LENGTH,
+  TRUNCATE_MARKER,
+} from "../constants/index.js";
 
-// ==================== Constants ====================
-
-/** Maximum characters for error message in prompt (single line) */
-const MAX_MESSAGE_LENGTH = 500;
-
-/** Maximum characters for snippet in prompt */
-const MAX_SNIPPET_LENGTH = 2000;
-
-/** Ratio of head to tail in middle truncation (60% head, 40% tail) */
-const TRUNCATE_HEAD_RATIO = 0.6;
-
-/** Minimum length for middle truncation to be meaningful */
-const MIN_MIDDLE_TRUNCATE_LENGTH = 50;
-
-/** Truncation marker for middle truncation */
-const TRUNCATE_MARKER = "\n...[TRUNCATED]...\n";
-
-/** Maximum characters for degraded mode raw log preview */
-export const MAX_RAW_LOG_PREVIEW_LENGTH = 3000;
+export { MAX_RAW_LOG_PREVIEW_LENGTH };
 
 // ==================== Text Helpers ====================
 
