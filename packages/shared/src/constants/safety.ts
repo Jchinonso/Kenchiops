@@ -189,6 +189,60 @@ export const INJECTION_CODE_FENCE_WEIGHT_MULTIPLIER = 0.3;
 export const HALLUCINATION_DEFAULT_THRESHOLD = 0.6;
 
 /**
+ * Patterns that indicate potential hallucinations.
+ */
+export const HALLUCINATION_PATTERNS = [
+  {
+    pattern: /\b(?:exactly|precisely)\s+\d+(?:\.\d+)?%/gi,
+    type: "overly_precise" as const,
+    weight: 0.3,
+  },
+  { pattern: /\b\d+\.\d{3,}%/g, type: "overly_precise" as const, weight: 0.25 },
+  {
+    pattern: /(?:studies?\s+(?:show|prove|confirm)|research\s+(?:indicates|suggests))\s+that/gi,
+    type: "specific_claim_without_source" as const,
+    weight: 0.2,
+  },
+  {
+    pattern: /according\s+to\s+(?:experts?|scientists?|researchers?)\b/gi,
+    type: "specific_claim_without_source" as const,
+    weight: 0.15,
+  },
+  {
+    pattern: /(?:said|stated|wrote|noted)\s*[,:]?\s*[""][^""]{50,}[""]/gi,
+    type: "invented_quote" as const,
+    weight: 0.35,
+  },
+  {
+    pattern: /\b(?:definitely|certainly|absolutely|undoubtedly)\s+(?:will|would|is|are)\b/gi,
+    type: "confident_uncertainty" as const,
+    weight: 0.2,
+  },
+  {
+    pattern:
+      /(?:published\s+in|appeared\s+in)\s+(?:the\s+)?[A-Z][a-z]+\s+(?:Journal|Review|Quarterly)/gi,
+    type: "nonexistent_reference" as const,
+    weight: 0.25,
+  },
+] as const;
+
+/**
+ * Patterns for extracting factual claims from text.
+ */
+export const CLAIM_PATTERNS: readonly RegExp[] = [
+  /[^.!?]*\b(?:is|are|was|were|has|have|had)\s+(?:a|an|the)?\s*[^.!?]+[.!?]/gi,
+  /[^.!?]*\b(?:shows?|proves?|indicates?|suggests?|demonstrates?)\s+[^.!?]+[.!?]/gi,
+  /[^.!?]*\b(?:caused?|results?\s+in|leads?\s+to)\s+[^.!?]+[.!?]/gi,
+  /[^.!?]*\b(?:run|execute|use|install|configure|set|add|create|delete|remove)\s+[^.!?]+[.!?]/gi,
+] as const;
+
+/** Temporal pattern for detecting future years in past tense */
+export const TEMPORAL_PATTERN = /in\s+(20\d{2})\s+(?:it\s+)?(?:was|had|became)/gi;
+
+/** Confidence level thresholds for hallucination detection */
+export const HALLUCINATION_CONFIDENCE_THRESHOLDS = { HIGH: 2, MEDIUM: 1 } as const;
+
+/**
  * Weight factors for hallucination risk score calculation.
  */
 export const HALLUCINATION_RISK_WEIGHTS = {
