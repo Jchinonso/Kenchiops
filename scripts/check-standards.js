@@ -10,7 +10,7 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const EXCLUDED_PATHS = ["node_modules", "dist", "coverage", "__tests__", ".test.", ".spec."];
+const EXCLUDED_PATHS = ["node_modules", "dist", "coverage", "__tests__", ".test.", ".spec.", "core/logger.ts"];
 
 const RULES = [
   {

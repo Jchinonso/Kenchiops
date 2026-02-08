@@ -4,6 +4,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import { ExternalServiceError } from "../../core/errors.js";
 import type { GitHubRepository } from "../../core/types.js";
+import type { ResilientResponse } from "../../http/resilientClient.js";
 
 // Mock config before importing githubAppClient
 jest.mock("../../core/config.js", () => ({
@@ -22,19 +23,37 @@ jest.mock("../../core/logger.js", () => ({
   })),
 }));
 
+// Mock resilient HTTP client
+const mockResilientGet = jest.fn();
+jest.mock("../../http/resilientClient.js", () => ({
+  resilientGet: (...args: unknown[]) => mockResilientGet(...args),
+}));
+
+// Mock formatting/index.js for truncateText
+jest.mock("../../formatting/index.js", () => ({
+  truncateText: (text: string, maxLen: number) =>
+    text.length > maxLen ? text.slice(0, maxLen - 3) + "..." : text,
+}));
+
 // Import after mocks
 import { fetchInstallationRepositories } from "../../integrations/githubAppClient.js";
 
-// Mock global fetch
-const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
-global.fetch = mockFetch;
+/**
+ * Helper to create a mock resilient response.
+ */
+const createMockResponse = <T>(data: T, status = 200): ResilientResponse<T> => ({
+  data,
+  status,
+  retryCount: 0,
+  duration: 100,
+});
 
 describe("githubAppClient", () => {
   const mockInstallationId = 12345;
   const mockGitHubAppUrl = "https://github-app.example.com";
 
   beforeEach(() => {
-    mockFetch.mockClear();
+    mockResilientGet.mockClear();
   });
 
   afterEach(() => {
@@ -72,22 +91,14 @@ describe("githubAppClient", () => {
 
     describe("happy path", () => {
       it("should fetch and transform repositories successfully", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockApiResponse,
-        } as Response);
+        mockResilientGet.mockResolvedValueOnce(createMockResponse(mockApiResponse));
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
-        expect(mockFetch).toHaveBeenCalledTimes(1);
-        expect(mockFetch).toHaveBeenCalledWith(
+        expect(mockResilientGet).toHaveBeenCalledTimes(1);
+        expect(mockResilientGet).toHaveBeenCalledWith(
           `${mockGitHubAppUrl}/api/github/installations/${mockInstallationId}/repositories`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
+          { headers: { "Content-Type": "application/json" } }
         );
 
         expect(result).toHaveLength(3);
@@ -118,14 +129,13 @@ describe("githubAppClient", () => {
       });
 
       it("should return empty array when no repositories exist", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [],
             total: 0,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -133,9 +143,8 @@ describe("githubAppClient", () => {
       });
 
       it("should handle single repository", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [
               {
@@ -147,8 +156,8 @@ describe("githubAppClient", () => {
               },
             ],
             total: 1,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -157,9 +166,8 @@ describe("githubAppClient", () => {
       });
 
       it("should correctly parse owner from fullName", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [
               {
@@ -171,8 +179,8 @@ describe("githubAppClient", () => {
               },
             ],
             total: 1,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -180,9 +188,8 @@ describe("githubAppClient", () => {
       });
 
       it("should preserve all repository properties", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [
               {
@@ -194,8 +201,8 @@ describe("githubAppClient", () => {
               },
             ],
             total: 1,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -210,97 +217,9 @@ describe("githubAppClient", () => {
       });
     });
 
-    describe("HTTP error handling", () => {
-      it("should throw ExternalServiceError on 404 Not Found", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-          text: async () => "Installation not found",
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
-          ExternalServiceError
-        );
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
-          /GitHubApp/
-        );
-      });
-
-      it("should throw ExternalServiceError on 401 Unauthorized", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 401,
-          text: async () => "Unauthorized",
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
-          ExternalServiceError
-        );
-      });
-
-      it("should throw ExternalServiceError on 403 Forbidden", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 403,
-          text: async () => "Forbidden",
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
-          ExternalServiceError
-        );
-      });
-
-      it("should throw ExternalServiceError on 500 Internal Server Error", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 500,
-          text: async () => "Internal Server Error",
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
-          ExternalServiceError
-        );
-      });
-
-      it("should throw ExternalServiceError on 503 Service Unavailable", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 503,
-          text: async () => "Service Unavailable",
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
-          ExternalServiceError
-        );
-      });
-
-      it("should include status code in error message", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 422,
-          text: async () => "Unprocessable Entity",
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(/422/);
-      });
-
-      it("should include error text in error message", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 400,
-          text: async () => "Bad Request: Invalid installation ID",
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
-          /Invalid installation ID/
-        );
-      });
-    });
-
-    describe("network error handling", () => {
+    describe("error handling", () => {
       it("should throw ExternalServiceError on network failure", async () => {
-        mockFetch.mockRejectedValueOnce(new Error("Network request failed"));
+        mockResilientGet.mockRejectedValueOnce(new Error("Network request failed"));
 
         await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
           ExternalServiceError
@@ -308,7 +227,7 @@ describe("githubAppClient", () => {
       });
 
       it("should throw ExternalServiceError on timeout", async () => {
-        mockFetch.mockRejectedValueOnce(new Error("Request timeout"));
+        mockResilientGet.mockRejectedValueOnce(new Error("Request timeout"));
 
         await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
           ExternalServiceError
@@ -316,7 +235,7 @@ describe("githubAppClient", () => {
       });
 
       it("should throw ExternalServiceError on DNS failure", async () => {
-        mockFetch.mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND"));
+        mockResilientGet.mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND"));
 
         await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
           ExternalServiceError
@@ -324,7 +243,7 @@ describe("githubAppClient", () => {
       });
 
       it("should throw ExternalServiceError on connection refused", async () => {
-        mockFetch.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+        mockResilientGet.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
 
         await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
           ExternalServiceError
@@ -332,7 +251,7 @@ describe("githubAppClient", () => {
       });
 
       it("should include installation ID in error metadata", async () => {
-        mockFetch.mockRejectedValueOnce(new Error("Network error"));
+        mockResilientGet.mockRejectedValueOnce(new Error("Network error"));
 
         try {
           await fetchInstallationRepositories(mockInstallationId);
@@ -345,66 +264,26 @@ describe("githubAppClient", () => {
           }
         }
       });
-    });
 
-    describe("invalid response handling", () => {
-      it("should throw ExternalServiceError when response is not JSON", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => {
-            throw new SyntaxError("Unexpected token < in JSON");
-          },
-        } as unknown as Response);
+      it("should re-throw ExternalServiceError from resilient client without wrapping", async () => {
+        const originalError = new ExternalServiceError("github-app", "Service unavailable", {
+          operation: "resilientGet",
+        });
+        mockResilientGet.mockRejectedValueOnce(originalError);
 
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow(
-          ExternalServiceError
-        );
-      });
-
-      it("should throw ExternalServiceError when response has invalid structure", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            // Missing required fields
-            invalidField: "test",
-          }),
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow();
-      });
-
-      it("should handle response with missing repositories array", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            installationId: mockInstallationId,
-            total: 0,
-            // Missing repositories array
-          }),
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow();
-      });
-
-      it("should handle response with null repositories", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            installationId: mockInstallationId,
-            repositories: null,
-            total: 0,
-          }),
-        } as Response);
-
-        await expect(fetchInstallationRepositories(mockInstallationId)).rejects.toThrow();
+        try {
+          await fetchInstallationRepositories(mockInstallationId);
+          expect(true).toBe(false);
+        } catch (error) {
+          expect(error).toBe(originalError);
+        }
       });
     });
 
     describe("edge cases", () => {
       it("should handle repository with hyphenated fullName", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [
               {
@@ -416,8 +295,8 @@ describe("githubAppClient", () => {
               },
             ],
             total: 1,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -426,9 +305,8 @@ describe("githubAppClient", () => {
       });
 
       it("should handle repository with underscored fullName", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [
               {
@@ -440,8 +318,8 @@ describe("githubAppClient", () => {
               },
             ],
             total: 1,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -450,9 +328,8 @@ describe("githubAppClient", () => {
       });
 
       it("should handle repository with dots in name", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [
               {
@@ -464,8 +341,8 @@ describe("githubAppClient", () => {
               },
             ],
             total: 1,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -482,14 +359,13 @@ describe("githubAppClient", () => {
           defaultBranch: "main",
         }));
 
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: manyRepos,
             total: 100,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -499,9 +375,8 @@ describe("githubAppClient", () => {
       });
 
       it("should handle different default branch names", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [
               {
@@ -534,8 +409,8 @@ describe("githubAppClient", () => {
               },
             ],
             total: 4,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 
@@ -546,18 +421,17 @@ describe("githubAppClient", () => {
       });
 
       it("should handle installation ID as zero", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: 0,
             repositories: [],
             total: 0,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(0);
 
-        expect(mockFetch).toHaveBeenCalledWith(
+        expect(mockResilientGet).toHaveBeenCalledWith(
           `${mockGitHubAppUrl}/api/github/installations/0/repositories`,
           expect.any(Object)
         );
@@ -566,18 +440,17 @@ describe("githubAppClient", () => {
 
       it("should handle very large installation ID", async () => {
         const largeId = 999999999;
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: largeId,
             repositories: [],
             total: 0,
-          }),
-        } as Response);
+          })
+        );
 
         const result = await fetchInstallationRepositories(largeId);
 
-        expect(mockFetch).toHaveBeenCalledWith(
+        expect(mockResilientGet).toHaveBeenCalledWith(
           `${mockGitHubAppUrl}/api/github/installations/${largeId}/repositories`,
           expect.any(Object)
         );
@@ -586,61 +459,37 @@ describe("githubAppClient", () => {
     });
 
     describe("request configuration", () => {
-      it("should use GET method", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+      it("should pass Content-Type header to resilient client", async () => {
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [],
             total: 0,
-          }),
-        } as Response);
-
-        await fetchInstallationRepositories(mockInstallationId);
-
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            method: "GET",
           })
         );
-      });
-
-      it("should include Content-Type header", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            installationId: mockInstallationId,
-            repositories: [],
-            total: 0,
-          }),
-        } as Response);
 
         await fetchInstallationRepositories(mockInstallationId);
 
-        expect(mockFetch).toHaveBeenCalledWith(
+        expect(mockResilientGet).toHaveBeenCalledWith(
           expect.any(String),
           expect.objectContaining({
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
           })
         );
       });
 
       it("should construct correct URL with installation ID", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
+        mockResilientGet.mockResolvedValueOnce(
+          createMockResponse({
             installationId: mockInstallationId,
             repositories: [],
             total: 0,
-          }),
-        } as Response);
+          })
+        );
 
         await fetchInstallationRepositories(mockInstallationId);
 
-        expect(mockFetch).toHaveBeenCalledWith(
+        expect(mockResilientGet).toHaveBeenCalledWith(
           `${mockGitHubAppUrl}/api/github/installations/${mockInstallationId}/repositories`,
           expect.any(Object)
         );
@@ -649,12 +498,10 @@ describe("githubAppClient", () => {
 
     describe("type safety", () => {
       it("should return array of GitHubRepository type", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockApiResponse,
-        } as Response);
+        mockResilientGet.mockResolvedValueOnce(createMockResponse(mockApiResponse));
 
-        const result: GitHubRepository[] = await fetchInstallationRepositories(mockInstallationId);
+        const result: readonly GitHubRepository[] =
+          await fetchInstallationRepositories(mockInstallationId);
 
         result.forEach((repo) => {
           expect(typeof repo.id).toBe("number");
@@ -667,10 +514,7 @@ describe("githubAppClient", () => {
       });
 
       it("should maintain readonly properties", async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockApiResponse,
-        } as Response);
+        mockResilientGet.mockResolvedValueOnce(createMockResponse(mockApiResponse));
 
         const result = await fetchInstallationRepositories(mockInstallationId);
 

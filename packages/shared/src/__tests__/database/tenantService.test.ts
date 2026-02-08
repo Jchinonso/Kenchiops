@@ -1,5 +1,5 @@
 /**
- * Unit tests for database/tenantService.ts
+ * Unit tests for database/tenant module.
  *
  * Tests tenant CRUD operations, status management, and audit logging.
  */
@@ -13,7 +13,7 @@ const mockQuery = jest.fn<(...args: any[]) => Promise<any>>();
 const mockTransaction = jest.fn<(fn: any) => Promise<any>>();
 
 // Mock database client
-jest.mock("../../database/client.js", () => ({
+jest.mock("../../database/client/client.js", () => ({
   query: mockQuery,
   transaction: mockTransaction,
 }));

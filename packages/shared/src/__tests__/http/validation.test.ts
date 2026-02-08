@@ -4,7 +4,8 @@
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import type { Request, Response, NextFunction } from "express";
-import { validate, validators, type ValidationSchema } from "../../http/validation.js";
+import { validate, validators } from "../../http/validation.js";
+import type { ValidationSchema } from "../../http/types.js";
 import { ValidationError } from "../../core/errors.js";
 
 describe("HTTP Validation", () => {
