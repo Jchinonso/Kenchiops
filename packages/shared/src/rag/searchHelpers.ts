@@ -18,16 +18,23 @@ import {
   batchIncrementKnowledgeDocHitCounts,
   type VectorSearchResult,
 } from "../database/index.js";
-import { type KnowledgeDocRecord } from "../database/knowledgeDoc/types.js";
+import type { KnowledgeDocRecord } from "../database/knowledgeDoc/types.js";
 import { recordEmbeddingOperation } from "./metrics.js";
 import { estimateTokenCount } from "./chunking.js";
-import { type RerankableResult, type RerankedResult } from "./reranker.js";
+import type {
+  RerankableResult,
+  RerankedResult,
+  EventQueryContext,
+  QueryEmbeddingResult,
+} from "./types.js";
 import {
   selectEmbeddingTier,
   getCachedEmbedding,
   cacheEmbedding,
   recordQueryCost,
 } from "./costControls.js";
+
+export type { EventQueryContext } from "./types.js";
 
 const logger = createLogger("rag-search");
 
@@ -48,18 +55,6 @@ export const SEARCH_CONSTANTS = {
 } as const;
 
 // ==================== Query Construction ====================
-
-/**
- * Query construction input from event context.
- */
-export interface EventQueryContext {
-  readonly eventType: string;
-  readonly repository: string;
-  readonly errorMessage?: string;
-  readonly failureSummary?: string;
-  readonly affectedFiles?: readonly string[];
-  readonly testNames?: readonly string[];
-}
 
 /**
  * Builds a search query from event context.
@@ -195,16 +190,6 @@ export const trackKnowledgeDocHitsSafely = async (docIds: readonly string[]): Pr
 };
 
 // ==================== Embedding Functions ====================
-
-/**
- * Result of query embedding operation with tier info.
- */
-export interface QueryEmbeddingResult {
-  readonly embedding: readonly number[];
-  readonly cacheHit: boolean;
-  readonly tier: EmbeddingTierName;
-  readonly dimension: number;
-}
 
 /**
  * Gets or generates embedding for a query, using cache when available.

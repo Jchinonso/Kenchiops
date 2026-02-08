@@ -11,6 +11,8 @@
 /**
  * Document type constants for chunking strategies.
  */
+import type { ChunkingStrategy } from "./types.js";
+
 export const DOC_TYPES = {
   ANALYSIS_LESSON: "analysis_lesson",
   PR_FIX_COMMENT: "pr_fix_comment",
@@ -22,30 +24,7 @@ export const DOC_TYPES = {
   DOCUMENTATION: "documentation",
   EXTERNAL: "external",
 } as const;
-
-// ==================== Strategy Types ====================
-
-/**
- * Chunking strategy configuration.
- */
-export interface ChunkingStrategy {
-  /** Target tokens per chunk */
-  readonly targetTokens: number;
-  /** Minimum tokens per chunk */
-  readonly minTokens: number;
-  /** Maximum tokens per chunk */
-  readonly maxTokens: number;
-  /** Overlap ratio between chunks */
-  readonly overlapRatio: number;
-  /** Whether to preserve sections (for structured docs) */
-  readonly preserveSections: boolean;
-  /** Whether to keep as atomic unit (small docs) */
-  readonly atomicUnit: boolean;
-  /** Maximum tokens before forcing chunking (for atomic units) */
-  readonly atomicMaxTokens: number;
-  /** Context prefix template */
-  readonly contextTemplate: string;
-}
+export type { ChunkingStrategy } from "./types.js";
 
 // ==================== Strategy Definitions ====================
 

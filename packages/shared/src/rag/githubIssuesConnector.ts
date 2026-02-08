@@ -9,6 +9,7 @@
 
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage, ExternalServiceError } from "../core/errors.js";
+import { resilientGet } from "../http/resilientClient.js";
 import {
   EXTERNAL_SOURCE_TYPES,
   EXTERNAL_SOURCE_CONFIG,
@@ -16,44 +17,16 @@ import {
   type TechStackTag,
 } from "../constants/index.js";
 import type { ExternalSource } from "../database/index.js";
-import {
-  registerConnector,
-  type ExternalDocument,
-  type FetchResult,
-  type ExternalSourceConnector,
-} from "./externalKnowledge.js";
+import { registerConnector } from "./externalKnowledge.js";
+import type {
+  ExternalDocument,
+  FetchResult,
+  ExternalSourceConnector,
+  GitHubIssue,
+  GitHubAuthConfig,
+} from "./types.js";
 
 const logger = createLogger("github-issues-connector");
-
-// ==================== Types ====================
-
-/**
- * GitHub issue from API response.
- */
-interface GitHubIssue {
-  readonly id: number;
-  readonly number: number;
-  readonly title: string;
-  readonly body: string | null;
-  readonly html_url: string;
-  readonly labels: ReadonlyArray<{ name: string }>;
-  readonly state: string;
-  readonly created_at: string;
-  readonly updated_at: string;
-  readonly closed_at: string | null;
-  readonly pull_request?: unknown;
-}
-
-/**
- * Auth config for GitHub connector.
- */
-interface GitHubAuthConfig {
-  readonly token?: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly labels?: readonly string[];
-  readonly state?: "open" | "closed" | "all";
-}
 
 // ==================== Constants ====================
 
@@ -176,7 +149,7 @@ const issueToDocument = (issue: GitHubIssue): ExternalDocument => ({
 });
 
 /**
- * Fetches issues from GitHub API.
+ * Fetches issues from GitHub API using resilient HTTP client.
  */
 const fetchGitHubIssues = async (
   config: GitHubAuthConfig,
@@ -202,20 +175,49 @@ const fetchGitHubIssues = async (
     headers.Authorization = `Bearer ${config.token}`;
   }
 
-  const response = await fetch(url.toString(), { headers });
+  const startTime = Date.now();
 
-  if (!response.ok) {
-    throw new ExternalServiceError(
-      "github",
-      `API error: ${response.status} ${response.statusText}`
-    );
+  try {
+    const response = await resilientGet<readonly GitHubIssue[]>(url.toString(), {
+      headers,
+    });
+
+    const durationMs = Date.now() - startTime;
+
+    logger.info("GitHub issues fetched", {
+      provider: "github",
+      operation: "listIssues",
+      durationMs,
+      statusCode: response.status,
+      owner: config.owner,
+      repo: config.repo,
+      page,
+    });
+
+    // resilientGet returns data directly; pagination check via status
+    // Note: Link header not available via resilientGet, use result length heuristic
+    const issues = response.data;
+    const hasMore = issues.length >= GITHUB_ISSUES_PER_PAGE;
+
+    return { issues: Object.freeze(issues), hasMore };
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+
+    logger.error("GitHub issues fetch failed", {
+      provider: "github",
+      operation: "listIssues",
+      durationMs,
+      owner: config.owner,
+      repo: config.repo,
+      page,
+      error: getErrorMessage(error),
+    });
+
+    throw new ExternalServiceError("github", `Failed to fetch issues: ${getErrorMessage(error)}`, {
+      retryable: true,
+      metadata: { owner: config.owner, repo: config.repo, page, durationMs },
+    });
   }
-
-  const issues = (await response.json()) as readonly GitHubIssue[];
-  const linkHeader = response.headers.get("Link");
-  const hasMore = linkHeader?.includes('rel="next"') ?? false;
-
-  return { issues: Object.freeze(issues), hasMore };
 };
 
 // ==================== Connector Implementation ====================
