@@ -6,6 +6,38 @@ TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of conc
 
 ---
 
+## Agent Delegation (Mandatory)
+
+Custom agents live in `.claude/agents/`. You MUST delegate to them by launching a Task with `subagent_type: "general-purpose"` and including the agent's role/instructions in the prompt. Read the agent file first, then embed its core instructions in the Task prompt.
+
+| Agent                     | Trigger Condition                                                                                | Agent File                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| `git-commit-staged`       | **Every commit.** Never commit manually with raw git commands. Always delegate.                  | `.claude/agents/git-commit-staged.md`       |
+| `principal-engineer`      | Implementing new features, bug fixes, or non-trivial code changes.                               | `.claude/agents/principal-engineer.md`      |
+| `test-engineer`           | After writing new modules, services, adapters, or utilities. After bug fixes (regression tests). | `.claude/agents/test-engineer.md`           |
+| `kenchi-refactor-analyst` | After significant code changes — audit for CLAUDE.md compliance and code smells.                 | `.claude/agents/kenchi-refactor-analyst.md` |
+| `vulnerability-scanner`   | Before committing code that handles auth, secrets, user input, or external data.                 | `.claude/agents/vulnerability-scanner.md`   |
+
+**Workflow for implementation tasks:**
+
+1. Implement the change (or delegate to `principal-engineer` for complex tasks)
+2. Delegate to `test-engineer` to write tests (if applicable)
+3. Delegate to `kenchi-refactor-analyst` to audit (if significant change)
+4. **Always** delegate to `git-commit-staged` to commit
+
+**How to delegate:**
+
+```
+Task tool → subagent_type: "general-purpose" → prompt includes:
+1. Read the agent file for full instructions
+2. The specific task to perform
+3. Context about what was changed and why
+```
+
+Users can also invoke agents directly as slash commands: `/git-commit-staged`, `/principal-engineer`, etc.
+
+---
+
 ## Rules of the Road (Quick Reference)
 
 ### 11 Hard Rules (Non-Negotiable)
