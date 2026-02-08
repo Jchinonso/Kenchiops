@@ -30,9 +30,6 @@ import type {
   WorkerErrorCallback,
 } from "./types.js";
 
-// Re-export types for backwards compatibility
-export type { ActionJobPayload, ActionResultEvent, QueueStats, QueueStatsResult } from "./types.js";
-
 const logger = createLogger("action-queue");
 
 // ==================== Queue Operations ====================
@@ -100,7 +97,7 @@ const processActionJob = async (
     logger.info("Action job completed", {
       ...jobContext,
       success: result.success,
-      duration: result.duration,
+      durationMs: result.durationMs,
     });
 
     return buildProcessResult(result.success, result.error);

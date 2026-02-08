@@ -23,14 +23,6 @@ import type {
   ParseResult,
 } from "./types.js";
 
-// Re-export types for backwards compatibility
-export type {
-  StoredActionPayload,
-  OpaqueActionValue,
-  ActionVerificationContext,
-  ActionStoreStats,
-} from "./types.js";
-
 const logger = createLogger("action-store");
 
 // ==================== Store State ====================

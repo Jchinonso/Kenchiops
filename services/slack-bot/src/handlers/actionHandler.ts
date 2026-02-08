@@ -192,7 +192,7 @@ const executeStoredAction = async (
     await persistActionStatus(finalActionProposal.id, executionStatus, "slack-user", {
       success: result.success,
       message: result.message,
-      duration: result.duration,
+      durationMs: result.durationMs,
     });
 
     const { status, text } = formatResultMessage(
@@ -211,7 +211,7 @@ const executeStoredAction = async (
       actionId: finalActionProposal.id,
       actionType: payload.actionType,
       success: result.success,
-      duration: result.duration,
+      durationMs: result.durationMs,
     });
   }
 

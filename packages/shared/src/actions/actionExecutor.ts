@@ -20,9 +20,6 @@ import type {
   ValidationResult,
 } from "./types.js";
 
-// Re-export types for backwards compatibility
-export type { ActionExecutionContext, ActionExecutionResult } from "./types.js";
-
 const logger = createLogger("action-executor");
 
 /**
@@ -70,7 +67,7 @@ const executeRerunPipeline: ActionExecutor = async (action, context) => {
     logger.info("Pipeline rerun triggered successfully", {
       repository: context.repository,
       runId: response.data.runId,
-      duration: response.duration,
+      durationMs: response.duration,
     });
 
     return {
@@ -219,7 +216,7 @@ export const executeAction = async (
     output: result.output,
     error: result.error,
     executedAt: new Date().toISOString(),
-    duration: Date.now() - startTime,
+    durationMs: Date.now() - startTime,
   });
 
   try {
@@ -231,7 +228,7 @@ export const executeAction = async (
       actionId: action.id,
       actionType: action.actionType,
       success: result.success,
-      duration: executionResult.duration,
+      durationMs: executionResult.durationMs,
     });
 
     return executionResult;

@@ -48,7 +48,7 @@ export interface ActionExecutionResult {
   readonly output?: string;
   readonly error?: string;
   readonly executedAt: string;
-  readonly duration?: number;
+  readonly durationMs?: number;
 }
 
 // ==================== Payload Store Types ====================
@@ -139,7 +139,7 @@ export interface RerunResponse {
 }
 
 /** Validation result for action execution. */
-export type ValidationResult = { valid: boolean; reason?: string };
+export type ValidationResult = { readonly valid: boolean; readonly reason?: string };
 
 // ==================== Payload Store Internal Types ====================
 

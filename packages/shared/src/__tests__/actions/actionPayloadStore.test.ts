@@ -8,8 +8,8 @@ import {
   deleteActionPayload,
   parseOpaqueActionValue,
   clearActionStore,
-  type StoredActionPayload,
 } from "../../actions/actionPayloadStore.js";
+import type { StoredActionPayload } from "../../actions/types.js";
 import { NotFoundError, ValidationError } from "../../core/errors.js";
 
 type ActionPayloadInput = Omit<StoredActionPayload, "createdAt" | "verificationToken">;

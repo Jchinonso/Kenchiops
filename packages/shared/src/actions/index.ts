@@ -48,6 +48,7 @@ export {
   enqueueAction,
   startActionQueueWorker,
   getActionQueueStats,
+  getActionQueueStatsResult,
 } from "./actionQueueProcessor.js";
 
 // ==================== Payload Store ====================
