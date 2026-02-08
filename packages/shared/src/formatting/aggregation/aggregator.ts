@@ -18,7 +18,7 @@ import {
   type CIPlatformType,
 } from "../../constants/index.js";
 
-import { createLogger } from "../../index.js";
+import { createLogger } from "../../core/logger.js";
 
 import type { ChunkResult } from "../chunking/types.js";
 import type { BatchExtractionResult, PrimaryFailure } from "../extraction/types.js";
@@ -173,7 +173,16 @@ export const aggregateArtifacts = (
 
   const sortedArtifacts = sortArtifactsByPriority(artifacts);
 
-  const selectedArtifacts = sortedArtifacts.slice(0, maxArtifacts);
+  // Ensure all test failures are preserved before filling remaining budget with other types.
+  // Test failures are the most actionable artifacts for developers and should never be truncated.
+  const testFailures = sortedArtifacts.filter(
+    (artifact) => artifact.type === ARTIFACT_TYPES.TEST_FAILURE
+  );
+  const nonTestFailures = sortedArtifacts.filter(
+    (artifact) => artifact.type !== ARTIFACT_TYPES.TEST_FAILURE
+  );
+  const remainingBudget = Math.max(0, maxArtifacts - testFailures.length);
+  const selectedArtifacts = [...testFailures, ...nonTestFailures.slice(0, remainingBudget)];
 
   const primaryFailure = determinePrimaryFailure(selectedArtifacts);
 
