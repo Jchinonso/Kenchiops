@@ -26,17 +26,6 @@ import {
   type WorkflowContext,
 } from "./types.js";
 
-// Re-export types for backwards compatibility
-export type {
-  FailureContext,
-  AggregationMetadata,
-  AggregationKeySet,
-  RedisClient,
-} from "./types.js";
-
-// Re-export constant for backwards compatibility
-export { AGGREGATION_KEY_PATTERN } from "../constants/index.js";
-
 // ==================== Redis Helpers ====================
 
 /** Checks if Redis client is ready for operations. */

@@ -10,27 +10,24 @@
 import { getRedisClient } from "../queue/redisClient.js";
 import { createLogger, withTimeout, getErrorMessage } from "../core/index.js";
 import { AGGREGATION_DEFAULTS, PARSE_INT_RADIX, REDIS_TIMEOUTS } from "../constants/index.js";
-import {
-  type AggregatedFailures,
-  type AggregationKey,
-  type AggregationReadResult,
-  type PendingAggregation,
-  type PendingCheckRun,
-  type SerializedPendingCheckData,
+import type {
+  AggregatedFailures,
+  AggregationKey,
+  AggregationMetadata,
+  AggregationReadResult,
+  PendingAggregation,
+  PendingCheckRun,
+  SerializedPendingCheckData,
 } from "./types.js";
 import {
   deserializeFailure,
   reconstructAggregation,
   buildAggregationKeys,
   isRedisReady,
-  type AggregationMetadata,
 } from "./aggregatorHelpers.js";
 import { buildLogContext } from "./aggregatorWrite.js";
 
 const logger = createLogger("redis-aggregator");
-
-// Re-export type for backward compatibility
-export type { AggregationReadResult } from "./types.js";
 
 // ==================== Result Constructors ====================
 

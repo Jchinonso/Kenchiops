@@ -9,6 +9,7 @@
 
 import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
 import type { getRedisClient } from "../queue/redisClient.js";
+import type { ProcessResult } from "../queue/types.js";
 import type {
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
@@ -543,9 +544,7 @@ export type WorkerLoop = () => Promise<void>;
 /**
  * Message processor function type.
  */
-export type MessageProcessor = (
-  message: QueueMessage
-) => Promise<import("../queue/messageQueue.js").ProcessResult>;
+export type MessageProcessor = (message: QueueMessage) => Promise<ProcessResult>;
 
 // ==================== Aggregator Worker Internal Types ====================
 

@@ -26,15 +26,6 @@ import { enqueuePendingAggregation } from "./aggregationEnqueuer.js";
 
 const logger = createLogger("aggregator-worker");
 
-// ==================== Re-exports for Backwards Compatibility ====================
-
-export type {
-  WorkerErrorCallback,
-  WorkerStats,
-  WorkerControl,
-  AggregatorWorkerOptions,
-} from "./types.js";
-
 // ==================== Enqueue Operations ====================
 
 /** Enqueues a single aggregation with error capture. */

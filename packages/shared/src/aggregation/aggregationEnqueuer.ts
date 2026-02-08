@@ -20,9 +20,6 @@ import { getAggregationFromRedis, getPendingAggregationFromRedis } from "./aggre
 import { deleteAggregationFromRedis } from "./redisAggregator.js";
 import { formatShaForDisplay } from "./aggregatorHelpers.js";
 
-// Re-export for backwards compatibility
-export type { PendingAggregationPayload } from "./types.js";
-
 const logger = createLogger("aggregation-enqueuer");
 
 // ==================== Helpers ====================

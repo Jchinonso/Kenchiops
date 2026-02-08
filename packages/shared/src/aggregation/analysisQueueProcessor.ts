@@ -34,18 +34,6 @@ import { formatShaForDisplay } from "./aggregatorHelpers.js";
 
 const logger = createLogger("analysis-queue-processor");
 
-// ==================== Re-exports for Backwards Compatibility ====================
-
-export type {
-  AggregationReadyCallback,
-  PendingAnalysisCallback,
-  ConsolidatedAnalysisPayload,
-  AnalysisQueueProcessorOptions,
-  ProcessorErrorCallback,
-  ProcessorStats,
-  ProcessorControl,
-} from "./types.js";
-
 // ==================== Result Constructors ====================
 
 /** Creates a success result. */

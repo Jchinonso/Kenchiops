@@ -16,13 +16,9 @@ import {
   type AggregationConfig,
   type AggregationKey,
   type ReadinessResult,
-} from "./types.js";
-import {
-  parseAggregationKey,
-  buildAggregationKeys,
-  isRedisReady,
   type RedisClient,
-} from "./aggregatorHelpers.js";
+} from "./types.js";
+import { parseAggregationKey, buildAggregationKeys, isRedisReady } from "./aggregatorHelpers.js";
 
 const logger = createLogger("aggregation-scanner");
 
