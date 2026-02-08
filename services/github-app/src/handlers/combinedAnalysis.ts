@@ -15,13 +15,18 @@ import {
   createLogger,
   config,
   resilientPost,
+  resilientGet,
   getErrorMessage,
   preprocessLogsWithMetadata,
   mapWithConcurrency,
   LLM_CONCURRENCY_DEFAULTS,
+  ExternalServiceError,
+  GITHUB_COMMENT_TEMPLATES,
   // V1.1: Chunking pipeline for improved preprocessing and line mapping
   sanitizeForChunkingWithMapping,
   getOriginalLineNumber,
+  // Tenant lookup
+  findByGitHubInstallation,
   type PendingAggregationPayload,
   type AggregatedFailures,
   type AnalyzedFailure,
@@ -33,10 +38,44 @@ import {
 } from "@kenchi/shared";
 import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
+import { postPRComment } from "../services/githubComments.js";
 
 const logger = createLogger("github-app");
 
+// ==================== Async Job Polling Configuration ====================
+
+/**
+ * Configuration for polling async analysis jobs.
+ * The API now returns 202 immediately with a job_id, and we poll for completion.
+ */
+const POLLING_CONFIG = {
+  /** Maximum time to wait for job completion (20 minutes for large logs with many chunks) */
+  MAX_WAIT_MS: 1_200_000,
+  /** Interval between status polls */
+  INTERVAL_MS: 5_000,
+  /** Timeout for individual HTTP requests */
+  REQUEST_TIMEOUT_MS: 30_000,
+} as const;
+
 // ==================== Types ====================
+
+/**
+ * Response from POST /api/analyze - job submission.
+ */
+interface JobSubmissionResponse {
+  readonly job_id: string;
+  readonly status: "pending";
+}
+
+/**
+ * Response from GET /api/jobs/:id - job status.
+ */
+interface JobStatusResponse {
+  readonly job_id: string;
+  readonly status: "pending" | "processing" | "completed" | "failed";
+  readonly result?: PerJobAnalysisApiResponse;
+  readonly error?: string;
+}
 
 /**
  * Per-job API response structure.
@@ -236,17 +275,149 @@ const createFallbackFailure = (
 });
 
 /**
+ * Helper to delay execution.
+ */
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/**
+ * Post a placeholder comment on a single PR.
+ * Returns silently on failure — placeholder is best-effort.
+ */
+const postPlaceholderToPR = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  placeholderBody: string
+): Promise<void> => {
+  try {
+    await postPRComment(installationId, owner, repo, prNumber, placeholderBody, true);
+  } catch (error) {
+    logger.warn("Failed to post analyzing placeholder", {
+      prNumber,
+      error: getErrorMessage(error),
+    });
+  }
+};
+
+/**
+ * Post a placeholder comment on PRs to indicate analysis is in progress.
+ * Best-effort: failures are logged but do not block the analysis pipeline.
+ */
+const postAnalyzingPlaceholder = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  pullRequestNumbers: readonly number[],
+  checkNames: readonly string[]
+): Promise<void> => {
+  if (pullRequestNumbers.length === 0) {
+    return;
+  }
+
+  const placeholderBody = GITHUB_COMMENT_TEMPLATES.ANALYZING_PLACEHOLDER(checkNames);
+
+  await Promise.all(
+    pullRequestNumbers.map((prNumber) =>
+      postPlaceholderToPR(installationId, owner, repo, prNumber, placeholderBody)
+    )
+  );
+
+  logger.info("Posted analyzing placeholder", {
+    owner,
+    repo,
+    prCount: pullRequestNumbers.length,
+    checkNames,
+  });
+};
+
+/**
+ * Poll for job completion from the API.
+ * The API processes analysis jobs asynchronously to avoid HTTP timeouts.
+ *
+ * @param jobId - The job ID returned from job submission
+ * @param apiBaseUrl - Base URL for the API (e.g., http://localhost:3000)
+ * @param jobName - Job name for logging context
+ * @returns The analysis result when job completes
+ * @throws ExternalServiceError if job fails or times out
+ */
+const pollForJobCompletion = async (
+  jobId: string,
+  apiBaseUrl: string,
+  jobName: string
+): Promise<PerJobAnalysisApiResponse> => {
+  const startTime = Date.now();
+  const statusUrl = `${apiBaseUrl}/api/jobs/${jobId}`;
+
+  logger.info("Polling for job completion", { jobId, jobName });
+
+  while (Date.now() - startTime < POLLING_CONFIG.MAX_WAIT_MS) {
+    const response = await resilientGet<JobStatusResponse>(statusUrl, {
+      timeout: POLLING_CONFIG.REQUEST_TIMEOUT_MS,
+    });
+
+    const { status, result, error } = response.data;
+
+    if (status === "completed" && result) {
+      logger.info("Job completed successfully", {
+        jobId,
+        jobName,
+        durationMs: Date.now() - startTime,
+      });
+      return result;
+    }
+
+    if (status === "failed") {
+      logger.error("Job failed", {
+        jobId,
+        jobName,
+        error,
+        durationMs: Date.now() - startTime,
+      });
+      throw new ExternalServiceError("api", error ?? "Job failed without error message", {
+        metadata: { jobId, jobName, status },
+        retryable: false,
+      });
+    }
+
+    // Still pending or processing, wait before polling again
+    await delay(POLLING_CONFIG.INTERVAL_MS);
+  }
+
+  // Timeout reached
+  const durationMs = Date.now() - startTime;
+  logger.error("Job polling timed out", {
+    jobId,
+    jobName,
+    durationMs,
+    maxWaitMs: POLLING_CONFIG.MAX_WAIT_MS,
+  });
+  throw new ExternalServiceError("api", `Job ${jobId} timed out after ${durationMs}ms`, {
+    metadata: { jobId, jobName, durationMs },
+    retryable: false,
+  });
+};
+
+/**
  * Analyze a single job's logs via LLM API.
  * LLM extracts test failures with expected/actual values.
  *
  * V1.1: Uses chunking pipeline preprocessing with line mapping for
  * original line number recovery in annotations.
+ *
+ * V2: Uses async job pattern to avoid HTTP timeouts for large logs.
+ * Submits job, receives 202 with job_id, then polls for completion.
  */
 const analyzeJobLogs = async (
   jobName: string,
   jobLogs: string,
   repository: string,
-  apiUrl: string
+  apiUrl: string,
+  tenantId?: string,
+  workflowId?: string
 ): Promise<JobAnalysisResult> => {
   // V1.1: Use chunking pipeline preprocessing for better size reduction and line mapping
   const sanitized: SanitizationResultWithMapping = sanitizeForChunkingWithMapping(jobLogs);
@@ -254,7 +425,7 @@ const analyzeJobLogs = async (
   // Also get test framework detection from legacy preprocessor
   const legacyPreprocessed = preprocessLogsWithMetadata(jobLogs);
 
-  logger.info("Analyzing job logs via LLM", {
+  logger.info("Submitting job for async analysis", {
     jobName,
     repository,
     originalSize: sanitized.originalSize,
@@ -274,6 +445,14 @@ const analyzeJobLogs = async (
     job_name: jobName,
   };
 
+  // Include tenant/workflow context when available
+  if (tenantId) {
+    requestPayload.tenant_id = tenantId;
+  }
+  if (workflowId) {
+    requestPayload.workflow_id = workflowId;
+  }
+
   // Include framework hint if detected
   if (legacyPreprocessed.testFramework) {
     requestPayload.test_framework = {
@@ -283,18 +462,35 @@ const analyzeJobLogs = async (
     };
   }
 
-  const response = await resilientPost<PerJobAnalysisApiResponse>(apiUrl, requestPayload);
+  // Step 1: Submit job for async processing (returns 202 with job_id)
+  const submitResponse = await resilientPost<JobSubmissionResponse>(apiUrl, requestPayload, {
+    timeout: POLLING_CONFIG.REQUEST_TIMEOUT_MS,
+  });
+
+  const { job_id: jobId } = submitResponse.data;
+
+  logger.info("Job submitted for async analysis", {
+    jobId,
+    jobName,
+    repository,
+  });
+
+  // Step 2: Poll for job completion
+  // Extract base URL from apiUrl (e.g., "http://localhost:3000/api/analyze" -> "http://localhost:3000")
+  const apiBaseUrl = apiUrl.replace(/\/api\/analyze$/, "");
+  const analysisResponse = await pollForJobCompletion(jobId, apiBaseUrl, jobName);
 
   // Extract LLM test failures with expected/actual values
-  const testFailures = extractTestFailures(response.data);
+  const testFailures = extractTestFailures(analysisResponse);
 
   // Extract LLM lint errors with specific symbols
-  const lintErrors = extractLintErrors(response.data);
+  const lintErrors = extractLintErrors(analysisResponse);
 
   // Extract LLM-generated test command
-  const testCommand = extractTestCommand(response.data);
+  const testCommand = extractTestCommand(analysisResponse);
 
-  logger.info("LLM analysis complete", {
+  logger.info("Async analysis complete", {
+    jobId,
     jobName,
     repository,
     testFailureCount: testFailures.length,
@@ -305,7 +501,7 @@ const analyzeJobLogs = async (
   return {
     jobName,
     jobLogs,
-    response: response.data,
+    response: analysisResponse,
     testFailures,
     lintErrors,
     testCommand,
@@ -363,10 +559,12 @@ type AnalysisResultWithError = JobAnalysisResult & { failed?: true; error?: stri
 const analyzeJobWithErrorHandling = async (
   job: { jobName: string; logs: string },
   repository: string,
-  apiUrl: string
+  apiUrl: string,
+  tenantId?: string,
+  workflowId?: string
 ): Promise<AnalysisResultWithError> => {
   try {
-    return await analyzeJobLogs(job.jobName, job.logs, repository, apiUrl);
+    return await analyzeJobLogs(job.jobName, job.logs, repository, apiUrl, tenantId, workflowId);
   } catch (error) {
     logger.error("Failed to analyze job", {
       jobName: job.jobName,
@@ -437,7 +635,22 @@ export const processCombinedAnalysis = async (
       jobCount: allJobsLogs.jobs.length,
     });
 
+    // Post placeholder comment so users see analysis is in progress
+    const checkNames = pending.pendingChecks.map((check) => check.checkName);
+    await postAnalyzingPlaceholder(
+      installationId,
+      repository.owner,
+      repository.name,
+      pending.pullRequestNumbers,
+      checkNames
+    );
+
     const apiUrl = `${config.API_URL}/api/analyze`;
+
+    // Look up tenant for analysis context
+    const tenant = await findByGitHubInstallation(installationId);
+    const tenantId = tenant?.id;
+    const workflowId = allJobsLogs.workflowName;
 
     // Step 2: Analyze each job separately (with concurrency limit)
     const maxConcurrent =
@@ -453,7 +666,7 @@ export const processCombinedAnalysis = async (
     // Analyze all jobs with concurrency limiting to avoid rate limits
     const analysisResults = await mapWithConcurrency(
       allJobsLogs.jobs,
-      (job) => analyzeJobWithErrorHandling(job, repository.fullName, apiUrl),
+      (job) => analyzeJobWithErrorHandling(job, repository.fullName, apiUrl, tenantId, workflowId),
       maxConcurrent,
       config.LLM_QUEUE_TIMEOUT_MS
     );
