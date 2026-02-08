@@ -439,6 +439,7 @@ export const enrichError = (error: unknown, context: ErrorContext): AppError => 
  * @example
  * invariant(user !== null, "User must exist after authentication");
  */
+// eslint-disable-next-line func-style -- assertion functions require function declaration syntax
 export function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(`Invariant violation: ${message}`);
@@ -462,6 +463,7 @@ export function invariant(condition: unknown, message: string): asserts conditio
  *   }
  * }
  */
+// eslint-disable-next-line func-style -- never-returning functions require function declaration syntax
 export function assertUnreachable(value: never): never {
   throw new Error(`Unhandled case: ${JSON.stringify(value)}`);
 }

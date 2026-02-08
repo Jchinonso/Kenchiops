@@ -12,7 +12,7 @@ import type {
   LLMDetectedDependencyChange,
   LLMDetectedBuildConfigChange,
 } from "../../core/types.js";
-import type { ArtifactSeverity, CIPlatformType } from "../../constants/chunkingPipeline.js";
+import type { ArtifactSeverity, CIPlatformType } from "../../constants/types.js";
 
 // ==================== Analysis Input Types ====================
 

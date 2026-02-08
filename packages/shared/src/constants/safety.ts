@@ -3,14 +3,9 @@
  */
 
 import { UNCERTAINTY_PENALTIES } from "./confidence.js";
+import type { UncertaintyPattern, RelevanceRule } from "./types.js";
 
-/**
- * Uncertainty pattern configuration type.
- */
-export type UncertaintyPattern = {
-  readonly pattern: RegExp;
-  readonly penalty: number;
-};
+export type { UncertaintyPattern, RelevanceRule, RiskLevel, RiskRuleCategory } from "./types.js";
 
 /**
  * Compiled uncertainty patterns with penalties.
@@ -46,15 +41,6 @@ export const METRIC_KEYWORDS: Readonly<Set<string>> = new Set([
  * Invalid cause keywords that indicate an invalid root cause identification.
  */
 export const INVALID_CAUSE_KEYWORDS: Readonly<Set<string>> = new Set(["unknown"]);
-
-/**
- * Cause-action relevance mapping configuration type.
- * Keywords should be normalized (lowercase, single words).
- */
-export type RelevanceRule = {
-  readonly causeKeywords: readonly string[];
-  readonly actionKeywords: readonly string[];
-};
 
 /**
  * Relevance rules for matching causes to actions.
@@ -275,24 +261,6 @@ export const RISK_LEVEL_THRESHOLDS = {
   /** Below this is "high" risk, at or above is "critical" */
   HIGH: 0.7,
 } as const;
-
-/**
- * Risk level categories.
- */
-export type RiskLevel = "low" | "moderate" | "high" | "critical";
-
-/**
- * Rule category identifiers for audit/debug.
- */
-export type RiskRuleCategory =
-  | "notification"
-  | "investigation"
-  | "service_restart"
-  | "configuration"
-  | "deployment"
-  | "database"
-  | "infrastructure"
-  | "default";
 
 // ==================== Context Multipliers ====================
 

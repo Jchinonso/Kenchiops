@@ -22,70 +22,26 @@ import {
   REDIS_LIST_OPS,
   REDIS_STATUS,
 } from "../constants/index.js";
+import type {
+  QueueMessage,
+  MessageHandler,
+  SubscriptionHandler,
+  QueueConfig,
+  QueueManager,
+  QueueStats,
+} from "./types.js";
+
+export type {
+  QueueMessage,
+  ProcessResult,
+  MessageHandler,
+  SubscriptionHandler,
+  QueueConfig,
+  QueueManager,
+  QueueStats,
+} from "./types.js";
 
 const logger = createLogger("message-queue");
-
-// ==================== Types ====================
-
-/**
- * Message payload structure
- */
-export interface QueueMessage<T = unknown> {
-  readonly id: string;
-  readonly type: string;
-  readonly payload: T;
-  readonly timestamp: string;
-  readonly retryCount?: number;
-  readonly metadata?: Readonly<Record<string, unknown>>;
-}
-
-/**
- * Job processing result
- */
-export interface ProcessResult {
-  readonly success: boolean;
-  readonly error?: string;
-  readonly shouldRetry?: boolean;
-}
-
-/**
- * Message handler function
- */
-export type MessageHandler<T = unknown> = (message: QueueMessage<T>) => Promise<ProcessResult>;
-
-/**
- * Subscription handler for pub/sub
- */
-export type SubscriptionHandler<T = unknown> = (message: QueueMessage<T>) => Promise<void>;
-
-/**
- * Queue configuration
- */
-export interface QueueConfig {
-  /** Queue name */
-  readonly name: string;
-  /** Maximum retry attempts before moving to dead letter queue */
-  readonly maxRetries?: number;
-  /** Visibility timeout in seconds (how long a job is hidden while processing) */
-  readonly visibilityTimeout?: number;
-  /** Dead letter queue name (default: {name}:dead) */
-  readonly deadLetterQueue?: string;
-}
-
-/**
- * Queue manager interface
- */
-export interface QueueManager {
-  readonly name: string;
-  readonly enqueue: <T>(
-    type: string,
-    payload: T,
-    metadata?: Record<string, unknown>
-  ) => Promise<string>;
-  readonly process: <T>(handler: MessageHandler<T>) => Promise<void>;
-  readonly getStats: () => Promise<{ pending: number; processing: number; dead: number }>;
-  readonly clear: () => Promise<void>;
-}
 
 // ==================== Helper Functions ====================
 
@@ -241,7 +197,7 @@ export const createQueue = (queueConfig: QueueConfig): QueueManager => {
         logger.info("Job completed", {
           queue: name,
           messageId: message.id,
-          duration: Date.now() - startTime,
+          durationMs: Date.now() - startTime,
         });
       } else if (result.shouldRetry !== false && (message.retryCount ?? 0) < maxRetries) {
         // Retry: update retry count and move back to main queue
@@ -300,11 +256,7 @@ export const createQueue = (queueConfig: QueueConfig): QueueManager => {
   /**
    * Gets queue statistics
    */
-  const getStats = async (): Promise<{
-    pending: number;
-    processing: number;
-    dead: number;
-  }> => {
+  const getStats = async (): Promise<QueueStats> => {
     const client = getRedisClient();
     const [pending, processing, dead] = await Promise.all([
       client.llen(name),

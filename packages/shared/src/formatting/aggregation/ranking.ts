@@ -7,8 +7,12 @@
  * @module formatting/aggregation/ranking
  */
 
-import { ARTIFACT_PRIORITY_WEIGHTS, type ArtifactType } from "../../constants/index.js";
-
+import {
+  ARTIFACT_PRIORITY_WEIGHTS,
+  ARTIFACT_TYPES,
+  type ArtifactType,
+} from "../../constants/index.js";
+import { createLogger } from "../../core/logger.js";
 import type { ExtractedArtifact, ExtractionResult } from "../extraction/types.js";
 import type {
   RankedArtifact,
@@ -17,8 +21,9 @@ import type {
   DeduplicationResult,
   FrameworkCount,
 } from "./types.js";
-
 import { computeArtifactSignatureSync, computeAbsoluteEvidenceId } from "./signature.js";
+
+const logger = createLogger("artifact-ranking");
 
 // ==================== Ranking ====================
 
@@ -92,20 +97,36 @@ export const deduplicateArtifacts = (
 
   const totalExtracted = artifactsWithContext.length;
 
+  // Count test_failure artifacts before deduplication
+  const testFailuresBefore = artifactsWithContext.filter(
+    (ctx) => ctx.artifact.type === ARTIFACT_TYPES.TEST_FAILURE
+  ).length;
+
   // Deduplicate by signature hash, keeping first occurrence
+  // EXCEPTION: test_failure artifacts without testName are never deduplicated
+  // to prevent collapsing distinct test failures that share error messages
+  let uniqueTestFailureCounter = 0;
   const artifactMap = artifactsWithContext.reduce<ReadonlyMap<string, ArtifactTracker>>(
     (accumulator, { artifact, chunkId, chunkLineOffset }) => {
       const signature = computeArtifactSignatureSync(artifact);
-      const existing = accumulator.get(signature.hash);
+
+      // For test_failure without testName, make each unique to prevent collapsing
+      const isTestFailureWithoutName =
+        artifact.type === ARTIFACT_TYPES.TEST_FAILURE && !artifact.testName;
+      const dedupeKey = isTestFailureWithoutName
+        ? `${signature.hash}_unique_${uniqueTestFailureCounter++}`
+        : signature.hash;
+
+      const existing = accumulator.get(dedupeKey);
 
       if (existing) {
-        return new Map(accumulator).set(signature.hash, {
+        return new Map(accumulator).set(dedupeKey, {
           ...existing,
           count: existing.count + 1,
         });
       }
 
-      return new Map(accumulator).set(signature.hash, {
+      return new Map(accumulator).set(dedupeKey, {
         artifact,
         chunkId,
         chunkLineOffset,
@@ -118,6 +139,20 @@ export const deduplicateArtifacts = (
   const rankedArtifacts = Array.from(artifactMap.values()).map((tracker) =>
     createRankedArtifact(tracker.artifact, tracker.chunkId, tracker.chunkLineOffset, tracker.count)
   );
+
+  // Count test_failure artifacts after deduplication
+  const testFailuresAfter = rankedArtifacts.filter(
+    (artifact) => artifact.type === ARTIFACT_TYPES.TEST_FAILURE
+  ).length;
+
+  logger.info("Deduplication complete", {
+    totalExtracted,
+    afterDedup: rankedArtifacts.length,
+    duplicatesRemoved: totalExtracted - rankedArtifacts.length,
+    testFailuresBefore,
+    testFailuresAfter,
+    testFailuresCollapsed: testFailuresBefore - testFailuresAfter,
+  });
 
   return {
     artifacts: rankedArtifacts,
@@ -158,8 +193,11 @@ export const detectCommonFramework = (
   artifacts: readonly ExtractedArtifact[]
 ): string | undefined => {
   const frameworks = artifacts
-    .filter((artifact) => artifact.framework !== undefined)
-    .map((artifact) => artifact.framework as string);
+    .filter(
+      (artifact): artifact is ExtractedArtifact & { framework: string } =>
+        artifact.framework !== undefined
+    )
+    .map((artifact) => artifact.framework);
 
   if (frameworks.length === 0) {
     return undefined;

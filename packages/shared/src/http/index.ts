@@ -2,14 +2,23 @@
  * HTTP module - Express middleware, validation, and resilient client utilities.
  */
 
-// Types
-export type { CircuitBreakerConfig, CircuitBreakerStatus } from "./types.js";
+// Types (all type exports from the canonical types.ts)
+export type {
+  CircuitBreakerConfig,
+  CircuitBreakerStatus,
+  HttpMethod,
+  ResilientRequestOptions,
+  ResilientResponse,
+  Validator,
+  ValidationSchema,
+  ValidationSource,
+} from "./types.js";
 
 // Middleware
 export { errorHandler, asyncHandler, requestLogger } from "./middleware.js";
 
 // Validation
-export { validate, validators, type Validator, type ValidationSchema } from "./validation.js";
+export { validate, validators } from "./validation.js";
 
 // Rate limiting (re-exported from rateLimit module)
 export {
@@ -45,6 +54,4 @@ export {
   resilientDelete,
   resetCircuitBreaker,
   getCircuitBreakerStatus,
-  type ResilientRequestOptions,
-  type ResilientResponse,
 } from "./resilientClient.js";

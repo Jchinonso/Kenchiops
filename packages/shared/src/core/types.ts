@@ -3,6 +3,23 @@
  * Based on DATA_MODELS.md specifications.
  */
 
+// ==================== Request Context ====================
+
+/**
+ * Request context for tracing and tenant isolation.
+ * Must be propagated through all layers (handler → service → adapter).
+ */
+export interface RequestContext {
+  /** UUID generated per request */
+  readonly requestId: string;
+  /** From auth/header (or "system" for jobs) */
+  readonly tenantId: string;
+  /** User/service identity */
+  readonly actor?: string;
+  /** OpenTelemetry trace ID if available */
+  readonly traceId?: string;
+}
+
 // ==================== Event Types ====================
 
 export type EventType =
@@ -20,55 +37,55 @@ export type EventSeverity = "critical" | "high" | "medium" | "low" | "info";
 
 export interface EventPayload {
   // CI/CD fields
-  repository?: string;
-  workflow?: string;
-  runId?: string;
-  branch?: string;
-  commit?: string;
+  readonly repository?: string;
+  readonly workflow?: string;
+  readonly runId?: string;
+  readonly branch?: string;
+  readonly commit?: string;
 
   // Error fields
-  errorMessage?: string;
-  errorLog?: string;
+  readonly errorMessage?: string;
+  readonly errorLog?: string;
 
   // Monitoring fields
-  alertId?: string;
-  metricName?: string;
-  metricValue?: number;
-  threshold?: number;
+  readonly alertId?: string;
+  readonly metricName?: string;
+  readonly metricValue?: number;
+  readonly threshold?: number;
 
   // Common fields
-  url?: string;
+  readonly url?: string;
 
   // Allow additional fields - use unknown for type safety
-  [key: string]: unknown;
+  readonly [key: string]: unknown;
 }
 
 export interface EventMetadata {
-  environment?: "production" | "staging" | "development" | "test";
-  service?: string;
-  team?: string;
-  tags?: readonly string[];
-  [key: string]: unknown;
+  readonly environment?: "production" | "staging" | "development" | "test";
+  readonly service?: string;
+  readonly team?: string;
+  readonly tags?: readonly string[];
+  readonly [key: string]: unknown;
 }
 
 export interface Event {
   // Core identification
-  id: string; // Format: evt_<alphanumeric>
-  type: EventType;
-  source: string;
-  timestamp: string; // ISO 8601
-  severity?: EventSeverity;
-  title?: string;
+  readonly id: string; // Format: evt_<alphanumeric>
+  readonly type: EventType;
+  readonly source: string;
+  readonly timestamp: string; // ISO 8601
+  readonly severity?: EventSeverity;
+  readonly title?: string;
 
   // Event-specific data
-  payload: EventPayload;
+  readonly payload: EventPayload;
 
   // Additional context
-  metadata?: EventMetadata;
+  readonly metadata?: EventMetadata;
 
   // Audit timestamps
-  createdAt?: string;
-  updatedAt?: string;
+  readonly createdAt?: string;
+  readonly updatedAt?: string;
 }
 
 // ==================== Evidence Types ====================
@@ -267,23 +284,23 @@ export interface Evidence {
 // ==================== LLM Analysis Result Types ====================
 
 export interface ImpactAssessment {
-  scope?: "isolated" | "service" | "system" | "organization";
-  affectedUsers?: "none" | "few" | "some" | "many" | "all";
-  businessImpact?: "none" | "low" | "medium" | "high" | "critical";
-  description?: string;
+  readonly scope?: "isolated" | "service" | "system" | "organization";
+  readonly affectedUsers?: "none" | "few" | "some" | "many" | "all";
+  readonly businessImpact?: "none" | "low" | "medium" | "high" | "critical";
+  readonly description?: string;
 }
 
 export interface LLMRecommendedAction {
-  actionType: string;
-  description: string;
-  reasoning?: string;
-  priority?: "immediate" | "high" | "medium" | "low";
+  readonly actionType: string;
+  readonly description: string;
+  readonly reasoning?: string;
+  readonly priority?: "immediate" | "high" | "medium" | "low";
 }
 
 export interface EvidenceReference {
-  type: "log" | "metric" | "commit" | "document" | "related_incident";
-  reference: string;
-  relevance?: string;
+  readonly type: "log" | "metric" | "commit" | "document" | "related_incident";
+  readonly reference: string;
+  readonly relevance?: string;
 }
 
 /**
@@ -308,13 +325,13 @@ export interface LLMSuggestedFix {
  * Points to specific file locations where errors or issues were detected.
  */
 export interface LLMCodeAnnotation {
-  path: string;
-  line: number;
-  level: "failure" | "warning" | "notice";
-  message: string;
-  title?: string;
+  readonly path: string;
+  readonly line: number;
+  readonly level: "failure" | "warning" | "notice";
+  readonly message: string;
+  readonly title?: string;
   /** AI-suggested fix for this issue */
-  suggestedFix?: LLMSuggestedFix;
+  readonly suggestedFix?: LLMSuggestedFix;
 }
 
 /**
@@ -393,40 +410,40 @@ export type FailureCategory =
 export type PipelinePhase = "dependency" | "build" | "test" | "deploy" | "runtime" | "unknown";
 
 export interface LLMAnalysisResult {
-  eventId: string;
-  summary: string;
-  identifiedCause?: string;
-  impactAssessment?: ImpactAssessment;
-  confidence?: "very_low" | "low" | "medium" | "high" | "very_high";
-  confidenceScore?: number;
-  reasoning?: string;
-  codeAnnotations?: readonly LLMCodeAnnotation[];
-  recommendedActions?: readonly LLMRecommendedAction[];
-  uncertainties?: readonly string[];
-  evidenceUsed?: readonly EvidenceReference[];
-  relatedIncidents?: readonly string[];
-  nextSteps?: readonly string[];
-  analyzedAt: string;
-  llmModel?: string;
-  processingTime?: number;
+  readonly eventId: string;
+  readonly summary: string;
+  readonly identifiedCause?: string;
+  readonly impactAssessment?: ImpactAssessment;
+  readonly confidence?: "very_low" | "low" | "medium" | "high" | "very_high";
+  readonly confidenceScore?: number;
+  readonly reasoning?: string;
+  readonly codeAnnotations?: readonly LLMCodeAnnotation[];
+  readonly recommendedActions?: readonly LLMRecommendedAction[];
+  readonly uncertainties?: readonly string[];
+  readonly evidenceUsed?: readonly EvidenceReference[];
+  readonly relatedIncidents?: readonly string[];
+  readonly nextSteps?: readonly string[];
+  readonly analyzedAt: string;
+  readonly llmModel?: string;
+  readonly processingTime?: number;
 
   // Failure classification (Phase 4 - Language Agnostic)
   /** Type of failure: dependency, compile, test, runtime, config, infra, unknown */
-  category?: FailureCategory;
+  readonly category?: FailureCategory;
   /** Pipeline phase where failure occurred: dependency, build, test, deploy, runtime, unknown */
-  phase?: PipelinePhase;
+  readonly phase?: PipelinePhase;
 
   // AI-extracted structured data (Phase 3 - Language Agnostic)
   /** Dependency changes detected from PR diff (any package manager format) */
-  detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
+  readonly detectedDependencyChanges?: readonly LLMDetectedDependencyChange[];
   /** Build config changes detected from PR diff (any build system) */
-  detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
+  readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
   /** Structured test failures extracted by LLM with expected/actual values */
-  testFailures?: readonly LLMTestFailure[];
+  readonly testFailures?: readonly LLMTestFailure[];
   /** Structured lint/compile errors extracted by LLM with specific symbols */
-  lintErrors?: readonly LLMLintError[];
+  readonly lintErrors?: readonly LLMLintError[];
   /** Command to run failing tests locally (LLM-generated based on detected framework) */
-  testCommand?: string;
+  readonly testCommand?: string;
 }
 
 // ==================== Action Proposal Types ====================
@@ -459,53 +476,53 @@ export type ActionStatus =
   | "rolled_back";
 
 export interface ExecutionDetails {
-  api?: string;
-  endpoint?: string;
-  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  parameters?: Record<string, unknown>;
-  command?: string;
-  script?: string;
+  readonly api?: string;
+  readonly endpoint?: string;
+  readonly method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  readonly parameters?: Record<string, unknown>;
+  readonly command?: string;
+  readonly script?: string;
 }
 
 export interface ExecutionResult {
-  success: boolean;
-  message?: string;
-  output?: string;
-  error?: string;
+  readonly success: boolean;
+  readonly message?: string;
+  readonly output?: string;
+  readonly error?: string;
 }
 
 export interface ActionProposal {
   // Identification
-  id: string; // Format: act_<alphanumeric>
-  eventId: string;
+  readonly id: string; // Format: act_<alphanumeric>
+  readonly eventId: string;
 
   // Action specification
-  actionType: ActionType;
-  description: string;
-  reasoning?: string;
+  readonly actionType: ActionType;
+  readonly description: string;
+  readonly reasoning?: string;
 
   // Confidence & safety
-  confidence: number; // 0.0 to 1.0
-  priority?: ActionPriority;
-  safetyLevel: SafetyLevel;
-  requiresApproval: boolean;
-  autoExecutable?: boolean;
+  readonly confidence: number; // 0.0 to 1.0
+  readonly priority?: ActionPriority;
+  readonly safetyLevel: SafetyLevel;
+  readonly requiresApproval: boolean;
+  readonly autoExecutable?: boolean;
 
   // Execution details
-  executionDetails?: ExecutionDetails;
-  expectedOutcome?: string;
-  rollbackPlan?: string;
-  estimatedDuration?: number;
-  dependencies?: readonly string[];
+  readonly executionDetails?: ExecutionDetails;
+  readonly expectedOutcome?: string;
+  readonly rollbackPlan?: string;
+  readonly estimatedDuration?: number;
+  readonly dependencies?: readonly string[];
 
   // Lifecycle tracking
-  status?: ActionStatus;
-  approvedBy?: string;
-  approvedAt?: string;
-  executedAt?: string;
-  completedAt?: string;
-  executionResult?: ExecutionResult;
-  createdAt?: string;
+  readonly status?: ActionStatus;
+  readonly approvedBy?: string;
+  readonly approvedAt?: string;
+  readonly executedAt?: string;
+  readonly completedAt?: string;
+  readonly executionResult?: ExecutionResult;
+  readonly createdAt?: string;
 }
 
 // ==================== Confidence Scoring Types ====================
@@ -560,20 +577,20 @@ export interface ConfidenceScoreBreakdown {
 }
 
 export interface ConfidenceScoreResult {
-  finalScore: number;
-  breakdown: ConfidenceScoreBreakdown;
-  reasoning: string[];
-  gatingDecision: "auto_approve" | "require_approval" | "block";
+  readonly finalScore: number;
+  readonly breakdown: ConfidenceScoreBreakdown;
+  readonly reasoning: readonly string[];
+  readonly gatingDecision: "auto_approve" | "require_approval" | "block";
   /** Scoring algorithm version for audit traceability */
-  scoringVersion: string;
+  readonly scoringVersion: string;
 }
 
 // ==================== Validation Types ====================
 
 export interface ValidationResult {
-  valid: boolean;
-  errors: string[];
-  warnings: string[];
+  readonly valid: boolean;
+  readonly errors: readonly string[];
+  readonly warnings: readonly string[];
 }
 
 // ==================== Legacy Webhook Types ====================
@@ -777,12 +794,27 @@ export interface GitHubRepository {
 /** Valid Node.js environment values. */
 export type NodeEnvironment = "development" | "production" | "test";
 
+/** LLM provider type */
+export type LLMProvider = "openai" | "openrouter";
+
 /**
  * Application configuration interface.
  * Centralized configuration with type-safe environment variable parsing.
  */
 export interface Config {
-  // OpenAI Configuration
+  // LLM Provider Configuration (provider-agnostic)
+  /** LLM provider to use: "openai" or "openrouter" */
+  readonly LLM_PROVIDER: LLMProvider;
+  /** Custom base URL for OpenAI-compatible APIs (e.g., OpenRouter) */
+  readonly LLM_BASE_URL?: string;
+  /** API key for the LLM provider (overrides OPENAI_API_KEY) */
+  readonly LLM_API_KEY?: string;
+  /** Model identifier (overrides OPENAI_MODEL) */
+  readonly LLM_MODEL?: string;
+  /** Model for chunk extraction (defaults to Claude 3.5 Haiku on OpenRouter) */
+  readonly EXTRACTION_MODEL?: string;
+
+  // OpenAI Configuration (legacy, used as fallbacks)
   readonly OPENAI_API_KEY: string;
   readonly OPENAI_MODEL?: string;
   readonly OPENAI_MAX_TOKENS?: number;
@@ -834,6 +866,42 @@ export interface Config {
   readonly LLM_MAX_CONCURRENT_ANALYSIS?: number;
   /** Maximum time to wait in queue before timeout (ms) */
   readonly LLM_QUEUE_TIMEOUT_MS?: number;
+}
+
+// ==================== Signed URL Types ====================
+
+/**
+ * Parameters for signed URL generation.
+ */
+export interface SignedUrlParams {
+  readonly analysisId: string;
+  readonly feedbackType: "correct" | "incorrect";
+  readonly expiresAt: number;
+}
+
+// ==================== Logger Internal Types ====================
+
+/**
+ * Internal structured log entry format.
+ * Used by the logger implementation for JSON-serialized output.
+ * Not to be confused with the evidence LogEntry type used in analysis.
+ */
+export interface StructuredLogEntry {
+  readonly level: number;
+  readonly message: string;
+  readonly timestamp: string;
+  readonly service?: string;
+  readonly metadata?: Record<string, unknown>;
+}
+
+/**
+ * Logger interface for structured logging.
+ */
+export interface Logger {
+  readonly debug: (message: string, metadata?: Record<string, unknown>) => void;
+  readonly info: (message: string, metadata?: Record<string, unknown>) => void;
+  readonly warn: (message: string, metadata?: Record<string, unknown>) => void;
+  readonly error: (message: string, metadata?: Record<string, unknown>) => void;
 }
 
 // ==================== Error Types ====================

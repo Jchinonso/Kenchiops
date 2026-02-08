@@ -9,6 +9,9 @@
 
 import { createLogger } from "../core/logger.js";
 import { SOURCE_RELIABILITY_SCORES, KNOWLEDGE_DOC_TYPES } from "../constants/index.js";
+import type { RerankableResult, QueryContext, RerankedResult, RerankOptions } from "./types.js";
+
+export type { RerankableResult, QueryContext, RerankedResult, RerankOptions } from "./types.js";
 
 const logger = createLogger("rag-reranker");
 
@@ -53,65 +56,6 @@ const METADATA_BOOSTS = {
   /** Boost for matching language/framework */
   SAME_LANGUAGE: 0.05,
 } as const;
-
-// ==================== Types ====================
-
-/**
- * Search result item for reranking.
- */
-export interface RerankableResult {
-  readonly id: string;
-  readonly similarity: number;
-  readonly docType: string;
-  readonly content: string;
-  readonly createdAt?: string;
-  readonly metadata?: {
-    readonly repository?: string;
-    readonly workflow?: string;
-    readonly errorSignature?: string;
-    readonly language?: string;
-    readonly hitCount?: number;
-    readonly helpfulRate?: number;
-    readonly negativeFeedbackCount?: number;
-  };
-}
-
-/**
- * Query context for metadata matching.
- */
-export interface QueryContext {
-  readonly repository?: string;
-  readonly workflow?: string;
-  readonly errorSignature?: string;
-  readonly language?: string;
-}
-
-/**
- * Reranked result with scoring breakdown.
- */
-export interface RerankedResult {
-  readonly result: RerankableResult;
-  readonly finalScore: number;
-  readonly scoreBreakdown: {
-    readonly vectorScore: number;
-    readonly reliabilityScore: number;
-    readonly recencyScore: number;
-    readonly feedbackScore: number;
-    readonly metadataBoost: number;
-  };
-}
-
-/**
- * Reranking options.
- */
-export interface RerankOptions {
-  /** Query context for metadata matching */
-  readonly queryContext?: QueryContext;
-  /** Maximum results to return */
-  readonly topK?: number;
-  /** Minimum final score threshold */
-  readonly minScore?: number;
-}
 
 // ==================== Scoring Functions ====================
 

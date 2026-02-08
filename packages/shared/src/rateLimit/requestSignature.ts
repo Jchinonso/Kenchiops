@@ -49,6 +49,7 @@ import {
   type SignOptions,
   type RequestWithRawBody,
   type HeaderExtractionResult,
+  type QueryValue,
 } from "./types.js";
 
 const logger = createLogger("request-signature");
@@ -97,8 +98,6 @@ const isNestedObject = (value: unknown): boolean =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 // ==================== Query Canonicalization ====================
-
-type QueryValue = string | string[] | undefined;
 
 const encodeParam = (key: string, value: string): string =>
   `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;

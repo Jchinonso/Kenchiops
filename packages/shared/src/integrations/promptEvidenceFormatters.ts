@@ -16,6 +16,7 @@ import type {
   RelatedEvent,
   KnowledgeDocument,
 } from "../core/types.js";
+import { ARTIFACT_TYPES } from "../constants/index.js";
 
 // ==================== Token Estimation ====================
 
@@ -30,8 +31,60 @@ const CHARS_PER_TOKEN = 4;
  */
 export const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN);
 
+/** Maximum snippet length when truncating evidence */
+const MAX_SNIPPET_LENGTH_TRUNCATED = 500;
+
+/**
+ * Checks if a log entry represents a test_failure artifact.
+ * Looks for the [test_failure] marker in the message.
+ */
+const isTestFailureLog = (log: LogEntry): boolean =>
+  log.message.includes(`[${ARTIFACT_TYPES.TEST_FAILURE}]`);
+
+/**
+ * Truncates a log entry's message/snippet if too long.
+ */
+const truncateLogMessage = (log: LogEntry, maxLength: number): LogEntry => {
+  if (log.message.length <= maxLength) {
+    return log;
+  }
+
+  // Find where the snippet starts and truncate only the snippet portion
+  const snippetStart = log.message.indexOf("Snippet:\n");
+  if (snippetStart === -1) {
+    // No snippet, truncate the whole message
+    return {
+      ...log,
+      message: `${log.message.slice(0, maxLength)}...<TRUNCATED>`,
+    };
+  }
+
+  // Keep the header, truncate the snippet
+  const header = log.message.slice(0, snippetStart + "Snippet:\n".length);
+  const snippet = log.message.slice(snippetStart + "Snippet:\n".length);
+  const remainingBudget = maxLength - header.length;
+
+  if (remainingBudget <= 0) {
+    return {
+      ...log,
+      message: `${header}...<TRUNCATED>`,
+    };
+  }
+
+  return {
+    ...log,
+    message: `${header}${snippet.slice(0, remainingBudget)}...<TRUNCATED>`,
+  };
+};
+
 /**
  * Truncates evidence to fit within a token budget.
+ * Prioritizes keeping test_failure artifacts over other log types.
+ *
+ * Truncation strategy:
+ * 1. First, try keeping all logs but truncating individual snippets
+ * 2. If still over budget, remove non-test-failure logs first
+ * 3. Only remove test_failure logs as a last resort
  *
  * @param evidence - Evidence to truncate
  * @param maxTokens - Maximum token budget
@@ -45,17 +98,61 @@ export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidenc
     return evidence;
   }
 
-  // Calculate reduction ratio
-  const ratio = maxTokens / currentTokens;
+  if (!evidence.logs || evidence.logs.length === 0) {
+    return evidence;
+  }
 
-  // Truncate logs if they exist
-  const truncatedLogs = evidence.logs
-    ? evidence.logs.slice(0, Math.max(1, Math.floor(evidence.logs.length * ratio)))
-    : undefined;
+  // Step 1: Separate test_failure logs from others
+  const testFailureLogs = evidence.logs.filter(isTestFailureLog);
+  const otherLogs = evidence.logs.filter((log) => !isTestFailureLog(log));
+
+  // Step 2: Truncate snippets in all logs to reduce size
+  const truncatedTestFailures = testFailureLogs.map((log) =>
+    truncateLogMessage(log, MAX_SNIPPET_LENGTH_TRUNCATED)
+  );
+  const truncatedOthers = otherLogs.map((log) =>
+    truncateLogMessage(log, MAX_SNIPPET_LENGTH_TRUNCATED)
+  );
+
+  // Step 3: Try with truncated logs (all test failures + all others)
+  let candidateLogs = [...truncatedTestFailures, ...truncatedOthers];
+  let candidateEvidence = { ...evidence, logs: candidateLogs };
+  let candidateTokens = estimateTokens(formatEvidence(candidateEvidence));
+
+  if (candidateTokens <= maxTokens) {
+    return candidateEvidence;
+  }
+
+  // Step 4: Start removing non-test-failure logs
+  // Keep reducing other logs until we fit or run out
+  const ratio = maxTokens / candidateTokens;
+  const otherLogsToKeep = Math.max(0, Math.floor(truncatedOthers.length * ratio));
+
+  candidateLogs = [...truncatedTestFailures, ...truncatedOthers.slice(0, otherLogsToKeep)];
+  candidateEvidence = { ...evidence, logs: candidateLogs };
+  candidateTokens = estimateTokens(formatEvidence(candidateEvidence));
+
+  if (candidateTokens <= maxTokens) {
+    return candidateEvidence;
+  }
+
+  // Step 5: If still over budget, keep only test failures (remove all others)
+  candidateLogs = truncatedTestFailures;
+  candidateEvidence = { ...evidence, logs: candidateLogs };
+  candidateTokens = estimateTokens(formatEvidence(candidateEvidence));
+
+  if (candidateTokens <= maxTokens) {
+    return candidateEvidence;
+  }
+
+  // Step 6: If STILL over budget, we have to reduce test failures too
+  // Keep as many as possible within budget
+  const testRatio = maxTokens / candidateTokens;
+  const testFailuresToKeep = Math.max(1, Math.floor(truncatedTestFailures.length * testRatio));
 
   return {
     ...evidence,
-    logs: truncatedLogs,
+    logs: truncatedTestFailures.slice(0, testFailuresToKeep),
   };
 };
 

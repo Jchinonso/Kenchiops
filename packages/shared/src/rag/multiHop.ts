@@ -12,10 +12,10 @@ import { MULTI_HOP_CONFIG, type RelationshipType } from "../constants/index.js";
 import { getBidirectionalRelationships, type IncidentRelationship } from "../database/index.js";
 
 // Import types used internally
-import type { GraphNode, MultiHopOptions, TraversalState, QueueItem } from "./multiHopTypes.js";
+import type { GraphNode, MultiHopOptions, TraversalState, QueueItem } from "./types.js";
 
 // Re-export public types for external consumers
-export type { GraphNode, MultiHopResult, MultiHopOptions } from "./multiHopTypes.js";
+export type { GraphNode, MultiHopResult, MultiHopOptions } from "./types.js";
 
 const logger = createLogger("rag-multi-hop");
 

@@ -186,7 +186,7 @@ export const CACHE_NAMESPACES = {
   TOKEN: "token",
 } as const;
 
-export type CacheNamespace = (typeof CACHE_NAMESPACES)[keyof typeof CACHE_NAMESPACES];
+export type { CacheNamespace } from "./types.js";
 
 // ==================== Cache Algorithm Constants ====================
 

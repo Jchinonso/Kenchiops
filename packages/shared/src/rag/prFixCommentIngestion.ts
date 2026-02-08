@@ -18,68 +18,29 @@ import {
   findFixComments,
   extractFixKnowledge,
   isDuplicateKnowledge,
-  type PRComment,
-  type PRFixFailureContext,
-  type ExtractedFixKnowledge,
 } from "./prFixCommentDetector.js";
-import {
-  ingestKnowledgeDoc,
-  type IngestKnowledgeDocInput,
-  type IngestKnowledgeDocResult,
-} from "./ingestion.js";
+import { ingestKnowledgeDoc } from "./ingestion.js";
 import { searchKnowledgeDocs } from "./search.js";
+import type {
+  IngestKnowledgeDocInput,
+  IngestKnowledgeDocResult,
+  PRFixFailureContext,
+  ExtractedFixKnowledge,
+  IngestPRFixCommentsInput,
+  FixCommentIngestionResult,
+  IngestPRFixCommentsResult,
+  DuplicateCheckResult,
+} from "./types.js";
+
+export type {
+  IngestPRFixCommentsInput,
+  FixCommentIngestionResult,
+  IngestPRFixCommentsResult,
+} from "./types.js";
 
 const logger = createLogger("pr-fix-comment-ingestion");
 
-// ==================== Types ====================
-
-/**
- * Input for PR fix comment ingestion.
- */
-export interface IngestPRFixCommentsInput {
-  /** PR comments to analyze */
-  readonly comments: readonly PRComment[];
-  /** Context about the original failure */
-  readonly failureContext: PRFixFailureContext;
-  /** Tenant ID for multi-tenant isolation */
-  readonly tenantId?: string;
-  /** Skip deduplication check */
-  readonly skipDedup?: boolean;
-}
-
-/**
- * Result of ingesting a single fix comment.
- */
-export interface FixCommentIngestionResult {
-  readonly success: boolean;
-  readonly commentId: string;
-  readonly documentId?: string;
-  readonly confidence: number;
-  readonly skippedReason?: string;
-  readonly error?: string;
-}
-
-/**
- * Result of ingesting all fix comments from a PR.
- */
-export interface IngestPRFixCommentsResult {
-  readonly totalComments: number;
-  readonly fixCommentsFound: number;
-  readonly ingested: number;
-  readonly skipped: number;
-  readonly failed: number;
-  readonly results: readonly FixCommentIngestionResult[];
-}
-
 // ==================== Deduplication ====================
-
-/**
- * Result of duplicate check operation.
- */
-interface DuplicateCheckResult {
-  readonly isDuplicate: boolean;
-  readonly checkSucceeded: boolean;
-}
 
 /**
  * Checks if similar knowledge already exists in the database.

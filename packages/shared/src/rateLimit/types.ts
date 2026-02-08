@@ -304,7 +304,7 @@ export interface RateLimitStore {
 
 /** Socket with optional TLS cipher method */
 export interface TLSSocket {
-  getCipher?: () => { name?: string };
+  getCipher?: () => { readonly name?: string };
 }
 
 // ==================== Burst Detection Types ====================
@@ -865,7 +865,7 @@ export interface EndpointLimitResult {
   readonly matched: boolean;
   /** Stable endpoint ID (from config) or null if default */
   readonly endpoint: string | null;
-  readonly limit: { max: number; windowMs: number };
+  readonly limit: { readonly max: number; readonly windowMs: number };
   /** Custom message for rate limit response (if configured) */
   readonly message: string | null;
   /** Whether anonymous requests are allowed for this endpoint */
@@ -1317,3 +1317,15 @@ export interface RateLimitMiddlewareResult {
   reset: (key: string) => Promise<void>;
   components: SecurityComponents;
 }
+
+// ==================== Internal Helper Types ====================
+
+/**
+ * Query parameter value type for canonicalization.
+ */
+export type QueryValue = string | string[] | undefined;
+
+/**
+ * Bot type extracted from BotDetectionResult.
+ */
+export type BotType = BotDetectionResult["botType"];

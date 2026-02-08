@@ -21,6 +21,10 @@ export interface ArtifactSignatureComponents {
   readonly errorCode?: string;
   readonly testName?: string;
   readonly assertionHash?: string;
+  /** Hash of snippet content to differentiate artifacts with same error but different context */
+  readonly snippetHash?: string;
+  /** Evidence ID for test_failure artifacts to prevent collapsing unique test failures */
+  readonly evidenceId?: string;
 }
 
 /**

@@ -84,7 +84,33 @@ export interface RetryContext {
   readonly maxRetries: number;
   readonly initialRetryDelay: number;
   readonly maxRetryDelay: number;
-  readonly headers: Record<string, string>;
+  readonly headers: Readonly<Record<string, string>>;
   readonly serviceKey: string;
   readonly startTime: number;
+}
+
+// ==================== Validation Types ====================
+
+/**
+ * Validator function type.
+ * Returns true if valid, or an error message string if invalid.
+ */
+export type Validator = (value: unknown) => boolean | string;
+
+/**
+ * Simple validation schema interface.
+ */
+export interface ValidationSchema {
+  readonly body?: Record<string, Validator>;
+  readonly params?: Record<string, Validator>;
+  readonly query?: Record<string, Validator>;
+}
+
+/**
+ * Internal validation source for processing request data.
+ */
+export interface ValidationSource {
+  readonly source: Record<string, unknown>;
+  readonly schema: Readonly<Record<string, Validator>>;
+  readonly prefix: string;
 }

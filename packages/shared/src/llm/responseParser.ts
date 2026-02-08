@@ -19,6 +19,7 @@
 import { createLogger } from "../core/logger.js";
 import { OPENAI_MESSAGES } from "../constants/index.js";
 import type { LLMAnalysisResult } from "../core/types.js";
+import type { TestFailureLogShape, LintErrorLogShape, ActionPriority } from "./types.js";
 
 // Import from sub-modules
 import { parseJsonObject } from "./jsonExtraction.js";
@@ -77,14 +78,6 @@ export {
 
 // ==================== Logging Utilities ====================
 
-/** Test failure shape for logging */
-interface TestFailureLogShape {
-  readonly testName: string;
-  readonly expected?: string | null;
-  readonly actual?: string | null;
-  readonly error: string;
-}
-
 /**
  * Builds sample failure data for logging.
  */
@@ -131,14 +124,6 @@ const logTestFailureExtraction = (
   });
 };
 
-/** Lint error shape for logging */
-interface LintErrorLogShape {
-  readonly code: string;
-  readonly message: string;
-  readonly file: string;
-  readonly line: number;
-}
-
 /**
  * Logs lint error extraction details for debugging.
  */
@@ -178,9 +163,6 @@ const generateActionType = (stepDescription: string, stepIndex: number): string 
     .toLowerCase();
   return `llm_action_${stepIndex}_${sanitized}`;
 };
-
-/** Valid priority values for recommended actions */
-type ActionPriority = "immediate" | "high" | "medium" | "low";
 
 /**
  * Normalizes a step item to a string description.

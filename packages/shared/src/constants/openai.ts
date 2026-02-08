@@ -1,21 +1,32 @@
 /**
- * OpenAI and text processing constants.
+ * OpenAI and LLM provider constants.
  */
 
 /**
  * OpenAI API configuration defaults.
  */
 export const OPENAI_DEFAULTS = {
-  TEMPERATURE: 0.1,
+  TEMPERATURE: 0.0, // Zero temperature for deterministic output
   MODEL: "gpt-4-turbo-2024-04-09",
-  MAX_TOKENS: 8192,
+  MAX_TOKENS: 16384, // Model max is 16K completion tokens
+} as const;
+
+/**
+ * OpenRouter API configuration defaults.
+ * Uses DeepSeek Chat (V3) - 128K context, best cost/quality ratio.
+ */
+export const OPENROUTER_DEFAULTS = {
+  BASE_URL: "https://openrouter.ai/api/v1",
+  MODEL: "google/gemini-2.5-flash", // Gemini 2.5 Flash, 1M context
+  TEMPERATURE: 0.6,
+  MAX_TOKENS: 16384,
 } as const;
 
 /**
  * OpenAI API configuration constants.
  */
 export const OPENAI_CONSTANTS = {
-  MAX_PROMPT_TOKENS: 48000, // Increased from 24000 to capture all test failures (GPT-4 has 128K context)
+  MAX_PROMPT_TOKENS: 128000, // Conservative limit; Gemini 2.5 Flash supports 1M context
   MAX_RETRIES: 3,
   DEFAULT_TIMEOUT_MS: 90000,
   TOKEN_BUFFER: 1000,
@@ -152,12 +163,6 @@ export const FINE_TUNING_STATUS = {
   FAILED: "failed",
   CANCELLED: "cancelled",
 } as const;
-
-/**
- * Type for fine-tuning job status values.
- * Derived from FINE_TUNING_STATUS constant.
- */
-export type FineTuningStatus = (typeof FINE_TUNING_STATUS)[keyof typeof FINE_TUNING_STATUS];
 
 /**
  * Fine-tuning training readiness thresholds.

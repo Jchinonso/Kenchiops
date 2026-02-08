@@ -96,8 +96,7 @@ export const HEALTH_STATUS = {
   UNHEALTHY: "unhealthy",
 } as const;
 
-/** Type for health status values (legacy: "ok" | "error", new: "healthy" | "degraded" | "unhealthy") */
-export type HealthStatus = (typeof HEALTH_STATUS)[keyof typeof HEALTH_STATUS];
+export type { HealthStatus, ApiResponseStatus } from "./types.js";
 
 /**
  * Memory usage threshold percentages for health checks.
@@ -122,9 +121,6 @@ export const API_RESPONSE_STATUS = {
   SUCCESS: "success",
   ERROR: "error",
 } as const;
-
-/** Type for API response status values */
-export type ApiResponseStatus = (typeof API_RESPONSE_STATUS)[keyof typeof API_RESPONSE_STATUS];
 
 /**
  * API response messages for standard responses.

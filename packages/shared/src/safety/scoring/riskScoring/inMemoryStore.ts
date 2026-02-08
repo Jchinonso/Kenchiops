@@ -7,6 +7,8 @@
  * @module safety/scoring/riskScoring/inMemoryStore
  */
 
+/* eslint-disable no-negated-condition -- intentional pattern for optional field updates */
+
 import crypto from "crypto";
 import {
   RISK_RULE_DEFAULTS,

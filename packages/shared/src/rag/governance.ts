@@ -22,62 +22,25 @@ import {
   deleteKnowledgeDocsByParent,
   getKnowledgeDocCountsByType,
 } from "../database/index.js";
-import { EMBEDDING_CONFIG, type KnowledgeDocType } from "../constants/index.js";
+import { EMBEDDING_CONFIG } from "../constants/index.js";
 import { processPendingEmbeddings } from "./ingestion.js";
+import type {
+  RAGTenantStats,
+  PurgeResult,
+  ReembeddingResult,
+  ReembeddingConfig,
+  RAGHealthStatus,
+} from "./types.js";
+
+export type {
+  RAGTenantStats,
+  PurgeResult,
+  ReembeddingResult,
+  ReembeddingConfig,
+  RAGHealthStatus,
+} from "./types.js";
 
 const logger = createLogger("rag-governance");
-
-// ==================== Types ====================
-
-/**
- * Statistics for RAG data by tenant.
- */
-export interface RAGTenantStats {
-  readonly tenantId: string;
-  readonly diffChunkCount: number;
-  readonly knowledgeDocCounts: Record<KnowledgeDocType, number>;
-  readonly pendingEmbeddings: number;
-  readonly outdatedEmbeddings: number;
-}
-
-/**
- * Result of a purge operation.
- */
-export interface PurgeResult {
-  readonly success: boolean;
-  readonly deletedCount: number;
-  readonly errors: readonly string[];
-}
-
-/**
- * Result of a re-embedding operation.
- */
-export interface ReembeddingResult {
-  readonly success: boolean;
-  readonly processedCount: number;
-  readonly errors: readonly string[];
-}
-
-/**
- * Configuration for re-embedding jobs.
- */
-export interface ReembeddingConfig {
-  readonly batchSize?: number;
-  readonly tenantId?: string;
-  readonly targetModel?: string;
-  readonly targetVersion?: string;
-}
-
-/**
- * Health status of the RAG system.
- */
-export interface RAGHealthStatus {
-  readonly healthy: boolean;
-  readonly pendingDiffChunks: number;
-  readonly pendingKnowledgeDocs: number;
-  readonly outdatedEmbeddings: number;
-  readonly issues: readonly string[];
-}
 
 // ==================== Constants ====================
 

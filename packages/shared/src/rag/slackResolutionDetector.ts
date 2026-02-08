@@ -17,8 +17,16 @@ import {
   hasPositiveReactions,
   hasCodeBlock,
   calculateConfidenceScore,
-  type SlackMessage,
 } from "./slackResolutionPatterns.js";
+import type {
+  SlackMessage,
+  SlackThread,
+  DetectedResolution,
+  ResolutionDetectionResult,
+  ResolutionCandidate,
+} from "./types.js";
+
+export type { SlackThread, DetectedResolution, ResolutionDetectionResult } from "./types.js";
 
 // Re-export patterns for backwards compatibility
 export {
@@ -37,67 +45,6 @@ export {
 } from "./slackResolutionPatterns.js";
 
 const logger = createLogger("slack-resolution-detector");
-
-// ==================== Types ====================
-
-/**
- * A Slack thread with its messages.
- */
-export interface SlackThread {
-  readonly channelId: string;
-  readonly channelName?: string;
-  readonly threadTs: string;
-  readonly messages: readonly SlackMessage[];
-  readonly originalIssue?: string;
-  readonly repository?: string;
-}
-
-/**
- * Detected resolution from a Slack thread.
- */
-export interface DetectedResolution {
-  readonly threadTs: string;
-  readonly channelId: string;
-  readonly confidence: number;
-  readonly resolutionContent: string;
-  readonly resolutionMessageTs: string;
-  readonly matchedPatterns: readonly string[];
-  readonly hasPositiveReactions: boolean;
-  readonly hasCodeBlock: boolean;
-  readonly resolverUserId: string;
-  readonly resolverUsername?: string;
-}
-
-/**
- * Result of resolution detection.
- */
-export interface ResolutionDetectionResult {
-  readonly hasResolution: boolean;
-  readonly resolution: DetectedResolution | null;
-  readonly allCandidates: readonly ResolutionCandidate[];
-  readonly analysisMetadata: ResolutionAnalysisMetadata;
-}
-
-/**
- * A candidate message that may contain a resolution.
- */
-interface ResolutionCandidate {
-  readonly message: SlackMessage;
-  readonly score: number;
-  readonly matchedPatterns: readonly string[];
-  readonly hasPositiveReactions: boolean;
-  readonly hasCodeBlock: boolean;
-}
-
-/**
- * Metadata about the resolution analysis.
- */
-interface ResolutionAnalysisMetadata {
-  readonly messagesAnalyzed: number;
-  readonly candidatesFound: number;
-  readonly topScore: number;
-  readonly patternMatchCounts: Readonly<Record<string, number>>;
-}
 
 // ==================== Candidate Analysis ====================
 

@@ -22,69 +22,24 @@ import {
   type ExternalSource,
 } from "../database/index.js";
 import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
+import type {
+  ExternalDocument,
+  ExternalSourceConnector,
+  SyncSourceResult,
+  SyncAllResult,
+  SyncOptions,
+} from "./types.js";
+
+export type {
+  ExternalDocument,
+  FetchResult,
+  ExternalSourceConnector,
+  SyncSourceResult,
+  SyncAllResult,
+  SyncOptions,
+} from "./types.js";
 
 const logger = createLogger("rag-external-knowledge");
-
-// ==================== Types ====================
-
-/**
- * External document fetched from a source.
- */
-export interface ExternalDocument {
-  readonly title: string;
-  readonly content: string;
-  readonly sourceUrl: string;
-  readonly techStackTags?: readonly TechStackTag[];
-  readonly metadata?: Record<string, unknown>;
-}
-
-/**
- * Result of fetching documents from an external source.
- */
-export interface FetchResult {
-  readonly documents: readonly ExternalDocument[];
-  readonly errorCount: number;
-  readonly nextCursor?: string;
-}
-
-/**
- * External source connector interface.
- */
-export interface ExternalSourceConnector {
-  readonly sourceType: ExternalSourceType;
-  readonly fetch: (source: ExternalSource, cursor?: string) => Promise<FetchResult>;
-}
-
-/**
- * Sync result for a single source.
- */
-export interface SyncSourceResult {
-  readonly sourceId: string;
-  readonly sourceName: string;
-  readonly docsIngested: number;
-  readonly docsSkipped: number;
-  readonly errorCount: number;
-  readonly durationMs: number;
-}
-
-/**
- * Sync result for all sources.
- */
-export interface SyncAllResult {
-  readonly sourcesProcessed: number;
-  readonly totalDocsIngested: number;
-  readonly totalErrors: number;
-  readonly results: readonly SyncSourceResult[];
-}
-
-/**
- * Options for syncing external sources.
- */
-export interface SyncOptions {
-  readonly maxDocsPerSource?: number;
-  readonly filterTechStack?: readonly TechStackTag[];
-  readonly minCredibility?: number;
-}
 
 // ==================== Connector Registry ====================
 
@@ -379,8 +334,8 @@ export const getTenantSyncStatus = async (
 
   // Find most recent sync
   const syncTimes = sources
-    .filter((source) => source.lastSyncAt)
-    .map((source) => source.lastSyncAt as string)
+    .map((source) => source.lastSyncAt)
+    .filter((lastSyncAt): lastSyncAt is string => lastSyncAt !== null && lastSyncAt !== undefined)
     .sort()
     .reverse();
 

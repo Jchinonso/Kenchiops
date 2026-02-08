@@ -15,7 +15,7 @@ import { chunkByDocType } from "./docTypeChunking.js";
 import { recordIngestionOperation } from "./metrics.js";
 import { validateMetadata, hasSchemaForDocType } from "./schemas/index.js";
 import { createDiffChunksBatch, createKnowledgeDocsBatch } from "../database/index.js";
-import { AUTO_DETECT_RELATIONSHIP_DOC_TYPES, type KnowledgeDocType } from "../constants/index.js";
+import { AUTO_DETECT_RELATIONSHIP_DOC_TYPES } from "../constants/index.js";
 import {
   INGESTION_DEFAULTS,
   mapDiffChunksToInputs,
@@ -24,73 +24,22 @@ import {
   embedPendingKnowledgeDocs,
 } from "./ingestionHelpers.js";
 import { detectAndCreateRelationships } from "./relationshipDetection.js";
+import type {
+  IngestDiffInput,
+  IngestDiffResult,
+  IngestKnowledgeDocInput,
+  IngestKnowledgeDocResult,
+  BatchEmbedOptions,
+} from "./types.js";
+
+export type {
+  IngestDiffInput,
+  IngestDiffResult,
+  IngestKnowledgeDocInput,
+  IngestKnowledgeDocResult,
+} from "./types.js";
 
 const logger = createLogger("rag-ingestion");
-
-// ==================== Types ====================
-
-/**
- * Input for ingesting a PR diff.
- */
-export interface IngestDiffInput {
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly commitSha: string;
-  readonly diffContent: string;
-  readonly filePath: string;
-  readonly hunkHeader?: string;
-  readonly tenantId?: string;
-}
-
-/**
- * Result of diff ingestion.
- */
-export interface IngestDiffResult {
-  readonly success: boolean;
-  readonly chunksCreated: number;
-  readonly chunksEmbedded: number;
-  readonly errors: readonly string[];
-}
-
-/**
- * Input for ingesting a knowledge document.
- */
-export interface IngestKnowledgeDocInput {
-  readonly docType: KnowledgeDocType;
-  readonly title: string;
-  readonly content: string;
-  readonly repository?: string;
-  readonly sourceUrl?: string;
-  readonly filePath?: string;
-  readonly tenantId?: string;
-  readonly metadata?: Record<string, unknown>;
-  /** If true, automatically detect and create relationships after ingestion */
-  readonly detectRelationships?: boolean;
-}
-
-/**
- * Result of knowledge doc ingestion.
- */
-export interface IngestKnowledgeDocResult {
-  readonly success: boolean;
-  readonly chunksCreated: number;
-  readonly chunksEmbedded: number;
-  readonly parentId: string | null;
-  readonly errors: readonly string[];
-  readonly validationWarnings: readonly string[];
-  /** Number of relationships detected (if detectRelationships was enabled) */
-  readonly relationshipsDetected?: number;
-  /** Number of relationships created (if detectRelationships was enabled) */
-  readonly relationshipsCreated?: number;
-}
-
-/**
- * Options for batch embedding operations.
- */
-interface BatchEmbedOptions {
-  readonly batchSize: number;
-  readonly tenantId?: string;
-}
 
 // ==================== Public API ====================
 

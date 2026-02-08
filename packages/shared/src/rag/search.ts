@@ -9,6 +9,7 @@
 
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
+import type { RequestContext } from "../core/types.js";
 import {
   searchSimilarDiffChunks,
   searchSimilarKnowledgeDocs,
@@ -16,10 +17,17 @@ import {
   type VectorSearchResult,
   type VectorSearchFilters,
 } from "../database/index.js";
-import { type KnowledgeDocRecord } from "../database/knowledgeDoc/types.js";
+import type { KnowledgeDocRecord } from "../database/knowledgeDoc/types.js";
+import type {
+  SearchQuery,
+  DiffSearchQuery,
+  KnowledgeSearchQuery,
+  RAGSearchResult,
+  QueryContext,
+} from "./types.js";
 import { VECTOR_SIMILARITY_THRESHOLDS } from "../constants/index.js";
 import { estimateTokenCount } from "./chunking.js";
-import { fullRerank, type QueryContext } from "./reranker.js";
+import { fullRerank } from "./reranker.js";
 import {
   validateQuery,
   normalizeQueryText,
@@ -35,60 +43,16 @@ import {
 import { cacheDeletePattern } from "../cache/cacheClient.js";
 import { clearCacheForTenant } from "./costControls.js";
 
-// Re-export types and helpers for external use
-export { EventQueryContext } from "./searchHelpers.js";
+// Re-export types for external use
+export type {
+  SearchQuery,
+  DiffSearchQuery,
+  KnowledgeSearchQuery,
+  RAGSearchResult,
+} from "./types.js";
+export type { EventQueryContext } from "./searchHelpers.js";
 
 const logger = createLogger("rag-search");
-
-// ==================== Types ====================
-
-/**
- * Search query input with optional filters.
- */
-export interface SearchQuery {
-  readonly queryText: string;
-  readonly tenantId?: string;
-  readonly repository?: string;
-  readonly topK?: number;
-  readonly minSimilarity?: number;
-  /** Enable reranking for knowledge docs (default: true) */
-  readonly enableReranking?: boolean;
-  /** Workflow name for metadata boost */
-  readonly workflow?: string;
-  /** Error signature for metadata boost */
-  readonly errorSignature?: string;
-}
-
-/**
- * Search query for diff chunks with PR-specific filters.
- */
-export interface DiffSearchQuery extends SearchQuery {
-  readonly prNumber?: number;
-  readonly filePath?: string;
-}
-
-/**
- * Search query for knowledge docs with doc-type filters.
- */
-export interface KnowledgeSearchQuery extends SearchQuery {
-  readonly docType?: string;
-  /** Enable reranking with deterministic scoring formula */
-  readonly enableReranking?: boolean;
-  /** Workflow name for metadata boost */
-  readonly workflow?: string;
-  /** Error signature for metadata boost */
-  readonly errorSignature?: string;
-}
-
-/**
- * Combined search result with source type.
- */
-export interface RAGSearchResult {
-  readonly diffChunks: ReadonlyArray<VectorSearchResult<DiffChunk>>;
-  readonly knowledgeDocs: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>;
-  readonly queryTokens: number;
-  readonly cacheHit: boolean;
-}
 
 // ==================== Public API ====================
 
@@ -365,26 +329,29 @@ export const searchAll = async (query: SearchQuery): Promise<RAGSearchResult> =>
  * Builds a search query from event context and searches all sources.
  * Convenience function for the common case of searching based on CI failure events.
  *
- * @param context - Event context for query construction
+ * @param eventContext - Event context for query construction
  * @param tenantId - Optional tenant ID for filtering
+ * @param requestContext - Optional request context for tracing
  * @returns Combined search results
  */
 export const searchFromEventContext = async (
-  context: EventQueryContext,
-  tenantId?: string
+  eventContext: EventQueryContext,
+  tenantId?: string,
+  requestContext?: RequestContext
 ): Promise<RAGSearchResult> => {
-  const queryText = buildQueryFromContext(context);
+  const queryText = buildQueryFromContext(eventContext);
 
   logger.info("Building search from event context", {
-    eventType: context.eventType,
-    repository: context.repository,
+    eventType: eventContext.eventType,
+    repository: eventContext.repository,
     queryLength: queryText.length,
+    ...(requestContext ?? {}),
   });
 
   return searchAll({
     queryText,
     tenantId,
-    repository: context.repository,
+    repository: eventContext.repository,
   });
 };
 

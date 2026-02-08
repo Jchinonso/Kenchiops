@@ -9,74 +9,54 @@
  */
 
 import { createLogger } from "../core/logger.js";
-import type { EmbeddingTierName } from "../constants/index.js";
+import { AppError } from "../core/errors.js";
+import { ERROR_CODES, HTTP_STATUS } from "../constants/index.js";
 import type { BudgetStatus } from "../database/index.js";
 import { selectEmbeddingTier, recordEmbeddingCost } from "./costControls.js";
+import type {
+  BudgetAwareEmbeddingOptions,
+  BatchBudgetAwareEmbeddingOptions,
+  BudgetAwareEmbeddingResult,
+  BatchBudgetAwareEmbeddingResult,
+} from "./types.js";
+
+export type {
+  BudgetAwareEmbeddingOptions,
+  BatchBudgetAwareEmbeddingOptions,
+  BudgetAwareEmbeddingResult,
+  BatchBudgetAwareEmbeddingResult,
+} from "./types.js";
 
 const logger = createLogger("rag-budget-embedding");
-
-// ==================== Types ====================
-
-/**
- * Options for budget-aware embedding generation.
- */
-export interface BudgetAwareEmbeddingOptions {
-  readonly tenantId: string;
-  readonly text: string;
-  /** If true, throws when budget exceeded. Otherwise, uses LIGHT tier. */
-  readonly blockOnBudgetExceeded?: boolean;
-}
-
-/**
- * Options for batch budget-aware embedding generation.
- */
-export interface BatchBudgetAwareEmbeddingOptions {
-  readonly tenantId: string;
-  readonly texts: readonly string[];
-  /** If true, throws when budget exceeded. Otherwise, uses LIGHT tier. */
-  readonly blockOnBudgetExceeded?: boolean;
-}
-
-/**
- * Budget-aware embedding result with tier selection info.
- */
-export interface BudgetAwareEmbeddingResult {
-  readonly embedding: readonly number[];
-  readonly tokenCount: number;
-  readonly model: string;
-  readonly tier: EmbeddingTierName;
-  readonly dimension: number;
-  readonly tierSelectionReason: string;
-  readonly budgetStatus: BudgetStatus;
-}
-
-/**
- * Budget-aware batch embedding result.
- */
-export interface BatchBudgetAwareEmbeddingResult {
-  readonly embeddings: ReadonlyArray<readonly number[]>;
-  readonly totalTokens: number;
-  readonly model: string;
-  readonly tier: EmbeddingTierName;
-  readonly dimension: number;
-  readonly tierSelectionReason: string;
-  readonly budgetStatus: BudgetStatus;
-}
 
 // ==================== Error Classes ====================
 
 /**
  * Budget exceeded error for blocking mode.
+ * Extends AppError for typed error handling and structured logging.
  */
-export class BudgetExceededError extends Error {
-  constructor(
-    public readonly tenantId: string,
-    public readonly budgetStatus: BudgetStatus
-  ) {
+export class BudgetExceededError extends AppError {
+  public readonly tenantId: string;
+  public readonly budgetStatus: BudgetStatus;
+
+  constructor(tenantId: string, budgetStatus: BudgetStatus) {
     super(
-      `Budget exceeded for tenant ${tenantId}: ${budgetStatus.percentUsed.toFixed(1)}% used (${budgetStatus.currentSpendUsd.toFixed(4)} / ${budgetStatus.monthlyBudgetUsd.toFixed(4)} USD)`
+      `Budget exceeded for tenant ${tenantId}: ${budgetStatus.percentUsed.toFixed(1)}% used (${budgetStatus.currentSpendUsd.toFixed(4)} / ${budgetStatus.monthlyBudgetUsd.toFixed(4)} USD)`,
+      ERROR_CODES.VALIDATION_ERROR,
+      HTTP_STATUS.TOO_MANY_REQUESTS,
+      true,
+      {
+        retryable: false,
+        metadata: {
+          tenantId,
+          percentUsed: budgetStatus.percentUsed,
+          currentSpendUsd: budgetStatus.currentSpendUsd,
+          monthlyBudgetUsd: budgetStatus.monthlyBudgetUsd,
+        },
+      }
     );
-    this.name = "BudgetExceededError";
+    this.tenantId = tenantId;
+    this.budgetStatus = budgetStatus;
   }
 }
 
@@ -131,7 +111,7 @@ export const generateBudgetAwareEmbedding = async (
     embedding: result.embedding,
     tokenCount: result.tokenCount,
     model: result.model,
-    tier: result.tier as EmbeddingTierName,
+    tier: tierSelection.selectedTier,
     dimension: result.dimension,
     tierSelectionReason: tierSelection.reason,
     budgetStatus: tierSelection.budgetStatus,
@@ -184,7 +164,7 @@ export const generateBatchBudgetAwareEmbeddings = async (
     embeddings: result.embeddings,
     totalTokens: result.totalTokens,
     model: result.model,
-    tier: result.tier as EmbeddingTierName,
+    tier: tierSelection.selectedTier,
     dimension: result.dimension,
     tierSelectionReason: tierSelection.reason,
     budgetStatus: tierSelection.budgetStatus,

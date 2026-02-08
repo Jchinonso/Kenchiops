@@ -103,6 +103,9 @@ RULES:
 4. Return empty array [] if nothing found
 5. Line numbers are relative to the chunk (1-indexed)
 6. Never invent file paths or test names not present in the text
+7. IGNORE console.error/console.warn/console.log output from test runners - these are log noise, NOT test failures
+8. Only count ACTUAL test failures (marked by ●, FAIL, expect/received, thrown errors in test blocks)
+9. Do NOT extract structured JSON log lines (e.g. {"level":3,"message":...}) as errors - these are logger output
 
 OUTPUT FORMAT: Raw JSON array only. No markdown, no backticks, no explanation.`;
 
@@ -134,11 +137,23 @@ Line offset in original log: ${chunk.lineOffset}
 ARTIFACT TYPES TO EXTRACT:
 - infra_killer: OOM, SIGKILL, timeout, disk full, network unreachable
 - ci_boundary: ##[error], exit code lines, "Process completed with exit code"
-- stack_trace: Exceptions with stack frames
-- test_failure: Assertion failures with test names
+- test_failure: Test failures with test names - EXTRACT EACH TEST AS A SEPARATE ARTIFACT
+- stack_trace: Exceptions with stack frames (only use if NO test name is present)
 - compiler_error: file:line:column errors from compilers
 - lint_error: Linter output (eslint, pylint, rubocop, etc.)
-- generic_error: Unclassified lines containing "error"/"Error"/"ERROR"
+- generic_error: Unclassified error lines (use sparingly - see IGNORE rules below)
+
+CRITICAL TEST FAILURE RULES:
+1. If you see "● Test Suite › Test Name" or "FAIL path/test.ts", use type "test_failure" (NOT stack_trace)
+2. Create a SEPARATE artifact for EACH failing test - do NOT group multiple tests into one artifact
+3. Even if tests share the same error message, each test must be its own artifact with unique test_name
+4. If 10 tests failed, you must output 10 separate test_failure artifacts
+
+IGNORE RULES (do NOT extract these as artifacts):
+1. console.error/console.warn/console.log output from test runners - these are log noise, NOT failures
+2. Structured JSON log lines like {"level":3,"message":"..."} - these are application logger output
+3. Stack traces that are PART OF console.error output when they appear inside test runner console output
+4. Repeated error messages that are just log output from code under test, not actual test assertions
 
 REQUIRED FIELDS FOR EACH ARTIFACT:
 {
@@ -155,8 +170,8 @@ OPTIONAL FIELDS (include ONLY if explicitly present):
 - file_path: Only if a file path appears in the text
 - line_number: Only if a line number appears
 - column: Only if a column number appears
-- test_name: For test failures only
-- test_suite: For test failures only
+- test_name: REQUIRED for test_failure, ALSO extract for stack_trace if test pattern visible (● TestName or FAIL TestName)
+- test_suite: For test failures, the parent suite name
 - expected: For assertion failures
 - actual: For assertion failures
 - error_code: If an error code is present
@@ -194,11 +209,23 @@ RULES:
 ARTIFACT TYPES TO EXTRACT:
 - infra_killer: OOM, SIGKILL, timeout, disk full, network unreachable
 - ci_boundary: ##[error], exit code lines, "Process completed with exit code"
-- stack_trace: Exceptions with stack frames
-- test_failure: Assertion failures with test names
+- test_failure: Test failures with test names - EXTRACT EACH TEST AS A SEPARATE ARTIFACT
+- stack_trace: Exceptions with stack frames (only use if NO test name is present)
 - compiler_error: file:line:column errors from compilers
 - lint_error: Linter output (eslint, pylint, rubocop, etc.)
-- generic_error: Unclassified lines containing "error"/"Error"/"ERROR"
+- generic_error: Unclassified error lines (use sparingly - see IGNORE rules below)
+
+CRITICAL TEST FAILURE RULES:
+1. If you see "● Test Suite › Test Name" or "FAIL path/test.ts", use type "test_failure" (NOT stack_trace)
+2. Create a SEPARATE artifact for EACH failing test - do NOT group multiple tests into one artifact
+3. Even if tests share the same error message, each test must be its own artifact with unique test_name
+4. If 10 tests failed, you must output 10 separate test_failure artifacts
+
+IGNORE RULES (do NOT extract these as artifacts):
+1. console.error/console.warn/console.log output from test runners - these are log noise, NOT failures
+2. Structured JSON log lines like {"level":3,"message":"..."} - these are application logger output
+3. Stack traces that are PART OF console.error output when they appear inside test runner console output
+4. Repeated error messages that are just log output from code under test, not actual test assertions
 
 REQUIRED FIELDS FOR EACH ARTIFACT:
 {
@@ -215,8 +242,8 @@ OPTIONAL FIELDS (include ONLY if explicitly present):
 - file_path: Only if a file path appears in the text
 - line_number: Only if a line number appears
 - column: Only if a column number appears
-- test_name: For test failures only
-- test_suite: For test failures only
+- test_name: REQUIRED for test_failure, ALSO extract for stack_trace if test pattern visible (● TestName or FAIL TestName)
+- test_suite: For test failures, the parent suite name
 - expected: For assertion failures
 - actual: For assertion failures
 - error_code: If an error code is present

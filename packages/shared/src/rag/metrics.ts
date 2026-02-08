@@ -8,65 +8,17 @@
  */
 
 import { createLogger } from "../core/logger.js";
+import type {
+  EmbeddingMetrics,
+  IngestionMetrics,
+  RAGMetricsSnapshot,
+  MetricEntry,
+  IngestionEntry,
+} from "./types.js";
+
+export type { EmbeddingMetrics, IngestionMetrics, RAGMetricsSnapshot } from "./types.js";
 
 const logger = createLogger("rag-metrics");
-
-// ==================== Types ====================
-
-/**
- * Embedding operation metrics.
- */
-export interface EmbeddingMetrics {
-  readonly totalOperations: number;
-  readonly totalTokens: number;
-  readonly totalErrors: number;
-  readonly averageLatencyMs: number;
-  readonly operationsPerMinute: number;
-  readonly estimatedCostUsd: number;
-}
-
-/**
- * Ingestion operation metrics.
- */
-export interface IngestionMetrics {
-  readonly diffChunksCreated: number;
-  readonly diffChunksEmbedded: number;
-  readonly diffIngestionErrors: number;
-  readonly knowledgeDocsCreated: number;
-  readonly knowledgeDocsEmbedded: number;
-  readonly knowledgeIngestionErrors: number;
-}
-
-/**
- * Combined RAG metrics snapshot.
- */
-export interface RAGMetricsSnapshot {
-  readonly embedding: EmbeddingMetrics;
-  readonly ingestion: IngestionMetrics;
-  readonly timestamp: string;
-  readonly windowMinutes: number;
-}
-
-/**
- * Metrics entry for a single operation.
- */
-interface MetricEntry {
-  readonly timestamp: number;
-  readonly tokens: number;
-  readonly latencyMs: number;
-  readonly success: boolean;
-}
-
-/**
- * Ingestion entry for tracking.
- */
-interface IngestionEntry {
-  readonly timestamp: number;
-  readonly type: "diff" | "knowledge";
-  readonly chunksCreated: number;
-  readonly chunksEmbedded: number;
-  readonly errorCount: number;
-}
 
 // ==================== Constants ====================
 

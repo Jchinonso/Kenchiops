@@ -12,7 +12,7 @@
  * Maximum size limits for GitHub context data.
  */
 export const GITHUB_CONTEXT_LIMITS = {
-  MAX_LOG_SIZE: 200000, // 200KB of logs - increased to capture all test failures
+  MAX_LOG_SIZE: 10000000, // 10MB - no truncation, let chunking pipeline handle large logs
   MAX_DIFF_SIZE: 50000, // 50KB of diff - increased for full context
   MAX_FILE_SIZE: 15000, // 15KB per file
   MAX_FILES: 10, // Maximum number of source files to fetch
@@ -87,8 +87,8 @@ export const GITHUB_ANNOTATION_LIMITS = {
  * Limits for log parsing operations.
  */
 export const LOG_PARSING_LIMITS = {
-  /** Maximum log size for simplified pipeline preprocessing (200KB) */
-  MAX_LOG_SIZE: 200000,
+  /** Maximum log size for preprocessing - set high to avoid truncation (10MB) */
+  MAX_LOG_SIZE: 10000000,
   /** Default position when no error indicator is found in logs */
   DEFAULT_ERROR_POSITION: 0,
   /** How far back to look from anchor point to capture context */
@@ -174,4 +174,4 @@ export const PR_CONTEXT_CORRELATION = {
  * Commit SHA display length for short format.
  * Standard GitHub short SHA length.
  */
-export const SHORT_COMMIT_SHA_LENGTH = 7;
+export const SHORT_COMMIT_SHA_LENGTH = 7 as const;

@@ -28,17 +28,7 @@ import {
   SHA_PATTERN_SINGLE,
   QUOTED_TEXT_PATTERN,
 } from "../constants/index.js";
-
-/**
- * Pre-computed lookup structures for validation.
- */
-interface ValidationLookups {
-  readonly commits: Set<string>;
-  readonly incidents: Set<string>;
-  readonly documentTitles: Set<string>;
-  readonly logs: Map<string, string>;
-  readonly logValues: string[];
-}
+import type { ValidationLookups, EvidenceValidator } from "./types.js";
 
 /**
  * Builds all lookup structures in a single pass.
@@ -133,15 +123,6 @@ const getQuotedTextWarnings = (text: string, lookups: ValidationLookups): string
     .filter((quoted) => quoted.length > minLength && !isQuotedTextValid(quoted, lookups.logValues))
     .map((quoted) => `LLM may have invented quoted text: "${quoted}"`);
 };
-
-/**
- * Evidence type validators - dispatch table for O(1) type lookup.
- */
-type EvidenceValidator = (
-  ref: string,
-  context: { event: Event; evidence: Evidence },
-  lookups: ValidationLookups
-) => boolean;
 
 const EVIDENCE_VALIDATORS: Readonly<Record<string, EvidenceValidator>> = {
   log: (ref, _context, lookups) => {

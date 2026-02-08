@@ -24,6 +24,7 @@ import type {
   DiffChunkInputValidationRule,
   DiffChunkRow,
   SearchConditionsResult,
+  SimilaritySearchQueryResult,
 } from "./types.js";
 
 // ==================== Input Validation ====================
@@ -121,9 +122,6 @@ const FILTER_HANDLERS: readonly DiffChunkFilterHandler[] = [
   { key: "filePath", column: "file_path" },
 ];
 
-// Re-export type for backwards compatibility
-export type { SearchConditionsResult } from "./types.js";
-
 /**
  * Builds WHERE clause conditions for similarity search.
  */
@@ -154,12 +152,6 @@ export const buildSearchConditions = (
 
   return { conditions: result.conditions, params: result.params };
 };
-
-/** Result of building similarity search query. */
-export interface SimilaritySearchQueryResult {
-  readonly query: string;
-  readonly params: readonly unknown[];
-}
 
 /**
  * Builds complete similarity search query with filters.

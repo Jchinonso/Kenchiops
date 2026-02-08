@@ -6,29 +6,9 @@
  * @module rag/slackResolutionPatterns
  */
 
-// ==================== Types ====================
+import type { SlackMessage } from "./types.js";
 
-/**
- * A reaction on a Slack message.
- */
-export interface SlackReaction {
-  readonly name: string;
-  readonly count: number;
-  readonly users?: readonly string[];
-}
-
-/**
- * A single message in a Slack thread.
- */
-export interface SlackMessage {
-  readonly ts: string;
-  readonly userId: string;
-  readonly username?: string;
-  readonly text: string;
-  readonly reactions?: readonly SlackReaction[];
-  readonly isBot?: boolean;
-  readonly threadTs?: string;
-}
+export type { SlackReaction, SlackMessage } from "./types.js";
 
 // ==================== Pattern Constants ====================
 

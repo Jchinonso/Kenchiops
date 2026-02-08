@@ -19,6 +19,7 @@ export type {
   PrimaryFailure,
   OptionalFieldExtractor,
   BatchProcessingState,
+  AttemptResult,
 } from "./types.js";
 
 // Helpers

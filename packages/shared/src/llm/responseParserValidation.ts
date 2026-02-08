@@ -13,25 +13,9 @@ import type {
   FailureCategory,
   PipelinePhase,
 } from "../core/types.js";
+import type { RawAnnotation, RawSecondaryFinding, ConfidenceLevel } from "./types.js";
 
-// ==================== Types ====================
-
-/**
- * Raw annotation structure from AI response
- */
-export interface RawAnnotation {
-  readonly evidence_id?: unknown;
-  readonly snippet?: unknown;
-  readonly explanation?: unknown;
-}
-
-/**
- * Raw secondary finding from AI response
- */
-export interface RawSecondaryFinding {
-  readonly issue?: unknown;
-  readonly evidence_id?: unknown;
-}
+export type { RawAnnotation, RawSecondaryFinding, ConfidenceLevel } from "./types.js";
 
 // ==================== Field Extractors ====================
 
@@ -221,7 +205,6 @@ export const parseSecondaryFindings = (rawFindings: unknown): string[] => {
  * Valid confidence levels
  */
 export const VALID_CONFIDENCE_LEVELS = new Set(["low", "medium", "high"] as const);
-export type ConfidenceLevel = "low" | "medium" | "high";
 
 /**
  * Valid failure categories

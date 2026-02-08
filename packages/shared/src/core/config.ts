@@ -15,7 +15,7 @@ import {
   PARSE_INT_RADIX,
   LLM_CONCURRENCY_DEFAULTS,
 } from "../constants/index.js";
-import type { Config, NodeEnvironment } from "./types.js";
+import type { Config, NodeEnvironment, LLMProvider } from "./types.js";
 
 dotenv.config();
 
@@ -86,11 +86,40 @@ const validateNodeEnv = (): NodeEnvironment => {
     : defaultEnv;
 };
 
+const VALID_LLM_PROVIDERS: readonly LLMProvider[] = ["openai", "openrouter"];
+
+const validateLLMProvider = (): LLMProvider => {
+  const value = process.env.LLM_PROVIDER;
+  if (isEmpty(value)) {
+    return "openai";
+  }
+  return VALID_LLM_PROVIDERS.includes(value as LLMProvider) ? (value as LLMProvider) : "openai";
+};
+
+/**
+ * Gets the effective API key for the LLM provider.
+ * LLM_API_KEY takes precedence over OPENAI_API_KEY.
+ */
+const getEffectiveApiKey = (): string => {
+  const llmApiKey = process.env.LLM_API_KEY;
+  if (!isEmpty(llmApiKey)) {
+    return llmApiKey;
+  }
+  return requireEnv("OPENAI_API_KEY");
+};
+
 // ==================== Configuration ====================
 
 export const config: Config = {
-  // OpenAI
-  OPENAI_API_KEY: requireEnv("OPENAI_API_KEY"),
+  // LLM Provider Configuration
+  LLM_PROVIDER: validateLLMProvider(),
+  LLM_BASE_URL: process.env.LLM_BASE_URL,
+  LLM_API_KEY: process.env.LLM_API_KEY,
+  LLM_MODEL: process.env.LLM_MODEL,
+  EXTRACTION_MODEL: process.env.EXTRACTION_MODEL,
+
+  // OpenAI (legacy, used as fallbacks)
+  OPENAI_API_KEY: getEffectiveApiKey(),
   OPENAI_MODEL: process.env.OPENAI_MODEL,
   OPENAI_MAX_TOKENS: optionalInt("OPENAI_MAX_TOKENS", CONFIG_DEFAULTS.OPENAI_MAX_TOKENS),
   OPENAI_TEMPERATURE: optionalFloat("OPENAI_TEMPERATURE"),

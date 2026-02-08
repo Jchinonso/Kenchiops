@@ -114,4 +114,4 @@ export type {
 } from "../finetuning/types.js";
 
 // RAG types (for feedback repository)
-export type { RAGRelevance } from "../rag/evaluation.js";
+export type { RAGRelevance } from "../rag/types.js";

@@ -115,6 +115,9 @@ export const GITHUB_COMMENT_TEMPLATES = {
     "\n> 💡 **Share your fix:** When you resolve this, reply with what worked — it helps the team learn faster.\n",
   /** Section divider for visual separation */
   SECTION_DIVIDER: "\n---\n",
+  /** Placeholder comment while analysis is in progress */
+  ANALYZING_PLACEHOLDER: (checkNames: readonly string[]): string =>
+    `## ⏳ KenchiOps — Analyzing CI Failure\n\n<!-- ${KENCHI_BRANDING.COMMENT_MARKER} -->\n\n🔍 **Analyzing ${checkNames.length} failed check${checkNames.length > 1 ? "s" : ""}:**\n${checkNames.map((name) => `- \`${name}\``).join("\n")}\n\n_This may take a few minutes for large logs. This comment will be replaced with the full analysis._\n\n---\n<sub>🤖 Powered by <a href="https://github.com/kenchi/devops">KenchiOps</a></sub>`,
 } as const;
 
 /**
@@ -235,11 +238,6 @@ export const MESSAGE_VARIANT_CONFIG = {
     INCLUDE_FULL_REPORT_LINK: true,
   },
 } as const;
-
-/**
- * Message variant type.
- */
-export type MessageVariant = keyof typeof MESSAGE_VARIANT_CONFIG;
 
 // ==================== Retry Configuration ====================
 

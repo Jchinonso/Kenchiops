@@ -14,57 +14,18 @@ import {
   ANALYSIS_LESSON_CONFIG,
   SHORT_COMMIT_SHA_LENGTH,
 } from "../constants/index.js";
-import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
+import { ingestKnowledgeDoc } from "./ingestion.js";
 import type { AnalysisLessonMetadata } from "./schemas/index.js";
 import type { AnalyzedFailure, AggregatedFailures } from "../aggregation/types.js";
+import type {
+  AnalysisLessonContext,
+  IngestAnalysisLessonResult,
+  FailureCategory,
+} from "./types.js";
+
+export type { AnalysisLessonContext, IngestAnalysisLessonResult } from "./types.js";
 
 const logger = createLogger("analysis-lesson-ingestion");
-
-// ==================== Types ====================
-
-/**
- * Context for creating an analysis lesson from a confirmed analysis.
- */
-export interface AnalysisLessonContext {
-  /** Repository full name (owner/repo) */
-  readonly repository: string;
-  /** Commit SHA that triggered the failure */
-  readonly commitSha: string;
-  /** The analyzed failures with LLM analysis */
-  readonly failures: readonly AnalyzedFailure[];
-  /** Tenant ID for multi-tenancy */
-  readonly tenantId?: string;
-  /** User who provided positive feedback */
-  readonly confirmedBy?: string;
-  /** PR number if applicable */
-  readonly prNumber?: number;
-  /** Installation ID */
-  readonly installationId?: number;
-}
-
-/**
- * Result of analysis lesson ingestion.
- */
-export interface IngestAnalysisLessonResult {
-  readonly success: boolean;
-  readonly ingestionResult: IngestKnowledgeDocResult | null;
-  readonly lessonsCreated: number;
-  readonly error?: string;
-}
-
-/**
- * Failure category based on analysis patterns.
- */
-type FailureCategory =
-  | "test_failure"
-  | "build_error"
-  | "type_error"
-  | "lint_error"
-  | "dependency_error"
-  | "runtime_error"
-  | "timeout"
-  | "infrastructure"
-  | "unknown";
 
 // ==================== Category Detection ====================
 

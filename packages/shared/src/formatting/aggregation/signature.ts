@@ -13,6 +13,7 @@ import {
   HEX_BYTE_WIDTH,
   PARSE_INT_RADIX,
   EVIDENCE_ID_PATTERN,
+  ARTIFACT_TYPES,
 } from "../../constants/index.js";
 
 import type { ExtractedArtifact } from "../extraction/types.js";
@@ -61,7 +62,20 @@ const computeHash = async (input: string): Promise<string> => {
 // ==================== Signature Components ====================
 
 /**
+ * Computes a simple hash of a string for snippet differentiation.
+ */
+const hashSnippet = (snippet: string): string => {
+  const hash = snippet.split("").reduce(
+    // eslint-disable-next-line no-bitwise -- Bitwise operations required for hash computation
+    (acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0,
+    0
+  );
+  return Math.abs(hash).toString(16).slice(0, 8);
+};
+
+/**
  * Builds signature components from an artifact.
+ * Includes snippetHash to differentiate artifacts with same error but different context.
  */
 const buildSignatureComponents = (artifact: ExtractedArtifact): ArtifactSignatureComponents => ({
   type: artifact.type,
@@ -70,6 +84,10 @@ const buildSignatureComponents = (artifact: ExtractedArtifact): ArtifactSignatur
   errorCode: artifact.errorCode,
   testName: artifact.testName?.toLowerCase(),
   assertionHash: artifact.confidence === "high" ? artifact.assertion_hash : undefined,
+  // Include snippet hash to keep artifacts with different context as unique
+  snippetHash: artifact.snippet ? hashSnippet(artifact.snippet) : undefined,
+  // Include evidenceId for test_failure to prevent collapsing unique test failures
+  evidenceId: artifact.type === ARTIFACT_TYPES.TEST_FAILURE ? artifact.evidenceId : undefined,
 });
 
 /**
@@ -83,6 +101,8 @@ const buildSignatureString = (components: ArtifactSignatureComponents): string =
     components.errorCode ? `code:${components.errorCode}` : "",
     components.testName ? `test:${components.testName}` : "",
     components.assertionHash ? `assert:${components.assertionHash}` : "",
+    components.snippetHash ? `snip:${components.snippetHash}` : "",
+    components.evidenceId ? `eid:${components.evidenceId}` : "",
   ]
     .filter((part) => part.length > 0)
     .join("|");

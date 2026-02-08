@@ -25,8 +25,6 @@ import type {
   RetryContext,
 } from "./types.js";
 
-export type { ResilientRequestOptions, ResilientResponse };
-
 const logger = createLogger("resilient-http");
 
 // ==================== Circuit Breaker ====================

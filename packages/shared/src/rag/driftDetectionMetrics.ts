@@ -16,8 +16,8 @@ import {
   type TestResultInput,
 } from "../database/index.js";
 import { searchDiffChunks, searchKnowledgeDocs } from "./search.js";
-import { calculateRecallAtK, calculateMRR, type RetrievalResult } from "./evaluation.js";
-import type { TestCaseResult, MetricAlertThreshold } from "./driftDetectionTypes.js";
+import { calculateRecallAtK, calculateMRR } from "./evaluation.js";
+import type { RetrievalResult, TestCaseResult, MetricAlertThreshold } from "./types.js";
 
 const logger = createLogger("rag-drift-detection");
 

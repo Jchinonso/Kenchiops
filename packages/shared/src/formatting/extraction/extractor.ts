@@ -19,6 +19,7 @@ import type {
   NormalizedExtractionOptions,
   BatchExtractionResult,
   BatchProcessingState,
+  AttemptResult,
 } from "./types.js";
 
 import {
@@ -31,13 +32,6 @@ import {
 import { parseExtractionResponse } from "./parser.js";
 
 // ==================== Retry Logic ====================
-
-/**
- * Result of an operation attempt - either success with value or failure with error.
- */
-type AttemptResult<T> =
-  | { readonly success: true; readonly value: T }
-  | { readonly success: false; readonly error: Error };
 
 /**
  * Delays execution for the specified milliseconds.

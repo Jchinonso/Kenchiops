@@ -9,76 +9,25 @@
 
 import { createLogger } from "../core/logger.js";
 import { TENANT_PROMPT_LIMITS } from "../constants/index.js";
+import type {
+  AnalysisDepth,
+  FocusArea,
+  PromptPreferences,
+  TechStackConfig,
+  TenantPromptConfig,
+} from "./types.js";
+
+export type {
+  AnalysisDepth,
+  CISystem,
+  FocusArea,
+  PromptPreferences,
+  TechStackConfig,
+  TenantPromptConfig,
+  VerbosityLevel,
+} from "./types.js";
 
 const logger = createLogger("tenant-prompt-config");
-
-// ==================== Types ====================
-
-/**
- * Tenant-specific prompt configuration.
- */
-export interface TenantPromptConfig {
-  readonly tenantId: string;
-  readonly techStack?: TechStackConfig;
-  readonly preferences?: PromptPreferences;
-  readonly customInstructions?: string;
-  readonly analysisDepth?: AnalysisDepth;
-  readonly languagePreference?: string;
-}
-
-/**
- * Technology stack configuration for context-aware prompts.
- */
-export interface TechStackConfig {
-  readonly primaryLanguages?: readonly string[];
-  readonly frameworks?: readonly string[];
-  readonly ciSystem?: CISystem;
-  readonly testingFrameworks?: readonly string[];
-  readonly deploymentPlatform?: string;
-}
-
-/**
- * CI/CD system types.
- */
-export type CISystem =
-  | "github_actions"
-  | "gitlab_ci"
-  | "jenkins"
-  | "circleci"
-  | "azure_devops"
-  | "other";
-
-/**
- * Analysis depth preference.
- */
-export type AnalysisDepth = "brief" | "standard" | "detailed";
-
-/**
- * Prompt behavior preferences.
- */
-export interface PromptPreferences {
-  readonly prioritizeSpeed?: boolean;
-  readonly includeCodeSnippets?: boolean;
-  readonly maxRecommendations?: number;
-  readonly focusAreas?: readonly FocusArea[];
-  readonly verbosityLevel?: VerbosityLevel;
-}
-
-/**
- * Areas to focus analysis on.
- */
-export type FocusArea =
-  | "root_cause"
-  | "dependencies"
-  | "configuration"
-  | "testing"
-  | "security"
-  | "performance";
-
-/**
- * Verbosity level for responses.
- */
-export type VerbosityLevel = "minimal" | "normal" | "verbose";
 
 // ==================== Default Configuration ====================
 

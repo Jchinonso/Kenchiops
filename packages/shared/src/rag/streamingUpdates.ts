@@ -12,63 +12,17 @@ import { getErrorMessage } from "../core/errors.js";
 import { query } from "../database/client/index.js";
 import { TTL_POLICIES, KNOWLEDGE_DOC_TYPES, type KnowledgeDocType } from "../constants/index.js";
 import { ingestDiffChunks, ingestKnowledgeDoc } from "./ingestion.js";
+import type { PRMergeEvent, DocUpdateEvent, StalenessResult, CleanupResult } from "./types.js";
+
+export type {
+  PRMergeEvent,
+  DocUpdateEvent,
+  StalenessResult,
+  CleanupResult,
+  TTLConfig,
+} from "./types.js";
 
 const logger = createLogger("rag-streaming-updates");
-
-// ==================== Types ====================
-
-/**
- * PR merge event for diff ingestion.
- */
-export interface PRMergeEvent {
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly commitSha: string;
-  readonly diffContent: string;
-  readonly tenantId: string;
-  readonly filePaths: readonly string[];
-}
-
-/**
- * Document update event for knowledge doc ingestion.
- */
-export interface DocUpdateEvent {
-  readonly repository: string;
-  readonly filePath: string;
-  readonly content: string;
-  readonly title: string;
-  readonly tenantId: string;
-  readonly docType?: KnowledgeDocType;
-}
-
-/**
- * Staleness check result.
- */
-export interface StalenessResult {
-  readonly staleDiffChunks: number;
-  readonly staleKnowledgeDocs: number;
-  readonly expiredDiffChunks: number;
-  readonly expiredKnowledgeDocs: number;
-}
-
-/**
- * Cleanup result.
- */
-export interface CleanupResult {
-  readonly diffChunksDeleted: number;
-  readonly knowledgeDocsDeleted: number;
-  readonly diffChunksMarkedStale: number;
-  readonly knowledgeDocsMarkedStale: number;
-}
-
-/**
- * TTL configuration for a document type.
- */
-export interface TTLConfig {
-  readonly docType: KnowledgeDocType;
-  readonly ttlDays: number;
-  readonly refreshBeforeExpiryHours: number;
-}
 
 // ==================== SQL Queries ====================
 

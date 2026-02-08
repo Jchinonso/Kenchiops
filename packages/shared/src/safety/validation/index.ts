@@ -12,6 +12,9 @@
  * @module safety/validation
  */
 
+// ==================== Types ====================
+export type { RedactSensitiveResult } from "./types.js";
+
 // ==================== Uncertainty Detection ====================
 export { detectUncertainty } from "./uncertaintyDetection.js";
 

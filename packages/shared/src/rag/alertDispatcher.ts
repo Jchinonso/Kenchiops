@@ -11,8 +11,20 @@ import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { enqueueSystemAlert } from "../queue/slackNotificationProcessor.js";
 import { findById } from "../database/index.js";
-import type { DriftAlert, DriftReport } from "./driftDetection.js";
+import type {
+  DriftAlert,
+  DriftReport,
+  AlertDispatchResult,
+  BatchAlertDispatchResult,
+  AlertDispatchOptions,
+} from "./types.js";
 import type { RAGMetricType } from "../constants/index.js";
+
+export type {
+  AlertDispatchResult,
+  BatchAlertDispatchResult,
+  AlertDispatchOptions,
+} from "./types.js";
 
 const logger = createLogger("rag-alert-dispatcher");
 
@@ -37,35 +49,6 @@ const SEVERITY_MAP: Record<DriftAlert["severity"], "warning" | "critical"> = {
   warning: "warning",
   critical: "critical",
 } as const;
-
-// ==================== Types ====================
-
-/**
- * Result of dispatching an alert
- */
-export interface AlertDispatchResult {
-  readonly success: boolean;
-  readonly messageId?: string;
-  readonly error?: string;
-}
-
-/**
- * Result of dispatching multiple alerts
- */
-export interface BatchAlertDispatchResult {
-  readonly total: number;
-  readonly successful: number;
-  readonly failed: number;
-  readonly results: readonly AlertDispatchResult[];
-}
-
-/**
- * Options for alert dispatch
- */
-export interface AlertDispatchOptions {
-  readonly tenantId?: string;
-  readonly repository?: string;
-}
 
 // ==================== Helper Functions ====================
 

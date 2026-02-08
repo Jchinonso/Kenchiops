@@ -7,7 +7,7 @@
  */
 
 // Core infrastructure
-export { config, type Config } from "./core/index.js";
+export { config } from "./core/index.js";
 export { createLogger, logger, LogLevel, type Logger } from "./core/index.js";
 export {
   withTimeout,
@@ -20,7 +20,6 @@ export {
   verifyUrlSignature,
   generateFeedbackUrl,
   parseFeedbackUrl,
-  type SignedUrlParams,
 } from "./core/index.js";
 export {
   createConcurrencyLimiter,
@@ -52,23 +51,37 @@ export {
   enrichError,
   invariant,
   assertUnreachable,
-  type ErrorContext,
 } from "./core/index.js";
 export type {
+  // Request Context
+  RequestContext,
+  // Configuration Types
+  Config,
+  NodeEnvironment,
+  LLMProvider,
   // Event Types
   Event,
   EventType,
   EventSeverity,
   EventPayload,
   EventMetadata,
+  EventCorrelation,
   // Evidence Types
   Evidence,
   LogEntry,
+  TimeSeriesDataPoint,
   TimeSeriesMetric,
+  MetricsTimeRange,
   MetricsSummary,
   Metrics,
   GitCommit,
   SystemState,
+  ServiceHealthStatus,
+  DependencyStatus,
+  DeploymentStatus,
+  DependencyHealth,
+  KnowledgeDocumentType,
+  KnowledgeDocumentMetadata,
   KnowledgeDocument,
   RelatedEvent,
   TestFrameworkHint,
@@ -98,11 +111,21 @@ export type {
   ConfidenceScoreBreakdown,
   ConfidenceScoreResult,
   LLMConfidenceLevel,
+  FactorValues,
+  ScoreTotals,
   // Validation Types
   ValidationResult,
+  // Error Types
+  ErrorContext,
+  RetryInfo,
+  // Signed URL Types
+  SignedUrlParams,
+  // Logger Internal Types
+  StructuredLogEntry,
   // Multi-Tenant Types
   Tenant,
   TenantStatus,
+  TenantEmbeddingTier,
   CreateTenantFromGitHub,
   LinkSlackWorkspace,
   TenantAuditAction,
@@ -116,6 +139,8 @@ export type {
   CIFailureEvent,
   SlackMessageEvent,
   GitHubPREvent,
+  GitHubPREventRepository,
+  GitHubPREventPullRequest,
 } from "./core/index.js";
 
 // Database access
@@ -556,6 +581,16 @@ export {
   truncateEvidence,
 } from "./integrations/index.js";
 export {
+  buildAnalysisFromArtifacts,
+  getFinalAnalyzerPromptTemplate,
+  validateAnalysisEvidenceIds,
+  validateConfidenceRequirements,
+  validateEnumFields,
+  validateArrayCompleteness,
+  extractValidEvidenceIds,
+  type ArtifactAnalysisPrompt,
+} from "./integrations/index.js";
+export {
   buildTenantPromptAdditions,
   createTenantPromptConfig,
   validateTenantPromptConfig,
@@ -791,6 +826,7 @@ export {
   type MessageHandler,
   type SubscriptionHandler,
   type QueueConfig,
+  type QueueManager,
   // Slack notification queue
   enqueueConsolidatedNotification,
   enqueueActionResultNotification,
@@ -798,11 +834,13 @@ export {
   startSlackNotificationWorker,
   getSlackNotificationQueueStats,
   type SlackNotificationType,
+  type BaseNotificationPayload,
   type ConsolidatedCIFailurePayload,
   type ActionResultPayload,
   type SystemAlertPayload,
   type SlackNotificationPayload,
   type NotificationHandler,
+  type WorkerOptions,
 } from "./queue/index.js";
 
 // Redis caching

@@ -36,11 +36,10 @@ import {
   type BotDetectionConfig,
   type BotDetectionResult,
   type BotCategory,
+  type BotType,
 } from "./types.js";
 
 const logger = createLogger("bot-detection");
-
-type BotType = BotDetectionResult["botType"];
 
 /** Destructured defaults for cleaner code */
 const { MAX_UA_LENGTH, MIN_RATE_MULTIPLIER, EMPTY_UA_RATE_MULTIPLIER } = BOT_DETECTION_DEFAULTS;

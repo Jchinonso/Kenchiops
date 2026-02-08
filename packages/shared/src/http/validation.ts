@@ -9,21 +9,7 @@ import {
   DEFAULT_VALIDATION_ERROR_MESSAGE,
   VALIDATION_MESSAGES,
 } from "../constants/index.js";
-
-/**
- * Validator function type.
- * Returns true if valid, or an error message string if invalid.
- */
-export type Validator = (value: unknown) => boolean | string;
-
-/**
- * Simple validation schema interface.
- */
-export interface ValidationSchema {
-  readonly body?: Record<string, Validator>;
-  readonly params?: Record<string, Validator>;
-  readonly query?: Record<string, Validator>;
-}
+import type { Validator, ValidationSchema, ValidationSource } from "./types.js";
 
 /**
  * Validates a data source against its schema and returns errors.
@@ -48,12 +34,6 @@ const validateSource = (
       return `${prefix}.${key}: ${message}`;
     })
     .filter((error): error is string => error !== null);
-
-type ValidationSource = {
-  readonly source: Record<string, unknown>;
-  readonly schema: Readonly<Record<string, Validator>>;
-  readonly prefix: string;
-};
 
 /**
  * Validation middleware factory.

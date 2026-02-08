@@ -29,7 +29,7 @@ import type {
   DriftMetricReport,
   DriftAlert,
   DriftDetectionWithAlertsResult,
-} from "./driftDetectionTypes.js";
+} from "./types.js";
 
 // Re-export types and utilities for consumers
 export type {
@@ -39,7 +39,7 @@ export type {
   DriftMetricReport,
   DriftAlert,
   DriftDetectionWithAlertsResult,
-} from "./driftDetectionTypes.js";
+} from "./types.js";
 
 export {
   METRIC_ALERT_THRESHOLDS,

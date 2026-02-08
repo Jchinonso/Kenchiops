@@ -3,6 +3,10 @@
  * Thresholds, base scores, and adjustment values for confidence calculations.
  */
 
+import type { ConfidenceRange } from "./types.js";
+
+export type { ConfidenceRange } from "./types.js";
+
 /**
  * Confidence score thresholds for gating decisions.
  */
@@ -204,11 +208,6 @@ export const MAX_WEIGHTED_ADJUSTMENT = {
 export const LOG_VALUE_MAX_LENGTH = 64;
 
 /**
- * Confidence range type for decision matrix.
- */
-export type ConfidenceRange = "very_low" | "low" | "medium" | "high" | "very_high";
-
-/**
  * Message templates for different confidence ranges.
  */
 export const CONFIDENCE_MESSAGES: Readonly<Record<ConfidenceRange, string>> = {
@@ -276,5 +275,4 @@ export const CONFIDENCE_LEVEL_THRESHOLDS = [
   { minScore: 0, level: "low" as const },
 ] as const;
 
-/** Type for confidence level derived from thresholds. */
-export type DerivedConfidenceLevel = (typeof CONFIDENCE_LEVEL_THRESHOLDS)[number]["level"];
+export type { DerivedConfidenceLevel } from "./types.js";

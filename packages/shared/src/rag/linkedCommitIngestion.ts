@@ -22,62 +22,24 @@ import {
   KNOWLEDGE_DOC_TYPES,
   SOURCE_RELIABILITY_SCORES,
 } from "../constants/index.js";
-import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
+import { ingestKnowledgeDoc } from "./ingestion.js";
+import type {
+  IngestKnowledgeDocResult,
+  FailureSummary,
+  PRFailureContext,
+  LinkedCommitInput,
+  LinkedCommitResult,
+  FailureSummaryInput,
+} from "./types.js";
+
+export type {
+  FailureSummary,
+  PRFailureContext,
+  LinkedCommitInput,
+  LinkedCommitResult,
+} from "./types.js";
 
 const logger = createLogger("rag-linked-commit");
-
-// ==================== Types ====================
-
-/**
- * Summary of a CI failure for linking with commits.
- */
-export interface FailureSummary {
-  readonly checkName: string;
-  readonly conclusion: string;
-  readonly identifiedCause: string;
-  readonly analysis: string;
-  readonly errorPatterns: readonly string[];
-  readonly testFailures: readonly string[];
-  readonly timestamp: string;
-  readonly confidence: number;
-}
-
-/**
- * PR failure context stored in Redis.
- */
-export interface PRFailureContext {
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly failures: readonly FailureSummary[];
-  readonly firstFailureAt: string;
-  readonly lastFailureAt: string;
-}
-
-/**
- * Input for creating linked commit knowledge.
- */
-export interface LinkedCommitInput {
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly prTitle: string;
-  readonly commitSha: string;
-  readonly commitMessages: readonly string[];
-  readonly diffSummary: string;
-  readonly changedFiles: readonly string[];
-  readonly tenantId: string;
-  readonly author?: string;
-}
-
-/**
- * Result of linked commit ingestion.
- */
-export interface LinkedCommitResult {
-  readonly success: boolean;
-  readonly chunksCreated: number;
-  readonly linkedFailures: number;
-  readonly skipped: boolean;
-  readonly reason?: string;
-}
 
 // ==================== Redis Key Helpers ====================
 
@@ -428,16 +390,6 @@ export const ingestLinkedCommitKnowledge = async (
  * Create a failure summary from an analyzed failure.
  * Utility for converting check run analysis into trackable format.
  */
-interface FailureSummaryInput {
-  readonly checkName: string;
-  readonly conclusion: string;
-  readonly identifiedCause: string;
-  readonly analysis: string;
-  readonly confidence: number;
-  readonly errorPatterns?: readonly string[];
-  readonly testFailures?: readonly string[];
-}
-
 export const createFailureSummary = (input: FailureSummaryInput): FailureSummary => ({
   checkName: input.checkName,
   conclusion: input.conclusion,

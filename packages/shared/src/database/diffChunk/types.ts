@@ -115,3 +115,11 @@ export interface SearchConditionsResult {
   readonly conditions: readonly string[];
   readonly params: readonly unknown[];
 }
+
+/**
+ * Result of building a similarity search query.
+ */
+export interface SimilaritySearchQueryResult {
+  readonly query: string;
+  readonly params: readonly unknown[];
+}

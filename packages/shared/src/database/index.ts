@@ -14,14 +14,13 @@ export {
 } from "./client/index.js";
 
 // Tenant module
+// Note: TenantRow and row mappers are internal to tenant module.
+// Domain types (Tenant, TenantStatus, etc.) are in core/types.ts.
 export {
-  // Row mappers
-  rowToTenant,
-  extractTenant,
+  // Status helpers (used by services for business logic)
   getStatusAfterGitHubInstall,
   getStatusAfterSlackInstall,
-  // Types
-  type TenantRow,
+  // Domain types
   type TenantStatistics,
   type TenantRAGBudgetConfig,
   type UpdateRAGBudgetInput,
@@ -66,12 +65,10 @@ export {
 export type { VectorSearchResult, VectorSearchFilters } from "./vector/index.js";
 
 // Diff chunk module
+// Note: DiffChunkRow, DiffChunkSimilarityRow, mapRowToDiffChunk are internal.
 export {
   type DiffChunk,
   type CreateDiffChunkInput,
-  type DiffChunkRow,
-  type DiffChunkSimilarityRow,
-  mapRowToDiffChunk,
   createDiffChunk,
   createDiffChunksBatch,
   searchSimilarDiffChunks,
@@ -83,12 +80,10 @@ export {
 } from "./diffChunk/index.js";
 
 // Knowledge document module
+// Note: KnowledgeDocRow, KnowledgeDocSimilarityRow, mapRowToKnowledgeDoc are internal.
 export {
   type KnowledgeDocRecord,
   type CreateKnowledgeDocInput,
-  type KnowledgeDocRow,
-  type KnowledgeDocSimilarityRow,
-  mapRowToKnowledgeDoc,
   createKnowledgeDoc,
   createKnowledgeDocsBatch,
   searchSimilarKnowledgeDocs,
@@ -248,8 +243,9 @@ export {
 } from "./costTracking/index.js";
 
 // Risk rules module (Context-Aware Risk Scoring)
+// Note: CustomRiskRuleRow, RiskAssessmentRow, and row mappers are internal.
 export {
-  // Types
+  // Domain types
   type RiskEnvironment,
   type CustomRiskRule,
   type RiskAssessmentRecord,
@@ -258,8 +254,6 @@ export {
   type CreateRiskAssessmentInput,
   type RiskRulesQueryOptions,
   type RiskAssessmentsQueryOptions,
-  type CustomRiskRuleRow,
-  type RiskAssessmentRow,
   type RiskRuleValidationRule,
   type RiskAssessmentValidationRule,
   type RiskRulesStore,
@@ -276,12 +270,6 @@ export {
   validateRiskAssessmentInput,
   validateRiskRulesQueryOptions,
   validateAssessmentsQueryOptions,
-  // Mappers
-  mapRowToCustomRiskRule,
-  mapRowToRiskAssessment,
-  extractFirstRule,
-  mapRowsToRules,
-  mapRowsToAssessments,
   // Helpers
   sanitizeForLogging,
   createRuleLogContext,

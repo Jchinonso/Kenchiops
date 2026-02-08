@@ -3,6 +3,18 @@
  * Includes embedding, chunking, similarity, relationships, and cost control.
  */
 
+import type { KnowledgeDocType, EvidenceKnowledgeDocType } from "./types.js";
+
+export type {
+  KnowledgeDocType,
+  RelationshipType,
+  ExternalSourceType,
+  TechStackTag,
+  EmbeddingTierName,
+  RAGMetricType,
+  EvidenceKnowledgeDocType,
+} from "./types.js";
+
 /**
  * Embedding configuration for RAG operations.
  */
@@ -72,8 +84,6 @@ export const KNOWLEDGE_DOC_TYPES = {
   LINKED_FIX: "linked_fix",
 } as const;
 
-export type KnowledgeDocType = (typeof KNOWLEDGE_DOC_TYPES)[keyof typeof KNOWLEDGE_DOC_TYPES];
-
 /**
  * Document types that auto-detect relationships on ingestion.
  * These produce high-value relationship graphs for multi-hop RAG.
@@ -99,8 +109,6 @@ export const RELATIONSHIP_TYPES = {
   PARENT_OF: "parent_of",
   CHILD_OF: "child_of",
 } as const;
-
-export type RelationshipType = (typeof RELATIONSHIP_TYPES)[keyof typeof RELATIONSHIP_TYPES];
 
 /**
  * Multi-hop RAG configuration.
@@ -135,8 +143,6 @@ export const EXTERNAL_SOURCE_TYPES = {
   COMMUNITY_DOCS: "community_docs",
   CUSTOM_API: "custom_api",
 } as const;
-
-export type ExternalSourceType = (typeof EXTERNAL_SOURCE_TYPES)[keyof typeof EXTERNAL_SOURCE_TYPES];
 
 /**
  * Technology stack tags for relevance filtering.
@@ -184,8 +190,6 @@ export const TECH_STACK_TAGS = {
   MOCHA: "mocha",
   CYPRESS: "cypress",
 } as const;
-
-export type TechStackTag = (typeof TECH_STACK_TAGS)[keyof typeof TECH_STACK_TAGS];
 
 /**
  * External source configuration.
@@ -289,8 +293,6 @@ export const EMBEDDING_TIERS = {
   },
 } as const;
 
-export type EmbeddingTierName = keyof typeof EMBEDDING_TIERS;
-
 /**
  * Cost control configuration.
  */
@@ -326,18 +328,6 @@ export const RAG_METRIC_TYPES = {
   INGESTION_RATE: "ingestion_rate",
   COST_PER_1K_TOKENS: "cost_per_1k_tokens",
 } as const;
-
-export type RAGMetricType = (typeof RAG_METRIC_TYPES)[keyof typeof RAG_METRIC_TYPES];
-
-/**
- * Evidence knowledge document type for mapping.
- */
-export type EvidenceKnowledgeDocType =
-  | "runbook"
-  | "past_incident"
-  | "documentation"
-  | "best_practice"
-  | "playbook";
 
 /**
  * Maps RAG document types to Evidence KnowledgeDocument types.

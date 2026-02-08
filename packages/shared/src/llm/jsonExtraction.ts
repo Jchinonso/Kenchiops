@@ -10,19 +10,9 @@
 
 import { LLMError } from "../core/errors.js";
 import { OPENAI_MESSAGES } from "../constants/index.js";
+import type { JsonExtractionState } from "./types.js";
 
 // ==================== JSON Extraction State Machine ====================
-
-/**
- * State for JSON extraction state machine.
- */
-interface JsonExtractionState {
-  readonly depth: number;
-  readonly startIndex: number;
-  readonly endIndex: number | null;
-  readonly isInString: boolean;
-  readonly isEscaped: boolean;
-}
 
 /** Initial state for JSON extraction */
 const INITIAL_JSON_STATE: JsonExtractionState = {
@@ -160,6 +150,7 @@ const normalizeJsonObject = (content: string): Record<string, unknown> | null =>
       return parsed as Record<string, unknown>;
     }
   } catch {
+    // Intentional: JSON.parse failure is expected for malformed input; falls through to extraction
     return null;
   }
 

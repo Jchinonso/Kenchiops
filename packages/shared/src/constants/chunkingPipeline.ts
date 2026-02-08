@@ -7,6 +7,8 @@
  * @module constants/chunkingPipeline
  */
 
+import type { ArtifactType } from "./types.js";
+
 // ==================== Line Number Convention ====================
 
 /**
@@ -55,8 +57,13 @@ export const CHUNKING_DEFAULTS = {
   OVERLAP_LINES: 40,
   /** Maximum chunks to prevent runaway processing */
   MAX_CHUNKS: 100,
-  /** Skip chunking for logs below this token count */
-  SMALL_LOG_THRESHOLD: 3500,
+  /**
+   * Skip chunking for logs below this token count.
+   * Logs under this threshold are small enough for a single LLM call.
+   * Larger logs benefit from parallel chunk extraction (~15 concurrent 3K-token calls
+   * is much faster than a single 90K-token call).
+   */
+  SMALL_LOG_THRESHOLD: 30000,
 } as const;
 
 // ==================== Protected Zone Detection ====================
@@ -169,14 +176,14 @@ export const ASSERTION_HASH_CONFIG = {
  * Chunk extraction configuration for Stage 2.
  */
 export const EXTRACTION_DEFAULTS = {
-  /** Maximum parallel extraction requests */
-  CONCURRENCY: 5,
+  /** Maximum parallel extraction requests (increased from 5 for better throughput) */
+  CONCURRENCY: 15,
   /** Timeout per extraction request in milliseconds */
   TIMEOUT_MS: 10000,
   /** Retry delay after timeout in milliseconds */
-  RETRY_DELAY_MS: 5000,
+  RETRY_DELAY_MS: 2000,
   /** Maximum artifacts to extract per chunk */
-  MAX_ARTIFACTS_PER_CHUNK: 20,
+  MAX_ARTIFACTS_PER_CHUNK: 100,
   /** Abort threshold - fail if this fraction of chunks fail */
   CHUNK_FAILURE_THRESHOLD: 0.5,
 } as const;
@@ -243,8 +250,6 @@ export const ARTIFACT_TYPES = {
   GENERIC_ERROR: "generic_error",
 } as const;
 
-export type ArtifactType = (typeof ARTIFACT_TYPES)[keyof typeof ARTIFACT_TYPES];
-
 /**
  * Priority weights for artifact ranking.
  * Higher weight = more likely to be root cause.
@@ -295,8 +300,6 @@ export const ARTIFACT_SEVERITY = {
   WARNING: "warning",
 } as const;
 
-export type ArtifactSeverity = (typeof ARTIFACT_SEVERITY)[keyof typeof ARTIFACT_SEVERITY];
-
 /**
  * Confidence levels for extracted artifacts.
  */
@@ -306,8 +309,6 @@ export const ARTIFACT_CONFIDENCE = {
   LOW: "low",
 } as const;
 
-export type ArtifactConfidence = (typeof ARTIFACT_CONFIDENCE)[keyof typeof ARTIFACT_CONFIDENCE];
-
 // ==================== Aggregation Configuration ====================
 
 /**
@@ -316,7 +317,7 @@ export type ArtifactConfidence = (typeof ARTIFACT_CONFIDENCE)[keyof typeof ARTIF
  */
 export const CHUNKING_AGGREGATION_DEFAULTS = {
   /** Maximum artifacts to pass to final analysis */
-  MAX_FINAL_ARTIFACTS: 25,
+  MAX_FINAL_ARTIFACTS: 50,
   /** Length of signature hash to use (first N chars of hash) */
   SIGNATURE_HASH_LENGTH: 16,
   /** Bit shift for simple hash function (standard djb2 variant) */
@@ -473,8 +474,6 @@ export const CI_PLATFORMS = {
   UNKNOWN: "unknown",
 } as const;
 
-export type CIPlatformType = (typeof CI_PLATFORMS)[keyof typeof CI_PLATFORMS];
-
 /**
  * Patterns for detecting CI platform from log content.
  */
@@ -527,8 +526,6 @@ export const BOUNDARY_TYPES = {
   OVERLAP: "overlap",
 } as const;
 
-export type BoundaryType = (typeof BOUNDARY_TYPES)[keyof typeof BOUNDARY_TYPES];
-
 // ==================== Protected Zone Types ====================
 
 /**
@@ -540,8 +537,6 @@ export const PROTECTED_ZONE_TYPES = {
   COMPILER_ERROR: "compiler_error",
   CI_GROUP: "ci_group",
 } as const;
-
-export type ProtectedZoneType = (typeof PROTECTED_ZONE_TYPES)[keyof typeof PROTECTED_ZONE_TYPES];
 
 // ==================== Evidence ID Parsing ====================
 

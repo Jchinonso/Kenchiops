@@ -23,3 +23,6 @@ export {
 
 // Error handling exports
 export { handleOpenAIError } from "./errors.js";
+
+// Type exports
+export type { OpenAIErrorLike, ErrorMessageFactory, ErrorHandler } from "./types.js";

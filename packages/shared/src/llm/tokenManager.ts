@@ -9,24 +9,19 @@
  */
 
 import type { Event, Evidence } from "../core/types.js";
+import type { TokenEstimate } from "./types.js";
 import { OPENAI_CONSTANTS } from "../constants/index.js";
 import { ValidationError } from "../core/errors.js";
+import { createLogger } from "../core/logger.js";
 import { buildAnalysisPrompt, estimateTokens, truncateEvidence } from "../integrations/prompts.js";
 
-/**
- * Token estimation result with metadata for optimization decisions.
- */
-interface TokenEstimate {
-  readonly evidenceTokens: number;
-  readonly totalEstimatedTokens: number;
-  readonly requiresTruncation: boolean;
-}
+const logger = createLogger("token-manager");
 
 /**
  * Validates token budget parameters.
  *
  * @param maxTokens - Maximum token budget
- * @throws {Error} If token budget is invalid
+ * @throws {ValidationError} If token budget is invalid
  */
 const validateTokenBudget = (maxTokens: number): void => {
   if (maxTokens <= OPENAI_CONSTANTS.TOKEN_BUFFER) {
@@ -74,12 +69,25 @@ export const manageTokenBudget = (
 ): Evidence => {
   validateTokenBudget(maxTokens);
 
+  const originalLogCount = evidence.logs?.length ?? 0;
   const estimate = estimateTokenBudget(evidence, maxTokens);
   const evidenceTokenBudget = calculateEvidenceBudget(maxTokens);
 
   // Early return: estimate clearly exceeds budget - truncate immediately
   if (estimate.requiresTruncation) {
-    return truncateEvidence(evidence, evidenceTokenBudget);
+    const truncated = truncateEvidence(evidence, evidenceTokenBudget);
+    const truncatedLogCount = truncated.logs?.length ?? 0;
+
+    logger.warn("Evidence truncated due to token budget (estimate)", {
+      originalLogCount,
+      truncatedLogCount,
+      logsRemoved: originalLogCount - truncatedLogCount,
+      estimatedTokens: estimate.totalEstimatedTokens,
+      maxTokens,
+      evidenceTokenBudget,
+    });
+
+    return truncated;
   }
 
   // Estimate suggests it might fit - verify with actual prompt
@@ -88,11 +96,28 @@ export const manageTokenBudget = (
 
   // Early return: actual tokens fit - return original evidence
   if (actualTokens <= maxTokens) {
+    logger.debug("Evidence fits within token budget", {
+      logCount: originalLogCount,
+      actualTokens,
+      maxTokens,
+    });
     return evidence;
   }
 
   // Actual tokens exceed budget - truncate evidence
-  return truncateEvidence(evidence, evidenceTokenBudget);
+  const truncated = truncateEvidence(evidence, evidenceTokenBudget);
+  const truncatedLogCount = truncated.logs?.length ?? 0;
+
+  logger.warn("Evidence truncated due to token budget (actual)", {
+    originalLogCount,
+    truncatedLogCount,
+    logsRemoved: originalLogCount - truncatedLogCount,
+    actualTokens,
+    maxTokens,
+    evidenceTokenBudget,
+  });
+
+  return truncated;
 };
 
 /**

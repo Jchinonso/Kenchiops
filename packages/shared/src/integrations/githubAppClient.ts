@@ -3,32 +3,25 @@
  *
  * Client for communicating with the GitHub App service.
  * Used by other services to fetch GitHub data via the GitHub App API.
+ *
+ * @module integrations/githubAppClient
  */
 
 import { config } from "../core/config.js";
 import { createLogger } from "../core/logger.js";
 import { ExternalServiceError, getErrorMessage } from "../core/errors.js";
-import type { GitHubRepository } from "../core/types.js";
+import { resilientGet } from "../http/resilientClient.js";
+import { truncateText } from "../formatting/index.js";
+import type { RequestContext, GitHubRepository } from "../core/types.js";
+import type { RepositoriesResponse } from "./types.js";
 
 const logger = createLogger("github-app-client");
 
-/**
- * API response for installation repositories
- */
-interface RepositoriesResponse {
-  readonly installationId: number;
-  readonly repositories: ReadonlyArray<{
-    readonly id: number;
-    readonly name: string;
-    readonly fullName: string;
-    readonly private: boolean;
-    readonly defaultBranch: string;
-  }>;
-  readonly total: number;
-}
+/** Maximum length for error text before truncation. */
+const MAX_ERROR_TEXT_LENGTH = 500;
 
 /**
- * Transform API response to GitHubRepository format
+ * Transform API response to GitHubRepository format.
  */
 const transformRepository = (
   repo: RepositoriesResponse["repositories"][number]
@@ -42,57 +35,59 @@ const transformRepository = (
 });
 
 /**
- * Fetch all repositories accessible to a GitHub App installation
+ * Fetch all repositories accessible to a GitHub App installation.
  *
  * @param installationId - The GitHub App installation ID
+ * @param context - Request context for tracing
  * @returns Array of repositories accessible to the installation
- * @throws ExternalServiceError if the request fails
+ * @throws ExternalServiceError if the fetch fails
  */
 export const fetchInstallationRepositories = async (
-  installationId: number
-): Promise<GitHubRepository[]> => {
+  installationId: number,
+  context?: RequestContext
+): Promise<readonly GitHubRepository[]> => {
   const url = `${config.GITHUB_APP_URL}/api/github/installations/${installationId}/repositories`;
-
-  logger.info("Fetching installation repositories", {
-    installationId,
-    url,
-  });
+  const startTime = Date.now();
 
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+    const response = await resilientGet<RepositoriesResponse>(url, {
+      headers: { "Content-Type": "application/json" },
     });
+    const durationMs = Date.now() - startTime;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new ExternalServiceError("GitHubApp", `HTTP ${response.status}: ${errorText}`, {
-        operation: "fetchInstallationRepositories",
-        metadata: { installationId },
-      });
-    }
+    const repositories = response.data.repositories.map(transformRepository);
 
-    const data = (await response.json()) as RepositoriesResponse;
-
-    const repositories = data.repositories.map(transformRepository);
-
-    logger.info("Fetched installation repositories successfully", {
+    logger.info("GitHub App repositories fetched", {
+      provider: "github-app",
+      operation: "fetchInstallationRepositories",
+      durationMs,
+      statusCode: response.status,
       installationId,
       repositoryCount: repositories.length,
+      ...context,
     });
 
     return repositories;
   } catch (error) {
-    logger.error("Failed to fetch installation repositories", {
+    const durationMs = Date.now() - startTime;
+    const errorMessage = truncateText(getErrorMessage(error), MAX_ERROR_TEXT_LENGTH);
+
+    logger.error("GitHub App repositories fetch failed", {
+      provider: "github-app",
+      operation: "fetchInstallationRepositories",
+      durationMs,
       installationId,
-      error: getErrorMessage(error),
+      error: errorMessage,
+      ...context,
     });
 
-    throw new ExternalServiceError("GitHubApp", getErrorMessage(error), {
+    if (error instanceof ExternalServiceError) {
+      throw error;
+    }
+
+    throw new ExternalServiceError("github-app", errorMessage, {
       operation: "fetchInstallationRepositories",
-      metadata: { installationId },
+      metadata: { installationId, durationMs },
     });
   }
 };

@@ -38,7 +38,10 @@ export {
   getFinalAnalyzerPromptTemplate,
   validateAnalysisEvidenceIds,
   validateConfidenceRequirements,
+  validateEnumFields,
+  validateArrayCompleteness,
   extractValidEvidenceIds,
+  type ArtifactAnalysisPrompt,
 } from "./promptArtifactAnalysis.js";
 
 // ==================== System Prompt (Role & Context) ====================

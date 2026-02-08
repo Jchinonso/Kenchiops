@@ -8,31 +8,14 @@
  */
 
 import { HTTP_STATUS, OPENAI_CONSTANTS } from "../../../constants/index.js";
-
-/**
- * Type definition for OpenAI API error responses.
- */
-interface OpenAIErrorLike {
-  readonly status?: number;
-  readonly code?: string;
-  readonly message?: string;
-}
+import { LLMError } from "../../../core/errors.js";
+import type { OpenAIErrorLike, ErrorMessageFactory, ErrorHandler } from "./types.js";
 
 /**
  * Type guard for error-like objects.
  */
 const isErrorLike = (error: unknown): error is OpenAIErrorLike =>
   typeof error === "object" && error !== null;
-
-/**
- * Error message factory type for status code handlers.
- */
-type ErrorMessageFactory = (message?: string) => string;
-
-/**
- * Error handler function type.
- */
-type ErrorHandler = (error: OpenAIErrorLike, timeout: number) => Error | null;
 
 /**
  * Error message factories for HTTP status codes.
@@ -68,12 +51,12 @@ const DEFAULT_ERROR_MESSAGE = "Unknown OpenAI error occurred";
  * @param error - Error object with status code
  * @returns Error instance if status code is handled, null otherwise
  */
-const handleStatusError = (error: OpenAIErrorLike): Error | null => {
+const handleStatusError = (error: OpenAIErrorLike): LLMError | null => {
   if (error.status === undefined) {
     return null;
   }
   const messageFactory = STATUS_ERROR_MESSAGES.get(error.status);
-  return messageFactory ? new Error(messageFactory(error.message)) : null;
+  return messageFactory ? new LLMError(messageFactory(error.message)) : null;
 };
 
 /**
@@ -83,9 +66,11 @@ const handleStatusError = (error: OpenAIErrorLike): Error | null => {
  * @param timeout - Timeout value in milliseconds
  * @returns Error instance if timeout error, null otherwise
  */
-const handleTimeoutError = (error: OpenAIErrorLike, timeout: number): Error | null => {
+const handleTimeoutError = (error: OpenAIErrorLike, timeout: number): LLMError | null => {
   const isTimeout = error.code !== undefined && TIMEOUT_ERROR_CODES.has(error.code);
-  return isTimeout ? new Error(`OpenAI request timed out after ${timeout}ms`) : null;
+  return isTimeout
+    ? new LLMError(`OpenAI request timed out after ${timeout}ms`, { retryable: true })
+    : null;
 };
 
 /**
@@ -94,8 +79,8 @@ const handleTimeoutError = (error: OpenAIErrorLike, timeout: number): Error | nu
  * @param error - Error object with message
  * @returns Error instance if message exists, null otherwise
  */
-const handleMessageError = (error: OpenAIErrorLike): Error | null =>
-  error.message ? new Error(`OpenAI error: ${error.message}`) : null;
+const handleMessageError = (error: OpenAIErrorLike): LLMError | null =>
+  error.message ? new LLMError(`OpenAI error: ${error.message}`) : null;
 
 /**
  * Array of error handlers in priority order.
@@ -115,7 +100,7 @@ const errorHandlers: readonly ErrorHandler[] = [
  *
  * @param error - The error to handle (unknown type for safety)
  * @param timeout - The timeout value in milliseconds for timeout errors
- * @returns A properly formatted Error instance
+ * @returns A properly formatted LLMError instance
  *
  * @example
  * ```typescript
@@ -126,10 +111,10 @@ const errorHandlers: readonly ErrorHandler[] = [
  * }
  * ```
  */
-export const handleOpenAIError = (error: unknown, timeout: number): Error => {
+export const handleOpenAIError = (error: unknown, timeout: number): LLMError => {
   // Early return for non-error-like objects
   if (!isErrorLike(error)) {
-    return new Error(DEFAULT_ERROR_MESSAGE);
+    return new LLMError(DEFAULT_ERROR_MESSAGE);
   }
 
   // Try each error handler in sequence
@@ -138,5 +123,5 @@ export const handleOpenAIError = (error: unknown, timeout: number): Error => {
     .find((result) => result !== null);
 
   // Return handled error or default
-  return handledError ?? new Error(DEFAULT_ERROR_MESSAGE);
+  return handledError ?? new LLMError(DEFAULT_ERROR_MESSAGE);
 };

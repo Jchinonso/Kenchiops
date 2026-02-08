@@ -7,87 +7,36 @@
  * @module queue/slackNotificationProcessor
  */
 
-import { slackNotificationQueue, type QueueMessage, type ProcessResult } from "./messageQueue.js";
+import { slackNotificationQueue } from "./messageQueue.js";
 import { createLogger } from "../core/logger.js";
 import { QUEUE_WORKER_DEFAULTS, SLACK_RETRYABLE_ERROR_PATTERNS } from "../constants/index.js";
 import { delay } from "../core/utils.js";
 import { getErrorMessage } from "../core/errors.js";
 import type { AggregatedFailures } from "../aggregation/types.js";
+import type {
+  QueueMessage,
+  ProcessResult,
+  QueueStats,
+  ConsolidatedCIFailurePayload,
+  ActionResultPayload,
+  SystemAlertPayload,
+  SlackNotificationPayload,
+  NotificationHandler,
+  WorkerOptions,
+} from "./types.js";
+
+export type {
+  SlackNotificationType,
+  ConsolidatedCIFailurePayload,
+  ActionResultPayload,
+  SystemAlertPayload,
+  SlackNotificationPayload,
+  NotificationHandler,
+  WorkerOptions,
+  QueueStats,
+} from "./types.js";
 
 const logger = createLogger("slack-notification-queue");
-
-// ==================== Types ====================
-
-/**
- * Slack notification job types
- */
-export type SlackNotificationType =
-  | "consolidated_ci_failure"
-  | "single_ci_failure"
-  | "action_result"
-  | "system_alert";
-
-/**
- * Base notification payload
- */
-interface BaseNotificationPayload {
-  readonly type: SlackNotificationType;
-  readonly repository: string;
-  readonly installationId: number;
-  readonly timestamp: string;
-}
-
-/**
- * Consolidated CI failure notification payload
- */
-export interface ConsolidatedCIFailurePayload extends BaseNotificationPayload {
-  readonly type: "consolidated_ci_failure";
-  readonly aggregation: AggregatedFailures;
-  readonly slackPayload: {
-    readonly blocks: readonly unknown[];
-    readonly text: string;
-    readonly metadata?: Record<string, unknown>;
-  };
-}
-
-/**
- * Action result notification payload
- */
-export interface ActionResultPayload extends BaseNotificationPayload {
-  readonly type: "action_result";
-  readonly actionId: string;
-  readonly actionType: string;
-  readonly success: boolean;
-  readonly message: string;
-  readonly channelId?: string;
-  readonly threadTs?: string;
-}
-
-/**
- * System alert notification payload
- */
-export interface SystemAlertPayload extends BaseNotificationPayload {
-  readonly type: "system_alert";
-  readonly severity: "info" | "warning" | "error" | "critical";
-  readonly title: string;
-  readonly message: string;
-  readonly details?: Record<string, unknown>;
-}
-
-/**
- * Union type for all notification payloads
- */
-export type SlackNotificationPayload =
-  | ConsolidatedCIFailurePayload
-  | ActionResultPayload
-  | SystemAlertPayload;
-
-/**
- * Notification handler function type
- */
-export type NotificationHandler = (
-  payload: SlackNotificationPayload
-) => Promise<{ success: boolean; error?: string }>;
 
 // ==================== Queue Operations ====================
 
@@ -208,13 +157,13 @@ const processNotificationJob =
 
     try {
       const result = await handler(payload);
-      const duration = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
 
       if (result.success) {
         logger.info("Notification job completed", {
           messageId: message.id,
           type: payload.type,
-          duration,
+          durationMs,
         });
 
         return { success: true };
@@ -224,7 +173,7 @@ const processNotificationJob =
         messageId: message.id,
         type: payload.type,
         error: result.error,
-        duration,
+        durationMs,
       });
 
       return {
@@ -234,13 +183,13 @@ const processNotificationJob =
       };
     } catch (error) {
       const errorMsg = getErrorMessage(error);
-      const duration = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
 
       logger.error("Notification job threw exception", {
         messageId: message.id,
         type: payload.type,
         error: errorMsg,
-        duration,
+        durationMs,
       });
 
       return {
@@ -261,7 +210,7 @@ const processNotificationJob =
  */
 export const startSlackNotificationWorker = async (
   handler: NotificationHandler,
-  options: { pollIntervalMs?: number; maxConcurrent?: number } = {}
+  options: WorkerOptions = {}
 ): Promise<() => void> => {
   const {
     pollIntervalMs = QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
@@ -316,8 +265,5 @@ export const startSlackNotificationWorker = async (
 /**
  * Gets queue statistics
  */
-export const getSlackNotificationQueueStats = async (): Promise<{
-  pending: number;
-  processing: number;
-  dead: number;
-}> => slackNotificationQueue.getStats();
+export const getSlackNotificationQueueStats = async (): Promise<QueueStats> =>
+  slackNotificationQueue.getStats();

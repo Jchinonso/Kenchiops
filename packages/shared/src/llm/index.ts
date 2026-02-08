@@ -27,6 +27,18 @@ export type {
   EmbeddingProviderFactory,
   LLMProviderName,
   ProviderRegistryEntry,
+  OpenAIConfig,
+  EmbeddingClientConfig,
+  TokenEstimate,
+  RawAnnotation,
+  RawSecondaryFinding,
+  ConfidenceLevel,
+  TestFailureLogShape,
+  LintErrorLogShape,
+  ActionPriority,
+  ValidationLookups,
+  EvidenceValidator,
+  JsonExtractionState,
 } from "./types.js";
 
 // ==================== Response Parsing ====================
@@ -58,9 +70,6 @@ export {
   mapConfidence,
   validateCategory,
   validatePhase,
-  type ConfidenceLevel,
-  type RawAnnotation,
-  type RawSecondaryFinding,
 } from "./responseParserValidation.js";
 
 // Structured data parsers

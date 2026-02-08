@@ -3,6 +3,42 @@
  * Re-exports all constants from their respective modules.
  */
 
+// Centralized type definitions
+export type {
+  ArtifactType,
+  ArtifactSeverity,
+  ArtifactConfidence,
+  CIPlatformType,
+  BoundaryType,
+  ProtectedZoneType,
+  MessageVariant,
+  FineTuningStatus,
+  EventType,
+  EventSource,
+  EventSeverity,
+  LogLevel,
+  EvidenceSource,
+  ConfidenceRange,
+  DerivedConfidenceLevel,
+  UncertaintyPattern,
+  RelevanceRule,
+  RiskLevel,
+  RiskRuleCategory,
+  SecretPattern,
+  KnowledgeDocType,
+  RelationshipType,
+  ExternalSourceType,
+  TechStackTag,
+  EmbeddingTierName,
+  RAGMetricType,
+  EvidenceKnowledgeDocType,
+  CacheNamespace,
+  HealthStatus,
+  ApiResponseStatus,
+  NumericPriority,
+  StringPriority,
+} from "./types.js";
+
 // Confidence scoring constants
 export {
   CONFIDENCE_THRESHOLDS,
@@ -31,8 +67,6 @@ export {
   EMPTY_ANALYSIS_MAX_SCORE,
   MAX_WEIGHTED_ADJUSTMENT,
   LOG_VALUE_MAX_LENGTH,
-  type ConfidenceRange,
-  type DerivedConfidenceLevel,
 } from "./confidence.js";
 
 // HTTP and error constants
@@ -57,11 +91,6 @@ export {
   LOG_LEVELS,
   EVIDENCE_SOURCES,
   EVENT_DEFAULTS,
-  type EventType,
-  type EventSource,
-  type EventSeverity,
-  type LogLevel,
-  type EvidenceSource,
 } from "./events.js";
 
 // Time, ports, and rate limiting
@@ -133,10 +162,6 @@ export {
   CONTEXT_MULTIPLIER_BOUNDS,
   RISK_SCORING_VERSION,
   RISK_LEVEL_THRESHOLDS,
-  type UncertaintyPattern,
-  type RelevanceRule,
-  type RiskLevel,
-  type RiskRuleCategory,
 } from "./safety.js";
 
 // GitHub constants
@@ -177,9 +202,10 @@ export {
   EVIDENCE_TEXT_LIMITS,
 } from "./evidence.js";
 
-// OpenAI and text processing constants
+// OpenAI and LLM provider constants
 export {
   OPENAI_DEFAULTS,
+  OPENROUTER_DEFAULTS,
   OPENAI_CONSTANTS,
   EVIDENCE_TRUNCATION,
   MATCHING_CONFIG,
@@ -195,7 +221,6 @@ export {
   FINE_TUNING_STATUS,
   FINE_TUNING_READINESS,
   FINE_TUNING_SCHEDULER,
-  type FineTuningStatus,
 } from "./openai.js";
 
 // RAG constants
@@ -221,13 +246,6 @@ export {
   COST_CONTROL_CONFIG,
   VALID_EMBEDDING_TIERS,
   RAG_METRIC_TYPES,
-  type KnowledgeDocType,
-  type RelationshipType,
-  type ExternalSourceType,
-  type TechStackTag,
-  type EmbeddingTierName,
-  type RAGMetricType,
-  type EvidenceKnowledgeDocType,
   RAG_TO_EVIDENCE_DOC_TYPE_MAP,
 } from "./ragConstants.js";
 
@@ -237,7 +255,6 @@ export {
   REDACTION_DEFAULTS,
   SECRET_PATTERNS,
   FORBIDDEN_FIELDS,
-  type SecretPattern,
 } from "./secrets.js";
 
 // Slack-specific constants
@@ -341,7 +358,6 @@ export {
   QUEUE_VISIBILITY_TIMEOUT,
   QUEUE_NAMES,
   PUBSUB_CHANNELS,
-  type CacheNamespace,
 } from "./redis.js";
 
 // API service constants
@@ -359,8 +375,6 @@ export {
   API_REQUEST_FIELDS,
   shouldSkipRateLimit,
   API_PAGINATION_DEFAULTS,
-  type HealthStatus,
-  type ApiResponseStatus,
 } from "./api.js";
 
 // Slack Bot service constants
@@ -394,8 +408,6 @@ export {
   isDocIngestionRequest,
   SLACK_UI_ERROR_MESSAGES,
   DOC_INGESTION_ERROR_CODES,
-  type NumericPriority,
-  type StringPriority,
 } from "./slackBot.js";
 
 // GitHub App service constants
@@ -417,7 +429,6 @@ export {
   GITHUB_RETRY_CONFIG,
   GITHUB_PAGINATION,
   CONTEXT_FETCH_CONFIG,
-  type MessageVariant,
 } from "./githubApp.js";
 
 // Passive learning constants
@@ -475,12 +486,6 @@ export {
   ANCHOR_TIERS,
   TEST_SUMMARY_PATTERNS,
   TEST_FRAMEWORK_CONFIDENCE,
-  type ArtifactType,
-  type ArtifactSeverity,
-  type ArtifactConfidence,
-  type BoundaryType,
-  type ProtectedZoneType,
-  type CIPlatformType,
 } from "./chunkingPipeline.js";
 
 // Diff chunk constants

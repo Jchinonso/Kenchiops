@@ -3,12 +3,19 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
-import { isAppError, logger } from "../core/index.js";
+import { isAppError } from "../core/errors.js";
+import { createLogger } from "../core/logger.js";
 import { ERROR_CODES, HTTP_STATUS, DEFAULT_ERROR_MESSAGES } from "../constants/index.js";
+
+const logger = createLogger("http-middleware");
 
 /**
  * Error handling middleware for Express.
- * Catches AppError instances and formats them appropriately.
+ *
+ * Per error logging boundary rules:
+ * - AppErrors are already logged at the appropriate boundary (adapter/service)
+ * - This middleware only logs unexpected (non-operational) errors
+ * - All errors are formatted into a consistent JSON response
  */
 export const errorHandler = (
   error: unknown,
@@ -17,13 +24,6 @@ export const errorHandler = (
   _next: NextFunction
 ): void => {
   if (isAppError(error)) {
-    logger.error("Application error", {
-      code: error.code,
-      message: error.message,
-      statusCode: error.statusCode,
-      metadata: error.metadata,
-    });
-
     res.status(error.statusCode).json({
       error: {
         code: error.code,
@@ -34,7 +34,7 @@ export const errorHandler = (
     return;
   }
 
-  // Handle unexpected errors
+  // Only log unexpected (non-AppError) errors at this boundary
   logger.error("Unexpected error", { error: String(error) });
 
   res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
@@ -47,11 +47,19 @@ export const errorHandler = (
 
 /**
  * Async handler wrapper to catch promise rejections in route handlers.
+ * Converts async route handler errors into Express next() calls.
  */
 export const asyncHandler =
   (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction): void => {
-    Promise.resolve(fn(req, res, next)).catch(next);
+    const execute = async (): Promise<void> => {
+      try {
+        await fn(req, res, next);
+      } catch (error: unknown) {
+        next(error);
+      }
+    };
+    void execute();
   };
 
 /**
@@ -61,12 +69,12 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
   const start = Date.now();
 
   res.on("finish", () => {
-    const duration = Date.now() - start;
-    logger.info("HTTP request", {
+    const durationMs = Date.now() - start;
+    logger.info("HTTP request processed", {
       method: req.method,
       path: req.path,
       statusCode: res.statusCode,
-      duration: `${duration}ms`,
+      durationMs,
       ip: req.ip,
     });
   });

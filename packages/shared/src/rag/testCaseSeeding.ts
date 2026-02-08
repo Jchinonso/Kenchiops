@@ -11,32 +11,11 @@ import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { RAG_TEST_CASE_CONFIG } from "../constants/index.js";
 import { createTestCase, getActiveTestCases, type CreateTestCaseInput } from "../database/index.js";
+import type { SeedTestCasesResult, TestCaseTemplate } from "./types.js";
+
+export type { SeedTestCasesResult } from "./types.js";
 
 const logger = createLogger("rag-test-case-seeding");
-
-// ==================== Types ====================
-
-/**
- * Result of seeding operation.
- */
-export interface SeedTestCasesResult {
-  readonly success: boolean;
-  readonly created: number;
-  readonly skipped: number;
-  readonly errors: readonly string[];
-}
-
-/**
- * Predefined test case template.
- */
-interface TestCaseTemplate {
-  readonly name: string;
-  readonly description: string;
-  readonly queryText: string;
-  readonly category: string;
-  readonly priority: number;
-  readonly expectedMinRecall: number;
-}
 
 // ==================== Seed Data ====================
 

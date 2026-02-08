@@ -14,8 +14,6 @@ import { CircuitBreakerOpenError, getErrorMessage } from "../core/errors.js";
 import { HTTP_RESILIENCE_DEFAULTS, CIRCUIT_BREAKER_SERVICE_KEYS } from "../constants/index.js";
 import type { CircuitStateRecord, CircuitBreakerConfig, CircuitBreakerStatus } from "./types.js";
 
-export type { CircuitBreakerConfig, CircuitBreakerStatus };
-
 /** Re-export service keys for backward compatibility. */
 export const SERVICE_KEYS = CIRCUIT_BREAKER_SERVICE_KEYS;
 

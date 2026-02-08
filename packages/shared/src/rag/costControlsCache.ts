@@ -14,40 +14,11 @@ import {
   type EmbeddingTierName,
 } from "../constants/index.js";
 import { getRAGBudgetConfig } from "../database/index.js";
+import type { CacheStats, TenantTierConfig, CacheEntry } from "./types.js";
+
+export type { CacheStats, TenantTierConfig } from "./types.js";
 
 const logger = createLogger("rag-cost-controls");
-
-// ==================== Types ====================
-
-/**
- * Query cache entry.
- */
-interface CacheEntry {
-  readonly embedding: readonly number[];
-  readonly timestamp: number;
-  readonly tier: EmbeddingTierName;
-}
-
-/**
- * Cache statistics.
- */
-export interface CacheStats {
-  readonly size: number;
-  readonly hits: number;
-  readonly misses: number;
-  readonly hitRate: number;
-}
-
-/**
- * Tiered embedding configuration for a tenant.
- */
-export interface TenantTierConfig {
-  readonly tenantId: string;
-  readonly preferredTier: EmbeddingTierName;
-  readonly monthlyBudgetUsd: number;
-  readonly degradeOnBudgetWarning: boolean;
-  readonly allowPremium: boolean;
-}
 
 // ==================== Query Cache ====================
 

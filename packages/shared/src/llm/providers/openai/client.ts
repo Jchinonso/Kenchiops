@@ -12,10 +12,11 @@
 
 import OpenAI from "openai";
 import { config } from "../../../core/config.js";
-import { logger } from "../../../core/logger.js";
+import { createLogger } from "../../../core/logger.js";
 import { LLMError, getErrorMessage, ExternalServiceError } from "../../../core/errors.js";
 import {
   OPENAI_DEFAULTS,
+  OPENROUTER_DEFAULTS,
   OPENAI_CONSTANTS,
   TIME_CONSTANTS,
   OPENAI_MESSAGES,
@@ -32,49 +33,84 @@ import {
   getCircuitStatus,
   SERVICE_KEYS,
 } from "../../../http/circuitBreaker.js";
-import type { LLMAnalysisProvider } from "../../types.js";
+import type { LLMAnalysisProvider, OpenAIConfig } from "../../types.js";
+
+const logger = createLogger("openai-client");
 
 /**
- * OpenAI client configuration.
+ * Checks if we're using OpenRouter provider.
  */
-interface OpenAIConfig {
-  readonly model: string;
-  readonly maxTokens: number;
-  readonly temperature: number;
-  readonly timeout: number;
-}
+const isOpenRouterProvider = (): boolean => config.LLM_PROVIDER === "openrouter";
+
+/**
+ * Gets the effective base URL for the LLM provider.
+ * Returns undefined for OpenAI (uses default), or the configured URL for OpenRouter.
+ */
+const getEffectiveBaseUrl = (): string | undefined => {
+  if (config.LLM_BASE_URL) {
+    return config.LLM_BASE_URL;
+  }
+  if (isOpenRouterProvider()) {
+    return OPENROUTER_DEFAULTS.BASE_URL;
+  }
+  return undefined;
+};
 
 /**
  * Creates OpenAI client configuration from environment variables.
+ * Supports custom base URLs for OpenRouter and other OpenAI-compatible providers.
  *
  * @returns Configured OpenAI client instance
  */
-const createOpenAIClient = (): OpenAI =>
-  new OpenAI({
+const createOpenAIClient = (timeout: number): OpenAI => {
+  const baseURL = getEffectiveBaseUrl();
+
+  return new OpenAI({
     apiKey: config.OPENAI_API_KEY,
-    timeout: config.OPENAI_TIMEOUT_MS || OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
+    timeout,
+    ...(baseURL && { baseURL }),
   });
+};
 
 /**
  * Creates client configuration from environment variables with defaults.
+ * Uses OpenRouter defaults when LLM_PROVIDER=openrouter.
  *
  * @returns Client configuration object
  */
-const createClientConfig = (): OpenAIConfig =>
-  ({
-    model: config.OPENAI_MODEL || OPENAI_DEFAULTS.MODEL,
-    maxTokens: config.OPENAI_MAX_TOKENS || OPENAI_DEFAULTS.MAX_TOKENS,
-    temperature: config.OPENAI_TEMPERATURE || OPENAI_DEFAULTS.TEMPERATURE,
+const createClientConfig = (): OpenAIConfig => {
+  const useOpenRouter = isOpenRouterProvider();
+
+  return {
+    model:
+      config.LLM_MODEL ||
+      config.OPENAI_MODEL ||
+      (useOpenRouter ? OPENROUTER_DEFAULTS.MODEL : OPENAI_DEFAULTS.MODEL),
+    maxTokens:
+      config.OPENAI_MAX_TOKENS ||
+      (useOpenRouter ? OPENROUTER_DEFAULTS.MAX_TOKENS : OPENAI_DEFAULTS.MAX_TOKENS),
+    temperature:
+      config.OPENAI_TEMPERATURE ??
+      (useOpenRouter ? OPENROUTER_DEFAULTS.TEMPERATURE : OPENAI_DEFAULTS.TEMPERATURE),
     timeout: config.OPENAI_TIMEOUT_MS || OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
-  }) as const;
+  } as const;
+};
 
 export class OpenAIClient implements LLMAnalysisProvider {
   private readonly client: OpenAI;
   private readonly clientConfig: OpenAIConfig;
 
   constructor() {
-    this.client = createOpenAIClient();
     this.clientConfig = createClientConfig();
+    this.client = createOpenAIClient(this.clientConfig.timeout);
+
+    logger.info("LLM client initialized", {
+      provider: config.LLM_PROVIDER,
+      model: this.clientConfig.model,
+      baseURL: getEffectiveBaseUrl() || "default",
+      maxTokens: this.clientConfig.maxTokens,
+      temperature: this.clientConfig.temperature,
+    });
   }
 
   /**
@@ -121,20 +157,51 @@ export class OpenAIClient implements LLMAnalysisProvider {
     const startTime = Date.now();
 
     try {
+      const originalLogCount = evidence.logs?.length ?? 0;
       const truncatedEvidence = manageTokenBudget(
         event,
         evidence,
         OPENAI_CONSTANTS.MAX_PROMPT_TOKENS
       );
+      const truncatedLogCount = truncatedEvidence.logs?.length ?? 0;
       const prompt = buildAnalysisPrompt(event, truncatedEvidence);
+
+      // Critical diagnostic: shows if truncation is causing test failure loss
+      logger.info("LLM prompt prepared", {
+        eventId: event.id,
+        originalLogCount,
+        truncatedLogCount,
+        logsRemoved: originalLogCount - truncatedLogCount,
+        promptLength: prompt.length,
+        estimatedTokens: Math.ceil(prompt.length / 4),
+        maxTokens: OPENAI_CONSTANTS.MAX_PROMPT_TOKENS,
+      });
+
       const response = await this.callOpenAIWithRetry(prompt);
+      const durationMs = Date.now() - startTime;
       const analysis = this.parseResponse(response, event.id);
       const validation = validateResponse(analysis, { event, evidence });
 
       this.logValidationResults(validation, event.id);
 
+      logger.info("OpenAI analyzeIncident completed", {
+        provider: "openai",
+        operation: "analyzeIncident",
+        durationMs,
+        eventId: event.id,
+        model: this.clientConfig.model,
+      });
+
       return this.enrichAnalysis(analysis, startTime);
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      logger.error("OpenAI analyzeIncident failed", {
+        provider: "openai",
+        operation: "analyzeIncident",
+        durationMs,
+        eventId: event.id,
+        model: this.clientConfig.model,
+      });
       throw handleOpenAIError(error, this.clientConfig.timeout);
     }
   }
@@ -213,13 +280,13 @@ export class OpenAIClient implements LLMAnalysisProvider {
   private readonly validationLoggers = [
     {
       condition: (validation: { valid: boolean }) => !validation.valid,
-      log: (validation: { errors: string[] }, eventId: string) =>
-        logger.warn("OpenAI response validation failed", { eventId, errors: validation.errors }),
+      log: (validation: { errors: readonly string[] }, eventId: string) =>
+        logger.warn("LLM output validation failed", { eventId, errors: validation.errors }),
     },
     {
-      condition: (validation: { warnings: string[] }) => validation.warnings.length > 0,
-      log: (validation: { warnings: string[] }, eventId: string) =>
-        logger.warn("OpenAI response validation warnings", {
+      condition: (validation: { warnings: readonly string[] }) => validation.warnings.length > 0,
+      log: (validation: { warnings: readonly string[] }, eventId: string) =>
+        logger.warn("LLM output validation warnings", {
           eventId,
           warnings: validation.warnings,
         }),
@@ -233,7 +300,7 @@ export class OpenAIClient implements LLMAnalysisProvider {
    * @param eventId - Event ID for logging context
    */
   private logValidationResults = (
-    validation: { valid: boolean; errors: string[]; warnings: string[] },
+    validation: { valid: boolean; errors: readonly string[]; warnings: readonly string[] },
     eventId: string
   ): void => {
     this.validationLoggers
@@ -262,10 +329,10 @@ export class OpenAIClient implements LLMAnalysisProvider {
    *
    * @param completion - OpenAI completion response
    * @returns Response content
-   * @throws {Error} If no content is found
+   * @throws {LLMError} If no content is found
    */
   private extractResponseContent = (completion: OpenAI.Chat.Completions.ChatCompletion): string =>
-    completion.choices[0]?.message?.content ??
+    completion.choices?.[0]?.message?.content ??
     (() => {
       throw new LLMError(OPENAI_MESSAGES.NO_CONTENT);
     })();
@@ -315,7 +382,7 @@ export class OpenAIClient implements LLMAnalysisProvider {
    * @param prompt - The prompt to send
    * @returns Response content
    * @throws {ExternalServiceError} If circuit breaker is open
-   * @throws {Error} If the API call fails
+   * @throws {LLMError} If the API call fails
    */
   private attemptApiCall = async (prompt: string): Promise<string> => {
     const requestConfig = this.createRequestConfig(prompt);
@@ -359,7 +426,7 @@ export class OpenAIClient implements LLMAnalysisProvider {
    * @param attempt - Current attempt number
    * @param maxRetries - Maximum number of retries
    * @returns Response content
-   * @throws {Error} If all retry attempts fail
+   * @throws {LLMError} If all retry attempts fail
    */
   private attemptWithRetry = async (
     prompt: string,
@@ -390,7 +457,7 @@ export class OpenAIClient implements LLMAnalysisProvider {
    * @param prompt - The prompt to send to OpenAI
    * @param maxRetries - Maximum number of retry attempts
    * @returns Response content from OpenAI
-   * @throws {Error} If all retry attempts fail
+   * @throws {LLMError} If all retry attempts fail
    */
   private callOpenAIWithRetry = async (
     prompt: string,

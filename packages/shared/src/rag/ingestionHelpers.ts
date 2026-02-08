@@ -11,7 +11,7 @@ import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
 import { getEmbeddingClient, type EmbeddingClient } from "../llm/providers/openai/embedding.js";
-import type { EmbeddingTierName, KnowledgeDocType } from "../constants/index.js";
+import type { EmbeddingTierName } from "../constants/index.js";
 import {
   updateDiffChunkEmbedding,
   getDiffChunksWithoutEmbeddings,
@@ -21,6 +21,7 @@ import {
   type CreateKnowledgeDocInput,
 } from "../database/index.js";
 import { selectEmbeddingTier, recordEmbeddingCost } from "./costControls.js";
+import type { DiffChunkContext, KnowledgeChunkContext } from "./types.js";
 
 const logger = createLogger("rag-ingestion");
 
@@ -42,18 +43,6 @@ export const redactContent = (content: string): string => redactSecrets(content)
 
 // ==================== Chunk Mapping ====================
 
-/**
- * Maps chunked diff result to database input format.
- */
-interface DiffChunkContext {
-  readonly filePath: string;
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly commitSha: string;
-  readonly hunkHeader?: string;
-  readonly tenantId?: string;
-}
-
 export const mapDiffChunksToInputs = (
   chunks: ReadonlyArray<{
     content: string;
@@ -73,20 +62,6 @@ export const mapDiffChunksToInputs = (
     endLine: chunk.metadata.endOffset,
     tenantId: context.tenantId,
   }));
-
-/**
- * Maps chunked knowledge doc result to database input format.
- */
-interface KnowledgeChunkContext {
-  readonly docType: KnowledgeDocType;
-  readonly title: string;
-  readonly parentId: string | null;
-  readonly repository?: string;
-  readonly sourceUrl?: string;
-  readonly filePath?: string;
-  readonly tenantId?: string;
-  readonly metadata?: Record<string, unknown>;
-}
 
 export const mapKnowledgeChunksToInputs = (
   chunks: ReadonlyArray<{ content: string; metadata: { chunkIndex: number } }>,

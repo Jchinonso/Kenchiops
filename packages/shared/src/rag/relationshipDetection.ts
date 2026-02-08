@@ -16,64 +16,21 @@ import {
 } from "../constants/index.js";
 import { createRelationshipsBatch, type CreateRelationshipInput } from "../database/index.js";
 import { searchKnowledgeDocs } from "./search.js";
+import type {
+  DocumentContext,
+  DetectedRelationship,
+  RelationshipDetectionResult,
+  KnowledgeDocSearchResult,
+  ScoredRelationship,
+} from "./types.js";
+
+export type {
+  DocumentContext,
+  DetectedRelationship,
+  RelationshipDetectionResult,
+} from "./types.js";
 
 const logger = createLogger("rag-relationship-detection");
-
-// ==================== Types ====================
-
-/**
- * Document context for relationship detection.
- */
-export interface DocumentContext {
-  readonly docId: string;
-  readonly docType: string;
-  readonly title: string;
-  readonly content: string;
-  readonly repository?: string;
-  readonly filePath?: string;
-  readonly tenantId?: string;
-  readonly metadata?: Record<string, unknown>;
-}
-
-/**
- * Detected relationship before persistence.
- */
-export interface DetectedRelationship {
-  readonly fromDocId: string;
-  readonly toDocId: string;
-  readonly relationshipType: RelationshipType;
-  readonly strength: number;
-  readonly reason: string;
-}
-
-/**
- * Result of relationship detection.
- */
-export interface RelationshipDetectionResult {
-  readonly detected: number;
-  readonly created: number;
-  readonly errors: readonly string[];
-}
-
-/**
- * Knowledge doc search result for relationship detection.
- */
-interface KnowledgeDocSearchResult {
-  readonly id: string;
-  readonly content: string;
-  readonly similarity: number;
-  readonly repository?: string;
-  readonly docType: string;
-}
-
-/**
- * Intermediate scored relationship during detection.
- */
-interface ScoredRelationship {
-  readonly result: KnowledgeDocSearchResult;
-  readonly strength: number;
-  readonly combinedPatternOverlap: number;
-}
 
 // ==================== Pattern Extractors ====================
 

@@ -226,26 +226,25 @@ const parseTestFailure = (raw: unknown): LLMTestFailure | null => {
     return null;
   }
 
-  // test_name is required (may come as test_name or testName)
+  // test_name - use fallback if missing to avoid dropping entries
   const testName = extractStringField(raw, TEST_NAME_FIELDS);
-  if (!testName) {
-    return null;
-  }
 
-  // error is required (may come as error_message, errorMessage, error, or message)
+  // error - use fallback if missing to avoid dropping entries
   const error = extractStringField(raw, ERROR_MESSAGE_FIELDS);
-  if (!error) {
+
+  // Must have at least one of testName or error to be valid
+  if (!testName && !error) {
     return null;
   }
 
   return {
-    testName,
+    testName: testName || "Unknown test",
     file: extractOptionalString(raw, "file"),
     line: extractOptionalNumber(raw, "line"),
     // Use extractValueAsString to handle LLM returning numbers (e.g., expected: 3, actual: 2)
     expected: extractValueAsString(raw, EXPECTED_VALUE_FIELDS),
     actual: extractValueAsString(raw, ACTUAL_VALUE_FIELDS),
-    error,
+    error: error || "Test failed",
   };
 };
 

@@ -7,77 +7,15 @@
  */
 
 import { CHUNKING_CONFIG } from "../constants/index.js";
+import type {
+  ChunkMetadata,
+  TextChunk,
+  ChunkingState,
+  SplitPattern,
+  SplitCandidate,
+} from "./types.js";
 
-// ==================== Types ====================
-
-/**
- * Metadata attached to each chunk for retrieval context.
- */
-export interface ChunkMetadata {
-  /** Zero-based index of this chunk within the source */
-  readonly chunkIndex: number;
-  /** Total number of chunks from the source */
-  readonly totalChunks: number;
-  /** Starting character offset in original text */
-  readonly startOffset: number;
-  /** Ending character offset in original text */
-  readonly endOffset: number;
-  /** Estimated token count for this chunk */
-  readonly estimatedTokens: number;
-}
-
-/**
- * A single text chunk with metadata.
- */
-export interface TextChunk {
-  /** The chunk content */
-  readonly content: string;
-  /** Chunk metadata for retrieval context */
-  readonly metadata: ChunkMetadata;
-}
-
-/**
- * Configuration for the chunking operation.
- */
-export interface ChunkingOptions {
-  /** Target token count per chunk */
-  readonly targetTokens?: number;
-  /** Minimum token count per chunk */
-  readonly minTokens?: number;
-  /** Maximum token count per chunk */
-  readonly maxTokens?: number;
-  /** Overlap ratio between adjacent chunks (0.0 to 0.5) */
-  readonly overlapRatio?: number;
-}
-
-/**
- * Internal state for recursive chunking.
- */
-export interface ChunkingState {
-  readonly text: string;
-  readonly currentPos: number;
-  readonly chunks: readonly TextChunk[];
-  readonly targetChars: number;
-  readonly overlapChars: number;
-  readonly searchRadius: number;
-  readonly minChars: number;
-}
-
-/**
- * Split pattern definition for finding boundaries.
- */
-interface SplitPattern {
-  readonly pattern: RegExp;
-  readonly priority: number;
-}
-
-/**
- * Split point candidate with position and priority.
- */
-interface SplitCandidate {
-  readonly position: number;
-  readonly priority: number;
-}
+export type { ChunkMetadata, TextChunk, ChunkingOptions, ChunkingState } from "./types.js";
 
 // ==================== Constants ====================
 

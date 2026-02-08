@@ -16,9 +16,12 @@ import {
   type ArtifactSeverity,
   type ArtifactConfidence,
 } from "../../constants/index.js";
+import { createLogger } from "../../core/logger.js";
 
 import type { ExtractedArtifact, OptionalFieldExtractor } from "./types.js";
 import { generateAssertionHash } from "./helpers.js";
+
+const logger = createLogger("extraction-parser");
 
 // ==================== Type Guards ====================
 
@@ -190,7 +193,8 @@ const cleanMarkdownFences = (response: string): string => {
 
   if (cleanedResponse.startsWith("```")) {
     const lines = cleanedResponse.split("\n");
-    const startIndex = lines[0].includes("json") ? 1 : 1;
+    // Skip the opening ``` line (with or without "json" language identifier)
+    const startIndex = 1;
     const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "```");
     cleanedResponse = lines.slice(startIndex, endIndex > 0 ? endIndex : undefined).join("\n");
   }
@@ -204,12 +208,18 @@ const cleanMarkdownFences = (response: string): string => {
 const attemptJsonParse = (response: string): unknown => {
   try {
     return JSON.parse(response);
-  } catch {
+  } catch (primaryError: unknown) {
+    logger.debug("Direct JSON parse failed, trying array extraction", {
+      responseLength: response.length,
+    });
     const arrayMatch = response.match(/\[[\s\S]*\]/);
     if (arrayMatch) {
       try {
         return JSON.parse(arrayMatch[0]);
-      } catch {
+      } catch (fallbackError: unknown) {
+        logger.debug("Fallback array JSON parse also failed", {
+          matchLength: arrayMatch[0].length,
+        });
         return undefined;
       }
     }

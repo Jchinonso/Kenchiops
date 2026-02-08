@@ -8,7 +8,8 @@
  */
 
 import { createLogger } from "../core/logger.js";
-import { OPENAI_DEFAULTS, MODEL_VERSIONING } from "../constants/index.js";
+import { config } from "../core/config.js";
+import { OPENAI_DEFAULTS, OPENROUTER_DEFAULTS, MODEL_VERSIONING } from "../constants/index.js";
 import type {
   ModelVersion,
   ModelFeatureFlags,
@@ -19,12 +20,23 @@ import type {
 
 const logger = createLogger("model-versioning");
 
+// ==================== LLM Model Configuration ====================
+
+/**
+ * Gets the configured LLM model based on provider settings.
+ * Uses LLM_MODEL, falls back to provider-specific defaults.
+ */
+const getConfiguredModel = (): string =>
+  config.LLM_MODEL ||
+  config.OPENAI_MODEL ||
+  (config.LLM_PROVIDER === "openrouter" ? OPENROUTER_DEFAULTS.MODEL : OPENAI_DEFAULTS.MODEL);
+
 // ==================== Default Configuration ====================
 
 const BASE_MODEL_VERSION: ModelVersion = {
   id: MODEL_VERSIONING.BASELINE_VERSION_ID,
   name: MODEL_VERSIONING.BASELINE_VERSION_NAME,
-  modelId: OPENAI_DEFAULTS.MODEL,
+  modelId: getConfiguredModel(),
   description: MODEL_VERSIONING.BASELINE_DESCRIPTION,
   createdAt: MODEL_VERSIONING.BASELINE_CREATED_AT,
   isBaseline: true,
@@ -228,7 +240,7 @@ const getABTestGroup = (tenantId: string, treatmentPercentage: number): "control
 const getDefaultModelResult = (context: ModelSelectionContext): ModelSelectionResult => {
   const version = context.getVersion(context.flags.defaultModelVersion);
   return {
-    modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
+    modelId: version?.modelId ?? getConfiguredModel(),
     versionId: context.flags.defaultModelVersion,
     reason: "default",
     isABTest: false,
@@ -243,7 +255,7 @@ const MODEL_SELECTION_HANDLERS: readonly ModelSelectionHandler[] = [
     getResult: (context) => {
       const version = context.getVersion(context.flags.rollbackModelVersion);
       return {
-        modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
+        modelId: version?.modelId ?? getConfiguredModel(),
         versionId: context.flags.rollbackModelVersion,
         reason: "rollback",
         isABTest: false,
@@ -260,7 +272,7 @@ const MODEL_SELECTION_HANDLERS: readonly ModelSelectionHandler[] = [
       const versionId = context.flags.tenantOverrides?.[context.tenantId] ?? "";
       const version = context.getVersion(versionId);
       return {
-        modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
+        modelId: version?.modelId ?? getConfiguredModel(),
         versionId,
         reason: "tenant_override",
         isABTest: false,
@@ -280,7 +292,7 @@ const MODEL_SELECTION_HANDLERS: readonly ModelSelectionHandler[] = [
       const versionId = group === "treatment" ? treatmentVersion : controlVersion;
       const version = context.getVersion(versionId);
       return {
-        modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
+        modelId: version?.modelId ?? getConfiguredModel(),
         versionId,
         reason: group === "treatment" ? "ab_test_treatment" : "ab_test_control",
         isABTest: true,

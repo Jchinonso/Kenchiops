@@ -10,85 +10,27 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { KNOWLEDGE_DOC_TYPES } from "../constants/index.js";
-import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
-import {
-  detectResolution,
-  type SlackThread,
-  type DetectedResolution,
-  type ResolutionDetectionResult,
-} from "./slackResolutionDetector.js";
+import { ingestKnowledgeDoc } from "./ingestion.js";
+import { detectResolution } from "./slackResolutionDetector.js";
 import type { SlackResolutionMetadata } from "./schemas/index.js";
+import type {
+  SlackThread,
+  DetectedResolution,
+  IngestSlackResolutionInput,
+  SlackResolutionFailureContext,
+  IngestSlackResolutionResult,
+  BatchIngestSlackResolutionsResult,
+  BatchAccumulator,
+} from "./types.js";
+
+export type {
+  IngestSlackResolutionInput,
+  SlackResolutionFailureContext,
+  IngestSlackResolutionResult,
+  BatchIngestSlackResolutionsResult,
+} from "./types.js";
 
 const logger = createLogger("slack-resolution-ingestion");
-
-// ==================== Types ====================
-
-/**
- * Input for ingesting a Slack resolution.
- */
-export interface IngestSlackResolutionInput {
-  /** The Slack thread to analyze */
-  readonly thread: SlackThread;
-  /** Tenant ID for multi-tenancy */
-  readonly tenantId?: string;
-  /** Repository context if the thread relates to code */
-  readonly repository?: string;
-  /** CI failure context if this was triggered by a failure */
-  readonly failureContext?: SlackResolutionFailureContext;
-}
-
-/**
- * Context about a CI failure that triggered this Slack thread.
- */
-export interface SlackResolutionFailureContext {
-  /** The check run name that failed */
-  readonly checkName?: string;
-  /** Error message from the failure */
-  readonly errorMessage?: string;
-  /** Files affected by the failure */
-  readonly affectedFiles?: readonly string[];
-  /** PR number if applicable */
-  readonly prNumber?: number;
-}
-
-/**
- * Result of Slack resolution ingestion.
- */
-export interface IngestSlackResolutionResult {
-  /** Whether resolution was detected and ingested */
-  readonly success: boolean;
-  /** Whether a resolution was found in the thread */
-  readonly resolutionDetected: boolean;
-  /** The detected resolution if found */
-  readonly resolution: DetectedResolution | null;
-  /** Ingestion result if resolution was ingested */
-  readonly ingestionResult: IngestKnowledgeDocResult | null;
-  /** Detection analysis details */
-  readonly detectionResult: ResolutionDetectionResult;
-  /** Error message if failed */
-  readonly error?: string;
-}
-
-/**
- * Result of batch ingestion.
- */
-export interface BatchIngestSlackResolutionsResult {
-  readonly threadsProcessed: number;
-  readonly successCount: number;
-  readonly resolutionsDetected: number;
-  readonly errorCount: number;
-  readonly results: readonly IngestSlackResolutionResult[];
-}
-
-/**
- * Accumulator for batch processing.
- */
-interface BatchAccumulator {
-  readonly results: readonly IngestSlackResolutionResult[];
-  readonly successCount: number;
-  readonly resolutionsDetected: number;
-  readonly errorCount: number;
-}
 
 // ==================== Content Building ====================
 

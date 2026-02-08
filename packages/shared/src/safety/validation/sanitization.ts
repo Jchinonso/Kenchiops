@@ -8,6 +8,7 @@
  */
 
 import type { OutputSanitizationResult, CommandValidationResult } from "../types.js";
+import type { RedactSensitiveResult } from "./types.js";
 import { SANITIZATION_CONFIG, COMMAND_RISK_THRESHOLDS } from "../../constants/validation.js";
 
 // ==================== Constants ====================
@@ -162,12 +163,6 @@ const escapeHtml = (text: string): string =>
  */
 const detectXssPatterns = (text: string): string[] =>
   XSS_PATTERNS.filter(({ pattern }) => pattern.test(text)).map(({ name }) => name);
-
-/** Result of redacting sensitive data */
-interface RedactSensitiveResult {
-  readonly text: string;
-  readonly appliedRules: readonly string[];
-}
 
 /**
  * Redacts sensitive data from text.

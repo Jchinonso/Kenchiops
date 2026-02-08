@@ -16,65 +16,21 @@ import {
   PASSIVE_LEARNING_TIME,
 } from "../constants/index.js";
 
+import type {
+  PRComment,
+  PRFixFailureContext,
+  FixCommentAnalysis,
+  ExtractedFixKnowledge,
+} from "./types.js";
+
+export type {
+  PRComment,
+  PRFixFailureContext,
+  FixCommentAnalysis,
+  ExtractedFixKnowledge,
+} from "./types.js";
+
 const logger = createLogger("pr-fix-comment-detector");
-
-// ==================== Types ====================
-
-/**
- * Represents a PR comment for analysis.
- */
-export interface PRComment {
-  readonly id: string;
-  readonly author: string;
-  readonly body: string;
-  readonly createdAt: string;
-  readonly updatedAt?: string;
-}
-
-/**
- * Context about the failure that was fixed.
- */
-export interface PRFixFailureContext {
-  readonly checkRunId: number;
-  readonly checkName: string;
-  readonly errorSummary: string;
-  readonly failedAt: string;
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly commitSha: string;
-  readonly filesChanged?: readonly string[];
-}
-
-/**
- * Result of analyzing a PR comment for fix content.
- */
-export interface FixCommentAnalysis {
-  readonly isFixComment: boolean;
-  readonly confidence: number;
-  readonly comment: PRComment;
-  readonly matchedPatterns: readonly string[];
-  readonly hasCodeBlock: boolean;
-  readonly hasFileReference: boolean;
-  readonly wordCount: number;
-}
-
-/**
- * Extracted fix knowledge ready for ingestion.
- */
-export interface ExtractedFixKnowledge {
-  readonly title: string;
-  readonly content: string;
-  readonly confidence: number;
-  readonly sourceComment: PRComment;
-  readonly failureContext: PRFixFailureContext;
-  readonly metadata: {
-    readonly prUrl: string;
-    readonly commentId: string;
-    readonly filesChanged: readonly string[];
-    readonly matchedPatterns: readonly string[];
-    readonly extractedAt: string;
-  };
-}
 
 // ==================== Pattern Matching ====================
 

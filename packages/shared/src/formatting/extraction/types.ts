@@ -12,6 +12,7 @@ import type {
   ArtifactSeverity,
   ArtifactConfidence,
 } from "../../constants/index.js";
+import type { ChunkResult } from "../chunking/types.js";
 
 // ==================== Extraction Options ====================
 
@@ -157,7 +158,7 @@ export type ExtractorFunction = (
  * Context for a single extraction attempt.
  */
 export interface ExtractionContext {
-  readonly chunk: import("../chunking/types.js").ChunkResult;
+  readonly chunk: ChunkResult;
   readonly systemPrompt: string;
   readonly userPrompt: string;
   readonly options: NormalizedExtractionOptions;
@@ -174,7 +175,7 @@ export interface NormalizedExtractionOptions {
   readonly chunkFailureThreshold: number;
   readonly model: string;
   readonly frameworkHint?: string;
-  readonly ciPlatformHint?: import("../../constants/index.js").CIPlatformType;
+  readonly ciPlatformHint?: CIPlatformType;
 }
 
 /**
@@ -195,3 +196,10 @@ export interface BatchProcessingState {
   readonly aborted: boolean;
   readonly abortReason: string | undefined;
 }
+
+/**
+ * Result of an operation attempt - either success with value or failure with error.
+ */
+export type AttemptResult<T> =
+  | { readonly success: true; readonly value: T }
+  | { readonly success: false; readonly error: Error };
