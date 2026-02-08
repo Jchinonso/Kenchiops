@@ -35,6 +35,10 @@ import {
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
+import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
+
+/** Reference to analysis worker for cleanup on shutdown */
+let analysisWorker: AnalysisWorkerControl | null = null;
 
 const logger = createLogger(SERVICE_NAMES.API);
 
@@ -332,10 +336,26 @@ const startServer = async (): Promise<void> => {
   startExternalSyncScheduler();
   registerCleanupHandler(stopExternalSyncScheduler);
 
-  // Start fine-tuning job scheduler and register for graceful shutdown
-  startScheduler();
-  registerCleanupHandler(stopScheduler);
-  logger.info("Fine-tuning job scheduler started");
+  // Start fine-tuning job scheduler only when a real OpenAI key is configured.
+  // OpenRouter keys (sk-or-*) are not valid for the OpenAI fine-tuning API.
+  const apiKey = process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY ?? "";
+  if (apiKey.startsWith("sk-or-")) {
+    logger.warn(
+      "Fine-tuning scheduler disabled: OpenRouter key cannot be used for OpenAI fine-tuning API"
+    );
+  } else {
+    startScheduler();
+    registerCleanupHandler(stopScheduler);
+    logger.info("Fine-tuning job scheduler started");
+  }
+
+  // Start analysis worker and register for graceful shutdown
+  analysisWorker = startAnalysisWorker();
+  registerCleanupHandler(() => {
+    if (analysisWorker) {
+      analysisWorker.stop();
+    }
+  });
 
   // Set up graceful shutdown
   setupGracefulShutdown(server, {
