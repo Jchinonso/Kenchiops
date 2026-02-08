@@ -7,7 +7,7 @@ Comprehensive unit tests for the API service covering all routes and services.
 1. **analysisService.test.ts** - Tests for the analysis service including:
    - Context creation from requests
    - Response formatting
-   - OpenAI integration
+   - LLM integration
    - Error handling
    - Edge cases (unicode, long strings, etc.)
 
@@ -98,7 +98,7 @@ All external dependencies are mocked to ensure:
 Mocked dependencies include:
 
 - `@kenchi/shared` - Logger, validators, error handlers
-- `OpenAIClient` - LLM analysis
+- `LLMClient` - LLM analysis
 - Service modules - Business logic isolation
 
 ## Test Patterns
