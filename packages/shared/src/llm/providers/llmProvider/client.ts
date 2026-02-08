@@ -26,7 +26,7 @@ import { buildAnalysisPrompt } from "../../../integrations/prompts.js";
 import { validateResponse } from "../../validation.js";
 import { manageTokenBudget } from "../../tokenManager.js";
 import { handleLLMError } from "./errors.js";
-import { parseOpenAIResponse } from "../../responseParser.js";
+import { parseLLMResponse } from "../../responseParser.js";
 import { delay } from "../../../core/utils.js";
 import {
   withCircuitBreaker,
@@ -471,7 +471,7 @@ export class LLMClient implements LLMAnalysisProvider {
    */
   private parseResponse = (responseContent: string, eventId: string): LLMAnalysisResult => {
     try {
-      return parseOpenAIResponse(responseContent, eventId);
+      return parseLLMResponse(responseContent, eventId);
     } catch (error) {
       throw new LLMError(`Failed to parse LLM response: ${getErrorMessage(error)}`);
     }

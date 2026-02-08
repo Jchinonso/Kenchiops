@@ -1,5 +1,5 @@
 /**
- * OpenAI Response Parser
+ * LLM Response Parser
  *
  * Parses and validates LLM responses from the language-agnostic
  * incident analysis format into structured analysis results.
@@ -287,10 +287,7 @@ export const createAnalysisFromParsed = (
  * @returns Parsed and validated LLM analysis result
  * @throws {LLMError} If parsing fails
  */
-export const parseOpenAIResponse = (
-  responseContent: string,
-  eventId: string
-): LLMAnalysisResult => {
+export const parseLLMResponse = (responseContent: string, eventId: string): LLMAnalysisResult => {
   const parsed = parseJsonObject(responseContent);
 
   // Debug: Log raw test_failures from LLM response

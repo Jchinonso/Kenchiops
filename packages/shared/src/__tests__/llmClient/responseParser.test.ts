@@ -1,7 +1,7 @@
 import { describe, it, expect } from "@jest/globals";
-import { extractJsonFromResponse, parseOpenAIResponse } from "../../llm/responseParser.js";
+import { extractJsonFromResponse, parseLLMResponse } from "../../llm/responseParser.js";
 
-describe("OpenAI responseParser", () => {
+describe("LLM responseParser", () => {
   it("should extract JSON from wrapped content", () => {
     const payload = {
       root_cause: "Missing AUTH_SECRET env var",
@@ -50,7 +50,7 @@ describe("OpenAI responseParser", () => {
     };
     const content = JSON.stringify(payload);
 
-    const result = parseOpenAIResponse(content, "evt_test");
+    const result = parseLLMResponse(content, "evt_test");
 
     expect(result.confidence).toBe("high");
     expect(result.category).toBe("build");
@@ -69,7 +69,7 @@ describe("OpenAI responseParser", () => {
     };
     const content = `Result:\n${JSON.stringify(payload)}\n-- end --`;
 
-    const result = parseOpenAIResponse(content, "evt_embedded");
+    const result = parseLLMResponse(content, "evt_embedded");
 
     expect(result.identifiedCause).toBe("Dependency install failed");
     expect(result.eventId).toBe("evt_embedded");
@@ -93,7 +93,7 @@ describe("OpenAI responseParser", () => {
     };
     const content = JSON.stringify(payload);
 
-    const result = parseOpenAIResponse(content, "evt_annotation");
+    const result = parseLLMResponse(content, "evt_annotation");
 
     expect(result.codeAnnotations[0]?.path).toBe("api/formatters/comment.test.ts");
     expect(result.codeAnnotations[0]?.line).toBe(0);

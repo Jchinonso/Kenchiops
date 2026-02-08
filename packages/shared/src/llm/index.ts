@@ -8,7 +8,7 @@
  * - Token budget management
  *
  * For provider-specific implementations, use:
- * - `@kenchi/shared/llm/providers/openai` for OpenAI
+ * - `@kenchi/shared/llm/providers/llmProvider` for OpenAI-compatible APIs
  *
  * @module llm
  */
@@ -48,7 +48,7 @@ export { extractJsonFromResponse, parseJsonObject } from "./jsonExtraction.js";
 
 // Response parser
 export {
-  parseOpenAIResponse,
+  parseLLMResponse,
   createAnalysisFromParsed,
   extractJsonFromResponse as extractJson,
 } from "./responseParser.js";
