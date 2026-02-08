@@ -25,31 +25,6 @@ import type {
   TenantStatsFetcher,
 } from "./types.js";
 
-// Re-export types and converters for backwards compatibility
-export {
-  toCachedTenant,
-  toCachedMapping,
-  type CachedTenant,
-  type CachedMapping,
-  type CachedTenantStats,
-} from "./types.js";
-
-// Re-export mapping cache operations for backwards compatibility
-export {
-  getCachedChannelForRepo,
-  cacheChannelForRepo,
-  getOrFetchChannelForRepo,
-  getCachedMappingsForChannel,
-  cacheMappingsForChannel,
-  getOrFetchMappingsForChannel,
-  getCachedAllMappingsForTenant,
-  cacheAllMappingsForTenant,
-  getOrFetchAllMappingsForTenant,
-  invalidateMappingCache,
-  invalidateRepositoryMapping,
-  invalidateChannelMappings,
-} from "./mappingCache.js";
-
 const logger = createLogger("tenant-cache");
 
 // ==================== Helper Functions ====================

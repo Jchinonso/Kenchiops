@@ -37,18 +37,6 @@ import type {
   AnnotationLevel,
 } from "./types.js";
 
-// Re-export types for backward compatibility
-export type {
-  CachedAnnotation,
-  CachedAction,
-  CachedAnalysis,
-  CachedConsolidatedAnalysis,
-  CacheOperationResult,
-  CacheWriteResult,
-  AnalysisApiResponse,
-  AnalysisCacheLogContext,
-} from "./types.js";
-
 const logger = createLogger("analysis-cache");
 
 // ==================== Helper Functions ====================

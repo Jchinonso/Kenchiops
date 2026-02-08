@@ -7,7 +7,6 @@
  */
 
 import type { CodeAnnotation, RecommendedAction } from "../aggregation/types.js";
-import type { Tenant, RepositoryChannelMapping } from "../core/types.js";
 import type { getRedisClient } from "../queue/redisClient.js";
 
 // ==================== Core Cache Types ====================
@@ -171,32 +170,6 @@ export interface CachedTenantStats {
   readonly lastAlertTime: string | null;
   readonly mappingCount: number;
 }
-
-// ==================== Tenant Conversion Utilities ====================
-
-/**
- * Convert full tenant to cached tenant.
- */
-export const toCachedTenant = (tenant: Tenant): CachedTenant => ({
-  id: tenant.id,
-  githubInstallationId: tenant.githubInstallationId,
-  githubOrg: tenant.githubOrg,
-  slackWorkspaceId: tenant.slackWorkspaceId,
-  slackTeamName: tenant.slackTeamName,
-  status: tenant.status,
-  createdAt: tenant.createdAt.toISOString(),
-});
-
-/**
- * Convert mapping to cached mapping.
- */
-export const toCachedMapping = (mapping: RepositoryChannelMapping): CachedMapping => ({
-  id: mapping.id,
-  tenantId: mapping.tenantId,
-  repository: mapping.repository,
-  slackChannelId: mapping.slackChannelId,
-  slackChannelName: mapping.slackChannelName ?? null,
-});
 
 // ==================== Fetcher Function Types ====================
 

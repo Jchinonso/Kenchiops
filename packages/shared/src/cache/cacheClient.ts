@@ -27,9 +27,6 @@ import type {
   CacheClientReadyResult,
 } from "./types.js";
 
-/** Re-exported cache types for backward compatibility. */
-export type { CacheEntry, CacheResult, CacheSetOptions, CacheStats } from "./types.js";
-
 const logger = createLogger("cache");
 
 /**

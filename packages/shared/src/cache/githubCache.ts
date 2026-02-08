@@ -25,14 +25,6 @@ import type {
   AnnotationsFetcher,
 } from "./types.js";
 
-/** Re-exported types for backward compatibility. */
-export type {
-  CachedPullRequest,
-  CachedComment,
-  CachedPRReference,
-  CachedCheckAnnotation,
-} from "./types.js";
-
 const logger = createLogger("github-cache");
 
 // ==================== Helper Functions ====================

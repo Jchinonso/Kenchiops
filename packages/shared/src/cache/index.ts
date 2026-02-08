@@ -20,6 +20,9 @@ export type {
   RedisClientReadyResult,
   // GitHub cache types
   CachedPullRequest,
+  CachedComment,
+  CachedPRReference,
+  CachedCheckAnnotation,
   // Tenant cache types
   CachedTenant,
   CachedMapping,
@@ -35,8 +38,10 @@ export type {
   AnalysisCacheLogContext,
 } from "./types.js";
 
+// ==================== Helpers ====================
+
 // Tenant conversion utilities
-export { toCachedTenant, toCachedMapping } from "./types.js";
+export { toCachedTenant, toCachedMapping } from "./helpers.js";
 
 // ==================== Core Cache Client ====================
 
@@ -82,10 +87,24 @@ export {
   getOrFetchPullRequestComments,
   getOrFetchCommitPullRequests,
   getOrFetchCheckAnnotations,
-  type CachedComment,
-  type CachedPRReference,
-  type CachedCheckAnnotation,
 } from "./githubCache.js";
+
+// ==================== Mapping Cache Operations ====================
+
+export {
+  getCachedChannelForRepo,
+  cacheChannelForRepo,
+  getOrFetchChannelForRepo,
+  getCachedMappingsForChannel,
+  cacheMappingsForChannel,
+  getOrFetchMappingsForChannel,
+  getCachedAllMappingsForTenant,
+  cacheAllMappingsForTenant,
+  getOrFetchAllMappingsForTenant,
+  invalidateMappingCache,
+  invalidateRepositoryMapping,
+  invalidateChannelMappings,
+} from "./mappingCache.js";
 
 // ==================== Tenant Cache Operations ====================
 
@@ -104,22 +123,10 @@ export {
   getCachedTenantStats,
   cacheTenantStats,
   getOrFetchTenantStats,
-  getCachedChannelForRepo,
-  cacheChannelForRepo,
-  getOrFetchChannelForRepo,
-  getCachedMappingsForChannel,
-  cacheMappingsForChannel,
-  getOrFetchMappingsForChannel,
-  getCachedAllMappingsForTenant,
-  cacheAllMappingsForTenant,
-  getOrFetchAllMappingsForTenant,
   invalidateTenantCache,
   invalidateTenantById,
   invalidateTenantByInstallation,
   invalidateTenantBySlackWorkspace,
-  invalidateMappingCache,
-  invalidateRepositoryMapping,
-  invalidateChannelMappings,
 } from "./tenantCache.js";
 
 // ==================== Analysis Cache Operations ====================
