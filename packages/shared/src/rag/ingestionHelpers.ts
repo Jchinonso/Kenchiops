@@ -11,7 +11,7 @@ import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
 import { getEmbeddingClient, type EmbeddingClient } from "../llm/providers/openai/embedding.js";
-import type { EmbeddingTierName } from "../constants/index.js";
+import { INGESTION_DEFAULTS, type EmbeddingTierName } from "../constants/index.js";
 import {
   updateDiffChunkEmbedding,
   getDiffChunksWithoutEmbeddings,
@@ -25,14 +25,7 @@ import type { DiffChunkContext, KnowledgeChunkContext } from "./types.js";
 
 const logger = createLogger("rag-ingestion");
 
-// ==================== Constants ====================
-
-/**
- * Default configuration for ingestion batch operations.
- */
-export const INGESTION_DEFAULTS = {
-  BATCH_SIZE: 50,
-} as const;
+export { INGESTION_DEFAULTS };
 
 // ==================== Content Processing ====================
 

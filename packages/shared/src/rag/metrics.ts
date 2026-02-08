@@ -8,6 +8,7 @@
  */
 
 import { createLogger } from "../core/logger.js";
+import { METRICS_CONSTANTS } from "../constants/index.js";
 import type {
   EmbeddingMetrics,
   IngestionMetrics,
@@ -19,27 +20,6 @@ import type {
 export type { EmbeddingMetrics, IngestionMetrics, RAGMetricsSnapshot } from "./types.js";
 
 const logger = createLogger("rag-metrics");
-
-// ==================== Constants ====================
-
-const METRICS_CONSTANTS = {
-  /** Window size for metrics calculation in minutes */
-  DEFAULT_WINDOW_MINUTES: 60,
-  /** Maximum entries to keep in memory */
-  MAX_ENTRIES: 10000,
-  /** Cost per 1K tokens for text-embedding-3-small (as of 2024) */
-  COST_PER_1K_TOKENS_USD: 0.00002,
-  /** Milliseconds per minute */
-  MS_PER_MINUTE: 60000,
-  /** Tokens per cost calculation unit */
-  TOKENS_PER_COST_UNIT: 1000,
-  /** Error rate threshold for alerts (10%) */
-  ERROR_RATE_ALERT_THRESHOLD: 0.1,
-  /** Latency threshold for alerts in milliseconds (5 seconds) */
-  LATENCY_ALERT_THRESHOLD_MS: 5000,
-  /** Percentage multiplier for display */
-  PERCENTAGE_MULTIPLIER: 100,
-} as const;
 
 // ==================== State ====================
 

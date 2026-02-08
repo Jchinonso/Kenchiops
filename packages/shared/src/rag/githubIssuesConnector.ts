@@ -14,6 +14,7 @@ import {
   EXTERNAL_SOURCE_TYPES,
   EXTERNAL_SOURCE_CONFIG,
   TECH_STACK_TAGS,
+  GITHUB_API_CONFIG,
   type TechStackTag,
 } from "../constants/index.js";
 import type { ExternalSource } from "../database/index.js";
@@ -29,9 +30,6 @@ import type {
 const logger = createLogger("github-issues-connector");
 
 // ==================== Constants ====================
-
-const GITHUB_API_BASE = "https://api.github.com";
-const GITHUB_ISSUES_PER_PAGE = 30;
 
 /**
  * Label to tech stack tag mapping.
@@ -155,9 +153,9 @@ const fetchGitHubIssues = async (
   config: GitHubAuthConfig,
   page: number
 ): Promise<{ issues: readonly GitHubIssue[]; hasMore: boolean }> => {
-  const url = new URL(`${GITHUB_API_BASE}/repos/${config.owner}/${config.repo}/issues`);
+  const url = new URL(`${GITHUB_API_CONFIG.BASE_URL}/repos/${config.owner}/${config.repo}/issues`);
   url.searchParams.set("state", config.state ?? "all");
-  url.searchParams.set("per_page", GITHUB_ISSUES_PER_PAGE.toString());
+  url.searchParams.set("per_page", GITHUB_API_CONFIG.ISSUES_PER_PAGE.toString());
   url.searchParams.set("page", page.toString());
   url.searchParams.set("sort", "updated");
   url.searchParams.set("direction", "desc");
@@ -197,7 +195,7 @@ const fetchGitHubIssues = async (
     // resilientGet returns data directly; pagination check via status
     // Note: Link header not available via resilientGet, use result length heuristic
     const issues = response.data;
-    const hasMore = issues.length >= GITHUB_ISSUES_PER_PAGE;
+    const hasMore = issues.length >= GITHUB_API_CONFIG.ISSUES_PER_PAGE;
 
     return { issues: Object.freeze(issues), hasMore };
   } catch (error) {

@@ -353,3 +353,169 @@ export const RAG_TO_EVIDENCE_DOC_TYPE_MAP: Readonly<Record<string, EvidenceKnowl
   onboarding: "documentation",
   external: "documentation",
 } as const;
+
+// ==================== Reranker Constants ====================
+
+/**
+ * Ranking weight configuration for RAG result reranking.
+ */
+export const RANKING_WEIGHTS = {
+  VECTOR_SIMILARITY: 0.55,
+  SOURCE_RELIABILITY: 0.2,
+  RECENCY_BOOST: 0.15,
+  FEEDBACK_SIGNAL: 0.1,
+} as const;
+
+/**
+ * Recency boost configuration for result freshness scoring.
+ */
+export const RECENCY_CONFIG = {
+  /** Maximum age in days for full recency boost */
+  FULL_BOOST_DAYS: 7,
+  /** Age in days after which no recency boost applies */
+  NO_BOOST_DAYS: 90,
+  /** Maximum recency boost value */
+  MAX_BOOST: 1.0,
+  /** Minimum recency boost value */
+  MIN_BOOST: 0.1,
+  /** Milliseconds per day */
+  MS_PER_DAY: 86400000,
+} as const;
+
+/**
+ * Metadata boost configuration for contextual relevance.
+ */
+export const METADATA_BOOSTS = {
+  /** Boost for matching repository */
+  SAME_REPO: 0.15,
+  /** Boost for matching workflow/CI step */
+  SAME_WORKFLOW: 0.1,
+  /** Boost for matching error signature */
+  SAME_ERROR_SIGNATURE: 0.2,
+  /** Boost for matching language/framework */
+  SAME_LANGUAGE: 0.05,
+} as const;
+
+// ==================== Search Constants ====================
+
+/**
+ * Search configuration constants for query processing and caching.
+ */
+export const SEARCH_CONSTANTS = {
+  /** Maximum query tokens before truncation */
+  MAX_QUERY_TOKENS: 2000,
+  /** Cache TTL for query embeddings in seconds (1 hour) */
+  EMBEDDING_CACHE_TTL_SECONDS: 3600,
+  /** Minimum query length to process */
+  MIN_QUERY_LENGTH: 10,
+  /** Cache key prefix for query embeddings */
+  CACHE_KEY_PREFIX: "rag:embedding:",
+} as const;
+
+// ==================== Relationship Detection Constants ====================
+
+/**
+ * Strength calculation weights for relationship detection.
+ */
+export const RELATIONSHIP_STRENGTH_WEIGHTS = {
+  SEMANTIC: 0.6,
+  PATTERN: 0.3,
+  SAME_REPO: 0.1,
+} as const;
+
+// ==================== Alert Dispatcher Constants ====================
+
+/**
+ * Alert configuration constants for drift detection alerts.
+ */
+export const ALERT_CONSTANTS = {
+  /** Default repository name for system-level alerts */
+  DEFAULT_REPOSITORY: "system",
+  /** Default installation ID for global alerts */
+  DEFAULT_INSTALLATION_ID: 0,
+  /** Alert title prefix */
+  TITLE_PREFIX: "RAG Drift Alert",
+} as const;
+
+// ==================== Governance Constants ====================
+
+/**
+ * Governance configuration for RAG health monitoring.
+ */
+export const GOVERNANCE_CONSTANTS = {
+  /** Default batch size for governance operations */
+  DEFAULT_BATCH_SIZE: 100,
+  /** Maximum allowed pending embeddings before warning */
+  MAX_PENDING_THRESHOLD: 1000,
+  /** Maximum allowed outdated embeddings before warning */
+  MAX_OUTDATED_THRESHOLD: 500,
+} as const;
+
+// ==================== Metrics Constants ====================
+
+/**
+ * Metrics configuration for RAG performance tracking.
+ */
+export const METRICS_CONSTANTS = {
+  /** Window size for metrics calculation in minutes */
+  DEFAULT_WINDOW_MINUTES: 60,
+  /** Maximum entries to keep in memory */
+  MAX_ENTRIES: 10000,
+  /** Cost per 1K tokens for text-embedding-3-small */
+  COST_PER_1K_TOKENS_USD: 0.00002,
+  /** Milliseconds per minute */
+  MS_PER_MINUTE: 60000,
+  /** Tokens per cost calculation unit */
+  TOKENS_PER_COST_UNIT: 1000,
+  /** Error rate threshold for alerts (10%) */
+  ERROR_RATE_ALERT_THRESHOLD: 0.1,
+  /** Latency threshold for alerts in milliseconds (5 seconds) */
+  LATENCY_ALERT_THRESHOLD_MS: 5000,
+  /** Percentage multiplier for display */
+  PERCENTAGE_MULTIPLIER: 100,
+} as const;
+
+// ==================== Resolution Confidence Constants ====================
+
+/**
+ * Confidence thresholds for Slack resolution detection.
+ */
+export const RESOLUTION_CONFIDENCE_THRESHOLDS = {
+  MIN_RESOLUTION: 0.2,
+  HIGH_CONFIDENCE: 0.6,
+  PATTERN_WEIGHT: 0.2,
+  REACTION_WEIGHT: 0.2,
+  CODE_BLOCK_WEIGHT: 0.15,
+  MESSAGE_LENGTH_WEIGHT: 0.1,
+  POSITION_WEIGHT: 0.15,
+  /** Minimum message length for any length score */
+  MIN_LENGTH_CHARS: 50,
+  /** Message length threshold for low score */
+  LOW_LENGTH_CHARS: 100,
+  /** Message length threshold for medium score */
+  MEDIUM_LENGTH_CHARS: 300,
+  /** Score multiplier for low length messages */
+  LOW_LENGTH_MULTIPLIER: 0.3,
+  /** Score multiplier for medium length messages */
+  MEDIUM_LENGTH_MULTIPLIER: 0.7,
+} as const;
+
+// ==================== Ingestion Constants ====================
+
+/**
+ * Default configuration for ingestion batch operations.
+ */
+export const INGESTION_DEFAULTS = {
+  BATCH_SIZE: 50,
+} as const;
+
+// ==================== Default Tier Config ====================
+
+/**
+ * Default tenant tier configuration for cost controls.
+ */
+export const DEFAULT_TIER_CONFIG_VALUES = {
+  PREFERRED_TIER: "STANDARD" as const,
+  DEGRADE_ON_BUDGET_WARNING: true,
+  ALLOW_PREMIUM: false,
+} as const;

@@ -12,6 +12,7 @@ import { getErrorMessage } from "../core/errors.js";
 import {
   RELATIONSHIP_TYPES,
   RELATIONSHIP_DETECTION_CONFIG,
+  RELATIONSHIP_STRENGTH_WEIGHTS,
   type RelationshipType,
 } from "../constants/index.js";
 import { createRelationshipsBatch, type CreateRelationshipInput } from "../database/index.js";
@@ -198,15 +199,6 @@ const determineRelationshipType = (
 };
 
 /**
- * Strength calculation weights.
- */
-const STRENGTH_WEIGHTS = {
-  SEMANTIC: 0.6,
-  PATTERN: 0.3,
-  SAME_REPO: 0.1,
-} as const;
-
-/**
  * Calculates relationship strength based on similarity and patterns.
  */
 const calculateStrength = (
@@ -215,10 +207,11 @@ const calculateStrength = (
   sameRepository: boolean
 ): number => {
   let strength =
-    semanticSimilarity * STRENGTH_WEIGHTS.SEMANTIC + patternOverlap * STRENGTH_WEIGHTS.PATTERN;
+    semanticSimilarity * RELATIONSHIP_STRENGTH_WEIGHTS.SEMANTIC +
+    patternOverlap * RELATIONSHIP_STRENGTH_WEIGHTS.PATTERN;
 
   if (sameRepository) {
-    strength += STRENGTH_WEIGHTS.SAME_REPO;
+    strength += RELATIONSHIP_STRENGTH_WEIGHTS.SAME_REPO;
   }
 
   return Math.min(1.0, Math.max(0.0, strength));

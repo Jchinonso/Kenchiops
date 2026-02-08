@@ -7,7 +7,9 @@
  */
 
 import type { SlackMessage } from "./types.js";
+import { RESOLUTION_CONFIDENCE_THRESHOLDS as CONFIDENCE_THRESHOLDS } from "../constants/index.js";
 
+export { CONFIDENCE_THRESHOLDS };
 export type { SlackReaction, SlackMessage } from "./types.js";
 
 // ==================== Pattern Constants ====================
@@ -61,29 +63,6 @@ export const POSITIVE_REACTIONS = new Set([
  * Code block detection pattern.
  */
 export const CODE_BLOCK_PATTERN = /```[\s\S]*?```|`[^`]+`/;
-
-/**
- * Confidence thresholds and scoring weights.
- */
-export const CONFIDENCE_THRESHOLDS = {
-  MIN_RESOLUTION: 0.2,
-  HIGH_CONFIDENCE: 0.6,
-  PATTERN_WEIGHT: 0.2,
-  REACTION_WEIGHT: 0.2,
-  CODE_BLOCK_WEIGHT: 0.15,
-  MESSAGE_LENGTH_WEIGHT: 0.1,
-  POSITION_WEIGHT: 0.15,
-  /** Minimum message length for any length score */
-  MIN_LENGTH_CHARS: 50,
-  /** Message length threshold for low score */
-  LOW_LENGTH_CHARS: 100,
-  /** Message length threshold for medium score */
-  MEDIUM_LENGTH_CHARS: 300,
-  /** Score multiplier for low length messages */
-  LOW_LENGTH_MULTIPLIER: 0.3,
-  /** Score multiplier for medium length messages */
-  MEDIUM_LENGTH_MULTIPLIER: 0.7,
-} as const;
 
 // ==================== Pattern Matching ====================
 

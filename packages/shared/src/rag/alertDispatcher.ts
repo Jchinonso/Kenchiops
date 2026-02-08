@@ -18,7 +18,7 @@ import type {
   BatchAlertDispatchResult,
   AlertDispatchOptions,
 } from "./types.js";
-import type { RAGMetricType } from "../constants/index.js";
+import { ALERT_CONSTANTS, type RAGMetricType } from "../constants/index.js";
 
 export type {
   AlertDispatchResult,
@@ -29,18 +29,6 @@ export type {
 const logger = createLogger("rag-alert-dispatcher");
 
 // ==================== Constants ====================
-
-/**
- * Alert configuration constants
- */
-const ALERT_CONSTANTS = {
-  /** Default repository name for system-level alerts */
-  DEFAULT_REPOSITORY: "system",
-  /** Default installation ID for global alerts */
-  DEFAULT_INSTALLATION_ID: 0,
-  /** Alert title prefix */
-  TITLE_PREFIX: "RAG Drift Alert",
-} as const;
 
 /**
  * Severity mapping from DriftAlert to SystemAlertPayload

@@ -15,23 +15,14 @@ import type {
   LLMTestFailure,
   LLMLintError,
 } from "../core/types.js";
-
-// ==================== Constants ====================
-
-const VALID_DEP_CHANGE_TYPES = new Set(["added", "removed", "updated"]);
-const VALID_CONFIG_CHANGE_TYPES = new Set(["added", "modified", "deleted"]);
-
-/** Field name mappings for test_name across frameworks */
-const TEST_NAME_FIELDS = ["test_name", "testName"] as const;
-
-/** Field name mappings for error message across frameworks */
-const ERROR_MESSAGE_FIELDS = ["error_message", "errorMessage", "error", "message"] as const;
-
-/** Field name mappings for expected value across frameworks (Rust: left, Go: want) */
-const EXPECTED_VALUE_FIELDS = ["expected", "left", "want"] as const;
-
-/** Field name mappings for actual value across frameworks (Rust: right, Jest: received, Go: got) */
-const ACTUAL_VALUE_FIELDS = ["actual", "right", "received", "got"] as const;
+import {
+  VALID_DEP_CHANGE_TYPES,
+  VALID_CONFIG_CHANGE_TYPES,
+  TEST_NAME_FIELDS,
+  ERROR_MESSAGE_FIELDS,
+  EXPECTED_VALUE_FIELDS,
+  ACTUAL_VALUE_FIELDS,
+} from "../constants/index.js";
 
 // ==================== Utility Functions ====================
 

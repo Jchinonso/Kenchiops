@@ -12,7 +12,7 @@ import { getErrorMessage, NotFoundError } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
 import { cacheGet, cacheSet } from "../cache/cacheClient.js";
 import { getEmbeddingClient } from "../llm/providers/openai/embedding.js";
-import type { EmbeddingTierName } from "../constants/index.js";
+import { SEARCH_CONSTANTS, type EmbeddingTierName } from "../constants/index.js";
 import {
   recordCost,
   batchIncrementKnowledgeDocHitCounts,
@@ -34,25 +34,10 @@ import {
   recordQueryCost,
 } from "./costControls.js";
 
+export { SEARCH_CONSTANTS };
 export type { EventQueryContext } from "./types.js";
 
 const logger = createLogger("rag-search");
-
-// ==================== Constants ====================
-
-/**
- * Search configuration constants for query processing and caching.
- */
-export const SEARCH_CONSTANTS = {
-  /** Maximum query tokens before truncation */
-  MAX_QUERY_TOKENS: 2000,
-  /** Cache TTL for query embeddings in seconds (1 hour) */
-  EMBEDDING_CACHE_TTL_SECONDS: 3600,
-  /** Minimum query length to process */
-  MIN_QUERY_LENGTH: 10,
-  /** Cache key prefix for query embeddings */
-  CACHE_KEY_PREFIX: "rag:embedding:",
-} as const;
 
 // ==================== Query Construction ====================
 

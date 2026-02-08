@@ -22,7 +22,7 @@ import {
   deleteKnowledgeDocsByParent,
   getKnowledgeDocCountsByType,
 } from "../database/index.js";
-import { EMBEDDING_CONFIG } from "../constants/index.js";
+import { EMBEDDING_CONFIG, GOVERNANCE_CONSTANTS } from "../constants/index.js";
 import { processPendingEmbeddings } from "./ingestion.js";
 import type {
   RAGTenantStats,
@@ -41,17 +41,6 @@ export type {
 } from "./types.js";
 
 const logger = createLogger("rag-governance");
-
-// ==================== Constants ====================
-
-const GOVERNANCE_CONSTANTS = {
-  /** Default batch size for governance operations */
-  DEFAULT_BATCH_SIZE: 100,
-  /** Maximum allowed pending embeddings before warning */
-  MAX_PENDING_THRESHOLD: 1000,
-  /** Maximum allowed outdated embeddings before warning */
-  MAX_OUTDATED_THRESHOLD: 500,
-} as const;
 
 // ==================== Tenant Operations ====================
 

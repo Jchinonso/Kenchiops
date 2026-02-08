@@ -194,3 +194,15 @@ export const API_PAGINATION_DEFAULTS = {
   /** Default offset for list queries */
   DEFAULT_OFFSET: 0,
 } as const;
+
+// ==================== GitHub API Constants ====================
+
+/**
+ * GitHub API configuration.
+ */
+export const GITHUB_API_CONFIG = {
+  /** GitHub REST API base URL */
+  BASE_URL: "https://api.github.com",
+  /** Default issues per page for list requests */
+  ISSUES_PER_PAGE: 30,
+} as const;

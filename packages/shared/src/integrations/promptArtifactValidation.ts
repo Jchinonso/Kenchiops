@@ -10,34 +10,11 @@
 
 import type { AggregatedEvidence } from "../formatting/aggregation/index.js";
 import { countTestArtifacts, countLintArtifacts } from "./promptArtifactHelpers.js";
-
-// ==================== Constants ====================
-
-/** Valid confidence values */
-const VALID_CONFIDENCE = ["high", "medium", "low"] as const;
-
-/** Valid category values */
-const VALID_CATEGORY = [
-  "dependency",
-  "build",
-  "test",
-  "deploy",
-  "runtime",
-  "config",
-  "infra",
-  "unknown",
-] as const;
-
-/** Valid phase values */
-const VALID_PHASE = [
-  "dependency",
-  "build",
-  "test",
-  "deploy",
-  "runtime",
-  "config",
-  "unknown",
-] as const;
+import {
+  VALID_ARTIFACT_CONFIDENCE as VALID_CONFIDENCE,
+  VALID_ARTIFACT_CATEGORY as VALID_CATEGORY,
+  VALID_ARTIFACT_PHASE as VALID_PHASE,
+} from "../constants/index.js";
 
 // ==================== Evidence ID Validation ====================
 

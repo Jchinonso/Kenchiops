@@ -11,6 +11,7 @@ import { getErrorMessage } from "../core/errors.js";
 import {
   COST_CONTROL_CONFIG,
   CACHE_TTL_SECONDS,
+  DEFAULT_TIER_CONFIG_VALUES,
   type EmbeddingTierName,
 } from "../constants/index.js";
 import { getRAGBudgetConfig } from "../database/index.js";
@@ -147,10 +148,10 @@ export const getCacheStats = (): CacheStats => {
  * Default tenant tier configuration.
  */
 export const DEFAULT_TIER_CONFIG: Omit<TenantTierConfig, "tenantId"> = {
-  preferredTier: "STANDARD",
+  preferredTier: DEFAULT_TIER_CONFIG_VALUES.PREFERRED_TIER,
   monthlyBudgetUsd: COST_CONTROL_CONFIG.DEFAULT_MONTHLY_BUDGET_USD,
-  degradeOnBudgetWarning: true,
-  allowPremium: false,
+  degradeOnBudgetWarning: DEFAULT_TIER_CONFIG_VALUES.DEGRADE_ON_BUDGET_WARNING,
+  allowPremium: DEFAULT_TIER_CONFIG_VALUES.ALLOW_PREMIUM,
 };
 
 /**
