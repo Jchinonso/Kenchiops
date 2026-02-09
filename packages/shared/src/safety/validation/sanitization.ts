@@ -10,6 +10,10 @@
 import type { OutputSanitizationResult, CommandValidationResult } from "../types.js";
 import type { RedactSensitiveResult } from "./types.js";
 import { SANITIZATION_CONFIG, COMMAND_RISK_THRESHOLDS } from "../../constants/validation.js";
+import {
+  redactSecrets as redactSecretsFromSecurity,
+  redactSecretsWithStats,
+} from "../../security/redaction.js";
 
 // ==================== Constants ====================
 
@@ -51,77 +55,8 @@ const DANGEROUS_SHELL_PATTERNS: ReadonlyArray<{
   { pattern: /\bexec\s/, name: "exec_command", severity: "high" },
 ] as const;
 
-/**
- * Patterns for sensitive data that should be redacted.
- */
-const SENSITIVE_DATA_PATTERNS: ReadonlyArray<{
-  readonly pattern: RegExp;
-  readonly replacement: string;
-  readonly name: string;
-}> = [
-  // API keys and tokens
-  {
-    pattern:
-      /(?:api[_-]?key|apikey|token|secret|password|pwd|auth)\s*[:=]\s*['"]?[\w-]{20,}['"]?/gi,
-    replacement: "[REDACTED_CREDENTIAL]",
-    name: "credential",
-  },
-  // AWS keys
-  {
-    pattern: /AKIA[0-9A-Z]{16}/g,
-    replacement: "[REDACTED_AWS_KEY]",
-    name: "aws_key",
-  },
-  // GitHub tokens (ghp_, ghu_, gho_, ghs_, ghr_)
-  {
-    pattern: /gh[pousr]_[A-Za-z0-9_]{36,}/g,
-    replacement: "[REDACTED_GITHUB_TOKEN]",
-    name: "github_token",
-  },
-  // Slack tokens (xoxb-, xoxa-, xoxp-, xoxr-)
-  {
-    pattern: /xox[barp]-[A-Za-z0-9-]{24,}/g,
-    replacement: "[REDACTED_SLACK_TOKEN]",
-    name: "slack_token",
-  },
-  // Google API keys
-  {
-    pattern: /AIza[A-Za-z0-9_-]{35}/g,
-    replacement: "[REDACTED_GOOGLE_KEY]",
-    name: "google_key",
-  },
-  // Stripe keys
-  {
-    pattern: /sk_(?:live|test)_[A-Za-z0-9]{24,}/g,
-    replacement: "[REDACTED_STRIPE_KEY]",
-    name: "stripe_key",
-  },
-  // Private keys
-  {
-    pattern:
-      /-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----[\s\S]*?-----END\s+(?:RSA\s+)?PRIVATE\s+KEY-----/g,
-    replacement: "[REDACTED_PRIVATE_KEY]",
-    name: "private_key",
-  },
-  // JWT tokens
-  {
-    pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
-    replacement: "[REDACTED_JWT]",
-    name: "jwt",
-  },
-  // Connection strings
-  {
-    pattern: /(?:mongodb|postgres|mysql|redis):\/\/[^\s'"]+/gi,
-    replacement: "[REDACTED_CONNECTION_STRING]",
-    name: "connection_string",
-  },
-  // Email addresses (optional, configurable)
-  {
-    pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-    replacement: "[REDACTED_EMAIL]",
-    name: "email",
-  },
-] as const;
+// Note: Secret/credential patterns are now maintained in security/redaction.ts
+// via SECRET_PATTERNS. This module delegates to that single source of truth.
 
 /**
  * HTML/XSS dangerous patterns.
@@ -166,27 +101,18 @@ const detectXssPatterns = (text: string): string[] =>
 
 /**
  * Redacts sensitive data from text.
+ * Delegates to security/redaction module (single source of truth for patterns).
  *
  * @param text - Text to redact
  * @returns Object with redacted text and applied rules
  */
-const redactSensitiveData = (text: string): RedactSensitiveResult =>
-  SENSITIVE_DATA_PATTERNS.reduce<RedactSensitiveResult>(
-    (accumulator, { pattern, replacement, name }) => {
-      // Reset regex state for global patterns to avoid state bugs across calls
-      pattern.lastIndex = 0;
-      if (!pattern.test(accumulator.text)) {
-        return accumulator;
-      }
-      // Reset again before replace since test() advanced lastIndex
-      pattern.lastIndex = 0;
-      return {
-        text: accumulator.text.replace(pattern, replacement),
-        appliedRules: [...accumulator.appliedRules, name],
-      };
-    },
-    { text, appliedRules: [] }
-  );
+const redactSensitiveData = (text: string): RedactSensitiveResult => {
+  const result = redactSecretsWithStats(text);
+  return {
+    text: result.text,
+    appliedRules: result.redactedTypes,
+  };
+};
 
 // ==================== Exports ====================
 
@@ -414,22 +340,16 @@ export const sanitizeFilePath = (path: string): string | null => {
 
 /**
  * Redacts secrets from text without full sanitization.
+ * Delegates to security/redaction module.
  * Useful for logging.
  *
  * @param text - Text containing potential secrets
  * @returns Text with secrets redacted
  */
 export const redactSecrets = (text: string): string => {
-  // Handle empty or invalid input
   if (!text || text.length === 0) {
     return "";
   }
 
-  // Truncate input to prevent DoS
-  const truncatedText =
-    text.length > SANITIZATION_CONFIG.MAX_INPUT_LENGTH
-      ? text.slice(0, SANITIZATION_CONFIG.MAX_INPUT_LENGTH)
-      : text;
-
-  return redactSensitiveData(truncatedText).text;
+  return redactSecretsFromSecurity(text);
 };
