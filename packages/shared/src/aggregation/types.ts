@@ -16,6 +16,7 @@ import type {
   LLMSuggestedFix,
   LLMLintError,
 } from "../core/types.js";
+import type { ParsedTestSummary } from "../formatting/extraction/types.js";
 
 // Re-export AI-extracted types from core (canonical definitions)
 export type { LLMDetectedDependencyChange as DetectedDependencyChange } from "../core/types.js";
@@ -148,6 +149,8 @@ export interface AnalyzedFailure {
   readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
   // RAG-retrieved related knowledge (Phase 2 - RAG Integration)
   readonly relatedKnowledge?: readonly RelatedKnowledgeDoc[];
+  /** Deterministic test summary parsed from CI runner output via regex (not LLM-derived) */
+  readonly parsedTestSummary?: ParsedTestSummary | null;
 }
 
 /**
@@ -172,6 +175,8 @@ export interface SerializedFailure {
   readonly detectedBuildConfigChanges?: readonly LLMDetectedBuildConfigChange[];
   // RAG-retrieved related knowledge (Phase 2 - RAG Integration)
   readonly relatedKnowledge?: readonly RelatedKnowledgeDoc[];
+  /** Deterministic test summary parsed from CI runner output via regex (not LLM-derived) */
+  readonly parsedTestSummary?: ParsedTestSummary | null;
 }
 
 /**

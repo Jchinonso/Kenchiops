@@ -25,6 +25,8 @@ import {
   // V1.1: Chunking pipeline for improved preprocessing and line mapping
   sanitizeForChunkingWithMapping,
   getOriginalLineNumber,
+  // Deterministic test summary parser (regex-based, no LLM)
+  parseTestSummary,
   // Tenant lookup
   findByGitHubInstallation,
   type PendingAggregationPayload,
@@ -35,6 +37,7 @@ import {
   type LLMLintError,
   type LineMapping,
   type SanitizationResultWithMapping,
+  type ParsedTestSummary,
 } from "@kenchi/shared";
 import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
@@ -111,6 +114,8 @@ interface JobAnalysisResult {
   readonly testCommand?: string;
   /** V1.1: Line mappings for original line number recovery */
   readonly lineMappings: readonly LineMapping[];
+  /** Deterministic test summary parsed from raw CI log via regex (not LLM-derived) */
+  readonly parsedTestSummary?: ParsedTestSummary | null;
 }
 
 /**
@@ -226,6 +231,7 @@ const convertJobResultToFailure = (
     testFailures: result.testFailures,
     lintErrors: result.lintErrors,
     testCommand: result.testCommand,
+    parsedTestSummary: result.parsedTestSummary,
     timestamp,
   };
 };
@@ -419,6 +425,9 @@ const analyzeJobLogs = async (
   tenantId?: string,
   workflowId?: string
 ): Promise<JobAnalysisResult> => {
+  // Parse deterministic test summary from raw logs BEFORE any sanitization
+  const parsedTestSummary = parseTestSummary(jobLogs);
+
   // V1.1: Use chunking pipeline preprocessing for better size reduction and line mapping
   const sanitized: SanitizationResultWithMapping = sanitizeForChunkingWithMapping(jobLogs);
 
@@ -494,6 +503,9 @@ const analyzeJobLogs = async (
     jobName,
     repository,
     testFailureCount: testFailures.length,
+    parsedTestSummary: parsedTestSummary
+      ? { failed: parsedTestSummary.failed, framework: parsedTestSummary.framework }
+      : null,
     lintErrorCount: lintErrors.length,
     testCommand,
   });
@@ -506,6 +518,7 @@ const analyzeJobLogs = async (
     lintErrors,
     testCommand,
     lineMappings: sanitized.lineMappings,
+    parsedTestSummary,
   };
 };
 

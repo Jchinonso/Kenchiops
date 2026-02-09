@@ -220,6 +220,11 @@ export {
   type SlackMessageOutput,
 } from "./output/index.js";
 
+// ==================== Test Summary Parser ====================
+
+export { parseTestSummary } from "./testSummaryParser.js";
+export type { ParsedTestSummary } from "./extraction/types.js";
+
 // ==================== Pipeline Module ====================
 
 export type {

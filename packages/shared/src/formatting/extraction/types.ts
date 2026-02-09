@@ -203,3 +203,22 @@ export interface BatchProcessingState {
 export type AttemptResult<T> =
   | { readonly success: true; readonly value: T }
   | { readonly success: false; readonly error: Error };
+
+// ==================== Test Summary ====================
+
+/**
+ * Deterministic test summary parsed from CI runner output via regex.
+ * Not LLM-derived — guaranteed consistent across runs for the same log.
+ */
+export interface ParsedTestSummary {
+  /** Number of tests reported as failed by the test runner */
+  readonly failed: number;
+  /** Number of tests reported as passed (0 if not parseable) */
+  readonly passed: number;
+  /** Total test count (0 if not parseable) */
+  readonly total: number;
+  /** Detected test framework (jest, pytest, rust, go, generic) */
+  readonly framework: string;
+  /** Number of failed test suites (if available, e.g., Jest "Test Suites: 12 failed") */
+  readonly failedSuites?: number;
+}
