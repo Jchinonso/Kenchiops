@@ -22,7 +22,7 @@ TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of conc
 10. **Log errors at the correct boundary** - see Error Logging Boundaries section
 11. **No empty catch blocks** - always log or rethrow with context
 
-### 12 Preferred Patterns (With Exceptions)
+### 13 Preferred Patterns (With Exceptions)
 
 1. **`const` only** - `let` allowed only for: loop counters in `for...of` with early-exit, genuinely iterative algorithms. Every `let` requires a comment justifying why `const` won't work
 2. **Array methods for transforms** - `map`/`filter`/`reduce`/`flatMap` over imperative loops. `for...of` allowed only for: early-exit, streaming/async iteration, performance-critical hot paths with measured benchmarks

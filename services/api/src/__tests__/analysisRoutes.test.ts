@@ -487,7 +487,7 @@ describe("Analysis Routes", () => {
       expect(response.status).toBe(202);
     });
 
-    it("should include all payload fields in log_ref JSON including undefined optionals", async () => {
+    it("should only include defined payload fields in log_ref JSON", async () => {
       mockQuery.mockResolvedValue({ rows: [mockJobRow] });
 
       await request(app).post("/api/analyze").send({
@@ -498,13 +498,13 @@ describe("Analysis Routes", () => {
       const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
       const logRef = JSON.parse(params[2] as string);
 
-      // Verify the structure includes all expected fields (even if undefined)
-      expect(logRef).toHaveProperty("failure_log");
-      expect(logRef).toHaveProperty("repository");
-      expect(logRef).toHaveProperty("commit");
-      expect(logRef).toHaveProperty("tenant_id");
-      expect(logRef).toHaveProperty("workflow_id");
-      expect(logRef).toHaveProperty("test_framework");
+      // JSON.stringify omits undefined values, so only provided fields appear
+      expect(logRef).toHaveProperty("failure_log", "Error occurred");
+      expect(logRef).toHaveProperty("repository", "owner/repo");
+      expect(logRef).not.toHaveProperty("commit");
+      expect(logRef).not.toHaveProperty("tenant_id");
+      expect(logRef).not.toHaveProperty("workflow_id");
+      expect(logRef).not.toHaveProperty("test_framework");
     });
   });
 

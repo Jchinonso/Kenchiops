@@ -1,11 +1,32 @@
 #!/bin/sh
 
-# Reject commit messages containing AI assistant references
+# Reject commit messages containing AI assistant attribution.
+# Allows legitimate file path references like .claude/CLAUDE.md.
 MSG_FILE="$1"
 MSG=$(cat "$MSG_FILE")
 
-if echo "$MSG" | grep -qiE '\bclaude\b|anthropic|co-authored-by:.*claude|co-authored-by:.*anthropic'; then
-  echo "ERROR: Commit message must not reference Claude or Anthropic."
-  echo "Please remove any AI assistant attribution from the commit message."
+# Strip file path references so they don't trigger false positives
+CLEANED=$(echo "$MSG" | sed -E 's|\.[a-zA-Z/]*claude[a-zA-Z/.]*||gi')
+
+# Check for AI attribution patterns in the cleaned message
+if echo "$CLEANED" | grep -qiE '\bclaude\b'; then
+  echo "ERROR: Commit message must not reference Claude."
+  echo "  File paths like .claude/CLAUDE.md are allowed."
+  echo "  Attribution like 'Co-Authored-By: Claude' is not."
+  exit 1
+fi
+
+if echo "$CLEANED" | grep -qiE 'co-authored-by:.*anthropic|generated with.*anthropic'; then
+  echo "ERROR: Commit message must not contain Anthropic attribution."
+  exit 1
+fi
+
+if echo "$MSG" | grep -qiE 'co-authored-by:.*claude'; then
+  echo "ERROR: Commit message must not contain Claude co-author attribution."
+  exit 1
+fi
+
+if echo "$MSG" | grep -qiE 'generated with \[claude'; then
+  echo "ERROR: Commit message must not contain 'Generated with Claude' footer."
   exit 1
 fi

@@ -399,21 +399,13 @@ describe("Analysis Worker", () => {
       const analysisPromise1 = new Promise((resolve) => {
         resolveAnalysis1 = resolve;
       });
-      let resolveAnalysis2: (value: unknown) => void;
-      const analysisPromise2 = new Promise((resolve) => {
-        resolveAnalysis2 = resolve;
-      });
 
       const job1 = createMockJobRow({ id: "job_slow_1" });
-      const job2 = createMockJobRow({ id: "job_slow_2" });
 
-      // First poll: return 2 jobs
-      // Second poll (if any): return more jobs
-      mockQuery.mockResolvedValueOnce({ rows: [job1, job2] }).mockResolvedValue({ rows: [] });
+      // With maxConcurrent=1, SQL LIMIT will be 1, so mock returns only 1 job
+      mockQuery.mockResolvedValueOnce({ rows: [job1] }).mockResolvedValue({ rows: [] });
 
-      mockPerformAnalysis
-        .mockReturnValueOnce(analysisPromise1)
-        .mockReturnValueOnce(analysisPromise2);
+      mockPerformAnalysis.mockReturnValueOnce(analysisPromise1);
 
       // maxConcurrent = 1: should only start 1 job
       workerControl = startAnalysisWorker(1);
@@ -426,7 +418,6 @@ describe("Analysis Worker", () => {
 
       // Cleanup
       resolveAnalysis1!({ analysis: "done" });
-      resolveAnalysis2!({ analysis: "done" });
       await jest.advanceTimersByTimeAsync(300);
     });
 
