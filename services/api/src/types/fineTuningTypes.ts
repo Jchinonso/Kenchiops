@@ -147,14 +147,18 @@ export interface SchedulerConfig {
 
 /**
  * Scheduler state.
+ *
+ * Properties are readonly at the type level. The scheduler polling loop mutates
+ * state via type assertion — see Allowed Exception #5 (framework-required
+ * mutation for state machine / polling loop) in CLAUDE.md.
  */
 export interface SchedulerState {
-  isRunning: boolean;
-  intervalId: NodeJS.Timeout | null;
-  trackedJobs: Set<string>;
-  processedCompletions: Set<string>;
-  lastAutoTriggerCheck: number;
-  lastJobTriggeredAt: number | null;
+  readonly isRunning: boolean;
+  readonly intervalId: NodeJS.Timeout | null;
+  readonly trackedJobs: ReadonlySet<string>;
+  readonly processedCompletions: ReadonlySet<string>;
+  readonly lastAutoTriggerCheck: number;
+  readonly lastJobTriggeredAt: number | null;
 }
 
 /**
