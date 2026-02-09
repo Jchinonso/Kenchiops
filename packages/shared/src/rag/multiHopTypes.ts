@@ -13,4 +13,6 @@ export type {
   TraversalState,
   QueueItem,
   PathResult,
+  PathMapEntry,
+  PathLevelItem,
 } from "./types.js";

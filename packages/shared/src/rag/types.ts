@@ -529,6 +529,23 @@ export interface PathResult {
   readonly totalStrength: number;
 }
 
+/**
+ * Entry in the BFS path map, tracking how we reached each node.
+ */
+export interface PathMapEntry {
+  readonly prev: string;
+  readonly type: RelationshipType;
+  readonly strength: number;
+}
+
+/**
+ * Item in BFS level queue for path finding.
+ */
+export interface PathLevelItem {
+  readonly docId: string;
+  readonly depth: number;
+}
+
 // ==================== Chunking Core Types ====================
 
 /**
