@@ -249,15 +249,17 @@ export const performAnalysis = async (
         testFramework: baseEvidence.testFramework,
       };
 
-      // Count artifacts by type and test_name presence for debugging
+      // Count artifacts by type for pipeline accuracy and debugging (logging only)
       const artifactsByType = aggregatedEvidence.artifacts.reduce(
-        (acc, a) => {
-          acc[a.type] = (acc[a.type] || 0) + 1;
+        (acc, artifact) => {
+          acc[artifact.type] = (acc[artifact.type] || 0) + 1;
           return acc;
         },
         {} as Record<string, number>
       );
-      const artifactsWithTestName = aggregatedEvidence.artifacts.filter((a) => a.testName).length;
+      const artifactsWithTestName = aggregatedEvidence.artifacts.filter(
+        (artifact) => artifact.testName
+      ).length;
 
       logger.info("Chunking pipeline evidence prepared", {
         eventId: event.id,
