@@ -42,9 +42,11 @@ Write code that strictly follows these rules:
 
 - All types in `types.ts` files, never inline
 - `import type` for type-only imports
-- `readonly` for immutable data
+- `readonly` on ALL interface properties and function parameters — data is immutable by default
+- `ReadonlyArray<T>`, `Readonly<T>`, `ReadonlyMap<K,V>`, `ReadonlySet<T>` for collection types
 - `unknown` over `any` — if `any` is unavoidable, cast immediately with a type guard
 - Explicit return types on all functions
+- `as const` for literal type objects and configuration
 
 **Error Handling:**
 
@@ -74,16 +76,25 @@ Write code that strictly follows these rules:
 - Idempotency keys for retries on non-idempotent operations
 - Webhook handlers must have replay protection (delivery ID check)
 
-**Code Style:**
+**Functional Programming (Mandatory):**
 
-- Array methods for transforms (`map`, `filter`, `reduce`)
-- `for...of` allowed for early-exit, streaming, performance
+- **`const` only** — never use `let` or `var`
+- **No state mutation** — never mutate objects, arrays, or parameters. Always return new values
+- **No mutating array methods** — never `.push()`, `.pop()`, `.splice()`, `.sort()`, `.reverse()`. Use `.map()`, `.filter()`, `.reduce()`, `.flatMap()`, `.toSorted()`, spread
+- **No object mutation** — never `obj.field = value`. Use spread: `{ ...obj, field: value }`
+- **Pure functions** — no side effects, same input → same output. Isolate I/O at boundaries
+- **Function composition** — compose small pure functions via `map`/`filter`/`reduce` pipelines
+- Array methods for transforms (`map`, `filter`, `reduce`, `flatMap`)
+- `for...of` allowed for early-exit/streaming — but must NOT mutate external state
 - Early returns to reduce nesting
 - Small functions (<50 lines ideal)
 - Descriptive names — no single-letter params in public APIs
 - JSDoc for public APIs, skip for obvious internals
 - Lookup tables for stable mappings
-- Immutable data flow (local mutation allowed when clearer)
+
+**Type Safety:**
+
+(updated) All types must use `readonly` on all properties. Use `ReadonlyArray<T>` for array parameters.
 
 ### Phase 3: Verify
 
@@ -100,6 +111,10 @@ After writing code:
    - No unbounded log payloads?
    - Types in types.ts?
    - No empty catch blocks?
+   - No `let`/`var` — `const` only?
+   - No array/object mutation?
+   - All interface properties `readonly`?
+   - Functions are pure where possible?
 
 ### Phase 4: Delegate to Other Agents
 
@@ -118,6 +133,10 @@ After your implementation is verified:
 
 ## Anti-Patterns to Avoid
 
+- Using `let` or `var` — always use `const`
+- Mutating arrays with `.push()`, `.splice()`, `.sort()`, `.reverse()` — use immutable alternatives
+- Mutating objects with property assignment — use spread
+- Writing impure functions when a pure function would suffice
 - Adding docstrings/comments to code you didn't change
 - Adding error handling for scenarios that can't happen
 - Creating helpers/utilities for one-time operations
@@ -144,6 +163,9 @@ Before considering your work done:
 - [ ] TypeScript builds with zero errors
 - [ ] No `console.*` in committed code
 - [ ] No `any` without immediate type guard
+- [ ] No `let`/`var` — `const` only
+- [ ] No array/object mutation (no `.push()`, `.splice()`, property assignment)
+- [ ] All interface properties use `readonly`
 - [ ] All types in `types.ts` files
 - [ ] RequestContext flows through all I/O functions
 - [ ] External calls have timeouts, structured logs, error classification

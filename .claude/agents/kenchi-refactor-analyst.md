@@ -59,10 +59,26 @@ Also verify the 11 Hard Rules:
 10. Log errors at correct boundary (adapter logs external failures, not services)
 11. No empty catch blocks
 
-### 2. Code Smells
+**Functional Programming Compliance (CRITICAL):**
+
+- [ ] No `let` or `var` — `const` only
+- [ ] No mutating array methods (`.push()`, `.pop()`, `.splice()`, `.sort()`, `.reverse()`, `.shift()`, `.unshift()`, `.fill()`)
+- [ ] No object property mutation (`obj.field = value`)
+- [ ] All interface properties use `readonly`
+- [ ] Functions are pure where possible (no side effects)
+- [ ] Data transformations use `map`/`filter`/`reduce`/`flatMap`, not imperative loops with mutation
+- [ ] Collections use `ReadonlyArray<T>`, `Readonly<T>`, `ReadonlyMap`, `ReadonlySet`
+
+### 2. Code Smells (Including Mutation Violations)
 
 Identify:
 
+- **`let`/`var` usage** — must be `const` only. Flag every instance. Fix: restructure with `const`, `reduce`, ternary, or function extraction
+- **Array mutation** — `.push()`, `.pop()`, `.splice()`, `.sort()`, `.reverse()`, `.shift()`, `.unshift()`, `.fill()`. Fix: use `.map()`, `.filter()`, `.reduce()`, `.flatMap()`, `.toSorted()`, `.toReversed()`, `.toSpliced()`, spread
+- **Object mutation** — `obj.field = value` after creation. Fix: use spread `{ ...obj, field: value }`
+- **Impure functions** — functions with side effects that could be pure. Fix: extract side effects to boundary, make core logic pure
+- **Missing `readonly`** — interface properties, function parameters without `readonly`. Fix: add `readonly` to all properties
+- **Mutable collection types** — `Array<T>` instead of `ReadonlyArray<T>` in function signatures
 - **Long methods** (>50 lines) — suggest decomposition
 - **God objects/services** — too many responsibilities
 - **Feature envy** — code that reaches into other modules' internals

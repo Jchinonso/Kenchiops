@@ -56,24 +56,24 @@ Users can also invoke agents directly as slash commands: `/git-commit-staged`, `
 
 ### 10 Preferred Patterns (With Exceptions)
 
-1. **Array methods for transforms** - `for...of` allowed for early-exit/streaming/perf
-2. **Lookup tables for stable mappings** - `if/else` allowed when clearer (2-3 conditions)
-3. **Immutable data flow** - local mutation allowed when it improves clarity/perf
-4. **Early returns** - reduce nesting, fail fast
-5. **Small functions** - single responsibility, <50 lines ideal
-6. **Explicit types** - on function params/returns, avoid `any`
-7. **Async/await** - not Promise chains
-8. **Parallel execution** - `Promise.all()` for independent operations
-9. **Descriptive names** - no single-letter params in public APIs; `i`/`j` allowed in local loops only
-10. **JSDoc for public APIs** - skip for obvious internal functions
+1. **Pure functions** - no side effects, same input → same output. Isolate I/O at boundaries
+2. **`const` only** - never use `let` or `var`. All bindings are immutable
+3. **No state mutation** - never mutate objects, arrays, or parameters. Always return new values via spread, `map`, `filter`, `reduce`, `flatMap`, `toSorted`, `toReversed`, `toSpliced`
+4. **Array methods for transforms** - `map`/`filter`/`reduce`/`flatMap` for all data transformations. No `for` loops with mutation
+5. **Lookup tables for stable mappings** - `if/else` allowed when clearer (2-3 conditions)
+6. **Early returns** - reduce nesting, fail fast
+7. **Small functions** - single responsibility, <50 lines ideal. Compose small pure functions
+8. **Explicit types** - on function params/returns, avoid `any`. Use `readonly` on all interface properties and function parameters
+9. **Async/await** - not Promise chains. Use `Promise.all()` for independent operations
+10. **Descriptive names** - no single-letter params in public APIs; `i`/`j` allowed in local loops only. JSDoc for public APIs
 
-### 5 Allowed Exceptions
+### 4 Allowed Exceptions
 
-1. **For loops**: streaming, early-break, parsing, performance-critical hot paths
-2. **Local mutation**: inside function scope when clearer than spread/reduce
-3. **If/else chains**: when more readable than lookup tables (2-3 conditions)
-4. **Plain Error**: only via `invariant(condition, msg)` for "should never happen" programmer bugs
-5. **any type**: only when interfacing with untyped libraries (must cast immediately)
+1. **For loops**: streaming, early-break, or parsing — but must NOT mutate external state
+2. **If/else chains**: when more readable than lookup tables (2-3 conditions)
+3. **Plain Error**: only via `invariant(condition, msg)` for "should never happen" programmer bugs
+4. **any type**: only when interfacing with untyped libraries (must cast immediately)
+5. **Framework-required mutation**: Express middleware setting `req.context`, test setup/teardown — document with comment
 
 ---
 
@@ -141,9 +141,9 @@ const processJob = async (job: Job) => {
 
 ```typescript
 interface HttpResponse<T> {
-  status: number;
-  data: T;
-  headers: Record<string, string>;
+  readonly status: number;
+  readonly data: T;
+  readonly headers: Readonly<Record<string, string>>;
 }
 
 // Usage
@@ -158,10 +158,10 @@ const response = await httpClient.get<User>("/users/123", { context });
 
 ```typescript
 interface ClassifiedError {
-  statusCode: number | undefined;
-  category: "retryable" | "non_retryable" | "auth_config" | "unknown";
-  retryable: boolean;
-  message: string;
+  readonly statusCode: number | undefined;
+  readonly category: "retryable" | "non_retryable" | "auth_config" | "unknown";
+  readonly retryable: boolean;
+  readonly message: string;
 }
 
 // Usage in adapters
@@ -543,19 +543,19 @@ const RETRY_CONFIG = {
 ### Separate Domain from DTOs
 
 ```typescript
-// Internal domain type (rich, may change)
+// Internal domain type (rich, may change) — all properties readonly
 interface Analysis {
-  id: string;
-  tenantId: string;
-  internalScore: number;
-  createdAt: Date;
+  readonly id: string;
+  readonly tenantId: string;
+  readonly internalScore: number;
+  readonly createdAt: Date;
 }
 
-// Public DTO (stable contract)
+// Public DTO (stable contract) — all properties readonly
 interface AnalysisResponse {
-  id: string;
-  score: number;
-  createdAt: string; // ISO string for JSON
+  readonly id: string;
+  readonly score: number;
+  readonly createdAt: string; // ISO string for JSON
 }
 ```
 
@@ -610,6 +610,11 @@ interface AnalysisResponse {
 - [ ] Idempotency store without TTL
 - [ ] DTO mapping inside service (must be at handler boundary)
 - [ ] Logging email, tokens, or PII
+- [ ] `let` or `var` declaration (use `const` only)
+- [ ] Array mutation methods (`.push()`, `.splice()`, `.sort()`, `.reverse()`, `.pop()`, `.shift()`) — use immutable alternatives
+- [ ] Object property reassignment (`obj.field = value`) — use spread into new object
+- [ ] Missing `readonly` on interface properties or function parameters
+- [ ] Impure function with side effects that could be pure
 
 ---
 
@@ -709,12 +714,12 @@ packages/shared/src/<domain>/<module>/
 ```typescript
 // ❌ WRONG - types defined inline in module file
 interface MyResult {
-  readonly value: number;
+  value: number; // also missing readonly
 }
 
 const calculate = (): MyResult => { ... }
 
-// ✅ CORRECT - types in types.ts, imported where needed
+// ✅ CORRECT - types in types.ts with readonly properties, imported where needed
 // In types.ts:
 export interface MyResult {
   readonly value: number;
@@ -752,9 +757,32 @@ import { ValidationError } from "@kenchi/shared";
 
 - Explicit types on function parameters and returns
 - `unknown` instead of `any`, with type guards
-- `readonly` for immutable data
+- `readonly` on ALL interface properties and function parameters — data is immutable by default
+- `Readonly<T>`, `ReadonlyArray<T>`, `ReadonlyMap<K,V>`, `ReadonlySet<T>` for collection types
 - `import type` for type-only imports
 - Discriminated unions for event types
+- `const` only — never `let` or `var`
+- `as const` for literal type objects and configuration
+
+---
+
+## Functional Programming Philosophy
+
+This codebase follows functional programming principles. All application code must be written in a functional style:
+
+1. **Immutability by default** — all data is `readonly`. Never mutate objects, arrays, or parameters
+2. **Pure functions** — functions take inputs and return outputs with no side effects. Isolate I/O at system boundaries (handlers, adapters)
+3. **`const` only** — never use `let` or `var`. If you need a "changing" value, use recursion, `reduce`, or restructure the logic
+4. **No mutating array methods** — never use `.push()`, `.pop()`, `.shift()`, `.unshift()`, `.splice()`, `.sort()`, `.reverse()`, `.fill()`. Use `.map()`, `.filter()`, `.reduce()`, `.flatMap()`, `.concat()`, `.toSorted()`, `.toReversed()`, `.toSpliced()`, spread (`[...arr]`)
+5. **No object mutation** — never assign to object properties after creation. Use spread (`{ ...obj, field: newValue }`) to create updated copies
+6. **Function composition** — build complex operations by composing small pure functions. Prefer pipelines of `map`/`filter`/`reduce` over imperative loops
+7. **Declarative over imperative** — describe WHAT to compute, not HOW to compute it step by step
+
+**Exceptions (documented with comments):**
+
+- Express middleware setting `req.context` (framework requirement)
+- Test setup/teardown (Jest lifecycle)
+- Database transaction commit/rollback (I/O boundary)
 
 ---
 
@@ -773,38 +801,63 @@ import { ValidationError } from "@kenchi/shared";
 
 ## Code Style Preferences
 
-### Loops & Conditionals
+### Functional Patterns
 
 ```typescript
-// ✅ Preferred: Array methods for transforms
+// ✅ Pure function transforms — always use array methods
 const activeUsers = users.filter((user) => user.isActive);
+const userNames = users.map((user) => user.name);
+const totalAge = users.reduce((sum, user) => sum + user.age, 0);
 
-// ✅ Allowed: for...of for early exit
+// ✅ Compose small pure functions
+const getActiveUserNames = (users: ReadonlyArray<User>): ReadonlyArray<string> =>
+  users.filter((user) => user.isActive).map((user) => user.name);
+
+// ✅ Allowed: for...of for early exit — but NO mutation of external state
 for (const item of items) {
   if (item.isMatch) return item;
 }
 
-// ✅ Allowed: Simple if/else when clearer (2-3 conditions)
+// ✅ Simple if/else when clearer (2-3 conditions)
 if (count === 0) return "none";
 else if (count === 1) return "single";
 else return "multiple";
 ```
 
-### Mutation
+### Immutability (No Mutation)
 
 ```typescript
-// ✅ Preferred: Immutable patterns
+// ✅ Object updates — spread into new object
 const updated = { ...original, newField: value };
+const withoutField = (({ fieldToRemove, ...rest }) => rest)(original);
 
-// ✅ Allowed: Local mutation for clarity/perf
+// ✅ Array building — use filter/map, never push
+const results = rawItems.map((raw) => parseItem(raw)).filter((parsed) => parsed.isValid);
+
+// ✅ Array concatenation — spread or concat, never push
+const combined = [...existingItems, ...newItems];
+const appended = [...items, newItem];
+
+// ✅ Sorted copy — toSorted (not sort which mutates)
+const sorted = items.toSorted((a, b) => a.name.localeCompare(b.name));
+
+// ✅ Conditional accumulation — reduce or filter+map
+const groupedByStatus = items.reduce<Record<string, ReadonlyArray<Item>>>(
+  (groups, item) => ({
+    ...groups,
+    [item.status]: [...(groups[item.status] ?? []), item],
+  }),
+  {}
+);
+
+// ❌ WRONG — mutation
 const results: Item[] = [];
-for (const raw of rawItems) {
-  const parsed = parseItem(raw);
-  if (parsed.isValid) {
-    results.push(parsed);
-  }
-}
-return results;
+results.push(item); // mutates array
+items.sort(); // mutates in place
+items.splice(0, 1); // mutates in place
+obj.field = newValue; // mutates object
+let count = 0;
+count++; // uses let + reassignment
 ```
 
 ---

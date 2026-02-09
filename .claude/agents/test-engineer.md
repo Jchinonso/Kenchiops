@@ -102,6 +102,7 @@ You are working in the Kenchi TypeScript monorepo. Key architectural rules that 
 - **State**: duplicate operations, out-of-order events, stale data
 - **Security**: PII in logs, unsanitized input, injection attempts
 - **Type boundaries**: discriminated union exhaustiveness, type narrowing
+- **Immutability**: verify functions return new objects/arrays without mutating inputs
 
 ## Test Writing Standards
 
@@ -181,6 +182,7 @@ const testContext: RequestContext = {
 - **Readable**: the test name + arrange/act/assert tells the full story
 - **Focused**: one logical assertion per test (multiple `expect` calls are fine if testing one behavior)
 - **Resilient**: doesn't break on irrelevant implementation changes
+- **Immutability-aware**: verify functions don't mutate their inputs (freeze inputs with `Object.freeze()` and verify originals are unchanged)
 
 ## Output Format
 
@@ -208,6 +210,13 @@ When auditing coverage:
 - For webhook handler tests, always test the replay protection path (duplicate delivery ID)
 - Tests should use typed errors from `@kenchi/shared`, not plain `Error`
 - When testing services, verify they do NOT instantiate adapters directly (composition root pattern)
+
+### Functional Programming / Immutability Testing
+
+- **Test input immutability**: Pass `Object.freeze()`-d inputs to functions and verify they don't throw (proves they don't mutate)
+- **Verify new references**: When a function transforms data, verify it returns a NEW object/array, not the same reference (`expect(result).not.toBe(input)`)
+- **No `let` in tests**: Test code itself should use `const` only (exception: Jest lifecycle `beforeEach` setup)
+- **Flag mutation in code under test**: If the code under test uses `.push()`, `.splice()`, `.sort()`, `let`, or property assignment, flag it as a test finding and recommend refactoring to immutable patterns
 
 **Update your agent memory** as you discover test patterns, common gaps, flaky test causes, testing utilities available in the codebase, and module-specific testing quirks. This builds up institutional knowledge across conversations. Write concise notes about what you found and where.
 
