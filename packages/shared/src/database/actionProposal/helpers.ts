@@ -7,6 +7,7 @@
  */
 
 import {
+  validateId,
   ValidationError,
   PARSE_INT_RADIX,
   ACTION_PROPOSAL_DEFAULTS,
@@ -23,19 +24,8 @@ import type {
 
 // ==================== Input Validation ====================
 
-/**
- * Validates that a string ID is non-empty.
- *
- * @throws ValidationError if ID is empty or whitespace-only
- */
-export const validateId = (id: string, fieldName: string): void => {
-  if (id.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateId",
-      metadata: { field: fieldName },
-    });
-  }
-};
+// Re-export shared validator for backwards compatibility
+export { validateId };
 
 /**
  * Validates that a status is a valid ActionProposalStatus.

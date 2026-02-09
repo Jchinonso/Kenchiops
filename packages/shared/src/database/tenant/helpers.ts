@@ -10,6 +10,8 @@ import {
   ValidationError,
   TENANT_STATUS,
   RAG_BUDGET_DEFAULTS,
+  validateId,
+  sharedValidateLimit,
   type CreateTenantFromGitHub,
   type LinkSlackWorkspace,
   type Tenant,
@@ -104,28 +106,14 @@ const RAG_BUDGET_FIELD_MAPPINGS: readonly FieldMapping[] = [
 
 // ==================== Validation Functions ====================
 
-/**
- * Validates that an ID is non-empty.
- */
-export const validateId = (id: string, fieldName: string): void => {
-  if (id.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateId",
-      metadata: { field: fieldName },
-    });
-  }
-};
+// Re-export shared validator for backwards compatibility
+export { validateId };
 
 /**
  * Validates that limit is a positive number.
  */
 export const validateLimit = (limit: number): void => {
-  if (!Number.isFinite(limit) || limit <= 0) {
-    throw new ValidationError("Limit must be a positive number", {
-      operation: "validateLimit",
-      metadata: { limit },
-    });
-  }
+  sharedValidateLimit(limit, 1);
 };
 
 /**

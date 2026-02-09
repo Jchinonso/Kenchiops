@@ -13,6 +13,7 @@ import {
   DRIFT_DETECTION_THRESHOLDS,
   EMBEDDING_TIERS,
   COST_TRACKING_DEFAULTS,
+  sharedValidateLimit,
   type EmbeddingTierName,
 } from "../common.js";
 import type {
@@ -140,12 +141,7 @@ export const validateDays = (days: number): void => {
  * @throws ValidationError if limit is not positive
  */
 export const validateLimit = (limit: number): void => {
-  if (!Number.isFinite(limit) || limit < COST_TRACKING_DEFAULTS.MIN_LIMIT) {
-    throw new ValidationError(`Limit must be at least ${COST_TRACKING_DEFAULTS.MIN_LIMIT}`, {
-      operation: "validateLimit",
-      metadata: { limit, minimum: COST_TRACKING_DEFAULTS.MIN_LIMIT },
-    });
-  }
+  sharedValidateLimit(limit, COST_TRACKING_DEFAULTS.MIN_LIMIT);
 };
 
 // ==================== Helper Functions ====================

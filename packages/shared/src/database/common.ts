@@ -102,6 +102,31 @@ export { parseEmbeddingVector, parseJsonbField, formatEmbeddingVector } from "./
 // Vector types
 export type { VectorSearchFilters, VectorSearchResult } from "./vector/types.js";
 
+// Shared validation utilities
+export {
+  validateId,
+  validateIds,
+  validateNonEmptyString,
+  validateMinimumNumber,
+  validatePositiveNumber,
+  validateNonNegativeNumber,
+  validateLimit as sharedValidateLimit,
+  validateEmbedding,
+} from "./validation/index.js";
+
+// Shared serialization utilities
+export { serializeOptionalJson, serializeRequiredJson } from "./serialization/index.js";
+
+// Shared query builder utilities
+export {
+  buildSearchConditions as sharedBuildSearchConditions,
+  buildSimilaritySearchQuery as sharedBuildSimilaritySearchQuery,
+  type FilterHandler,
+  type QueryBuilderConfig,
+  type SearchConditionsResult,
+  type SimilaritySearchQueryResult,
+} from "./vector/queryBuilder.js";
+
 // Database client
 export { query, transaction } from "./client/client.js";
 

@@ -9,6 +9,9 @@
 import {
   ValidationError,
   EXTERNAL_SOURCE_DEFAULTS,
+  validateNonEmptyString,
+  validateMinimumNumber,
+  serializeOptionalJson,
   type ExternalSourceType,
   type TechStackTag,
 } from "../common.js";
@@ -37,33 +40,8 @@ const CREATE_INPUT_VALIDATION_RULES: readonly CreateInputValidationRule[] = [
 
 // ==================== Input Validation ====================
 
-/**
- * Validates that a string is non-empty.
- *
- * @throws ValidationError if value is empty or whitespace-only
- */
-export const validateNonEmptyString = (value: string, fieldName: string): void => {
-  if (value.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateNonEmptyString",
-      metadata: { field: fieldName },
-    });
-  }
-};
-
-/**
- * Validates that a number meets minimum requirement.
- *
- * @throws ValidationError if value is below minimum
- */
-export const validateMinimumNumber = (value: number, fieldName: string, minimum: number): void => {
-  if (!Number.isFinite(value) || value < minimum) {
-    throw new ValidationError(`${fieldName} must be at least ${minimum}`, {
-      operation: "validateMinimumNumber",
-      metadata: { field: fieldName, value, minimum },
-    });
-  }
-};
+// Re-export shared validators for backwards compatibility
+export { validateNonEmptyString, validateMinimumNumber };
 
 /**
  * Validates CreateExternalSourceInput.
@@ -91,11 +69,8 @@ export const validateCreateInput = (input: CreateExternalSourceInput): void => {
 
 // ==================== Serialization Helpers ====================
 
-/**
- * Serializes optional JSON field for database storage.
- */
-export const serializeOptionalJson = (value: Record<string, unknown> | undefined): string | null =>
-  value === undefined ? null : JSON.stringify(value);
+// Re-export shared serializer for backwards compatibility
+export { serializeOptionalJson };
 
 // ==================== Constants ====================
 

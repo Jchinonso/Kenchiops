@@ -11,3 +11,13 @@ export type { VectorSearchResult, VectorSearchFilters } from "./types.js";
 
 // Helpers
 export { parseEmbeddingVector, parseJsonbField, formatEmbeddingVector } from "./helpers.js";
+
+// Query builder
+export {
+  buildSearchConditions,
+  buildSimilaritySearchQuery,
+  type FilterHandler,
+  type QueryBuilderConfig,
+  type SearchConditionsResult,
+  type SimilaritySearchQueryResult,
+} from "./queryBuilder.js";

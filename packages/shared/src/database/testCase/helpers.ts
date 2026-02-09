@@ -6,7 +6,7 @@
  * @module database/testCase/helpers
  */
 
-import { ValidationError } from "../common.js";
+import { ValidationError, validateId, validatePositiveNumber } from "../common.js";
 import type {
   CreateTestCaseInput,
   CreateTestCaseValidationRule,
@@ -74,37 +74,8 @@ export const validateCreateTestCaseInput = (input: CreateTestCaseInput): void =>
   });
 };
 
-/**
- * Validates that an ID is non-empty.
- *
- * @param id - ID to validate
- * @param fieldName - Name of the field for error message
- * @throws ValidationError if ID is empty
- */
-export const validateId = (id: string, fieldName: string): void => {
-  if (id.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateId",
-      metadata: { field: fieldName },
-    });
-  }
-};
-
-/**
- * Validates that a number is positive.
- *
- * @param value - Value to validate
- * @param fieldName - Name of the field for error message
- * @throws ValidationError if value is invalid
- */
-export const validatePositiveNumber = (value: number, fieldName: string): void => {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new ValidationError(`${fieldName} must be a positive number`, {
-      operation: "validatePositiveNumber",
-      metadata: { field: fieldName, value },
-    });
-  }
-};
+// Re-export shared validators for backwards compatibility
+export { validateId, validatePositiveNumber };
 
 // ==================== Row Mappers ====================
 

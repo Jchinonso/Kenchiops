@@ -15,47 +15,28 @@ import {
   formatEmbeddingVector,
   parseEmbeddingVector,
   parseJsonbField,
+  validateNonEmptyString,
+  validateMinimumNumber,
+  sharedBuildSearchConditions,
+  sharedBuildSimilaritySearchQuery,
   type VectorSearchFilters,
+  type FilterHandler,
+  type QueryBuilderConfig,
 } from "../common.js";
 import type {
   CreateDiffChunkInput,
   DiffChunk,
-  DiffChunkFilterHandler,
   DiffChunkInputValidationRule,
   DiffChunkRow,
   SearchConditionsResult,
   SimilaritySearchQueryResult,
 } from "./types.js";
 
-// ==================== Input Validation ====================
+// Re-export shared validators for backwards compatibility
+export { validateNonEmptyString };
 
-/**
- * Validates that a string is non-empty.
- *
- * @throws ValidationError if value is empty or whitespace-only
- */
-export const validateNonEmptyString = (value: string, fieldName: string): void => {
-  if (value.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateNonEmptyString",
-      metadata: { field: fieldName },
-    });
-  }
-};
-
-/**
- * Validates that a number is positive.
- *
- * @throws ValidationError if value is not positive
- */
-export const validatePositiveNumber = (value: number, fieldName: string, minimum: number): void => {
-  if (!Number.isFinite(value) || value < minimum) {
-    throw new ValidationError(`${fieldName} must be at least ${minimum}`, {
-      operation: "validatePositiveNumber",
-      metadata: { field: fieldName, value, minimum },
-    });
-  }
-};
+/** @deprecated Use validateMinimumNumber instead */
+export const validatePositiveNumber = validateMinimumNumber;
 
 /** Validation rules for CreateDiffChunkInput. */
 const CREATE_INPUT_VALIDATION_RULES: readonly DiffChunkInputValidationRule[] = [
@@ -115,12 +96,19 @@ export const validateCreateInput = (input: CreateDiffChunkInput): void => {
 // ==================== Query Builders ====================
 
 /** Filter handlers for building WHERE clauses. */
-const FILTER_HANDLERS: readonly DiffChunkFilterHandler[] = [
+const FILTER_HANDLERS: readonly FilterHandler[] = [
   { key: "tenantId", column: "tenant_id" },
   { key: "repository", column: "repository" },
   { key: "prNumber", column: "pr_number" },
   { key: "filePath", column: "file_path" },
 ];
+
+/** Query builder config for diff chunk similarity search. */
+const QUERY_BUILDER_CONFIG: QueryBuilderConfig = {
+  baseQuery: DIFF_CHUNK_QUERIES.SEARCH_SIMILAR,
+  defaultSimilarityThreshold: VECTOR_SIMILARITY_THRESHOLDS.DIFF_CHUNKS,
+  filterHandlers: FILTER_HANDLERS,
+};
 
 /**
  * Builds WHERE clause conditions for similarity search.
@@ -128,59 +116,14 @@ const FILTER_HANDLERS: readonly DiffChunkFilterHandler[] = [
 export const buildSearchConditions = (
   filters: VectorSearchFilters,
   startParamIndex: number
-): SearchConditionsResult => {
-  const result = FILTER_HANDLERS.reduce<{
-    conditions: readonly string[];
-    params: readonly unknown[];
-    paramIndex: number;
-  }>(
-    (accumulator, handler) => {
-      const value = filters[handler.key];
-
-      if (value === undefined) {
-        return accumulator;
-      }
-
-      return {
-        conditions: [...accumulator.conditions, `${handler.column} = $${accumulator.paramIndex}`],
-        params: [...accumulator.params, value],
-        paramIndex: accumulator.paramIndex + 1,
-      };
-    },
-    { conditions: [], params: [], paramIndex: startParamIndex }
-  );
-
-  return { conditions: result.conditions, params: result.params };
-};
+): SearchConditionsResult => sharedBuildSearchConditions(filters, FILTER_HANDLERS, startParamIndex);
 
 /**
  * Builds complete similarity search query with filters.
  */
 export const buildSimilaritySearchQuery = (
   filters: VectorSearchFilters
-): SimilaritySearchQueryResult => {
-  const minSimilarity = filters.minSimilarity ?? VECTOR_SIMILARITY_THRESHOLDS.DIFF_CHUNKS;
-  const limit = Math.min(
-    filters.limit ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K,
-    VECTOR_SIMILARITY_THRESHOLDS.MAX_TOP_K
-  );
-
-  const { conditions, params } = buildSearchConditions(filters, 2);
-
-  const whereClause =
-    conditions.length > 0
-      ? `${DIFF_CHUNK_QUERIES.SEARCH_SIMILAR} AND ${conditions.join(" AND ")}`
-      : DIFF_CHUNK_QUERIES.SEARCH_SIMILAR;
-
-  const fullQuery = `
-    ${whereClause}
-    AND 1 - (embedding <=> $1::vector) >= ${minSimilarity}
-    ORDER BY similarity DESC
-    LIMIT ${limit}
-  `;
-
-  return { query: fullQuery, params };
-};
+): SimilaritySearchQueryResult => sharedBuildSimilaritySearchQuery(filters, QUERY_BUILDER_CONFIG);
 
 // ==================== Serialization Helpers ====================
 

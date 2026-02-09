@@ -8,6 +8,7 @@
 
 import {
   ValidationError,
+  validateId,
   type ModelVersion,
   type ModelMetadata,
   type ABTestConfig,
@@ -59,21 +60,8 @@ export const validateCreateModelVersionInput = (input: CreateModelVersionInput):
   });
 };
 
-/**
- * Validates that an ID is non-empty.
- *
- * @param id - ID to validate
- * @param fieldName - Name of the field for error message
- * @throws ValidationError if ID is empty
- */
-export const validateId = (id: string, fieldName: string): void => {
-  if (id.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateId",
-      metadata: { field: fieldName },
-    });
-  }
-};
+// Re-export shared validator for backwards compatibility
+export { validateId };
 
 /**
  * Validates SaveFeatureFlagsInput.

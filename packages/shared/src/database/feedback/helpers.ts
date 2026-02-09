@@ -6,7 +6,12 @@
  * @module database/feedback/helpers
  */
 
-import { ValidationError, type RAGRelevance } from "../common.js";
+import {
+  ValidationError,
+  validateNonEmptyString,
+  validateMinimumNumber,
+  type RAGRelevance,
+} from "../common.js";
 import type {
   CreateRAGFeedbackInput,
   CreateAnalysisFeedbackInput,
@@ -87,33 +92,8 @@ const QA_FEEDBACK_VALIDATION_RULES: readonly QAFeedbackValidationRule[] = [
 
 // ==================== Validation Functions ====================
 
-/**
- * Validates that a string is non-empty.
- *
- * @throws ValidationError if value is empty or whitespace-only
- */
-export const validateNonEmptyString = (value: string, fieldName: string): void => {
-  if (value.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateNonEmptyString",
-      metadata: { field: fieldName },
-    });
-  }
-};
-
-/**
- * Validates that a number meets minimum requirement.
- *
- * @throws ValidationError if value is below minimum
- */
-export const validateMinimumNumber = (value: number, fieldName: string, minimum: number): void => {
-  if (!Number.isFinite(value) || value < minimum) {
-    throw new ValidationError(`${fieldName} must be at least ${minimum}`, {
-      operation: "validateMinimumNumber",
-      metadata: { field: fieldName, value, minimum },
-    });
-  }
-};
+// Re-export shared validators for backwards compatibility
+export { validateNonEmptyString, validateMinimumNumber };
 
 /**
  * Validates CreateRAGFeedbackInput.

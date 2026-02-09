@@ -8,46 +8,36 @@
  */
 
 import {
-  ValidationError,
   VECTOR_SIMILARITY_THRESHOLDS,
   KNOWLEDGE_DOC_QUERIES,
   KNOWLEDGE_DOC_DEFAULTS,
   parseEmbeddingVector,
   parseJsonbField,
+  validateNonEmptyString,
+  validateMinimumNumber,
+  validateId,
+  validateIds,
+  validateEmbedding,
+  sharedValidateLimit,
+  sharedBuildSearchConditions,
+  sharedBuildSimilaritySearchQuery,
   type VectorSearchFilters,
   type KnowledgeDocType,
+  type FilterHandler,
+  type QueryBuilderConfig,
 } from "../common.js";
-import type { KnowledgeDocFilterHandler, KnowledgeDocRecord, KnowledgeDocRow } from "./types.js";
+import type { KnowledgeDocRecord, KnowledgeDocRow } from "./types.js";
+
+// Re-export shared validators for backwards compatibility
+export {
+  validateNonEmptyString,
+  validateMinimumNumber,
+  validateId,
+  validateIds,
+  validateEmbedding,
+};
 
 // ==================== Input Validation ====================
-
-/**
- * Validates that a string is non-empty.
- *
- * @throws ValidationError if value is empty or whitespace-only
- */
-export const validateNonEmptyString = (value: string, fieldName: string): void => {
-  if (value.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateNonEmptyString",
-      metadata: { field: fieldName },
-    });
-  }
-};
-
-/**
- * Validates that a number meets minimum requirement.
- *
- * @throws ValidationError if value is below minimum
- */
-export const validateMinimumNumber = (value: number, fieldName: string, minimum: number): void => {
-  if (!Number.isFinite(value) || value < minimum) {
-    throw new ValidationError(`${fieldName} must be at least ${minimum}`, {
-      operation: "validateMinimumNumber",
-      metadata: { field: fieldName, value, minimum },
-    });
-  }
-};
 
 /**
  * Validates query limit parameter.
@@ -55,136 +45,40 @@ export const validateMinimumNumber = (value: number, fieldName: string, minimum:
  * @throws ValidationError if limit is invalid
  */
 export const validateLimit = (limit: number): void => {
-  validateMinimumNumber(limit, "limit", KNOWLEDGE_DOC_DEFAULTS.MIN_QUERY_LIMIT);
-};
-
-/**
- * Validates embedding array.
- *
- * @throws ValidationError if embedding is empty or contains invalid values
- */
-export const validateEmbedding = (embedding: readonly number[]): void => {
-  if (embedding.length === 0) {
-    throw new ValidationError("Embedding cannot be empty", {
-      operation: "validateEmbedding",
-      metadata: { length: 0 },
-    });
-  }
-
-  const hasInvalidValues = embedding.some((value) => !Number.isFinite(value));
-  if (hasInvalidValues) {
-    throw new ValidationError("Embedding contains invalid values", {
-      operation: "validateEmbedding",
-      metadata: { length: embedding.length },
-    });
-  }
-};
-
-/**
- * Validates that an ID is non-empty.
- *
- * @throws ValidationError if ID is empty or whitespace-only
- */
-export const validateId = (id: string, fieldName: string): void => {
-  if (id.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateId",
-      metadata: { field: fieldName },
-    });
-  }
-};
-
-/**
- * Validates that an array of IDs contains no empty entries.
- *
- * @throws ValidationError if array contains invalid IDs
- */
-export const validateIds = (ids: readonly string[], fieldName: string): void => {
-  if (ids.length === 0) {
-    return; // Empty array is valid, will short-circuit in batch operations
-  }
-
-  const invalidIds = ids.filter((id) => id.trim().length === 0);
-  if (invalidIds.length > 0) {
-    throw new ValidationError(`${fieldName} contains empty IDs`, {
-      operation: "validateIds",
-      metadata: { field: fieldName, invalidCount: invalidIds.length },
-    });
-  }
+  sharedValidateLimit(limit, KNOWLEDGE_DOC_DEFAULTS.MIN_QUERY_LIMIT);
 };
 
 // ==================== Query Builders ====================
 
 /** Filter handlers for knowledge doc search. */
-const FILTER_HANDLERS: readonly KnowledgeDocFilterHandler[] = [
+const FILTER_HANDLERS: readonly FilterHandler[] = [
   { key: "tenantId", column: "tenant_id" },
   { key: "docType", column: "doc_type" },
 ];
 
+/** Query builder config for knowledge doc similarity search. */
+const QUERY_BUILDER_CONFIG: QueryBuilderConfig = {
+  baseQuery: KNOWLEDGE_DOC_QUERIES.SEARCH_SIMILAR,
+  defaultSimilarityThreshold: VECTOR_SIMILARITY_THRESHOLDS.KNOWLEDGE_DOCS,
+  filterHandlers: FILTER_HANDLERS,
+};
+
 /**
  * Builds WHERE clause conditions for knowledge doc similarity search.
- *
- * @param filters - Search filters
- * @param paramIndex - Starting parameter index
- * @returns Object with conditions array and params array
  */
 export const buildSearchConditions = (
   filters: VectorSearchFilters,
   paramIndex: number
-): { conditions: readonly string[]; params: readonly unknown[] } => {
-  let currentIndex = paramIndex;
-
-  const result = FILTER_HANDLERS.reduce<{ conditions: string[]; params: unknown[] }>(
-    (accumulator, handler) => {
-      const value = filters[handler.key];
-      if (value !== undefined) {
-        return {
-          conditions: [...accumulator.conditions, `${handler.column} = $${currentIndex++}`],
-          params: [...accumulator.params, value],
-        };
-      }
-      return accumulator;
-    },
-    { conditions: [], params: [] }
-  );
-
-  return {
-    conditions: Object.freeze(result.conditions),
-    params: Object.freeze(result.params),
-  };
-};
+): { conditions: readonly string[]; params: readonly unknown[] } =>
+  sharedBuildSearchConditions(filters, FILTER_HANDLERS, paramIndex);
 
 /**
  * Builds complete similarity search query with filters for knowledge docs.
- *
- * @param filters - Search filters
- * @returns Object with query string and params array
  */
 export const buildSimilaritySearchQuery = (
   filters: VectorSearchFilters
-): { query: string; params: readonly unknown[] } => {
-  const minSimilarity = filters.minSimilarity ?? VECTOR_SIMILARITY_THRESHOLDS.KNOWLEDGE_DOCS;
-  const limit = Math.min(
-    filters.limit ?? VECTOR_SIMILARITY_THRESHOLDS.DEFAULT_TOP_K,
-    VECTOR_SIMILARITY_THRESHOLDS.MAX_TOP_K
-  );
-
-  const { conditions, params } = buildSearchConditions(filters, 2);
-
-  const whereClause =
-    conditions.length > 0
-      ? `${KNOWLEDGE_DOC_QUERIES.SEARCH_SIMILAR} AND ${conditions.join(" AND ")}`
-      : KNOWLEDGE_DOC_QUERIES.SEARCH_SIMILAR;
-
-  const fullQuery = `
-    ${whereClause}
-    AND 1 - (embedding <=> $1::vector) >= ${minSimilarity}
-    ORDER BY similarity DESC
-    LIMIT ${limit}
-  `;
-
-  return { query: fullQuery, params };
-};
+): { query: string; params: readonly unknown[] } =>
+  sharedBuildSimilaritySearchQuery(filters, QUERY_BUILDER_CONFIG);
 
 // ==================== Row Mappers ====================
 

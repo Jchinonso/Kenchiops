@@ -6,7 +6,13 @@
  * @module database/relationship/helpers
  */
 
-import { ValidationError, RELATIONSHIP_TYPES, type RelationshipType } from "../common.js";
+import {
+  ValidationError,
+  RELATIONSHIP_TYPES,
+  validateId,
+  validateNonNegativeNumber,
+  type RelationshipType,
+} from "../common.js";
 import type {
   CreateRelationshipInput,
   CreateRelationshipValidationRule,
@@ -69,37 +75,11 @@ export const validateCreateRelationshipInput = (input: CreateRelationshipInput):
   });
 };
 
-/**
- * Validates that an ID is non-empty.
- *
- * @param id - ID to validate
- * @param fieldName - Name of the field for error message
- * @throws ValidationError if ID is empty
- */
-export const validateId = (id: string, fieldName: string): void => {
-  if (id.trim().length === 0) {
-    throw new ValidationError(`${fieldName} cannot be empty`, {
-      operation: "validateId",
-      metadata: { field: fieldName },
-    });
-  }
-};
+// Re-export shared validators for backwards compatibility
+export { validateId };
 
-/**
- * Validates that a number is non-negative.
- *
- * @param value - Value to validate
- * @param fieldName - Name of the field for error message
- * @throws ValidationError if value is invalid
- */
-export const validatePositiveNumber = (value: number, fieldName: string): void => {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new ValidationError(`${fieldName} must be a non-negative number`, {
-      operation: "validatePositiveNumber",
-      metadata: { field: fieldName, value },
-    });
-  }
-};
+/** @deprecated Use validateNonNegativeNumber instead */
+export const validatePositiveNumber = validateNonNegativeNumber;
 
 // ==================== Row Mappers ====================
 
