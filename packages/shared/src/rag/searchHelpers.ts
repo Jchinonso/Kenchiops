@@ -26,6 +26,7 @@ import type {
   RerankedResult,
   EventQueryContext,
   QueryEmbeddingResult,
+  QueryContext,
 } from "./types.js";
 import {
   selectEmbeddingTier,
@@ -33,6 +34,7 @@ import {
   cacheEmbedding,
   recordQueryCost,
 } from "./costControls.js";
+import { fullRerank } from "./reranker.js";
 
 export { SEARCH_CONSTANTS };
 export type { EventQueryContext } from "./types.js";
@@ -284,6 +286,77 @@ export const getQueryEmbedding = async (
     recordEmbeddingOperation(0, latencyMs, false);
     throw error;
   }
+};
+
+// ==================== Reranking Pipeline ====================
+
+/**
+ * Computes the fetch limit for knowledge doc queries.
+ * When reranking is enabled, fetches 2x the desired topK to allow for reordering.
+ */
+export const computeRerankFetchLimit = (topK: number, enableReranking: boolean): number =>
+  enableReranking ? topK * 2 : topK;
+
+/**
+ * Applies the full reranking pipeline to knowledge doc search results.
+ * Converts to rerankable format, runs reranking, and converts back.
+ * Returns sliced results when reranking is disabled.
+ */
+export const rerankKnowledgeResults = (
+  rawResults: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>,
+  options: {
+    readonly enableReranking: boolean;
+    readonly topK: number;
+    readonly queryContext?: QueryContext;
+  }
+): ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>> => {
+  if (!options.enableReranking || rawResults.length === 0) {
+    return rawResults.slice(0, options.topK);
+  }
+
+  const rerankableResults = rawResults.map(toRerankableResult);
+  const reranked = fullRerank(rerankableResults, {
+    queryContext: options.queryContext,
+    topK: options.topK,
+  });
+
+  const finalResults = reranked.map((rerankedResult) =>
+    fromRerankedResult(rerankedResult, rawResults)
+  );
+
+  logger.debug("Reranking applied to knowledge docs", {
+    originalCount: rawResults.length,
+    rerankedCount: finalResults.length,
+    topScore: reranked[0]?.finalScore ?? 0,
+  });
+
+  return finalResults;
+};
+
+/**
+ * Records query cost for a tenant if not a cache hit (fire-and-forget).
+ * No-op when tenantId is missing or the result was a cache hit.
+ */
+export const recordSearchCostIfNeeded = (
+  normalizedQuery: string,
+  tenantId: string | undefined,
+  cacheHit: boolean
+): void => {
+  if (!tenantId || cacheHit) {
+    return;
+  }
+  const tokenCount = estimateTokenCount(normalizedQuery);
+  void recordQueryCostSafely(tenantId, tokenCount);
+};
+
+/**
+ * Extracts document IDs from knowledge results and tracks hits (fire-and-forget).
+ */
+export const trackKnowledgeResultHits = (
+  results: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>
+): void => {
+  const docIds = results.map((result) => result.item.id);
+  void trackKnowledgeDocHitsSafely(docIds);
 };
 
 // ==================== Reranking Conversions ====================
