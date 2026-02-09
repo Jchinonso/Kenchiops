@@ -49,67 +49,72 @@ export const generateProgressBar = (value: number, total: number): string => {
 };
 
 /**
- * Categorize test failures by error type.
- * Works with any test framework - LLM already filters real failures.
+ * Check if a failure matches assertion keywords in its error message.
+ */
+const isAssertionByKeyword = (errorLower: string): boolean =>
+  errorLower.includes("expect") ||
+  errorLower.includes("assert") ||
+  errorLower.includes("received") ||
+  errorLower.includes("tobe") ||
+  errorLower.includes("toequal");
+
+/**
+ * Check if a failure matches timeout keywords in its error message.
+ */
+const isTimeoutByKeyword = (errorLower: string): boolean =>
+  errorLower.includes("timeout") || errorLower.includes("exceeded") || errorLower.includes("async");
+
+/**
+ * Check if a failure matches runtime error keywords in its error message.
+ */
+const isRuntimeByKeyword = (errorLower: string): boolean =>
+  errorLower.includes("typeerror") ||
+  errorLower.includes("referenceerror") ||
+  errorLower.includes("is not a function") ||
+  errorLower.includes("undefined") ||
+  errorLower.includes("null");
+
+/**
+ * Categorize test failures by error type using single-pass classification.
+ *
+ * Priority 1: If expected AND actual fields are present, classify as assertion
+ * (structural/deterministic check, independent of LLM-written error text).
+ * Priority 2: Fall back to keyword matching in the error message.
+ *
+ * Each failure is assigned to exactly one category (no double counting).
  */
 export const categorizeFailures = (
   testFailures: readonly TestFailureInfo[]
 ): ErrorCategoryBreakdown => {
-  const assertion = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("expect") ||
-      failure.error?.toLowerCase().includes("assert") ||
-      failure.error?.toLowerCase().includes("received") ||
-      failure.error?.toLowerCase().includes("tobe") ||
-      failure.error?.toLowerCase().includes("toequal")
-  ).length;
+  let assertion = 0;
+  let timeout = 0;
+  let runtime = 0;
+  let other = 0;
 
-  const timeout = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("timeout") ||
-      failure.error?.toLowerCase().includes("exceeded") ||
-      failure.error?.toLowerCase().includes("async")
-  ).length;
-
-  const runtime = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("typeerror") ||
-      failure.error?.toLowerCase().includes("referenceerror") ||
-      failure.error?.toLowerCase().includes("is not a function") ||
-      failure.error?.toLowerCase().includes("undefined") ||
-      failure.error?.toLowerCase().includes("null")
-  ).length;
-
-  // Other = total - categorized, avoiding double counting
-  const categorized = new Set<TestFailureInfo>();
-  testFailures.forEach((failure) => {
-    const errorLower = failure.error?.toLowerCase() ?? "";
+  for (const failure of testFailures) {
+    // Priority 1: Structural check — expected AND actual fields present means assertion
     if (
-      errorLower.includes("expect") ||
-      errorLower.includes("assert") ||
-      errorLower.includes("received") ||
-      errorLower.includes("tobe") ||
-      errorLower.includes("toequal")
+      failure.expected !== null &&
+      failure.expected !== undefined &&
+      failure.actual !== null &&
+      failure.actual !== undefined
     ) {
-      categorized.add(failure);
-    } else if (
-      errorLower.includes("timeout") ||
-      errorLower.includes("exceeded") ||
-      errorLower.includes("async")
-    ) {
-      categorized.add(failure);
-    } else if (
-      errorLower.includes("typeerror") ||
-      errorLower.includes("referenceerror") ||
-      errorLower.includes("is not a function") ||
-      errorLower.includes("undefined") ||
-      errorLower.includes("null")
-    ) {
-      categorized.add(failure);
+      assertion++;
+      continue;
     }
-  });
 
-  const other = testFailures.length - categorized.size;
+    // Priority 2: Keyword matching in error message (single category per failure)
+    const errorLower = failure.error?.toLowerCase() ?? "";
+    if (isAssertionByKeyword(errorLower)) {
+      assertion++;
+    } else if (isTimeoutByKeyword(errorLower)) {
+      timeout++;
+    } else if (isRuntimeByKeyword(errorLower)) {
+      runtime++;
+    } else {
+      other++;
+    }
+  }
 
   return {
     assertion,
@@ -155,6 +160,10 @@ export const generateErrorBreakdownVisual = (breakdown: ErrorCategoryBreakdown):
 /**
  * Generate consolidated actions by error type (not per file).
  * Works with any test framework - LLM already filters real failures.
+ *
+ * Uses the same priority logic as categorizeFailures:
+ * Priority 1: expected AND actual fields present -> assertion
+ * Priority 2: keyword matching in error message
  */
 export const generateConsolidatedActions = (
   testFailures: readonly TestFailureInfo[],
@@ -168,46 +177,53 @@ export const generateConsolidatedActions = (
 
   const actions: string[] = [];
 
-  // Count error types across all failures
-  const assertionFailures = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("expect") ||
-      failure.error?.toLowerCase().includes("assert") ||
-      failure.error?.toLowerCase().includes("received")
-  );
+  // Single-pass categorization with expected/actual priority
+  let assertionCount = 0;
+  let timeoutCount = 0;
+  let typeErrorCount = 0;
 
-  const timeoutFailures = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("timeout") ||
-      failure.error?.toLowerCase().includes("exceeded")
-  );
+  for (const failure of testFailures) {
+    // Priority 1: Structural check — expected AND actual fields present means assertion
+    if (
+      failure.expected !== null &&
+      failure.expected !== undefined &&
+      failure.actual !== null &&
+      failure.actual !== undefined
+    ) {
+      assertionCount++;
+      continue;
+    }
 
-  const typeErrors = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("typeerror") ||
-      failure.error?.toLowerCase().includes("is not a function") ||
-      failure.error?.toLowerCase().includes("undefined")
-  );
+    // Priority 2: Keyword matching (single category per failure)
+    const errorLower = failure.error?.toLowerCase() ?? "";
+    if (isAssertionByKeyword(errorLower)) {
+      assertionCount++;
+    } else if (isTimeoutByKeyword(errorLower)) {
+      timeoutCount++;
+    } else if (isRuntimeByKeyword(errorLower)) {
+      typeErrorCount++;
+    }
+  }
 
   // Get unique files
   const uniqueFiles = [...new Set(testFailures.map((failure) => failure.file).filter(Boolean))];
 
   // Generate one action per error type
-  if (assertionFailures.length > 0) {
+  if (assertionCount > 0) {
     actions.push(
-      `**Assertion failures (${assertionFailures.length})**: Test expectations don't match actual values. Review the expected vs received values and update tests or fix the implementation.`
+      `**Assertion failures (${assertionCount})**: Test expectations don't match actual values. Review the expected vs received values and update tests or fix the implementation.`
     );
   }
 
-  if (timeoutFailures.length > 0) {
+  if (timeoutCount > 0) {
     actions.push(
-      `**Timeout/Async issues (${timeoutFailures.length})**: Tests timing out or async operations not completing. Check for missing \`await\`, increase timeouts, or fix hanging promises.`
+      `**Timeout/Async issues (${timeoutCount})**: Tests timing out or async operations not completing. Check for missing \`await\`, increase timeouts, or fix hanging promises.`
     );
   }
 
-  if (typeErrors.length > 0) {
+  if (typeErrorCount > 0) {
     actions.push(
-      `**Type/Runtime errors (${typeErrors.length})**: Code throwing errors during execution. Check for undefined values, missing imports, or incorrect function calls.`
+      `**Type/Runtime errors (${typeErrorCount})**: Code throwing errors during execution. Check for undefined values, missing imports, or incorrect function calls.`
     );
   }
 
