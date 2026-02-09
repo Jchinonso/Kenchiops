@@ -51,6 +51,7 @@ import {
   CLEANUP_INTERVAL_REQUESTS,
   type RateLimitOptions,
   type RateLimitStore,
+  type RateLimitInfo,
   type RateLimitEntry,
 } from "./types.js";
 import { secureKeyGenerator } from "./security.js";
@@ -171,6 +172,119 @@ export {
 } from "./middleware.js";
 
 const logger = createLogger("rate-limiter");
+
+// ==================== Middleware Helper Functions ====================
+
+/**
+ * Increment the rate limit store with a timeout guard.
+ * Rejects with ExternalServiceError if the store doesn't respond in time.
+ */
+const incrementWithTimeout = async (
+  store: RateLimitStore,
+  key: string,
+  windowMs: number
+): Promise<RateLimitInfo> => {
+  let timeoutHandle: NodeJS.Timeout | null = null;
+
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new ExternalServiceError("rate-limit-store", "Rate limit check timeout")),
+        HTTP_RESILIENCE_DEFAULTS.RATE_LIMIT_CHECK_TIMEOUT_MS
+      );
+    });
+    return await Promise.race([store.increment(key, windowMs), timeoutPromise]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+};
+
+/**
+ * Validate that rate limit info values are finite numbers.
+ * SECURITY: Prevents setting NaN/Infinity in response headers.
+ */
+const validateRateLimitInfo = (info: RateLimitInfo): void => {
+  if (
+    !Number.isFinite(info.current) ||
+    !Number.isFinite(info.remaining) ||
+    !Number.isFinite(info.resetTime)
+  ) {
+    throw new ExternalServiceError(
+      "rate-limit-store",
+      "Rate limit store returned non-finite values"
+    );
+  }
+};
+
+/**
+ * Set standard rate limit response headers.
+ * Clamps reset time to reasonable bounds (within 24 hours from now).
+ */
+const setRateLimitHeaders = (
+  res: Response,
+  effectiveMax: number,
+  effectiveRemaining: number,
+  resetTime: number
+): void => {
+  res.setHeader("X-RateLimit-Limit", effectiveMax);
+  res.setHeader("X-RateLimit-Remaining", effectiveRemaining);
+
+  const now = Date.now();
+  const maxResetTime = now + MAX_TTL_MS;
+  const boundedResetTime = Math.min(Math.max(now, resetTime), maxResetTime);
+  res.setHeader(
+    "X-RateLimit-Reset",
+    Math.ceil(boundedResetTime / TIME_CONSTANTS.MILLISECONDS_PER_SECOND)
+  );
+};
+
+/**
+ * Compute clamped Retry-After header value in seconds from a reset timestamp.
+ */
+const computeRetryAfterSeconds = (resetTime: number): number => {
+  const retryAfterMs = Math.max(0, resetTime - Date.now());
+  return Math.min(
+    Math.max(
+      MIN_RETRY_AFTER_SECONDS,
+      Math.ceil(retryAfterMs / TIME_CONSTANTS.MILLISECONDS_PER_SECOND)
+    ),
+    MAX_RETRY_AFTER_SECONDS
+  );
+};
+
+/**
+ * Handle errors from the rate limit middleware.
+ * Re-throws known errors; wraps unknown errors as RateLimitError for security.
+ */
+const handleMiddlewareError = (error: unknown, key: string): never => {
+  const keyHash = crypto.createHash("sha256").update(key).digest("hex").slice(0, 8);
+  const errorMessage = getErrorMessage(error);
+
+  if (error instanceof RateLimitError) {
+    throw error;
+  }
+
+  if (error instanceof AppError) {
+    logger.error("Rate limiting failed", {
+      error: errorMessage,
+      keyHash,
+    });
+    throw error;
+  }
+
+  logger.error("Rate limiting failed, denying for security", {
+    error: errorMessage,
+    keyHash,
+  });
+  throw new RateLimitError(
+    "Service temporarily unavailable, please try again",
+    TIME_CONSTANTS.MILLISECONDS_PER_SECOND
+  );
+};
+
+// ==================== Rate Limiter Classes ====================
 
 /**
  * Rate limiter implementation with Redis backend and in-memory fallback.
@@ -329,99 +443,30 @@ class RateLimiter {
       }
 
       const key = this.keyGenerator(req);
-      let timeoutHandle: NodeJS.Timeout | null = null;
 
-      // Compute effective max: use resolver if provided, otherwise static max
       // SECURITY: Clamp to minimum of 1 to prevent bypass
       const effectiveMax = Math.max(1, this.maxResolver ? this.maxResolver(req) : this.max);
 
       try {
         const store = this.getStore();
+        const info = await incrementWithTimeout(store, key, this.windowMs);
 
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutHandle = setTimeout(
-            () => reject(new ExternalServiceError("rate-limit-store", "Rate limit check timeout")),
-            HTTP_RESILIENCE_DEFAULTS.RATE_LIMIT_CHECK_TIMEOUT_MS
-          );
-        });
-        const info = await Promise.race([store.increment(key, this.windowMs), timeoutPromise]);
+        validateRateLimitInfo(info);
 
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-          timeoutHandle = null;
-        }
-
-        // SECURITY: Validate rate limit info values are finite before setting headers
-        if (
-          !Number.isFinite(info.current) ||
-          !Number.isFinite(info.remaining) ||
-          !Number.isFinite(info.resetTime)
-        ) {
-          throw new ExternalServiceError(
-            "rate-limit-store",
-            "Rate limit store returned non-finite values"
-          );
-        }
-
-        // Compute remaining based on effective max (not store's static max)
         const effectiveRemaining = Math.max(0, effectiveMax - info.current);
+        setRateLimitHeaders(res, effectiveMax, effectiveRemaining, info.resetTime);
 
-        // SECURITY: Validate and bound response header values
-        res.setHeader("X-RateLimit-Limit", effectiveMax);
-        res.setHeader("X-RateLimit-Remaining", effectiveRemaining);
-
-        // Clamp reset time to reasonable bounds (within 24 hours from now)
-        const maxResetTime = Date.now() + MAX_TTL_MS;
-        const boundedResetTime = Math.min(Math.max(Date.now(), info.resetTime), maxResetTime);
-        res.setHeader(
-          "X-RateLimit-Reset",
-          Math.ceil(boundedResetTime / TIME_CONSTANTS.MILLISECONDS_PER_SECOND)
-        );
-
-        // Use effectiveMax for enforcement (enables dynamic per-request limits)
         if (info.current > effectiveMax) {
-          const retryAfterMs = Math.max(0, info.resetTime - Date.now());
-          const retryAfterSec = Math.min(
-            Math.max(
-              MIN_RETRY_AFTER_SECONDS,
-              Math.ceil(retryAfterMs / TIME_CONSTANTS.MILLISECONDS_PER_SECOND)
-            ),
-            MAX_RETRY_AFTER_SECONDS
-          );
+          const retryAfterSec = computeRetryAfterSeconds(info.resetTime);
           res.setHeader("Retry-After", retryAfterSec);
 
+          const retryAfterMs = Math.max(0, info.resetTime - Date.now());
           throw new RateLimitError(this.message, retryAfterMs);
         }
 
         next();
       } catch (error) {
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-        }
-
-        const keyHash = crypto.createHash("sha256").update(key).digest("hex").slice(0, 8);
-        const errorMessage = getErrorMessage(error);
-
-        if (error instanceof RateLimitError) {
-          throw error;
-        }
-
-        if (error instanceof AppError) {
-          logger.error("Rate limiting error", {
-            error: errorMessage,
-            keyHash,
-          });
-          throw error;
-        }
-
-        logger.error("Rate limiting error, denying request for security", {
-          error: errorMessage,
-          keyHash,
-        });
-        throw new RateLimitError(
-          "Service temporarily unavailable, please try again",
-          TIME_CONSTANTS.MILLISECONDS_PER_SECOND
-        );
+        handleMiddlewareError(error, key);
       }
     };
 
