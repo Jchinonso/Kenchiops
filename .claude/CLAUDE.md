@@ -6,38 +6,6 @@ TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of conc
 
 ---
 
-## Agent Delegation (Mandatory)
-
-Custom agents live in `.claude/agents/`. You MUST delegate to them by launching a Task with `subagent_type: "general-purpose"` and including the agent's role/instructions in the prompt. Read the agent file first, then embed its core instructions in the Task prompt.
-
-| Agent                     | Trigger Condition                                                                                | Agent File                                  |
-| ------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| `git-commit-staged`       | **Every commit.** Never commit manually with raw git commands. Always delegate.                  | `.claude/agents/git-commit-staged.md`       |
-| `principal-engineer`      | Implementing new features, bug fixes, or non-trivial code changes.                               | `.claude/agents/principal-engineer.md`      |
-| `test-engineer`           | After writing new modules, services, adapters, or utilities. After bug fixes (regression tests). | `.claude/agents/test-engineer.md`           |
-| `kenchi-refactor-analyst` | After significant code changes — audit for CLAUDE.md compliance and code smells.                 | `.claude/agents/kenchi-refactor-analyst.md` |
-| `vulnerability-scanner`   | Before committing code that handles auth, secrets, user input, or external data.                 | `.claude/agents/vulnerability-scanner.md`   |
-
-**Workflow for implementation tasks:**
-
-1. Implement the change (or delegate to `principal-engineer` for complex tasks)
-2. Delegate to `test-engineer` to write tests (if applicable)
-3. Delegate to `kenchi-refactor-analyst` to audit (if significant change)
-4. **Always** delegate to `git-commit-staged` to commit
-
-**How to delegate:**
-
-```
-Task tool → subagent_type: "general-purpose" → prompt includes:
-1. Read the agent file for full instructions
-2. The specific task to perform
-3. Context about what was changed and why
-```
-
-Users can also invoke agents directly as slash commands: `/git-commit-staged`, `/principal-engineer`, etc.
-
----
-
 ## Rules of the Road (Quick Reference)
 
 ### 11 Hard Rules (Non-Negotiable)
@@ -54,26 +22,29 @@ Users can also invoke agents directly as slash commands: `/git-commit-staged`, `
 10. **Log errors at the correct boundary** - see Error Logging Boundaries section
 11. **No empty catch blocks** - always log or rethrow with context
 
-### 10 Preferred Patterns (With Exceptions)
+### 12 Preferred Patterns (With Exceptions)
 
-1. **Pure functions** - no side effects, same input → same output. Isolate I/O at boundaries
-2. **`const` only** - never use `let` or `var`. All bindings are immutable
-3. **No state mutation** - never mutate objects, arrays, or parameters. Always return new values via spread, `map`, `filter`, `reduce`, `flatMap`, `toSorted`, `toReversed`, `toSpliced`
-4. **Array methods for transforms** - `map`/`filter`/`reduce`/`flatMap` for all data transformations. No `for` loops with mutation
-5. **Lookup tables for stable mappings** - `if/else` allowed when clearer (2-3 conditions)
-6. **Early returns** - reduce nesting, fail fast
-7. **Small functions** - single responsibility, <50 lines ideal. Compose small pure functions
-8. **Explicit types** - on function params/returns, avoid `any`. Use `readonly` on all interface properties and function parameters
-9. **Async/await** - not Promise chains. Use `Promise.all()` for independent operations
-10. **Descriptive names** - no single-letter params in public APIs; `i`/`j` allowed in local loops only. JSDoc for public APIs
+1. **`const` only** - `let` allowed only for: loop counters in `for...of` with early-exit, genuinely iterative algorithms. Every `let` requires a comment justifying why `const` won't work
+2. **Array methods for transforms** - `map`/`filter`/`reduce`/`flatMap` over imperative loops. `for...of` allowed only for: early-exit, streaming/async iteration, performance-critical hot paths with measured benchmarks
+3. **Pure functions by default** - functions should be deterministic (same input → same output) with no side effects. Side effects isolated to: adapters (I/O), handlers (HTTP), entrypoints (setup). Helpers, services, mappers, and validators must be pure
+4. **Immutable data flow** - spread/destructure to derive new values, never reassign or mutate. `readonly` on all type properties and function parameters. `Readonly<T>`, `ReadonlyArray<T>`, `ReadonlyMap<K,V>` for collection types
+5. **Expression-oriented code** - prefer expressions over statements: ternaries for simple conditionals, `??`/`?.` over null-check blocks, immediately-invoked arrow functions or helper calls over multi-statement blocks
+6. **Lookup tables for stable mappings** - `if/else` allowed when clearer (2-3 conditions)
+7. **Early returns** - reduce nesting, fail fast
+8. **Small, single-purpose functions** - single responsibility, <50 lines ideal. Extract named helpers over inline logic
+9. **Explicit types** - on function params/returns, avoid `any`
+10. **Async/await** - not Promise chains
+11. **Parallel execution** - `Promise.all()` for independent operations
+12. **Descriptive names** - no single-letter params in public APIs; `i`/`j` allowed in local loops only
+13. **JSDoc for public APIs** - skip for obvious internal functions
 
-### 4 Allowed Exceptions
+### 5 Allowed Exceptions
 
-1. **For loops**: streaming, early-break, or parsing — but must NOT mutate external state
-2. **If/else chains**: when more readable than lookup tables (2-3 conditions)
-3. **Plain Error**: only via `invariant(condition, msg)` for "should never happen" programmer bugs
-4. **any type**: only when interfacing with untyped libraries (must cast immediately)
-5. **Framework-required mutation**: Express middleware setting `req.context`, test setup/teardown — document with comment
+1. **`for...of` loops**: early-break, streaming/async iteration, measured performance-critical hot paths only. Never for simple transforms — use `map`/`filter`
+2. **`let` bindings**: loop counters in `for...of`, genuinely iterative state machines. Must include `// let: <reason>` comment
+3. **If/else chains**: when more readable than lookup tables (2-3 conditions)
+4. **Plain Error**: only via `invariant(condition, msg)` for "should never happen" programmer bugs
+5. **`any` type**: only when interfacing with untyped libraries (must cast immediately)
 
 ---
 
@@ -141,9 +112,9 @@ const processJob = async (job: Job) => {
 
 ```typescript
 interface HttpResponse<T> {
-  readonly status: number;
-  readonly data: T;
-  readonly headers: Readonly<Record<string, string>>;
+  status: number;
+  data: T;
+  headers: Record<string, string>;
 }
 
 // Usage
@@ -158,10 +129,10 @@ const response = await httpClient.get<User>("/users/123", { context });
 
 ```typescript
 interface ClassifiedError {
-  readonly statusCode: number | undefined;
-  readonly category: "retryable" | "non_retryable" | "auth_config" | "unknown";
-  readonly retryable: boolean;
-  readonly message: string;
+  statusCode: number | undefined;
+  category: "retryable" | "non_retryable" | "auth_config" | "unknown";
+  retryable: boolean;
+  message: string;
 }
 
 // Usage in adapters
@@ -324,13 +295,13 @@ logger.debug("Payload details", {
 ### Repository Contract
 
 ```typescript
-// ✅ CORRECT - repository returns domain object
-class AnalysisRepository {
-  async findById(id: string): Promise<Analysis | null> {
-    const row = await query<AnalysisRow>(SQL, [id]);
+// ✅ CORRECT - repository as factory returning domain objects
+export const createAnalysisRepository = (db: DbClient) => ({
+  findById: async (id: string): Promise<Analysis | null> => {
+    const row = await db.query<AnalysisRow>(SQL, [id]);
     return row ? mapRowToAnalysis(row) : null; // Mapping happens HERE
-  }
-}
+  },
+});
 
 // ❌ WRONG - leaking DB row types to service
 async findById(id: string): Promise<AnalysisRow | null> { ... }
@@ -366,12 +337,12 @@ export const createContainer = (config: Config) => {
   const githubChecks = new GitHubChecksAdapter(octokit);
 
   return {
-    analysisService: new AnalysisService(githubChecks),
+    analysisService: createAnalysisService(githubChecks),
   };
 };
 ```
 
-**Rule:** Services receive dependencies via constructor. No `new Adapter()` inside services.
+**Rule:** Services receive dependencies via factory args (closures), not constructors. Adapters may use classes (SDK instances need `this`). No `new Adapter()` inside services.
 
 ---
 
@@ -543,19 +514,19 @@ const RETRY_CONFIG = {
 ### Separate Domain from DTOs
 
 ```typescript
-// Internal domain type (rich, may change) — all properties readonly
+// Internal domain type (rich, may change)
 interface Analysis {
-  readonly id: string;
-  readonly tenantId: string;
-  readonly internalScore: number;
-  readonly createdAt: Date;
+  id: string;
+  tenantId: string;
+  internalScore: number;
+  createdAt: Date;
 }
 
-// Public DTO (stable contract) — all properties readonly
+// Public DTO (stable contract)
 interface AnalysisResponse {
-  readonly id: string;
-  readonly score: number;
-  readonly createdAt: string; // ISO string for JSON
+  id: string;
+  score: number;
+  createdAt: string; // ISO string for JSON
 }
 ```
 
@@ -610,11 +581,13 @@ interface AnalysisResponse {
 - [ ] Idempotency store without TTL
 - [ ] DTO mapping inside service (must be at handler boundary)
 - [ ] Logging email, tokens, or PII
-- [ ] `let` or `var` declaration (use `const` only)
-- [ ] Array mutation methods (`.push()`, `.splice()`, `.sort()`, `.reverse()`, `.pop()`, `.shift()`) — use immutable alternatives
-- [ ] Object property reassignment (`obj.field = value`) — use spread into new object
-- [ ] Missing `readonly` on interface properties or function parameters
-- [ ] Impure function with side effects that could be pure
+- [ ] `let` without justification comment (`// let: <reason>`)
+- [ ] Imperative loop (`for`/`for...of`) for a simple transform — use `map`/`filter`/`reduce`
+- [ ] Mutable interface properties — must use `readonly` on all fields
+- [ ] Mutable array/collection parameters — must use `ReadonlyArray<T>` or `readonly T[]`
+- [ ] Class for business logic/services/helpers — use plain functions + closures
+- [ ] Impure helper/mapper/validator — side effects only in adapters, handlers, entrypoints
+- [ ] Object mutation (`obj.key = value`) — derive new objects with spread
 
 ---
 
@@ -714,12 +687,12 @@ packages/shared/src/<domain>/<module>/
 ```typescript
 // ❌ WRONG - types defined inline in module file
 interface MyResult {
-  value: number; // also missing readonly
+  readonly value: number;
 }
 
 const calculate = (): MyResult => { ... }
 
-// ✅ CORRECT - types in types.ts with readonly properties, imported where needed
+// ✅ CORRECT - types in types.ts, imported where needed
 // In types.ts:
 export interface MyResult {
   readonly value: number;
@@ -757,32 +730,13 @@ import { ValidationError } from "@kenchi/shared";
 
 - Explicit types on function parameters and returns
 - `unknown` instead of `any`, with type guards
-- `readonly` on ALL interface properties and function parameters — data is immutable by default
-- `Readonly<T>`, `ReadonlyArray<T>`, `ReadonlyMap<K,V>`, `ReadonlySet<T>` for collection types
+- `readonly` on all interface properties and function parameters — mutable types require justification comment
+- `ReadonlyArray<T>` (or `readonly T[]`) for array types in interfaces and parameters
+- `Readonly<Record<K,V>>` and `ReadonlyMap<K,V>` for collection types
 - `import type` for type-only imports
 - Discriminated unions for event types
-- `const` only — never `let` or `var`
-- `as const` for literal type objects and configuration
-
----
-
-## Functional Programming Philosophy
-
-This codebase follows functional programming principles. All application code must be written in a functional style:
-
-1. **Immutability by default** — all data is `readonly`. Never mutate objects, arrays, or parameters
-2. **Pure functions** — functions take inputs and return outputs with no side effects. Isolate I/O at system boundaries (handlers, adapters)
-3. **`const` only** — never use `let` or `var`. If you need a "changing" value, use recursion, `reduce`, or restructure the logic
-4. **No mutating array methods** — never use `.push()`, `.pop()`, `.shift()`, `.unshift()`, `.splice()`, `.sort()`, `.reverse()`, `.fill()`. Use `.map()`, `.filter()`, `.reduce()`, `.flatMap()`, `.concat()`, `.toSorted()`, `.toReversed()`, `.toSpliced()`, spread (`[...arr]`)
-5. **No object mutation** — never assign to object properties after creation. Use spread (`{ ...obj, field: newValue }`) to create updated copies
-6. **Function composition** — build complex operations by composing small pure functions. Prefer pipelines of `map`/`filter`/`reduce` over imperative loops
-7. **Declarative over imperative** — describe WHAT to compute, not HOW to compute it step by step
-
-**Exceptions (documented with comments):**
-
-- Express middleware setting `req.context` (framework requirement)
-- Test setup/teardown (Jest lifecycle)
-- Database transaction commit/rollback (I/O boundary)
+- `as const` for literal objects and tuples that should not be widened
+- Prefer `type` aliases for function signatures and unions; `interface` for object shapes
 
 ---
 
@@ -799,65 +753,152 @@ This codebase follows functional programming principles. All application code mu
 
 ---
 
-## Code Style Preferences
+## Functional Style Rules
 
-### Functional Patterns
+### `const` Over `let`
 
 ```typescript
-// ✅ Pure function transforms — always use array methods
-const activeUsers = users.filter((user) => user.isActive);
-const userNames = users.map((user) => user.name);
-const totalAge = users.reduce((sum, user) => sum + user.age, 0);
+// ✅ CORRECT - derive values with const
+const total = items.reduce((sum, item) => sum + item.price, 0);
+const label = count === 0 ? "none" : count === 1 ? "single" : "multiple";
+const config = { ...defaults, ...overrides };
 
-// ✅ Compose small pure functions
-const getActiveUserNames = (users: ReadonlyArray<User>): ReadonlyArray<string> =>
-  users.filter((user) => user.isActive).map((user) => user.name);
-
-// ✅ Allowed: for...of for early exit — but NO mutation of external state
+// ❌ WRONG - unnecessary let
+let total = 0;
 for (const item of items) {
-  if (item.isMatch) return item;
+  total += item.price;
 }
 
-// ✅ Simple if/else when clearer (2-3 conditions)
-if (count === 0) return "none";
-else if (count === 1) return "single";
-else return "multiple";
+// ✅ ALLOWED - let with justification
+for (const item of items) {
+  // let: early-exit search
+  if (item.isMatch) return item;
+}
 ```
 
-### Immutability (No Mutation)
+### Pure Functions
 
 ```typescript
-// ✅ Object updates — spread into new object
-const updated = { ...original, newField: value };
-const withoutField = (({ fieldToRemove, ...rest }) => rest)(original);
+// ✅ CORRECT - pure: same input → same output, no side effects
+const calculateScore = (metrics: readonly Metric[]): number =>
+  metrics.reduce((sum, m) => sum + m.weight * m.value, 0);
 
-// ✅ Array building — use filter/map, never push
-const results = rawItems.map((raw) => parseItem(raw)).filter((parsed) => parsed.isValid);
+const formatAnalysis = (analysis: Analysis): AnalysisResponse => ({
+  id: analysis.id,
+  score: analysis.internalScore,
+  createdAt: analysis.createdAt.toISOString(),
+});
 
-// ✅ Array concatenation — spread or concat, never push
-const combined = [...existingItems, ...newItems];
-const appended = [...items, newItem];
+// ❌ WRONG - impure helper (side effect: logging)
+const calculateScore = (metrics: Metric[]): number => {
+  console.log("calculating...");
+  return metrics.reduce((sum, m) => sum + m.weight * m.value, 0);
+};
 
-// ✅ Sorted copy — toSorted (not sort which mutates)
-const sorted = items.toSorted((a, b) => a.name.localeCompare(b.name));
+// ✅ Side effects allowed in: adapters, handlers, entrypoints
+```
 
-// ✅ Conditional accumulation — reduce or filter+map
-const groupedByStatus = items.reduce<Record<string, ReadonlyArray<Item>>>(
-  (groups, item) => ({
-    ...groups,
-    [item.status]: [...(groups[item.status] ?? []), item],
+### Immutable Data & `readonly`
+
+```typescript
+// ✅ CORRECT - readonly types
+interface Analysis {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly scores: ReadonlyArray<number>;
+  readonly metadata: Readonly<Record<string, string>>;
+}
+
+// ✅ CORRECT - readonly function parameters
+const processItems = (items: ReadonlyArray<Item>): ReadonlyArray<Result> =>
+  items.map(transformItem);
+
+// ❌ WRONG - mutable types
+interface Analysis {
+  id: string;
+  scores: number[];
+}
+
+// ✅ CORRECT - derive new objects, never mutate
+const updated = { ...original, status: "complete" } as const;
+
+// ❌ WRONG - mutation
+original.status = "complete";
+```
+
+### Array Methods Over Loops
+
+```typescript
+// ✅ CORRECT - array methods for transforms
+const activeNames = users.filter((user) => user.isActive).map((user) => user.name);
+
+const grouped = items.reduce<Record<string, Item[]>>(
+  (acc, item) => ({
+    ...acc,
+    [item.category]: [...(acc[item.category] ?? []), item],
   }),
   {}
 );
 
-// ❌ WRONG — mutation
-const results: Item[] = [];
-results.push(item); // mutates array
-items.sort(); // mutates in place
-items.splice(0, 1); // mutates in place
-obj.field = newValue; // mutates object
-let count = 0;
-count++; // uses let + reassignment
+// ❌ WRONG - imperative loop for a transform
+const activeNames: string[] = [];
+for (const user of users) {
+  if (user.isActive) activeNames.push(user.name);
+}
+
+// ✅ ALLOWED - for...of for early-exit only
+for (const item of items) {
+  if (item.isMatch) return item;
+}
+```
+
+### Expression-Oriented Code
+
+```typescript
+// ✅ CORRECT - expressions
+const status = isActive ? "running" : "stopped";
+const name = user?.displayName ?? user?.email ?? "anonymous";
+const value = maybeCompute() ?? fallback;
+
+// ❌ WRONG - statement blocks for simple derivations
+let status: string;
+if (isActive) {
+  status = "running";
+} else {
+  status = "stopped";
+}
+
+// ✅ CORRECT - extract helper for complex branching
+const resolvePermission = (role: Role, resource: Resource): Permission => {
+  if (role === "admin") return "full";
+  if (resource.isPublic) return "read";
+  return "none";
+};
+```
+
+### No Classes for Business Logic
+
+```typescript
+// ✅ CORRECT - plain functions + closures for services/helpers
+export const createAnalysisService = (
+  repo: AnalysisRepository,
+  githubPort: GitHubChecksPort,
+) => ({
+  create: async (input: CreateInput, context: RequestContext) => { ... },
+  findById: async (id: string, context: RequestContext) => { ... },
+});
+
+// ✅ ALLOWED - classes for adapters (need this for SDK instance)
+export class GitHubChecksAdapter implements GitHubChecksPort {
+  constructor(private readonly httpClient: HttpClient) {}
+  // ...
+}
+
+// ❌ WRONG - class for business logic
+export class AnalysisService {
+  analyze(input: Input) { this.helper(); }
+  private helper() { ... }
+}
 ```
 
 ---
@@ -874,26 +915,28 @@ export const handleOperation = asyncHandler(async (req, res) => {
 });
 ```
 
-### Service Method
+### Service Factory
 
 ```typescript
-export const performOperation = async (
-  input: OperationInput,
-  context: RequestContext
-): Promise<OperationResult> => {
-  validateOperationInput(input);
-  const logger = createLogger("operation-service", context);
+export const createOperationService = (
+  repository: OperationRepository,
+  externalAdapter: ExternalServicePort
+) => ({
+  perform: async (input: OperationInput, context: RequestContext): Promise<OperationResult> => {
+    validateOperationInput(input);
+    const logger = createLogger("operation-service", context);
 
-  const data = await repository.fetch(input.id);
-  if (!data) {
-    throw new NotFoundError("Resource not found", { metadata: { id: input.id } });
-  }
+    const data = await repository.fetch(input.id);
+    if (!data) {
+      throw new NotFoundError("Resource not found", { metadata: { id: input.id } });
+    }
 
-  const result = await externalAdapter.process(data, context);
+    const result = await externalAdapter.process(data, context);
 
-  logger.info("Operation completed", { operationId: input.id });
-  return result;
-};
+    logger.info("Operation completed", { operationId: input.id });
+    return result;
+  },
+});
 ```
 
 ### Adapter
