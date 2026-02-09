@@ -292,54 +292,56 @@ export const triggerReembedding = async (
  *
  * @returns RAG health status
  */
-export const checkRAGHealth = async (): Promise<RAGHealthStatus> => {
-  const issues: string[] = [];
+/**
+ * Fetches embedding counts and checks thresholds, returning health data.
+ */
+const fetchEmbeddingHealthData = async (): Promise<RAGHealthStatus> => {
+  const pendingDiffChunks = await getDiffChunksWithoutEmbeddings(
+    GOVERNANCE_CONSTANTS.MAX_PENDING_THRESHOLD + 1
+  );
+  const pendingKnowledgeDocs = await getKnowledgeDocsWithoutEmbeddings(
+    GOVERNANCE_CONSTANTS.MAX_PENDING_THRESHOLD + 1
+  );
+  const outdatedDocs = await getDocsNeedingReembedding(
+    EMBEDDING_CONFIG.MODEL,
+    "1",
+    GOVERNANCE_CONSTANTS.MAX_OUTDATED_THRESHOLD + 1
+  );
 
+  const totalPending = pendingDiffChunks.length + pendingKnowledgeDocs.length;
+  const issues = [
+    ...(totalPending > GOVERNANCE_CONSTANTS.MAX_PENDING_THRESHOLD
+      ? [`High pending embedding count: ${totalPending}`]
+      : []),
+    ...(outdatedDocs.length > GOVERNANCE_CONSTANTS.MAX_OUTDATED_THRESHOLD
+      ? [`High outdated embedding count: ${outdatedDocs.length}`]
+      : []),
+  ];
+
+  return {
+    healthy: issues.length === 0,
+    pendingDiffChunks: pendingDiffChunks.length,
+    pendingKnowledgeDocs: pendingKnowledgeDocs.length,
+    outdatedEmbeddings: outdatedDocs.length,
+    issues: Object.freeze(issues),
+  };
+};
+
+export const checkRAGHealth = async (): Promise<RAGHealthStatus> => {
   logger.debug("Checking RAG health");
 
   try {
-    // Get pending embeddings
-    const pendingDiffChunks = await getDiffChunksWithoutEmbeddings(
-      GOVERNANCE_CONSTANTS.MAX_PENDING_THRESHOLD + 1
-    );
-    const pendingKnowledgeDocs = await getKnowledgeDocsWithoutEmbeddings(
-      GOVERNANCE_CONSTANTS.MAX_PENDING_THRESHOLD + 1
-    );
-
-    // Get outdated embeddings
-    const outdatedDocs = await getDocsNeedingReembedding(
-      EMBEDDING_CONFIG.MODEL,
-      "1",
-      GOVERNANCE_CONSTANTS.MAX_OUTDATED_THRESHOLD + 1
-    );
-
-    // Check thresholds
-    const totalPending = pendingDiffChunks.length + pendingKnowledgeDocs.length;
-    if (totalPending > GOVERNANCE_CONSTANTS.MAX_PENDING_THRESHOLD) {
-      issues.push(`High pending embedding count: ${totalPending}`);
-    }
-
-    if (outdatedDocs.length > GOVERNANCE_CONSTANTS.MAX_OUTDATED_THRESHOLD) {
-      issues.push(`High outdated embedding count: ${outdatedDocs.length}`);
-    }
-
-    const healthy = issues.length === 0;
+    const healthStatus = await fetchEmbeddingHealthData();
 
     logger.info("RAG health check complete", {
-      healthy,
-      pendingDiffChunks: pendingDiffChunks.length,
-      pendingKnowledgeDocs: pendingKnowledgeDocs.length,
-      outdatedEmbeddings: outdatedDocs.length,
-      issueCount: issues.length,
+      healthy: healthStatus.healthy,
+      pendingDiffChunks: healthStatus.pendingDiffChunks,
+      pendingKnowledgeDocs: healthStatus.pendingKnowledgeDocs,
+      outdatedEmbeddings: healthStatus.outdatedEmbeddings,
+      issueCount: healthStatus.issues.length,
     });
 
-    return {
-      healthy,
-      pendingDiffChunks: pendingDiffChunks.length,
-      pendingKnowledgeDocs: pendingKnowledgeDocs.length,
-      outdatedEmbeddings: outdatedDocs.length,
-      issues: Object.freeze(issues),
-    };
+    return healthStatus;
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     logger.error("RAG health check failed", { error: errorMessage });

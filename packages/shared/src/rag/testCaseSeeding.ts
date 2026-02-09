@@ -144,6 +144,59 @@ const ALL_SEED_TEST_CASES: readonly TestCaseTemplate[] = [
   ...LANGUAGE_SPECIFIC_TEST_CASES,
 ];
 
+// ==================== Helpers ====================
+
+/**
+ * Builds a CreateTestCaseInput from a template.
+ */
+const buildTestCaseInput = (
+  template: TestCaseTemplate,
+  tenantId?: string
+): CreateTestCaseInput => ({
+  tenantId,
+  name: template.name,
+  description: template.description,
+  queryText: template.queryText,
+  expectedDocIds: [], // Will be populated as knowledge is ingested
+  expectedMinRecall: template.expectedMinRecall,
+  category: template.category,
+  priority: template.priority,
+});
+
+/**
+ * Processes a single template, creating it if not already existing.
+ * Returns "created", "skipped", or an error message.
+ */
+const processOneTemplate = async (
+  template: TestCaseTemplate,
+  existingNames: ReadonlySet<string>,
+  tenantId?: string
+): Promise<"created" | "skipped" | string> => {
+  if (existingNames.has(template.name)) {
+    return "skipped";
+  }
+
+  try {
+    await createTestCase(buildTestCaseInput(template, tenantId));
+    return "created";
+  } catch (error) {
+    return `Failed to create "${template.name}": ${getErrorMessage(error)}`;
+  }
+};
+
+/**
+ * Processes all templates sequentially, accumulating outcomes via reduce.
+ */
+const processAllTemplates = (
+  existingNames: ReadonlySet<string>,
+  tenantId?: string
+): Promise<readonly string[]> =>
+  ALL_SEED_TEST_CASES.reduce<Promise<readonly string[]>>(async (accPromise, template) => {
+    const acc = await accPromise;
+    const outcome = await processOneTemplate(template, existingNames, tenantId);
+    return [...acc, outcome];
+  }, Promise.resolve([]));
+
 // ==================== Public API ====================
 
 /**
@@ -154,80 +207,27 @@ const ALL_SEED_TEST_CASES: readonly TestCaseTemplate[] = [
  * @returns Seeding result with counts
  */
 export const seedTestCases = async (tenantId?: string): Promise<SeedTestCasesResult> => {
-  const errors: string[] = [];
-  let created = 0;
-  let skipped = 0;
-
   logger.info("Starting test case seeding", {
     tenantId,
     totalTemplates: ALL_SEED_TEST_CASES.length,
   });
 
   try {
-    // Get existing test cases to avoid duplicates
     const existingCases = await getActiveTestCases();
     const existingNames = new Set(existingCases.map((testCase) => testCase.name));
+    const outcomes = await processAllTemplates(existingNames, tenantId);
 
-    // Process each template
-    const processTemplate = async (index: number): Promise<void> => {
-      if (index >= ALL_SEED_TEST_CASES.length) {
-        return;
-      }
+    const created = outcomes.filter((outcome) => outcome === "created").length;
+    const skipped = outcomes.filter((outcome) => outcome === "skipped").length;
+    const errors = outcomes.filter((outcome) => outcome !== "created" && outcome !== "skipped");
 
-      const template = ALL_SEED_TEST_CASES[index];
+    logger.info("Test case seeding complete", { created, skipped, errors: errors.length });
 
-      // Skip if already exists
-      if (existingNames.has(template.name)) {
-        skipped++;
-        return processTemplate(index + 1);
-      }
-
-      try {
-        const input: CreateTestCaseInput = {
-          tenantId,
-          name: template.name,
-          description: template.description,
-          queryText: template.queryText,
-          expectedDocIds: [], // Will be populated as knowledge is ingested
-          expectedMinRecall: template.expectedMinRecall,
-          category: template.category,
-          priority: template.priority,
-        };
-
-        await createTestCase(input);
-        created++;
-      } catch (error) {
-        errors.push(`Failed to create "${template.name}": ${getErrorMessage(error)}`);
-      }
-
-      return processTemplate(index + 1);
-    };
-
-    await processTemplate(0);
-
-    logger.info("Test case seeding complete", {
-      created,
-      skipped,
-      errors: errors.length,
-    });
-
-    return {
-      success: errors.length === 0,
-      created,
-      skipped,
-      errors: Object.freeze(errors),
-    };
+    return { success: errors.length === 0, created, skipped, errors: Object.freeze(errors) };
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     logger.error("Test case seeding failed", { error: errorMessage });
-    errors.push(errorMessage);
-
-    return {
-      success: false,
-      created,
-      skipped,
-      errors: Object.freeze(errors),
-    };
+    return { success: false, created: 0, skipped: 0, errors: Object.freeze([errorMessage]) };
   }
 };
 

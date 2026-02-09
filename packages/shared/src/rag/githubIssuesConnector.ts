@@ -149,37 +149,44 @@ const issueToDocument = (issue: GitHubIssue): ExternalDocument => ({
 /**
  * Fetches issues from GitHub API using resilient HTTP client.
  */
-const fetchGitHubIssues = async (
-  config: GitHubAuthConfig,
-  page: number
-): Promise<{ issues: readonly GitHubIssue[]; hasMore: boolean }> => {
+/**
+ * Builds the GitHub issues API URL with query parameters.
+ */
+const buildIssuesUrl = (config: GitHubAuthConfig, page: number): string => {
   const url = new URL(`${GITHUB_API_CONFIG.BASE_URL}/repos/${config.owner}/${config.repo}/issues`);
   url.searchParams.set("state", config.state ?? "all");
   url.searchParams.set("per_page", GITHUB_API_CONFIG.ISSUES_PER_PAGE.toString());
   url.searchParams.set("page", page.toString());
   url.searchParams.set("sort", "updated");
   url.searchParams.set("direction", "desc");
-
   if (config.labels && config.labels.length > 0) {
     url.searchParams.set("labels", config.labels.join(","));
   }
+  return url.toString();
+};
 
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github.v3+json",
-    "User-Agent": "Kenchi-RAG-Connector",
-  };
+/**
+ * Builds request headers for the GitHub API.
+ */
+const buildGitHubHeaders = (config: GitHubAuthConfig): Record<string, string> => ({
+  Accept: "application/vnd.github.v3+json",
+  "User-Agent": "Kenchi-RAG-Connector",
+  ...(config.token ? { Authorization: `Bearer ${config.token}` } : {}),
+});
 
-  if (config.token) {
-    headers.Authorization = `Bearer ${config.token}`;
-  }
-
+/**
+ * Fetches issues from GitHub API using resilient HTTP client.
+ */
+const fetchGitHubIssues = async (
+  config: GitHubAuthConfig,
+  page: number
+): Promise<{ readonly issues: readonly GitHubIssue[]; readonly hasMore: boolean }> => {
+  const url = buildIssuesUrl(config, page);
+  const headers = buildGitHubHeaders(config);
   const startTime = Date.now();
 
   try {
-    const response = await resilientGet<readonly GitHubIssue[]>(url.toString(), {
-      headers,
-    });
-
+    const response = await resilientGet<readonly GitHubIssue[]>(url, { headers });
     const durationMs = Date.now() - startTime;
 
     logger.info("GitHub issues fetched", {
@@ -192,12 +199,11 @@ const fetchGitHubIssues = async (
       page,
     });
 
-    // resilientGet returns data directly; pagination check via status
-    // Note: Link header not available via resilientGet, use result length heuristic
     const issues = response.data;
-    const hasMore = issues.length >= GITHUB_API_CONFIG.ISSUES_PER_PAGE;
-
-    return { issues: Object.freeze(issues), hasMore };
+    return {
+      issues: Object.freeze(issues),
+      hasMore: issues.length >= GITHUB_API_CONFIG.ISSUES_PER_PAGE,
+    };
   } catch (error) {
     const durationMs = Date.now() - startTime;
 
@@ -221,6 +227,26 @@ const fetchGitHubIssues = async (
 // ==================== Connector Implementation ====================
 
 /**
+ * Creates an empty fetch result with an error count.
+ */
+const buildEmptyFetchResult = (errorCount: number): FetchResult => ({
+  documents: Object.freeze([]),
+  errorCount,
+});
+
+/**
+ * Processes raw GitHub issues into limited, filtered documents.
+ */
+const processIssuesToDocuments = (
+  issues: readonly GitHubIssue[],
+  maxDocsRemaining: number
+): readonly ExternalDocument[] => {
+  const actualIssues = issues.filter((issue) => !issue.pull_request);
+  const documents = actualIssues.map(issueToDocument);
+  return documents.slice(0, maxDocsRemaining);
+};
+
+/**
  * Fetches issues from GitHub with pagination support.
  */
 const fetchGitHubIssuesWithPagination = async (
@@ -230,14 +256,10 @@ const fetchGitHubIssuesWithPagination = async (
   const config = parseAuthConfig(source.authConfig);
   if (!config) {
     logger.error("Invalid GitHub auth config", { sourceId: source.id });
-    return {
-      documents: Object.freeze([]),
-      errorCount: 1,
-    };
+    return buildEmptyFetchResult(1);
   }
 
   const page = cursor ? parseInt(cursor, 10) : 1;
-  const maxDocs = EXTERNAL_SOURCE_CONFIG.MAX_DOCS_PER_SOURCE;
 
   logger.info("Fetching GitHub issues", {
     sourceId: source.id,
@@ -248,20 +270,12 @@ const fetchGitHubIssuesWithPagination = async (
 
   try {
     const { issues, hasMore } = await fetchGitHubIssues(config, page);
-
-    // Filter out pull requests (GitHub API returns them as issues)
-    const actualIssues = issues.filter((issue) => !issue.pull_request);
-
-    // Convert to documents
-    const documents = actualIssues.map(issueToDocument);
-
-    // Limit total documents
-    const limitedDocs = documents.slice(0, maxDocs - source.docCount);
+    const maxDocsRemaining = EXTERNAL_SOURCE_CONFIG.MAX_DOCS_PER_SOURCE - source.docCount;
+    const limitedDocs = processIssuesToDocuments(issues, maxDocsRemaining);
 
     logger.info("Fetched GitHub issues", {
       sourceId: source.id,
       fetched: issues.length,
-      filtered: actualIssues.length,
       returned: limitedDocs.length,
       hasMore,
     });
@@ -276,11 +290,7 @@ const fetchGitHubIssuesWithPagination = async (
       sourceId: source.id,
       error: getErrorMessage(error),
     });
-
-    return {
-      documents: Object.freeze([]),
-      errorCount: 1,
-    };
+    return buildEmptyFetchResult(1);
   }
 };
 

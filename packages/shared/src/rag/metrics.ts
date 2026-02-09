@@ -238,59 +238,64 @@ export const logRAGMetrics = (
  * @param windowMinutes - Time window in minutes
  * @returns List of alert messages
  */
+/**
+ * Checks a single error rate against the alert threshold.
+ * Returns an alert message if exceeded, null otherwise.
+ */
+const checkErrorRateAlert = (
+  label: string,
+  errors: number,
+  total: number,
+  logContext: Record<string, unknown>
+): string | null => {
+  const rate = total > 0 ? errors / total : 0;
+  if (rate <= METRICS_CONSTANTS.ERROR_RATE_ALERT_THRESHOLD) {
+    return null;
+  }
+  const message = `High ${label}: ${formatErrorRatePercent(rate)}%`;
+  logger.warn(`RAG alert: ${message}`, logContext);
+  return message;
+};
+
 export const checkRAGAlerts = (
   windowMinutes: number = METRICS_CONSTANTS.DEFAULT_WINDOW_MINUTES
 ): readonly string[] => {
-  const alerts: string[] = [];
   const embedding = getEmbeddingMetrics(windowMinutes);
   const ingestion = getIngestionMetrics(windowMinutes);
 
-  // Check embedding error rate
-  const errorRate =
-    embedding.totalOperations > 0 ? embedding.totalErrors / embedding.totalOperations : 0;
+  const latencyAlert =
+    embedding.averageLatencyMs > METRICS_CONSTANTS.LATENCY_ALERT_THRESHOLD_MS
+      ? `High embedding latency: ${embedding.averageLatencyMs.toFixed(0)}ms`
+      : null;
 
-  if (errorRate > METRICS_CONSTANTS.ERROR_RATE_ALERT_THRESHOLD) {
-    const message = `High embedding error rate: ${formatErrorRatePercent(errorRate)}%`;
-    alerts.push(message);
-    logger.warn(`RAG alert: ${message}`, { errorRate, totalOperations: embedding.totalOperations });
+  if (latencyAlert) {
+    logger.warn(`RAG alert: ${latencyAlert}`, { averageLatencyMs: embedding.averageLatencyMs });
   }
 
-  // Check average latency
-  if (embedding.averageLatencyMs > METRICS_CONSTANTS.LATENCY_ALERT_THRESHOLD_MS) {
-    const message = `High embedding latency: ${embedding.averageLatencyMs.toFixed(0)}ms`;
-    alerts.push(message);
-    logger.warn(`RAG alert: ${message}`, { averageLatencyMs: embedding.averageLatencyMs });
-  }
-
-  // Check diff ingestion error rate
-  const diffErrorRate =
-    ingestion.diffChunksCreated > 0
-      ? ingestion.diffIngestionErrors / ingestion.diffChunksCreated
-      : 0;
-
-  if (diffErrorRate > METRICS_CONSTANTS.ERROR_RATE_ALERT_THRESHOLD) {
-    const message = `High diff ingestion error rate: ${formatErrorRatePercent(diffErrorRate)}%`;
-    alerts.push(message);
-    logger.warn(`RAG alert: ${message}`, {
-      diffErrorRate,
-      diffChunksCreated: ingestion.diffChunksCreated,
-    });
-  }
-
-  // Check knowledge doc ingestion error rate
-  const knowledgeErrorRate =
-    ingestion.knowledgeDocsCreated > 0
-      ? ingestion.knowledgeIngestionErrors / ingestion.knowledgeDocsCreated
-      : 0;
-
-  if (knowledgeErrorRate > METRICS_CONSTANTS.ERROR_RATE_ALERT_THRESHOLD) {
-    const message = `High knowledge doc ingestion error rate: ${formatErrorRatePercent(knowledgeErrorRate)}%`;
-    alerts.push(message);
-    logger.warn(`RAG alert: ${message}`, {
-      knowledgeErrorRate,
-      knowledgeDocsCreated: ingestion.knowledgeDocsCreated,
-    });
-  }
+  const alerts = [
+    checkErrorRateAlert("embedding error rate", embedding.totalErrors, embedding.totalOperations, {
+      errorRate:
+        embedding.totalOperations > 0 ? embedding.totalErrors / embedding.totalOperations : 0,
+      totalOperations: embedding.totalOperations,
+    }),
+    latencyAlert,
+    checkErrorRateAlert(
+      "diff ingestion error rate",
+      ingestion.diffIngestionErrors,
+      ingestion.diffChunksCreated,
+      {
+        diffChunksCreated: ingestion.diffChunksCreated,
+      }
+    ),
+    checkErrorRateAlert(
+      "knowledge doc ingestion error rate",
+      ingestion.knowledgeIngestionErrors,
+      ingestion.knowledgeDocsCreated,
+      {
+        knowledgeDocsCreated: ingestion.knowledgeDocsCreated,
+      }
+    ),
+  ].filter((alert): alert is string => alert !== null);
 
   return Object.freeze(alerts);
 };

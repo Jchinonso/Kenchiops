@@ -153,6 +153,55 @@ const collectPatternMatchCounts = (
   }, {});
 };
 
+// ==================== Result Builders ====================
+
+/**
+ * Builds analysis metadata from candidates and messages.
+ */
+const buildAnalysisMetadata = (
+  messagesAnalyzed: number,
+  candidates: readonly ResolutionCandidate[],
+  patternMatchCounts: Readonly<Record<string, number>>,
+  topScore: number
+): ResolutionDetectionResult["analysisMetadata"] => ({
+  messagesAnalyzed,
+  candidatesFound: candidates.length,
+  topScore,
+  patternMatchCounts,
+});
+
+/**
+ * Builds a no-resolution result.
+ */
+const buildNoResolutionResult = (
+  candidates: readonly ResolutionCandidate[],
+  metadata: ResolutionDetectionResult["analysisMetadata"]
+): ResolutionDetectionResult => ({
+  hasResolution: false,
+  resolution: null,
+  allCandidates: candidates,
+  analysisMetadata: metadata,
+});
+
+/**
+ * Builds a DetectedResolution from the best candidate and thread.
+ */
+const buildDetectedResolution = (
+  candidate: ResolutionCandidate,
+  thread: SlackThread
+): DetectedResolution => ({
+  threadTs: thread.threadTs,
+  channelId: thread.channelId,
+  confidence: candidate.score,
+  resolutionContent: buildResolutionContent(candidate, thread),
+  resolutionMessageTs: candidate.message.ts,
+  matchedPatterns: candidate.matchedPatterns,
+  hasPositiveReactions: candidate.hasPositiveReactions,
+  hasCodeBlock: candidate.hasCodeBlock,
+  resolverUserId: candidate.message.userId,
+  resolverUsername: candidate.message.username,
+});
+
 // ==================== Public API ====================
 
 /**
@@ -170,29 +219,16 @@ const collectPatternMatchCounts = (
  */
 export const detectResolution = (thread: SlackThread): ResolutionDetectionResult => {
   const { messages } = thread;
+  const emptyMetadata = buildAnalysisMetadata(0, [], {}, 0);
 
   if (messages.length === 0) {
-    return {
-      hasResolution: false,
-      resolution: null,
-      allCandidates: [],
-      analysisMetadata: {
-        messagesAnalyzed: 0,
-        candidatesFound: 0,
-        topScore: 0,
-        patternMatchCounts: {},
-      },
-    };
+    return buildNoResolutionResult([], emptyMetadata);
   }
 
-  // Find all resolution candidates
   const candidates = findResolutionCandidates(messages);
-
-  // Collect pattern match statistics
   const patternMatchCounts = collectPatternMatchCounts(candidates);
-
-  // Check if best candidate meets threshold
   const bestCandidate = candidates[0] ?? null;
+  const topScore = bestCandidate?.score ?? 0;
   const meetsThreshold =
     bestCandidate !== null && bestCandidate.score >= CONFIDENCE_THRESHOLDS.MIN_RESOLUTION;
 
@@ -201,48 +237,21 @@ export const detectResolution = (thread: SlackThread): ResolutionDetectionResult
     channelId: thread.channelId,
     messagesAnalyzed: messages.length,
     candidatesFound: candidates.length,
-    topScore: bestCandidate?.score ?? 0,
+    topScore,
     hasResolution: meetsThreshold,
   });
 
-  if (!meetsThreshold || bestCandidate === null) {
-    return {
-      hasResolution: false,
-      resolution: null,
-      allCandidates: candidates,
-      analysisMetadata: {
-        messagesAnalyzed: messages.length,
-        candidatesFound: candidates.length,
-        topScore: bestCandidate?.score ?? 0,
-        patternMatchCounts,
-      },
-    };
-  }
+  const metadata = buildAnalysisMetadata(messages.length, candidates, patternMatchCounts, topScore);
 
-  // Build resolution from best candidate
-  const resolution: DetectedResolution = {
-    threadTs: thread.threadTs,
-    channelId: thread.channelId,
-    confidence: bestCandidate.score,
-    resolutionContent: buildResolutionContent(bestCandidate, thread),
-    resolutionMessageTs: bestCandidate.message.ts,
-    matchedPatterns: bestCandidate.matchedPatterns,
-    hasPositiveReactions: bestCandidate.hasPositiveReactions,
-    hasCodeBlock: bestCandidate.hasCodeBlock,
-    resolverUserId: bestCandidate.message.userId,
-    resolverUsername: bestCandidate.message.username,
-  };
+  if (!meetsThreshold || bestCandidate === null) {
+    return buildNoResolutionResult(candidates, metadata);
+  }
 
   return {
     hasResolution: true,
-    resolution,
+    resolution: buildDetectedResolution(bestCandidate, thread),
     allCandidates: candidates,
-    analysisMetadata: {
-      messagesAnalyzed: messages.length,
-      candidatesFound: candidates.length,
-      topScore: bestCandidate.score,
-      patternMatchCounts,
-    },
+    analysisMetadata: metadata,
   };
 };
 

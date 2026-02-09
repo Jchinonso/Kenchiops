@@ -84,6 +84,49 @@ const checkForExistingKnowledge = async (
 // ==================== Ingestion ====================
 
 /**
+ * Builds the ingestion input from extracted fix knowledge.
+ */
+const buildFixCommentIngestionInput = (
+  knowledge: ExtractedFixKnowledge,
+  tenantId?: string
+): IngestKnowledgeDocInput => ({
+  docType: KNOWLEDGE_DOC_TYPES.PR_FIX_COMMENT,
+  title: knowledge.title,
+  content: knowledge.content,
+  tenantId,
+  repository: knowledge.failureContext.repository,
+  sourceUrl: knowledge.metadata.prUrl,
+  metadata: {
+    commentId: knowledge.metadata.commentId,
+    prNumber: knowledge.failureContext.prNumber,
+    commitSha: knowledge.failureContext.commitSha,
+    checkRunId: knowledge.failureContext.checkRunId,
+    checkName: knowledge.failureContext.checkName,
+    filesChanged: [...knowledge.metadata.filesChanged],
+    matchedPatterns: [...knowledge.metadata.matchedPatterns],
+    confidence: knowledge.confidence,
+    sourceReliability: SOURCE_RELIABILITY_SCORES.PR_FIX_COMMENT,
+    extractedAt: knowledge.metadata.extractedAt,
+    author: knowledge.sourceComment.author,
+    commentCreatedAt: knowledge.sourceComment.createdAt,
+  },
+});
+
+/**
+ * Builds a failure result for a fix comment ingestion.
+ */
+const buildFixFailureResult = (
+  commentId: string,
+  confidence: number,
+  error: string
+): FixCommentIngestionResult => ({
+  success: false,
+  commentId,
+  confidence,
+  error,
+});
+
+/**
  * Ingests a single extracted fix knowledge document.
  */
 const ingestSingleFixComment = async (
@@ -106,39 +149,17 @@ const ingestSingleFixComment = async (
       }
     }
 
-    const input: IngestKnowledgeDocInput = {
-      docType: KNOWLEDGE_DOC_TYPES.PR_FIX_COMMENT,
-      title: knowledge.title,
-      content: knowledge.content,
-      tenantId,
-      repository: knowledge.failureContext.repository,
-      sourceUrl: knowledge.metadata.prUrl,
-      metadata: {
-        commentId: knowledge.metadata.commentId,
-        prNumber: knowledge.failureContext.prNumber,
-        commitSha: knowledge.failureContext.commitSha,
-        checkRunId: knowledge.failureContext.checkRunId,
-        checkName: knowledge.failureContext.checkName,
-        filesChanged: [...knowledge.metadata.filesChanged],
-        matchedPatterns: [...knowledge.metadata.matchedPatterns],
-        confidence: knowledge.confidence,
-        sourceReliability: SOURCE_RELIABILITY_SCORES.PR_FIX_COMMENT,
-        extractedAt: knowledge.metadata.extractedAt,
-        author: knowledge.sourceComment.author,
-        commentCreatedAt: knowledge.sourceComment.createdAt,
-      },
-    };
-
-    const result: IngestKnowledgeDocResult = await ingestKnowledgeDoc(input);
+    const result: IngestKnowledgeDocResult = await ingestKnowledgeDoc(
+      buildFixCommentIngestionInput(knowledge, tenantId)
+    );
 
     if (result.success) {
-      logger.info("Successfully ingested PR fix comment", {
+      logger.info("Fix comment knowledge stored", {
         commentId,
         documentId: result.parentId,
         chunksCreated: result.chunksCreated,
         confidence: knowledge.confidence,
       });
-
       return {
         success: true,
         commentId,
@@ -147,25 +168,11 @@ const ingestSingleFixComment = async (
       };
     }
 
-    return {
-      success: false,
-      commentId,
-      confidence: knowledge.confidence,
-      error: result.errors.join(", "),
-    };
+    return buildFixFailureResult(commentId, knowledge.confidence, result.errors.join(", "));
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    logger.error("Failed to ingest PR fix comment", {
-      commentId,
-      error: errorMessage,
-    });
-
-    return {
-      success: false,
-      commentId,
-      confidence: knowledge.confidence,
-      error: errorMessage,
-    };
+    logger.error("Fix comment ingestion failed", { commentId, error: errorMessage });
+    return buildFixFailureResult(commentId, knowledge.confidence, errorMessage);
   }
 };
 
@@ -180,6 +187,23 @@ const ingestSingleFixComment = async (
  * @param input - PR comments and failure context
  * @returns Ingestion results for all fix comments found
  */
+/**
+ * Processes extracted knowledge sequentially via reduce.
+ */
+const processExtractedKnowledge = (
+  extractedKnowledge: readonly ExtractedFixKnowledge[],
+  tenantId?: string,
+  skipDedup?: boolean
+): Promise<readonly FixCommentIngestionResult[]> =>
+  extractedKnowledge.reduce<Promise<readonly FixCommentIngestionResult[]>>(
+    async (accPromise, knowledge) => {
+      const acc = await accPromise;
+      const result = await ingestSingleFixComment(knowledge, tenantId, skipDedup);
+      return [...acc, result];
+    },
+    Promise.resolve([])
+  );
+
 export const ingestPRFixComments = async (
   input: IngestPRFixCommentsInput
 ): Promise<IngestPRFixCommentsResult> => {
@@ -199,7 +223,6 @@ export const ingestPRFixComments = async (
       repository: failureContext.repository,
       prNumber: failureContext.prNumber,
     });
-
     return {
       totalComments: comments.length,
       fixCommentsFound: 0,
@@ -213,28 +236,13 @@ export const ingestPRFixComments = async (
   const extractedKnowledge = fixCommentAnalyses.map((analysis) =>
     extractFixKnowledge(analysis, failureContext)
   );
-
-  const results: FixCommentIngestionResult[] = [];
-
-  const processKnowledge = async (index: number): Promise<void> => {
-    if (index >= extractedKnowledge.length) {
-      return;
-    }
-
-    const knowledge = extractedKnowledge[index];
-    const result = await ingestSingleFixComment(knowledge, tenantId, skipDedup);
-    results.push(result);
-
-    await processKnowledge(index + 1);
-  };
-
-  await processKnowledge(0);
+  const results = await processExtractedKnowledge(extractedKnowledge, tenantId, skipDedup);
 
   const ingested = results.filter((result) => result.success).length;
   const skipped = results.filter((result) => result.skippedReason).length;
   const failed = results.filter((result) => !result.success && !result.skippedReason).length;
 
-  logger.info("Completed PR fix comment ingestion", {
+  logger.info("PR fix comment ingestion complete", {
     totalComments: comments.length,
     fixCommentsFound: fixCommentAnalyses.length,
     ingested,

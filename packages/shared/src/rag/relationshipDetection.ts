@@ -220,26 +220,55 @@ const calculateStrength = (
 /**
  * Finds related documents using semantic search and pattern matching.
  */
+/**
+ * Scores a search result against the source document's patterns.
+ */
+const scoreSearchResult = (
+  result: KnowledgeDocSearchResult,
+  doc: DocumentContext,
+  errorPatterns: readonly string[],
+  techPatterns: readonly string[]
+): ScoredRelationship => {
+  const targetErrorPatterns = extractErrorPatterns(result.content);
+  const targetTechPatterns = extractTechPatterns(result.content);
+  const errorOverlap = calculatePatternOverlap(errorPatterns, targetErrorPatterns);
+  const techOverlap = calculatePatternOverlap(techPatterns, targetTechPatterns);
+  const combinedPatternOverlap = (errorOverlap + techOverlap) / 2;
+  const sameRepo = doc.repository !== undefined && doc.repository === result.repository;
+  const strength = calculateStrength(result.similarity, combinedPatternOverlap, sameRepo);
+
+  return { result, strength, combinedPatternOverlap };
+};
+
+/**
+ * Converts a scored relationship to a detected relationship.
+ */
+const toDetectedRelationship = (
+  scored: ScoredRelationship,
+  doc: DocumentContext
+): DetectedRelationship => ({
+  fromDocId: doc.docId,
+  toDocId: scored.result.id,
+  relationshipType: determineRelationshipType(doc, scored.result.docType, scored.result.similarity),
+  strength: scored.strength,
+  reason: `Semantic similarity: ${scored.result.similarity.toFixed(2)}, Pattern overlap: ${scored.combinedPatternOverlap.toFixed(2)}`,
+});
+
 export const findRelatedDocuments = async (
   doc: DocumentContext,
   maxResults: number = RELATIONSHIP_DETECTION_CONFIG.MAX_RELATED_DOCS
 ): Promise<readonly DetectedRelationship[]> => {
   try {
-    // Extract patterns from source document
     const errorPatterns = extractErrorPatterns(doc.content);
     const techPatterns = extractTechPatterns(doc.content);
-
-    // Build search query from title and key content
     const queryText = `${doc.title} ${doc.content.slice(0, 500)}`;
 
-    // Search for semantically similar documents
     const searchResponse = await searchKnowledgeDocs({
       queryText,
-      topK: maxResults * 2, // Get more to filter
+      topK: maxResults * 2,
       tenantId: doc.tenantId,
     });
 
-    // Filter and score results - map VectorSearchResult to our simpler type
     const searchResults: readonly KnowledgeDocSearchResult[] = searchResponse.results.map(
       (vectorResult) => ({
         id: vectorResult.item.id,
@@ -251,52 +280,23 @@ export const findRelatedDocuments = async (
     );
 
     const relationships = searchResults
-      .filter((result: KnowledgeDocSearchResult) => result.id !== doc.docId) // Skip self-references
-      .map((result: KnowledgeDocSearchResult) => {
-        // Extract patterns from target document
-        const targetErrorPatterns = extractErrorPatterns(result.content);
-        const targetTechPatterns = extractTechPatterns(result.content);
-
-        // Calculate pattern overlaps
-        const errorOverlap = calculatePatternOverlap(errorPatterns, targetErrorPatterns);
-        const techOverlap = calculatePatternOverlap(techPatterns, targetTechPatterns);
-        const combinedPatternOverlap = (errorOverlap + techOverlap) / 2;
-
-        // Check same repository
-        const sameRepo = doc.repository !== undefined && doc.repository === result.repository;
-
-        // Calculate overall strength
-        const strength = calculateStrength(result.similarity, combinedPatternOverlap, sameRepo);
-
-        return {
-          result,
-          strength,
-          combinedPatternOverlap,
-        };
-      })
+      .filter((result: KnowledgeDocSearchResult) => result.id !== doc.docId)
+      .map((result: KnowledgeDocSearchResult) =>
+        scoreSearchResult(result, doc, errorPatterns, techPatterns)
+      )
       .filter(
         ({ strength }: ScoredRelationship) =>
           strength >= RELATIONSHIP_DETECTION_CONFIG.MIN_STRENGTH_THRESHOLD
       )
-      .map(({ result, strength, combinedPatternOverlap }: ScoredRelationship) => {
-        const relationshipType = determineRelationshipType(doc, result.docType, result.similarity);
-
-        return {
-          fromDocId: doc.docId,
-          toDocId: result.id,
-          relationshipType,
-          strength,
-          reason: `Semantic similarity: ${result.similarity.toFixed(2)}, Pattern overlap: ${combinedPatternOverlap.toFixed(2)}`,
-        };
-      })
-      .sort(
+      .map((scored: ScoredRelationship) => toDetectedRelationship(scored, doc))
+      .toSorted(
         (relA: DetectedRelationship, relB: DetectedRelationship) => relB.strength - relA.strength
       )
       .slice(0, maxResults);
 
     return Object.freeze(relationships);
   } catch (error) {
-    logger.warn("Failed to find related documents", {
+    logger.warn("Relationship detection failed", {
       docId: doc.docId,
       error: getErrorMessage(error),
     });
