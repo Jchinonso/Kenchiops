@@ -1386,6 +1386,30 @@ export interface BatchEmbedOptions {
   readonly tenantId?: string;
 }
 
+/**
+ * Intermediate result of chunking and storing (diff or knowledge doc).
+ */
+export interface ChunkStoreResult {
+  readonly chunksCreated: number;
+  readonly parentId: string | null;
+}
+
+/**
+ * Intermediate result of embedding generation.
+ */
+export interface EmbedResult {
+  readonly chunksEmbedded: number;
+  readonly errors: readonly string[];
+}
+
+/**
+ * Intermediate result of relationship detection (optional step).
+ */
+export interface RelationshipStepResult {
+  readonly relationshipsDetected?: number;
+  readonly relationshipsCreated?: number;
+}
+
 // ==================== Ingestion Helper Internal Types ====================
 
 /**
