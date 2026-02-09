@@ -106,6 +106,11 @@ const getCategory = (botType: BotType, shouldBlock: boolean): BotCategory | null
  * 2. Custom patterns (blocked > allowed)
  * 3. Built-in patterns (malicious > search > monitoring)
  */
+/**
+ * Configurable bot detector that analyzes User-Agent headers to classify requests
+ * as human, allowed bot, or suspicious/malicious bot. Provides rate multipliers
+ * and blocking decisions for use by rate limiting middleware.
+ */
 export class BotDetector {
   private readonly allowSearchEngines: boolean;
   private readonly allowMonitoring: boolean;
@@ -269,9 +274,16 @@ export class BotDetector {
   }
 }
 
+/**
+ * Creates a BotDetector with the given configuration.
+ *
+ * @param config - Optional bot detection configuration
+ * @returns Configured BotDetector instance
+ */
 export const createBotDetector = (config?: BotDetectionConfig): BotDetector =>
   new BotDetector(config);
 
+/** Default BotDetector instance using default configuration. */
 export const defaultBotDetector = createBotDetector();
 
 /**

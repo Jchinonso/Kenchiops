@@ -182,6 +182,11 @@ const safeKeyIdHash = (keyId: string | undefined): string | undefined =>
 
 // ==================== Signature Verifier ====================
 
+/**
+ * HMAC signature verifier for authenticating inbound requests.
+ * Supports SHA-256/384/512 algorithms, timestamp-based replay protection,
+ * multi-key setups with key ID resolution, and configurable signed fields.
+ */
 export class SignatureVerifier {
   private readonly signatureHeader: string;
   private readonly timestampHeader: string;
@@ -218,6 +223,13 @@ export class SignatureVerifier {
     this.pathSource = config.pathSource ?? SIGNATURE_DEFAULTS.PATH_SOURCE;
   }
 
+  /**
+   * Verifies the HMAC signature on an inbound request.
+   * Checks signature format, timestamp freshness, and payload integrity.
+   *
+   * @param req - Express request with signature and timestamp headers
+   * @returns Verification result with validity status, key ID, timestamp, and age
+   */
   verify(req: Request): SignatureVerificationResult {
     // 1. Extract and validate signature
     const sigHeader = extractSingleHeader(req, this.signatureHeader);
@@ -320,6 +332,17 @@ export class SignatureVerifier {
     return { ok: true, secret, keyId: keyIdHeader.value };
   }
 
+  /**
+   * Signs a request payload using the configured HMAC algorithm.
+   * Builds a mock request internally to produce a signature compatible with verify().
+   *
+   * @param body - Request body to sign
+   * @param path - Request path
+   * @param method - HTTP method
+   * @param options - Optional signing options (key ID, query params, raw body)
+   * @returns Object with hex-encoded signature and timestamp used
+   * @throws {ValidationError} If payload data is invalid or key ID is unknown
+   */
   sign(
     body: unknown,
     path: string,
@@ -369,14 +392,17 @@ export class SignatureVerifier {
     return secret;
   }
 
+  /** Returns the configured HMAC algorithm (sha256, sha384, or sha512). */
   getAlgorithm(): SignatureAlgorithm {
     return this.algorithm;
   }
 
+  /** Returns the expected hex-encoded signature length for the configured algorithm. */
   getExpectedSignatureLength(): number {
     return SIGNATURE_HEX_LENGTHS[this.algorithm];
   }
 
+  /** Returns the configured path source used for signature payload construction. */
   getPathSource(): PathSource {
     return this.pathSource;
   }
@@ -384,14 +410,36 @@ export class SignatureVerifier {
 
 // ==================== Factory Functions ====================
 
+/**
+ * Creates a SignatureVerifier with full configuration options.
+ *
+ * @param config - Signature verification configuration
+ * @returns Configured SignatureVerifier instance
+ */
 export const createSignatureVerifier = (config: SignatureConfig): SignatureVerifier =>
   new SignatureVerifier(config);
 
+/**
+ * Creates a SignatureVerifier with just a shared secret using default settings.
+ *
+ * @param secret - HMAC shared secret string
+ * @returns SignatureVerifier configured with SHA-256 and default headers
+ */
 export const createSimpleSignatureVerifier = (secret: string): SignatureVerifier =>
   new SignatureVerifier({ secret });
 
 // ==================== Middleware Helper ====================
 
+/**
+ * Express body-parser verify callback that captures the raw request body buffer.
+ * Pass as the `verify` option to `express.json()` or `express.raw()` to enable
+ * raw body signature verification.
+ *
+ * @param req - Express request (extended with rawBody property)
+ * @param _res - Express response (unused)
+ * @param buf - Raw body buffer from the parser
+ * @param _encoding - Body encoding (unused)
+ */
 export const captureRawBody = (
   req: RequestWithRawBody,
   _res: unknown,

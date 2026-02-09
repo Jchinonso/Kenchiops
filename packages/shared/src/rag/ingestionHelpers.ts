@@ -39,6 +39,14 @@ export const redactContent = (content: string): string => redactSecrets(content)
 
 // ==================== Chunk Mapping ====================
 
+/**
+ * Maps raw text chunks to CreateDiffChunkInput format for database insertion.
+ * Applies secret redaction to chunk content before mapping.
+ *
+ * @param chunks - Raw text chunks with content and positional metadata
+ * @param context - Diff chunk context including repository, PR, commit, and file info
+ * @returns Array of inputs ready for diff chunk creation
+ */
 export const mapDiffChunksToInputs = (
   chunks: ReadonlyArray<{
     content: string;
@@ -59,6 +67,14 @@ export const mapDiffChunksToInputs = (
     tenantId: context.tenantId,
   }));
 
+/**
+ * Maps raw text chunks to CreateKnowledgeDocInput format for database insertion.
+ * Applies secret redaction to chunk content before mapping.
+ *
+ * @param chunks - Raw text chunks with content and chunk index metadata
+ * @param context - Knowledge chunk context including repository, doc type, and source info
+ * @returns Array of inputs ready for knowledge document creation
+ */
 export const mapKnowledgeChunksToInputs = (
   chunks: ReadonlyArray<{ content: string; metadata: { chunkIndex: number } }>,
   context: KnowledgeChunkContext

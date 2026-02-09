@@ -35,6 +35,10 @@ const hashKey = (key: string): string => crypto.createHash("sha256").update(key)
 const hashKeyForLogging = (key: string): string =>
   `${hashKey(key).slice(0, LOG_HASH_PREFIX_LENGTH)}...`;
 
+/**
+ * Validates API keys from request headers and resolves per-key rate limit quotas.
+ * Keys are hashed with SHA-256 before storage and lookup to avoid keeping raw keys in memory.
+ */
 export class ApiKeyValidator {
   private readonly headerName: string;
   private readonly validationPattern: RegExp;
@@ -58,6 +62,13 @@ export class ApiKeyValidator {
     }
   }
 
+  /**
+   * Validates the API key from the request header.
+   * Returns validation status, hashed key ID, and associated rate limit.
+   *
+   * @param req - Express request to extract API key from
+   * @returns Validation result with status, key ID, and limit
+   */
   validate(req: Request): ApiKeyValidationResult {
     const headerValue = req.headers[this.headerName.toLowerCase()];
 
@@ -181,11 +192,24 @@ export class ApiKeyValidator {
   }
 }
 
+/**
+ * Creates an ApiKeyValidator with the given configuration.
+ *
+ * @param config - Optional API key validation configuration
+ * @returns Configured ApiKeyValidator instance
+ */
 export const createApiKeyValidator = (config?: ApiKeyConfig): ApiKeyValidator =>
   new ApiKeyValidator(config);
 
+/** Default ApiKeyValidator instance using default configuration. */
 export const defaultApiKeyValidator = createApiKeyValidator();
 
+/**
+ * Extracts the API key from a request using the default validator.
+ *
+ * @param req - Express request to extract API key from
+ * @returns Raw API key string, or null if missing or invalid
+ */
 export const extractApiKey = (req: Request): string | null =>
   defaultApiKeyValidator.extractKey(req);
 

@@ -96,6 +96,11 @@ const createClientConfig = (): LLMConfig => {
   } as const;
 };
 
+/**
+ * LLM analysis provider that wraps the OpenAI-compatible API with circuit breaker
+ * protection, exponential backoff retry, token budget management, and response
+ * validation. Supports both direct OpenAI and OpenRouter backends.
+ */
 export class LLMClient implements LLMAnalysisProvider {
   private readonly client: OpenAI;
   private readonly clientConfig: LLMConfig;

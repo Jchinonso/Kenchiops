@@ -53,6 +53,11 @@ const hashKeyForLog = (key: string): string =>
  * - Compacts array when pointer exceeds threshold
  * - Amortized O(1) per request vs O(n) for filter
  */
+/**
+ * In-memory burst detector that tracks request timestamps per key using a sliding window.
+ * Detects rapid request bursts and applies rate penalties with configurable duration.
+ * Uses an index pointer approach for O(1) amortized timestamp pruning.
+ */
 export class BurstDetector {
   private readonly store = new Map<string, BurstTrackingEntry>();
   private readonly windowMs: number;
@@ -249,15 +254,18 @@ export class BurstDetector {
     }
   }
 
+  /** Resets burst tracking for a single key. */
   reset(key: string): void {
     this.store.delete(key);
   }
 
+  /** Resets all burst tracking state and clears the cleanup counter. */
   resetAll(): void {
     this.store.clear();
     this.cleanupCounter = 0;
   }
 
+  /** Returns the number of tracked keys and total valid timestamps across all entries. */
   getStats(): { trackedKeys: number; totalTimestamps: number } {
     let totalTimestamps = 0;
     for (const entry of this.store.values()) {
@@ -268,7 +276,14 @@ export class BurstDetector {
   }
 }
 
+/**
+ * Creates a BurstDetector with the given configuration.
+ *
+ * @param config - Optional burst detection configuration
+ * @returns Configured BurstDetector instance
+ */
 export const createBurstDetector = (config?: BurstDetectionConfig): BurstDetector =>
   new BurstDetector(config);
 
+/** Default BurstDetector instance using default configuration. */
 export const defaultBurstDetector = createBurstDetector();
