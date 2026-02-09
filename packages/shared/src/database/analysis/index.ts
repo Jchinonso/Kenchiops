@@ -15,7 +15,7 @@ export type {
   CreateAnalysisValidationRule,
 } from "./types.js";
 
-// Helpers (includes validation, mappers, and serialization)
+// Helpers (includes validation and mappers)
 export {
   ANALYSIS_ID_PREFIX,
   validateId,
@@ -23,8 +23,6 @@ export {
   validateCreateInput,
   mapRowToAnalysis,
   extractFirstAnalysisRow,
-  serializeOptionalJson,
-  serializeRequiredJson,
 } from "./helpers.js";
 
 // Repository operations

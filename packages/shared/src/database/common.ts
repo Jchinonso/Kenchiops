@@ -114,9 +114,6 @@ export {
   validateEmbedding,
 } from "./validation/index.js";
 
-// Shared serialization utilities
-export { serializeOptionalJson, serializeRequiredJson } from "./serialization/index.js";
-
 // Shared query builder utilities
 export {
   buildSearchConditions as sharedBuildSearchConditions,

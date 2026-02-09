@@ -25,8 +25,6 @@ export {
   validateNonEmptyString,
   validateMinimumNumber,
   validateCreateInput,
-  // Serialization
-  serializeOptionalJson,
   // Constants
   DEFAULT_SYNC_LIMIT,
   MIN_QUERY_LIMIT,

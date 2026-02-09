@@ -28,7 +28,6 @@ import {
   validateNonEmptyString,
   validateMinimumNumber,
   validateCreateInput,
-  serializeOptionalJson,
   mapRowToExternalSource,
 } from "./helpers.js";
 
@@ -58,11 +57,11 @@ export const createExternalSource = async (
       input.sourceType,
       input.name,
       input.baseUrl ?? null,
-      serializeOptionalJson(input.authConfig),
+      input.authConfig === undefined ? null : JSON.stringify(input.authConfig),
       input.techStackTags ?? [],
       input.credibilityScore ?? EXTERNAL_SOURCE_CONFIG.DEFAULT_CREDIBILITY_SCORE,
       input.syncFrequencyHours ?? EXTERNAL_SOURCE_CONFIG.DEFAULT_SYNC_FREQUENCY_HOURS,
-      serializeOptionalJson(input.metadata),
+      input.metadata === undefined ? null : JSON.stringify(input.metadata),
     ]);
 
     logger.info("Created external source", {
@@ -239,12 +238,12 @@ export const updateExternalSource = async (
       sourceId,
       input.name ?? null,
       input.baseUrl ?? null,
-      serializeOptionalJson(input.authConfig),
+      input.authConfig === undefined ? null : JSON.stringify(input.authConfig),
       input.techStackTags ?? null,
       input.isEnabled ?? null,
       input.credibilityScore ?? null,
       input.syncFrequencyHours ?? null,
-      serializeOptionalJson(input.metadata),
+      input.metadata === undefined ? null : JSON.stringify(input.metadata),
     ]);
 
     if (result.rows.length === 0) {

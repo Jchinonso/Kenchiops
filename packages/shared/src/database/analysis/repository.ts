@@ -29,8 +29,6 @@ import {
   validateCreateInput,
   mapRowToAnalysis,
   extractFirstAnalysisRow,
-  serializeOptionalJson,
-  serializeRequiredJson,
 } from "./helpers.js";
 
 const logger = createLogger("analysis-repository");
@@ -58,9 +56,9 @@ export const createAnalysis = async (input: CreateAnalysisInput): Promise<Analys
       input.identifiedCause ?? null,
       input.diagnosisConfidence,
       input.actionConfidence ?? null,
-      serializeOptionalJson(input.confidenceSignals),
-      serializeOptionalJson(input.recommendedActions),
-      serializeRequiredJson(input.fullAnalysis),
+      input.confidenceSignals === undefined ? null : JSON.stringify(input.confidenceSignals),
+      input.recommendedActions === undefined ? null : JSON.stringify(input.recommendedActions),
+      JSON.stringify(input.fullAnalysis),
       input.tenantId ?? null,
       input.modelVersionId ?? null,
       input.aggregationKey ?? null,

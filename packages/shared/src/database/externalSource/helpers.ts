@@ -11,7 +11,6 @@ import {
   EXTERNAL_SOURCE_DEFAULTS,
   validateNonEmptyString,
   validateMinimumNumber,
-  serializeOptionalJson,
   type ExternalSourceType,
   type TechStackTag,
 } from "../common.js";
@@ -66,11 +65,6 @@ export const validateCreateInput = (input: CreateExternalSourceInput): void => {
     metadata,
   });
 };
-
-// ==================== Serialization Helpers ====================
-
-// Re-export shared serializer for backwards compatibility
-export { serializeOptionalJson };
 
 // ==================== Constants ====================
 

@@ -6,14 +6,7 @@
  * @module database/analysis/helpers
  */
 
-import {
-  ValidationError,
-  ANALYSIS_DEFAULTS,
-  validateId,
-  sharedValidateLimit,
-  serializeOptionalJson,
-  serializeRequiredJson,
-} from "../common.js";
+import { ValidationError, ANALYSIS_DEFAULTS, validateId, sharedValidateLimit } from "../common.js";
 import type {
   CreateAnalysisInput,
   CreateAnalysisValidationRule,
@@ -107,6 +100,3 @@ export const mapRowToAnalysis = (row: AnalysisRow): AnalysisRecord => ({
  */
 export const extractFirstAnalysisRow = (rows: readonly AnalysisRow[]): AnalysisRecord | null =>
   rows.length > 0 ? mapRowToAnalysis(rows[0]) : null;
-
-// Re-export shared serializers for backwards compatibility
-export { serializeOptionalJson, serializeRequiredJson };
