@@ -181,6 +181,71 @@ If ANY artifact has type "infra_killer" OR message/snippet contains:
   OOM, "out of memory", SIGKILL, "killed", "timed out", "no space left", "disk full"
 Then: category MUST be "infra" and that artifact MUST be root cause.`;
 
+// ==================== User Message Section Builders ====================
+
+/**
+ * Builds the extraction summary section of the user message.
+ */
+const buildExtractionSummary = (
+  evidence: AggregatedEvidence,
+  testFailureCount: number,
+  lintErrorCount: number
+): string => `EXTRACTION SUMMARY
+
+chunks_processed: ${evidence.chunksProcessed}
+chunks_failed: ${evidence.chunksFailed}
+total_artifacts_extracted: ${evidence.totalExtracted}
+duplicates_removed: ${evidence.duplicatesRemoved}
+artifacts_for_analysis: ${evidence.artifacts.length}
+test_failure_artifacts: ${testFailureCount}
+lint_error_artifacts: ${lintErrorCount}
+primary_failure_type: ${evidence.primaryFailureType ?? "unknown"}
+detected_framework: ${evidence.detectedFramework ?? "not detected"}
+ci_platform: ${evidence.detectedCIPlatform ?? "unknown"}`;
+
+/**
+ * Builds guidance text when no artifacts were extracted.
+ */
+const buildEmptyArtifactsGuidance = (artifactCount: number, exitCode: number): string =>
+  artifactCount === 0
+    ? `\nEMPTY ARTIFACTS GUIDANCE
+
+No artifacts were extracted. Response requirements:
+- Set category to "unknown", confidence to "low"
+- Set root_cause.summary to: "Build failed with exit code ${exitCode} but no specific errors were extracted"
+- Use empty arrays for annotations, test_failures, lint_errors, secondary_findings
+- Suggest checking full logs in next_steps
+`
+    : "";
+
+/**
+ * Builds the degraded mode section when pipeline failed.
+ */
+const buildDegradedModeSection = (evidence: AggregatedEvidence): string =>
+  evidence.degraded_mode && evidence.rawLogPreview
+    ? `\nDEGRADED MODE
+
+The chunking pipeline failed or produced insufficient results. A raw log preview is provided for basic analysis.
+Set confidence to "low" unless you find a clear error.
+
+RAW_LOG_PREVIEW_BEGIN
+${truncateMiddle(evidence.rawLogPreview, MAX_RAW_LOG_PREVIEW_LENGTH)}
+RAW_LOG_PREVIEW_END
+`
+    : "";
+
+/**
+ * Builds the output instruction section with count requirements.
+ */
+const buildOutputInstruction = (testFailureCount: number, lintErrorCount: number): string =>
+  `Analyze the artifacts above and respond with a single JSON object matching the schema.
+
+OUTPUT REQUIREMENTS:
+- Output ONLY valid JSON. No markdown, no code fences, no prose before or after.
+- test_failures array MUST have exactly ${testFailureCount} entries.
+- lint_errors array MUST have exactly ${lintErrorCount} entries.
+- If you cannot produce a valid analysis, output: {"category":"unknown","phase":"unknown","confidence":"low","root_cause":{"summary":"Analysis failed","detail":"Could not determine root cause","evidence_ids":[]},"annotations":[],"next_steps":[{"action":"Check full CI logs manually","reason":"Automated analysis incomplete","safe":true,"priority":2}],"secondary_findings":[],"test_failures":[],"lint_errors":[],"metadata":{"analysis_version":"2.0.0","chunks_processed":0,"artifacts_analyzed":0,"model_used":"unknown","processing_time_ms":0}}`;
+
 // ==================== Main Prompt Builder ====================
 
 /**
@@ -203,61 +268,13 @@ ${buildArtifactOutputSchema()}
 
 ${buildCausalOrderingSection()}`;
 
-  // --- User message sections ---
-
   const testFailureCount = countTestArtifacts(evidence.artifacts);
   const lintErrorCount = countLintArtifacts(evidence.artifacts);
 
-  const summarySection = `EXTRACTION SUMMARY
-
-chunks_processed: ${evidence.chunksProcessed}
-chunks_failed: ${evidence.chunksFailed}
-total_artifacts_extracted: ${evidence.totalExtracted}
-duplicates_removed: ${evidence.duplicatesRemoved}
-artifacts_for_analysis: ${evidence.artifacts.length}
-test_failure_artifacts: ${testFailureCount}
-lint_error_artifacts: ${lintErrorCount}
-primary_failure_type: ${evidence.primaryFailureType ?? "unknown"}
-detected_framework: ${evidence.detectedFramework ?? "not detected"}
-ci_platform: ${evidence.detectedCIPlatform ?? "unknown"}`;
-
-  const emptyGuidance =
-    evidence.artifacts.length === 0
-      ? `\nEMPTY ARTIFACTS GUIDANCE
-
-No artifacts were extracted. Response requirements:
-- Set category to "unknown", confidence to "low"
-- Set root_cause.summary to: "Build failed with exit code ${metadata.exitCode} but no specific errors were extracted"
-- Use empty arrays for annotations, test_failures, lint_errors, secondary_findings
-- Suggest checking full logs in next_steps
-`
-      : "";
-
-  const degradedSection =
-    evidence.degraded_mode && evidence.rawLogPreview
-      ? `\nDEGRADED MODE
-
-The chunking pipeline failed or produced insufficient results. A raw log preview is provided for basic analysis.
-Set confidence to "low" unless you find a clear error.
-
-RAW_LOG_PREVIEW_BEGIN
-${truncateMiddle(evidence.rawLogPreview, MAX_RAW_LOG_PREVIEW_LENGTH)}
-RAW_LOG_PREVIEW_END
-`
-      : "";
-
-  const outputInstruction = `Analyze the artifacts above and respond with a single JSON object matching the schema.
-
-OUTPUT REQUIREMENTS:
-- Output ONLY valid JSON. No markdown, no code fences, no prose before or after.
-- test_failures array MUST have exactly ${testFailureCount} entries.
-- lint_errors array MUST have exactly ${lintErrorCount} entries.
-- If you cannot produce a valid analysis, output: {"category":"unknown","phase":"unknown","confidence":"low","root_cause":{"summary":"Analysis failed","detail":"Could not determine root cause","evidence_ids":[]},"annotations":[],"next_steps":[{"action":"Check full CI logs manually","reason":"Automated analysis incomplete","safe":true,"priority":2}],"secondary_findings":[],"test_failures":[],"lint_errors":[],"metadata":{"analysis_version":"2.0.0","chunks_processed":0,"artifacts_analyzed":0,"model_used":"unknown","processing_time_ms":0}}`;
-
   const user = `${formatBuildMetadata(metadata)}
 
-${summarySection}
-${emptyGuidance}${degradedSection}
+${buildExtractionSummary(evidence, testFailureCount, lintErrorCount)}
+${buildEmptyArtifactsGuidance(evidence.artifacts.length, metadata.exitCode)}${buildDegradedModeSection(evidence)}
 ---
 
 BEGIN_UNTRUSTED_DATA
@@ -268,7 +285,7 @@ END_UNTRUSTED_DATA
 
 ---
 
-${outputInstruction}`;
+${buildOutputInstruction(testFailureCount, lintErrorCount)}`;
 
   return { system, user };
 };

@@ -76,6 +76,56 @@ const truncateLogMessage = (log: LogEntry, maxLength: number): LogEntry => {
 };
 
 /**
+ * Separates logs into test failures and others, truncating each.
+ * Uses a single pass to avoid nested iteration.
+ */
+const separateAndTruncateLogs = (
+  logs: readonly LogEntry[]
+): { readonly testFailures: readonly LogEntry[]; readonly others: readonly LogEntry[] } =>
+  logs.reduce<{ testFailures: LogEntry[]; others: LogEntry[] }>(
+    (acc, log) => {
+      const truncated = truncateLogMessage(log, MAX_SNIPPET_LENGTH_TRUNCATED);
+      if (isTestFailureLog(log)) {
+        acc.testFailures.push(truncated);
+      } else {
+        acc.others.push(truncated);
+      }
+      return acc;
+    },
+    { testFailures: [], others: [] }
+  );
+
+/**
+ * Checks if candidate logs fit within the token budget.
+ * Returns the evidence if it fits, or null if over budget.
+ */
+const tryFitLogs = (
+  evidence: Evidence,
+  logs: readonly LogEntry[],
+  maxTokens: number
+): Evidence | null => {
+  const candidate = { ...evidence, logs: [...logs] };
+  const tokens = estimateTokens(formatEvidence(candidate));
+  return tokens <= maxTokens ? candidate : null;
+};
+
+/**
+ * Reduces other logs proportionally to fit within the token budget.
+ */
+const reduceOtherLogs = (
+  evidence: Evidence,
+  testFailures: readonly LogEntry[],
+  others: readonly LogEntry[],
+  maxTokens: number
+): Evidence | null => {
+  const allLogs = [...testFailures, ...others];
+  const allTokens = estimateTokens(formatEvidence({ ...evidence, logs: allLogs }));
+  const ratio = maxTokens / allTokens;
+  const otherLogsToKeep = Math.max(0, Math.floor(others.length * ratio));
+  return tryFitLogs(evidence, [...testFailures, ...others.slice(0, otherLogsToKeep)], maxTokens);
+};
+
+/**
  * Truncates evidence to fit within a token budget.
  * Prioritizes keeping test_failure artifacts over other log types.
  *
@@ -89,10 +139,7 @@ const truncateLogMessage = (log: LogEntry, maxLength: number): LogEntry => {
  * @returns Truncated evidence
  */
 export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidence => {
-  const formatted = formatEvidence(evidence);
-  const currentTokens = estimateTokens(formatted);
-
-  if (currentTokens <= maxTokens) {
+  if (estimateTokens(formatEvidence(evidence)) <= maxTokens) {
     return evidence;
   }
 
@@ -100,58 +147,32 @@ export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidenc
     return evidence;
   }
 
-  // Step 1: Separate test_failure logs from others
-  const testFailureLogs = evidence.logs.filter(isTestFailureLog);
-  const otherLogs = evidence.logs.filter((log) => !isTestFailureLog(log));
+  const { testFailures, others } = separateAndTruncateLogs(evidence.logs);
 
-  // Step 2: Truncate snippets in all logs to reduce size
-  const truncatedTestFailures = testFailureLogs.map((log) =>
-    truncateLogMessage(log, MAX_SNIPPET_LENGTH_TRUNCATED)
-  );
-  const truncatedOthers = otherLogs.map((log) =>
-    truncateLogMessage(log, MAX_SNIPPET_LENGTH_TRUNCATED)
-  );
-
-  // Step 3: Try with truncated logs (all test failures + all others)
-  let candidateLogs = [...truncatedTestFailures, ...truncatedOthers];
-  let candidateEvidence = { ...evidence, logs: candidateLogs };
-  let candidateTokens = estimateTokens(formatEvidence(candidateEvidence));
-
-  if (candidateTokens <= maxTokens) {
-    return candidateEvidence;
+  // Try with all truncated logs
+  const allTruncated = tryFitLogs(evidence, [...testFailures, ...others], maxTokens);
+  if (allTruncated) {
+    return allTruncated;
   }
 
-  // Step 4: Start removing non-test-failure logs
-  // Keep reducing other logs until we fit or run out
-  const ratio = maxTokens / candidateTokens;
-  const otherLogsToKeep = Math.max(0, Math.floor(truncatedOthers.length * ratio));
-
-  candidateLogs = [...truncatedTestFailures, ...truncatedOthers.slice(0, otherLogsToKeep)];
-  candidateEvidence = { ...evidence, logs: candidateLogs };
-  candidateTokens = estimateTokens(formatEvidence(candidateEvidence));
-
-  if (candidateTokens <= maxTokens) {
-    return candidateEvidence;
+  // Reduce non-test-failure logs proportionally
+  const reduced = reduceOtherLogs(evidence, testFailures, others, maxTokens);
+  if (reduced) {
+    return reduced;
   }
 
-  // Step 5: If still over budget, keep only test failures (remove all others)
-  candidateLogs = truncatedTestFailures;
-  candidateEvidence = { ...evidence, logs: candidateLogs };
-  candidateTokens = estimateTokens(formatEvidence(candidateEvidence));
-
-  if (candidateTokens <= maxTokens) {
-    return candidateEvidence;
+  // Keep only test failures
+  const testOnly = tryFitLogs(evidence, testFailures, maxTokens);
+  if (testOnly) {
+    return testOnly;
   }
 
-  // Step 6: If STILL over budget, we have to reduce test failures too
-  // Keep as many as possible within budget
-  const testRatio = maxTokens / candidateTokens;
-  const testFailuresToKeep = Math.max(1, Math.floor(truncatedTestFailures.length * testRatio));
+  // Last resort: reduce test failures proportionally
+  const testOnlyTokens = estimateTokens(formatEvidence({ ...evidence, logs: [...testFailures] }));
+  const testRatio = maxTokens / testOnlyTokens;
+  const testFailuresToKeep = Math.max(1, Math.floor(testFailures.length * testRatio));
 
-  return {
-    ...evidence,
-    logs: truncatedTestFailures.slice(0, testFailuresToKeep),
-  };
+  return { ...evidence, logs: testFailures.slice(0, testFailuresToKeep) };
 };
 
 // ==================== Log Formatter ====================
