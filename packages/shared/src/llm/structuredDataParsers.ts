@@ -239,8 +239,159 @@ const parseTestFailure = (raw: unknown): LLMTestFailure | null => {
   };
 };
 
+// ==================== Test Failure Deduplication Helpers ====================
+
+interface TestFailureEntry {
+  readonly failure: LLMTestFailure;
+  readonly index: number;
+  readonly normalized: string;
+  readonly normalizedKey: string;
+  readonly locationKey: string | null;
+}
+
+/** Normalizes test name to last "›" segment for matching. */
+const normalizeTestName = (name: string): string => {
+  const separator = " › ";
+  const lastIdx = name.lastIndexOf(separator);
+  return lastIdx >= 0 ? name.substring(lastIdx + separator.length).trim() : name.trim();
+};
+
+/** Checks if a file path is a test file. */
+const isTestFile = (filePath: string): boolean => /\.(test|spec)\.[jt]sx?$/.test(filePath);
+
+/** Extracts the base filename without test/spec suffix. */
+const getBaseName = (filePath: string): string => {
+  const fileName = filePath.split("/").pop() ?? filePath;
+  return fileName.replace(/\.(test|spec)(\.[jt]sx?)$/, "$2");
+};
+
+/** Builds enriched entries with normalized keys for deduplication. */
+const buildTestFailureEntries = (parsed: readonly LLMTestFailure[]): readonly TestFailureEntry[] =>
+  parsed.map((failure, index) => {
+    const normalized = normalizeTestName(failure.testName);
+    const normalizedKey = `${normalized}::${failure.file ?? ""}`;
+    const locationKey =
+      failure.file && failure.line !== undefined ? `${failure.file}::${failure.line}` : null;
+    return { failure, index, normalized, normalizedKey, locationKey };
+  });
+
 /**
- * Parses test failures array from parsed LLM response.
+ * Deduplicates by normalized name + file and by file + line location.
+ * Keeps the entry with the longer (more descriptive) testName on collision.
+ */
+const deduplicateByNameAndLocation = (entries: readonly TestFailureEntry[]): Set<number> => {
+  const seenByNormalizedName = new Map<string, number>();
+  const seenByLocation = new Map<string, number>();
+  const keepIndices = new Set<number>();
+
+  for (const entry of entries) {
+    const existingByName = seenByNormalizedName.get(entry.normalizedKey);
+    if (existingByName !== undefined) {
+      if (entry.failure.testName.length > entries[existingByName].failure.testName.length) {
+        keepIndices.delete(existingByName);
+        keepIndices.add(entry.index);
+        seenByNormalizedName.set(entry.normalizedKey, entry.index);
+      }
+      continue;
+    }
+    seenByNormalizedName.set(entry.normalizedKey, entry.index);
+
+    if (entry.locationKey) {
+      const existingByLoc = seenByLocation.get(entry.locationKey);
+      if (existingByLoc !== undefined) {
+        if (entry.failure.testName.length > entries[existingByLoc].failure.testName.length) {
+          keepIndices.delete(existingByLoc);
+          keepIndices.add(entry.index);
+          seenByLocation.set(entry.locationKey, entry.index);
+        }
+        continue;
+      }
+      seenByLocation.set(entry.locationKey, entry.index);
+    }
+
+    keepIndices.add(entry.index);
+  }
+
+  return keepIndices;
+};
+
+/**
+ * Resolves test vs. source file preference per normalized name.
+ * Returns a map of normalized name → best entry index (prefers test files).
+ */
+const buildBestByNormalized = (
+  entries: readonly TestFailureEntry[],
+  keepIndices: ReadonlySet<number>
+): ReadonlyMap<string, number> => {
+  const bestByNormalized = new Map<string, number>();
+
+  for (const idx of keepIndices) {
+    const entry = entries[idx];
+    const existing = bestByNormalized.get(entry.normalized);
+    if (existing === undefined) {
+      bestByNormalized.set(entry.normalized, idx);
+      continue;
+    }
+    const existingFile = entries[existing].failure.file;
+    const currentFile = entry.failure.file;
+    if (currentFile && isTestFile(currentFile) && (!existingFile || !isTestFile(existingFile))) {
+      bestByNormalized.set(entry.normalized, idx);
+    }
+  }
+
+  return bestByNormalized;
+};
+
+/**
+ * Final pass: drops file-less duplicates, source-file duplicates when test files exist,
+ * and non-best entries when a test file variant is the best.
+ */
+const applyTestFilePreference = (
+  entries: readonly TestFailureEntry[],
+  keepIndices: ReadonlySet<number>,
+  bestByNormalized: ReadonlyMap<string, number>
+): Set<number> => {
+  const baseNamesWithTestFiles = new Set<string>();
+  for (const idx of keepIndices) {
+    const { file } = entries[idx].failure;
+    if (file && isTestFile(file)) {
+      baseNamesWithTestFiles.add(getBaseName(file));
+    }
+  }
+
+  const finalIndices = new Set<number>();
+  for (const idx of keepIndices) {
+    const entry = entries[idx];
+    const bestIdx = bestByNormalized.get(entry.normalized);
+
+    if (!entry.failure.file) {
+      if (bestIdx !== undefined && entries[bestIdx].failure.file) {
+        continue;
+      }
+    } else if (
+      !isTestFile(entry.failure.file) &&
+      baseNamesWithTestFiles.has(getBaseName(entry.failure.file))
+    ) {
+      continue;
+    } else if (bestIdx !== undefined && bestIdx !== idx) {
+      const bestFile = entries[bestIdx].failure.file;
+      if (bestFile && isTestFile(bestFile) && !isTestFile(entry.failure.file)) {
+        continue;
+      }
+    }
+
+    finalIndices.add(idx);
+  }
+
+  return finalIndices;
+};
+
+// ==================== Test Failure Parsing ====================
+
+/**
+ * Parses and deduplicates test failures from LLM response.
+ * Handles LLM re-extraction inflation where the same failure appears
+ * with different name formats, file attributions, or missing files.
  */
 export const parseTestFailures = (raw: unknown): readonly LLMTestFailure[] => {
   if (!Array.isArray(raw)) {
@@ -251,18 +402,12 @@ export const parseTestFailures = (raw: unknown): readonly LLMTestFailure[] => {
     .map((rawItem) => parseTestFailure(rawItem))
     .filter((failure): failure is LLMTestFailure => failure !== null);
 
-  // Deduplicate by (testName, file) to prevent LLM re-extraction inflation.
-  // The LLM sees formatted pipeline artifacts as evidence text and often
-  // re-extracts the same failure multiple times from overlapping context.
-  const seen = new Set<string>();
-  return parsed.filter((failure) => {
-    const key = `${failure.testName}::${failure.file ?? ""}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
+  const entries = buildTestFailureEntries(parsed);
+  const keepIndices = deduplicateByNameAndLocation(entries);
+  const bestByNormalized = buildBestByNormalized(entries, keepIndices);
+  const finalIndices = applyTestFilePreference(entries, keepIndices, bestByNormalized);
+
+  return entries.filter((entry) => finalIndices.has(entry.index)).map((entry) => entry.failure);
 };
 
 // ==================== Lint Error Parsing ====================
