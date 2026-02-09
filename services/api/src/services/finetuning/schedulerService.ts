@@ -352,3 +352,19 @@ export const cleanupProcessedCompletions = (): void => {
     state.processedCompletions.clear();
   }
 };
+
+/**
+ * Resets all scheduler state. Test-only — used to prevent state leaking between tests.
+ */
+export const _resetStateForTesting = (): void => {
+  if (state.intervalId) {
+    clearInterval(state.intervalId);
+  }
+  state.isRunning = false;
+  state.intervalId = null;
+  state.trackedJobs.clear();
+  state.processedCompletions.clear();
+  state.lastAutoTriggerCheck = 0;
+  state.lastJobTriggeredAt = null;
+  currentConfig = { ...DEFAULT_CONFIG };
+};
