@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Reject commit messages containing AI assistant references
+MSG_FILE="$1"
+MSG=$(cat "$MSG_FILE")
+
+if echo "$MSG" | grep -qiE '\bclaude\b|anthropic|co-authored-by:.*claude|co-authored-by:.*anthropic'; then
+  echo "ERROR: Commit message must not reference Claude or Anthropic."
+  echo "Please remove any AI assistant attribution from the commit message."
+  exit 1
+fi
