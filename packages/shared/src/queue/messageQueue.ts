@@ -122,23 +122,99 @@ export const subscribe = async <T>(
   };
 };
 
+// ==================== Job Queue Helpers ====================
+
+/**
+ * Retries a failed job by incrementing retry count and re-enqueuing.
+ */
+const retryJob = async <T>(
+  client: ReturnType<typeof getRedisClient>,
+  queueName: string,
+  processingQueue: string,
+  message: QueueMessage<T>,
+  data: string,
+  errorInfo: string
+): Promise<void> => {
+  const updatedMessage: QueueMessage<T> = {
+    ...message,
+    retryCount: (message.retryCount ?? 0) + 1,
+  };
+  await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
+  await client.lpush(queueName, serializeMessage(updatedMessage));
+  logger.warn("Job retrying", {
+    queue: queueName,
+    messageId: message.id,
+    retryCount: updatedMessage.retryCount,
+    error: errorInfo,
+  });
+};
+
+/**
+ * Moves a failed job to the dead letter queue after exhausting retries.
+ */
+const moveToDeadLetter = async <T>(
+  client: ReturnType<typeof getRedisClient>,
+  queueName: string,
+  processingQueue: string,
+  deadLetterQueue: string,
+  message: QueueMessage<T>,
+  data: string,
+  errorInfo: string
+): Promise<void> => {
+  await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
+  await client.lpush(deadLetterQueue, data);
+  logger.error("Job moved to dead letter queue", {
+    queue: queueName,
+    messageId: message.id,
+    retryCount: message.retryCount,
+    error: errorInfo,
+  });
+};
+
+/**
+ * Handles a job failure by retrying or moving to dead letter queue.
+ */
+const handleJobFailure = async <T>(
+  client: ReturnType<typeof getRedisClient>,
+  queueName: string,
+  processingQueue: string,
+  deadLetterQueue: string,
+  maxRetries: number,
+  message: QueueMessage<T>,
+  data: string,
+  errorInfo: string
+): Promise<void> => {
+  if ((message.retryCount ?? 0) < maxRetries) {
+    await retryJob(client, queueName, processingQueue, message, data, errorInfo);
+  } else {
+    await moveToDeadLetter(
+      client,
+      queueName,
+      processingQueue,
+      deadLetterQueue,
+      message,
+      data,
+      errorInfo
+    );
+  }
+};
+
 // ==================== Job Queue Functions ====================
 
 /**
- * Creates a queue manager for reliable job processing
+ * Creates a queue manager for reliable job processing.
  */
 export const createQueue = (queueConfig: QueueConfig): QueueManager => {
   const {
     name,
     maxRetries = QUEUE_CONFIG.DEFAULT_MAX_RETRIES,
-    // visibilityTimeout not used with non-blocking rpoplpush
     deadLetterQueue = `${name}${QUEUE_CONFIG.DEAD_LETTER_SUFFIX}`,
   } = queueConfig;
 
   const processingQueue = `${name}${QUEUE_CONFIG.PROCESSING_SUFFIX}`;
 
   /**
-   * Adds a job to the queue
+   * Adds a job to the queue.
    */
   const enqueue = async <T>(
     type: string,
@@ -156,34 +232,25 @@ export const createQueue = (queueConfig: QueueConfig): QueueManager => {
     };
 
     await client.lpush(name, serializeMessage(message));
-
-    logger.debug("Job enqueued", {
-      queue: name,
-      messageId: message.id,
-      type,
-    });
-
+    logger.debug("Job enqueued", { queue: name, messageId: message.id, type });
     return message.id;
   };
 
   /**
-   * Processes jobs from the queue (non-blocking)
-   * Uses rpoplpush instead of brpoplpush to avoid blocking the Redis connection
+   * Processes jobs from the queue (non-blocking).
+   * Uses rpoplpush instead of brpoplpush to avoid blocking the Redis connection.
    */
   const process = async <T>(handler: MessageHandler<T>): Promise<void> => {
     const client = getRedisClient();
 
-    // Check if Redis is ready
     if (client.status !== REDIS_STATUS.READY) {
-      return; // Skip if not ready
+      return;
     }
 
-    // Move job from main queue to processing queue (atomic, non-blocking)
     const data = await client.rpoplpush(name, processingQueue);
-
     if (!data) {
       return;
-    } // No job available
+    }
 
     const message = deserializeMessage<T>(data);
     const startTime = Date.now();
@@ -192,69 +259,41 @@ export const createQueue = (queueConfig: QueueConfig): QueueManager => {
       const result = await handler(message);
 
       if (result.success) {
-        // Remove from processing queue
         await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
         logger.info("Job completed", {
           queue: name,
           messageId: message.id,
           durationMs: Date.now() - startTime,
         });
-      } else if (result.shouldRetry !== false && (message.retryCount ?? 0) < maxRetries) {
-        // Retry: update retry count and move back to main queue
-        const updatedMessage: QueueMessage<T> = {
-          ...message,
-          retryCount: (message.retryCount ?? 0) + 1,
-        };
-        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
-        await client.lpush(name, serializeMessage(updatedMessage));
-        logger.warn("Job retrying", {
-          queue: name,
-          messageId: message.id,
-          retryCount: updatedMessage.retryCount,
-          error: result.error,
-        });
       } else {
-        // Move to dead letter queue
-        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
-        await client.lpush(deadLetterQueue, data);
-        logger.error("Job moved to dead letter queue", {
-          queue: name,
-          messageId: message.id,
-          retryCount: message.retryCount,
-          error: result.error,
-        });
+        const shouldRetry = result.shouldRetry !== false;
+        await handleJobFailure(
+          client,
+          name,
+          processingQueue,
+          deadLetterQueue,
+          shouldRetry ? maxRetries : 0,
+          message,
+          data,
+          result.error ?? "Job failed"
+        );
       }
     } catch (error) {
-      // Unexpected error - retry if possible
-      const errorMessage = getErrorMessage(error);
-
-      if ((message.retryCount ?? 0) < maxRetries) {
-        const updatedMessage: QueueMessage<T> = {
-          ...message,
-          retryCount: (message.retryCount ?? 0) + 1,
-        };
-        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
-        await client.lpush(name, serializeMessage(updatedMessage));
-        logger.warn("Job failed, retrying", {
-          queue: name,
-          messageId: message.id,
-          retryCount: updatedMessage.retryCount,
-          error: errorMessage,
-        });
-      } else {
-        await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
-        await client.lpush(deadLetterQueue, data);
-        logger.error("Job failed, moved to dead letter queue", {
-          queue: name,
-          messageId: message.id,
-          error: errorMessage,
-        });
-      }
+      await handleJobFailure(
+        client,
+        name,
+        processingQueue,
+        deadLetterQueue,
+        maxRetries,
+        message,
+        data,
+        getErrorMessage(error)
+      );
     }
   };
 
   /**
-   * Gets queue statistics
+   * Gets queue statistics.
    */
   const getStats = async (): Promise<QueueStats> => {
     const client = getRedisClient();
@@ -267,7 +306,7 @@ export const createQueue = (queueConfig: QueueConfig): QueueManager => {
   };
 
   /**
-   * Clears all jobs from the queue (use with caution)
+   * Clears all jobs from the queue (use with caution).
    */
   const clear = async (): Promise<void> => {
     const client = getRedisClient();
@@ -275,13 +314,7 @@ export const createQueue = (queueConfig: QueueConfig): QueueManager => {
     logger.warn("Queue cleared", { queue: name });
   };
 
-  return {
-    enqueue,
-    process,
-    getStats,
-    clear,
-    name,
-  };
+  return { enqueue, process, getStats, clear, name };
 };
 
 // ==================== Pre-defined Queues ====================
