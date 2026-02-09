@@ -31,23 +31,26 @@ describe("GeoRestriction", () => {
       expect(result.rateMultiplier).toBe(1);
     });
 
-    it("should restrict requests from non-allowed countries", () => {
+    it("should block requests from non-allowed countries", () => {
       const restriction = createGeoAllowlist(allowedCountries);
       const result = restriction.check(createMockRequest("RU"));
 
       expect(result.isAllowed).toBe(false);
-      expect(result.isRestricted).toBe(true);
+      expect(result.isRestricted).toBe(false);
       expect(result.countryCode).toBe("RU");
+      expect(result.category).toBe("blocked");
     });
 
-    it("should apply rate multiplier to restricted countries", () => {
+    it("should use MIN_RATE_MULTIPLIER for blocked countries", () => {
       const restriction = createGeoAllowlist(allowedCountries, {
         restrictedRateMultiplier: 0.25,
       });
       const result = restriction.check(createMockRequest("CN"));
 
       expect(result.isAllowed).toBe(false);
-      expect(result.rateMultiplier).toBe(0.25);
+      expect(result.isRestricted).toBe(false);
+      expect(result.rateMultiplier).toBe(GEO_RESTRICTION_DEFAULTS.MIN_RATE_MULTIPLIER);
+      expect(result.category).toBe("blocked");
     });
 
     it.each(["us", "Us", "uS"])("should normalize country codes to uppercase (%s)", (code) => {
@@ -67,8 +70,9 @@ describe("GeoRestriction", () => {
       const result = restriction.check(createMockRequest("RU"));
 
       expect(result.isAllowed).toBe(false);
-      expect(result.isRestricted).toBe(true);
+      expect(result.isRestricted).toBe(false);
       expect(result.countryCode).toBe("RU");
+      expect(result.category).toBe("blocked");
     });
 
     it("should allow requests from non-blocked countries", () => {
@@ -101,8 +105,9 @@ describe("GeoRestriction", () => {
 
       expect(result.countryCode).toBeNull();
       expect(result.isAllowed).toBe(false);
-      expect(result.isRestricted).toBe(true);
-      expect(result.rateMultiplier).toBe(0);
+      expect(result.isRestricted).toBe(false);
+      expect(result.rateMultiplier).toBe(GEO_RESTRICTION_DEFAULTS.MIN_RATE_MULTIPLIER);
+      expect(result.category).toBe("blocked");
     });
 
     it("should rate limit unknown country when configured", () => {
@@ -143,13 +148,15 @@ describe("GeoRestriction", () => {
       }
     );
 
-    it("should handle array header values", () => {
+    it("should treat multiple geo headers as suspicious and return null country", () => {
       const req = {
         headers: { "cf-ipcountry": ["US", "CA"] },
       } as unknown as Request;
 
       const result = restriction.check(req);
-      expect(result.countryCode).toBe("US");
+      expect(result.countryCode).toBeNull();
+      expect(result.isAllowed).toBe(true);
+      expect(result.rateMultiplier).toBe(1);
     });
   });
 

@@ -18,13 +18,14 @@ const createMockRequest = (apiKey?: string, header?: string): Request =>
 
 describe("ApiKeyValidator", () => {
   describe("validate", () => {
-    it("should return invalid for missing API key", () => {
+    it("should return missing status for absent API key", () => {
       const validator = createApiKeyValidator();
       const result = validator.validate(createMockRequest());
 
       expect(result.isValid).toBe(false);
       expect(result.keyId).toBeNull();
-      expect(result.error).toBe("API key not provided");
+      expect(result.status).toBe("missing");
+      expect(result.error).toBeUndefined();
     });
 
     it("should validate correct API key format and return keyId (not raw key)", () => {

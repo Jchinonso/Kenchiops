@@ -445,8 +445,8 @@ That's what I found.`;
       }));
 
       const artifacts = parseExtractionResponse(JSON.stringify(manyArtifacts), 0);
-      // Should respect default limit (20)
-      expect(artifacts.length).toBeLessThanOrEqual(20);
+      // All 30 artifacts are valid and within the default limit (100)
+      expect(artifacts.length).toBe(30);
     });
 
     it("should handle markdown code block with json language tag", () => {

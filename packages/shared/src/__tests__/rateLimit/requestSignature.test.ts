@@ -62,26 +62,28 @@ describe("SignatureVerifier", () => {
       const result = verifier.verify(req);
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toBe("Missing signature header");
+      expect(result.error).toBe("Missing x-signature header");
     });
 
     it("should reject missing timestamp header", () => {
-      const req = createMockRequest({ test: "data" }, "some-signature", undefined);
+      const validHexSig = "a".repeat(64);
+      const req = createMockRequest({ test: "data" }, validHexSig, undefined);
 
       const result = verifier.verify(req);
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toBe("Missing timestamp header");
+      expect(result.error).toBe("Missing x-timestamp header");
     });
 
     it("should reject invalid timestamp format", () => {
+      const validHexSig = "a".repeat(64);
       const req = {
         body: { test: "data" },
         path: "/api/test",
         method: "POST",
         query: {},
         headers: {
-          [SIGNATURE_DEFAULTS.SIGNATURE_HEADER.toLowerCase()]: "some-signature",
+          [SIGNATURE_DEFAULTS.SIGNATURE_HEADER.toLowerCase()]: validHexSig,
           [SIGNATURE_DEFAULTS.TIMESTAMP_HEADER.toLowerCase()]: "not-a-number",
         },
       } as unknown as Request;
@@ -122,10 +124,22 @@ describe("SignatureVerifier", () => {
       expect(result.error).toBe("Invalid timestamp (future)");
     });
 
-    it("should reject invalid signature", () => {
+    it("should reject invalid signature format", () => {
       const body = { test: "data" };
       const timestamp = Date.now();
       const req = createMockRequest(body, "invalid-signature", timestamp);
+
+      const result = verifier.verify(req);
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe("Invalid signature format");
+    });
+
+    it("should reject wrong signature value", () => {
+      const body = { test: "data" };
+      const timestamp = Date.now();
+      const wrongSig = "a".repeat(64);
+      const req = createMockRequest(body, wrongSig, timestamp);
 
       const result = verifier.verify(req);
 
@@ -208,7 +222,7 @@ describe("SignatureVerifier", () => {
       const path = "/api/test";
       const method = "POST";
 
-      const { signature, timestamp } = multiKeyVerifier.sign(body, path, method, "key1");
+      const { signature, timestamp } = multiKeyVerifier.sign(body, path, method, { keyId: "key1" });
 
       const req = {
         body,
@@ -229,13 +243,14 @@ describe("SignatureVerifier", () => {
     });
 
     it("should reject missing key ID", () => {
+      const validHexSig = "a".repeat(64);
       const req = {
         body: { test: "data" },
         path: "/api/test",
         method: "POST",
         query: {},
         headers: {
-          [SIGNATURE_DEFAULTS.SIGNATURE_HEADER.toLowerCase()]: "some-signature",
+          [SIGNATURE_DEFAULTS.SIGNATURE_HEADER.toLowerCase()]: validHexSig,
           [SIGNATURE_DEFAULTS.TIMESTAMP_HEADER.toLowerCase()]: Date.now().toString(),
         },
       } as unknown as Request;
@@ -243,17 +258,18 @@ describe("SignatureVerifier", () => {
       const result = multiKeyVerifier.verify(req);
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toBe("Missing key ID header");
+      expect(result.error).toBe("Missing x-key-id header");
     });
 
     it("should reject unknown key ID", () => {
+      const validHexSig = "a".repeat(64);
       const req = {
         body: { test: "data" },
         path: "/api/test",
         method: "POST",
         query: {},
         headers: {
-          [SIGNATURE_DEFAULTS.SIGNATURE_HEADER.toLowerCase()]: "some-signature",
+          [SIGNATURE_DEFAULTS.SIGNATURE_HEADER.toLowerCase()]: validHexSig,
           [SIGNATURE_DEFAULTS.TIMESTAMP_HEADER.toLowerCase()]: Date.now().toString(),
           [SIGNATURE_DEFAULTS.KEY_ID_HEADER.toLowerCase()]: "unknown-key",
         },
@@ -273,8 +289,8 @@ describe("SignatureVerifier", () => {
 
     it("should throw when signing with unknown key ID", () => {
       expect(() => {
-        multiKeyVerifier.sign({ test: "data" }, "/api/test", "POST", "unknown");
-      }).toThrow("Unknown key ID: unknown");
+        multiKeyVerifier.sign({ test: "data" }, "/api/test", "POST", { keyId: "unknown" });
+      }).toThrow("Unknown key ID");
     });
   });
 
@@ -393,7 +409,7 @@ describe("SignatureVerifier", () => {
       expect(result.isValid).toBe(true);
     });
 
-    it("should handle array header values", () => {
+    it("should reject multiple signature headers (header injection protection)", () => {
       const body = { test: "data" };
       const path = "/api/test";
       const method = "POST";
@@ -407,6 +423,28 @@ describe("SignatureVerifier", () => {
         headers: {
           [SIGNATURE_DEFAULTS.SIGNATURE_HEADER.toLowerCase()]: [signature, "other"],
           [SIGNATURE_DEFAULTS.TIMESTAMP_HEADER.toLowerCase()]: [timestamp.toString(), "other"],
+        },
+      } as unknown as Request;
+
+      const result = verifier.verify(req);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe("Multiple x-signature headers not allowed");
+    });
+
+    it("should accept single-element array header value", () => {
+      const body = { test: "data" };
+      const path = "/api/test";
+      const method = "POST";
+      const { signature, timestamp } = verifier.sign(body, path, method);
+
+      const req = {
+        body,
+        path,
+        method,
+        query: {},
+        headers: {
+          [SIGNATURE_DEFAULTS.SIGNATURE_HEADER.toLowerCase()]: [signature],
+          [SIGNATURE_DEFAULTS.TIMESTAMP_HEADER.toLowerCase()]: [timestamp.toString()],
         },
       } as unknown as Request;
 

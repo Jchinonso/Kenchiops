@@ -154,7 +154,7 @@ describe("LLMClient", () => {
       setMockOpenAIError(authError);
 
       await expect(client.analyzeIncident(mockEvent, mockEvidence)).rejects.toThrow(
-        "OpenAI authentication failed"
+        "LLM authentication failed"
       );
     });
 
@@ -172,7 +172,7 @@ describe("LLMClient", () => {
       setMockOpenAIResponse(mockResponse);
 
       await expect(client.analyzeIncident(mockEvent, mockEvidence)).rejects.toThrow(
-        "Failed to parse OpenAI response"
+        "Failed to parse LLM response"
       );
     });
 
@@ -204,7 +204,7 @@ describe("LLMClient", () => {
 
       // Logger now outputs JSON format
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('"message":"OpenAI response validation failed"')
+        expect.stringContaining('"message":"LLM output validation failed"')
       );
       expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("dangerous keyword"));
 

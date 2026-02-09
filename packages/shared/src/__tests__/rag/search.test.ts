@@ -41,7 +41,7 @@ const mockEmbeddingClient = {
   }),
 };
 
-jest.mock("../../llm/providers/openai/embedding.js", () => ({
+jest.mock("../../llm/providers/llmProvider/embedding.js", () => ({
   EmbeddingClient: jest.fn().mockImplementation(() => mockEmbeddingClient),
   getEmbeddingClient: jest.fn().mockReturnValue(mockEmbeddingClient),
 }));

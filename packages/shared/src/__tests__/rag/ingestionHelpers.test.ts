@@ -24,7 +24,7 @@ jest.mock("../../security/index.js", () => ({
   redactSecrets: jest.fn((text: string) => text.replace(/SECRET_\w+/gi, "[REDACTED]")),
 }));
 
-jest.mock("../../llm/providers/openai/embedding.js", () => ({
+jest.mock("../../llm/providers/llmProvider/embedding.js", () => ({
   getEmbeddingClient: jest.fn(() => ({
     generateBatchEmbeddings: jest.fn(),
   })),

@@ -27,6 +27,7 @@ jest.mock("../config/appConfig.js", () => ({
 
 // Create mock Octokit instance
 const mockOctokitInstance = {
+  paginate: jest.fn(),
   rest: {
     issues: {
       listComments: jest.fn(),
@@ -88,14 +89,12 @@ describe("GitHub Service API Functions", () => {
   describe("deleteKenchiOpsComments", () => {
     it("should delete comments containing KenchiOps marker", async () => {
       const marker = KENCHI_BRANDING.COMMENT_MARKER;
-      (mockOctokitInstance.rest.issues.listComments as jest.Mock).mockResolvedValue({
-        data: [
-          { id: 1, body: "Regular comment" },
-          { id: 2, body: `${marker} Analysis here` },
-          { id: 3, body: "Another regular comment" },
-          { id: 4, body: `${marker} Old analysis` },
-        ],
-      });
+      (mockOctokitInstance.paginate as jest.Mock).mockResolvedValue([
+        { id: 1, body: "Regular comment" },
+        { id: 2, body: `${marker} Analysis here` },
+        { id: 3, body: "Another regular comment" },
+        { id: 4, body: `${marker} Old analysis` },
+      ]);
       (mockOctokitInstance.rest.issues.deleteComment as jest.Mock).mockResolvedValue({});
 
       const deletedCount = await deleteKenchiOpsComments(12345, "owner", "repo", 42);
@@ -115,12 +114,10 @@ describe("GitHub Service API Functions", () => {
     });
 
     it("should return 0 when no KenchiOps comments found", async () => {
-      (mockOctokitInstance.rest.issues.listComments as jest.Mock).mockResolvedValue({
-        data: [
-          { id: 1, body: "Regular comment" },
-          { id: 2, body: "Another regular comment" },
-        ],
-      });
+      (mockOctokitInstance.paginate as jest.Mock).mockResolvedValue([
+        { id: 1, body: "Regular comment" },
+        { id: 2, body: "Another regular comment" },
+      ]);
 
       const deletedCount = await deleteKenchiOpsComments(12345, "owner", "repo", 42);
 
@@ -129,9 +126,7 @@ describe("GitHub Service API Functions", () => {
     });
 
     it("should return 0 when API call fails", async () => {
-      (mockOctokitInstance.rest.issues.listComments as jest.Mock).mockRejectedValue(
-        new Error("API error")
-      );
+      (mockOctokitInstance.paginate as jest.Mock).mockRejectedValue(new Error("API error"));
 
       const deletedCount = await deleteKenchiOpsComments(12345, "owner", "repo", 42);
 
@@ -140,13 +135,11 @@ describe("GitHub Service API Functions", () => {
 
     it("should handle comments with null body", async () => {
       const marker = KENCHI_BRANDING.COMMENT_MARKER;
-      (mockOctokitInstance.rest.issues.listComments as jest.Mock).mockResolvedValue({
-        data: [
-          { id: 1, body: null },
-          { id: 2, body: undefined },
-          { id: 3, body: `${marker} Valid` },
-        ],
-      });
+      (mockOctokitInstance.paginate as jest.Mock).mockResolvedValue([
+        { id: 1, body: null },
+        { id: 2, body: undefined },
+        { id: 3, body: `${marker} Valid` },
+      ]);
       (mockOctokitInstance.rest.issues.deleteComment as jest.Mock).mockResolvedValue({});
 
       const deletedCount = await deleteKenchiOpsComments(12345, "owner", "repo", 42);
@@ -155,9 +148,7 @@ describe("GitHub Service API Functions", () => {
     });
 
     it("should handle empty comments list", async () => {
-      (mockOctokitInstance.rest.issues.listComments as jest.Mock).mockResolvedValue({
-        data: [],
-      });
+      (mockOctokitInstance.paginate as jest.Mock).mockResolvedValue([]);
 
       const deletedCount = await deleteKenchiOpsComments(12345, "owner", "repo", 42);
 
@@ -183,9 +174,9 @@ describe("GitHub Service API Functions", () => {
 
     it("should delete old comments when deleteOldComments is true", async () => {
       const marker = KENCHI_BRANDING.COMMENT_MARKER;
-      (mockOctokitInstance.rest.issues.listComments as jest.Mock).mockResolvedValue({
-        data: [{ id: 1, body: `${marker} Old comment` }],
-      });
+      (mockOctokitInstance.paginate as jest.Mock).mockResolvedValue([
+        { id: 1, body: `${marker} Old comment` },
+      ]);
       (mockOctokitInstance.rest.issues.deleteComment as jest.Mock).mockResolvedValue({});
       (mockOctokitInstance.rest.issues.createComment as jest.Mock).mockResolvedValue({
         data: { id: 123 },

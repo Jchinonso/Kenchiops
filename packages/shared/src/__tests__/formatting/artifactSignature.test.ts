@@ -113,7 +113,7 @@ describe("Artifact Signature", () => {
       expect(sig1.hash).toBe(sig2.hash);
     });
 
-    it("should NOT include snippet in signature (too variable)", async () => {
+    it("should include snippet hash in signature for differentiation", async () => {
       const artifact1 = createMockArtifact({
         filePath: "src/a.ts",
         lineNumber: 10,
@@ -128,8 +128,8 @@ describe("Artifact Signature", () => {
       const sig1 = await computeArtifactSignature(artifact1);
       const sig2 = await computeArtifactSignature(artifact2);
 
-      // Same file/line should produce same hash regardless of snippet
-      expect(sig1.hash).toBe(sig2.hash);
+      // Different snippets produce different hashes for differentiation
+      expect(sig1.hash).not.toBe(sig2.hash);
     });
 
     it("should include error code in signature", async () => {
