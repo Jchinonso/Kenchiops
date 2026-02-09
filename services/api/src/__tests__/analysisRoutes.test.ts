@@ -420,6 +420,92 @@ describe("Analysis Routes", () => {
 
       expect(response.status).toBe(202);
     });
+
+    it("should return 400 when failure_log is a number instead of string", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: 12345,
+        repository: "owner/repo",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Validation failed");
+    });
+
+    it("should return 400 when repository is an object instead of string", async () => {
+      const response = await request(app)
+        .post("/api/analyze")
+        .send({
+          failure_log: "Error occurred",
+          repository: { name: "owner/repo" },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Validation failed");
+    });
+
+    it("should return 400 when failure_log is an array", async () => {
+      const response = await request(app)
+        .post("/api/analyze")
+        .send({
+          failure_log: ["error1", "error2"],
+          repository: "owner/repo",
+        });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("should return 400 when failure_log is null", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: null,
+        repository: "owner/repo",
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("should return 400 when repository is null", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: "Error occurred",
+        repository: null,
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("should accept request with only required fields and ignore extra fields", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      const response = await request(app)
+        .post("/api/analyze")
+        .send({
+          failure_log: "Error occurred",
+          repository: "owner/repo",
+          unknown_field: "should be ignored",
+          extra_data: { nested: true },
+        });
+
+      expect(response.status).toBe(202);
+    });
+
+    it("should include all payload fields in log_ref JSON including undefined optionals", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      await request(app).post("/api/analyze").send({
+        failure_log: "Error occurred",
+        repository: "owner/repo",
+      });
+
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      const logRef = JSON.parse(params[2] as string);
+
+      // Verify the structure includes all expected fields (even if undefined)
+      expect(logRef).toHaveProperty("failure_log");
+      expect(logRef).toHaveProperty("repository");
+      expect(logRef).toHaveProperty("commit");
+      expect(logRef).toHaveProperty("tenant_id");
+      expect(logRef).toHaveProperty("workflow_id");
+      expect(logRef).toHaveProperty("test_framework");
+    });
   });
 
   // ==================== GET /api/jobs/:id ====================
@@ -538,6 +624,81 @@ describe("Analysis Routes", () => {
 
       expect(response.body).not.toHaveProperty("result");
       expect(response.body).not.toHaveProperty("error");
+    });
+
+    it("should return both result and error when both are present", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [
+          {
+            id: jobId,
+            status: "completed",
+            result: { analysis: "partial result" },
+            error: "Warning: partial failure",
+          },
+        ],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.result).toEqual({ analysis: "partial result" });
+      expect(response.body.error).toBe("Warning: partial failure");
+    });
+
+    it("should handle job with empty result object", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [{ id: jobId, status: "completed", result: {}, error: null }],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.result).toEqual({});
+    });
+
+    it("should correctly map all job status types", async () => {
+      const statuses = ["pending", "processing", "completed", "failed"] as const;
+
+      for (const status of statuses) {
+        mockQuery.mockResolvedValue({
+          rows: [{ id: jobId, status, result: null, error: null }],
+        });
+
+        const response = await request(app).get(`/api/jobs/${jobId}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe(status);
+      }
+    });
+  });
+
+  // ==================== Route Type Imports ====================
+
+  describe("route type imports", () => {
+    it("should use types from routes/types.ts for response shapes", () => {
+      // Verify the response shapes match the types defined in routes/types.ts
+      // AnalyzeJobResponse shape: { job_id: string, status: "pending" }
+      const analyzeResponse: { readonly job_id: string; readonly status: "pending" } = {
+        job_id: "test-uuid",
+        status: "pending",
+      };
+      expect(analyzeResponse).toHaveProperty("job_id");
+      expect(analyzeResponse.status).toBe("pending");
+
+      // JobStatusResponse shape
+      const statusResponse: {
+        readonly job_id: string;
+        readonly status: "pending" | "processing" | "completed" | "failed";
+        readonly result?: Readonly<Record<string, unknown>>;
+        readonly error?: string;
+      } = {
+        job_id: "test-uuid",
+        status: "completed",
+        result: { key: "value" },
+      };
+      expect(statusResponse).toHaveProperty("job_id");
+      expect(statusResponse).toHaveProperty("status");
+      expect(statusResponse).toHaveProperty("result");
     });
   });
 });

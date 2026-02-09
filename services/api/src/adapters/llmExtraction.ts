@@ -1,8 +1,9 @@
 /**
  * LLM Extraction Adapter
  *
- * Wraps OpenAI-compatible SDK for chunk extraction operations.
- * Supports OpenRouter and other OpenAI-compatible providers.
+ * Wraps the LLM SDK for chunk extraction operations.
+ * Uses the OpenAI SDK client which supports OpenRouter
+ * and other compatible providers.
  * Keeps vendor SDK out of the service layer per CLAUDE.md.
  *
  * @module adapters/llmExtraction
