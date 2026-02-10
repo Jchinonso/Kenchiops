@@ -13,7 +13,7 @@ import {
   createLogger,
   errorHandler,
   requestLogger,
-  createRedisRateLimiter,
+  createRateLimitMiddleware,
   setupGracefulShutdown,
   registerCleanupHandler,
   initDatabase,
@@ -30,12 +30,17 @@ import {
   API_REDIS_PREFIXES,
   shouldSkipRateLimit,
   SERVER_TIMEOUTS,
+  SERVICE_NAMES,
 } from "@kenchi/shared";
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
+import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
 
-const logger = createLogger("api");
+/** Reference to analysis worker for cleanup on shutdown */
+let analysisWorker: AnalysisWorkerControl | null = null;
+
+const logger = createLogger(SERVICE_NAMES.API);
 
 /** Default shutdown timeout in milliseconds */
 const SHUTDOWN_TIMEOUT_MS = 30000;
@@ -232,16 +237,32 @@ const stopExternalSyncScheduler = (): void => {
 };
 
 /**
- * Redis-backed rate limiter: 100 requests per minute per IP.
+ * Redis-backed rate limiter with security features: 100 requests per minute per IP.
  * Falls back to in-memory if Redis is unavailable.
  * Skips health check endpoints for monitoring.
+ *
+ * Security features enabled:
+ * - Bot detection (signal-based, not blocking by default)
+ * - Burst detection (penalty-based, not blocking by default)
  */
-const apiRateLimiter = createRedisRateLimiter({
-  windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
-  max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
-  message: API_MESSAGES.RATE_LIMIT_EXCEEDED,
-  keyPrefix: API_REDIS_PREFIXES.RATE_LIMIT,
+const apiRateLimiter = createRateLimitMiddleware({
+  rateLimit: {
+    windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
+    max: RATE_LIMIT_CONSTANTS.DEFAULT_MAX_REQUESTS,
+    message: API_MESSAGES.RATE_LIMIT_EXCEEDED,
+    keyPrefix: API_REDIS_PREFIXES.RATE_LIMIT,
+  },
   skip: (req) => shouldSkipRateLimit(req.path),
+  botDetection: {
+    blockMalicious: false, // Signal-based, not blocking
+    botRateMultiplier: 0.5, // Bots get half the rate limit
+  },
+  burstDetection: {
+    maxBurst: 10,
+    rateMultiplier: 0.5, // Burst users get rate limit halved
+    blockOnBurst: false, // Penalty-based, not blocking
+  },
+  distributedFallback: "fail", // Fail-safe when Redis unavailable
 });
 
 /**
@@ -315,10 +336,26 @@ const startServer = async (): Promise<void> => {
   startExternalSyncScheduler();
   registerCleanupHandler(stopExternalSyncScheduler);
 
-  // Start fine-tuning job scheduler and register for graceful shutdown
-  startScheduler();
-  registerCleanupHandler(stopScheduler);
-  logger.info("Fine-tuning job scheduler started");
+  // Start fine-tuning job scheduler only when a real OpenAI key is configured.
+  // OpenRouter keys (sk-or-*) are not valid for the OpenAI fine-tuning API.
+  const apiKey = process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY ?? "";
+  if (apiKey.startsWith("sk-or-")) {
+    logger.warn(
+      "Fine-tuning scheduler disabled: OpenRouter key cannot be used for OpenAI fine-tuning API"
+    );
+  } else {
+    startScheduler();
+    registerCleanupHandler(stopScheduler);
+    logger.info("Fine-tuning job scheduler started");
+  }
+
+  // Start analysis worker and register for graceful shutdown
+  analysisWorker = startAnalysisWorker();
+  registerCleanupHandler(() => {
+    if (analysisWorker) {
+      analysisWorker.stop();
+    }
+  });
 
   // Set up graceful shutdown
   setupGracefulShutdown(server, {

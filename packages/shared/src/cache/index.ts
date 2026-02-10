@@ -7,7 +7,44 @@
  * @module cache
  */
 
-// Core cache client
+// ==================== Types (canonical definitions) ====================
+
+export type {
+  // Core cache types
+  CacheEntry,
+  CacheResult,
+  CacheSetOptions,
+  CacheStats,
+  CacheStatsState,
+  DeserializeResult,
+  RedisClientReadyResult,
+  // GitHub cache types
+  CachedPullRequest,
+  CachedComment,
+  CachedPRReference,
+  CachedCheckAnnotation,
+  // Tenant cache types
+  CachedTenant,
+  CachedMapping,
+  CachedTenantStats,
+  // Analysis cache types
+  CachedAnnotation,
+  CachedAction,
+  CachedAnalysis,
+  CachedConsolidatedAnalysis,
+  CacheOperationResult,
+  CacheWriteResult,
+  AnalysisApiResponse,
+  AnalysisCacheLogContext,
+} from "./types.js";
+
+// ==================== Helpers ====================
+
+// Tenant conversion utilities
+export { toCachedTenant, toCachedMapping } from "./helpers.js";
+
+// ==================== Core Cache Client ====================
+
 export {
   cacheGet,
   cacheSet,
@@ -20,13 +57,10 @@ export {
   getCacheStats,
   resetCacheStats,
   CACHE_TTL,
-  type CacheEntry,
-  type CacheResult,
-  type CacheSetOptions,
-  type CacheStats,
 } from "./cacheClient.js";
 
-// Cache key utilities
+// ==================== Cache Key Utilities ====================
+
 export {
   CACHE_NAMESPACE,
   githubCacheKeys,
@@ -39,7 +73,8 @@ export {
   type CacheNamespace,
 } from "./cacheKeys.js";
 
-// GitHub cache
+// ==================== GitHub Cache Operations ====================
+
 export {
   getCachedPullRequest,
   cachePullRequest,
@@ -47,13 +82,33 @@ export {
   getCachedPullRequestDiff,
   cachePullRequestDiff,
   getOrFetchPullRequestDiff,
-  type CachedPullRequest,
+  getOrFetchPullRequestCommits,
+  getOrFetchPullRequestFiles,
+  getOrFetchPullRequestComments,
+  getOrFetchCommitPullRequests,
+  getOrFetchCheckAnnotations,
 } from "./githubCache.js";
 
-// Tenant cache
+// ==================== Mapping Cache Operations ====================
+
 export {
-  toCachedTenant,
-  toCachedMapping,
+  getCachedChannelForRepo,
+  cacheChannelForRepo,
+  getOrFetchChannelForRepo,
+  getCachedMappingsForChannel,
+  cacheMappingsForChannel,
+  getOrFetchMappingsForChannel,
+  getCachedAllMappingsForTenant,
+  cacheAllMappingsForTenant,
+  getOrFetchAllMappingsForTenant,
+  invalidateMappingCache,
+  invalidateRepositoryMapping,
+  invalidateChannelMappings,
+} from "./mappingCache.js";
+
+// ==================== Tenant Cache Operations ====================
+
+export {
   getCachedTenantById,
   cacheTenantById,
   getOrFetchTenantById,
@@ -68,28 +123,14 @@ export {
   getCachedTenantStats,
   cacheTenantStats,
   getOrFetchTenantStats,
-  getCachedChannelForRepo,
-  cacheChannelForRepo,
-  getOrFetchChannelForRepo,
-  getCachedMappingsForChannel,
-  cacheMappingsForChannel,
-  getOrFetchMappingsForChannel,
-  getCachedAllMappingsForTenant,
-  cacheAllMappingsForTenant,
-  getOrFetchAllMappingsForTenant,
   invalidateTenantCache,
   invalidateTenantById,
   invalidateTenantByInstallation,
   invalidateTenantBySlackWorkspace,
-  invalidateMappingCache,
-  invalidateRepositoryMapping,
-  invalidateChannelMappings,
-  type CachedTenant,
-  type CachedMapping,
-  type CachedTenantStats,
 } from "./tenantCache.js";
 
-// Analysis cache
+// ==================== Analysis Cache Operations ====================
+
 export {
   generateLogHash,
   getCachedCheckAnalysis,
@@ -108,8 +149,4 @@ export {
   invalidateLogHashAnalysis,
   hasAnalysisInCache,
   hasLogHashInCache,
-  type CachedAnnotation,
-  type CachedAction,
-  type CachedAnalysis,
-  type CachedConsolidatedAnalysis,
 } from "./analysisCache.js";

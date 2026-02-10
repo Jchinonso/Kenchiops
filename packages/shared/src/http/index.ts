@@ -2,22 +2,37 @@
  * HTTP module - Express middleware, validation, and resilient client utilities.
  */
 
+// Types (all type exports from the canonical types.ts)
+export type {
+  CircuitBreakerConfig,
+  CircuitBreakerStatus,
+  HttpMethod,
+  ResilientRequestOptions,
+  ResilientResponse,
+  Validator,
+  ValidationSchema,
+  ValidationSource,
+} from "./types.js";
+
 // Middleware
 export { errorHandler, asyncHandler, requestLogger } from "./middleware.js";
 
 // Validation
-export { validate, validators, type Validator, type ValidationSchema } from "./validation.js";
+export { validate, validators } from "./validation.js";
 
-// Rate limiting
+// Rate limiting (re-exported from rateLimit module)
 export {
   createRateLimiter,
   defaultRateLimiter,
   createRedisRateLimiter,
   defaultRedisRateLimiter,
+  createRateLimitMiddleware,
+  createProductionRateLimitMiddleware,
   secureKeyGenerator,
   type RateLimitOptions,
   type RateLimitInfo,
-} from "./rateLimit.js";
+  type RateLimitMiddlewareConfig,
+} from "../rateLimit/index.js";
 
 // Generic circuit breaker pattern
 export {
@@ -27,8 +42,6 @@ export {
   resetAllCircuits,
   getAllCircuitStatus,
   SERVICE_KEYS,
-  type CircuitBreakerConfig,
-  type CircuitBreakerStatus,
 } from "./circuitBreaker.js";
 
 // Resilient HTTP client with retry and circuit breaker
@@ -41,6 +54,4 @@ export {
   resilientDelete,
   resetCircuitBreaker,
   getCircuitBreakerStatus,
-  type ResilientRequestOptions,
-  type ResilientResponse,
 } from "./resilientClient.js";

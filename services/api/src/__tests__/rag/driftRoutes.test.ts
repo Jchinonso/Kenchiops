@@ -41,6 +41,9 @@ jest.mock("@kenchi/shared", () => ({
     RAG_SEED_TEST_CASES: "/seed-test-cases",
     RAG_DETECT_RELATIONSHIPS: "/detect-relationships",
   },
+  RAG_QUERY_DEFAULTS: {
+    STALE_DOCS_LIMIT: 100,
+  },
   runTestSuite: mockRunTestSuite,
   generateDriftReport: mockGenerateDriftReport,
   checkMetricBounds: mockCheckMetricBounds,

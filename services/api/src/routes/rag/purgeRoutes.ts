@@ -4,7 +4,7 @@
  * @module routes/rag/purgeRoutes
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   HTTP_STATUS,
@@ -15,111 +15,156 @@ import {
   purgePRDiffChunks,
   purgeKnowledgeDocChunks,
 } from "@kenchi/shared";
+import type { TenantPurgeResponse, PRPurgeResponse, DocPurgeResponse } from "./types.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
 
-/**
- * DELETE /api/rag/tenant/:tenantId - Purge all tenant RAG data
- */
-router.delete(
-  API_ROUTES.RAG_PURGE_TENANT,
-  asyncHandler(async (req, res) => {
-    const { tenantId } = req.params;
+// ==================== Response Builders ====================
 
-    if (!tenantId) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "tenantId is required",
-      });
-      return;
-    }
+/** Builds tenant purge response */
+const buildTenantPurgeResponse = (
+  tenantId: string,
+  result: { readonly deletedCount: number; readonly errors: readonly string[] }
+): TenantPurgeResponse => ({
+  tenantId,
+  deletedCount: result.deletedCount,
+  errors: result.errors,
+});
 
-    logger.info("Purging tenant RAG data", { tenantId });
+/** Builds PR purge response */
+const buildPRPurgeResponse = (
+  repository: string,
+  prNumber: number,
+  result: { readonly deletedCount: number; readonly errors: readonly string[] }
+): PRPurgeResponse => ({
+  repository,
+  prNumber,
+  deletedCount: result.deletedCount,
+  errors: result.errors,
+});
 
-    const result = await purgeTenantRAGData(tenantId);
+/** Builds document purge response */
+const buildDocPurgeResponse = (
+  parentId: string,
+  result: { readonly deletedCount: number; readonly errors: readonly string[] }
+): DocPurgeResponse => ({
+  parentId,
+  deletedCount: result.deletedCount,
+  errors: result.errors,
+});
 
-    res.status(HTTP_STATUS.OK).json({
-      success: result.success,
-      data: {
-        tenantId,
-        deletedCount: result.deletedCount,
-        errors: result.errors,
-      },
-    });
-  })
-);
-
-/**
- * DELETE /api/rag/pr/:repository/:prNumber - Purge PR diff chunks
- */
-router.delete(
-  API_ROUTES.RAG_PURGE_PR,
-  asyncHandler(async (req, res) => {
-    const { repository, prNumber } = req.params;
-
-    if (!repository || !prNumber) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "repository and prNumber are required",
-      });
-      return;
-    }
-
-    const prNumberInt = parseInt(prNumber, 10);
-    if (isNaN(prNumberInt)) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "prNumber must be a valid number",
-      });
-      return;
-    }
-
-    logger.info("Purging PR diff chunks", { repository, prNumber: prNumberInt });
-
-    const result = await purgePRDiffChunks(repository, prNumberInt);
-
-    res.status(HTTP_STATUS.OK).json({
-      success: result.success,
-      data: {
-        repository,
-        prNumber: prNumberInt,
-        deletedCount: result.deletedCount,
-        errors: result.errors,
-      },
-    });
-  })
-);
+// ==================== Route Handlers ====================
 
 /**
- * DELETE /api/rag/doc/:parentId - Purge a knowledge document
+ * Handles tenant RAG data purge.
  */
-router.delete(
-  API_ROUTES.RAG_PURGE_DOC,
-  asyncHandler(async (req, res) => {
-    const { parentId } = req.params;
+const handlePurgeTenant = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { tenantId } = req.params;
 
-    if (!parentId) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "parentId is required",
-      });
-      return;
-    }
-
-    logger.info("Purging knowledge document", { parentId });
-
-    const result = await purgeKnowledgeDocChunks(parentId);
-
-    res.status(HTTP_STATUS.OK).json({
-      success: result.success,
-      data: {
-        parentId,
-        deletedCount: result.deletedCount,
-        errors: result.errors,
-      },
+  if (!tenantId) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "tenantId is required",
     });
-  })
-);
+    return;
+  }
+
+  const result = await purgeTenantRAGData(tenantId);
+
+  logger.info("Tenant RAG data purged", {
+    tenantId,
+    deletedCount: result.deletedCount,
+    errorCount: result.errors.length,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: result.success,
+    data: buildTenantPurgeResponse(tenantId, result),
+  });
+};
+
+/**
+ * Handles PR diff chunks purge.
+ */
+const handlePurgePR = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { repository, prNumber } = req.params;
+
+  if (!repository || !prNumber) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "repository and prNumber are required",
+    });
+    return;
+  }
+
+  const prNumberInt = parseInt(prNumber, 10);
+  if (isNaN(prNumberInt)) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "prNumber must be a valid number",
+    });
+    return;
+  }
+
+  const result = await purgePRDiffChunks(repository, prNumberInt);
+
+  logger.info("PR diff chunks purged", {
+    repository,
+    prNumber: prNumberInt,
+    deletedCount: result.deletedCount,
+    errorCount: result.errors.length,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: result.success,
+    data: buildPRPurgeResponse(repository, prNumberInt, result),
+  });
+};
+
+/**
+ * Handles knowledge document purge.
+ */
+const handlePurgeDoc = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { parentId } = req.params;
+
+  if (!parentId) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "parentId is required",
+    });
+    return;
+  }
+
+  const result = await purgeKnowledgeDocChunks(parentId);
+
+  logger.info("Knowledge document purged", {
+    parentId,
+    deletedCount: result.deletedCount,
+    errorCount: result.errors.length,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: result.success,
+    data: buildDocPurgeResponse(parentId, result),
+  });
+};
+
+// ==================== Route Definitions ====================
+
+/** DELETE /api/rag/tenant/:tenantId - Purge all tenant RAG data */
+router.delete(API_ROUTES.RAG_PURGE_TENANT, asyncHandler(handlePurgeTenant));
+
+/** DELETE /api/rag/pr/:repository/:prNumber - Purge PR diff chunks */
+router.delete(API_ROUTES.RAG_PURGE_PR, asyncHandler(handlePurgePR));
+
+/** DELETE /api/rag/doc/:parentId - Purge a knowledge document */
+router.delete(API_ROUTES.RAG_PURGE_DOC, asyncHandler(handlePurgeDoc));
 
 export { router as ragPurgeRoutes };

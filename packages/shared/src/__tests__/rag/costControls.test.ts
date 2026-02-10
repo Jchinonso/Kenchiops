@@ -14,12 +14,12 @@ jest.mock("../../core/logger.js", () => ({
   })),
 }));
 
-jest.mock("../../database/costTrackingRepository.js", () => ({
+jest.mock("../../database/costTracking/repository.js", () => ({
   recordCost: jest.fn(),
   getBudgetStatus: jest.fn(),
 }));
 
-jest.mock("../../database/tenantRagConfig.js", () => ({
+jest.mock("../../database/tenant/ragConfig.js", () => ({
   getRAGBudgetConfig: jest.fn(),
   updateRAGBudgetConfig: jest.fn(),
 }));
@@ -40,8 +40,8 @@ import {
   estimateMonthlyCost,
   recommendTier,
 } from "../../rag/costControls.js";
-import { recordCost, getBudgetStatus } from "../../database/costTrackingRepository.js";
-import { getRAGBudgetConfig } from "../../database/tenantRagConfig.js";
+import { recordCost, getBudgetStatus } from "../../database/index.js";
+import { getRAGBudgetConfig } from "../../database/tenant/ragConfig.js";
 
 const mockRecordCost = recordCost as jest.MockedFunction<typeof recordCost>;
 const mockGetBudgetStatus = getBudgetStatus as jest.MockedFunction<typeof getBudgetStatus>;

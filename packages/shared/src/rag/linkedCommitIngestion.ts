@@ -22,62 +22,24 @@ import {
   KNOWLEDGE_DOC_TYPES,
   SOURCE_RELIABILITY_SCORES,
 } from "../constants/index.js";
-import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
+import { ingestKnowledgeDoc } from "./ingestion.js";
+import type {
+  IngestKnowledgeDocResult,
+  FailureSummary,
+  PRFailureContext,
+  LinkedCommitInput,
+  LinkedCommitResult,
+  FailureSummaryInput,
+} from "./types.js";
+
+export type {
+  FailureSummary,
+  PRFailureContext,
+  LinkedCommitInput,
+  LinkedCommitResult,
+} from "./types.js";
 
 const logger = createLogger("rag-linked-commit");
-
-// ==================== Types ====================
-
-/**
- * Summary of a CI failure for linking with commits.
- */
-export interface FailureSummary {
-  readonly checkName: string;
-  readonly conclusion: string;
-  readonly identifiedCause: string;
-  readonly analysis: string;
-  readonly errorPatterns: readonly string[];
-  readonly testFailures: readonly string[];
-  readonly timestamp: string;
-  readonly confidence: number;
-}
-
-/**
- * PR failure context stored in Redis.
- */
-export interface PRFailureContext {
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly failures: readonly FailureSummary[];
-  readonly firstFailureAt: string;
-  readonly lastFailureAt: string;
-}
-
-/**
- * Input for creating linked commit knowledge.
- */
-export interface LinkedCommitInput {
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly prTitle: string;
-  readonly commitSha: string;
-  readonly commitMessages: readonly string[];
-  readonly diffSummary: string;
-  readonly changedFiles: readonly string[];
-  readonly tenantId: string;
-  readonly author?: string;
-}
-
-/**
- * Result of linked commit ingestion.
- */
-export interface LinkedCommitResult {
-  readonly success: boolean;
-  readonly chunksCreated: number;
-  readonly linkedFailures: number;
-  readonly skipped: boolean;
-  readonly reason?: string;
-}
 
 // ==================== Redis Key Helpers ====================
 
@@ -314,6 +276,78 @@ const buildLinkedKnowledgeTitle = (
   return `Fix: ${shortCause} (PR #${input.prNumber})`;
 };
 
+// ==================== Ingestion Helpers ====================
+
+/**
+ * Build metadata for the linked knowledge document ingestion.
+ */
+const buildIngestionMetadata = (
+  input: LinkedCommitInput,
+  failureContext: PRFailureContext
+): Record<string, unknown> => ({
+  prNumber: input.prNumber,
+  commitSha: input.commitSha,
+  author: input.author,
+  changedFiles: input.changedFiles,
+  failureCount: failureContext.failures.length,
+  firstFailureAt: failureContext.firstFailureAt,
+  lastFailureAt: failureContext.lastFailureAt,
+  sourceReliability: SOURCE_RELIABILITY_SCORES.LINKED_FIX,
+  checkNames: failureContext.failures.map((failure) => failure.checkName),
+  errorPatterns: failureContext.failures.flatMap((failure) => failure.errorPatterns),
+});
+
+/**
+ * Handle post-ingestion logging and cleanup.
+ * Clears tracked failures on success, logs errors on failure.
+ */
+const handleIngestionResult = async (
+  result: IngestKnowledgeDocResult,
+  repository: string,
+  prNumber: number,
+  failureCount: number
+): Promise<void> => {
+  if (result.success) {
+    await clearPRFailures(repository, prNumber);
+    logger.info("Linked commit knowledge created", {
+      repository,
+      prNumber,
+      documentId: result.parentId,
+      chunksCreated: result.chunksCreated,
+      linkedFailures: failureCount,
+    });
+    return;
+  }
+
+  logger.error("Failed to ingest linked commit knowledge", {
+    repository,
+    prNumber,
+    errors: result.errors,
+  });
+};
+
+/**
+ * Create a result for when no failures are tracked (skip case).
+ */
+const createSkippedResult = (reason: string): LinkedCommitResult => ({
+  success: true,
+  chunksCreated: 0,
+  linkedFailures: 0,
+  skipped: true,
+  reason,
+});
+
+/**
+ * Create a result for when ingestion fails with an error.
+ */
+const createErrorResult = (errorMessage: string): LinkedCommitResult => ({
+  success: false,
+  chunksCreated: 0,
+  linkedFailures: 0,
+  skipped: false,
+  reason: errorMessage,
+});
+
 // ==================== Main Ingestion Function ====================
 
 /**
@@ -336,75 +370,39 @@ export const ingestLinkedCommitKnowledge = async (
   logger.info("Checking for linked commit knowledge", { repository, prNumber });
 
   try {
-    // Get tracked failures for this PR
     const failureContext = await getPRFailures(repository, prNumber);
 
     if (!failureContext || failureContext.failures.length === 0) {
       logger.debug("No failures to link for PR", { repository, prNumber });
-      return {
-        success: true,
-        chunksCreated: 0,
-        linkedFailures: 0,
-        skipped: true,
-        reason: "No failures tracked for this PR",
-      };
+      return createSkippedResult("No failures tracked for this PR");
     }
 
-    // Build the knowledge document content
-    const content = buildLinkedKnowledgeContent(input, failureContext.failures);
-    const title = buildLinkedKnowledgeTitle(input, failureContext.failures);
+    const { failures } = failureContext;
+    const content = buildLinkedKnowledgeContent(input, failures);
+    const title = buildLinkedKnowledgeTitle(input, failures);
 
     logger.info("Creating linked commit knowledge", {
       repository,
       prNumber,
-      failureCount: failureContext.failures.length,
+      failureCount: failures.length,
       contentLength: content.length,
     });
 
-    // Ingest as high-reliability knowledge
-    const result: IngestKnowledgeDocResult = await ingestKnowledgeDoc({
+    const result = await ingestKnowledgeDoc({
       docType: KNOWLEDGE_DOC_TYPES.LINKED_FIX,
       title,
       content,
       repository,
       tenantId,
-      metadata: {
-        prNumber,
-        commitSha: input.commitSha,
-        author: input.author,
-        changedFiles: input.changedFiles,
-        failureCount: failureContext.failures.length,
-        firstFailureAt: failureContext.firstFailureAt,
-        lastFailureAt: failureContext.lastFailureAt,
-        sourceReliability: SOURCE_RELIABILITY_SCORES.LINKED_FIX,
-        checkNames: failureContext.failures.map((failure) => failure.checkName),
-        errorPatterns: failureContext.failures.flatMap((failure) => failure.errorPatterns),
-      },
+      metadata: buildIngestionMetadata(input, failureContext),
     });
 
-    if (result.success) {
-      // Clear tracked failures after successful ingestion
-      await clearPRFailures(repository, prNumber);
-
-      logger.info("Linked commit knowledge created", {
-        repository,
-        prNumber,
-        documentId: result.parentId,
-        chunksCreated: result.chunksCreated,
-        linkedFailures: failureContext.failures.length,
-      });
-    } else {
-      logger.error("Failed to ingest linked commit knowledge", {
-        repository,
-        prNumber,
-        errors: result.errors,
-      });
-    }
+    await handleIngestionResult(result, repository, prNumber, failures.length);
 
     return {
       success: result.success,
       chunksCreated: result.chunksCreated,
-      linkedFailures: failureContext.failures.length,
+      linkedFailures: failures.length,
       skipped: false,
     };
   } catch (error) {
@@ -413,14 +411,7 @@ export const ingestLinkedCommitKnowledge = async (
       prNumber,
       error: getErrorMessage(error),
     });
-
-    return {
-      success: false,
-      chunksCreated: 0,
-      linkedFailures: 0,
-      skipped: false,
-      reason: getErrorMessage(error),
-    };
+    return createErrorResult(getErrorMessage(error));
   }
 };
 
@@ -428,16 +419,6 @@ export const ingestLinkedCommitKnowledge = async (
  * Create a failure summary from an analyzed failure.
  * Utility for converting check run analysis into trackable format.
  */
-interface FailureSummaryInput {
-  readonly checkName: string;
-  readonly conclusion: string;
-  readonly identifiedCause: string;
-  readonly analysis: string;
-  readonly confidence: number;
-  readonly errorPatterns?: readonly string[];
-  readonly testFailures?: readonly string[];
-}
-
 export const createFailureSummary = (input: FailureSummaryInput): FailureSummary => ({
   checkName: input.checkName,
   conclusion: input.conclusion,

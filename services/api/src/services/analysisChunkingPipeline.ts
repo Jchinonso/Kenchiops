@@ -9,14 +9,15 @@
  * @module services/analysisChunkingPipeline
  */
 
-import OpenAI from "openai";
 import {
-  config,
   createLogger,
   LOG_LEVELS,
   EVIDENCE_SOURCES,
   EVIDENCE_LOG_TIMING,
   SERVICE_NAMES,
+  ARTIFACT_TYPES,
+  config,
+  LLM_DEFAULTS,
   // Chunking pipeline imports - Stage 1
   chunkLog,
   // Chunking pipeline imports - Stage 2
@@ -27,14 +28,25 @@ import {
   createDegradedResult,
   type Evidence,
   type LogEntry,
-  // Chunking pipeline types
+  type RequestContext,
   type AggregatedEvidence,
-  type ExtractorFunction,
 } from "@kenchi/shared";
+import { createLLMExtractor } from "../adapters/llmExtraction.js";
 
 const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Configuration ====================
+
+/**
+ * Gets the extraction model for chunk processing.
+ * Uses EXTRACTION_MODEL env var if set, otherwise falls back to Gemini 2.0 Flash
+ * on OpenRouter (fastest, cheapest) or the configured LLM_MODEL.
+ */
+const getExtractionModel = (): string =>
+  config.EXTRACTION_MODEL ||
+  (config.LLM_PROVIDER === "openrouter"
+    ? "google/gemini-2.5-flash"
+    : config.LLM_MODEL || LLM_DEFAULTS.MODEL);
 
 /**
  * Configuration for chunking pipeline.
@@ -43,60 +55,15 @@ const logger = createLogger(SERVICE_NAMES.API);
 export const CHUNKING_PIPELINE_CONFIG = {
   /** Token threshold for using chunking pipeline (zero means always use chunking) */
   TOKEN_THRESHOLD: 0,
-  /** Model to use for chunk extraction (cheaper, faster model) */
-  EXTRACTION_MODEL: "gpt-4o-mini",
-  /** Timeout for extraction requests in milliseconds */
-  EXTRACTION_TIMEOUT_MS: 30000,
+  /** Model to use for chunk extraction (uses configured LLM model) */
+  get EXTRACTION_MODEL() {
+    return getExtractionModel();
+  },
+  /** Timeout for extraction requests in milliseconds (per chunk, ~3000 tokens each) */
+  EXTRACTION_TIMEOUT_MS: 60000,
   /** Maximum concurrent extraction requests */
-  EXTRACTION_CONCURRENCY: 5,
+  EXTRACTION_CONCURRENCY: 15,
 } as const;
-
-// ==================== OpenAI Extraction Client ====================
-
-/**
- * Singleton OpenAI client for extraction operations.
- * Separate from the main analysis client for lightweight extraction calls.
- */
-let extractionClientInstance: OpenAI | null = null;
-
-/**
- * Gets or creates the OpenAI extraction client singleton.
- */
-const getExtractionClient = (): OpenAI => {
-  if (!extractionClientInstance) {
-    extractionClientInstance = new OpenAI({ apiKey: config.OPENAI_API_KEY });
-  }
-  return extractionClientInstance;
-};
-
-/**
- * Creates an extractor function that uses OpenAI for artifact extraction.
- * The extractor is called for each chunk during Stage 2.
- * Uses a lightweight OpenAI client instance for extraction operations.
- */
-const createOpenAIExtractor = (): ExtractorFunction => {
-  const extractionClient = getExtractionClient();
-
-  return async (
-    systemPrompt: string,
-    userPrompt: string,
-    options: { timeoutMs: number; model: string }
-  ): Promise<string> => {
-    const response = await extractionClient.chat.completions.create({
-      model: options.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0,
-      // Note: Not using response_format: json_object because the prompt asks for
-      // a raw JSON array, and json_object requires a root object. The parser
-      // handles both array and object responses with markdown fence stripping.
-    });
-
-    return response.choices[0]?.message?.content ?? "[]";
-  };
-};
 
 // ==================== Pipeline Execution ====================
 
@@ -109,16 +76,19 @@ const createOpenAIExtractor = (): ExtractorFunction => {
  *
  * @param failureLog - The preprocessed failure log content
  * @param repository - Repository name for logging
+ * @param context - Request context for tracing
  * @returns Aggregated evidence from the pipeline
  */
 export const executeChunkingPipeline = async (
   failureLog: string,
-  repository: string
+  repository: string,
+  context: RequestContext
 ): Promise<AggregatedEvidence> => {
+  const logContext = { ...context };
   const startTime = Date.now();
 
   // Stage 1: Smart Chunking
-  logger.info("Chunking pipeline Stage 1: Chunking log", { repository });
+  logger.info("Chunking pipeline Stage 1: Chunking log", { repository, ...logContext });
   const chunkingResult = chunkLog(failureLog);
 
   logger.info("Chunking complete", {
@@ -127,15 +97,17 @@ export const executeChunkingPipeline = async (
     totalTokens: chunkingResult.totalTokens,
     skippedChunking: chunkingResult.skippedChunking,
     detectedPlatform: chunkingResult.detectedPlatform,
+    ...logContext,
   });
 
   // Stage 2: Per-chunk extraction
   logger.info("Chunking pipeline Stage 2: Extracting artifacts from chunks", {
     repository,
     chunkCount: chunkingResult.chunks.length,
+    ...logContext,
   });
 
-  const extractor = createOpenAIExtractor();
+  const extractor = createLLMExtractor();
   const batchResult = await extractFromAllChunks(chunkingResult.chunks, extractor, {
     concurrency: CHUNKING_PIPELINE_CONFIG.EXTRACTION_CONCURRENCY,
     timeoutMs: CHUNKING_PIPELINE_CONFIG.EXTRACTION_TIMEOUT_MS,
@@ -148,6 +120,7 @@ export const executeChunkingPipeline = async (
     failedChunks: batchResult.failedChunks,
     totalArtifacts: batchResult.totalArtifacts,
     aborted: batchResult.aborted,
+    ...logContext,
   });
 
   // Check viability before aggregation
@@ -156,6 +129,7 @@ export const executeChunkingPipeline = async (
     logger.warn("Aggregation viability check failed, using degraded mode", {
       repository,
       reason: viabilityError,
+      ...logContext,
     });
     return createDegradedResult(
       failureLog,
@@ -167,7 +141,7 @@ export const executeChunkingPipeline = async (
   }
 
   // Stage 3: Aggregation and ranking
-  logger.info("Chunking pipeline Stage 3: Aggregating artifacts", { repository });
+  logger.info("Chunking pipeline Stage 3: Aggregating artifacts", { repository, ...logContext });
   const aggregatedEvidence = aggregateArtifacts(
     batchResult,
     chunkingResult.chunks,
@@ -185,6 +159,7 @@ export const executeChunkingPipeline = async (
     primaryFailureType: aggregatedEvidence.primaryFailureType,
     detectedFramework: aggregatedEvidence.detectedFramework,
     degradedMode: aggregatedEvidence.degraded_mode,
+    ...logContext,
   });
 
   return aggregatedEvidence;
@@ -193,24 +168,99 @@ export const executeChunkingPipeline = async (
 // ==================== Evidence Conversion ====================
 
 /**
+ * Formats a test_failure artifact with structured metadata for easier LLM extraction.
+ */
+const formatTestFailureMessage = (artifact: {
+  readonly type: string;
+  readonly errorMessage: string;
+  readonly snippet: string;
+  readonly testName?: string;
+  readonly filePath?: string;
+  readonly lineNumber?: number;
+  readonly expected?: string | null;
+  readonly actual?: string | null;
+}): string => {
+  const parts: string[] = [];
+
+  parts.push(`[${artifact.type}]`);
+
+  if (artifact.testName) {
+    parts.push(`Test: ${artifact.testName}`);
+  }
+
+  if (artifact.filePath) {
+    const location = artifact.lineNumber
+      ? `${artifact.filePath}:${artifact.lineNumber}`
+      : artifact.filePath;
+    parts.push(`File: ${location}`);
+  }
+
+  if (artifact.expected !== undefined && artifact.expected !== null) {
+    parts.push(`Expected: ${artifact.expected}`);
+  }
+
+  if (artifact.actual !== undefined && artifact.actual !== null) {
+    parts.push(`Actual: ${artifact.actual}`);
+  }
+
+  parts.push(`Error: ${artifact.errorMessage}`);
+  parts.push(`\nSnippet:\n${artifact.snippet}`);
+
+  return parts.join("\n");
+};
+
+/**
  * Converts aggregated evidence to Evidence format for final analysis.
  * Maps ranked artifacts to log entries that can be analyzed by the LLM.
+ * Adds a summary of artifact counts to help the LLM output all items.
  */
 export const convertAggregatedToEvidence = (
   aggregated: AggregatedEvidence,
   eventId: string,
   collectedAt: string
 ): Evidence => {
+  // Count artifacts by type
+  const artifactCounts = aggregated.artifacts.reduce(
+    (counts, artifact) => {
+      counts[artifact.type] = (counts[artifact.type] ?? 0) + 1;
+      return counts;
+    },
+    {} as Record<string, number>
+  );
+
+  const testFailureCount = artifactCounts[ARTIFACT_TYPES.TEST_FAILURE] ?? 0;
+
   // Convert artifacts to log entries
-  const logs: LogEntry[] = aggregated.artifacts.map((artifact, index) => ({
-    id: `artifact_${index}`,
-    level: artifact.severity === "fatal" ? LOG_LEVELS.ERROR : LOG_LEVELS.INFO,
-    message: `[${artifact.type}] ${artifact.errorMessage}\n\nSnippet:\n${artifact.snippet}`,
-    timestamp: new Date(
-      new Date(collectedAt).getTime() + index * EVIDENCE_LOG_TIMING.TIMESTAMP_OFFSET_MS
-    ).toISOString(),
+  const logs: LogEntry[] = aggregated.artifacts.map((artifact, index) => {
+    // Use structured format for test_failure artifacts
+    const message =
+      artifact.type === ARTIFACT_TYPES.TEST_FAILURE
+        ? formatTestFailureMessage(artifact)
+        : `[${artifact.type}] ${artifact.errorMessage}\n\nSnippet:\n${artifact.snippet}`;
+
+    return {
+      id: `artifact_${index}`,
+      level: artifact.severity === "fatal" ? LOG_LEVELS.ERROR : LOG_LEVELS.INFO,
+      message,
+      timestamp: new Date(
+        new Date(collectedAt).getTime() + index * EVIDENCE_LOG_TIMING.TIMESTAMP_OFFSET_MS
+      ).toISOString(),
+      source: EVIDENCE_SOURCES.CI,
+    };
+  });
+
+  // Add artifact summary at the start to help LLM understand the full scope
+  const countSummary = Object.entries(artifactCounts)
+    .map(([type, count]) => `${type}: ${count}`)
+    .join(", ");
+
+  logs.unshift({
+    id: "artifact_summary",
+    level: LOG_LEVELS.INFO,
+    message: `ARTIFACT SUMMARY: Total ${aggregated.artifacts.length} artifacts extracted. Breakdown: ${countSummary}.\n\nIMPORTANT: You MUST include ALL ${testFailureCount} test failures in your test_failures array. Each test_failure artifact below MUST have a corresponding entry.`,
+    timestamp: collectedAt,
     source: EVIDENCE_SOURCES.CI,
-  }));
+  });
 
   // Add primary failure context if available
   if (aggregated.primaryFailure && aggregated.primaryFailure.artifactIndex >= 0) {

@@ -11,43 +11,15 @@ import { getErrorMessage } from "../core/errors.js";
 import {
   COST_CONTROL_CONFIG,
   CACHE_TTL_SECONDS,
+  DEFAULT_TIER_CONFIG_VALUES,
   type EmbeddingTierName,
 } from "../constants/index.js";
-import { getRAGBudgetConfig } from "../database/tenantRagConfig.js";
+import { getRAGBudgetConfig } from "../database/index.js";
+import type { CacheStats, TenantTierConfig, CacheEntry } from "./types.js";
+
+export type { CacheStats, TenantTierConfig } from "./types.js";
 
 const logger = createLogger("rag-cost-controls");
-
-// ==================== Types ====================
-
-/**
- * Query cache entry.
- */
-interface CacheEntry {
-  readonly embedding: readonly number[];
-  readonly timestamp: number;
-  readonly tier: EmbeddingTierName;
-}
-
-/**
- * Cache statistics.
- */
-export interface CacheStats {
-  readonly size: number;
-  readonly hits: number;
-  readonly misses: number;
-  readonly hitRate: number;
-}
-
-/**
- * Tiered embedding configuration for a tenant.
- */
-export interface TenantTierConfig {
-  readonly tenantId: string;
-  readonly preferredTier: EmbeddingTierName;
-  readonly monthlyBudgetUsd: number;
-  readonly degradeOnBudgetWarning: boolean;
-  readonly allowPremium: boolean;
-}
 
 // ==================== Query Cache ====================
 
@@ -176,10 +148,10 @@ export const getCacheStats = (): CacheStats => {
  * Default tenant tier configuration.
  */
 export const DEFAULT_TIER_CONFIG: Omit<TenantTierConfig, "tenantId"> = {
-  preferredTier: "STANDARD",
+  preferredTier: DEFAULT_TIER_CONFIG_VALUES.PREFERRED_TIER,
   monthlyBudgetUsd: COST_CONTROL_CONFIG.DEFAULT_MONTHLY_BUDGET_USD,
-  degradeOnBudgetWarning: true,
-  allowPremium: false,
+  degradeOnBudgetWarning: DEFAULT_TIER_CONFIG_VALUES.DEGRADE_ON_BUDGET_WARNING,
+  allowPremium: DEFAULT_TIER_CONFIG_VALUES.ALLOW_PREMIUM,
 };
 
 /**
@@ -198,11 +170,11 @@ export const clearTenantConfigCache = (tenantId: string): void => {
 
 /**
  * Sets tier configuration for a tenant (updates database).
- * For backwards compatibility - prefer using updateRAGBudgetConfig from tenantRagConfig.
+ * For backwards compatibility - prefer using updateRAGBudgetConfig from database/tenant.
  */
 export const setTenantTierConfig = async (config: TenantTierConfig): Promise<void> => {
   // Import dynamically to avoid circular dependency
-  const { updateRAGBudgetConfig } = await import("../database/tenantRagConfig.js");
+  const { updateRAGBudgetConfig } = await import("../database/tenant/index.js");
 
   await updateRAGBudgetConfig({
     tenantId: config.tenantId,

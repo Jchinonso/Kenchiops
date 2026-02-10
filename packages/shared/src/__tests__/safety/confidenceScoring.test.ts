@@ -48,8 +48,9 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have strong uncertainty penalty (-0.15 for "not sure")
-      expect(result.breakdown.uncertaintyAdjustment).toBeLessThan(0);
-      expect(result.breakdown.uncertaintyAdjustment).toBeLessThanOrEqual(-0.15);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.uncertainty).toBeLessThan(0);
+      expect(result.breakdown.bounded.uncertainty).toBeLessThanOrEqual(-0.15);
       expect(result.finalScore).toBeLessThan(0.75); // Less than base score
     });
 
@@ -78,7 +79,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have positive evidence alignment (+0.15 for log reference)
-      expect(result.breakdown.evidenceAlignment).toBeGreaterThan(0);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.evidenceAlignment).toBeGreaterThan(0);
       expect(result.finalScore).toBeGreaterThan(0.75); // Greater than base score
     });
 
@@ -107,7 +109,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have positive evidence alignment (+0.10 for commit reference)
-      expect(result.breakdown.evidenceAlignment).toBeGreaterThan(0);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.evidenceAlignment).toBeGreaterThan(0);
     });
 
     it("should penalize when no evidence alignment but cause identified", () => {
@@ -134,7 +137,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have negative evidence alignment (-0.15)
-      expect(result.breakdown.evidenceAlignment).toBe(-0.15);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.evidenceAlignment).toBe(-0.15);
     });
 
     it("should reward completeness when analysis is thorough", () => {
@@ -175,9 +179,10 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have positive completeness score
-      expect(result.breakdown.completeness).toBeGreaterThan(0);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.completeness).toBeGreaterThan(0);
       // Root cause + reasoning + actions + impact + uncertainties = +0.13
-      expect(result.breakdown.completeness).toBeGreaterThanOrEqual(0.13);
+      expect(result.breakdown.bounded.completeness).toBeGreaterThanOrEqual(0.13);
     });
 
     it("should penalize incomplete analysis", () => {
@@ -196,7 +201,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have negative completeness (-0.15)
-      expect(result.breakdown.completeness).toBe(-0.15);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.completeness).toBe(-0.15);
     });
 
     it("should reward knowledge base validation for high-similarity incidents", () => {
@@ -225,7 +231,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have positive knowledge base validation (+0.10)
-      expect(result.breakdown.knowledgeBaseValidation).toBe(0.1);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.knowledgeBaseValidation).toBe(0.1);
     });
 
     it("should reward consistency when actions address cause", () => {
@@ -252,7 +259,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have positive consistency (+0.05)
-      expect(result.breakdown.consistency).toBe(0.05);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.consistency).toBe(0.05);
     });
 
     it("should penalize inconsistent actions", () => {
@@ -279,7 +287,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = calculateConfidenceScore(analysis, evidence);
 
       // Should have negative consistency (-0.10)
-      expect(result.breakdown.consistency).toBe(-0.1);
+      // Check bounded value (after clamping, before weighting)
+      expect(result.breakdown.bounded.consistency).toBe(-0.1);
     });
 
     it("should clamp final score to [0, 1] range", () => {
@@ -373,8 +382,9 @@ describe("Safety - Confidence Scoring", () => {
 
       const result = determineActionGating(action, 0.2);
 
-      expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(false);
+      // Block state: requiresApproval=false (approval can't help), canExecute=false
+      expect(result.requiresApproval).toBe(false);
+      expect(result.canExecute).toBe(false);
       expect(result.message).toContain("Very low confidence");
     });
 
@@ -392,7 +402,7 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.4);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(true);
+      expect(result.canExecute).toBe(true);
       expect(result.message).toContain("Low confidence");
     });
 
@@ -410,7 +420,7 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.6);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(true);
+      expect(result.canExecute).toBe(true);
       expect(result.message).toContain("Medium confidence");
     });
 
@@ -428,7 +438,7 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.75);
 
       expect(result.requiresApproval).toBe(false);
-      expect(result.autoExecutable).toBe(true);
+      expect(result.canExecute).toBe(true);
       expect(result.message).toContain("High confidence");
       expect(result.message).toContain("Auto-approved");
     });
@@ -447,8 +457,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.75);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(true);
-      expect(result.message).toContain("medium risk");
+      expect(result.canExecute).toBe(true);
+      expect(result.message).toContain("medium-risk");
       expect(result.message).toContain("Approval required");
     });
 
@@ -477,9 +487,9 @@ describe("Safety - Confidence Scoring", () => {
       const lowRiskResult = determineActionGating(lowRiskAction, 0.9);
 
       expect(safeResult.requiresApproval).toBe(false);
-      expect(safeResult.autoExecutable).toBe(true);
+      expect(safeResult.canExecute).toBe(true);
       expect(lowRiskResult.requiresApproval).toBe(false);
-      expect(lowRiskResult.autoExecutable).toBe(true);
+      expect(lowRiskResult.canExecute).toBe(true);
     });
 
     it("should require approval for medium-risk actions even with very high confidence", () => {
@@ -496,8 +506,8 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.9);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.autoExecutable).toBe(true);
-      expect(result.message).toContain("medium risk");
+      expect(result.canExecute).toBe(true);
+      expect(result.message).toContain("medium-risk");
     });
 
     it("should always require approval for dangerous actions", () => {
@@ -514,7 +524,243 @@ describe("Safety - Confidence Scoring", () => {
       const result = determineActionGating(action, 0.95);
 
       expect(result.requiresApproval).toBe(true);
-      expect(result.message).toContain("Always requires approval");
+      expect(result.message).toContain("dangerous");
+      expect(result.message).toContain("Approval required");
+    });
+  });
+
+  describe("Robustness improvements", () => {
+    describe("Unknown confidence handling", () => {
+      it("should fall back to default for missing confidence", () => {
+        const analysis: LLMAnalysisResult = {
+          eventId: "evt_test",
+          summary: "Test summary",
+          // confidence is undefined
+          analyzedAt: new Date().toISOString(),
+        };
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          collectedAt: new Date().toISOString(),
+        };
+
+        const result = calculateConfidenceScore(analysis, evidence);
+
+        expect(result.breakdown.baseScore).toBe(0.5); // DEFAULT
+        expect(result.reasoning[0]).toContain("missing → default");
+      });
+
+      it("should fall back to default for invalid confidence value", () => {
+        const analysis = {
+          eventId: "evt_test",
+          summary: "Test summary",
+          confidence: "Very_High", // Invalid casing
+          analyzedAt: new Date().toISOString(),
+        } as unknown as LLMAnalysisResult;
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          collectedAt: new Date().toISOString(),
+        };
+
+        const result = calculateConfidenceScore(analysis, evidence);
+
+        expect(result.breakdown.baseScore).toBe(0.5); // DEFAULT
+        expect(result.reasoning[0]).toContain("unknown, using default");
+      });
+    });
+
+    describe("Factor bounding (mis-implementation resistant)", () => {
+      it("should clamp factors to defined bounds", () => {
+        // The actual factor functions should return bounded values,
+        // but the main scoring function also clamps as defense-in-depth
+        const analysis: LLMAnalysisResult = {
+          eventId: "evt_test",
+          summary: "Test",
+          confidence: "high",
+          analyzedAt: new Date().toISOString(),
+        };
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          collectedAt: new Date().toISOString(),
+        };
+
+        const result = calculateConfidenceScore(analysis, evidence);
+
+        // All bounded factors should be within their defined bounds
+        // (bounded = raw values clamped to FACTOR_BOUNDS)
+        expect(result.breakdown.bounded.uncertainty).toBeGreaterThanOrEqual(-0.3);
+        expect(result.breakdown.bounded.uncertainty).toBeLessThanOrEqual(0);
+
+        expect(result.breakdown.bounded.evidenceAlignment).toBeGreaterThanOrEqual(-0.4);
+        expect(result.breakdown.bounded.evidenceAlignment).toBeLessThanOrEqual(0.4);
+
+        expect(result.breakdown.bounded.completeness).toBeGreaterThanOrEqual(-0.2);
+        expect(result.breakdown.bounded.completeness).toBeLessThanOrEqual(0.2);
+
+        expect(result.breakdown.bounded.knowledgeBaseValidation).toBeGreaterThanOrEqual(-0.3);
+        expect(result.breakdown.bounded.knowledgeBaseValidation).toBeLessThanOrEqual(0.3);
+
+        expect(result.breakdown.bounded.consistency).toBeGreaterThanOrEqual(-0.2);
+        expect(result.breakdown.bounded.consistency).toBeLessThanOrEqual(0.2);
+
+        // Also verify weighted factors exist and are bounded * weight
+        expect(result.breakdown.weighted.uncertainty).toBeDefined();
+        expect(result.breakdown.weighted.evidenceAlignment).toBeDefined();
+        expect(result.breakdown.weighted.completeness).toBeDefined();
+        expect(result.breakdown.weighted.knowledgeBaseValidation).toBeDefined();
+        expect(result.breakdown.weighted.consistency).toBeDefined();
+
+        // Verify totals
+        expect(result.breakdown.totals.weightedAdjustment).toBeDefined();
+        expect(result.breakdown.totals.rawScore).toBeDefined();
+        expect(result.breakdown.totals.cappedScore).toBeDefined();
+        expect(result.breakdown.totals.finalScore).toBe(result.finalScore);
+      });
+    });
+
+    describe("Empty analysis handling", () => {
+      it("should cap score for empty analysis (no summary, cause, or actions)", () => {
+        const emptyAnalysis: LLMAnalysisResult = {
+          eventId: "evt_test",
+          // No summary
+          // No identifiedCause
+          // No recommendedActions
+          confidence: "very_high", // Even high confidence
+          analyzedAt: new Date().toISOString(),
+        };
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          collectedAt: new Date().toISOString(),
+        };
+
+        const result = calculateConfidenceScore(emptyAnalysis, evidence);
+
+        // Should be capped at 0.3 (EMPTY_ANALYSIS_MAX_SCORE)
+        expect(result.finalScore).toBeLessThanOrEqual(0.3);
+        expect(result.reasoning).toContainEqual(expect.stringContaining("Empty analysis cap"));
+        // Should be blocked or require approval
+        expect(["block", "require_approval"]).toContain(result.gatingDecision);
+      });
+
+      it("should not apply empty analysis penalty when summary exists", () => {
+        const analysisWithSummary: LLMAnalysisResult = {
+          eventId: "evt_test",
+          summary: "This is a valid summary",
+          confidence: "high",
+          analyzedAt: new Date().toISOString(),
+        };
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          collectedAt: new Date().toISOString(),
+        };
+
+        const result = calculateConfidenceScore(analysisWithSummary, evidence);
+
+        // Should NOT contain empty analysis cap in reasoning
+        expect(result.reasoning).not.toContainEqual(expect.stringContaining("Empty analysis cap"));
+      });
+    });
+
+    describe("Determinism", () => {
+      it("should produce identical results for identical inputs", () => {
+        const analysis: LLMAnalysisResult = {
+          eventId: "evt_test",
+          summary: "Test summary",
+          identifiedCause: "Test cause",
+          reasoning: "Test reasoning",
+          confidence: "high",
+          recommendedActions: [{ actionType: "notify_team", description: "Notify team" }],
+          analyzedAt: "2024-01-01T00:00:00.000Z",
+        };
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          logs: [{ message: "Test cause found in logs" }],
+          collectedAt: "2024-01-01T00:00:00.000Z",
+        };
+
+        // Run multiple times
+        const results = Array.from({ length: 10 }, () =>
+          calculateConfidenceScore(analysis, evidence)
+        );
+
+        // All results should be identical
+        const firstResult = results[0];
+        for (const result of results) {
+          expect(result.finalScore).toBe(firstResult.finalScore);
+          expect(result.breakdown).toEqual(firstResult.breakdown);
+          expect(result.gatingDecision).toBe(firstResult.gatingDecision);
+        }
+      });
+    });
+
+    describe("Scoring version traceability", () => {
+      it("should include scoring version in result", () => {
+        const analysis: LLMAnalysisResult = {
+          eventId: "evt_test",
+          summary: "Test",
+          confidence: "medium",
+          analyzedAt: new Date().toISOString(),
+        };
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          collectedAt: new Date().toISOString(),
+        };
+
+        const result = calculateConfidenceScore(analysis, evidence);
+
+        expect(result.scoringVersion).toBeDefined();
+        expect(result.scoringVersion).toBe("confidence_v2");
+      });
+    });
+
+    describe("Text processing robustness", () => {
+      it("should handle very long analysis text without error", () => {
+        const longText = "a".repeat(50000);
+        const analysis: LLMAnalysisResult = {
+          eventId: "evt_test",
+          summary: longText,
+          reasoning: longText,
+          identifiedCause: longText,
+          confidence: "medium",
+          analyzedAt: new Date().toISOString(),
+        };
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          collectedAt: new Date().toISOString(),
+        };
+
+        // Should not throw
+        expect(() => calculateConfidenceScore(analysis, evidence)).not.toThrow();
+
+        const result = calculateConfidenceScore(analysis, evidence);
+        expect(result.finalScore).toBeGreaterThanOrEqual(0);
+        expect(result.finalScore).toBeLessThanOrEqual(1);
+      });
+
+      it("should handle whitespace-only fields gracefully", () => {
+        const analysis: LLMAnalysisResult = {
+          eventId: "evt_test",
+          summary: "   ",
+          reasoning: "\n\t\n",
+          confidence: "medium",
+          analyzedAt: new Date().toISOString(),
+        };
+
+        const evidence: Evidence = {
+          eventId: "evt_test",
+          collectedAt: new Date().toISOString(),
+        };
+
+        // Should not throw
+        expect(() => calculateConfidenceScore(analysis, evidence)).not.toThrow();
+      });
     });
   });
 

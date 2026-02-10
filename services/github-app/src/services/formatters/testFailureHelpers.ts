@@ -49,71 +49,93 @@ export const generateProgressBar = (value: number, total: number): string => {
 };
 
 /**
- * Categorize test failures by error type.
- * Works with any test framework - LLM already filters real failures.
+ * Check if a failure matches assertion keywords in its error message.
+ */
+const isAssertionByKeyword = (errorLower: string): boolean =>
+  errorLower.includes("expect") ||
+  errorLower.includes("assert") ||
+  errorLower.includes("received") ||
+  errorLower.includes("tobe") ||
+  errorLower.includes("toequal");
+
+/**
+ * Check if a failure matches timeout keywords in its error message.
+ */
+const isTimeoutByKeyword = (errorLower: string): boolean =>
+  errorLower.includes("timeout") || errorLower.includes("exceeded") || errorLower.includes("async");
+
+/**
+ * Check if a failure matches module-not-found keywords in its error message.
+ * Checked before runtime because "Cannot find module" errors often contain
+ * "undefined" which would incorrectly match the runtime category.
+ */
+const isModuleNotFoundByKeyword = (errorLower: string): boolean =>
+  errorLower.includes("could not locate module") ||
+  errorLower.includes("cannot find module") ||
+  errorLower.includes("module not found") ||
+  errorLower.includes("no module named") ||
+  errorLower.includes("modulenotfounderror");
+
+/**
+ * Check if a failure matches runtime error keywords in its error message.
+ */
+const isRuntimeByKeyword = (errorLower: string): boolean =>
+  errorLower.includes("typeerror") ||
+  errorLower.includes("referenceerror") ||
+  errorLower.includes("is not a function") ||
+  errorLower.includes("undefined") ||
+  errorLower.includes("null");
+
+/**
+ * Categorize test failures by error type using single-pass classification.
+ *
+ * Priority 1: If expected AND actual fields are present, classify as assertion
+ * (structural/deterministic check, independent of LLM-written error text).
+ * Priority 2: Fall back to keyword matching in the error message.
+ *
+ * Each failure is assigned to exactly one category (no double counting).
  */
 export const categorizeFailures = (
   testFailures: readonly TestFailureInfo[]
 ): ErrorCategoryBreakdown => {
-  const assertion = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("expect") ||
-      failure.error?.toLowerCase().includes("assert") ||
-      failure.error?.toLowerCase().includes("received") ||
-      failure.error?.toLowerCase().includes("tobe") ||
-      failure.error?.toLowerCase().includes("toequal")
-  ).length;
+  // let: single-pass accumulator counters for categorization
+  let assertion = 0;
+  let timeout = 0;
+  let moduleNotFound = 0;
+  let runtime = 0;
+  let other = 0;
 
-  const timeout = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("timeout") ||
-      failure.error?.toLowerCase().includes("exceeded") ||
-      failure.error?.toLowerCase().includes("async")
-  ).length;
-
-  const runtime = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("typeerror") ||
-      failure.error?.toLowerCase().includes("referenceerror") ||
-      failure.error?.toLowerCase().includes("is not a function") ||
-      failure.error?.toLowerCase().includes("undefined") ||
-      failure.error?.toLowerCase().includes("null")
-  ).length;
-
-  // Other = total - categorized, avoiding double counting
-  const categorized = new Set<TestFailureInfo>();
-  testFailures.forEach((failure) => {
-    const errorLower = failure.error?.toLowerCase() ?? "";
+  for (const failure of testFailures) {
+    // Priority 1: Structural check — expected AND actual fields present means assertion
     if (
-      errorLower.includes("expect") ||
-      errorLower.includes("assert") ||
-      errorLower.includes("received") ||
-      errorLower.includes("tobe") ||
-      errorLower.includes("toequal")
+      failure.expected !== null &&
+      failure.expected !== undefined &&
+      failure.actual !== null &&
+      failure.actual !== undefined
     ) {
-      categorized.add(failure);
-    } else if (
-      errorLower.includes("timeout") ||
-      errorLower.includes("exceeded") ||
-      errorLower.includes("async")
-    ) {
-      categorized.add(failure);
-    } else if (
-      errorLower.includes("typeerror") ||
-      errorLower.includes("referenceerror") ||
-      errorLower.includes("is not a function") ||
-      errorLower.includes("undefined") ||
-      errorLower.includes("null")
-    ) {
-      categorized.add(failure);
+      assertion++;
+      continue;
     }
-  });
 
-  const other = testFailures.length - categorized.size;
+    // Priority 2: Keyword matching in error message (single category per failure)
+    const errorLower = failure.error?.toLowerCase() ?? "";
+    if (isAssertionByKeyword(errorLower)) {
+      assertion++;
+    } else if (isTimeoutByKeyword(errorLower)) {
+      timeout++;
+    } else if (isModuleNotFoundByKeyword(errorLower)) {
+      moduleNotFound++;
+    } else if (isRuntimeByKeyword(errorLower)) {
+      runtime++;
+    } else {
+      other++;
+    }
+  }
 
   return {
     assertion,
     timeout,
+    module_not_found: moduleNotFound,
     runtime,
     other: Math.max(0, other),
     total: testFailures.length,
@@ -131,6 +153,7 @@ export const generateErrorBreakdownVisual = (breakdown: ErrorCategoryBreakdown):
   const categories = [
     { name: "Assertion", count: breakdown.assertion },
     { name: "Timeout  ", count: breakdown.timeout },
+    { name: "Module   ", count: breakdown.module_not_found },
     { name: "Runtime  ", count: breakdown.runtime },
     { name: "Other    ", count: breakdown.other },
   ];
@@ -153,89 +176,52 @@ export const generateErrorBreakdownVisual = (breakdown: ErrorCategoryBreakdown):
 };
 
 /**
- * Generate consolidated actions by error type (not per file).
- * Works with any test framework - LLM already filters real failures.
+ * Build a fallback summary line from categorized test failures.
+ * Used only when the LLM provides no recommended actions.
+ */
+const buildFallbackSummary = (testFailures: readonly TestFailureInfo[]): string => {
+  const breakdown = categorizeFailures(testFailures);
+
+  const categories = [
+    { count: breakdown.assertion, label: "assertion failure" },
+    { count: breakdown.timeout, label: "timeout/async issue" },
+    { count: breakdown.module_not_found, label: "missing module" },
+    { count: breakdown.runtime, label: "runtime error" },
+    { count: breakdown.other, label: "other failure" },
+  ] as const;
+
+  const parts = categories
+    .filter((cat) => cat.count > 0)
+    .map((cat) => `${cat.count} ${cat.label}${cat.count > 1 ? "s" : ""}`);
+
+  const count = testFailures.length;
+  const suffix = parts.length > 0 ? `: ${parts.join(", ")}` : "";
+  return `Review ${count} test failure${count > 1 ? "s" : ""}${suffix}`;
+};
+
+/**
+ * Generate consolidated recommended actions.
+ *
+ * LLM-generated actions are primary — the analysis prompts already instruct
+ * surgical, pattern-based recommendations. Template fallback only fires
+ * when the LLM returns zero actions.
  */
 export const generateConsolidatedActions = (
   testFailures: readonly TestFailureInfo[],
   llmActions: readonly LLMAction[]
 ): string[] => {
-  if (testFailures.length === 0) {
+  // LLM actions available — use them directly (already surgical per prompt instructions)
+  if (llmActions.length > 0) {
     return llmActions
       .slice(0, GITHUB_COMMENT_DISPLAY.MAX_ACTIONS)
       .map((action) => action.description);
   }
 
-  const actions: string[] = [];
-
-  // Count error types across all failures
-  const assertionFailures = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("expect") ||
-      failure.error?.toLowerCase().includes("assert") ||
-      failure.error?.toLowerCase().includes("received")
-  );
-
-  const timeoutFailures = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("timeout") ||
-      failure.error?.toLowerCase().includes("exceeded")
-  );
-
-  const typeErrors = testFailures.filter(
-    (failure) =>
-      failure.error?.toLowerCase().includes("typeerror") ||
-      failure.error?.toLowerCase().includes("is not a function") ||
-      failure.error?.toLowerCase().includes("undefined")
-  );
-
-  // Get unique files
-  const uniqueFiles = [...new Set(testFailures.map((failure) => failure.file).filter(Boolean))];
-
-  // Generate one action per error type
-  if (assertionFailures.length > 0) {
-    actions.push(
-      `**Assertion failures (${assertionFailures.length})**: Test expectations don't match actual values. Review the expected vs received values and update tests or fix the implementation.`
-    );
+  // No LLM actions and no test failures — nothing to recommend
+  if (testFailures.length === 0) {
+    return [];
   }
 
-  if (timeoutFailures.length > 0) {
-    actions.push(
-      `**Timeout/Async issues (${timeoutFailures.length})**: Tests timing out or async operations not completing. Check for missing \`await\`, increase timeouts, or fix hanging promises.`
-    );
-  }
-
-  if (typeErrors.length > 0) {
-    actions.push(
-      `**Type/Runtime errors (${typeErrors.length})**: Code throwing errors during execution. Check for undefined values, missing imports, or incorrect function calls.`
-    );
-  }
-
-  // Add file summary if multiple files affected
-  if (uniqueFiles.length > 1) {
-    const fileList = uniqueFiles
-      .slice(0, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS)
-      .map((filePath) => `\`${filePath?.split("/").pop()}\``)
-      .join(", ");
-    actions.push(
-      `**Files to review**: ${fileList}${uniqueFiles.length > GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS ? " and more" : ""}`
-    );
-  }
-
-  // Add one relevant LLM action if not redundant
-  const relevantLlmAction = llmActions.find(
-    (llmAction) =>
-      !actions.some((action) =>
-        action
-          .toLowerCase()
-          .includes(
-            llmAction.description.substring(0, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS).toLowerCase()
-          )
-      )
-  );
-  if (relevantLlmAction) {
-    actions.push(relevantLlmAction.description);
-  }
-
-  return actions.slice(0, GITHUB_COMMENT_DISPLAY.MAX_ACTIONS);
+  // Fallback: single context-aware summary when LLM provided no actions
+  return [buildFallbackSummary(testFailures)];
 };

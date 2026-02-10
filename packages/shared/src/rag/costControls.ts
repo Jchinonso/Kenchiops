@@ -13,14 +13,11 @@ import {
   EMBEDDING_TIERS,
   type EmbeddingTierName,
 } from "../constants/index.js";
-import {
-  recordCost,
-  getBudgetStatus,
-  type BudgetStatus,
-} from "../database/costTrackingRepository.js";
-
-// Import only what's used internally
+import { recordCost, getBudgetStatus } from "../database/index.js";
+import type { TierSelectionResult } from "./types.js";
 import { getTenantTierConfig } from "./costControlsCache.js";
+
+export type { TierSelectionResult, CacheStats, TenantTierConfig } from "./types.js";
 
 // Re-export cache utilities for backwards compatibility
 export {
@@ -34,24 +31,9 @@ export {
   setTenantTierConfig,
   getTenantTierConfig,
   DEFAULT_TIER_CONFIG,
-  type CacheStats,
-  type TenantTierConfig,
 } from "./costControlsCache.js";
 
 const logger = createLogger("rag-cost-controls");
-
-// ==================== Types ====================
-
-/**
- * Embedding tier selection result.
- */
-export interface TierSelectionResult {
-  readonly selectedTier: EmbeddingTierName;
-  readonly model: string;
-  readonly dimension: number;
-  readonly reason: string;
-  readonly budgetStatus: BudgetStatus;
-}
 
 // ==================== Tier Selection ====================
 

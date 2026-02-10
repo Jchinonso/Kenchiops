@@ -5,8 +5,10 @@
  * root cause failures using causality-aware heuristics.
  */
 import { describe, it, expect } from "@jest/globals";
-import { determinePrimaryFailure } from "../../formatting/primaryFailureDetermination.js";
-import type { RankedArtifact } from "../../formatting/chunkingTypes.js";
+import {
+  determinePrimaryFailure,
+  type RankedArtifact,
+} from "../../formatting/aggregation/index.js";
 import { ARTIFACT_TYPES, ARTIFACT_SEVERITY, ARTIFACT_CONFIDENCE } from "../../constants/index.js";
 
 describe("Primary Failure Determination", () => {

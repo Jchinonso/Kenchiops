@@ -16,65 +16,21 @@ import {
   PASSIVE_LEARNING_TIME,
 } from "../constants/index.js";
 
+import type {
+  PRComment,
+  PRFixFailureContext,
+  FixCommentAnalysis,
+  ExtractedFixKnowledge,
+} from "./types.js";
+
+export type {
+  PRComment,
+  PRFixFailureContext,
+  FixCommentAnalysis,
+  ExtractedFixKnowledge,
+} from "./types.js";
+
 const logger = createLogger("pr-fix-comment-detector");
-
-// ==================== Types ====================
-
-/**
- * Represents a PR comment for analysis.
- */
-export interface PRComment {
-  readonly id: string;
-  readonly author: string;
-  readonly body: string;
-  readonly createdAt: string;
-  readonly updatedAt?: string;
-}
-
-/**
- * Context about the failure that was fixed.
- */
-export interface PRFixFailureContext {
-  readonly checkRunId: number;
-  readonly checkName: string;
-  readonly errorSummary: string;
-  readonly failedAt: string;
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly commitSha: string;
-  readonly filesChanged?: readonly string[];
-}
-
-/**
- * Result of analyzing a PR comment for fix content.
- */
-export interface FixCommentAnalysis {
-  readonly isFixComment: boolean;
-  readonly confidence: number;
-  readonly comment: PRComment;
-  readonly matchedPatterns: readonly string[];
-  readonly hasCodeBlock: boolean;
-  readonly hasFileReference: boolean;
-  readonly wordCount: number;
-}
-
-/**
- * Extracted fix knowledge ready for ingestion.
- */
-export interface ExtractedFixKnowledge {
-  readonly title: string;
-  readonly content: string;
-  readonly confidence: number;
-  readonly sourceComment: PRComment;
-  readonly failureContext: PRFixFailureContext;
-  readonly metadata: {
-    readonly prUrl: string;
-    readonly commentId: string;
-    readonly filesChanged: readonly string[];
-    readonly matchedPatterns: readonly string[];
-    readonly extractedAt: string;
-  };
-}
 
 // ==================== Pattern Matching ====================
 
@@ -187,6 +143,50 @@ const hoursToMs = (hours: number): number =>
   PASSIVE_LEARNING_TIME.SECONDS_PER_MINUTE *
   PASSIVE_LEARNING_TIME.MS_PER_SECOND;
 
+// ==================== Analysis Helpers ====================
+
+/**
+ * Creates a non-fix analysis result for excluded comments.
+ */
+const buildExcludedAnalysis = (comment: PRComment, wordCount: number): FixCommentAnalysis => ({
+  isFixComment: false,
+  confidence: 0,
+  comment,
+  matchedPatterns: [],
+  hasCodeBlock: false,
+  hasFileReference: false,
+  wordCount,
+});
+
+/**
+ * Runs pattern matching and content analysis on a comment body.
+ */
+const analyzeCommentContent = (
+  body: string
+): {
+  readonly allMatches: readonly string[];
+  readonly highMatches: readonly string[];
+  readonly mediumMatches: readonly string[];
+  readonly lowMatches: readonly string[];
+  readonly hasCode: boolean;
+  readonly hasFile: boolean;
+  readonly wordCount: number;
+} => {
+  const highMatches = matchesAnyPattern(body, FIX_COMMENT_PATTERNS.HIGH_CONFIDENCE);
+  const mediumMatches = matchesAnyPattern(body, FIX_COMMENT_PATTERNS.MEDIUM_CONFIDENCE);
+  const lowMatches = matchesAnyPattern(body, FIX_COMMENT_PATTERNS.LOW_CONFIDENCE);
+
+  return {
+    allMatches: [...highMatches, ...mediumMatches, ...lowMatches],
+    highMatches,
+    mediumMatches,
+    lowMatches,
+    hasCode: hasCodeBlock(body),
+    hasFile: hasFileReference(body),
+    wordCount: countWords(body),
+  };
+};
+
 // ==================== Public API ====================
 
 /**
@@ -196,65 +196,32 @@ const hoursToMs = (hours: number): number =>
  * @returns Analysis result with confidence score
  */
 export const analyzeComment = (comment: PRComment): FixCommentAnalysis => {
-  const { body } = comment;
-
-  // Quick exclusion checks
   if (isBotComment(comment.author)) {
-    return {
-      isFixComment: false,
-      confidence: 0,
-      comment,
-      matchedPatterns: [],
-      hasCodeBlock: false,
-      hasFileReference: false,
-      wordCount: 0,
-    };
+    return buildExcludedAnalysis(comment, 0);
   }
 
-  if (isTrivialComment(body)) {
-    return {
-      isFixComment: false,
-      confidence: 0,
-      comment,
-      matchedPatterns: [],
-      hasCodeBlock: false,
-      hasFileReference: false,
-      wordCount: countWords(body),
-    };
+  if (isTrivialComment(comment.body)) {
+    return buildExcludedAnalysis(comment, countWords(comment.body));
   }
 
-  // Pattern matching
-  const highMatches = matchesAnyPattern(body, FIX_COMMENT_PATTERNS.HIGH_CONFIDENCE);
-  const mediumMatches = matchesAnyPattern(body, FIX_COMMENT_PATTERNS.MEDIUM_CONFIDENCE);
-  const lowMatches = matchesAnyPattern(body, FIX_COMMENT_PATTERNS.LOW_CONFIDENCE);
-
-  const allMatches = [...highMatches, ...mediumMatches, ...lowMatches];
-
-  // Content analysis
-  const hasCode = hasCodeBlock(body);
-  const hasFile = hasFileReference(body);
-  const wordCount = countWords(body);
-
-  // Calculate confidence
+  const content = analyzeCommentContent(comment.body);
   const confidence = calculateConfidence(
-    highMatches,
-    mediumMatches,
-    lowMatches,
-    hasCode,
-    hasFile,
-    wordCount
+    content.highMatches,
+    content.mediumMatches,
+    content.lowMatches,
+    content.hasCode,
+    content.hasFile,
+    content.wordCount
   );
 
-  const isFixComment = confidence >= PR_FIX_COMMENT_CONFIG.MIN_CONFIDENCE_THRESHOLD;
-
   return Object.freeze({
-    isFixComment,
+    isFixComment: confidence >= PR_FIX_COMMENT_CONFIG.MIN_CONFIDENCE_THRESHOLD,
     confidence,
     comment,
-    matchedPatterns: Object.freeze(allMatches),
-    hasCodeBlock: hasCode,
-    hasFileReference: hasFile,
-    wordCount,
+    matchedPatterns: Object.freeze(content.allMatches),
+    hasCodeBlock: content.hasCode,
+    hasFileReference: content.hasFile,
+    wordCount: content.wordCount,
   });
 };
 

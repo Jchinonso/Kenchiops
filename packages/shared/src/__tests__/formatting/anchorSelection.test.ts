@@ -4,7 +4,7 @@
  * Tests the tiered anchor selection strategy for CI log truncation.
  */
 import { describe, it, expect } from "@jest/globals";
-import { findBestAnchor, findBestErrorPosition } from "../../formatting/anchorSelection.js";
+import { findBestAnchor, findBestErrorPosition } from "../../formatting/preprocessing/index.js";
 
 describe("Anchor Selection", () => {
   describe("findBestAnchor", () => {

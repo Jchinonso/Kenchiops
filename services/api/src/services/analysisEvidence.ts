@@ -15,25 +15,10 @@ import {
   sanitizeIdPart,
   type LogEntry,
 } from "@kenchi/shared";
+import type { EvidenceSection, SectionAccumulator } from "../types/apiTypes.js";
 
-// ==================== Section Types ====================
-
-/**
- * Represents a section in the evidence log.
- */
-export interface EvidenceSection {
-  readonly heading: string;
-  readonly content: string;
-}
-
-/**
- * Intermediate state for section parsing.
- */
-interface SectionAccumulator {
-  readonly sections: readonly EvidenceSection[];
-  readonly currentHeading: string;
-  readonly currentLines: readonly string[];
-}
+// Re-export for backwards compatibility
+export type { EvidenceSection } from "../types/apiTypes.js";
 
 // ==================== Section Splitting ====================
 

@@ -10,85 +10,27 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { KNOWLEDGE_DOC_TYPES } from "../constants/index.js";
-import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
-import {
-  detectResolution,
-  type SlackThread,
-  type DetectedResolution,
-  type ResolutionDetectionResult,
-} from "./slackResolutionDetector.js";
+import { ingestKnowledgeDoc } from "./ingestion.js";
+import { detectResolution } from "./slackResolutionDetector.js";
 import type { SlackResolutionMetadata } from "./schemas/index.js";
+import type {
+  SlackThread,
+  DetectedResolution,
+  IngestSlackResolutionInput,
+  SlackResolutionFailureContext,
+  IngestSlackResolutionResult,
+  BatchIngestSlackResolutionsResult,
+  BatchAccumulator,
+} from "./types.js";
+
+export type {
+  IngestSlackResolutionInput,
+  SlackResolutionFailureContext,
+  IngestSlackResolutionResult,
+  BatchIngestSlackResolutionsResult,
+} from "./types.js";
 
 const logger = createLogger("slack-resolution-ingestion");
-
-// ==================== Types ====================
-
-/**
- * Input for ingesting a Slack resolution.
- */
-export interface IngestSlackResolutionInput {
-  /** The Slack thread to analyze */
-  readonly thread: SlackThread;
-  /** Tenant ID for multi-tenancy */
-  readonly tenantId?: string;
-  /** Repository context if the thread relates to code */
-  readonly repository?: string;
-  /** CI failure context if this was triggered by a failure */
-  readonly failureContext?: SlackResolutionFailureContext;
-}
-
-/**
- * Context about a CI failure that triggered this Slack thread.
- */
-export interface SlackResolutionFailureContext {
-  /** The check run name that failed */
-  readonly checkName?: string;
-  /** Error message from the failure */
-  readonly errorMessage?: string;
-  /** Files affected by the failure */
-  readonly affectedFiles?: readonly string[];
-  /** PR number if applicable */
-  readonly prNumber?: number;
-}
-
-/**
- * Result of Slack resolution ingestion.
- */
-export interface IngestSlackResolutionResult {
-  /** Whether resolution was detected and ingested */
-  readonly success: boolean;
-  /** Whether a resolution was found in the thread */
-  readonly resolutionDetected: boolean;
-  /** The detected resolution if found */
-  readonly resolution: DetectedResolution | null;
-  /** Ingestion result if resolution was ingested */
-  readonly ingestionResult: IngestKnowledgeDocResult | null;
-  /** Detection analysis details */
-  readonly detectionResult: ResolutionDetectionResult;
-  /** Error message if failed */
-  readonly error?: string;
-}
-
-/**
- * Result of batch ingestion.
- */
-export interface BatchIngestSlackResolutionsResult {
-  readonly threadsProcessed: number;
-  readonly successCount: number;
-  readonly resolutionsDetected: number;
-  readonly errorCount: number;
-  readonly results: readonly IngestSlackResolutionResult[];
-}
-
-/**
- * Accumulator for batch processing.
- */
-interface BatchAccumulator {
-  readonly results: readonly IngestSlackResolutionResult[];
-  readonly successCount: number;
-  readonly resolutionsDetected: number;
-  readonly errorCount: number;
-}
 
 // ==================== Content Building ====================
 
@@ -121,6 +63,64 @@ const buildResolutionTitle = (
 };
 
 /**
+ * Builds the problem section of the resolution document.
+ */
+const buildProblemSection = (
+  thread: SlackThread,
+  failureContext?: SlackResolutionFailureContext
+): string => {
+  const problemText =
+    failureContext?.errorMessage ?? thread.originalIssue ?? "Issue discussed in Slack thread.";
+  return `## Problem\n${problemText}`;
+};
+
+/**
+ * Builds the optional context section from failure details.
+ */
+const buildContextSection = (failureContext?: SlackResolutionFailureContext): string | null => {
+  if (!failureContext || (!failureContext.checkName && !failureContext.affectedFiles?.length)) {
+    return null;
+  }
+  const lines = [
+    "\n## Context",
+    ...(failureContext.checkName ? [`- Check: ${failureContext.checkName}`] : []),
+    ...(failureContext.prNumber ? [`- PR: #${failureContext.prNumber}`] : []),
+    ...(failureContext.affectedFiles?.length
+      ? [`- Files: ${failureContext.affectedFiles.slice(0, 5).join(", ")}`]
+      : []),
+  ];
+  return lines.join("\n");
+};
+
+/**
+ * Builds the detection metadata section.
+ */
+const buildDetectionMetadataSection = (resolution: DetectedResolution): string => {
+  const lines = [
+    "\n## Detection Metadata",
+    `- Confidence: ${(resolution.confidence * 100).toFixed(0)}%`,
+    `- Patterns matched: ${resolution.matchedPatterns.join(", ") || "none"}`,
+    ...(resolution.hasCodeBlock ? ["- Contains code example"] : []),
+    ...(resolution.hasPositiveReactions ? ["- Confirmed by reactions"] : []),
+    ...(resolution.resolverUsername ? [`- Resolver: @${resolution.resolverUsername}`] : []),
+  ];
+  return lines.join("\n");
+};
+
+/**
+ * Builds the source section.
+ */
+const buildSourceSection = (thread: SlackThread): string => {
+  const lines = [
+    "\n## Source",
+    `- Channel: ${thread.channelName ?? thread.channelId}`,
+    `- Thread: ${thread.threadTs}`,
+    ...(thread.repository ? [`- Repository: ${thread.repository}`] : []),
+  ];
+  return lines.join("\n");
+};
+
+/**
  * Builds comprehensive content for the knowledge document.
  */
 const buildResolutionDocContent = (
@@ -128,57 +128,13 @@ const buildResolutionDocContent = (
   thread: SlackThread,
   failureContext?: SlackResolutionFailureContext
 ): string => {
-  const sections: string[] = [];
-
-  // Problem section
-  sections.push("## Problem");
-  if (failureContext?.errorMessage) {
-    sections.push(failureContext.errorMessage);
-  } else if (thread.originalIssue) {
-    sections.push(thread.originalIssue);
-  } else {
-    sections.push("Issue discussed in Slack thread.");
-  }
-
-  // Context section if we have failure details
-  if (failureContext && (failureContext.checkName || failureContext.affectedFiles?.length)) {
-    sections.push("\n## Context");
-    if (failureContext.checkName) {
-      sections.push(`- Check: ${failureContext.checkName}`);
-    }
-    if (failureContext.prNumber) {
-      sections.push(`- PR: #${failureContext.prNumber}`);
-    }
-    if (failureContext.affectedFiles?.length) {
-      sections.push(`- Files: ${failureContext.affectedFiles.slice(0, 5).join(", ")}`);
-    }
-  }
-
-  // Resolution section
-  sections.push("\n## Resolution");
-  sections.push(resolution.resolutionContent);
-
-  // Confidence section
-  sections.push("\n## Detection Metadata");
-  sections.push(`- Confidence: ${(resolution.confidence * 100).toFixed(0)}%`);
-  sections.push(`- Patterns matched: ${resolution.matchedPatterns.join(", ") || "none"}`);
-  if (resolution.hasCodeBlock) {
-    sections.push("- Contains code example");
-  }
-  if (resolution.hasPositiveReactions) {
-    sections.push("- Confirmed by reactions");
-  }
-  if (resolution.resolverUsername) {
-    sections.push(`- Resolver: @${resolution.resolverUsername}`);
-  }
-
-  // Source section
-  sections.push("\n## Source");
-  sections.push(`- Channel: ${thread.channelName ?? thread.channelId}`);
-  sections.push(`- Thread: ${thread.threadTs}`);
-  if (thread.repository) {
-    sections.push(`- Repository: ${thread.repository}`);
-  }
+  const sections = [
+    buildProblemSection(thread, failureContext),
+    buildContextSection(failureContext),
+    `\n## Resolution\n${resolution.resolutionContent}`,
+    buildDetectionMetadataSection(resolution),
+    buildSourceSection(thread),
+  ].filter((section): section is string => section !== null);
 
   return sections.join("\n");
 };
@@ -224,6 +180,66 @@ const buildSlackUrl = (thread: SlackThread): string => {
   return `slack://channel?id=${thread.channelId}&message=${tsWithoutDot}`;
 };
 
+// ==================== Result Builders ====================
+
+/**
+ * Builds an empty detection result for error cases.
+ */
+const buildEmptyDetectionResult = (): IngestSlackResolutionResult["detectionResult"] => ({
+  hasResolution: false,
+  resolution: null,
+  allCandidates: [],
+  analysisMetadata: {
+    messagesAnalyzed: 0,
+    candidatesFound: 0,
+    topScore: 0,
+    patternMatchCounts: {},
+  },
+});
+
+/**
+ * Ingests a detected resolution and returns the result.
+ */
+const ingestDetectedResolution = async (
+  resolution: DetectedResolution,
+  thread: SlackThread,
+  tenantId?: string,
+  repository?: string,
+  failureContext?: SlackResolutionFailureContext
+): Promise<IngestSlackResolutionResult["ingestionResult"]> => {
+  const title = buildResolutionTitle(resolution, thread, failureContext);
+  const content = buildResolutionDocContent(resolution, thread, failureContext);
+  const metadata = buildResolutionMetadata(resolution, thread, failureContext);
+
+  logger.info("Resolution detected, ingesting", {
+    channelId: thread.channelId,
+    threadTs: thread.threadTs,
+    confidence: resolution.confidence,
+    title,
+    contentLength: content.length,
+  });
+
+  const ingestionResult = await ingestKnowledgeDoc({
+    docType: KNOWLEDGE_DOC_TYPES.SLACK_RESOLUTION,
+    title,
+    content,
+    tenantId,
+    repository: repository ?? thread.repository,
+    sourceUrl: buildSlackUrl(thread),
+    metadata,
+  });
+
+  logger.info("Resolution knowledge stored", {
+    channelId: thread.channelId,
+    threadTs: thread.threadTs,
+    chunksCreated: ingestionResult.chunksCreated,
+    chunksEmbedded: ingestionResult.chunksEmbedded,
+    parentId: ingestionResult.parentId,
+  });
+
+  return ingestionResult;
+};
+
 // ==================== Public API ====================
 
 /**
@@ -241,7 +257,7 @@ export const ingestSlackResolution = async (
 ): Promise<IngestSlackResolutionResult> => {
   const { thread, tenantId, repository, failureContext } = input;
 
-  logger.info("Analyzing Slack thread for resolution", {
+  logger.info("Analyzing thread for resolution", {
     channelId: thread.channelId,
     threadTs: thread.threadTs,
     messageCount: thread.messages.length,
@@ -249,7 +265,6 @@ export const ingestSlackResolution = async (
   });
 
   try {
-    // Detect resolution in thread
     const detectionResult = detectResolution(thread);
 
     if (!detectionResult.hasResolution || !detectionResult.resolution) {
@@ -259,7 +274,6 @@ export const ingestSlackResolution = async (
         candidatesFound: detectionResult.allCandidates.length,
         topScore: detectionResult.analysisMetadata.topScore,
       });
-
       return {
         success: true,
         resolutionDetected: false,
@@ -270,41 +284,16 @@ export const ingestSlackResolution = async (
     }
 
     const { resolution } = detectionResult;
-
-    // Build document content
-    const title = buildResolutionTitle(resolution, thread, failureContext);
-    const content = buildResolutionDocContent(resolution, thread, failureContext);
-    const metadata = buildResolutionMetadata(resolution, thread, failureContext);
-
-    logger.info("Resolution detected, ingesting", {
-      channelId: thread.channelId,
-      threadTs: thread.threadTs,
-      confidence: resolution.confidence,
-      title,
-      contentLength: content.length,
-    });
-
-    // Ingest the resolution
-    const ingestionResult = await ingestKnowledgeDoc({
-      docType: KNOWLEDGE_DOC_TYPES.SLACK_RESOLUTION,
-      title,
-      content,
+    const ingestionResult = await ingestDetectedResolution(
+      resolution,
+      thread,
       tenantId,
-      repository: repository ?? thread.repository,
-      sourceUrl: buildSlackUrl(thread),
-      metadata,
-    });
-
-    logger.info("Slack resolution ingested", {
-      channelId: thread.channelId,
-      threadTs: thread.threadTs,
-      chunksCreated: ingestionResult.chunksCreated,
-      chunksEmbedded: ingestionResult.chunksEmbedded,
-      parentId: ingestionResult.parentId,
-    });
+      repository,
+      failureContext
+    );
 
     return {
-      success: ingestionResult.success,
+      success: ingestionResult?.success ?? false,
       resolutionDetected: true,
       resolution,
       ingestionResult,
@@ -312,29 +301,17 @@ export const ingestSlackResolution = async (
     };
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-
-    logger.error("Failed to ingest Slack resolution", {
+    logger.error("Resolution ingestion failed", {
       channelId: thread.channelId,
       threadTs: thread.threadTs,
       error: errorMessage,
     });
-
     return {
       success: false,
       resolutionDetected: false,
       resolution: null,
       ingestionResult: null,
-      detectionResult: {
-        hasResolution: false,
-        resolution: null,
-        allCandidates: [],
-        analysisMetadata: {
-          messagesAnalyzed: 0,
-          candidatesFound: 0,
-          topScore: 0,
-          patternMatchCounts: {},
-        },
-      },
+      detectionResult: buildEmptyDetectionResult(),
       error: errorMessage,
     };
   }

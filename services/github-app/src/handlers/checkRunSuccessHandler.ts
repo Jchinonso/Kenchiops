@@ -16,6 +16,9 @@ import {
   KENCHI_BRANDING,
   PR_FIX_COMMENT_CONFIG,
   PASSIVE_LEARNING_TIME,
+  getOrFetchCommitPullRequests,
+  getOrFetchPullRequestComments,
+  getOrFetchPullRequestFiles,
   type PRComment,
   type CachedAnalysis,
 } from "@kenchi/shared";
@@ -31,7 +34,7 @@ const successLogger = createLogger("github-app-success-handler");
 // ==================== Helper Functions ====================
 
 /**
- * Fetches PR numbers associated with a commit.
+ * Fetches PR numbers associated with a commit with caching.
  */
 const fetchPRsByCommit = async (
   installationId: number,
@@ -40,13 +43,20 @@ const fetchPRsByCommit = async (
   commitSha: string
 ): Promise<readonly number[]> => {
   try {
-    const octokit = await getOctokit(installationId);
-    const response = await octokit.rest.repos.listPullRequestsAssociatedWithCommit({
-      owner,
-      repo,
-      commit_sha: commitSha,
+    const cachedPRs = await getOrFetchCommitPullRequests(owner, repo, commitSha, async () => {
+      const octokit = await getOctokit(installationId);
+      const response = await octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+        owner,
+        repo,
+        commit_sha: commitSha,
+      });
+      return response.data.map((pullRequest) => ({
+        number: pullRequest.number,
+        title: pullRequest.title,
+        state: pullRequest.state,
+      }));
     });
-    return response.data.map((pr) => pr.number);
+    return cachedPRs.map((pullRequest) => pullRequest.number);
   } catch (error) {
     successLogger.warn("Failed to fetch PRs by commit", {
       owner,
@@ -95,7 +105,7 @@ const shouldProcessSuccess = (webhook: CheckRunWebhook): boolean => {
 };
 
 /**
- * Fetches all comments from a PR with proper pagination.
+ * Fetches all comments from a PR with caching.
  */
 const fetchAllPRComments = async (
   owner: string,
@@ -104,21 +114,31 @@ const fetchAllPRComments = async (
   installationId: number
 ): Promise<readonly PRComment[]> => {
   try {
-    const octokit = await getOctokit(installationId);
+    const cachedComments = await getOrFetchPullRequestComments(owner, repo, prNumber, async () => {
+      const octokit = await getOctokit(installationId);
 
-    const response = await octokit.rest.issues.listComments({
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: PR_FIX_COMMENT_CONFIG.MAX_COMMENTS_TO_FETCH,
+      const response = await octokit.rest.issues.listComments({
+        owner,
+        repo,
+        issue_number: prNumber,
+        per_page: PR_FIX_COMMENT_CONFIG.MAX_COMMENTS_TO_FETCH,
+      });
+
+      return response.data.map((comment) => ({
+        id: comment.id,
+        body: comment.body ?? "",
+        user: comment.user?.login ?? "unknown",
+        createdAt: comment.created_at,
+      }));
     });
 
-    return response.data.map((comment) => ({
+    // Convert cached comments to PRComment format
+    return cachedComments.map((comment) => ({
       id: String(comment.id),
-      author: comment.user?.login ?? "unknown",
-      body: comment.body ?? "",
-      createdAt: comment.created_at,
-      updatedAt: comment.updated_at,
+      author: comment.user,
+      body: comment.body,
+      createdAt: comment.createdAt,
+      updatedAt: comment.createdAt, // Use createdAt as fallback
     }));
   } catch (error) {
     successLogger.error("Failed to fetch PR comments", {
@@ -132,7 +152,7 @@ const fetchAllPRComments = async (
 };
 
 /**
- * Fetches list of changed files in the PR.
+ * Fetches list of changed files in the PR with caching.
  */
 const fetchChangedFiles = async (
   owner: string,
@@ -141,16 +161,18 @@ const fetchChangedFiles = async (
   installationId: number
 ): Promise<readonly string[]> => {
   try {
-    const octokit = await getOctokit(installationId);
+    return await getOrFetchPullRequestFiles(owner, repo, prNumber, async () => {
+      const octokit = await getOctokit(installationId);
 
-    const response = await octokit.rest.pulls.listFiles({
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: PR_FIX_COMMENT_CONFIG.MAX_COMMENTS_TO_FETCH,
+      const response = await octokit.rest.pulls.listFiles({
+        owner,
+        repo,
+        pull_number: prNumber,
+        per_page: PR_FIX_COMMENT_CONFIG.MAX_COMMENTS_TO_FETCH,
+      });
+
+      return response.data.map((file) => file.filename);
     });
-
-    return response.data.map((file) => file.filename);
   } catch (error) {
     successLogger.warn("Failed to fetch changed files", {
       owner,

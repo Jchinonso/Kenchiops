@@ -5,19 +5,15 @@
  */
 
 import { LOGGER_DEFAULTS } from "../constants/index.js";
+import type { StructuredLogEntry, Logger } from "./types.js";
 
 /**
  * Log severity levels in ascending order of importance.
  *
  * Levels are numeric to allow easy comparison (e.g., `level >= LogLevel.WARN`).
  *
- * @example
- * ```typescript
- * const logger = createLogger('my-service', LogLevel.INFO);
- * logger.debug('This will not be logged'); // Below INFO level
- * logger.info('This will be logged');       // At INFO level
- * logger.warn('This will be logged');       // Above INFO level
- * ```
+ * NOTE: This enum lives here rather than in types.ts because types.ts already
+ * has a domain `LogLevel` string union type for evidence log entries.
  */
 export enum LogLevel {
   /** Detailed debugging information (most verbose) */
@@ -30,23 +26,7 @@ export enum LogLevel {
   ERROR = 3,
 }
 
-interface LogEntry {
-  level: LogLevel;
-  message: string;
-  timestamp: string;
-  service?: string;
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * Logger interface for structured logging.
- */
-export interface Logger {
-  readonly debug: (message: string, metadata?: Record<string, unknown>) => void;
-  readonly info: (message: string, metadata?: Record<string, unknown>) => void;
-  readonly warn: (message: string, metadata?: Record<string, unknown>) => void;
-  readonly error: (message: string, metadata?: Record<string, unknown>) => void;
-}
+export type { Logger };
 
 /**
  * Console method lookup table for log levels.
@@ -87,7 +67,7 @@ class LoggerImpl implements Logger {
     metadata?: Record<string, unknown>
   ): string => {
     const timestamp = new Date().toISOString();
-    const entry: LogEntry = {
+    const entry: StructuredLogEntry = {
       level,
       message,
       timestamp,

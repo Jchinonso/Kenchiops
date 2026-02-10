@@ -49,15 +49,81 @@ export const TENANT_DEFAULTS = {
   SUSPENSION_REASON: "No reason provided",
 } as const;
 
+/**
+ * Default RAG budget configuration values for tenants
+ */
+export const RAG_BUDGET_DEFAULTS = {
+  MONTHLY_BUDGET_USD: 0,
+  PREFERRED_TIER: "STANDARD",
+  ALLOW_PREMIUM: false,
+  DEGRADE_ON_BUDGET_WARNING: true,
+} as const;
+
 // ==================== Query Templates ====================
 
 /**
- * SQL query templates for tenant operations
+ * SQL query templates for tenant operations.
+ * All queries use parameterized statements to prevent SQL injection.
  */
 export const TENANT_QUERIES = {
-  SELECT_ALL_FIELDS: "SELECT * FROM tenants",
-  EXCLUDE_DELETED: "status != 'deleted'",
-  ORDER_BY_CREATED: "ORDER BY created_at DESC",
+  // Lookup queries
+  FIND_BY_GITHUB_INSTALLATION: `SELECT * FROM tenants WHERE github_installation_id = $1 AND status != $2`,
+  FIND_BY_GITHUB_ORG: `SELECT * FROM tenants WHERE LOWER(github_org) = LOWER($1) AND status != $2`,
+  FIND_BY_GITHUB_ORG_ANY_STATUS: `SELECT * FROM tenants WHERE LOWER(github_org) = LOWER($1)`,
+  FIND_BY_SLACK_WORKSPACE: `SELECT * FROM tenants WHERE slack_workspace_id = $1 AND status != $2`,
+  FIND_BY_ID: `SELECT * FROM tenants WHERE id = $1`,
+  FIND_ACTIVE: `SELECT * FROM tenants WHERE status = $1 ORDER BY created_at DESC`,
+
+  // Insert queries
+  INSERT_FROM_GITHUB: `INSERT INTO tenants (github_org, github_installation_id, github_app_installed_at, status)
+     VALUES ($1, $2, NOW(), $3)
+     RETURNING *`,
+  INSERT_FROM_SLACK: `INSERT INTO tenants (
+       github_org,
+       slack_workspace_id,
+       slack_team_name,
+       slack_bot_token,
+       slack_bot_user_id,
+       slack_app_installed_at,
+       status
+     )
+     VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+     RETURNING *`,
+
+  // Update queries
+  UPDATE_GITHUB_INSTALL: `UPDATE tenants
+     SET github_installation_id = $1,
+         github_app_installed_at = NOW(),
+         status = $2,
+         updated_at = NOW()
+     WHERE id = $3
+     RETURNING *`,
+  UPDATE_SLACK_LINK: `UPDATE tenants
+     SET slack_workspace_id = $1,
+         slack_team_name = $2,
+         slack_bot_token = $3,
+         slack_bot_user_id = $4,
+         slack_app_installed_at = NOW(),
+         status = $5,
+         updated_at = NOW()
+     WHERE id = $6
+     RETURNING *`,
+  UPDATE_STATUS: `UPDATE tenants SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+  UPDATE_SLACK_TOKEN: `UPDATE tenants SET slack_bot_token = $1, updated_at = NOW() WHERE id = $2`,
+  UPDATE_GITHUB_UNINSTALL: `UPDATE tenants
+     SET github_installation_id = NULL,
+         status = $1,
+         updated_at = NOW()
+     WHERE id = $2`,
+
+  // Statistics queries
+  STATS_ANALYSES_TODAY: `SELECT COUNT(*) as count FROM analyses
+     WHERE tenant_id = $1 AND created_at >= CURRENT_DATE`,
+  STATS_ALERTS_TOTAL: `SELECT COUNT(*) as count FROM slack_messages WHERE tenant_id = $1`,
+  STATS_LAST_ALERT: `SELECT created_at FROM slack_messages
+     WHERE tenant_id = $1
+     ORDER BY created_at DESC
+     LIMIT 1`,
 } as const;
 
 /**

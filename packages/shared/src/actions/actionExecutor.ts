@@ -12,33 +12,15 @@ import { createLogger, getErrorMessage } from "../core/index.js";
 import { config } from "../core/config.js";
 import { resilientPost } from "../http/resilientClient.js";
 import { ACTION_MESSAGES } from "../constants/index.js";
-import type { ActionExecutionContext, ActionExecutionResult } from "./actionTypes.js";
-
-// Re-export types for backwards compatibility
-export type { ActionExecutionContext, ActionExecutionResult } from "./actionTypes.js";
+import type {
+  ActionExecutionContext,
+  ActionExecutionResult,
+  ActionExecutor,
+  RerunResponse,
+  ValidationResult,
+} from "./types.js";
 
 const logger = createLogger("action-executor");
-
-/**
- * Action executor function type.
- * Each action type has a corresponding executor.
- */
-type ActionExecutor = (
-  action: ActionProposal,
-  context: ActionExecutionContext
-) => Promise<ExecutionResult>;
-
-// ==================== Action Executors ====================
-
-/**
- * Response from GitHub App rerun endpoint
- */
-interface RerunResponse {
-  readonly success: boolean;
-  readonly message: string;
-  readonly runId?: number;
-  readonly error?: string;
-}
 
 /**
  * Executes a pipeline rerun action.
@@ -85,7 +67,7 @@ const executeRerunPipeline: ActionExecutor = async (action, context) => {
     logger.info("Pipeline rerun triggered successfully", {
       repository: context.repository,
       runId: response.data.runId,
-      duration: response.duration,
+      durationMs: response.duration,
     });
 
     return {
@@ -119,37 +101,11 @@ const executeNotifyTeam: ActionExecutor = async (action, context) => {
     channelId: context.channelId,
   });
 
-  // TODO: Implement actual Slack notification
+  // TODO: [#60] Implement actual Slack notification
   // This would post a message to the team's Slack channel
   return {
     success: true,
     message: `Team notification sent to channel ${context.channelId ?? "default"}`,
-  };
-};
-
-/**
- * Executes a PR comment action.
- * Posts a comment on the associated pull request.
- */
-const executePostComment: ActionExecutor = async (action, context) => {
-  logger.info("Executing post comment action", {
-    actionId: action.id,
-    repository: context.repository,
-    prNumber: context.prNumber,
-  });
-
-  if (!context.prNumber) {
-    return {
-      success: false,
-      message: ACTION_MESSAGES.MISSING_PR_NUMBER,
-      error: "Missing prNumber in context",
-    };
-  }
-
-  // TODO: Implement actual GitHub PR comment
-  return {
-    success: true,
-    message: `Comment posted to PR #${context.prNumber}`,
   };
 };
 
@@ -181,7 +137,7 @@ const executeRunDiagnostic: ActionExecutor = async (action, context) => {
     repository: context.repository,
   });
 
-  // TODO: Implement actual diagnostic execution
+  // TODO: [#62] Implement actual diagnostic execution
   return {
     success: true,
     message: "Diagnostic run completed",
@@ -215,7 +171,6 @@ const executeNotImplemented: ActionExecutor = async (action, _context) => {
 const ACTION_EXECUTORS: Readonly<Record<ActionType, ActionExecutor>> = {
   rerun_pipeline: executeRerunPipeline,
   notify_team: executeNotifyTeam,
-  post_comment: executePostComment,
   manual_investigation: executeManualInvestigation,
   run_diagnostic: executeRunDiagnostic,
   // Placeholder executors for future implementation
@@ -261,7 +216,7 @@ export const executeAction = async (
     output: result.output,
     error: result.error,
     executedAt: new Date().toISOString(),
-    duration: Date.now() - startTime,
+    durationMs: Date.now() - startTime,
   });
 
   try {
@@ -273,7 +228,7 @@ export const executeAction = async (
       actionId: action.id,
       actionType: action.actionType,
       success: result.success,
-      duration: executionResult.duration,
+      durationMs: executionResult.durationMs,
     });
 
     return executionResult;
@@ -293,8 +248,6 @@ export const executeAction = async (
     });
   }
 };
-
-type ValidationResult = { valid: boolean; reason?: string };
 
 /** Validation rules for action execution, checked in order. */
 const VALIDATION_RULES: ReadonlyArray<{

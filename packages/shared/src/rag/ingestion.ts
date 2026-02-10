@@ -9,13 +9,13 @@
 
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
-import { getEmbeddingClient } from "../llm/providers/openai/embedding.js";
+import { getEmbeddingClient } from "../llm/providers/llmProvider/embedding.js";
 import { chunkDiff } from "./chunking.js";
 import { chunkByDocType } from "./docTypeChunking.js";
 import { recordIngestionOperation } from "./metrics.js";
 import { validateMetadata, hasSchemaForDocType } from "./schemas/index.js";
 import { createDiffChunksBatch, createKnowledgeDocsBatch } from "../database/index.js";
-import { AUTO_DETECT_RELATIONSHIP_DOC_TYPES, type KnowledgeDocType } from "../constants/index.js";
+import { AUTO_DETECT_RELATIONSHIP_DOC_TYPES } from "../constants/index.js";
 import {
   INGESTION_DEFAULTS,
   mapDiffChunksToInputs,
@@ -24,73 +24,265 @@ import {
   embedPendingKnowledgeDocs,
 } from "./ingestionHelpers.js";
 import { detectAndCreateRelationships } from "./relationshipDetection.js";
+import type {
+  IngestDiffInput,
+  IngestDiffResult,
+  IngestKnowledgeDocInput,
+  IngestKnowledgeDocResult,
+  BatchEmbedOptions,
+  ChunkStoreResult,
+  EmbedResult,
+  RelationshipStepResult,
+} from "./types.js";
+
+export type {
+  IngestDiffInput,
+  IngestDiffResult,
+  IngestKnowledgeDocInput,
+  IngestKnowledgeDocResult,
+} from "./types.js";
 
 const logger = createLogger("rag-ingestion");
 
-// ==================== Types ====================
+// ==================== Diff Ingestion Helpers ====================
 
 /**
- * Input for ingesting a PR diff.
+ * Chunks a diff and stores the resulting chunks in the database.
+ * Returns null if no chunks were generated (empty diff).
  */
-export interface IngestDiffInput {
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly commitSha: string;
-  readonly diffContent: string;
-  readonly filePath: string;
-  readonly hunkHeader?: string;
-  readonly tenantId?: string;
-}
+const chunkAndStoreDiff = async (input: IngestDiffInput): Promise<ChunkStoreResult | null> => {
+  const chunkResult = chunkDiff(input.diffContent, input.filePath);
+
+  if (chunkResult.chunks.length === 0) {
+    logger.info("No chunks generated from diff", {
+      prNumber: input.prNumber,
+      repository: input.repository,
+      filePath: input.filePath,
+    });
+    return null;
+  }
+
+  const chunkInputs = mapDiffChunksToInputs(chunkResult.chunks, {
+    filePath: chunkResult.filePath,
+    repository: input.repository,
+    prNumber: input.prNumber,
+    commitSha: input.commitSha,
+    hunkHeader: input.hunkHeader,
+    tenantId: input.tenantId,
+  });
+
+  const createdChunks = await createDiffChunksBatch(chunkInputs);
+
+  logger.info("Created diff chunks", {
+    prNumber: input.prNumber,
+    repository: input.repository,
+    filePath: input.filePath,
+    chunksCreated: createdChunks.length,
+  });
+
+  return { chunksCreated: createdChunks.length, parentId: null };
+};
 
 /**
- * Result of diff ingestion.
+ * Generates embeddings for pending diff chunks and records metrics.
  */
-export interface IngestDiffResult {
-  readonly success: boolean;
-  readonly chunksCreated: number;
-  readonly chunksEmbedded: number;
-  readonly errors: readonly string[];
-}
+const embedAndRecordDiff = async (
+  tenantId: string | undefined,
+  chunksCreated: number
+): Promise<EmbedResult> => {
+  const embeddingClient = getEmbeddingClient();
+  const embedResult = await embedPendingDiffChunks(
+    embeddingClient,
+    INGESTION_DEFAULTS.BATCH_SIZE,
+    tenantId
+  );
+
+  recordIngestionOperation("diff", chunksCreated, embedResult.embedded, embedResult.errors.length);
+
+  return { chunksEmbedded: embedResult.embedded, errors: embedResult.errors };
+};
 
 /**
- * Input for ingesting a knowledge document.
+ * Builds a failure result for diff ingestion and records failure metrics.
  */
-export interface IngestKnowledgeDocInput {
-  readonly docType: KnowledgeDocType;
-  readonly title: string;
-  readonly content: string;
-  readonly repository?: string;
-  readonly sourceUrl?: string;
-  readonly filePath?: string;
-  readonly tenantId?: string;
-  readonly metadata?: Record<string, unknown>;
-  /** If true, automatically detect and create relationships after ingestion */
-  readonly detectRelationships?: boolean;
-}
+const buildDiffFailureResult = (input: IngestDiffInput, error: unknown): IngestDiffResult => {
+  const errorMessage = getErrorMessage(error);
+  logger.error("Diff ingestion failed", {
+    prNumber: input.prNumber,
+    repository: input.repository,
+    filePath: input.filePath,
+    error: errorMessage,
+  });
+
+  recordIngestionOperation("diff", 0, 0, 1);
+
+  return { success: false, chunksCreated: 0, chunksEmbedded: 0, errors: [errorMessage] };
+};
+
+// ==================== Knowledge Doc Ingestion Helpers ====================
 
 /**
- * Result of knowledge doc ingestion.
+ * Validates metadata against the schema for the given doc type.
+ * Returns validation warnings (empty array if no schema or validation passes).
  */
-export interface IngestKnowledgeDocResult {
-  readonly success: boolean;
-  readonly chunksCreated: number;
-  readonly chunksEmbedded: number;
-  readonly parentId: string | null;
-  readonly errors: readonly string[];
-  readonly validationWarnings: readonly string[];
-  /** Number of relationships detected (if detectRelationships was enabled) */
-  readonly relationshipsDetected?: number;
-  /** Number of relationships created (if detectRelationships was enabled) */
-  readonly relationshipsCreated?: number;
-}
+const validateDocMetadata = (
+  docType: string,
+  title: string,
+  metadata: Record<string, unknown> | undefined
+): readonly string[] => {
+  if (!metadata || !hasSchemaForDocType(docType)) {
+    return [];
+  }
+
+  const validationResult = validateMetadata(docType, metadata);
+  if (!validationResult.success && validationResult.errors) {
+    const warnings = validationResult.errors.map(
+      (validationError) => `${validationError.path}: ${validationError.message}`
+    );
+    logger.warn("Metadata validation warnings - proceeding with ingestion", {
+      docType,
+      title,
+      warnings,
+    });
+    return warnings;
+  }
+
+  return [];
+};
 
 /**
- * Options for batch embedding operations.
+ * Chunks a knowledge document and stores the resulting chunks in the database.
+ * Returns null if no chunks were generated (empty doc).
  */
-interface BatchEmbedOptions {
-  readonly batchSize: number;
-  readonly tenantId?: string;
-}
+const chunkAndStoreKnowledgeDoc = async (
+  input: IngestKnowledgeDocInput
+): Promise<ChunkStoreResult | null> => {
+  const chunkResult = chunkByDocType(input.content, input.docType, input.title);
+
+  if (chunkResult.chunks.length === 0) {
+    logger.info("No chunks generated from knowledge doc", {
+      docType: input.docType,
+      title: input.title,
+    });
+    return null;
+  }
+
+  const chunkInputs = mapKnowledgeChunksToInputs(chunkResult.chunks, {
+    docType: input.docType,
+    title: input.title,
+    parentId: null,
+    repository: input.repository,
+    sourceUrl: input.sourceUrl,
+    filePath: input.filePath,
+    tenantId: input.tenantId,
+    metadata: input.metadata,
+  });
+
+  const createdDocs = await createKnowledgeDocsBatch(chunkInputs);
+  const parentId = createdDocs.length > 0 ? createdDocs[0].id : null;
+
+  logger.info("Created knowledge doc chunks", {
+    docType: input.docType,
+    title: input.title,
+    chunksCreated: createdDocs.length,
+    parentId,
+  });
+
+  return { chunksCreated: createdDocs.length, parentId };
+};
+
+/**
+ * Generates embeddings for pending knowledge docs and records metrics.
+ */
+const embedAndRecordKnowledge = async (
+  tenantId: string | undefined,
+  chunksCreated: number
+): Promise<EmbedResult> => {
+  const embeddingClient = getEmbeddingClient();
+  const embedResult = await embedPendingKnowledgeDocs(
+    embeddingClient,
+    INGESTION_DEFAULTS.BATCH_SIZE,
+    tenantId
+  );
+
+  recordIngestionOperation(
+    "knowledge",
+    chunksCreated,
+    embedResult.embedded,
+    embedResult.errors.length
+  );
+
+  return { chunksEmbedded: embedResult.embedded, errors: embedResult.errors };
+};
+
+/**
+ * Detects and creates relationships for a newly ingested document.
+ * Non-fatal: logs warnings on failure and returns empty result.
+ */
+const detectDocRelationships = async (
+  input: IngestKnowledgeDocInput,
+  parentId: string
+): Promise<RelationshipStepResult> => {
+  const shouldDetect =
+    input.detectRelationships ?? AUTO_DETECT_RELATIONSHIP_DOC_TYPES.includes(input.docType);
+
+  if (!shouldDetect) {
+    return {};
+  }
+
+  try {
+    const result = await detectAndCreateRelationships({
+      docId: parentId,
+      docType: input.docType,
+      title: input.title,
+      content: input.content,
+      repository: input.repository,
+      filePath: input.filePath,
+      tenantId: input.tenantId,
+    });
+
+    logger.info("Relationship detection complete", {
+      parentId,
+      detected: result.detected,
+      created: result.created,
+    });
+
+    return { relationshipsDetected: result.detected, relationshipsCreated: result.created };
+  } catch (relationshipError) {
+    logger.warn("Relationship detection failed (non-fatal)", {
+      parentId,
+      error: getErrorMessage(relationshipError),
+    });
+    return {};
+  }
+};
+
+/**
+ * Builds a failure result for knowledge doc ingestion and records failure metrics.
+ */
+const buildKnowledgeFailureResult = (
+  input: IngestKnowledgeDocInput,
+  error: unknown,
+  validationWarnings: readonly string[]
+): IngestKnowledgeDocResult => {
+  const errorMessage = getErrorMessage(error);
+  logger.error("Knowledge doc ingestion failed", {
+    docType: input.docType,
+    title: input.title,
+    error: errorMessage,
+  });
+
+  recordIngestionOperation("knowledge", 0, 0, 1);
+
+  return {
+    success: false,
+    chunksCreated: 0,
+    chunksEmbedded: 0,
+    parentId: null,
+    errors: [errorMessage],
+    validationWarnings,
+  };
+};
 
 // ==================== Public API ====================
 
@@ -115,49 +307,13 @@ export const ingestDiffChunks = async (input: IngestDiffInput): Promise<IngestDi
   });
 
   try {
-    // Chunk the diff
-    const chunkResult = chunkDiff(input.diffContent, input.filePath);
-
-    if (chunkResult.chunks.length === 0) {
-      logger.info("No chunks generated from diff", {
-        prNumber: input.prNumber,
-        repository: input.repository,
-        filePath: input.filePath,
-      });
+    const storeResult = await chunkAndStoreDiff(input);
+    if (!storeResult) {
       return { success: true, chunksCreated: 0, chunksEmbedded: 0, errors: [] };
     }
 
-    // Map chunks to database input format
-    const chunkInputs = mapDiffChunksToInputs(chunkResult.chunks, {
-      filePath: chunkResult.filePath,
-      repository: input.repository,
-      prNumber: input.prNumber,
-      commitSha: input.commitSha,
-      hunkHeader: input.hunkHeader,
-      tenantId: input.tenantId,
-    });
-
-    // Store chunks in database
-    const createdChunks = await createDiffChunksBatch(chunkInputs);
-    const chunksCreated = createdChunks.length;
-
-    logger.info("Created diff chunks", {
-      prNumber: input.prNumber,
-      repository: input.repository,
-      filePath: input.filePath,
-      chunksCreated,
-    });
-
-    // Generate embeddings (tier selection handled by helper)
-    const embeddingClient = getEmbeddingClient();
-    const embedResult = await embedPendingDiffChunks(
-      embeddingClient,
-      INGESTION_DEFAULTS.BATCH_SIZE,
-      input.tenantId
-    );
-
-    const chunksEmbedded = embedResult.embedded;
-    const { errors } = embedResult;
+    const { chunksCreated } = storeResult;
+    const { chunksEmbedded, errors } = await embedAndRecordDiff(input.tenantId, chunksCreated);
 
     logger.info("Completed diff ingestion", {
       prNumber: input.prNumber,
@@ -168,33 +324,9 @@ export const ingestDiffChunks = async (input: IngestDiffInput): Promise<IngestDi
       errorCount: errors.length,
     });
 
-    // Record metrics for observability
-    recordIngestionOperation("diff", chunksCreated, chunksEmbedded, errors.length);
-
-    return {
-      success: errors.length === 0,
-      chunksCreated,
-      chunksEmbedded,
-      errors,
-    };
+    return { success: errors.length === 0, chunksCreated, chunksEmbedded, errors };
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    logger.error("Diff ingestion failed", {
-      prNumber: input.prNumber,
-      repository: input.repository,
-      filePath: input.filePath,
-      error: errorMessage,
-    });
-
-    // Record failure metrics
-    recordIngestionOperation("diff", 0, 0, 1);
-
-    return {
-      success: false,
-      chunksCreated: 0,
-      chunksEmbedded: 0,
-      errors: [errorMessage],
-    };
+    return buildDiffFailureResult(input, error);
   }
 };
 
@@ -207,6 +339,7 @@ export const ingestDiffChunks = async (input: IngestDiffInput): Promise<IngestDi
  * 3. Redact secrets from each chunk
  * 4. Store chunks in database with parent reference
  * 5. Generate embeddings for stored chunks
+ * 6. Detect and create relationships (if enabled)
  *
  * @param input - Knowledge doc ingestion input
  * @returns Ingestion result with statistics and validation warnings
@@ -220,35 +353,11 @@ export const ingestKnowledgeDoc = async (
     contentLength: input.content.length,
   });
 
-  // Validate metadata if schema exists for this doc type
-  const validationWarnings: readonly string[] =
-    input.metadata && hasSchemaForDocType(input.docType)
-      ? (() => {
-          const validationResult = validateMetadata(input.docType, input.metadata);
-          if (!validationResult.success && validationResult.errors) {
-            const warnings = validationResult.errors.map(
-              (validationError) => `${validationError.path}: ${validationError.message}`
-            );
-            logger.warn("Metadata validation warnings - proceeding with ingestion", {
-              docType: input.docType,
-              title: input.title,
-              warnings,
-            });
-            return warnings;
-          }
-          return [];
-        })()
-      : [];
+  const validationWarnings = validateDocMetadata(input.docType, input.title, input.metadata);
 
   try {
-    // Chunk the document using doc-type-specific strategy
-    const chunkResult = chunkByDocType(input.content, input.docType, input.title);
-
-    if (chunkResult.chunks.length === 0) {
-      logger.info("No chunks generated from knowledge doc", {
-        docType: input.docType,
-        title: input.title,
-      });
+    const storeResult = await chunkAndStoreKnowledgeDoc(input);
+    if (!storeResult) {
       return {
         success: true,
         chunksCreated: 0,
@@ -259,42 +368,8 @@ export const ingestKnowledgeDoc = async (
       };
     }
 
-    // Map chunks to database input format
-    const chunkInputs = mapKnowledgeChunksToInputs(chunkResult.chunks, {
-      docType: input.docType,
-      title: input.title,
-      parentId: null,
-      repository: input.repository,
-      sourceUrl: input.sourceUrl,
-      filePath: input.filePath,
-      tenantId: input.tenantId,
-      metadata: input.metadata,
-    });
-
-    // Store chunks in database
-    const createdDocs = await createKnowledgeDocsBatch(chunkInputs);
-    const chunksCreated = createdDocs.length;
-
-    // Set parentId to first chunk for reference
-    const parentId = createdDocs.length > 0 ? createdDocs[0].id : null;
-
-    logger.info("Created knowledge doc chunks", {
-      docType: input.docType,
-      title: input.title,
-      chunksCreated,
-      parentId,
-    });
-
-    // Generate embeddings (tier selection handled by helper)
-    const embeddingClient = getEmbeddingClient();
-    const embedResult = await embedPendingKnowledgeDocs(
-      embeddingClient,
-      INGESTION_DEFAULTS.BATCH_SIZE,
-      input.tenantId
-    );
-
-    const chunksEmbedded = embedResult.embedded;
-    const { errors } = embedResult;
+    const { chunksCreated, parentId } = storeResult;
+    const { chunksEmbedded, errors } = await embedAndRecordKnowledge(input.tenantId, chunksCreated);
 
     logger.info("Completed knowledge doc ingestion", {
       docType: input.docType,
@@ -305,44 +380,7 @@ export const ingestKnowledgeDoc = async (
       errorCount: errors.length,
     });
 
-    // Record metrics for observability
-    recordIngestionOperation("knowledge", chunksCreated, chunksEmbedded, errors.length);
-
-    // Detect and create relationships if enabled and we have a parentId
-    // Auto-detect for high-value doc types unless explicitly disabled
-    let relationshipsDetected: number | undefined;
-    let relationshipsCreated: number | undefined;
-
-    const shouldDetectRelationships =
-      input.detectRelationships ?? AUTO_DETECT_RELATIONSHIP_DOC_TYPES.includes(input.docType);
-
-    if (shouldDetectRelationships && parentId) {
-      try {
-        const relationshipResult = await detectAndCreateRelationships({
-          docId: parentId,
-          docType: input.docType,
-          title: input.title,
-          content: input.content,
-          repository: input.repository,
-          filePath: input.filePath,
-          tenantId: input.tenantId,
-        });
-
-        relationshipsDetected = relationshipResult.detected;
-        relationshipsCreated = relationshipResult.created;
-
-        logger.info("Relationship detection complete", {
-          parentId,
-          detected: relationshipsDetected,
-          created: relationshipsCreated,
-        });
-      } catch (relationshipError) {
-        logger.warn("Relationship detection failed (non-fatal)", {
-          parentId,
-          error: getErrorMessage(relationshipError),
-        });
-      }
-    }
+    const relationships = parentId ? await detectDocRelationships(input, parentId) : {};
 
     return {
       success: errors.length === 0,
@@ -351,28 +389,10 @@ export const ingestKnowledgeDoc = async (
       parentId,
       errors,
       validationWarnings,
-      relationshipsDetected,
-      relationshipsCreated,
+      ...relationships,
     };
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    logger.error("Knowledge doc ingestion failed", {
-      docType: input.docType,
-      title: input.title,
-      error: errorMessage,
-    });
-
-    // Record failure metrics
-    recordIngestionOperation("knowledge", 0, 0, 1);
-
-    return {
-      success: false,
-      chunksCreated: 0,
-      chunksEmbedded: 0,
-      parentId: null,
-      errors: [errorMessage],
-      validationWarnings,
-    };
+    return buildKnowledgeFailureResult(input, error, validationWarnings);
   }
 };
 

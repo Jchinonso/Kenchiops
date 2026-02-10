@@ -19,6 +19,7 @@ import {
   type ChunkingOptions,
   type TextChunk,
 } from "./chunkingCore.js";
+import type { DiffChunkResult, KnowledgeChunkResult, MarkdownSection } from "./types.js";
 
 // Re-export core types and utilities for external consumers
 export {
@@ -28,46 +29,17 @@ export {
   createTextChunk,
   findBestSplitPoint,
   processNextChunk,
-  type ChunkMetadata,
-  type TextChunk,
-  type ChunkingOptions,
-  type ChunkingState,
 } from "./chunkingCore.js";
 
-// ==================== Types ====================
-
-/**
- * Result of a diff chunking operation.
- */
-export interface DiffChunkResult {
-  /** The chunked content */
-  readonly chunks: readonly TextChunk[];
-  /** Original file path */
-  readonly filePath: string;
-  /** Hunk header if available */
-  readonly hunkHeader: string | null;
-}
-
-/**
- * Result of a knowledge document chunking operation.
- */
-export interface KnowledgeChunkResult {
-  /** The chunked content */
-  readonly chunks: readonly TextChunk[];
-  /** Document title */
-  readonly title: string;
-  /** Document type */
-  readonly docType: string;
-}
-
-/**
- * Markdown section with header and content.
- */
-export interface MarkdownSection {
-  readonly header: string;
-  readonly content: string;
-  readonly level: number;
-}
+export type {
+  ChunkMetadata,
+  TextChunk,
+  ChunkingOptions,
+  ChunkingState,
+  DiffChunkResult,
+  KnowledgeChunkResult,
+  MarkdownSection,
+} from "./types.js";
 
 // ==================== Public API ====================
 

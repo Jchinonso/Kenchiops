@@ -3,7 +3,7 @@
  */
 
 // Configuration
-export { config, type Config } from "./config.js";
+export { config } from "./config.js";
 
 // Logger
 export { createLogger, logger, LogLevel, type Logger } from "./logger.js";
@@ -20,8 +20,17 @@ export {
   verifyUrlSignature,
   generateFeedbackUrl,
   parseFeedbackUrl,
-  type SignedUrlParams,
 } from "./utils.js";
+
+// Concurrency control
+export {
+  createConcurrencyLimiter,
+  mapWithConcurrency,
+  withConcurrencyLimit,
+  isQueueTimeoutError,
+  type ConcurrencyLimiterConfig,
+  type ConcurrencyLimiter,
+} from "./concurrency.js";
 
 // Error handling
 export {
@@ -34,6 +43,7 @@ export {
   LLMError,
   RateLimitError,
   CircuitBreakerOpenError,
+  QueueTimeoutError,
   isAppError,
   isRetryableAppError,
   isExternalServiceError,
@@ -43,25 +53,38 @@ export {
   formatErrorForLog,
   wrapError,
   enrichError,
-  type ErrorContext,
+  invariant,
+  assertUnreachable,
 } from "./errors.js";
 
 // Types
 export type {
+  // Request Context
+  RequestContext,
   // Event Types
   Event,
   EventType,
   EventSeverity,
   EventPayload,
   EventMetadata,
+  EventCorrelation,
   // Evidence Types
   Evidence,
+  PRDiffEvidence,
   LogEntry,
+  TimeSeriesDataPoint,
   TimeSeriesMetric,
+  MetricsTimeRange,
   MetricsSummary,
   Metrics,
   GitCommit,
   SystemState,
+  ServiceHealthStatus,
+  DependencyStatus,
+  DeploymentStatus,
+  DependencyHealth,
+  KnowledgeDocumentType,
+  KnowledgeDocumentMetadata,
   KnowledgeDocument,
   RelatedEvent,
   TestFrameworkHint,
@@ -90,11 +113,19 @@ export type {
   // Confidence Scoring Types
   ConfidenceScoreBreakdown,
   ConfidenceScoreResult,
+  LLMConfidenceLevel,
+  FactorValues,
+  ScoreTotals,
   // Validation Types
   ValidationResult,
+  // Configuration Types
+  Config,
+  NodeEnvironment,
+  LLMProvider,
   // Multi-Tenant Types
   Tenant,
   TenantStatus,
+  TenantEmbeddingTier,
   CreateTenantFromGitHub,
   LinkSlackWorkspace,
   TenantAuditAction,
@@ -108,4 +139,19 @@ export type {
   CIFailureEvent,
   SlackMessageEvent,
   GitHubPREvent,
+  GitHubPREventRepository,
+  GitHubPREventPullRequest,
+  // Signed URL Types
+  SignedUrlParams,
+  // Logger Internal Types
+  StructuredLogEntry,
+  // Error Types
+  ErrorContext,
+  RetryInfo,
+  // Health Check Types
+  HealthStatus,
+  ComponentHealth,
+  MemoryHealth,
+  ServiceHealth,
+  HealthCheckConfig,
 } from "./types.js";

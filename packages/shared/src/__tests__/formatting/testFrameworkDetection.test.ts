@@ -7,7 +7,7 @@ import { describe, it, expect } from "@jest/globals";
 import {
   detectTestFramework,
   detectTestFrameworkSimple,
-} from "../../formatting/testFrameworkDetection.js";
+} from "../../formatting/preprocessing/index.js";
 
 describe("Test Framework Detection", () => {
   describe("detectTestFramework", () => {

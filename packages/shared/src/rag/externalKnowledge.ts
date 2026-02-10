@@ -20,71 +20,26 @@ import {
   getSourcesDueForSync,
   updateSyncStatus,
   type ExternalSource,
-} from "../database/externalSourceRepository.js";
+} from "../database/index.js";
 import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
+import type {
+  ExternalDocument,
+  ExternalSourceConnector,
+  SyncSourceResult,
+  SyncAllResult,
+  SyncOptions,
+} from "./types.js";
+
+export type {
+  ExternalDocument,
+  FetchResult,
+  ExternalSourceConnector,
+  SyncSourceResult,
+  SyncAllResult,
+  SyncOptions,
+} from "./types.js";
 
 const logger = createLogger("rag-external-knowledge");
-
-// ==================== Types ====================
-
-/**
- * External document fetched from a source.
- */
-export interface ExternalDocument {
-  readonly title: string;
-  readonly content: string;
-  readonly sourceUrl: string;
-  readonly techStackTags?: readonly TechStackTag[];
-  readonly metadata?: Record<string, unknown>;
-}
-
-/**
- * Result of fetching documents from an external source.
- */
-export interface FetchResult {
-  readonly documents: readonly ExternalDocument[];
-  readonly errorCount: number;
-  readonly nextCursor?: string;
-}
-
-/**
- * External source connector interface.
- */
-export interface ExternalSourceConnector {
-  readonly sourceType: ExternalSourceType;
-  readonly fetch: (source: ExternalSource, cursor?: string) => Promise<FetchResult>;
-}
-
-/**
- * Sync result for a single source.
- */
-export interface SyncSourceResult {
-  readonly sourceId: string;
-  readonly sourceName: string;
-  readonly docsIngested: number;
-  readonly docsSkipped: number;
-  readonly errorCount: number;
-  readonly durationMs: number;
-}
-
-/**
- * Sync result for all sources.
- */
-export interface SyncAllResult {
-  readonly sourcesProcessed: number;
-  readonly totalDocsIngested: number;
-  readonly totalErrors: number;
-  readonly results: readonly SyncSourceResult[];
-}
-
-/**
- * Options for syncing external sources.
- */
-export interface SyncOptions {
-  readonly maxDocsPerSource?: number;
-  readonly filterTechStack?: readonly TechStackTag[];
-  readonly minCredibility?: number;
-}
 
 // ==================== Connector Registry ====================
 
@@ -207,6 +162,61 @@ const ingestFetchedDocuments = async (
   return { ingested: result.ingested, skipped, errors: result.errors };
 };
 
+// ==================== Sync Result Builders ====================
+
+/**
+ * Creates a sync result with zero docs ingested.
+ */
+const buildEmptySyncResult = (
+  sourceId: string,
+  sourceName: string,
+  startTime: number,
+  errorCount: number
+): SyncSourceResult => ({
+  sourceId,
+  sourceName,
+  docsIngested: 0,
+  docsSkipped: 0,
+  errorCount,
+  durationMs: Date.now() - startTime,
+});
+
+/**
+ * Performs the fetch-ingest-update cycle for a valid connector.
+ */
+const fetchAndIngestDocs = async (
+  source: ExternalSource,
+  connector: ExternalSourceConnector,
+  options: SyncOptions,
+  startTime: number
+): Promise<SyncSourceResult> => {
+  const fetchResult = await connector.fetch(source);
+  const ingestResult = await ingestFetchedDocuments(fetchResult.documents, source, options);
+
+  await updateSyncStatus(
+    source.id,
+    source.docCount + ingestResult.ingested,
+    fetchResult.errorCount + ingestResult.errors
+  );
+
+  logger.info("Knowledge ingestion from connector finished", {
+    sourceId: source.id,
+    sourceName: source.name,
+    docsIngested: ingestResult.ingested,
+    docsSkipped: ingestResult.skipped,
+    errors: ingestResult.errors,
+  });
+
+  return {
+    sourceId: source.id,
+    sourceName: source.name,
+    docsIngested: ingestResult.ingested,
+    docsSkipped: ingestResult.skipped,
+    errorCount: fetchResult.errorCount + ingestResult.errors,
+    durationMs: Date.now() - startTime,
+  };
+};
+
 // ==================== Public API ====================
 
 /**
@@ -224,88 +234,35 @@ export const syncExternalSource = async (
 
   const source = await getExternalSourceById(sourceId);
   if (!source) {
-    logger.warn("External source not found for sync", { sourceId });
+    logger.warn("Not found for ingestion", { sourceId });
     return null;
   }
 
-  // Check credibility threshold
   const minCredibility = options.minCredibility ?? EXTERNAL_SOURCE_CONFIG.MIN_CREDIBILITY_THRESHOLD;
   if (source.credibilityScore < minCredibility) {
-    logger.info("Source below credibility threshold, skipping sync", {
+    logger.info("Below credibility threshold, skipping", {
       sourceId,
       credibility: source.credibilityScore,
       threshold: minCredibility,
     });
-    return {
-      sourceId,
-      sourceName: source.name,
-      docsIngested: 0,
-      docsSkipped: 0,
-      errorCount: 0,
-      durationMs: Date.now() - startTime,
-    };
+    return buildEmptySyncResult(sourceId, source.name, startTime, 0);
   }
 
-  // Get connector
   const connector = getConnector(source.sourceType);
   if (!connector) {
-    logger.warn("No connector registered for source type", { sourceType: source.sourceType });
-    return {
-      sourceId,
-      sourceName: source.name,
-      docsIngested: 0,
-      docsSkipped: 0,
-      errorCount: 1,
-      durationMs: Date.now() - startTime,
-    };
+    logger.warn("No connector registered for type", { sourceType: source.sourceType });
+    return buildEmptySyncResult(sourceId, source.name, startTime, 1);
   }
 
   try {
-    // Fetch documents
-    const fetchResult = await connector.fetch(source);
-
-    // Ingest documents
-    const ingestResult = await ingestFetchedDocuments(fetchResult.documents, source, options);
-
-    // Update sync status
-    await updateSyncStatus(
-      sourceId,
-      source.docCount + ingestResult.ingested,
-      fetchResult.errorCount + ingestResult.errors
-    );
-
-    logger.info("Completed external source sync", {
-      sourceId,
-      sourceName: source.name,
-      docsIngested: ingestResult.ingested,
-      docsSkipped: ingestResult.skipped,
-      errors: ingestResult.errors,
-    });
-
-    return {
-      sourceId,
-      sourceName: source.name,
-      docsIngested: ingestResult.ingested,
-      docsSkipped: ingestResult.skipped,
-      errorCount: fetchResult.errorCount + ingestResult.errors,
-      durationMs: Date.now() - startTime,
-    };
+    return await fetchAndIngestDocs(source, connector, options, startTime);
   } catch (error) {
-    logger.error("External source sync failed", {
+    logger.error("Ingestion from connector failed", {
       sourceId,
       error: getErrorMessage(error),
     });
-
     await updateSyncStatus(sourceId, source.docCount, source.errorCount + 1);
-
-    return {
-      sourceId,
-      sourceName: source.name,
-      docsIngested: 0,
-      docsSkipped: 0,
-      errorCount: 1,
-      durationMs: Date.now() - startTime,
-    };
+    return buildEmptySyncResult(sourceId, source.name, startTime, 1);
   }
 };
 
@@ -379,8 +336,8 @@ export const getTenantSyncStatus = async (
 
   // Find most recent sync
   const syncTimes = sources
-    .filter((source) => source.lastSyncAt)
-    .map((source) => source.lastSyncAt as string)
+    .map((source) => source.lastSyncAt)
+    .filter((lastSyncAt): lastSyncAt is string => lastSyncAt !== null && lastSyncAt !== undefined)
     .sort()
     .reverse();
 

@@ -8,6 +8,7 @@
  */
 
 import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
+import type { EmbeddingTierName } from "../constants/index.js";
 
 // ==================== Analysis Provider ====================
 
@@ -170,4 +171,120 @@ export interface ProviderRegistryEntry {
   readonly name: LLMProviderName;
   readonly createAnalysisProvider?: AnalysisProviderFactory;
   readonly createEmbeddingProvider?: EmbeddingProviderFactory;
+}
+
+// ==================== LLM Client Types ====================
+
+/**
+ * LLM client configuration.
+ */
+export interface LLMConfig {
+  readonly model: string;
+  readonly maxTokens: number;
+  readonly temperature: number;
+  readonly timeout: number;
+}
+
+// ==================== Embedding Client Types ====================
+
+/**
+ * LLM client configuration for embeddings.
+ */
+export interface EmbeddingClientConfig {
+  readonly model: string;
+  readonly dimension: number;
+  readonly timeout: number;
+  readonly maxBatchSize: number;
+  readonly tier: EmbeddingTierName;
+}
+
+// ==================== Token Manager Types ====================
+
+/**
+ * Token estimation result with metadata for optimization decisions.
+ */
+export interface TokenEstimate {
+  readonly evidenceTokens: number;
+  readonly totalEstimatedTokens: number;
+  readonly requiresTruncation: boolean;
+}
+
+// ==================== Response Parser Validation Types ====================
+
+/**
+ * Raw annotation structure from AI response
+ */
+export interface RawAnnotation {
+  readonly evidence_id?: unknown;
+  readonly snippet?: unknown;
+  readonly explanation?: unknown;
+}
+
+/**
+ * Raw secondary finding from AI response
+ */
+export interface RawSecondaryFinding {
+  readonly issue?: unknown;
+  readonly evidence_id?: unknown;
+}
+
+/**
+ * Valid confidence levels
+ */
+export type ConfidenceLevel = "low" | "medium" | "high";
+
+// ==================== Response Parser Types ====================
+
+/** Test failure shape for logging */
+export interface TestFailureLogShape {
+  readonly testName: string;
+  readonly expected?: string | null;
+  readonly actual?: string | null;
+  readonly error: string;
+}
+
+/** Lint error shape for logging */
+export interface LintErrorLogShape {
+  readonly code: string;
+  readonly message: string;
+  readonly file: string;
+  readonly line: number;
+}
+
+/** Valid priority values for recommended actions */
+export type ActionPriority = "immediate" | "high" | "medium" | "low";
+
+// ==================== Validation Types ====================
+
+/**
+ * Pre-computed lookup structures for validation.
+ */
+export interface ValidationLookups {
+  readonly commits: Set<string>;
+  readonly incidents: Set<string>;
+  readonly documentTitles: Set<string>;
+  readonly logs: Map<string, string>;
+  readonly logValues: string[];
+}
+
+/**
+ * Evidence type validator - dispatch table for O(1) type lookup.
+ */
+export type EvidenceValidator = (
+  ref: string,
+  context: { event: Event; evidence: Evidence },
+  lookups: ValidationLookups
+) => boolean;
+
+// ==================== JSON Extraction Types ====================
+
+/**
+ * State for JSON extraction state machine.
+ */
+export interface JsonExtractionState {
+  readonly depth: number;
+  readonly startIndex: number;
+  readonly endIndex: number | null;
+  readonly isInString: boolean;
+  readonly isEscaped: boolean;
 }

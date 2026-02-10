@@ -12,12 +12,18 @@ import { createLogger, withTimeout, getErrorMessage } from "../core/index.js";
 import { REDIS_TIMEOUTS, AGGREGATION_DEFAULTS } from "../constants/index.js";
 import {
   DEFAULT_AGGREGATION_CONFIG,
-  type AggregationKey,
   type AggregationConfig,
+  type AggregationKey,
+  type AggregationKeySet,
+  type AggregationLogContext,
   type AnalyzedFailure,
+  type FailureContext,
+  type PendingCheckContext,
   type PendingCheckRun,
+  type SerializedPendingCheckData,
+  type AddToAggregationParams,
+  type PipelineOptions,
 } from "./types.js";
-
 import {
   formatShaForDisplay,
   calculateAggregationTTL,
@@ -26,17 +32,7 @@ import {
   buildMetadata,
   buildAggregationKeys,
   isRedisReady,
-  type FailureContext,
-  type AggregationKeySet,
 } from "./aggregatorHelpers.js";
-
-import {
-  type PendingCheckContext,
-  type SerializedPendingCheckData,
-  type AddToAggregationParams,
-  type AggregationLogContext,
-  type PipelineOptions,
-} from "./aggregatorTypes.js";
 
 const logger = createLogger("redis-aggregator");
 

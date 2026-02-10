@@ -22,7 +22,7 @@ import {
   EXPRESS_CONFIG,
   SERVER_TIMEOUTS,
   startActionQueueWorker,
-  createRedisRateLimiter,
+  createRateLimitMiddleware,
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   getErrorMessage,
@@ -41,6 +41,8 @@ import {
   cleanupExpired,
   // Drift detection
   runDriftDetectionWithAlerts,
+  type WorkerControl,
+  type ProcessorControl,
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
@@ -59,16 +61,32 @@ declare module "express-serve-static-core" {
 }
 
 /**
- * Redis-backed rate limiter for GitHub webhooks.
+ * Redis-backed rate limiter with security features for GitHub webhooks.
  * Higher limit since webhooks can come in bursts during CI activity.
  * Skips health check endpoints for monitoring.
+ *
+ * Security features enabled:
+ * - Bot detection (signal-based, not blocking - GitHub sends webhooks)
+ * - Burst detection (higher threshold for webhook bursts)
  */
-const githubRateLimiter = createRedisRateLimiter({
-  windowMs: GITHUB_APP_RATE_LIMITS.WINDOW_MS,
-  max: GITHUB_APP_RATE_LIMITS.MAX_REQUESTS,
-  message: GITHUB_APP_MESSAGES.RATE_LIMIT_EXCEEDED,
-  keyPrefix: GITHUB_APP_RATE_LIMITS.KEY_PREFIX,
+const githubRateLimiter = createRateLimitMiddleware({
+  rateLimit: {
+    windowMs: GITHUB_APP_RATE_LIMITS.WINDOW_MS,
+    max: GITHUB_APP_RATE_LIMITS.MAX_REQUESTS,
+    message: GITHUB_APP_MESSAGES.RATE_LIMIT_EXCEEDED,
+    keyPrefix: GITHUB_APP_RATE_LIMITS.KEY_PREFIX,
+  },
   skip: (req) => shouldSkipGitHubAppRateLimit(req.path),
+  botDetection: {
+    blockMalicious: false, // Signal-based, not blocking
+    botRateMultiplier: 1, // Don't penalize webhooks from GitHub
+  },
+  burstDetection: {
+    maxBurst: 50, // Higher threshold for webhook bursts
+    rateMultiplier: 0.75, // Mild penalty (75% of normal rate)
+    blockOnBurst: false, // Don't block legitimate webhook bursts
+  },
+  distributedFallback: "fail", // Fail-safe when Redis unavailable
 });
 
 /**
@@ -124,14 +142,14 @@ const initializeDatabase = (): void => {
 };
 
 /**
- * Stop function for aggregator worker
+ * Control for aggregator worker
  */
-let stopAggregatorWorker: (() => void) | null = null;
+let aggregatorWorkerControl: WorkerControl | null = null;
 
 /**
- * Stop function for analysis queue processor
+ * Control for analysis queue processor
  */
-let stopAnalysisProcessor: (() => void) | null = null;
+let analysisProcessorControl: ProcessorControl | null = null;
 
 /**
  * Initialize Redis-based failure aggregator for consolidated CI failure analysis
@@ -161,14 +179,14 @@ const initializeFailureAggregator = (): void => {
   };
 
   // Start the aggregator worker (checks for ready aggregations and enqueues them)
-  stopAggregatorWorker = startAggregatorWorker(
-    aggregationConfig,
-    QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS
-  );
+  aggregatorWorkerControl = startAggregatorWorker({
+    config: aggregationConfig,
+    pollIntervalMs: QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS,
+  });
 
   // Start the analysis queue processor (processes enqueued aggregations)
   // Handles both legacy flow (pre-analyzed) and new flow (pending checks for combined analysis)
-  stopAnalysisProcessor = startAnalysisQueueProcessor(postConsolidatedAnalysis, {
+  analysisProcessorControl = startAnalysisQueueProcessor(postConsolidatedAnalysis, {
     pollIntervalMs: QUEUE_WORKER_DEFAULTS.POLL_INTERVAL_MS,
     maxConcurrent: QUEUE_WORKER_DEFAULTS.SLACK_MAX_CONCURRENT,
     onPendingReady: processCombinedAnalysis,
@@ -284,13 +302,13 @@ const setupGracefulShutdown = (server: ReturnType<typeof express.application.lis
       }
 
       // Stop aggregator workers (Redis state persists, will be processed on restart)
-      if (stopAggregatorWorker) {
+      if (aggregatorWorkerControl) {
         logger.info("Stopping aggregator worker...");
-        stopAggregatorWorker();
+        aggregatorWorkerControl.stop();
       }
-      if (stopAnalysisProcessor) {
+      if (analysisProcessorControl) {
         logger.info("Stopping analysis processor...");
-        stopAnalysisProcessor();
+        analysisProcessorControl.stop();
       }
 
       // Stop RAG background jobs

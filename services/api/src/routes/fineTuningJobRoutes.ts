@@ -2,9 +2,11 @@
  * Fine-Tuning Job Routes
  *
  * API endpoints for managing fine-tuning jobs and the scheduler.
+ *
+ * @module routes/fineTuningJobRoutes
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   validate,
@@ -12,6 +14,7 @@ import {
   HTTP_STATUS,
   createLogger,
   SERVICE_NAMES,
+  FINE_TUNING_CONFIG,
 } from "@kenchi/shared";
 import {
   startFineTuningJob,
@@ -22,190 +25,249 @@ import {
   stopScheduler,
   getSchedulerStatus,
 } from "../services/finetuning/index.js";
+import type { StartJobRequestBody } from "../types/apiTypes.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
 
-// ==================== Job Endpoints ====================
+// ==================== Validation Rules ====================
+
+/** Validation rule: optional string */
+const validateOptionalString = (fieldValue: unknown): boolean | string =>
+  fieldValue === undefined || validators.string(fieldValue);
+
+/** Validation rule: optional number */
+const validateOptionalNumber = (fieldValue: unknown): boolean | string =>
+  fieldValue === undefined || validators.number(fieldValue);
+
+/** Validation rule: optional boolean */
+const validateOptionalBoolean = (fieldValue: unknown): boolean | string =>
+  fieldValue === undefined || typeof fieldValue === "boolean" || "Must be a boolean";
+
+// ==================== Route Handlers ====================
 
 /**
- * Start a fine-tuning job
- * POST /api/fine-tuning/jobs
+ * Handles starting a fine-tuning job.
  */
+const handleStartJob = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const body = req.body as StartJobRequestBody;
+
+  const result = await startFineTuningJob({
+    tenantId: body.tenantId,
+    epochs: body.epochs,
+    suffix: body.suffix,
+    dryRun: body.dryRun ?? false,
+  });
+
+  if (!result.success) {
+    logger.info("Fine-tuning job start failed", {
+      tenantId: body.tenantId,
+      error: result.error,
+      durationMs: Date.now() - startTime,
+    });
+
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: result.error,
+      validationIssues: result.validationIssues,
+    });
+    return;
+  }
+
+  logger.info("Fine-tuning job started", {
+    tenantId: body.tenantId,
+    jobId: result.jobId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.CREATED).json({
+    success: true,
+    data: {
+      jobId: result.jobId,
+      status: result.status,
+      fileId: result.fileId,
+      model: result.model,
+      datasetStats: result.datasetStats,
+    },
+  });
+};
+
+/**
+ * Handles getting fine-tuning job status.
+ */
+const handleGetJobStatus = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { jobId } = req.params;
+
+  const result = await getJobStatus(jobId);
+
+  if (!result) {
+    logger.info("Fine-tuning job not found", {
+      jobId,
+      durationMs: Date.now() - startTime,
+    });
+
+    res.status(HTTP_STATUS.NOT_FOUND).json({
+      success: false,
+      error: "Job not found",
+    });
+    return;
+  }
+
+  logger.info("Fine-tuning job status retrieved", {
+    jobId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: result,
+  });
+};
+
+/**
+ * Handles cancelling a fine-tuning job.
+ */
+const handleCancelJob = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const { jobId } = req.params;
+
+  const success = await cancelJob(jobId);
+
+  if (!success) {
+    logger.info("Fine-tuning job cancel failed", {
+      jobId,
+      durationMs: Date.now() - startTime,
+    });
+
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "Failed to cancel job",
+    });
+    return;
+  }
+
+  logger.info("Fine-tuning job cancelled", {
+    jobId,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "Job cancelled",
+  });
+};
+
+/**
+ * Handles listing fine-tuning jobs.
+ */
+const handleListJobs = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const limit = req.query.limit
+    ? parseInt(req.query.limit as string, 10)
+    : FINE_TUNING_CONFIG.API_DEFAULT_JOBS_LIMIT;
+
+  const jobs = await listJobs(limit);
+
+  logger.info("Fine-tuning jobs listed", {
+    limit,
+    count: jobs.length,
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: jobs,
+  });
+};
+
+/**
+ * Handles getting scheduler status.
+ */
+const handleGetSchedulerStatus = async (_req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+
+  const status = getSchedulerStatus();
+
+  logger.info("Scheduler status retrieved", {
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: status,
+  });
+};
+
+/**
+ * Handles starting the scheduler.
+ */
+const handleStartScheduler = async (_req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+
+  startScheduler();
+
+  logger.info("Scheduler started", {
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "Scheduler started",
+  });
+};
+
+/**
+ * Handles stopping the scheduler.
+ */
+const handleStopScheduler = async (_req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+
+  stopScheduler();
+
+  logger.info("Scheduler stopped", {
+    durationMs: Date.now() - startTime,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "Scheduler stopped",
+  });
+};
+
+// ==================== Route Definitions ====================
+
+/** POST /api/fine-tuning/jobs - Start a fine-tuning job */
 router.post(
   "/api/fine-tuning/jobs",
   validate({
     body: {
-      tenantId: (value) => !value || validators.string(value),
-      epochs: (value) => !value || validators.number(value),
-      suffix: (value) => !value || validators.string(value),
-      dryRun: (value) => value === undefined || typeof value === "boolean",
+      tenantId: validateOptionalString,
+      epochs: validateOptionalNumber,
+      suffix: validateOptionalString,
+      dryRun: validateOptionalBoolean,
     },
   }),
-  asyncHandler(async (req, res) => {
-    logger.info("Starting fine-tuning job", {
-      tenantId: req.body.tenantId,
-      epochs: req.body.epochs,
-      dryRun: req.body.dryRun,
-    });
-
-    const result = await startFineTuningJob({
-      tenantId: req.body.tenantId,
-      epochs: req.body.epochs,
-      suffix: req.body.suffix,
-      dryRun: req.body.dryRun ?? false,
-    });
-
-    if (!result.success) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: result.error,
-        validationIssues: result.validationIssues,
-      });
-      return;
-    }
-
-    res.status(HTTP_STATUS.CREATED).json({
-      success: true,
-      data: {
-        jobId: result.jobId,
-        status: result.status,
-        fileId: result.fileId,
-        model: result.model,
-        datasetStats: result.datasetStats,
-      },
-    });
-  })
+  asyncHandler(handleStartJob)
 );
 
-/**
- * Get fine-tuning job status
- * GET /api/fine-tuning/jobs/:jobId
- */
-router.get(
-  "/api/fine-tuning/jobs/:jobId",
-  asyncHandler(async (req, res) => {
-    const { jobId } = req.params;
+/** GET /api/fine-tuning/jobs/:jobId - Get fine-tuning job status */
+router.get("/api/fine-tuning/jobs/:jobId", asyncHandler(handleGetJobStatus));
 
-    logger.info("Getting fine-tuning job status", { jobId });
+/** POST /api/fine-tuning/jobs/:jobId/cancel - Cancel a fine-tuning job */
+router.post("/api/fine-tuning/jobs/:jobId/cancel", asyncHandler(handleCancelJob));
 
-    const result = await getJobStatus(jobId);
+/** GET /api/fine-tuning/jobs - List fine-tuning jobs */
+router.get("/api/fine-tuning/jobs", asyncHandler(handleListJobs));
 
-    if (!result) {
-      res.status(HTTP_STATUS.NOT_FOUND).json({
-        success: false,
-        error: "Job not found",
-      });
-      return;
-    }
+/** GET /api/fine-tuning/scheduler/status - Get scheduler status */
+router.get("/api/fine-tuning/scheduler/status", asyncHandler(handleGetSchedulerStatus));
 
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: result,
-    });
-  })
-);
+/** POST /api/fine-tuning/scheduler/start - Start the scheduler */
+router.post("/api/fine-tuning/scheduler/start", asyncHandler(handleStartScheduler));
 
-/**
- * Cancel a fine-tuning job
- * POST /api/fine-tuning/jobs/:jobId/cancel
- */
-router.post(
-  "/api/fine-tuning/jobs/:jobId/cancel",
-  asyncHandler(async (req, res) => {
-    const { jobId } = req.params;
-
-    logger.info("Cancelling fine-tuning job", { jobId });
-
-    const success = await cancelJob(jobId);
-
-    if (!success) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: "Failed to cancel job",
-      });
-      return;
-    }
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      message: "Job cancelled",
-    });
-  })
-);
-
-/**
- * List fine-tuning jobs
- * GET /api/fine-tuning/jobs
- */
-router.get(
-  "/api/fine-tuning/jobs",
-  asyncHandler(async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
-
-    logger.info("Listing fine-tuning jobs", { limit });
-
-    const jobs = await listJobs(limit);
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: jobs,
-    });
-  })
-);
-
-// ==================== Scheduler Endpoints ====================
-
-/**
- * Get scheduler status
- * GET /api/fine-tuning/scheduler/status
- */
-router.get(
-  "/api/fine-tuning/scheduler/status",
-  asyncHandler(async (req, res) => {
-    const status = getSchedulerStatus();
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: status,
-    });
-  })
-);
-
-/**
- * Start the scheduler
- * POST /api/fine-tuning/scheduler/start
- */
-router.post(
-  "/api/fine-tuning/scheduler/start",
-  asyncHandler(async (req, res) => {
-    logger.info("Starting fine-tuning scheduler");
-
-    startScheduler();
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      message: "Scheduler started",
-    });
-  })
-);
-
-/**
- * Stop the scheduler
- * POST /api/fine-tuning/scheduler/stop
- */
-router.post(
-  "/api/fine-tuning/scheduler/stop",
-  asyncHandler(async (req, res) => {
-    logger.info("Stopping fine-tuning scheduler");
-
-    stopScheduler();
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      message: "Scheduler stopped",
-    });
-  })
-);
+/** POST /api/fine-tuning/scheduler/stop - Stop the scheduler */
+router.post("/api/fine-tuning/scheduler/stop", asyncHandler(handleStopScheduler));
 
 export { router as fineTuningJobRoutes };

@@ -35,7 +35,7 @@ jest.mock("@kenchi/shared", () => {
       error: jest.fn(),
       debug: jest.fn(),
     })),
-    OpenAIClient: jest.fn().mockImplementation(() => ({
+    LLMClient: jest.fn().mockImplementation(() => ({
       analyzeIncident: mockResolve,
     })),
     calculateConfidenceScore: jest.fn(() => ({
@@ -90,7 +90,7 @@ jest.mock("../services/githubService.js", () => {
 
 // Import after mocks
 import {
-  getOpenAIClient,
+  getLLMClient,
   getOctokit,
   createEventFromPR,
   createEventFromCheckRun,
@@ -205,21 +205,21 @@ describe("GitHub Service", () => {
     ...overrides,
   });
 
-  describe("getOpenAIClient", () => {
+  describe("getLLMClient", () => {
     it("should return singleton OpenAI client instance", () => {
-      const client1 = getOpenAIClient();
-      const client2 = getOpenAIClient();
+      const client1 = getLLMClient();
+      const client2 = getLLMClient();
 
       expect(client1).toBe(client2);
       expect(client1).toBeDefined();
     });
 
     it("should only create one instance", () => {
-      // The singleton instance is created on first call to getOpenAIClient
+      // The singleton instance is created on first call to getLLMClient
       // Since it's a module-level singleton, we can only test that subsequent calls return the same instance
-      const client1 = getOpenAIClient();
-      const client2 = getOpenAIClient();
-      const client3 = getOpenAIClient();
+      const client1 = getLLMClient();
+      const client2 = getLLMClient();
+      const client3 = getLLMClient();
 
       // All should be the same instance
       expect(client1).toBe(client2);
@@ -433,7 +433,7 @@ describe("GitHub Service", () => {
     it("should call OpenAI client analyzeIncident", async () => {
       const webhook = createMockPRWebhook();
       const event = createEventFromPR(webhook);
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       await performAnalysis(event);
 
@@ -455,7 +455,7 @@ describe("GitHub Service", () => {
     it("should throw LLMError when analysis fails", async () => {
       const webhook = createMockPRWebhook();
       const event = createEventFromPR(webhook);
-      const client = getOpenAIClient();
+      const client = getLLMClient();
 
       (client.analyzeIncident as jest.Mock).mockRejectedValueOnce(
         new Error("OpenAI API error") as never
@@ -467,7 +467,7 @@ describe("GitHub Service", () => {
     it("should wrap error message when analysis fails", async () => {
       const webhook = createMockPRWebhook();
       const event = createEventFromPR(webhook);
-      const client = getOpenAIClient();
+      const client = getLLMClient();
       const { wrapError } = jest.requireMock("@kenchi/shared") as {
         wrapError: jest.Mock;
       };

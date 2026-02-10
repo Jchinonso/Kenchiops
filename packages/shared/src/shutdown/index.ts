@@ -9,6 +9,11 @@ export {
   registerCleanupHandler,
   isShuttingDown,
   getShutdownStatus,
-  type CleanupFunction,
-  type GracefulShutdownConfig,
 } from "./gracefulShutdown.js";
+
+export type {
+  CleanupFunction,
+  GracefulShutdownConfig,
+  ShutdownStatus,
+  UnregisterFunction,
+} from "./types.js";

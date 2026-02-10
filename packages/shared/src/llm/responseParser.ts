@@ -1,5 +1,5 @@
 /**
- * OpenAI Response Parser
+ * LLM Response Parser
  *
  * Parses and validates LLM responses from the language-agnostic
  * incident analysis format into structured analysis results.
@@ -17,8 +17,9 @@
  */
 
 import { createLogger } from "../core/logger.js";
-import { OPENAI_MESSAGES } from "../constants/index.js";
+import { LLM_MESSAGES } from "../constants/index.js";
 import type { LLMAnalysisResult } from "../core/types.js";
+import type { TestFailureLogShape, LintErrorLogShape, ActionPriority } from "./types.js";
 
 // Import from sub-modules
 import { parseJsonObject } from "./jsonExtraction.js";
@@ -77,14 +78,6 @@ export {
 
 // ==================== Logging Utilities ====================
 
-/** Test failure shape for logging */
-interface TestFailureLogShape {
-  readonly testName: string;
-  readonly expected?: string | null;
-  readonly actual?: string | null;
-  readonly error: string;
-}
-
 /**
  * Builds sample failure data for logging.
  */
@@ -131,14 +124,6 @@ const logTestFailureExtraction = (
   });
 };
 
-/** Lint error shape for logging */
-interface LintErrorLogShape {
-  readonly code: string;
-  readonly message: string;
-  readonly file: string;
-  readonly line: number;
-}
-
 /**
  * Logs lint error extraction details for debugging.
  */
@@ -178,9 +163,6 @@ const generateActionType = (stepDescription: string, stepIndex: number): string 
     .toLowerCase();
   return `llm_action_${stepIndex}_${sanitized}`;
 };
-
-/** Valid priority values for recommended actions */
-type ActionPriority = "immediate" | "high" | "medium" | "low";
 
 /**
  * Normalizes a step item to a string description.
@@ -245,7 +227,7 @@ export const createAnalysisFromParsed = (
   eventId: string
 ): LLMAnalysisResult => {
   // Extract core fields
-  const rootCause = extractString(parsed.root_cause, OPENAI_MESSAGES.NO_SUMMARY);
+  const rootCause = extractString(parsed.root_cause, LLM_MESSAGES.NO_SUMMARY);
   const confidence = mapConfidence(parsed.confidence);
   const category = validateCategory(parsed.category);
   const phase = validatePhase(parsed.phase);
@@ -305,10 +287,7 @@ export const createAnalysisFromParsed = (
  * @returns Parsed and validated LLM analysis result
  * @throws {LLMError} If parsing fails
  */
-export const parseOpenAIResponse = (
-  responseContent: string,
-  eventId: string
-): LLMAnalysisResult => {
+export const parseLLMResponse = (responseContent: string, eventId: string): LLMAnalysisResult => {
   const parsed = parseJsonObject(responseContent);
 
   // Debug: Log raw test_failures from LLM response

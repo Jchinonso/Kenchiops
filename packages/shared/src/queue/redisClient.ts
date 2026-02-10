@@ -10,31 +10,18 @@
 import Redis from "ioredis";
 import { createLogger } from "../core/logger.js";
 import { config } from "../core/config.js";
-import { getErrorMessage } from "../core/errors.js";
+import { getErrorMessage, ExternalServiceError } from "../core/errors.js";
 import {
   RETRY_DEFAULTS,
   REDIS_CONNECTION_DEFAULTS,
   REDIS_STATUS,
   REDIS_RESPONSES,
 } from "../constants/index.js";
+import type { RedisOptions } from "./types.js";
+
+export type { RedisOptions } from "./types.js";
 
 const logger = createLogger("redis");
-
-// ==================== Types ====================
-
-/**
- * Redis connection options
- */
-export interface RedisOptions {
-  /** Redis URL (redis://host:port) */
-  readonly url?: string;
-  /** Maximum retry attempts */
-  readonly maxRetries?: number;
-  /** Enable offline queue (buffer commands while disconnected) */
-  readonly enableOfflineQueue?: boolean;
-  /** Connection timeout in milliseconds */
-  readonly connectTimeout?: number;
-}
 
 // ==================== Connection Management ====================
 
@@ -116,7 +103,8 @@ export const isRedisHealthy = async (): Promise<boolean> => {
     const client = getRedisClient();
     const result = await client.ping();
     return result === REDIS_RESPONSES.PONG;
-  } catch {
+  } catch (error) {
+    logger.warn("Redis health check failed", { error: getErrorMessage(error) });
     return false;
   }
 };
@@ -140,7 +128,12 @@ export const waitForRedisConnection = async (
   // Wait for connection
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error(`Redis connection timeout after ${timeoutMs}ms`));
+      reject(
+        new ExternalServiceError("redis", `Redis connection timeout after ${timeoutMs}ms`, {
+          retryable: true,
+          metadata: { timeoutMs },
+        })
+      );
     }, timeoutMs);
 
     const onReady = (): void => {
@@ -163,6 +156,24 @@ export const waitForRedisConnection = async (
 };
 
 /**
+ * Safely closes a Redis client, logging success or failure.
+ */
+const safeCloseClient = async (
+  client: Redis,
+  label: string,
+  clearRef: () => void
+): Promise<void> => {
+  try {
+    await client.quit();
+    clearRef();
+    logger.info(`Redis ${label} closed`);
+  } catch (error) {
+    clearRef();
+    logger.error(`Failed to close Redis ${label}`, { error: getErrorMessage(error) });
+  }
+};
+
+/**
  * Closes all Redis connections
  */
 export const closeRedis = async (): Promise<void> => {
@@ -171,34 +182,18 @@ export const closeRedis = async (): Promise<void> => {
   if (redisClient) {
     const client = redisClient;
     closePromises.push(
-      client
-        .quit()
-        .then(() => {
-          redisClient = null;
-          logger.info("Redis main client closed");
-        })
-        .catch((error: unknown) => {
-          redisClient = null;
-          logger.error("Failed to close Redis main client", { error: getErrorMessage(error) });
-        })
+      safeCloseClient(client, "main client", () => {
+        redisClient = null;
+      })
     );
   }
 
   if (subscriberClient) {
     const client = subscriberClient;
     closePromises.push(
-      client
-        .quit()
-        .then(() => {
-          subscriberClient = null;
-          logger.info("Redis subscriber client closed");
-        })
-        .catch((error: unknown) => {
-          subscriberClient = null;
-          logger.error("Failed to close Redis subscriber client", {
-            error: getErrorMessage(error),
-          });
-        })
+      safeCloseClient(client, "subscriber client", () => {
+        subscriberClient = null;
+      })
     );
   }
 

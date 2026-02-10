@@ -37,6 +37,10 @@ jest.mock("@kenchi/shared", () => ({
     RAG_COST_ESTIMATE: "/cost/estimate",
     RAG_COST_STATS: "/cost-stats",
   },
+  COST_CONTROL_CONFIG: {
+    DAYS_IN_MONTH: 30,
+  },
+  VALID_EMBEDDING_TIERS: new Set(["LIGHT", "STANDARD", "PREMIUM"]),
   getTenantTierConfig: mockGetTenantTierConfig,
   setTenantTierConfig: mockSetTenantTierConfig,
   getRAGCacheStats: mockGetRAGCacheStats,

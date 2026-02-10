@@ -2,116 +2,59 @@
  * Health Check Utilities
  *
  * Provides comprehensive health check functionality for all services.
- * Includes checks for:
- * - Database connectivity
- * - Redis connectivity
- * - External service circuit breakers
- * - Memory usage
- * - System resources
+ * Includes checks for database, Redis, circuit breakers, and memory.
  *
  * @module health/healthCheck
  */
 
-import { isDatabaseHealthy } from "../database/client.js";
+import { isDatabaseHealthy } from "../database/client/index.js";
 import { isRedisHealthy } from "../queue/redisClient.js";
 import { getCircuitStatus, SERVICE_KEYS } from "../http/circuitBreaker.js";
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { HEALTH_STATUS, MEMORY_THRESHOLDS } from "../constants/index.js";
+import type {
+  HealthStatus,
+  ComponentHealth,
+  MemoryHealth,
+  ServiceHealth,
+  HealthCheckConfig,
+} from "../core/types.js";
 
-const logger = createLogger("health-check");
-
-// ==================== Types ====================
-
-/**
- * Health status values (healthy, degraded, unhealthy)
- */
-export type HealthStatus =
-  | typeof HEALTH_STATUS.HEALTHY
-  | typeof HEALTH_STATUS.DEGRADED
-  | typeof HEALTH_STATUS.UNHEALTHY;
-
-/**
- * Individual component health check result
- */
-export interface ComponentHealth {
-  readonly name: string;
-  readonly status: HealthStatus;
-  readonly message?: string;
-  readonly latencyMs?: number;
-  readonly details?: Record<string, unknown>;
-}
-
-/**
- * Overall service health response
- */
-export interface ServiceHealth {
-  readonly status: HealthStatus;
-  readonly service: string;
-  readonly version: string;
-  readonly timestamp: string;
-  readonly uptime: number;
-  readonly environment: string;
-  readonly components: ComponentHealth[];
-  readonly memory: MemoryHealth;
-}
-
-/**
- * Memory health information
- */
-export interface MemoryHealth {
-  readonly heapUsed: number;
-  readonly heapTotal: number;
-  readonly heapUsedPercent: number;
-  readonly rss: number;
-  readonly external: number;
-}
+export type { HealthStatus, ComponentHealth, MemoryHealth, ServiceHealth, HealthCheckConfig };
 
 // ==================== Memory Health ====================
 
 /**
  * Gets current memory usage information.
- *
- * @returns Memory health metrics including heap usage percentages
  */
 export const getMemoryHealth = (): MemoryHealth => {
   const usage = process.memoryUsage();
-  const heapUsedPercent = Math.round((usage.heapUsed / usage.heapTotal) * 100);
+  const { BYTES_PER_MB, PERCENT_MULTIPLIER } = MEMORY_THRESHOLDS;
+  const heapUsedPercent = Math.round((usage.heapUsed / usage.heapTotal) * PERCENT_MULTIPLIER);
 
   return {
-    heapUsed: Math.round(usage.heapUsed / 1024 / 1024), // MB
-    heapTotal: Math.round(usage.heapTotal / 1024 / 1024), // MB
+    heapUsed: Math.round(usage.heapUsed / BYTES_PER_MB),
+    heapTotal: Math.round(usage.heapTotal / BYTES_PER_MB),
     heapUsedPercent,
-    rss: Math.round(usage.rss / 1024 / 1024), // MB
-    external: Math.round(usage.external / 1024 / 1024), // MB
+    rss: Math.round(usage.rss / BYTES_PER_MB),
+    external: Math.round(usage.external / BYTES_PER_MB),
   };
 };
 
 /**
- * Converts memory health to record for component details.
- */
-const memoryToRecord = (memory: MemoryHealth): Record<string, unknown> => ({
-  heapUsed: memory.heapUsed,
-  heapTotal: memory.heapTotal,
-  heapUsedPercent: memory.heapUsedPercent,
-  rss: memory.rss,
-  external: memory.external,
-});
-
-/**
  * Checks if memory usage is healthy based on heap usage thresholds.
- *
- * @returns Component health status for memory
  */
 export const checkMemoryStatus = (): ComponentHealth => {
   const memory = getMemoryHealth();
+  const details: Record<string, unknown> = { ...memory };
 
   if (memory.heapUsedPercent >= MEMORY_THRESHOLDS.CRITICAL) {
     return {
       name: "memory",
       status: HEALTH_STATUS.UNHEALTHY,
       message: `Heap usage critical: ${memory.heapUsedPercent}%`,
-      details: memoryToRecord(memory),
+      details,
     };
   }
 
@@ -120,7 +63,7 @@ export const checkMemoryStatus = (): ComponentHealth => {
       name: "memory",
       status: HEALTH_STATUS.DEGRADED,
       message: `Heap usage high: ${memory.heapUsedPercent}%`,
-      details: memoryToRecord(memory),
+      details,
     };
   }
 
@@ -128,7 +71,7 @@ export const checkMemoryStatus = (): ComponentHealth => {
     name: "memory",
     status: HEALTH_STATUS.HEALTHY,
     message: `Heap usage: ${memory.heapUsedPercent}%`,
-    details: memoryToRecord(memory),
+    details,
   };
 };
 
@@ -136,8 +79,6 @@ export const checkMemoryStatus = (): ComponentHealth => {
 
 /**
  * Checks database connectivity with latency measurement.
- *
- * @returns Component health status for database
  */
 export const checkDatabaseHealth = async (): Promise<ComponentHealth> => {
   const startTime = Date.now();
@@ -146,28 +87,18 @@ export const checkDatabaseHealth = async (): Promise<ComponentHealth> => {
     const isHealthy = await isDatabaseHealthy();
     const latencyMs = Date.now() - startTime;
 
-    if (isHealthy) {
-      return {
-        name: "database",
-        status: HEALTH_STATUS.HEALTHY,
-        message: "PostgreSQL connection OK",
-        latencyMs,
-      };
-    }
-
     return {
       name: "database",
-      status: HEALTH_STATUS.UNHEALTHY,
-      message: "PostgreSQL connection failed",
+      status: isHealthy ? HEALTH_STATUS.HEALTHY : HEALTH_STATUS.UNHEALTHY,
+      message: isHealthy ? "PostgreSQL connection OK" : "PostgreSQL connection failed",
       latencyMs,
     };
   } catch (error) {
-    const latencyMs = Date.now() - startTime;
     return {
       name: "database",
       status: HEALTH_STATUS.UNHEALTHY,
       message: getErrorMessage(error),
-      latencyMs,
+      latencyMs: Date.now() - startTime,
     };
   }
 };
@@ -177,8 +108,6 @@ export const checkDatabaseHealth = async (): Promise<ComponentHealth> => {
 /**
  * Checks Redis connectivity with latency measurement.
  * Returns degraded (not unhealthy) since Redis is optional with fallback.
- *
- * @returns Component health status for Redis
  */
 export const checkRedisHealth = async (): Promise<ComponentHealth> => {
   const startTime = Date.now();
@@ -187,28 +116,18 @@ export const checkRedisHealth = async (): Promise<ComponentHealth> => {
     const isHealthy = await isRedisHealthy();
     const latencyMs = Date.now() - startTime;
 
-    if (isHealthy) {
-      return {
-        name: "redis",
-        status: HEALTH_STATUS.HEALTHY,
-        message: "Redis connection OK",
-        latencyMs,
-      };
-    }
-
     return {
       name: "redis",
-      status: HEALTH_STATUS.DEGRADED,
-      message: "Redis connection failed, using fallback",
+      status: isHealthy ? HEALTH_STATUS.HEALTHY : HEALTH_STATUS.DEGRADED,
+      message: isHealthy ? "Redis connection OK" : "Redis connection failed, using fallback",
       latencyMs,
     };
   } catch (error) {
-    const latencyMs = Date.now() - startTime;
     return {
       name: "redis",
       status: HEALTH_STATUS.DEGRADED,
       message: getErrorMessage(error),
-      latencyMs,
+      latencyMs: Date.now() - startTime,
     };
   }
 };
@@ -217,44 +136,34 @@ export const checkRedisHealth = async (): Promise<ComponentHealth> => {
 
 /**
  * Checks circuit breaker status for a specific service.
- *
- * @param serviceKey - The service identifier used in circuit breaker registry
- * @param displayName - Human-readable name for the component
- * @returns Component health status for the circuit breaker
  */
 export const checkCircuitBreakerHealth = (
   serviceKey: string,
   displayName: string
 ): ComponentHealth => {
   const status = getCircuitStatus(serviceKey);
+  const name = `circuit:${displayName.toLowerCase()}`;
 
   if (status.isOpen) {
     return {
-      name: `circuit:${displayName.toLowerCase()}`,
+      name,
       status: HEALTH_STATUS.DEGRADED,
       message: `Circuit breaker open (${status.failures} failures)`,
-      details: {
-        state: status.state,
-        failures: status.failures,
-        lastFailure: status.lastFailure,
-      },
+      details: { state: status.state, failures: status.failures, lastFailure: status.lastFailure },
     };
   }
 
   if (status.failures > 0) {
     return {
-      name: `circuit:${displayName.toLowerCase()}`,
+      name,
       status: HEALTH_STATUS.HEALTHY,
       message: `Circuit closed (${status.failures} recent failures)`,
-      details: {
-        state: status.state,
-        failures: status.failures,
-      },
+      details: { state: status.state, failures: status.failures },
     };
   }
 
   return {
-    name: `circuit:${displayName.toLowerCase()}`,
+    name,
     status: HEALTH_STATUS.HEALTHY,
     message: "Circuit breaker closed",
     details: { state: status.state },
@@ -263,8 +172,6 @@ export const checkCircuitBreakerHealth = (
 
 /**
  * Checks all known circuit breakers (OpenAI, GitHub, Slack).
- *
- * @returns Array of component health statuses for each circuit breaker
  */
 export const checkAllCircuitBreakers = (): ComponentHealth[] => [
   checkCircuitBreakerHealth(SERVICE_KEYS.OPENAI, "OpenAI"),
@@ -275,27 +182,15 @@ export const checkAllCircuitBreakers = (): ComponentHealth[] => [
 // ==================== Aggregate Health Check ====================
 
 /**
- * Configuration for health check.
- */
-export interface HealthCheckConfig {
-  readonly serviceName: string;
-  readonly version: string;
-  readonly environment: string;
-  readonly includeDatabase?: boolean;
-  readonly includeRedis?: boolean;
-  readonly includeCircuitBreakers?: boolean;
-}
-
-/**
  * Determines overall status from component statuses.
  */
-const aggregateStatus = (components: ComponentHealth[]): HealthStatus => {
-  const hasUnhealthy = components.some((component) => component.status === HEALTH_STATUS.UNHEALTHY);
+const aggregateStatus = (components: readonly ComponentHealth[]): HealthStatus => {
+  const hasUnhealthy = components.some((c) => c.status === HEALTH_STATUS.UNHEALTHY);
   if (hasUnhealthy) {
     return HEALTH_STATUS.UNHEALTHY;
   }
 
-  const hasDegraded = components.some((component) => component.status === HEALTH_STATUS.DEGRADED);
+  const hasDegraded = components.some((c) => c.status === HEALTH_STATUS.DEGRADED);
   if (hasDegraded) {
     return HEALTH_STATUS.DEGRADED;
   }
@@ -304,50 +199,67 @@ const aggregateStatus = (components: ComponentHealth[]): HealthStatus => {
 };
 
 /**
+ * Creates a fallback component health for failed checks.
+ */
+const createFallbackHealth = (
+  name: string,
+  status: HealthStatus,
+  error: unknown
+): ComponentHealth => ({
+  name,
+  status,
+  message: `Health check failed: ${getErrorMessage(error)}`,
+});
+
+/**
+ * Safely executes a health check with error handling.
+ */
+const safeHealthCheck = async (
+  check: () => Promise<ComponentHealth>,
+  fallbackName: string,
+  fallbackStatus: HealthStatus
+): Promise<ComponentHealth> => {
+  try {
+    return await check();
+  } catch (error) {
+    return createFallbackHealth(fallbackName, fallbackStatus, error);
+  }
+};
+
+/**
  * Performs a comprehensive health check for the service.
  */
-export const performHealthCheck = async (config: HealthCheckConfig): Promise<ServiceHealth> => {
+export const performHealthCheck = async (
+  healthConfig: HealthCheckConfig
+): Promise<ServiceHealth> => {
   const startTime = Date.now();
-  const components: ComponentHealth[] = [];
+  const logger = createLogger("health-check");
 
-  // Always check memory
-  components.push(checkMemoryStatus());
+  // Determine which checks to run (default to true if not specified)
+  const shouldCheckDatabase = healthConfig.includeDatabase ?? true;
+  const shouldCheckRedis = healthConfig.includeRedis ?? true;
+  const shouldCheckCircuitBreakers = healthConfig.includeCircuitBreakers ?? true;
 
-  // Check database if enabled
-  if (config.includeDatabase !== false) {
-    try {
-      components.push(await checkDatabaseHealth());
-    } catch (error) {
-      logger.error("Database health check failed", { error: getErrorMessage(error) });
-      components.push({
-        name: "database",
-        status: HEALTH_STATUS.UNHEALTHY,
-        message: "Health check failed",
-      });
-    }
-  }
+  // Run async checks in parallel
+  const [databaseResult, redisResult] = await Promise.all([
+    shouldCheckDatabase
+      ? safeHealthCheck(checkDatabaseHealth, "database", HEALTH_STATUS.UNHEALTHY)
+      : null,
+    shouldCheckRedis ? safeHealthCheck(checkRedisHealth, "redis", HEALTH_STATUS.DEGRADED) : null,
+  ]);
 
-  // Check Redis if enabled
-  if (config.includeRedis !== false) {
-    try {
-      components.push(await checkRedisHealth());
-    } catch (error) {
-      logger.error("Redis health check failed", { error: getErrorMessage(error) });
-      components.push({
-        name: "redis",
-        status: HEALTH_STATUS.DEGRADED,
-        message: "Health check failed",
-      });
-    }
-  }
+  // Build sync checks based on config
+  const circuitBreakerChecks = shouldCheckCircuitBreakers ? checkAllCircuitBreakers() : [];
+  const syncChecks = [checkMemoryStatus(), ...circuitBreakerChecks];
 
-  // Check circuit breakers if enabled
-  if (config.includeCircuitBreakers !== false) {
-    components.push(...checkAllCircuitBreakers());
-  }
+  // Combine all components (filter out null results)
+  const asyncResults = [databaseResult, redisResult].filter(
+    (result): result is ComponentHealth => result !== null
+  );
+  const components = [...syncChecks, ...asyncResults];
+  const status = aggregateStatus(components);
 
   const totalLatency = Date.now() - startTime;
-  const status = aggregateStatus(components);
 
   logger.debug("Health check completed", {
     status,
@@ -357,11 +269,11 @@ export const performHealthCheck = async (config: HealthCheckConfig): Promise<Ser
 
   return {
     status,
-    service: config.serviceName,
-    version: config.version,
+    service: healthConfig.serviceName,
+    version: healthConfig.version,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: config.environment,
+    environment: healthConfig.environment,
     components,
     memory: getMemoryHealth(),
   };
@@ -380,21 +292,21 @@ export const livenessCheck = (): { status: "ok"; timestamp: string } => ({
  * Returns false if any critical component is unhealthy.
  */
 export const readinessCheck = async (
-  config: Omit<HealthCheckConfig, "includeCircuitBreakers">
+  readinessConfig: Omit<HealthCheckConfig, "includeCircuitBreakers">
 ): Promise<{ ready: boolean; reason?: string }> => {
   const health = await performHealthCheck({
-    ...config,
-    includeCircuitBreakers: false, // Don't include circuit breakers for readiness
+    ...readinessConfig,
+    includeCircuitBreakers: false,
   });
 
   if (health.status === HEALTH_STATUS.UNHEALTHY) {
-    const unhealthyComponents = health.components
+    const unhealthyNames = health.components
       .filter((component) => component.status === HEALTH_STATUS.UNHEALTHY)
       .map((component) => component.name);
 
     return {
       ready: false,
-      reason: `Unhealthy components: ${unhealthyComponents.join(", ")}`,
+      reason: `Unhealthy components: ${unhealthyNames.join(", ")}`,
     };
   }
 

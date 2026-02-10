@@ -13,7 +13,7 @@ import {
   findNaturalBoundaries,
   chunkLog,
   normalizeChunkingOptions,
-} from "../../formatting/logChunking.js";
+} from "../../formatting/chunking/index.js";
 import {
   CI_PLATFORMS,
   CHUNKING_DEFAULTS,

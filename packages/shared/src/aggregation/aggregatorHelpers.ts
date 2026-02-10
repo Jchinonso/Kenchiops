@@ -6,10 +6,9 @@
  * @module aggregation/aggregatorHelpers
  */
 
-import type { getRedisClient } from "../queue/redisClient.js";
 import {
-  REDIS_KEY_PREFIXES,
   AGGREGATION_DEFAULTS,
+  AGGREGATION_KEY_PATTERN,
   DISPLAY_DEFAULTS,
   TIME_CONSTANTS,
 } from "../constants/index.js";
@@ -17,52 +16,20 @@ import {
   AGGREGATION_KEYS,
   type AggregatedFailures,
   type AggregationKey,
+  type AggregationKeySet,
+  type AggregationMetadata,
   type AnalyzedFailure,
-  type SerializedFailure,
-  type RepositoryInfo,
+  type FailureContext,
   type PRContext,
+  type RedisClient,
+  type SerializedFailure,
   type WorkflowContext,
 } from "./types.js";
-
-// ==================== Types ====================
-
-/** Redis client type from getRedisClient. */
-export type RedisClient = ReturnType<typeof getRedisClient>;
 
 // ==================== Redis Helpers ====================
 
 /** Checks if Redis client is ready for operations. */
 export const isRedisReady = (redis: RedisClient): boolean => redis.status === "ready";
-
-/** Context for failure aggregation operations. */
-export interface FailureContext {
-  readonly repositoryInfo: RepositoryInfo;
-  readonly installationId: number;
-  readonly pullRequestNumbers: readonly number[];
-  readonly prContext: PRContext | null;
-  readonly workflowContext: WorkflowContext | null;
-}
-
-/** Metadata stored in Redis for an aggregation (JSON-serialized fields). */
-export interface AggregationMetadata {
-  readonly repositoryFullName: string;
-  readonly repositoryOwner: string;
-  readonly repositoryName: string;
-  readonly commitSha: string;
-  readonly installationId: number;
-  readonly pullRequestNumbers: string;
-  readonly prContext: string | null;
-  readonly workflowContext: string | null;
-  readonly firstFailureAt: string;
-  readonly lastFailureAt: string;
-}
-
-// ==================== Constants ====================
-
-/** Regex pattern for parsing aggregation metadata keys */
-export const AGGREGATION_KEY_PATTERN = new RegExp(
-  `^${REDIS_KEY_PREFIXES.AGGREGATION.replace(":", "\\:")}:(.+):([a-f0-9]+):meta$`
-);
 
 // ==================== Display Helpers ====================
 
@@ -154,13 +121,6 @@ export const parseAggregationKey = (metaKey: string): AggregationKey | null => {
   const [, repoFullName, commitSha] = match;
   return { repositoryFullName: repoFullName, commitSha };
 };
-
-/** Redis key set for an aggregation. */
-export interface AggregationKeySet {
-  readonly failuresKey: string;
-  readonly metadataKey: string;
-  readonly debounceKey: string;
-}
 
 /** Builds all Redis keys for an aggregation. */
 export const buildAggregationKeys = (key: AggregationKey): AggregationKeySet => ({

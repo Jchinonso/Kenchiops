@@ -10,25 +10,25 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { enqueueSystemAlert } from "../queue/slackNotificationProcessor.js";
-import { findById } from "../database/tenantService.js";
-import type { DriftAlert, DriftReport } from "./driftDetection.js";
-import type { RAGMetricType } from "../constants/index.js";
+import { findById } from "../database/index.js";
+import type {
+  DriftAlert,
+  DriftReport,
+  AlertDispatchResult,
+  BatchAlertDispatchResult,
+  AlertDispatchOptions,
+} from "./types.js";
+import { ALERT_CONSTANTS, type RAGMetricType } from "../constants/index.js";
+
+export type {
+  AlertDispatchResult,
+  BatchAlertDispatchResult,
+  AlertDispatchOptions,
+} from "./types.js";
 
 const logger = createLogger("rag-alert-dispatcher");
 
 // ==================== Constants ====================
-
-/**
- * Alert configuration constants
- */
-const ALERT_CONSTANTS = {
-  /** Default repository name for system-level alerts */
-  DEFAULT_REPOSITORY: "system",
-  /** Default installation ID for global alerts */
-  DEFAULT_INSTALLATION_ID: 0,
-  /** Alert title prefix */
-  TITLE_PREFIX: "RAG Drift Alert",
-} as const;
 
 /**
  * Severity mapping from DriftAlert to SystemAlertPayload
@@ -37,35 +37,6 @@ const SEVERITY_MAP: Record<DriftAlert["severity"], "warning" | "critical"> = {
   warning: "warning",
   critical: "critical",
 } as const;
-
-// ==================== Types ====================
-
-/**
- * Result of dispatching an alert
- */
-export interface AlertDispatchResult {
-  readonly success: boolean;
-  readonly messageId?: string;
-  readonly error?: string;
-}
-
-/**
- * Result of dispatching multiple alerts
- */
-export interface BatchAlertDispatchResult {
-  readonly total: number;
-  readonly successful: number;
-  readonly failed: number;
-  readonly results: readonly AlertDispatchResult[];
-}
-
-/**
- * Options for alert dispatch
- */
-export interface AlertDispatchOptions {
-  readonly tenantId?: string;
-  readonly repository?: string;
-}
 
 // ==================== Helper Functions ====================
 
@@ -178,62 +149,47 @@ export const dispatchDriftAlert = async (
  * @param options - Optional dispatch configuration
  * @returns Batch result with per-alert outcomes
  */
+/**
+ * Processes alerts sequentially via reduce.
+ */
+const processAlertsSequentially = (
+  alerts: readonly DriftAlert[],
+  installationId: number,
+  repository: string,
+  tenantId?: string
+): Promise<readonly AlertDispatchResult[]> =>
+  alerts.reduce<Promise<readonly AlertDispatchResult[]>>(async (accPromise, alert) => {
+    const acc = await accPromise;
+    const result = await dispatchSingleAlertSafe(alert, installationId, repository, tenantId);
+    return [...acc, result];
+  }, Promise.resolve([]));
+
 export const dispatchDriftAlerts = async (
   alerts: readonly DriftAlert[],
   options: AlertDispatchOptions = {}
 ): Promise<BatchAlertDispatchResult> => {
   if (alerts.length === 0) {
-    return {
-      total: 0,
-      successful: 0,
-      failed: 0,
-      results: Object.freeze([]),
-    };
+    return { total: 0, successful: 0, failed: 0, results: Object.freeze([]) };
   }
 
   const { tenantId, repository = ALERT_CONSTANTS.DEFAULT_REPOSITORY } = options;
 
-  logger.info("Dispatching batch drift alerts", {
-    count: alerts.length,
-    tenantId,
-  });
+  logger.info("Dispatching batch drift alerts", { count: alerts.length, tenantId });
 
   const installationId = await getInstallationIdForTenant(tenantId);
-
-  // Process alerts recursively to avoid loops
-  const processAlerts = async (
-    index: number,
-    accumulated: readonly AlertDispatchResult[]
-  ): Promise<readonly AlertDispatchResult[]> => {
-    if (index >= alerts.length) {
-      return accumulated;
-    }
-
-    const result = await dispatchSingleAlertSafe(
-      alerts[index],
-      installationId,
-      repository,
-      tenantId
-    );
-
-    return processAlerts(index + 1, [...accumulated, result]);
-  };
-
-  const results = await processAlerts(0, []);
-
+  const results = await processAlertsSequentially(alerts, installationId, repository, tenantId);
   const successful = results.filter((result) => result.success).length;
-  const failed = results.length - successful;
 
   logger.info("Batch alert dispatch complete", {
     total: results.length,
     successful,
-    failed,
+    failed: results.length - successful,
   });
 
   return {
     total: results.length,
     successful,
-    failed,
+    failed: results.length - successful,
     results: Object.freeze(results),
   };
 };

@@ -19,22 +19,13 @@ import {
   saveFeatureFlags,
   getFeatureFlagsFromDB,
   setRollbackActive,
+  SERVICE_NAMES,
   type ModelVersion,
   type ModelSelectionResult,
 } from "@kenchi/shared";
+import type { ABTestOptions } from "../../types/fineTuningTypes.js";
 
-const logger = createLogger("model-service");
-
-// ==================== Types ====================
-
-/**
- * Options for A/B test configuration.
- */
-export interface ABTestOptions {
-  readonly controlVersion: string;
-  readonly treatmentVersion: string;
-  readonly treatmentPercentage: number;
-}
+const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Public API ====================
 

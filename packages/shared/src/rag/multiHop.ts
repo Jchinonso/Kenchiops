@@ -9,16 +9,21 @@
 
 import { createLogger } from "../core/logger.js";
 import { MULTI_HOP_CONFIG, type RelationshipType } from "../constants/index.js";
-import {
-  getBidirectionalRelationships,
-  type IncidentRelationship,
-} from "../database/relationshipRepository.js";
+import { getBidirectionalRelationships, type IncidentRelationship } from "../database/index.js";
 
 // Import types used internally
-import type { GraphNode, MultiHopOptions, TraversalState, QueueItem } from "./multiHopTypes.js";
+import type {
+  GraphNode,
+  MultiHopOptions,
+  TraversalState,
+  QueueItem,
+  PathMapEntry,
+  PathLevelItem,
+  PathResult,
+} from "./types.js";
 
 // Re-export public types for external consumers
-export type { GraphNode, MultiHopResult, MultiHopOptions } from "./multiHopTypes.js";
+export type { GraphNode, MultiHopResult, MultiHopOptions } from "./types.js";
 
 const logger = createLogger("rag-multi-hop");
 
@@ -259,18 +264,14 @@ export const getGraphStats = async (
  * Reconstructs path from pathMap using recursion.
  */
 const reconstructPath = (
-  pathMap: Map<string, { prev: string; type: RelationshipType; strength: number }>,
+  pathMap: Map<string, PathMapEntry>,
   fromDocId: string,
   current: string,
   pathAcc: readonly string[],
   relAcc: readonly RelationshipType[],
   strengthAcc: number
-): {
-  path: readonly string[];
-  relationships: readonly RelationshipType[];
-  totalStrength: number;
-} => {
-  if (current === fromDocId) {
+): PathResult => {
+  if (current === fromDocId || !pathMap.has(current)) {
     return {
       path: Object.freeze(pathAcc),
       relationships: Object.freeze(relAcc),
@@ -278,15 +279,8 @@ const reconstructPath = (
     };
   }
 
-  const info = pathMap.get(current);
-  if (!info) {
-    return {
-      path: Object.freeze(pathAcc),
-      relationships: Object.freeze(relAcc),
-      totalStrength: strengthAcc,
-    };
-  }
-
+  // Safe: guarded by pathMap.has(current) check above
+  const info = pathMap.get(current) as PathMapEntry;
   return reconstructPath(
     pathMap,
     fromDocId,
@@ -295,6 +289,112 @@ const reconstructPath = (
     [info.type, ...relAcc],
     strengthAcc * info.strength
   );
+};
+
+/**
+ * Checks if target doc is directly reachable from relationships.
+ * If found, records the path map entry and returns the target ID.
+ */
+const findTargetInRelationships = (
+  relationships: readonly IncidentRelationship[],
+  docId: string,
+  targetDocId: string,
+  pathMap: Map<string, PathMapEntry>
+): boolean => {
+  const targetRelationship = relationships.find(
+    (rel) => getTargetDocId(rel, docId) === targetDocId
+  );
+
+  if (!targetRelationship) {
+    return false;
+  }
+
+  pathMap.set(targetDocId, {
+    prev: docId,
+    type: targetRelationship.relationshipType,
+    strength: targetRelationship.strength,
+  });
+  return true;
+};
+
+/**
+ * Records unvisited relationships into the path map and next level queue.
+ */
+const recordUnvisitedNeighbors = (
+  relationships: readonly IncidentRelationship[],
+  docId: string,
+  depth: number,
+  visited: Set<string>,
+  pathMap: Map<string, PathMapEntry>,
+  nextLevel: PathLevelItem[]
+): void => {
+  for (const rel of relationships) {
+    const targetId = getTargetDocId(rel, docId);
+    if (visited.has(targetId)) {
+      continue;
+    }
+
+    visited.add(targetId);
+    pathMap.set(targetId, { prev: docId, type: rel.relationshipType, strength: rel.strength });
+    nextLevel.push({ docId: targetId, depth: depth + 1 });
+  }
+};
+
+/**
+ * Processes one BFS level for path finding. Returns true if target found.
+ */
+const processPathLevel = async (
+  currentLevel: readonly PathLevelItem[],
+  targetDocId: string,
+  maxDepth: number,
+  visited: Set<string>,
+  pathMap: Map<string, PathMapEntry>,
+  nextLevel: PathLevelItem[]
+): Promise<boolean> => {
+  for (const item of currentLevel) {
+    if (item.depth >= maxDepth) {
+      continue;
+    }
+
+    const relationships = await getBidirectionalRelationships(item.docId);
+
+    if (findTargetInRelationships(relationships, item.docId, targetDocId, pathMap)) {
+      return true;
+    }
+
+    recordUnvisitedNeighbors(relationships, item.docId, item.depth, visited, pathMap, nextLevel);
+  }
+  return false;
+};
+
+/**
+ * Recursive BFS across levels until target is found or graph is exhausted.
+ */
+const findPathBFS = async (
+  currentLevel: readonly PathLevelItem[],
+  targetDocId: string,
+  maxDepth: number,
+  visited: Set<string>,
+  pathMap: Map<string, PathMapEntry>
+): Promise<boolean> => {
+  if (currentLevel.length === 0) {
+    return false;
+  }
+
+  const nextLevel: PathLevelItem[] = [];
+  const found = await processPathLevel(
+    currentLevel,
+    targetDocId,
+    maxDepth,
+    visited,
+    pathMap,
+    nextLevel
+  );
+
+  if (found) {
+    return true;
+  }
+  return findPathBFS(nextLevel, targetDocId, maxDepth, visited, pathMap);
 };
 
 /**
@@ -309,94 +409,22 @@ export const findPath = async (
   fromDocId: string,
   toDocId: string,
   maxDepth: number = MULTI_HOP_CONFIG.MAX_HOP_DEPTH
-): Promise<{
-  path: readonly string[];
-  relationships: readonly RelationshipType[];
-  totalStrength: number;
-} | null> => {
+): Promise<PathResult | null> => {
   const visited = new Set<string>([fromDocId]);
-  const pathMap = new Map<string, { prev: string; type: RelationshipType; strength: number }>();
+  const pathMap = new Map<string, PathMapEntry>();
 
-  // BFS to find shortest path - process relationships functionally
-  const processRelationshipsForPath = (
-    relationships: readonly IncidentRelationship[],
-    docId: string,
-    depth: number,
-    nextLevel: Array<{ docId: string; depth: number }>
-  ): string | null => {
-    const foundTarget = relationships.find((rel) => {
-      const targetId = getTargetDocId(rel, docId);
-      return targetId === toDocId;
-    });
-
-    if (foundTarget) {
-      const targetId = getTargetDocId(foundTarget, docId);
-      pathMap.set(targetId, {
-        prev: docId,
-        type: foundTarget.relationshipType,
-        strength: foundTarget.strength,
-      });
-      return targetId;
-    }
-
-    relationships.forEach((rel) => {
-      const targetId = getTargetDocId(rel, docId);
-      if (!visited.has(targetId)) {
-        visited.add(targetId);
-        pathMap.set(targetId, { prev: docId, type: rel.relationshipType, strength: rel.strength });
-        nextLevel.push({ docId: targetId, depth: depth + 1 });
-      }
-    });
-
-    return null;
-  };
-
-  // Recursive BFS level processing
-  const findPathLevel = async (
-    currentLevel: ReadonlyArray<{ docId: string; depth: number }>
-  ): Promise<boolean> => {
-    if (currentLevel.length === 0) {
-      return false;
-    }
-
-    const nextLevel: Array<{ docId: string; depth: number }> = [];
-
-    const processItem = async (index: number): Promise<boolean> => {
-      if (index >= currentLevel.length) {
-        return false;
-      }
-
-      const { docId, depth } = currentLevel[index];
-
-      if (depth >= maxDepth) {
-        return processItem(index + 1);
-      }
-
-      const relationships = await getBidirectionalRelationships(docId);
-      const found = processRelationshipsForPath(relationships, docId, depth, nextLevel);
-
-      if (found) {
-        return true;
-      }
-
-      return processItem(index + 1);
-    };
-
-    const found = await processItem(0);
-    if (found) {
-      return true;
-    }
-
-    return findPathLevel(nextLevel);
-  };
-
-  const found = await findPathLevel([{ docId: fromDocId, depth: 0 }]);
+  const found = await findPathBFS(
+    [{ docId: fromDocId, depth: 0 }],
+    toDocId,
+    maxDepth,
+    visited,
+    pathMap
+  );
 
   if (!found) {
     return null;
   }
 
-  // Reconstruct path using recursion
   const result = reconstructPath(pathMap, fromDocId, toDocId, [toDocId], [], 1.0);
 
   logger.debug("Found path between documents", {

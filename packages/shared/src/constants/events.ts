@@ -16,7 +16,7 @@ export const EVENT_TYPES = {
   ALERT: "ALERT",
 } as const;
 
-export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];
+export type { EventType } from "./types.js";
 
 /**
  * Event source identifiers
@@ -32,7 +32,7 @@ export const EVENT_SOURCES = {
   MANUAL: "manual",
 } as const;
 
-export type EventSource = (typeof EVENT_SOURCES)[keyof typeof EVENT_SOURCES];
+export type { EventSource } from "./types.js";
 
 /**
  * Event severity levels
@@ -48,7 +48,7 @@ export const EVENT_SEVERITY = {
   LOW: "low",
 } as const;
 
-export type EventSeverity = (typeof EVENT_SEVERITY)[keyof typeof EVENT_SEVERITY];
+export type { EventSeverity } from "./types.js";
 
 /**
  * Log level identifiers for evidence logs
@@ -60,7 +60,7 @@ export const LOG_LEVELS = {
   DEBUG: "DEBUG",
 } as const;
 
-export type LogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];
+export type { LogLevel } from "./types.js";
 
 /**
  * Evidence source identifiers
@@ -74,7 +74,7 @@ export const EVIDENCE_SOURCES = {
   SYSTEM: "system",
 } as const;
 
-export type EvidenceSource = (typeof EVIDENCE_SOURCES)[keyof typeof EVIDENCE_SOURCES];
+export type { EvidenceSource } from "./types.js";
 
 /**
  * Default values for events

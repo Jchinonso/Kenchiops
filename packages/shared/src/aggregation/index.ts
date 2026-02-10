@@ -7,9 +7,10 @@
  * @module aggregation
  */
 
-// ==================== Types ====================
+// ==================== Types (all from types.ts) ====================
 
 export type {
+  // Domain types
   CodeAnnotation,
   RecommendedAction,
   TestFailureInfo,
@@ -17,9 +18,11 @@ export type {
   DetectedDependencyChange,
   DetectedBuildConfigChange,
   SuggestedFix,
+  LintErrorInfo,
   PendingCheckRun,
   SerializedPendingCheckRun,
   PendingAggregation,
+  PendingAggregationPayload,
   AnalyzedFailure,
   SerializedFailure,
   PRContext,
@@ -29,7 +32,28 @@ export type {
   AggregationKey,
   AggregationConfig,
   ConsolidatedPostResult,
+  FailureContext,
+  AggregationMetadata,
+  AggregationKeySet,
+  PendingCheckContext,
+  RedisClient,
+  AggregationReadResult,
+  // Queue processor types
+  AggregationReadyCallback,
+  PendingAnalysisCallback,
+  ProcessorErrorCallback,
+  ProcessorStats,
+  ProcessorControl,
+  ConsolidatedAnalysisPayload,
+  AnalysisQueueProcessorOptions,
+  // Worker types
+  WorkerErrorCallback,
+  WorkerStats,
+  WorkerControl,
+  AggregatorWorkerOptions,
 } from "./types.js";
+
+// ==================== Constants & Serialization (from types.ts) ====================
 
 export {
   serializeAggregationKey,
@@ -37,10 +61,6 @@ export {
   DEFAULT_AGGREGATION_CONFIG,
   AGGREGATION_KEYS,
 } from "./types.js";
-
-// ==================== Internal Types ====================
-
-export type { PendingCheckContext } from "./aggregatorTypes.js";
 
 // ==================== Aggregator Helpers ====================
 
@@ -55,10 +75,6 @@ export {
   parseAggregationKey,
   buildAggregationKeys,
   isRedisReady,
-  type RedisClient,
-  type FailureContext,
-  type AggregationMetadata,
-  type AggregationKeySet,
 } from "./aggregatorHelpers.js";
 
 // ==================== Write Operations ====================
@@ -67,7 +83,12 @@ export { addFailureToRedis, addPendingCheckToRedis } from "./aggregatorWrite.js"
 
 // ==================== Read Operations ====================
 
-export { getAggregationFromRedis, getPendingAggregationFromRedis } from "./aggregatorRead.js";
+export {
+  getAggregationFromRedis,
+  getPendingAggregationFromRedis,
+  getAggregationResult,
+  getPendingAggregationResult,
+} from "./aggregatorRead.js";
 
 // ==================== Delete Operations ====================
 
@@ -83,11 +104,7 @@ export {
 
 // ==================== Enqueuer ====================
 
-export {
-  enqueueAggregation,
-  enqueuePendingAggregation,
-  type PendingAggregationPayload,
-} from "./aggregationEnqueuer.js";
+export { enqueueAggregation, enqueuePendingAggregation } from "./aggregationEnqueuer.js";
 
 // ==================== Worker ====================
 
@@ -95,10 +112,4 @@ export { startAggregatorWorker } from "./aggregatorWorker.js";
 
 // ==================== Queue Processor ====================
 
-export {
-  startAnalysisQueueProcessor,
-  deserializeQueuePayload,
-  type ConsolidatedAnalysisPayload,
-  type AggregationReadyCallback,
-  type PendingAnalysisCallback,
-} from "./analysisQueueProcessor.js";
+export { startAnalysisQueueProcessor, deserializeQueuePayload } from "./analysisQueueProcessor.js";

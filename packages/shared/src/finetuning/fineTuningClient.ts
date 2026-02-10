@@ -12,11 +12,20 @@ import { config } from "../core/config.js";
 import { createLogger } from "../core/logger.js";
 import { ExternalServiceError, getErrorMessage } from "../core/errors.js";
 import {
-  OPENAI_CONSTANTS,
+  LLM_CONSTANTS,
   FINE_TUNING_CONFIG,
   FINE_TUNING_STATUS,
   type FineTuningStatus,
 } from "../constants/index.js";
+import type {
+  FineTuningJobOptions,
+  FineTuningJobResult,
+  FileUploadOptions,
+  FileUploadResult,
+  FineTuningWorkflowResult,
+  ProgressCallback,
+  TerminalStatusHandler,
+} from "./types.js";
 
 const logger = createLogger("fine-tuning-client");
 
@@ -30,76 +39,6 @@ const TERMINAL_STATUSES: readonly FineTuningStatus[] = [
   FINE_TUNING_STATUS.CANCELLED,
 ];
 
-// ==================== Types ====================
-
-/**
- * Options for creating a fine-tuning job.
- */
-export interface FineTuningJobOptions {
-  /** Training file ID from OpenAI Files API */
-  readonly trainingFileId: string;
-  /** Optional validation file ID */
-  readonly validationFileId?: string;
-  /** Base model to fine-tune */
-  readonly model?: string;
-  /** Number of epochs to train */
-  readonly epochs?: number;
-  /** Learning rate multiplier */
-  readonly learningRateMultiplier?: number;
-  /** Batch size */
-  readonly batchSize?: number;
-  /** Optional suffix for the fine-tuned model name */
-  readonly suffix?: string;
-}
-
-/**
- * Result of creating a fine-tuning job.
- */
-export interface FineTuningJobResult {
-  readonly jobId: string;
-  readonly status: FineTuningStatus;
-  readonly model: string;
-  readonly trainingFileId: string;
-  readonly validationFileId?: string;
-  readonly createdAt: string;
-  readonly fineTunedModel?: string;
-  readonly error?: string;
-}
-
-/**
- * Options for uploading a training file.
- */
-export interface FileUploadOptions {
-  /** JSONL content to upload */
-  readonly content: string;
-  /** Optional filename */
-  readonly filename?: string;
-}
-
-/**
- * Result of uploading a file.
- */
-export interface FileUploadResult {
-  readonly fileId: string;
-  readonly filename: string;
-  readonly bytes: number;
-  readonly createdAt: string;
-  readonly purpose: string;
-}
-
-/**
- * Fine-tuning workflow result.
- */
-export interface FineTuningWorkflowResult {
-  readonly job: FineTuningJobResult;
-  readonly fileId: string;
-}
-
-/**
- * Callback type for progress updates.
- */
-export type ProgressCallback = (job: FineTuningJobResult) => void;
-
 // ==================== Client Creation ====================
 
 /**
@@ -108,7 +47,7 @@ export type ProgressCallback = (job: FineTuningJobResult) => void;
 const createFineTuningClient = (): OpenAI =>
   new OpenAI({
     apiKey: config.OPENAI_API_KEY,
-    timeout: OPENAI_CONSTANTS.DEFAULT_TIMEOUT_MS,
+    timeout: LLM_CONSTANTS.DEFAULT_TIMEOUT_MS,
   });
 
 // ==================== Helper Functions ====================
@@ -319,6 +258,37 @@ const pollDelay = (): Promise<void> =>
     setTimeout(resolve, FINE_TUNING_CONFIG.POLL_INTERVAL_MS);
   });
 
+/** Handlers for terminal job statuses. */
+const TERMINAL_STATUS_HANDLERS: readonly TerminalStatusHandler[] = [
+  {
+    status: FINE_TUNING_STATUS.FAILED,
+    handle: (job) => {
+      throw new ExternalServiceError(
+        SERVICE_NAME,
+        `Fine-tuning job failed: ${job.error ?? "Unknown error"}`
+      );
+    },
+  },
+  {
+    status: FINE_TUNING_STATUS.SUCCEEDED,
+    handle: (job) => job,
+  },
+  {
+    status: FINE_TUNING_STATUS.CANCELLED,
+    handle: (job) => job,
+  },
+];
+
+/**
+ * Processes a job in terminal state using handler lookup.
+ */
+const processTerminalJob = (job: FineTuningJobResult): FineTuningJobResult => {
+  const handler = TERMINAL_STATUS_HANDLERS.find(
+    (terminalHandler) => terminalHandler.status === job.status
+  );
+  return handler?.handle(job) ?? job;
+};
+
 /**
  * Waits for a fine-tuning job to complete.
  *
@@ -347,13 +317,7 @@ export const waitForFineTuningJob = async (
     onProgress?.(job);
 
     if (isTerminalStatus(job.status)) {
-      if (job.status === FINE_TUNING_STATUS.FAILED) {
-        throw new ExternalServiceError(
-          SERVICE_NAME,
-          `Fine-tuning job failed: ${job.error ?? "Unknown error"}`
-        );
-      }
-      return job;
+      return processTerminalJob(job);
     }
 
     logger.debug("Polling fine-tuning job", { jobId, status: job.status, attempt: attempts });

@@ -13,12 +13,14 @@ import {
   RAG_METRIC_TYPES,
   type RAGMetricType,
 } from "../constants/index.js";
-import { getActiveTestCases } from "../database/testCaseRepository.js";
 import {
+  getActiveTestCases,
   recordMetric,
   detectDrift,
   getAllBaselines,
-} from "../database/metricsHistoryRepository.js";
+  type MetricBaseline,
+  type DriftDetectionResult,
+} from "../database/index.js";
 
 // Import from metrics sub-module
 import { METRIC_ALERT_THRESHOLDS, runTestCasesRecursive } from "./driftDetectionMetrics.js";
@@ -29,7 +31,12 @@ import type {
   DriftMetricReport,
   DriftAlert,
   DriftDetectionWithAlertsResult,
-} from "./driftDetectionTypes.js";
+  MetricAlertThreshold,
+  HealthStatus,
+  MetricStatus,
+  MetricTrend,
+  AlertSeverity,
+} from "./types.js";
 
 // Re-export types and utilities for consumers
 export type {
@@ -39,7 +46,7 @@ export type {
   DriftMetricReport,
   DriftAlert,
   DriftDetectionWithAlertsResult,
-} from "./driftDetectionTypes.js";
+} from "./types.js";
 
 export {
   METRIC_ALERT_THRESHOLDS,
@@ -49,6 +56,126 @@ export {
 } from "./driftDetectionMetrics.js";
 
 const logger = createLogger("rag-drift-detection");
+
+// ==================== Drift Report Helpers ====================
+
+/**
+ * Checks whether a deviation in the given direction is bad for the metric.
+ */
+const isDeviationBad = (
+  threshold: MetricAlertThreshold,
+  direction: DriftDetectionResult["direction"]
+): boolean => (threshold.higherIsBetter ? direction === "decrease" : direction === "increase");
+
+/**
+ * Determines metric status based on deviation severity.
+ */
+const determineMetricStatus = (
+  deviation: number,
+  threshold: MetricAlertThreshold,
+  badDeviation: boolean
+): MetricStatus => {
+  if (!badDeviation) {
+    return "ok";
+  }
+  if (deviation >= threshold.criticalThreshold) {
+    return "alert";
+  }
+  if (deviation >= threshold.warningThreshold) {
+    return "warning";
+  }
+  return "ok";
+};
+
+/**
+ * Determines metric trend from deviation direction.
+ */
+const determineTrend = (
+  badDeviation: boolean,
+  direction: DriftDetectionResult["direction"]
+): MetricTrend => {
+  if (badDeviation) {
+    return "degrading";
+  }
+  if (direction === "stable") {
+    return "stable";
+  }
+  return "improving";
+};
+
+/**
+ * Builds a drift alert for a metric that exceeded a threshold.
+ */
+const buildDriftAlert = (
+  status: MetricStatus,
+  threshold: MetricAlertThreshold,
+  deviation: number
+): DriftAlert | null => {
+  if (status === "ok") {
+    return null;
+  }
+
+  const severity: AlertSeverity = status === "alert" ? "critical" : "warning";
+  const verb = severity === "critical" ? "has degraded by" : "shows";
+  const suffix = severity === "critical" ? "" : " degradation";
+
+  return {
+    severity,
+    metricType: threshold.metricType,
+    message: `${threshold.metricType} ${verb} ${deviation.toFixed(1)}%${suffix}`,
+    deviationPercent: deviation,
+  };
+};
+
+/**
+ * Evaluates a single metric threshold against its baseline.
+ * Returns the metric report and an optional alert, or null if no baseline.
+ */
+const evaluateMetricThreshold = async (
+  threshold: MetricAlertThreshold,
+  baselines: readonly MetricBaseline[],
+  tenantId?: string
+): Promise<{ report: DriftMetricReport; alert: DriftAlert | null } | null> => {
+  const baseline = baselines.find(
+    (baselineItem) => baselineItem.metricType === threshold.metricType
+  );
+  if (!baseline || baseline.sampleCount < DRIFT_DETECTION_THRESHOLDS.MIN_SAMPLE_SIZE) {
+    return null;
+  }
+
+  const driftResult = await detectDrift(threshold.metricType, baseline.baselineValue, tenantId);
+  const deviation = Math.abs(driftResult.deviationPercent);
+  const badDeviation = isDeviationBad(threshold, driftResult.direction);
+
+  const status = determineMetricStatus(deviation, threshold, badDeviation);
+  const trend = determineTrend(badDeviation, driftResult.direction);
+  const alert = buildDriftAlert(status, threshold, deviation);
+
+  return {
+    report: {
+      metricType: threshold.metricType,
+      currentValue: driftResult.currentValue,
+      baselineValue: driftResult.baselineValue,
+      deviationPercent: driftResult.deviationPercent,
+      status,
+      trend,
+    },
+    alert,
+  };
+};
+
+/**
+ * Determines overall system health from the collected alerts.
+ */
+const determineOverallHealth = (alerts: readonly DriftAlert[]): HealthStatus => {
+  if (alerts.some((alert) => alert.severity === "critical")) {
+    return "critical";
+  }
+  if (alerts.some((alert) => alert.severity === "warning")) {
+    return "degraded";
+  }
+  return "healthy";
+};
 
 // ==================== Public API ====================
 
@@ -116,100 +243,29 @@ export const runTestSuite = async (tenantId?: string): Promise<TestSuiteResult> 
 };
 
 /**
- * Generates a drift detection report.
+ * Generates a drift detection report by evaluating all monitored metrics.
  */
 export const generateDriftReport = async (tenantId?: string): Promise<DriftReport> => {
   const baselines = await getAllBaselines(tenantId);
-  const alerts: DriftAlert[] = [];
   const metricReports: DriftMetricReport[] = [];
+  const alerts: DriftAlert[] = [];
 
-  // Check each monitored metric
-  const checkMetric = async (
-    threshold: (typeof METRIC_ALERT_THRESHOLDS)[number]
-  ): Promise<DriftMetricReport | null> => {
-    const baseline = baselines.find(
-      (baselineItem) => baselineItem.metricType === threshold.metricType
-    );
-    if (!baseline || baseline.sampleCount < DRIFT_DETECTION_THRESHOLDS.MIN_SAMPLE_SIZE) {
-      return null;
+  // Evaluate each metric threshold sequentially (each calls detectDrift)
+  for (const threshold of METRIC_ALERT_THRESHOLDS) {
+    const evaluation = await evaluateMetricThreshold(threshold, baselines, tenantId);
+    if (!evaluation) {
+      continue;
     }
 
-    const driftResult = await detectDrift(threshold.metricType, baseline.baselineValue, tenantId);
-    const deviation = Math.abs(driftResult.deviationPercent);
-
-    // Determine status based on direction and thresholds
-    const isBadDeviation = threshold.higherIsBetter
-      ? driftResult.direction === "decrease"
-      : driftResult.direction === "increase";
-
-    let status: "ok" | "warning" | "alert" = "ok";
-    if (isBadDeviation) {
-      if (deviation >= threshold.criticalThreshold) {
-        status = "alert";
-        alerts.push({
-          severity: "critical",
-          metricType: threshold.metricType,
-          message: `${threshold.metricType} has degraded by ${deviation.toFixed(1)}%`,
-          deviationPercent: deviation,
-        });
-      } else if (deviation >= threshold.warningThreshold) {
-        status = "warning";
-        alerts.push({
-          severity: "warning",
-          metricType: threshold.metricType,
-          message: `${threshold.metricType} shows ${deviation.toFixed(1)}% degradation`,
-          deviationPercent: deviation,
-        });
-      }
+    metricReports.push(evaluation.report);
+    if (evaluation.alert) {
+      alerts.push(evaluation.alert);
     }
-
-    const trend = isBadDeviation
-      ? "degrading"
-      : driftResult.direction === "stable"
-        ? "stable"
-        : "improving";
-
-    return {
-      metricType: threshold.metricType,
-      currentValue: driftResult.currentValue,
-      baselineValue: driftResult.baselineValue,
-      deviationPercent: driftResult.deviationPercent,
-      status,
-      trend,
-    };
-  };
-
-  // Process all metrics
-  const processMetrics = async (
-    index: number,
-    reports: readonly DriftMetricReport[]
-  ): Promise<readonly DriftMetricReport[]> => {
-    if (index >= METRIC_ALERT_THRESHOLDS.length) {
-      return reports;
-    }
-
-    const report = await checkMetric(METRIC_ALERT_THRESHOLDS[index]);
-    const newReports = report ? [...reports, report] : reports;
-    return processMetrics(index + 1, newReports);
-  };
-
-  const reports = await processMetrics(0, []);
-  reports.forEach((report) => metricReports.push(report));
-
-  // Determine overall health
-  const criticalAlerts = alerts.filter((alert) => alert.severity === "critical");
-  const warningAlerts = alerts.filter((alert) => alert.severity === "warning");
-
-  let overallHealth: "healthy" | "degraded" | "critical" = "healthy";
-  if (criticalAlerts.length > 0) {
-    overallHealth = "critical";
-  } else if (warningAlerts.length > 0) {
-    overallHealth = "degraded";
   }
 
   return {
     timestamp: new Date().toISOString(),
-    overallHealth,
+    overallHealth: determineOverallHealth(alerts),
     metrics: Object.freeze(metricReports),
     alerts: Object.freeze(alerts),
     baselines: Object.freeze([...baselines]),

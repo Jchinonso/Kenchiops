@@ -18,7 +18,7 @@ import {
   groupByServicePath,
   stripAbsolutePaths,
   type DependencyChange,
-} from "../../formatting/ciFormatters.js";
+} from "../../formatting/index.js";
 
 describe("CI Formatters", () => {
   describe("formatDependencyChange", () => {

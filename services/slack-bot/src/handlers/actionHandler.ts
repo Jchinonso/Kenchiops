@@ -18,6 +18,13 @@ import {
   getErrorMessage,
   deleteActionPayload,
   type ActionType,
+  // Safety features
+  checkRestrictions,
+  assessActionRisk,
+  recordActionProposal,
+  recordRestrictionApplied,
+  recordRiskAssessment,
+  type SafetyRequestContext,
 } from "@kenchi/shared";
 import { formatProgressUpdate } from "../formatters.js";
 import type { SlackBlocks, AckFn } from "./actionHandlerTypes.js";
@@ -41,6 +48,7 @@ const logger = createLogger("slack-bot");
 /**
  * Executes an action after retrieval from store.
  * Handles both async (Redis queue) and sync execution.
+ * Includes safety checks: restrictions and risk assessment.
  */
 const executeStoredAction = async (
   payload: Awaited<ReturnType<typeof getActionPayload>>,
@@ -48,17 +56,89 @@ const executeStoredAction = async (
   say: SayFn,
   messageTs?: string
 ): Promise<void> => {
+  const actionId = opaqueId ?? `legacy_${payload.commitSha.substring(0, 8)}`;
+
+  // Build safety request context for audit logging
+  const safetyContext: SafetyRequestContext = {
+    requestId: actionId,
+    tenantId: payload.repository.split("/")[0] ?? "unknown",
+    actor: "slack-user",
+  };
+
+  // Check time-based restrictions before executing
+  const restrictionCheck = checkRestrictions({ actionType: payload.actionType });
+  if (!restrictionCheck.isAllowed) {
+    logger.warn("Action blocked by restriction", {
+      actionId,
+      actionType: payload.actionType,
+      reason: restrictionCheck.reason,
+      restrictedUntil: restrictionCheck.restrictedUntil?.toISOString(),
+    });
+
+    // Record restriction in audit log
+    const restriction = restrictionCheck.activeRestrictions[0];
+    if (restriction) {
+      await recordRestrictionApplied(
+        restriction.type,
+        restriction.name,
+        payload.actionType,
+        safetyContext
+      );
+    }
+
+    const restrictedBlocks = formatProgressUpdate(
+      actionId,
+      "failed",
+      `Action *${payload.actionType}* blocked: ${restrictionCheck.reason}`
+    );
+
+    await say({
+      blocks: restrictedBlocks as SlackBlocks,
+      ...(messageTs && { thread_ts: messageTs }),
+    });
+
+    return;
+  }
+
   // Create action proposal from stored payload
   const actionProposal = {
-    id: opaqueId ?? `legacy_${payload.commitSha.substring(0, 8)}`,
+    id: actionId,
     eventId: `evt_${payload.commitSha.substring(0, 8)}`,
     actionType: payload.actionType as ActionType,
     description: payload.description,
     confidence: 0.8,
-    safetyLevel: "low_risk" as const,
+    safetyLevel: "low_risk" as const, // Will be updated after risk assessment
     requiresApproval: true,
     status: "approved" as const,
   };
+
+  // Assess risk of the action
+  const riskAssessment = assessActionRisk(actionProposal);
+
+  // Update safety level based on risk assessment
+  const safetyLevel: "high_risk" | "low_risk" =
+    riskAssessment.score >= 0.7 ? "high_risk" : "low_risk";
+  const finalActionProposal = { ...actionProposal, safetyLevel };
+
+  // Record risk assessment in audit log
+  await recordRiskAssessment(
+    payload.actionType,
+    riskAssessment.score,
+    riskAssessment.summary,
+    safetyContext
+  );
+
+  if (riskAssessment.score >= 0.8) {
+    logger.warn("High-risk action detected", {
+      actionId,
+      actionType: payload.actionType,
+      riskScore: riskAssessment.score,
+      summary: riskAssessment.summary,
+    });
+  }
+
+  // Record action proposal in audit log
+  await recordActionProposal(payload.actionType, 0.8, "allowed", safetyContext);
 
   const context = createExecutionContext(payload, "slack-user");
   const useAsync = await canUseAsyncExecution();
@@ -66,7 +146,7 @@ const executeStoredAction = async (
   if (useAsync) {
     // Async execution via Redis queue
     const inProgressBlocks = formatProgressUpdate(
-      actionProposal.id,
+      finalActionProposal.id,
       "in_progress",
       `Queued *${payload.actionType}* for execution...`
     );
@@ -76,16 +156,16 @@ const executeStoredAction = async (
       ...(messageTs && { thread_ts: messageTs }),
     });
 
-    await enqueueAction(actionProposal, context);
-    await persistActionStatus(actionProposal.id, "approved", "slack-user");
+    await enqueueAction(finalActionProposal, context);
+    await persistActionStatus(finalActionProposal.id, "approved", "slack-user");
 
     logger.info("Action enqueued for async execution", {
-      actionId: actionProposal.id,
+      actionId: finalActionProposal.id,
       actionType: payload.actionType,
     });
 
     const queuedBlocks = formatProgressUpdate(
-      actionProposal.id,
+      finalActionProposal.id,
       "completed",
       `Action *${payload.actionType}* queued for processing`
     );
@@ -97,7 +177,7 @@ const executeStoredAction = async (
   } else {
     // Sync execution
     const inProgressBlocks = formatProgressUpdate(
-      actionProposal.id,
+      finalActionProposal.id,
       "in_progress",
       `Executing *${payload.actionType}*...`
     );
@@ -107,12 +187,12 @@ const executeStoredAction = async (
       ...(messageTs && { thread_ts: messageTs }),
     });
 
-    const result = await executeAction(actionProposal, context);
+    const result = await executeAction(finalActionProposal, context);
     const executionStatus = result.success ? "executed" : "failed";
-    await persistActionStatus(actionProposal.id, executionStatus, "slack-user", {
+    await persistActionStatus(finalActionProposal.id, executionStatus, "slack-user", {
       success: result.success,
       message: result.message,
-      duration: result.duration,
+      durationMs: result.durationMs,
     });
 
     const { status, text } = formatResultMessage(
@@ -120,7 +200,7 @@ const executeStoredAction = async (
       payload.actionType,
       result.message
     );
-    const completedBlocks = formatProgressUpdate(actionProposal.id, status, text);
+    const completedBlocks = formatProgressUpdate(finalActionProposal.id, status, text);
 
     await say({
       blocks: completedBlocks as SlackBlocks,
@@ -128,10 +208,10 @@ const executeStoredAction = async (
     });
 
     logger.info("Action executed synchronously", {
-      actionId: actionProposal.id,
+      actionId: finalActionProposal.id,
       actionType: payload.actionType,
       success: result.success,
-      duration: result.duration,
+      durationMs: result.durationMs,
     });
   }
 
@@ -294,7 +374,7 @@ export const handleActionConfirmation = async (
 
 /**
  * Handles action rejection.
- * Logs the rejection, cleans up stored payload, and updates the message.
+ * Logs the rejection, records audit entry, cleans up stored payload, and updates the message.
  */
 export const handleActionRejection = async (
   action: ButtonAction,
@@ -319,6 +399,16 @@ export const handleActionRejection = async (
 
     const displayId = opaqueId ?? `legacy_${payload.commitSha.substring(0, 8)}`;
     const { actionType } = payload;
+
+    // Build safety request context for audit logging
+    const safetyContext: SafetyRequestContext = {
+      requestId: displayId,
+      tenantId: payload.repository.split("/")[0] ?? "unknown",
+      actor: "slack-user",
+    };
+
+    // Record rejection in audit log
+    await recordActionProposal(actionType, 0.8, "blocked", safetyContext);
 
     const rejectedBlocks = formatProgressUpdate(
       displayId,

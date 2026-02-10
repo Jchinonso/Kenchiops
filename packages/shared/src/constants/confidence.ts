@@ -3,6 +3,10 @@
  * Thresholds, base scores, and adjustment values for confidence calculations.
  */
 
+import type { ConfidenceRange } from "./types.js";
+
+export type { ConfidenceRange } from "./types.js";
+
 /**
  * Confidence score thresholds for gating decisions.
  */
@@ -54,6 +58,7 @@ export const ALIGNMENT_ADJUSTMENTS = {
   HIGH_SIMILARITY_INCIDENT: 0.15,
   METRICS_REFERENCE: 0.05,
   NO_ALIGNMENT_PENALTY: -0.15,
+  MIN: -0.15,
   MAX: 0.2,
 } as const;
 
@@ -67,6 +72,8 @@ export const COMPLETENESS_ADJUSTMENTS = {
   IMPACT_ASSESSMENT: 0.02,
   UNCERTAINTIES_LISTED: 0.03,
   MINIMAL_ANALYSIS_PENALTY: -0.15,
+  MIN: -0.15,
+  MAX: 0.13,
 } as const;
 
 /**
@@ -82,9 +89,31 @@ export const VALIDATION_ADJUSTMENTS = {
  * Consistency checking adjustments.
  */
 export const CONSISTENCY_ADJUSTMENTS = {
+  /** Actions clearly address the identified cause */
   HIGH_RELEVANCE: 0.05,
+  /** No actions address the identified cause */
   NO_RELEVANCE: -0.1,
-  DEFAULT: 0,
+  /** Some actions address cause, but not majority */
+  PARTIAL_RELEVANCE: 0,
+  /** Missing cause or actions - can't verify consistency */
+  MISSING_DATA: -0.05,
+  /** Shotgun approach with no relevant actions (combined penalty, pre-tuned) */
+  SHOTGUN_NO_RELEVANCE: -0.15,
+  /** Generic actions only (no specifically relevant actions) */
+  GENERIC_ONLY: -0.05,
+} as const;
+
+/**
+ * Thresholds for shotgun list detection.
+ * Penalizes suggesting many actions with low relevance.
+ */
+export const SHOTGUN_LIST_THRESHOLDS = {
+  /** Minimum actions to trigger shotgun check */
+  MIN_ACTIONS: 4,
+  /** Maximum relevance ratio to be considered shotgun */
+  MAX_RELEVANCE_RATIO: 0.25,
+  /** Maximum effective relevant count to be considered shotgun (relevant + 0.5*generic) */
+  MAX_EFFECTIVE_RELEVANT: 1,
 } as const;
 
 /**
@@ -117,9 +146,66 @@ export const MIN_LENGTHS = {
 export const MIN_ACTIONS_FOR_BONUS = 2;
 
 /**
- * Confidence range type for decision matrix.
+ * Current scoring algorithm version for audit traceability.
+ * Increment when scoring logic changes materially.
  */
-export type ConfidenceRange = "very_low" | "low" | "medium" | "high" | "very_high";
+export const SCORING_VERSION = "confidence_v2" as const;
+
+/**
+ * Factor bounds for clamping each factor contribution.
+ * Prevents any single buggy factor from dominating the final score.
+ * Range: [min, max] for each factor.
+ */
+export const FACTOR_BOUNDS = {
+  uncertainty: { min: -0.3, max: 0 },
+  evidenceAlignment: { min: -0.4, max: 0.4 },
+  completeness: { min: -0.2, max: 0.2 },
+  knowledgeBaseValidation: { min: -0.3, max: 0.3 },
+  consistency: { min: -0.2, max: 0.2 },
+} as const;
+
+/**
+ * Factor weights for explicit tuning.
+ * Each factor's contribution is multiplied by its weight.
+ * Weights should sum to approximately 1.0 for interpretability.
+ */
+export const FACTOR_WEIGHTS = {
+  uncertainty: 0.15,
+  evidenceAlignment: 0.3,
+  completeness: 0.15,
+  knowledgeBaseValidation: 0.25,
+  consistency: 0.15,
+} as const;
+
+/**
+ * Text processing limits to prevent DoS from large inputs.
+ */
+export const TEXT_LIMITS = {
+  /** Maximum characters for analysis text concatenation */
+  MAX_ANALYSIS_TEXT_LENGTH: 20_000,
+} as const;
+
+/**
+ * Empty analysis penalty cap.
+ * If analysis lacks summary, identifiedCause, and recommendedActions,
+ * cap the final score to this value since it's not actionable.
+ */
+export const EMPTY_ANALYSIS_MAX_SCORE = 0.3;
+
+/**
+ * Maximum weighted adjustment (guard rail against config mistakes).
+ * Prevents the sum of weighted factors from exceeding this range.
+ */
+export const MAX_WEIGHTED_ADJUSTMENT = {
+  min: -0.5,
+  max: 0.5,
+} as const;
+
+/**
+ * Maximum length for logging LLM confidence values.
+ * Prevents surprise payloads from upstream.
+ */
+export const LOG_VALUE_MAX_LENGTH = 64;
 
 /**
  * Message templates for different confidence ranges.
@@ -189,5 +275,4 @@ export const CONFIDENCE_LEVEL_THRESHOLDS = [
   { minScore: 0, level: "low" as const },
 ] as const;
 
-/** Type for confidence level derived from thresholds. */
-export type DerivedConfidenceLevel = (typeof CONFIDENCE_LEVEL_THRESHOLDS)[number]["level"];
+export type { DerivedConfidenceLevel } from "./types.js";

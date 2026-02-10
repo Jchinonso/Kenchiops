@@ -1,20 +1,23 @@
 /**
  * OpenAPI/Swagger documentation setup.
  *
- * TODO: Install swagger-ui-express and swagger-jsdoc for full functionality
+ * Note: Install swagger-ui-express and swagger-jsdoc for full functionality
  * npm install swagger-ui-express swagger-jsdoc
  * npm install --save-dev @types/swagger-ui-express @types/swagger-jsdoc
  */
 
 import type { Express } from "express";
 import {
-  logger,
+  createLogger,
   SERVICE_PORTS,
+  SERVICE_NAMES,
   HTTP_STATUS,
   SWAGGER_ROUTES,
   HEALTH_STATUS,
   API_RESPONSE_STATUS,
 } from "@kenchi/shared";
+
+const logger = createLogger(SERVICE_NAMES.API);
 
 /**
  * Basic OpenAPI 3.0 specification.
@@ -150,7 +153,7 @@ export const openApiSpec = {
 /**
  * Setup Swagger UI (placeholder - requires swagger-ui-express).
  *
- * TODO: Uncomment and install dependencies:
+ * To enable, uncomment and install dependencies:
  *
  * import swaggerUi from 'swagger-ui-express';
  *
@@ -159,6 +162,6 @@ export const openApiSpec = {
  * }
  */
 export const setupSwagger = (_app: Express): void => {
-  // TODO: Implement when swagger-ui-express is installed
+  // Placeholder - implement when swagger-ui-express is installed
   logger.info("Swagger documentation available at /api-docs (when implemented)");
 };

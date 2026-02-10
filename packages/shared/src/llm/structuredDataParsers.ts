@@ -15,23 +15,14 @@ import type {
   LLMTestFailure,
   LLMLintError,
 } from "../core/types.js";
-
-// ==================== Constants ====================
-
-const VALID_DEP_CHANGE_TYPES = new Set(["added", "removed", "updated"]);
-const VALID_CONFIG_CHANGE_TYPES = new Set(["added", "modified", "deleted"]);
-
-/** Field name mappings for test_name across frameworks */
-const TEST_NAME_FIELDS = ["test_name", "testName"] as const;
-
-/** Field name mappings for error message across frameworks */
-const ERROR_MESSAGE_FIELDS = ["error_message", "errorMessage", "error", "message"] as const;
-
-/** Field name mappings for expected value across frameworks (Rust: left, Go: want) */
-const EXPECTED_VALUE_FIELDS = ["expected", "left", "want"] as const;
-
-/** Field name mappings for actual value across frameworks (Rust: right, Jest: received, Go: got) */
-const ACTUAL_VALUE_FIELDS = ["actual", "right", "received", "got"] as const;
+import {
+  VALID_DEP_CHANGE_TYPES,
+  VALID_CONFIG_CHANGE_TYPES,
+  TEST_NAME_FIELDS,
+  ERROR_MESSAGE_FIELDS,
+  EXPECTED_VALUE_FIELDS,
+  ACTUAL_VALUE_FIELDS,
+} from "../constants/index.js";
 
 // ==================== Utility Functions ====================
 
@@ -226,40 +217,197 @@ const parseTestFailure = (raw: unknown): LLMTestFailure | null => {
     return null;
   }
 
-  // test_name is required (may come as test_name or testName)
+  // test_name - use fallback if missing to avoid dropping entries
   const testName = extractStringField(raw, TEST_NAME_FIELDS);
-  if (!testName) {
-    return null;
-  }
 
-  // error is required (may come as error_message, errorMessage, error, or message)
+  // error - use fallback if missing to avoid dropping entries
   const error = extractStringField(raw, ERROR_MESSAGE_FIELDS);
-  if (!error) {
+
+  // Must have at least one of testName or error to be valid
+  if (!testName && !error) {
     return null;
   }
 
   return {
-    testName,
+    testName: testName || "Unknown test",
     file: extractOptionalString(raw, "file"),
     line: extractOptionalNumber(raw, "line"),
     // Use extractValueAsString to handle LLM returning numbers (e.g., expected: 3, actual: 2)
     expected: extractValueAsString(raw, EXPECTED_VALUE_FIELDS),
     actual: extractValueAsString(raw, ACTUAL_VALUE_FIELDS),
-    error,
+    error: error || "Test failed",
   };
 };
 
+// ==================== Test Failure Deduplication Helpers ====================
+
+interface TestFailureEntry {
+  readonly failure: LLMTestFailure;
+  readonly index: number;
+  readonly normalized: string;
+  readonly normalizedKey: string;
+  readonly locationKey: string | null;
+}
+
+/** Normalizes test name to last "›" segment for matching. */
+const normalizeTestName = (name: string): string => {
+  const separator = " › ";
+  const lastIdx = name.lastIndexOf(separator);
+  return lastIdx >= 0 ? name.substring(lastIdx + separator.length).trim() : name.trim();
+};
+
+/** Checks if a file path is a test file. */
+const isTestFile = (filePath: string): boolean => /\.(test|spec)\.[jt]sx?$/.test(filePath);
+
+/** Extracts the base filename without test/spec suffix. */
+const getBaseName = (filePath: string): string => {
+  const fileName = filePath.split("/").pop() ?? filePath;
+  return fileName.replace(/\.(test|spec)(\.[jt]sx?)$/, "$2");
+};
+
+/** Builds enriched entries with normalized keys for deduplication. */
+const buildTestFailureEntries = (parsed: readonly LLMTestFailure[]): readonly TestFailureEntry[] =>
+  parsed.map((failure, index) => {
+    const normalized = normalizeTestName(failure.testName);
+    const normalizedKey = `${normalized}::${failure.file ?? ""}`;
+    const locationKey =
+      failure.file && failure.line !== undefined ? `${failure.file}::${failure.line}` : null;
+    return { failure, index, normalized, normalizedKey, locationKey };
+  });
+
 /**
- * Parses test failures array from parsed LLM response.
+ * Deduplicates by normalized name + file and by file + line location.
+ * Keeps the entry with the longer (more descriptive) testName on collision.
+ */
+const deduplicateByNameAndLocation = (entries: readonly TestFailureEntry[]): Set<number> => {
+  const seenByNormalizedName = new Map<string, number>();
+  const seenByLocation = new Map<string, number>();
+  const keepIndices = new Set<number>();
+
+  for (const entry of entries) {
+    const existingByName = seenByNormalizedName.get(entry.normalizedKey);
+    if (existingByName !== undefined) {
+      if (entry.failure.testName.length > entries[existingByName].failure.testName.length) {
+        keepIndices.delete(existingByName);
+        keepIndices.add(entry.index);
+        seenByNormalizedName.set(entry.normalizedKey, entry.index);
+      }
+      continue;
+    }
+    seenByNormalizedName.set(entry.normalizedKey, entry.index);
+
+    if (entry.locationKey) {
+      const existingByLoc = seenByLocation.get(entry.locationKey);
+      if (existingByLoc !== undefined) {
+        if (entry.failure.testName.length > entries[existingByLoc].failure.testName.length) {
+          keepIndices.delete(existingByLoc);
+          keepIndices.add(entry.index);
+          seenByLocation.set(entry.locationKey, entry.index);
+        }
+        continue;
+      }
+      seenByLocation.set(entry.locationKey, entry.index);
+    }
+
+    keepIndices.add(entry.index);
+  }
+
+  return keepIndices;
+};
+
+/**
+ * Resolves test vs. source file preference per normalized name.
+ * Returns a map of normalized name → best entry index (prefers test files).
+ */
+const buildBestByNormalized = (
+  entries: readonly TestFailureEntry[],
+  keepIndices: ReadonlySet<number>
+): ReadonlyMap<string, number> => {
+  const bestByNormalized = new Map<string, number>();
+
+  for (const idx of keepIndices) {
+    const entry = entries[idx];
+    const existing = bestByNormalized.get(entry.normalized);
+    if (existing === undefined) {
+      bestByNormalized.set(entry.normalized, idx);
+      continue;
+    }
+    const existingFile = entries[existing].failure.file;
+    const currentFile = entry.failure.file;
+    if (currentFile && isTestFile(currentFile) && (!existingFile || !isTestFile(existingFile))) {
+      bestByNormalized.set(entry.normalized, idx);
+    }
+  }
+
+  return bestByNormalized;
+};
+
+/**
+ * Final pass: drops file-less duplicates, source-file duplicates when test files exist,
+ * and non-best entries when a test file variant is the best.
+ */
+const applyTestFilePreference = (
+  entries: readonly TestFailureEntry[],
+  keepIndices: ReadonlySet<number>,
+  bestByNormalized: ReadonlyMap<string, number>
+): Set<number> => {
+  const baseNamesWithTestFiles = new Set<string>();
+  for (const idx of keepIndices) {
+    const { file } = entries[idx].failure;
+    if (file && isTestFile(file)) {
+      baseNamesWithTestFiles.add(getBaseName(file));
+    }
+  }
+
+  const finalIndices = new Set<number>();
+  for (const idx of keepIndices) {
+    const entry = entries[idx];
+    const bestIdx = bestByNormalized.get(entry.normalized);
+
+    if (!entry.failure.file) {
+      if (bestIdx !== undefined && entries[bestIdx].failure.file) {
+        continue;
+      }
+    } else if (
+      !isTestFile(entry.failure.file) &&
+      baseNamesWithTestFiles.has(getBaseName(entry.failure.file))
+    ) {
+      continue;
+    } else if (bestIdx !== undefined && bestIdx !== idx) {
+      const bestFile = entries[bestIdx].failure.file;
+      if (bestFile && isTestFile(bestFile) && !isTestFile(entry.failure.file)) {
+        continue;
+      }
+    }
+
+    finalIndices.add(idx);
+  }
+
+  return finalIndices;
+};
+
+// ==================== Test Failure Parsing ====================
+
+/**
+ * Parses and deduplicates test failures from LLM response.
+ * Handles LLM re-extraction inflation where the same failure appears
+ * with different name formats, file attributions, or missing files.
  */
 export const parseTestFailures = (raw: unknown): readonly LLMTestFailure[] => {
   if (!Array.isArray(raw)) {
     return [];
   }
 
-  return raw
+  const parsed = raw
     .map((rawItem) => parseTestFailure(rawItem))
     .filter((failure): failure is LLMTestFailure => failure !== null);
+
+  const entries = buildTestFailureEntries(parsed);
+  const keepIndices = deduplicateByNameAndLocation(entries);
+  const bestByNormalized = buildBestByNormalized(entries, keepIndices);
+  const finalIndices = applyTestFilePreference(entries, keepIndices, bestByNormalized);
+
+  return entries.filter((entry) => finalIndices.has(entry.index)).map((entry) => entry.failure);
 };
 
 // ==================== Lint Error Parsing ====================

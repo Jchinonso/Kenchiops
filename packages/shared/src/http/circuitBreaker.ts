@@ -11,49 +11,13 @@
 
 import { createLogger } from "../core/logger.js";
 import { CircuitBreakerOpenError, getErrorMessage } from "../core/errors.js";
-import { HTTP_RESILIENCE_DEFAULTS } from "../constants/index.js";
+import { HTTP_RESILIENCE_DEFAULTS, CIRCUIT_BREAKER_SERVICE_KEYS } from "../constants/index.js";
+import type { CircuitStateRecord, CircuitBreakerConfig, CircuitBreakerStatus } from "./types.js";
+
+/** Re-export service keys for backward compatibility. */
+export const SERVICE_KEYS = CIRCUIT_BREAKER_SERVICE_KEYS;
 
 const logger = createLogger("circuit-breaker");
-
-// ==================== Types ====================
-
-/**
- * Circuit breaker state enumeration
- */
-type CircuitState = "closed" | "open" | "half-open";
-
-/**
- * Circuit breaker state tracking
- */
-interface CircuitStateRecord {
-  state: CircuitState;
-  failures: number;
-  lastFailure: number;
-  successes: number;
-  lastErrorMessage?: string;
-}
-
-/**
- * Circuit breaker configuration options
- */
-export interface CircuitBreakerConfig {
-  /** Number of failures before opening circuit */
-  readonly threshold?: number;
-  /** Time in ms before attempting reset (half-open state) */
-  readonly resetTimeout?: number;
-  /** Number of successful calls required to close circuit from half-open */
-  readonly successThreshold?: number;
-}
-
-/**
- * Circuit breaker status for external monitoring
- */
-export interface CircuitBreakerStatus {
-  readonly state: CircuitState;
-  readonly failures: number;
-  readonly isOpen: boolean;
-  readonly lastFailure: number | null;
-}
 
 // ==================== Circuit State Management ====================
 
@@ -68,7 +32,7 @@ const circuits = new Map<string, CircuitStateRecord>();
 const DEFAULT_CONFIG: Required<CircuitBreakerConfig> = {
   threshold: HTTP_RESILIENCE_DEFAULTS.CIRCUIT_BREAKER_THRESHOLD,
   resetTimeout: HTTP_RESILIENCE_DEFAULTS.CIRCUIT_BREAKER_RESET_MS,
-  successThreshold: 1,
+  successThreshold: HTTP_RESILIENCE_DEFAULTS.CIRCUIT_BREAKER_SUCCESS_THRESHOLD,
 } as const;
 
 /**
@@ -141,23 +105,18 @@ const shouldTransitionToHalfOpen = (
 const canExecute = (serviceKey: string, config: Required<CircuitBreakerConfig>): boolean => {
   const record = getCircuitRecord(serviceKey);
 
-  // Closed circuit - always allow
-  if (record.state === "closed") {
-    return true;
-  }
-
-  // Half-open circuit - allow probe request
-  if (record.state === "half-open") {
+  // Closed or half-open circuits allow execution
+  if (record.state === "closed" || record.state === "half-open") {
     return true;
   }
 
   // Open circuit - check if ready for half-open transition
-  if (shouldTransitionToHalfOpen(record, config)) {
-    stateTransitions.toHalfOpen(record, serviceKey);
-    return true;
+  if (!shouldTransitionToHalfOpen(record, config)) {
+    return false;
   }
 
-  return false;
+  stateTransitions.toHalfOpen(record, serviceKey);
+  return true;
 };
 
 /**
@@ -166,17 +125,18 @@ const canExecute = (serviceKey: string, config: Required<CircuitBreakerConfig>):
 const recordSuccess = (serviceKey: string, config: Required<CircuitBreakerConfig>): void => {
   const record = getCircuitRecord(serviceKey);
 
-  // In half-open state, track successes for potential close
-  if (record.state === "half-open") {
-    record.successes += 1;
-    if (record.successes >= config.successThreshold) {
-      stateTransitions.toClosed(record, serviceKey);
-    }
+  // In closed state, reset failure count
+  if (record.state !== "half-open") {
+    record.failures = 0;
     return;
   }
 
-  // In closed state, reset failure count
-  record.failures = 0;
+  // In half-open state, track successes for potential close
+  record.successes += 1;
+  const shouldClose = record.successes >= config.successThreshold;
+  if (shouldClose) {
+    stateTransitions.toClosed(record, serviceKey);
+  }
 };
 
 /**
@@ -309,12 +269,3 @@ export const getAllCircuitStatus = (): Map<string, CircuitBreakerStatus> =>
   new Map(
     Array.from(circuits.keys()).map((serviceKey) => [serviceKey, getCircuitStatus(serviceKey)])
   );
-
-/**
- * Service keys for common integrations
- */
-export const SERVICE_KEYS = {
-  OPENAI: "openai",
-  GITHUB: "github",
-  SLACK: "slack",
-} as const;

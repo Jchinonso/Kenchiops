@@ -2,6 +2,10 @@
  * Secret detection and redaction constants.
  */
 
+import type { SecretPattern } from "./types.js";
+
+export type { SecretPattern } from "./types.js";
+
 /**
  * Placeholder text used to replace redacted secrets.
  */
@@ -16,14 +20,6 @@ export const REDACTION_DEFAULTS = {
   /** Maximum input size for redaction (5MB) to prevent ReDoS attacks */
   MAX_INPUT_SIZE: 5 * 1024 * 1024,
 } as const;
-
-/**
- * Secret pattern configuration type.
- */
-export type SecretPattern = {
-  readonly name: string;
-  readonly pattern: RegExp;
-};
 
 /**
  * Compiled regex patterns for detecting secrets in text.

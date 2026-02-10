@@ -30,6 +30,7 @@
     "validate": "tsx scripts/validate-env.ts",
     "check-build": "tsx scripts/check-build.ts",
     "check:duplication": "tsx scripts/check-duplication.ts",
+    "check:standards": "node scripts/check-standards.js",
     "prepare": "husky"
   },
   "lint-staged": {

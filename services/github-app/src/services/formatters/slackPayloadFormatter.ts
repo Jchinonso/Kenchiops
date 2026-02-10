@@ -9,36 +9,20 @@ import {
   GITHUB_COMMENT_DISPLAY,
   UI_EMOJI,
   type AggregatedFailures,
+  type PRContext,
 } from "@kenchi/shared";
+import type { SlackBlock, SlackBlockElement, SlackPayload } from "./slackPayloadTypes.js";
 
-/**
- * Slack block element for buttons.
- */
-export interface SlackBlockElement {
-  readonly type: "button";
-  readonly text: { readonly type: "plain_text"; readonly text: string };
-  readonly url?: string;
-  readonly action_id?: string;
-  readonly value?: string;
-}
+export type { SlackBlock, SlackBlockElement, SlackPayload } from "./slackPayloadTypes.js";
 
-/**
- * Slack block structure for Block Kit.
- */
-export interface SlackBlock {
-  readonly type: "header" | "section" | "divider" | "actions";
-  readonly text?: { readonly type: "mrkdwn" | "plain_text"; readonly text: string };
-  readonly fields?: ReadonlyArray<{ readonly type: "mrkdwn"; readonly text: string }>;
-  readonly elements?: readonly SlackBlockElement[];
-}
+// ==================== Display Limits ====================
 
-/**
- * Slack payload structure.
- */
-export interface SlackPayload {
-  readonly text: string;
-  readonly blocks: readonly SlackBlock[];
-}
+const SLACK_DISPLAY_LIMITS = {
+  /** Maximum changed files to show in PR context */
+  MAX_CHANGED_FILES: 10,
+} as const;
+
+// ==================== Block Builders ====================
 
 /**
  * Build header block for Slack message.
@@ -58,6 +42,35 @@ const buildCommitInfoBlock = (shortSha: string, failureCount: number): SlackBloc
     { type: "mrkdwn", text: `*${UI_EMOJI.warning} Failed Checks:* ${failureCount}` },
   ],
 });
+
+/**
+ * Build PR context block with metadata and changed files.
+ * Provides developers with PR context to correlate failures with code changes.
+ */
+const buildPRContextBlock = (prContext: PRContext): SlackBlock => {
+  const titleLine = `${UI_EMOJI.list} *PR #${prContext.number}:* ${prContext.title}`;
+  const metaLine = `${UI_EMOJI.user} ${prContext.author}  |  ${UI_EMOJI.branch} \`${prContext.branch}\` → \`${prContext.baseBranch}\``;
+
+  const changedFiles = prContext.changedFiles ?? [];
+  const filesLine =
+    changedFiles.length > 0
+      ? `${UI_EMOJI.document} *Changed files (${changedFiles.length}):* ${changedFiles
+          .slice(0, SLACK_DISPLAY_LIMITS.MAX_CHANGED_FILES)
+          .map((file) => `\`${file}\``)
+          .join(
+            ", "
+          )}${changedFiles.length > SLACK_DISPLAY_LIMITS.MAX_CHANGED_FILES ? ` and ${changedFiles.length - SLACK_DISPLAY_LIMITS.MAX_CHANGED_FILES} more` : ""}`
+      : null;
+
+  const text = [titleLine, metaLine, filesLine]
+    .filter((line): line is string => line !== null)
+    .join("\n");
+
+  return {
+    type: "section",
+    text: { type: "mrkdwn", text },
+  };
+};
 
 /**
  * Build failure section block with recommended actions.
@@ -90,23 +103,23 @@ const buildActionButtonsBlock = (
   commitSha: string,
   prNumber?: number
 ): SlackBlock => {
-  const elements: SlackBlockElement[] = [];
+  const prButton: readonly SlackBlockElement[] = prNumber
+    ? [
+        {
+          type: "button" as const,
+          text: { type: "plain_text" as const, text: "View PR" },
+          url: `https://github.com/${repository}/pull/${prNumber}`,
+        },
+      ]
+    : [];
 
-  if (prNumber) {
-    elements.push({
-      type: "button",
-      text: { type: "plain_text", text: "View PR" },
-      url: `https://github.com/${repository}/pull/${prNumber}`,
-    });
-  }
-
-  elements.push({
+  const commitButton: SlackBlockElement = {
     type: "button",
     text: { type: "plain_text", text: "View Commit" },
     url: `https://github.com/${repository}/commit/${commitSha}`,
-  });
+  };
 
-  return { type: "actions", elements };
+  return { type: "actions", elements: [...prButton, commitButton] };
 };
 
 /**
@@ -138,6 +151,8 @@ const buildFeedbackButtonsBlock = (analysisId: string): SlackBlock => ({
   ],
 });
 
+// ==================== Main Payload Builder ====================
+
 /**
  * Build consolidated Slack payload from aggregated failures.
  */
@@ -149,9 +164,14 @@ export const buildConsolidatedSlackPayload = (aggregation: AggregatedFailures): 
 
   const failureBlocks = aggregation.failures.map(buildFailureBlock);
 
-  const blocks: SlackBlock[] = [
+  const prContextBlock: readonly SlackBlock[] = aggregation.prContext
+    ? [buildPRContextBlock(aggregation.prContext)]
+    : [];
+
+  const blocks: readonly SlackBlock[] = [
     buildHeaderBlock(repository),
     buildCommitInfoBlock(shortSha, aggregation.failures.length),
+    ...prContextBlock,
     { type: "divider" },
     ...failureBlocks,
     { type: "divider" },

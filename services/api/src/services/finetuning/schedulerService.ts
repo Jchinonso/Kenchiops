@@ -16,37 +16,32 @@ import {
   FINE_TUNING_STATUS,
   FINE_TUNING_CONFIG,
   FINE_TUNING_SCHEDULER,
+  SERVICE_NAMES,
   type FineTuningJobResult,
 } from "@kenchi/shared";
+import type {
+  SchedulerConfig,
+  SchedulerState,
+  SchedulerStatus,
+} from "../../types/fineTuningTypes.js";
 import { handleJobCompletion, startFineTuningJob } from "./jobService.js";
 import { getFineTuningStats } from "./statsService.js";
 
-const logger = createLogger("finetuning-scheduler");
-
-// ==================== Types ====================
-
 /**
- * Scheduler configuration.
+ * Mutable version of SchedulerState for the polling loop.
+ * Allowed Exception #5: framework-required mutation for state machine / polling loop.
+ * The SchedulerState interface uses readonly properties at the type level,
+ * but the scheduler is an inherently stateful background worker that must
+ * mutate its tracking state (timers, job sets, flags) as jobs progress.
+ * ReadonlySet -> Set to allow .add()/.delete()/.clear() on tracked jobs.
  */
-interface SchedulerConfig {
-  readonly pollIntervalMs: number;
-  readonly maxConcurrentPolls: number;
-  readonly autoTriggerEnabled: boolean;
-  readonly autoTriggerCheckIntervalMs: number;
-  readonly minDaysBetweenJobs: number;
-}
+type MutableSchedulerState = {
+  -readonly [K in keyof SchedulerState]: SchedulerState[K] extends ReadonlySet<infer U>
+    ? Set<U>
+    : SchedulerState[K];
+};
 
-/**
- * Scheduler state.
- */
-interface SchedulerState {
-  isRunning: boolean;
-  intervalId: NodeJS.Timeout | null;
-  trackedJobs: Set<string>;
-  processedCompletions: Set<string>;
-  lastAutoTriggerCheck: number;
-  lastJobTriggeredAt: number | null;
-}
+const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Constants ====================
 
@@ -66,7 +61,10 @@ const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
 
 // ==================== State ====================
 
-const state: SchedulerState = {
+// Allowed Exception #5: framework-required mutation for state machine / polling loop.
+// The scheduler is an inherently stateful background worker — its state (timers,
+// tracked job sets, flags) must be mutated as jobs progress through their lifecycle.
+const state: MutableSchedulerState = {
   isRunning: false,
   intervalId: null,
   trackedJobs: new Set(),
@@ -75,8 +73,23 @@ const state: SchedulerState = {
   lastJobTriggeredAt: null,
 };
 
-/** Current scheduler configuration */
-let currentConfig: SchedulerConfig = { ...DEFAULT_CONFIG };
+/**
+ * Current scheduler configuration.
+ * Uses closure-based memoization to avoid module-level `let` (CLAUDE.md: const only).
+ */
+const configStore = (() => {
+  // Allowed Exception #5: framework-required mutation for scheduler configuration.
+  const holder = { current: { ...DEFAULT_CONFIG } as SchedulerConfig };
+  return {
+    get: (): SchedulerConfig => holder.current,
+    set: (cfg: SchedulerConfig): void => {
+      holder.current = cfg;
+    },
+    reset: (): void => {
+      holder.current = { ...DEFAULT_CONFIG };
+    },
+  };
+})();
 
 // ==================== Helper Functions ====================
 
@@ -146,7 +159,7 @@ const hasEnoughTimePassed = (): boolean => {
   }
   const daysSinceLastJob =
     (Date.now() - state.lastJobTriggeredAt) / FINE_TUNING_SCHEDULER.MS_PER_DAY;
-  return daysSinceLastJob >= currentConfig.minDaysBetweenJobs;
+  return daysSinceLastJob >= configStore.get().minDaysBetweenJobs;
 };
 
 const recordAutoTriggeredJob = (jobId: string, fileId: string | undefined): void => {
@@ -162,11 +175,12 @@ const recordAutoTriggeredJob = (jobId: string, fileId: string | undefined): void
  * Checks if it's time to run the auto-trigger check.
  */
 const shouldRunAutoTriggerCheck = (): boolean => {
-  if (!currentConfig.autoTriggerEnabled) {
+  const cfg = configStore.get();
+  if (!cfg.autoTriggerEnabled) {
     return false;
   }
   const timeSinceLastCheck = Date.now() - state.lastAutoTriggerCheck;
-  return timeSinceLastCheck >= currentConfig.autoTriggerCheckIntervalMs;
+  return timeSinceLastCheck >= cfg.autoTriggerCheckIntervalMs;
 };
 
 /**
@@ -191,7 +205,7 @@ const checkAutoTrigger = async (): Promise<void> => {
     // Check if enough time has passed since last job
     if (!hasEnoughTimePassed()) {
       logger.debug("Skipping auto-trigger: not enough time since last job", {
-        minDaysBetweenJobs: currentConfig.minDaysBetweenJobs,
+        minDaysBetweenJobs: configStore.get().minDaysBetweenJobs,
       });
       return;
     }
@@ -292,7 +306,8 @@ export const startScheduler = (config: Partial<SchedulerConfig> = {}): void => {
     return;
   }
 
-  currentConfig = { ...DEFAULT_CONFIG, ...config };
+  configStore.set({ ...DEFAULT_CONFIG, ...config });
+  const currentConfig = configStore.get();
 
   logger.info("Starting fine-tuning scheduler", {
     pollIntervalMs: currentConfig.pollIntervalMs,
@@ -303,12 +318,12 @@ export const startScheduler = (config: Partial<SchedulerConfig> = {}): void => {
   state.isRunning = true;
 
   // Run initial poll
-  pollJobs();
+  void pollJobs();
 
   // Set up interval for continuous polling
   state.intervalId = setInterval(() => {
-    pollJobs();
-  }, currentConfig.pollIntervalMs);
+    void pollJobs();
+  }, configStore.get().pollIntervalMs);
 };
 
 /**
@@ -345,18 +360,11 @@ export const trackJob = (jobId: string): void => {
  *
  * @returns Scheduler status
  */
-export const getSchedulerStatus = (): {
-  readonly isRunning: boolean;
-  readonly trackedJobCount: number;
-  readonly processedCompletionCount: number;
-  readonly autoTriggerEnabled: boolean;
-  readonly lastAutoTriggerCheck: string | null;
-  readonly lastJobTriggeredAt: string | null;
-} => ({
+export const getSchedulerStatus = (): SchedulerStatus => ({
   isRunning: state.isRunning,
   trackedJobCount: state.trackedJobs.size,
   processedCompletionCount: state.processedCompletions.size,
-  autoTriggerEnabled: currentConfig.autoTriggerEnabled,
+  autoTriggerEnabled: configStore.get().autoTriggerEnabled,
   lastAutoTriggerCheck: state.lastAutoTriggerCheck
     ? new Date(state.lastAutoTriggerCheck).toISOString()
     : null,
@@ -377,4 +385,20 @@ export const cleanupProcessedCompletions = (): void => {
     });
     state.processedCompletions.clear();
   }
+};
+
+/**
+ * Resets all scheduler state. Test-only — used to prevent state leaking between tests.
+ */
+export const _resetStateForTesting = (): void => {
+  if (state.intervalId) {
+    clearInterval(state.intervalId);
+  }
+  state.isRunning = false;
+  state.intervalId = null;
+  state.trackedJobs.clear();
+  state.processedCompletions.clear();
+  state.lastAutoTriggerCheck = 0;
+  state.lastJobTriggeredAt = null;
+  configStore.reset();
 };

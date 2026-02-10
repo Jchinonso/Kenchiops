@@ -10,17 +10,20 @@
 import type {
   Event,
   Evidence,
+  PRDiffEvidence,
   LogEntry,
   Metrics,
   GitCommit,
   RelatedEvent,
   KnowledgeDocument,
 } from "../core/types.js";
-
-// ==================== Token Estimation ====================
-
-/** Approximate characters per token for GPT models */
-const CHARS_PER_TOKEN = 4;
+import {
+  ARTIFACT_TYPES,
+  CHARS_PER_TOKEN,
+  MAX_SNIPPET_LENGTH_TRUNCATED,
+  SHORT_COMMIT_SHA_LENGTH,
+  PERCENTAGE_MULTIPLIER,
+} from "../constants/index.js";
 
 /**
  * Estimates token count for a string.
@@ -31,32 +34,143 @@ const CHARS_PER_TOKEN = 4;
 export const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN);
 
 /**
+ * Checks if a log entry represents a test_failure artifact.
+ * Looks for the [test_failure] marker in the message.
+ */
+const isTestFailureLog = (log: LogEntry): boolean =>
+  log.message.includes(`[${ARTIFACT_TYPES.TEST_FAILURE}]`);
+
+/**
+ * Truncates a log entry's message/snippet if too long.
+ */
+const truncateLogMessage = (log: LogEntry, maxLength: number): LogEntry => {
+  if (log.message.length <= maxLength) {
+    return log;
+  }
+
+  // Find where the snippet starts and truncate only the snippet portion
+  const snippetStart = log.message.indexOf("Snippet:\n");
+  if (snippetStart === -1) {
+    // No snippet, truncate the whole message
+    return {
+      ...log,
+      message: `${log.message.slice(0, maxLength)}...<TRUNCATED>`,
+    };
+  }
+
+  // Keep the header, truncate the snippet
+  const header = log.message.slice(0, snippetStart + "Snippet:\n".length);
+  const snippet = log.message.slice(snippetStart + "Snippet:\n".length);
+  const remainingBudget = maxLength - header.length;
+
+  if (remainingBudget <= 0) {
+    return {
+      ...log,
+      message: `${header}...<TRUNCATED>`,
+    };
+  }
+
+  return {
+    ...log,
+    message: `${header}${snippet.slice(0, remainingBudget)}...<TRUNCATED>`,
+  };
+};
+
+/**
+ * Separates logs into test failures and others, truncating each.
+ * Uses a single pass to avoid nested iteration.
+ */
+const separateAndTruncateLogs = (
+  logs: readonly LogEntry[]
+): { readonly testFailures: readonly LogEntry[]; readonly others: readonly LogEntry[] } =>
+  logs.reduce<{ readonly testFailures: readonly LogEntry[]; readonly others: readonly LogEntry[] }>(
+    (acc, log) => {
+      const truncated = truncateLogMessage(log, MAX_SNIPPET_LENGTH_TRUNCATED);
+      return isTestFailureLog(log)
+        ? { ...acc, testFailures: [...acc.testFailures, truncated] }
+        : { ...acc, others: [...acc.others, truncated] };
+    },
+    { testFailures: [], others: [] }
+  );
+
+/**
+ * Checks if candidate logs fit within the token budget.
+ * Returns the evidence if it fits, or null if over budget.
+ */
+const tryFitLogs = (
+  evidence: Evidence,
+  logs: readonly LogEntry[],
+  maxTokens: number
+): Evidence | null => {
+  const candidate = { ...evidence, logs: [...logs] };
+  const tokens = estimateTokens(formatEvidence(candidate));
+  return tokens <= maxTokens ? candidate : null;
+};
+
+/**
+ * Reduces other logs proportionally to fit within the token budget.
+ */
+const reduceOtherLogs = (
+  evidence: Evidence,
+  testFailures: readonly LogEntry[],
+  others: readonly LogEntry[],
+  maxTokens: number
+): Evidence | null => {
+  const allLogs = [...testFailures, ...others];
+  const allTokens = estimateTokens(formatEvidence({ ...evidence, logs: allLogs }));
+  const ratio = maxTokens / allTokens;
+  const otherLogsToKeep = Math.max(0, Math.floor(others.length * ratio));
+  return tryFitLogs(evidence, [...testFailures, ...others.slice(0, otherLogsToKeep)], maxTokens);
+};
+
+/**
  * Truncates evidence to fit within a token budget.
+ * Prioritizes keeping test_failure artifacts over other log types.
+ *
+ * Truncation strategy:
+ * 1. First, try keeping all logs but truncating individual snippets
+ * 2. If still over budget, remove non-test-failure logs first
+ * 3. Only remove test_failure logs as a last resort
  *
  * @param evidence - Evidence to truncate
  * @param maxTokens - Maximum token budget
  * @returns Truncated evidence
  */
 export const truncateEvidence = (evidence: Evidence, maxTokens: number): Evidence => {
-  const formatted = formatEvidence(evidence);
-  const currentTokens = estimateTokens(formatted);
-
-  if (currentTokens <= maxTokens) {
+  if (estimateTokens(formatEvidence(evidence)) <= maxTokens) {
     return evidence;
   }
 
-  // Calculate reduction ratio
-  const ratio = maxTokens / currentTokens;
+  if (!evidence.logs || evidence.logs.length === 0) {
+    return evidence;
+  }
 
-  // Truncate logs if they exist
-  const truncatedLogs = evidence.logs
-    ? evidence.logs.slice(0, Math.max(1, Math.floor(evidence.logs.length * ratio)))
-    : undefined;
+  const { testFailures, others } = separateAndTruncateLogs(evidence.logs);
 
-  return {
-    ...evidence,
-    logs: truncatedLogs,
-  };
+  // Try with all truncated logs
+  const allTruncated = tryFitLogs(evidence, [...testFailures, ...others], maxTokens);
+  if (allTruncated) {
+    return allTruncated;
+  }
+
+  // Reduce non-test-failure logs proportionally
+  const reduced = reduceOtherLogs(evidence, testFailures, others, maxTokens);
+  if (reduced) {
+    return reduced;
+  }
+
+  // Keep only test failures
+  const testOnly = tryFitLogs(evidence, testFailures, maxTokens);
+  if (testOnly) {
+    return testOnly;
+  }
+
+  // Last resort: reduce test failures proportionally
+  const testOnlyTokens = estimateTokens(formatEvidence({ ...evidence, logs: [...testFailures] }));
+  const testRatio = maxTokens / testOnlyTokens;
+  const testFailuresToKeep = Math.max(1, Math.floor(testFailures.length * testRatio));
+
+  return { ...evidence, logs: testFailures.slice(0, testFailuresToKeep) };
 };
 
 // ==================== Log Formatter ====================
@@ -122,9 +236,6 @@ export const formatMetrics = (metrics: Metrics): string => {
 
 // ==================== Git History Formatter ====================
 
-/** Length of short SHA for display */
-const SHORT_SHA_LENGTH = 7;
-
 /**
  * Formats git history for the prompt.
  *
@@ -137,7 +248,7 @@ export const formatGitHistory = (commits: readonly GitCommit[]): string => {
   }
 
   const formattedCommits = commits.map((commit) => {
-    const shortSha = commit.sha.substring(0, SHORT_SHA_LENGTH);
+    const shortSha = commit.sha.substring(0, SHORT_COMMIT_SHA_LENGTH);
     const files = commit.filesChanged ? ` (${commit.filesChanged.length} files)` : "";
     return `[commit#${shortSha}] ${commit.author} - ${commit.message}${files}`;
   });
@@ -167,9 +278,6 @@ export const formatRelatedEvents = (events: readonly RelatedEvent[]): string => 
 };
 
 // ==================== Knowledge Docs Formatter ====================
-
-/** Percentage multiplier for similarity display */
-const PERCENTAGE_MULTIPLIER = 100;
 
 /**
  * Formats knowledge documents for the prompt.
@@ -223,6 +331,41 @@ export const formatEvent = (event: Event): string => {
   return lines.join("\n");
 };
 
+// ==================== PR Diff Context Formatter ====================
+
+/**
+ * Formats PR diff context for the analysis prompt.
+ * Provides the LLM with code changes to correlate with failures.
+ * This is TRUSTED context from the GitHub API, not from CI logs.
+ *
+ * @param prDiffContext - PR diff evidence
+ * @returns Formatted PR diff section
+ */
+export const formatPRDiffContext = (prDiffContext: PRDiffEvidence): string => {
+  const headerLines = [`### PR Changes (PR #${prDiffContext.prNumber}) — TRUSTED CONTEXT`];
+
+  const metadataLines = [
+    prDiffContext.title ? `**Title:** ${prDiffContext.title}` : null,
+    prDiffContext.author ? `**Author:** ${prDiffContext.author}` : null,
+    prDiffContext.baseBranch ? `**Base branch:** ${prDiffContext.baseBranch}` : null,
+  ].filter((line): line is string => line !== null);
+
+  const fileListLines =
+    prDiffContext.changedFiles.length > 0
+      ? [
+          "",
+          `**Changed files (${prDiffContext.changedFiles.length}):**`,
+          ...prDiffContext.changedFiles.map((file, index) => `[diff#${index + 1}] ${file}`),
+        ]
+      : [];
+
+  const diffLines = prDiffContext.diff
+    ? ["", "**Unified Diff:**", "```diff", prDiffContext.diff, "```"]
+    : [];
+
+  return [...headerLines, ...metadataLines, ...fileListLines, ...diffLines].join("\n");
+};
+
 // ==================== Evidence Formatter ====================
 
 /**
@@ -244,6 +387,7 @@ export const formatEvidence = (evidence: Evidence): string => {
     evidence.relatedDocs && evidence.relatedDocs.length > 0
       ? formatKnowledgeDocs(evidence.relatedDocs)
       : null,
+    evidence.prDiffContext ? formatPRDiffContext(evidence.prDiffContext) : null,
   ].filter((section): section is string => section !== null);
 
   return sections.length > 0 ? sections.join("\n\n") : "No evidence available.";

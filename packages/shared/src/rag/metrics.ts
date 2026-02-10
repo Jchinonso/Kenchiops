@@ -8,86 +8,18 @@
  */
 
 import { createLogger } from "../core/logger.js";
+import { METRICS_CONSTANTS } from "../constants/index.js";
+import type {
+  EmbeddingMetrics,
+  IngestionMetrics,
+  RAGMetricsSnapshot,
+  MetricEntry,
+  IngestionEntry,
+} from "./types.js";
+
+export type { EmbeddingMetrics, IngestionMetrics, RAGMetricsSnapshot } from "./types.js";
 
 const logger = createLogger("rag-metrics");
-
-// ==================== Types ====================
-
-/**
- * Embedding operation metrics.
- */
-export interface EmbeddingMetrics {
-  readonly totalOperations: number;
-  readonly totalTokens: number;
-  readonly totalErrors: number;
-  readonly averageLatencyMs: number;
-  readonly operationsPerMinute: number;
-  readonly estimatedCostUsd: number;
-}
-
-/**
- * Ingestion operation metrics.
- */
-export interface IngestionMetrics {
-  readonly diffChunksCreated: number;
-  readonly diffChunksEmbedded: number;
-  readonly diffIngestionErrors: number;
-  readonly knowledgeDocsCreated: number;
-  readonly knowledgeDocsEmbedded: number;
-  readonly knowledgeIngestionErrors: number;
-}
-
-/**
- * Combined RAG metrics snapshot.
- */
-export interface RAGMetricsSnapshot {
-  readonly embedding: EmbeddingMetrics;
-  readonly ingestion: IngestionMetrics;
-  readonly timestamp: string;
-  readonly windowMinutes: number;
-}
-
-/**
- * Metrics entry for a single operation.
- */
-interface MetricEntry {
-  readonly timestamp: number;
-  readonly tokens: number;
-  readonly latencyMs: number;
-  readonly success: boolean;
-}
-
-/**
- * Ingestion entry for tracking.
- */
-interface IngestionEntry {
-  readonly timestamp: number;
-  readonly type: "diff" | "knowledge";
-  readonly chunksCreated: number;
-  readonly chunksEmbedded: number;
-  readonly errorCount: number;
-}
-
-// ==================== Constants ====================
-
-const METRICS_CONSTANTS = {
-  /** Window size for metrics calculation in minutes */
-  DEFAULT_WINDOW_MINUTES: 60,
-  /** Maximum entries to keep in memory */
-  MAX_ENTRIES: 10000,
-  /** Cost per 1K tokens for text-embedding-3-small (as of 2024) */
-  COST_PER_1K_TOKENS_USD: 0.00002,
-  /** Milliseconds per minute */
-  MS_PER_MINUTE: 60000,
-  /** Tokens per cost calculation unit */
-  TOKENS_PER_COST_UNIT: 1000,
-  /** Error rate threshold for alerts (10%) */
-  ERROR_RATE_ALERT_THRESHOLD: 0.1,
-  /** Latency threshold for alerts in milliseconds (5 seconds) */
-  LATENCY_ALERT_THRESHOLD_MS: 5000,
-  /** Percentage multiplier for display */
-  PERCENTAGE_MULTIPLIER: 100,
-} as const;
 
 // ==================== State ====================
 
@@ -306,59 +238,64 @@ export const logRAGMetrics = (
  * @param windowMinutes - Time window in minutes
  * @returns List of alert messages
  */
+/**
+ * Checks a single error rate against the alert threshold.
+ * Returns an alert message if exceeded, null otherwise.
+ */
+const checkErrorRateAlert = (
+  label: string,
+  errors: number,
+  total: number,
+  logContext: Record<string, unknown>
+): string | null => {
+  const rate = total > 0 ? errors / total : 0;
+  if (rate <= METRICS_CONSTANTS.ERROR_RATE_ALERT_THRESHOLD) {
+    return null;
+  }
+  const message = `High ${label}: ${formatErrorRatePercent(rate)}%`;
+  logger.warn(`RAG alert: ${message}`, logContext);
+  return message;
+};
+
 export const checkRAGAlerts = (
   windowMinutes: number = METRICS_CONSTANTS.DEFAULT_WINDOW_MINUTES
 ): readonly string[] => {
-  const alerts: string[] = [];
   const embedding = getEmbeddingMetrics(windowMinutes);
   const ingestion = getIngestionMetrics(windowMinutes);
 
-  // Check embedding error rate
-  const errorRate =
-    embedding.totalOperations > 0 ? embedding.totalErrors / embedding.totalOperations : 0;
+  const latencyAlert =
+    embedding.averageLatencyMs > METRICS_CONSTANTS.LATENCY_ALERT_THRESHOLD_MS
+      ? `High embedding latency: ${embedding.averageLatencyMs.toFixed(0)}ms`
+      : null;
 
-  if (errorRate > METRICS_CONSTANTS.ERROR_RATE_ALERT_THRESHOLD) {
-    const message = `High embedding error rate: ${formatErrorRatePercent(errorRate)}%`;
-    alerts.push(message);
-    logger.warn(`RAG alert: ${message}`, { errorRate, totalOperations: embedding.totalOperations });
+  if (latencyAlert) {
+    logger.warn(`RAG alert: ${latencyAlert}`, { averageLatencyMs: embedding.averageLatencyMs });
   }
 
-  // Check average latency
-  if (embedding.averageLatencyMs > METRICS_CONSTANTS.LATENCY_ALERT_THRESHOLD_MS) {
-    const message = `High embedding latency: ${embedding.averageLatencyMs.toFixed(0)}ms`;
-    alerts.push(message);
-    logger.warn(`RAG alert: ${message}`, { averageLatencyMs: embedding.averageLatencyMs });
-  }
-
-  // Check diff ingestion error rate
-  const diffErrorRate =
-    ingestion.diffChunksCreated > 0
-      ? ingestion.diffIngestionErrors / ingestion.diffChunksCreated
-      : 0;
-
-  if (diffErrorRate > METRICS_CONSTANTS.ERROR_RATE_ALERT_THRESHOLD) {
-    const message = `High diff ingestion error rate: ${formatErrorRatePercent(diffErrorRate)}%`;
-    alerts.push(message);
-    logger.warn(`RAG alert: ${message}`, {
-      diffErrorRate,
-      diffChunksCreated: ingestion.diffChunksCreated,
-    });
-  }
-
-  // Check knowledge doc ingestion error rate
-  const knowledgeErrorRate =
-    ingestion.knowledgeDocsCreated > 0
-      ? ingestion.knowledgeIngestionErrors / ingestion.knowledgeDocsCreated
-      : 0;
-
-  if (knowledgeErrorRate > METRICS_CONSTANTS.ERROR_RATE_ALERT_THRESHOLD) {
-    const message = `High knowledge doc ingestion error rate: ${formatErrorRatePercent(knowledgeErrorRate)}%`;
-    alerts.push(message);
-    logger.warn(`RAG alert: ${message}`, {
-      knowledgeErrorRate,
-      knowledgeDocsCreated: ingestion.knowledgeDocsCreated,
-    });
-  }
+  const alerts = [
+    checkErrorRateAlert("embedding error rate", embedding.totalErrors, embedding.totalOperations, {
+      errorRate:
+        embedding.totalOperations > 0 ? embedding.totalErrors / embedding.totalOperations : 0,
+      totalOperations: embedding.totalOperations,
+    }),
+    latencyAlert,
+    checkErrorRateAlert(
+      "diff ingestion error rate",
+      ingestion.diffIngestionErrors,
+      ingestion.diffChunksCreated,
+      {
+        diffChunksCreated: ingestion.diffChunksCreated,
+      }
+    ),
+    checkErrorRateAlert(
+      "knowledge doc ingestion error rate",
+      ingestion.knowledgeIngestionErrors,
+      ingestion.knowledgeDocsCreated,
+      {
+        knowledgeDocsCreated: ingestion.knowledgeDocsCreated,
+      }
+    ),
+  ].filter((alert): alert is string => alert !== null);
 
   return Object.freeze(alerts);
 };

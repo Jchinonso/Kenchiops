@@ -14,7 +14,7 @@ import {
   getRepoName,
   getFirstSentence,
   buildTruncatedList,
-} from "../../formatting/uiHelpers.js";
+} from "../../formatting/index.js";
 import { SLACK_COLORS } from "../../constants/index.js";
 
 describe("UI Helpers", () => {

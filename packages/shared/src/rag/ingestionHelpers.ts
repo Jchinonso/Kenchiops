@@ -10,8 +10,11 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { redactSecrets } from "../security/index.js";
-import { getEmbeddingClient, type EmbeddingClient } from "../llm/providers/openai/embedding.js";
-import type { EmbeddingTierName, KnowledgeDocType } from "../constants/index.js";
+import {
+  getEmbeddingClient,
+  type EmbeddingClient,
+} from "../llm/providers/llmProvider/embedding.js";
+import { INGESTION_DEFAULTS, type EmbeddingTierName } from "../constants/index.js";
 import {
   updateDiffChunkEmbedding,
   getDiffChunksWithoutEmbeddings,
@@ -21,17 +24,11 @@ import {
   type CreateKnowledgeDocInput,
 } from "../database/index.js";
 import { selectEmbeddingTier, recordEmbeddingCost } from "./costControls.js";
+import type { DiffChunkContext, KnowledgeChunkContext } from "./types.js";
 
 const logger = createLogger("rag-ingestion");
 
-// ==================== Constants ====================
-
-/**
- * Default configuration for ingestion batch operations.
- */
-export const INGESTION_DEFAULTS = {
-  BATCH_SIZE: 50,
-} as const;
+export { INGESTION_DEFAULTS };
 
 // ==================== Content Processing ====================
 
@@ -43,17 +40,13 @@ export const redactContent = (content: string): string => redactSecrets(content)
 // ==================== Chunk Mapping ====================
 
 /**
- * Maps chunked diff result to database input format.
+ * Maps raw text chunks to CreateDiffChunkInput format for database insertion.
+ * Applies secret redaction to chunk content before mapping.
+ *
+ * @param chunks - Raw text chunks with content and positional metadata
+ * @param context - Diff chunk context including repository, PR, commit, and file info
+ * @returns Array of inputs ready for diff chunk creation
  */
-interface DiffChunkContext {
-  readonly filePath: string;
-  readonly repository: string;
-  readonly prNumber: number;
-  readonly commitSha: string;
-  readonly hunkHeader?: string;
-  readonly tenantId?: string;
-}
-
 export const mapDiffChunksToInputs = (
   chunks: ReadonlyArray<{
     content: string;
@@ -75,19 +68,13 @@ export const mapDiffChunksToInputs = (
   }));
 
 /**
- * Maps chunked knowledge doc result to database input format.
+ * Maps raw text chunks to CreateKnowledgeDocInput format for database insertion.
+ * Applies secret redaction to chunk content before mapping.
+ *
+ * @param chunks - Raw text chunks with content and chunk index metadata
+ * @param context - Knowledge chunk context including repository, doc type, and source info
+ * @returns Array of inputs ready for knowledge document creation
  */
-interface KnowledgeChunkContext {
-  readonly docType: KnowledgeDocType;
-  readonly title: string;
-  readonly parentId: string | null;
-  readonly repository?: string;
-  readonly sourceUrl?: string;
-  readonly filePath?: string;
-  readonly tenantId?: string;
-  readonly metadata?: Record<string, unknown>;
-}
-
 export const mapKnowledgeChunksToInputs = (
   chunks: ReadonlyArray<{ content: string; metadata: { chunkIndex: number } }>,
   context: KnowledgeChunkContext

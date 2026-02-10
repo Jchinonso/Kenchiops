@@ -16,6 +16,7 @@ import {
   type KnowledgeDocument,
   type RAGSearchResult,
   type EventQueryContext,
+  type RequestContext,
 } from "@kenchi/shared";
 
 const logger = createLogger(SERVICE_NAMES.API);
@@ -92,44 +93,56 @@ const mapRAGResultsToKnowledgeDocs = (ragResult: RAGSearchResult): readonly Know
  * Retrieves relevant knowledge documents using RAG search.
  * Returns empty array if search fails (graceful degradation).
  * When tenantId is provided, enables cost tracking and budget-aware tier selection.
+ *
+ * @param repository - Repository name for context
+ * @param failureLog - The failure log content
+ * @param tenantId - Optional tenant ID for cost tracking
+ * @param context - Request context for tracing
  */
 export const retrieveRelevantKnowledge = async (
   repository: string,
   failureLog: string,
-  tenantId?: string
+  tenantId: string | undefined,
+  context: RequestContext
 ): Promise<readonly KnowledgeDocument[]> => {
+  const logContext = { ...context };
+  const startTime = Date.now();
+  const errorSummary = extractErrorSummary(failureLog);
+
+  const queryContext: EventQueryContext = {
+    eventType: "ci_failure",
+    repository,
+    errorMessage: errorSummary,
+  };
+
+  logger.info("Searching RAG for relevant knowledge", {
+    repository,
+    queryLength: errorSummary.length,
+    ...logContext,
+  });
+
   try {
-    const errorSummary = extractErrorSummary(failureLog);
-
-    const queryContext: EventQueryContext = {
-      eventType: "ci_failure",
-      repository,
-      errorMessage: errorSummary,
-    };
-
-    logger.info("Searching RAG for relevant knowledge", {
-      repository,
-      tenantId,
-      queryLength: errorSummary.length,
-    });
-
-    const ragResult = await searchFromEventContext(queryContext, tenantId);
+    const ragResult = await searchFromEventContext(queryContext, tenantId, context);
     const knowledgeDocs = mapRAGResultsToKnowledgeDocs(ragResult);
+    const durationMs = Date.now() - startTime;
 
     logger.info("RAG search completed", {
       repository,
-      tenantId,
       diffChunksFound: ragResult.diffChunks.length,
       knowledgeDocsFound: knowledgeDocs.length,
       cacheHit: ragResult.cacheHit,
+      durationMs,
+      ...logContext,
     });
 
     return knowledgeDocs;
   } catch (error) {
+    const durationMs = Date.now() - startTime;
     logger.warn("RAG search failed, continuing without knowledge context", {
       repository,
-      tenantId,
       error: getErrorMessage(error),
+      durationMs,
+      ...logContext,
     });
     return [];
   }

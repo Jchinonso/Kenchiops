@@ -45,8 +45,8 @@ export const deleteKenchiOpsComments = async (
       marker: KENCHIOPS_COMMENT_MARKER,
     });
 
-    // List all comments on the PR
-    const { data: comments } = await octokit.rest.issues.listComments({
+    // List all comments on the PR (paginate to handle PRs with >100 comments)
+    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
       owner,
       repo,
       issue_number: prNumber,

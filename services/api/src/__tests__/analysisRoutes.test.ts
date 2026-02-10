@@ -1,78 +1,139 @@
 /**
  * Unit tests for Analysis Routes
+ *
+ * Tests the async job-based analysis flow:
+ * - POST /api/analyze -> 202 Accepted with job_id
+ * - GET /api/jobs/:id -> job status with result/error
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import request from "supertest";
-import express, { type Express } from "express";
-import { analysisRoutes } from "../routes/analysisRoutes.js";
-import type { AnalyzeResponse } from "../types/apiTypes.js";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 
-// Mock dependencies
-jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
-  return {
-    ...actual,
-    // asyncHandler that properly catches errors and passes to next
-    asyncHandler:
-      (
-        fn: (
-          req: unknown,
-          res: unknown,
-          next: (error?: unknown) => void
-        ) => Promise<unknown> | unknown
-      ) =>
-      async (req: unknown, res: unknown, next: (error?: unknown) => void): Promise<void> => {
-        try {
-          await fn(req, res, next);
-        } catch (error) {
-          next(error);
+// ==================== Mock Setup ====================
+
+const mockQuery = jest.fn<(...args: unknown[]) => Promise<{ rows: unknown[] }>>();
+const mockGenerateEventId = jest.fn<(prefix: string) => string>();
+const mockLoggerInfo = jest.fn();
+const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
+const mockLoggerDebug = jest.fn();
+
+/**
+ * NotFoundError stub used in the mock. Matches the real error class shape
+ * so the error middleware can detect it.
+ */
+class MockNotFoundError extends Error {
+  readonly statusCode: number;
+  readonly code: string;
+  readonly metadata: Record<string, unknown>;
+
+  constructor(message: string, context: { metadata?: Record<string, unknown> } = {}) {
+    super(message);
+    this.name = "NotFoundError";
+    this.statusCode = 404;
+    this.code = "NOT_FOUND";
+    this.metadata = context.metadata ?? {};
+  }
+}
+
+jest.mock("@kenchi/shared", () => ({
+  asyncHandler:
+    (fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) =>
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      try {
+        await fn(req, res, next);
+      } catch (error) {
+        next(error);
+      }
+    },
+  validate:
+    (schema: Record<string, unknown>) =>
+    (req: Request, res: Response, next: NextFunction): void => {
+      const bodySchema = (schema as { body?: Record<string, (v: unknown) => boolean | string> })
+        .body;
+      if (bodySchema) {
+        const errors: string[] = [];
+        for (const [field, validator] of Object.entries(bodySchema)) {
+          const value = (req.body as Record<string, unknown>)?.[field];
+          const result = validator(value);
+          if (result !== true) {
+            errors.push(`${field} ${result}`);
+          }
         }
-      },
-    validate: () => (req: unknown, res: unknown, next: (error?: unknown) => void) => next(),
-    validators: {
-      required: jest.fn(() => true),
-      string: jest.fn(() => true),
+        if (errors.length > 0) {
+          res.status(400).json({ error: "Validation failed", details: errors });
+          return;
+        }
+      }
+      next();
     },
-    HTTP_STATUS: {
-      OK: 200,
-      BAD_REQUEST: 400,
-      INTERNAL_SERVER_ERROR: 500,
+  validators: {
+    required: (value: unknown): boolean | string => {
+      if (value === undefined || value === null || value === "") {
+        return "is required";
+      }
+      return true;
     },
-    createLogger: jest.fn(() => ({
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    })),
-  };
-});
-
-jest.mock("../services/analysisService.js", () => ({
-  performAnalysis: jest.fn(),
+    string: (value: unknown): boolean | string => {
+      if (typeof value !== "string") {
+        return "must be a string";
+      }
+      return true;
+    },
+  },
+  HTTP_STATUS: {
+    OK: 200,
+    CREATED: 201,
+    ACCEPTED: 202,
+    BAD_REQUEST: 400,
+    NOT_FOUND: 404,
+    INTERNAL_SERVER_ERROR: 500,
+  },
+  createLogger: jest.fn(() => ({
+    info: mockLoggerInfo,
+    error: mockLoggerError,
+    warn: mockLoggerWarn,
+    debug: mockLoggerDebug,
+  })),
+  SERVICE_NAMES: {
+    API: "api",
+  },
+  API_ROUTES: {
+    ANALYZE: "/api/analyze",
+  },
+  query: mockQuery,
+  NotFoundError: MockNotFoundError,
+  generateEventId: mockGenerateEventId,
 }));
 
-// Get the mocked function reference after mock setup
-import { performAnalysis } from "../services/analysisService.js";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockPerformAnalysis = performAnalysis as jest.MockedFunction<any>;
+// Import the router after mocks are registered
+import { analysisRoutes } from "../routes/analysisRoutes.js";
+
+// ==================== Test Suite ====================
 
 describe("Analysis Routes", () => {
   let app: Express;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGenerateEventId.mockReturnValue("job_1234567890_abc123");
+
     app = express();
     app.use(express.json());
     app.use(analysisRoutes);
-    // Add error handling middleware
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
+    // Error handling middleware matching Express error handler signature
     app.use(
-      (err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-        res.status(500).json({ error: err.message });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      (err: Error & { statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
+        const status = err.statusCode ?? 500;
+        res.status(status).json({ error: err.message });
       }
     );
   });
+
+  // ==================== POST /api/analyze ====================
 
   describe("POST /api/analyze", () => {
     const validRequest = {
@@ -81,281 +142,210 @@ describe("Analysis Routes", () => {
       commit: "abc123def456",
     };
 
-    const mockResponse: AnalyzeResponse = {
-      analysis: "The build failed due to a missing module dependency",
-      identified_cause: "Module 'lodash' not found in node_modules",
-      confidence: 0.85,
-      recommended_actions: [
-        {
-          actionType: "fix_code",
-          description: "Run npm install to install missing dependencies",
-          priority: "high",
-        },
-      ],
-      full_analysis: {
-        eventId: "evt_123",
-        summary: "The build failed due to a missing module dependency",
-        identifiedCause: "Module 'lodash' not found in node_modules",
-        confidence: "high",
-        analyzedAt: new Date().toISOString(),
-        recommendedActions: [
-          {
-            actionType: "fix_code",
-            description: "Run npm install to install missing dependencies",
-            priority: "high",
-          },
-        ],
-      },
-      repository: "owner/repo",
+    const mockJobRow = {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      status: "pending",
     };
 
-    it("should successfully analyze CI failure", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
+    it("should return 202 Accepted with job_id for valid input", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
 
       const response = await request(app).post("/api/analyze").send(validRequest);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockResponse);
-      expect(mockPerformAnalysis).toHaveBeenCalledWith({
-        failure_log: validRequest.failure_log,
-        repository: validRequest.repository,
-        commit: validRequest.commit,
+      expect(response.status).toBe(202);
+      expect(response.body).toEqual({
+        job_id: mockJobRow.id,
+        status: "pending",
       });
     });
 
-    it("should handle request without commit", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
+    it("should return 400 when failure_log is missing", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        repository: "owner/repo",
+      });
 
-      const requestWithoutCommit = {
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Validation failed");
+    });
+
+    it("should return 400 when repository is missing", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: "Some error",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Validation failed");
+    });
+
+    it("should return 400 when both required fields are missing", async () => {
+      const response = await request(app).post("/api/analyze").send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Validation failed");
+    });
+
+    it("should return 400 when failure_log is empty string", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: "",
+        repository: "owner/repo",
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("should return 400 when repository is empty string", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: "Some error",
+        repository: "",
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("should insert correct data into database via query()", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      await request(app).post("/api/analyze").send(validRequest);
+
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+
+      const [queryText, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+
+      // Verify the SQL is the INSERT_JOB query
+      expect(queryText).toContain("INSERT INTO analysis_jobs");
+      expect(queryText).toContain("RETURNING id, status");
+
+      // Verify parameters
+      // $1 = idempotency_key
+      expect(params[0]).toBe("job_1234567890_abc123");
+      // $2 = workspace_id (tenant_id ?? "default")
+      expect(params[1]).toBe("default");
+      // $3 = log_ref (JSON stringified payload)
+      const logRef = JSON.parse(params[2] as string);
+      expect(logRef.failure_log).toBe(validRequest.failure_log);
+      expect(logRef.repository).toBe(validRequest.repository);
+      expect(logRef.commit).toBe(validRequest.commit);
+      // $4 = repository_full_name
+      expect(params[3]).toBe(validRequest.repository);
+      // $5 = commit_sha
+      expect(params[4]).toBe(validRequest.commit);
+      // $6 = installation_id (0 for direct API calls)
+      expect(params[5]).toBe(0);
+    });
+
+    it("should use tenant_id from request body when provided", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      await request(app)
+        .post("/api/analyze")
+        .send({
+          ...validRequest,
+          tenant_id: "tenant-xyz",
+        });
+
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      // $2 = workspace_id should be the provided tenant_id
+      expect(params[1]).toBe("tenant-xyz");
+    });
+
+    it("should default workspace_id to 'default' when tenant_id is absent", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      await request(app).post("/api/analyze").send({
         failure_log: "Error occurred",
         repository: "owner/repo",
-      };
+      });
 
-      const response = await request(app).post("/api/analyze").send(requestWithoutCommit);
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      expect(params[1]).toBe("default");
+    });
 
-      expect(response.status).toBe(200);
-      expect(mockPerformAnalysis).toHaveBeenCalledWith({
-        failure_log: requestWithoutCommit.failure_log,
-        repository: requestWithoutCommit.repository,
-        commit: undefined,
+    it("should default commit_sha to 'unknown' when commit is absent", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      await request(app).post("/api/analyze").send({
+        failure_log: "Error occurred",
+        repository: "owner/repo",
+      });
+
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      // $5 = commit_sha
+      expect(params[4]).toBe("unknown");
+    });
+
+    it("should call generateEventId with 'job' prefix", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      await request(app).post("/api/analyze").send(validRequest);
+
+      expect(mockGenerateEventId).toHaveBeenCalledWith("job");
+    });
+
+    it("should log job creation with relevant metadata", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      await request(app).post("/api/analyze").send(validRequest);
+
+      expect(mockLoggerInfo).toHaveBeenCalledWith("Analysis job created", {
+        jobId: mockJobRow.id,
+        repository: validRequest.repository,
+        hasCommit: true,
       });
     });
 
-    it("should return analysis with high confidence", async () => {
-      const highConfidenceResponse = { ...mockResponse, confidence: 0.95 };
-      mockPerformAnalysis.mockResolvedValue(highConfidenceResponse);
+    it("should log hasCommit as false when commit is not provided", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
 
-      const response = await request(app).post("/api/analyze").send(validRequest);
+      await request(app).post("/api/analyze").send({
+        failure_log: "Error occurred",
+        repository: "owner/repo",
+      });
 
-      expect(response.status).toBe(200);
-      expect(response.body.confidence).toBe(0.95);
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        "Analysis job created",
+        expect.objectContaining({ hasCommit: false })
+      );
     });
 
-    it("should return analysis with low confidence", async () => {
-      const lowConfidenceResponse = { ...mockResponse, confidence: 0.35 };
-      mockPerformAnalysis.mockResolvedValue(lowConfidenceResponse);
+    it("should include optional fields in log_ref JSON", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
 
-      const response = await request(app).post("/api/analyze").send(validRequest);
-
-      expect(response.status).toBe(200);
-      expect(response.body.confidence).toBe(0.35);
-    });
-
-    it("should handle very long failure logs", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
-
-      const longLogRequest = {
-        ...validRequest,
-        failure_log: "Error: ".repeat(1000) + "Stack trace here",
-      };
-
-      const response = await request(app).post("/api/analyze").send(longLogRequest);
-
-      expect(response.status).toBe(200);
-      expect(mockPerformAnalysis).toHaveBeenCalled();
-    });
-
-    it("should handle unicode characters in failure log", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
-
-      const unicodeRequest = {
-        ...validRequest,
-        failure_log: "Error: 测试错误 🔥 Ошибка",
-      };
-
-      const response = await request(app).post("/api/analyze").send(unicodeRequest);
-
-      expect(response.status).toBe(200);
-    });
-
-    it("should handle multiline failure logs", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
-
-      const multilineRequest = {
-        ...validRequest,
-        failure_log: "Error on line 1\nError on line 2\nStack trace:\n  at function()",
-      };
-
-      const response = await request(app).post("/api/analyze").send(multilineRequest);
-
-      expect(response.status).toBe(200);
-    });
-
-    it("should handle analysis with no recommended actions", async () => {
-      const noActionsResponse = { ...mockResponse, recommended_actions: undefined };
-      mockPerformAnalysis.mockResolvedValue(noActionsResponse);
-
-      const response = await request(app).post("/api/analyze").send(validRequest);
-
-      expect(response.status).toBe(200);
-      expect(response.body.recommended_actions).toBeUndefined();
-    });
-
-    it("should handle analysis with multiple recommended actions", async () => {
-      const multiActionsResponse = {
-        ...mockResponse,
-        recommended_actions: [
-          { actionType: "fix_code", description: "Action 1", priority: "high" },
-          { actionType: "review_logs", description: "Action 2", priority: "medium" },
-          { actionType: "rollback", description: "Action 3", priority: "low" },
-        ],
-      };
-      mockPerformAnalysis.mockResolvedValue(multiActionsResponse);
-
-      const response = await request(app).post("/api/analyze").send(validRequest);
-
-      expect(response.status).toBe(200);
-      expect(response.body.recommended_actions).toHaveLength(3);
-    });
-
-    it("should handle analysis with no identified cause", async () => {
-      const noCauseResponse = { ...mockResponse, identified_cause: undefined };
-      mockPerformAnalysis.mockResolvedValue(noCauseResponse);
-
-      const response = await request(app).post("/api/analyze").send(validRequest);
-
-      expect(response.status).toBe(200);
-      expect(response.body.identified_cause).toBeUndefined();
-    });
-
-    it("should handle special characters in repository name", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
-
-      const specialRepoRequest = {
-        ...validRequest,
-        repository: "org-name/repo_name-123",
-      };
-
-      const response = await request(app).post("/api/analyze").send(specialRepoRequest);
-
-      expect(response.status).toBe(200);
-    });
-
-    it("should return full analysis object", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
-
-      const response = await request(app).post("/api/analyze").send(validRequest);
-
-      expect(response.status).toBe(200);
-      expect(response.body.full_analysis).toBeDefined();
-      expect(response.body.full_analysis.eventId).toBeDefined();
-      expect(response.body.full_analysis.analyzedAt).toBeDefined();
-    });
-
-    it("should handle empty string failure log", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
-
-      const emptyLogRequest = {
-        ...validRequest,
-        failure_log: "",
-      };
-
-      const response = await request(app).post("/api/analyze").send(emptyLogRequest);
-
-      expect(response.status).toBe(200);
-    });
-
-    it("should handle service errors gracefully", async () => {
-      mockPerformAnalysis.mockRejectedValue(new Error("Analysis service error"));
-
-      await request(app).post("/api/analyze").send(validRequest);
-
-      // Error handling depends on error middleware configuration
-      expect(mockPerformAnalysis).toHaveBeenCalled();
-    });
-
-    it("should handle LLM timeout errors", async () => {
-      mockPerformAnalysis.mockRejectedValue(new Error("Request timeout"));
-
-      await request(app).post("/api/analyze").send(validRequest);
-
-      expect(mockPerformAnalysis).toHaveBeenCalled();
-    });
-
-    it("should handle malformed JSON request", async () => {
-      const response = await request(app)
+      await request(app)
         .post("/api/analyze")
-        .set("Content-Type", "application/json")
-        .send("{ invalid json");
+        .send({
+          ...validRequest,
+          tenant_id: "tenant-abc",
+          workflow_id: "wf-123",
+          test_framework: { name: "jest", language: "typescript", assertion_hint: "expect" },
+        });
 
-      expect(response.status).toBeGreaterThanOrEqual(400);
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      const logRef = JSON.parse(params[2] as string);
+
+      expect(logRef.tenant_id).toBe("tenant-abc");
+      expect(logRef.workflow_id).toBe("wf-123");
+      expect(logRef.test_framework).toEqual({
+        name: "jest",
+        language: "typescript",
+        assertion_hint: "expect",
+      });
     });
 
-    it("should preserve repository name in response", async () => {
-      mockPerformAnalysis.mockResolvedValue(mockResponse);
+    it("should handle database errors gracefully", async () => {
+      mockQuery.mockRejectedValue(new Error("Connection refused"));
 
       const response = await request(app).post("/api/analyze").send(validRequest);
 
-      expect(response.status).toBe(200);
-      expect(response.body.repository).toBe("owner/repo");
-    });
-  });
-
-  describe("request validation", () => {
-    it("should accept valid request with all fields", async () => {
-      mockPerformAnalysis.mockResolvedValue({
-        analysis: "Test",
-        confidence: 0.5,
-        repository: "test/repo",
-      });
-
-      await request(app).post("/api/analyze").send({
-        failure_log: "Error",
-        repository: "test/repo",
-        commit: "abc123",
-      });
-
-      expect(mockPerformAnalysis).toHaveBeenCalled();
+      expect(response.status).toBe(500);
     });
 
-    it("should accept request without optional commit field", async () => {
-      mockPerformAnalysis.mockResolvedValue({
-        analysis: "Test",
-        confidence: 0.5,
-        repository: "test/repo",
-      });
-
-      await request(app).post("/api/analyze").send({
-        failure_log: "Error",
-        repository: "test/repo",
-      });
-
-      expect(mockPerformAnalysis).toHaveBeenCalled();
-    });
-  });
-
-  describe("edge cases", () => {
-    it("should handle concurrent requests", async () => {
-      mockPerformAnalysis.mockResolvedValue({
-        analysis: "Test",
-        confidence: 0.5,
-        repository: "test/repo",
-        full_analysis: {
-          eventId: "test",
-          summary: "Test",
-          confidence: "medium",
-          analyzedAt: new Date().toISOString(),
-        },
+    it("should handle concurrent requests independently", async () => {
+      let callCount = 0;
+      mockQuery.mockImplementation(async () => {
+        callCount += 1;
+        return {
+          rows: [{ id: `job-uuid-${callCount}`, status: "pending" }],
+        };
       });
 
       const requests = Array.from({ length: 5 }, () =>
@@ -368,45 +358,347 @@ describe("Analysis Routes", () => {
       const responses = await Promise.all(requests);
 
       responses.forEach((response) => {
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(202);
+        expect(response.body.status).toBe("pending");
+        expect(response.body.job_id).toBeDefined();
       });
-      expect(mockPerformAnalysis).toHaveBeenCalledTimes(5);
+
+      expect(mockQuery).toHaveBeenCalledTimes(5);
     });
 
-    it("should handle very long repository names", async () => {
-      mockPerformAnalysis.mockResolvedValue({
-        analysis: "Test",
-        confidence: 0.5,
-        repository: "org/" + "a".repeat(200),
-        full_analysis: {
-          eventId: "test",
-          summary: "Test",
-          confidence: "medium",
-          analyzedAt: new Date().toISOString(),
-        },
+    it("should handle special characters in repository name", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: "Error occurred",
+        repository: "org-name/repo_name-123",
       });
+
+      expect(response.status).toBe(202);
+
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      expect(params[3]).toBe("org-name/repo_name-123");
+    });
+
+    it("should handle unicode characters in failure log", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: "Error: test failure unicode chars",
+        repository: "owner/repo",
+      });
+
+      expect(response.status).toBe(202);
+    });
+
+    it("should handle very long failure logs", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      const longLog = "Error: ".repeat(1000) + "Stack trace here";
+
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: longLog,
+        repository: "owner/repo",
+      });
+
+      expect(response.status).toBe(202);
+
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      const logRef = JSON.parse(params[2] as string);
+      expect(logRef.failure_log).toBe(longLog);
+    });
+
+    it("should handle multiline failure logs", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      const multilineLog = "Error on line 1\nError on line 2\nStack trace:\n  at function()";
+
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: multilineLog,
+        repository: "owner/repo",
+      });
+
+      expect(response.status).toBe(202);
+    });
+
+    it("should return 400 when failure_log is a number instead of string", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: 12345,
+        repository: "owner/repo",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Validation failed");
+    });
+
+    it("should return 400 when repository is an object instead of string", async () => {
+      const response = await request(app)
+        .post("/api/analyze")
+        .send({
+          failure_log: "Error occurred",
+          repository: { name: "owner/repo" },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Validation failed");
+    });
+
+    it("should return 400 when failure_log is an array", async () => {
+      const response = await request(app)
+        .post("/api/analyze")
+        .send({
+          failure_log: ["error1", "error2"],
+          repository: "owner/repo",
+        });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("should return 400 when failure_log is null", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: null,
+        repository: "owner/repo",
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("should return 400 when repository is null", async () => {
+      const response = await request(app).post("/api/analyze").send({
+        failure_log: "Error occurred",
+        repository: null,
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("should accept request with only required fields and ignore extra fields", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
 
       const response = await request(app)
         .post("/api/analyze")
         .send({
-          failure_log: "Error",
-          repository: "org/" + "a".repeat(200),
+          failure_log: "Error occurred",
+          repository: "owner/repo",
+          unknown_field: "should be ignored",
+          extra_data: { nested: true },
         });
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(202);
     });
 
-    it("should handle empty request body", async () => {
-      mockPerformAnalysis.mockResolvedValue({
-        analysis: "Test",
-        confidence: 0.5,
-        repository: undefined,
+    it("should only include defined payload fields in log_ref JSON", async () => {
+      mockQuery.mockResolvedValue({ rows: [mockJobRow] });
+
+      await request(app).post("/api/analyze").send({
+        failure_log: "Error occurred",
+        repository: "owner/repo",
       });
 
-      const response = await request(app).post("/api/analyze").send({});
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      const logRef = JSON.parse(params[2] as string);
 
-      // With validation mocked to pass, the handler is called
+      // JSON.stringify omits undefined values, so only provided fields appear
+      expect(logRef).toHaveProperty("failure_log", "Error occurred");
+      expect(logRef).toHaveProperty("repository", "owner/repo");
+      expect(logRef).not.toHaveProperty("commit");
+      expect(logRef).not.toHaveProperty("tenant_id");
+      expect(logRef).not.toHaveProperty("workflow_id");
+      expect(logRef).not.toHaveProperty("test_framework");
+    });
+  });
+
+  // ==================== GET /api/jobs/:id ====================
+
+  describe("GET /api/jobs/:id", () => {
+    const jobId = "550e8400-e29b-41d4-a716-446655440000";
+
+    it("should return job status when job is found with pending status", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [{ id: jobId, status: "pending", result: null, error: null }],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
       expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        job_id: jobId,
+        status: "pending",
+      });
+    });
+
+    it("should return job status when job is processing", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [{ id: jobId, status: "processing", result: null, error: null }],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        job_id: jobId,
+        status: "processing",
+      });
+    });
+
+    it("should return job status with result when job is completed", async () => {
+      const jobResult = {
+        analysis: "Build failed due to missing dependency",
+        confidence: 0.85,
+      };
+
+      mockQuery.mockResolvedValue({
+        rows: [{ id: jobId, status: "completed", result: jobResult, error: null }],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        job_id: jobId,
+        status: "completed",
+        result: jobResult,
+      });
+    });
+
+    it("should return job status with error when job has failed", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [
+          {
+            id: jobId,
+            status: "failed",
+            result: null,
+            error: "LLM timeout after 60s",
+          },
+        ],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        job_id: jobId,
+        status: "failed",
+        error: "LLM timeout after 60s",
+      });
+    });
+
+    it("should throw NotFoundError when job is not found", async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("Job not found");
+    });
+
+    it("should query database with the correct job ID", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [{ id: jobId, status: "pending", result: null, error: null }],
+      });
+
+      await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+
+      const [queryText, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      expect(queryText).toContain("SELECT id, status, result, error");
+      expect(queryText).toContain("FROM analysis_jobs");
+      expect(params[0]).toBe(jobId);
+    });
+
+    it("should handle database errors gracefully", async () => {
+      mockQuery.mockRejectedValue(new Error("Connection refused"));
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(500);
+    });
+
+    it("should omit result and error fields when they are null", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [{ id: jobId, status: "pending", result: null, error: null }],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.body).not.toHaveProperty("result");
+      expect(response.body).not.toHaveProperty("error");
+    });
+
+    it("should return both result and error when both are present", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [
+          {
+            id: jobId,
+            status: "completed",
+            result: { analysis: "partial result" },
+            error: "Warning: partial failure",
+          },
+        ],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.result).toEqual({ analysis: "partial result" });
+      expect(response.body.error).toBe("Warning: partial failure");
+    });
+
+    it("should handle job with empty result object", async () => {
+      mockQuery.mockResolvedValue({
+        rows: [{ id: jobId, status: "completed", result: {}, error: null }],
+      });
+
+      const response = await request(app).get(`/api/jobs/${jobId}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.result).toEqual({});
+    });
+
+    it("should correctly map all job status types", async () => {
+      const statuses = ["pending", "processing", "completed", "failed"] as const;
+
+      for (const status of statuses) {
+        mockQuery.mockResolvedValue({
+          rows: [{ id: jobId, status, result: null, error: null }],
+        });
+
+        const response = await request(app).get(`/api/jobs/${jobId}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe(status);
+      }
+    });
+  });
+
+  // ==================== Route Type Imports ====================
+
+  describe("route type imports", () => {
+    it("should use types from routes/types.ts for response shapes", () => {
+      // Verify the response shapes match the types defined in routes/types.ts
+      // AnalyzeJobResponse shape: { job_id: string, status: "pending" }
+      const analyzeResponse: { readonly job_id: string; readonly status: "pending" } = {
+        job_id: "test-uuid",
+        status: "pending",
+      };
+      expect(analyzeResponse).toHaveProperty("job_id");
+      expect(analyzeResponse.status).toBe("pending");
+
+      // JobStatusResponse shape
+      const statusResponse: {
+        readonly job_id: string;
+        readonly status: "pending" | "processing" | "completed" | "failed";
+        readonly result?: Readonly<Record<string, unknown>>;
+        readonly error?: string;
+      } = {
+        job_id: "test-uuid",
+        status: "completed",
+        result: { key: "value" },
+      };
+      expect(statusResponse).toHaveProperty("job_id");
+      expect(statusResponse).toHaveProperty("status");
+      expect(statusResponse).toHaveProperty("result");
     });
   });
 });

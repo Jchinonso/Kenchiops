@@ -48,10 +48,19 @@ export const HTTP_RESILIENCE_DEFAULTS = {
   CIRCUIT_BREAKER_THRESHOLD: 5,
   /** Circuit breaker reset timeout in milliseconds */
   CIRCUIT_BREAKER_RESET_MS: 30000,
+  /** Successes required to close circuit from half-open */
+  CIRCUIT_BREAKER_SUCCESS_THRESHOLD: 1,
   /** Jitter factor for exponential backoff (0-30%) */
   JITTER_FACTOR: 0.3,
   /** Rate limit check timeout in milliseconds */
   RATE_LIMIT_CHECK_TIMEOUT_MS: 3000,
+} as const;
+
+/** Service keys for circuit breaker integrations. */
+export const CIRCUIT_BREAKER_SERVICE_KEYS = {
+  OPENAI: "openai",
+  GITHUB: "github",
+  SLACK: "slack",
 } as const;
 
 /**

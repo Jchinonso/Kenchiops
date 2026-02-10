@@ -22,7 +22,7 @@ jest.mock("../../core/logger.js", () => ({
 }));
 
 // Mock database functions - using inline mock to avoid hoisting issues
-jest.mock("../../database/feedbackRepository.js", () => ({
+jest.mock("../../database/feedback/repository.js", () => ({
   createRAGFeedback: jest.fn().mockResolvedValue({
     id: "feedback_123",
     analysisId: "analysis-123",

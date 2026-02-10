@@ -2,6 +2,26 @@
  * Queue module - Redis-based message queue and pub/sub.
  */
 
+// Types
+export type {
+  RedisOptions,
+  QueueMessage,
+  ProcessResult,
+  MessageHandler,
+  SubscriptionHandler,
+  QueueConfig,
+  QueueManager,
+  QueueStats,
+  SlackNotificationType,
+  BaseNotificationPayload,
+  ConsolidatedCIFailurePayload,
+  ActionResultPayload,
+  SystemAlertPayload,
+  SlackNotificationPayload,
+  NotificationHandler,
+  WorkerOptions,
+} from "./types.js";
+
 // Redis client
 export {
   getRedisClient,
@@ -9,7 +29,6 @@ export {
   isRedisHealthy,
   waitForRedisConnection,
   closeRedis,
-  type RedisOptions,
 } from "./redisClient.js";
 
 // Message queue
@@ -21,11 +40,6 @@ export {
   slackNotificationQueue,
   githubActionQueue,
   CHANNELS,
-  type QueueMessage,
-  type ProcessResult,
-  type MessageHandler,
-  type SubscriptionHandler,
-  type QueueConfig,
 } from "./messageQueue.js";
 
 // Slack notification processor
@@ -35,10 +49,4 @@ export {
   enqueueSystemAlert,
   startSlackNotificationWorker,
   getSlackNotificationQueueStats,
-  type SlackNotificationType,
-  type ConsolidatedCIFailurePayload,
-  type ActionResultPayload,
-  type SystemAlertPayload,
-  type SlackNotificationPayload,
-  type NotificationHandler,
 } from "./slackNotificationProcessor.js";

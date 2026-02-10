@@ -1,12 +1,12 @@
 /**
  * GitHub Analysis Functions
  *
- * Event creation and OpenAI analysis functions for GitHub webhooks.
+ * Event creation and LLM analysis functions for GitHub webhooks.
  */
 
 import {
   createLogger,
-  OpenAIClient,
+  LLMClient,
   calculateConfidenceScore,
   generateEventId,
   type Event,
@@ -16,6 +16,10 @@ import {
   LLMError,
   getErrorMessage,
   wrapError,
+  // Safety features
+  checkForHallucinations,
+  recordHallucinationDetection,
+  type SafetyRequestContext,
 } from "@kenchi/shared";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
 
@@ -23,18 +27,18 @@ const logger = createLogger("github-app");
 
 // ==================== Singleton Client ====================
 
-/** Singleton OpenAI client */
-let openaiClientInstance: OpenAIClient | null = null;
+/** Singleton LLM client */
+let llmClientInstance: LLMClient | null = null;
 
 /**
- * Get or create the OpenAI client singleton.
+ * Get or create the LLM client singleton.
  */
-export const getOpenAIClient = (): OpenAIClient => {
-  if (!openaiClientInstance) {
-    openaiClientInstance = new OpenAIClient();
-    logger.info("OpenAI client initialized");
+export const getLLMClient = (): LLMClient => {
+  if (!llmClientInstance) {
+    llmClientInstance = new LLMClient();
+    logger.info("LLM client initialized");
   }
-  return openaiClientInstance;
+  return llmClientInstance;
 };
 
 // ==================== Types ====================
@@ -118,11 +122,18 @@ export const createMinimalEvidence = (eventId: string): Evidence => ({
 // ==================== Analysis ====================
 
 /**
- * Perform OpenAI analysis on an event.
+ * Perform LLM analysis on an event.
+ * Includes hallucination detection for safety.
  */
 export const performAnalysis = async (event: Event): Promise<AnalysisResult> => {
+  // Build safety context for audit logging early
+  const safetyContext: SafetyRequestContext = {
+    requestId: event.id,
+    tenantId: "github",
+    actor: "system",
+  };
   const evidence = createMinimalEvidence(event.id);
-  const openaiClient = getOpenAIClient();
+  const llmClient = getLLMClient();
 
   logger.info("Starting analysis", {
     eventId: event.id,
@@ -130,13 +141,41 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
   });
 
   try {
-    const analysis = await openaiClient.analyzeIncident(event, evidence);
+    const analysis = await llmClient.analyzeIncident(event, evidence);
     const confidence = calculateConfidenceScore(analysis, evidence);
+
+    // Check for hallucinations in the analysis using summary and reasoning
+    const textToCheck = [analysis.summary, analysis.reasoning, analysis.identifiedCause]
+      .filter(Boolean)
+      .join(" ");
+    const hallucinationCheck = checkForHallucinations(textToCheck);
+
+    if (hallucinationCheck.isLikelyHallucinated) {
+      logger.warn("Potential hallucination detected in analysis", {
+        eventId: event.id,
+        riskScore: hallucinationCheck.riskScore,
+        indicatorCount: hallucinationCheck.indicators.length,
+      });
+
+      // Record hallucination detection in audit log
+      try {
+        await recordHallucinationDetection(
+          hallucinationCheck.riskScore,
+          hallucinationCheck.indicators.length,
+          safetyContext
+        );
+      } catch (auditError) {
+        logger.error("Failed to record hallucination audit", {
+          error: getErrorMessage(auditError),
+        });
+      }
+    }
 
     logger.info("Analysis completed", {
       eventId: event.id,
       confidence: confidence.finalScore,
       gating: confidence.gatingDecision,
+      hallucinationRisk: hallucinationCheck.riskScore,
     });
 
     return { analysis, confidence, event };

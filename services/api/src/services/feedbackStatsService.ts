@@ -6,20 +6,10 @@
  * @module services/feedbackStatsService
  */
 
-import { query, createLogger, getErrorMessage } from "@kenchi/shared";
+import { query, createLogger, getErrorMessage, SERVICE_NAMES } from "@kenchi/shared";
+import type { FeedbackCounts } from "../types/apiTypes.js";
 
-const logger = createLogger("feedback-stats-service");
-
-// ==================== Types ====================
-
-/**
- * Feedback counts by type.
- */
-export interface FeedbackCounts {
-  readonly helpful: number;
-  readonly not_helpful: number;
-  readonly neutral: number;
-}
+const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== SQL Queries ====================
 

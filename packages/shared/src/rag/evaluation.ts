@@ -14,86 +14,28 @@ import { getErrorMessage } from "../core/errors.js";
 import {
   createRAGFeedback as dbCreateRAGFeedback,
   getRAGFeedbackMetrics as dbGetRAGFeedbackMetrics,
-} from "../database/feedbackRepository.js";
+} from "../database/index.js";
+import type {
+  RAGFeedbackInput,
+  RAGEvaluationMetrics,
+  RetrievalResult,
+  RAGTestCase,
+  RAGTestResult,
+  FeedbackResult,
+  SearchFunction,
+} from "./types.js";
+
+export type {
+  RAGRelevance,
+  RAGFeedbackInput,
+  RAGEvaluationMetrics,
+  RetrievalResult,
+  RAGTestCase,
+  RAGTestResult,
+  FeedbackResult,
+} from "./types.js";
 
 const logger = createLogger("rag-evaluation");
-
-// ==================== Types ====================
-
-/**
- * RAG relevance feedback from user.
- */
-export type RAGRelevance = "helpful" | "not_helpful" | "partially_helpful";
-
-/**
- * Input for recording RAG feedback.
- */
-export interface RAGFeedbackInput {
-  readonly analysisId: string;
-  readonly knowledgeDocId: string;
-  readonly relevance: RAGRelevance;
-  readonly retrievalSimilarity: number;
-  readonly retrievalRank: number;
-  readonly userId: string;
-  readonly slackChannel?: string;
-  readonly slackMessageTs?: string;
-}
-
-/**
- * Aggregated RAG metrics for a time period.
- */
-export interface RAGEvaluationMetrics {
-  readonly totalFeedback: number;
-  readonly helpfulCount: number;
-  readonly notHelpfulCount: number;
-  readonly partiallyHelpfulCount: number;
-  readonly helpfulRate: number;
-  readonly recallAtK: Record<number, number>;
-  readonly mrr: number;
-  readonly averageSimilarity: number;
-  readonly timestamp: string;
-}
-
-/**
- * Retrieval result for metrics calculation.
- */
-export interface RetrievalResult {
-  readonly docId: string;
-  readonly similarity: number;
-  readonly rank: number;
-  readonly isRelevant: boolean;
-}
-
-/**
- * Ground truth for regression testing.
- */
-export interface RAGTestCase {
-  readonly testId: string;
-  readonly queryText: string;
-  readonly expectedDocIds: readonly string[];
-  readonly repository?: string;
-  readonly eventType?: string;
-}
-
-/**
- * Result of running a RAG test case.
- */
-export interface RAGTestResult {
-  readonly testId: string;
-  readonly passed: boolean;
-  readonly recallAt1: number;
-  readonly recallAt3: number;
-  readonly recallAt5: number;
-  readonly retrievedDocIds: readonly string[];
-}
-
-/**
- * Result of recording feedback.
- */
-export interface FeedbackResult {
-  readonly success: boolean;
-  readonly error?: string;
-}
 
 // ==================== Metrics Calculation ====================
 
@@ -211,11 +153,6 @@ export const recordRAGFeedback = async (input: RAGFeedbackInput): Promise<Feedba
 };
 
 // ==================== Regression Testing ====================
-
-/**
- * Search function type for test execution.
- */
-type SearchFunction = (query: string, repository?: string) => Promise<readonly RetrievalResult[]>;
 
 /**
  * Runs a RAG test case and returns results.

@@ -3,6 +3,42 @@
  * Re-exports all constants from their respective modules.
  */
 
+// Centralized type definitions
+export type {
+  ArtifactType,
+  ArtifactSeverity,
+  ArtifactConfidence,
+  CIPlatformType,
+  BoundaryType,
+  ProtectedZoneType,
+  MessageVariant,
+  FineTuningStatus,
+  EventType,
+  EventSource,
+  EventSeverity,
+  LogLevel,
+  EvidenceSource,
+  ConfidenceRange,
+  DerivedConfidenceLevel,
+  UncertaintyPattern,
+  RelevanceRule,
+  RiskLevel,
+  RiskRuleCategory,
+  SecretPattern,
+  KnowledgeDocType,
+  RelationshipType,
+  ExternalSourceType,
+  TechStackTag,
+  EmbeddingTierName,
+  RAGMetricType,
+  EvidenceKnowledgeDocType,
+  CacheNamespace,
+  HealthStatus,
+  ApiResponseStatus,
+  NumericPriority,
+  StringPriority,
+} from "./types.js";
+
 // Confidence scoring constants
 export {
   CONFIDENCE_THRESHOLDS,
@@ -14,6 +50,7 @@ export {
   COMPLETENESS_ADJUSTMENTS,
   VALIDATION_ADJUSTMENTS,
   CONSISTENCY_ADJUSTMENTS,
+  SHOTGUN_LIST_THRESHOLDS,
   SIMILARITY_THRESHOLDS,
   RELEVANCE_THRESHOLDS,
   MIN_LENGTHS,
@@ -23,8 +60,13 @@ export {
   CONTEXT_CONFIDENCE_ADJUSTMENTS,
   CONFIDENCE_DISPLAY_THRESHOLDS,
   CONFIDENCE_LEVEL_THRESHOLDS,
-  type ConfidenceRange,
-  type DerivedConfidenceLevel,
+  SCORING_VERSION,
+  FACTOR_BOUNDS,
+  FACTOR_WEIGHTS,
+  TEXT_LIMITS,
+  EMPTY_ANALYSIS_MAX_SCORE,
+  MAX_WEIGHTED_ADJUSTMENT,
+  LOG_VALUE_MAX_LENGTH,
 } from "./confidence.js";
 
 // HTTP and error constants
@@ -49,11 +91,6 @@ export {
   LOG_LEVELS,
   EVIDENCE_SOURCES,
   EVENT_DEFAULTS,
-  type EventType,
-  type EventSource,
-  type EventSeverity,
-  type LogLevel,
-  type EvidenceSource,
 } from "./events.js";
 
 // Time, ports, and rate limiting
@@ -85,6 +122,12 @@ export {
   DEFAULT_VALIDATION_ERROR_MESSAGE,
   DANGEROUS_KEYWORDS,
   DANGEROUS_KEYWORDS_PATTERN,
+  HALLUCINATION_CONFIG,
+  HALLUCINATION_TEXT_THRESHOLDS,
+  CLAIM_STOPWORDS,
+  SANITIZATION_CONFIG,
+  COMMAND_RISK_THRESHOLDS,
+  INPUT_VALIDATION_LIMITS,
 } from "./validation.js";
 
 // Safety analysis constants
@@ -93,10 +136,36 @@ export {
   METRIC_KEYWORDS,
   INVALID_CAUSE_KEYWORDS,
   RELEVANCE_RULES,
+  GENERIC_REMEDIATION_KEYWORDS,
   AUTO_APPROVABLE_SAFETY_LEVELS,
   SAFETY_MESSAGES,
-  type UncertaintyPattern,
-  type RelevanceRule,
+  // Audit constants
+  AUDIT_DEFAULT_QUERY_LIMIT,
+  AUDIT_MAX_IN_MEMORY_ENTRIES,
+  // Prompt injection constants
+  INJECTION_RISK_THRESHOLDS,
+  INJECTION_MAX_WEIGHT_PER_TYPE,
+  INJECTION_CODE_FENCE_WEIGHT_MULTIPLIER,
+  // Hallucination constants
+  HALLUCINATION_DEFAULT_THRESHOLD,
+  HALLUCINATION_RISK_WEIGHTS,
+  HALLUCINATION_PATTERNS,
+  CLAIM_PATTERNS,
+  TEMPORAL_PATTERN,
+  HALLUCINATION_CONFIDENCE_THRESHOLDS,
+  // Risk scoring constants
+  ACTION_RISK_WEIGHTS,
+  BLAST_RADIUS_SCORES,
+  REVERSIBILITY_SCORES,
+  DATA_IMPACT_SCORES,
+  DEFAULT_ACTION_RISK,
+  // Context-aware risk scoring constants
+  CONTEXT_MULTIPLIERS,
+  OFF_HOURS_CONFIG,
+  PLATFORM_THRESHOLDS,
+  CONTEXT_MULTIPLIER_BOUNDS,
+  RISK_SCORING_VERSION,
+  RISK_LEVEL_THRESHOLDS,
 } from "./safety.js";
 
 // GitHub constants
@@ -123,6 +192,10 @@ export {
   TEXT_SANITIZATION_PATTERNS,
   SHORT_COMMIT_SHA_LENGTH,
   PR_CONTEXT_CORRELATION,
+  SKIP_DIRECTORY_PREFIXES,
+  ABSOLUTE_PATH_SKIP_DIRS,
+  ABSOLUTE_PATH_PATTERN,
+  ACTION_REVIEW_PATTERNS,
 } from "./github.js";
 
 // Evidence parsing constants
@@ -133,16 +206,18 @@ export {
   EVIDENCE_TEXT_LIMITS,
 } from "./evidence.js";
 
-// OpenAI and text processing constants
+// LLM provider constants
 export {
-  OPENAI_DEFAULTS,
-  OPENAI_CONSTANTS,
+  LLM_DEFAULTS,
+  OPENROUTER_DEFAULTS,
+  LLM_CONSTANTS,
   EVIDENCE_TRUNCATION,
   MATCHING_CONFIG,
   SHA_PATTERN,
   SHA_PATTERN_SINGLE,
   QUOTED_TEXT_PATTERN,
-  OPENAI_MESSAGES,
+  LOG_NORMALIZATION_PATTERNS,
+  LLM_MESSAGES,
   TENANT_PROMPT_LIMITS,
   MODEL_VERSIONING,
   DATASET_THRESHOLDS,
@@ -150,8 +225,7 @@ export {
   FINE_TUNING_STATUS,
   FINE_TUNING_READINESS,
   FINE_TUNING_SCHEDULER,
-  type FineTuningStatus,
-} from "./openai.js";
+} from "./llm.js";
 
 // RAG constants
 export {
@@ -170,18 +244,24 @@ export {
   DRIFT_DETECTION_THRESHOLDS,
   RAG_JOB_INTERVALS,
   RAG_EVALUATION_CONFIG,
+  RAG_QUERY_DEFAULTS,
   RAG_TEST_CASE_CONFIG,
   EMBEDDING_TIERS,
   COST_CONTROL_CONFIG,
+  VALID_EMBEDDING_TIERS,
   RAG_METRIC_TYPES,
-  type KnowledgeDocType,
-  type RelationshipType,
-  type ExternalSourceType,
-  type TechStackTag,
-  type EmbeddingTierName,
-  type RAGMetricType,
-  type EvidenceKnowledgeDocType,
   RAG_TO_EVIDENCE_DOC_TYPE_MAP,
+  RANKING_WEIGHTS,
+  RECENCY_CONFIG,
+  METADATA_BOOSTS,
+  SEARCH_CONSTANTS,
+  RELATIONSHIP_STRENGTH_WEIGHTS,
+  ALERT_CONSTANTS,
+  GOVERNANCE_CONSTANTS,
+  METRICS_CONSTANTS,
+  RESOLUTION_CONFIDENCE_THRESHOLDS,
+  INGESTION_DEFAULTS,
+  DEFAULT_TIER_CONFIG_VALUES,
 } from "./ragConstants.js";
 
 // Secret detection constants
@@ -190,7 +270,6 @@ export {
   REDACTION_DEFAULTS,
   SECRET_PATTERNS,
   FORBIDDEN_FIELDS,
-  type SecretPattern,
 } from "./secrets.js";
 
 // Slack-specific constants
@@ -205,7 +284,12 @@ export {
 export { DATABASE_POOL_DEFAULTS, QUERY_LOGGING, TRANSACTION_COMMANDS } from "./database.js";
 
 // Action executor constants
-export { ACTION_MESSAGES } from "./actions.js";
+export {
+  ACTION_MESSAGES,
+  ACTION_STORE_CONFIG,
+  ACTION_TOKEN_CONFIG,
+  ACTION_CHAR_SETS,
+} from "./actions.js";
 
 // Tenant constants
 export {
@@ -213,11 +297,26 @@ export {
   AUDIT_ACTIONS,
   AUDIT_DEFAULTS,
   TENANT_DEFAULTS,
+  RAG_BUDGET_DEFAULTS,
   TENANT_QUERIES,
   AUDIT_QUERIES,
   TENANT_FIELD_MAP,
   AUDIT_FIELD_MAP,
 } from "./tenant.js";
+
+// Action proposal constants
+export {
+  ACTION_PROPOSAL_DEFAULTS,
+  ACTION_PROPOSAL_QUERIES,
+  VALID_ACTION_PROPOSAL_STATUSES,
+  MIN_STATS_WINDOW_MINUTES,
+} from "./actionProposal.js";
+
+// Analysis constants
+export { ANALYSIS_DEFAULTS, ANALYSIS_QUERIES } from "./analysis.js";
+
+// Cost tracking constants
+export { COST_TRACKING_DEFAULTS, COST_TRACKING_QUERIES } from "./costTracking.js";
 
 // Core module constants
 export {
@@ -228,10 +327,14 @@ export {
   HEX_RADIX,
   HEX_BYTE_WIDTH,
   HTTP_RESILIENCE_DEFAULTS,
+  CIRCUIT_BREAKER_SERVICE_KEYS,
   RETRYABLE_HTTP_STATUS_CODES,
   RETRYABLE_NETWORK_ERRORS,
   ID_GENERATION,
 } from "./core.js";
+
+// LLM concurrency constants
+export { LLM_CONCURRENCY_DEFAULTS } from "./llmConcurrency.js";
 
 // Redis constants
 export {
@@ -240,6 +343,7 @@ export {
   REDIS_LIST_OPS,
   REDIS_TTL_VALUES,
   REDIS_SCAN,
+  RATE_LIMIT_LUA_SCRIPT,
   REDIS_TIMEOUTS,
   REDIS_CONNECTION_DEFAULTS,
   RETRYABLE_ERROR_PATTERNS,
@@ -248,8 +352,20 @@ export {
   REDIS_KEY_PREFIXES,
   CACHE_KEY_STRUCTURE,
   CACHE_NAMESPACES,
+  ANALYSIS_HASH_ALGORITHM,
+  ANALYSIS_CACHE_VERSION,
+  CACHE_KEY_SEGMENT_INDICES,
+  MIN_CACHE_KEY_SEGMENTS,
+  CACHE_KEY_SEPARATOR,
+  REPO_SLASH_REPLACEMENT,
+  CHECK_NAME_WHITESPACE_PATTERN,
+  REDIS_READY_STATUS,
+  REDIS_KEY_EXISTS,
+  CACHE_TTL_ERROR_DEFAULT,
   QUEUE_WORKER_DEFAULTS,
   AGGREGATION_DEFAULTS,
+  AGGREGATION_KEY_PATTERN,
+  AGGREGATION_METADATA_FIELDS,
   DISPLAY_DEFAULTS,
   RETRY_DEFAULTS,
   QUEUE_CONFIG,
@@ -257,7 +373,6 @@ export {
   QUEUE_VISIBILITY_TIMEOUT,
   QUEUE_NAMES,
   PUBSUB_CHANNELS,
-  type CacheNamespace,
 } from "./redis.js";
 
 // API service constants
@@ -274,8 +389,8 @@ export {
   API_LOG_LIMITS,
   API_REQUEST_FIELDS,
   shouldSkipRateLimit,
-  type HealthStatus,
-  type ApiResponseStatus,
+  API_PAGINATION_DEFAULTS,
+  GITHUB_API_CONFIG,
 } from "./api.js";
 
 // Slack Bot service constants
@@ -309,8 +424,6 @@ export {
   isDocIngestionRequest,
   SLACK_UI_ERROR_MESSAGES,
   DOC_INGESTION_ERROR_CODES,
-  type NumericPriority,
-  type StringPriority,
 } from "./slackBot.js";
 
 // GitHub App service constants
@@ -326,11 +439,12 @@ export {
   GITHUB_COMMENT_TEMPLATES,
   SLACK_FAILURE_TEMPLATES,
   FORMATTER_DISPLAY_LIMITS,
+  CONFIDENCE_DESCRIPTIONS,
+  CATEGORY_EMOJI,
   MESSAGE_VARIANT_CONFIG,
   GITHUB_RETRY_CONFIG,
   GITHUB_PAGINATION,
   CONTEXT_FETCH_CONFIG,
-  type MessageVariant,
 } from "./githubApp.js";
 
 // Passive learning constants
@@ -360,8 +474,10 @@ export {
 export {
   TOKEN_ESTIMATION,
   CHUNKING_DEFAULTS,
+  PROTECTED_ZONE_CONFIG,
   PROTECTED_ZONE_PATTERNS,
   NATURAL_BOUNDARY_PATTERNS,
+  ASSERTION_HASH_CONFIG,
   EXTRACTION_DEFAULTS,
   ARTIFACT_TYPES,
   ARTIFACT_PRIORITY_WEIGHTS,
@@ -381,10 +497,68 @@ export {
   PROGRESS_INDICATOR_PATTERNS,
   BOUNDARY_TYPES,
   PROTECTED_ZONE_TYPES,
-  type ArtifactType,
-  type ArtifactSeverity,
-  type ArtifactConfidence,
-  type BoundaryType,
-  type ProtectedZoneType,
-  type CIPlatformType,
+  EVIDENCE_ID_PATTERN,
+  TRUNCATION_MARKER,
+  ANCHOR_TIERS,
+  TEST_SUMMARY_PATTERNS,
+  TEST_FRAMEWORK_CONFIDENCE,
 } from "./chunkingPipeline.js";
+
+// Diff chunk constants
+export { DIFF_CHUNK_DEFAULTS, DIFF_CHUNK_QUERIES } from "./diffChunk.js";
+
+// External source constants
+export { EXTERNAL_SOURCE_DEFAULTS, EXTERNAL_SOURCE_QUERIES } from "./externalSource.js";
+
+// Feedback constants
+export { FEEDBACK_DEFAULTS, FEEDBACK_QUERIES } from "./feedback.js";
+
+// Dataset extractor constants
+export { EXTRACTION_QUERIES, VALIDATION_CHECKS } from "./datasetExtractor.js";
+
+// Knowledge document hit tracking constants
+export { HIT_TRACKING_DEFAULTS, HIT_TRACKING_QUERIES } from "./knowledgeDocHitTracking.js";
+
+// Knowledge document repository constants
+export { KNOWLEDGE_DOC_DEFAULTS, KNOWLEDGE_DOC_QUERIES } from "./knowledgeDocRepository.js";
+
+// Metrics history constants
+export { METRICS_HISTORY_DEFAULTS, METRICS_HISTORY_QUERIES } from "./metricsHistory.js";
+
+// Model version constants
+export { MODEL_VERSION_DEFAULTS, MODEL_VERSION_QUERIES } from "./modelVersion.js";
+
+// Relationship constants
+export { RELATIONSHIP_DEFAULTS, RELATIONSHIP_QUERIES } from "./relationship.js";
+
+// Test case constants
+export { TEST_CASE_DEFAULTS, TEST_CASE_QUERIES } from "./testCase.js";
+
+// Repository channel constants
+export { REPOSITORY_CHANNEL_QUERIES } from "./repositoryChannel.js";
+
+// Structured data parsing constants
+export {
+  VALID_DEP_CHANGE_TYPES,
+  VALID_CONFIG_CHANGE_TYPES,
+  TEST_NAME_FIELDS,
+  ERROR_MESSAGE_FIELDS,
+  EXPECTED_VALUE_FIELDS,
+  ACTUAL_VALUE_FIELDS,
+  VALID_ARTIFACT_CONFIDENCE,
+  VALID_ARTIFACT_CATEGORY,
+  VALID_ARTIFACT_PHASE,
+} from "./structuredData.js";
+
+// Formatting and text processing constants
+export {
+  MAX_MESSAGE_LENGTH,
+  MAX_SNIPPET_LENGTH,
+  MAX_RAW_LOG_PREVIEW_LENGTH,
+  MAX_SNIPPET_LENGTH_TRUNCATED,
+  TRUNCATE_HEAD_RATIO,
+  MIN_MIDDLE_TRUNCATE_LENGTH,
+  TRUNCATE_MARKER,
+  CHARS_PER_TOKEN,
+  PERCENTAGE_MULTIPLIER,
+} from "./formatting.js";

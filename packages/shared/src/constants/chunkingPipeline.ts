@@ -7,6 +7,8 @@
  * @module constants/chunkingPipeline
  */
 
+import type { ArtifactType } from "./types.js";
+
 // ==================== Line Number Convention ====================
 
 /**
@@ -55,11 +57,26 @@ export const CHUNKING_DEFAULTS = {
   OVERLAP_LINES: 40,
   /** Maximum chunks to prevent runaway processing */
   MAX_CHUNKS: 100,
-  /** Skip chunking for logs below this token count */
-  SMALL_LOG_THRESHOLD: 3500,
+  /**
+   * Skip chunking for logs below this token count.
+   * Logs under this threshold are small enough for a single LLM call.
+   * Larger logs benefit from parallel chunk extraction (~15 concurrent 3K-token calls
+   * is much faster than a single 90K-token call).
+   */
+  SMALL_LOG_THRESHOLD: 30000,
 } as const;
 
 // ==================== Protected Zone Detection ====================
+
+/**
+ * Configuration for protected zone detection.
+ */
+export const PROTECTED_ZONE_CONFIG = {
+  /** Maximum characters to include in zone description */
+  MAX_DESCRIPTION_LENGTH: 80,
+  /** Number of lines to look ahead for context */
+  LOOKAHEAD_LINES: 10,
+} as const;
 
 /**
  * Patterns for detecting protected zones that should not be split.
@@ -146,17 +163,27 @@ export const NATURAL_BOUNDARY_PATTERNS = {
 // ==================== Extraction Configuration ====================
 
 /**
+ * Configuration for assertion hash generation.
+ */
+export const ASSERTION_HASH_CONFIG = {
+  /** Hash algorithm to use */
+  ALGORITHM: "sha256",
+  /** Length of hash to return (first N hex characters) */
+  HASH_LENGTH: 16,
+} as const;
+
+/**
  * Chunk extraction configuration for Stage 2.
  */
 export const EXTRACTION_DEFAULTS = {
-  /** Maximum parallel extraction requests */
-  CONCURRENCY: 5,
+  /** Maximum parallel extraction requests (increased from 5 for better throughput) */
+  CONCURRENCY: 15,
   /** Timeout per extraction request in milliseconds */
   TIMEOUT_MS: 10000,
   /** Retry delay after timeout in milliseconds */
-  RETRY_DELAY_MS: 5000,
+  RETRY_DELAY_MS: 2000,
   /** Maximum artifacts to extract per chunk */
-  MAX_ARTIFACTS_PER_CHUNK: 20,
+  MAX_ARTIFACTS_PER_CHUNK: 100,
   /** Abort threshold - fail if this fraction of chunks fail */
   CHUNK_FAILURE_THRESHOLD: 0.5,
 } as const;
@@ -223,8 +250,6 @@ export const ARTIFACT_TYPES = {
   GENERIC_ERROR: "generic_error",
 } as const;
 
-export type ArtifactType = (typeof ARTIFACT_TYPES)[keyof typeof ARTIFACT_TYPES];
-
 /**
  * Priority weights for artifact ranking.
  * Higher weight = more likely to be root cause.
@@ -275,8 +300,6 @@ export const ARTIFACT_SEVERITY = {
   WARNING: "warning",
 } as const;
 
-export type ArtifactSeverity = (typeof ARTIFACT_SEVERITY)[keyof typeof ARTIFACT_SEVERITY];
-
 /**
  * Confidence levels for extracted artifacts.
  */
@@ -286,8 +309,6 @@ export const ARTIFACT_CONFIDENCE = {
   LOW: "low",
 } as const;
 
-export type ArtifactConfidence = (typeof ARTIFACT_CONFIDENCE)[keyof typeof ARTIFACT_CONFIDENCE];
-
 // ==================== Aggregation Configuration ====================
 
 /**
@@ -296,7 +317,7 @@ export type ArtifactConfidence = (typeof ARTIFACT_CONFIDENCE)[keyof typeof ARTIF
  */
 export const CHUNKING_AGGREGATION_DEFAULTS = {
   /** Maximum artifacts to pass to final analysis */
-  MAX_FINAL_ARTIFACTS: 25,
+  MAX_FINAL_ARTIFACTS: 50,
   /** Length of signature hash to use (first N chars of hash) */
   SIGNATURE_HASH_LENGTH: 16,
   /** Bit shift for simple hash function (standard djb2 variant) */
@@ -453,8 +474,6 @@ export const CI_PLATFORMS = {
   UNKNOWN: "unknown",
 } as const;
 
-export type CIPlatformType = (typeof CI_PLATFORMS)[keyof typeof CI_PLATFORMS];
-
 /**
  * Patterns for detecting CI platform from log content.
  */
@@ -507,8 +526,6 @@ export const BOUNDARY_TYPES = {
   OVERLAP: "overlap",
 } as const;
 
-export type BoundaryType = (typeof BOUNDARY_TYPES)[keyof typeof BOUNDARY_TYPES];
-
 // ==================== Protected Zone Types ====================
 
 /**
@@ -521,4 +538,72 @@ export const PROTECTED_ZONE_TYPES = {
   CI_GROUP: "ci_group",
 } as const;
 
-export type ProtectedZoneType = (typeof PROTECTED_ZONE_TYPES)[keyof typeof PROTECTED_ZONE_TYPES];
+// ==================== Evidence ID Parsing ====================
+
+/**
+ * Pattern for parsing evidence IDs with named capture groups.
+ * Matches format: chunk#<chunkId>:L<startLine>-L<endLine>
+ */
+export const EVIDENCE_ID_PATTERN = /chunk#(?<chunkId>\d+):L(?<startLine>\d+)-L(?<endLine>\d+)/;
+
+// ==================== Anchor Selection Configuration ====================
+
+/**
+ * Truncation marker for truncated log content.
+ */
+export const TRUNCATION_MARKER = "... [truncated] ..." as const;
+
+/**
+ * Anchor tier weights for log truncation.
+ * Higher tier = higher priority (lower number).
+ */
+export const ANCHOR_TIERS = {
+  /** Test summary at end of output (highest priority) */
+  SUMMARY: 0,
+  /** Explicit CI failure boundaries (##[error], exit codes) */
+  CI_BOUNDARY: 1,
+  /** Infrastructure killers (OOM, timeout, disk full, DNS) */
+  INFRA_KILLER: 2,
+  /** Stack traces, exceptions, assertions */
+  STACK_TRACE: 3,
+  /** Generic error indicators (ERROR level, build failures) */
+  GENERIC_ERROR: 4,
+  /** Simple string fallback (ERROR, FAILED) */
+  FALLBACK: -1,
+} as const;
+
+/**
+ * Test/run summary patterns - language-agnostic structural markers.
+ * These patterns detect "end-of-run summary" lines across common CI runners.
+ * Kept generic: match structural shapes, not specific framework output.
+ */
+export const TEST_SUMMARY_PATTERNS: readonly RegExp[] = [
+  // Jest/Vitest style: "Tests: X failed", "Test Suites: X failed"
+  /Tests?(?:\s+Suites?)?:\s*\d+\s+(?:failed|passed)/gi,
+  // pytest style: "===== X failed, Y passed in Zs =====" (structural equals bars)
+  /={3,}\s*\d+\s+(?:failed|passed).*={3,}/gi,
+  // Generic count summaries: "X failed, Y passed" or "X failures, Y successes"
+  /\d+\s+(?:failed|failures?),?\s+\d+\s+(?:passed|success)/gi,
+  // Go test style: "FAIL\t<pkg>" at end, or "ok\t<pkg>"
+  /^(?:FAIL|ok)\t\S+\s+[\d.]+s$/gim,
+  // Rust/cargo style: "test result: FAILED" or "test result: ok"
+  /test result:\s*(?:FAILED|ok)\.\s+\d+\s+passed/gi,
+  // Generic "X tests?, Y failures?" summaries
+  /\d+\s+tests?,\s*\d+\s+(?:failures?|errors?)/gi,
+  // CI runner summaries: "Ran X tests" type lines
+  /Ran\s+\d+\s+tests?\s+in\s+[\d.]+/gi,
+] as const;
+
+// ==================== Test Framework Detection Configuration ====================
+
+/**
+ * Confidence score adjustments for test framework detection.
+ */
+export const TEST_FRAMEWORK_CONFIDENCE = {
+  /** Bonus for each additional pattern match */
+  MULTI_MATCH_BONUS: 0.1,
+  /** Maximum confidence cap */
+  MAX_CONFIDENCE: 0.95,
+  /** Minimum confidence threshold */
+  MIN_CONFIDENCE: 0.5,
+} as const;

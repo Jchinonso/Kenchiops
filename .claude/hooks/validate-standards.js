@@ -36,7 +36,6 @@ const EXCLUDED_PATHS = new Set([
  */
 const SHARED_UTILITIES = new Set([
   "createLogger",
-  // Note: "logger" is NOT here because `const logger = createLogger(...)` is the correct pattern
   "config",
   "errorHandler",
   "asyncHandler",
@@ -51,6 +50,16 @@ const SHARED_UTILITIES = new Set([
   "deduplicateByKey",
   "getErrorMessage",
   "shouldExcludePath",
+  "httpClient",
+  "fetchWithTimeout",
+  "withRetry",
+  "classifyHttpError",
+  "startTimer",
+  "redactSecrets",
+  "truncate",
+  "invariant",
+  "assertUnreachable",
+  "idempotencyStore",
 ]);
 
 /**
@@ -60,9 +69,11 @@ const SHARED_ERROR_CLASSES = new Set([
   "AppError",
   "ValidationError",
   "AuthenticationError",
+  "AuthorizationError",
   "NotFoundError",
   "ExternalServiceError",
   "LLMError",
+  "RateLimitError",
 ]);
 
 /**
@@ -79,7 +90,21 @@ const SHARED_TYPES = new Set([
   "CodeAnnotation",
   "RecommendedAction",
   "TestFailure",
+  "RequestContext",
+  "HttpResponse",
+  "ClassifiedError",
 ]);
+
+/**
+ * Vendor SDKs that should NOT be imported in services
+ */
+const VENDOR_SDK_PATTERNS = [
+  "@octokit",
+  "@slack/",
+  "openai",
+  "node-fetch",
+  "axios",
+];
 
 // ==================== Validation Rules ====================
 
@@ -134,6 +159,28 @@ const VALIDATION_RULES = [
     skipInShared: true,
   },
 
+  // ==================== Vendor SDK Restrictions ====================
+
+  // Vendor SDK imports in services (not adapters)
+  {
+    id: "vendor-sdk-in-service",
+    pattern: /import\s+(?:type\s+)?(?:\{[^}]*\}|[^{}\s]+)\s+from\s+['"](?:@octokit|@slack\/|openai|node-fetch|axios)[^'"]*['"]/g,
+    message: "Vendor SDKs not allowed in services - use adapters or shared httpClient",
+    extract: () => "Found vendor SDK import in service - move to adapter layer",
+    onlyInServices: true,
+    skipInAdapters: true,
+  },
+
+  // Direct fetch calls (should use httpClient)
+  {
+    id: "direct-fetch",
+    pattern: /(?<!http(?:Client|s?)\.)\bfetch\s*\(/g,
+    message: "Use shared httpClient instead of direct fetch calls",
+    extract: () => "Found direct fetch() call - use httpClient from @kenchi/shared",
+    skipInShared: true,
+    skipInAdapters: true,
+  },
+
   // ==================== TypeScript Standards ====================
 
   // any type usage
@@ -170,22 +217,56 @@ const VALIDATION_RULES = [
     extract: () => "Found .catch() - use try/catch with async/await instead",
   },
 
-  // ==================== Code Quality - Loops ====================
+  // ==================== Error Handling ====================
 
-  // for loops
+  // Plain Error throw (should use typed errors)
   {
-    id: "for-loop",
-    pattern: /\bfor\s*\(/g,
-    message: "Use functional array methods (map, filter, reduce, forEach) instead of for loops",
-    extract: () => "Found for loop - use functional array methods (map, filter, reduce, forEach)",
+    id: "plain-error-throw",
+    pattern: /throw\s+new\s+Error\s*\(/g,
+    message: "Use typed errors (ValidationError, NotFoundError, etc.) instead of plain Error. Exception: invariant() for programmer bugs",
+    extract: () => "Found 'throw new Error()' - use typed errors from @kenchi/shared",
+    skipInTests: true,
   },
 
-  // while loops
+  // Empty catch blocks
   {
-    id: "while-loop",
-    pattern: /\bwhile\s*\(/g,
-    message: "Use recursion or functional patterns instead of while loops",
-    extract: () => "Found while loop - use recursion or functional patterns",
+    id: "empty-catch-block",
+    pattern: /catch\s*\([^)]*\)\s*\{\s*\}/g,
+    message: "Empty catch blocks swallow errors - handle or rethrow",
+    extract: () => "Found empty catch block - add error handling or rethrow",
+  },
+
+  // ==================== RequestContext Propagation ====================
+
+  // Service methods missing context parameter
+  {
+    id: "service-missing-context",
+    pattern: /export\s+(?:const|async\s+function)\s+\w+\s*=?\s*async\s*\([^)]*\)\s*(?::\s*Promise)?[^{]*\{(?![\s\S]{0,200}context)/g,
+    message: "Service methods doing I/O should accept RequestContext as last parameter",
+    extract: () => "Found async function without context parameter - add RequestContext",
+    onlyInServices: true,
+    skipInTests: true,
+  },
+
+  // ==================== External Call Logging ====================
+
+  // External call log missing durationMs
+  {
+    id: "missing-duration-ms",
+    pattern: /logger\.(info|error|warn)\s*\(\s*["'`][^"'`]*(?:call|request|response|api|external)[^"'`]*["'`]\s*,\s*\{(?![\s\S]{0,150}durationMs)[^}]*\}/gi,
+    message: "External call logs must include durationMs",
+    extract: () => "Found external call log without durationMs - add timing measurement",
+    skipInTests: true,
+  },
+
+  // External call log missing provider
+  {
+    id: "missing-provider",
+    pattern: /logger\.(info|error|warn)\s*\(\s*["'`][^"'`]*(?:call|request|response|api|external)[^"'`]*["'`]\s*,\s*\{(?![\s\S]{0,100}provider)[^}]*\}/gi,
+    message: "External call logs must include provider field",
+    extract: () => "Found external call log without provider - add provider: 'github'|'slack'|'openai'",
+    skipInTests: true,
+    onlyInAdapters: true,
   },
 
   // ==================== Naming Conventions ====================
@@ -196,14 +277,6 @@ const VALIDATION_RULES = [
     pattern: /\.(map|filter|reduce|forEach|some|every|find|findIndex|flatMap|sort)\s*\(\s*\(([a-zA-Z])\s*[,)]/g,
     message: "Use descriptive callback parameter names instead of single letters",
     extract: (match) => `Found single-letter '${match[2]}' in .${match[1]}() - use descriptive name`,
-  },
-
-  // Single-letter parameters in arrow functions
-  {
-    id: "single-letter-arrow-param",
-    pattern: /(?:const|let|var)\s+\w+\s*=\s*\(([a-zA-Z])\s*(?::[^)]+)?\)\s*(?::\s*[^=]+)?\s*=>/g,
-    message: "Use descriptive parameter names in arrow functions",
-    extract: (match) => `Found single-letter '${match[1]}' parameter - use descriptive name`,
   },
 
   // Single-letter reduce accumulator
@@ -236,19 +309,49 @@ const VALIDATION_RULES = [
     skipInShared: true,
   },
 
-  // ==================== Inline Emojis ====================
+  // ==================== Webhook Replay Protection ====================
 
-  // Common emojis that should use UI_EMOJI
+  // Webhook handler without delivery ID check
   {
-    id: "inline-emoji",
-    pattern: /["'`][^"'`]*[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}][^"'`]*["'`]/gu,
-    message: "Use UI_EMOJI constants from @kenchi/shared instead of inline emojis",
-    extract: () => "Found inline emoji - use UI_EMOJI from @kenchi/shared",
-    skipInConstants: true,
-    skipInShared: true,
+    id: "webhook-missing-idempotency",
+    pattern: /(?:handleWebhook|webhookHandler|processWebhook)\s*=\s*(?:async\s*)?\([^)]*\)\s*(?::\s*[^=>{]*)?=>\s*\{(?![\s\S]{0,300}(?:deliveryId|delivery_id|eventId|event_id|idempotency))/gi,
+    message: "Webhook handlers must check delivery ID for replay protection",
+    extract: () => "Found webhook handler without replay protection - add delivery ID check",
+    skipInTests: true,
   },
 
-  // ==================== Separation of Concerns ====================
+  // ==================== Secrets & PII ====================
+
+  // Logging raw request body
+  {
+    id: "logging-raw-body",
+    pattern: /logger\.\w+\s*\([^,]+,\s*\{[^}]*(?:body:\s*req\.body|payload:\s*(?:req\.body|event|webhook))[^}]*\}/g,
+    message: "Never log raw request body - extract only needed fields or use redactSecrets()",
+    extract: () => "Found raw body logging - extract specific fields or use redactSecrets()",
+    skipInTests: true,
+  },
+
+  // Potential hardcoded secrets
+  {
+    id: "hardcoded-secret",
+    pattern: /(?:password|secret|apiKey|api_key|token|auth)\s*[:=]\s*["'][^"']{8,}["']/gi,
+    message: "Never hardcode secrets - use environment variables",
+    extract: () => "Found potential hardcoded secret - use environment variables",
+  },
+
+  // ==================== Console Usage ====================
+
+  // Console.log in production code
+  {
+    id: "console-log",
+    pattern: /console\.(log|debug|info|warn|error)\s*\(/g,
+    message: "Use logger from @kenchi/shared instead of console",
+    extract: () => "Found console.* - use logger from @kenchi/shared",
+    skipInTests: true,
+    skipInScripts: true,
+  },
+
+  // ==================== Architecture Boundaries ====================
 
   // Services importing other services
   {
@@ -259,151 +362,25 @@ const VALIDATION_RULES = [
     onlyInServices: true,
   },
 
-  // ==================== Readonly Enforcement ====================
-
-  // Mutable array type declarations in interfaces/types (should use readonly)
-  // Note: Skipped in function signatures to maintain compatibility with existing APIs
+  // Business logic in handlers (complex processing patterns)
   {
-    id: "mutable-array-type",
-    pattern: /(?:interface|type)\s+\w+[^{]*\{[^}]*:\s*(?:Array<[^>]+>|[A-Za-z]+\[\])\s*[;,]/g,
-    message: "Use 'readonly' for array types in interfaces/types to enforce immutability",
-    extract: () => "Found mutable array type in interface/type - use 'readonly T[]'",
+    id: "business-logic-in-handler",
+    pattern: /(?:router\.|app\.(?:get|post|put|delete|patch))\s*\([^,]+,\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{[\s\S]{500,}?\}/g,
+    message: "Business logic should be in services, not route handlers",
+    extract: () => "Found complex logic in handler - move to service layer",
+    onlyInRoutes: true,
     skipInTests: true,
   },
 
-  // ==================== Import Type Enforcement ====================
+  // ==================== Database Module Pattern ====================
 
-  // Type-only imports not using 'import type'
-  // Note: Excludes "Error" suffix since Error classes are used as constructors (values)
+  // Self-referencing @kenchi/shared within shared package
   {
-    id: "missing-import-type",
-    pattern: /import\s+\{\s*(?:type\s+)?([A-Z][A-Za-z]*(?:Type|Interface|Props|State|Config|Options|Params|Result|Response|Request|Event|Data|Info|Context|Schema|Spec|Definition|Descriptor|Metadata|Payload|DTO))\s*(?:,|\})\s*from/g,
-    message: "Use 'import type' for type-only imports",
-    extract: (match) => `Found '${match[1]}' - use 'import type { ${match[1]} }' for type-only imports`,
-  },
-
-  // ==================== Explicit Return Types ====================
-
-  // Arrow functions without return types (exported or assigned to const)
-  {
-    id: "missing-return-type-arrow",
-    pattern: /(?:export\s+)?const\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*(?:async\s+)?\([^)]*\)\s*=>\s*[^:]/g,
-    message: "Add explicit return type to arrow functions",
-    extract: () => "Found arrow function without return type - add ': ReturnType' after parameters",
-    skipInTests: true,
-  },
-
-  // Function declarations without return types
-  {
-    id: "missing-return-type-function",
-    pattern: /(?:export\s+)?(?:async\s+)?function\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\([^)]*\)\s*\{/g,
-    message: "Add explicit return type to function declarations",
-    extract: () => "Found function without return type - add ': ReturnType' after parameters",
-    skipInTests: true,
-  },
-
-  // ==================== Boolean Naming ====================
-
-  // Boolean variables without proper prefix
-  {
-    id: "boolean-naming",
-    pattern: /(?:const|let|var)\s+([a-z][a-zA-Z]*)\s*:\s*boolean\s*=/g,
-    message: "Boolean variables should use is/has/should/can/will/did prefix",
-    extract: (match) => {
-      const name = match[1];
-      const prefixes = ["is", "has", "should", "can", "will", "did", "was", "are", "does"];
-      const hasPrefix = prefixes.some((prefix) => name.startsWith(prefix) && name[prefix.length] === name[prefix.length]?.toUpperCase());
-      return hasPrefix ? null : `Boolean '${name}' should start with is/has/should/can prefix`;
-    },
-    skipIfNull: true,
-  },
-
-  // ==================== Arrow Function Preference ====================
-
-  // Function declarations (prefer arrow functions)
-  {
-    id: "prefer-arrow-function",
-    pattern: /(?<!export\s+default\s+)function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g,
-    message: "Use arrow functions by default, function declarations only for overloads/generators/type guards",
-    extract: (match) => `Found function declaration '${match[1]}' - prefer arrow function: const ${match[1]} = () =>`,
-    skipInTests: true,
-    skipInShared: true,
-  },
-
-  // ==================== JSDoc on Exports ====================
-
-  // Exported functions without JSDoc
-  {
-    id: "missing-jsdoc-export",
-    pattern: /(?<!\*\/\s*\n\s*)export\s+(?:const|function|class)\s+[a-zA-Z]/g,
-    message: "Add JSDoc comment for exported functions/classes",
-    extract: () => "Found export without JSDoc - add /** description */ above",
-    skipInTests: true,
-  },
-
-  // ==================== Circular Import Detection ====================
-
-  // Importing from parent directories in a way that could cause cycles
-  {
-    id: "potential-circular-import",
-    pattern: /from\s+['"]\.\.\/\.\.\/[^'"]*['"]/g,
-    message: "Deep parent imports may cause circular dependencies - consider restructuring",
-    extract: () => "Found deep parent import (../../) - verify no circular dependency",
-  },
-
-  // ==================== Principal Engineer Standards ====================
-
-  // Class inheritance (prefer composition)
-  {
-    id: "prefer-composition",
-    pattern: /class\s+\w+\s+extends\s+(?!Error|AppError|ValidationError|AuthenticationError|NotFoundError|ExternalServiceError|LLMError)\w+/g,
-    message: "Prefer composition over inheritance - use dependency injection instead",
-    extract: () => "Found class inheritance - prefer composition over inheritance (SOLID)",
-    skipInTests: true,
-  },
-
-  // Empty catch blocks (comprehensive error handling)
-  {
-    id: "empty-catch-block",
-    pattern: /catch\s*\([^)]*\)\s*\{\s*\}/g,
-    message: "Empty catch blocks swallow errors - handle or rethrow",
-    extract: () => "Found empty catch block - add error handling or rethrow",
-  },
-
-  // Catch without logging or rethrowing
-  {
-    id: "silent-catch",
-    pattern: /catch\s*\([^)]*\)\s*\{\s*\/\//g,
-    message: "Catch blocks should log errors or rethrow - don't silently ignore",
-    extract: () => "Found catch with only comment - add proper error handling",
-  },
-
-  // Console.log in production code
-  {
-    id: "console-log",
-    pattern: /console\.(log|debug|info|warn|error)\s*\(/g,
-    message: "Use logger from @kenchi/shared instead of console",
-    extract: () => "Found console.* - use logger from @kenchi/shared",
-    skipInTests: true,
-  },
-
-  // TODO/FIXME without ticket reference
-  {
-    id: "todo-without-ticket",
-    pattern: /\/\/\s*(TODO|FIXME|HACK|XXX)(?!:?\s*\[|\s*#|\s*JIRA|\s*GH-)/gi,
-    message: "TODOs should reference a ticket or issue number",
-    extract: () => "Found TODO/FIXME without ticket reference - add issue number",
-  },
-
-  // Magic numbers (numeric literals in logic)
-  {
-    id: "magic-number",
-    pattern: /(?:if|while|for|return|===|!==|>|<|>=|<=|\+|-|\*|\/)\s*\d{2,}(?!\d*[mshdwMY])/g,
-    message: "Avoid magic numbers - use named constants",
-    extract: () => "Found magic number - extract to named constant in shared/constants",
-    skipInTests: true,
-    skipInConstants: true,
-    stripTemplateLiterals: true,
+    id: "shared-self-import",
+    pattern: /import\s+(?:type\s+)?(?:\{[^}]*\}|[^{}\s]+)\s+from\s+['"]@kenchi\/shared['"]/g,
+    message: "Within shared package, use relative imports not @kenchi/shared",
+    extract: () => "Found @kenchi/shared import in shared package - use relative import",
+    onlyInShared: true,
   },
 
   // ==================== Performance ====================
@@ -424,14 +401,14 @@ const VALIDATION_RULES = [
     extract: () => "Found nested iteration - consider Map/Set for O(1) lookups",
   },
 
-  // ==================== Security ====================
+  // ==================== TODO/FIXME ====================
 
-  // Potential hardcoded secrets
+  // TODO/FIXME without ticket reference
   {
-    id: "hardcoded-secret",
-    pattern: /(?:password|secret|apiKey|api_key|token|auth)\s*[:=]\s*["'][^"']{8,}["']/gi,
-    message: "Never hardcode secrets - use environment variables",
-    extract: () => "Found potential hardcoded secret - use environment variables",
+    id: "todo-without-ticket",
+    pattern: /\/\/\s*(TODO|FIXME|HACK|XXX)(?!:?\s*\[|\s*#|\s*JIRA|\s*GH-)/gi,
+    message: "TODOs should reference a ticket or issue number",
+    extract: () => "Found TODO/FIXME without ticket reference - add issue number",
   },
 ];
 
@@ -471,7 +448,29 @@ const isSharedFile = (filePath) => {
  */
 const isServiceFile = (filePath) => {
   const normalizedPath = filePath.replace(/\\/g, "/");
-  return normalizedPath.includes("/services/") && normalizedPath.includes("/src/services/");
+  return (
+    normalizedPath.includes("/services/") &&
+    normalizedPath.includes("/src/services/")
+  );
+};
+
+/**
+ * Check if file is an adapter file
+ */
+const isAdapterFile = (filePath) => {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  return normalizedPath.includes("/adapters/");
+};
+
+/**
+ * Check if file is a route/handler file
+ */
+const isRouteFile = (filePath) => {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  return (
+    normalizedPath.includes("/routes/") ||
+    normalizedPath.includes("/handlers/")
+  );
 };
 
 /**
@@ -488,20 +487,23 @@ const isTestFile = (filePath) => {
 };
 
 /**
+ * Check if file is a script file
+ */
+const isScriptFile = (filePath) => {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  return normalizedPath.includes("/scripts/");
+};
+
+/**
  * Count lines in content
  */
 const countLines = (content) => content.split("\n").length;
 
 /**
  * Strip template literal content for certain validations.
- * Replaces content inside backticks with spaces to preserve line numbers.
- * Handles escaped backticks within template literals.
  */
 const stripTemplateLiterals = (content) => {
-  // Match template literals including escaped backticks: `...` or `...\`...`
-  // (?:[^`\\]|\\.)* matches: non-backtick/non-backslash chars OR escaped chars
   return content.replace(/`(?:[^`\\]|\\.)*`/gs, (match) => {
-    // Preserve newlines, replace other chars with spaces
     return match.replace(/[^\n]/g, " ");
   });
 };
@@ -524,7 +526,10 @@ const validateFile = (filePath, content) => {
   const isConstants = isConstantsFile(filePath);
   const isShared = isSharedFile(filePath);
   const isService = isServiceFile(filePath);
+  const isAdapter = isAdapterFile(filePath);
+  const isRoute = isRouteFile(filePath);
   const isTest = isTestFile(filePath);
+  const isScript = isScriptFile(filePath);
 
   // Check module size
   const lineCount = countLines(content);
@@ -545,7 +550,12 @@ const validateFile = (filePath, content) => {
     if (rule.skipInConstants && isConstants) return;
     if (rule.skipInShared && isShared) return;
     if (rule.onlyInServices && !isService) return;
+    if (rule.skipInAdapters && isAdapter) return;
+    if (rule.onlyInAdapters && !isAdapter) return;
+    if (rule.onlyInRoutes && !isRoute) return;
+    if (rule.onlyInShared && !isShared) return;
     if (rule.skipInTests && isTest) return;
+    if (rule.skipInScripts && isScript) return;
 
     // Use stripped content for rules that need template literals removed
     const contentToCheck = rule.stripTemplateLiterals ? strippedContent : content;
@@ -558,7 +568,7 @@ const validateFile = (filePath, content) => {
       const line = getLineNumber(contentToCheck, match.index);
       const message = rule.extract ? rule.extract(match) : rule.message;
 
-      // Skip if extract returns null (for conditional rules like boolean-naming)
+      // Skip if extract returns null
       if (rule.skipIfNull && message === null) continue;
 
       violations.push({
@@ -589,14 +599,15 @@ const formatViolations = (violations) => {
 
   const details = Object.entries(byRule)
     .map(([rule, ruleViolations]) => {
-      const ruleHeader = `[${rule}] (${ruleViolations.length} occurrence${ruleViolations.length > 1 ? 's' : ''})`;
+      const ruleHeader = `[${rule}] (${ruleViolations.length} occurrence${ruleViolations.length > 1 ? "s" : ""})`;
       const items = ruleViolations
-        .slice(0, 5) // Limit to 5 per rule to avoid overwhelming output
-        .map((v) => `  - Line ${v.line}: ${v.message}`)
+        .slice(0, 5)
+        .map((violation) => `  - Line ${violation.line}: ${violation.message}`)
         .join("\n");
-      const more = ruleViolations.length > 5
-        ? `\n  ... and ${ruleViolations.length - 5} more`
-        : "";
+      const more =
+        ruleViolations.length > 5
+          ? `\n  ... and ${ruleViolations.length - 5} more`
+          : "";
       return `${ruleHeader}\n${items}${more}`;
     })
     .join("\n\n");
@@ -626,8 +637,6 @@ const main = () => {
         const filePath = toolInput.file_path;
 
         if (filePath && shouldValidateFile(filePath)) {
-          // For Edit tool, check the new content
-          // For Write tool, check the full content
           const contentToCheck = toolInput.new_string || toolInput.content || "";
 
           if (contentToCheck) {
@@ -654,7 +663,7 @@ const main = () => {
       }
       process.exit(0);
     } catch (error) {
-      // If we can't parse input, approve by default to not block workflow
+      // If we can't parse input, approve by default
       console.log(JSON.stringify({ decision: "approve" }));
       process.exit(0);
     }

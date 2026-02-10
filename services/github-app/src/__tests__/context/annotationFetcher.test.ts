@@ -23,6 +23,11 @@ jest.mock("@kenchi/shared", () => ({
   getErrorMessage: jest.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error)
   ),
+  // Mock the cache function to just call the fetcher
+  getOrFetchCheckAnnotations: jest.fn(
+    async (_owner: string, _repo: string, _checkRunId: number, fetcher: () => Promise<unknown>) =>
+      fetcher()
+  ),
 }));
 
 // Mock Octokit instance

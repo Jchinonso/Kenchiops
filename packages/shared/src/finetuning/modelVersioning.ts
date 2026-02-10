@@ -8,96 +8,35 @@
  */
 
 import { createLogger } from "../core/logger.js";
-import { OPENAI_DEFAULTS, MODEL_VERSIONING } from "../constants/index.js";
+import { config } from "../core/config.js";
+import { LLM_DEFAULTS, OPENROUTER_DEFAULTS, MODEL_VERSIONING } from "../constants/index.js";
+import type {
+  ModelVersion,
+  ModelFeatureFlags,
+  ModelSelectionResult,
+  ModelSelectionContext,
+  ModelSelectionHandler,
+} from "./types.js";
 
 const logger = createLogger("model-versioning");
 
-// ==================== Types ====================
+// ==================== LLM Model Configuration ====================
 
 /**
- * Model version configuration.
+ * Gets the configured LLM model based on provider settings.
+ * Uses LLM_MODEL, falls back to provider-specific defaults.
  */
-export interface ModelVersion {
-  readonly id: string;
-  readonly name: string;
-  readonly modelId: string;
-  readonly description?: string;
-  readonly createdAt: string;
-  readonly isBaseline: boolean;
-  readonly metadata?: ModelMetadata;
-}
-
-/**
- * Model metadata for tracking provenance.
- */
-export interface ModelMetadata {
-  readonly trainingDatasetId?: string;
-  readonly trainingExamplesCount?: number;
-  readonly evaluationMetrics?: EvaluationMetrics;
-  readonly parentModelId?: string;
-}
-
-/**
- * Model evaluation metrics.
- */
-export interface EvaluationMetrics {
-  readonly accuracy?: number;
-  readonly helpfulRate?: number;
-  readonly recallAt5?: number;
-  readonly mrr?: number;
-  readonly humanReviewScore?: number;
-}
-
-/**
- * Feature flag configuration for model selection.
- */
-export interface ModelFeatureFlags {
-  readonly defaultModelVersion: string;
-  readonly rollbackEnabled: boolean;
-  readonly rollbackModelVersion: string;
-  readonly abTestEnabled: boolean;
-  readonly abTestConfig?: ABTestConfig;
-  readonly tenantOverrides?: Record<string, string>;
-}
-
-/**
- * A/B test configuration.
- */
-export interface ABTestConfig {
-  readonly controlVersion: string;
-  readonly treatmentVersion: string;
-  readonly treatmentPercentage: number;
-  readonly startedAt: string;
-  readonly endAt?: string;
-}
-
-/**
- * Model selection result.
- */
-export interface ModelSelectionResult {
-  readonly modelId: string;
-  readonly versionId: string;
-  readonly reason: ModelSelectionReason;
-  readonly isABTest: boolean;
-  readonly abTestGroup?: "control" | "treatment";
-}
-
-/**
- * Reason for model selection.
- */
-export type ModelSelectionReason =
-  | "default"
-  | "tenant_override"
-  | "ab_test_control"
-  | "ab_test_treatment"
-  | "rollback";
+const getConfiguredModel = (): string =>
+  config.LLM_MODEL ||
+  config.OPENAI_MODEL ||
+  (config.LLM_PROVIDER === "openrouter" ? OPENROUTER_DEFAULTS.MODEL : LLM_DEFAULTS.MODEL);
 
 // ==================== Default Configuration ====================
 
 const BASE_MODEL_VERSION: ModelVersion = {
   id: MODEL_VERSIONING.BASELINE_VERSION_ID,
   name: MODEL_VERSIONING.BASELINE_VERSION_NAME,
-  modelId: OPENAI_DEFAULTS.MODEL,
+  modelId: getConfiguredModel(),
   description: MODEL_VERSIONING.BASELINE_DESCRIPTION,
   createdAt: MODEL_VERSIONING.BASELINE_CREATED_AT,
   isBaseline: true,
@@ -295,61 +234,94 @@ const getABTestGroup = (tenantId: string, treatmentPercentage: number): "control
 };
 
 /**
+ * Returns the default model selection result.
+ * Defined before handlers as it's used as fallback in A/B test handler.
+ */
+const getDefaultModelResult = (context: ModelSelectionContext): ModelSelectionResult => {
+  const version = context.getVersion(context.flags.defaultModelVersion);
+  return {
+    modelId: version?.modelId ?? getConfiguredModel(),
+    versionId: context.flags.defaultModelVersion,
+    reason: "default",
+    isABTest: false,
+  };
+};
+
+/** Ordered handlers for model selection (first match wins). */
+const MODEL_SELECTION_HANDLERS: readonly ModelSelectionHandler[] = [
+  {
+    // Rollback (highest priority)
+    condition: (context) => context.isInRollback && context.flags.rollbackEnabled,
+    getResult: (context) => {
+      const version = context.getVersion(context.flags.rollbackModelVersion);
+      return {
+        modelId: version?.modelId ?? getConfiguredModel(),
+        versionId: context.flags.rollbackModelVersion,
+        reason: "rollback",
+        isABTest: false,
+      };
+    },
+  },
+  {
+    // Tenant override
+    condition: (context) => {
+      const versionId = context.flags.tenantOverrides?.[context.tenantId];
+      return versionId !== undefined && context.getVersion(versionId) !== undefined;
+    },
+    getResult: (context) => {
+      const versionId = context.flags.tenantOverrides?.[context.tenantId] ?? "";
+      const version = context.getVersion(versionId);
+      return {
+        modelId: version?.modelId ?? getConfiguredModel(),
+        versionId,
+        reason: "tenant_override",
+        isABTest: false,
+      };
+    },
+  },
+  {
+    // A/B test
+    condition: (context) => context.flags.abTestEnabled && context.flags.abTestConfig !== undefined,
+    getResult: (context) => {
+      const { abTestConfig } = context.flags;
+      if (!abTestConfig) {
+        return getDefaultModelResult(context);
+      }
+      const { controlVersion, treatmentVersion, treatmentPercentage } = abTestConfig;
+      const group = getABTestGroup(context.tenantId, treatmentPercentage);
+      const versionId = group === "treatment" ? treatmentVersion : controlVersion;
+      const version = context.getVersion(versionId);
+      return {
+        modelId: version?.modelId ?? getConfiguredModel(),
+        versionId,
+        reason: group === "treatment" ? "ab_test_treatment" : "ab_test_control",
+        isABTest: true,
+        abTestGroup: group,
+      };
+    },
+  },
+];
+
+/**
+ * Creates the model selection context for handlers.
+ */
+const createSelectionContext = (tenantId: string): ModelSelectionContext => ({
+  tenantId,
+  isInRollback,
+  flags: currentFlags,
+  getVersion: (versionId: string) => modelVersions.get(versionId),
+});
+
+/**
  * Selects the appropriate model for a request.
  *
  * @param tenantId - Tenant identifier
  * @returns Model selection result
  */
 export const selectModel = (tenantId: string): ModelSelectionResult => {
-  // Check rollback first (highest priority)
-  if (isInRollback && currentFlags.rollbackEnabled) {
-    const version = modelVersions.get(currentFlags.rollbackModelVersion);
-    return {
-      modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
-      versionId: currentFlags.rollbackModelVersion,
-      reason: "rollback",
-      isABTest: false,
-    };
-  }
-
-  // Check tenant override
-  if (currentFlags.tenantOverrides?.[tenantId]) {
-    const versionId = currentFlags.tenantOverrides[tenantId];
-    const version = modelVersions.get(versionId);
-    if (version) {
-      return {
-        modelId: version.modelId,
-        versionId,
-        reason: "tenant_override",
-        isABTest: false,
-      };
-    }
-  }
-
-  // Check A/B test
-  if (currentFlags.abTestEnabled && currentFlags.abTestConfig) {
-    const { controlVersion, treatmentVersion, treatmentPercentage } = currentFlags.abTestConfig;
-    const group = getABTestGroup(tenantId, treatmentPercentage);
-    const versionId = group === "treatment" ? treatmentVersion : controlVersion;
-    const version = modelVersions.get(versionId);
-
-    return {
-      modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
-      versionId,
-      reason: group === "treatment" ? "ab_test_treatment" : "ab_test_control",
-      isABTest: true,
-      abTestGroup: group,
-    };
-  }
-
-  // Default model
-  const version = modelVersions.get(currentFlags.defaultModelVersion);
-  return {
-    modelId: version?.modelId ?? OPENAI_DEFAULTS.MODEL,
-    versionId: currentFlags.defaultModelVersion,
-    reason: "default",
-    isABTest: false,
-  };
+  const context = createSelectionContext(tenantId);
+  const matchedHandler = MODEL_SELECTION_HANDLERS.find((handler) => handler.condition(context));
+  return matchedHandler?.getResult(context) ?? getDefaultModelResult(context);
 };
 
 /**

@@ -8,6 +8,7 @@
 
 import { ID_GENERATION } from "../constants/core.js";
 import { FEEDBACK_URL_CONFIG } from "../constants/passiveLearning.js";
+import type { SignedUrlParams } from "./types.js";
 
 // ==================== Promise Utilities ====================
 
@@ -82,6 +83,7 @@ export const safeJsonParse = <T>(json: string): T | null => {
   try {
     return JSON.parse(json) as T;
   } catch {
+    // Intentional: returns null for malformed JSON — callers handle the null case
     return null;
   }
 };
@@ -124,14 +126,7 @@ export const generateEventId = (prefix: string = ID_GENERATION.DEFAULT_PREFIX): 
 
 // ==================== Signed URL Utilities ====================
 
-/**
- * Parameters for signed URL generation.
- */
-export interface SignedUrlParams {
-  readonly analysisId: string;
-  readonly feedbackType: "correct" | "incorrect";
-  readonly expiresAt: number;
-}
+export type { SignedUrlParams };
 
 /**
  * Generate HMAC-SHA256 signature for URL parameters.

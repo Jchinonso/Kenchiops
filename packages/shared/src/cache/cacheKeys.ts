@@ -11,64 +11,107 @@ import {
   REDIS_KEY_PREFIXES,
   CACHE_NAMESPACES,
   CACHE_KEY_STRUCTURE,
+  ANALYSIS_CACHE_VERSION,
+  CACHE_KEY_SEGMENT_INDICES,
+  MIN_CACHE_KEY_SEGMENTS,
+  CACHE_KEY_SEPARATOR,
+  REPO_SLASH_REPLACEMENT,
+  CHECK_NAME_WHITESPACE_PATTERN,
   type CacheNamespace,
 } from "../constants/index.js";
+import type { ParsedCacheKey } from "./types.js";
 
-// Re-export for backward compatibility
+/** Re-exported cache namespaces for backward compatibility. */
 export const CACHE_NAMESPACE = CACHE_NAMESPACES;
+
+/** Re-exported cache namespace type for backward compatibility. */
 export type { CacheNamespace };
 
-// ==================== Key Builders ====================
+// ==================== Helper Functions ====================
 
 /**
- * Build a cache key with namespace
+ * Normalizes a repository name for use in cache keys.
+ * Replaces "/" with "-" to avoid key segment confusion.
+ */
+const normalizeRepository = (repository: string): string =>
+  repository.replace("/", REPO_SLASH_REPLACEMENT);
+
+/**
+ * Normalizes a check name for use in cache keys.
+ * Replaces whitespace with "-" and lowercases.
+ */
+const normalizeCheckName = (checkName: string): string =>
+  checkName.replace(CHECK_NAME_WHITESPACE_PATTERN, REPO_SLASH_REPLACEMENT).toLowerCase();
+
+/**
+ * Build a cache key with namespace.
  */
 const buildKey = (namespace: CacheNamespace, ...parts: readonly string[]): string =>
-  [REDIS_KEY_PREFIXES.CACHE, namespace, ...parts].join(":");
+  [REDIS_KEY_PREFIXES.CACHE, namespace, ...parts].join(CACHE_KEY_SEPARATOR);
 
 // ==================== GitHub Cache Keys ====================
 
 /**
- * GitHub cache key builders
+ * GitHub cache key builders.
  */
 export const githubCacheKeys = {
-  /** Installation repositories list */
+  /** Installation repositories list. */
   installationRepos: (installationId: number): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "repos", String(installationId)),
 
-  /** Repository details */
+  /** Repository details. */
   repository: (owner: string, repo: string): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "repo", owner, repo),
 
-  /** Pull request metadata */
+  /** Pull request metadata. */
   pullRequest: (owner: string, repo: string, prNumber: number): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "pr", owner, repo, String(prNumber)),
 
-  /** Pull request diff */
+  /** Pull request diff. */
   pullRequestDiff: (owner: string, repo: string, prNumber: number): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "pr-diff", owner, repo, String(prNumber)),
 
-  /** Commit details */
+  /** Pull request commits. */
+  pullRequestCommits: (owner: string, repo: string, prNumber: number): string =>
+    buildKey(CACHE_NAMESPACE.GITHUB, "pr-commits", owner, repo, String(prNumber)),
+
+  /** Pull request files changed. */
+  pullRequestFiles: (owner: string, repo: string, prNumber: number): string =>
+    buildKey(CACHE_NAMESPACE.GITHUB, "pr-files", owner, repo, String(prNumber)),
+
+  /** Pull request comments. */
+  pullRequestComments: (owner: string, repo: string, prNumber: number): string =>
+    buildKey(CACHE_NAMESPACE.GITHUB, "pr-comments", owner, repo, String(prNumber)),
+
+  /** PRs associated with a commit. */
+  commitPullRequests: (owner: string, repo: string, commitSha: string): string =>
+    buildKey(CACHE_NAMESPACE.GITHUB, "commit-prs", owner, repo, commitSha),
+
+  /** Check run annotations. */
+  checkAnnotations: (owner: string, repo: string, checkRunId: number): string =>
+    buildKey(CACHE_NAMESPACE.GITHUB, "annotations", owner, repo, String(checkRunId)),
+
+  /** Commit details. */
   commit: (owner: string, repo: string, sha: string): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "commit", owner, repo, sha),
 
-  /** Check run details */
+  /** Check run details. */
   checkRun: (owner: string, repo: string, checkRunId: number): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "check", owner, repo, String(checkRunId)),
 
-  /** Workflow run details */
+  /** Workflow run details. */
   workflowRun: (owner: string, repo: string, runId: number): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "workflow", owner, repo, String(runId)),
 
-  /** Workflow logs */
+  /** Workflow logs. */
   workflowLogs: (owner: string, repo: string, runId: number): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "logs", owner, repo, String(runId)),
 
-  /** Pattern for all GitHub cache entries for a repository */
+  /** Pattern for all GitHub cache entries for a repository. */
   repositoryPattern: (owner: string, repo: string): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "*", owner, repo, "*"),
 
-  /** Pattern for all installation cache entries */
+  /** Pattern for all installation cache entries. */
   installationPattern: (installationId: number): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "*", String(installationId), "*"),
 } as const;
@@ -76,55 +119,55 @@ export const githubCacheKeys = {
 // ==================== Tenant Cache Keys ====================
 
 /**
- * Tenant cache key builders
+ * Tenant cache key builders.
  */
 export const tenantCacheKeys = {
-  /** Tenant by ID */
+  /** Tenant by ID. */
   byId: (tenantId: string): string => buildKey(CACHE_NAMESPACE.TENANT, "id", tenantId),
 
-  /** Tenant by GitHub installation ID */
+  /** Tenant by GitHub installation ID. */
   byInstallation: (installationId: number): string =>
     buildKey(CACHE_NAMESPACE.TENANT, "install", String(installationId)),
 
-  /** Tenant by GitHub organization */
+  /** Tenant by GitHub organization. */
   byGitHubOrg: (orgName: string): string => buildKey(CACHE_NAMESPACE.TENANT, "org", orgName),
 
-  /** Tenant by Slack workspace ID */
+  /** Tenant by Slack workspace ID. */
   bySlackWorkspace: (workspaceId: string): string =>
     buildKey(CACHE_NAMESPACE.TENANT, "slack", workspaceId),
 
-  /** All active tenants */
+  /** All active tenants. */
   activeTenants: (): string => buildKey(CACHE_NAMESPACE.TENANT, "active"),
 
-  /** Tenant statistics */
+  /** Tenant statistics. */
   statistics: (tenantId: string): string => buildKey(CACHE_NAMESPACE.TENANT, "stats", tenantId),
 
-  /** Pattern for all tenant cache entries */
+  /** Pattern for all tenant cache entries. */
   allPattern: (): string => buildKey(CACHE_NAMESPACE.TENANT, "*"),
 } as const;
 
 // ==================== Mapping Cache Keys ====================
 
 /**
- * Repository-channel mapping cache key builders
+ * Repository-channel mapping cache key builders.
  */
 export const mappingCacheKeys = {
-  /** Channel for a repository */
+  /** Channel for a repository. */
   channelForRepo: (tenantId: string, repository: string): string =>
-    buildKey(CACHE_NAMESPACE.MAPPING, "repo", tenantId, repository.replace("/", "-")),
+    buildKey(CACHE_NAMESPACE.MAPPING, "repo", tenantId, normalizeRepository(repository)),
 
-  /** Mappings for a channel */
+  /** Mappings for a channel. */
   mappingsForChannel: (tenantId: string, channelId: string): string =>
     buildKey(CACHE_NAMESPACE.MAPPING, "channel", tenantId, channelId),
 
-  /** All mappings for a tenant */
+  /** All mappings for a tenant. */
   allForTenant: (tenantId: string): string => buildKey(CACHE_NAMESPACE.MAPPING, "all", tenantId),
 
-  /** Check if repository is mapped */
+  /** Check if repository is mapped. */
   isMapped: (tenantId: string, repository: string): string =>
-    buildKey(CACHE_NAMESPACE.MAPPING, "exists", tenantId, repository.replace("/", "-")),
+    buildKey(CACHE_NAMESPACE.MAPPING, "exists", tenantId, normalizeRepository(repository)),
 
-  /** Pattern for all mapping cache entries for a tenant */
+  /** Pattern for all mapping cache entries for a tenant. */
   tenantPattern: (tenantId: string): string =>
     buildKey(CACHE_NAMESPACE.MAPPING, "*", tenantId, "*"),
 } as const;
@@ -132,43 +175,41 @@ export const mappingCacheKeys = {
 // ==================== Analysis Cache Keys ====================
 
 /**
- * AI analysis result cache key builders
+ * AI analysis result cache key builders.
  */
-const ANALYSIS_CACHE_VERSION = "v2";
-
 export const analysisCacheKeys = {
-  /** Analysis by commit SHA and check name (uses full SHA for zero collision risk) */
+  /** Analysis by commit SHA and check name (uses full SHA for zero collision risk). */
   byCommitAndCheck: (repository: string, commitSha: string, checkName: string): string =>
     buildKey(
       CACHE_NAMESPACE.ANALYSIS,
       ANALYSIS_CACHE_VERSION,
       "check",
-      repository.replace("/", "-"),
+      normalizeRepository(repository),
       commitSha,
-      checkName.replace(/\s+/g, "-").toLowerCase()
+      normalizeCheckName(checkName)
     ),
 
-  /** Consolidated analysis for a commit (uses full SHA for zero collision risk) */
+  /** Consolidated analysis for a commit (uses full SHA for zero collision risk). */
   byCommit: (repository: string, commitSha: string): string =>
     buildKey(
       CACHE_NAMESPACE.ANALYSIS,
       ANALYSIS_CACHE_VERSION,
       "commit",
-      repository.replace("/", "-"),
+      normalizeRepository(repository),
       commitSha
     ),
 
-  /** Analysis by log hash (for deduplication) */
+  /** Analysis by log hash (for deduplication). */
   byLogHash: (logHash: string): string =>
     buildKey(CACHE_NAMESPACE.ANALYSIS, ANALYSIS_CACHE_VERSION, "log", logHash),
 
-  /** Pattern for all analysis cache entries for a repository */
+  /** Pattern for all analysis cache entries for a repository. */
   repositoryPattern: (repository: string): string =>
     buildKey(
       CACHE_NAMESPACE.ANALYSIS,
       ANALYSIS_CACHE_VERSION,
       "*",
-      repository.replace("/", "-"),
+      normalizeRepository(repository),
       "*"
     ),
 } as const;
@@ -176,41 +217,48 @@ export const analysisCacheKeys = {
 // ==================== Token Cache Keys ====================
 
 /**
- * Token cache key builders (for GitHub installation tokens)
+ * Token cache key builders (for GitHub installation tokens).
  */
 export const tokenCacheKeys = {
-  /** Installation access token */
+  /** Installation access token. */
   installationToken: (installationId: number): string =>
     buildKey(CACHE_NAMESPACE.TOKEN, "install", String(installationId)),
 
-  /** Pattern for all token cache entries */
+  /** Pattern for all token cache entries. */
   allPattern: (): string => buildKey(CACHE_NAMESPACE.TOKEN, "*"),
 } as const;
 
 // ==================== Utility Functions ====================
 
 /**
- * Parse a cache key to extract namespace and parts
+ * Parse a cache key to extract namespace and parts.
+ *
+ * @param key - Cache key string (e.g., "kenchi:cache:github:pr:owner:repo:123")
+ * @returns Parsed key with namespace and parts, or null if invalid
  */
-export const parseCacheKey = (key: string): { namespace: string; parts: string[] } | null => {
-  const segments = key.split(":");
-  const [prefix, cachePrefix, ...rest] = segments;
+export const parseCacheKey = (key: string): ParsedCacheKey | null => {
+  const segments = key.split(CACHE_KEY_SEPARATOR);
 
-  if (
-    rest.length < 1 ||
-    prefix !== CACHE_KEY_STRUCTURE.ROOT_PREFIX ||
-    cachePrefix !== CACHE_KEY_STRUCTURE.CACHE_PREFIX
-  ) {
+  const hasMinimumSegments = segments.length >= MIN_CACHE_KEY_SEGMENTS;
+  const rootPrefix = segments[CACHE_KEY_SEGMENT_INDICES.ROOT_PREFIX];
+  const cachePrefix = segments[CACHE_KEY_SEGMENT_INDICES.CACHE_PREFIX];
+
+  const hasValidRootPrefix = rootPrefix === CACHE_KEY_STRUCTURE.ROOT_PREFIX;
+  const hasValidCachePrefix = cachePrefix === CACHE_KEY_STRUCTURE.CACHE_PREFIX;
+
+  if (!hasMinimumSegments || !hasValidRootPrefix || !hasValidCachePrefix) {
     return null;
   }
 
-  return {
-    namespace: rest[0],
-    parts: rest.slice(1),
-  };
+  const namespace = segments[CACHE_KEY_SEGMENT_INDICES.NAMESPACE];
+  const parts = segments.slice(CACHE_KEY_SEGMENT_INDICES.PARTS_START);
+
+  return { namespace, parts };
 };
 
 /**
- * Get all cache key patterns for invalidation
+ * Get all cache key patterns for invalidation.
  */
-export const getAllPatterns = (): readonly string[] => [`${REDIS_KEY_PREFIXES.CACHE}:*`];
+export const getAllPatterns = (): readonly string[] => [
+  `${REDIS_KEY_PREFIXES.CACHE}${CACHE_KEY_SEPARATOR}*`,
+];

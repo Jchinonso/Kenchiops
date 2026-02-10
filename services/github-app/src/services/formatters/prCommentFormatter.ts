@@ -11,8 +11,14 @@ import {
   UI_EMOJI,
   type AggregatedFailures,
   type TestFailureInfo,
+  type ParsedTestSummary,
 } from "@kenchi/shared";
-import { type FeedbackLinks } from "./prCommentTypes.js";
+import {
+  type FeedbackLinks,
+  type LintErrorForDisplay,
+  type LintErrorWithFile,
+  type RecommendedActionInput,
+} from "./prCommentTypes.js";
 import {
   extractAssertionDiff,
   categorizeFailures,
@@ -34,13 +40,18 @@ export const buildHeaderSection = (shortSha: string, failureCount: number): stri
 
 /**
  * Build summary line for test failures.
+ * Uses deterministic parsedTestSummary count when available, falls back to LLM array length.
  */
-export const buildTestFailureSummary = (testFailures: readonly TestFailureInfo[]): string => {
+export const buildTestFailureSummary = (
+  testFailures: readonly TestFailureInfo[],
+  parsedTestSummary?: ParsedTestSummary | null
+): string => {
   const uniqueFiles = [
     ...new Set(testFailures.map((testFailure) => testFailure.file).filter(Boolean)),
   ];
   const fileCount = uniqueFiles.length;
-  const testCount = testFailures.length;
+  // Prefer deterministic regex-parsed count over LLM-generated array length
+  const testCount = parsedTestSummary?.failed ?? testFailures.length;
 
   if (fileCount > 0) {
     const fileList = uniqueFiles
@@ -136,17 +147,23 @@ export const buildTestFileGroup = (
 /**
  * Build the test failures section.
  * Works with any test framework - LLM already filters real failures.
+ * Uses deterministic parsedTestSummary count when available for the headline.
  *
  * @param testFailures - Array of test failures to display
  * @param testCommand - LLM-generated command to run failing tests locally
+ * @param parsedTestSummary - Deterministic test summary from regex parsing (optional)
  */
 export const buildTestFailuresSection = (
   testFailures: readonly TestFailureInfo[],
-  testCommand?: string
+  testCommand?: string,
+  parsedTestSummary?: ParsedTestSummary | null
 ): string[] => {
   if (testFailures.length === 0) {
     return [];
   }
+
+  // Prefer deterministic regex-parsed count over LLM-generated array length
+  const headlineCount = parsedTestSummary?.failed ?? testFailures.length;
 
   // Group failures by file
   const failuresByFile = new Map<string, TestFailureInfo[]>();
@@ -181,25 +198,13 @@ export const buildTestFailuresSection = (
   return [
     `${UI_EMOJI.new} **New failures introduced in this PR**`,
     "",
-    `**${UI_EMOJI.warning} ${testFailures.length} Test Failure${testFailures.length > 1 ? "s" : ""}:**`,
+    `**${UI_EMOJI.warning} ${headlineCount} Test Failure${headlineCount > 1 ? "s" : ""}:**`,
     "",
     ...fileGroupLines,
     ...(breakdownLines.length > 0 ? [...breakdownLines, ""] : []),
     ...testCommandSection,
   ];
 };
-
-/**
- * Lint error structure for building sections.
- */
-interface LintErrorForDisplay {
-  readonly code: string;
-  readonly message: string;
-  readonly line: number;
-  readonly column?: number;
-  readonly symbol?: string;
-  readonly suggestion?: string;
-}
 
 /**
  * Build a file group section for lint errors.
@@ -236,13 +241,6 @@ export const buildLintFileGroup = (
 };
 
 /**
- * Lint error with file for section building.
- */
-interface LintErrorWithFile extends LintErrorForDisplay {
-  readonly file: string;
-}
-
-/**
  * Build the lint errors section.
  */
 export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[]): string[] => {
@@ -269,12 +267,6 @@ export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[])
   ];
 };
 
-/** Recommended action with description and priority */
-interface RecommendedActionInput {
-  readonly description: string;
-  readonly priority: string | number;
-}
-
 /**
  * Build the recommended actions section.
  */
@@ -282,15 +274,7 @@ export const buildActionsSection = (
   testFailures: readonly TestFailureInfo[],
   recommendedActions: readonly RecommendedActionInput[]
 ): string[] => {
-  const consolidatedActions = generateConsolidatedActions(
-    testFailures.map((testFailure) => ({
-      testName: testFailure.testName,
-      error: testFailure.error,
-      file: testFailure.file,
-      line: testFailure.line,
-    })),
-    recommendedActions
-  );
+  const consolidatedActions = generateConsolidatedActions(testFailures, recommendedActions);
 
   if (consolidatedActions.length === 0) {
     return [];
@@ -321,14 +305,15 @@ export const buildFooterSection = (feedbackLinks?: FeedbackLinks): string[] => {
 
 /**
  * Build a single failure section.
+ * Threads parsedTestSummary for deterministic test count display.
  */
 export const buildFailureSection = (failure: AggregatedFailures["failures"][number]): string[] => {
   const summaryLine = failure.testFailures?.length
-    ? buildTestFailureSummary(failure.testFailures)
+    ? buildTestFailureSummary(failure.testFailures, failure.parsedTestSummary)
     : `> ${failure.identifiedCause ?? failure.analysis ?? "Unknown error"}`;
 
   const testFailuresSection = failure.testFailures?.length
-    ? buildTestFailuresSection(failure.testFailures, failure.testCommand)
+    ? buildTestFailuresSection(failure.testFailures, failure.testCommand, failure.parsedTestSummary)
     : [];
 
   const lintErrorsSection = failure.lintErrors?.length

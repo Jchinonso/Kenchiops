@@ -8,7 +8,7 @@
  * - Token budget management
  *
  * For provider-specific implementations, use:
- * - `@kenchi/shared/llm/providers/openai` for OpenAI
+ * - `@kenchi/shared/llm/providers/llmProvider` for OpenAI-compatible APIs
  *
  * @module llm
  */
@@ -27,6 +27,18 @@ export type {
   EmbeddingProviderFactory,
   LLMProviderName,
   ProviderRegistryEntry,
+  LLMConfig,
+  EmbeddingClientConfig,
+  TokenEstimate,
+  RawAnnotation,
+  RawSecondaryFinding,
+  ConfidenceLevel,
+  TestFailureLogShape,
+  LintErrorLogShape,
+  ActionPriority,
+  ValidationLookups,
+  EvidenceValidator,
+  JsonExtractionState,
 } from "./types.js";
 
 // ==================== Response Parsing ====================
@@ -36,7 +48,7 @@ export { extractJsonFromResponse, parseJsonObject } from "./jsonExtraction.js";
 
 // Response parser
 export {
-  parseOpenAIResponse,
+  parseLLMResponse,
   createAnalysisFromParsed,
   extractJsonFromResponse as extractJson,
 } from "./responseParser.js";
@@ -58,9 +70,6 @@ export {
   mapConfidence,
   validateCategory,
   validatePhase,
-  type ConfidenceLevel,
-  type RawAnnotation,
-  type RawSecondaryFinding,
 } from "./responseParserValidation.js";
 
 // Structured data parsers
@@ -79,14 +88,13 @@ export { validateResponse } from "./validation.js";
 
 export { manageTokenBudget } from "./tokenManager.js";
 
-// ==================== OpenAI Provider (backward compatibility) ====================
+// ==================== LLM Provider ====================
 
-// Re-export OpenAI provider for backward compatibility
 export {
-  OpenAIClient,
+  LLMClient,
   EmbeddingClient,
   getEmbeddingClient,
   clearClientCache,
   createEmbeddingProvider,
-  handleOpenAIError,
-} from "./providers/openai/index.js";
+  handleLLMError,
+} from "./providers/llmProvider/index.js";

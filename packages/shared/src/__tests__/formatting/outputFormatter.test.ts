@@ -8,7 +8,7 @@ import {
   formatGitHubComment,
   formatSlackMessage,
   type OutputContext,
-} from "../../formatting/outputFormatter.js";
+} from "../../formatting/output/index.js";
 import type { LLMAnalysisResult } from "../../core/types.js";
 
 describe("Output Formatter", () => {

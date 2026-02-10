@@ -7,32 +7,19 @@
  */
 
 import { createLogger } from "../core/logger.js";
-import {
-  chunkText,
-  splitMarkdownSections,
-  type ChunkingOptions,
-  type TextChunk,
-  type MarkdownSection,
-} from "./chunking.js";
-import { getChunkingStrategy, type ChunkingStrategy } from "./chunkingStrategies.js";
+import { chunkText, splitMarkdownSections } from "./chunking.js";
+import { getChunkingStrategy } from "./chunkingStrategies.js";
+import type {
+  ChunkingOptions,
+  TextChunk,
+  MarkdownSection,
+  ChunkingStrategy,
+  DocTypeChunkResult,
+} from "./types.js";
+
+export type { DocTypeChunkResult } from "./types.js";
 
 const logger = createLogger("doc-type-chunking");
-
-// ==================== Result Types ====================
-
-/**
- * Result of doc-type-specific chunking.
- */
-export interface DocTypeChunkResult {
-  readonly chunks: readonly TextChunk[];
-  readonly docType: string;
-  readonly strategy: string;
-  readonly metadata: {
-    readonly originalLength: number;
-    readonly chunkCount: number;
-    readonly preservedSections: boolean;
-  };
-}
 
 // ==================== Helper Functions ====================
 

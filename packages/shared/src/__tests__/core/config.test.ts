@@ -378,6 +378,9 @@ describe("Core Config", () => {
  * Helper to set all required environment variables
  */
 function setRequiredEnvVars(): void {
+  // Set LLM_API_KEY to empty so dotenv.config() won't reload it from .env
+  // and getEffectiveApiKey() falls back to OPENAI_API_KEY (empty string is falsy)
+  process.env.LLM_API_KEY = "";
   process.env.OPENAI_API_KEY = "sk-test-key";
   process.env.SLACK_BOT_TOKEN = "xoxb-test-token";
   process.env.SLACK_SIGNING_SECRET = "test-signing-secret";

@@ -9,29 +9,24 @@
  */
 
 import type { Event, Evidence } from "../core/types.js";
-import { OPENAI_CONSTANTS } from "../constants/index.js";
+import type { TokenEstimate } from "./types.js";
+import { LLM_CONSTANTS } from "../constants/index.js";
 import { ValidationError } from "../core/errors.js";
+import { createLogger } from "../core/logger.js";
 import { buildAnalysisPrompt, estimateTokens, truncateEvidence } from "../integrations/prompts.js";
 
-/**
- * Token estimation result with metadata for optimization decisions.
- */
-interface TokenEstimate {
-  readonly evidenceTokens: number;
-  readonly totalEstimatedTokens: number;
-  readonly requiresTruncation: boolean;
-}
+const logger = createLogger("token-manager");
 
 /**
  * Validates token budget parameters.
  *
  * @param maxTokens - Maximum token budget
- * @throws {Error} If token budget is invalid
+ * @throws {ValidationError} If token budget is invalid
  */
 const validateTokenBudget = (maxTokens: number): void => {
-  if (maxTokens <= OPENAI_CONSTANTS.TOKEN_BUFFER) {
+  if (maxTokens <= LLM_CONSTANTS.TOKEN_BUFFER) {
     throw new ValidationError(
-      `Token budget (${maxTokens}) must be greater than buffer (${OPENAI_CONSTANTS.TOKEN_BUFFER})`
+      `Token budget (${maxTokens}) must be greater than buffer (${LLM_CONSTANTS.TOKEN_BUFFER})`
     );
   }
 };
@@ -43,7 +38,7 @@ const validateTokenBudget = (maxTokens: number): void => {
  * @returns Available tokens for evidence
  */
 const calculateEvidenceBudget = (maxTokens: number): number =>
-  maxTokens - OPENAI_CONSTANTS.TOKEN_BUFFER;
+  maxTokens - LLM_CONSTANTS.TOKEN_BUFFER;
 
 /**
  * Manages token budget by truncating evidence if necessary.
@@ -63,7 +58,7 @@ const calculateEvidenceBudget = (maxTokens: number): number =>
  * const truncatedEvidence = manageTokenBudget(
  *   event,
  *   evidence,
- *   OPENAI_CONSTANTS.MAX_PROMPT_TOKENS
+ *   LLM_CONSTANTS.MAX_PROMPT_TOKENS
  * );
  * ```
  */
@@ -74,12 +69,25 @@ export const manageTokenBudget = (
 ): Evidence => {
   validateTokenBudget(maxTokens);
 
+  const originalLogCount = evidence.logs?.length ?? 0;
   const estimate = estimateTokenBudget(evidence, maxTokens);
   const evidenceTokenBudget = calculateEvidenceBudget(maxTokens);
 
   // Early return: estimate clearly exceeds budget - truncate immediately
   if (estimate.requiresTruncation) {
-    return truncateEvidence(evidence, evidenceTokenBudget);
+    const truncated = truncateEvidence(evidence, evidenceTokenBudget);
+    const truncatedLogCount = truncated.logs?.length ?? 0;
+
+    logger.warn("Evidence truncated due to token budget (estimate)", {
+      originalLogCount,
+      truncatedLogCount,
+      logsRemoved: originalLogCount - truncatedLogCount,
+      estimatedTokens: estimate.totalEstimatedTokens,
+      maxTokens,
+      evidenceTokenBudget,
+    });
+
+    return truncated;
   }
 
   // Estimate suggests it might fit - verify with actual prompt
@@ -88,11 +96,28 @@ export const manageTokenBudget = (
 
   // Early return: actual tokens fit - return original evidence
   if (actualTokens <= maxTokens) {
+    logger.debug("Evidence fits within token budget", {
+      logCount: originalLogCount,
+      actualTokens,
+      maxTokens,
+    });
     return evidence;
   }
 
   // Actual tokens exceed budget - truncate evidence
-  return truncateEvidence(evidence, evidenceTokenBudget);
+  const truncated = truncateEvidence(evidence, evidenceTokenBudget);
+  const truncatedLogCount = truncated.logs?.length ?? 0;
+
+  logger.warn("Evidence truncated due to token budget (actual)", {
+    originalLogCount,
+    truncatedLogCount,
+    logsRemoved: originalLogCount - truncatedLogCount,
+    actualTokens,
+    maxTokens,
+    evidenceTokenBudget,
+  });
+
+  return truncated;
 };
 
 /**
@@ -107,7 +132,7 @@ export const manageTokenBudget = (
  */
 const estimateTokenBudget = (evidence: Evidence, maxTokens: number): TokenEstimate => {
   const evidenceTokens = estimateEvidenceSize(evidence);
-  const totalEstimatedTokens = evidenceTokens + OPENAI_CONSTANTS.TOKEN_BUFFER;
+  const totalEstimatedTokens = evidenceTokens + LLM_CONSTANTS.TOKEN_BUFFER;
   const requiresTruncation = totalEstimatedTokens > maxTokens;
 
   return {
@@ -139,6 +164,13 @@ const estimateMetricsChars = (metrics: Evidence["metrics"]): number =>
 const estimateSystemStateChars = (systemState: Evidence["systemState"]): number =>
   systemState ? JSON.stringify(systemState).length : 0;
 
+const estimatePRDiffChars = (prDiffContext: Evidence["prDiffContext"]): number =>
+  prDiffContext
+    ? prDiffContext.diff.length +
+      prDiffContext.changedFiles.reduce((sum, file) => sum + file.length, 0) +
+      (prDiffContext.title?.length ?? 0)
+    : 0;
+
 /**
  * Array of evidence estimation functions paired with their corresponding evidence accessors.
  * This allows for a single-pass iteration without multiple if statements.
@@ -151,6 +183,7 @@ const evidenceEstimators: ReadonlyArray<{
   { estimate: (evidence) => estimateRelatedDocsChars(evidence.relatedDocs) },
   { estimate: (evidence) => estimateMetricsChars(evidence.metrics) },
   { estimate: (evidence) => estimateSystemStateChars(evidence.systemState) },
+  { estimate: (evidence) => estimatePRDiffChars(evidence.prDiffContext) },
 ] as const;
 
 /**
@@ -163,7 +196,7 @@ const evidenceEstimators: ReadonlyArray<{
  * @returns Estimated token count (rounded up for safety)
  */
 const estimateEvidenceSize = (evidence: Evidence): number => {
-  const { CHARS_PER_TOKEN_ESTIMATE } = OPENAI_CONSTANTS;
+  const { CHARS_PER_TOKEN_ESTIMATE } = LLM_CONSTANTS;
 
   const totalChars = evidenceEstimators.reduce((sum, { estimate }) => sum + estimate(evidence), 0);
 

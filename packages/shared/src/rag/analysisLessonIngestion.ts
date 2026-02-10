@@ -14,57 +14,18 @@ import {
   ANALYSIS_LESSON_CONFIG,
   SHORT_COMMIT_SHA_LENGTH,
 } from "../constants/index.js";
-import { ingestKnowledgeDoc, type IngestKnowledgeDocResult } from "./ingestion.js";
+import { ingestKnowledgeDoc } from "./ingestion.js";
 import type { AnalysisLessonMetadata } from "./schemas/index.js";
 import type { AnalyzedFailure, AggregatedFailures } from "../aggregation/types.js";
+import type {
+  AnalysisLessonContext,
+  IngestAnalysisLessonResult,
+  FailureCategory,
+} from "./types.js";
+
+export type { AnalysisLessonContext, IngestAnalysisLessonResult } from "./types.js";
 
 const logger = createLogger("analysis-lesson-ingestion");
-
-// ==================== Types ====================
-
-/**
- * Context for creating an analysis lesson from a confirmed analysis.
- */
-export interface AnalysisLessonContext {
-  /** Repository full name (owner/repo) */
-  readonly repository: string;
-  /** Commit SHA that triggered the failure */
-  readonly commitSha: string;
-  /** The analyzed failures with LLM analysis */
-  readonly failures: readonly AnalyzedFailure[];
-  /** Tenant ID for multi-tenancy */
-  readonly tenantId?: string;
-  /** User who provided positive feedback */
-  readonly confirmedBy?: string;
-  /** PR number if applicable */
-  readonly prNumber?: number;
-  /** Installation ID */
-  readonly installationId?: number;
-}
-
-/**
- * Result of analysis lesson ingestion.
- */
-export interface IngestAnalysisLessonResult {
-  readonly success: boolean;
-  readonly ingestionResult: IngestKnowledgeDocResult | null;
-  readonly lessonsCreated: number;
-  readonly error?: string;
-}
-
-/**
- * Failure category based on analysis patterns.
- */
-type FailureCategory =
-  | "test_failure"
-  | "build_error"
-  | "type_error"
-  | "lint_error"
-  | "dependency_error"
-  | "runtime_error"
-  | "timeout"
-  | "infrastructure"
-  | "unknown";
 
 // ==================== Category Detection ====================
 
@@ -182,72 +143,79 @@ const buildLessonTitle = (failure: AnalyzedFailure, repository: string): string 
 };
 
 /**
+ * Builds the test failures section from analyzed failure.
+ */
+const buildTestFailuresSection = (failure: AnalyzedFailure): string | null => {
+  if (!failure.testFailures || failure.testFailures.length === 0) {
+    return null;
+  }
+  const entries = failure.testFailures
+    .slice(0, ANALYSIS_LESSON_CONFIG.MAX_TEST_FAILURES_DISPLAYED)
+    .flatMap((testFailure) => {
+      const fileInfo = testFailure.file
+        ? [`  - File: ${testFailure.file}${testFailure.line ? `:${testFailure.line}` : ""}`]
+        : [];
+      return [`- **${testFailure.testName}**`, ...fileInfo];
+    });
+  return `\n## Failed Tests\n${entries.join("\n")}`;
+};
+
+/**
+ * Builds the annotations section from analyzed failure.
+ */
+const buildAnnotationsSection = (failure: AnalyzedFailure): string | null => {
+  if (failure.annotations.length === 0) {
+    return null;
+  }
+  const entries = failure.annotations
+    .slice(0, ANALYSIS_LESSON_CONFIG.MAX_ANNOTATIONS_DISPLAYED)
+    .flatMap((annotation) => [
+      `- **${annotation.path}:${annotation.line}**`,
+      `  ${annotation.message.substring(0, ANALYSIS_LESSON_CONFIG.MAX_ANNOTATION_MESSAGE_LENGTH)}`,
+    ]);
+  return `\n## Error Locations\n${entries.join("\n")}`;
+};
+
+/**
+ * Builds the recommended actions section.
+ */
+const buildActionsSection = (failure: AnalyzedFailure): string | null => {
+  if (!failure.recommendedActions || failure.recommendedActions.length === 0) {
+    return null;
+  }
+  const entries = failure.recommendedActions.map(
+    (action) => `- **${action.actionType}**: ${action.description}`
+  );
+  return `\n## Recommended Actions\n${entries.join("\n")}`;
+};
+
+/**
+ * Builds the context section for the lesson document.
+ */
+const buildLessonContextSection = (context: AnalysisLessonContext): string => {
+  const lines = [
+    "\n## Context",
+    `- Repository: ${context.repository}`,
+    `- Commit: ${context.commitSha}`,
+    ...(context.prNumber ? [`- PR: #${context.prNumber}`] : []),
+    "- Confirmed helpful by user feedback",
+  ];
+  return lines.join("\n");
+};
+
+/**
  * Builds comprehensive content for the analysis lesson document.
  */
 const buildLessonContent = (failure: AnalyzedFailure, context: AnalysisLessonContext): string => {
-  const sections: string[] = [];
-
-  // Problem summary
-  sections.push("## Problem");
-  sections.push(
-    `Check "${failure.checkName}" failed on commit ${context.commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH)}.`
-  );
-
-  // Root cause if identified
-  if (failure.identifiedCause) {
-    sections.push("\n## Root Cause");
-    sections.push(failure.identifiedCause);
-  }
-
-  // Analysis from LLM
-  if (failure.analysis) {
-    sections.push("\n## Analysis");
-    sections.push(failure.analysis);
-  }
-
-  // Test failures if any
-  if (failure.testFailures && failure.testFailures.length > 0) {
-    sections.push("\n## Failed Tests");
-    failure.testFailures
-      .slice(0, ANALYSIS_LESSON_CONFIG.MAX_TEST_FAILURES_DISPLAYED)
-      .forEach((testFailure) => {
-        sections.push(`- **${testFailure.testName}**`);
-        if (testFailure.file) {
-          const lineInfo = testFailure.line ? `:${testFailure.line}` : "";
-          sections.push(`  - File: ${testFailure.file}${lineInfo}`);
-        }
-      });
-  }
-
-  // Annotations with error details
-  if (failure.annotations.length > 0) {
-    sections.push("\n## Error Locations");
-    failure.annotations
-      .slice(0, ANALYSIS_LESSON_CONFIG.MAX_ANNOTATIONS_DISPLAYED)
-      .forEach((annotation) => {
-        sections.push(`- **${annotation.path}:${annotation.line}**`);
-        sections.push(
-          `  ${annotation.message.substring(0, ANALYSIS_LESSON_CONFIG.MAX_ANNOTATION_MESSAGE_LENGTH)}`
-        );
-      });
-  }
-
-  // Recommended actions
-  if (failure.recommendedActions && failure.recommendedActions.length > 0) {
-    sections.push("\n## Recommended Actions");
-    failure.recommendedActions.forEach((action) => {
-      sections.push(`- **${action.actionType}**: ${action.description}`);
-    });
-  }
-
-  // Context section
-  sections.push("\n## Context");
-  sections.push(`- Repository: ${context.repository}`);
-  sections.push(`- Commit: ${context.commitSha}`);
-  if (context.prNumber) {
-    sections.push(`- PR: #${context.prNumber}`);
-  }
-  sections.push(`- Confirmed helpful by user feedback`);
+  const sections = [
+    `## Problem\nCheck "${failure.checkName}" failed on commit ${context.commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH)}.`,
+    failure.identifiedCause ? `\n## Root Cause\n${failure.identifiedCause}` : null,
+    failure.analysis ? `\n## Analysis\n${failure.analysis}` : null,
+    buildTestFailuresSection(failure),
+    buildAnnotationsSection(failure),
+    buildActionsSection(failure),
+    buildLessonContextSection(context),
+  ].filter((section): section is string => section !== null);
 
   return sections.join("\n");
 };
@@ -294,98 +262,94 @@ const buildLessonMetadata = (
  * @param context - The analysis context with failure details
  * @returns Ingestion result with statistics
  */
+/**
+ * Checks if a failure has sufficient content and confidence for a lesson.
+ */
+const isQualifiedFailure = (failure: AnalyzedFailure): boolean => {
+  const hasContent =
+    failure.identifiedCause ||
+    failure.analysis ||
+    (failure.annotations && failure.annotations.length > 0);
+  const hasConfidence =
+    failure.confidence === undefined ||
+    failure.confidence >= ANALYSIS_LESSON_CONFIG.MIN_ANALYSIS_CONFIDENCE;
+  return Boolean(hasContent) && hasConfidence;
+};
+
+/**
+ * Ingests a single primary failure as a lesson document.
+ */
+const ingestPrimaryFailureLesson = async (
+  failure: AnalyzedFailure,
+  context: AnalysisLessonContext
+): Promise<IngestAnalysisLessonResult> => {
+  const { repository, commitSha, tenantId } = context;
+  const title = buildLessonTitle(failure, repository);
+  const content = buildLessonContent(failure, context);
+  const metadata = buildLessonMetadata(failure, context);
+
+  logger.info("Storing analysis lesson", {
+    repository,
+    commitSha: commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH),
+    checkName: failure.checkName,
+    title,
+    contentLength: content.length,
+  });
+
+  const ingestionResult = await ingestKnowledgeDoc({
+    docType: KNOWLEDGE_DOC_TYPES.ANALYSIS_LESSON,
+    title,
+    content,
+    tenantId,
+    repository,
+    sourceUrl: `https://github.com/${repository}/commit/${commitSha}`,
+    metadata,
+  });
+
+  logger.info("Analysis lesson stored", {
+    repository,
+    commitSha: commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH),
+    chunksCreated: ingestionResult.chunksCreated,
+    chunksEmbedded: ingestionResult.chunksEmbedded,
+    parentId: ingestionResult.parentId,
+  });
+
+  return { success: ingestionResult.success, ingestionResult, lessonsCreated: 1 };
+};
+
 export const ingestAnalysisLesson = async (
   context: AnalysisLessonContext
 ): Promise<IngestAnalysisLessonResult> => {
-  const { repository, commitSha, failures, tenantId } = context;
+  const { repository, commitSha, failures } = context;
+  const shortSha = commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH);
 
   logger.info("Starting analysis lesson ingestion", {
     repository,
-    commitSha: commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH),
+    commitSha: shortSha,
     failureCount: failures.length,
   });
 
-  // Filter to failures with sufficient analysis content
-  const qualifiedFailures = failures.filter((failure) => {
-    const hasContent =
-      failure.identifiedCause ||
-      failure.analysis ||
-      (failure.annotations && failure.annotations.length > 0);
-    const hasConfidence =
-      failure.confidence === undefined ||
-      failure.confidence >= ANALYSIS_LESSON_CONFIG.MIN_ANALYSIS_CONFIDENCE;
-
-    return hasContent && hasConfidence;
-  });
+  const qualifiedFailures = failures.filter(isQualifiedFailure);
 
   if (qualifiedFailures.length === 0) {
     logger.info("No qualified failures for lesson extraction", {
       repository,
-      commitSha: commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH),
+      commitSha: shortSha,
       totalFailures: failures.length,
     });
-
-    return {
-      success: true,
-      ingestionResult: null,
-      lessonsCreated: 0,
-    };
+    return { success: true, ingestionResult: null, lessonsCreated: 0 };
   }
 
   try {
-    // Process the primary failure (first qualified one)
-    // Could be extended to process multiple failures as separate lessons
-    const primaryFailure = qualifiedFailures[0];
-    const title = buildLessonTitle(primaryFailure, repository);
-    const content = buildLessonContent(primaryFailure, context);
-    const metadata = buildLessonMetadata(primaryFailure, context);
-
-    logger.info("Ingesting analysis lesson", {
-      repository,
-      commitSha: commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH),
-      checkName: primaryFailure.checkName,
-      title,
-      contentLength: content.length,
-    });
-
-    const ingestionResult = await ingestKnowledgeDoc({
-      docType: KNOWLEDGE_DOC_TYPES.ANALYSIS_LESSON,
-      title,
-      content,
-      tenantId,
-      repository,
-      sourceUrl: `https://github.com/${repository}/commit/${commitSha}`,
-      metadata,
-    });
-
-    logger.info("Analysis lesson ingested", {
-      repository,
-      commitSha: commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH),
-      chunksCreated: ingestionResult.chunksCreated,
-      chunksEmbedded: ingestionResult.chunksEmbedded,
-      parentId: ingestionResult.parentId,
-    });
-
-    return {
-      success: ingestionResult.success,
-      ingestionResult,
-      lessonsCreated: 1,
-    };
+    return await ingestPrimaryFailureLesson(qualifiedFailures[0], context);
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-
-    logger.error("Failed to ingest analysis lesson", {
+    logger.error("Lesson ingestion failed", {
       repository,
-      commitSha: commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH),
+      commitSha: shortSha,
       error: errorMessage,
     });
-
-    return {
-      success: false,
-      ingestionResult: null,
-      lessonsCreated: 0,
-      error: errorMessage,
-    };
+    return { success: false, ingestionResult: null, lessonsCreated: 0, error: errorMessage };
   }
 };
 

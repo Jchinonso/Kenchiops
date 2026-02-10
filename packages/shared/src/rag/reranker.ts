@@ -8,110 +8,18 @@
  */
 
 import { createLogger } from "../core/logger.js";
-import { SOURCE_RELIABILITY_SCORES, KNOWLEDGE_DOC_TYPES } from "../constants/index.js";
+import {
+  SOURCE_RELIABILITY_SCORES,
+  KNOWLEDGE_DOC_TYPES,
+  RANKING_WEIGHTS,
+  RECENCY_CONFIG,
+  METADATA_BOOSTS,
+} from "../constants/index.js";
+import type { RerankableResult, QueryContext, RerankedResult, RerankOptions } from "./types.js";
+
+export type { RerankableResult, QueryContext, RerankedResult, RerankOptions } from "./types.js";
 
 const logger = createLogger("rag-reranker");
-
-// ==================== Constants ====================
-
-/**
- * Ranking weight configuration.
- */
-const RANKING_WEIGHTS = {
-  VECTOR_SIMILARITY: 0.55,
-  SOURCE_RELIABILITY: 0.2,
-  RECENCY_BOOST: 0.15,
-  FEEDBACK_SIGNAL: 0.1,
-} as const;
-
-/**
- * Recency boost configuration.
- */
-const RECENCY_CONFIG = {
-  /** Maximum age in days for full recency boost */
-  FULL_BOOST_DAYS: 7,
-  /** Age in days after which no recency boost applies */
-  NO_BOOST_DAYS: 90,
-  /** Maximum recency boost value */
-  MAX_BOOST: 1.0,
-  /** Minimum recency boost value */
-  MIN_BOOST: 0.1,
-  /** Milliseconds per day */
-  MS_PER_DAY: 86400000,
-} as const;
-
-/**
- * Metadata boost configuration.
- */
-const METADATA_BOOSTS = {
-  /** Boost for matching repository */
-  SAME_REPO: 0.15,
-  /** Boost for matching workflow/CI step */
-  SAME_WORKFLOW: 0.1,
-  /** Boost for matching error signature */
-  SAME_ERROR_SIGNATURE: 0.2,
-  /** Boost for matching language/framework */
-  SAME_LANGUAGE: 0.05,
-} as const;
-
-// ==================== Types ====================
-
-/**
- * Search result item for reranking.
- */
-export interface RerankableResult {
-  readonly id: string;
-  readonly similarity: number;
-  readonly docType: string;
-  readonly content: string;
-  readonly createdAt?: string;
-  readonly metadata?: {
-    readonly repository?: string;
-    readonly workflow?: string;
-    readonly errorSignature?: string;
-    readonly language?: string;
-    readonly hitCount?: number;
-    readonly helpfulRate?: number;
-    readonly negativeFeedbackCount?: number;
-  };
-}
-
-/**
- * Query context for metadata matching.
- */
-export interface QueryContext {
-  readonly repository?: string;
-  readonly workflow?: string;
-  readonly errorSignature?: string;
-  readonly language?: string;
-}
-
-/**
- * Reranked result with scoring breakdown.
- */
-export interface RerankedResult {
-  readonly result: RerankableResult;
-  readonly finalScore: number;
-  readonly scoreBreakdown: {
-    readonly vectorScore: number;
-    readonly reliabilityScore: number;
-    readonly recencyScore: number;
-    readonly feedbackScore: number;
-    readonly metadataBoost: number;
-  };
-}
-
-/**
- * Reranking options.
- */
-export interface RerankOptions {
-  /** Query context for metadata matching */
-  readonly queryContext?: QueryContext;
-  /** Maximum results to return */
-  readonly topK?: number;
-  /** Minimum final score threshold */
-  readonly minScore?: number;
-}
 
 // ==================== Scoring Functions ====================
 

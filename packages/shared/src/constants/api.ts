@@ -96,8 +96,7 @@ export const HEALTH_STATUS = {
   UNHEALTHY: "unhealthy",
 } as const;
 
-/** Type for health status values (legacy: "ok" | "error", new: "healthy" | "degraded" | "unhealthy") */
-export type HealthStatus = (typeof HEALTH_STATUS)[keyof typeof HEALTH_STATUS];
+export type { HealthStatus, ApiResponseStatus } from "./types.js";
 
 /**
  * Memory usage threshold percentages for health checks.
@@ -107,6 +106,10 @@ export const MEMORY_THRESHOLDS = {
   WARNING: 95,
   /** Heap usage percentage that triggers unhealthy status */
   CRITICAL: 99,
+  /** Bytes per megabyte for memory conversions */
+  BYTES_PER_MB: 1024 * 1024,
+  /** Multiplier to convert decimal to percentage */
+  PERCENT_MULTIPLIER: 100,
 } as const;
 
 /**
@@ -118,9 +121,6 @@ export const API_RESPONSE_STATUS = {
   SUCCESS: "success",
   ERROR: "error",
 } as const;
-
-/** Type for API response status values */
-export type ApiResponseStatus = (typeof API_RESPONSE_STATUS)[keyof typeof API_RESPONSE_STATUS];
 
 /**
  * API response messages for standard responses.
@@ -184,3 +184,25 @@ export const API_REQUEST_FIELDS = {
  * @returns True if the path should skip rate limiting
  */
 export const shouldSkipRateLimit = (path: string): boolean => RATE_LIMIT_SKIP_PATHS.has(path);
+
+/**
+ * Default pagination values for API routes.
+ */
+export const API_PAGINATION_DEFAULTS = {
+  /** Default limit for list queries */
+  DEFAULT_LIMIT: 100,
+  /** Default offset for list queries */
+  DEFAULT_OFFSET: 0,
+} as const;
+
+// ==================== GitHub API Constants ====================
+
+/**
+ * GitHub API configuration.
+ */
+export const GITHUB_API_CONFIG = {
+  /** GitHub REST API base URL */
+  BASE_URL: "https://api.github.com",
+  /** Default issues per page for list requests */
+  ISSUES_PER_PAGE: 30,
+} as const;

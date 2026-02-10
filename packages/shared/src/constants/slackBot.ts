@@ -184,11 +184,7 @@ export const PRIORITY_NUMERIC_MAP = {
   4: "low",
 } as const;
 
-/** Type for numeric priority values */
-export type NumericPriority = keyof typeof PRIORITY_NUMERIC_MAP;
-
-/** Type for string priority values from numeric map */
-export type StringPriority = (typeof PRIORITY_NUMERIC_MAP)[NumericPriority];
+export type { NumericPriority, StringPriority } from "./types.js";
 
 // ==================== Messages ====================
 

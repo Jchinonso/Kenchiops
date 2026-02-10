@@ -5,17 +5,10 @@
  */
 
 import { config, SERVICE_PORTS, SERVICE_NAMES, SERVICE_VERSIONS } from "@kenchi/shared";
+import type { ApiConfig } from "../types/apiTypes.js";
 
-/**
- * API service configuration interface
- */
-export interface ApiConfig {
-  readonly port: number;
-  readonly environment: string;
-  readonly serviceName: string;
-  readonly version: string;
-  readonly databaseUrl: string;
-}
+// Re-export for backwards compatibility
+export type { ApiConfig } from "../types/apiTypes.js";
 
 /**
  * Validated API configuration

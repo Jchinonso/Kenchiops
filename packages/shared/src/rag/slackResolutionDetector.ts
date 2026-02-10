@@ -17,8 +17,16 @@ import {
   hasPositiveReactions,
   hasCodeBlock,
   calculateConfidenceScore,
-  type SlackMessage,
 } from "./slackResolutionPatterns.js";
+import type {
+  SlackMessage,
+  SlackThread,
+  DetectedResolution,
+  ResolutionDetectionResult,
+  ResolutionCandidate,
+} from "./types.js";
+
+export type { SlackThread, DetectedResolution, ResolutionDetectionResult } from "./types.js";
 
 // Re-export patterns for backwards compatibility
 export {
@@ -37,67 +45,6 @@ export {
 } from "./slackResolutionPatterns.js";
 
 const logger = createLogger("slack-resolution-detector");
-
-// ==================== Types ====================
-
-/**
- * A Slack thread with its messages.
- */
-export interface SlackThread {
-  readonly channelId: string;
-  readonly channelName?: string;
-  readonly threadTs: string;
-  readonly messages: readonly SlackMessage[];
-  readonly originalIssue?: string;
-  readonly repository?: string;
-}
-
-/**
- * Detected resolution from a Slack thread.
- */
-export interface DetectedResolution {
-  readonly threadTs: string;
-  readonly channelId: string;
-  readonly confidence: number;
-  readonly resolutionContent: string;
-  readonly resolutionMessageTs: string;
-  readonly matchedPatterns: readonly string[];
-  readonly hasPositiveReactions: boolean;
-  readonly hasCodeBlock: boolean;
-  readonly resolverUserId: string;
-  readonly resolverUsername?: string;
-}
-
-/**
- * Result of resolution detection.
- */
-export interface ResolutionDetectionResult {
-  readonly hasResolution: boolean;
-  readonly resolution: DetectedResolution | null;
-  readonly allCandidates: readonly ResolutionCandidate[];
-  readonly analysisMetadata: ResolutionAnalysisMetadata;
-}
-
-/**
- * A candidate message that may contain a resolution.
- */
-interface ResolutionCandidate {
-  readonly message: SlackMessage;
-  readonly score: number;
-  readonly matchedPatterns: readonly string[];
-  readonly hasPositiveReactions: boolean;
-  readonly hasCodeBlock: boolean;
-}
-
-/**
- * Metadata about the resolution analysis.
- */
-interface ResolutionAnalysisMetadata {
-  readonly messagesAnalyzed: number;
-  readonly candidatesFound: number;
-  readonly topScore: number;
-  readonly patternMatchCounts: Readonly<Record<string, number>>;
-}
 
 // ==================== Candidate Analysis ====================
 
@@ -206,6 +153,55 @@ const collectPatternMatchCounts = (
   }, {});
 };
 
+// ==================== Result Builders ====================
+
+/**
+ * Builds analysis metadata from candidates and messages.
+ */
+const buildAnalysisMetadata = (
+  messagesAnalyzed: number,
+  candidates: readonly ResolutionCandidate[],
+  patternMatchCounts: Readonly<Record<string, number>>,
+  topScore: number
+): ResolutionDetectionResult["analysisMetadata"] => ({
+  messagesAnalyzed,
+  candidatesFound: candidates.length,
+  topScore,
+  patternMatchCounts,
+});
+
+/**
+ * Builds a no-resolution result.
+ */
+const buildNoResolutionResult = (
+  candidates: readonly ResolutionCandidate[],
+  metadata: ResolutionDetectionResult["analysisMetadata"]
+): ResolutionDetectionResult => ({
+  hasResolution: false,
+  resolution: null,
+  allCandidates: candidates,
+  analysisMetadata: metadata,
+});
+
+/**
+ * Builds a DetectedResolution from the best candidate and thread.
+ */
+const buildDetectedResolution = (
+  candidate: ResolutionCandidate,
+  thread: SlackThread
+): DetectedResolution => ({
+  threadTs: thread.threadTs,
+  channelId: thread.channelId,
+  confidence: candidate.score,
+  resolutionContent: buildResolutionContent(candidate, thread),
+  resolutionMessageTs: candidate.message.ts,
+  matchedPatterns: candidate.matchedPatterns,
+  hasPositiveReactions: candidate.hasPositiveReactions,
+  hasCodeBlock: candidate.hasCodeBlock,
+  resolverUserId: candidate.message.userId,
+  resolverUsername: candidate.message.username,
+});
+
 // ==================== Public API ====================
 
 /**
@@ -223,29 +219,16 @@ const collectPatternMatchCounts = (
  */
 export const detectResolution = (thread: SlackThread): ResolutionDetectionResult => {
   const { messages } = thread;
+  const emptyMetadata = buildAnalysisMetadata(0, [], {}, 0);
 
   if (messages.length === 0) {
-    return {
-      hasResolution: false,
-      resolution: null,
-      allCandidates: [],
-      analysisMetadata: {
-        messagesAnalyzed: 0,
-        candidatesFound: 0,
-        topScore: 0,
-        patternMatchCounts: {},
-      },
-    };
+    return buildNoResolutionResult([], emptyMetadata);
   }
 
-  // Find all resolution candidates
   const candidates = findResolutionCandidates(messages);
-
-  // Collect pattern match statistics
   const patternMatchCounts = collectPatternMatchCounts(candidates);
-
-  // Check if best candidate meets threshold
   const bestCandidate = candidates[0] ?? null;
+  const topScore = bestCandidate?.score ?? 0;
   const meetsThreshold =
     bestCandidate !== null && bestCandidate.score >= CONFIDENCE_THRESHOLDS.MIN_RESOLUTION;
 
@@ -254,48 +237,21 @@ export const detectResolution = (thread: SlackThread): ResolutionDetectionResult
     channelId: thread.channelId,
     messagesAnalyzed: messages.length,
     candidatesFound: candidates.length,
-    topScore: bestCandidate?.score ?? 0,
+    topScore,
     hasResolution: meetsThreshold,
   });
 
-  if (!meetsThreshold || bestCandidate === null) {
-    return {
-      hasResolution: false,
-      resolution: null,
-      allCandidates: candidates,
-      analysisMetadata: {
-        messagesAnalyzed: messages.length,
-        candidatesFound: candidates.length,
-        topScore: bestCandidate?.score ?? 0,
-        patternMatchCounts,
-      },
-    };
-  }
+  const metadata = buildAnalysisMetadata(messages.length, candidates, patternMatchCounts, topScore);
 
-  // Build resolution from best candidate
-  const resolution: DetectedResolution = {
-    threadTs: thread.threadTs,
-    channelId: thread.channelId,
-    confidence: bestCandidate.score,
-    resolutionContent: buildResolutionContent(bestCandidate, thread),
-    resolutionMessageTs: bestCandidate.message.ts,
-    matchedPatterns: bestCandidate.matchedPatterns,
-    hasPositiveReactions: bestCandidate.hasPositiveReactions,
-    hasCodeBlock: bestCandidate.hasCodeBlock,
-    resolverUserId: bestCandidate.message.userId,
-    resolverUsername: bestCandidate.message.username,
-  };
+  if (!meetsThreshold || bestCandidate === null) {
+    return buildNoResolutionResult(candidates, metadata);
+  }
 
   return {
     hasResolution: true,
-    resolution,
+    resolution: buildDetectedResolution(bestCandidate, thread),
     allCandidates: candidates,
-    analysisMetadata: {
-      messagesAnalyzed: messages.length,
-      candidatesFound: candidates.length,
-      topScore: bestCandidate.score,
-      patternMatchCounts,
-    },
+    analysisMetadata: metadata,
   };
 };
 

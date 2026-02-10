@@ -13,8 +13,8 @@ import {
   extractFromChunk,
   extractFromAllChunks,
   type ExtractorFunction,
-} from "../../formatting/chunkExtractor.js";
-import type { ChunkResult } from "../../formatting/chunkingTypes.js";
+} from "../../formatting/extraction/index.js";
+import type { ChunkResult } from "../../formatting/chunking/index.js";
 import {
   EXTRACTION_DEFAULTS,
   ARTIFACT_TYPES,

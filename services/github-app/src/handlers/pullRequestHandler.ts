@@ -10,6 +10,8 @@ import {
   ingestLinkedCommitKnowledge,
   getErrorMessage,
   findByGitHubInstallation,
+  getOrFetchPullRequestDiff,
+  getOrFetchPullRequestCommits,
 } from "@kenchi/shared";
 import { GITHUB_PR_ACTIONS, type PullRequestWebhook } from "../types/githubTypes.js";
 import { getOctokit } from "../services/githubService.js";
@@ -19,7 +21,7 @@ const logger = createLogger("github-app");
 // ==================== Helper Functions ====================
 
 /**
- * Fetches the diff content for a PR.
+ * Fetches the diff content for a PR with caching.
  */
 const fetchPRDiff = async (
   installationId: number,
@@ -28,15 +30,17 @@ const fetchPRDiff = async (
   prNumber: number
 ): Promise<string | null> => {
   try {
-    const octokit = await getOctokit(installationId);
-    const response = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-      mediaType: { format: "diff" },
+    return await getOrFetchPullRequestDiff(owner, repo, prNumber, async () => {
+      const octokit = await getOctokit(installationId);
+      const response = await octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: prNumber,
+        mediaType: { format: "diff" },
+      });
+      // Response.data will be the diff string when using diff format
+      return response.data as unknown as string;
     });
-    // Response.data will be the diff string when using diff format
-    return response.data as unknown as string;
   } catch (error) {
     logger.warn("Failed to fetch PR diff", {
       owner,
@@ -49,7 +53,7 @@ const fetchPRDiff = async (
 };
 
 /**
- * Fetches commit messages for a PR.
+ * Fetches commit messages for a PR with caching.
  */
 const fetchPRCommits = async (
   installationId: number,
@@ -58,14 +62,16 @@ const fetchPRCommits = async (
   prNumber: number
 ): Promise<readonly string[]> => {
   try {
-    const octokit = await getOctokit(installationId);
-    const response = await octokit.rest.pulls.listCommits({
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
+    return await getOrFetchPullRequestCommits(owner, repo, prNumber, async () => {
+      const octokit = await getOctokit(installationId);
+      const response = await octokit.rest.pulls.listCommits({
+        owner,
+        repo,
+        pull_number: prNumber,
+        per_page: 100,
+      });
+      return response.data.map((commit) => commit.commit.message);
     });
-    return response.data.map((commit) => commit.commit.message);
   } catch (error) {
     logger.warn("Failed to fetch PR commits", {
       owner,

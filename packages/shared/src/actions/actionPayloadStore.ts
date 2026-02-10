@@ -6,121 +6,211 @@
  *
  * Uses short opaque IDs in button values, stores full payloads server-side.
  * Includes TTL-based expiration and verification.
+ *
+ * @module actions/actionPayloadStore
  */
 
 import { createLogger } from "../core/logger.js";
 import { ValidationError, NotFoundError } from "../core/errors.js";
-import { TIME_CONSTANTS } from "../constants/index.js";
+import { ACTION_STORE_CONFIG, ACTION_TOKEN_CONFIG, ACTION_CHAR_SETS } from "../constants/index.js";
 import type {
   StoredActionPayload,
   OpaqueActionValue,
   ActionVerificationContext,
   ActionStoreStats,
-} from "./actionTypes.js";
-
-// Re-export types for backwards compatibility
-export type {
-  StoredActionPayload,
-  OpaqueActionValue,
-  ActionVerificationContext,
-  ActionStoreStats,
-} from "./actionTypes.js";
+  StoredEntry,
+  VerificationRule,
+  ParseResult,
+} from "./types.js";
 
 const logger = createLogger("action-store");
 
-// ==================== Constants ====================
-
-const PAYLOAD_TTL_MS = TIME_CONSTANTS.MILLISECONDS_PER_HOUR;
-const CLEANUP_INTERVAL_MS = TIME_CONSTANTS.MILLISECONDS_PER_MINUTE * 5;
-const MAX_STORED_PAYLOADS = 10000;
-const EVICTION_PERCENTAGE = 0.1;
-const VERIFICATION_TOKEN_LENGTH = 8;
-const VERIFICATION_PREFIX_LENGTH = 4;
-const SHORT_ID_SEGMENT_COUNT = 3;
-const SHORT_ID_SEGMENT_LENGTH = 4;
-
-const ALPHANUMERIC_LOWER = "abcdefghijklmnopqrstuvwxyz0123456789";
-const ALPHANUMERIC_MIXED = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-// ==================== Store Implementation ====================
-
-interface StoredEntry {
-  readonly payload: StoredActionPayload;
-  readonly expiresAt: number;
-}
+// ==================== Store State ====================
 
 const payloadStore = new Map<string, StoredEntry>();
 let cleanupIntervalId: NodeJS.Timeout | null = null;
 
-/** Generates random string from given character set. */
-const randomString = (length: number, chars: string): string =>
-  Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+// ==================== Random Generation ====================
 
-/** Generates a short random ID (format: xxxx-xxxx-xxxx). */
+/** Generates random string from given character set */
+const generateRandomString = (length: number, charSet: string): string =>
+  Array.from({ length }, () => charSet[Math.floor(Math.random() * charSet.length)]).join("");
+
+/** Generates a short random ID (format: xxxx-xxxx-xxxx) */
 const generateShortId = (): string =>
-  Array.from({ length: SHORT_ID_SEGMENT_COUNT }, () =>
-    randomString(SHORT_ID_SEGMENT_LENGTH, ALPHANUMERIC_LOWER)
+  Array.from({ length: ACTION_TOKEN_CONFIG.SEGMENT_COUNT }, () =>
+    generateRandomString(ACTION_TOKEN_CONFIG.SEGMENT_LENGTH, ACTION_CHAR_SETS.LOWER)
   ).join("-");
 
-/** Generates a verification token. */
+/** Generates a verification token */
 const generateVerificationToken = (): string =>
-  randomString(VERIFICATION_TOKEN_LENGTH, ALPHANUMERIC_MIXED);
+  generateRandomString(ACTION_TOKEN_CONFIG.VERIFICATION_LENGTH, ACTION_CHAR_SETS.MIXED);
 
-/** Removes expired entries from the store and returns count removed. */
+// ==================== Store Maintenance ====================
+
+/** Deletes multiple entries from the store by their IDs */
+const deleteEntriesById = (entryIds: readonly string[]): number =>
+  entryIds.filter((entryId) => payloadStore.delete(entryId)).length;
+
+/** Removes expired entries from the store and returns count removed */
 const cleanupExpiredEntries = (): number => {
   const now = Date.now();
   const expiredIds = [...payloadStore.entries()]
-    .filter(([, entry]) => entry.expiresAt <= now)
-    .map(([id]) => id);
+    .filter(([, storedEntry]) => storedEntry.expiresAt <= now)
+    .map(([entryId]) => entryId);
 
   if (expiredIds.length === 0) {
     return 0;
   }
 
-  expiredIds.forEach((entryId) => payloadStore.delete(entryId));
-  logger.debug("Cleaned up expired action payloads", { count: expiredIds.length });
+  const deletedCount = deleteEntriesById(expiredIds);
+  logger.debug("Cleaned up expired action payloads", { count: deletedCount });
 
-  return expiredIds.length;
+  return deletedCount;
 };
 
-/** Starts the cleanup interval if not already running. */
+/** Starts the cleanup interval if not already running */
 const ensureCleanupInterval = (): void => {
   if (cleanupIntervalId !== null) {
     return;
   }
 
-  cleanupIntervalId = setInterval(cleanupExpiredEntries, CLEANUP_INTERVAL_MS);
-  cleanupIntervalId.unref(); // Don't block process exit
+  cleanupIntervalId = setInterval(cleanupExpiredEntries, ACTION_STORE_CONFIG.CLEANUP_INTERVAL_MS);
+  cleanupIntervalId.unref();
+};
+
+/** Removes oldest entries when store exceeds capacity */
+const evictOldestEntries = (): void => {
+  cleanupExpiredEntries();
+
+  if (payloadStore.size < ACTION_STORE_CONFIG.MAX_PAYLOADS) {
+    return;
+  }
+
+  const evictionCount = Math.floor(
+    ACTION_STORE_CONFIG.MAX_PAYLOADS * ACTION_STORE_CONFIG.EVICTION_RATIO
+  );
+  const idsToEvict = [...payloadStore.keys()].slice(0, evictionCount);
+  deleteEntriesById(idsToEvict);
+
+  logger.warn("Force-removed oldest action payloads", { count: evictionCount });
+};
+
+// ==================== Verification ====================
+
+/** Throws NotFoundError for expired payloads */
+const handleExpiredPayload = (opaqueValue: OpaqueActionValue): never => {
+  payloadStore.delete(opaqueValue.id);
+  throw new NotFoundError(`Action payload expired: ${opaqueValue.id}`);
+};
+
+/** Throws ValidationError for token mismatch */
+const handleTokenMismatch = (storedEntry: StoredEntry, opaqueValue: OpaqueActionValue): never => {
+  logger.warn("Action verification token mismatch", {
+    id: opaqueValue.id,
+    expected: storedEntry.payload.verificationToken.slice(0, ACTION_TOKEN_CONFIG.PREFIX_LENGTH),
+    received: opaqueValue.v,
+  });
+  throw new ValidationError("Action verification failed");
+};
+
+/** Throws ValidationError for context mismatch */
+const handleContextMismatch = (
+  fieldName: string,
+  opaqueValueId: string,
+  expected: unknown,
+  received: unknown
+): never => {
+  logger.warn(`Action ${fieldName} mismatch`, { id: opaqueValueId, expected, received });
+  throw new ValidationError("Action context verification failed");
+};
+
+/** Verification rules applied in order */
+const VERIFICATION_RULES: readonly VerificationRule[] = [
+  {
+    shouldReject: (storedEntry) => storedEntry.expiresAt <= Date.now(),
+    reject: (_storedEntry, opaqueValue): never => handleExpiredPayload(opaqueValue),
+  },
+  {
+    shouldReject: (storedEntry, opaqueValue) =>
+      !storedEntry.payload.verificationToken.startsWith(opaqueValue.v),
+    reject: (storedEntry, opaqueValue): never => handleTokenMismatch(storedEntry, opaqueValue),
+  },
+  {
+    shouldReject: (storedEntry, _opaqueValue, context) =>
+      Boolean(context?.repository && context.repository !== storedEntry.payload.repository),
+    reject: (storedEntry, opaqueValue, context): never =>
+      handleContextMismatch(
+        "repository",
+        opaqueValue.id,
+        storedEntry.payload.repository,
+        context?.repository
+      ),
+  },
+  {
+    shouldReject: (storedEntry, _opaqueValue, context) =>
+      Boolean(
+        context?.installationId && context.installationId !== storedEntry.payload.installationId
+      ),
+    reject: (storedEntry, opaqueValue, context): never =>
+      handleContextMismatch(
+        "installationId",
+        opaqueValue.id,
+        storedEntry.payload.installationId,
+        context?.installationId
+      ),
+  },
+];
+
+/** Applies all verification rules, throws on first failure */
+const verifyPayload = (
+  storedEntry: StoredEntry,
+  opaqueValue: OpaqueActionValue,
+  context?: ActionVerificationContext
+): void => {
+  const failedRule = VERIFICATION_RULES.find((rule) =>
+    rule.shouldReject(storedEntry, opaqueValue, context)
+  );
+
+  if (failedRule) {
+    failedRule.reject(storedEntry, opaqueValue, context);
+  }
+};
+
+// ==================== Type Guards ====================
+
+/** Type guard for OpaqueActionValue */
+const isOpaqueActionValue = (value: unknown): value is OpaqueActionValue => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.id === "string" && typeof candidate.v === "string";
+};
+
+/** Safely parses JSON without throwing */
+const safeJsonParse = (jsonString: string): ParseResult<unknown> => {
+  try {
+    return { success: true, data: JSON.parse(jsonString) };
+  } catch {
+    return { success: false };
+  }
 };
 
 // ==================== Public API ====================
 
-/** Deletes entries from store by IDs. */
-const deleteEntries = (ids: readonly string[]): void => {
-  ids.forEach((id) => payloadStore.delete(id));
-};
-
-/** Removes oldest entries when store exceeds capacity. */
-const evictOldestEntries = (): void => {
-  cleanupExpiredEntries();
-
-  if (payloadStore.size < MAX_STORED_PAYLOADS) {
-    return;
-  }
-
-  const entriesToRemove = Math.floor(MAX_STORED_PAYLOADS * EVICTION_PERCENTAGE);
-  const idsToRemove = [...payloadStore.keys()].slice(0, entriesToRemove);
-  deleteEntries(idsToRemove);
-  logger.warn("Force-removed oldest action payloads", { count: entriesToRemove });
-};
-
-/** Stores an action payload and returns an opaque reference for Slack buttons. */
+/**
+ * Stores an action payload and returns an opaque reference for Slack buttons.
+ *
+ * @param payload - The action payload to store
+ * @returns Opaque value containing short ID and verification prefix
+ */
 export const storeActionPayload = (
   payload: Omit<StoredActionPayload, "createdAt" | "verificationToken">
 ): OpaqueActionValue => {
   ensureCleanupInterval();
 
-  if (payloadStore.size >= MAX_STORED_PAYLOADS) {
+  if (payloadStore.size >= ACTION_STORE_CONFIG.MAX_PAYLOADS) {
     evictOldestEntries();
   }
 
@@ -136,7 +226,7 @@ export const storeActionPayload = (
 
   payloadStore.set(id, {
     payload: storedPayload,
-    expiresAt: now + PAYLOAD_TTL_MS,
+    expiresAt: now + ACTION_STORE_CONFIG.PAYLOAD_TTL_MS,
   });
 
   logger.debug("Stored action payload", {
@@ -145,79 +235,15 @@ export const storeActionPayload = (
     repository: payload.repository,
   });
 
-  return { id, v: verificationToken.slice(0, VERIFICATION_PREFIX_LENGTH) };
+  return { id, v: verificationToken.slice(0, ACTION_TOKEN_CONFIG.PREFIX_LENGTH) };
 };
-
-/** Verification rule for action retrieval validation. */
-interface VerificationRule {
-  readonly check: (
-    entry: StoredEntry,
-    opaqueValue: OpaqueActionValue,
-    context?: ActionVerificationContext
-  ) => boolean;
-  readonly onFail: (
-    entry: StoredEntry,
-    opaqueValue: OpaqueActionValue,
-    context?: ActionVerificationContext
-  ) => never;
-}
-
-/** Logs verification failure and throws ValidationError. */
-const failContextVerification = (
-  logMessage: string,
-  opaqueValueId: string,
-  expected: unknown,
-  received: unknown
-): never => {
-  logger.warn(logMessage, { id: opaqueValueId, expected, received });
-  throw new ValidationError("Action context verification failed");
-};
-
-const VERIFICATION_RULES: readonly VerificationRule[] = [
-  {
-    check: (entry) => entry.expiresAt <= Date.now(),
-    onFail: (_entry, opaqueValue) => {
-      payloadStore.delete(opaqueValue.id);
-      throw new NotFoundError(`Action payload expired: ${opaqueValue.id}`);
-    },
-  },
-  {
-    check: (entry, opaqueValue) => !entry.payload.verificationToken.startsWith(opaqueValue.v),
-    onFail: (entry, opaqueValue) => {
-      logger.warn("Action verification token mismatch", {
-        id: opaqueValue.id,
-        expected: entry.payload.verificationToken.slice(0, VERIFICATION_PREFIX_LENGTH),
-        received: opaqueValue.v,
-      });
-      throw new ValidationError("Action verification failed");
-    },
-  },
-  {
-    check: (entry, _opaqueValue, context) =>
-      Boolean(context?.repository && context.repository !== entry.payload.repository),
-    onFail: (entry, opaqueValue, context) =>
-      failContextVerification(
-        "Action repository mismatch",
-        opaqueValue.id,
-        entry.payload.repository,
-        context?.repository
-      ),
-  },
-  {
-    check: (entry, _opaqueValue, context) =>
-      Boolean(context?.installationId && context.installationId !== entry.payload.installationId),
-    onFail: (entry, opaqueValue, context) =>
-      failContextVerification(
-        "Action installation mismatch",
-        opaqueValue.id,
-        entry.payload.installationId,
-        context?.installationId
-      ),
-  },
-];
 
 /**
  * Retrieves and verifies an action payload by its opaque ID.
+ *
+ * @param opaqueValue - The opaque reference from a Slack button
+ * @param context - Optional verification context for additional checks
+ * @returns The stored action payload
  * @throws {NotFoundError} If payload not found or expired
  * @throws {ValidationError} If verification fails
  */
@@ -225,39 +251,49 @@ export const retrieveActionPayload = (
   opaqueValue: OpaqueActionValue,
   context?: ActionVerificationContext
 ): StoredActionPayload => {
-  const entry = payloadStore.get(opaqueValue.id);
+  const storedEntry = payloadStore.get(opaqueValue.id);
 
-  if (!entry) {
+  if (!storedEntry) {
     throw new NotFoundError(`Action payload not found: ${opaqueValue.id}`);
   }
 
-  const failedRule = VERIFICATION_RULES.find((rule) => rule.check(entry, opaqueValue, context));
-  if (failedRule) {
-    failedRule.onFail(entry, opaqueValue, context);
-  }
+  verifyPayload(storedEntry, opaqueValue, context);
 
-  return entry.payload;
+  return storedEntry.payload;
 };
 
-/** Deletes an action payload (after execution or rejection). */
+/**
+ * Deletes an action payload after execution or rejection.
+ *
+ * @param id - The payload ID to delete
+ * @returns True if deleted, false if not found
+ */
 export const deleteActionPayload = (id: string): boolean => {
   const deleted = payloadStore.delete(id);
+
   if (deleted) {
     logger.debug("Deleted action payload", { id });
   }
+
   return deleted;
 };
 
-/** Returns store statistics for monitoring. */
+/**
+ * Returns store statistics for monitoring.
+ */
 export const getActionStoreStats = (): ActionStoreStats => ({
   size: payloadStore.size,
-  maxSize: MAX_STORED_PAYLOADS,
-  ttlMs: PAYLOAD_TTL_MS,
+  maxSize: ACTION_STORE_CONFIG.MAX_PAYLOADS,
+  ttlMs: ACTION_STORE_CONFIG.PAYLOAD_TTL_MS,
 });
 
-/** Clears all stored payloads and stops cleanup interval (for testing). */
+/**
+ * Clears all stored payloads and stops cleanup interval.
+ * For testing purposes only.
+ */
 export const clearActionStore = (): void => {
   payloadStore.clear();
+
   if (cleanupIntervalId === null) {
     return;
   }
@@ -266,30 +302,23 @@ export const clearActionStore = (): void => {
   cleanupIntervalId = null;
 };
 
-/** Type guard for OpaqueActionValue. */
-const isOpaqueActionValue = (value: unknown): value is OpaqueActionValue => {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const candidate = value as Record<string, unknown>;
-  return typeof candidate.id === "string" && typeof candidate.v === "string";
-};
-
 /**
  * Parses an opaque value from a JSON string (from Slack button value).
+ *
+ * @param valueString - JSON string containing the opaque value
+ * @returns Parsed opaque action value
  * @throws {ValidationError} If parsing fails or format is invalid
  */
 export const parseOpaqueActionValue = (valueString: string): OpaqueActionValue => {
-  try {
-    const parsed: unknown = JSON.parse(valueString);
-    if (isOpaqueActionValue(parsed)) {
-      return parsed;
-    }
-    throw new ValidationError("Invalid opaque action value format");
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      throw error;
-    }
+  const parseResult = safeJsonParse(valueString);
+
+  if (!parseResult.success) {
     throw new ValidationError("Failed to parse opaque action value");
   }
+
+  if (!isOpaqueActionValue(parseResult.data)) {
+    throw new ValidationError("Invalid opaque action value format");
+  }
+
+  return parseResult.data;
 };

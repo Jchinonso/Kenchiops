@@ -10,35 +10,17 @@
 
 import { ciAnalysisQueue } from "../queue/messageQueue.js";
 import { createLogger, getErrorMessage } from "../core/index.js";
-import type { AggregationKey, RepositoryInfo, PendingCheckRun } from "./types.js";
+import type {
+  AggregationKey,
+  PendingCheckRun,
+  SerializedPendingCheckRun,
+  PendingAggregationPayload,
+} from "./types.js";
 import { getAggregationFromRedis, getPendingAggregationFromRedis } from "./aggregatorRead.js";
 import { deleteAggregationFromRedis } from "./redisAggregator.js";
 import { formatShaForDisplay } from "./aggregatorHelpers.js";
 
 const logger = createLogger("aggregation-enqueuer");
-
-// ==================== Types ====================
-
-/** Serialized pending check for queue payload. */
-interface SerializedPendingCheck {
-  readonly checkRunId: number;
-  readonly checkName: string;
-  readonly conclusion: string;
-  readonly timestamp: string;
-}
-
-/** Payload for pending aggregation jobs (checks without analysis). */
-export interface PendingAggregationPayload {
-  readonly pendingAggregation: {
-    readonly commitSha: string;
-    readonly repository: RepositoryInfo;
-    readonly installationId: number;
-    readonly pullRequestNumbers: readonly number[];
-    readonly pendingChecks: readonly SerializedPendingCheck[];
-    readonly firstFailureAt: string;
-    readonly lastFailureAt: string;
-  };
-}
 
 // ==================== Helpers ====================
 
@@ -53,7 +35,7 @@ const buildLogContext = (key: AggregationKey): { repository: string; commitSha: 
 /** Serializes a pending check for queue payload. */
 const serializePendingCheckForPayload = (
   pendingCheck: PendingCheckRun
-): SerializedPendingCheck => ({
+): SerializedPendingCheckRun => ({
   checkRunId: pendingCheck.checkRunId,
   checkName: pendingCheck.checkName,
   conclusion: pendingCheck.conclusion,

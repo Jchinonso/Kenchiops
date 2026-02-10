@@ -3,173 +3,174 @@
  *
  * Centralized configuration loader with validation.
  * All services should import from this module instead of reading process.env directly.
+ *
+ * @module core/config
  */
 
 import dotenv from "dotenv";
 import { ValidationError } from "./errors.js";
-import { CONFIG_DEFAULTS, VALID_NODE_ENVS, PARSE_INT_RADIX } from "../constants/index.js";
+import {
+  CONFIG_DEFAULTS,
+  VALID_NODE_ENVS,
+  PARSE_INT_RADIX,
+  LLM_CONCURRENCY_DEFAULTS,
+} from "../constants/index.js";
+import type { Config, NodeEnvironment, LLMProvider } from "./types.js";
 
-// Load environment variables once, at process start.
 dotenv.config();
 
-// ==================== Types ====================
+export type { Config, NodeEnvironment };
 
-/**
- * Application configuration interface.
- */
-export interface Config {
-  // OpenAI Configuration
-  readonly OPENAI_API_KEY: string;
-  readonly OPENAI_MODEL?: string;
-  readonly OPENAI_MAX_TOKENS?: number;
-  readonly OPENAI_TEMPERATURE?: number;
-  readonly OPENAI_TIMEOUT_MS?: number;
+// ==================== Helpers ====================
 
-  // Slack Configuration (single-tenant mode - tokens in env vars)
-  readonly SLACK_BOT_TOKEN: string;
-  readonly SLACK_SIGNING_SECRET: string;
-  readonly SLACK_APP_LEVEL_TOKEN: string;
+const isEmpty = (value: string | undefined): value is undefined | "" =>
+  value === undefined || value === "";
 
-  // Slack OAuth Configuration (multi-tenant mode - tokens in database)
-  readonly SLACK_CLIENT_ID?: string;
-  readonly SLACK_CLIENT_SECRET?: string;
-  readonly SLACK_REDIRECT_URI?: string;
-
-  // GitHub Configuration
-  readonly GITHUB_APP_ID: string;
-  readonly GITHUB_APP_PRIVATE_KEY: string;
-  readonly GITHUB_INSTALLATION_ID: string;
-  readonly GITHUB_WEBHOOK_SECRET: string;
-  readonly GITHUB_APP_SLUG?: string;
-
-  // Database Configuration
-  readonly DATABASE_URL: string;
-  readonly VECTOR_DB_URL: string;
-
-  // General Configuration
-  readonly NODE_ENV: "development" | "production" | "test";
-  readonly PORT: number;
-
-  // Multi-tenant Configuration
-  readonly MULTI_TENANT_MODE?: boolean;
-
-  // Feature Flags
-  /** Enable simplified CI analysis pipeline (Phase 1 of pipeline simplification) */
-  readonly SIMPLIFIED_PIPELINE_ENABLED?: boolean;
-
-  // Service URLs (for inter-service communication)
-  readonly API_URL: string;
-  readonly SLACK_BOT_URL: string;
-  readonly GITHUB_APP_URL: string;
-
-  // Redis Configuration
-  readonly REDIS_URL: string;
-}
-
-// ==================== Parser Helpers ====================
-
-/**
- * Parses integer from environment variable with validation.
- */
-const parseIntEnv = (value: string | undefined, defaultValue: number): number => {
-  if (!value) {
-    return defaultValue;
-  }
+const parseIntSafe = (value: string): number | undefined => {
   const parsed = parseInt(value, PARSE_INT_RADIX);
-  return Number.isNaN(parsed) ? defaultValue : parsed;
+  return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-/**
- * Parses float from environment variable with validation.
- */
-const parseFloatEnv = (value: string | undefined): number | undefined => {
-  if (!value) {
-    return undefined;
-  }
+const parseFloatSafe = (value: string): number | undefined => {
   const parsed = parseFloat(value);
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-/**
- * Validates required environment variable.
- */
-const requireEnv = (key: string, value: string | undefined): string => {
-  if (!value || value.trim() === "") {
+const requireEnv = (key: string): string => {
+  const value = process.env[key];
+  if (value === undefined || value.trim() === "") {
     throw new ValidationError(`Required environment variable ${key} is not set`);
   }
   return value;
 };
 
-/**
- * Validates NODE_ENV value.
- */
-const validateNodeEnv = (value: string | undefined): Config["NODE_ENV"] => {
-  const env = (value || CONFIG_DEFAULTS.NODE_ENV) as Config["NODE_ENV"];
-  return VALID_NODE_ENVS.includes(env) ? env : CONFIG_DEFAULTS.NODE_ENV;
+const optionalString = (key: string, defaultValue: string): string => {
+  const value = process.env[key];
+  return isEmpty(value) ? defaultValue : value;
+};
+
+const optionalInt = (key: string, fallbackOnInvalid?: number): number | undefined => {
+  const value = process.env[key];
+  if (isEmpty(value)) {
+    return undefined;
+  }
+  return parseIntSafe(value) ?? fallbackOnInvalid;
+};
+
+const requiredInt = (key: string, defaultValue: number): number => {
+  const value = process.env[key];
+  if (isEmpty(value)) {
+    return defaultValue;
+  }
+  return parseIntSafe(value) ?? defaultValue;
+};
+
+const optionalFloat = (key: string): number | undefined => {
+  const value = process.env[key];
+  if (isEmpty(value)) {
+    return undefined;
+  }
+  return parseFloatSafe(value);
+};
+
+const optionalBool = (key: string): boolean => process.env[key] === "true";
+
+const validateNodeEnv = (): NodeEnvironment => {
+  const value = process.env.NODE_ENV;
+  const defaultEnv = CONFIG_DEFAULTS.NODE_ENV as NodeEnvironment;
+  if (isEmpty(value)) {
+    return defaultEnv;
+  }
+  return VALID_NODE_ENVS.includes(value as NodeEnvironment)
+    ? (value as NodeEnvironment)
+    : defaultEnv;
+};
+
+const VALID_LLM_PROVIDERS: readonly LLMProvider[] = ["openai", "openrouter"];
+
+const validateLLMProvider = (): LLMProvider => {
+  const value = process.env.LLM_PROVIDER;
+  if (isEmpty(value)) {
+    return "openai";
+  }
+  return VALID_LLM_PROVIDERS.includes(value as LLMProvider) ? (value as LLMProvider) : "openai";
 };
 
 /**
- * Parse optional integer with default if undefined.
+ * Gets the effective API key for the LLM provider.
+ * LLM_API_KEY takes precedence over OPENAI_API_KEY.
  */
-const parseOptionalInt = (value: string | undefined, defaultValue: number): number | undefined =>
-  value ? parseIntEnv(value, defaultValue) : undefined;
+const getEffectiveApiKey = (): string => {
+  const llmApiKey = process.env.LLM_API_KEY;
+  if (!isEmpty(llmApiKey)) {
+    return llmApiKey;
+  }
+  return requireEnv("OPENAI_API_KEY");
+};
 
 // ==================== Configuration ====================
 
-/**
- * Centralized configuration loader with validation.
- * Throws error if required variables are missing.
- */
 export const config: Config = {
-  // OpenAI Configuration
-  OPENAI_API_KEY: requireEnv("OPENAI_API_KEY", process.env.OPENAI_API_KEY),
+  // LLM Provider Configuration
+  LLM_PROVIDER: validateLLMProvider(),
+  LLM_BASE_URL: process.env.LLM_BASE_URL,
+  LLM_API_KEY: process.env.LLM_API_KEY,
+  LLM_MODEL: process.env.LLM_MODEL,
+  EXTRACTION_MODEL: process.env.EXTRACTION_MODEL,
+
+  // OpenAI (legacy, used as fallbacks)
+  OPENAI_API_KEY: getEffectiveApiKey(),
   OPENAI_MODEL: process.env.OPENAI_MODEL,
-  OPENAI_MAX_TOKENS: parseOptionalInt(
-    process.env.OPENAI_MAX_TOKENS,
-    CONFIG_DEFAULTS.OPENAI_MAX_TOKENS
-  ),
-  OPENAI_TEMPERATURE: parseFloatEnv(process.env.OPENAI_TEMPERATURE),
-  OPENAI_TIMEOUT_MS: parseOptionalInt(
-    process.env.OPENAI_TIMEOUT_MS,
-    CONFIG_DEFAULTS.OPENAI_TIMEOUT_MS
-  ),
+  OPENAI_MAX_TOKENS: optionalInt("OPENAI_MAX_TOKENS", CONFIG_DEFAULTS.OPENAI_MAX_TOKENS),
+  OPENAI_TEMPERATURE: optionalFloat("OPENAI_TEMPERATURE"),
+  OPENAI_TIMEOUT_MS: optionalInt("OPENAI_TIMEOUT_MS", CONFIG_DEFAULTS.OPENAI_TIMEOUT_MS),
 
-  // Slack Configuration (single-tenant mode)
-  SLACK_BOT_TOKEN: requireEnv("SLACK_BOT_TOKEN", process.env.SLACK_BOT_TOKEN),
-  SLACK_SIGNING_SECRET: requireEnv("SLACK_SIGNING_SECRET", process.env.SLACK_SIGNING_SECRET),
-  SLACK_APP_LEVEL_TOKEN: requireEnv("SLACK_APP_LEVEL_TOKEN", process.env.SLACK_APP_LEVEL_TOKEN),
+  // Slack (single-tenant)
+  SLACK_BOT_TOKEN: requireEnv("SLACK_BOT_TOKEN"),
+  SLACK_SIGNING_SECRET: requireEnv("SLACK_SIGNING_SECRET"),
+  SLACK_APP_LEVEL_TOKEN: requireEnv("SLACK_APP_LEVEL_TOKEN"),
 
-  // Slack OAuth Configuration (multi-tenant mode)
+  // Slack OAuth (multi-tenant)
   SLACK_CLIENT_ID: process.env.SLACK_CLIENT_ID,
   SLACK_CLIENT_SECRET: process.env.SLACK_CLIENT_SECRET,
   SLACK_REDIRECT_URI: process.env.SLACK_REDIRECT_URI,
 
-  // GitHub Configuration
-  GITHUB_APP_ID: requireEnv("GITHUB_APP_ID", process.env.GITHUB_APP_ID),
-  GITHUB_APP_PRIVATE_KEY: requireEnv("GITHUB_APP_PRIVATE_KEY", process.env.GITHUB_APP_PRIVATE_KEY),
-  GITHUB_INSTALLATION_ID: requireEnv("GITHUB_INSTALLATION_ID", process.env.GITHUB_INSTALLATION_ID),
-  GITHUB_WEBHOOK_SECRET: requireEnv("GITHUB_WEBHOOK_SECRET", process.env.GITHUB_WEBHOOK_SECRET),
-  GITHUB_APP_SLUG: process.env.GITHUB_APP_SLUG || CONFIG_DEFAULTS.GITHUB_APP_SLUG,
+  // GitHub
+  GITHUB_APP_ID: requireEnv("GITHUB_APP_ID"),
+  GITHUB_APP_PRIVATE_KEY: requireEnv("GITHUB_APP_PRIVATE_KEY"),
+  GITHUB_INSTALLATION_ID: requireEnv("GITHUB_INSTALLATION_ID"),
+  GITHUB_WEBHOOK_SECRET: requireEnv("GITHUB_WEBHOOK_SECRET"),
+  GITHUB_APP_SLUG: optionalString("GITHUB_APP_SLUG", CONFIG_DEFAULTS.GITHUB_APP_SLUG),
 
-  // Database Configuration
-  DATABASE_URL: requireEnv("DATABASE_URL", process.env.DATABASE_URL),
-  VECTOR_DB_URL: requireEnv("VECTOR_DB_URL", process.env.VECTOR_DB_URL),
+  // Database
+  DATABASE_URL: requireEnv("DATABASE_URL"),
+  VECTOR_DB_URL: requireEnv("VECTOR_DB_URL"),
 
-  // General Configuration
-  NODE_ENV: validateNodeEnv(process.env.NODE_ENV),
-  PORT: parseIntEnv(process.env.PORT, CONFIG_DEFAULTS.PORT),
+  // General
+  NODE_ENV: validateNodeEnv(),
+  PORT: requiredInt("PORT", CONFIG_DEFAULTS.PORT),
 
-  // Multi-tenant Configuration
-  MULTI_TENANT_MODE: process.env.MULTI_TENANT_MODE === "true",
+  // Multi-tenant
+  MULTI_TENANT_MODE: optionalBool("MULTI_TENANT_MODE"),
 
   // Feature Flags
-  SIMPLIFIED_PIPELINE_ENABLED: process.env.SIMPLIFIED_PIPELINE_ENABLED === "true",
+  SIMPLIFIED_PIPELINE_ENABLED: optionalBool("SIMPLIFIED_PIPELINE_ENABLED"),
 
-  // Service URLs (for inter-service communication)
-  API_URL: process.env.API_URL || CONFIG_DEFAULTS.API_URL,
-  SLACK_BOT_URL: process.env.SLACK_BOT_URL || CONFIG_DEFAULTS.SLACK_BOT_URL,
-  GITHUB_APP_URL: process.env.GITHUB_APP_URL || CONFIG_DEFAULTS.GITHUB_APP_URL,
+  // Service URLs
+  API_URL: optionalString("API_URL", CONFIG_DEFAULTS.API_URL),
+  SLACK_BOT_URL: optionalString("SLACK_BOT_URL", CONFIG_DEFAULTS.SLACK_BOT_URL),
+  GITHUB_APP_URL: optionalString("GITHUB_APP_URL", CONFIG_DEFAULTS.GITHUB_APP_URL),
 
-  // Redis Configuration
-  REDIS_URL: process.env.REDIS_URL || CONFIG_DEFAULTS.REDIS_URL,
+  // Redis
+  REDIS_URL: optionalString("REDIS_URL", CONFIG_DEFAULTS.REDIS_URL),
+
+  // LLM Concurrency
+  LLM_MAX_CONCURRENT_ANALYSIS: optionalInt(
+    "LLM_MAX_CONCURRENT_ANALYSIS",
+    LLM_CONCURRENCY_DEFAULTS.MAX_CONCURRENT_ANALYSIS
+  ),
+  LLM_QUEUE_TIMEOUT_MS: optionalInt(
+    "LLM_QUEUE_TIMEOUT_MS",
+    LLM_CONCURRENCY_DEFAULTS.QUEUE_TIMEOUT_MS
+  ),
 } as const;

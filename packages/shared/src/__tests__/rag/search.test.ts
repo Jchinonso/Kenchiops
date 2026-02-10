@@ -41,7 +41,7 @@ const mockEmbeddingClient = {
   }),
 };
 
-jest.mock("../../llm/providers/openai/embedding.js", () => ({
+jest.mock("../../llm/providers/llmProvider/embedding.js", () => ({
   EmbeddingClient: jest.fn().mockImplementation(() => mockEmbeddingClient),
   getEmbeddingClient: jest.fn().mockReturnValue(mockEmbeddingClient),
 }));
@@ -53,7 +53,7 @@ jest.mock("../../database/index.js", () => ({
   batchIncrementKnowledgeDocHitCounts: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock("../../database/costTrackingRepository.js", () => ({
+jest.mock("../../database/costTracking/repository.js", () => ({
   recordCost: jest.fn().mockResolvedValue(undefined),
   getBudgetStatus: jest.fn().mockResolvedValue({
     status: "ok",
@@ -64,7 +64,7 @@ jest.mock("../../database/costTrackingRepository.js", () => ({
   }),
 }));
 
-jest.mock("../../database/tenantRagConfig.js", () => ({
+jest.mock("../../database/tenant/ragConfig.js", () => ({
   getRAGBudgetConfig: jest.fn().mockResolvedValue(null),
   updateRAGBudgetConfig: jest.fn().mockResolvedValue(undefined),
 }));
@@ -82,7 +82,7 @@ import {
   clearEmbeddingCache,
 } from "../../rag/search.js";
 import { cacheGet, cacheSet } from "../../cache/cacheClient.js";
-import { EmbeddingClient } from "../../llm/providers/openai/embedding.js";
+import { EmbeddingClient } from "../../llm/providers/llmProvider/embedding.js";
 import { searchSimilarDiffChunks, searchSimilarKnowledgeDocs } from "../../database/index.js";
 import { redactSecrets } from "../../security/index.js";
 
