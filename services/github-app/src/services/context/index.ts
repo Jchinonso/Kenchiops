@@ -20,6 +20,8 @@ export type {
   TestFailure,
   FileReference,
   EnrichedContext,
+  JobLogsResult,
+  AllFailedJobsLogs,
 } from "./types.js";
 
 // Workflow log fetching (used by simplified pipeline)

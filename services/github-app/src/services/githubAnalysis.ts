@@ -11,8 +11,6 @@ import {
   generateEventId,
   type Event,
   type Evidence,
-  type LLMAnalysisResult,
-  type ConfidenceScoreResult,
   LLMError,
   getErrorMessage,
   wrapError,
@@ -23,11 +21,15 @@ import {
 } from "@kenchi/shared";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
 
+import type { AnalysisResult } from "./githubAnalysisTypes.js";
+
+export type { AnalysisResult };
+
 const logger = createLogger("github-app");
 
 // ==================== Singleton Client ====================
 
-/** Singleton LLM client */
+// let: lazy-initialized singleton, assigned once on first call
 let llmClientInstance: LLMClient | null = null;
 
 /**
@@ -40,17 +42,6 @@ export const getLLMClient = (): LLMClient => {
   }
   return llmClientInstance;
 };
-
-// ==================== Types ====================
-
-/**
- * Analysis result with confidence scoring
- */
-export interface AnalysisResult {
-  readonly analysis: LLMAnalysisResult;
-  readonly confidence: ConfidenceScoreResult;
-  readonly event: Event;
-}
 
 // ==================== Event Creation ====================
 

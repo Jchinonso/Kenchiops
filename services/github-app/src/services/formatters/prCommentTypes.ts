@@ -49,6 +49,12 @@ export interface RecommendedActionInput {
   readonly priority: string | number;
 }
 
+/** LLM-generated recommended action */
+export interface LLMAction {
+  readonly description: string;
+  readonly priority: string | number;
+}
+
 /**
  * Characters for building visual progress bars.
  */

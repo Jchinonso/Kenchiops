@@ -32,6 +32,7 @@ import {
   type RerunResult,
 } from "../services/workflowService.js";
 import { appConfig } from "../config/appConfig.js";
+import type { RerunRequestBody } from "./apiRoutesTypes.js";
 
 const router = Router();
 const logger = createLogger("github-app");
@@ -294,18 +295,6 @@ router.get(
     }
   })
 );
-
-/**
- * Rerun request payload
- */
-interface RerunRequestBody {
-  readonly installationId: number;
-  readonly repository: string;
-  readonly workflowRunId?: number;
-  readonly checkRunId?: number;
-  readonly commitSha?: string;
-  readonly approvedBy?: string;
-}
 
 /**
  * Parse repository string into owner and repo

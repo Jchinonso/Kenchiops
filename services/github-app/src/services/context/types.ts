@@ -137,3 +137,25 @@ export interface EnrichedContext {
   readonly repositoryMetadata: RepositoryMetadata | null;
   readonly workflowTiming: WorkflowTiming | null;
 }
+
+// ==================== Workflow Fetcher Types ====================
+
+/**
+ * Job logs result containing job name and log content
+ */
+export interface JobLogsResult {
+  readonly jobName: string;
+  readonly jobId: number;
+  readonly logs: string;
+}
+
+/**
+ * Combined logs result for all failed jobs
+ */
+export interface AllFailedJobsLogs {
+  readonly workflowName: string;
+  readonly workflowRunId: number;
+  readonly jobs: readonly JobLogsResult[];
+  /** Combined logs with job name headers for LLM analysis */
+  readonly combinedLogs: string;
+}
