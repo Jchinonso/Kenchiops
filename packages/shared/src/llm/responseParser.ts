@@ -28,6 +28,7 @@ import {
   parseBuildConfigChanges,
   parseTestFailures,
   parseLintErrors,
+  parseChangeCorrelations,
 } from "./structuredDataParsers.js";
 import {
   extractString,
@@ -243,6 +244,7 @@ export const createAnalysisFromParsed = (
   // Parse structured data from LLM response
   const testFailures = parseTestFailures(parsed.test_failures);
   const lintErrors = parseLintErrors(parsed.lint_errors);
+  const changeCorrelations = parseChangeCorrelations(parsed.change_correlations);
 
   // Extract test command if provided (LLM-generated based on detected framework)
   const testCommand =
@@ -276,6 +278,7 @@ export const createAnalysisFromParsed = (
     testFailures: testFailures.length > 0 ? testFailures : undefined,
     lintErrors: lintErrors.length > 0 ? lintErrors : undefined,
     testCommand,
+    changeCorrelations: changeCorrelations.length > 0 ? changeCorrelations : undefined,
   };
 };
 

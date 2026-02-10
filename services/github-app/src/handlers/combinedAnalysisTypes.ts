@@ -7,7 +7,13 @@
  * @module handlers/combinedAnalysisTypes
  */
 
-import type { TestFailureInfo, LLMLintError, LineMapping, ParsedTestSummary } from "@kenchi/shared";
+import type {
+  TestFailureInfo,
+  LLMLintError,
+  LLMChangeCorrelation,
+  LineMapping,
+  ParsedTestSummary,
+} from "@kenchi/shared";
 
 // ==================== API Response Types ====================
 
@@ -45,6 +51,8 @@ export interface PerJobAnalysisApiResponse {
     readonly lintErrors?: readonly LLMLintError[];
     /** Command to run failing tests locally (LLM-generated based on detected framework) */
     readonly testCommand?: string;
+    /** Correlations between changed functions and failing tests */
+    readonly changeCorrelations?: readonly LLMChangeCorrelation[];
   };
 }
 
@@ -84,6 +92,8 @@ export interface JobAnalysisResult {
   readonly lintErrors: readonly LLMLintError[];
   /** Command to run failing tests locally (LLM-generated based on detected framework) */
   readonly testCommand?: string;
+  /** Correlations between changed functions and failing tests */
+  readonly changeCorrelations: readonly LLMChangeCorrelation[];
   /** V1.1: Line mappings for original line number recovery */
   readonly lineMappings: readonly LineMapping[];
   /** Deterministic test summary parsed from raw CI log via regex (not LLM-derived) */

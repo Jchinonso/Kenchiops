@@ -57,6 +57,10 @@ export const GITHUB_COMMENT_DISPLAY = {
   MAX_FILE_PATH_LENGTH: 200,
   /** Maximum assertions to show per file in grouped display */
   MAX_ASSERTIONS_PER_FILE: 2,
+  /** Maximum change correlation rows to display in PR comment */
+  MAX_CORRELATION_ROWS: 10,
+  /** Maximum failing test names to show per correlation row */
+  MAX_CORRELATION_TESTS: 3,
 } as const;
 
 /**

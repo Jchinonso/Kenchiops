@@ -9,6 +9,7 @@ import {
   GITHUB_COMMENT_DISPLAY,
   UI_EMOJI,
   type AggregatedFailures,
+  type LLMChangeCorrelation,
   type PRContext,
 } from "@kenchi/shared";
 import type { SlackBlock, SlackBlockElement, SlackPayload } from "./slackPayloadTypes.js";
@@ -151,6 +152,41 @@ const buildFeedbackButtonsBlock = (analysisId: string): SlackBlock => ({
   ],
 });
 
+// ==================== Change Correlation Block ====================
+
+/**
+ * Format a single correlation entry for Slack display.
+ */
+const formatSlackCorrelation = (correlation: LLMChangeCorrelation): string =>
+  correlation.failingTests.length > 0
+    ? `\`${correlation.changedFunction}()\` → ${correlation.failingTests.slice(0, GITHUB_COMMENT_DISPLAY.MAX_CORRELATION_TESTS).join(", ")} (${correlation.correlation})`
+    : `\`${correlation.changedFunction}()\` → no failures`;
+
+/**
+ * Build condensed change correlation block for Slack.
+ * Shows top correlations in a single line format.
+ */
+const buildChangeCorrelationBlock = (
+  correlations: readonly LLMChangeCorrelation[]
+): readonly SlackBlock[] => {
+  if (correlations.length === 0) {
+    return [];
+  }
+
+  const displayCorrelations = correlations.slice(0, GITHUB_COMMENT_DISPLAY.MAX_CORRELATION_ROWS);
+  const correlationLines = displayCorrelations.map(formatSlackCorrelation).join(" | ");
+
+  return [
+    {
+      type: "section" as const,
+      text: {
+        type: "mrkdwn" as const,
+        text: `${UI_EMOJI.link} *Change Correlation:* ${correlationLines}`,
+      },
+    },
+  ];
+};
+
 // ==================== Main Payload Builder ====================
 
 /**
@@ -168,12 +204,19 @@ export const buildConsolidatedSlackPayload = (aggregation: AggregatedFailures): 
     ? [buildPRContextBlock(aggregation.prContext)]
     : [];
 
+  // Collect all change correlations across failures
+  const allCorrelations = aggregation.failures.flatMap(
+    (failure) => failure.changeCorrelations ?? []
+  );
+  const correlationBlocks = buildChangeCorrelationBlock(allCorrelations);
+
   const blocks: readonly SlackBlock[] = [
     buildHeaderBlock(repository),
     buildCommitInfoBlock(shortSha, aggregation.failures.length),
     ...prContextBlock,
     { type: "divider" },
     ...failureBlocks,
+    ...correlationBlocks,
     { type: "divider" },
     buildActionButtonsBlock(repository, aggregation.commitSha, prNumber),
     buildFeedbackSectionBlock(),
