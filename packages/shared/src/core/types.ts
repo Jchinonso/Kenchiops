@@ -277,8 +277,29 @@ export interface Evidence {
   readonly relatedEvents?: readonly RelatedEvent[];
   /** Detected test framework for assertion parsing hints. */
   readonly testFramework?: TestFrameworkHint;
+  /** PR diff context for correlating failures with code changes. */
+  readonly prDiffContext?: PRDiffEvidence;
   readonly collectedAt: string;
   readonly collectionDuration?: number;
+}
+
+/**
+ * PR diff evidence for LLM analysis context.
+ * Provides changed files and diff content to correlate with CI failures.
+ */
+export interface PRDiffEvidence {
+  /** Pull request number */
+  readonly prNumber: number;
+  /** Files changed in the PR */
+  readonly changedFiles: readonly string[];
+  /** Unified diff content (truncated to MAX_DIFF_SIZE) */
+  readonly diff: string;
+  /** PR title for context */
+  readonly title?: string;
+  /** PR author */
+  readonly author?: string;
+  /** Base branch the PR targets */
+  readonly baseBranch?: string;
 }
 
 // ==================== LLM Analysis Result Types ====================

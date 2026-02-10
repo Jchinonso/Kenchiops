@@ -22,6 +22,7 @@ import {
   LLM_CONCURRENCY_DEFAULTS,
   ExternalServiceError,
   GITHUB_COMMENT_TEMPLATES,
+  GITHUB_CONTEXT_LIMITS,
   // V1.1: Chunking pipeline for improved preprocessing and line mapping
   sanitizeForChunkingWithMapping,
   getOriginalLineNumber,
@@ -29,19 +30,31 @@ import {
   parseTestSummary,
   // Tenant lookup
   findByGitHubInstallation,
+  // PR context caching
+  getOrFetchPullRequest,
+  getOrFetchPullRequestDiff,
+  getOrFetchPullRequestFiles,
   type PendingAggregationPayload,
   type AggregatedFailures,
   type AnalyzedFailure,
   type ConsolidatedPostResult,
   type TestFailureInfo,
   type LLMLintError,
-  type LineMapping,
   type SanitizationResultWithMapping,
-  type ParsedTestSummary,
 } from "@kenchi/shared";
 import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
 import { postPRComment } from "../services/githubComments.js";
+import { getOctokit } from "../services/githubService.js";
+import type {
+  JobSubmissionResponse,
+  JobStatusResponse,
+  PerJobAnalysisApiResponse,
+  JobAnalysisResult,
+  RecommendedActionResponse,
+  PRDiffContext,
+  AnalysisResultWithError,
+} from "./combinedAnalysisTypes.js";
 
 const logger = createLogger("github-app");
 
@@ -60,84 +73,114 @@ const POLLING_CONFIG = {
   REQUEST_TIMEOUT_MS: 30_000,
 } as const;
 
-// ==================== Types ====================
-
 /**
- * Response from POST /api/analyze - job submission.
+ * Fetch PR diff context for the first associated PR.
+ * Uses cached GitHub API utilities for efficient retrieval.
+ * Returns null if no PRs exist or fetch fails (graceful degradation).
+ *
+ * @param installationId - GitHub App installation ID
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param pullRequestNumbers - PR numbers associated with this commit
+ * @returns PR diff context or null
  */
-interface JobSubmissionResponse {
-  readonly job_id: string;
-  readonly status: "pending";
-}
+const fetchPRDiffContext = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  pullRequestNumbers: readonly number[]
+): Promise<PRDiffContext | null> => {
+  if (pullRequestNumbers.length === 0) {
+    return null;
+  }
 
-/**
- * Response from GET /api/jobs/:id - job status.
- */
-interface JobStatusResponse {
-  readonly job_id: string;
-  readonly status: "pending" | "processing" | "completed" | "failed";
-  readonly result?: PerJobAnalysisApiResponse;
-  readonly error?: string;
-}
+  const prNumber = pullRequestNumbers[0];
+  const startTime = Date.now();
 
-/**
- * Per-job API response structure.
- * Each job gets its own LLM analysis call.
- * full_analysis contains the LLMAnalysisResult with testFailures already in camelCase.
- */
-interface PerJobAnalysisApiResponse {
-  readonly analysis?: string;
-  readonly identified_cause?: string;
-  readonly confidence?: number | string;
-  readonly recommended_actions?: readonly RecommendedActionResponse[];
-  readonly annotations?: readonly AnalysisAnnotation[];
-  readonly full_analysis?: {
-    readonly testFailures?: readonly TestFailureInfo[];
-    readonly lintErrors?: readonly LLMLintError[];
-    /** Command to run failing tests locally (LLM-generated based on detected framework) */
-    readonly testCommand?: string;
-  };
-}
+  try {
+    const [prData, diff, changedFiles] = await Promise.all([
+      getOrFetchPullRequest(owner, repo, prNumber, async () => {
+        const octokit = await getOctokit(installationId);
+        const response = await octokit.rest.pulls.get({
+          owner,
+          repo,
+          pull_number: prNumber,
+        });
+        return {
+          number: response.data.number,
+          title: response.data.title,
+          body: response.data.body,
+          author: response.data.user?.login ?? "unknown",
+          headBranch: response.data.head.ref,
+          baseBranch: response.data.base.ref,
+          headSha: response.data.head.sha,
+          labels: response.data.labels.map((label) => label.name),
+          state: response.data.state,
+          draft: response.data.draft ?? false,
+        };
+      }),
+      getOrFetchPullRequestDiff(owner, repo, prNumber, async () => {
+        const octokit = await getOctokit(installationId);
+        const response = await octokit.rest.pulls.get({
+          owner,
+          repo,
+          pull_number: prNumber,
+          mediaType: { format: "diff" },
+        });
+        return response.data as unknown as string;
+      }),
+      getOrFetchPullRequestFiles(owner, repo, prNumber, async () => {
+        const octokit = await getOctokit(installationId);
+        const response = await octokit.rest.pulls.listFiles({
+          owner,
+          repo,
+          pull_number: prNumber,
+          per_page: 100,
+        });
+        return response.data.map((file) => file.filename);
+      }),
+    ]);
 
-/**
- * Result of analyzing a single job.
- */
-interface JobAnalysisResult {
-  readonly jobName: string;
-  readonly jobLogs: string;
-  readonly response: PerJobAnalysisApiResponse;
-  /** LLM-extracted test failures with expected/actual values */
-  readonly testFailures: readonly TestFailureInfo[];
-  /** LLM-extracted lint/compile errors with specific symbols */
-  readonly lintErrors: readonly LLMLintError[];
-  /** Command to run failing tests locally (LLM-generated based on detected framework) */
-  readonly testCommand?: string;
-  /** V1.1: Line mappings for original line number recovery */
-  readonly lineMappings: readonly LineMapping[];
-  /** Deterministic test summary parsed from raw CI log via regex (not LLM-derived) */
-  readonly parsedTestSummary?: ParsedTestSummary | null;
-}
+    const truncatedDiff =
+      diff.length > GITHUB_CONTEXT_LIMITS.MAX_DIFF_SIZE
+        ? diff.substring(0, GITHUB_CONTEXT_LIMITS.MAX_DIFF_SIZE)
+        : diff;
 
-/**
- * Recommended action from API response.
- */
-interface RecommendedActionResponse {
-  readonly actionType?: string;
-  readonly description?: string;
-  readonly reasoning?: string;
-  readonly priority?: string;
-}
+    logger.info("Fetched PR diff context", {
+      provider: "github",
+      operation: "fetchPRDiffContext",
+      durationMs: Date.now() - startTime,
+      owner,
+      repo,
+      prNumber,
+      changedFileCount: changedFiles.length,
+      diffSize: diff.length,
+      truncated: diff.length > GITHUB_CONTEXT_LIMITS.MAX_DIFF_SIZE,
+    });
 
-/**
- * Annotation from API response.
- */
-interface AnalysisAnnotation {
-  readonly path?: string;
-  readonly line?: number;
-  readonly level?: string;
-  readonly message?: string;
-  readonly title?: string;
-}
+    return {
+      prNumber,
+      diff: truncatedDiff,
+      changedFiles,
+      title: prData.title,
+      author: prData.author,
+      baseBranch: prData.baseBranch,
+      branch: prData.headBranch,
+      labels: [...prData.labels],
+    };
+  } catch (error) {
+    logger.warn("Failed to fetch PR diff context, continuing without it", {
+      provider: "github",
+      operation: "fetchPRDiffContext",
+      durationMs: Date.now() - startTime,
+      owner,
+      repo,
+      prNumber,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
 
 // ==================== Helpers ====================
 
@@ -423,7 +466,8 @@ const analyzeJobLogs = async (
   repository: string,
   apiUrl: string,
   tenantId?: string,
-  workflowId?: string
+  workflowId?: string,
+  prDiffContext?: PRDiffContext | null
 ): Promise<JobAnalysisResult> => {
   // Parse deterministic test summary from raw logs BEFORE any sanitization
   const parsedTestSummary = parseTestSummary(jobLogs);
@@ -447,29 +491,27 @@ const analyzeJobLogs = async (
     detectedFramework: legacyPreprocessed.testFramework?.name,
   });
 
-  // Build request payload with optional framework hint
-  const requestPayload: Record<string, unknown> = {
+  // Build request payload with optional context via spread (immutable)
+  const requestPayload: Readonly<Record<string, unknown>> = {
     failure_log: sanitized.text,
     repository,
     job_name: jobName,
+    ...(tenantId && { tenant_id: tenantId }),
+    ...(workflowId && { workflow_id: workflowId }),
+    ...(legacyPreprocessed.testFramework && {
+      test_framework: {
+        name: legacyPreprocessed.testFramework.name,
+        language: legacyPreprocessed.testFramework.language,
+        assertion_hint: legacyPreprocessed.testFramework.assertionHint,
+      },
+    }),
+    ...(prDiffContext && {
+      pr_number: prDiffContext.prNumber,
+      pr_diff: prDiffContext.diff,
+      pr_changed_files: prDiffContext.changedFiles,
+      pr_title: prDiffContext.title,
+    }),
   };
-
-  // Include tenant/workflow context when available
-  if (tenantId) {
-    requestPayload.tenant_id = tenantId;
-  }
-  if (workflowId) {
-    requestPayload.workflow_id = workflowId;
-  }
-
-  // Include framework hint if detected
-  if (legacyPreprocessed.testFramework) {
-    requestPayload.test_framework = {
-      name: legacyPreprocessed.testFramework.name,
-      language: legacyPreprocessed.testFramework.language,
-      assertion_hint: legacyPreprocessed.testFramework.assertionHint,
-    };
-  }
 
   // Step 1: Submit job for async processing (returns 202 with job_id)
   const submitResponse = await resilientPost<JobSubmissionResponse>(apiUrl, requestPayload, {
@@ -561,11 +603,6 @@ const deserializePendingPayload = (
 // ==================== Main Handler ====================
 
 /**
- * Result type for per-job analysis with optional error info.
- */
-type AnalysisResultWithError = JobAnalysisResult & { failed?: true; error?: string };
-
-/**
  * Analyze a single job with error handling.
  * Returns a result object with failed flag if analysis fails.
  */
@@ -574,10 +611,19 @@ const analyzeJobWithErrorHandling = async (
   repository: string,
   apiUrl: string,
   tenantId?: string,
-  workflowId?: string
+  workflowId?: string,
+  prDiffContext?: PRDiffContext | null
 ): Promise<AnalysisResultWithError> => {
   try {
-    return await analyzeJobLogs(job.jobName, job.logs, repository, apiUrl, tenantId, workflowId);
+    return await analyzeJobLogs(
+      job.jobName,
+      job.logs,
+      repository,
+      apiUrl,
+      tenantId,
+      workflowId,
+      prDiffContext
+    );
   } catch (error) {
     logger.error("Failed to analyze job", {
       jobName: job.jobName,
@@ -665,6 +711,14 @@ export const processCombinedAnalysis = async (
     const tenantId = tenant?.id;
     const workflowId = allJobsLogs.workflowName;
 
+    // Fetch PR diff context for LLM correlation (cached, graceful degradation)
+    const prDiffContext = await fetchPRDiffContext(
+      installationId,
+      repository.owner,
+      repository.name,
+      pending.pullRequestNumbers
+    );
+
     // Step 2: Analyze each job separately (with concurrency limit)
     const maxConcurrent =
       config.LLM_MAX_CONCURRENT_ANALYSIS ?? LLM_CONCURRENCY_DEFAULTS.MAX_CONCURRENT_ANALYSIS;
@@ -679,16 +733,23 @@ export const processCombinedAnalysis = async (
     // Analyze all jobs with concurrency limiting to avoid rate limits
     const analysisResults = await mapWithConcurrency(
       allJobsLogs.jobs,
-      (job) => analyzeJobWithErrorHandling(job, repository.fullName, apiUrl, tenantId, workflowId),
+      (job) =>
+        analyzeJobWithErrorHandling(
+          job,
+          repository.fullName,
+          apiUrl,
+          tenantId,
+          workflowId,
+          prDiffContext
+        ),
       maxConcurrent,
       config.LLM_QUEUE_TIMEOUT_MS
     );
 
-    // Create a map of job name to analysis result
-    const analysisMap = new Map<string, AnalysisResultWithError>();
-    analysisResults.forEach((result) => {
-      analysisMap.set(result.jobName.toLowerCase(), result);
-    });
+    // Create a map of job name to analysis result (functional construction)
+    const analysisMap = new Map(
+      analysisResults.map((result) => [result.jobName.toLowerCase(), result] as const)
+    );
 
     logger.info("All job analyses complete", {
       repository: repository.fullName,
@@ -697,7 +758,7 @@ export const processCombinedAnalysis = async (
     });
 
     // Step 3: Map each pending check to its analysis
-    const failures: AnalyzedFailure[] = pending.pendingChecks.map((check) => {
+    const failures: readonly AnalyzedFailure[] = pending.pendingChecks.map((check) => {
       // Try to find matching analysis by check name
       const analysisResult = analysisMap.get(check.checkName.toLowerCase());
 
@@ -743,7 +804,17 @@ export const processCombinedAnalysis = async (
       installationId,
       pullRequestNumbers: [...pending.pullRequestNumbers],
       failures,
-      prContext: null,
+      prContext: prDiffContext
+        ? {
+            number: prDiffContext.prNumber,
+            title: prDiffContext.title,
+            author: prDiffContext.author,
+            branch: prDiffContext.branch,
+            baseBranch: prDiffContext.baseBranch,
+            labels: [...prDiffContext.labels],
+            changedFiles: [...prDiffContext.changedFiles],
+          }
+        : null,
       workflowContext: {
         name: allJobsLogs.workflowName,
         duration: "unknown",

@@ -70,6 +70,7 @@ export type {
   EventCorrelation,
   // Evidence Types
   Evidence,
+  PRDiffEvidence,
   LogEntry,
   TimeSeriesDataPoint,
   TimeSeriesMetric,

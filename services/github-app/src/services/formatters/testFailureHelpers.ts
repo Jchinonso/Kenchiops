@@ -65,6 +65,18 @@ const isTimeoutByKeyword = (errorLower: string): boolean =>
   errorLower.includes("timeout") || errorLower.includes("exceeded") || errorLower.includes("async");
 
 /**
+ * Check if a failure matches module-not-found keywords in its error message.
+ * Checked before runtime because "Cannot find module" errors often contain
+ * "undefined" which would incorrectly match the runtime category.
+ */
+const isModuleNotFoundByKeyword = (errorLower: string): boolean =>
+  errorLower.includes("could not locate module") ||
+  errorLower.includes("cannot find module") ||
+  errorLower.includes("module not found") ||
+  errorLower.includes("no module named") ||
+  errorLower.includes("modulenotfounderror");
+
+/**
  * Check if a failure matches runtime error keywords in its error message.
  */
 const isRuntimeByKeyword = (errorLower: string): boolean =>
@@ -86,8 +98,10 @@ const isRuntimeByKeyword = (errorLower: string): boolean =>
 export const categorizeFailures = (
   testFailures: readonly TestFailureInfo[]
 ): ErrorCategoryBreakdown => {
+  // let: single-pass accumulator counters for categorization
   let assertion = 0;
   let timeout = 0;
+  let moduleNotFound = 0;
   let runtime = 0;
   let other = 0;
 
@@ -109,6 +123,8 @@ export const categorizeFailures = (
       assertion++;
     } else if (isTimeoutByKeyword(errorLower)) {
       timeout++;
+    } else if (isModuleNotFoundByKeyword(errorLower)) {
+      moduleNotFound++;
     } else if (isRuntimeByKeyword(errorLower)) {
       runtime++;
     } else {
@@ -119,6 +135,7 @@ export const categorizeFailures = (
   return {
     assertion,
     timeout,
+    module_not_found: moduleNotFound,
     runtime,
     other: Math.max(0, other),
     total: testFailures.length,
@@ -136,6 +153,7 @@ export const generateErrorBreakdownVisual = (breakdown: ErrorCategoryBreakdown):
   const categories = [
     { name: "Assertion", count: breakdown.assertion },
     { name: "Timeout  ", count: breakdown.timeout },
+    { name: "Module   ", count: breakdown.module_not_found },
     { name: "Runtime  ", count: breakdown.runtime },
     { name: "Other    ", count: breakdown.other },
   ];
@@ -158,100 +176,52 @@ export const generateErrorBreakdownVisual = (breakdown: ErrorCategoryBreakdown):
 };
 
 /**
- * Generate consolidated actions by error type (not per file).
- * Works with any test framework - LLM already filters real failures.
+ * Build a fallback summary line from categorized test failures.
+ * Used only when the LLM provides no recommended actions.
+ */
+const buildFallbackSummary = (testFailures: readonly TestFailureInfo[]): string => {
+  const breakdown = categorizeFailures(testFailures);
+
+  const categories = [
+    { count: breakdown.assertion, label: "assertion failure" },
+    { count: breakdown.timeout, label: "timeout/async issue" },
+    { count: breakdown.module_not_found, label: "missing module" },
+    { count: breakdown.runtime, label: "runtime error" },
+    { count: breakdown.other, label: "other failure" },
+  ] as const;
+
+  const parts = categories
+    .filter((cat) => cat.count > 0)
+    .map((cat) => `${cat.count} ${cat.label}${cat.count > 1 ? "s" : ""}`);
+
+  const count = testFailures.length;
+  const suffix = parts.length > 0 ? `: ${parts.join(", ")}` : "";
+  return `Review ${count} test failure${count > 1 ? "s" : ""}${suffix}`;
+};
+
+/**
+ * Generate consolidated recommended actions.
  *
- * Uses the same priority logic as categorizeFailures:
- * Priority 1: expected AND actual fields present -> assertion
- * Priority 2: keyword matching in error message
+ * LLM-generated actions are primary — the analysis prompts already instruct
+ * surgical, pattern-based recommendations. Template fallback only fires
+ * when the LLM returns zero actions.
  */
 export const generateConsolidatedActions = (
   testFailures: readonly TestFailureInfo[],
   llmActions: readonly LLMAction[]
 ): string[] => {
-  if (testFailures.length === 0) {
+  // LLM actions available — use them directly (already surgical per prompt instructions)
+  if (llmActions.length > 0) {
     return llmActions
       .slice(0, GITHUB_COMMENT_DISPLAY.MAX_ACTIONS)
       .map((action) => action.description);
   }
 
-  const actions: string[] = [];
-
-  // Single-pass categorization with expected/actual priority
-  let assertionCount = 0;
-  let timeoutCount = 0;
-  let typeErrorCount = 0;
-
-  for (const failure of testFailures) {
-    // Priority 1: Structural check — expected AND actual fields present means assertion
-    if (
-      failure.expected !== null &&
-      failure.expected !== undefined &&
-      failure.actual !== null &&
-      failure.actual !== undefined
-    ) {
-      assertionCount++;
-      continue;
-    }
-
-    // Priority 2: Keyword matching (single category per failure)
-    const errorLower = failure.error?.toLowerCase() ?? "";
-    if (isAssertionByKeyword(errorLower)) {
-      assertionCount++;
-    } else if (isTimeoutByKeyword(errorLower)) {
-      timeoutCount++;
-    } else if (isRuntimeByKeyword(errorLower)) {
-      typeErrorCount++;
-    }
+  // No LLM actions and no test failures — nothing to recommend
+  if (testFailures.length === 0) {
+    return [];
   }
 
-  // Get unique files
-  const uniqueFiles = [...new Set(testFailures.map((failure) => failure.file).filter(Boolean))];
-
-  // Generate one action per error type
-  if (assertionCount > 0) {
-    actions.push(
-      `**Assertion failures (${assertionCount})**: Test expectations don't match actual values. Review the expected vs received values and update tests or fix the implementation.`
-    );
-  }
-
-  if (timeoutCount > 0) {
-    actions.push(
-      `**Timeout/Async issues (${timeoutCount})**: Tests timing out or async operations not completing. Check for missing \`await\`, increase timeouts, or fix hanging promises.`
-    );
-  }
-
-  if (typeErrorCount > 0) {
-    actions.push(
-      `**Type/Runtime errors (${typeErrorCount})**: Code throwing errors during execution. Check for undefined values, missing imports, or incorrect function calls.`
-    );
-  }
-
-  // Add file summary if multiple files affected
-  if (uniqueFiles.length > 1) {
-    const fileList = uniqueFiles
-      .slice(0, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS)
-      .map((filePath) => `\`${filePath?.split("/").pop()}\``)
-      .join(", ");
-    actions.push(
-      `**Files to review**: ${fileList}${uniqueFiles.length > GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS ? " and more" : ""}`
-    );
-  }
-
-  // Add one relevant LLM action if not redundant
-  const relevantLlmAction = llmActions.find(
-    (llmAction) =>
-      !actions.some((action) =>
-        action
-          .toLowerCase()
-          .includes(
-            llmAction.description.substring(0, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS).toLowerCase()
-          )
-      )
-  );
-  if (relevantLlmAction) {
-    actions.push(relevantLlmAction.description);
-  }
-
-  return actions.slice(0, GITHUB_COMMENT_DISPLAY.MAX_ACTIONS);
+  // Fallback: single context-aware summary when LLM provided no actions
+  return [buildFallbackSummary(testFailures)];
 };

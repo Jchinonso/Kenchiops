@@ -68,6 +68,7 @@ export type {
   EventCorrelation,
   // Evidence Types
   Evidence,
+  PRDiffEvidence,
   LogEntry,
   TimeSeriesDataPoint,
   TimeSeriesMetric,
@@ -580,6 +581,7 @@ export {
   formatGitHistory,
   formatRelatedEvents,
   formatKnowledgeDocs,
+  formatPRDiffContext,
   estimateTokens,
   truncateEvidence,
 } from "./integrations/index.js";

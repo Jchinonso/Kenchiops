@@ -13,7 +13,12 @@ import {
   type TestFailureInfo,
   type ParsedTestSummary,
 } from "@kenchi/shared";
-import { type FeedbackLinks } from "./prCommentTypes.js";
+import {
+  type FeedbackLinks,
+  type LintErrorForDisplay,
+  type LintErrorWithFile,
+  type RecommendedActionInput,
+} from "./prCommentTypes.js";
 import {
   extractAssertionDiff,
   categorizeFailures,
@@ -202,18 +207,6 @@ export const buildTestFailuresSection = (
 };
 
 /**
- * Lint error structure for building sections.
- */
-interface LintErrorForDisplay {
-  readonly code: string;
-  readonly message: string;
-  readonly line: number;
-  readonly column?: number;
-  readonly symbol?: string;
-  readonly suggestion?: string;
-}
-
-/**
  * Build a file group section for lint errors.
  */
 export const buildLintFileGroup = (
@@ -248,13 +241,6 @@ export const buildLintFileGroup = (
 };
 
 /**
- * Lint error with file for section building.
- */
-interface LintErrorWithFile extends LintErrorForDisplay {
-  readonly file: string;
-}
-
-/**
  * Build the lint errors section.
  */
 export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[]): string[] => {
@@ -281,12 +267,6 @@ export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[])
   ];
 };
 
-/** Recommended action with description and priority */
-interface RecommendedActionInput {
-  readonly description: string;
-  readonly priority: string | number;
-}
-
 /**
  * Build the recommended actions section.
  */
@@ -294,15 +274,7 @@ export const buildActionsSection = (
   testFailures: readonly TestFailureInfo[],
   recommendedActions: readonly RecommendedActionInput[]
 ): string[] => {
-  const consolidatedActions = generateConsolidatedActions(
-    testFailures.map((testFailure) => ({
-      testName: testFailure.testName,
-      error: testFailure.error,
-      file: testFailure.file,
-      line: testFailure.line,
-    })),
-    recommendedActions
-  );
+  const consolidatedActions = generateConsolidatedActions(testFailures, recommendedActions);
 
   if (consolidatedActions.length === 0) {
     return [];

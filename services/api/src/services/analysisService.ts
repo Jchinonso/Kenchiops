@@ -97,6 +97,15 @@ export const createAnalysisContext = (request: AnalyzeRequest): AnalysisContext 
           assertionHint: request.test_framework.assertion_hint,
         }
       : undefined,
+    // Include PR diff context for failure-to-change correlation
+    prDiffContext: request.pr_diff
+      ? {
+          prNumber: request.pr_number ?? 0,
+          changedFiles: request.pr_changed_files ?? [],
+          diff: request.pr_diff,
+          title: request.pr_title,
+        }
+      : undefined,
   };
 
   return { event, evidence };

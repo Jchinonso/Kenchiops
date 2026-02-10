@@ -164,6 +164,13 @@ const estimateMetricsChars = (metrics: Evidence["metrics"]): number =>
 const estimateSystemStateChars = (systemState: Evidence["systemState"]): number =>
   systemState ? JSON.stringify(systemState).length : 0;
 
+const estimatePRDiffChars = (prDiffContext: Evidence["prDiffContext"]): number =>
+  prDiffContext
+    ? prDiffContext.diff.length +
+      prDiffContext.changedFiles.reduce((sum, file) => sum + file.length, 0) +
+      (prDiffContext.title?.length ?? 0)
+    : 0;
+
 /**
  * Array of evidence estimation functions paired with their corresponding evidence accessors.
  * This allows for a single-pass iteration without multiple if statements.
@@ -176,6 +183,7 @@ const evidenceEstimators: ReadonlyArray<{
   { estimate: (evidence) => estimateRelatedDocsChars(evidence.relatedDocs) },
   { estimate: (evidence) => estimateMetricsChars(evidence.metrics) },
   { estimate: (evidence) => estimateSystemStateChars(evidence.systemState) },
+  { estimate: (evidence) => estimatePRDiffChars(evidence.prDiffContext) },
 ] as const;
 
 /**

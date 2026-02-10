@@ -79,6 +79,8 @@ Analyze the provided build/test logs or error output to identify the most likely
 
 **Multi-Language Support:** Apply these tasks to any programming language or framework. Use general patterns rather than language-specific terms.
 
+**PR Change Correlation:** When PR changes are provided in the evidence (marked as TRUSTED CONTEXT), correlate test failures and errors with specific code changes in the diff. Identify which changed files and lines are most likely responsible for the failure. Reference changed file paths in your root cause analysis and next steps. If a test file appears in both the changed files and the failures, the test itself may have been modified. If a source file is changed and tests for that file are failing, the source change is the likely cause.
+
 Do not summarize the entire log. Zero in on the failure indicators and their context.`;
 
 // ==================== Safety & Content Guidelines ====================

@@ -10,6 +10,7 @@
 import type {
   Event,
   Evidence,
+  PRDiffEvidence,
   LogEntry,
   Metrics,
   GitCommit,
@@ -82,15 +83,12 @@ const truncateLogMessage = (log: LogEntry, maxLength: number): LogEntry => {
 const separateAndTruncateLogs = (
   logs: readonly LogEntry[]
 ): { readonly testFailures: readonly LogEntry[]; readonly others: readonly LogEntry[] } =>
-  logs.reduce<{ testFailures: LogEntry[]; others: LogEntry[] }>(
+  logs.reduce<{ readonly testFailures: readonly LogEntry[]; readonly others: readonly LogEntry[] }>(
     (acc, log) => {
       const truncated = truncateLogMessage(log, MAX_SNIPPET_LENGTH_TRUNCATED);
-      if (isTestFailureLog(log)) {
-        acc.testFailures.push(truncated);
-      } else {
-        acc.others.push(truncated);
-      }
-      return acc;
+      return isTestFailureLog(log)
+        ? { ...acc, testFailures: [...acc.testFailures, truncated] }
+        : { ...acc, others: [...acc.others, truncated] };
     },
     { testFailures: [], others: [] }
   );
@@ -333,6 +331,41 @@ export const formatEvent = (event: Event): string => {
   return lines.join("\n");
 };
 
+// ==================== PR Diff Context Formatter ====================
+
+/**
+ * Formats PR diff context for the analysis prompt.
+ * Provides the LLM with code changes to correlate with failures.
+ * This is TRUSTED context from the GitHub API, not from CI logs.
+ *
+ * @param prDiffContext - PR diff evidence
+ * @returns Formatted PR diff section
+ */
+export const formatPRDiffContext = (prDiffContext: PRDiffEvidence): string => {
+  const headerLines = [`### PR Changes (PR #${prDiffContext.prNumber}) — TRUSTED CONTEXT`];
+
+  const metadataLines = [
+    prDiffContext.title ? `**Title:** ${prDiffContext.title}` : null,
+    prDiffContext.author ? `**Author:** ${prDiffContext.author}` : null,
+    prDiffContext.baseBranch ? `**Base branch:** ${prDiffContext.baseBranch}` : null,
+  ].filter((line): line is string => line !== null);
+
+  const fileListLines =
+    prDiffContext.changedFiles.length > 0
+      ? [
+          "",
+          `**Changed files (${prDiffContext.changedFiles.length}):**`,
+          ...prDiffContext.changedFiles.map((file, index) => `[diff#${index + 1}] ${file}`),
+        ]
+      : [];
+
+  const diffLines = prDiffContext.diff
+    ? ["", "**Unified Diff:**", "```diff", prDiffContext.diff, "```"]
+    : [];
+
+  return [...headerLines, ...metadataLines, ...fileListLines, ...diffLines].join("\n");
+};
+
 // ==================== Evidence Formatter ====================
 
 /**
@@ -354,6 +387,7 @@ export const formatEvidence = (evidence: Evidence): string => {
     evidence.relatedDocs && evidence.relatedDocs.length > 0
       ? formatKnowledgeDocs(evidence.relatedDocs)
       : null,
+    evidence.prDiffContext ? formatPRDiffContext(evidence.prDiffContext) : null,
   ].filter((section): section is string => section !== null);
 
   return sections.length > 0 ? sections.join("\n\n") : "No evidence available.";

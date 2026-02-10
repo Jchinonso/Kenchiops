@@ -43,6 +43,12 @@ export interface AnalyzeRequest {
   readonly branch?: string;
   /** Pull request number */
   readonly pr_number?: number;
+  /** PR diff content (truncated, unified format) for failure correlation */
+  readonly pr_diff?: string;
+  /** Files changed in the PR */
+  readonly pr_changed_files?: readonly string[];
+  /** PR title for LLM context */
+  readonly pr_title?: string;
   /** Workflow SHA for fingerprinting */
   readonly workflow_sha?: string;
   /** Exit code from CI job */

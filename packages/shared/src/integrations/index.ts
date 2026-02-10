@@ -29,6 +29,7 @@ export {
   formatGitHistory,
   formatRelatedEvents,
   formatKnowledgeDocs,
+  formatPRDiffContext,
   formatEvent,
   formatEvidence,
   buildTestFrameworkHint,
