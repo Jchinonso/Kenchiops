@@ -6,9 +6,34 @@ TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of conc
 
 ---
 
+## Agent Delegation (Mandatory)
+
+Custom agents live in `.claude/agents/`. You MUST delegate to them by launching a Task with `subagent_type` matching the agent name and including the task context in the prompt. Read the agent file first, then embed its core instructions in the Task prompt.
+
+| Agent                             | Trigger Condition                                                                                | Agent File                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `git-commit-staged`               | **Every commit.** Never commit manually with raw git commands. Always delegate.                  | `.claude/agents/git-commit-staged.md`               |
+| `principal-engineer`              | Implementing new features, bug fixes, or non-trivial code changes.                               | `.claude/agents/principal-engineer.md`              |
+| `test-engineer`                   | After writing new modules, services, adapters, or utilities. After bug fixes (regression tests). | `.claude/agents/test-engineer.md`                   |
+| `kenchi-refactor-analyst`         | After significant code changes — audit for CLAUDE.md compliance and code smells.                 | `.claude/agents/kenchi-refactor-analyst.md`         |
+| `vulnerability-scanner`           | Before committing code that handles auth, secrets, user input, or external data.                 | `.claude/agents/vulnerability-scanner.md`           |
+| `database-migration-query-expert` | Creating/reviewing migrations, writing SQL, or detecting N+1 queries.                            | `.claude/agents/database-migration-query-expert.md` |
+| `docs-generator`                  | When documentation needs to be created, updated, or improved.                                    | `.claude/agents/docs-generator.md`                  |
+
+**Workflow for implementation tasks:**
+
+1. Implement the change (or delegate to `principal-engineer` for complex tasks)
+2. Delegate to `test-engineer` to write tests (if applicable)
+3. Delegate to `kenchi-refactor-analyst` to audit (if significant change)
+4. **Always** delegate to `git-commit-staged` to commit
+
+Users can also invoke agents directly as slash commands: `/git-commit-staged`, `/principal-engineer`, etc.
+
+---
+
 ## Rules of the Road (Quick Reference)
 
-### 11 Hard Rules (Non-Negotiable)
+### 12 Hard Rules (Non-Negotiable)
 
 1. **Check `@kenchi/shared` first** - never duplicate utilities, errors, types, or constants
 2. **Types in types.ts only** - never define interfaces/types inline in module files. All types go in the module's `types.ts` file and are exported from the barrel
@@ -21,6 +46,7 @@ TypeScript monorepo for an AI-driven DevOps assistant. Strict separation of conc
 9. **No unbounded logs** - use `redactSecrets()` and `truncate()` before logging any external data
 10. **Log errors at the correct boundary** - see Error Logging Boundaries section
 11. **No empty catch blocks** - always log or rethrow with context
+12. **Verify webhook signatures first** - validate `x-hub-signature-256` (GitHub) or `x-slack-signature` (Slack) before parsing body or checking idempotency. Reject invalid with 401
 
 ### 13 Preferred Patterns (With Exceptions)
 
@@ -346,6 +372,27 @@ export const createContainer = (config: Config) => {
 
 ---
 
+## Configuration Rules
+
+- All env vars accessed through `@kenchi/shared` config module — never `process.env` directly
+- Config validated at startup (fail fast on missing required vars)
+- Secrets loaded from environment, never hardcoded or committed
+- Feature flags: use typed config, not string comparisons
+- No environment-specific branching in business logic (`if (env === 'prod')` → use config values instead)
+
+---
+
+## Database Conventions
+
+- Parameterized queries only — never string interpolation for SQL
+- Transactions: use shared `withTransaction(db, async (tx) => { ... })` helper
+- Migrations: sequential, timestamped, idempotent (e.g., `IF NOT EXISTS`)
+- Column naming: `snake_case` in DB, `camelCase` in domain — mapping in repository layer
+- No raw SQL in services — all queries live in repository modules
+- Connection pooling managed at composition root, not per-request
+
+---
+
 ## Request Lifecycle
 
 ```typescript
@@ -436,6 +483,16 @@ await withRetry(() =>
 
 ---
 
+## Webhook Security
+
+- **Verify signatures FIRST** — before parsing body or checking idempotency
+- GitHub: verify `x-hub-signature-256` using shared `verifyGitHubSignature()`
+- Slack: verify `x-slack-signature` using shared `verifySlackSignature()`
+- Reject invalid signatures with 401, log with `provider` and `operation` fields
+- Never trust webhook payload content without signature verification
+
+---
+
 ## Error Classification & Design for Failure
 
 ### Error Categories
@@ -507,6 +564,24 @@ const RETRY_CONFIG = {
 } as const;
 ```
 
+### Bounded Concurrency
+
+```typescript
+// ✅ CORRECT - bounded parallel requests
+import { pMap } from "@kenchi/shared";
+await pMap(items, processItem, { concurrency: 5 });
+
+// ❌ WRONG - unbounded parallel requests to external APIs
+await Promise.all(items.map(processItem));
+```
+
+**Rule:** Use `Promise.all()` for independent internal operations. Use `pMap` with concurrency limit for batch external API calls.
+
+### Inbound Rate Limiting
+
+- Rate limiting middleware at route level (use shared middleware)
+- Webhook endpoints: validate signatures before any processing
+
 ---
 
 ## Public API & DTO Rules
@@ -536,6 +611,26 @@ interface AnalysisResponse {
 - **Repository boundary**: row → domain (for DB results)
 
 **Rule:** Services work with domain objects only. Never raw rows, never DTOs.
+
+---
+
+## API Response Contract
+
+### Standard Envelope
+
+```typescript
+// Success
+{ "data": T }
+
+// Error
+{ "error": { "code": string, "message": string, "requestId": string } }
+```
+
+### Versioning
+
+- URL-based: `/api/v1/...`
+- Breaking changes require new version
+- Deprecation: minimum 30-day notice via response header `Deprecation: true`
 
 ---
 
@@ -588,6 +683,11 @@ interface AnalysisResponse {
 - [ ] Class for business logic/services/helpers — use plain functions + closures
 - [ ] Impure helper/mapper/validator — side effects only in adapters, handlers, entrypoints
 - [ ] Object mutation (`obj.key = value`) — derive new objects with spread
+- [ ] Missing webhook signature verification before processing
+- [ ] Unbounded `Promise.all()` without concurrency limit for batch external calls
+- [ ] `process.env` accessed directly instead of through shared config
+- [ ] Raw SQL string interpolation (must use parameterized queries)
+- [ ] Missing health/readiness endpoint in new service
 
 ---
 
@@ -737,6 +837,22 @@ import { ValidationError } from "@kenchi/shared";
 - Discriminated unions for event types
 - `as const` for literal objects and tuples that should not be widened
 - Prefer `type` aliases for function signatures and unions; `interface` for object shapes
+
+---
+
+## Naming Conventions
+
+| Thing            | Convention          | Example               |
+| ---------------- | ------------------- | --------------------- |
+| Files            | kebab-case          | `analysis-service.ts` |
+| Types/Interfaces | PascalCase          | `AnalysisResult`      |
+| Functions/vars   | camelCase           | `createAnalysis`      |
+| Constants        | SCREAMING_SNAKE     | `MAX_RETRY_COUNT`     |
+| DB columns       | snake_case          | `created_at`          |
+| Log operations   | camelCase verb+noun | `createCheckRun`      |
+| Provider keys    | lowercase           | `github`, `slack`     |
+| Env vars         | SCREAMING_SNAKE     | `GITHUB_APP_ID`       |
+| Route paths      | kebab-case          | `/api/v1/check-runs`  |
 
 ---
 
@@ -987,6 +1103,41 @@ export class ExternalServiceAdapter implements ExternalServicePort {
 
 ---
 
+## Testing Standards
+
+### Test Structure
+
+- Co-locate tests: `module.ts` → `module.test.ts` (same directory)
+- Use `describe` blocks matching module/function names
+- Test names: `it("should <expected behavior> when <condition>")`
+
+### What to Test
+
+- **Services**: Unit test with mocked ports/repositories
+- **Adapters**: Integration test against real API (or recorded fixtures)
+- **Validators**: Edge cases, boundary values, invalid input shapes
+- **Mappers/Helpers**: Pure function → pure tests, no mocks needed
+
+### Mocking Rules
+
+- Mock at port boundaries, never mock internal functions
+- Use factory functions for test fixtures: `createTestAnalysis(overrides)`
+- Always pass a test `RequestContext`:
+  ```typescript
+  const testContext: RequestContext = {
+    requestId: "test-request-id",
+    tenantId: "test-tenant",
+  };
+  ```
+
+### Anti-Patterns
+
+- No testing implementation details (internal method calls)
+- No snapshot tests for non-UI code
+- No mocking what you don't own without an adapter boundary
+
+---
+
 ## Definition of Done (New Modules)
 
 Before merging new module/feature:
@@ -1044,6 +1195,19 @@ import {
   errorHandler,
   asyncHandler,
 
+  // Concurrency
+  pMap,
+
+  // Webhook security
+  verifyGitHubSignature,
+  verifySlackSignature,
+
+  // Database
+  withTransaction,
+
+  // Config
+  validateConfig,
+
   // Types
   type RequestContext,
   type HttpResponse,
@@ -1051,6 +1215,34 @@ import {
   type WebhookEvent,
 } from "@kenchi/shared";
 ```
+
+---
+
+## Graceful Shutdown
+
+- All services handle `SIGTERM`/`SIGINT`
+- Drain in-flight requests before exiting (configurable timeout)
+- Close DB pools, Redis connections, and HTTP servers in order
+- Log shutdown lifecycle events with structured logger
+
+---
+
+## Health Checks
+
+- Every service exposes `GET /health` (liveness) and `GET /ready` (readiness)
+- Readiness checks DB connectivity and critical dependencies
+- Health endpoints excluded from auth middleware
+- Return `{ "status": "ok" | "degraded" | "unhealthy" }` with dependency details
+
+---
+
+## Git Conventions
+
+- Branch: `feat/`, `fix/`, `chore/`, `refactor/` prefix
+- Commits: conventional commits (`feat: add analysis endpoint`)
+- One logical change per commit
+- PR must pass CI (lint, type-check, tests) before review
+- Shared package changes require explicit callout in PR description
 
 ---
 
