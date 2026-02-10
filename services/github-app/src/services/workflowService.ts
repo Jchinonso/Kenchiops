@@ -7,20 +7,11 @@
 
 import { createLogger, getErrorMessage } from "@kenchi/shared";
 import { getOctokit } from "./githubService.js";
+import type { RerunResult } from "./workflowServiceTypes.js";
+
+export type { RerunResult };
 
 const logger = createLogger("github-app");
-
-// ==================== Types ====================
-
-/**
- * Result of a workflow rerun attempt
- */
-export interface RerunResult {
-  readonly success: boolean;
-  readonly message: string;
-  readonly runId?: number;
-  readonly error?: string;
-}
 
 // ==================== Workflow Operations ====================
 

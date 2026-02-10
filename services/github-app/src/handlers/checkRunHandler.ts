@@ -16,22 +16,14 @@ import {
 } from "../types/githubTypes.js";
 import { handleCheckRunSuccess } from "./checkRunSuccessHandler.js";
 import { processCIFailure } from "./checkRunAnalysis.js";
+import type { CheckRunHandlerResult } from "./checkRunHandlerTypes.js";
+
+export type { CheckRunHandlerResult };
 
 // Re-export analysis functions for consumers
 export { processCIFailure, SKIP_CONCLUSIONS } from "./checkRunAnalysis.js";
 
 const logger = createLogger("github-app");
-
-// ==================== Type Definitions ====================
-
-/**
- * Result of handling a check run webhook
- */
-export interface CheckRunHandlerResult {
-  readonly handled: boolean;
-  readonly message: string;
-  readonly eventId?: string;
-}
 
 // ==================== Constants ====================
 

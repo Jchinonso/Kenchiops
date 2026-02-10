@@ -15,6 +15,9 @@ import {
 } from "@kenchi/shared";
 import { GITHUB_PR_ACTIONS, type PullRequestWebhook } from "../types/githubTypes.js";
 import { getOctokit } from "../services/githubService.js";
+import type { PRHandlerResult } from "./pullRequestHandlerTypes.js";
+
+export type { PRHandlerResult };
 
 const logger = createLogger("github-app");
 
@@ -82,15 +85,6 @@ const fetchPRCommits = async (
     return [];
   }
 };
-
-/**
- * Result of handling a PR webhook
- */
-export interface PRHandlerResult {
-  readonly handled: boolean;
-  readonly message: string;
-  readonly eventId?: string;
-}
 
 /**
  * Handle pull request opened event
