@@ -162,6 +162,20 @@ export interface SchedulerState {
 }
 
 /**
+ * Mutable version of SchedulerState for the polling loop.
+ * Allowed Exception #5: framework-required mutation for state machine / polling loop.
+ * The SchedulerState interface uses readonly properties at the type level,
+ * but the scheduler is an inherently stateful background worker that must
+ * mutate its tracking state (timers, job sets, flags) as jobs progress.
+ * ReadonlySet -> Set to allow .add()/.delete()/.clear() on tracked jobs.
+ */
+export type MutableSchedulerState = {
+  -readonly [K in keyof SchedulerState]: SchedulerState[K] extends ReadonlySet<infer U>
+    ? Set<U>
+    : SchedulerState[K];
+};
+
+/**
  * Scheduler status response.
  */
 export interface SchedulerStatus {

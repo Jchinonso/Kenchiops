@@ -20,7 +20,12 @@ import {
   NotFoundError,
   generateEventId,
 } from "@kenchi/shared";
-import type { AnalyzeRequest } from "../types/apiTypes.js";
+import type {
+  AnalyzeRequest,
+  JobRow,
+  AnalyzeJobResponse,
+  JobStatusResponse,
+} from "../types/apiTypes.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
@@ -44,27 +49,6 @@ const QUERIES = {
     FROM analysis_jobs WHERE id = $1::uuid
   `,
 } as const;
-
-// ==================== Types ====================
-
-interface JobRow {
-  readonly id: string;
-  readonly status: string;
-  readonly result: Record<string, unknown> | null;
-  readonly error: string | null;
-}
-
-interface AnalyzeJobResponse {
-  readonly job_id: string;
-  readonly status: "pending";
-}
-
-interface JobStatusResponse {
-  readonly job_id: string;
-  readonly status: "pending" | "processing" | "completed" | "failed";
-  readonly result?: Record<string, unknown>;
-  readonly error?: string;
-}
 
 // ==================== Validation Rules ====================
 

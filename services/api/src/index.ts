@@ -37,7 +37,7 @@ import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
 
-/** Reference to analysis worker for cleanup on shutdown */
+// let: module-level lifecycle state — assigned during init, read during shutdown
 let analysisWorker: AnalysisWorkerControl | null = null;
 
 const logger = createLogger(SERVICE_NAMES.API);
@@ -45,16 +45,16 @@ const logger = createLogger(SERVICE_NAMES.API);
 /** Default shutdown timeout in milliseconds */
 const SHUTDOWN_TIMEOUT_MS = 30000;
 
-/** Reference to cleanup interval for cleanup on shutdown */
+// let: module-level lifecycle state — assigned during init, cleared during shutdown
 let cleanupIntervalId: NodeJS.Timeout | null = null;
 
-/** Reference to drift detection interval for cleanup on shutdown */
+// let: module-level lifecycle state — assigned during init, cleared during shutdown
 let driftIntervalId: NodeJS.Timeout | null = null;
 
-/** Reference to re-embedding interval for cleanup on shutdown */
+// let: module-level lifecycle state — assigned during init, cleared during shutdown
 let reembedIntervalId: NodeJS.Timeout | null = null;
 
-/** Reference to external sync interval for cleanup on shutdown */
+// let: module-level lifecycle state — assigned during init, cleared during shutdown
 let externalSyncIntervalId: NodeJS.Timeout | null = null;
 
 /**

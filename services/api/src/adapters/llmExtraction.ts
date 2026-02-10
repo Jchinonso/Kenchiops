@@ -11,25 +11,9 @@
 
 import OpenAI from "openai";
 import { config, OPENROUTER_DEFAULTS } from "@kenchi/shared";
+import type { ExtractionOptions, ExtractorFunction } from "./llmExtractionTypes.js";
 
-// ==================== Types ====================
-
-/**
- * Options for extraction calls.
- */
-export interface ExtractionOptions {
-  readonly timeoutMs: number;
-  readonly model: string;
-}
-
-/**
- * Extractor function signature.
- */
-export type ExtractorFunction = (
-  systemPrompt: string,
-  userPrompt: string,
-  options: ExtractionOptions
-) => Promise<string>;
+export type { ExtractionOptions, ExtractorFunction };
 
 // ==================== Provider Configuration ====================
 
@@ -53,6 +37,7 @@ const getEffectiveBaseUrl = (): string | undefined => {
 
 // ==================== Singleton Client ====================
 
+// let: lazy-initialized singleton, assigned once on first call
 let clientInstance: OpenAI | null = null;
 
 const getClient = (): OpenAI => {
