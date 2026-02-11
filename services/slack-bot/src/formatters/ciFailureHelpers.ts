@@ -6,21 +6,17 @@
 
 import { PRIORITY_EMOJI, PRIORITY_NUMERIC_MAP } from "@kenchi/shared";
 import type { CIFailureAnalysis, CIAnnotation } from "../types/slackTypes.js";
+import type {
+  CIDependencyChange,
+  CIBuildConfigChange,
+  CIRecommendedAction,
+} from "./ciFailureHelpersTypes.js";
 
-// ==================== Type Aliases ====================
-
-/** Dependency change from analysis (AI-extracted or legacy) */
-export type CIDependencyChange =
-  | NonNullable<CIFailureAnalysis["detectedDependencyChanges"]>[number]
-  | NonNullable<CIFailureAnalysis["dependencyChanges"]>[number];
-
-/** Build config change from analysis (AI-extracted) */
-export type CIBuildConfigChange = NonNullable<
-  CIFailureAnalysis["detectedBuildConfigChanges"]
->[number];
-
-/** Recommended action from CI failure analysis */
-export type CIRecommendedAction = NonNullable<CIFailureAnalysis["recommended_actions"]>[number];
+export type {
+  CIDependencyChange,
+  CIBuildConfigChange,
+  CIRecommendedAction,
+} from "./ciFailureHelpersTypes.js";
 
 // ==================== Priority Functions ====================
 

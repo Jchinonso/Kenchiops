@@ -22,16 +22,7 @@ import { postConsolidatedMessage } from "./messageService.js";
 import type { ConsolidatedMessageRequest } from "../types/slackTypes.js";
 import { getSlackClientForTenant, isMultiTenantEnabled } from "./tenantSlackClient.js";
 import { storeAnalysisContext } from "./analysisContextStore.js";
-
-// ==================== Types ====================
-
-/**
- * Handler result
- */
-interface HandlerResult {
-  readonly success: boolean;
-  readonly error?: string;
-}
+import type { HandlerResult } from "./notificationHandlerTypes.js";
 
 // ==================== Handler Functions ====================
 

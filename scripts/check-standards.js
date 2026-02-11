@@ -30,6 +30,32 @@ const RULES = [
     pattern: /\/\/\s*(TODO|FIXME)(?!:?\s*\[|\s*#)/gi,
     message: "TODO/FIXME without ticket reference",
   },
+  {
+    id: "direct-process-env",
+    pattern: /process\.env\.\w+/g,
+    message: "Access env vars through @kenchi/shared config module, not process.env",
+    skipInTests: true,
+    skipInScripts: true,
+    skipInConfig: true,
+  },
+  {
+    id: "plain-error-throw",
+    pattern: /throw\s+new\s+Error\s*\(/g,
+    message: "Use typed errors (ValidationError, NotFoundError, etc.) from @kenchi/shared",
+    skipInTests: true,
+  },
+  {
+    id: "sql-string-interpolation",
+    pattern: /(?:query|execute|sql)\s*\(\s*`[^`]*\$\{/gi,
+    message: "SQL string interpolation detected - use parameterized queries",
+    skipInTests: true,
+  },
+  {
+    id: "unsafe-any-type",
+    pattern: /as\s+any\b/g,
+    message: "Avoid 'as any' - use proper typing or type guards",
+    skipInTests: true,
+  },
 ];
 
 function getStagedFiles() {
@@ -50,6 +76,7 @@ function checkFile(filePath) {
   const violations = [];
   const isTest = filePath.includes("__tests__") || filePath.includes(".test.") || filePath.includes(".spec.");
   const isScript = filePath.includes("/scripts/");
+  const isConfig = filePath.includes("/config/") || filePath.includes("/config.ts") || filePath.includes("/core/config");
 
   try {
     const content = fs.readFileSync(filePath, "utf8");
@@ -58,6 +85,7 @@ function checkFile(filePath) {
     RULES.forEach((rule) => {
       if (rule.skipInTests && isTest) return;
       if (rule.skipInScripts && isScript) return;
+      if (rule.skipInConfig && isConfig) return;
 
       lines.forEach((line, index) => {
         if (rule.pattern.test(line)) {

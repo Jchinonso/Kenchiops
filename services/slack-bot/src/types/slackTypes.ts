@@ -12,6 +12,12 @@ import type {
   LLMSuggestedFix,
   LLMAnalysisResult,
 } from "@kenchi/shared";
+import type Bolt from "@slack/bolt";
+
+/**
+ * Centralized SlackApp type alias — import this instead of redefining per-file.
+ */
+export type SlackApp = InstanceType<typeof Bolt.App>;
 
 /**
  * Slack command payload structure.

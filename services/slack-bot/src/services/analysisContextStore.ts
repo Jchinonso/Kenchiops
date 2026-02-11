@@ -8,24 +8,7 @@
  */
 
 import { logger, ANALYSIS_CONTEXT_STORE_CONFIG, type AggregatedFailures } from "@kenchi/shared";
-
-// ==================== Types ====================
-
-/**
- * Stored analysis context for lesson extraction.
- */
-interface StoredAnalysisContext {
-  /** The aggregated failures with full analysis details */
-  readonly aggregation: AggregatedFailures;
-  /** Channel where the message was posted */
-  readonly channelId: string;
-  /** Message timestamp */
-  readonly messageTs: string;
-  /** When the context was stored */
-  readonly storedAt: Date;
-  /** Tenant ID for multi-tenancy */
-  readonly tenantId?: string;
-}
+import type { StoredAnalysisContext } from "./analysisContextStoreTypes.js";
 
 // ==================== Store ====================
 

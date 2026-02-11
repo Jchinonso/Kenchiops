@@ -37,9 +37,9 @@ import { setupSlackHandlers } from "./handlers/slackEventSetup.js";
 import { createHttpRoutes } from "./routes/httpRoutes.js";
 import { oauthRoutes } from "./routes/oauthRoutes.js";
 import { createNotificationHandler } from "./services/notificationHandler.js";
+import type { SlackApp } from "./types/slackTypes.js";
 
 const { App } = Bolt;
-type SlackApp = InstanceType<typeof App>;
 
 /**
  * Initializes and configures the Slack Bolt app.

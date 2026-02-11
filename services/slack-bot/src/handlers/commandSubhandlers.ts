@@ -4,8 +4,6 @@
  * Individual subcommand handlers for /kenchi slash commands.
  */
 
-import type { SlashCommand, RespondFn, RespondArguments } from "@slack/bolt";
-import type { WebClient } from "@slack/web-api";
 import type { View } from "@slack/types";
 import {
   createLogger,
@@ -28,28 +26,12 @@ import {
 } from "./channelHandler.js";
 import { handleAddDocCommand } from "./documentIngestionHandler.js";
 import { toSlackSDKView, type SlackBlock } from "../types/slackTypes.js";
+import type { SubcommandHandler } from "./commandSubhandlersTypes.js";
+import type { SlackBlocks } from "./actionHandlerTypes.js";
 
-// Type for Slack blocks compatible with Bolt
-type SlackBlocks = NonNullable<RespondArguments["blocks"]>;
+export type { CommandContext, SubcommandHandler } from "./commandSubhandlersTypes.js";
 
 const logger = createLogger("slack-bot");
-
-// ==================== Types ====================
-
-/**
- * Command context passed to subcommand handlers
- */
-export interface CommandContext {
-  readonly command: SlashCommand;
-  readonly args: string;
-  readonly respond: RespondFn;
-  readonly client: WebClient;
-}
-
-/**
- * Subcommand handler type
- */
-export type SubcommandHandler = (ctx: CommandContext) => Promise<void>;
 
 // ==================== Subcommand Handlers ====================
 

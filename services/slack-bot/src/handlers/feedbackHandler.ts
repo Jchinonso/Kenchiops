@@ -18,34 +18,13 @@ import {
   type RAGRelevance,
 } from "@kenchi/shared";
 import { getAnalysisContext, deleteAnalysisContext } from "../services/analysisContextStore.js";
+import type {
+  RespondFunction,
+  AckFunction,
+  RAGFeedbackButtonValue,
+} from "./feedbackHandlerTypes.js";
 
 const logger = createLogger("slack-bot");
-
-// ==================== Types ====================
-
-/**
- * Type for Slack respond function
- */
-type RespondFunction = (message: {
-  text: string;
-  replace_original?: boolean;
-  response_type?: "in_channel" | "ephemeral";
-}) => Promise<void>;
-
-/**
- * Type alias for Slack ack function
- */
-type AckFunction = () => Promise<void>;
-
-/**
- * RAG feedback button value payload (matches slackContentBlocks.ts)
- */
-interface RAGFeedbackButtonValue {
-  readonly analysisId: string;
-  readonly knowledgeDocId: string;
-  readonly similarity: number;
-  readonly rank: number;
-}
 
 // ==================== Helper Functions ====================
 

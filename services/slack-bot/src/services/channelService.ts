@@ -11,19 +11,9 @@ import {
   NotFoundError,
   getErrorMessage,
 } from "@kenchi/shared";
-import type Bolt from "@slack/bolt";
+import type { SlackClient, SlackChannel } from "./channelServiceTypes.js";
 
-type SlackApp = InstanceType<typeof Bolt.App>;
-export type SlackClient = SlackApp["client"];
-
-/**
- * Channel information from Slack API.
- */
-export interface SlackChannel {
-  readonly id?: string;
-  readonly name?: string;
-  readonly is_member?: boolean;
-}
+export type { SlackClient, SlackChannel } from "./channelServiceTypes.js";
 
 /**
  * Resolves a channel name to a channel ID.

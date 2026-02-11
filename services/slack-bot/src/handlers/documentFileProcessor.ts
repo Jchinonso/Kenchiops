@@ -16,39 +16,19 @@ import {
   UI_EMOJI,
   type KnowledgeDocType,
 } from "@kenchi/shared";
+import type {
+  SlackFileInfo,
+  FileIngestionResult,
+  FileProcessingContext,
+} from "./documentFileProcessorTypes.js";
+
+export type {
+  SlackFileInfo,
+  FileIngestionResult,
+  FileProcessingContext,
+} from "./documentFileProcessorTypes.js";
 
 const logger = createLogger("slack-bot");
-
-// ==================== Types ====================
-
-/**
- * File info from Slack API
- */
-export interface SlackFileInfo {
-  readonly id: string;
-  readonly name: string;
-  readonly filetype: string;
-  readonly size: number;
-  readonly url_private: string;
-}
-
-/**
- * File ingestion result
- */
-export interface FileIngestionResult {
-  readonly filename: string;
-  readonly success: boolean;
-  readonly error?: string;
-  readonly chunks?: number;
-}
-
-/**
- * Context for file processing
- */
-export interface FileProcessingContext {
-  readonly userId: string;
-  readonly botToken: string;
-}
 
 // ==================== Validation Functions ====================
 

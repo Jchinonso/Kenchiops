@@ -25,10 +25,7 @@ import type {
   ConsolidatedMessageRequest,
 } from "../types/slackTypes.js";
 import { resolveChannelId, getBotMemberChannels, type SlackClient } from "./channelService.js";
-import {
-  createAnalysisAttachments,
-  type MessageAttachment,
-} from "../formatters/ciFailureFormatter.js";
+import { createAnalysisAttachments } from "../formatters/ciFailureFormatter.js";
 import {
   buildMessageKey,
   getMessage,
@@ -36,17 +33,7 @@ import {
   deleteMessage,
   cleanupMessageStore,
 } from "./messageStore.js";
-
-// ==================== Types ====================
-
-/**
- * Message payload for Slack API
- */
-interface MessagePayload {
-  readonly fallbackText: string;
-  readonly blocks?: SlackBlock[];
-  readonly attachments?: MessageAttachment[];
-}
+import type { MessagePayload } from "./messageServiceTypes.js";
 
 // ==================== Payload Builders ====================
 

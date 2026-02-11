@@ -17,14 +17,7 @@ import {
   TIME_CONSTANTS,
   getErrorMessage,
 } from "@kenchi/shared";
-
-/**
- * Verification result
- */
-interface VerificationResult {
-  readonly valid: boolean;
-  readonly error?: string;
-}
+import type { VerificationResult } from "./verifySlackTypes.js";
 
 /**
  * Verifies Slack request signature using HMAC-SHA256.

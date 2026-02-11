@@ -60,6 +60,11 @@ const SHARED_UTILITIES = new Set([
   "invariant",
   "assertUnreachable",
   "idempotencyStore",
+  "verifyGitHubSignature",
+  "verifySlackSignature",
+  "pMap",
+  "withTransaction",
+  "validateConfig",
 ]);
 
 /**
@@ -410,6 +415,67 @@ const VALIDATION_RULES = [
     message: "TODOs should reference a ticket or issue number",
     extract: () => "Found TODO/FIXME without ticket reference - add issue number",
   },
+
+  // ==================== Configuration Rules ====================
+
+  // Direct process.env access (must use shared config module)
+  {
+    id: "direct-process-env",
+    pattern: /process\.env\.\w+/g,
+    message: "Access env vars through @kenchi/shared config module, not process.env directly",
+    extract: () => "Found direct process.env access - use config from @kenchi/shared",
+    skipInTests: true,
+    skipInScripts: true,
+    skipInConfig: true,
+  },
+
+  // ==================== Database Conventions ====================
+
+  // SQL string interpolation (potential SQL injection)
+  {
+    id: "sql-string-interpolation",
+    pattern: /(?:query|execute|sql|SELECT|INSERT|UPDATE|DELETE)\s*\(\s*`[^`]*\$\{/gi,
+    message: "Never use string interpolation in SQL - use parameterized queries",
+    extract: () => "Found SQL string interpolation - use parameterized queries with $1, $2",
+    skipInTests: true,
+  },
+
+  // ==================== Webhook Security ====================
+
+  // Webhook handler without signature verification
+  {
+    id: "webhook-missing-signature-check",
+    pattern: /(?:handleWebhook|webhookHandler|processWebhook)\s*=\s*(?:async\s*)?\([^)]*\)\s*(?::\s*[^=>{]*)?=>\s*\{(?![\s\S]{0,200}(?:verifySignature|verifyGitHubSignature|verifySlackSignature|x-hub-signature|x-slack-signature))/gi,
+    message: "Webhook handlers must verify signatures before processing",
+    extract: () => "Found webhook handler without signature verification - verify signatures first",
+    skipInTests: true,
+  },
+
+  // ==================== Functional Style ====================
+
+  // let without justification comment
+  {
+    id: "let-without-justification",
+    pattern: /^\s*let\s+\w+/gm,
+    message: "Use const instead of let. If let is required, add '// let: <reason>' comment",
+    extract: () => "Found 'let' without justification - use const or add '// let: <reason>' comment",
+    skipInTests: true,
+    skipInScripts: true,
+    skipIfLetJustified: true,
+  },
+
+  // ==================== Immutability ====================
+
+  // Direct object mutation
+  {
+    id: "object-mutation",
+    pattern: /\w+\.\w+\s*=\s*(?!>)/g,
+    message: "Avoid object mutation - derive new objects with spread",
+    extract: () => "Found potential object mutation - use spread to derive new objects",
+    skipInTests: true,
+    skipInAdapters: true,
+    skipInConstructors: true,
+  },
 ];
 
 // ==================== Utility Functions ====================
@@ -495,6 +561,18 @@ const isScriptFile = (filePath) => {
 };
 
 /**
+ * Check if file is a config file (allowed to use process.env)
+ */
+const isConfigFile = (filePath) => {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  return (
+    normalizedPath.includes("/config/") ||
+    normalizedPath.includes("/config.ts") ||
+    normalizedPath.includes("/core/config")
+  );
+};
+
+/**
  * Count lines in content
  */
 const countLines = (content) => content.split("\n").length;
@@ -530,6 +608,7 @@ const validateFile = (filePath, content) => {
   const isRoute = isRouteFile(filePath);
   const isTest = isTestFile(filePath);
   const isScript = isScriptFile(filePath);
+  const isConfig = isConfigFile(filePath);
 
   // Check module size
   const lineCount = countLines(content);
@@ -556,6 +635,7 @@ const validateFile = (filePath, content) => {
     if (rule.onlyInShared && !isShared) return;
     if (rule.skipInTests && isTest) return;
     if (rule.skipInScripts && isScript) return;
+    if (rule.skipInConfig && isConfig) return;
 
     // Use stripped content for rules that need template literals removed
     const contentToCheck = rule.stripTemplateLiterals ? strippedContent : content;
@@ -564,12 +644,26 @@ const validateFile = (filePath, content) => {
     rule.pattern.lastIndex = 0;
 
     const matches = contentToCheck.matchAll(rule.pattern);
+    const contentLines = contentToCheck.split("\n");
     for (const match of matches) {
       const line = getLineNumber(contentToCheck, match.index);
       const message = rule.extract ? rule.extract(match) : rule.message;
 
       // Skip if extract returns null
       if (rule.skipIfNull && message === null) continue;
+
+      // Skip let declarations that have a justification comment
+      if (rule.skipIfLetJustified) {
+        const currentLine = contentLines[line - 1] || "";
+        const prevLine = contentLines[line - 2] || "";
+        if (currentLine.includes("// let:") || prevLine.includes("// let:")) continue;
+      }
+
+      // Skip object mutation in constructors/class fields
+      if (rule.skipInConstructors) {
+        const currentLine = contentLines[line - 1] || "";
+        if (currentLine.includes("this.") || currentLine.includes("private") || currentLine.includes("readonly")) continue;
+      }
 
       violations.push({
         rule: rule.id,

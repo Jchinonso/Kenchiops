@@ -6,17 +6,9 @@
  */
 
 import { logger, MESSAGE_STORE_CONFIG } from "@kenchi/shared";
+import type { StoredMessage } from "./messageStoreTypes.js";
 
-// ==================== Types ====================
-
-/**
- * Stored message info for update/delete operations
- */
-export interface StoredMessage {
-  readonly channelId: string;
-  readonly timestamp: string;
-  readonly postedAt: Date;
-}
+export type { StoredMessage } from "./messageStoreTypes.js";
 
 // ==================== Store ====================
 

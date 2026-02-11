@@ -10,19 +10,9 @@ import {
   SLACK_BLOCK_IDS,
   KNOWLEDGE_DOC_TYPES,
   DOC_INGESTION_CONFIG,
-  type KnowledgeDocType,
 } from "@kenchi/shared";
 import type { SlackModalView } from "../types/slackTypes.js";
-
-// ==================== Types ====================
-
-/**
- * Document type option for modal dropdown
- */
-interface DocTypeOption {
-  readonly value: KnowledgeDocType;
-  readonly label: string;
-}
+import type { DocTypeOption } from "./documentModalBuilderTypes.js";
 
 // ==================== Constants ====================
 

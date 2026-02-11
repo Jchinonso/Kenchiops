@@ -14,17 +14,9 @@ import {
   SLACK_CLIENT_CACHE,
 } from "@kenchi/shared";
 
-const logger = createLogger("tenant-slack-client");
+import type { CachedClient } from "../types/tenantSlackClientTypes.js";
 
-/**
- * Client cache to avoid creating new clients for every request.
- * Key: installation_id, Value: { client, createdAt }
- */
-interface CachedClient {
-  readonly client: WebClient;
-  readonly createdAt: number;
-  readonly workspaceId: string;
-}
+const logger = createLogger("tenant-slack-client");
 
 const clientCache = new Map<number, CachedClient>();
 
