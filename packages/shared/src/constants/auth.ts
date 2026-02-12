@@ -108,6 +108,28 @@ export const JWT_CONFIG = {
   ALGORITHM: "HS256" as const,
 } as const;
 
+// ==================== Cookie Configuration ====================
+
+export const COOKIE_CONFIG = {
+  /** Cookie name for the JWT access token */
+  ACCESS_TOKEN_NAME: "kenchi_access",
+  /** Cookie name for the refresh token */
+  REFRESH_TOKEN_NAME: "kenchi_refresh",
+  /** Access token cookie maxAge in seconds (15 minutes) */
+  ACCESS_TOKEN_MAX_AGE_SECONDS: 900,
+  /** Refresh token cookie maxAge in seconds (7 days) */
+  REFRESH_TOKEN_MAX_AGE_SECONDS: 604_800,
+  /**
+   * SameSite policy — Lax (not Strict) because the OAuth callback is a
+   * cross-site redirect from the OAuth provider. Strict would strip the
+   * cookie on that redirect. Lax allows top-level navigations while
+   * still protecting against CSRF on sub-requests.
+   */
+  SAME_SITE: "lax" as const,
+  /** Cookie path — accessible from all routes */
+  PATH: "/",
+} as const;
+
 // ==================== OAuth State Configuration ====================
 
 export const OAUTH_STATE_CONFIG = {

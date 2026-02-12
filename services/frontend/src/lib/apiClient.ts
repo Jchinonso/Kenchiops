@@ -1,9 +1,9 @@
 /**
  * Authenticated API Client
  *
- * Browser-side HTTP wrapper with Bearer token injection and automatic
- * token refresh on 401. Tokens are stored in localStorage and cleared
- * on auth failure.
+ * Browser-side HTTP wrapper with cookie-based authentication.
+ * Auth tokens are stored in httpOnly cookies (set by the API on OAuth callback).
+ * All requests include `credentials: "include"` so the browser sends cookies.
  *
  * NOTE: This is a frontend browser module. It uses the browser's native
  * Fetch API (not @kenchi/shared httpClient, which is a Node.js utility).
@@ -11,40 +11,22 @@
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
-const TOKEN_KEYS = {
-  ACCESS: "kenchi_access_token",
-  REFRESH: "kenchi_refresh_token",
-} as const;
-
-// ==================== Token Helpers ====================
-
-export const getAccessToken = (): string | null => localStorage.getItem(TOKEN_KEYS.ACCESS);
-
-const getRefreshToken = (): string | null => localStorage.getItem(TOKEN_KEYS.REFRESH);
-
-export const setTokens = (accessToken: string, refreshToken: string): void => {
-  localStorage.setItem(TOKEN_KEYS.ACCESS, accessToken);
-  localStorage.setItem(TOKEN_KEYS.REFRESH, refreshToken);
-};
-
-export const clearTokens = (): void => {
-  localStorage.removeItem(TOKEN_KEYS.ACCESS);
-  localStorage.removeItem(TOKEN_KEYS.REFRESH);
-};
-
-export const isAuthenticated = (): boolean => getAccessToken() !== null;
+// Browser Fetch API reference — frontend uses native browser fetch,
+// not @kenchi/shared httpClient (which is Node.js server-only)
+const browserRequest = globalThis.fetch.bind(globalThis);
 
 // ==================== Browser HTTP ====================
 
 /**
- * Browser-native HTTP request. Isolated here so the rest of the module
- * calls this wrapper instead of the global directly.
- *
- * Frontend code uses the browser Fetch API -- @kenchi/shared httpClient
- * is a Node.js server utility and is not available in the browser.
+ * Browser-native HTTP request with credentials included.
+ * The `credentials: "include"` flag ensures httpOnly cookies are sent
+ * on every request, including cross-origin requests during development.
  */
 const httpRequest = (url: string, init?: RequestInit): Promise<Response> =>
-  globalThis.fetch(url, init);
+  browserRequest(url, {
+    ...init,
+    credentials: "include",
+  });
 
 /** Navigate to a path using browser location. */
 const redirectTo = (path: string): void => {
@@ -66,31 +48,14 @@ const attemptTokenRefresh = async (): Promise<boolean> => {
   }
 
   const doRefresh = async (): Promise<boolean> => {
-    const refreshToken = getRefreshToken();
-
-    if (!refreshToken) {
-      return false;
-    }
-
     try {
+      // No body needed — the refresh token is in the httpOnly cookie
       const response = await httpRequest(`${API_URL}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
       });
 
-      if (!response.ok) {
-        return false;
-      }
-
-      const data = (await response.json()) as {
-        readonly access_token: string;
-        readonly refresh_token: string;
-        readonly expires_in: number;
-      };
-
-      setTokens(data.access_token, data.refresh_token);
-      return true;
+      return response.ok;
     } catch {
       return false;
     }
@@ -114,12 +79,10 @@ interface ApiClientOptions {
 }
 
 const buildHeaders = (
-  token: string | null,
   extraHeaders: Readonly<Record<string, string>>
 ): Readonly<Record<string, string>> => ({
   "Content-Type": "application/json",
   ...extraHeaders,
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
 });
 
 const buildInit = (
@@ -137,7 +100,8 @@ const buildInit = (
 /**
  * Authenticated request wrapper for the browser.
  *
- * Attaches Authorization header, handles 401 with token refresh,
+ * Relies on httpOnly cookies for authentication (sent automatically
+ * via credentials: "include"). Handles 401 with token refresh
  * and redirects to /login on auth failure.
  */
 export const apiClient = async (
@@ -145,7 +109,7 @@ export const apiClient = async (
   options: ApiClientOptions = {}
 ): Promise<Response> => {
   const { method = "GET", body, headers = {} } = options;
-  const requestHeaders = buildHeaders(getAccessToken(), headers);
+  const requestHeaders = buildHeaders(headers);
   const init = buildInit(method, requestHeaders, body);
 
   const response = await httpRequest(`${API_URL}${path}`, init);
@@ -157,13 +121,12 @@ export const apiClient = async (
   const refreshed = await attemptTokenRefresh();
 
   if (!refreshed) {
-    clearTokens();
     redirectTo("/login");
     return response;
   }
 
-  const retryHeaders = buildHeaders(getAccessToken(), headers);
-  const retryInit = buildInit(method, retryHeaders, body);
+  // Retry with new cookies (sent automatically)
+  const retryInit = buildInit(method, requestHeaders, body);
   return httpRequest(`${API_URL}${path}`, retryInit);
 };
 

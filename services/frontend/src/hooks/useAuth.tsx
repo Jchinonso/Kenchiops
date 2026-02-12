@@ -3,6 +3,9 @@
  *
  * Provides authentication state (user, isAuthenticated, isLoading)
  * and auth actions (login, logout, refreshUser) via React Context.
+ *
+ * Authentication tokens are stored in httpOnly cookies (managed by the API).
+ * The browser sends them automatically via `credentials: "include"`.
  */
 
 import {
@@ -14,7 +17,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiClient, clearTokens, getLoginUrl, getAccessToken } from "@/lib/apiClient";
+import { apiClient, getLoginUrl } from "@/lib/apiClient";
 
 // ==================== Types ====================
 
@@ -51,15 +54,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = useCallback(async (): Promise<void> => {
-    const token = getAccessToken();
-
-    if (!token) {
-      setUser(null);
-      setIsLoading(false);
-      return;
-    }
-
     try {
+      // Cookie is sent automatically via credentials: "include".
+      // If no valid cookie exists, the API returns 401 and apiClient
+      // handles the redirect to /login after a failed refresh attempt.
       const response = await apiClient("/auth/me");
 
       if (!response.ok) {
@@ -83,14 +81,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const logout = useCallback(async (): Promise<void> => {
     try {
-      await apiClient("/auth/logout", {
-        method: "POST",
-        body: { refreshToken: localStorage.getItem("kenchi_refresh_token") },
-      });
+      // Server reads the refresh token from the httpOnly cookie
+      // and revokes the token family, then clears both cookies.
+      await apiClient("/auth/logout", { method: "POST" });
     } catch {
-      // Logout is best-effort; always clear local state
+      // Logout is best-effort; always redirect to login
     } finally {
-      clearTokens();
       setUser(null);
       window.location.assign("/login");
     }

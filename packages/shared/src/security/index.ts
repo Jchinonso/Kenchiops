@@ -36,6 +36,15 @@ export {
 // Encryption utilities (AES-256-GCM for data at rest)
 export { encryptValue, decryptValue } from "./encryption.js";
 
+// Cookie utilities (httpOnly auth cookies)
+export {
+  setAuthCookies,
+  clearAuthCookies,
+  extractAccessToken,
+  extractRefreshToken,
+  type AuthCookieTokens,
+} from "./cookies.js";
+
 // Re-export constants for convenience
 export {
   SECRET_PATTERNS,

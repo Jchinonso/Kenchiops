@@ -9,6 +9,8 @@
  */
 
 import express from "express";
+import cookieParser from "cookie-parser";
+import cors from "cors";
 import {
   config,
   createLogger,
@@ -286,6 +288,17 @@ const createApp = (): express.Express => {
     res.setHeader("X-XSS-Protection", "0");
     next();
   });
+
+  // CORS — required for cross-origin cookie-based auth (frontend dev server on different port)
+  app.use(
+    cors({
+      origin: config.FRONTEND_URL,
+      credentials: true,
+    })
+  );
+
+  // Parse cookies for auth token extraction
+  app.use(cookieParser());
 
   // Middleware - use configured limit for large CI context payloads
   app.use(express.json({ limit: EXPRESS_CONFIG.JSON_BODY_LIMIT }));

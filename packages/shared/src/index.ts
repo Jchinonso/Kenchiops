@@ -831,6 +831,12 @@ export {
   // Encryption utilities (AES-256-GCM for data at rest)
   encryptValue,
   decryptValue,
+  // Cookie utilities (httpOnly auth cookies)
+  setAuthCookies,
+  clearAuthCookies,
+  extractAccessToken,
+  extractRefreshToken,
+  type AuthCookieTokens,
 } from "./security/index.js";
 
 // Action execution

@@ -10,6 +10,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../security/jwt.js";
+import { extractAccessToken } from "../security/cookies.js";
 import { PUBLIC_ROUTES } from "../constants/auth.js";
 import { AuthenticationError, createLogger } from "../core/index.js";
 import type { AuthenticatedUser } from "../database/user/types.js";
@@ -49,17 +50,8 @@ const logger = createLogger("auth-middleware");
 const isPublicRoute = (path: string): boolean =>
   PUBLIC_ROUTES.some((prefix) => path.startsWith(prefix));
 
-/**
- * Extract the Bearer token from the Authorization header.
- * Returns null if the header is missing or malformed.
- */
-const extractBearerToken = (authHeader: string | undefined): string | null => {
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
-  }
-  const token = authHeader.slice(7);
-  return token.length > 0 ? token : null;
-};
+// Token extraction moved to security/cookies.ts (extractAccessToken)
+// which checks Authorization Bearer header first, then falls back to cookie.
 
 /**
  * Apply authenticated user info to the Express request.
@@ -99,7 +91,7 @@ export const authMiddleware = (req: Request, _res: Response, next: NextFunction)
     return;
   }
 
-  const token = extractBearerToken(req.headers.authorization);
+  const token = extractAccessToken(req);
 
   if (!token) {
     next(

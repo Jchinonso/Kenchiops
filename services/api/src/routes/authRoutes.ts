@@ -25,6 +25,9 @@ import {
   getErrorMessage,
   findUserById,
   findOAuthIdentitiesByUser,
+  setAuthCookies,
+  clearAuthCookies,
+  extractRefreshToken,
   type OAuthProvider,
   type RequestContext,
 } from "@kenchi/shared";
@@ -260,10 +263,14 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   const tokenPair = await authService.generateTokenPair(user, extractTokenMeta(req), context);
   const durationMs = Date.now() - startTime;
 
+  // Set tokens as httpOnly cookies (never exposed in URL or response body)
+  setAuthCookies(res, {
+    accessToken: tokenPair.accessToken,
+    refreshToken: tokenPair.refreshToken,
+  });
+
+  // Redirect with only non-sensitive params (no tokens in URL)
   const callbackUrl = new URL(`${frontendUrl}/auth/callback`);
-  callbackUrl.searchParams.set("access_token", tokenPair.accessToken);
-  callbackUrl.searchParams.set("refresh_token", tokenPair.refreshToken);
-  callbackUrl.searchParams.set("expires_in", String(tokenPair.expiresIn));
 
   const sanitizedRedirect = sanitizeRedirectUrl(oauthState.redirectAfter, frontendUrl);
   if (sanitizedRedirect) {
@@ -277,7 +284,7 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     ...context,
   });
 
-  // Prevent token leakage via Referer header on redirect
+  // Referrer-Policy for defense-in-depth
   res.setHeader("Referrer-Policy", "no-referrer");
   res.redirect(callbackUrl.toString());
 };
@@ -288,9 +295,9 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
  */
 const handleTokenRefresh = async (req: Request, res: Response): Promise<void> => {
   const context = getRequestContext(req);
-  const { refreshToken } = req.body as { readonly refreshToken?: string };
+  const refreshToken = extractRefreshToken(req);
 
-  if (!refreshToken || typeof refreshToken !== "string" || refreshToken.trim().length === 0) {
+  if (!refreshToken) {
     throw new ValidationError("refreshToken is required", {
       operation: "handleTokenRefresh",
       metadata: { field: "refreshToken" },
@@ -299,6 +306,13 @@ const handleTokenRefresh = async (req: Request, res: Response): Promise<void> =>
 
   const tokenPair = await authService.refreshTokens(refreshToken, extractTokenMeta(req), context);
 
+  // Set new cookies (browser clients)
+  setAuthCookies(res, {
+    accessToken: tokenPair.accessToken,
+    refreshToken: tokenPair.refreshToken,
+  });
+
+  // Also return tokens in body (backward compat for API clients using Bearer header flow)
   res.status(HTTP_STATUS.OK).json({
     access_token: tokenPair.accessToken,
     refresh_token: tokenPair.refreshToken,
@@ -313,11 +327,14 @@ const handleTokenRefresh = async (req: Request, res: Response): Promise<void> =>
  */
 const handleLogout = async (req: Request, res: Response): Promise<void> => {
   const context = getRequestContext(req);
-  const { refreshToken } = req.body as { readonly refreshToken?: string };
+  const refreshToken = extractRefreshToken(req);
 
-  if (refreshToken && typeof refreshToken === "string") {
+  if (refreshToken) {
     await authService.revokeUserTokens(refreshToken, context);
   }
+
+  // Always clear auth cookies
+  clearAuthCookies(res);
 
   res.status(HTTP_STATUS.OK).json({ success: true });
 };

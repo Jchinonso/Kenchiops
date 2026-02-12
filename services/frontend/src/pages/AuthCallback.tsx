@@ -1,13 +1,13 @@
 /**
  * OAuth Callback Page
  *
- * Receives tokens from the OAuth redirect, stores them in localStorage,
- * and redirects to the dashboard (or an error page).
+ * Handles the redirect from the OAuth provider after login.
+ * Tokens are delivered via httpOnly cookies (set by the API on redirect),
+ * so this page only handles error params and redirect_after navigation.
  */
 
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { setTokens } from "@/lib/apiClient";
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -21,20 +21,10 @@ const AuthCallback = () => {
       return;
     }
 
-    const accessToken = searchParams.get("access_token");
-    const refreshToken = searchParams.get("refresh_token");
     const redirectAfter = searchParams.get("redirect_after");
 
-    // Clear tokens from URL immediately to prevent history/referrer leakage
-    window.history.replaceState({}, "", window.location.pathname);
-
-    if (!accessToken || !refreshToken) {
-      navigate("/login?error=missing_tokens", { replace: true });
-      return;
-    }
-
-    setTokens(accessToken, refreshToken);
-
+    // Tokens are in httpOnly cookies (set by the API during redirect).
+    // Navigate to the target page — apiClient sends cookies automatically.
     navigate(redirectAfter ?? "/dashboard", { replace: true });
   }, [navigate, searchParams]);
 
