@@ -303,6 +303,11 @@ export const REFRESH_TOKEN_QUERIES = {
     SELECT * FROM refresh_tokens
     WHERE token_hash = $1 AND expires_at > NOW()
   `,
+  FIND_BY_HASH_FOR_UPDATE: `
+    SELECT * FROM refresh_tokens
+    WHERE token_hash = $1 AND expires_at > NOW()
+    FOR UPDATE
+  `,
   REVOKE: `
     UPDATE refresh_tokens SET revoked_at = NOW()
     WHERE id = $1 AND revoked_at IS NULL

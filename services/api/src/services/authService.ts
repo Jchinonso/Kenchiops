@@ -27,7 +27,7 @@ import {
   createRefreshToken,
   findRefreshTokenByHash,
   revokeTokenFamily,
-  replaceRefreshToken,
+  rotateRefreshTokenAtomically,
   // Tenant lookup
   findByGitHubOrg,
   // JWT utilities
@@ -229,35 +229,43 @@ export const createAuthService = () => ({
    * - Otherwise the old token is replaced and a new pair is issued
    */
   refreshTokens: async (
-    rawRefreshToken: string,
+    rawToken: string,
     meta: TokenMeta,
     context: RequestContext
   ): Promise<TokenPair> => {
-    const tokenHash = hashRefreshToken(rawRefreshToken);
-    const storedToken = await findRefreshTokenByHash(tokenHash);
+    const currentHash = hashRefreshToken(rawToken);
+    const newRawToken = generateRefreshToken();
+    const newHash = hashRefreshToken(newRawToken);
 
-    if (!storedToken) {
+    const rotationResult = await rotateRefreshTokenAtomically({
+      tokenHash: currentHash,
+      newTokenHash: newHash,
+      userAgent: meta.userAgent,
+      ipAddress: meta.ipAddress,
+    });
+
+    if (!rotationResult) {
       throw new AuthenticationError("Invalid or expired refresh token", {
         operation: "refreshTokens",
       });
     }
 
-    if (storedToken.revokedAt !== null) {
-      await revokeTokenFamily(storedToken.familyId);
+    const { status, oldToken } = rotationResult;
 
+    if (status === "reused") {
       logger.warn("Refresh token reuse detected, family revoked", {
-        familyId: storedToken.familyId,
-        userId: storedToken.userId,
+        familyId: oldToken.familyId,
+        userId: oldToken.userId,
         ...context,
       });
 
       throw new AuthenticationError("Refresh token reuse detected", {
         operation: "refreshTokens",
-        metadata: { familyId: storedToken.familyId },
+        metadata: { familyId: oldToken.familyId },
       });
     }
 
-    const user = await findUserById(storedToken.userId);
+    const user = await findUserById(oldToken.userId);
 
     if (!user) {
       throw new AuthenticationError("User not found for refresh token", {
@@ -273,28 +281,16 @@ export const createAuthService = () => ({
     }
 
     const accessToken = generateAccessToken(user);
-    const newRawRefreshToken = generateRefreshToken();
-    const newTokenHash = hashRefreshToken(newRawRefreshToken);
-
-    const newToken = await createRefreshToken({
-      userId: user.id,
-      tokenHash: newTokenHash,
-      familyId: storedToken.familyId,
-      userAgent: meta.userAgent,
-      ipAddress: meta.ipAddress,
-    });
-
-    await replaceRefreshToken(storedToken.id, newToken.id);
 
     logger.info("Refresh token rotated", {
       userId: user.id,
-      familyId: storedToken.familyId,
+      familyId: oldToken.familyId,
       ...context,
     });
 
     return {
       accessToken,
-      refreshToken: newRawRefreshToken,
+      refreshToken: newRawToken,
       expiresIn: JWT_CONFIG.ACCESS_TOKEN_EXPIRY_SECONDS,
     };
   },

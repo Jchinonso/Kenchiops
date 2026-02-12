@@ -36,6 +36,7 @@ const mockCreateRefreshToken = jest.fn<(...args: unknown[]) => Promise<RefreshTo
 const mockFindRefreshTokenByHash = jest.fn<(...args: unknown[]) => Promise<RefreshToken | null>>();
 const mockRevokeTokenFamily = jest.fn<(...args: unknown[]) => Promise<void>>();
 const mockReplaceRefreshToken = jest.fn<(...args: unknown[]) => Promise<void>>();
+const mockRotateRefreshTokenAtomically = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockFindByGitHubOrg = jest.fn<(...args: unknown[]) => Promise<{ id: string } | null>>();
 
 // JWT mocks
@@ -76,6 +77,7 @@ jest.mock("@kenchi/shared", () => {
     findRefreshTokenByHash: (...args: unknown[]) => mockFindRefreshTokenByHash(...args),
     revokeTokenFamily: (...args: unknown[]) => mockRevokeTokenFamily(...args),
     replaceRefreshToken: (...args: unknown[]) => mockReplaceRefreshToken(...args),
+    rotateRefreshTokenAtomically: (...args: unknown[]) => mockRotateRefreshTokenAtomically(...args),
     findByGitHubOrg: (...args: unknown[]) => mockFindByGitHubOrg(...args),
     // JWT utilities
     generateAccessToken: (...args: unknown[]) => mockGenerateAccessToken(...args),
@@ -563,17 +565,19 @@ describe("authService", () => {
 
   describe("refreshTokens", () => {
     it("should rotate refresh token and return new token pair", async () => {
-      const storedToken = createTestRefreshToken();
+      const oldToken = createTestRefreshToken();
+      const newToken = createTestRefreshToken({ id: "rtk_new-token" });
       const user = createTestUser();
-      const newStoredToken = createTestRefreshToken({ id: "rtk_new-token" });
 
-      mockFindRefreshTokenByHash.mockResolvedValue(storedToken);
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "rotated",
+        oldToken,
+        newToken,
+      });
       mockFindUserById.mockResolvedValue(user);
       mockGenerateAccessToken.mockReturnValue("new-access-token");
       mockGenerateRefreshToken.mockReturnValue("new-raw-refresh-token");
       mockHashRefreshToken.mockReturnValue("new-hashed-token");
-      mockCreateRefreshToken.mockResolvedValue(newStoredToken);
-      mockReplaceRefreshToken.mockResolvedValue(undefined);
 
       const result = await service.refreshTokens(
         "old-raw-refresh-token",
@@ -586,70 +590,68 @@ describe("authService", () => {
       expect(result.expiresIn).toBe(900);
     });
 
-    it("should replace the old token with the new token in the database", async () => {
-      const storedToken = createTestRefreshToken({ id: "rtk_old" });
+    it("should call rotateRefreshTokenAtomically with hashed tokens and meta", async () => {
+      const oldToken = createTestRefreshToken();
+      const newToken = createTestRefreshToken({ id: "rtk_new" });
       const user = createTestUser();
-      const newStoredToken = createTestRefreshToken({ id: "rtk_new" });
 
-      mockFindRefreshTokenByHash.mockResolvedValue(storedToken);
+      mockHashRefreshToken.mockReturnValueOnce("hashed-current").mockReturnValueOnce("hashed-new");
+      mockGenerateRefreshToken.mockReturnValue("new-raw-token");
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "rotated",
+        oldToken,
+        newToken,
+      });
       mockFindUserById.mockResolvedValue(user);
-      mockCreateRefreshToken.mockResolvedValue(newStoredToken);
 
-      await service.refreshTokens("raw-token", testTokenMeta, testContext);
+      const meta: TokenMeta = { userAgent: "Chrome/120", ipAddress: "10.0.0.1" };
+      await service.refreshTokens("raw-token", meta, testContext);
 
-      expect(mockReplaceRefreshToken).toHaveBeenCalledWith("rtk_old", "rtk_new");
-    });
-
-    it("should use the same familyId for the new refresh token", async () => {
-      const storedToken = createTestRefreshToken({ familyId: "family-xyz" });
-      const user = createTestUser();
-      const newStoredToken = createTestRefreshToken();
-
-      mockFindRefreshTokenByHash.mockResolvedValue(storedToken);
-      mockFindUserById.mockResolvedValue(user);
-      mockCreateRefreshToken.mockResolvedValue(newStoredToken);
-
-      await service.refreshTokens("raw-token", testTokenMeta, testContext);
-
-      const createCall = mockCreateRefreshToken.mock.calls[0]![0] as Record<string, unknown>;
-      expect(createCall.familyId).toBe("family-xyz");
+      expect(mockRotateRefreshTokenAtomically).toHaveBeenCalledWith({
+        tokenHash: "hashed-current",
+        newTokenHash: "hashed-new",
+        userAgent: "Chrome/120",
+        ipAddress: "10.0.0.1",
+      });
     });
 
     it("should throw AuthenticationError when refresh token is not found (invalid/expired)", async () => {
-      mockFindRefreshTokenByHash.mockResolvedValue(null);
+      mockRotateRefreshTokenAtomically.mockResolvedValue(null);
 
       await expect(
         service.refreshTokens("unknown-token", testTokenMeta, testContext)
       ).rejects.toThrow(AuthenticationError);
 
-      mockFindRefreshTokenByHash.mockResolvedValue(null);
+      mockRotateRefreshTokenAtomically.mockResolvedValue(null);
 
       await expect(
         service.refreshTokens("unknown-token", testTokenMeta, testContext)
       ).rejects.toThrow("Invalid or expired refresh token");
     });
 
-    it("should revoke entire token family when reuse is detected (token already revoked)", async () => {
+    it("should throw AuthenticationError on reuse detection (atomic rotation handles family revocation)", async () => {
       const revokedToken = createTestRefreshToken({
         revokedAt: new Date("2025-01-15T00:00:00Z"),
         familyId: "compromised-family",
       });
 
-      mockFindRefreshTokenByHash.mockResolvedValue(revokedToken);
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "reused",
+        oldToken: revokedToken,
+      });
 
       await expect(
         service.refreshTokens("reused-token", testTokenMeta, testContext)
       ).rejects.toThrow(AuthenticationError);
-
-      expect(mockRevokeTokenFamily).toHaveBeenCalledWith("compromised-family");
     });
 
     it("should throw AuthenticationError with correct message on reuse detection", async () => {
-      const revokedToken = createTestRefreshToken({
-        revokedAt: new Date(),
-      });
+      const revokedToken = createTestRefreshToken({ revokedAt: new Date() });
 
-      mockFindRefreshTokenByHash.mockResolvedValue(revokedToken);
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "reused",
+        oldToken: revokedToken,
+      });
 
       await expect(
         service.refreshTokens("reused-token", testTokenMeta, testContext)
@@ -657,9 +659,14 @@ describe("authService", () => {
     });
 
     it("should throw AuthenticationError when user is not found for the refresh token", async () => {
-      const storedToken = createTestRefreshToken();
+      const oldToken = createTestRefreshToken();
+      const newToken = createTestRefreshToken({ id: "rtk_new" });
 
-      mockFindRefreshTokenByHash.mockResolvedValue(storedToken);
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "rotated",
+        oldToken,
+        newToken,
+      });
       mockFindUserById.mockResolvedValue(null);
 
       await expect(service.refreshTokens("raw-token", testTokenMeta, testContext)).rejects.toThrow(
@@ -668,10 +675,15 @@ describe("authService", () => {
     });
 
     it("should throw AuthenticationError when user account is suspended", async () => {
-      const storedToken = createTestRefreshToken();
+      const oldToken = createTestRefreshToken();
+      const newToken = createTestRefreshToken({ id: "rtk_new" });
       const suspendedUser = createTestUser({ status: "suspended" });
 
-      mockFindRefreshTokenByHash.mockResolvedValue(storedToken);
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "rotated",
+        oldToken,
+        newToken,
+      });
       mockFindUserById.mockResolvedValue(suspendedUser);
 
       await expect(service.refreshTokens("raw-token", testTokenMeta, testContext)).rejects.toThrow(
@@ -680,10 +692,15 @@ describe("authService", () => {
     });
 
     it("should throw AuthenticationError when user account is deleted", async () => {
-      const storedToken = createTestRefreshToken();
+      const oldToken = createTestRefreshToken();
+      const newToken = createTestRefreshToken({ id: "rtk_new" });
       const deletedUser = createTestUser({ status: "deleted" });
 
-      mockFindRefreshTokenByHash.mockResolvedValue(storedToken);
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "rotated",
+        oldToken,
+        newToken,
+      });
       mockFindUserById.mockResolvedValue(deletedUser);
 
       await expect(service.refreshTokens("raw-token", testTokenMeta, testContext)).rejects.toThrow(
@@ -691,26 +708,32 @@ describe("authService", () => {
       );
     });
 
-    it("should not create new tokens when reuse is detected (abort early)", async () => {
+    it("should not call findUserById when reuse is detected (abort early)", async () => {
       const revokedToken = createTestRefreshToken({ revokedAt: new Date() });
 
-      mockFindRefreshTokenByHash.mockResolvedValue(revokedToken);
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "reused",
+        oldToken: revokedToken,
+      });
 
       await expect(
         service.refreshTokens("reused-token", testTokenMeta, testContext)
       ).rejects.toThrow(AuthenticationError);
 
-      expect(mockCreateRefreshToken).not.toHaveBeenCalled();
+      expect(mockFindUserById).not.toHaveBeenCalled();
     });
 
-    it("should pass meta (userAgent, ipAddress) to new refresh token creation", async () => {
-      const storedToken = createTestRefreshToken();
-      const user = createTestUser();
+    it("should pass meta (userAgent, ipAddress) to atomic rotation", async () => {
+      const oldToken = createTestRefreshToken();
       const newToken = createTestRefreshToken({ id: "rtk_new" });
+      const user = createTestUser();
 
-      mockFindRefreshTokenByHash.mockResolvedValue(storedToken);
+      mockRotateRefreshTokenAtomically.mockResolvedValue({
+        status: "rotated",
+        oldToken,
+        newToken,
+      });
       mockFindUserById.mockResolvedValue(user);
-      mockCreateRefreshToken.mockResolvedValue(newToken);
 
       const meta: TokenMeta = {
         userAgent: "Chrome/120",
@@ -719,9 +742,9 @@ describe("authService", () => {
 
       await service.refreshTokens("raw-token", meta, testContext);
 
-      const createCall = mockCreateRefreshToken.mock.calls[0]![0] as Record<string, unknown>;
-      expect(createCall.userAgent).toBe("Chrome/120");
-      expect(createCall.ipAddress).toBe("10.0.0.1");
+      const call = mockRotateRefreshTokenAtomically.mock.calls[0]![0] as Record<string, unknown>;
+      expect(call.userAgent).toBe("Chrome/120");
+      expect(call.ipAddress).toBe("10.0.0.1");
     });
   });
 

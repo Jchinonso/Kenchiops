@@ -23,6 +23,8 @@ export type {
   UpsertOAuthIdentityInput,
   OAuthStateInput,
   CreateRefreshTokenInput,
+  RotateRefreshTokenInput,
+  RotateRefreshTokenResult,
   OAuthProviderProfile,
   OAuthTokenResponse,
   JWTPayload,
@@ -72,5 +74,6 @@ export {
   revokeRefreshToken,
   revokeTokenFamily,
   replaceRefreshToken,
+  rotateRefreshTokenAtomically,
   cleanupExpiredRefreshTokens,
 } from "./refreshToken.js";

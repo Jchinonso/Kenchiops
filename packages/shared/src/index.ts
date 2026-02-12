@@ -278,6 +278,8 @@ export {
   type UpsertOAuthIdentityInput,
   type OAuthStateInput,
   type CreateRefreshTokenInput,
+  type RotateRefreshTokenInput,
+  type RotateRefreshTokenResult,
   type OAuthProviderProfile,
   type OAuthTokenResponse,
   type JWTPayload,
@@ -303,6 +305,7 @@ export {
   revokeRefreshToken,
   revokeTokenFamily,
   replaceRefreshToken,
+  rotateRefreshTokenAtomically,
   cleanupExpiredRefreshTokens,
 } from "./database/index.js";
 

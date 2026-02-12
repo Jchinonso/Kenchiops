@@ -171,6 +171,19 @@ export interface CreateRefreshTokenInput {
   readonly ipAddress: string | null;
 }
 
+/** Input for the atomic refresh token rotation (find + validate + create + replace in one transaction). */
+export interface RotateRefreshTokenInput {
+  readonly tokenHash: string;
+  readonly newTokenHash: string;
+  readonly userAgent: string | null;
+  readonly ipAddress: string | null;
+}
+
+/** Result of an atomic token rotation attempt. */
+export type RotateRefreshTokenResult =
+  | { readonly status: "rotated"; readonly oldToken: RefreshToken; readonly newToken: RefreshToken }
+  | { readonly status: "reused"; readonly oldToken: RefreshToken };
+
 // ==================== OAuth Response Types ====================
 
 export interface OAuthProviderProfile {
