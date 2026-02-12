@@ -176,6 +176,7 @@ export const config: Config = {
 
   // Auth / JWT
   JWT_SECRET: process.env.JWT_SECRET,
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
 
   // GitHub OAuth App (separate from GitHub App)
   GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID,

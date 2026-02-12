@@ -912,6 +912,8 @@ export interface Config {
   // Auth / JWT
   /** Secret for signing JWT access tokens */
   readonly JWT_SECRET?: string;
+  /** 32-byte hex key for AES-256-GCM encryption of OAuth tokens at rest */
+  readonly ENCRYPTION_KEY?: string;
 
   // GitHub OAuth App (separate from GitHub App)
   readonly GITHUB_OAUTH_CLIENT_ID?: string;

@@ -23,6 +23,10 @@ const AuthCallback = () => {
 
     const accessToken = searchParams.get("access_token");
     const refreshToken = searchParams.get("refresh_token");
+    const redirectAfter = searchParams.get("redirect_after");
+
+    // Clear tokens from URL immediately to prevent history/referrer leakage
+    window.history.replaceState({}, "", window.location.pathname);
 
     if (!accessToken || !refreshToken) {
       navigate("/login?error=missing_tokens", { replace: true });
@@ -31,7 +35,6 @@ const AuthCallback = () => {
 
     setTokens(accessToken, refreshToken);
 
-    const redirectAfter = searchParams.get("redirect_after");
     navigate(redirectAfter ?? "/dashboard", { replace: true });
   }, [navigate, searchParams]);
 

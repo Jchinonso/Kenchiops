@@ -33,6 +33,9 @@ export {
   hashRefreshToken,
 } from "./jwt.js";
 
+// Encryption utilities (AES-256-GCM for data at rest)
+export { encryptValue, decryptValue } from "./encryption.js";
+
 // Re-export constants for convenience
 export {
   SECRET_PATTERNS,

@@ -17,12 +17,21 @@ import type { User, AuthenticatedUser, JWTPayload } from "../database/user/types
 
 // ==================== Secret Management ====================
 
+/** Minimum length for JWT_SECRET (32 chars = 256 bits of entropy) */
+const MIN_JWT_SECRET_LENGTH = 32;
+
 const getSecret = (): string => {
   const secret = config.JWT_SECRET;
   if (!secret || secret.trim().length === 0) {
     throw new AuthenticationError("JWT_SECRET environment variable is not configured", {
       operation: "getSecret",
     });
+  }
+  if (secret.length < MIN_JWT_SECRET_LENGTH) {
+    throw new AuthenticationError(
+      `JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters`,
+      { operation: "getSecret" }
+    );
   }
   return secret;
 };

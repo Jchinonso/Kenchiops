@@ -277,6 +277,16 @@ const createApp = (): express.Express => {
   // Required for rate limiting to work correctly behind reverse proxies
   app.set("trust proxy", 1);
 
+  // Security headers — applied early before any response is sent
+  app.use((_req, res, next) => {
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    // Disable legacy XSS filter — modern browsers handle this natively
+    res.setHeader("X-XSS-Protection", "0");
+    next();
+  });
+
   // Middleware - use configured limit for large CI context payloads
   app.use(express.json({ limit: EXPRESS_CONFIG.JSON_BODY_LIMIT }));
   app.use(requestLogger);

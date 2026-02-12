@@ -131,6 +131,29 @@ const buildAuthorizeUrl = (
   return url.toString();
 };
 
+/**
+ * Sanitize a redirect URL to prevent open redirect attacks.
+ * Only allows relative paths (starting with /, not //) or same-origin URLs.
+ * Returns null for external URLs or invalid input.
+ */
+const sanitizeRedirectUrl = (url: string | null, frontendUrl: string): string | null => {
+  if (!url) {
+    return null;
+  }
+  // Allow relative paths starting with / but not // (protocol-relative URLs)
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    return url;
+  }
+  // Allow same-origin URLs only
+  try {
+    const { origin: candidateOrigin } = new URL(url);
+    const { origin: referenceOrigin } = new URL(frontendUrl);
+    return candidateOrigin === referenceOrigin ? url : null;
+  } catch {
+    return null;
+  }
+};
+
 /** Extract token metadata from a request. */
 const extractTokenMeta = (
   req: Request
@@ -149,7 +172,8 @@ const handleOAuthLogin = async (req: Request, res: Response): Promise<void> => {
   const context = getRequestContext(req);
   const provider = validateProvider(req.params.provider);
   const instanceUrl = (req.query.instance_url as string) ?? null;
-  const redirectAfter = (req.query.redirect_after as string) ?? null;
+  const rawRedirectAfter = (req.query.redirect_after as string) ?? null;
+  const redirectAfter = sanitizeRedirectUrl(rawRedirectAfter, config.FRONTEND_URL);
 
   const clientId = getClientId(provider);
   const redirectUri = getRedirectUri(provider);
@@ -241,8 +265,9 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   callbackUrl.searchParams.set("refresh_token", tokenPair.refreshToken);
   callbackUrl.searchParams.set("expires_in", String(tokenPair.expiresIn));
 
-  if (oauthState.redirectAfter) {
-    callbackUrl.searchParams.set("redirect_after", oauthState.redirectAfter);
+  const sanitizedRedirect = sanitizeRedirectUrl(oauthState.redirectAfter, frontendUrl);
+  if (sanitizedRedirect) {
+    callbackUrl.searchParams.set("redirect_after", sanitizedRedirect);
   }
 
   logger.info("OAuth callback completed", {
@@ -252,6 +277,8 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     ...context,
   });
 
+  // Prevent token leakage via Referer header on redirect
+  res.setHeader("Referrer-Policy", "no-referrer");
   res.redirect(callbackUrl.toString());
 };
 

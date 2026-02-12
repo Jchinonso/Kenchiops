@@ -30,6 +30,7 @@ import {
   validateCreateUserInput,
   validateUpsertOAuthIdentityInput,
 } from "./helpers.js";
+import { encryptValue } from "../../security/encryption.js";
 
 const logger = createLogger("user-lifecycle");
 
@@ -140,6 +141,10 @@ export const upsertOAuthIdentity = async (
   validateUpsertOAuthIdentityInput(input);
 
   try {
+    // Encrypt OAuth tokens before storing in database
+    const encryptedAccessToken = encryptValue(input.accessToken) ?? input.accessToken;
+    const encryptedRefreshToken = encryptValue(input.refreshToken);
+
     const result = await query<OAuthIdentityRow>(OAUTH_IDENTITY_QUERIES.UPSERT, [
       input.userId,
       input.provider,
@@ -148,8 +153,8 @@ export const upsertOAuthIdentity = async (
       input.providerEmail,
       input.providerAvatarUrl,
       input.instanceUrl,
-      input.accessToken,
-      input.refreshToken,
+      encryptedAccessToken,
+      encryptedRefreshToken,
       input.tokenExpiresAt,
       input.scopes as string[],
       JSON.stringify(input.rawProfile),

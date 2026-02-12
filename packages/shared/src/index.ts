@@ -828,6 +828,9 @@ export {
   verifyAccessToken,
   generateRefreshToken,
   hashRefreshToken,
+  // Encryption utilities (AES-256-GCM for data at rest)
+  encryptValue,
+  decryptValue,
 } from "./security/index.js";
 
 // Action execution

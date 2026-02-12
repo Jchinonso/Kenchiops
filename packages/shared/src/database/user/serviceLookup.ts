@@ -17,8 +17,16 @@ import {
 } from "../common.js";
 import type { UserRow, OAuthIdentityRow, OAuthProvider, User, OAuthIdentity } from "./types.js";
 import { extractUser, rowToOAuthIdentity, extractOAuthIdentity } from "./helpers.js";
+import { decryptValue } from "../../security/encryption.js";
 
 const logger = createLogger("user-lookup");
+
+/** Decrypt OAuth token fields on a domain identity object. */
+const decryptIdentityTokens = (identity: OAuthIdentity): OAuthIdentity => ({
+  ...identity,
+  accessToken: decryptValue(identity.accessToken) as string | null,
+  refreshToken: decryptValue(identity.refreshToken) as string | null,
+});
 
 // ==================== User Lookups ====================
 
@@ -66,7 +74,8 @@ export const findOAuthIdentity = async (
       providerUserId,
       instanceUrl,
     ]);
-    return extractOAuthIdentity(result.rows);
+    const identity = extractOAuthIdentity(result.rows);
+    return identity ? decryptIdentityTokens(identity) : null;
   } catch (error) {
     logger.error("Failed to find OAuth identity", {
       provider,
@@ -83,7 +92,7 @@ export const findOAuthIdentitiesByUser = async (
 
   try {
     const result = await query<OAuthIdentityRow>(OAUTH_IDENTITY_QUERIES.FIND_BY_USER, [userId]);
-    return result.rows.map(rowToOAuthIdentity);
+    return result.rows.map((row) => decryptIdentityTokens(rowToOAuthIdentity(row)));
   } catch (error) {
     logger.error("Failed to find OAuth identities for user", {
       userId,
