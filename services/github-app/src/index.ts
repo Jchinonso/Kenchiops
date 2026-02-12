@@ -141,14 +141,10 @@ const initializeDatabase = (): void => {
   }
 };
 
-/**
- * Control for aggregator worker
- */
+// let: module-level lifecycle state — assigned during init, read during shutdown
 let aggregatorWorkerControl: WorkerControl | null = null;
 
-/**
- * Control for analysis queue processor
- */
+// let: module-level lifecycle state — assigned during init, read during shutdown
 let analysisProcessorControl: ProcessorControl | null = null;
 
 /**
@@ -199,14 +195,10 @@ const initializeFailureAggregator = (): void => {
   });
 };
 
-/**
- * Stop function for action queue worker
- */
+// let: module-level lifecycle state — assigned during init, read during shutdown
 let stopActionQueueWorker: (() => void) | null = null;
 
-/**
- * Interval IDs for RAG background jobs
- */
+// let: module-level lifecycle state — assigned during init, cleared during shutdown
 let ragCleanupIntervalId: NodeJS.Timeout | null = null;
 let driftDetectionIntervalId: NodeJS.Timeout | null = null;
 

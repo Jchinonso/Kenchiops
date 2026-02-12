@@ -38,6 +38,27 @@
     ],
     "@typescript-eslint/no-require-imports": "error",
 
+    // ==================== Vendor SDK & Config Restrictions ====================
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          { "group": ["node-fetch", "axios"], "message": "Use @kenchi/shared httpClient" },
+          {
+            "group": ["@octokit/*", "@slack/*", "openai"],
+            "message": "Vendor SDKs not allowed in services. Use adapters."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "MemberExpression[object.name='process'][property.name='env']",
+        "message": "Access env vars through @kenchi/shared config module, not process.env directly"
+      }
+    ],
+
     // ==================== Code Quality ====================
     "no-console": "error",
     "no-debugger": "error",
@@ -206,6 +227,40 @@
         "@typescript-eslint/no-shadow": "off",
         "curly": "off",
         "no-confusing-arrow": "off"
+      }
+    },
+    {
+      "files": ["**/adapters/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["services/slack-bot/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["node-fetch", "axios"],
+                "message": "Use @kenchi/shared httpClient"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "**/config/**/*.ts",
+        "**/core/config.ts",
+        "**/config.ts",
+        "**/scripts/**/*.ts",
+        "**/scripts/**/*.js"
+      ],
+      "rules": {
+        "no-restricted-syntax": "off"
       }
     },
     {

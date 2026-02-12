@@ -5,13 +5,7 @@
  */
 
 import { GITHUB_COMMENT_DISPLAY, UI_CONSTANTS, type TestFailureInfo } from "@kenchi/shared";
-import { type ErrorCategoryBreakdown, PROGRESS_BAR } from "./prCommentTypes.js";
-
-/** LLM-generated recommended action */
-interface LLMAction {
-  readonly description: string;
-  readonly priority: string | number;
-}
+import { type ErrorCategoryBreakdown, type LLMAction, PROGRESS_BAR } from "./prCommentTypes.js";
 
 /**
  * Extract Expected/Received values from assertion error.

@@ -11,8 +11,6 @@ import {
   createLogger,
   type Event,
   type Evidence,
-  type LLMAnalysisResult,
-  type ConfidenceScoreResult,
   LLMError,
   getErrorMessage,
   wrapError,
@@ -22,12 +20,16 @@ import {
   type SafetyRequestContext,
 } from "@kenchi/shared";
 import type { SlackCommandPayload, SlackMentionPayload } from "../types/slackTypes.js";
+import type { AnalysisResult } from "./analysisServiceTypes.js";
+
+export type { AnalysisResult } from "./analysisServiceTypes.js";
 
 const logger = createLogger("slack-bot");
 
 /**
  * Singleton LLM client instance
  */
+// let: lazy-initialized singleton, assigned once on first call
 let llmClientInstance: LLMClient | null = null;
 
 /**
@@ -40,15 +42,6 @@ export const getLLMClient = (): LLMClient => {
   }
   return llmClientInstance;
 };
-
-/**
- * Analysis result with confidence scoring
- */
-export interface AnalysisResult {
-  readonly analysis: LLMAnalysisResult;
-  readonly confidence: ConfidenceScoreResult;
-  readonly event: Event;
-}
 
 /**
  * Creates an Event from a Slack command

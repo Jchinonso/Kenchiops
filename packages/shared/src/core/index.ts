@@ -99,6 +99,7 @@ export type {
   LLMDetectedBuildConfigChange,
   LLMTestFailure,
   LLMLintError,
+  LLMChangeCorrelation,
   // Failure Classification Types
   FailureCategory,
   PipelinePhase,

@@ -20,6 +20,7 @@
 import type { SlashCommand, RespondFn } from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
 import { createLogger } from "@kenchi/shared";
+import type { AckFn } from "./actionHandlerTypes.js";
 import {
   type CommandContext,
   type SubcommandHandler,
@@ -107,8 +108,3 @@ export const handleKenchiCommand = async (
     await handler(ctx);
   }
 };
-
-/**
- * Acknowledgment function type
- */
-type AckFn = () => Promise<void>;

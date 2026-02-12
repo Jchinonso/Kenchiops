@@ -12,6 +12,7 @@ import {
   type AggregatedFailures,
   type TestFailureInfo,
   type ParsedTestSummary,
+  type LLMChangeCorrelation,
 } from "@kenchi/shared";
 import {
   type FeedbackLinks,
@@ -119,17 +120,23 @@ export const buildAssertionDiffLines = (testFailure: TestFailureInfo): string[] 
 
 /**
  * Build a file group section for test failures.
+ * Includes cross-reference lines when change correlations are available.
  */
 export const buildTestFileGroup = (
   filePath: string,
-  fileFailures: readonly TestFailureInfo[]
+  fileFailures: readonly TestFailureInfo[],
+  correlations?: readonly LLMChangeCorrelation[]
 ): string[] => {
   const fileName = filePath.split("/").pop() ?? filePath;
   const failureLines = fileFailures.flatMap((testFailure) => {
     const lineRef = testFailure.line ? `:${testFailure.line}` : "";
+    const crossRef = correlations
+      ? buildCrossReferenceLine(testFailure.testName, correlations)
+      : [];
     return [
       `${UI_EMOJI.failure} ${testFailure.testName}${lineRef}`,
       ...buildAssertionDiffLines(testFailure),
+      ...crossRef,
     ];
   });
 
@@ -152,11 +159,13 @@ export const buildTestFileGroup = (
  * @param testFailures - Array of test failures to display
  * @param testCommand - LLM-generated command to run failing tests locally
  * @param parsedTestSummary - Deterministic test summary from regex parsing (optional)
+ * @param correlations - Change correlations for cross-referencing (optional)
  */
 export const buildTestFailuresSection = (
   testFailures: readonly TestFailureInfo[],
   testCommand?: string,
-  parsedTestSummary?: ParsedTestSummary | null
+  parsedTestSummary?: ParsedTestSummary | null,
+  correlations?: readonly LLMChangeCorrelation[]
 ): string[] => {
   if (testFailures.length === 0) {
     return [];
@@ -175,7 +184,7 @@ export const buildTestFailuresSection = (
 
   // Build file group sections
   const fileGroupLines = [...failuresByFile.entries()].flatMap(([filePath, fileFailures]) =>
-    buildTestFileGroup(filePath, fileFailures)
+    buildTestFileGroup(filePath, fileFailures, correlations)
   );
 
   // Build breakdown visual
@@ -267,6 +276,100 @@ export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[])
   ];
 };
 
+// ==================== Change Correlation Display ====================
+
+/**
+ * Capitalize the first letter of a correlation level.
+ */
+const capitalizeCorrelation = (level: LLMChangeCorrelation["correlation"]): string =>
+  level === "none" ? "—" : `${level.charAt(0).toUpperCase()}${level.slice(1)}`;
+
+/**
+ * Format failing test names for a correlation row.
+ */
+const formatCorrelationTests = (failingTests: readonly string[]): string =>
+  failingTests.length > 0
+    ? failingTests
+        .slice(0, GITHUB_COMMENT_DISPLAY.MAX_CORRELATION_TESTS)
+        .map((test) => `\`${test}\``)
+        .join(", ") +
+      (failingTests.length > GITHUB_COMMENT_DISPLAY.MAX_CORRELATION_TESTS
+        ? ` +${failingTests.length - GITHUB_COMMENT_DISPLAY.MAX_CORRELATION_TESTS} more`
+        : "")
+    : "*(none)*";
+
+/**
+ * Build a single correlation table row.
+ */
+const buildCorrelationRow = (correlation: LLMChangeCorrelation): string => {
+  const fileName = correlation.changedFile.split("/").pop() ?? correlation.changedFile;
+  const lineRef = correlation.changedLine ? `:${correlation.changedLine}` : "";
+  return `| \`${correlation.changedFunction}()\` | \`${fileName}${lineRef}\` | ${formatCorrelationTests(correlation.failingTests)} | ${capitalizeCorrelation(correlation.correlation)} |`;
+};
+
+/**
+ * Build the change correlation section as a collapsible table.
+ * Shows which changed functions correlate with failing tests.
+ */
+export const buildChangeCorrelationSection = (
+  correlations: readonly LLMChangeCorrelation[]
+): string[] => {
+  if (correlations.length === 0) {
+    return [];
+  }
+
+  const maxRows = GITHUB_COMMENT_DISPLAY.MAX_CORRELATION_ROWS;
+  const displayCorrelations = correlations.slice(0, maxRows);
+  const moreCount = correlations.length > maxRows ? correlations.length - maxRows : 0;
+
+  const tableRows = displayCorrelations.map(buildCorrelationRow);
+  const moreLine = moreCount > 0 ? [`\n*...and ${moreCount} more changed functions*`] : [];
+
+  return [
+    `<details><summary>${UI_EMOJI.link} <strong>Change Correlation</strong> (${correlations.length} function${correlations.length > 1 ? "s" : ""} changed)</summary>`,
+    "",
+    "| Changed Function | File | Failing Tests | Confidence |",
+    "| :--- | :--- | :--- | :--- |",
+    ...tableRows,
+    ...moreLine,
+    "",
+    "</details>",
+    "",
+  ];
+};
+
+/**
+ * Find the correlation entry for a given test name.
+ */
+const findCorrelationForTest = (
+  testName: string,
+  correlations: readonly LLMChangeCorrelation[]
+): LLMChangeCorrelation | undefined =>
+  correlations.find(
+    (correlation) =>
+      correlation.correlation !== "none" &&
+      correlation.failingTests.some(
+        (test: string) => test === testName || testName.includes(test) || test.includes(testName)
+      )
+  );
+
+/**
+ * Build cross-reference line for a test failure if a correlation exists.
+ */
+const buildCrossReferenceLine = (
+  testName: string,
+  correlations: readonly LLMChangeCorrelation[]
+): string[] => {
+  const match = findCorrelationForTest(testName, correlations);
+  if (!match) {
+    return [];
+  }
+  const lineRef = match.changedLine ? `:${match.changedLine}` : "";
+  return [
+    `  ${UI_EMOJI.location} Likely caused by changes to \`${match.changedFunction}()\` in ${match.changedFile}${lineRef}`,
+  ];
+};
+
 /**
  * Build the recommended actions section.
  */
@@ -308,17 +411,26 @@ export const buildFooterSection = (feedbackLinks?: FeedbackLinks): string[] => {
  * Threads parsedTestSummary for deterministic test count display.
  */
 export const buildFailureSection = (failure: AggregatedFailures["failures"][number]): string[] => {
+  const correlations = failure.changeCorrelations ?? [];
+
   const summaryLine = failure.testFailures?.length
     ? buildTestFailureSummary(failure.testFailures, failure.parsedTestSummary)
     : `> ${failure.identifiedCause ?? failure.analysis ?? "Unknown error"}`;
 
   const testFailuresSection = failure.testFailures?.length
-    ? buildTestFailuresSection(failure.testFailures, failure.testCommand, failure.parsedTestSummary)
+    ? buildTestFailuresSection(
+        failure.testFailures,
+        failure.testCommand,
+        failure.parsedTestSummary,
+        correlations
+      )
     : [];
 
   const lintErrorsSection = failure.lintErrors?.length
     ? buildLintErrorsSection(failure.lintErrors)
     : [];
+
+  const correlationSection = buildChangeCorrelationSection(correlations);
 
   const actionsSection = buildActionsSection(
     failure.testFailures ?? [],
@@ -332,6 +444,7 @@ export const buildFailureSection = (failure: AggregatedFailures["failures"][numb
     "",
     ...testFailuresSection,
     ...lintErrorsSection,
+    ...correlationSection,
     ...actionsSection,
   ];
 };

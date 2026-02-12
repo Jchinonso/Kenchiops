@@ -7,8 +7,6 @@
  * @module handlers/slackEventSetup
  */
 
-import type Bolt from "@slack/bolt";
-import type { ButtonAction as BoltButtonAction } from "@slack/bolt"; // eslint-disable-line no-duplicate-imports
 import {
   logger,
   findBySlackWorkspace,
@@ -38,13 +36,11 @@ import {
   buildNoReposModal,
   getAvailableRepositories,
 } from "./channelHandler.js";
-import { toSlackSDKView } from "../types/slackTypes.js";
+import { toSlackSDKView, type SlackApp } from "../types/slackTypes.js";
 import type { View } from "@slack/types";
 import { handleAppHomeOpened, handleTestConnection, handleRefreshHome } from "./appHomeHandler.js";
 import { registerRepoSelectHandler } from "./repoSelectHandler.js";
-
-type SlackApp = InstanceType<typeof Bolt.App>;
-type ButtonAction = BoltButtonAction;
+import type { ButtonAction } from "./slackEventSetupTypes.js";
 
 /**
  * Handle bot leaving a channel - clean up repository mappings.

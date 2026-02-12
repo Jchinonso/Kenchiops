@@ -31,11 +31,18 @@ import {
 import { toSlackSDKView } from "../types/slackTypes.js";
 import { buildAddDocumentModal } from "./documentModalBuilder.js";
 import {
-  type SlackFileInfo,
   type FileProcessingContext,
   processAllFilesWithContext,
   formatIngestionResponse,
 } from "./documentFileProcessor.js";
+import type {
+  DocumentModalValues,
+  MessageWithFiles,
+  ModalValuesInput,
+  SayFunction,
+} from "./documentIngestionHandlerTypes.js";
+
+export type { MessageWithFiles } from "./documentIngestionHandlerTypes.js";
 
 // Re-export types and utilities for consumers
 export type {
@@ -46,42 +53,6 @@ export type {
 export { buildAddDocumentModal } from "./documentModalBuilder.js";
 
 const logger = createLogger("slack-bot");
-
-// ==================== Types ====================
-
-/**
- * Parsed modal submission values for document ingestion
- */
-interface DocumentModalValues {
-  readonly title: string;
-  readonly docType: KnowledgeDocType;
-  readonly content: string;
-  readonly description: string;
-}
-
-/**
- * Message with files attached
- */
-export interface MessageWithFiles {
-  readonly text?: string;
-  readonly files?: readonly SlackFileInfo[];
-  readonly user?: string;
-  readonly channel?: string;
-  readonly ts?: string;
-}
-
-/**
- * Modal values input type - matches Slack's ViewStateValue
- */
-type ModalValuesInput = Record<
-  string,
-  Record<string, { value?: string | null; selected_option?: { value: string } | null }>
->;
-
-/**
- * Say function type for Slack responses
- */
-type SayFunction = (text: string) => Promise<void>;
 
 // ==================== Command Handler ====================
 
@@ -151,6 +122,7 @@ export const handleDocumentModalSubmit = async (
   const { title, docType, content, description } = parseModalValues(values);
 
   // Parse private metadata
+  // let: conditionally assigned from JSON.parse in try block
   let channelId: string | undefined;
   try {
     const metadata = JSON.parse(privateMetadata) as { channelId?: string };

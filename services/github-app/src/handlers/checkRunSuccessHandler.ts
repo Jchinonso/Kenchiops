@@ -28,6 +28,9 @@ import {
   type CheckRunWebhook,
 } from "../types/githubTypes.js";
 import { getOctokit } from "../services/githubService.js";
+import type { CheckRunSuccessResult } from "./checkRunSuccessHandlerTypes.js";
+
+export type { CheckRunSuccessResult };
 
 const successLogger = createLogger("github-app-success-handler");
 
@@ -67,22 +70,6 @@ const fetchPRsByCommit = async (
     return [];
   }
 };
-
-// ==================== Types ====================
-
-/**
- * Result of handling a successful check run.
- */
-export interface CheckRunSuccessResult {
-  readonly handled: boolean;
-  readonly message: string;
-  readonly fixCommentsIngested?: number;
-  readonly previousFailure?: {
-    readonly checkName: string;
-    readonly failedAt: string;
-    readonly errorSummary: string;
-  };
-}
 
 // ==================== Helper Functions ====================
 
@@ -266,7 +253,7 @@ export const handleCheckRunSuccess = async (
       };
     }
 
-    // Process each PR for fix comments
+    // let: accumulator incremented per PR processed
     let totalIngested = 0;
 
     const processPR = async (prNumber: number): Promise<void> => {

@@ -14,6 +14,7 @@ import type {
   LLMDetectedBuildConfigChange,
   LLMTestFailure,
   LLMLintError,
+  LLMChangeCorrelation,
 } from "../core/types.js";
 import {
   VALID_DEP_CHANGE_TYPES,
@@ -452,4 +453,56 @@ export const parseLintErrors = (raw: unknown): readonly LLMLintError[] => {
   return raw
     .map((rawItem) => parseLintError(rawItem))
     .filter((lintError): lintError is LLMLintError => lintError !== null);
+};
+
+// ==================== Change Correlation Parsing ====================
+
+const VALID_CORRELATION_LEVELS = new Set<string>(["high", "medium", "low", "none"]);
+
+/**
+ * Validates and parses a single change correlation from raw LLM output.
+ */
+const parseChangeCorrelation = (raw: unknown): LLMChangeCorrelation | null => {
+  if (!isNonNullObject(raw)) {
+    return null;
+  }
+
+  const changedFunction = extractRequiredString(raw, "changed_function");
+  const changedFile = extractRequiredString(raw, "changed_file");
+  const correlation = extractRequiredString(raw, "correlation");
+  const explanation = extractRequiredString(raw, "explanation");
+
+  if (!changedFunction || !changedFile || !correlation || !explanation) {
+    return null;
+  }
+
+  if (!VALID_CORRELATION_LEVELS.has(correlation)) {
+    return null;
+  }
+
+  const failingTests = Array.isArray(raw.failing_tests)
+    ? raw.failing_tests.filter((test): test is string => typeof test === "string")
+    : [];
+
+  return {
+    changedFunction,
+    changedFile,
+    changedLine: extractOptionalNumber(raw, "changed_line"),
+    failingTests,
+    correlation: correlation as LLMChangeCorrelation["correlation"],
+    explanation,
+  };
+};
+
+/**
+ * Parses change correlations array from parsed LLM response.
+ */
+export const parseChangeCorrelations = (raw: unknown): readonly LLMChangeCorrelation[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((rawItem) => parseChangeCorrelation(rawItem))
+    .filter((correlation): correlation is LLMChangeCorrelation => correlation !== null);
 };

@@ -3,7 +3,7 @@
  * Processes @kenchi mentions and returns AI analysis or Q&A responses.
  */
 
-import type { AppMentionEvent, SayFn, SayArguments } from "@slack/bolt";
+import type { AppMentionEvent, SayFn } from "@slack/bolt";
 import {
   createLogger,
   TIME_CONSTANTS,
@@ -16,9 +16,7 @@ import { formatQAResponse, formatQAErrorMessage } from "../formatters/qaFormatte
 import { createEventFromMention, performAnalysis } from "../services/analysisService.js";
 import { shouldTriggerQA, performQASearch, generateQueryId } from "../services/qaService.js";
 import type { SlackBlock } from "../types/slackTypes.js";
-
-// Type for Slack blocks compatible with Bolt
-type SlackBlocks = NonNullable<SayArguments["blocks"]>;
+import type { SlackBlocks } from "./actionHandlerTypes.js";
 
 const logger = createLogger("slack-bot");
 

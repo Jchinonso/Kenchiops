@@ -40,6 +40,7 @@ import {
   type ConsolidatedPostResult,
   type TestFailureInfo,
   type LLMLintError,
+  type LLMChangeCorrelation,
   type SanitizationResultWithMapping,
 } from "@kenchi/shared";
 import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
@@ -233,6 +234,14 @@ const extractTestCommand = (response: PerJobAnalysisApiResponse): string | undef
   response.full_analysis?.testCommand;
 
 /**
+ * Extract change correlations from API response.
+ * Maps changed functions to failing tests from LLM PR diff analysis.
+ */
+const extractChangeCorrelations = (
+  response: PerJobAnalysisApiResponse
+): readonly LLMChangeCorrelation[] => response.full_analysis?.changeCorrelations ?? [];
+
+/**
  * Convert per-job analysis result to AnalyzedFailure.
  * Uses LLM-extracted test failures with expected/actual values.
  *
@@ -274,6 +283,8 @@ const convertJobResultToFailure = (
     testFailures: result.testFailures,
     lintErrors: result.lintErrors,
     testCommand: result.testCommand,
+    changeCorrelations:
+      result.changeCorrelations.length > 0 ? result.changeCorrelations : undefined,
     parsedTestSummary: result.parsedTestSummary,
     timestamp,
   };
@@ -540,6 +551,9 @@ const analyzeJobLogs = async (
   // Extract LLM-generated test command
   const testCommand = extractTestCommand(analysisResponse);
 
+  // Extract change correlations from LLM PR diff analysis
+  const changeCorrelations = extractChangeCorrelations(analysisResponse);
+
   logger.info("Async analysis complete", {
     jobId,
     jobName,
@@ -559,6 +573,7 @@ const analyzeJobLogs = async (
     testFailures,
     lintErrors,
     testCommand,
+    changeCorrelations,
     lineMappings: sanitized.lineMappings,
     parsedTestSummary,
   };
@@ -635,6 +650,7 @@ const analyzeJobWithErrorHandling = async (
       response: {} as PerJobAnalysisApiResponse,
       testFailures: [],
       lintErrors: [],
+      changeCorrelations: [],
       lineMappings: [],
       failed: true,
       error: getErrorMessage(error),

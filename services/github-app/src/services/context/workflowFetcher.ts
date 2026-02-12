@@ -6,7 +6,7 @@
 
 import { createLogger, GITHUB_RETRY_CONFIG, getErrorMessage } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
-import type { WorkflowTiming } from "./types.js";
+import type { WorkflowTiming, JobLogsResult, AllFailedJobsLogs } from "./types.js";
 
 const logger = createLogger("github-app");
 
@@ -147,25 +147,7 @@ export const fetchWorkflowLogs = async (
   }
 };
 
-/**
- * Job logs result containing job name and log content
- */
-export interface JobLogsResult {
-  readonly jobName: string;
-  readonly jobId: number;
-  readonly logs: string;
-}
-
-/**
- * Combined logs result for all failed jobs
- */
-export interface AllFailedJobsLogs {
-  readonly workflowName: string;
-  readonly workflowRunId: number;
-  readonly jobs: readonly JobLogsResult[];
-  /** Combined logs with job name headers for LLM analysis */
-  readonly combinedLogs: string;
-}
+export type { JobLogsResult, AllFailedJobsLogs } from "./types.js";
 
 /**
  * Fetch logs for ALL failed jobs in a workflow run.
@@ -357,7 +339,7 @@ export const fetchWorkflowTiming = async (
 
     const failedJob = jobs.jobs.find((job) => job.conclusion === "failure");
 
-    // Calculate duration
+    // let: conditionally assigned from multiple timing sources
     let durationMs: number | null = null;
     if (failedRun.run_started_at && failedRun.updated_at) {
       durationMs =

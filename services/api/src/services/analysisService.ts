@@ -45,9 +45,7 @@ const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== LLM Client Singleton ====================
 
-/**
- * Singleton LLM client instance
- */
+// let: lazy-initialized singleton, assigned once on first call
 let llmClientInstance: LLMClient | null = null;
 
 /**
@@ -226,6 +224,7 @@ export const performAnalysis = async (
     context
   );
 
+  // let: conditionally assigned from chunking pipeline or fallback path
   let enrichedEvidence: Evidence;
 
   if (useChunkingPipeline) {

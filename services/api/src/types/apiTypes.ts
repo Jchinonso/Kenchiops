@@ -138,6 +138,36 @@ export interface CompareModelsRequestBody {
   readonly tenantId?: string;
 }
 
+// ==================== Analysis Route Types ====================
+
+/**
+ * Database row shape for analysis jobs.
+ */
+export interface JobRow {
+  readonly id: string;
+  readonly status: string;
+  readonly result: Record<string, unknown> | null;
+  readonly error: string | null;
+}
+
+/**
+ * Response for POST /api/analyze (job creation).
+ */
+export interface AnalyzeJobResponse {
+  readonly job_id: string;
+  readonly status: "pending";
+}
+
+/**
+ * Response for GET /api/jobs/:id (job status polling).
+ */
+export interface JobStatusResponse {
+  readonly job_id: string;
+  readonly status: "pending" | "processing" | "completed" | "failed";
+  readonly result?: Record<string, unknown>;
+  readonly error?: string;
+}
+
 // ==================== Config Types ====================
 
 /**

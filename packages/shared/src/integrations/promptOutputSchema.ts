@@ -66,6 +66,16 @@ SCHEMA:
   "test_command": "command to run failing tests locally (e.g., cargo test, npm test, pytest)",
   "secondary_findings": [
     { "summary": "Description of independent issue", "evidence_ids": ["log#N"], "severity": "warning" }
+  ],
+  "change_correlations": [
+    {
+      "changed_function": "function or method name from diff hunk",
+      "changed_file": "path/to/file.ext",
+      "changed_line": 8,
+      "failing_tests": ["test_name_1", "test_name_2"],
+      "correlation": "high|medium|low|none",
+      "explanation": "Why this function likely caused these failures"
+    }
   ]
 }`;
 
@@ -371,6 +381,40 @@ EXAMPLE 2 - Test failures with format/lint issues (ideal output):
 Ensure valid JSON. Double-quoted keys. Properly escaped strings.`;
 
 /**
+ * Builds the change_correlations field requirements section.
+ */
+const buildChangeCorrelationsRequirementsSection = (): string =>
+  `**change_correlations** (optional, include when PR diff evidence is present with diff# IDs): Maps changed functions/methods to failing tests. Maximum 10 entries.
+
+WHEN TO INCLUDE:
+- Only when evidence contains PR diff context (diff# evidence IDs)
+- If no PR diff is present, omit this field entirely or return an empty array
+
+HOW TO EXTRACT:
+1. Scan diff hunks for function/method signatures: \`function\`, \`def\`, \`fn\`, \`func\`, \`class\`, method definitions, arrow functions assigned to named constants
+2. For each changed function, check if any failing tests exercise it
+3. Include functions with NO failing tests (correlation: "none") — this highlights untested changes
+
+CORRELATION CONFIDENCE:
+- **high**: Test name directly references the function (e.g., \`test_add\` tests \`add()\`), OR test file is the test counterpart of the source file AND test fails with values matching the function's behavior
+- **medium**: Test file corresponds to the source file (e.g., \`calculator.test.ts\` tests \`calculator.ts\`), but relationship is indirect
+- **low**: Indirect relationship — the function is in the call chain but not directly tested
+- **none**: No failing tests exercise this function (untested change)
+
+FIELD REQUIREMENTS:
+- **changed_function** (required): Function/method name as it appears in the diff (e.g., "add", "calculateTotal", "UserService.getById")
+- **changed_file** (required): File path from the diff
+- **changed_line** (optional): Line number from the diff hunk header
+- **failing_tests** (required): Array of test names that fail and exercise this function. Empty array if correlation is "none"
+- **correlation** (required): "high", "medium", "low", or "none"
+- **explanation** (required): Brief explanation of why this function is correlated (or "No failing tests for this changed function" for "none")
+
+ANTI-HALLUCINATION:
+- Only include functions that ACTUALLY appear in the diff evidence
+- Only reference test names that appear in the test_failures array
+- Do NOT invent function names or test relationships`;
+
+/**
  * Builds the final self-check section.
  */
 const buildFinalSelfCheckSection = (): string =>
@@ -413,6 +457,7 @@ export const buildOutputFormatSectionForRawEvidence = (): string => {
     buildTestFailuresRequirementsSection(),
     buildLintErrorsRequirementsSection(),
     buildSecondaryFindingsAndExampleSection(),
+    buildChangeCorrelationsRequirementsSection(),
     buildFinalSelfCheckSection(),
   ];
 

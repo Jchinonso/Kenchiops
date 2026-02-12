@@ -21,82 +21,14 @@ import {
   formatSlackMessage,
   type LLMAnalysisResult,
   type OutputContext,
-  type GitHubCommentOutput,
-  type SlackMessageOutput,
 } from "@kenchi/shared";
 import type { CheckRunWebhook } from "../types/githubTypes.js";
 import { fetchWorkflowLogs } from "../services/context/workflowFetcher.js";
+import type { SimplifiedAnalysisResult, AnalysisApiResponse } from "./simplifiedAnalysisTypes.js";
+
+export type { SimplifiedAnalysisResult };
 
 const logger = createLogger("github-app");
-
-// ==================== Types ====================
-
-/**
- * Result of simplified CI failure analysis.
- */
-export interface SimplifiedAnalysisResult {
-  readonly success: boolean;
-  readonly analysis?: LLMAnalysisResult;
-  readonly githubComment?: GitHubCommentOutput;
-  readonly slackMessage?: SlackMessageOutput;
-  readonly error?: string;
-  readonly metadata?: SimplifiedAnalysisMetadata;
-}
-
-/**
- * Metadata about the analysis process.
- */
-interface SimplifiedAnalysisMetadata {
-  readonly originalLogSize: number;
-  readonly processedLogSize: number;
-  readonly wasTruncated: boolean;
-  readonly secretsRedacted: number;
-}
-
-/**
- * API response structure from the analysis service.
- */
-interface AnalysisApiResponse {
-  readonly analysis?: string;
-  readonly identified_cause?: string;
-  readonly confidence?: number;
-  readonly recommended_actions?: readonly RecommendedActionResponse[];
-  readonly full_analysis?: FullAnalysisResponse;
-}
-
-/**
- * Recommended action from API response.
- */
-interface RecommendedActionResponse {
-  readonly actionType?: string;
-  readonly description?: string;
-  readonly reasoning?: string;
-  readonly priority?: string;
-}
-
-/**
- * Full analysis from API response.
- */
-interface FullAnalysisResponse {
-  readonly summary?: string;
-  readonly identifiedCause?: string;
-  readonly confidence?: string;
-  readonly category?: string;
-  readonly phase?: string;
-  readonly codeAnnotations?: readonly AnalysisAnnotation[];
-  readonly nextSteps?: readonly string[];
-}
-
-/**
- * Annotation from API response.
- */
-interface AnalysisAnnotation {
-  readonly path?: string;
-  readonly line?: number;
-  readonly level?: string;
-  readonly message?: string;
-  readonly title?: string;
-}
 
 // ==================== Converters ====================
 

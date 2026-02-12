@@ -417,6 +417,25 @@ export interface LLMLintError {
   readonly suggestion?: string;
 }
 
+/**
+ * Change correlation between a modified function and failing tests.
+ * Extracted by LLM from PR diff hunks and test failure data.
+ */
+export interface LLMChangeCorrelation {
+  /** Function or method name extracted from diff hunk */
+  readonly changedFunction: string;
+  /** File path where the function was changed */
+  readonly changedFile: string;
+  /** Line number of the change in the diff */
+  readonly changedLine?: number;
+  /** Test names that exercise this function (empty if none fail) */
+  readonly failingTests: readonly string[];
+  /** Correlation confidence between the change and test failures */
+  readonly correlation: "high" | "medium" | "low" | "none";
+  /** Brief explanation of why this function likely caused the failures */
+  readonly explanation: string;
+}
+
 /** Failure category classification */
 export type FailureCategory =
   | "dependency"
@@ -465,6 +484,8 @@ export interface LLMAnalysisResult {
   readonly lintErrors?: readonly LLMLintError[];
   /** Command to run failing tests locally (LLM-generated based on detected framework) */
   readonly testCommand?: string;
+  /** Correlations between changed functions and failing tests (from PR diff analysis) */
+  readonly changeCorrelations?: readonly LLMChangeCorrelation[];
 }
 
 // ==================== Action Proposal Types ====================

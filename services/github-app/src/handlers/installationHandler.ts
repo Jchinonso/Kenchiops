@@ -16,17 +16,11 @@ import {
   type Tenant,
 } from "@kenchi/shared";
 import { GITHUB_INSTALLATION_ACTIONS, type InstallationWebhook } from "../types/githubTypes.js";
+import type { InstallationHandlerResult, TenantLookupResult } from "./installationHandlerTypes.js";
+
+export type { InstallationHandlerResult };
 
 const logger = createLogger("github-app");
-
-/**
- * Result of handling an installation webhook
- */
-export interface InstallationHandlerResult {
-  readonly handled: boolean;
-  readonly message: string;
-  readonly tenantId?: string;
-}
 
 /**
  * Build success result
@@ -122,13 +116,6 @@ const handleInstallationDeleted = async (
     return failureResult(`Failed to delete tenant: ${getErrorMessage(error)}`);
   }
 };
-
-/**
- * Result type for tenant lookup
- */
-type TenantLookupResult =
-  | { found: true; tenant: Tenant }
-  | { found: false; result: InstallationHandlerResult };
 
 /**
  * Lookup tenant with standardized not-found handling

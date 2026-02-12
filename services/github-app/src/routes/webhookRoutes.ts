@@ -23,27 +23,10 @@ import type {
   InstallationWebhook,
   PushWebhook,
 } from "../types/githubTypes.js";
+import type { WebhookHandlerResult, GitHubEventHandler } from "./webhookRoutesTypes.js";
 
 const router = Router();
 const logger = createLogger("github-app");
-
-/**
- * Webhook handler result with optional fields
- */
-interface WebhookHandlerResult {
-  readonly handled: boolean;
-  readonly message: string;
-  readonly eventId?: string;
-  readonly tenantId?: string;
-}
-
-/**
- * GitHub event handler configuration
- */
-interface GitHubEventHandler {
-  readonly handle: (body: unknown) => Promise<WebhookHandlerResult>;
-  readonly formatResponse: (result: WebhookHandlerResult) => object;
-}
 
 /**
  * Format standard webhook response
@@ -144,6 +127,7 @@ const handlePush = async (webhook: PushWebhook): Promise<WebhookHandlerResult> =
     }
 
     // Process each doc file
+    // let: accumulator incremented per successful doc file ingestion
     let successCount = 0;
     const processResults = await Promise.all(
       docFiles.map(async (filePath) => {

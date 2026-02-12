@@ -16,20 +16,15 @@ import {
   type Tenant,
   type TenantStatistics,
 } from "@kenchi/shared";
-import type { WebClient } from "@slack/web-api";
 import {
   buildAppHomeView,
   buildErrorView,
   type AppHomeContext,
   type RepositoryMappingDisplay,
 } from "../formatters/appHomeFormatter.js";
+import type { SlackClient } from "./appHomeHandlerTypes.js";
 
 const logger = createLogger("app-home");
-
-/**
- * Type for Slack client (subset of WebClient)
- */
-type SlackClient = Pick<WebClient, "views" | "auth">;
 
 /**
  * Get tenant info for the workspace

@@ -15,6 +15,7 @@ import type {
   LLMDetectedBuildConfigChange,
   LLMSuggestedFix,
   LLMLintError,
+  LLMChangeCorrelation,
 } from "../core/types.js";
 import type { ParsedTestSummary } from "../formatting/extraction/types.js";
 
@@ -151,6 +152,8 @@ export interface AnalyzedFailure {
   readonly relatedKnowledge?: readonly RelatedKnowledgeDoc[];
   /** Deterministic test summary parsed from CI runner output via regex (not LLM-derived) */
   readonly parsedTestSummary?: ParsedTestSummary | null;
+  /** Correlations between changed functions and failing tests (from LLM PR diff analysis) */
+  readonly changeCorrelations?: readonly LLMChangeCorrelation[];
 }
 
 /**
@@ -177,6 +180,8 @@ export interface SerializedFailure {
   readonly relatedKnowledge?: readonly RelatedKnowledgeDoc[];
   /** Deterministic test summary parsed from CI runner output via regex (not LLM-derived) */
   readonly parsedTestSummary?: ParsedTestSummary | null;
+  /** Correlations between changed functions and failing tests (from LLM PR diff analysis) */
+  readonly changeCorrelations?: readonly LLMChangeCorrelation[];
 }
 
 /**

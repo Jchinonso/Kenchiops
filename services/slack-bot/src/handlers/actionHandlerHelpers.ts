@@ -52,6 +52,7 @@ export const getActionPayload = (action: ButtonAction): StoredActionPayload => {
     throw new ValidationError("Action value is missing");
   }
 
+  // let: conditionally assigned — parse attempt may fail, checked below
   let opaqueValue: OpaqueActionValue | null = null;
   try {
     opaqueValue = parseOpaqueActionValue(action.value);

@@ -18,19 +18,16 @@ import {
 } from "@kenchi/shared";
 import { performAnalysis } from "../services/analysisService.js";
 import type { AnalyzeRequest } from "../types/apiTypes.js";
+import type {
+  JobStatus,
+  AnalysisJob,
+  WorkerState,
+  AnalysisWorkerControl,
+} from "./analysisWorkerTypes.js";
+
+export type { AnalysisWorkerControl };
 
 const logger = createLogger(SERVICE_NAMES.API);
-
-// ==================== Types ====================
-
-type JobStatus = "pending" | "processing" | "completed" | "failed";
-
-interface AnalysisJob {
-  readonly id: string;
-  readonly status: JobStatus;
-  readonly repository: string;
-  readonly requestPayload: Record<string, unknown>;
-}
 
 // ==================== Database Queries ====================
 
@@ -86,19 +83,6 @@ const WORKER_CONFIG = {
   /** Batch size for fetching pending jobs */
   BATCH_SIZE: 5,
 } as const;
-
-// ==================== Worker State ====================
-
-interface WorkerState {
-  running: boolean;
-  activeJobs: number;
-}
-
-export interface AnalysisWorkerControl {
-  stop: () => void;
-  isRunning: () => boolean;
-  getActiveJobs: () => number;
-}
 
 // ==================== Helper Functions ====================
 

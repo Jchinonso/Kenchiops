@@ -7,31 +7,15 @@
 
 import { SLACK_MODAL_CALLBACKS, SLACK_ACTION_IDS, SLACK_BLOCK_IDS } from "@kenchi/shared";
 import type { SlackModalView } from "../types/slackTypes.js";
+import type { RepositoryOption, RepositoryMapping } from "./modalBuildersTypes.js";
+
+export type { RepositoryOption, RepositoryMapping } from "./modalBuildersTypes.js";
 
 // Re-export for backward compatibility with existing imports
 export const REPO_SELECT_MODAL_CALLBACK = SLACK_MODAL_CALLBACKS.REPO_SELECT;
 export const REPO_SELECT_ACTION_ID = SLACK_ACTION_IDS.REPO_SELECT;
 export const UNCONFIGURE_MODAL_CALLBACK = SLACK_MODAL_CALLBACKS.UNCONFIGURE;
 export const UNCONFIGURE_SELECT_ACTION_ID = SLACK_ACTION_IDS.UNCONFIGURE_SELECT;
-
-// ==================== Types ====================
-
-/**
- * Repository option for selection
- */
-export interface RepositoryOption {
-  readonly fullName: string;
-  readonly name: string;
-}
-
-/**
- * Repository mapping for unconfigure modal
- */
-export interface RepositoryMapping {
-  readonly repository: string;
-  readonly channelId: string;
-  readonly channelName: string | null;
-}
 
 // ==================== Modal Builders ====================
 
