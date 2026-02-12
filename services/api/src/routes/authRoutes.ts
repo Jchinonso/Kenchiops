@@ -13,6 +13,8 @@ import {
   asyncHandler,
   createLogger,
   ValidationError,
+  AuthenticationError,
+  NotFoundError,
   config,
   VALID_OAUTH_PROVIDERS,
   OAUTH_PROVIDER_URLS,
@@ -21,6 +23,8 @@ import {
   createOAuthState,
   consumeOAuthState,
   getErrorMessage,
+  findUserById,
+  findOAuthIdentitiesByUser,
   type OAuthProvider,
   type RequestContext,
 } from "@kenchi/shared";
@@ -293,13 +297,48 @@ const handleLogout = async (req: Request, res: Response): Promise<void> => {
 
 /**
  * GET /auth/me
- * Stub — requires auth middleware (Phase 3).
+ * Return the authenticated user's profile and linked providers.
+ * Requires a valid JWT (auth middleware enforced).
  */
-const handleGetCurrentUser = async (_req: Request, res: Response): Promise<void> => {
-  res.status(501).json({
-    error: {
-      code: "not_implemented",
-      message: "Auth middleware required (Phase 3)",
+const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> => {
+  const context = getRequestContext(req);
+
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleGetCurrentUser",
+    });
+  }
+
+  const [user, identities] = await Promise.all([
+    findUserById(req.user.userId),
+    findOAuthIdentitiesByUser(req.user.userId),
+  ]);
+
+  if (!user) {
+    throw new NotFoundError("User not found", {
+      operation: "handleGetCurrentUser",
+      metadata: { userId: req.user.userId },
+    });
+  }
+
+  logger.info("User profile retrieved", {
+    userId: user.id,
+    ...context,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    data: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      tenantId: user.tenantId,
+      role: user.role,
+      providers: identities.map((identity) => ({
+        provider: identity.provider,
+        username: identity.providerUsername,
+      })),
+      createdAt: user.createdAt.toISOString(),
     },
   });
 };
