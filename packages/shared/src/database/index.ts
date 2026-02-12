@@ -242,6 +242,65 @@ export {
   type BudgetStatus,
 } from "./costTracking/index.js";
 
+// User module (Authentication)
+export {
+  // Types
+  type UserRow,
+  type OAuthIdentityRow,
+  type RefreshTokenRow,
+  type OAuthStateRow,
+  type User,
+  type OAuthIdentity,
+  type RefreshToken,
+  type OAuthState,
+  type OAuthProvider,
+  type UserRole,
+  type UserStatus,
+  type CreateUserInput,
+  type UpsertOAuthIdentityInput,
+  type OAuthStateInput,
+  type CreateRefreshTokenInput,
+  type OAuthProviderProfile,
+  type OAuthTokenResponse,
+  type JWTPayload,
+  type TokenPair,
+  type AuthenticatedUser,
+  type UserValidationRule,
+  type OAuthIdentityValidationRule,
+  // Helpers
+  rowToUser,
+  extractUser,
+  rowToOAuthIdentity,
+  extractOAuthIdentity,
+  rowToRefreshToken,
+  extractRefreshToken,
+  rowToOAuthState,
+  extractOAuthState,
+  validateCreateUserInput,
+  validateUpsertOAuthIdentityInput,
+  // Lookup operations
+  findUserById,
+  findUserByEmail,
+  findOAuthIdentity,
+  findOAuthIdentitiesByUser,
+  // Lifecycle operations
+  createUser,
+  updateLastLogin,
+  updateUserTenant,
+  upsertOAuthIdentity,
+  // OAuth state operations
+  createOAuthState,
+  consumeOAuthState,
+  cleanupExpiredStates,
+  // Refresh token operations
+  createRefreshToken,
+  findRefreshTokenByHash,
+  revokeRefreshToken,
+  revokeTokenFamily,
+  replaceRefreshToken,
+  cleanupExpiredRefreshTokens,
+} from "./user/index.js";
+
 // Risk rules module (Context-Aware Risk Scoring)
 // Note: CustomRiskRuleRow, RiskAssessmentRow, and row mappers are internal.
 export {

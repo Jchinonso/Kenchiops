@@ -10,9 +10,11 @@
 
 import express from "express";
 import {
+  config,
   createLogger,
   errorHandler,
   requestLogger,
+  authMiddleware,
   createRateLimitMiddleware,
   setupGracefulShutdown,
   registerCleanupHandler,
@@ -279,6 +281,7 @@ const createApp = (): express.Express => {
   app.use(express.json({ limit: EXPRESS_CONFIG.JSON_BODY_LIMIT }));
   app.use(requestLogger);
   app.use(apiRateLimiter.middleware());
+  app.use(authMiddleware);
 
   // Register all routes
   registerRoutes(app);
@@ -338,7 +341,7 @@ const startServer = async (): Promise<void> => {
 
   // Start fine-tuning job scheduler only when a real OpenAI key is configured.
   // OpenRouter keys (sk-or-*) are not valid for the OpenAI fine-tuning API.
-  const apiKey = process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY ?? "";
+  const apiKey = config.LLM_API_KEY ?? config.OPENAI_API_KEY ?? "";
   if (apiKey.startsWith("sk-or-")) {
     logger.warn(
       "Fine-tuning scheduler disabled: OpenRouter key cannot be used for OpenAI fine-tuning API"

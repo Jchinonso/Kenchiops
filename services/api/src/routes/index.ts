@@ -6,6 +6,7 @@
 
 import type { Express } from "express";
 import { healthRoutes } from "./healthRoutes.js";
+import { authRoutes } from "./authRoutes.js";
 import { webhookRoutes } from "./webhookRoutes.js";
 import { eventRoutes } from "./eventRoutes.js";
 import { analysisRoutes } from "./analysisRoutes.js";
@@ -19,6 +20,9 @@ import { riskRulesRoutes } from "./riskRulesRoutes.js";
 export const registerRoutes = (app: Express): void => {
   // Health check (no prefix)
   app.use(healthRoutes);
+
+  // Auth routes (public — login, callback, refresh, logout)
+  app.use(authRoutes);
 
   // Webhook routes
   app.use(webhookRoutes);

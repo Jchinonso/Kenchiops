@@ -17,6 +17,9 @@ export type {
 // Middleware
 export { errorHandler, asyncHandler, requestLogger } from "./middleware.js";
 
+// Auth middleware
+export { authMiddleware } from "./authMiddleware.js";
+
 // Validation
 export { validate, validators } from "./validation.js";
 

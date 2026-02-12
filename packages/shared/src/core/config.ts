@@ -173,4 +173,27 @@ export const config: Config = {
     "LLM_QUEUE_TIMEOUT_MS",
     LLM_CONCURRENCY_DEFAULTS.QUEUE_TIMEOUT_MS
   ),
+
+  // Auth / JWT
+  JWT_SECRET: process.env.JWT_SECRET,
+
+  // GitHub OAuth App (separate from GitHub App)
+  GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID,
+  GITHUB_OAUTH_CLIENT_SECRET: process.env.GITHUB_OAUTH_CLIENT_SECRET,
+
+  // GitLab OAuth
+  GITLAB_OAUTH_CLIENT_ID: process.env.GITLAB_OAUTH_CLIENT_ID,
+  GITLAB_OAUTH_CLIENT_SECRET: process.env.GITLAB_OAUTH_CLIENT_SECRET,
+
+  // Bitbucket OAuth
+  BITBUCKET_OAUTH_CLIENT_ID: process.env.BITBUCKET_OAUTH_CLIENT_ID,
+  BITBUCKET_OAUTH_CLIENT_SECRET: process.env.BITBUCKET_OAUTH_CLIENT_SECRET,
+
+  // Azure DevOps OAuth
+  AZURE_DEVOPS_OAUTH_CLIENT_ID: process.env.AZURE_DEVOPS_OAUTH_CLIENT_ID,
+  AZURE_DEVOPS_OAUTH_CLIENT_SECRET: process.env.AZURE_DEVOPS_OAUTH_CLIENT_SECRET,
+
+  // Frontend URL (for OAuth redirects)
+  FRONTEND_URL: optionalString("FRONTEND_URL", "http://localhost:3003"),
+  OAUTH_CALLBACK_BASE_URL: optionalString("OAUTH_CALLBACK_BASE_URL", "http://localhost:3001"),
 } as const;

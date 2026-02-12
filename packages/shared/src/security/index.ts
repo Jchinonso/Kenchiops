@@ -25,6 +25,14 @@ export type {
   CustomRedactor,
 } from "./types.js";
 
+// JWT utilities
+export {
+  generateAccessToken,
+  verifyAccessToken,
+  generateRefreshToken,
+  hashRefreshToken,
+} from "./jwt.js";
+
 // Re-export constants for convenience
 export {
   SECRET_PATTERNS,

@@ -94,6 +94,14 @@ export {
   type RelationshipType,
   type ExternalSourceType,
   type TechStackTag,
+  // Auth
+  USER_QUERIES,
+  OAUTH_IDENTITY_QUERIES,
+  OAUTH_STATE_QUERIES,
+  REFRESH_TOKEN_QUERIES,
+  VALID_OAUTH_PROVIDERS,
+  AUTH_DEFAULTS,
+  JWT_CONFIG,
 } from "../constants/index.js";
 
 // Vector utilities

@@ -264,6 +264,48 @@ export {
   type AnalysisRecord,
 } from "./database/index.js";
 
+// User module (Authentication)
+export {
+  // Types
+  type User,
+  type OAuthIdentity,
+  type RefreshToken,
+  type OAuthState,
+  type OAuthProvider,
+  type UserRole,
+  type UserStatus,
+  type CreateUserInput,
+  type UpsertOAuthIdentityInput,
+  type OAuthStateInput,
+  type CreateRefreshTokenInput,
+  type OAuthProviderProfile,
+  type OAuthTokenResponse,
+  type JWTPayload,
+  type TokenPair,
+  type AuthenticatedUser,
+  // Lookup operations
+  findUserById,
+  findUserByEmail,
+  findOAuthIdentity,
+  findOAuthIdentitiesByUser,
+  // Lifecycle operations
+  createUser,
+  updateLastLogin,
+  updateUserTenant,
+  upsertOAuthIdentity,
+  // OAuth state operations
+  createOAuthState,
+  consumeOAuthState,
+  cleanupExpiredStates,
+  // Refresh token operations
+  createRefreshToken,
+  findRefreshTokenByHash,
+  revokeRefreshToken,
+  revokeTokenFamily,
+  replaceRefreshToken,
+  cleanupExpiredRefreshTokens,
+} from "./database/index.js";
+
 // Risk rules repository operations
 export {
   createCustomRiskRule,
@@ -277,7 +319,7 @@ export {
 } from "./database/index.js";
 
 // HTTP utilities
-export { errorHandler, asyncHandler, requestLogger } from "./http/index.js";
+export { errorHandler, asyncHandler, requestLogger, authMiddleware } from "./http/index.js";
 export { validate, validators, type ValidationSchema } from "./http/index.js";
 export {
   createRateLimiter,
@@ -781,6 +823,11 @@ export {
   detectSecretTypes,
   createCustomRedactor,
   type RedactionResult,
+  // JWT utilities
+  generateAccessToken,
+  verifyAccessToken,
+  generateRefreshToken,
+  hashRefreshToken,
 } from "./security/index.js";
 
 // Action execution

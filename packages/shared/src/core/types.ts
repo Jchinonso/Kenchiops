@@ -908,6 +908,30 @@ export interface Config {
   readonly LLM_MAX_CONCURRENT_ANALYSIS?: number;
   /** Maximum time to wait in queue before timeout (ms) */
   readonly LLM_QUEUE_TIMEOUT_MS?: number;
+
+  // Auth / JWT
+  /** Secret for signing JWT access tokens */
+  readonly JWT_SECRET?: string;
+
+  // GitHub OAuth App (separate from GitHub App)
+  readonly GITHUB_OAUTH_CLIENT_ID?: string;
+  readonly GITHUB_OAUTH_CLIENT_SECRET?: string;
+
+  // GitLab OAuth
+  readonly GITLAB_OAUTH_CLIENT_ID?: string;
+  readonly GITLAB_OAUTH_CLIENT_SECRET?: string;
+
+  // Bitbucket OAuth
+  readonly BITBUCKET_OAUTH_CLIENT_ID?: string;
+  readonly BITBUCKET_OAUTH_CLIENT_SECRET?: string;
+
+  // Azure DevOps OAuth
+  readonly AZURE_DEVOPS_OAUTH_CLIENT_ID?: string;
+  readonly AZURE_DEVOPS_OAUTH_CLIENT_SECRET?: string;
+
+  // Frontend URL (for OAuth redirects)
+  readonly FRONTEND_URL: string;
+  readonly OAUTH_CALLBACK_BASE_URL: string;
 }
 
 // ==================== Signed URL Types ====================
