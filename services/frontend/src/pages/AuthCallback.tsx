@@ -9,6 +9,17 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+/**
+ * Validate redirect_after to prevent open redirect attacks (defense-in-depth).
+ * The backend already validates this, but we re-validate on the client
+ * in case the URL was tampered with after the backend set it.
+ *
+ * Only allows paths starting with "/" that are not protocol-relative ("//")
+ * and do not contain backslashes or authority components.
+ */
+const isSafeRedirectPath = (path: string): boolean =>
+  path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\") && !path.includes(":");
+
 const AuthCallback = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -25,7 +36,10 @@ const AuthCallback = () => {
 
     // Tokens are in httpOnly cookies (set by the API during redirect).
     // Navigate to the target page — apiClient sends cookies automatically.
-    navigate(redirectAfter ?? "/dashboard", { replace: true });
+    // Defense-in-depth: re-validate the redirect path on the client side.
+    const safeRedirect =
+      redirectAfter && isSafeRedirectPath(redirectAfter) ? redirectAfter : "/dashboard";
+    navigate(safeRedirect, { replace: true });
   }, [navigate, searchParams]);
 
   return (

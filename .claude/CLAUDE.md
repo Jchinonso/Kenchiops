@@ -264,25 +264,7 @@ logger.error("GitHub API call failed", {
 - **Never log**: tokens, API keys, secrets, passwords, email addresses, phone numbers, access tokens
 - Webhook payloads: extract only the fields you need, never log raw body
 
-### Enforcement
-
-```typescript
-// ❌ WRONG - raw external data
-logger.info("Webhook received", { body: req.body });
-logger.info("User data", { user: externalUser });
-
-// ✅ CORRECT - sanitized
-logger.info("Webhook received", {
-  type: payload.type,
-  action: payload.action,
-  prNumber: payload.pull_request?.number,
-});
-
-// If you must log more, sanitize first
-logger.debug("Payload details", {
-  body: truncate(redactSecrets(payload), 1000),
-});
-```
+**Pattern:** Extract only needed fields from payloads. If you must log more, use `truncate(redactSecrets(payload), 1000)`.
 
 ---
 
@@ -691,40 +673,6 @@ interface AnalysisResponse {
 
 ---
 
-## Automated Enforcement
-
-### ESLint Rules
-
-```javascript
-// .eslintrc.js
-{
-  "rules": {
-    // Ban console.* except in /scripts
-    "no-console": ["error", { "allow": [] }],
-
-    // Ban direct fetch/axios and vendor SDKs in services
-    "no-restricted-imports": ["error", {
-      "patterns": [
-        { "group": ["node-fetch", "axios"], "message": "Use @kenchi/shared httpClient" },
-        { "group": ["@octokit/*", "@slack/*", "openai"], "message": "Vendor SDKs not allowed in services. Use adapters." }
-      ]
-    }]
-  },
-  "overrides": [
-    { "files": ["**/adapters/**"], "rules": { "no-restricted-imports": "off" } },
-    { "files": ["**/scripts/**"], "rules": { "no-console": "off" } }
-  ]
-}
-```
-
-### CI Checks
-
-- **No duplicate constants**: grep for patterns that should be in constants.ts
-- **Barrel exports**: new shared modules must be exported from index.ts
-- **Type coverage**: maintain minimum threshold (e.g., 95%)
-
----
-
 ## Monorepo Structure
 
 ```
@@ -869,156 +817,6 @@ import { ValidationError } from "@kenchi/shared";
 
 ---
 
-## Functional Style Rules
-
-### `const` Over `let`
-
-```typescript
-// ✅ CORRECT - derive values with const
-const total = items.reduce((sum, item) => sum + item.price, 0);
-const label = count === 0 ? "none" : count === 1 ? "single" : "multiple";
-const config = { ...defaults, ...overrides };
-
-// ❌ WRONG - unnecessary let
-let total = 0;
-for (const item of items) {
-  total += item.price;
-}
-
-// ✅ ALLOWED - let with justification
-for (const item of items) {
-  // let: early-exit search
-  if (item.isMatch) return item;
-}
-```
-
-### Pure Functions
-
-```typescript
-// ✅ CORRECT - pure: same input → same output, no side effects
-const calculateScore = (metrics: readonly Metric[]): number =>
-  metrics.reduce((sum, m) => sum + m.weight * m.value, 0);
-
-const formatAnalysis = (analysis: Analysis): AnalysisResponse => ({
-  id: analysis.id,
-  score: analysis.internalScore,
-  createdAt: analysis.createdAt.toISOString(),
-});
-
-// ❌ WRONG - impure helper (side effect: logging)
-const calculateScore = (metrics: Metric[]): number => {
-  console.log("calculating...");
-  return metrics.reduce((sum, m) => sum + m.weight * m.value, 0);
-};
-
-// ✅ Side effects allowed in: adapters, handlers, entrypoints
-```
-
-### Immutable Data & `readonly`
-
-```typescript
-// ✅ CORRECT - readonly types
-interface Analysis {
-  readonly id: string;
-  readonly tenantId: string;
-  readonly scores: ReadonlyArray<number>;
-  readonly metadata: Readonly<Record<string, string>>;
-}
-
-// ✅ CORRECT - readonly function parameters
-const processItems = (items: ReadonlyArray<Item>): ReadonlyArray<Result> =>
-  items.map(transformItem);
-
-// ❌ WRONG - mutable types
-interface Analysis {
-  id: string;
-  scores: number[];
-}
-
-// ✅ CORRECT - derive new objects, never mutate
-const updated = { ...original, status: "complete" } as const;
-
-// ❌ WRONG - mutation
-original.status = "complete";
-```
-
-### Array Methods Over Loops
-
-```typescript
-// ✅ CORRECT - array methods for transforms
-const activeNames = users.filter((user) => user.isActive).map((user) => user.name);
-
-const grouped = items.reduce<Record<string, Item[]>>(
-  (acc, item) => ({
-    ...acc,
-    [item.category]: [...(acc[item.category] ?? []), item],
-  }),
-  {}
-);
-
-// ❌ WRONG - imperative loop for a transform
-const activeNames: string[] = [];
-for (const user of users) {
-  if (user.isActive) activeNames.push(user.name);
-}
-
-// ✅ ALLOWED - for...of for early-exit only
-for (const item of items) {
-  if (item.isMatch) return item;
-}
-```
-
-### Expression-Oriented Code
-
-```typescript
-// ✅ CORRECT - expressions
-const status = isActive ? "running" : "stopped";
-const name = user?.displayName ?? user?.email ?? "anonymous";
-const value = maybeCompute() ?? fallback;
-
-// ❌ WRONG - statement blocks for simple derivations
-let status: string;
-if (isActive) {
-  status = "running";
-} else {
-  status = "stopped";
-}
-
-// ✅ CORRECT - extract helper for complex branching
-const resolvePermission = (role: Role, resource: Resource): Permission => {
-  if (role === "admin") return "full";
-  if (resource.isPublic) return "read";
-  return "none";
-};
-```
-
-### No Classes for Business Logic
-
-```typescript
-// ✅ CORRECT - plain functions + closures for services/helpers
-export const createAnalysisService = (
-  repo: AnalysisRepository,
-  githubPort: GitHubChecksPort,
-) => ({
-  create: async (input: CreateInput, context: RequestContext) => { ... },
-  findById: async (id: string, context: RequestContext) => { ... },
-});
-
-// ✅ ALLOWED - classes for adapters (need this for SDK instance)
-export class GitHubChecksAdapter implements GitHubChecksPort {
-  constructor(private readonly httpClient: HttpClient) {}
-  // ...
-}
-
-// ❌ WRONG - class for business logic
-export class AnalysisService {
-  analyze(input: Input) { this.helper(); }
-  private helper() { ... }
-}
-```
-
----
-
 ## Templates
 
 ### Route Handler
@@ -1057,49 +855,7 @@ export const createOperationService = (
 
 ### Adapter
 
-```typescript
-export class ExternalServiceAdapter implements ExternalServicePort {
-  constructor(private readonly httpClient: HttpClient) {}
-
-  async fetchData(id: string, context: RequestContext): Promise<Data> {
-    const logger = createLogger("external-adapter", context);
-    const startTime = Date.now();
-
-    try {
-      const response = await this.httpClient.get<VendorResponse>(`/data/${id}`, { context });
-      const durationMs = Date.now() - startTime;
-
-      logger.info("External call completed", {
-        provider: "external",
-        operation: "fetchData",
-        durationMs,
-        statusCode: response.status,
-        ...context,
-      });
-
-      return mapVendorResponseToData(response.data);
-    } catch (error) {
-      const durationMs = Date.now() - startTime;
-      const classified = classifyHttpError(error);
-
-      logger.error("External call failed", {
-        provider: "external",
-        operation: "fetchData",
-        durationMs,
-        statusCode: classified.statusCode,
-        category: classified.category,
-        retryable: classified.retryable,
-        ...context,
-      });
-
-      throw new ExternalServiceError("external", "Failed to fetch data", {
-        metadata: { id, durationMs },
-        retryable: classified.retryable,
-      });
-    }
-  }
-}
-```
+See "Adapter Logging (Mandatory Fields)" section above for the required pattern: createLogger, startTimer, try/catch with classifyHttpError, log success+failure with provider/operation/durationMs/statusCode/context, throw ExternalServiceError.
 
 ---
 
@@ -1243,6 +999,131 @@ import {
 - One logical change per commit
 - PR must pass CI (lint, type-check, tests) before review
 - Shared package changes require explicit callout in PR description
+
+---
+
+## React & Frontend Standards
+
+### Scope
+
+These rules apply to `services/frontend/`. Backend rules (typed errors, RequestContext, adapters/ports) do not apply to frontend code.
+
+### Component Rules
+
+- **Functional components only** — no class components
+- **Named exports** for components — except page-level components which use `export default`
+- **PascalCase files** — `UserProfile.tsx`, `CIAnalysisMockup.tsx`
+- **One component per file** — exception: small tightly-coupled helper components (e.g., mockup sub-components within a feature section)
+- **Props interface in same file** — this is an exception to the backend "types in types.ts" rule. React component props live alongside the component
+
+```typescript
+// ✅ CORRECT — props interface in component file
+interface StatCardProps {
+  readonly value: string;
+  readonly label: string;
+  readonly icon: React.ReactNode;
+}
+
+const StatCard = ({ value, label, icon }: StatCardProps) => { ... }
+
+// ❌ WRONG — props in a separate types.ts for simple components
+```
+
+### Hooks Rules
+
+- Custom hooks in `hooks/` directory, prefixed with `use` (`useIsMobile`, `useAnalysis`)
+- **Exhaustive deps enforced** — `eslint-plugin-react-hooks` is configured
+- **No `useEffect` for derived state** — use `useMemo` instead
+- **Side effects in `useEffect` only** — never during render
+- **Cleanup functions** required for subscriptions, timers, event listeners
+
+```typescript
+// ❌ WRONG — derived state in useEffect
+const [fullName, setFullName] = useState("");
+useEffect(() => {
+  setFullName(`${first} ${last}`);
+}, [first, last]);
+
+// ✅ CORRECT — useMemo for derived state
+const fullName = useMemo(() => `${first} ${last}`, [first, last]);
+```
+
+### State Management
+
+| State Type          | Pattern                                                                     |
+| ------------------- | --------------------------------------------------------------------------- |
+| **Server state**    | TanStack Query (`useQuery`, `useMutation`) — no manual `fetch` + `useState` |
+| **Local UI state**  | `useState` / `useReducer`                                                   |
+| **Form state**      | React Hook Form + Zod schemas                                               |
+| **Shared UI state** | Context API or component composition — no prop drilling beyond 2 levels     |
+
+### Styling
+
+- **Tailwind utility classes only** — no CSS modules, no styled-components, no inline `style={}` (exception: truly dynamic computed values like calculated widths)
+- **`cn()` utility** from `@/lib/utils` for conditional/merged classes
+- **shadcn/ui** is the base component library — use existing `components/ui/` primitives before building custom ones
+- **Do not modify** files in `components/ui/` — they are managed by shadcn CLI
+
+### TypeScript for React
+
+```typescript
+// ✅ Extending HTML element props
+interface ButtonProps extends React.ComponentProps<"button"> {
+  readonly variant?: "primary" | "secondary";
+}
+
+// ✅ Event handler types
+const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => { ... }
+
+// ✅ Children typing
+interface LayoutProps {
+  readonly children: React.ReactNode;
+}
+
+// ❌ WRONG — any in props or state
+interface Props { data: any; }
+```
+
+### Frontend File Organization
+
+```
+services/frontend/src/
+├── components/ui/     # shadcn/ui primitives (DO NOT MODIFY)
+├── components/        # Shared app components (Navbar, Footer, etc.)
+├── sections/          # Landing page sections (Hero, Features, etc.)
+├── pages/             # Route-level components (Login, Dashboard)
+├── hooks/             # Custom React hooks
+├── lib/               # Utilities (cn, formatters, etc.)
+└── main.tsx           # Entry point
+```
+
+### Performance
+
+- **`React.memo`** only when measured — not preemptive
+- **`useMemo`/`useCallback`** only for expensive computations or stable references passed to memoized children
+- **`React.lazy`** for route-level code splitting
+- **No premature optimization** — profile first, optimize second
+
+### Frontend Testing
+
+- **React Testing Library** — not Enzyme
+- **Test behavior, not implementation** — query by role/text, not by class/test-id
+- **`userEvent`** over `fireEvent` — more realistic user interaction simulation
+- **MSW** for API mocking in component tests
+
+### Frontend Code Review Bar
+
+These will fail code review:
+
+- [ ] Class component
+- [ ] CSS modules or styled-components (use Tailwind)
+- [ ] Manual fetch + useState instead of TanStack Query for server state
+- [ ] Modified `components/ui/` file (use shadcn CLI to update)
+- [ ] `useEffect` for derived state (use `useMemo`)
+- [ ] Prop drilling beyond 2 levels
+- [ ] `any` type in component props or state
+- [ ] Missing cleanup in `useEffect` with subscriptions/timers
+- [ ] Inline `style={}` without justification
 
 ---
 

@@ -28,6 +28,7 @@ import {
   setAuthCookies,
   clearAuthCookies,
   extractRefreshToken,
+  INSTANCE_URL_CONFIG,
   type OAuthProvider,
   type RequestContext,
 } from "@kenchi/shared";
@@ -144,7 +145,8 @@ const sanitizeRedirectUrl = (url: string | null, frontendUrl: string): string | 
     return null;
   }
   // Allow relative paths starting with / but not // (protocol-relative URLs)
-  if (url.startsWith("/") && !url.startsWith("//")) {
+  // Also block backslash which some browsers normalize to forward slash
+  if (url.startsWith("/") && !url.startsWith("//") && !url.startsWith("/\\")) {
     return url;
   }
   // Allow same-origin URLs only
@@ -155,6 +157,108 @@ const sanitizeRedirectUrl = (url: string | null, frontendUrl: string): string | 
   } catch {
     return null;
   }
+};
+
+/** Check whether a URL protocol is HTTPS. */
+const isHttpsProtocol = (protocol: string): boolean => protocol === "https:";
+
+/** Check whether a URL protocol is HTTP or HTTPS. */
+const isHttpOrHttpsProtocol = (protocol: string): boolean =>
+  protocol === "https:" || protocol === "http:";
+
+/** Check whether a hostname matches a private/blocked pattern. */
+const isBlockedHostname = (hostname: string): boolean => {
+  const matchesPrefix = INSTANCE_URL_CONFIG.BLOCKED_HOST_PREFIXES.some((prefix) =>
+    hostname.startsWith(prefix)
+  );
+  // Also block 172.16.0.0/12 private range
+  const matchesPrivate172 = /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+  return matchesPrefix || matchesPrivate172;
+};
+
+/** Check whether a hostname is a bare IPv4 address. */
+const isIpv4Address = (hostname: string): boolean => /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+
+/**
+ * Validate a self-hosted instance URL to prevent SSRF.
+ *
+ * Rules:
+ * - Must be HTTPS in production (HTTP allowed in dev for localhost)
+ * - Must not resolve to private/internal IP ranges (metadata endpoints, etc.)
+ * - Must not contain fragments, userinfo, or unusual ports
+ * - Returns the origin only (strips path/query) so adapters append correct API paths
+ *
+ * Throws ValidationError for invalid or dangerous URLs.
+ */
+const validateInstanceUrl = (rawUrl: string): string => {
+  if (rawUrl.length > INSTANCE_URL_CONFIG.MAX_LENGTH) {
+    throw new ValidationError("instance_url exceeds maximum length", {
+      operation: "validateInstanceUrl",
+      metadata: { length: rawUrl.length },
+    });
+  }
+
+  const parsed = (() => {
+    try {
+      return new URL(rawUrl);
+    } catch {
+      throw new ValidationError("instance_url is not a valid URL", {
+        operation: "validateInstanceUrl",
+      });
+    }
+  })();
+
+  const { protocol, username, password, hash, hostname: rawHostname, origin } = parsed;
+  const { NODE_ENV } = config;
+
+  // Block non-HTTP(S) schemes (javascript:, data:, file:, ftp:, etc.)
+  const isProduction = NODE_ENV === "production";
+  if (isProduction && !isHttpsProtocol(protocol)) {
+    throw new ValidationError("instance_url must use HTTPS in production", {
+      operation: "validateInstanceUrl",
+    });
+  }
+  if (!isProduction && !isHttpOrHttpsProtocol(protocol)) {
+    throw new ValidationError("instance_url must use HTTP or HTTPS", {
+      operation: "validateInstanceUrl",
+    });
+  }
+
+  // Block userinfo (http://user:pass@host is suspicious)
+  if (username || password) {
+    throw new ValidationError("instance_url must not contain user credentials", {
+      operation: "validateInstanceUrl",
+    });
+  }
+
+  // Block fragments (should not be in a server-to-server URL)
+  if (hash) {
+    throw new ValidationError("instance_url must not contain a fragment", {
+      operation: "validateInstanceUrl",
+    });
+  }
+
+  // Block private/reserved hostnames and IP ranges to prevent SSRF
+  const hostname = rawHostname.toLowerCase();
+  if (isBlockedHostname(hostname)) {
+    throw new ValidationError("instance_url must not point to a private or reserved address", {
+      operation: "validateInstanceUrl",
+    });
+  }
+
+  // Must have a valid hostname (not just an IP in production)
+  if (isProduction && isIpv4Address(hostname)) {
+    throw new ValidationError(
+      "instance_url must use a hostname, not an IP address, in production",
+      {
+        operation: "validateInstanceUrl",
+      }
+    );
+  }
+
+  // Return the origin only (strip path, query, fragment) to prevent path injection
+  // The adapter will append the correct API paths
+  return origin;
 };
 
 /** Extract token metadata from a request. */
@@ -174,7 +278,9 @@ const extractTokenMeta = (
 const handleOAuthLogin = async (req: Request, res: Response): Promise<void> => {
   const context = getRequestContext(req);
   const provider = validateProvider(req.params.provider);
-  const instanceUrl = (req.query.instance_url as string) ?? null;
+  const rawInstanceUrl = (req.query.instance_url as string) ?? null;
+  // Validate instance URL to prevent SSRF (only for self-hosted providers)
+  const instanceUrl = rawInstanceUrl ? validateInstanceUrl(rawInstanceUrl) : null;
   const rawRedirectAfter = (req.query.redirect_after as string) ?? null;
   const redirectAfter = sanitizeRedirectUrl(rawRedirectAfter, config.FRONTEND_URL);
 
@@ -312,10 +418,10 @@ const handleTokenRefresh = async (req: Request, res: Response): Promise<void> =>
     refreshToken: tokenPair.refreshToken,
   });
 
-  // Also return tokens in body (backward compat for API clients using Bearer header flow)
+  // Return metadata only — tokens are delivered exclusively via httpOnly cookies
+  // to prevent XSS token theft. API clients using Bearer headers should use
+  // the /auth/:provider/callback flow which also sets cookies.
   res.status(HTTP_STATUS.OK).json({
-    access_token: tokenPair.accessToken,
-    refresh_token: tokenPair.refreshToken,
     expires_in: tokenPair.expiresIn,
     token_type: "Bearer",
   });

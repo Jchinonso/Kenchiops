@@ -111,10 +111,17 @@ export const JWT_CONFIG = {
 // ==================== Cookie Configuration ====================
 
 export const COOKIE_CONFIG = {
-  /** Cookie name for the JWT access token */
+  /**
+   * Cookie name for the JWT access token.
+   * In production, use __Host- prefix to enforce Secure + no Domain + Path=/.
+   * This prevents subdomain injection and session fixation attacks.
+   * Non-prefixed name used in development where Secure=false (HTTP localhost).
+   */
   ACCESS_TOKEN_NAME: "kenchi_access",
-  /** Cookie name for the refresh token */
+  ACCESS_TOKEN_NAME_PRODUCTION: "__Host-kenchi_access",
+  /** Cookie name for the refresh token (see ACCESS_TOKEN_NAME comment for prefix rationale). */
   REFRESH_TOKEN_NAME: "kenchi_refresh",
+  REFRESH_TOKEN_NAME_PRODUCTION: "__Host-kenchi_refresh",
   /** Access token cookie maxAge in seconds (15 minutes) */
   ACCESS_TOKEN_MAX_AGE_SECONDS: 900,
   /** Refresh token cookie maxAge in seconds (7 days) */
@@ -136,6 +143,24 @@ export const OAUTH_STATE_CONFIG = {
   STATE_TOKEN_BYTES: 32,
   STATE_TTL_MINUTES: 10,
   CLEANUP_INTERVAL_MINUTES: 30,
+} as const;
+
+// ==================== Instance URL Validation ====================
+
+export const INSTANCE_URL_CONFIG = {
+  /** Maximum allowed length for self-hosted instance URLs */
+  MAX_LENGTH: 256,
+  /** Hostnames/prefixes blocked to prevent SSRF against internal services */
+  BLOCKED_HOST_PREFIXES: [
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "[::1]",
+    "169.254.",
+    "metadata.google.",
+    "10.",
+    "192.168.",
+  ] as readonly string[],
 } as const;
 
 // ==================== Auth Route Paths ====================
