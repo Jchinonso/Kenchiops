@@ -12,11 +12,17 @@ import { ValidationError, type OAuthProvider } from "@kenchi/shared";
 
 import type { OAuthPort } from "../ports/oauthPort.js";
 import { githubOAuthAdapter } from "./githubOAuthAdapter.js";
+import { gitlabOAuthAdapter } from "./gitlabOAuthAdapter.js";
+import { bitbucketOAuthAdapter } from "./bitbucketOAuthAdapter.js";
+import { azureDevOpsOAuthAdapter } from "./azureDevOpsOAuthAdapter.js";
 
 // ==================== Registry ====================
 
 const ADAPTERS: Partial<Record<OAuthProvider, OAuthPort>> = {
   github: githubOAuthAdapter,
+  gitlab: gitlabOAuthAdapter,
+  bitbucket: bitbucketOAuthAdapter,
+  azure_devops: azureDevOpsOAuthAdapter,
 };
 
 /**

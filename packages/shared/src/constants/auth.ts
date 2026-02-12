@@ -53,6 +53,7 @@ export const OAUTH_PROVIDER_URLS = {
     authorize: "https://gitlab.com/oauth/authorize",
     token: "https://gitlab.com/oauth/token",
     userProfile: "https://gitlab.com/api/v4/user",
+    userGroups: "https://gitlab.com/api/v4/groups",
     scopes: ["read_user", "read_api"],
   },
   bitbucket: {
@@ -60,12 +61,14 @@ export const OAUTH_PROVIDER_URLS = {
     token: "https://bitbucket.org/site/oauth2/access_token",
     userProfile: "https://api.bitbucket.org/2.0/user",
     userEmails: "https://api.bitbucket.org/2.0/user/emails",
+    userWorkspaces: "https://api.bitbucket.org/2.0/workspaces",
     scopes: ["account", "email"],
   },
   azure_devops: {
     authorize: "https://app.vssps.visualstudio.com/oauth2/authorize",
     token: "https://app.vssps.visualstudio.com/oauth2/token",
     userProfile: "https://app.vssps.visualstudio.com/_apis/profile/profiles/me",
+    userAccounts: "https://app.vssps.visualstudio.com/_apis/accounts",
     scopes: ["vso.profile", "vso.project"],
   },
 } as const;
@@ -84,6 +87,7 @@ export const SELF_HOSTED_URL_PATTERNS = {
     authorize: (baseUrl: string): string => `${baseUrl}/oauth/authorize`,
     token: (baseUrl: string): string => `${baseUrl}/oauth/token`,
     userProfile: (baseUrl: string): string => `${baseUrl}/api/v4/user`,
+    userGroups: (baseUrl: string): string => `${baseUrl}/api/v4/groups`,
   },
   bitbucket: {
     authorize: (baseUrl: string): string => `${baseUrl}/site/oauth2/authorize`,

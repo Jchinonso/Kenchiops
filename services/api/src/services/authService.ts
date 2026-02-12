@@ -54,6 +54,8 @@ const logger = createLogger("auth-service");
 const ORG_CAPABLE_PROVIDERS: ReadonlySet<OAuthProvider> = new Set<OAuthProvider>([
   "github",
   "gitlab",
+  "bitbucket",
+  "azure_devops",
 ]);
 
 // ==================== Service Factory ====================
