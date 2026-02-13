@@ -296,6 +296,7 @@ describe("azureDevOpsOAuthAdapter", () => {
         providerUserId: "azure-user-id-12345",
         username: "azureuser",
         email: "user@azure.com",
+        emailVerified: true,
         displayName: "Azure User",
         avatarUrl: null,
         rawProfile: profileData,

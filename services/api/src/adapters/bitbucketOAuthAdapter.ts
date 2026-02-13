@@ -278,6 +278,8 @@ const getUserProfile = async (
       providerUserId: stripBraces(profile.uuid),
       username: profile.username,
       email,
+      // Bitbucket resolveEmail only returns confirmed emails (or null)
+      emailVerified: email !== null,
       displayName: profile.display_name ?? profile.username,
       avatarUrl: profile.links.avatar.href,
       rawProfile: profile as unknown as Record<string, unknown>,

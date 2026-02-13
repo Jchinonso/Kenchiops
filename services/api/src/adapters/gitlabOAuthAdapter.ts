@@ -243,6 +243,8 @@ const getUserProfile = async (
       providerUserId: String(profile.id),
       username: profile.username,
       email: profile.email,
+      // GitLab's /api/v4/user only returns email if confirmed by the user
+      emailVerified: profile.email !== null,
       displayName: profile.name ?? profile.username,
       avatarUrl: profile.avatar_url,
       rawProfile: profile as unknown as Record<string, unknown>,

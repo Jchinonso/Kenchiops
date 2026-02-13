@@ -276,6 +276,7 @@ describe("gitlabOAuthAdapter", () => {
         providerUserId: "12345",
         username: "gitlab-user",
         email: "user@gitlab.com",
+        emailVerified: true,
         displayName: "GitLab User",
         avatarUrl: "https://gitlab.com/uploads/avatar.png",
         rawProfile: profileData,

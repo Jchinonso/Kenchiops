@@ -175,11 +175,23 @@ export const AUTH_ROUTES = {
 
 // ==================== Public Routes (Skip Auth) ====================
 
+/**
+ * Route prefixes that skip JWT authentication.
+ *
+ * Auth routes are listed explicitly to ensure /auth/me (which requires
+ * a valid JWT) is NOT matched. The previous catch-all "/auth/" prefix
+ * was overly broad and accidentally made /auth/me unauthenticated.
+ */
 export const PUBLIC_ROUTES: readonly string[] = [
   "/health",
   "/live",
   "/ready",
-  "/auth/",
+  "/auth/github/",
+  "/auth/gitlab/",
+  "/auth/bitbucket/",
+  "/auth/azure_devops/",
+  "/auth/refresh",
+  "/auth/logout",
   "/webhooks/",
   "/api/webhooks/",
 ];

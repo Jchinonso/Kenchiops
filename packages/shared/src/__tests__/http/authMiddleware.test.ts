@@ -117,9 +117,11 @@ describe("http/authMiddleware", () => {
       const authPaths = [
         "/auth/github/login",
         "/auth/github/callback",
+        "/auth/gitlab/login",
+        "/auth/bitbucket/callback",
+        "/auth/azure_devops/login",
         "/auth/refresh",
         "/auth/logout",
-        "/auth/me",
       ];
 
       authPaths.forEach((path) => {
@@ -146,6 +148,17 @@ describe("http/authMiddleware", () => {
 
         expect(next).toHaveBeenCalledWith();
       });
+    });
+
+    it("should NOT skip auth for /auth/me (requires JWT)", () => {
+      const req = createMockRequest({ path: "/auth/me", headers: {} });
+      const res = createMockResponse();
+      const next = createMockNext();
+
+      authMiddleware(req, res, next);
+
+      const passedError = next.mock.calls[0]![0];
+      expect(passedError).toBeInstanceOf(AuthenticationError);
     });
   });
 

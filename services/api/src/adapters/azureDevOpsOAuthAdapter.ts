@@ -260,6 +260,8 @@ const getUserProfile = async (
       providerUserId: profile.id,
       username: profile.publicAlias,
       email: profile.emailAddress,
+      // Azure DevOps emails come from Azure AD/Microsoft accounts (verified)
+      emailVerified: profile.emailAddress !== null,
       displayName: profile.displayName ?? profile.publicAlias,
       avatarUrl: null,
       rawProfile: profile as unknown as Record<string, unknown>,

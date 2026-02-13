@@ -140,6 +140,7 @@ const createTestProfile = (
   providerUserId: "12345",
   username: "testuser",
   email: "test@example.com",
+  emailVerified: true,
   displayName: "Test User",
   avatarUrl: "https://github.com/avatar.png",
   rawProfile: { id: 12345, login: "testuser" },

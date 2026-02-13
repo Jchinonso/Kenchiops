@@ -29,6 +29,7 @@ import {
   clearAuthCookies,
   extractRefreshToken,
   INSTANCE_URL_CONFIG,
+  createRateLimitMiddleware,
   type OAuthProvider,
   type RequestContext,
 } from "@kenchi/shared";
@@ -328,16 +329,39 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     return;
   }
 
-  const oauthState = await consumeOAuthState(state as string);
+  const codeStr = String(code);
+  const stateStr = String(state);
+
+  // Validate input lengths to prevent DoS via oversized parameters.
+  // State tokens are 64 hex chars (32 bytes); codes are typically < 512 chars.
+  if (stateStr.length > 128 || codeStr.length > 2048) {
+    res.redirect(`${frontendUrl}/login?error=invalid_params`);
+    return;
+  }
+
+  const oauthState = await consumeOAuthState(stateStr);
 
   if (!oauthState) {
     res.redirect(`${frontendUrl}/login?error=invalid_state`);
     return;
   }
 
+  // Prevent provider-confusion attacks: ensure the URL :provider param
+  // matches the provider stored in the CSRF state token
+  const callbackProvider = req.params.provider;
+  if (callbackProvider !== oauthState.provider) {
+    logger.warn("OAuth provider mismatch between URL and state", {
+      urlProvider: callbackProvider,
+      stateProvider: oauthState.provider,
+      ...context,
+    });
+    res.redirect(`${frontendUrl}/login?error=provider_mismatch`);
+    return;
+  }
+
   const startTime = Date.now();
   const adapter = getOAuthAdapter(oauthState.provider);
-  const tokens = await adapter.exchangeCode(code as string, oauthState.instanceUrl, context);
+  const tokens = await adapter.exchangeCode(codeStr, oauthState.instanceUrl, context);
   const profile = await adapter.getUserProfile(tokens.accessToken, oauthState.instanceUrl, context);
 
   const { user } = await authService.findOrCreateUser(
@@ -493,12 +517,37 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
   });
 };
 
+// ==================== Endpoint Rate Limiter ====================
+
+/** Rate limit error shown to clients who exceed the endpoint limit. */
+const SENSITIVE_RATE_LIMIT_MSG = "Too many requests, please try again later";
+
+/**
+ * Stricter rate limit for sensitive endpoints (refresh, logout).
+ * 20 requests per 15-minute window per IP -- prevents brute-force
+ * token enumeration while allowing normal usage patterns.
+ * Applied in addition to the global API rate limiter.
+ */
+const sensitiveEndpointLimiter = createRateLimitMiddleware({
+  rateLimit: {
+    windowMs: 900_000,
+    max: 20,
+    message: SENSITIVE_RATE_LIMIT_MSG,
+    keyPrefix: "rl:sensitive:",
+  },
+  distributedFallback: "fail",
+});
+
 // ==================== Route Definitions ====================
 
 router.get("/auth/:provider/login", asyncHandler(handleOAuthLogin));
 router.get("/auth/:provider/callback", asyncHandler(handleOAuthCallback));
-router.post("/auth/refresh", asyncHandler(handleTokenRefresh));
-router.post("/auth/logout", asyncHandler(handleLogout));
+router.post(
+  "/auth/refresh",
+  sensitiveEndpointLimiter.middleware(),
+  asyncHandler(handleTokenRefresh)
+);
+router.post("/auth/logout", sensitiveEndpointLimiter.middleware(), asyncHandler(handleLogout));
 router.get("/auth/me", asyncHandler(handleGetCurrentUser));
 
 export { router as authRoutes };

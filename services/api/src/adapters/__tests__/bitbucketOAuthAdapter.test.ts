@@ -285,6 +285,7 @@ describe("bitbucketOAuthAdapter", () => {
         providerUserId: "12345-abcde-67890",
         username: "bb-user",
         email: "primary@bitbucket.com",
+        emailVerified: true,
         displayName: "Bitbucket User",
         avatarUrl: "https://bitbucket.org/account/bb-user/avatar",
         rawProfile: profileData,

@@ -108,8 +108,11 @@ export const createAuthService = () => ({
       return { user, isNew: false };
     }
 
-    // Attempt account linking by email
-    const emailMatch = profile.email ? await findUserByEmail(profile.email) : null;
+    // Attempt account linking by verified email only.
+    // Unverified emails must NOT be used for linking to prevent account
+    // takeover by an attacker who sets their OAuth profile email to a victim's address.
+    const emailMatch =
+      profile.email && profile.emailVerified ? await findUserByEmail(profile.email) : null;
 
     const isNew = emailMatch === null;
 
@@ -320,6 +323,24 @@ export const createAuthService = () => ({
 
 // ==================== Helpers ====================
 
+/**
+ * Maximum serialized size for rawProfile stored in the database.
+ * Prevents unbounded external data from bloating the JSONB column.
+ * 8 KB is sufficient for standard OAuth profile fields.
+ */
+const RAW_PROFILE_MAX_BYTES = 8192;
+
+/**
+ * Truncate a raw profile object to prevent storing unbounded external data.
+ * If the serialized size exceeds the limit, stores a marker indicating truncation.
+ */
+const sanitizeRawProfile = (rawProfile: Record<string, unknown>): Record<string, unknown> => {
+  const serialized = JSON.stringify(rawProfile);
+  return serialized.length <= RAW_PROFILE_MAX_BYTES
+    ? rawProfile
+    : { _truncated: true, _originalSize: serialized.length };
+};
+
 /** Build the UpsertOAuthIdentityInput from OAuth profile and token data. */
 const buildUpsertInput = (
   userId: string,
@@ -339,5 +360,5 @@ const buildUpsertInput = (
   refreshToken: tokens.refreshToken,
   tokenExpiresAt: tokens.expiresIn !== null ? new Date(Date.now() + tokens.expiresIn * 1000) : null,
   scopes: tokens.scope.split(/[,\s]+/).filter((scope) => scope.length > 0),
-  rawProfile: profile.rawProfile,
+  rawProfile: sanitizeRawProfile(profile.rawProfile),
 });

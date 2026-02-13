@@ -317,6 +317,7 @@ describe("githubOAuthAdapter", () => {
         providerUserId: "12345",
         username: "github-user",
         email: "primary@github.com",
+        emailVerified: true,
         displayName: "GitHub User",
         avatarUrl: "https://avatars.githubusercontent.com/u/12345",
         rawProfile: profileData,

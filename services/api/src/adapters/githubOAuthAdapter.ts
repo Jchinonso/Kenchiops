@@ -97,22 +97,23 @@ const getUrls = (
  * and their verified email list.
  *
  * Priority: primary verified > any verified > profile.email > null
+ * Returns both the email and whether it was verified by GitHub.
  */
 const resolveEmail = (
   profile: GitHubUserProfile,
   emails: readonly GitHubUserEmail[]
-): string | null => {
+): { readonly email: string | null; readonly verified: boolean } => {
   const primaryVerified = emails.find((entry) => entry.primary && entry.verified);
   if (primaryVerified) {
-    return primaryVerified.email;
+    return { email: primaryVerified.email, verified: true };
   }
 
   const anyVerified = emails.find((entry) => entry.verified);
   if (anyVerified) {
-    return anyVerified.email;
+    return { email: anyVerified.email, verified: true };
   }
 
-  return profile.email ?? null;
+  return { email: profile.email ?? null, verified: false };
 };
 
 /**
@@ -285,7 +286,7 @@ const getUserProfile = async (
     const profile = (await profileResponse.json()) as GitHubUserProfile;
     const emails = (await emailsResponse.json()) as readonly GitHubUserEmail[];
 
-    const email = resolveEmail(profile, emails);
+    const resolvedEmail = resolveEmail(profile, emails);
 
     logger.info("GitHub user profile fetched", {
       provider: "github",
@@ -298,7 +299,8 @@ const getUserProfile = async (
     return {
       providerUserId: String(profile.id),
       username: profile.login,
-      email,
+      email: resolvedEmail.email,
+      emailVerified: resolvedEmail.verified,
       displayName: profile.name ?? profile.login,
       avatarUrl: profile.avatar_url,
       rawProfile: profile as unknown as Record<string, unknown>,

@@ -27,6 +27,7 @@ import {
   triggerReembedding,
   syncDueSources,
   getErrorMessage,
+  ValidationError,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
   RAG_JOB_INTERVALS,
@@ -280,12 +281,18 @@ const createApp = (): express.Express => {
   app.set("trust proxy", 1);
 
   // Security headers — applied early before any response is sent
+  const { NODE_ENV } = config;
+  const isProductionEnv = NODE_ENV === "production";
   app.use((_req, res, next) => {
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     // Disable legacy XSS filter — modern browsers handle this natively
     res.setHeader("X-XSS-Protection", "0");
+    // HSTS: enforce HTTPS for 1 year in production (prevents first-request MitM)
+    if (isProductionEnv) {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
     next();
   });
 
@@ -318,10 +325,31 @@ const createApp = (): express.Express => {
 /** Database connection pool size for API service */
 const API_DB_MAX_CONNECTIONS = 10;
 
+/** Minimum acceptable length for JWT_SECRET (256 bits of entropy). */
+const JWT_SECRET_MIN_LENGTH = 32;
+
+/**
+ * Validate that auth-critical configuration is present at startup.
+ * Fails fast instead of waiting for the first JWT operation to discover
+ * a missing or weak JWT_SECRET.
+ */
+const validateAuthConfig = (): void => {
+  const jwtSecret = config.JWT_SECRET;
+  if (!jwtSecret || jwtSecret.trim().length < JWT_SECRET_MIN_LENGTH) {
+    throw new ValidationError(
+      `JWT_SECRET must be at least ${String(JWT_SECRET_MIN_LENGTH)} characters`,
+      { operation: "validateAuthConfig" }
+    );
+  }
+};
+
 /**
  * Start the API service
  */
 const startServer = async (): Promise<void> => {
+  // Fail fast on missing auth configuration
+  validateAuthConfig();
+
   // Initialize database for RAG operations
   initDatabase({
     connectionString: appConfig.databaseUrl,

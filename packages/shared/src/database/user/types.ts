@@ -190,6 +190,12 @@ export interface OAuthProviderProfile {
   readonly providerUserId: string;
   readonly username: string | null;
   readonly email: string | null;
+  /**
+   * Whether the email was verified by the OAuth provider.
+   * Only verified emails should be used for account linking
+   * to prevent account takeover via unverified email claims.
+   */
+  readonly emailVerified: boolean;
   readonly displayName: string;
   readonly avatarUrl: string | null;
   readonly rawProfile: Record<string, unknown>;
