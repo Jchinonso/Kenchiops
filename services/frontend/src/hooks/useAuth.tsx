@@ -17,8 +17,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useNavigate } from "react-router-dom";
 import { apiClient, getLoginUrl } from "@/lib/apiClient";
+
+/**
+ * SessionStorage key set during logout to prevent refreshUser from
+ * re-authenticating on the next page load. Cleared on the first
+ * refreshUser call after the flag is detected.
+ */
+const LOGGED_OUT_KEY = "kenchi_logged_out";
 
 // ==================== Types ====================
 
@@ -51,11 +57,20 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 // ==================== Provider ====================
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = useCallback(async (): Promise<void> => {
+    // After an explicit logout, skip the API call entirely.
+    // This prevents re-authentication from cookies that the browser
+    // may not have fully cleared before the page reloaded.
+    if (sessionStorage.getItem(LOGGED_OUT_KEY)) {
+      sessionStorage.removeItem(LOGGED_OUT_KEY);
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Cookie is sent automatically via credentials: "include".
       // If no valid cookie exists, the API returns 401 and apiClient
@@ -90,13 +105,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Logout is best-effort; always redirect to login
     } finally {
       setUser(null);
-      // Use React Router navigation (not window.location.assign) to preserve
-      // the user=null state. A full page reload would remount AuthProvider,
-      // re-run refreshUser(), and potentially restore the session from cached
-      // cookies before the browser fully processes the Set-Cookie clear headers.
-      navigate("/login", { replace: true });
+      // Signal refreshUser to skip re-authentication on the next page load.
+      // This prevents a race where cookies haven't been fully cleared by the
+      // browser before the reload triggers a new /auth/me request.
+      sessionStorage.setItem(LOGGED_OUT_KEY, "1");
+      window.location.assign("/login");
     }
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     refreshUser();
