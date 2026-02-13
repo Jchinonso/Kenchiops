@@ -1,29 +1,37 @@
-import { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { Link, useLocation, Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyMedia,
+} from "@/components/ui/empty";
+import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   AlertTriangle,
-  Target,
   Zap,
   BarChart3,
   Settings,
   Bell,
   Search,
   ChevronDown,
-  CheckCircle,
   Clock,
-  TrendingUp,
-  Activity,
-  Repeat,
   MoreHorizontal,
-  Filter,
-  Download,
-  RefreshCw,
   LogOut,
   User,
   HelpCircle,
   Menu,
   X,
+  GitBranch,
+  Rocket,
+  Circle,
+  ExternalLink,
+  Activity,
+  FolderGit2,
 } from "lucide-react";
 
 interface SidebarItemProps {
@@ -49,153 +57,101 @@ const SidebarItem = ({ icon, label, href, active, onClick }: SidebarItemProps) =
   </Link>
 );
 
-interface StatCardProps {
+interface GettingStartedStep {
+  readonly title: string;
+  readonly description: string;
+  readonly href: string;
+  readonly linkLabel: string;
+}
+
+const gettingStartedSteps: readonly GettingStartedStep[] = [
+  {
+    title: "Connect a Repository",
+    description:
+      "Link your GitHub, GitLab, or Bitbucket repository to start monitoring CI pipelines.",
+    href: "/dashboard/repos",
+    linkLabel: "Go to Repositories",
+  },
+  {
+    title: "Set Up CI Webhook",
+    description:
+      "Configure your CI provider to send build events to Kenchi for automatic analysis.",
+    href: "/dashboard/settings",
+    linkLabel: "Open Settings",
+  },
+  {
+    title: "Run Your First Analysis",
+    description:
+      "Once connected, Kenchi automatically analyzes CI failures and identifies root causes.",
+    href: "/dashboard/analyses",
+    linkLabel: "View Analyses",
+  },
+];
+
+interface QuickStat {
   readonly title: string;
   readonly value: string;
-  readonly change: string;
-  readonly changeType: "positive" | "negative" | "neutral";
   readonly icon: React.ReactNode;
-  readonly color: string;
+  readonly colorClass: string;
 }
 
-const StatCard = ({ title, value, change, changeType, icon, color }: StatCardProps) => (
-  <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-    <div className="flex items-start justify-between">
-      <div className="min-w-0">
-        <p className="text-xs sm:text-sm text-gray-500 mb-1">{title}</p>
-        <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{value}</h3>
-        <div className="flex items-center gap-1 mt-1">
-          <span
-            className={`text-xs sm:text-sm font-medium ${
-              changeType === "positive"
-                ? "text-green-600"
-                : changeType === "negative"
-                  ? "text-red-600"
-                  : "text-gray-600"
-            }`}
-          >
-            {change}
-          </span>
-          <span className="text-xs text-gray-400 hidden sm:inline">vs last week</span>
-        </div>
-      </div>
-      <div
-        className={`w-10 h-10 sm:w-12 sm:h-12 ${color} rounded-xl flex items-center justify-center flex-shrink-0`}
-      >
-        {icon}
-      </div>
-    </div>
-  </div>
-);
-
-interface FailureItemProps {
-  readonly title: string;
-  readonly repo: string;
-  readonly branch: string;
-  readonly status: "open" | "analyzing" | "resolved";
-  readonly time: string;
-  readonly confidence: string;
-}
-
-const FailureItem = ({ title, repo, branch, status, time, confidence }: FailureItemProps) => (
-  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 hover:bg-gray-50 rounded-lg transition-colors gap-2 sm:gap-0">
-    <div className="flex items-start sm:items-center gap-3">
-      <div
-        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-          status === "open"
-            ? "bg-red-100 text-red-600"
-            : status === "analyzing"
-              ? "bg-amber-100 text-amber-600"
-              : "bg-green-100 text-green-600"
-        }`}
-      >
-        <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
-      </div>
-      <div className="min-w-0">
-        <h4 className="font-medium text-gray-900 text-sm sm:text-base truncate">{title}</h4>
-        <p className="text-xs sm:text-sm text-gray-500 truncate">
-          {repo} • {branch} • {time}
-        </p>
-      </div>
-    </div>
-    <div className="flex items-center gap-2 sm:gap-4 ml-11 sm:ml-0">
-      <div className="flex items-center gap-1 text-gray-400">
-        <span className="text-xs sm:text-sm">{confidence}</span>
-        <span className="text-xs hidden sm:inline">confidence</span>
-      </div>
-      <span
-        className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
-          status === "open"
-            ? "bg-red-100 text-red-700"
-            : status === "analyzing"
-              ? "bg-amber-100 text-amber-700"
-              : "bg-green-100 text-green-700"
-        }`}
-      >
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    </div>
-  </div>
-);
-
-interface FailurePatternProps {
-  readonly title: string;
-  readonly frequency: "high" | "medium" | "low";
-  readonly type: string;
-  readonly occurrences: string;
-}
-
-const FailurePattern = ({ title, frequency, type, occurrences }: FailurePatternProps) => (
-  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 hover:bg-gray-50 rounded-lg transition-colors gap-2 sm:gap-0">
-    <div className="flex items-start sm:items-center gap-3">
-      <div
-        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-          frequency === "high"
-            ? "bg-red-100 text-red-600"
-            : frequency === "medium"
-              ? "bg-amber-100 text-amber-600"
-              : "bg-blue-100 text-blue-600"
-        }`}
-      >
-        <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />
-      </div>
-      <div className="min-w-0">
-        <h4 className="font-medium text-gray-900 text-sm sm:text-base truncate">{title}</h4>
-        <p className="text-xs sm:text-sm text-gray-500 truncate">
-          {type} • {occurrences}
-        </p>
-      </div>
-    </div>
-    <span
-      className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ml-11 sm:ml-0 self-start sm:self-auto ${
-        frequency === "high"
-          ? "bg-red-100 text-red-700"
-          : frequency === "medium"
-            ? "bg-amber-100 text-amber-700"
-            : "bg-blue-100 text-blue-700"
-      }`}
-    >
-      {frequency.charAt(0).toUpperCase() + frequency.slice(1)}
-    </span>
-  </div>
-);
+const quickStats: readonly QuickStat[] = [
+  {
+    title: "Failed Builds",
+    value: "0",
+    icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
+    colorClass: "bg-red-500",
+  },
+  {
+    title: "Analyses Run",
+    value: "0",
+    icon: <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
+    colorClass: "bg-indigo-500",
+  },
+  {
+    title: "Avg Resolution",
+    value: "--",
+    icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
+    colorClass: "bg-blue-500",
+  },
+  {
+    title: "Connected Repos",
+    value: "0",
+    icon: <FolderGit2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
+    colorClass: "bg-green-500",
+  },
+];
 
 const Dashboard = () => {
-  const location = useLocation();
+  const { pathname: currentPath } = useLocation();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Close sidebar when clicking outside on mobile
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setSidebarOpen(false);
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const userInitials = user?.displayName
+    ? user.displayName
+        .split(" ")
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "?";
+  const displayName = user?.displayName ?? "User";
+  const displayEmail = user?.email ?? "";
+  const firstName = user?.displayName?.split(" ")[0] ?? "there";
 
   const sidebarItems = [
     { icon: <LayoutDashboard className="w-5 h-5" />, label: "Overview", href: "/dashboard" },
@@ -205,116 +161,31 @@ const Dashboard = () => {
       href: "/dashboard/failures",
     },
     { icon: <Search className="w-5 h-5" />, label: "Analyses", href: "/dashboard/analyses" },
-    { icon: <TrendingUp className="w-5 h-5" />, label: "Patterns", href: "/dashboard/patterns" },
-    { icon: <BarChart3 className="w-5 h-5" />, label: "Analytics", href: "/dashboard/analytics" },
+    { icon: <GitBranch className="w-5 h-5" />, label: "Repositories", href: "/dashboard/repos" },
+    { icon: <BarChart3 className="w-5 h-5" />, label: "Patterns", href: "/dashboard/patterns" },
+    { icon: <Activity className="w-5 h-5" />, label: "Analytics", href: "/dashboard/analytics" },
     { icon: <Settings className="w-5 h-5" />, label: "Settings", href: "/dashboard/settings" },
   ];
 
-  const stats = [
-    {
-      title: "Failed Builds",
-      value: "18",
-      change: "-31%",
-      changeType: "positive" as const,
-      icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-      color: "bg-red-500",
-    },
-    {
-      title: "Root Cause Accuracy",
-      value: "93%",
-      change: "+4%",
-      changeType: "positive" as const,
-      icon: <Target className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-      color: "bg-green-500",
-    },
-    {
-      title: "Avg Resolution Time",
-      value: "12min",
-      change: "-42%",
-      changeType: "positive" as const,
-      icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-      color: "bg-blue-500",
-    },
-    {
-      title: "Active Analyses",
-      value: "6",
-      change: "+2",
-      changeType: "neutral" as const,
-      icon: <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-      color: "bg-indigo-500",
-    },
-  ];
-
-  const recentFailures = [
-    {
-      title: "TypeScript build error in auth module",
-      repo: "frontend-app",
-      branch: "feature/sso",
-      status: "analyzing" as const,
-      time: "12 min ago",
-      confidence: "92%",
-    },
-    {
-      title: "Docker image build timeout exceeded",
-      repo: "backend-api",
-      branch: "main",
-      status: "resolved" as const,
-      time: "2 hours ago",
-      confidence: "97%",
-    },
-    {
-      title: "Test suite segfault in CI runner",
-      repo: "shared-lib",
-      branch: "refactor/core",
-      status: "open" as const,
-      time: "4 hours ago",
-      confidence: "78%",
-    },
-    {
-      title: "Dependency conflict: react@19 vs react@18",
-      repo: "web-app",
-      branch: "deps/upgrade",
-      status: "resolved" as const,
-      time: "1 day ago",
-      confidence: "95%",
-    },
-  ];
-
-  const failurePatterns = [
-    {
-      title: "Module resolution errors",
-      frequency: "high" as const,
-      type: "Build",
-      occurrences: "23 this week",
-    },
-    {
-      title: "Flaky test: payment flow",
-      frequency: "medium" as const,
-      type: "Test",
-      occurrences: "8 this week",
-    },
-    {
-      title: "Docker layer cache miss",
-      frequency: "medium" as const,
-      type: "Infra",
-      occurrences: "5 this week",
-    },
-    {
-      title: "OOM kill in CI runner",
-      frequency: "low" as const,
-      type: "Resource",
-      occurrences: "2 this week",
-    },
-  ];
+  const closeSidebar = () => setSidebarOpen(false);
+  const handleSidebarLogout = () => {
+    closeSidebar();
+    logout();
+  };
+  const toggleNotifications = () => {
+    setNotificationsOpen((prev) => !prev);
+    setUserMenuOpen(false);
+  };
+  const toggleUserMenu = () => {
+    setUserMenuOpen((prev) => !prev);
+    setNotificationsOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={closeSidebar} />
       )}
 
       {/* Sidebar */}
@@ -323,7 +194,6 @@ const Dashboard = () => {
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        {/* Logo */}
         <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
@@ -343,41 +213,37 @@ const Dashboard = () => {
             </div>
             <span className="text-lg sm:text-xl font-bold text-gray-900">Kenchi</span>
           </Link>
-          {/* Close button for mobile */}
           <button
-            onClick={() => setSidebarOpen(false)}
+            onClick={closeSidebar}
             className="lg:hidden p-2 text-gray-500 hover:text-gray-700"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 p-3 sm:p-4 space-y-1 overflow-y-auto">
           {sidebarItems.map((item) => (
             <SidebarItem
               key={item.label}
               {...item}
-              active={location.pathname === item.href}
-              onClick={() => setSidebarOpen(false)}
+              active={currentPath === item.href}
+              onClick={closeSidebar}
             />
           ))}
         </nav>
 
-        {/* Bottom Actions */}
         <div className="p-3 sm:p-4 border-t border-gray-100 space-y-1">
           <button className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors">
             <HelpCircle className="w-5 h-5" />
             <span className="font-medium">Help & Support</span>
           </button>
-          <Link
-            to="/"
-            onClick={() => setSidebarOpen(false)}
+          <button
+            onClick={handleSidebarLogout}
             className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors"
           >
             <LogOut className="w-5 h-5" />
             <span className="font-medium">Sign Out</span>
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -386,17 +252,13 @@ const Dashboard = () => {
         {/* Header */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-4">
-            {/* Left: Hamburger + Search */}
             <div className="flex items-center gap-3 flex-1">
-              {/* Hamburger Menu Button */}
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <Menu className="w-5 h-5" />
               </button>
-
-              {/* Search */}
               <div className="flex-1 max-w-xl">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
@@ -409,44 +271,26 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Right Actions */}
             <div className="flex items-center gap-2 sm:gap-4">
               {/* Notifications */}
               <div className="relative">
                 <button
-                  onClick={() => {
-                    setNotificationsOpen(!notificationsOpen);
-                    setUserMenuOpen(false);
-                  }}
+                  onClick={toggleNotifications}
                   className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
                 </button>
-
-                {/* Notifications Dropdown */}
                 {notificationsOpen && (
                   <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
                     <div className="px-4 py-2 border-b border-gray-100">
                       <h4 className="font-semibold text-gray-900">Notifications</h4>
                     </div>
-                    <div className="max-h-64 overflow-y-auto">
-                      <div className="px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                        <p className="text-sm text-gray-900">
-                          Root cause identified for build #1847
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">2 minutes ago</p>
-                      </div>
-                      <div className="px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                        <p className="text-sm text-gray-900">
-                          New failure pattern detected in backend-api
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">1 hour ago</p>
-                      </div>
-                      <div className="px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                        <p className="text-sm text-gray-900">Analysis complete: 97% confidence</p>
-                        <p className="text-xs text-gray-500 mt-1">3 hours ago</p>
-                      </div>
+                    <div className="px-4 py-8 text-center">
+                      <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">No notifications yet</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        You&apos;ll see analysis results and alerts here
+                      </p>
                     </div>
                   </div>
                 )}
@@ -455,32 +299,33 @@ const Dashboard = () => {
               {/* User Menu */}
               <div className="relative">
                 <button
-                  onClick={() => {
-                    setUserMenuOpen(!userMenuOpen);
-                    setNotificationsOpen(false);
-                  }}
+                  onClick={toggleUserMenu}
                   className="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 bg-indigo-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-medium text-xs sm:text-sm">JD</span>
-                  </div>
+                  {user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={displayName}
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-indigo-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-medium text-xs sm:text-sm">
+                        {userInitials}
+                      </span>
+                    </div>
+                  )}
                   <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-gray-900">John Doe</p>
-                    <p className="text-xs text-gray-500">john@company.com</p>
+                    <p className="text-sm font-medium text-gray-900">{displayName}</p>
+                    <p className="text-xs text-gray-500">{displayEmail}</p>
                   </div>
                   <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
                 </button>
-
-                {/* User Dropdown */}
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
-                    <div className="px-4 py-3 border-b border-gray-100 sm:hidden">
-                      <p className="font-medium text-gray-900">John Doe</p>
-                      <p className="text-sm text-gray-500">john@company.com</p>
-                    </div>
-                    <div className="px-4 py-3 border-b border-gray-100 hidden sm:block">
-                      <p className="font-medium text-gray-900">John Doe</p>
-                      <p className="text-sm text-gray-500">john@company.com</p>
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="font-medium text-gray-900">{displayName}</p>
+                      <p className="text-sm text-gray-500">{displayEmail}</p>
                     </div>
                     <Link
                       to="#"
@@ -490,20 +335,20 @@ const Dashboard = () => {
                       Profile
                     </Link>
                     <Link
-                      to="#"
+                      to="/dashboard/settings"
                       className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"
                     >
                       <Settings className="w-4 h-4" />
                       Settings
                     </Link>
                     <div className="border-t border-gray-100 mt-2 pt-2">
-                      <Link
-                        to="/"
-                        className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50"
+                      <button
+                        onClick={() => logout()}
+                        className="flex items-center gap-3 px-4 py-2 w-full text-left text-red-600 hover:bg-red-50"
                       >
                         <LogOut className="w-4 h-4" />
                         Sign Out
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -514,223 +359,118 @@ const Dashboard = () => {
 
         {/* Dashboard Content */}
         <div className="p-4 sm:p-6 lg:p-8">
-          {/* Page Title */}
           <div className="mb-6 sm:mb-8">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard Overview</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+              Welcome back, {firstName}!
+            </h1>
             <p className="text-sm sm:text-base text-gray-500 mt-1">
-              Welcome back! Here's your CI/CD pipeline health at a glance.
+              Here&apos;s your CI/CD pipeline health at a glance.
             </p>
           </div>
 
-          {/* Stats Grid */}
+          {/* Quick Stats Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-            {stats.map((stat, index) => (
-              <StatCard key={index} {...stat} />
+            {quickStats.map((stat) => (
+              <Card key={stat.title} className="py-4 sm:py-5">
+                <CardContent className="px-4 sm:px-6">
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm text-gray-500 mb-1">{stat.title}</p>
+                      <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{stat.value}</h3>
+                    </div>
+                    <div
+                      className={`w-10 h-10 sm:w-12 sm:h-12 ${stat.colorClass} rounded-xl flex items-center justify-center flex-shrink-0`}
+                    >
+                      {stat.icon}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
 
-          {/* Main Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-8">
-            {/* Recent CI Failures */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
-                  <h2 className="font-semibold text-gray-900 text-sm sm:text-base">
-                    Recent CI Failures
-                  </h2>
-                </div>
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Filter className="w-4 h-4" />
-                  </button>
-                  <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </div>
+          {/* Getting Started */}
+          <Card className="mb-6 sm:mb-8">
+            <CardHeader className="border-b">
+              <div className="flex items-center gap-2">
+                <Rocket className="w-5 h-5 text-indigo-500" />
+                <CardTitle>Getting Started</CardTitle>
               </div>
-              <div className="divide-y divide-gray-100">
-                {recentFailures.map((failure, failureIndex) => (
-                  <FailureItem key={failureIndex} {...failure} />
+              <CardDescription>
+                Complete these steps to start analyzing your CI/CD failures.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                {gettingStartedSteps.map((step, stepIndex) => (
+                  <div
+                    key={step.title}
+                    className="flex items-start gap-4 p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors"
+                  >
+                    <div className="flex-shrink-0 mt-0.5">
+                      <Circle className="w-5 h-5 text-gray-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-medium text-gray-900 text-sm">
+                          {stepIndex + 1}. {step.title}
+                        </h4>
+                        <Badge variant="outline" className="text-xs">
+                          Pending
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-500 mb-2">{step.description}</p>
+                      <Link
+                        to={step.href}
+                        className="inline-flex items-center gap-1 text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                      >
+                        {step.linkLabel}
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  </div>
                 ))}
               </div>
-              <div className="p-3 sm:p-4 border-t border-gray-100">
-                <Link
-                  to="/dashboard/failures"
-                  className="flex items-center justify-center gap-2 text-indigo-500 hover:text-indigo-600 font-medium text-sm"
-                >
-                  View All CI Failures
-                  <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
-                </Link>
-              </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Failure Patterns */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Repeat className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
-                  <h2 className="font-semibold text-gray-900 text-sm sm:text-base">
-                    Failure Patterns
-                  </h2>
-                </div>
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                  <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="divide-y divide-gray-100">
-                {failurePatterns.map((pattern, patternIndex) => (
-                  <FailurePattern key={patternIndex} {...pattern} />
-                ))}
-              </div>
-              <div className="p-3 sm:p-4 border-t border-gray-100">
-                <Link
-                  to="/dashboard/patterns"
-                  className="flex items-center justify-center gap-2 text-indigo-500 hover:text-indigo-600 font-medium text-sm"
-                >
-                  View All Patterns
-                  <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Analysis Accuracy */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Target className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-                  <h2 className="font-semibold text-gray-900 text-sm sm:text-base">
-                    Analysis Accuracy
-                  </h2>
+          {/* Recent Activity */}
+          <Card>
+            <CardHeader className="border-b">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  <CardTitle>Recent Activity</CardTitle>
                 </div>
                 <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                   <MoreHorizontal className="w-4 h-4" />
                 </button>
               </div>
-              <div className="p-4 sm:p-6">
-                <div className="flex items-center justify-center mb-4 sm:mb-6">
-                  <div className="relative w-32 h-32 sm:w-40 sm:h-40">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="none"
-                        stroke="#e5e7eb"
-                        strokeWidth="10"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="none"
-                        stroke="#22c55e"
-                        strokeWidth="10"
-                        strokeDasharray="234 251"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl sm:text-3xl font-bold text-gray-900">93%</span>
-                      <span className="text-xs sm:text-sm text-gray-500">Accuracy</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-3 sm:space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-                      <span className="text-sm text-gray-700">Pattern Match Rate</span>
-                    </div>
-                    <span className="font-medium text-gray-900 text-sm">89%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
-                      <span className="text-sm text-gray-700">Historical Match</span>
-                    </div>
-                    <span className="font-medium text-gray-900 text-sm">76%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <Target className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" />
-                      <span className="text-sm text-gray-700">Avg Confidence</span>
-                    </div>
-                    <span className="font-medium text-gray-900 text-sm">0.91</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
-                      <span className="text-sm text-gray-700">Analysis Coverage</span>
-                    </div>
-                    <span className="font-medium text-gray-900 text-sm">98%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Pipeline Health */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
-                  <h2 className="font-semibold text-gray-900 text-sm sm:text-base">
-                    Pipeline Health
-                  </h2>
-                </div>
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Download className="w-4 h-4" />
-                  </button>
-                  <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="p-4 sm:p-6">
-                <div className="flex items-end justify-between h-36 sm:h-48 gap-1 sm:gap-2">
-                  {[
-                    { day: "Mon", value: 40 },
-                    { day: "Tue", value: 65 },
-                    { day: "Wed", value: 45 },
-                    { day: "Thu", value: 80 },
-                    { day: "Fri", value: 55 },
-                    { day: "Sat", value: 30 },
-                    { day: "Sun", value: 25 },
-                  ].map((item, index) => (
-                    <div key={index} className="flex flex-col items-center gap-1 sm:gap-2 flex-1">
-                      <div
-                        className="w-full bg-indigo-100 rounded-t-lg relative overflow-hidden"
-                        style={{ height: `${item.value}%` }}
-                      >
-                        <div className="absolute bottom-0 left-0 right-0 h-full bg-indigo-500 rounded-t-lg transition-all duration-500" />
-                      </div>
-                      <span className="text-[10px] sm:text-xs text-gray-500">{item.day}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100">
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Total Analyses</p>
-                    <p className="text-lg sm:text-2xl font-bold text-gray-900">156</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Avg Analysis Time</p>
-                    <p className="text-lg sm:text-2xl font-bold text-gray-900">1.8min</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Resolution Rate</p>
-                    <p className="text-lg sm:text-2xl font-bold text-gray-900">87%</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+              <CardDescription>
+                CI failures and analysis results from your connected repositories.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="py-8">
+              <Empty className="border-0">
+                <EmptyMedia variant="icon">
+                  <Activity className="w-6 h-6" />
+                </EmptyMedia>
+                <EmptyHeader>
+                  <EmptyTitle>No recent activity</EmptyTitle>
+                  <EmptyDescription>
+                    Connect a repository and push some code to see CI analysis results here.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <Link
+                  to="/dashboard/repos"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <GitBranch className="w-4 h-4" />
+                  Connect a Repository
+                </Link>
+              </Empty>
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>
