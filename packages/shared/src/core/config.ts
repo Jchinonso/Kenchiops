@@ -196,5 +196,5 @@ export const config: Config = {
 
   // Frontend URL (for OAuth redirects)
   FRONTEND_URL: optionalString("FRONTEND_URL", "http://localhost:3003"),
-  OAUTH_CALLBACK_BASE_URL: optionalString("OAUTH_CALLBACK_BASE_URL", "http://localhost:3001"),
+  OAUTH_CALLBACK_BASE_URL: optionalString("OAUTH_CALLBACK_BASE_URL", "http://localhost:3000"),
 } as const;

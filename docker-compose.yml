@@ -45,6 +45,8 @@ services:
       - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
       - REDIS_URL=redis://redis:6379
       - LOGSAGE_ROLLOUT_PERCENTAGE=100
+      - FRONTEND_URL=http://localhost:3003
+      - OAUTH_CALLBACK_BASE_URL=http://localhost:3003
     env_file:
       - .env
     ports:

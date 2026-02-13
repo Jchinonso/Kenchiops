@@ -9,7 +9,7 @@
  * Fetch API (not @kenchi/shared httpClient, which is a Node.js utility).
  */
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 // Browser Fetch API reference — frontend uses native browser fetch,
 // not @kenchi/shared httpClient (which is Node.js server-only)
@@ -135,9 +135,13 @@ export const apiClient = async (
  *
  * Redirects to the API's OAuth login endpoint which handles
  * CSRF state generation and provider redirect.
+ *
+ * When API_URL is empty (Docker/production), uses window.location.origin
+ * as the base so the browser navigates through the nginx proxy.
  */
 export const getLoginUrl = (provider: string, instanceUrl?: string): string => {
-  const url = new URL(`${API_URL}/auth/${provider}/login`);
+  const base = API_URL || window.location.origin;
+  const url = new URL(`${base}/auth/${provider}/login`);
 
   if (instanceUrl) {
     url.searchParams.set("instance_url", instanceUrl);
