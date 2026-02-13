@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Clock,
   LogOut,
+  Loader2,
   User,
   HelpCircle,
   Menu,
@@ -126,6 +127,7 @@ const Dashboard = () => {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -201,7 +203,8 @@ const Dashboard = () => {
   ];
 
   const closeSidebar = () => setSidebarOpen(false);
-  const handleSidebarLogout = () => {
+  const handleLogout = () => {
+    setLoggingOut(true);
     closeSidebar();
     logout();
   };
@@ -265,11 +268,16 @@ const Dashboard = () => {
             <span className="font-medium">Help & Support</span>
           </button>
           <button
-            onClick={handleSidebarLogout}
-            className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors disabled:opacity-50"
           >
-            <LogOut className="w-5 h-5" />
-            <span className="font-medium">Sign Out</span>
+            {loggingOut ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <LogOut className="w-5 h-5" />
+            )}
+            <span className="font-medium">{loggingOut ? "Signing out..." : "Sign Out"}</span>
           </button>
         </div>
       </aside>
@@ -370,11 +378,16 @@ const Dashboard = () => {
                     </Link>
                     <div className="border-t border-gray-100 mt-2 pt-2">
                       <button
-                        onClick={() => logout()}
-                        className="flex items-center gap-3 px-4 py-2 w-full text-left text-red-600 hover:bg-red-50"
+                        onClick={handleLogout}
+                        disabled={loggingOut}
+                        className="flex items-center gap-3 px-4 py-2 w-full text-left text-red-600 hover:bg-red-50 disabled:opacity-50"
                       >
-                        <LogOut className="w-4 h-4" />
-                        Sign Out
+                        {loggingOut ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <LogOut className="w-4 h-4" />
+                        )}
+                        {loggingOut ? "Signing out..." : "Sign Out"}
                       </button>
                     </div>
                   </div>

@@ -10,6 +10,7 @@ import {
   Shield,
   Brain,
   BarChart3,
+  Loader2,
 } from "lucide-react";
 import { getLoginUrl } from "@/lib/apiClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -51,13 +52,18 @@ const Login = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<"saas" | "selfhosted">("saas");
   const [instanceUrl, setInstanceUrl] = useState("");
+  const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
 
   // Redirect authenticated users to dashboard
   if (isAuthenticated && !isLoading) {
     return <Navigate to="/dashboard" replace />;
   }
 
+  // Show loading spinner while checking auth state on initial load
+  const authChecking = isLoading;
+
   const handleProviderClick = (providerId: string): void => {
+    setLoadingProvider(providerId);
     const url =
       activeTab === "selfhosted" && instanceUrl
         ? getLoginUrl(providerId, instanceUrl)
@@ -241,53 +247,80 @@ const Login = () => {
             </div>
           )}
 
-          {/* Primary Provider (GitHub) */}
-          <div className="space-y-2.5">
-            {providers
-              .filter((entry) => entry.primary)
-              .map((provider) => (
-                <button
-                  key={provider.name}
-                  onClick={() => handleProviderClick(provider.id)}
-                  className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-medium transition-all duration-200 shadow-lg shadow-gray-900/10 hover:shadow-xl hover:shadow-gray-900/15 group"
-                >
-                  <span className="group-hover:scale-110 transition-transform duration-200">
-                    {provider.icon}
-                  </span>
-                  <span>Continue with {provider.name}</span>
-                </button>
-              ))}
-          </div>
-
-          {/* Divider */}
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
+          {authChecking ? (
+            <div className="py-12 flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+              <p className="text-sm text-gray-400">Checking authentication...</p>
             </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-3 text-gray-400 uppercase tracking-wider">
-                or continue with
-              </span>
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* Primary Provider (GitHub) */}
+              <div className="space-y-2.5">
+                {providers
+                  .filter((entry) => entry.primary)
+                  .map((provider) => (
+                    <button
+                      key={provider.name}
+                      onClick={() => handleProviderClick(provider.id)}
+                      disabled={loadingProvider !== null}
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-medium transition-all duration-200 shadow-lg shadow-gray-900/10 hover:shadow-xl hover:shadow-gray-900/15 group disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      {loadingProvider === provider.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <span className="group-hover:scale-110 transition-transform duration-200">
+                          {provider.icon}
+                        </span>
+                      )}
+                      <span>
+                        {loadingProvider === provider.id
+                          ? `Connecting to ${provider.name}...`
+                          : `Continue with ${provider.name}`}
+                      </span>
+                    </button>
+                  ))}
+              </div>
 
-          {/* Secondary Providers */}
-          <div className="space-y-2.5">
-            {providers
-              .filter((entry) => !entry.primary)
-              .map((provider) => (
-                <button
-                  key={provider.name}
-                  onClick={() => handleProviderClick(provider.id)}
-                  className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700 font-medium transition-all duration-200 group"
-                >
-                  <span className="text-gray-500 group-hover:scale-110 transition-transform duration-200">
-                    {provider.icon}
+              {/* Divider */}
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-3 text-gray-400 uppercase tracking-wider">
+                    or continue with
                   </span>
-                  <span>{provider.name}</span>
-                </button>
-              ))}
-          </div>
+                </div>
+              </div>
+
+              {/* Secondary Providers */}
+              <div className="space-y-2.5">
+                {providers
+                  .filter((entry) => !entry.primary)
+                  .map((provider) => (
+                    <button
+                      key={provider.name}
+                      onClick={() => handleProviderClick(provider.id)}
+                      disabled={loadingProvider !== null}
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700 font-medium transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingProvider === provider.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                      ) : (
+                        <span className="text-gray-500 group-hover:scale-110 transition-transform duration-200">
+                          {provider.icon}
+                        </span>
+                      )}
+                      <span>
+                        {loadingProvider === provider.id
+                          ? `Connecting to ${provider.name}...`
+                          : provider.name}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </>
+          )}
 
           {/* Help Link */}
           <div className="mt-8 text-center">
