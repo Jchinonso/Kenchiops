@@ -500,6 +500,10 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
     ...context,
   });
 
+  // Prevent browser from caching auth state — stale cached responses
+  // after logout would make the user appear still authenticated.
+  res.setHeader("Cache-Control", "no-store");
+
   res.status(HTTP_STATUS.OK).json({
     data: {
       id: user.id,

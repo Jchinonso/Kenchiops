@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   Github,
   Gitlab,
@@ -12,6 +12,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { getLoginUrl } from "@/lib/apiClient";
+import { useAuth } from "@/hooks/useAuth";
 
 interface GitProvider {
   readonly id: string;
@@ -47,8 +48,14 @@ const stats = [
 ] as const;
 
 const Login = () => {
+  const { isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<"saas" | "selfhosted">("saas");
   const [instanceUrl, setInstanceUrl] = useState("");
+
+  // Redirect authenticated users to dashboard
+  if (isAuthenticated && !isLoading) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleProviderClick = (providerId: string): void => {
     const url =

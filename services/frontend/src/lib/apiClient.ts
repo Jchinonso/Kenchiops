@@ -28,11 +28,6 @@ const httpRequest = (url: string, init?: RequestInit): Promise<Response> =>
     credentials: "include",
   });
 
-/** Navigate to a path using browser location. */
-const redirectTo = (path: string): void => {
-  window.location.assign(path);
-};
-
 // ==================== Token Refresh ====================
 
 /**
@@ -121,7 +116,6 @@ export const apiClient = async (
   const refreshed = await attemptTokenRefresh();
 
   if (!refreshed) {
-    redirectTo("/login");
     return response;
   }
 

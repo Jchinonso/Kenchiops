@@ -3,13 +3,6 @@ import { Link, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyMedia,
-} from "@/components/ui/empty";
-import {
   LayoutDashboard,
   AlertTriangle,
   Zap,
@@ -132,6 +125,7 @@ const Dashboard = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -185,6 +179,12 @@ const Dashboard = () => {
   const displayName = user?.displayName ?? "User";
   const displayEmail = user?.email ?? "";
   const firstName = user?.displayName?.split(" ")[0] ?? "there";
+  const onboardingKey = `kenchi_onboarding_${user?.id}`;
+  const showOnboarding = !onboardingDismissed && !localStorage.getItem(onboardingKey);
+  const dismissOnboarding = () => {
+    localStorage.setItem(onboardingKey, "1");
+    setOnboardingDismissed(true);
+  };
 
   const sidebarItems = [
     { icon: <LayoutDashboard className="w-5 h-5" />, label: "Overview", href: "/dashboard" },
@@ -416,54 +416,64 @@ const Dashboard = () => {
             ))}
           </div>
 
-          {/* Getting Started — Onboarding */}
-          <Card className="mb-6 sm:mb-8">
-            <CardHeader className="border-b">
-              <div className="flex items-center gap-2">
-                <Rocket className="w-5 h-5 text-indigo-500" />
-                <CardTitle>Get Set Up</CardTitle>
-              </div>
-              <CardDescription>
-                Complete these steps to start analyzing your CI/CD failures.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                {onboardingSteps.map((step, stepIndex) => (
-                  <div
-                    key={step.title}
-                    className="flex items-start gap-4 p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors"
-                  >
-                    <div className="flex-shrink-0 mt-1">{step.icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-gray-900 text-sm mb-1">
-                        {stepIndex + 1}. {step.title}
-                      </h4>
-                      <p className="text-sm text-gray-500 mb-3">{step.description}</p>
-                      {step.external ? (
-                        <a
-                          href={step.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          {step.ctaLabel}
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      ) : (
-                        <Link
-                          to={step.href}
-                          className="inline-flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
-                        >
-                          {step.ctaLabel}
-                        </Link>
-                      )}
-                    </div>
+          {/* Getting Started — Onboarding (first-time users only) */}
+          {showOnboarding && (
+            <Card className="mb-6 sm:mb-8">
+              <CardHeader className="border-b">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Rocket className="w-5 h-5 text-indigo-500" />
+                    <CardTitle>Get Set Up</CardTitle>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  <button
+                    onClick={dismissOnboarding}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <CardDescription>
+                  Complete these steps to start analyzing your CI/CD failures.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {onboardingSteps.map((step, stepIndex) => (
+                    <div
+                      key={step.title}
+                      className="flex items-start gap-4 p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors"
+                    >
+                      <div className="flex-shrink-0 mt-1">{step.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 text-sm mb-1">
+                          {stepIndex + 1}. {step.title}
+                        </h4>
+                        <p className="text-sm text-gray-500 mb-3">{step.description}</p>
+                        {step.external ? (
+                          <a
+                            href={step.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            {step.ctaLabel}
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        ) : (
+                          <Link
+                            to={step.href}
+                            className="inline-flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                          >
+                            {step.ctaLabel}
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Recent Activity */}
           <Card>
@@ -476,18 +486,12 @@ const Dashboard = () => {
                 CI failures and analysis results from your connected repositories.
               </CardDescription>
             </CardHeader>
-            <CardContent className="py-8">
-              <Empty className="border-0">
-                <EmptyMedia variant="icon">
-                  <Activity className="w-6 h-6" />
-                </EmptyMedia>
-                <EmptyHeader>
-                  <EmptyTitle>No recent activity</EmptyTitle>
-                  <EmptyDescription>
-                    Install the GitHub App above to start seeing CI analysis results here.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
+            <CardContent className="py-12 text-center">
+              <Activity className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-500">No recent activity</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Activity from your connected repositories will appear here.
+              </p>
             </CardContent>
           </Card>
         </div>

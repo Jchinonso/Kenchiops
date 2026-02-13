@@ -17,6 +17,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiClient, getLoginUrl } from "@/lib/apiClient";
 
 // ==================== Types ====================
@@ -50,6 +51,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 // ==================== Provider ====================
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -88,9 +90,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Logout is best-effort; always redirect to login
     } finally {
       setUser(null);
-      window.location.assign("/login");
+      // Use React Router navigation (not window.location.assign) to preserve
+      // the user=null state. A full page reload would remount AuthProvider,
+      // re-run refreshUser(), and potentially restore the session from cached
+      // cookies before the browser fully processes the Set-Cookie clear headers.
+      navigate("/login", { replace: true });
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     refreshUser();
