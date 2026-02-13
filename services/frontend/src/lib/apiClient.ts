@@ -9,7 +9,7 @@
  * Fetch API (not @kenchi/shared httpClient, which is a Node.js utility).
  */
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 // Browser Fetch API reference — frontend uses native browser fetch,
 // not @kenchi/shared httpClient (which is Node.js server-only)

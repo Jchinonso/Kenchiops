@@ -195,6 +195,7 @@ export const config: Config = {
   AZURE_DEVOPS_OAUTH_CLIENT_SECRET: process.env.AZURE_DEVOPS_OAUTH_CLIENT_SECRET,
 
   // Frontend URL (for OAuth redirects)
-  FRONTEND_URL: optionalString("FRONTEND_URL", "http://localhost:3003"),
-  OAUTH_CALLBACK_BASE_URL: optionalString("OAUTH_CALLBACK_BASE_URL", "http://localhost:3000"),
+  // Defaults match Vite dev server; Docker overrides via docker-compose env vars
+  FRONTEND_URL: optionalString("FRONTEND_URL", "http://localhost:5173"),
+  OAUTH_CALLBACK_BASE_URL: optionalString("OAUTH_CALLBACK_BASE_URL", "http://localhost:5173"),
 } as const;

@@ -37,7 +37,7 @@ const App = () => (
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/oauth/callback" element={<AuthCallback />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/dashboard/failures" element={<Dashboard />} />
         <Route path="/dashboard/analyses" element={<Dashboard />} />

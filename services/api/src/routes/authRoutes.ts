@@ -400,7 +400,7 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   });
 
   // Redirect with only non-sensitive params (no tokens in URL)
-  const callbackUrl = new URL(`${frontendUrl}/auth/callback`);
+  const callbackUrl = new URL(`${frontendUrl}/oauth/callback`);
 
   const sanitizedRedirect = sanitizeRedirectUrl(oauthState.redirectAfter, frontendUrl);
   if (sanitizedRedirect) {
