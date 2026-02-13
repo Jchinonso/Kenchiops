@@ -9,7 +9,6 @@ import {
   EmptyDescription,
   EmptyMedia,
 } from "@/components/ui/empty";
-import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -26,11 +25,12 @@ import {
   Menu,
   X,
   GitBranch,
+  Github,
   Rocket,
-  Circle,
   ExternalLink,
   Activity,
   FolderGit2,
+  MessageSquare,
 } from "lucide-react";
 
 interface SidebarItemProps {
@@ -56,34 +56,39 @@ const SidebarItem = ({ icon, label, href, active, onClick }: SidebarItemProps) =
   </Link>
 );
 
-interface GettingStartedStep {
+const GITHUB_APP_SLUG = import.meta.env.VITE_GITHUB_APP_SLUG ?? "kenchi-devops";
+
+interface OnboardingStep {
   readonly title: string;
   readonly description: string;
+  readonly ctaLabel: string;
   readonly href: string;
-  readonly linkLabel: string;
+  readonly external?: boolean;
+  readonly icon: React.ReactNode;
 }
 
-const gettingStartedSteps: readonly GettingStartedStep[] = [
+const onboardingSteps: readonly OnboardingStep[] = [
   {
-    title: "Connect a Repository",
-    description:
-      "Link your GitHub, GitLab, or Bitbucket repository to start monitoring CI pipelines.",
-    href: "/dashboard/repos",
-    linkLabel: "Go to Repositories",
+    title: "Install Kenchi GitHub App",
+    description: "One click connects your repos and sets up webhooks — no manual config needed.",
+    ctaLabel: "Install GitHub App",
+    href: `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`,
+    external: true,
+    icon: <Github className="w-5 h-5 text-gray-900" />,
   },
   {
-    title: "Set Up CI Webhook",
-    description:
-      "Configure your CI provider to send build events to Kenchi for automatic analysis.",
+    title: "Connect Slack (optional)",
+    description: "Get failure alerts and analysis results delivered to your team's Slack channels.",
+    ctaLabel: "Add to Slack",
     href: "/dashboard/settings",
-    linkLabel: "Open Settings",
+    icon: <MessageSquare className="w-5 h-5 text-purple-600" />,
   },
   {
-    title: "Run Your First Analysis",
-    description:
-      "Once connected, Kenchi automatically analyzes CI failures and identifies root causes.",
+    title: "Your First Analysis",
+    description: "Once connected, Kenchi automatically analyzes CI failures on every push.",
+    ctaLabel: "View Analyses",
     href: "/dashboard/analyses",
-    linkLabel: "View Analyses",
+    icon: <Zap className="w-5 h-5 text-amber-500" />,
   },
 ];
 
@@ -411,12 +416,12 @@ const Dashboard = () => {
             ))}
           </div>
 
-          {/* Getting Started */}
+          {/* Getting Started — Onboarding */}
           <Card className="mb-6 sm:mb-8">
             <CardHeader className="border-b">
               <div className="flex items-center gap-2">
                 <Rocket className="w-5 h-5 text-indigo-500" />
-                <CardTitle>Getting Started</CardTitle>
+                <CardTitle>Get Set Up</CardTitle>
               </div>
               <CardDescription>
                 Complete these steps to start analyzing your CI/CD failures.
@@ -424,31 +429,35 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                {gettingStartedSteps.map((step, stepIndex) => (
+                {onboardingSteps.map((step, stepIndex) => (
                   <div
                     key={step.title}
                     className="flex items-start gap-4 p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors"
                   >
-                    <div className="flex-shrink-0 mt-0.5">
-                      <Circle className="w-5 h-5 text-gray-300" />
-                    </div>
+                    <div className="flex-shrink-0 mt-1">{step.icon}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium text-gray-900 text-sm">
-                          {stepIndex + 1}. {step.title}
-                        </h4>
-                        <Badge variant="outline" className="text-xs">
-                          Pending
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-500 mb-2">{step.description}</p>
-                      <Link
-                        to={step.href}
-                        className="inline-flex items-center gap-1 text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
-                      >
-                        {step.linkLabel}
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </Link>
+                      <h4 className="font-medium text-gray-900 text-sm mb-1">
+                        {stepIndex + 1}. {step.title}
+                      </h4>
+                      <p className="text-sm text-gray-500 mb-3">{step.description}</p>
+                      {step.external ? (
+                        <a
+                          href={step.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          {step.ctaLabel}
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      ) : (
+                        <Link
+                          to={step.href}
+                          className="inline-flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                        >
+                          {step.ctaLabel}
+                        </Link>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -475,16 +484,9 @@ const Dashboard = () => {
                 <EmptyHeader>
                   <EmptyTitle>No recent activity</EmptyTitle>
                   <EmptyDescription>
-                    Connect a repository and push some code to see CI analysis results here.
+                    Install the GitHub App above to start seeing CI analysis results here.
                   </EmptyDescription>
                 </EmptyHeader>
-                <Link
-                  to="/dashboard/repos"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  <GitBranch className="w-4 h-4" />
-                  Connect a Repository
-                </Link>
               </Empty>
             </CardContent>
           </Card>
