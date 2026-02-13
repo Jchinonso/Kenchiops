@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -20,7 +20,6 @@ import {
   Search,
   ChevronDown,
   Clock,
-  MoreHorizontal,
   LogOut,
   User,
   HelpCircle,
@@ -128,6 +127,35 @@ const Dashboard = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on outside click or Escape key
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (notificationsRef.current && !notificationsRef.current.contains(target)) {
+        setNotificationsOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(target)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    const handleEscape = ({ key }: KeyboardEvent) => {
+      if (key === "Escape") {
+        setNotificationsOpen(false);
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -172,14 +200,8 @@ const Dashboard = () => {
     closeSidebar();
     logout();
   };
-  const toggleNotifications = () => {
-    setNotificationsOpen((prev) => !prev);
-    setUserMenuOpen(false);
-  };
-  const toggleUserMenu = () => {
-    setUserMenuOpen((prev) => !prev);
-    setNotificationsOpen(false);
-  };
+  const toggleNotifications = () => setNotificationsOpen((prev) => !prev);
+  const toggleUserMenu = () => setUserMenuOpen((prev) => !prev);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -273,7 +295,7 @@ const Dashboard = () => {
 
             <div className="flex items-center gap-2 sm:gap-4">
               {/* Notifications */}
-              <div className="relative">
+              <div ref={notificationsRef} className="relative">
                 <button
                   onClick={toggleNotifications}
                   className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -297,7 +319,7 @@ const Dashboard = () => {
               </div>
 
               {/* User Menu */}
-              <div className="relative">
+              <div ref={userMenuRef} className="relative">
                 <button
                   onClick={toggleUserMenu}
                   className="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -328,7 +350,7 @@ const Dashboard = () => {
                       <p className="text-sm text-gray-500">{displayEmail}</p>
                     </div>
                     <Link
-                      to="#"
+                      to="/dashboard/settings"
                       className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"
                     >
                       <User className="w-4 h-4" />
@@ -437,14 +459,9 @@ const Dashboard = () => {
           {/* Recent Activity */}
           <Card>
             <CardHeader className="border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  <CardTitle>Recent Activity</CardTitle>
-                </div>
-                <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                <CardTitle>Recent Activity</CardTitle>
               </div>
               <CardDescription>
                 CI failures and analysis results from your connected repositories.
