@@ -30,6 +30,7 @@ jest.mock("@kenchi/shared", () => {
     config: {
       GITHUB_OAUTH_CLIENT_ID: "test-github-client-id",
       GITHUB_OAUTH_CLIENT_SECRET: "test-github-client-secret",
+      OAUTH_CALLBACK_BASE_URL: "http://localhost:5173",
     },
     createLogger: jest.fn(() => ({
       info: jest.fn(),
@@ -124,12 +125,13 @@ describe("githubOAuthAdapter", () => {
             client_id: "test-github-client-id",
             client_secret: "test-github-client-secret",
             code: "test-code",
+            redirect_uri: "http://localhost:5173/auth/github/callback",
           }),
         })
       );
     });
 
-    it("should NOT include grant_type or redirect_uri in the request body", async () => {
+    it("should include redirect_uri but NOT grant_type in the request body", async () => {
       const tokenData = createGitHubTokenResponse();
       mockFetch.mockResolvedValueOnce(createFetchResponse(tokenData));
 
@@ -142,8 +144,8 @@ describe("githubOAuthAdapter", () => {
       >;
 
       expect(body).not.toHaveProperty("grant_type");
-      expect(body).not.toHaveProperty("redirect_uri");
-      expect(Object.keys(body)).toEqual(["client_id", "client_secret", "code"]);
+      expect(body).toHaveProperty("redirect_uri", "http://localhost:5173/auth/github/callback");
+      expect(Object.keys(body)).toEqual(["client_id", "client_secret", "code", "redirect_uri"]);
     });
 
     it("should always return refreshToken as null and expiresIn as null", async () => {

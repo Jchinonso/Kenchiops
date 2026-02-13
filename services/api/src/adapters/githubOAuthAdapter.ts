@@ -135,6 +135,7 @@ const exchangeCode = async (
 ): Promise<OAuthTokenResponse> => {
   const { clientId, clientSecret } = ensureClientCredentials();
   const urls = getUrls(instanceUrl);
+  const callbackUrl = `${config.OAUTH_CALLBACK_BASE_URL}/auth/github/callback`;
   const startTime = Date.now();
 
   try {
@@ -148,6 +149,7 @@ const exchangeCode = async (
         client_id: clientId,
         client_secret: clientSecret,
         code,
+        redirect_uri: callbackUrl,
       }),
       signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
     });
