@@ -417,6 +417,7 @@ const pollForJobCompletion = async (
   while (Date.now() - startTime < POLLING_CONFIG.MAX_WAIT_MS) {
     const response = await resilientGet<JobStatusResponse>(statusUrl, {
       timeout: POLLING_CONFIG.REQUEST_TIMEOUT_MS,
+      internalAuth: true,
     });
 
     const { status, result, error } = response.data;
@@ -527,6 +528,7 @@ const analyzeJobLogs = async (
   // Step 1: Submit job for async processing (returns 202 with job_id)
   const submitResponse = await resilientPost<JobSubmissionResponse>(apiUrl, requestPayload, {
     timeout: POLLING_CONFIG.REQUEST_TIMEOUT_MS,
+    internalAuth: true,
   });
 
   const { job_id: jobId } = submitResponse.data;

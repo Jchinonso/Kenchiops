@@ -934,6 +934,14 @@ export interface Config {
   // Frontend URL (for OAuth redirects)
   readonly FRONTEND_URL: string;
   readonly OAUTH_CALLBACK_BASE_URL: string;
+
+  // Internal service-to-service authentication
+  /** Shared secret for HMAC-SHA256 signing of inter-service requests */
+  readonly INTERNAL_SERVICE_SECRET?: string;
+
+  // Aggregation timing overrides
+  readonly AGGREGATION_DEBOUNCE_MS?: number;
+  readonly AGGREGATION_MAX_WAIT_MS?: number;
 }
 
 // ==================== Signed URL Types ====================

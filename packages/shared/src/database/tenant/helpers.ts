@@ -19,6 +19,7 @@ import {
   type TenantEmbeddingTier,
   type TenantAuditEntry,
 } from "../common.js";
+import { decryptValue } from "../../security/encryption.js";
 import type {
   AuditRow,
   FieldMapping,
@@ -265,7 +266,7 @@ export const rowToTenant = (row: TenantRow): Tenant => ({
   githubAppInstalledAt: row.github_app_installed_at,
   slackWorkspaceId: row.slack_workspace_id,
   slackTeamName: row.slack_team_name,
-  slackBotToken: row.slack_bot_token,
+  slackBotToken: (decryptValue(row.slack_bot_token) as string | null) ?? null,
   slackBotUserId: row.slack_bot_user_id,
   slackAppInstalledAt: row.slack_app_installed_at,
   status: row.status,

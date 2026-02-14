@@ -23,6 +23,8 @@ import {
   SERVER_TIMEOUTS,
   startActionQueueWorker,
   createRateLimitMiddleware,
+  createInternalAuthMiddleware,
+  createSecurityHeaders,
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   getErrorMessage,
@@ -89,6 +91,9 @@ const githubRateLimiter = createRateLimitMiddleware({
   distributedFallback: "fail", // Fail-safe when Redis unavailable
 });
 
+const { NODE_ENV } = config;
+const isProduction = NODE_ENV === "production";
+
 /**
  * Create and configure Express application
  */
@@ -112,6 +117,24 @@ const createApp = (): express.Express => {
   );
   app.use(requestLogger);
   app.use(githubRateLimiter.middleware());
+
+  // Security headers -- applied early before any response is sent
+  app.use(createSecurityHeaders(isProduction));
+
+  // Internal auth for service-to-service calls.
+  // Public paths skip HMAC verification (health probes, webhook with its own signature, etc.)
+  app.use(
+    createInternalAuthMiddleware({
+      publicPaths: [
+        "/health",
+        "/live",
+        "/ready",
+        "/api/github/webhook",
+        "/github/setup",
+        "/api/feedback",
+      ],
+    })
+  );
 
   // Register all routes
   registerRoutes(app);
@@ -157,15 +180,9 @@ const initializeFailureAggregator = (): void => {
     return;
   }
 
-  // Configure aggregation timing (can be overridden via env)
-  const debounceMs = parseInt(
-    process.env.AGGREGATION_DEBOUNCE_MS || String(AGGREGATION_DEFAULTS.DEBOUNCE_MS),
-    10
-  );
-  const maxWaitMs = parseInt(
-    process.env.AGGREGATION_MAX_WAIT_MS || String(AGGREGATION_DEFAULTS.MAX_WAIT_MS),
-    10
-  );
+  // Configure aggregation timing (can be overridden via config)
+  const debounceMs = config.AGGREGATION_DEBOUNCE_MS ?? AGGREGATION_DEFAULTS.DEBOUNCE_MS;
+  const maxWaitMs = config.AGGREGATION_MAX_WAIT_MS ?? AGGREGATION_DEFAULTS.MAX_WAIT_MS;
   const { maxFailuresPerCommit } = DEFAULT_AGGREGATION_CONFIG;
 
   const aggregationConfig = {

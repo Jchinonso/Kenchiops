@@ -22,6 +22,7 @@ import {
   type CreateTenantFromGitHub,
   type LinkSlackWorkspace,
 } from "../common.js";
+import { encryptValue } from "../../security/encryption.js";
 import { insertAuditLog } from "./audit.js";
 import {
   validateId,
@@ -123,7 +124,7 @@ export const linkSlackWorkspace = async (data: LinkSlackWorkspace): Promise<Tena
       const updated = await client.query<TenantRow>(TENANT_QUERIES.UPDATE_SLACK_LINK, [
         data.slackWorkspaceId,
         data.slackTeamName,
-        data.slackBotToken,
+        encryptValue(data.slackBotToken),
         data.slackBotUserId ?? null,
         newStatus,
         data.tenantId,
@@ -183,7 +184,7 @@ export const createFromSlackInstall = async (
         orgName,
         slackData.slackWorkspaceId,
         slackData.slackTeamName,
-        slackData.slackBotToken,
+        encryptValue(slackData.slackBotToken),
         slackData.slackBotUserId ?? null,
         TENANT_STATUS.PENDING_GITHUB,
       ]);
@@ -329,7 +330,7 @@ export const updateSlackToken = async (tenantId: string, newToken: string): Prom
   validateId(newToken, "newToken");
 
   try {
-    await query(TENANT_QUERIES.UPDATE_SLACK_TOKEN, [newToken, tenantId]);
+    await query(TENANT_QUERIES.UPDATE_SLACK_TOKEN, [encryptValue(newToken), tenantId]);
     logger.info("Slack token updated", { tenantId });
   } catch (error) {
     logger.error("Failed to update Slack token", {

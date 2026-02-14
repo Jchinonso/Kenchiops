@@ -45,6 +45,11 @@ export {
   type AuthCookieTokens,
 } from "./cookies.js";
 
+// OAuth state store (Redis with in-memory fallback)
+export { createOAuthStateStore } from "./oauthStateStore.js";
+
+export type { OAuthStoredState, OAuthStateStore } from "./oauthStateStoreTypes.js";
+
 // Re-export constants for convenience
 export {
   SECRET_PATTERNS,

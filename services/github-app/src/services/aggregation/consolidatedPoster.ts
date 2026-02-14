@@ -241,14 +241,18 @@ const postToSlack = async (
   const slackUrl = `${config.SLACK_BOT_URL}/slack/message`;
 
   try {
-    const response = await resilientPost<{ success: boolean }>(slackUrl, {
-      consolidated: true,
-      payload: slackPayload,
-      repository: aggregation.repository.fullName,
-      installation_id: aggregation.installationId,
-      commit_sha: aggregation.commitSha,
-      failure_count: aggregation.failures.length,
-    });
+    const response = await resilientPost<{ success: boolean }>(
+      slackUrl,
+      {
+        consolidated: true,
+        payload: slackPayload,
+        repository: aggregation.repository.fullName,
+        installation_id: aggregation.installationId,
+        commit_sha: aggregation.commitSha,
+        failure_count: aggregation.failures.length,
+      },
+      { internalAuth: true }
+    );
 
     logger.info("Posted consolidated Slack message (direct HTTP)", {
       repository: aggregation.repository.fullName,

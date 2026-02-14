@@ -14,6 +14,7 @@ import {
   SERVICE_NAMES,
   API_ROUTES,
   RAG_QUERY_DEFAULTS,
+  requireTenantMatch,
   type RAGMetricType,
   runTestSuite,
   generateDriftReport,
@@ -340,17 +341,18 @@ const handleDetectRelationships = async (req: Request, res: Response): Promise<v
 // ==================== Route Definitions ====================
 
 /** POST /api/rag/test-suite - Run RAG test suite */
-router.post(API_ROUTES.RAG_TEST_SUITE, asyncHandler(handleTestSuite));
+router.post(API_ROUTES.RAG_TEST_SUITE, requireTenantMatch(), asyncHandler(handleTestSuite));
 
 /** GET /api/rag/drift-report - Generate drift report */
-router.get(API_ROUTES.RAG_DRIFT_REPORT, asyncHandler(handleGetDriftReport));
+router.get(API_ROUTES.RAG_DRIFT_REPORT, requireTenantMatch(), asyncHandler(handleGetDriftReport));
 
 /** POST /api/rag/drift-report - Run drift detection with alerts */
-router.post(API_ROUTES.RAG_DRIFT_REPORT, asyncHandler(handleDriftDetection));
+router.post(API_ROUTES.RAG_DRIFT_REPORT, requireTenantMatch(), asyncHandler(handleDriftDetection));
 
 /** POST /api/rag/check-metric - Check metric bounds */
 router.post(
   API_ROUTES.RAG_CHECK_METRIC,
+  requireTenantMatch(),
   validate({
     body: {
       metricType: validateRequiredString,
@@ -367,14 +369,19 @@ router.get(API_ROUTES.RAG_STALENESS, asyncHandler(handleStaleness));
 router.get(`${API_ROUTES.RAG_STALENESS}/documents`, asyncHandler(handleStaleDocuments));
 
 /** POST /api/rag/reembed - Trigger re-embedding */
-router.post(API_ROUTES.RAG_REEMBED, asyncHandler(handleReembed));
+router.post(API_ROUTES.RAG_REEMBED, requireTenantMatch(), asyncHandler(handleReembed));
 
 /** POST /api/rag/seed-test-cases - Seed test cases */
-router.post(API_ROUTES.RAG_SEED_TEST_CASES, asyncHandler(handleSeedTestCases));
+router.post(
+  API_ROUTES.RAG_SEED_TEST_CASES,
+  requireTenantMatch(),
+  asyncHandler(handleSeedTestCases)
+);
 
 /** POST /api/rag/detect-relationships - Detect document relationships */
 router.post(
   API_ROUTES.RAG_DETECT_RELATIONSHIPS,
+  requireTenantMatch(),
   validate({
     body: {
       docId: validateRequiredString,

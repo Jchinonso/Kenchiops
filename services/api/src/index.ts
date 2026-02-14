@@ -18,6 +18,7 @@ import {
   requestLogger,
   authMiddleware,
   createRateLimitMiddleware,
+  createSecurityHeaders,
   setupGracefulShutdown,
   registerCleanupHandler,
   initDatabase,
@@ -267,6 +268,11 @@ const apiRateLimiter = createRateLimitMiddleware({
     rateMultiplier: 0.5, // Burst users get rate limit halved
     blockOnBurst: false, // Penalty-based, not blocking
   },
+  tenantRateLimit: {
+    enabled: true,
+    max: 500, // 500 requests per minute per tenant (5x per-IP limit)
+    windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
+  },
   distributedFallback: "fail", // Fail-safe when Redis unavailable
 });
 
@@ -282,19 +288,7 @@ const createApp = (): express.Express => {
 
   // Security headers — applied early before any response is sent
   const { NODE_ENV } = config;
-  const isProductionEnv = NODE_ENV === "production";
-  app.use((_req, res, next) => {
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
-    // Disable legacy XSS filter — modern browsers handle this natively
-    res.setHeader("X-XSS-Protection", "0");
-    // HSTS: enforce HTTPS for 1 year in production (prevents first-request MitM)
-    if (isProductionEnv) {
-      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-    }
-    next();
-  });
+  app.use(createSecurityHeaders(NODE_ENV === "production"));
 
   // CORS — required for cross-origin cookie-based auth (frontend dev server on different port)
   app.use(

@@ -198,4 +198,11 @@ export const config: Config = {
   // Defaults match Vite dev server; Docker overrides via docker-compose env vars
   FRONTEND_URL: optionalString("FRONTEND_URL", "http://localhost:5173"),
   OAUTH_CALLBACK_BASE_URL: optionalString("OAUTH_CALLBACK_BASE_URL", "http://localhost:5173"),
+
+  // Internal service-to-service authentication
+  INTERNAL_SERVICE_SECRET: process.env.INTERNAL_SERVICE_SECRET,
+
+  // Aggregation timing overrides (optional)
+  AGGREGATION_DEBOUNCE_MS: optionalInt("AGGREGATION_DEBOUNCE_MS"),
+  AGGREGATION_MAX_WAIT_MS: optionalInt("AGGREGATION_MAX_WAIT_MS"),
 } as const;

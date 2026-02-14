@@ -1180,6 +1180,27 @@ export const HEADER_IDENTITY_SOURCES: readonly HeaderIdentitySource[] = [
   { header: IDENTITY_HEADERS.CLIENT_ID, prefix: "client" },
 ];
 
+// ==================== Per-Tenant Rate Limit Types ====================
+
+/**
+ * Per-tenant rate limiting configuration.
+ *
+ * When enabled, applies an additional rate limit keyed on the authenticated
+ * user's tenantId (from req.user.tenantId). This prevents a single tenant
+ * from exhausting the shared rate limit quota.
+ *
+ * Unauthenticated requests or users without a tenantId are not subject
+ * to tenant rate limiting (they still go through the standard IP-based limiter).
+ */
+export interface TenantRateLimitConfig {
+  /** Whether per-tenant rate limiting is active */
+  readonly enabled: boolean;
+  /** Maximum requests per tenant in the window (defaults to the base rateLimit.max) */
+  readonly max?: number;
+  /** Time window in milliseconds (defaults to the base rateLimit.windowMs) */
+  readonly windowMs?: number;
+}
+
 // ==================== Middleware Types ====================
 
 /**
@@ -1206,6 +1227,13 @@ export interface RateLimitMiddlewareConfig {
 
   /** Per-endpoint limits (optional) */
   readonly endpointLimits?: EndpointLimitsConfig;
+
+  /**
+   * Per-tenant rate limiting (optional).
+   * Adds a separate rate limit keyed on req.user.tenantId
+   * to prevent a single tenant from exhausting shared quota.
+   */
+  readonly tenantRateLimit?: TenantRateLimitConfig;
 
   /** Fallback behavior when Redis unavailable */
   readonly distributedFallback?: FallbackBehavior;

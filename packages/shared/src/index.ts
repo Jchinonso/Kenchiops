@@ -322,7 +322,14 @@ export {
 } from "./database/index.js";
 
 // HTTP utilities
-export { errorHandler, asyncHandler, requestLogger, authMiddleware } from "./http/index.js";
+export {
+  errorHandler,
+  asyncHandler,
+  requestLogger,
+  authMiddleware,
+  requireRole,
+} from "./http/index.js";
+export { getEffectiveTenantId, requireTenantMatch } from "./http/index.js";
 export { validate, validators, type ValidationSchema } from "./http/index.js";
 export {
   createRateLimiter,
@@ -411,6 +418,7 @@ export type {
   // Rate limit types
   FallbackBehavior,
   TrustedProxyConfig,
+  TenantRateLimitConfig,
   BurstDetectionConfig,
   BurstDetectionResult,
   BotDetectionConfig,
@@ -443,6 +451,13 @@ export {
   getCircuitBreakerStatus,
   type ResilientRequestOptions,
   type ResilientResponse,
+} from "./http/index.js";
+export {
+  signInternalRequest,
+  verifyInternalSignature,
+  INTERNAL_AUTH_HEADERS,
+  createInternalAuthMiddleware,
+  createSecurityHeaders,
 } from "./http/index.js";
 export {
   withCircuitBreaker,
@@ -840,6 +855,10 @@ export {
   extractAccessToken,
   extractRefreshToken,
   type AuthCookieTokens,
+  // OAuth state store (Redis with in-memory fallback)
+  createOAuthStateStore,
+  type OAuthStoredState,
+  type OAuthStateStore,
 } from "./security/index.js";
 
 // Action execution

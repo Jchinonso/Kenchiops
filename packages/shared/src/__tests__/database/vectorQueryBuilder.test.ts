@@ -60,33 +60,39 @@ describe("database/vector/queryBuilder", () => {
   });
 
   describe("buildSimilaritySearchQuery", () => {
-    it("builds query with no filters", () => {
+    it("builds query with no filters and parameterizes similarity and limit", () => {
       const result = buildSimilaritySearchQuery({}, TEST_CONFIG);
       expect(result.query).toContain("SELECT * FROM docs WHERE embedding IS NOT NULL");
-      expect(result.query).toContain(">= 0.7");
+      expect(result.query).toContain(">= $2");
       expect(result.query).toContain("ORDER BY similarity DESC");
-      expect(result.params).toEqual([]);
+      expect(result.query).toContain("LIMIT $3");
+      expect(result.params).toEqual([0.7, 5]);
     });
 
-    it("builds query with filter conditions", () => {
+    it("builds query with filter conditions and correct param indices", () => {
       const result = buildSimilaritySearchQuery({ tenantId: "t-123" }, TEST_CONFIG);
       expect(result.query).toContain("AND tenant_id = $2");
-      expect(result.params).toEqual(["t-123"]);
+      expect(result.query).toContain(">= $3");
+      expect(result.query).toContain("LIMIT $4");
+      expect(result.params).toEqual(["t-123", 0.7, 5]);
     });
 
-    it("uses custom minSimilarity when provided", () => {
+    it("parameterizes custom minSimilarity", () => {
       const result = buildSimilaritySearchQuery({ minSimilarity: 0.9 }, TEST_CONFIG);
-      expect(result.query).toContain(">= 0.9");
+      expect(result.query).toContain(">= $2");
+      expect(result.params).toEqual([0.9, 5]);
     });
 
-    it("uses default similarity threshold when not provided", () => {
+    it("parameterizes default similarity threshold", () => {
       const result = buildSimilaritySearchQuery({}, TEST_CONFIG);
-      expect(result.query).toContain(">= 0.7");
+      expect(result.query).toContain(">= $2");
+      expect(result.params).toEqual([0.7, 5]);
     });
 
-    it("applies LIMIT from filters", () => {
-      const result = buildSimilaritySearchQuery({ limit: 5 }, TEST_CONFIG);
-      expect(result.query).toContain("LIMIT 5");
+    it("parameterizes LIMIT from filters", () => {
+      const result = buildSimilaritySearchQuery({ limit: 3 }, TEST_CONFIG);
+      expect(result.query).toContain("LIMIT $3");
+      expect(result.params).toEqual([0.7, 3]);
     });
   });
 });

@@ -268,6 +268,13 @@ export const searchFromEventContext = async (
 ): Promise<RAGSearchResult> => {
   const queryText = buildQueryFromContext(eventContext);
 
+  if (!tenantId) {
+    logger.warn("RAG search without tenantId - results may span tenants", {
+      eventType: eventContext.eventType,
+      repository: eventContext.repository,
+    });
+  }
+
   logger.info("Building search from event context", {
     eventType: eventContext.eventType,
     repository: eventContext.repository,

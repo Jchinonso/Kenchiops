@@ -58,6 +58,8 @@ export interface ResilientRequestOptions {
   readonly headers?: Record<string, string>;
   /** Whether to skip circuit breaker check. */
   readonly skipCircuitBreaker?: boolean;
+  /** When true, signs the request with INTERNAL_SERVICE_SECRET (HMAC-SHA256). */
+  readonly internalAuth?: boolean;
 }
 
 /** Response from resilient HTTP client. */
@@ -87,6 +89,8 @@ export interface RetryContext {
   readonly headers: Readonly<Record<string, string>>;
   readonly serviceKey: string;
   readonly startTime: number;
+  /** When true, signs the request with INTERNAL_SERVICE_SECRET (HMAC-SHA256). */
+  readonly internalAuth?: boolean;
 }
 
 // ==================== Validation Types ====================

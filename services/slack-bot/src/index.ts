@@ -22,6 +22,7 @@ import {
   waitForRedisConnection,
   isSocketModeDisconnectError,
   createRateLimitMiddleware,
+  createSecurityHeaders,
   startSlackNotificationWorker,
   getErrorMessage,
   SLACK_BOT_RATE_LIMITS,
@@ -163,6 +164,10 @@ const startService = async (): Promise<void> => {
     expressApp.set("trust proxy", 1);
 
     expressApp.use(express.json({ limit: EXPRESS_CONFIG.SLACK_BOT_JSON_LIMIT }));
+
+    // Security headers -- applied early before any response is sent
+    const { NODE_ENV } = config;
+    expressApp.use(createSecurityHeaders(NODE_ENV === "production"));
 
     // Redis-backed rate limiter with security features for HTTP endpoints
     // Security features enabled:

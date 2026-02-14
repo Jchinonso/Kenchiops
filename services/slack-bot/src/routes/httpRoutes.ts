@@ -18,6 +18,7 @@ import {
   livenessCheck,
   readinessCheck,
   getErrorMessage,
+  createInternalAuthMiddleware,
 } from "@kenchi/shared";
 import type { WebClient } from "@slack/web-api";
 import type { AppConfig } from "../config/appConfig.js";
@@ -107,6 +108,9 @@ const getStatusCode = (status: string): number =>
 export const createHttpRoutes = (app: SlackApp, appConfig?: AppConfig): express.Router => {
   const router = express.Router();
 
+  // Internal auth for service-to-service calls (applied per-route, not globally)
+  const internalAuth = createInternalAuthMiddleware();
+
   /** Health check config for this service */
   const healthConfig = {
     serviceName: appConfig?.serviceName ?? "slack-bot",
@@ -129,6 +133,7 @@ export const createHttpRoutes = (app: SlackApp, appConfig?: AppConfig): express.
    */
   router.post(
     "/slack/message",
+    internalAuth,
     validate({
       body: {
         installation_id: (value) => !value || validators.number(value),
@@ -183,6 +188,7 @@ export const createHttpRoutes = (app: SlackApp, appConfig?: AppConfig): express.
    */
   router.post(
     "/slack/broadcast",
+    internalAuth,
     validate({
       body: {
         message: (value) => validators.required(value) && validators.string(value),

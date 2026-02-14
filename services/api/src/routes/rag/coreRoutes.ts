@@ -14,6 +14,8 @@ import {
   SERVICE_NAMES,
   API_ROUTES,
   KNOWLEDGE_DOC_TYPES,
+  ValidationError,
+  getEffectiveTenantId,
   type KnowledgeDocType,
   ingestKnowledgeDoc,
   searchAll,
@@ -191,14 +193,22 @@ const handleIngest = async (req: Request, res: Response): Promise<void> => {
 
 /**
  * Handles RAG search requests.
+ * Enforces tenant isolation: regular users are scoped to their own tenant,
+ * admin/owner can specify a different tenant via body.
  */
 const handleSearch = async (req: Request, res: Response): Promise<void> => {
   const body = req.body as SearchRequestBody;
   const startTime = Date.now();
 
+  const tenantId = getEffectiveTenantId(req);
+
+  if (!tenantId && !req.user?.role) {
+    throw new ValidationError("tenantId is required for unauthenticated searches");
+  }
+
   const results = await searchAll({
     queryText: body.query,
-    tenantId: body.tenantId,
+    tenantId,
     repository: body.repository,
     topK: body.topK,
     minSimilarity: body.minSimilarity,
