@@ -115,6 +115,85 @@ export const getEventsByTenant = async (
 };
 
 /**
+ * Retrieves events by tenant with optional repository and severity filters.
+ *
+ * @param options - Query options including tenantId, type, repository, severity, limit, offset
+ * @returns Array of event records matching the filters
+ * @throws ValidationError if options are invalid
+ * @throws Error if database operation fails
+ */
+export const getEventsByTenantFiltered = async (
+  options: EventListOptions & {
+    readonly repository?: string | null;
+    readonly severity?: string | null;
+  }
+): Promise<readonly EventRecord[]> => {
+  validateEventListOptions(options);
+
+  const limit = options.limit ?? EVENT_DB_DEFAULTS.QUERY_LIMIT;
+  const offset = options.offset ?? 0;
+
+  try {
+    const result = await query<EventRow>(EVENT_DB_QUERIES.GET_BY_TENANT_TYPE_FILTERED, [
+      options.tenantId,
+      options.type ?? "CICD_FAILURE",
+      options.repository ?? null,
+      options.severity ?? null,
+      limit,
+      offset,
+    ]);
+    return Object.freeze(result.rows.map(mapRowToEvent));
+  } catch (error) {
+    logger.error("Failed to get filtered events by tenant", {
+      tenantId: options.tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Counts events by tenant with optional repository and severity filters.
+ *
+ * @param tenantId - The tenant ID
+ * @param type - The event type
+ * @param repository - Optional repository name filter
+ * @param severity - Optional severity filter
+ * @returns The count of matching events
+ * @throws ValidationError if tenantId is empty
+ * @throws Error if database operation fails
+ */
+export const countEventsByTenantFiltered = async (
+  tenantId: string,
+  type: string,
+  repository: string | null,
+  severity: string | null
+): Promise<number> => {
+  if (!tenantId?.trim()) {
+    throw new ValidationError("tenantId is required", {
+      operation: "countEventsByTenantFiltered",
+      metadata: { field: "tenantId" },
+    });
+  }
+
+  try {
+    const result = await query<EventCountRow>(EVENT_DB_QUERIES.COUNT_BY_TENANT_TYPE_FILTERED, [
+      tenantId,
+      type,
+      repository,
+      severity,
+    ]);
+    return parseInt(result.rows[0].count, PARSE_INT_RADIX);
+  } catch (error) {
+    logger.error("Failed to count filtered events by tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Counts events by tenant, optionally filtered by type.
  *
  * @param tenantId - The tenant ID

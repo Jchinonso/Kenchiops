@@ -74,4 +74,20 @@ export const ANALYSIS_QUERIES = {
     SELECT id, event_id, diagnosis_confidence FROM analyses
     WHERE event_id = ANY($1) AND tenant_id = $2
   `,
+
+  GET_BY_TENANT_FILTERED: `
+    SELECT * FROM analyses
+    WHERE tenant_id = $1
+      AND ($2::text IS NULL OR aggregation_key ILIKE '%' || $2 || '%')
+      AND ($3::numeric IS NULL OR diagnosis_confidence >= $3)
+    ORDER BY created_at DESC
+    LIMIT $4 OFFSET $5
+  `,
+
+  COUNT_BY_TENANT_FILTERED: `
+    SELECT COUNT(*) as count FROM analyses
+    WHERE tenant_id = $1
+      AND ($2::text IS NULL OR aggregation_key ILIKE '%' || $2 || '%')
+      AND ($3::numeric IS NULL OR diagnosis_confidence >= $3)
+  `,
 } as const;

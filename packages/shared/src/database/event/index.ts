@@ -19,4 +19,10 @@ export type {
 export { mapRowToEvent, validateEventListOptions, validateCreateEventInput } from "./helpers.js";
 
 // Repository operations
-export { createEvent, getEventsByTenant, countEventsByTenant } from "./repository.js";
+export {
+  createEvent,
+  getEventsByTenant,
+  countEventsByTenant,
+  getEventsByTenantFiltered,
+  countEventsByTenantFiltered,
+} from "./repository.js";

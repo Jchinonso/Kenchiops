@@ -168,24 +168,64 @@ export const useRepositories = (
 ): UseFetchResult<readonly InstallationRepository[]> =>
   useFetch<readonly InstallationRepository[]>("/api/v1/dashboard/repositories", `${refreshKey}`);
 
+const buildAnalysesUrl = (
+  limit: number,
+  offset: number,
+  repository?: string,
+  minConfidence?: string
+): string => {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  if (repository) {
+    params.set("repository", repository);
+  }
+  if (minConfidence) {
+    params.set("minConfidence", minConfidence);
+  }
+  return `/api/v1/dashboard/analyses?${params.toString()}`;
+};
+
+const buildFailuresUrl = (
+  limit: number,
+  offset: number,
+  repository?: string,
+  severity?: string
+): string => {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  if (repository) {
+    params.set("repository", repository);
+  }
+  if (severity) {
+    params.set("severity", severity);
+  }
+  return `/api/v1/dashboard/failures?${params.toString()}`;
+};
+
 export const useAnalyses = (
   limit: number = 20,
   offset: number = 0,
-  refreshKey: number = 0
+  refreshKey: number = 0,
+  repository?: string,
+  minConfidence?: string
 ): UseFetchResult<PaginatedResult<AnalysisRecord>> =>
   useFetch<PaginatedResult<AnalysisRecord>>(
-    `/api/v1/dashboard/analyses?limit=${limit}&offset=${offset}`,
-    `${limit}:${offset}:${refreshKey}`
+    buildAnalysesUrl(limit, offset, repository, minConfidence),
+    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}`
   );
 
 export const useFailures = (
   limit: number = 20,
   offset: number = 0,
-  refreshKey: number = 0
+  refreshKey: number = 0,
+  repository?: string,
+  severity?: string
 ): UseFetchResult<PaginatedResult<EventRecord>> =>
   useFetch<PaginatedResult<EventRecord>>(
-    `/api/v1/dashboard/failures?limit=${limit}&offset=${offset}`,
-    `${limit}:${offset}:${refreshKey}`
+    buildFailuresUrl(limit, offset, repository, severity),
+    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${severity ?? ""}`
   );
 
 export const useAnalysisDetail = (

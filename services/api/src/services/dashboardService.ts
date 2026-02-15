@@ -14,9 +14,13 @@ import {
   getAnalysisById,
   getAnalysesByTenant,
   countAnalysesByTenant,
+  getAnalysesByTenantFiltered,
+  countAnalysesByTenantFiltered,
   getAnalysesByEventIds,
   getEventsByTenant,
   countEventsByTenant,
+  getEventsByTenantFiltered,
+  countEventsByTenantFiltered,
   type RequestContext,
   type AnalysisRecord,
   type EventRecord,
@@ -134,6 +138,67 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
       logger.info("Analyses retrieved", {
         count: items.length,
         total,
+        ...context,
+      });
+
+      return { items, total, limit, offset };
+    },
+
+    /**
+     * Retrieves paginated analysis records for a tenant with optional filters.
+     */
+    getAnalysesFiltered: async (
+      tenantId: string,
+      repository: string | null,
+      minConfidence: number | null,
+      limit: number,
+      offset: number,
+      context: RequestContext
+    ): Promise<PaginatedResult<AnalysisRecord>> => {
+      const [items, total] = await Promise.all([
+        getAnalysesByTenantFiltered(tenantId, repository, minConfidence, limit, offset),
+        countAnalysesByTenantFiltered(tenantId, repository, minConfidence),
+      ]);
+
+      logger.info("Filtered analyses retrieved", {
+        count: items.length,
+        total,
+        repository,
+        minConfidence,
+        ...context,
+      });
+
+      return { items, total, limit, offset };
+    },
+
+    /**
+     * Retrieves paginated CI/CD failure events for a tenant with optional filters.
+     */
+    getFailuresFiltered: async (
+      tenantId: string,
+      repository: string | null,
+      severity: string | null,
+      limit: number,
+      offset: number,
+      context: RequestContext
+    ): Promise<PaginatedResult<EventRecord>> => {
+      const [items, total] = await Promise.all([
+        getEventsByTenantFiltered({
+          tenantId,
+          type: CICD_FAILURE_TYPE,
+          repository,
+          severity,
+          limit,
+          offset,
+        }),
+        countEventsByTenantFiltered(tenantId, CICD_FAILURE_TYPE, repository, severity),
+      ]);
+
+      logger.info("Filtered failures retrieved", {
+        count: items.length,
+        total,
+        repository,
+        severity,
         ...context,
       });
 

@@ -46,4 +46,20 @@ export const EVENT_DB_QUERIES = {
   COUNT_BY_TENANT_AND_TYPE: `
     SELECT COUNT(*) as count FROM events WHERE tenant_id = $1 AND type = $2
   `,
+
+  GET_BY_TENANT_TYPE_FILTERED: `
+    SELECT * FROM events
+    WHERE tenant_id = $1 AND type = $2
+      AND ($3::text IS NULL OR payload->>'repository' ILIKE '%' || $3 || '%')
+      AND ($4::text IS NULL OR severity = $4)
+    ORDER BY created_at DESC
+    LIMIT $5 OFFSET $6
+  `,
+
+  COUNT_BY_TENANT_TYPE_FILTERED: `
+    SELECT COUNT(*) as count FROM events
+    WHERE tenant_id = $1 AND type = $2
+      AND ($3::text IS NULL OR payload->>'repository' ILIKE '%' || $3 || '%')
+      AND ($4::text IS NULL OR severity = $4)
+  `,
 } as const;

@@ -3,9 +3,10 @@
  *
  * Lists recent CI/CD failure events with pagination.
  * Data comes from the dashboard API (events of type CICD_FAILURE).
+ * Rows expand inline to show full payload details and links.
  */
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -23,7 +24,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { AlertTriangle, ExternalLink, Search } from "lucide-react";
+import { AlertTriangle, ExternalLink, Search, ChevronRight } from "lucide-react";
 import {
   useFailures,
   useAnalysisStatusByEvents,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/formatters";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
+import { FilterBar, type FilterValues } from "@/components/FilterBar";
 
 // ==================== Helpers ====================
 
@@ -51,9 +53,11 @@ const PAGE_SIZE = 20;
 interface FailureRowProps {
   readonly event: EventRecord;
   readonly analysisStatus?: AnalysisStatusEntry | null;
+  readonly isExpanded: boolean;
+  readonly onClick: () => void;
 }
 
-const FailureRow = ({ event, analysisStatus }: FailureRowProps) => {
+const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowProps) => {
   const repository = getPayloadString(event.payload, "repository");
   const checkName = getPayloadString(event.payload, "checkName");
   const conclusion = getPayloadString(event.payload, "conclusion");
@@ -61,7 +65,12 @@ const FailureRow = ({ event, analysisStatus }: FailureRowProps) => {
   const shortSha = headSha !== "--" ? headSha.slice(0, 7) : "--";
 
   return (
-    <TableRow>
+    <TableRow onClick={onClick} className="cursor-pointer hover:bg-gray-50 transition-colors">
+      <TableCell className="w-8">
+        <ChevronRight
+          className={cn("w-4 h-4 text-gray-400 transition-transform", isExpanded && "rotate-90")}
+        />
+      </TableCell>
       <TableCell className="text-gray-500 text-xs">{formatTimestamp(event.timestamp)}</TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
@@ -72,6 +81,7 @@ const FailureRow = ({ event, analysisStatus }: FailureRowProps) => {
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-indigo-500 transition-colors"
+              onClick={(linkEvent) => linkEvent.stopPropagation()}
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
@@ -92,7 +102,11 @@ const FailureRow = ({ event, analysisStatus }: FailureRowProps) => {
       <TableCell className="text-gray-500 font-mono text-xs">{shortSha}</TableCell>
       <TableCell>
         {analysisStatus ? (
-          <Link to="/dashboard/cicd/analyses" className="inline-flex items-center gap-1.5 group">
+          <Link
+            to="/dashboard/cicd/analyses"
+            className="inline-flex items-center gap-1.5 group"
+            onClick={(linkEvent) => linkEvent.stopPropagation()}
+          >
             <Badge
               variant="outline"
               className={cn(
@@ -112,15 +126,111 @@ const FailureRow = ({ event, analysisStatus }: FailureRowProps) => {
   );
 };
 
+// ==================== Expanded Row ====================
+
+interface ExpandedFailureRowProps {
+  readonly event: EventRecord;
+  readonly analysisStatus?: AnalysisStatusEntry | null;
+}
+
+const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) => {
+  const repository = getPayloadString(event.payload, "repository");
+  const checkName = getPayloadString(event.payload, "checkName");
+  const workflowName = getPayloadString(event.payload, "workflowName");
+  const branch = getPayloadString(event.payload, "branch");
+  const headSha = getPayloadString(event.payload, "headSha");
+  const conclusion = getPayloadString(event.payload, "conclusion");
+  const hasGitHubLink = repository !== "--" && headSha !== "--";
+
+  const details: ReadonlyArray<readonly [string, string]> = [
+    ["Repository", repository],
+    ["Check Name", checkName],
+    ["Workflow Name", workflowName],
+    ["Branch", branch],
+    ["Commit SHA", headSha],
+    ["Conclusion", conclusion],
+  ];
+
+  return (
+    <TableRow className="hover:bg-gray-50">
+      <TableCell colSpan={8} className="bg-gray-50 border-b p-0">
+        <div className="p-4 space-y-3">
+          <div>
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Full Payload Details
+            </h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {details.map(([label, value]) => (
+                <Fragment key={label}>
+                  <span className="text-xs text-gray-500">{label}</span>
+                  <span className="text-sm text-gray-900">{value}</span>
+                </Fragment>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {hasGitHubLink && (
+              <a
+                href={`https://github.com/${repository}/commit/${headSha}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                onClick={(linkEvent) => linkEvent.stopPropagation()}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                View on GitHub
+              </a>
+            )}
+            {analysisStatus && (
+              <Link
+                to="/dashboard/cicd/analyses"
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                onClick={(linkEvent) => linkEvent.stopPropagation()}
+              >
+                View Analysis
+              </Link>
+            )}
+          </div>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
 // ==================== Main Component ====================
 
 interface CICDFailuresProps {
   readonly refreshKey?: number;
+  readonly searchQuery?: string;
 }
 
-export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
+export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps) => {
   const [offset, setOffset] = useState(0);
-  const { data, isLoading, error } = useFailures(PAGE_SIZE, offset, refreshKey);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<FilterValues>({
+    repository: searchQuery ?? "",
+    severity: "",
+    minConfidence: "",
+  });
+
+  // Sync repository filter when searchQuery prop changes
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, repository: searchQuery ?? "" }));
+  }, [searchQuery]);
+
+  const handleFilterChange = (next: FilterValues) => {
+    setFilters(next);
+    setOffset(0);
+  };
+
+  const { data, isLoading, error } = useFailures(
+    PAGE_SIZE,
+    offset,
+    refreshKey,
+    filters.repository || undefined,
+    filters.severity || undefined
+  );
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -144,6 +254,8 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
           Recent build and check failures from your connected repositories.
         </p>
       </div>
+
+      <FilterBar variant="failures" filters={filters} onFilterChange={handleFilterChange} />
 
       <Card>
         <CardHeader className="border-b">
@@ -182,6 +294,7 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8" />
                     <TableHead>Time</TableHead>
                     <TableHead>Repository</TableHead>
                     <TableHead>Check Name</TableHead>
@@ -193,11 +306,22 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
                 </TableHeader>
                 <TableBody>
                   {items.map((event) => (
-                    <FailureRow
-                      key={event.id}
-                      event={event}
-                      analysisStatus={analysisStatus?.[event.id]}
-                    />
+                    <Fragment key={event.id}>
+                      <FailureRow
+                        event={event}
+                        analysisStatus={analysisStatus?.[event.id]}
+                        isExpanded={expandedId === event.id}
+                        onClick={() =>
+                          setExpandedId((prev) => (prev === event.id ? null : event.id))
+                        }
+                      />
+                      {expandedId === event.id && (
+                        <ExpandedFailureRow
+                          event={event}
+                          analysisStatus={analysisStatus?.[event.id]}
+                        />
+                      )}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>

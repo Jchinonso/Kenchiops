@@ -104,11 +104,38 @@ const handleGetRepositories = async (req: Request, res: Response): Promise<void>
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+const parseStringParam = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+const parseNumericParam = (value: unknown): number | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const context = getRequestContext(req);
   const { limit, offset } = parsePaginationParams(req);
-  const result = await dashboardService.getAnalyses(tenantId, limit, offset, context);
+  const { repository: repoParam, minConfidence: confParam } = req.query;
+
+  const repository = parseStringParam(repoParam);
+  const minConfidence = parseNumericParam(confParam);
+  const hasFilters = repository !== null || minConfidence !== null;
+
+  const result = hasFilters
+    ? await dashboardService.getAnalysesFiltered(
+        tenantId,
+        repository,
+        minConfidence,
+        limit,
+        offset,
+        context
+      )
+    : await dashboardService.getAnalyses(tenantId, limit, offset, context);
+
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
@@ -116,7 +143,23 @@ const handleGetFailures = async (req: Request, res: Response): Promise<void> => 
   const tenantId = requireTenantId(req);
   const context = getRequestContext(req);
   const { limit, offset } = parsePaginationParams(req);
-  const result = await dashboardService.getFailures(tenantId, limit, offset, context);
+  const { repository: repoParam, severity: sevParam } = req.query;
+
+  const repository = parseStringParam(repoParam);
+  const severity = parseStringParam(sevParam);
+  const hasFilters = repository !== null || severity !== null;
+
+  const result = hasFilters
+    ? await dashboardService.getFailuresFiltered(
+        tenantId,
+        repository,
+        severity,
+        limit,
+        offset,
+        context
+      )
+    : await dashboardService.getFailures(tenantId, limit, offset, context);
+
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 

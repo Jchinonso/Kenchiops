@@ -80,17 +80,17 @@ const findComingSoonConfig = (pathname: string): ComingSoonConfig | undefined =>
 
 const isCICDRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/cicd");
 
-const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode => {
+const renderCICDPage = (pathname: string, refreshKey: number, query: string): React.ReactNode => {
   if (pathname.startsWith("/dashboard/cicd/failures")) {
-    return <CICDFailures refreshKey={refreshKey} />;
+    return <CICDFailures refreshKey={refreshKey} searchQuery={query} />;
   }
   if (pathname.startsWith("/dashboard/cicd/analyses")) {
-    return <CICDAnalyses refreshKey={refreshKey} />;
+    return <CICDAnalyses refreshKey={refreshKey} searchQuery={query} />;
   }
   if (pathname.startsWith("/dashboard/cicd/pipelines")) {
     return <CICDPipelines />;
   }
-  return <CICDFailures refreshKey={refreshKey} />;
+  return <CICDFailures refreshKey={refreshKey} searchQuery={query} />;
 };
 
 // ==================== Dashboard ====================
@@ -104,6 +104,7 @@ const Dashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -205,6 +206,8 @@ const Dashboard = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                   <input
                     type="text"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search failures, analyses, or patterns..."
                     className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
                   />
@@ -308,7 +311,7 @@ const Dashboard = () => {
           {comingSoonConfig ? (
             <ComingSoon {...comingSoonConfig} />
           ) : isCICD ? (
-            renderCICDPage(currentPath, refreshKey)
+            renderCICDPage(currentPath, refreshKey, searchQuery)
           ) : (
             <DashboardOverview
               firstName={firstName}
