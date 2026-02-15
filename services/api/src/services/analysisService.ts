@@ -314,7 +314,9 @@ export const performAnalysis = async (
   // Persist analysis to database for evaluation and fine-tuning
   // Note: eventId is null because we don't persist events to the events table
   // aggregationKey links to feedback via repo:commit format
-  const aggregationKey = request.commit ? `${request.repository}:${request.commit}` : undefined;
+  const aggregationKey = request.commit
+    ? `${request.repository}:${request.commit}`
+    : request.repository;
 
   const savedAnalysis = await createAnalysis({
     eventId: null,
@@ -323,7 +325,10 @@ export const performAnalysis = async (
     diagnosisConfidence: confidenceResult.finalScore,
     confidenceSignals: confidenceResult.breakdown as unknown as Record<string, unknown>,
     recommendedActions: analysisResult.recommendedActions?.map((action) => action.description),
-    fullAnalysis: analysisResult as unknown as Record<string, unknown>,
+    fullAnalysis: {
+      ...(analysisResult as unknown as Record<string, unknown>),
+      repository: request.repository,
+    },
     tenantId: request.tenant_id,
     modelVersionId: modelSelection.versionId,
     aggregationKey,

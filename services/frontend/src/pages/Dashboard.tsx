@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardSSE } from "@/hooks/useDashboardSSE";
+import { Toaster } from "@/components/ui/sonner";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { ComingSoon } from "@/components/ComingSoon";
 import { DashboardOverview } from "@/pages/DashboardOverview";
@@ -318,6 +319,8 @@ const Dashboard = () => {
           )}
         </div>
       </main>
+
+      <Toaster position="bottom-right" />
     </div>
   );
 };

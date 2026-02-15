@@ -62,12 +62,19 @@ const formatTimestamp = (timestamp: string): string =>
 const truncateText = (text: string, maxLength: number): string =>
   text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 
-const extractRepoFromKey = (key: string | null): string => {
-  if (!key) {
-    return "--";
+const extractRepoFromKey = (
+  key: string | null,
+  fullAnalysis?: Readonly<Record<string, unknown>>
+): string => {
+  if (key) {
+    const colonIndex = key.indexOf(":");
+    return colonIndex > 0 ? key.slice(0, colonIndex) : key;
   }
-  const colonIndex = key.indexOf(":");
-  return colonIndex > 0 ? key.slice(0, colonIndex) : key;
+  // Fallback: check fullAnalysis JSONB for repository field
+  if (typeof fullAnalysis?.repository === "string" && fullAnalysis.repository.length > 0) {
+    return fullAnalysis.repository;
+  }
+  return "--";
 };
 
 // ==================== Sub-components ====================
@@ -85,7 +92,7 @@ interface AnalysisRowProps {
 }
 
 const AnalysisRow = ({ analysis }: AnalysisRowProps) => {
-  const repo = extractRepoFromKey(analysis.aggregationKey);
+  const repo = extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis);
   const confidence = Math.round(analysis.diagnosisConfidence * 100);
 
   return (
