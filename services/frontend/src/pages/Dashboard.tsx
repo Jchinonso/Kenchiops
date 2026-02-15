@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { useLocation, Navigate } from "react-router-dom";
+import { useLocation, Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardSSE } from "@/hooks/useDashboardSSE";
 import { Toaster } from "@/components/ui/sonner";
@@ -361,20 +361,36 @@ const Dashboard = () => {
                   <TooltipContent>Notifications</TooltipContent>
                 </Tooltip>
                 {notificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 py-2 z-50">
-                    <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800">
+                  <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 z-50">
+                    <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                       <h4 className="font-semibold text-gray-900 dark:text-gray-100">
                         Notifications
                       </h4>
+                      <button
+                        type="button"
+                        disabled
+                        className="text-xs text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                      >
+                        Mark all read
+                      </button>
                     </div>
                     <div className="px-4 py-8 text-center">
                       <Bell className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                         No notifications yet
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        You&apos;ll see analysis results and alerts here
+                        CI/CD failure alerts and analysis results will appear here.
                       </p>
+                    </div>
+                    <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
+                      <Link
+                        to="/dashboard/settings"
+                        onClick={() => setNotificationsOpen(false)}
+                        className="text-xs text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                      >
+                        Notification preferences
+                      </Link>
                     </div>
                   </div>
                 )}
