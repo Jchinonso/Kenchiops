@@ -372,7 +372,7 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     context
   );
 
-  // Auto-link tenant — fire-and-forget, don't fail the login
+  // Auto-link tenant — best-effort, don't fail the login
   try {
     await authService.autoLinkTenant(
       user,
@@ -390,7 +390,10 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     });
   }
 
-  const tokenPair = await authService.generateTokenPair(user, extractTokenMeta(req), context);
+  // Re-fetch user to pick up tenant linking (autoLinkTenant may have updated tenant_id)
+  const freshUser = (await findUserById(user.id)) ?? user;
+
+  const tokenPair = await authService.generateTokenPair(freshUser, extractTokenMeta(req), context);
   const durationMs = Date.now() - startTime;
 
   // Set tokens as httpOnly cookies (never exposed in URL or response body)
