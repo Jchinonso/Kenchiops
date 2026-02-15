@@ -34,6 +34,7 @@ import {
   formatTimestamp,
   truncateText,
   extractRepoFromKey,
+  formatSignalValue,
 } from "@/lib/formatters";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -150,7 +151,7 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
                   <Fragment key={label}>
                     <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
                     <span className="text-sm text-gray-900 dark:text-gray-100">
-                      {String(value)}
+                      {formatSignalValue(value)}
                     </span>
                   </Fragment>
                 ))}

@@ -32,6 +32,7 @@ import {
   getConfidenceStyle,
   formatTimestamp,
   extractRepoFromKey,
+  formatSignalValue,
 } from "@/lib/formatters";
 import { useAnalysisDetail, type AnalysisRecord } from "@/hooks/useDashboardData";
 
@@ -166,7 +167,7 @@ const DetailContent = ({ analysis }: DetailContentProps) => {
                   {key}
                 </span>
                 <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
-                  {String(value)}
+                  {formatSignalValue(value)}
                 </span>
               </div>
             ))}
