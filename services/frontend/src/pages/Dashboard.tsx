@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation, Navigate } from "react-router-dom";
+import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardSSE } from "@/hooks/useDashboardSSE";
 import { Toaster } from "@/components/ui/sonner";
@@ -19,13 +19,11 @@ import { CICDPipelines } from "@/pages/CICDPipelines";
 import { RepositoryDetail } from "@/pages/RepositoryDetail";
 import { Settings as SettingsPage } from "@/pages/Settings";
 import {
-  Settings as SettingsIcon,
   Bell,
   Search,
   ChevronDown,
   LogOut,
   Loader2,
-  User,
   Menu,
   Rocket,
   Siren,
@@ -42,10 +40,12 @@ import {
   DollarSign,
   ShieldAlert,
   ArrowUpCircle,
+  Keyboard,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { DashboardBreadcrumb } from "@/components/DashboardBreadcrumb";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 
 // ==================== Coming Soon Configs ====================
 
@@ -178,6 +178,7 @@ const Dashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [localSearch, setLocalSearch] = useState("");
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,18 +196,34 @@ const Dashboard = () => {
       }
     };
 
-    const handleEscape = ({ key }: KeyboardEvent) => {
-      if (key === "Escape") {
+    const handleKeydown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const isInput = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+
+      if (event.key === "Escape") {
         setNotificationsOpen(false);
         setUserMenuOpen(false);
+      }
+      if (event.key === "?" && !isInput) {
+        event.preventDefault();
+        setShortcutsOpen(true);
+      }
+      if (event.key === "/" && !isInput) {
+        const searchInput = document.querySelector<HTMLInputElement>(
+          'input[placeholder="Search repositories..."]'
+        );
+        if (searchInput) {
+          event.preventDefault();
+          searchInput.focus();
+        }
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
+    document.addEventListener("keydown", handleKeydown);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("keydown", handleKeydown);
     };
   }, []);
 
@@ -396,21 +413,18 @@ const Dashboard = () => {
                       <p className="font-medium text-gray-900 dark:text-gray-100">{displayName}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{displayEmail}</p>
                     </div>
-                    <Link
-                      to="/dashboard/settings"
-                      className="flex items-center gap-3 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setShortcutsOpen(true);
+                      }}
+                      className="flex items-center gap-3 px-4 py-2 w-full text-left text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                      <User className="w-4 h-4" />
-                      Profile
-                    </Link>
-                    <Link
-                      to="/dashboard/settings"
-                      className="flex items-center gap-3 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <SettingsIcon className="w-4 h-4" />
-                      Settings
-                    </Link>
-                    <div className="border-t border-gray-100 dark:border-gray-800 mt-2 pt-2">
+                      <Keyboard className="w-4 h-4" />
+                      Keyboard Shortcuts
+                    </button>
+                    <div className="border-t border-gray-100 dark:border-gray-800 mt-1 pt-1">
                       <button
                         onClick={handleLogout}
                         disabled={loggingOut}
@@ -451,6 +465,7 @@ const Dashboard = () => {
       </main>
 
       <Toaster position="bottom-right" theme={resolvedTheme} />
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 };

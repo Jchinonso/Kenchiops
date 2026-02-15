@@ -260,14 +260,14 @@ export const DashboardSidebar = ({
       )
   );
 
-  // Auto-expand group when navigating to a child route
+  // Auto-expand only the active group when navigating (accordion behavior)
   useEffect(() => {
     const matchingGroup = NAV_ENTRIES.find(
       (entry): entry is NavGroup =>
         isNavGroup(entry) && entry.children.some((child) => pathname.startsWith(child.href))
     );
-    if (matchingGroup && !openGroups.has(matchingGroup.label)) {
-      setOpenGroups((prev) => new Set([...prev, matchingGroup.label]));
+    if (matchingGroup) {
+      setOpenGroups(new Set([matchingGroup.label]));
     }
   }, [pathname]);
 
