@@ -85,6 +85,14 @@ export interface AnalysisCountRow {
   readonly count: string;
 }
 
+/**
+ * Database row type for confidence distribution aggregation.
+ */
+export interface ConfidenceDistributionRow {
+  readonly level: string;
+  readonly count: number;
+}
+
 // ==================== Validation Types ====================
 
 /**

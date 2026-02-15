@@ -13,6 +13,7 @@ export type {
   AnalysisRow,
   AnalysisEventRow,
   AnalysisCountRow,
+  ConfidenceDistributionRow,
   CreateAnalysisValidationRule,
 } from "./types.js";
 
@@ -38,4 +39,5 @@ export {
   getAnalysesByTenantFiltered,
   countAnalysesByTenantFiltered,
   getAnalysesByEventIds,
+  getConfidenceDistribution,
 } from "./repository.js";

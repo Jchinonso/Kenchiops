@@ -17,6 +17,7 @@ import {
   getAnalysesByTenantFiltered,
   countAnalysesByTenantFiltered,
   getAnalysesByEventIds,
+  getConfidenceDistribution,
   getEventsByTenant,
   countEventsByTenant,
   getEventsByTenantFiltered,
@@ -276,6 +277,21 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
         ...context,
       });
       return result;
+    },
+
+    /**
+     * Returns confidence distribution buckets (high/medium/low) for a tenant.
+     */
+    getConfidenceDistributionStats: async (
+      tenantId: string,
+      context: RequestContext
+    ): Promise<ReadonlyArray<{ readonly level: string; readonly count: number }>> => {
+      const distribution = await getConfidenceDistribution(tenantId);
+      logger.info("Confidence distribution retrieved", {
+        buckets: distribution.length,
+        ...context,
+      });
+      return distribution;
     },
   };
 };

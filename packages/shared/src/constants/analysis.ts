@@ -92,4 +92,17 @@ export const ANALYSIS_QUERIES = {
       AND ($3::numeric IS NULL OR diagnosis_confidence >= $3)
       AND ($4::numeric IS NULL OR diagnosis_confidence < $4)
   `,
+
+  CONFIDENCE_DISTRIBUTION: `
+    SELECT
+      CASE
+        WHEN diagnosis_confidence >= 0.8 THEN 'high'
+        WHEN diagnosis_confidence >= 0.5 THEN 'medium'
+        ELSE 'low'
+      END AS level,
+      COUNT(*)::int AS count
+    FROM analyses
+    WHERE tenant_id = $1
+    GROUP BY level
+  `,
 } as const;

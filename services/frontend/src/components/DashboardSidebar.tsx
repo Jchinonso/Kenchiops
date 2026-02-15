@@ -175,11 +175,11 @@ const SidebarLeafItem = ({ icon, label, href, active, indented, onClick }: LeafI
       indented ? "ml-5 pl-3 py-2 border-l-2" : "px-4 py-2.5",
       active
         ? indented
-          ? "border-indigo-500 bg-indigo-50 text-indigo-700 font-medium"
+          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-medium"
           : "bg-indigo-500 text-white shadow-md font-medium"
         : indented
-          ? "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+          ? "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+          : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
     )}
   >
     {icon}
@@ -204,8 +204,8 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: Nav
         className={cn(
           "flex items-center justify-between w-full px-4 py-2.5 rounded-lg transition-all duration-200 text-sm",
           hasActiveChild
-            ? "text-indigo-700 bg-indigo-50/60"
-            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            ? "text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-950/60"
+            : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
         )}
       >
         <div className="flex items-center gap-3">
@@ -286,12 +286,12 @@ export const DashboardSidebar = ({
   return (
     <aside
       className={cn(
-        "fixed lg:sticky top-0 left-0 z-50 w-64 h-screen bg-white border-r border-gray-200 flex flex-col transition-transform duration-300",
+        "fixed lg:sticky top-0 left-0 z-50 w-64 h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-transform duration-300",
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}
     >
       {/* Logo */}
-      <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between">
+      <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
             <svg
@@ -308,7 +308,9 @@ export const DashboardSidebar = ({
               />
             </svg>
           </div>
-          <span className="text-lg sm:text-xl font-bold text-gray-900">Kenchi</span>
+          <span className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
+            Kenchi
+          </span>
         </Link>
         <button onClick={onClose} className="lg:hidden p-2 text-gray-500 hover:text-gray-700">
           <X className="w-5 h-5" />
@@ -339,15 +341,15 @@ export const DashboardSidebar = ({
       </nav>
 
       {/* Footer */}
-      <div className="p-3 sm:p-4 border-t border-gray-100 space-y-1">
-        <button className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors">
+      <div className="p-3 sm:p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">
+        <button className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors">
           <HelpCircle className="w-5 h-5" />
           <span className="font-medium text-sm">Help & Support</span>
         </button>
         <button
           onClick={onLogout}
           disabled={isLoggingOut}
-          className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors disabled:opacity-50"
+          className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors disabled:opacity-50"
         >
           {isLoggingOut ? (
             <Loader2 className="w-5 h-5 animate-spin" />

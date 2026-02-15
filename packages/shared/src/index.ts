@@ -265,6 +265,7 @@ export {
   getAnalysesByTenantFiltered,
   countAnalysesByTenantFiltered,
   getAnalysesByEventIds,
+  getConfidenceDistribution,
   type CreateAnalysisInput,
   type AnalysisRecord,
 } from "./database/index.js";

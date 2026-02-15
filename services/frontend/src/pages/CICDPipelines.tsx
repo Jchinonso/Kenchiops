@@ -16,6 +16,7 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty";
 import { Workflow, ExternalLink, Lock, Globe, GitBranch } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useRepositories, type InstallationRepository } from "@/hooks/useDashboardData";
 
 // ==================== Sub-components ====================
@@ -33,31 +34,39 @@ interface RepoCardProps {
 }
 
 const RepoCard = ({ repo }: RepoCardProps) => (
-  <a
-    href={`https://github.com/${repo.fullName}`}
-    target="_blank"
-    rel="noopener noreferrer"
+  <Link
+    to={`/dashboard/cicd/pipelines/${encodeURIComponent(repo.fullName)}`}
     className="group block"
   >
-    <Card className="h-full transition-all duration-200 hover:shadow-md hover:border-indigo-200 group-hover:border-indigo-200">
+    <Card className="h-full transition-all duration-200 hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-800 group-hover:border-indigo-200 dark:group-hover:border-indigo-800">
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2 min-w-0">
             <Workflow className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-            <span className="font-medium text-gray-900 truncate text-sm">{repo.name}</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">
+              {repo.name}
+            </span>
           </div>
-          <ExternalLink className="w-3.5 h-3.5 text-gray-400 group-hover:text-indigo-500 transition-colors flex-shrink-0" />
+          <a
+            href={`https://github.com/${repo.fullName}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-400 hover:text-indigo-500 transition-colors flex-shrink-0"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
         </div>
 
-        <p className="text-xs text-gray-500 mb-3 truncate">{repo.fullName}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 truncate">{repo.fullName}</p>
 
         <div className="flex items-center gap-2">
           <Badge
             variant="outline"
             className={
               repo.isPrivate
-                ? "text-xs bg-amber-50 text-amber-700 border-amber-200"
-                : "text-xs bg-green-50 text-green-700 border-green-200"
+                ? "text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                : "text-xs bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
             }
           >
             {repo.isPrivate ? (
@@ -68,14 +77,17 @@ const RepoCard = ({ repo }: RepoCardProps) => (
             {repo.isPrivate ? "Private" : "Public"}
           </Badge>
 
-          <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200">
+          <Badge
+            variant="outline"
+            className="text-xs bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+          >
             <GitBranch className="w-3 h-3 mr-1" />
             {repo.defaultBranch}
           </Badge>
         </div>
       </CardContent>
     </Card>
-  </a>
+  </Link>
 );
 
 // ==================== Main Component ====================
@@ -89,8 +101,10 @@ export const CICDPipelines = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Pipelines & Repositories</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          Pipelines & Repositories
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Repositories connected through your GitHub App installation.
         </p>
       </div>

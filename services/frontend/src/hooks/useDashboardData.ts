@@ -232,6 +232,23 @@ export const useFailures = (
     `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${severity ?? ""}`
   );
 
+// ==================== Confidence Distribution ====================
+
+interface ConfidenceBucket {
+  readonly level: string;
+  readonly count: number;
+}
+
+export const useConfidenceDistribution = (
+  refreshKey: number = 0
+): UseFetchResult<readonly ConfidenceBucket[]> =>
+  useFetch<readonly ConfidenceBucket[]>(
+    "/api/v1/dashboard/stats/confidence-distribution",
+    `${refreshKey}`
+  );
+
+// ==================== Analysis Detail ====================
+
 export const useAnalysisDetail = (
   analysisId: string | null,
   refreshKey: number = 0

@@ -24,7 +24,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { AlertTriangle, ExternalLink, Search, ChevronRight } from "lucide-react";
+import { AlertTriangle, ExternalLink, Search, ChevronRight, Download } from "lucide-react";
 import {
   useFailures,
   useAnalysisStatusByEvents,
@@ -43,6 +43,7 @@ import {
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { FilterBar, type FilterValues } from "@/components/FilterBar";
+import { exportFailuresToCSV } from "@/lib/csvExport";
 
 // ==================== Helpers ====================
 
@@ -65,16 +66,21 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
   const shortSha = headSha !== "--" ? headSha.slice(0, 7) : "--";
 
   return (
-    <TableRow onClick={onClick} className="cursor-pointer hover:bg-gray-50 transition-colors">
+    <TableRow
+      onClick={onClick}
+      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+    >
       <TableCell className="w-8">
         <ChevronRight
           className={cn("w-4 h-4 text-gray-400 transition-transform", isExpanded && "rotate-90")}
         />
       </TableCell>
-      <TableCell className="text-gray-500 text-xs">{formatTimestamp(event.timestamp)}</TableCell>
+      <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
+        {formatTimestamp(event.timestamp)}
+      </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
-          <span className="font-medium text-gray-900">{repository}</span>
+          <span className="font-medium text-gray-900 dark:text-gray-100">{repository}</span>
           {repository !== "--" && (
             <a
               href={`https://github.com/${repository}`}
@@ -88,18 +94,23 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
           )}
         </div>
       </TableCell>
-      <TableCell className="text-gray-700">{checkName}</TableCell>
+      <TableCell className="text-gray-700 dark:text-gray-300">{checkName}</TableCell>
       <TableCell>
         <Badge variant="outline" className={cn("text-xs", getSeverityStyle(event.severity))}>
           {event.severity ?? "unknown"}
         </Badge>
       </TableCell>
       <TableCell>
-        <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200">
+        <Badge
+          variant="outline"
+          className="text-xs bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+        >
           {conclusion}
         </Badge>
       </TableCell>
-      <TableCell className="text-gray-500 font-mono text-xs">{shortSha}</TableCell>
+      <TableCell className="text-gray-500 dark:text-gray-400 font-mono text-xs">
+        {shortSha}
+      </TableCell>
       <TableCell>
         {analysisStatus ? (
           <Link
@@ -119,7 +130,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
             </Badge>
           </Link>
         ) : (
-          <span className="text-xs text-gray-400">--</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">--</span>
         )}
       </TableCell>
     </TableRow>
@@ -152,18 +163,18 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
   ];
 
   return (
-    <TableRow className="hover:bg-gray-50">
-      <TableCell colSpan={8} className="bg-gray-50 border-b p-0">
+    <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
+      <TableCell colSpan={8} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
         <div className="p-4 space-y-3">
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
               Full Payload Details
             </h4>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
               {details.map(([label, value]) => (
                 <Fragment key={label}>
-                  <span className="text-xs text-gray-500">{label}</span>
-                  <span className="text-sm text-gray-900">{value}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+                  <span className="text-sm text-gray-900 dark:text-gray-100">{value}</span>
                 </Fragment>
               ))}
             </div>
@@ -256,8 +267,10 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">CI/CD Failures</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          CI/CD Failures
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Recent build and check failures from your connected repositories.
         </p>
       </div>
@@ -266,9 +279,21 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
 
       <Card>
         <CardHeader className="border-b">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-red-500" />
-            <CardTitle>Failure Events</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              <CardTitle>Failure Events</CardTitle>
+            </div>
+            {hasItems && (
+              <button
+                type="button"
+                onClick={() => exportFailuresToCSV(items)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export CSV
+              </button>
+            )}
           </div>
           <CardDescription>
             {total > 0

@@ -52,10 +52,10 @@ interface SectionCardProps {
 }
 
 const SectionCard = ({ icon, title, children }: SectionCardProps) => (
-  <div className="rounded-lg border border-gray-200 bg-white">
-    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
       {icon}
-      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
     </div>
     <div className="px-4 py-3">{children}</div>
   </div>
@@ -71,12 +71,12 @@ const ConfidenceBar = ({ label, value }: ConfidenceBarProps) => {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-600">{label}</span>
+        <span className="text-xs text-gray-600 dark:text-gray-400">{label}</span>
         <Badge variant="outline" className={cn("text-xs", getConfidenceStyle(value))}>
           {getConfidenceLabel(value)} ({percentage}%)
         </Badge>
       </div>
-      <div className="h-2 w-full rounded-full bg-gray-100">
+      <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800">
         <div
           className={cn(
             "h-2 rounded-full transition-all",
@@ -112,14 +112,14 @@ const DetailContent = ({ analysis }: DetailContentProps) => {
     <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
       {/* Summary */}
       <SectionCard icon={<Zap className="h-4 w-4 text-indigo-500" />} title="Summary">
-        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
           {analysis.summary}
         </p>
       </SectionCard>
 
       {/* Root Cause */}
       <SectionCard icon={<AlertTriangle className="h-4 w-4 text-amber-500" />} title="Root Cause">
-        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
           {analysis.identifiedCause ?? "No root cause identified"}
         </p>
       </SectionCard>
@@ -142,7 +142,10 @@ const DetailContent = ({ analysis }: DetailContentProps) => {
         >
           <ol className="list-decimal list-inside space-y-2">
             {analysis.recommendedActions.map((action, index) => (
-              <li key={`action-${index}`} className="text-sm text-gray-700 leading-relaxed">
+              <li
+                key={`action-${index}`}
+                className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+              >
                 {action}
               </li>
             ))}
@@ -159,8 +162,12 @@ const DetailContent = ({ analysis }: DetailContentProps) => {
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             {confidenceSignalEntries.map(([key, value]) => (
               <div key={key} className="contents">
-                <span className="text-xs font-medium text-gray-500 truncate">{key}</span>
-                <span className="text-xs text-gray-700 truncate">{String(value)}</span>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
+                  {key}
+                </span>
+                <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                  {String(value)}
+                </span>
               </div>
             ))}
           </div>
@@ -169,21 +176,23 @@ const DetailContent = ({ analysis }: DetailContentProps) => {
 
       {/* Linked Event */}
       {analysis.eventId && (
-        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3">
           <FileText className="h-4 w-4 text-gray-400 shrink-0" />
-          <span className="text-xs text-gray-600">
+          <span className="text-xs text-gray-600 dark:text-gray-400">
             Linked to failure event:{" "}
-            <span className="font-mono text-gray-800">{analysis.eventId}</span>
+            <span className="font-mono text-gray-800 dark:text-gray-200">{analysis.eventId}</span>
           </span>
         </div>
       )}
 
       {/* Raw Analysis JSON */}
       <Collapsible open={rawOpen} onOpenChange={setRawOpen}>
-        <div className="rounded-lg border border-gray-200 bg-white">
-          <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-3 hover:bg-gray-50 transition-colors">
-            <Code className="h-4 w-4 text-gray-500" />
-            <span className="text-sm font-semibold text-gray-900">Raw Analysis Data</span>
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <Code className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Raw Analysis Data
+            </span>
             {rawOpen ? (
               <ChevronDown className="ml-auto h-4 w-4 text-gray-400" />
             ) : (
@@ -191,8 +200,8 @@ const DetailContent = ({ analysis }: DetailContentProps) => {
             )}
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="border-t border-gray-100 px-4 py-3">
-              <pre className="overflow-x-auto rounded-md bg-gray-50 p-3 text-xs font-mono text-gray-700 max-h-96 overflow-y-auto">
+            <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3">
+              <pre className="overflow-x-auto rounded-md bg-gray-50 dark:bg-gray-800 p-3 text-xs font-mono text-gray-700 dark:text-gray-300 max-h-96 overflow-y-auto">
                 {JSON.stringify(analysis.fullAnalysis, null, 2)}
               </pre>
             </div>

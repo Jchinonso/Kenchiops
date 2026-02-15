@@ -22,6 +22,7 @@ import type {
   AnalysisRow,
   AnalysisCountRow,
   AnalysisEventRow,
+  ConfidenceDistributionRow,
 } from "./types.js";
 import {
   ANALYSIS_ID_PREFIX,
@@ -363,6 +364,30 @@ export const getAnalysesByEventIds = async (
   } catch (error) {
     logger.error("Failed to get analyses by event IDs", {
       eventIdCount: count,
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Returns the confidence distribution for a tenant's analyses,
+ * bucketed into high (>=0.8), medium (>=0.5), and low (<0.5).
+ */
+export const getConfidenceDistribution = async (
+  tenantId: string
+): Promise<readonly ConfidenceDistributionRow[]> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<ConfidenceDistributionRow>(
+      ANALYSIS_QUERIES.CONFIDENCE_DISTRIBUTION,
+      [tenantId]
+    );
+    return Object.freeze(result.rows);
+  } catch (error) {
+    logger.error("Failed to get confidence distribution", {
       tenantId,
       error: getErrorMessage(error),
     });

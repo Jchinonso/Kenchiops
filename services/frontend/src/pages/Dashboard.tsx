@@ -16,8 +16,10 @@ import { DashboardOverview } from "@/pages/DashboardOverview";
 import { CICDFailures } from "@/pages/CICDFailures";
 import { CICDAnalyses } from "@/pages/CICDAnalyses";
 import { CICDPipelines } from "@/pages/CICDPipelines";
+import { RepositoryDetail } from "@/pages/RepositoryDetail";
+import { Settings as SettingsPage } from "@/pages/Settings";
 import {
-  Settings,
+  Settings as SettingsIcon,
   Bell,
   Search,
   ChevronDown,
@@ -30,7 +32,10 @@ import {
   Server,
   Puzzle,
   BarChart3,
+  Moon,
+  Sun,
 } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 
 // ==================== Coming Soon Configs ====================
 
@@ -80,12 +85,18 @@ const findComingSoonConfig = (pathname: string): ComingSoonConfig | undefined =>
 
 const isCICDRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/cicd");
 
+const PIPELINES_PREFIX = "/dashboard/cicd/pipelines/";
+
 const renderCICDPage = (pathname: string, refreshKey: number, query: string): React.ReactNode => {
   if (pathname.startsWith("/dashboard/cicd/failures")) {
     return <CICDFailures refreshKey={refreshKey} searchQuery={query} />;
   }
   if (pathname.startsWith("/dashboard/cicd/analyses")) {
     return <CICDAnalyses refreshKey={refreshKey} searchQuery={query} />;
+  }
+  if (pathname.startsWith(PIPELINES_PREFIX)) {
+    const repoFullName = decodeURIComponent(pathname.slice(PIPELINES_PREFIX.length));
+    return <RepositoryDetail repoFullName={repoFullName} refreshKey={refreshKey} />;
   }
   if (pathname.startsWith("/dashboard/cicd/pipelines")) {
     return <CICDPipelines />;
@@ -138,7 +149,7 @@ const Dashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -175,12 +186,17 @@ const Dashboard = () => {
   const toggleNotifications = () => setNotificationsOpen((prev) => !prev);
   const toggleUserMenu = () => setUserMenuOpen((prev) => !prev);
 
+  const { resolved: resolvedTheme, setTheme } = useTheme();
+  const toggleTheme = () => setTheme(resolvedTheme === "dark" ? "light" : "dark");
+
   const isOverview = currentPath === "/dashboard";
+  const isSettings = currentPath === "/dashboard/settings";
   const isCICD = isCICDRoute(currentPath);
-  const comingSoonConfig = isOverview || isCICD ? undefined : findComingSoonConfig(currentPath);
+  const comingSoonConfig =
+    isOverview || isCICD || isSettings ? undefined : findComingSoonConfig(currentPath);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={closeSidebar} />
       )}
@@ -194,12 +210,12 @@ const Dashboard = () => {
 
       <main className="flex-1 min-w-0">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-30">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-4">
             <div className="flex items-center gap-3 flex-1">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >
                 <Menu className="w-5 h-5" />
               </button>
@@ -220,30 +236,47 @@ const Dashboard = () => {
                       });
                     }}
                     placeholder="Filter by repository..."
-                    className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                    className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm dark:text-gray-100 dark:placeholder-gray-500"
                   />
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4">
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                aria-label="Toggle theme"
+              >
+                {resolvedTheme === "dark" ? (
+                  <Sun className="w-4 h-4 sm:w-5 sm:h-5" />
+                ) : (
+                  <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
+              </button>
+
               {/* Notifications */}
               <div ref={notificationsRef} className="relative">
                 <button
                   onClick={toggleNotifications}
-                  className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="relative p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
                 {notificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
-                    <div className="px-4 py-2 border-b border-gray-100">
-                      <h4 className="font-semibold text-gray-900">Notifications</h4>
+                  <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 py-2 z-50">
+                    <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800">
+                      <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                        Notifications
+                      </h4>
                     </div>
                     <div className="px-4 py-8 text-center">
-                      <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">No notifications yet</p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <Bell className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No notifications yet
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                         You&apos;ll see analysis results and alerts here
                       </p>
                     </div>
@@ -255,7 +288,7 @@ const Dashboard = () => {
               <div ref={userMenuRef} className="relative">
                 <button
                   onClick={toggleUserMenu}
-                  className="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   {user?.avatarUrl ? (
                     <img
@@ -271,36 +304,38 @@ const Dashboard = () => {
                     </div>
                   )}
                   <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-gray-900">{displayName}</p>
-                    <p className="text-xs text-gray-500">{displayEmail}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {displayName}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{displayEmail}</p>
                   </div>
                   <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
                 </button>
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
-                    <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="font-medium text-gray-900">{displayName}</p>
-                      <p className="text-sm text-gray-500">{displayEmail}</p>
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 py-2 z-50">
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{displayName}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{displayEmail}</p>
                     </div>
                     <Link
                       to="/dashboard/settings"
-                      className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"
+                      className="flex items-center gap-3 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       <User className="w-4 h-4" />
                       Profile
                     </Link>
                     <Link
                       to="/dashboard/settings"
-                      className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"
+                      className="flex items-center gap-3 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                      <Settings className="w-4 h-4" />
+                      <SettingsIcon className="w-4 h-4" />
                       Settings
                     </Link>
-                    <div className="border-t border-gray-100 mt-2 pt-2">
+                    <div className="border-t border-gray-100 dark:border-gray-800 mt-2 pt-2">
                       <button
                         onClick={handleLogout}
                         disabled={loggingOut}
-                        className="flex items-center gap-3 px-4 py-2 w-full text-left text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        className="flex items-center gap-3 px-4 py-2 w-full text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50"
                       >
                         {loggingOut ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -321,6 +356,8 @@ const Dashboard = () => {
         <div className="p-4 sm:p-6 lg:p-8">
           {comingSoonConfig ? (
             <ComingSoon {...comingSoonConfig} />
+          ) : isSettings ? (
+            <SettingsPage />
           ) : isCICD ? (
             renderCICDPage(currentPath, refreshKey, searchQuery)
           ) : (
@@ -334,7 +371,7 @@ const Dashboard = () => {
         </div>
       </main>
 
-      <Toaster position="bottom-right" theme="light" />
+      <Toaster position="bottom-right" theme={resolvedTheme} />
     </div>
   );
 };

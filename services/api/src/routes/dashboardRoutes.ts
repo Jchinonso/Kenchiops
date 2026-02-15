@@ -209,10 +209,21 @@ const handleGetAnalysisStatusByEvents = async (req: Request, res: Response): Pro
   res.status(HTTP_STATUS.OK).json({ data });
 };
 
+const handleGetConfidenceDistribution = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
+  const result = await dashboardService.getConfidenceDistributionStats(tenantId, context);
+  res.status(HTTP_STATUS.OK).json({ data: result });
+};
+
 // ==================== Route Definitions ====================
 
 router.get("/api/v1/dashboard/tenant", asyncHandler(handleGetTenantInfo));
 router.get("/api/v1/dashboard/stats", asyncHandler(handleGetDashboardStats));
+router.get(
+  "/api/v1/dashboard/stats/confidence-distribution",
+  asyncHandler(handleGetConfidenceDistribution)
+);
 router.get("/api/v1/dashboard/repositories", asyncHandler(handleGetRepositories));
 router.post("/api/v1/dashboard/analyses/by-events", asyncHandler(handleGetAnalysisStatusByEvents));
 router.get("/api/v1/dashboard/analyses/:id", asyncHandler(handleGetAnalysisDetail));

@@ -46,9 +46,9 @@ const CONFIDENCE_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label
 ];
 
 const INPUT_CLASS = cn(
-  "px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg",
+  "px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg",
   "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent",
-  "placeholder:text-gray-400"
+  "placeholder:text-gray-400 dark:placeholder:text-gray-500 dark:text-gray-100"
 );
 
 const EMPTY_FILTERS: FilterValues = { repository: "", severity: "", minConfidence: "" };
@@ -181,7 +181,7 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
           type="button"
           onClick={handleClear}
           aria-label="Clear all filters"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
         >
           <X className="w-3.5 h-3.5" />
           Clear

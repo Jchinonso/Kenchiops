@@ -46,6 +46,7 @@ import {
   MessageSquare,
   X,
 } from "lucide-react";
+import { ConfidenceChart } from "@/components/ConfidenceChart";
 
 // ==================== Constants ====================
 
@@ -67,7 +68,7 @@ const ONBOARDING_STEPS: readonly OnboardingStep[] = [
     ctaLabel: "Install GitHub App",
     href: `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`,
     external: true,
-    icon: <Github className="w-5 h-5 text-gray-900" />,
+    icon: <Github className="w-5 h-5 text-gray-900 dark:text-gray-100" />,
   },
   {
     title: "Connect Slack (optional)",
@@ -164,8 +165,10 @@ export const DashboardOverview = ({
   return (
     <>
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Welcome back, {firstName}!</h1>
-        <p className="text-sm sm:text-base text-gray-500 mt-1">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          Welcome back, {firstName}!
+        </h1>
+        <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">
           Here&apos;s your CI/CD pipeline health at a glance.
         </p>
       </div>
@@ -177,11 +180,15 @@ export const DashboardOverview = ({
             <CardContent className="px-4 sm:px-6">
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
-                  <p className="text-xs sm:text-sm text-gray-500 mb-1">{stat.title}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                    {stat.title}
+                  </p>
                   {statsLoading ? (
                     <Skeleton className="h-7 w-12 mt-1" />
                   ) : (
-                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{stat.value}</h3>
+                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                      {stat.value}
+                    </h3>
                   )}
                 </div>
                 <div
@@ -195,6 +202,9 @@ export const DashboardOverview = ({
         ))}
       </div>
 
+      {/* Confidence Distribution Chart */}
+      <ConfidenceChart refreshKey={refreshKey} />
+
       {/* Onboarding (first-time users only) */}
       {showOnboarding && (
         <Card className="mb-6 sm:mb-8">
@@ -206,7 +216,7 @@ export const DashboardOverview = ({
               </div>
               <button
                 onClick={dismissOnboarding}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -220,20 +230,22 @@ export const DashboardOverview = ({
               {ONBOARDING_STEPS.map((step, stepIndex) => (
                 <div
                   key={step.title}
-                  className="flex items-start gap-4 p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors"
+                  className="flex items-start gap-4 p-4 rounded-lg border border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
                 >
                   <div className="flex-shrink-0 mt-1">{step.icon}</div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-900 text-sm mb-1">
+                    <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm mb-1">
                       {stepIndex + 1}. {step.title}
                     </h4>
-                    <p className="text-sm text-gray-500 mb-3">{step.description}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                      {step.description}
+                    </p>
                     {step.external ? (
                       <a
                         href={step.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-colors"
                       >
                         {step.ctaLabel}
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -302,9 +314,11 @@ export const DashboardOverview = ({
             </CardDescription>
           </CardHeader>
           <CardContent className="py-12 text-center">
-            <Activity className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-500">No recent activity</p>
-            <p className="text-xs text-gray-400 mt-1">
+            <Activity className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              No recent activity
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
               Activity from your connected repositories will appear here.
             </p>
           </CardContent>
@@ -320,14 +334,14 @@ export const DashboardOverview = ({
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-100 dark:divide-gray-800">
                   {failureItems.map((event: EventRecord) => (
                     <div
                       key={event.id}
-                      className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 -mx-6 px-6 transition-colors"
+                      className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
                           {formatTimestamp(event.timestamp)}
                         </span>
                         <Badge
@@ -340,10 +354,10 @@ export const DashboardOverview = ({
                           {event.severity ?? "unknown"}
                         </Badge>
                       </div>
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                         {getPayloadString(event.payload, "repository")}
                       </p>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                         {getPayloadString(event.payload, "checkName")}
                       </p>
                     </div>
@@ -370,14 +384,14 @@ export const DashboardOverview = ({
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-100 dark:divide-gray-800">
                   {analysisItems.map((analysis: AnalysisRecord) => (
                     <div
                       key={analysis.id}
-                      className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 -mx-6 px-6 transition-colors"
+                      className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
                           {formatTimestamp(analysis.createdAt)}
                         </span>
                         <Badge
@@ -390,10 +404,10 @@ export const DashboardOverview = ({
                           {getConfidenceLabel(analysis.diagnosisConfidence)}
                         </Badge>
                       </div>
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                         {extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis)}
                       </p>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                         {truncateText(analysis.summary, 60)}
                       </p>
                     </div>
