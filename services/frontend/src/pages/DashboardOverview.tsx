@@ -91,6 +91,7 @@ const ONBOARDING_STEPS: readonly OnboardingStep[] = [
 interface QuickStat {
   readonly title: string;
   readonly value: string;
+  readonly subtitle: string;
   readonly icon: React.ReactNode;
   readonly colorClass: string;
 }
@@ -116,24 +117,28 @@ const buildQuickStats = (
   {
     title: "Failed Builds",
     value: stats ? String(stats.totalFailures) : "--",
+    subtitle: "All time",
     icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-red-500",
   },
   {
     title: "Analyses Run",
     value: stats ? String(stats.totalAnalyses) : "--",
+    subtitle: "All time",
     icon: <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-indigo-500",
   },
   {
     title: "Avg Confidence",
     value: avgConfidence,
+    subtitle: "Recent",
     icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-blue-500",
   },
   {
     title: "Connected Repos",
     value: stats ? String(stats.connectedRepos) : "--",
+    subtitle: "Active",
     icon: <FolderGit2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-green-500",
   },
@@ -188,9 +193,14 @@ export const DashboardOverview = ({
                   {statsLoading ? (
                     <Skeleton className="h-7 w-12 mt-1" />
                   ) : (
-                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                      {stat.value}
-                    </h3>
+                    <>
+                      <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        {stat.value}
+                      </h3>
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                        {stat.subtitle}
+                      </p>
+                    </>
                   )}
                 </div>
                 <div

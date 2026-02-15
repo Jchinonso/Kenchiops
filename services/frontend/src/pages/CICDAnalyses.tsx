@@ -121,15 +121,15 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
         </span>
       </TableCell>
       <TableCell className="text-gray-700 dark:text-gray-300 font-medium text-xs">{repo}</TableCell>
-      <TableCell className="max-w-xs">
+      <TableCell className="max-w-sm">
         <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
-          {truncateText(analysis.summary, 80)}
+          {truncateText(analysis.summary, 100)}
         </p>
-      </TableCell>
-      <TableCell className="max-w-xs">
-        <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-          {analysis.identifiedCause ? truncateText(analysis.identifiedCause, 60) : "--"}
-        </p>
+        {analysis.identifiedCause && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+            Cause: {truncateText(analysis.identifiedCause, 60)}
+          </p>
+        )}
       </TableCell>
       <TableCell>
         <Badge
@@ -171,7 +171,7 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
 
   return (
     <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
-      <TableCell colSpan={7} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
+      <TableCell colSpan={6} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
         <div className="p-4 space-y-3">
           <div>
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
@@ -394,7 +394,6 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
                     />
                     <TableHead>Repository</TableHead>
                     <TableHead>Summary</TableHead>
-                    <TableHead>Root Cause</TableHead>
                     <SortableTableHead
                       label="Confidence"
                       column="confidence"

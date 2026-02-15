@@ -223,7 +223,7 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
   const conclusion = getPayloadString(event.payload, "conclusion");
   const hasGitHubLink = repository !== "--" && headSha !== "--";
 
-  const details: ReadonlyArray<readonly [string, string]> = [
+  const allDetails: ReadonlyArray<readonly [string, string]> = [
     ["Repository", repository],
     ["Check Name", checkName],
     ["Workflow Name", workflowName],
@@ -231,6 +231,7 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
     ["Commit SHA", headSha],
     ["Conclusion", conclusion],
   ];
+  const visibleDetails = allDetails.filter(([, value]) => value !== "--");
 
   return (
     <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -240,23 +241,29 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
               Full Payload Details
             </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-              {details.map(([label, value]) => (
-                <Fragment key={label}>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-                  <span className="text-sm text-gray-900 dark:text-gray-100">{value}</span>
-                </Fragment>
-              ))}
-            </div>
+            {visibleDetails.length > 0 ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {visibleDetails.map(([label, value]) => (
+                  <Fragment key={label}>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+                    <span className="text-sm text-gray-900 dark:text-gray-100">{value}</span>
+                  </Fragment>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 dark:text-gray-500">
+                Limited payload data available for this event.
+              </p>
+            )}
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {hasGitHubLink && (
               <a
                 href={`https://github.com/${repository}/commit/${headSha}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 onClick={(linkEvent) => linkEvent.stopPropagation()}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -266,9 +273,10 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
             {analysisStatus && (
               <Link
                 to="/dashboard/cicd/analyses"
-                className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors"
                 onClick={(linkEvent) => linkEvent.stopPropagation()}
               >
+                <Search className="w-3.5 h-3.5" />
                 View Analysis
               </Link>
             )}
