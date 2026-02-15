@@ -126,7 +126,7 @@ export const CICDPipelines = () => {
             <GridSkeleton />
           ) : error ? (
             <div className="p-8 text-center">
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           ) : !hasRepos ? (
             <Empty className="py-12 border-0">

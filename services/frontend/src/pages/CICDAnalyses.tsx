@@ -93,7 +93,7 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
         {analysis.eventId ? (
           <Link
             to="/dashboard/cicd/failures"
-            className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 transition-colors"
+            className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
             onClick={(event) => event.stopPropagation()}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -161,7 +161,7 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
           <div>
             <button
               type="button"
-              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
               onClick={(event) => {
                 event.stopPropagation();
                 onViewDetails();
@@ -262,7 +262,7 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
-                Export CSV
+                Export Page
               </button>
             )}
           </div>
@@ -277,7 +277,7 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
             <TableSkeleton />
           ) : error ? (
             <div className="p-8 text-center">
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           ) : !hasItems ? (
             <Empty className="py-12 border-0">

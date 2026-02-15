@@ -208,7 +208,7 @@ export const Settings = () => {
                     "text-xs",
                     tenant.status === "active"
                       ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800"
-                      : "bg-gray-50 text-gray-600 border-gray-200"
+                      : "bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
                   )}
                 >
                   {tenant.status}
@@ -217,7 +217,7 @@ export const Settings = () => {
               <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{tenant.id}</p>
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No organization found.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">No organization found.</p>
           )}
         </CardContent>
       </Card>

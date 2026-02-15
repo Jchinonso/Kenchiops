@@ -21,18 +21,20 @@ export const getConfidenceLabel = (confidence: number): string =>
 
 export const getConfidenceStyle = (confidence: number): string =>
   confidence >= CONFIDENCE_THRESHOLDS.HIGH
-    ? "bg-green-100 text-green-700 border-green-200"
+    ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
     : confidence >= CONFIDENCE_THRESHOLDS.MEDIUM
-      ? "bg-amber-100 text-amber-700 border-amber-200"
-      : "bg-red-100 text-red-700 border-red-200";
+      ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+      : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800";
 
 // ==================== Severity ====================
 
 export const SEVERITY_STYLES: Readonly<Record<string, string>> = {
-  high: "bg-red-100 text-red-700 border-red-200",
-  medium: "bg-amber-100 text-amber-700 border-amber-200",
-  low: "bg-blue-100 text-blue-700 border-blue-200",
-  default: "bg-gray-100 text-gray-700 border-gray-200",
+  high: "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800",
+  medium:
+    "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+  low: "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800",
+  default:
+    "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700",
 } as const;
 
 export const getSeverityStyle = (severity: string | null): string =>

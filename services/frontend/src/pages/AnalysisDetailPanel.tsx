@@ -246,7 +246,7 @@ export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetai
           <DetailSkeleton />
         ) : error ? (
           <div className="px-4 py-8 text-center">
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
         ) : analysis ? (
           <DetailContent analysis={analysis} />

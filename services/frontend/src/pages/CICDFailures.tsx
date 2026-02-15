@@ -186,7 +186,7 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
                 href={`https://github.com/${repository}/commit/${headSha}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
                 onClick={(linkEvent) => linkEvent.stopPropagation()}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -196,7 +196,7 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
             {analysisStatus && (
               <Link
                 to="/dashboard/cicd/analyses"
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
                 onClick={(linkEvent) => linkEvent.stopPropagation()}
               >
                 View Analysis
@@ -291,7 +291,7 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
-                Export CSV
+                Export Page
               </button>
             )}
           </div>
@@ -306,7 +306,7 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
             <TableSkeleton />
           ) : error ? (
             <div className="p-8 text-center">
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           ) : !hasItems ? (
             <Empty className="py-12 border-0">
