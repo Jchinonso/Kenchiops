@@ -1,5 +1,5 @@
 /**
- * Unit tests for extractRepoFromKey helper from CICDAnalyses page.
+ * Unit tests for extractRepoFromKey helper.
  *
  * Tests the pure function that derives a repository display name from
  * the analysis aggregationKey or fullAnalysis JSONB fallback.
@@ -16,27 +16,7 @@
  */
 
 import { describe, it, expect } from "@jest/globals";
-
-// ==================== Function Under Test ====================
-
-/**
- * Extracted directly from CICDAnalyses.tsx for isolated unit testing.
- * This is a pure function with no React dependencies.
- */
-const extractRepoFromKey = (
-  key: string | null,
-  fullAnalysis?: Readonly<Record<string, unknown>>
-): string => {
-  if (key) {
-    const colonIndex = key.indexOf(":");
-    return colonIndex > 0 ? key.slice(0, colonIndex) : key;
-  }
-  // Fallback: check fullAnalysis JSONB for repository field
-  if (typeof fullAnalysis?.repository === "string" && fullAnalysis.repository.length > 0) {
-    return fullAnalysis.repository;
-  }
-  return "--";
-};
+import { extractRepoFromKey } from "../lib/formatters";
 
 // ==================== Tests ====================
 

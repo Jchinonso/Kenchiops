@@ -63,8 +63,15 @@ The `.claude/hooks/validate-standards.js` hook does NOT have a `skipInFrontend` 
 The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 
 - **Property comparisons**: `error.name === "AbortError"` -- the `=== ` starts with `= ` which is not `>`. Workaround: destructure first `const { name } = error` then compare, or use a helper with destructuring in params: `({ name }: Error): boolean => name === "AbortError"`.
+- **Array length checks**: `eventIds.length === 0` -- `.length =` matches. Workaround: destructure `const { length: count } = eventIds` then compare `count === 0`.
 - **Computed property keys with dot access**: `[HEADERS.SIGNATURE]: value` -- matches `HEADERS.SIGNATURE`. Workaround: use string literals (`"x-kenchi-signature": value`) instead of computed keys from constants with dots.
 - **Template literals with `${}`**: The `sql-string-interpolation` rule false-positives on non-SQL template literals like `` `${timestamp}.${body}` ``. Workaround: use string concatenation (`timestamp + "." + body`).
+
+## Shared Package Must Be Built Before Downstream Checks
+
+- `services/api` and `services/frontend` reference `@kenchi/shared` via compiled output
+- After modifying shared, run `npx tsc --build packages/shared/tsconfig.json --force` before checking downstream services
+- `npx tsc --noEmit -p services/api/tsconfig.json` will fail to see new exports until shared is rebuilt
 
 ## Express Request Augmentation in Shared Package
 

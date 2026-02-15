@@ -69,4 +69,9 @@ export const ANALYSIS_QUERIES = {
     SELECT COUNT(*) as count FROM analyses
     WHERE tenant_id = $1
   `,
+
+  GET_BY_EVENT_IDS: `
+    SELECT id, event_id, diagnosis_confidence FROM analyses
+    WHERE event_id = ANY($1) AND tenant_id = $2
+  `,
 } as const;

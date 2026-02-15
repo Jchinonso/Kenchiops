@@ -6,9 +6,33 @@
  */
 
 import { Link } from "react-router-dom";
-import { useDashboardStats } from "@/hooks/useDashboardData";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  useDashboardStats,
+  useAnalyses,
+  useFailures,
+  type AnalysisRecord,
+  type EventRecord,
+} from "@/hooks/useDashboardData";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import {
+  formatTimestamp,
+  truncateText,
+  getConfidenceLabel,
+  getConfidenceStyle,
+  getSeverityStyle,
+  extractRepoFromKey,
+  getPayloadString,
+} from "@/lib/formatters";
 import {
   AlertTriangle,
   Zap,
@@ -18,6 +42,7 @@ import {
   Rocket,
   ExternalLink,
   Activity,
+  Search,
   MessageSquare,
   X,
 } from "lucide-react";
@@ -116,7 +141,14 @@ export const DashboardOverview = ({
   refreshKey = 0,
 }: DashboardOverviewProps) => {
   const { data: stats, isLoading: statsLoading } = useDashboardStats(refreshKey);
+  const { data: recentAnalyses, isLoading: analysesLoading } = useAnalyses(5, 0, refreshKey);
+  const { data: recentFailures, isLoading: failuresLoading } = useFailures(5, 0, refreshKey);
+
   const quickStats = buildQuickStats(stats);
+  const failureItems = recentFailures?.items ?? [];
+  const analysisItems = recentAnalyses?.items ?? [];
+  const hasActivity = failureItems.length > 0 || analysisItems.length > 0;
+  const activityLoading = analysesLoading || failuresLoading;
 
   return (
     <>
@@ -212,24 +244,163 @@ export const DashboardOverview = ({
       )}
 
       {/* Recent Activity */}
-      <Card>
-        <CardHeader className="border-b">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-500" />
-            <CardTitle>Recent Activity</CardTitle>
-          </div>
-          <CardDescription>
-            CI failures and analysis results from your connected repositories.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="py-12 text-center">
-          <Activity className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-gray-500">No recent activity</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Activity from your connected repositories will appear here.
-          </p>
-        </CardContent>
-      </Card>
+      {activityLoading ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <Card>
+            <CardHeader className="border-b">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-5 rounded" />
+                <Skeleton className="h-5 w-32" />
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={`skel-fail-${index}`} className="space-y-1.5 py-2">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="border-b">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-5 rounded" />
+                <Skeleton className="h-5 w-32" />
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={`skel-analysis-${index}`} className="space-y-1.5 py-2">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      ) : !hasActivity ? (
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <CardTitle>Recent Activity</CardTitle>
+            </div>
+            <CardDescription>
+              CI failures and analysis results from your connected repositories.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="py-12 text-center">
+            <Activity className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500">No recent activity</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Activity from your connected repositories will appear here.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          {failureItems.length > 0 && (
+            <Card>
+              <CardHeader className="border-b">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  <CardTitle>Recent Failures</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <div className="divide-y divide-gray-100">
+                  {failureItems.map((event: EventRecord) => (
+                    <div
+                      key={event.id}
+                      className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 -mx-6 px-6 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-xs text-gray-400">
+                          {formatTimestamp(event.timestamp)}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] px-1.5 py-0",
+                            getSeverityStyle(event.severity)
+                          )}
+                        >
+                          {event.severity ?? "unknown"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {getPayloadString(event.payload, "repository")}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {getPayloadString(event.payload, "checkName")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+              <CardFooter className="border-t">
+                <Link
+                  to="/dashboard/cicd/failures"
+                  className="text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                >
+                  View all failures &rarr;
+                </Link>
+              </CardFooter>
+            </Card>
+          )}
+
+          {analysisItems.length > 0 && (
+            <Card>
+              <CardHeader className="border-b">
+                <div className="flex items-center gap-2">
+                  <Search className="w-5 h-5 text-indigo-500" />
+                  <CardTitle>Recent Analyses</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <div className="divide-y divide-gray-100">
+                  {analysisItems.map((analysis: AnalysisRecord) => (
+                    <div
+                      key={analysis.id}
+                      className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 -mx-6 px-6 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-xs text-gray-400">
+                          {formatTimestamp(analysis.createdAt)}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] px-1.5 py-0",
+                            getConfidenceStyle(analysis.diagnosisConfidence)
+                          )}
+                        >
+                          {getConfidenceLabel(analysis.diagnosisConfidence)}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis)}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {truncateText(analysis.summary, 60)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+              <CardFooter className="border-t">
+                <Link
+                  to="/dashboard/cicd/analyses"
+                  className="text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                >
+                  View all analyses &rarr;
+                </Link>
+              </CardFooter>
+            </Card>
+          )}
+        </div>
+      )}
     </>
   );
 };

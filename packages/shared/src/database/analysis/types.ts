@@ -70,6 +70,15 @@ export interface AnalysisRow {
 }
 
 /**
+ * Database row type for batch event ID lookup (partial SELECT).
+ */
+export interface AnalysisEventRow {
+  readonly id: string;
+  readonly event_id: string;
+  readonly diagnosis_confidence: number;
+}
+
+/**
  * Database row type for count queries.
  */
 export interface AnalysisCountRow {

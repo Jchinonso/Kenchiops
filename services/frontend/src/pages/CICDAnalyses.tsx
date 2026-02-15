@@ -16,7 +16,6 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Empty,
   EmptyHeader,
@@ -24,79 +23,38 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, AlertTriangle } from "lucide-react";
 import { useAnalyses, type AnalysisRecord } from "@/hooks/useDashboardData";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import {
+  getConfidenceLabel,
+  getConfidenceStyle,
+  formatTimestamp,
+  truncateText,
+  extractRepoFromKey,
+} from "@/lib/formatters";
+import { TableSkeleton } from "@/components/TableSkeleton";
+import { PaginationControls } from "@/components/PaginationControls";
+import { AnalysisDetailPanel } from "@/pages/AnalysisDetailPanel";
 
 // ==================== Helpers ====================
 
 const PAGE_SIZE = 20;
 
-const CONFIDENCE_THRESHOLDS = {
-  HIGH: 0.8,
-  MEDIUM: 0.5,
-} as const;
-
-const getConfidenceLabel = (confidence: number): string =>
-  confidence >= CONFIDENCE_THRESHOLDS.HIGH
-    ? "High"
-    : confidence >= CONFIDENCE_THRESHOLDS.MEDIUM
-      ? "Medium"
-      : "Low";
-
-const getConfidenceStyle = (confidence: number): string =>
-  confidence >= CONFIDENCE_THRESHOLDS.HIGH
-    ? "bg-green-100 text-green-700 border-green-200"
-    : confidence >= CONFIDENCE_THRESHOLDS.MEDIUM
-      ? "bg-amber-100 text-amber-700 border-amber-200"
-      : "bg-red-100 text-red-700 border-red-200";
-
-const formatTimestamp = (timestamp: string): string =>
-  new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-const truncateText = (text: string, maxLength: number): string =>
-  text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
-
-const extractRepoFromKey = (
-  key: string | null,
-  fullAnalysis?: Readonly<Record<string, unknown>>
-): string => {
-  if (key) {
-    const colonIndex = key.indexOf(":");
-    return colonIndex > 0 ? key.slice(0, colonIndex) : key;
-  }
-  // Fallback: check fullAnalysis JSONB for repository field
-  if (typeof fullAnalysis?.repository === "string" && fullAnalysis.repository.length > 0) {
-    return fullAnalysis.repository;
-  }
-  return "--";
-};
-
 // ==================== Sub-components ====================
-
-const TableSkeleton = () => (
-  <div className="space-y-3 p-4">
-    {Array.from({ length: 5 }, (_, idx) => (
-      <Skeleton key={idx} className="h-12 w-full" />
-    ))}
-  </div>
-);
 
 interface AnalysisRowProps {
   readonly analysis: AnalysisRecord;
+  readonly onClick: () => void;
 }
 
-const AnalysisRow = ({ analysis }: AnalysisRowProps) => {
+const AnalysisRow = ({ analysis, onClick }: AnalysisRowProps) => {
   const repo = extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis);
   const confidence = Math.round(analysis.diagnosisConfidence * 100);
 
   return (
-    <TableRow>
+    <TableRow onClick={onClick} className="cursor-pointer hover:bg-gray-50 transition-colors">
       <TableCell className="text-gray-500 text-xs">{formatTimestamp(analysis.createdAt)}</TableCell>
       <TableCell className="text-gray-700 font-medium text-xs">{repo}</TableCell>
       <TableCell className="max-w-xs">
@@ -115,6 +73,20 @@ const AnalysisRow = ({ analysis }: AnalysisRowProps) => {
           {getConfidenceLabel(analysis.diagnosisConfidence)} ({confidence}%)
         </Badge>
       </TableCell>
+      <TableCell>
+        {analysis.eventId ? (
+          <Link
+            to="/dashboard/cicd/failures"
+            className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 transition-colors"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span className="text-xs underline">Linked</span>
+          </Link>
+        ) : (
+          <span className="text-xs text-gray-400">--</span>
+        )}
+      </TableCell>
     </TableRow>
   );
 };
@@ -127,6 +99,7 @@ interface CICDAnalysesProps {
 
 export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const [offset, setOffset] = useState(0);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
   const { data, isLoading, error } = useAnalyses(PAGE_SIZE, offset, refreshKey);
 
   const items = data?.items ?? [];
@@ -191,44 +164,40 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
                     <TableHead>Summary</TableHead>
                     <TableHead>Root Cause</TableHead>
                     <TableHead>Confidence</TableHead>
+                    <TableHead>Event</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((analysis) => (
-                    <AnalysisRow key={analysis.id} analysis={analysis} />
+                    <AnalysisRow
+                      key={analysis.id}
+                      analysis={analysis}
+                      onClick={() => setSelectedAnalysisId(analysis.id)}
+                    />
                   ))}
                 </TableBody>
               </Table>
 
               {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t">
-                  <span className="text-sm text-gray-500">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={goPrev}
-                      disabled={!hasPrev}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      Prev
-                    </button>
-                    <button
-                      onClick={goNext}
-                      disabled={!hasNext}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Next
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  onPrev={goPrev}
+                  onNext={goNext}
+                />
               )}
             </>
           )}
         </CardContent>
       </Card>
+
+      <AnalysisDetailPanel
+        analysisId={selectedAnalysisId}
+        open={selectedAnalysisId !== null}
+        onClose={() => setSelectedAnalysisId(null)}
+      />
     </div>
   );
 };

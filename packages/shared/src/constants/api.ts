@@ -203,6 +203,8 @@ export const DASHBOARD_PAGINATION = {
   DEFAULT_LIMIT: 20,
   /** Maximum items per page */
   MAX_LIMIT: 200,
+  /** Maximum event IDs in a single batch lookup */
+  MAX_BATCH_SIZE: 100,
 } as const;
 
 // ==================== GitHub API Constants ====================

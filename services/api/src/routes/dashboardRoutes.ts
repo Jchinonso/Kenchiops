@@ -120,11 +120,53 @@ const handleGetFailures = async (req: Request, res: Response): Promise<void> => 
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+const handleGetAnalysisDetail = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
+  const { id } = req.params;
+
+  if (!id) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: { code: "INVALID_ID", message: "Analysis ID required" },
+    });
+    return;
+  }
+
+  const result = await dashboardService.getAnalysisDetail(tenantId, id, context);
+  res.status(HTTP_STATUS.OK).json({ data: result });
+};
+
+const handleGetAnalysisStatusByEvents = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
+  const { eventIds } = req.body as { readonly eventIds?: readonly string[] };
+  const { length: idCount } = Array.isArray(eventIds) ? eventIds : [];
+
+  if (!Array.isArray(eventIds) || idCount === 0) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: { code: "INVALID_INPUT", message: "eventIds array is required" },
+    });
+    return;
+  }
+
+  const cappedIds: readonly string[] = eventIds.slice(0, DASHBOARD_PAGINATION.MAX_BATCH_SIZE);
+
+  const result = await dashboardService.getAnalysisStatusByEvents(tenantId, cappedIds, context);
+
+  const data: Readonly<
+    Record<string, { readonly analysisId: string; readonly confidence: number } | null>
+  > = Object.fromEntries(cappedIds.map((id) => [id, result.get(id) ?? null]));
+
+  res.status(HTTP_STATUS.OK).json({ data });
+};
+
 // ==================== Route Definitions ====================
 
 router.get("/api/v1/dashboard/tenant", asyncHandler(handleGetTenantInfo));
 router.get("/api/v1/dashboard/stats", asyncHandler(handleGetDashboardStats));
 router.get("/api/v1/dashboard/repositories", asyncHandler(handleGetRepositories));
+router.post("/api/v1/dashboard/analyses/by-events", asyncHandler(handleGetAnalysisStatusByEvents));
+router.get("/api/v1/dashboard/analyses/:id", asyncHandler(handleGetAnalysisDetail));
 router.get("/api/v1/dashboard/analyses", asyncHandler(handleGetAnalyses));
 router.get("/api/v1/dashboard/failures", asyncHandler(handleGetFailures));
 

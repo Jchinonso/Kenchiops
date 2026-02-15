@@ -128,6 +128,7 @@ export {
   countAnalysesByModelVersion,
   getAnalysesByTenant,
   countAnalysesByTenant,
+  getAnalysesByEventIds,
   type CreateAnalysisInput,
   type AnalysisRecord,
 } from "./analysis/index.js";

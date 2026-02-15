@@ -11,8 +11,10 @@ import {
   createLogger,
   NotFoundError,
   findById as findTenantById,
+  getAnalysisById,
   getAnalysesByTenant,
   countAnalysesByTenant,
+  getAnalysesByEventIds,
   getEventsByTenant,
   countEventsByTenant,
   type RequestContext,
@@ -139,6 +141,28 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
     },
 
     /**
+     * Retrieves a single analysis by ID, scoped to the tenant.
+     *
+     * @throws NotFoundError if analysis does not exist or belongs to another tenant
+     */
+    getAnalysisDetail: async (
+      tenantId: string,
+      analysisId: string,
+      context: RequestContext
+    ): Promise<AnalysisRecord> => {
+      const analysis = await getAnalysisById(analysisId);
+
+      if (!analysis || analysis.tenantId !== tenantId) {
+        throw new NotFoundError("Analysis not found", {
+          metadata: { analysisId },
+        });
+      }
+
+      logger.info("Analysis detail retrieved", { analysisId, ...context });
+      return analysis;
+    },
+
+    /**
      * Retrieves paginated CI/CD failure events for a tenant.
      */
     getFailures: async (
@@ -159,6 +183,25 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
       });
 
       return { items, total, limit, offset };
+    },
+
+    /**
+     * Batch lookup: returns analysis status for multiple event IDs.
+     */
+    getAnalysisStatusByEvents: async (
+      tenantId: string,
+      eventIds: readonly string[],
+      context: RequestContext
+    ): Promise<
+      ReadonlyMap<string, { readonly analysisId: string; readonly confidence: number }>
+    > => {
+      const result = await getAnalysesByEventIds(eventIds, tenantId);
+      logger.info("Analysis status batch lookup", {
+        requestedCount: eventIds.length,
+        foundCount: result.size,
+        ...context,
+      });
+      return result;
     },
   };
 };

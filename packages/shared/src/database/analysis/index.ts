@@ -11,6 +11,7 @@ export type {
   CreateAnalysisInput,
   AnalysisRecord,
   AnalysisRow,
+  AnalysisEventRow,
   AnalysisCountRow,
   CreateAnalysisValidationRule,
 } from "./types.js";
@@ -34,4 +35,5 @@ export {
   countAnalysesByModelVersion,
   getAnalysesByTenant,
   countAnalysesByTenant,
+  getAnalysesByEventIds,
 } from "./repository.js";

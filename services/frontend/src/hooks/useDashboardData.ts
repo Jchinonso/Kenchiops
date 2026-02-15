@@ -96,6 +96,11 @@ const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
   }, []);
 
   useEffect(() => {
+    if (!path) {
+      setState({ data: null, isLoading: false, error: null });
+      return;
+    }
+
     const controller = new AbortController();
     // let: mutable flag for async cleanup coordination
     let cancelled = false; // let: tracks if effect was cleaned up during async fetch
@@ -183,6 +188,87 @@ export const useFailures = (
     `${limit}:${offset}:${refreshKey}`
   );
 
+export const useAnalysisDetail = (
+  analysisId: string | null,
+  refreshKey: number = 0
+): UseFetchResult<AnalysisRecord> =>
+  useFetch<AnalysisRecord>(
+    analysisId ? `/api/v1/dashboard/analyses/${analysisId}` : "",
+    `${analysisId ?? ""}:${refreshKey}`
+  );
+
+// ==================== Batch Lookup Hook ====================
+
+interface AnalysisStatusEntry {
+  readonly analysisId: string;
+  readonly confidence: number;
+}
+
+type AnalysisStatusMap = Readonly<Record<string, AnalysisStatusEntry | null>>;
+
+/**
+ * POST-based batch lookup for analysis status by event IDs.
+ * Returns a map of eventId to analysis info (or null if not analyzed).
+ */
+export const useAnalysisStatusByEvents = (
+  eventIds: readonly string[],
+  refreshKey: number = 0
+): FetchState<AnalysisStatusMap> => {
+  const [state, setState] = useState<FetchState<AnalysisStatusMap>>({
+    data: null,
+    isLoading: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    const { length: idCount } = eventIds;
+    if (idCount === 0) {
+      setState({ data: null, isLoading: false, error: null });
+      return;
+    }
+
+    // let: mutable flag for async cleanup coordination
+    let cancelled = false; // let: tracks if effect was cleaned up during async fetch
+
+    const fetchData = async (): Promise<void> => {
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        const response = await apiClient("/api/v1/dashboard/analyses/by-events", {
+          method: "POST",
+          body: { eventIds },
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok) {
+          setState({ data: null, isLoading: false, error: `Request failed (${response.status})` });
+          return;
+        }
+
+        const json: { readonly data: AnalysisStatusMap } = await response.json();
+        setState({ data: json.data, isLoading: false, error: null });
+      } catch (caught) {
+        if (cancelled) {
+          return;
+        }
+        const message = caught instanceof Error ? caught.message : "Unknown error";
+        setState({ data: null, isLoading: false, error: message });
+      }
+    };
+
+    void fetchData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [JSON.stringify(eventIds), refreshKey]);
+
+  return state;
+};
+
 // Re-export types for use in page components
 export type {
   TenantInfo,
@@ -191,4 +277,6 @@ export type {
   EventRecord,
   AnalysisRecord,
   PaginatedResult,
+  AnalysisStatusEntry,
+  AnalysisStatusMap,
 };

@@ -21,6 +21,7 @@ import type {
   AnalysisRecord,
   AnalysisRow,
   AnalysisCountRow,
+  AnalysisEventRow,
 } from "./types.js";
 import {
   ANALYSIS_ID_PREFIX,
@@ -243,6 +244,45 @@ export const countAnalysesByTenant = async (tenantId: string): Promise<number> =
     return parseInt(result.rows[0].count, PARSE_INT_RADIX);
   } catch (error) {
     logger.error("Failed to count analyses by tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Retrieves analysis summaries for multiple event IDs (batch lookup).
+ * Returns a map of eventId to analysisId and confidence.
+ */
+export const getAnalysesByEventIds = async (
+  eventIds: readonly string[],
+  tenantId: string
+): Promise<ReadonlyMap<string, { readonly analysisId: string; readonly confidence: number }>> => {
+  const { length: count } = eventIds;
+  if (count === 0) {
+    return new Map();
+  }
+
+  try {
+    const result = await query<AnalysisEventRow>(ANALYSIS_QUERIES.GET_BY_EVENT_IDS, [
+      eventIds,
+      tenantId,
+    ]);
+
+    const mapEventRow = ({
+      event_id,
+      id,
+      diagnosis_confidence,
+    }: AnalysisEventRow): readonly [
+      string,
+      { readonly analysisId: string; readonly confidence: number },
+    ] => [event_id, { analysisId: id, confidence: diagnosis_confidence }];
+
+    return new Map(result.rows.map(mapEventRow));
+  } catch (error) {
+    logger.error("Failed to get analyses by event IDs", {
+      eventIdCount: count,
       tenantId,
       error: getErrorMessage(error),
     });

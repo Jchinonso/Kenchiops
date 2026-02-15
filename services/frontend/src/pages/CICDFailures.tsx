@@ -5,7 +5,7 @@
  * Data comes from the dashboard API (events of type CICD_FAILURE).
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -16,7 +16,6 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Empty,
   EmptyHeader,
@@ -24,50 +23,37 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { AlertTriangle, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
-import { useFailures, type EventRecord } from "@/hooks/useDashboardData";
+import { AlertTriangle, ExternalLink, Search } from "lucide-react";
+import {
+  useFailures,
+  useAnalysisStatusByEvents,
+  type EventRecord,
+  type AnalysisStatusEntry,
+} from "@/hooks/useDashboardData";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import {
+  getConfidenceLabel,
+  getConfidenceStyle,
+  formatTimestamp,
+  getSeverityStyle,
+  getPayloadString,
+} from "@/lib/formatters";
+import { TableSkeleton } from "@/components/TableSkeleton";
+import { PaginationControls } from "@/components/PaginationControls";
 
 // ==================== Helpers ====================
 
 const PAGE_SIZE = 20;
 
-const SEVERITY_STYLES: Readonly<Record<string, string>> = {
-  high: "bg-red-100 text-red-700 border-red-200",
-  medium: "bg-amber-100 text-amber-700 border-amber-200",
-  low: "bg-blue-100 text-blue-700 border-blue-200",
-  default: "bg-gray-100 text-gray-700 border-gray-200",
-};
-
-const formatTimestamp = (timestamp: string): string =>
-  new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-const getSeverityStyle = (severity: string | null): string =>
-  SEVERITY_STYLES[severity ?? "default"] ?? SEVERITY_STYLES.default;
-
-const getPayloadString = (payload: Readonly<Record<string, unknown>>, key: string): string =>
-  typeof payload[key] === "string" ? String(payload[key]) : "--";
-
 // ==================== Sub-components ====================
-
-const TableSkeleton = () => (
-  <div className="space-y-3 p-4">
-    {Array.from({ length: 5 }, (_, idx) => (
-      <Skeleton key={idx} className="h-12 w-full" />
-    ))}
-  </div>
-);
 
 interface FailureRowProps {
   readonly event: EventRecord;
+  readonly analysisStatus?: AnalysisStatusEntry | null;
 }
 
-const FailureRow = ({ event }: FailureRowProps) => {
+const FailureRow = ({ event, analysisStatus }: FailureRowProps) => {
   const repository = getPayloadString(event.payload, "repository");
   const checkName = getPayloadString(event.payload, "checkName");
   const conclusion = getPayloadString(event.payload, "conclusion");
@@ -104,6 +90,24 @@ const FailureRow = ({ event }: FailureRowProps) => {
         </Badge>
       </TableCell>
       <TableCell className="text-gray-500 font-mono text-xs">{shortSha}</TableCell>
+      <TableCell>
+        {analysisStatus ? (
+          <Link to="/dashboard/cicd/analyses" className="inline-flex items-center gap-1.5 group">
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-xs group-hover:ring-1 group-hover:ring-indigo-300 transition-all",
+                getConfidenceStyle(analysisStatus.confidence)
+              )}
+            >
+              <Search className="w-3 h-3 mr-1" />
+              {getConfidenceLabel(analysisStatus.confidence)}
+            </Badge>
+          </Link>
+        ) : (
+          <span className="text-xs text-gray-400">--</span>
+        )}
+      </TableCell>
     </TableRow>
   );
 };
@@ -120,6 +124,9 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+
+  const eventIds = useMemo(() => items.map((item) => item.id), [items]);
+  const { data: analysisStatus } = useAnalysisStatusByEvents(eventIds, refreshKey);
   const hasItems = Boolean(items.length);
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -181,39 +188,29 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
                     <TableHead>Severity</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Commit</TableHead>
+                    <TableHead>Analysis</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((event) => (
-                    <FailureRow key={event.id} event={event} />
+                    <FailureRow
+                      key={event.id}
+                      event={event}
+                      analysisStatus={analysisStatus?.[event.id]}
+                    />
                   ))}
                 </TableBody>
               </Table>
 
               {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t">
-                  <span className="text-sm text-gray-500">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={goPrev}
-                      disabled={!hasPrev}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      Prev
-                    </button>
-                    <button
-                      onClick={goNext}
-                      disabled={!hasNext}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Next
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  onPrev={goPrev}
+                  onNext={goNext}
+                />
               )}
             </>
           )}
