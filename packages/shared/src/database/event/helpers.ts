@@ -7,7 +7,7 @@
  */
 
 import { ValidationError, EVENT_DB_DEFAULTS } from "../common.js";
-import type { EventRow, EventRecord, EventListOptions } from "./types.js";
+import type { EventRow, EventRecord, EventListOptions, CreateEventInput } from "./types.js";
 
 // ==================== Row Mappers ====================
 
@@ -51,5 +51,33 @@ export const validateEventListOptions = (options: EventListOptions): void => {
         metadata: { field: "limit", value: limit },
       }
     );
+  }
+};
+
+/**
+ * Validates input for creating a new event.
+ *
+ * @throws ValidationError if required fields are missing
+ */
+export const validateCreateEventInput = (input: CreateEventInput): void => {
+  if (!input.type?.trim()) {
+    throw new ValidationError("type is required", {
+      operation: "validateCreateEventInput",
+      metadata: { field: "type" },
+    });
+  }
+
+  if (!input.source?.trim()) {
+    throw new ValidationError("source is required", {
+      operation: "validateCreateEventInput",
+      metadata: { field: "source" },
+    });
+  }
+
+  if (!input.timestamp?.trim()) {
+    throw new ValidationError("timestamp is required", {
+      operation: "validateCreateEventInput",
+      metadata: { field: "timestamp" },
+    });
   }
 };

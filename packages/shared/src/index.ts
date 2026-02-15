@@ -267,10 +267,12 @@ export {
 } from "./database/index.js";
 export {
   // Event module
+  createEvent,
   getEventsByTenant,
   countEventsByTenant,
   type EventRecord,
   type EventListOptions,
+  type CreateEventInput,
 } from "./database/index.js";
 
 // User module (Authentication)

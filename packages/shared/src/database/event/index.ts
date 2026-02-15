@@ -7,10 +7,16 @@
  */
 
 // Types
-export type { EventRow, EventRecord, EventCountRow, EventListOptions } from "./types.js";
+export type {
+  EventRow,
+  EventRecord,
+  EventCountRow,
+  EventListOptions,
+  CreateEventInput,
+} from "./types.js";
 
 // Helpers (includes validation and mappers)
-export { mapRowToEvent, validateEventListOptions } from "./helpers.js";
+export { mapRowToEvent, validateEventListOptions, validateCreateEventInput } from "./helpers.js";
 
 // Repository operations
-export { getEventsByTenant, countEventsByTenant } from "./repository.js";
+export { createEvent, getEventsByTenant, countEventsByTenant } from "./repository.js";

@@ -40,6 +40,7 @@ import {
 } from "@kenchi/shared";
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
+import { SSE_STREAM_PATH } from "./routes/sseRoutes.js";
 import { appConfig } from "./config/appConfig.js";
 import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
 
@@ -258,7 +259,10 @@ const apiRateLimiter = createRateLimitMiddleware({
     message: API_MESSAGES.RATE_LIMIT_EXCEEDED,
     keyPrefix: API_REDIS_PREFIXES.RATE_LIMIT,
   },
-  skip: (req) => shouldSkipRateLimit(req.path),
+  skip: (req) => {
+    const { path } = req;
+    return shouldSkipRateLimit(path) || path === SSE_STREAM_PATH;
+  },
   botDetection: {
     blockMalicious: false, // Signal-based, not blocking
     botRateMultiplier: 0.5, // Bots get half the rate limit

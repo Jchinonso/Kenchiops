@@ -114,9 +114,13 @@ const AnalysisRow = ({ analysis }: AnalysisRowProps) => {
 
 // ==================== Main Component ====================
 
-export const CICDAnalyses = () => {
+interface CICDAnalysesProps {
+  readonly refreshKey?: number;
+}
+
+export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const [offset, setOffset] = useState(0);
-  const { data, isLoading, error } = useAnalyses(PAGE_SIZE, offset);
+  const { data, isLoading, error } = useAnalyses(PAGE_SIZE, offset, refreshKey);
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;

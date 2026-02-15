@@ -106,14 +106,16 @@ interface DashboardOverviewProps {
   readonly firstName: string;
   readonly showOnboarding: boolean;
   readonly dismissOnboarding: () => void;
+  readonly refreshKey?: number;
 }
 
 export const DashboardOverview = ({
   firstName,
   showOnboarding,
   dismissOnboarding,
+  refreshKey = 0,
 }: DashboardOverviewProps) => {
-  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: stats, isLoading: statsLoading } = useDashboardStats(refreshKey);
   const quickStats = buildQuickStats(stats);
 
   return (

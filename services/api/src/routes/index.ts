@@ -14,6 +14,7 @@ import { ragRoutes } from "./rag/index.js";
 import { fineTuningRoutes } from "./fineTuningRoutes.js";
 import { riskRulesRoutes } from "./riskRulesRoutes.js";
 import { dashboardRoutes } from "./dashboardRoutes.js";
+import { sseRoutes } from "./sseRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -45,4 +46,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Dashboard routes (CI/CD dashboard)
   app.use(dashboardRoutes);
+
+  // SSE routes (real-time dashboard events)
+  app.use(sseRoutes);
 };

@@ -378,4 +378,6 @@ export const PUBSUB_CHANNELS = {
   ACTION_EVENTS: "kenchi:events:actions",
   /** System health events */
   HEALTH_EVENTS: "kenchi:events:health",
+  /** Dashboard real-time events (SSE) */
+  DASHBOARD: "kenchi:events:dashboard",
 } as const;

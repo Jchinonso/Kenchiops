@@ -23,6 +23,11 @@ export const EVENT_DB_DEFAULTS = {
  * SQL query templates for event database operations.
  */
 export const EVENT_DB_QUERIES = {
+  INSERT: `
+    INSERT INTO events (id, type, source, severity, timestamp, payload, metadata, tenant_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING *
+  `,
   GET_BY_TENANT: `
     SELECT * FROM events
     WHERE tenant_id = $1

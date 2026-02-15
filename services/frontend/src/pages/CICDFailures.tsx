@@ -110,9 +110,13 @@ const FailureRow = ({ event }: FailureRowProps) => {
 
 // ==================== Main Component ====================
 
-export const CICDFailures = () => {
+interface CICDFailuresProps {
+  readonly refreshKey?: number;
+}
+
+export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
   const [offset, setOffset] = useState(0);
-  const { data, isLoading, error } = useFailures(PAGE_SIZE, offset);
+  const { data, isLoading, error } = useFailures(PAGE_SIZE, offset, refreshKey);
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;

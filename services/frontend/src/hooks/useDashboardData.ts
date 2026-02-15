@@ -152,31 +152,35 @@ const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
 
 // ==================== Typed Hooks ====================
 
-export const useTenantInfo = (): UseFetchResult<TenantInfo> =>
-  useFetch<TenantInfo>("/api/v1/dashboard/tenant");
+export const useTenantInfo = (refreshKey: number = 0): UseFetchResult<TenantInfo> =>
+  useFetch<TenantInfo>("/api/v1/dashboard/tenant", `${refreshKey}`);
 
-export const useDashboardStats = (): UseFetchResult<DashboardStats> =>
-  useFetch<DashboardStats>("/api/v1/dashboard/stats");
+export const useDashboardStats = (refreshKey: number = 0): UseFetchResult<DashboardStats> =>
+  useFetch<DashboardStats>("/api/v1/dashboard/stats", `${refreshKey}`);
 
-export const useRepositories = (): UseFetchResult<readonly InstallationRepository[]> =>
-  useFetch<readonly InstallationRepository[]>("/api/v1/dashboard/repositories");
+export const useRepositories = (
+  refreshKey: number = 0
+): UseFetchResult<readonly InstallationRepository[]> =>
+  useFetch<readonly InstallationRepository[]>("/api/v1/dashboard/repositories", `${refreshKey}`);
 
 export const useAnalyses = (
   limit: number = 20,
-  offset: number = 0
+  offset: number = 0,
+  refreshKey: number = 0
 ): UseFetchResult<PaginatedResult<AnalysisRecord>> =>
   useFetch<PaginatedResult<AnalysisRecord>>(
     `/api/v1/dashboard/analyses?limit=${limit}&offset=${offset}`,
-    `${limit}:${offset}`
+    `${limit}:${offset}:${refreshKey}`
   );
 
 export const useFailures = (
   limit: number = 20,
-  offset: number = 0
+  offset: number = 0,
+  refreshKey: number = 0
 ): UseFetchResult<PaginatedResult<EventRecord>> =>
   useFetch<PaginatedResult<EventRecord>>(
     `/api/v1/dashboard/failures?limit=${limit}&offset=${offset}`,
-    `${limit}:${offset}`
+    `${limit}:${offset}:${refreshKey}`
   );
 
 // Re-export types for use in page components

@@ -318,6 +318,9 @@ export { ANALYSIS_DEFAULTS, ANALYSIS_QUERIES } from "./analysis.js";
 // Event database constants
 export { EVENT_DB_DEFAULTS, EVENT_DB_QUERIES } from "./event.js";
 
+// Dashboard constants
+export { SSE_CONFIG, DASHBOARD_EVENT_TYPES } from "./dashboard.js";
+
 // Cost tracking constants
 export { COST_TRACKING_DEFAULTS, COST_TRACKING_QUERIES } from "./costTracking.js";
 

@@ -49,6 +49,21 @@ export interface EventCountRow {
   readonly count: string;
 }
 
+// ==================== Input Types ====================
+
+/**
+ * Input for creating a new event record.
+ */
+export interface CreateEventInput {
+  readonly type: string;
+  readonly source: string;
+  readonly severity: string | null;
+  readonly timestamp: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly metadata?: Readonly<Record<string, unknown>> | null;
+  readonly tenantId?: string | null;
+}
+
 // ==================== Query Options ====================
 
 /**

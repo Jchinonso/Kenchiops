@@ -12,6 +12,7 @@ import {
   createLogger,
   generateEventId,
   createAnalysis,
+  publish,
   LLMError,
   getErrorMessage,
   wrapError,
@@ -20,6 +21,8 @@ import {
   EVENT_SEVERITY,
   EVENT_DEFAULTS,
   SERVICE_NAMES,
+  PUBSUB_CHANNELS,
+  DASHBOARD_EVENT_TYPES,
   selectModel,
   logModelSelection,
   // Chunking pipeline imports
@@ -335,6 +338,23 @@ export const performAnalysis = async (
     ragDocsUsed: relatedDocs.length,
     ...logContext,
   });
+
+  // Publish dashboard SSE notification (fire-and-forget)
+  void (async () => {
+    try {
+      await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.ANALYSIS_COMPLETE, {
+        tenantId: request.tenant_id,
+        analysisId: savedAnalysis.id,
+        repository: request.repository,
+        confidence: confidenceResult.finalScore,
+      });
+    } catch (publishError) {
+      logger.warn("Failed to publish dashboard notification", {
+        error: getErrorMessage(publishError),
+        analysisId: savedAnalysis.id,
+      });
+    }
+  })();
 
   return formatAnalysisResponse(analysisResult, enrichedEvidence, request.repository);
 };

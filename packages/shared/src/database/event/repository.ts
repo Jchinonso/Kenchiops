@@ -9,18 +9,73 @@
 import {
   query,
   createLogger,
+  generateEventId,
   getErrorMessage,
   ValidationError,
   PARSE_INT_RADIX,
   EVENT_DB_DEFAULTS,
   EVENT_DB_QUERIES,
 } from "../common.js";
-import type { EventRow, EventRecord, EventCountRow, EventListOptions } from "./types.js";
-import { mapRowToEvent, validateEventListOptions } from "./helpers.js";
+import type {
+  EventRow,
+  EventRecord,
+  EventCountRow,
+  EventListOptions,
+  CreateEventInput,
+} from "./types.js";
+import { mapRowToEvent, validateEventListOptions, validateCreateEventInput } from "./helpers.js";
+
+/** ID prefix for generated event IDs */
+const EVENT_ID_PREFIX = "evt";
 
 const logger = createLogger("event-repository");
 
 // ==================== Public API ====================
+
+/**
+ * Creates a new event record in the database.
+ *
+ * @param input - The event data to store
+ * @returns The created event record
+ * @throws ValidationError if input validation fails
+ * @throws Error if database operation fails
+ */
+export const createEvent = async (input: CreateEventInput): Promise<EventRecord> => {
+  validateCreateEventInput(input);
+
+  const id = generateEventId(EVENT_ID_PREFIX);
+
+  try {
+    const result = await query<EventRow>(EVENT_DB_QUERIES.INSERT, [
+      id,
+      input.type,
+      input.source,
+      input.severity,
+      input.timestamp,
+      JSON.stringify(input.payload),
+      input.metadata ? JSON.stringify(input.metadata) : null,
+      input.tenantId ?? null,
+    ]);
+
+    const record = mapRowToEvent(result.rows[0]);
+
+    logger.info("Event created", {
+      id: record.id,
+      type: record.type,
+      source: record.source,
+      tenantId: record.tenantId,
+    });
+
+    return record;
+  } catch (error) {
+    logger.error("Failed to create event", {
+      type: input.type,
+      source: input.source,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
 
 /**
  * Retrieves events by tenant, optionally filtered by type.

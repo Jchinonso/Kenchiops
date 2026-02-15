@@ -134,10 +134,12 @@ export {
 
 // Event module
 export {
+  createEvent,
   getEventsByTenant,
   countEventsByTenant,
   type EventRecord,
   type EventListOptions,
+  type CreateEventInput,
 } from "./event/index.js";
 
 // Action proposal module

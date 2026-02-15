@@ -9,6 +9,14 @@ import {
   createLogger,
   getErrorMessage,
   addPendingCheckToRedis,
+  createEvent,
+  publish,
+  findByGitHubInstallation,
+  PUBSUB_CHANNELS,
+  DASHBOARD_EVENT_TYPES,
+  EVENT_TYPES,
+  EVENT_SOURCES,
+  EVENT_SEVERITY,
   type PendingCheckRun,
   type PendingCheckContext,
   type AggregationKey,
@@ -84,6 +92,59 @@ const buildPendingCheckContext = (webhook: CheckRunWebhook): PendingCheckContext
   };
 };
 
+// ==================== Event Persistence & Notification ====================
+
+/**
+ * Persist a CI failure event to the database and publish a dashboard
+ * notification via Redis pub/sub. Both operations are best-effort and
+ * must not block the aggregation pipeline.
+ */
+const persistEventAndNotify = async (webhook: CheckRunWebhook): Promise<void> => {
+  const { check_run, repository, installation } = webhook;
+  const installationId = installation?.id ?? 0;
+
+  try {
+    // Look up tenant for event scoping
+    const tenant = installationId > 0 ? await findByGitHubInstallation(installationId) : null;
+    const tenantId = tenant?.id ?? null;
+
+    await createEvent({
+      type: EVENT_TYPES.CICD_FAILURE,
+      source: EVENT_SOURCES.GITHUB_APP,
+      severity: EVENT_SEVERITY.HIGH,
+      timestamp: new Date().toISOString(),
+      payload: {
+        repository: repository.full_name,
+        checkName: check_run.name,
+        conclusion: check_run.conclusion,
+        headSha: check_run.head_sha,
+        checkRunId: check_run.id,
+        pullRequestCount: check_run.pull_requests.length,
+      },
+      metadata: {
+        owner: repository.owner.login,
+        repo: repository.name,
+        installationId,
+      },
+      tenantId,
+    });
+
+    // Publish to dashboard SSE channel
+    await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.NEW_FAILURE, {
+      tenantId,
+      repository: repository.full_name,
+      checkName: check_run.name,
+      commitSha: check_run.head_sha,
+    });
+  } catch (error) {
+    logger.warn("Failed to persist event or publish dashboard notification", {
+      error: getErrorMessage(error),
+      repository: repository.full_name,
+      checkName: check_run.name,
+    });
+  }
+};
+
 // ==================== Main Handler ====================
 
 /**
@@ -123,6 +184,9 @@ export const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolea
       checkName: check_run.name,
       checkRunId: check_run.id,
     });
+
+    // Persist event to DB and publish to dashboard SSE (fire-and-forget)
+    void persistEventAndNotify(webhook);
 
     return true;
   } catch (error) {

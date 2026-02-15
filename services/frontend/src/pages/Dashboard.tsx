@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useDashboardSSE } from "@/hooks/useDashboardSSE";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { ComingSoon } from "@/components/ComingSoon";
 import { DashboardOverview } from "@/pages/DashboardOverview";
@@ -78,17 +79,17 @@ const findComingSoonConfig = (pathname: string): ComingSoonConfig | undefined =>
 
 const isCICDRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/cicd");
 
-const renderCICDPage = (pathname: string): React.ReactNode => {
+const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode => {
   if (pathname.startsWith("/dashboard/cicd/failures")) {
-    return <CICDFailures />;
+    return <CICDFailures refreshKey={refreshKey} />;
   }
   if (pathname.startsWith("/dashboard/cicd/analyses")) {
-    return <CICDAnalyses />;
+    return <CICDAnalyses refreshKey={refreshKey} />;
   }
   if (pathname.startsWith("/dashboard/cicd/pipelines")) {
     return <CICDPipelines />;
   }
-  return <CICDFailures />;
+  return <CICDFailures refreshKey={refreshKey} />;
 };
 
 // ==================== Dashboard ====================
@@ -96,6 +97,7 @@ const renderCICDPage = (pathname: string): React.ReactNode => {
 const Dashboard = () => {
   const { pathname: currentPath } = useLocation();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { refreshKey } = useDashboardSSE();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -305,12 +307,13 @@ const Dashboard = () => {
           {comingSoonConfig ? (
             <ComingSoon {...comingSoonConfig} />
           ) : isCICD ? (
-            renderCICDPage(currentPath)
+            renderCICDPage(currentPath, refreshKey)
           ) : (
             <DashboardOverview
               firstName={firstName}
               showOnboarding={showOnboarding}
               dismissOnboarding={dismissOnboarding}
+              refreshKey={refreshKey}
             />
           )}
         </div>
