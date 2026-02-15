@@ -61,6 +61,9 @@ export const formatRelativeTime = (timestamp: string): string => {
   return Number.isNaN(date.getTime()) ? "--" : formatDistanceToNow(date, { addSuffix: true });
 };
 
+export const titleCase = (text: string): string =>
+  text.length === 0 ? text : `${text[0].toUpperCase()}${text.slice(1).toLowerCase()}`;
+
 export const truncateText = (text: string, maxLength: number): string =>
   text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 

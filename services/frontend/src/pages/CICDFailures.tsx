@@ -41,6 +41,7 @@ import {
   formatRelativeTime,
   getSeverityStyle,
   getPayloadString,
+  titleCase,
 } from "@/lib/formatters";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -104,7 +105,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
       <TableCell className="text-gray-700 dark:text-gray-300">{checkName}</TableCell>
       <TableCell>
         <Badge variant="outline" className={cn("text-xs", getSeverityStyle(event.severity))}>
-          {event.severity ?? "unknown"}
+          {titleCase(event.severity ?? "unknown")}
         </Badge>
       </TableCell>
       <TableCell>
@@ -350,7 +351,7 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
                     <TableHead>Repository</TableHead>
                     <TableHead>Check Name</TableHead>
                     <TableHead>Severity</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Conclusion</TableHead>
                     <TableHead>Commit</TableHead>
                     <TableHead>Analysis</TableHead>
                   </TableRow>

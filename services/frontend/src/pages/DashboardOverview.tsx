@@ -33,6 +33,7 @@ import {
   getSeverityStyle,
   extractRepoFromKey,
   getPayloadString,
+  titleCase,
 } from "@/lib/formatters";
 import {
   AlertTriangle,
@@ -355,7 +356,7 @@ export const DashboardOverview = ({
                             getSeverityStyle(event.severity)
                           )}
                         >
-                          {event.severity ?? "unknown"}
+                          {titleCase(event.severity ?? "unknown")}
                         </Badge>
                       </div>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">

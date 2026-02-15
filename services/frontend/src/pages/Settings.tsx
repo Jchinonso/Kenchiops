@@ -24,6 +24,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { titleCase } from "@/lib/formatters";
 
 // ==================== Constants ====================
 
@@ -174,7 +175,7 @@ export const Settings = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">{displayEmail}</p>
               )}
               <Badge variant="outline" className="mt-1.5 text-xs">
-                {user?.role ?? "member"}
+                {titleCase(user?.role ?? "member")}
               </Badge>
             </div>
           </div>
@@ -211,10 +212,12 @@ export const Settings = () => {
                       : "bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
                   )}
                 >
-                  {tenant.status}
+                  {titleCase(tenant.status)}
                 </Badge>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{tenant.id}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Tenant ID: <span className="font-mono select-all">{tenant.id}</span>
+              </p>
             </div>
           ) : (
             <p className="text-sm text-gray-500 dark:text-gray-400">No organization found.</p>
@@ -243,7 +246,7 @@ export const Settings = () => {
           <ConnectionCard
             name="Slack"
             icon={<MessageSquare className="w-8 h-8 text-purple-600" />}
-            connected={tenant?.slackConnected ?? false}
+            connected={false}
             actionLabel="Connect"
             actionHref="/dashboard/settings"
           />

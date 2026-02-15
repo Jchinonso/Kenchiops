@@ -32,6 +32,7 @@ import {
   getConfidenceStyle,
   getSeverityStyle,
   getPayloadString,
+  titleCase,
 } from "@/lib/formatters";
 import { PaginationControls } from "@/components/PaginationControls";
 import { ArrowLeft, ExternalLink, AlertTriangle, Search, GitBranch } from "lucide-react";
@@ -64,7 +65,7 @@ const FailureItem = ({ event }: FailureItemProps) => {
           variant="outline"
           className={cn("text-[10px] px-1.5 py-0", getSeverityStyle(event.severity))}
         >
-          {event.severity ?? "unknown"}
+          {titleCase(event.severity ?? "unknown")}
         </Badge>
       </div>
       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{checkName}</p>
