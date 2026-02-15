@@ -40,7 +40,10 @@ interface AnalysisCompletePayload {
 const parseEventData = <T>(event: MessageEvent): T | null => {
   try {
     return JSON.parse(event.data as string) as T;
-  } catch {
+  } catch (error) {
+    // Intentional: malformed SSE data is non-fatal; log for debuggability
+    // eslint-disable-next-line no-console
+    console.warn("[useDashboardSSE] Failed to parse SSE event data", error);
     return null;
   }
 };
@@ -62,6 +65,12 @@ export const useDashboardSSE = (): { readonly refreshKey: number } => {
     const eventSource = new EventSource(SSE_ENDPOINT, {
       withCredentials: true,
     });
+
+    // EventSource auto-reconnects on error; log for debugging
+    eventSource.onerror = () => {
+      // eslint-disable-next-line no-console
+      console.warn("[useDashboardSSE] SSE connection error, browser will auto-reconnect");
+    };
 
     const handleNewFailure = (event: MessageEvent) => {
       setRefreshKey((prev) => prev + 1);

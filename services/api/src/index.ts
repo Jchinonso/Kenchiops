@@ -44,6 +44,13 @@ import { SSE_STREAM_PATH } from "./routes/sseRoutes.js";
 import { appConfig } from "./config/appConfig.js";
 import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
 
+// Augment Express Request with rawBody for HMAC signature verification
+declare module "express-serve-static-core" {
+  interface Request {
+    rawBody?: Buffer;
+  }
+}
+
 // let: module-level lifecycle state — assigned during init, read during shutdown
 let analysisWorker: AnalysisWorkerControl | null = null;
 
@@ -306,7 +313,22 @@ const createApp = (): express.Express => {
   app.use(cookieParser());
 
   // Middleware - use configured limit for large CI context payloads
-  app.use(express.json({ limit: EXPRESS_CONFIG.JSON_BODY_LIMIT }));
+  // Capture raw body ONLY when internal HMAC auth headers are present,
+  // to avoid retaining a duplicate buffer in memory for regular browser requests.
+  // Object.assign is required because Express verify callbacks must mutate req by design
+  // (this is a framework-boundary side effect, allowed per CLAUDE.md rule 3).
+  app.use(
+    express.json({
+      limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
+      verify: (req: express.Request, _res, buf) => {
+        // Only capture rawBody when HMAC signature header is present
+        // to avoid doubling memory usage on every request
+        if (req.headers["x-kenchi-signature"]) {
+          Object.assign(req, { rawBody: buf });
+        }
+      },
+    })
+  );
   app.use(requestLogger);
   app.use(apiRateLimiter.middleware());
   app.use(authMiddleware);

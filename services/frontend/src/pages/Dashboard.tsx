@@ -320,7 +320,7 @@ const Dashboard = () => {
         </div>
       </main>
 
-      <Toaster position="bottom-right" />
+      <Toaster position="bottom-right" theme="light" />
     </div>
   );
 };

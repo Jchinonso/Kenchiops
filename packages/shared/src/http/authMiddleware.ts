@@ -18,8 +18,34 @@ import { PUBLIC_ROUTES } from "../constants/auth.js";
 import { AuthenticationError, createLogger } from "../core/index.js";
 import { config } from "../core/config.js";
 import { INTERNAL_AUTH_HEADERS, verifyInternalSignature } from "./internalAuth.js";
+import { SERVICE_NAMES } from "../constants/http.js";
 import type { AuthenticatedUser } from "../database/user/types.js";
 import type { RequestContext } from "../core/types.js";
+
+/**
+ * Set of known internal service names for HMAC actor validation.
+ * Prevents arbitrary actor injection via the x-kenchi-service header.
+ */
+const KNOWN_SERVICE_NAMES: ReadonlySet<string> = new Set(Object.values(SERVICE_NAMES));
+
+/** Maximum allowed length for service name header (defense-in-depth). */
+const MAX_SERVICE_NAME_LENGTH = 64;
+
+/**
+ * Validate and sanitize a service name from the x-kenchi-service header.
+ * Returns the validated name, or "unknown" if invalid/missing.
+ */
+const validateServiceName = (raw: string | undefined): string => {
+  if (!raw || raw.length === 0 || raw.length > MAX_SERVICE_NAME_LENGTH) {
+    return "unknown";
+  }
+  if (KNOWN_SERVICE_NAMES.has(raw)) {
+    return raw;
+  }
+  // Unknown service name — log-safe sanitization (alphanumeric + hyphens only)
+  const sanitized = raw.replace(/[^a-zA-Z0-9-]/g, "").slice(0, MAX_SERVICE_NAME_LENGTH);
+  return sanitized.length > 0 ? sanitized : "unknown";
+};
 
 // ==================== Express Augmentation ====================
 
@@ -83,28 +109,39 @@ const tryInternalAuth = (req: Request): boolean => {
     return false;
   }
 
-  // Use raw body if available, otherwise re-serialize parsed body
-  const typedReq = req as RequestWithRawBody;
+  // Use raw body buffer when available (captured by express.json verify callback).
+  // For bodyless methods (GET/HEAD/DELETE/OPTIONS), express.json initializes the
+  // parsed body to an empty object even though nothing was sent. Use empty string
+  // for those methods to match the signing side (resilientClient signs "" for no body).
+  const reqWithBody = req as RequestWithRawBody;
+  const capturedRaw = reqWithBody.rawBody;
+  const { method } = req;
+  const hasRequestBody = method === "POST" || method === "PUT" || method === "PATCH";
   const rawBody =
-    typedReq.rawBody !== undefined && typedReq.rawBody !== null
-      ? typedReq.rawBody.toString("utf-8")
-      : JSON.stringify(req.body);
+    capturedRaw !== undefined && capturedRaw !== null
+      ? capturedRaw.toString("utf-8")
+      : hasRequestBody
+        ? JSON.stringify(req.body)
+        : "";
+
+  const rawServiceName = req.headers[INTERNAL_AUTH_HEADERS.SERVICE] as string | undefined;
+  const serviceName = validateServiceName(rawServiceName);
 
   if (!verifyInternalSignature(signature, timestamp, rawBody, secret)) {
-    const serviceName = req.headers[INTERNAL_AUTH_HEADERS.SERVICE] as string | undefined;
     logger.warn("Internal auth signature verification failed", {
       path: req.path,
-      service: serviceName ?? "unknown",
+      service: serviceName,
     });
     throw new AuthenticationError("Invalid internal authentication signature", {
       operation: "internalAuth",
     });
   }
 
-  // Enrich request context with calling service identity
-  const serviceName = req.headers[INTERNAL_AUTH_HEADERS.SERVICE] as string | undefined;
+  // Enrich request context with validated service identity.
+  // Object.assign is required because Express middleware must mutate req by design
+  // (this is a handler-boundary side effect, allowed per CLAUDE.md rule 3).
   const reqWithCtx = req as RequestWithRequestContext;
-  if (serviceName && reqWithCtx.context) {
+  if (serviceName !== "unknown" && reqWithCtx.context) {
     Object.assign(req, {
       context: { ...reqWithCtx.context, actor: `service:${serviceName}` },
     });
@@ -112,7 +149,7 @@ const tryInternalAuth = (req: Request): boolean => {
 
   logger.debug("Internal service auth verified", {
     path: req.path,
-    service: serviceName ?? "unknown",
+    service: serviceName,
   });
 
   return true;
