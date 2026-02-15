@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import AuthCallback from "./pages/AuthCallback";
 import { AuthProvider } from "./hooks/useAuth";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const HomePage = () => (
   <>
@@ -32,34 +33,36 @@ const HomePage = () => (
 );
 
 const App = () => (
-  <Router>
-    <AuthProvider>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/oauth/callback" element={<AuthCallback />} />
-        {/* Backward-compatible redirects for old URLs */}
-        <Route
-          path="/dashboard/failures"
-          element={<Navigate to="/dashboard/cicd/failures" replace />}
-        />
-        <Route
-          path="/dashboard/analyses"
-          element={<Navigate to="/dashboard/cicd/analyses" replace />}
-        />
-        <Route
-          path="/dashboard/repos"
-          element={<Navigate to="/dashboard/cicd/pipelines" replace />}
-        />
-        <Route
-          path="/dashboard/patterns"
-          element={<Navigate to="/dashboard/analytics" replace />}
-        />
-        {/* Dashboard shell handles all sub-routes */}
-        <Route path="/dashboard/*" element={<Dashboard />} />
-      </Routes>
-    </AuthProvider>
-  </Router>
+  <ErrorBoundary>
+    <Router>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/oauth/callback" element={<AuthCallback />} />
+          {/* Backward-compatible redirects for old URLs */}
+          <Route
+            path="/dashboard/failures"
+            element={<Navigate to="/dashboard/cicd/failures" replace />}
+          />
+          <Route
+            path="/dashboard/analyses"
+            element={<Navigate to="/dashboard/cicd/analyses" replace />}
+          />
+          <Route
+            path="/dashboard/repos"
+            element={<Navigate to="/dashboard/cicd/pipelines" replace />}
+          />
+          <Route
+            path="/dashboard/patterns"
+            element={<Navigate to="/dashboard/analytics" replace />}
+          />
+          {/* Dashboard shell handles all sub-routes */}
+          <Route path="/dashboard/*" element={<Dashboard />} />
+        </Routes>
+      </AuthProvider>
+    </Router>
+  </ErrorBoundary>
 );
 
 export default App;
