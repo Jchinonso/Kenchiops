@@ -56,7 +56,7 @@ const FailureItem = ({ event }: FailureItemProps) => {
     <div className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors">
       <div className="flex items-center justify-between gap-2 mb-1">
         <span
-          className="text-xs text-gray-400 dark:text-gray-500"
+          className="text-xs text-gray-400 dark:text-gray-400"
           title={formatTimestamp(event.timestamp)}
         >
           {formatRelativeTime(event.timestamp)}
@@ -82,7 +82,7 @@ const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
   <div className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors">
     <div className="flex items-center justify-between gap-2 mb-1">
       <span
-        className="text-xs text-gray-400 dark:text-gray-500"
+        className="text-xs text-gray-400 dark:text-gray-400"
         title={formatTimestamp(analysis.createdAt)}
       >
         {formatRelativeTime(analysis.createdAt)}

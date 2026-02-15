@@ -341,7 +341,7 @@ export const DashboardSidebar = ({
       </nav>
 
       {/* Footer */}
-      <div className="p-3 sm:p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">
+      <div className="p-3 sm:p-4 border-t border-gray-100 dark:border-gray-700 space-y-1">
         <button className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors">
           <HelpCircle className="w-5 h-5" />
           <span className="font-medium text-sm">Help & Support</span>

@@ -382,47 +382,49 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
             </Empty>
           ) : (
             <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-8" />
-                    <SortableTableHead
-                      label="Time"
-                      column="createdAt"
-                      currentSort={sort}
-                      onSort={handleSort}
-                    />
-                    <TableHead>Repository</TableHead>
-                    <TableHead>Summary</TableHead>
-                    <SortableTableHead
-                      label="Confidence"
-                      column="confidence"
-                      currentSort={sort}
-                      onSort={handleSort}
-                    />
-                    <TableHead>Event</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedItems.map((analysis) => (
-                    <Fragment key={analysis.id}>
-                      <AnalysisRow
-                        analysis={analysis}
-                        isExpanded={expandedId === analysis.id}
-                        onClick={() =>
-                          setExpandedId((prev) => (prev === analysis.id ? null : analysis.id))
-                        }
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8" />
+                      <SortableTableHead
+                        label="Time"
+                        column="createdAt"
+                        currentSort={sort}
+                        onSort={handleSort}
                       />
-                      {expandedId === analysis.id && (
-                        <ExpandedAnalysisRow
+                      <TableHead>Repository</TableHead>
+                      <TableHead>Summary</TableHead>
+                      <SortableTableHead
+                        label="Confidence"
+                        column="confidence"
+                        currentSort={sort}
+                        onSort={handleSort}
+                      />
+                      <TableHead>Event</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedItems.map((analysis) => (
+                      <Fragment key={analysis.id}>
+                        <AnalysisRow
                           analysis={analysis}
-                          onViewDetails={() => setSelectedAnalysisId(analysis.id)}
+                          isExpanded={expandedId === analysis.id}
+                          onClick={() =>
+                            setExpandedId((prev) => (prev === analysis.id ? null : analysis.id))
+                          }
                         />
-                      )}
-                    </Fragment>
-                  ))}
-                </TableBody>
-              </Table>
+                        {expandedId === analysis.id && (
+                          <ExpandedAnalysisRow
+                            analysis={analysis}
+                            onViewDetails={() => setSelectedAnalysisId(analysis.id)}
+                          />
+                        )}
+                      </Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
               {totalPages > 1 && (
                 <PaginationControls

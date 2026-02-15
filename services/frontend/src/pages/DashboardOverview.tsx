@@ -346,7 +346,7 @@ export const DashboardOverview = ({
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
                   {failureItems.map((event: EventRecord) => (
                     <div
                       key={event.id}
@@ -354,7 +354,7 @@ export const DashboardOverview = ({
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span
-                          className="text-xs text-gray-400 dark:text-gray-500"
+                          className="text-xs text-gray-400 dark:text-gray-400"
                           title={formatTimestamp(event.timestamp)}
                         >
                           {formatRelativeTime(event.timestamp)}
@@ -399,7 +399,7 @@ export const DashboardOverview = ({
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
                   {analysisItems.map((analysis: AnalysisRecord) => (
                     <div
                       key={analysis.id}
@@ -407,7 +407,7 @@ export const DashboardOverview = ({
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span
-                          className="text-xs text-gray-400 dark:text-gray-500"
+                          className="text-xs text-gray-400 dark:text-gray-400"
                           title={formatTimestamp(analysis.createdAt)}
                         >
                           {formatRelativeTime(analysis.createdAt)}

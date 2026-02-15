@@ -443,55 +443,57 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
             </Empty>
           ) : (
             <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-8" />
-                    <SortableTableHead
-                      label="Time"
-                      column="timestamp"
-                      currentSort={sort}
-                      onSort={handleSort}
-                    />
-                    <TableHead>Repository</TableHead>
-                    <TableHead>Check Name</TableHead>
-                    <SortableTableHead
-                      label="Severity"
-                      column="severity"
-                      currentSort={sort}
-                      onSort={handleSort}
-                    />
-                    <SortableTableHead
-                      label="Conclusion"
-                      column="conclusion"
-                      currentSort={sort}
-                      onSort={handleSort}
-                    />
-                    <TableHead>Commit</TableHead>
-                    <TableHead>Analysis</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedItems.map((event) => (
-                    <Fragment key={event.id}>
-                      <FailureRow
-                        event={event}
-                        analysisStatus={analysisStatus?.[event.id]}
-                        isExpanded={expandedId === event.id}
-                        onClick={() =>
-                          setExpandedId((prev) => (prev === event.id ? null : event.id))
-                        }
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8" />
+                      <SortableTableHead
+                        label="Time"
+                        column="timestamp"
+                        currentSort={sort}
+                        onSort={handleSort}
                       />
-                      {expandedId === event.id && (
-                        <ExpandedFailureRow
+                      <TableHead>Repository</TableHead>
+                      <TableHead>Check Name</TableHead>
+                      <SortableTableHead
+                        label="Severity"
+                        column="severity"
+                        currentSort={sort}
+                        onSort={handleSort}
+                      />
+                      <SortableTableHead
+                        label="Conclusion"
+                        column="conclusion"
+                        currentSort={sort}
+                        onSort={handleSort}
+                      />
+                      <TableHead>Commit</TableHead>
+                      <TableHead>Analysis</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedItems.map((event) => (
+                      <Fragment key={event.id}>
+                        <FailureRow
                           event={event}
                           analysisStatus={analysisStatus?.[event.id]}
+                          isExpanded={expandedId === event.id}
+                          onClick={() =>
+                            setExpandedId((prev) => (prev === event.id ? null : event.id))
+                          }
                         />
-                      )}
-                    </Fragment>
-                  ))}
-                </TableBody>
-              </Table>
+                        {expandedId === event.id && (
+                          <ExpandedFailureRow
+                            event={event}
+                            analysisStatus={analysisStatus?.[event.id]}
+                          />
+                        )}
+                      </Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
               {totalPages > 1 && (
                 <PaginationControls
