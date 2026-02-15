@@ -44,6 +44,8 @@ import {
   ArrowUpCircle,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
+import { DashboardBreadcrumb } from "@/components/DashboardBreadcrumb";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 // ==================== Coming Soon Configs ====================
 
@@ -280,7 +282,7 @@ const Dashboard = () => {
               >
                 <Menu className="w-5 h-5" />
               </button>
-              {isCICD && (
+              {isCICD ? (
                 <div className="flex-1 max-w-xl">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
@@ -302,31 +304,45 @@ const Dashboard = () => {
                     />
                   </div>
                 </div>
+              ) : (
+                <div className="hidden sm:block">
+                  <DashboardBreadcrumb />
+                </div>
               )}
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4">
               {/* Theme Toggle */}
-              <button
-                onClick={toggleTheme}
-                className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                aria-label="Toggle theme"
-              >
-                {resolvedTheme === "dark" ? (
-                  <Sun className="w-4 h-4 sm:w-5 sm:h-5" />
-                ) : (
-                  <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
-                )}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={toggleTheme}
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    aria-label="Toggle theme"
+                  >
+                    {resolvedTheme === "dark" ? (
+                      <Sun className="w-4 h-4 sm:w-5 sm:h-5" />
+                    ) : (
+                      <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Toggle theme</TooltipContent>
+              </Tooltip>
 
               {/* Notifications */}
               <div ref={notificationsRef} className="relative">
-                <button
-                  onClick={toggleNotifications}
-                  className="relative p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                >
-                  <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={toggleNotifications}
+                      className="relative p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    >
+                      <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Notifications</TooltipContent>
+                </Tooltip>
                 {notificationsOpen && (
                   <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 py-2 z-50">
                     <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800">

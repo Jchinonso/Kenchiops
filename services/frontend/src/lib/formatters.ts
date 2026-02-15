@@ -5,6 +5,8 @@
  * timestamps, text truncation, and payload extraction.
  */
 
+import { formatDistanceToNow } from "date-fns";
+
 // ==================== Confidence ====================
 
 export const CONFIDENCE_THRESHOLDS = {
@@ -52,6 +54,11 @@ export const formatTimestamp = (timestamp: string): string => {
         hour: "2-digit",
         minute: "2-digit",
       });
+};
+
+export const formatRelativeTime = (timestamp: string): string => {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? "--" : formatDistanceToNow(date, { addSuffix: true });
 };
 
 export const truncateText = (text: string, maxLength: number): string =>

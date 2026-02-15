@@ -32,6 +32,7 @@ import {
   getConfidenceLabel,
   getConfidenceStyle,
   formatTimestamp,
+  formatRelativeTime,
   truncateText,
   extractRepoFromKey,
   formatSignalValue,
@@ -69,7 +70,9 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
         />
       </TableCell>
       <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
-        {formatTimestamp(analysis.createdAt)}
+        <span title={formatTimestamp(analysis.createdAt)}>
+          {formatRelativeTime(analysis.createdAt)}
+        </span>
       </TableCell>
       <TableCell className="text-gray-700 dark:text-gray-300 font-medium text-xs">{repo}</TableCell>
       <TableCell className="max-w-xs">
@@ -336,6 +339,8 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
                   hasNext={hasNext}
                   onPrev={goPrev}
                   onNext={goNext}
+                  totalItems={total}
+                  pageSize={PAGE_SIZE}
                 />
               )}
             </>

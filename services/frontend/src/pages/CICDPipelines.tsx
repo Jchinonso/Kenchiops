@@ -16,6 +16,7 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty";
 import { Workflow, ExternalLink, Lock, Globe, GitBranch } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
 import { useRepositories, type InstallationRepository } from "@/hooks/useDashboardData";
 
@@ -47,15 +48,20 @@ const RepoCard = ({ repo }: RepoCardProps) => (
               {repo.name}
             </span>
           </div>
-          <a
-            href={`https://github.com/${repo.fullName}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-gray-400 hover:text-indigo-500 transition-colors flex-shrink-0"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                href={`https://github.com/${repo.fullName}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-indigo-500 transition-colors flex-shrink-0"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>Open on GitHub</TooltipContent>
+          </Tooltip>
         </div>
 
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 truncate">{repo.fullName}</p>

@@ -5,6 +5,7 @@
  * from dashboard data (analyses and failure events).
  */
 
+import { toast } from "sonner";
 import { extractRepoFromKey, getPayloadString } from "@/lib/formatters";
 
 // ==================== Types ====================
@@ -72,10 +73,9 @@ export const exportAnalysesToCSV = (analyses: readonly AnalysisExportRecord[]): 
     (analysis.recommendedActions ?? []).join("; "),
     analysis.eventId ?? "",
   ]);
-  downloadCSV(
-    `kenchi-analyses-${new Date().toISOString().slice(0, 10)}.csv`,
-    generateCSV(ANALYSIS_HEADERS, rows)
-  );
+  const filename = `kenchi-analyses-${new Date().toISOString().slice(0, 10)}.csv`;
+  downloadCSV(filename, generateCSV(ANALYSIS_HEADERS, rows));
+  toast.success(`Exported ${analyses.length} analyses`, { description: filename });
 };
 
 const FAILURE_HEADERS = [
@@ -100,8 +100,7 @@ export const exportFailuresToCSV = (failures: readonly FailureExportRecord[]): v
     getPayloadString(event.payload, "conclusion"),
     getPayloadString(event.payload, "headSha"),
   ]);
-  downloadCSV(
-    `kenchi-failures-${new Date().toISOString().slice(0, 10)}.csv`,
-    generateCSV(FAILURE_HEADERS, rows)
-  );
+  const filename = `kenchi-failures-${new Date().toISOString().slice(0, 10)}.csv`;
+  downloadCSV(filename, generateCSV(FAILURE_HEADERS, rows));
+  toast.success(`Exported ${failures.length} failures`, { description: filename });
 };

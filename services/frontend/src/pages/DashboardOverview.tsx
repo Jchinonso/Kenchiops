@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   formatTimestamp,
+  formatRelativeTime,
   truncateText,
   getConfidenceLabel,
   getConfidenceStyle,
@@ -341,8 +342,11 @@ export const DashboardOverview = ({
                       className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          {formatTimestamp(event.timestamp)}
+                        <span
+                          className="text-xs text-gray-400 dark:text-gray-500"
+                          title={formatTimestamp(event.timestamp)}
+                        >
+                          {formatRelativeTime(event.timestamp)}
                         </span>
                         <Badge
                           variant="outline"
@@ -391,8 +395,11 @@ export const DashboardOverview = ({
                       className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          {formatTimestamp(analysis.createdAt)}
+                        <span
+                          className="text-xs text-gray-400 dark:text-gray-500"
+                          title={formatTimestamp(analysis.createdAt)}
+                        >
+                          {formatRelativeTime(analysis.createdAt)}
                         </span>
                         <Badge
                           variant="outline"

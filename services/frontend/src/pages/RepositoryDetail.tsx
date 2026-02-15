@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   formatTimestamp,
+  formatRelativeTime,
   truncateText,
   getConfidenceLabel,
   getConfidenceStyle,
@@ -34,6 +35,7 @@ import {
 } from "@/lib/formatters";
 import { PaginationControls } from "@/components/PaginationControls";
 import { ArrowLeft, ExternalLink, AlertTriangle, Search, GitBranch } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 // ==================== Constants ====================
 
@@ -52,8 +54,11 @@ const FailureItem = ({ event }: FailureItemProps) => {
   return (
     <div className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-xs text-gray-400 dark:text-gray-500">
-          {formatTimestamp(event.timestamp)}
+        <span
+          className="text-xs text-gray-400 dark:text-gray-500"
+          title={formatTimestamp(event.timestamp)}
+        >
+          {formatRelativeTime(event.timestamp)}
         </span>
         <Badge
           variant="outline"
@@ -75,8 +80,11 @@ interface AnalysisItemProps {
 const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
   <div className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors">
     <div className="flex items-center justify-between gap-2 mb-1">
-      <span className="text-xs text-gray-400 dark:text-gray-500">
-        {formatTimestamp(analysis.createdAt)}
+      <span
+        className="text-xs text-gray-400 dark:text-gray-500"
+        title={formatTimestamp(analysis.createdAt)}
+      >
+        {formatRelativeTime(analysis.createdAt)}
       </span>
       <Badge
         variant="outline"
@@ -145,15 +153,20 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
               {repoFullName}
             </h1>
-            <a
-              href={`https://github.com/${repoFullName}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-indigo-500 hover:text-indigo-600 transition-colors"
-            >
-              View on GitHub
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={`https://github.com/${repoFullName}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-indigo-500 hover:text-indigo-600 transition-colors"
+                >
+                  View on GitHub
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>View on GitHub</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -211,6 +224,8 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
               hasNext={failuresOffset + PAGE_SIZE < failuresTotal}
               onPrev={() => setFailuresOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
               onNext={() => setFailuresOffset((prev) => prev + PAGE_SIZE)}
+              totalItems={failuresTotal}
+              pageSize={PAGE_SIZE}
             />
           )}
         </Card>
@@ -264,6 +279,8 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
               hasNext={analysesOffset + PAGE_SIZE < analysesTotal}
               onPrev={() => setAnalysesOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
               onNext={() => setAnalysesOffset((prev) => prev + PAGE_SIZE)}
+              totalItems={analysesTotal}
+              pageSize={PAGE_SIZE}
             />
           )}
         </Card>

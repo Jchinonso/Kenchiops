@@ -25,6 +25,7 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty";
 import { AlertTriangle, ExternalLink, Search, ChevronRight, Download } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
   useFailures,
   useAnalysisStatusByEvents,
@@ -37,6 +38,7 @@ import {
   getConfidenceLabel,
   getConfidenceStyle,
   formatTimestamp,
+  formatRelativeTime,
   getSeverityStyle,
   getPayloadString,
 } from "@/lib/formatters";
@@ -76,21 +78,26 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
         />
       </TableCell>
       <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
-        {formatTimestamp(event.timestamp)}
+        <span title={formatTimestamp(event.timestamp)}>{formatRelativeTime(event.timestamp)}</span>
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
           <span className="font-medium text-gray-900 dark:text-gray-100">{repository}</span>
           {repository !== "--" && (
-            <a
-              href={`https://github.com/${repository}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-400 hover:text-indigo-500 transition-colors"
-              onClick={(linkEvent) => linkEvent.stopPropagation()}
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={`https://github.com/${repository}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-indigo-500 transition-colors"
+                  onClick={(linkEvent) => linkEvent.stopPropagation()}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>Open on GitHub</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </TableCell>
@@ -109,7 +116,19 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
         </Badge>
       </TableCell>
       <TableCell className="text-gray-500 dark:text-gray-400 font-mono text-xs">
-        {shortSha}
+        {headSha !== "--" && repository !== "--" ? (
+          <a
+            href={`https://github.com/${repository}/commit/${headSha}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-indigo-500 underline decoration-dotted underline-offset-2 transition-colors"
+            onClick={(linkEvent) => linkEvent.stopPropagation()}
+          >
+            {shortSha}
+          </a>
+        ) : (
+          shortSha
+        )}
       </TableCell>
       <TableCell>
         {analysisStatus ? (
@@ -366,6 +385,8 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
                   hasNext={hasNext}
                   onPrev={goPrev}
                   onNext={goNext}
+                  totalItems={total}
+                  pageSize={PAGE_SIZE}
                 />
               )}
             </>
