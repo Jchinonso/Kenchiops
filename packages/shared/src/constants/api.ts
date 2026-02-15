@@ -195,6 +195,16 @@ export const API_PAGINATION_DEFAULTS = {
   DEFAULT_OFFSET: 0,
 } as const;
 
+/**
+ * Dashboard-specific pagination defaults.
+ */
+export const DASHBOARD_PAGINATION = {
+  /** Default items per page for dashboard list endpoints */
+  DEFAULT_LIMIT: 20,
+  /** Maximum items per page */
+  MAX_LIMIT: 200,
+} as const;
+
 // ==================== GitHub API Constants ====================
 
 /**

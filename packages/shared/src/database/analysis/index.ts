@@ -32,4 +32,6 @@ export {
   getAnalysisByEventId,
   getAnalysesByModelVersion,
   countAnalysesByModelVersion,
+  getAnalysesByTenant,
+  countAnalysesByTenant,
 } from "./repository.js";

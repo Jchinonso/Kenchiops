@@ -260,8 +260,17 @@ export {
   getAnalysisByEventId,
   getAnalysesByModelVersion,
   countAnalysesByModelVersion,
+  getAnalysesByTenant,
+  countAnalysesByTenant,
   type CreateAnalysisInput,
   type AnalysisRecord,
+} from "./database/index.js";
+export {
+  // Event module
+  getEventsByTenant,
+  countEventsByTenant,
+  type EventRecord,
+  type EventListOptions,
 } from "./database/index.js";
 
 // User module (Authentication)

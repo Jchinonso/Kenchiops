@@ -13,6 +13,7 @@ import { analysisRoutes } from "./analysisRoutes.js";
 import { ragRoutes } from "./rag/index.js";
 import { fineTuningRoutes } from "./fineTuningRoutes.js";
 import { riskRulesRoutes } from "./riskRulesRoutes.js";
+import { dashboardRoutes } from "./dashboardRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -41,4 +42,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Risk rules routes (custom risk rules management)
   app.use(riskRulesRoutes);
+
+  // Dashboard routes (CI/CD dashboard)
+  app.use(dashboardRoutes);
 };

@@ -188,3 +188,64 @@ export const countAnalysesByModelVersion = async (modelVersionId: string): Promi
     throw error;
   }
 };
+
+/**
+ * Retrieves analyses by tenant ID.
+ *
+ * @param tenantId - The tenant ID
+ * @param limit - Maximum number of records to return (default: 50)
+ * @param offset - Number of records to skip (default: 0)
+ * @returns Array of analysis records
+ * @throws ValidationError if tenantId is empty or limit is invalid
+ * @throws Error if database operation fails
+ */
+export const getAnalysesByTenant = async (
+  tenantId: string,
+  limit: number = ANALYSIS_DEFAULTS.TENANT_QUERY_LIMIT,
+  offset: number = 0
+): Promise<readonly AnalysisRecord[]> => {
+  validateId(tenantId, "tenantId");
+  validateLimit(limit);
+
+  try {
+    const result = await query<AnalysisRow>(ANALYSIS_QUERIES.GET_BY_TENANT, [
+      tenantId,
+      limit,
+      offset,
+    ]);
+
+    return Object.freeze(result.rows.map(mapRowToAnalysis));
+  } catch (error) {
+    logger.error("Failed to get analyses by tenant", {
+      tenantId,
+      limit,
+      offset,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Counts analyses by tenant ID.
+ *
+ * @param tenantId - The tenant ID
+ * @returns The count of analyses
+ * @throws ValidationError if tenantId is empty
+ * @throws Error if database operation fails
+ */
+export const countAnalysesByTenant = async (tenantId: string): Promise<number> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<AnalysisCountRow>(ANALYSIS_QUERIES.COUNT_BY_TENANT, [tenantId]);
+
+    return parseInt(result.rows[0].count, PARSE_INT_RADIX);
+  } catch (error) {
+    logger.error("Failed to count analyses by tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};

@@ -126,9 +126,19 @@ export {
   getAnalysisByEventId,
   getAnalysesByModelVersion,
   countAnalysesByModelVersion,
+  getAnalysesByTenant,
+  countAnalysesByTenant,
   type CreateAnalysisInput,
   type AnalysisRecord,
 } from "./analysis/index.js";
+
+// Event module
+export {
+  getEventsByTenant,
+  countEventsByTenant,
+  type EventRecord,
+  type EventListOptions,
+} from "./event/index.js";
 
 // Action proposal module
 export {

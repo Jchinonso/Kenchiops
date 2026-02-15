@@ -16,6 +16,10 @@ export const ANALYSIS_DEFAULTS = {
   MODEL_VERSION_QUERY_LIMIT: 100,
   /** Minimum valid limit for queries. */
   MIN_QUERY_LIMIT: 1,
+  /** Default limit for tenant queries. */
+  TENANT_QUERY_LIMIT: 50,
+  /** Maximum limit for tenant queries. */
+  MAX_TENANT_QUERY_LIMIT: 200,
 } as const;
 
 // ==================== SQL Queries ====================
@@ -52,5 +56,17 @@ export const ANALYSIS_QUERIES = {
   COUNT_BY_MODEL_VERSION: `
     SELECT COUNT(*) as count FROM analyses
     WHERE model_version_id = $1
+  `,
+
+  GET_BY_TENANT: `
+    SELECT * FROM analyses
+    WHERE tenant_id = $1
+    ORDER BY created_at DESC
+    LIMIT $2 OFFSET $3
+  `,
+
+  COUNT_BY_TENANT: `
+    SELECT COUNT(*) as count FROM analyses
+    WHERE tenant_id = $1
   `,
 } as const;
