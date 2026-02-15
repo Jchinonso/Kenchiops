@@ -6,7 +6,7 @@
  * Rows expand inline to show recommended actions and confidence signals.
  */
 
-import { Fragment, useState, useEffect } from "react";
+import { Fragment, useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -37,7 +37,7 @@ import {
 } from "@/lib/formatters";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
-import { FilterBar, type FilterValues } from "@/components/FilterBar";
+import { FilterBar, parseConfidenceFilter, type FilterValues } from "@/components/FilterBar";
 import { AnalysisDetailPanel } from "@/pages/AnalysisDetailPanel";
 
 // ==================== Helpers ====================
@@ -191,14 +191,21 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
   const handleFilterChange = (next: FilterValues) => {
     setFilters(next);
     setOffset(0);
+    setExpandedId(null);
   };
+
+  const confidenceRange = useMemo(
+    () => parseConfidenceFilter(filters.minConfidence),
+    [filters.minConfidence]
+  );
 
   const { data, isLoading, error } = useAnalyses(
     PAGE_SIZE,
     offset,
     refreshKey,
     filters.repository || undefined,
-    filters.minConfidence || undefined
+    confidenceRange.min !== null ? String(confidenceRange.min) : undefined,
+    confidenceRange.max !== null ? String(confidenceRange.max) : undefined
   );
 
   const items = data?.items ?? [];
@@ -209,8 +216,14 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
   const hasPrev = offset > 0;
   const hasNext = offset + PAGE_SIZE < total;
 
-  const goNext = () => setOffset((prev) => prev + PAGE_SIZE);
-  const goPrev = () => setOffset((prev) => Math.max(0, prev - PAGE_SIZE));
+  const goNext = () => {
+    setOffset((prev) => prev + PAGE_SIZE);
+    setExpandedId(null);
+  };
+  const goPrev = () => {
+    setOffset((prev) => Math.max(0, prev - PAGE_SIZE));
+    setExpandedId(null);
+  };
 
   return (
     <div className="space-y-6">

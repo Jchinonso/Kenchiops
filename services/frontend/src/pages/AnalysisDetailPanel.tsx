@@ -225,7 +225,11 @@ export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetai
         <SheetHeader>
           <SheetTitle>Analysis Detail</SheetTitle>
           <SheetDescription>
-            {repo && timestamp ? `${repo} \u00b7 ${timestamp}` : "Loading analysis details..."}
+            {error
+              ? "Failed to load analysis"
+              : repo && timestamp
+                ? `${repo} \u00b7 ${timestamp}`
+                : "Loading analysis details..."}
           </SheetDescription>
         </SheetHeader>
 

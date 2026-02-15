@@ -17,7 +17,7 @@ export const PaginationControls = ({
   onPrev,
   onNext,
 }: PaginationControlsProps) => (
-  <div className="flex items-center justify-between px-4 py-3 border-t">
+  <nav aria-label="Pagination" className="flex items-center justify-between px-4 py-3 border-t">
     <span className="text-sm text-gray-500">
       Page {currentPage} of {totalPages}
     </span>
@@ -25,6 +25,7 @@ export const PaginationControls = ({
       <button
         onClick={onPrev}
         disabled={!hasPrev}
+        aria-label="Go to previous page"
         className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <ChevronLeft className="w-4 h-4" />
@@ -33,11 +34,12 @@ export const PaginationControls = ({
       <button
         onClick={onNext}
         disabled={!hasNext}
+        aria-label="Go to next page"
         className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Next
         <ChevronRight className="w-4 h-4" />
       </button>
     </div>
-  </div>
+  </nav>
 );

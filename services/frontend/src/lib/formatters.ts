@@ -40,13 +40,17 @@ export const getSeverityStyle = (severity: string | null): string =>
 
 // ==================== General ====================
 
-export const formatTimestamp = (timestamp: string): string =>
-  new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+export const formatTimestamp = (timestamp: string): string => {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime())
+    ? "--"
+    : date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+};
 
 export const truncateText = (text: string, maxLength: number): string =>
   text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;

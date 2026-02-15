@@ -151,13 +151,21 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
       tenantId: string,
       repository: string | null,
       minConfidence: number | null,
+      maxConfidence: number | null,
       limit: number,
       offset: number,
       context: RequestContext
     ): Promise<PaginatedResult<AnalysisRecord>> => {
       const [items, total] = await Promise.all([
-        getAnalysesByTenantFiltered(tenantId, repository, minConfidence, limit, offset),
-        countAnalysesByTenantFiltered(tenantId, repository, minConfidence),
+        getAnalysesByTenantFiltered(
+          tenantId,
+          repository,
+          minConfidence,
+          maxConfidence,
+          limit,
+          offset
+        ),
+        countAnalysesByTenantFiltered(tenantId, repository, minConfidence, maxConfidence),
       ]);
 
       logger.info("Filtered analyses retrieved", {
@@ -165,6 +173,7 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
         total,
         repository,
         minConfidence,
+        maxConfidence,
         ...context,
       });
 

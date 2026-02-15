@@ -92,12 +92,23 @@ interface QuickStat {
   readonly colorClass: string;
 }
 
+const formatAvgConfidence = (analyses: readonly AnalysisRecord[]): string => {
+  const { length: count } = analyses;
+  if (count === 0) {
+    return "--";
+  }
+  const confidences = analyses.map((analysis) => analysis.diagnosisConfidence);
+  const sum = confidences.reduce((runningSum, confidence) => runningSum + confidence, 0);
+  return `${Math.round((sum / count) * 100)}%`;
+};
+
 const buildQuickStats = (
   stats: {
     readonly totalFailures: number;
     readonly totalAnalyses: number;
     readonly connectedRepos: number;
-  } | null
+  } | null,
+  avgConfidence: string
 ): readonly QuickStat[] => [
   {
     title: "Failed Builds",
@@ -112,8 +123,8 @@ const buildQuickStats = (
     colorClass: "bg-indigo-500",
   },
   {
-    title: "Avg Resolution",
-    value: "--",
+    title: "Avg Confidence",
+    value: avgConfidence,
     icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-blue-500",
   },
@@ -144,9 +155,9 @@ export const DashboardOverview = ({
   const { data: recentAnalyses, isLoading: analysesLoading } = useAnalyses(5, 0, refreshKey);
   const { data: recentFailures, isLoading: failuresLoading } = useFailures(5, 0, refreshKey);
 
-  const quickStats = buildQuickStats(stats);
   const failureItems = recentFailures?.items ?? [];
   const analysisItems = recentAnalyses?.items ?? [];
+  const quickStats = buildQuickStats(stats, formatAvgConfidence(analysisItems));
   const hasActivity = failureItems.length > 0 || analysisItems.length > 0;
   const activityLoading = analysesLoading || failuresLoading;
 

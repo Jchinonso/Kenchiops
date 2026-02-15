@@ -3,10 +3,13 @@
  *
  * Provides filtering controls for dashboard list pages.
  * Supports repository text search (debounced), severity dropdown,
- * and confidence threshold dropdown depending on the variant.
+ * and confidence range dropdown depending on the variant.
+ *
+ * Confidence filter uses "min:X,max:Y" encoding to support range queries
+ * (e.g., "min:0.5,max:0.8" for medium, "max:0.5" for low).
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -37,9 +40,9 @@ const SEVERITY_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label: 
 
 const CONFIDENCE_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label: string }> = [
   { value: "", label: "All Confidence" },
-  { value: "0.8", label: "High (80%+)" },
-  { value: "0.5", label: "Medium (50%+)" },
-  { value: "0.01", label: "Low (<50%)" },
+  { value: "min:0.8", label: "High (80%+)" },
+  { value: "min:0.5,max:0.8", label: "Medium (50-80%)" },
+  { value: "max:0.5", label: "Low (<50%)" },
 ];
 
 const INPUT_CLASS = cn(
@@ -60,26 +63,15 @@ const setRef = <T,>(ref: React.MutableRefObject<T>, value: T): void => {
 export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) => {
   const [localRepo, setLocalRepo] = useState(filters.repository);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Use a ref to always access the latest filters inside the debounced callback,
+  // preventing stale closure issues when dropdown changes race with debounced repo input.
+  const filtersRef = useRef(filters);
+  setRef(filtersRef, filters);
 
   // Sync local state when external filters change (e.g., from searchQuery prop)
   useEffect(() => {
     setLocalRepo(filters.repository);
   }, [filters.repository]);
-
-  const handleDebouncedRepoChange = useCallback(
-    (value: string) => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-      setRef(
-        timerRef,
-        setTimeout(() => {
-          onFilterChange({ ...filters, repository: value });
-        }, DEBOUNCE_MS)
-      );
-    },
-    [filters, onFilterChange]
-  );
 
   // Cleanup timer on unmount
   useEffect(
@@ -94,7 +86,17 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
   const handleRepoInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = event.target;
     setLocalRepo(value);
-    handleDebouncedRepoChange(value);
+
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    setRef(
+      timerRef,
+      setTimeout(() => {
+        // Read from ref to get latest filters (avoids stale closure)
+        onFilterChange({ ...filtersRef.current, repository: value });
+      }, DEBOUNCE_MS)
+    );
   };
 
   const handleSeverityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -117,8 +119,16 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
     filters.repository !== "" || filters.severity !== "" || filters.minConfidence !== "";
 
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-4">
+    <div
+      className="flex flex-wrap items-center gap-3 mb-4"
+      role="search"
+      aria-label="Table filters"
+    >
+      <label className="sr-only" htmlFor="filter-repository">
+        Filter by repository
+      </label>
       <input
+        id="filter-repository"
         type="text"
         value={localRepo}
         onChange={handleRepoInput}
@@ -127,33 +137,50 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
       />
 
       {variant === "failures" && (
-        <select value={filters.severity} onChange={handleSeverityChange} className={INPUT_CLASS}>
-          {SEVERITY_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <>
+          <label className="sr-only" htmlFor="filter-severity">
+            Filter by severity
+          </label>
+          <select
+            id="filter-severity"
+            value={filters.severity}
+            onChange={handleSeverityChange}
+            className={INPUT_CLASS}
+          >
+            {SEVERITY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </>
       )}
 
       {variant === "analyses" && (
-        <select
-          value={filters.minConfidence}
-          onChange={handleConfidenceChange}
-          className={INPUT_CLASS}
-        >
-          {CONFIDENCE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <>
+          <label className="sr-only" htmlFor="filter-confidence">
+            Filter by confidence level
+          </label>
+          <select
+            id="filter-confidence"
+            value={filters.minConfidence}
+            onChange={handleConfidenceChange}
+            className={INPUT_CLASS}
+          >
+            {CONFIDENCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </>
       )}
 
       {hasActiveFilters && (
         <button
           type="button"
           onClick={handleClear}
+          aria-label="Clear all filters"
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
         >
           <X className="w-3.5 h-3.5" />
@@ -162,6 +189,31 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
       )}
     </div>
   );
+};
+
+/**
+ * Parses the confidence filter string into min/max values.
+ * Format: "min:0.5,max:0.8" or "min:0.8" or "max:0.5"
+ */
+export const parseConfidenceFilter = (
+  value: string
+): { readonly min: number | null; readonly max: number | null } => {
+  if (!value) {
+    return { min: null, max: null };
+  }
+
+  const parts = value.split(",");
+
+  const extractValue = (prefix: string): number | null => {
+    const match = parts.find((part) => part.startsWith(`${prefix}:`));
+    if (!match) {
+      return null;
+    }
+    const parsed = parseFloat(match.split(":")[1]);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  return { min: extractValue("min"), max: extractValue("max") };
 };
 
 export type { FilterValues };

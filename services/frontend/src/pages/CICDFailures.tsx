@@ -222,6 +222,7 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
   const handleFilterChange = (next: FilterValues) => {
     setFilters(next);
     setOffset(0);
+    setExpandedId(null);
   };
 
   const { data, isLoading, error } = useFailures(
@@ -243,8 +244,14 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
   const hasPrev = offset > 0;
   const hasNext = offset + PAGE_SIZE < total;
 
-  const goNext = () => setOffset((prev) => prev + PAGE_SIZE);
-  const goPrev = () => setOffset((prev) => Math.max(0, prev - PAGE_SIZE));
+  const goNext = () => {
+    setOffset((prev) => prev + PAGE_SIZE);
+    setExpandedId(null);
+  };
+  const goPrev = () => {
+    setOffset((prev) => Math.max(0, prev - PAGE_SIZE));
+    setExpandedId(null);
+  };
 
   return (
     <div className="space-y-6">

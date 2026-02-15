@@ -5,7 +5,7 @@
  * Uses native fetch via apiClient with useState/useEffect.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { apiClient } from "@/lib/apiClient";
 
 // ==================== Types ====================
@@ -80,7 +80,8 @@ interface PaginatedResult<T> {
 // ==================== Generic Fetch Hook ====================
 
 /**
- * Generic data-fetching hook with loading/error states and abort handling.
+ * Generic data-fetching hook with loading/error states and cancellation.
+ * Uses a cancelled flag to prevent state updates after effect cleanup.
  */
 const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
   const [state, setState] = useState<FetchState<T>>({
@@ -101,7 +102,6 @@ const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
       return;
     }
 
-    const controller = new AbortController();
     // let: mutable flag for async cleanup coordination
     let cancelled = false; // let: tracks if effect was cleaned up during async fetch
 
@@ -148,7 +148,6 @@ const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
 
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [path, refreshKey, depsKey]);
 
@@ -172,7 +171,8 @@ const buildAnalysesUrl = (
   limit: number,
   offset: number,
   repository?: string,
-  minConfidence?: string
+  minConfidence?: string,
+  maxConfidence?: string
 ): string => {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
@@ -182,6 +182,9 @@ const buildAnalysesUrl = (
   }
   if (minConfidence) {
     params.set("minConfidence", minConfidence);
+  }
+  if (maxConfidence) {
+    params.set("maxConfidence", maxConfidence);
   }
   return `/api/v1/dashboard/analyses?${params.toString()}`;
 };
@@ -209,11 +212,12 @@ export const useAnalyses = (
   offset: number = 0,
   refreshKey: number = 0,
   repository?: string,
-  minConfidence?: string
+  minConfidence?: string,
+  maxConfidence?: string
 ): UseFetchResult<PaginatedResult<AnalysisRecord>> =>
   useFetch<PaginatedResult<AnalysisRecord>>(
-    buildAnalysesUrl(limit, offset, repository, minConfidence),
-    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}`
+    buildAnalysesUrl(limit, offset, repository, minConfidence, maxConfidence),
+    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}:${maxConfidence ?? ""}`
   );
 
 export const useFailures = (
@@ -249,6 +253,7 @@ type AnalysisStatusMap = Readonly<Record<string, AnalysisStatusEntry | null>>;
 /**
  * POST-based batch lookup for analysis status by event IDs.
  * Returns a map of eventId to analysis info (or null if not analyzed).
+ * Uses useMemo to stabilize the dependency array key.
  */
 export const useAnalysisStatusByEvents = (
   eventIds: readonly string[],
@@ -260,9 +265,16 @@ export const useAnalysisStatusByEvents = (
     error: null,
   });
 
+  // Stabilize the event IDs key to avoid re-rendering on every render
+  const eventIdsKey = useMemo(() => eventIds.join(","), [eventIds]);
+  // Keep a ref to the latest eventIds for use in the async callback
+  const eventIdsRef = useRef(eventIds);
   useEffect(() => {
-    const { length: idCount } = eventIds;
-    if (idCount === 0) {
+    Object.assign(eventIdsRef, { current: eventIds });
+  }, [eventIds]);
+
+  useEffect(() => {
+    if (eventIdsKey === "") {
       setState({ data: null, isLoading: false, error: null });
       return;
     }
@@ -276,7 +288,7 @@ export const useAnalysisStatusByEvents = (
       try {
         const response = await apiClient("/api/v1/dashboard/analyses/by-events", {
           method: "POST",
-          body: { eventIds },
+          body: { eventIds: eventIdsRef.current },
         });
 
         if (cancelled) {
@@ -304,7 +316,7 @@ export const useAnalysisStatusByEvents = (
     return () => {
       cancelled = true;
     };
-  }, [JSON.stringify(eventIds), refreshKey]);
+  }, [eventIdsKey, refreshKey]);
 
   return state;
 };

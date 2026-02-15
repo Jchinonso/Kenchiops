@@ -119,17 +119,23 @@ const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => 
   const tenantId = requireTenantId(req);
   const context = getRequestContext(req);
   const { limit, offset } = parsePaginationParams(req);
-  const { repository: repoParam, minConfidence: confParam } = req.query;
+  const {
+    repository: repoParam,
+    minConfidence: confParam,
+    maxConfidence: maxConfParam,
+  } = req.query;
 
   const repository = parseStringParam(repoParam);
   const minConfidence = parseNumericParam(confParam);
-  const hasFilters = repository !== null || minConfidence !== null;
+  const maxConfidence = parseNumericParam(maxConfParam);
+  const hasFilters = repository !== null || minConfidence !== null || maxConfidence !== null;
 
   const result = hasFilters
     ? await dashboardService.getAnalysesFiltered(
         tenantId,
         repository,
         minConfidence,
+        maxConfidence,
         limit,
         offset,
         context

@@ -80,8 +80,9 @@ export const ANALYSIS_QUERIES = {
     WHERE tenant_id = $1
       AND ($2::text IS NULL OR aggregation_key ILIKE '%' || $2 || '%')
       AND ($3::numeric IS NULL OR diagnosis_confidence >= $3)
+      AND ($4::numeric IS NULL OR diagnosis_confidence < $4)
     ORDER BY created_at DESC
-    LIMIT $4 OFFSET $5
+    LIMIT $5 OFFSET $6
   `,
 
   COUNT_BY_TENANT_FILTERED: `
@@ -89,5 +90,6 @@ export const ANALYSIS_QUERIES = {
     WHERE tenant_id = $1
       AND ($2::text IS NULL OR aggregation_key ILIKE '%' || $2 || '%')
       AND ($3::numeric IS NULL OR diagnosis_confidence >= $3)
+      AND ($4::numeric IS NULL OR diagnosis_confidence < $4)
   `,
 } as const;

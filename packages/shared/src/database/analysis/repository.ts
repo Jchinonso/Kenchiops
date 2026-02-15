@@ -267,6 +267,7 @@ export const getAnalysesByTenantFiltered = async (
   tenantId: string,
   repository: string | null,
   minConfidence: number | null,
+  maxConfidence: number | null,
   limit: number = ANALYSIS_DEFAULTS.TENANT_QUERY_LIMIT,
   offset: number = 0
 ): Promise<readonly AnalysisRecord[]> => {
@@ -278,6 +279,7 @@ export const getAnalysesByTenantFiltered = async (
       tenantId,
       repository,
       minConfidence,
+      maxConfidence,
       limit,
       offset,
     ]);
@@ -287,6 +289,7 @@ export const getAnalysesByTenantFiltered = async (
       tenantId,
       repository,
       minConfidence,
+      maxConfidence,
       error: getErrorMessage(error),
     });
     throw error;
@@ -306,7 +309,8 @@ export const getAnalysesByTenantFiltered = async (
 export const countAnalysesByTenantFiltered = async (
   tenantId: string,
   repository: string | null,
-  minConfidence: number | null
+  minConfidence: number | null,
+  maxConfidence: number | null
 ): Promise<number> => {
   validateId(tenantId, "tenantId");
 
@@ -315,6 +319,7 @@ export const countAnalysesByTenantFiltered = async (
       tenantId,
       repository,
       minConfidence,
+      maxConfidence,
     ]);
     return parseInt(result.rows[0].count, PARSE_INT_RADIX);
   } catch (error) {
