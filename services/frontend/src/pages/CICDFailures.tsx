@@ -24,7 +24,16 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { AlertTriangle, ExternalLink, Search, ChevronRight, Download } from "lucide-react";
+import {
+  AlertTriangle,
+  ExternalLink,
+  Search,
+  ChevronRight,
+  Download,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
   useFailures,
@@ -51,6 +60,47 @@ import { exportFailuresToCSV } from "@/lib/csvExport";
 // ==================== Helpers ====================
 
 const PAGE_SIZE = 20;
+
+const getSeverityRank = (severity: string | null): number =>
+  severity === "high" ? 0 : severity === "medium" ? 1 : severity === "low" ? 2 : 3;
+
+interface SortConfig {
+  readonly column: string;
+  readonly direction: "asc" | "desc" | null;
+}
+
+const cycleSortDirection = (current: "asc" | "desc" | null): "asc" | "desc" | null =>
+  current === null ? "asc" : current === "asc" ? "desc" : null;
+
+interface SortableTableHeadProps {
+  readonly label: string;
+  readonly column: string;
+  readonly currentSort: SortConfig;
+  readonly onSort: (column: string) => void;
+}
+
+const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTableHeadProps) => {
+  const { column: sortColumn, direction: sortDirection } = currentSort;
+  const isActive = sortColumn === column && sortDirection !== null;
+  const Icon =
+    isActive && sortDirection === "asc"
+      ? ArrowUp
+      : isActive && sortDirection === "desc"
+        ? ArrowDown
+        : ArrowUpDown;
+
+  return (
+    <TableHead
+      className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+      onClick={() => onSort(column)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-gray-400")} />
+      </div>
+    </TableHead>
+  );
+};
 
 // ==================== Sub-components ====================
 
@@ -238,7 +288,9 @@ interface CICDFailuresProps {
 
 export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps) => {
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
   const [filters, setFilters] = useState<FilterValues>({
     repository: searchQuery ?? "",
     severity: "",
@@ -256,8 +308,23 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
     setExpandedId(null);
   };
 
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setOffset(0);
+    setExpandedId(null);
+  };
+
+  const handleSort = (column: string) => {
+    setSort((prev) => {
+      const { column: prevColumn, direction: prevDirection } = prev;
+      return prevColumn === column
+        ? { column, direction: cycleSortDirection(prevDirection) }
+        : { column, direction: "asc" as const };
+    });
+  };
+
   const { data, isLoading, error } = useFailures(
-    PAGE_SIZE,
+    pageSize,
     offset,
     refreshKey,
     filters.repository || undefined,
@@ -267,20 +334,45 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
 
+  const sortedItems = useMemo(() => {
+    const { column, direction } = sort;
+    if (!direction) {
+      return items;
+    }
+
+    const multiplier = direction === "asc" ? 1 : -1;
+    return [...items].sort((left, right) => {
+      if (column === "timestamp") {
+        return (
+          multiplier * (new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime())
+        );
+      }
+      if (column === "severity") {
+        return multiplier * (getSeverityRank(left.severity) - getSeverityRank(right.severity));
+      }
+      if (column === "conclusion") {
+        const leftVal = getPayloadString(left.payload, "conclusion");
+        const rightVal = getPayloadString(right.payload, "conclusion");
+        return multiplier * leftVal.localeCompare(rightVal);
+      }
+      return 0;
+    });
+  }, [items, sort]);
+
   const eventIds = useMemo(() => items.map((item) => item.id), [items]);
   const { data: analysisStatus } = useAnalysisStatusByEvents(eventIds, refreshKey);
   const hasItems = Boolean(items.length);
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const currentPage = Math.floor(offset / pageSize) + 1;
+  const totalPages = Math.ceil(total / pageSize);
   const hasPrev = offset > 0;
-  const hasNext = offset + PAGE_SIZE < total;
+  const hasNext = offset + pageSize < total;
 
   const goNext = () => {
-    setOffset((prev) => prev + PAGE_SIZE);
+    setOffset((prev) => prev + pageSize);
     setExpandedId(null);
   };
   const goPrev = () => {
-    setOffset((prev) => Math.max(0, prev - PAGE_SIZE));
+    setOffset((prev) => Math.max(0, prev - pageSize));
     setExpandedId(null);
   };
 
@@ -347,17 +439,32 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
-                    <TableHead>Time</TableHead>
+                    <SortableTableHead
+                      label="Time"
+                      column="timestamp"
+                      currentSort={sort}
+                      onSort={handleSort}
+                    />
                     <TableHead>Repository</TableHead>
                     <TableHead>Check Name</TableHead>
-                    <TableHead>Severity</TableHead>
-                    <TableHead>Conclusion</TableHead>
+                    <SortableTableHead
+                      label="Severity"
+                      column="severity"
+                      currentSort={sort}
+                      onSort={handleSort}
+                    />
+                    <SortableTableHead
+                      label="Conclusion"
+                      column="conclusion"
+                      currentSort={sort}
+                      onSort={handleSort}
+                    />
                     <TableHead>Commit</TableHead>
                     <TableHead>Analysis</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((event) => (
+                  {sortedItems.map((event) => (
                     <Fragment key={event.id}>
                       <FailureRow
                         event={event}
@@ -387,7 +494,8 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
                   onPrev={goPrev}
                   onNext={goNext}
                   totalItems={total}
-                  pageSize={PAGE_SIZE}
+                  pageSize={pageSize}
+                  onPageSizeChange={handlePageSizeChange}
                 />
               )}
             </>

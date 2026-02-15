@@ -1,4 +1,13 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+
+const DEFAULT_PAGE_SIZE_OPTIONS: readonly number[] = [10, 20, 50];
 
 interface PaginationControlsProps {
   readonly currentPage: number;
@@ -9,6 +18,8 @@ interface PaginationControlsProps {
   readonly onNext: () => void;
   readonly totalItems?: number;
   readonly pageSize?: number;
+  readonly onPageSizeChange?: (size: number) => void;
+  readonly pageSizeOptions?: readonly number[];
 }
 
 export const PaginationControls = ({
@@ -20,6 +31,8 @@ export const PaginationControls = ({
   onNext,
   totalItems,
   pageSize,
+  onPageSizeChange,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
 }: PaginationControlsProps) => {
   const rangeLabel =
     totalItems !== undefined && pageSize !== undefined
@@ -31,7 +44,26 @@ export const PaginationControls = ({
       aria-label="Pagination"
       className="flex items-center justify-between px-4 py-3 border-t dark:border-gray-800"
     >
-      <span className="text-sm text-gray-500 dark:text-gray-400">{rangeLabel}</span>
+      <div className="flex items-center gap-3">
+        {onPageSizeChange && pageSize !== undefined && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 dark:text-gray-400">Show</span>
+            <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+              <SelectTrigger className="w-[68px] h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pageSizeOptions.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <span className="text-sm text-gray-500 dark:text-gray-400">{rangeLabel}</span>
+      </div>
       <div className="flex items-center gap-2">
         <button
           onClick={onPrev}

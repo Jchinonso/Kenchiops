@@ -113,15 +113,27 @@ interface RepositoryDetailProps {
 export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDetailProps) => {
   const [failuresOffset, setFailuresOffset] = useState(0);
   const [analysesOffset, setAnalysesOffset] = useState(0);
+  const [failuresPageSize, setFailuresPageSize] = useState(PAGE_SIZE);
+  const [analysesPageSize, setAnalysesPageSize] = useState(PAGE_SIZE);
+
+  const handleFailuresPageSizeChange = (size: number) => {
+    setFailuresPageSize(size);
+    setFailuresOffset(0);
+  };
+
+  const handleAnalysesPageSizeChange = (size: number) => {
+    setAnalysesPageSize(size);
+    setAnalysesOffset(0);
+  };
 
   const { data: failuresData, isLoading: failuresLoading } = useFailures(
-    PAGE_SIZE,
+    failuresPageSize,
     failuresOffset,
     refreshKey,
     repoFullName
   );
   const { data: analysesData, isLoading: analysesLoading } = useAnalyses(
-    PAGE_SIZE,
+    analysesPageSize,
     analysesOffset,
     refreshKey,
     repoFullName
@@ -129,13 +141,13 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
 
   const failureItems = failuresData?.items ?? [];
   const failuresTotal = failuresData?.total ?? 0;
-  const failuresCurrentPage = Math.floor(failuresOffset / PAGE_SIZE) + 1;
-  const failuresTotalPages = Math.ceil(failuresTotal / PAGE_SIZE);
+  const failuresCurrentPage = Math.floor(failuresOffset / failuresPageSize) + 1;
+  const failuresTotalPages = Math.ceil(failuresTotal / failuresPageSize);
 
   const analysisItems = analysesData?.items ?? [];
   const analysesTotal = analysesData?.total ?? 0;
-  const analysesCurrentPage = Math.floor(analysesOffset / PAGE_SIZE) + 1;
-  const analysesTotalPages = Math.ceil(analysesTotal / PAGE_SIZE);
+  const analysesCurrentPage = Math.floor(analysesOffset / analysesPageSize) + 1;
+  const analysesTotalPages = Math.ceil(analysesTotal / analysesPageSize);
 
   return (
     <div className="space-y-6">
@@ -222,11 +234,12 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
               currentPage={failuresCurrentPage}
               totalPages={failuresTotalPages}
               hasPrev={failuresOffset > 0}
-              hasNext={failuresOffset + PAGE_SIZE < failuresTotal}
-              onPrev={() => setFailuresOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
-              onNext={() => setFailuresOffset((prev) => prev + PAGE_SIZE)}
+              hasNext={failuresOffset + failuresPageSize < failuresTotal}
+              onPrev={() => setFailuresOffset((prev) => Math.max(0, prev - failuresPageSize))}
+              onNext={() => setFailuresOffset((prev) => prev + failuresPageSize)}
               totalItems={failuresTotal}
-              pageSize={PAGE_SIZE}
+              pageSize={failuresPageSize}
+              onPageSizeChange={handleFailuresPageSizeChange}
             />
           )}
         </Card>
@@ -277,11 +290,12 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
               currentPage={analysesCurrentPage}
               totalPages={analysesTotalPages}
               hasPrev={analysesOffset > 0}
-              hasNext={analysesOffset + PAGE_SIZE < analysesTotal}
-              onPrev={() => setAnalysesOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
-              onNext={() => setAnalysesOffset((prev) => prev + PAGE_SIZE)}
+              hasNext={analysesOffset + analysesPageSize < analysesTotal}
+              onPrev={() => setAnalysesOffset((prev) => Math.max(0, prev - analysesPageSize))}
+              onNext={() => setAnalysesOffset((prev) => prev + analysesPageSize)}
               totalItems={analysesTotal}
-              pageSize={PAGE_SIZE}
+              pageSize={analysesPageSize}
+              onPageSizeChange={handleAnalysesPageSizeChange}
             />
           )}
         </Card>

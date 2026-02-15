@@ -24,7 +24,15 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { Search, AlertTriangle, ChevronRight, Download } from "lucide-react";
+import {
+  Search,
+  AlertTriangle,
+  ChevronRight,
+  Download,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 import { useAnalyses, type AnalysisRecord } from "@/hooks/useDashboardData";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -46,6 +54,44 @@ import { exportAnalysesToCSV } from "@/lib/csvExport";
 // ==================== Helpers ====================
 
 const PAGE_SIZE = 20;
+
+interface SortConfig {
+  readonly column: string;
+  readonly direction: "asc" | "desc" | null;
+}
+
+const cycleSortDirection = (current: "asc" | "desc" | null): "asc" | "desc" | null =>
+  current === null ? "asc" : current === "asc" ? "desc" : null;
+
+interface SortableTableHeadProps {
+  readonly label: string;
+  readonly column: string;
+  readonly currentSort: SortConfig;
+  readonly onSort: (column: string) => void;
+}
+
+const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTableHeadProps) => {
+  const { column: sortColumn, direction: sortDirection } = currentSort;
+  const isActive = sortColumn === column && sortDirection !== null;
+  const Icon =
+    isActive && sortDirection === "asc"
+      ? ArrowUp
+      : isActive && sortDirection === "desc"
+        ? ArrowDown
+        : ArrowUpDown;
+
+  return (
+    <TableHead
+      className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+      onClick={() => onSort(column)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-gray-400")} />
+      </div>
+    </TableHead>
+  );
+};
 
 // ==================== Sub-components ====================
 
@@ -189,8 +235,10 @@ interface CICDAnalysesProps {
 
 export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps) => {
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
   const [filters, setFilters] = useState<FilterValues>({
     repository: searchQuery ?? "",
     severity: "",
@@ -208,13 +256,28 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
     setExpandedId(null);
   };
 
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setOffset(0);
+    setExpandedId(null);
+  };
+
+  const handleSort = (column: string) => {
+    setSort((prev) => {
+      const { column: prevColumn, direction: prevDirection } = prev;
+      return prevColumn === column
+        ? { column, direction: cycleSortDirection(prevDirection) }
+        : { column, direction: "asc" as const };
+    });
+  };
+
   const confidenceRange = useMemo(
     () => parseConfidenceFilter(filters.minConfidence),
     [filters.minConfidence]
   );
 
   const { data, isLoading, error } = useAnalyses(
-    PAGE_SIZE,
+    pageSize,
     offset,
     refreshKey,
     filters.repository || undefined,
@@ -224,18 +287,39 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+
+  const sortedItems = useMemo(() => {
+    const { column, direction } = sort;
+    if (!direction) {
+      return items;
+    }
+
+    const multiplier = direction === "asc" ? 1 : -1;
+    return [...items].sort((left, right) => {
+      if (column === "createdAt") {
+        return (
+          multiplier * (new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+        );
+      }
+      if (column === "confidence") {
+        return multiplier * (left.diagnosisConfidence - right.diagnosisConfidence);
+      }
+      return 0;
+    });
+  }, [items, sort]);
+
   const hasItems = Boolean(items.length);
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const currentPage = Math.floor(offset / pageSize) + 1;
+  const totalPages = Math.ceil(total / pageSize);
   const hasPrev = offset > 0;
-  const hasNext = offset + PAGE_SIZE < total;
+  const hasNext = offset + pageSize < total;
 
   const goNext = () => {
-    setOffset((prev) => prev + PAGE_SIZE);
+    setOffset((prev) => prev + pageSize);
     setExpandedId(null);
   };
   const goPrev = () => {
-    setOffset((prev) => Math.max(0, prev - PAGE_SIZE));
+    setOffset((prev) => Math.max(0, prev - pageSize));
     setExpandedId(null);
   };
 
@@ -302,16 +386,26 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
-                    <TableHead>Time</TableHead>
+                    <SortableTableHead
+                      label="Time"
+                      column="createdAt"
+                      currentSort={sort}
+                      onSort={handleSort}
+                    />
                     <TableHead>Repository</TableHead>
                     <TableHead>Summary</TableHead>
                     <TableHead>Root Cause</TableHead>
-                    <TableHead>Confidence</TableHead>
+                    <SortableTableHead
+                      label="Confidence"
+                      column="confidence"
+                      currentSort={sort}
+                      onSort={handleSort}
+                    />
                     <TableHead>Event</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((analysis) => (
+                  {sortedItems.map((analysis) => (
                     <Fragment key={analysis.id}>
                       <AnalysisRow
                         analysis={analysis}
@@ -340,7 +434,8 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
                   onPrev={goPrev}
                   onNext={goNext}
                   totalItems={total}
-                  pageSize={PAGE_SIZE}
+                  pageSize={pageSize}
+                  onPageSizeChange={handlePageSizeChange}
                 />
               )}
             </>
