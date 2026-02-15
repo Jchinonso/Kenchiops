@@ -48,17 +48,15 @@ interface ConfidenceChartProps {
 export const ConfidenceChart = ({ refreshKey = 0 }: ConfidenceChartProps) => {
   const { data, isLoading } = useConfidenceDistribution(refreshKey);
 
-  const chartData = (data ?? []).map((bucket) => ({
-    level: LEVEL_LABELS[bucket.level] ?? bucket.level,
-    count: bucket.count,
-    fill: LEVEL_COLORS[bucket.level] ?? "#6b7280",
+  const ALL_LEVELS = ["high", "medium", "low"] as const;
+  const apiMap = new Map((data ?? []).map((bucket) => [bucket.level, bucket.count]));
+  const chartData = ALL_LEVELS.map((level) => ({
+    level: LEVEL_LABELS[level] ?? level,
+    count: apiMap.get(level) ?? 0,
+    fill: LEVEL_COLORS[level] ?? "#6b7280",
   }));
 
   const totalAnalyses = chartData.reduce((runningTotal, bucket) => runningTotal + bucket.count, 0);
-
-  if (!isLoading && totalAnalyses === 0) {
-    return null;
-  }
 
   return (
     <Card className="mb-6 sm:mb-8">
@@ -68,7 +66,9 @@ export const ConfidenceChart = ({ refreshKey = 0 }: ConfidenceChartProps) => {
           <CardTitle>Confidence Distribution</CardTitle>
         </div>
         <CardDescription>
-          Breakdown of analysis confidence levels across {totalAnalyses} analyses.
+          {totalAnalyses > 0
+            ? `Breakdown of analysis confidence levels across ${totalAnalyses} analys${totalAnalyses === 1 ? "is" : "es"}.`
+            : "No analyses recorded yet. Confidence breakdown will appear here."}
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6">

@@ -12,6 +12,13 @@
 import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
 // ==================== Types ====================
 
@@ -99,12 +106,12 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
     );
   };
 
-  const handleSeverityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    onFilterChange({ ...filters, severity: event.target.value });
+  const handleSeverityChange = (value: string) => {
+    onFilterChange({ ...filters, severity: value === "all" ? "" : value });
   };
 
-  const handleConfidenceChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    onFilterChange({ ...filters, minConfidence: event.target.value });
+  const handleConfidenceChange = (value: string) => {
+    onFilterChange({ ...filters, minConfidence: value === "all" ? "" : value });
   };
 
   const handleClear = () => {
@@ -137,43 +144,33 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
       />
 
       {variant === "failures" && (
-        <>
-          <label className="sr-only" htmlFor="filter-severity">
-            Filter by severity
-          </label>
-          <select
-            id="filter-severity"
-            value={filters.severity}
-            onChange={handleSeverityChange}
-            className={INPUT_CLASS}
-          >
+        <Select value={filters.severity || "all"} onValueChange={handleSeverityChange}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="All Severities" />
+          </SelectTrigger>
+          <SelectContent>
             {SEVERITY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <SelectItem key={option.value || "all"} value={option.value || "all"}>
                 {option.label}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-        </>
+          </SelectContent>
+        </Select>
       )}
 
       {variant === "analyses" && (
-        <>
-          <label className="sr-only" htmlFor="filter-confidence">
-            Filter by confidence level
-          </label>
-          <select
-            id="filter-confidence"
-            value={filters.minConfidence}
-            onChange={handleConfidenceChange}
-            className={INPUT_CLASS}
-          >
+        <Select value={filters.minConfidence || "all"} onValueChange={handleConfidenceChange}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Confidence" />
+          </SelectTrigger>
+          <SelectContent>
             {CONFIDENCE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <SelectItem key={option.value || "all"} value={option.value || "all"}>
                 {option.label}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-        </>
+          </SelectContent>
+        </Select>
       )}
 
       {hasActiveFilters && (

@@ -34,6 +34,14 @@ import {
   BarChart3,
   Moon,
   Sun,
+  Flame,
+  Clock,
+  FileText,
+  FileCode,
+  RefreshCw,
+  DollarSign,
+  ShieldAlert,
+  ArrowUpCircle,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -46,11 +54,49 @@ interface ComingSoonConfig {
 }
 
 const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
+  // ---- Incidents ----
+  "/dashboard/incidents/active": {
+    title: "Active Incidents",
+    description:
+      "Real-time incident detection with auto-severity classification. Connect your monitoring tools to surface active incidents here.",
+    icon: <Flame className="w-8 h-8" />,
+  },
+  "/dashboard/incidents/timeline": {
+    title: "Incident Timeline",
+    description:
+      "Chronological incident correlation across services. See how failures cascade and identify blast radius automatically.",
+    icon: <Clock className="w-8 h-8" />,
+  },
+  "/dashboard/incidents/postmortems": {
+    title: "Automated Postmortems",
+    description:
+      "AI-generated postmortem drafts from incident data — root cause, timeline, and action items ready for review.",
+    icon: <FileText className="w-8 h-8" />,
+  },
   "/dashboard/incidents": {
     title: "Incident Triage",
     description:
       "AI-powered incident correlation, severity classification, and automated postmortem generation. Connect your monitoring tools to enable this.",
     icon: <Siren className="w-8 h-8" />,
+  },
+  // ---- Infrastructure ----
+  "/dashboard/infra/iac": {
+    title: "IaC Reviews",
+    description:
+      "Automated review of Terraform, Pulumi, and CloudFormation changes before they hit production. Catch misconfigurations early.",
+    icon: <FileCode className="w-8 h-8" />,
+  },
+  "/dashboard/infra/drift": {
+    title: "Drift Detection",
+    description:
+      "Detect configuration drift between your IaC definitions and live infrastructure state. Stay in sync automatically.",
+    icon: <RefreshCw className="w-8 h-8" />,
+  },
+  "/dashboard/infra/cost": {
+    title: "Cost Analysis",
+    description:
+      "Infrastructure cost attribution and optimization recommendations. Identify underutilized resources and right-size workloads.",
+    icon: <DollarSign className="w-8 h-8" />,
   },
   "/dashboard/infra": {
     title: "Infrastructure Intelligence",
@@ -58,12 +104,26 @@ const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
       "IaC change review, drift detection, and cost analysis. Connect Terraform Cloud or your Kubernetes clusters to get started.",
     icon: <Server className="w-8 h-8" />,
   },
+  // ---- Deployments ----
+  "/dashboard/deployments/risk": {
+    title: "Deployment Risk Scores",
+    description:
+      "Pre-deploy risk scoring based on change scope, historical failure patterns, and dependency impact analysis.",
+    icon: <ShieldAlert className="w-8 h-8" />,
+  },
+  "/dashboard/deployments/rollouts": {
+    title: "Rollout Monitoring",
+    description:
+      "Canary rollout health analysis, automated rollback triggers, and progressive delivery insights across environments.",
+    icon: <ArrowUpCircle className="w-8 h-8" />,
+  },
   "/dashboard/deployments": {
     title: "Deployment Intelligence",
     description:
       "Pre-deploy risk scoring, canary rollout health analysis, and automated rollback triggers. Available once CI/CD data is flowing.",
     icon: <Rocket className="w-8 h-8" />,
   },
+  // ---- Analytics & Integrations ----
   "/dashboard/analytics": {
     title: "Engineering Analytics",
     description:
@@ -81,6 +141,7 @@ const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
 // ==================== Routing Helpers ====================
 
 const findComingSoonConfig = (pathname: string): ComingSoonConfig | undefined =>
+  COMING_SOON_PAGES[pathname] ??
   Object.entries(COMING_SOON_PAGES).find(([prefix]) => pathname.startsWith(prefix))?.[1];
 
 const isCICDRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/cicd");
