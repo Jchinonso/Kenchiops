@@ -333,7 +333,7 @@ const Dashboard = () => {
                     )}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>Toggle theme</TooltipContent>
+                <TooltipContent>Toggle theme (t)</TooltipContent>
               </Tooltip>
 
               {/* Notifications */}

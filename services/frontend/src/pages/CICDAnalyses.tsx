@@ -32,6 +32,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  RefreshCw,
 } from "lucide-react";
 import { useAnalyses, type AnalysisRecord } from "@/hooks/useDashboardData";
 import { Link } from "react-router-dom";
@@ -270,7 +271,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
     [filters.minConfidence]
   );
 
-  const { data, isLoading, error } = useAnalyses(
+  const { data, isLoading, error, refetch } = useAnalyses(
     pageSize,
     offset,
     refreshKey,
@@ -358,8 +359,16 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
           {isLoading ? (
             <TableSkeleton />
           ) : error ? (
-            <div className="p-8 text-center">
+            <div className="p-8 text-center space-y-3">
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <button
+                type="button"
+                onClick={refetch}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Retry
+              </button>
             </div>
           ) : !hasItems ? (
             <Empty className="py-12 border-0">
@@ -383,7 +392,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
             <>
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
                     <TableRow>
                       <TableHead className="w-8" />
                       <SortableTableHead

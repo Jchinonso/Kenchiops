@@ -24,7 +24,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { Webhook, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Webhook, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 import { useWebhookActivity, type WebhookActivityRecord } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
 import { formatTimestamp, formatRelativeTime, titleCase } from "@/lib/formatters";
@@ -37,13 +37,13 @@ const PAGE_SIZE = 20;
 
 const STATUS_STYLES: Readonly<Record<string, string>> = {
   processed:
-    "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800",
+    "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800",
   skipped:
-    "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700",
+    "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
   ignored:
-    "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700",
+    "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
   failed:
-    "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800",
+    "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800",
 };
 
 const getStatusStyle = (status: string): string => STATUS_STYLES[status] ?? STATUS_STYLES.skipped;
@@ -218,7 +218,7 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
     });
   };
 
-  const { data, isLoading, error } = useWebhookActivity(
+  const { data, isLoading, error, refetch } = useWebhookActivity(
     pageSize,
     offset,
     refreshKey,
@@ -315,8 +315,16 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
           {isLoading ? (
             <TableSkeleton />
           ) : error ? (
-            <div className="p-8 text-center">
+            <div className="p-8 text-center space-y-3">
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <button
+                type="button"
+                onClick={refetch}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Retry
+              </button>
             </div>
           ) : !hasItems ? (
             <Empty className="py-12 border-0">
@@ -335,7 +343,7 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
             <>
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
                     <TableRow>
                       <TableHead className="w-8" />
                       <SortableTableHead

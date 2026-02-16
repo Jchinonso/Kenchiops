@@ -210,16 +210,21 @@ export const Settings = () => {
                   className={cn(
                     "text-xs",
                     tenant.status === "active"
-                      ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800"
-                      : "bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+                      ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800"
+                      : "bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-200 border-gray-200 dark:border-gray-700"
                   )}
                 >
                   {titleCase(tenant.status)}
                 </Badge>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Tenant ID: <span className="font-mono select-all">{tenant.id}</span>
-              </p>
+              <details className="mt-1">
+                <summary className="text-xs text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                  Show technical details
+                </summary>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Tenant ID: <span className="font-mono select-all">{tenant.id}</span>
+                </p>
+              </details>
             </div>
           ) : (
             <p className="text-sm text-gray-500 dark:text-gray-400">No organization found.</p>

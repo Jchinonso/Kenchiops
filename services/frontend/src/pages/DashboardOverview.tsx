@@ -107,18 +107,27 @@ interface QuickStat {
   readonly title: string;
   readonly value: string;
   readonly subtitle: string;
+  readonly href: string;
   readonly icon: React.ReactNode;
   readonly colorClass: string;
 }
 
-const formatAvgConfidence = (analyses: readonly AnalysisRecord[]): string => {
+const formatAvgConfidence = (
+  analyses: readonly AnalysisRecord[]
+): {
+  readonly label: string;
+  readonly subtitle: string;
+} => {
   const { length: count } = analyses;
   if (count === 0) {
-    return "--";
+    return { label: "--", subtitle: "No analyses yet" };
   }
   const confidences = analyses.map((analysis) => analysis.diagnosisConfidence);
   const sum = confidences.reduce((runningSum, confidence) => runningSum + confidence, 0);
-  return `${Math.round((sum / count) * 100)}%`;
+  return {
+    label: `${Math.round((sum / count) * 100)}%`,
+    subtitle: `From last ${count} analyses`,
+  };
 };
 
 const buildQuickStats = (
@@ -127,33 +136,43 @@ const buildQuickStats = (
     readonly totalAnalyses: number;
     readonly connectedRepos: number;
   } | null,
-  avgConfidence: string
+  avgConfidence: { readonly label: string; readonly subtitle: string }
 ): readonly QuickStat[] => [
   {
     title: "Failed Builds",
     value: stats ? String(stats.totalFailures) : "--",
-    subtitle: "All time",
+    subtitle: stats
+      ? `${stats.totalFailures === 0 ? "No failures detected" : "Total detected"}`
+      : "Loading...",
+    href: "/dashboard/cicd/failures",
     icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-red-500",
   },
   {
     title: "Analyses Run",
     value: stats ? String(stats.totalAnalyses) : "--",
-    subtitle: "All time",
+    subtitle: stats
+      ? `${stats.totalAnalyses === 0 ? "No analyses yet" : "Total completed"}`
+      : "Loading...",
+    href: "/dashboard/cicd/analyses",
     icon: <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-indigo-500",
   },
   {
     title: "Avg Confidence",
-    value: avgConfidence,
-    subtitle: "Recent",
+    value: avgConfidence.label,
+    subtitle: avgConfidence.subtitle,
+    href: "/dashboard/cicd/analyses",
     icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-blue-500",
   },
   {
     title: "Connected Repos",
     value: stats ? String(stats.connectedRepos) : "--",
-    subtitle: "Active",
+    subtitle: stats
+      ? `${stats.connectedRepos === 0 ? "None connected yet" : "Receiving webhooks"}`
+      : "Loading...",
+    href: "/dashboard/cicd/pipelines",
     icon: <FolderGit2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-green-500",
   },
@@ -206,34 +225,36 @@ export const DashboardOverview = ({
       {/* Quick Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
         {quickStats.map((stat) => (
-          <Card key={stat.title} className="py-4 sm:py-5">
-            <CardContent className="px-4 sm:px-6">
-              <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
-                    {stat.title}
-                  </p>
-                  {statsLoading ? (
-                    <Skeleton className="h-7 w-12 mt-1" />
-                  ) : (
-                    <>
-                      <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {stat.value}
-                      </h3>
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                        {stat.subtitle}
-                      </p>
-                    </>
-                  )}
+          <Link key={stat.title} to={stat.href} className="block group">
+            <Card className="py-4 sm:py-5 group-hover:border-indigo-300 dark:group-hover:border-indigo-700 transition-colors">
+              <CardContent className="px-4 sm:px-6">
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                      {stat.title}
+                    </p>
+                    {statsLoading ? (
+                      <Skeleton className="h-7 w-12 mt-1" />
+                    ) : (
+                      <>
+                        <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          {stat.value}
+                        </h3>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                          {stat.subtitle}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <div
+                    className={`w-10 h-10 sm:w-12 sm:h-12 ${stat.colorClass} rounded-xl flex items-center justify-center flex-shrink-0`}
+                  >
+                    {stat.icon}
+                  </div>
                 </div>
-                <div
-                  className={`w-10 h-10 sm:w-12 sm:h-12 ${stat.colorClass} rounded-xl flex items-center justify-center flex-shrink-0`}
-                >
-                  {stat.icon}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
