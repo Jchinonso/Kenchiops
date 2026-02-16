@@ -236,6 +236,7 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: Nav
           <Link
             to={firstChildHref}
             onClick={onItemClick}
+            aria-label={group.label}
             className={cn(
               "hidden md:flex lg:hidden items-center justify-center w-full px-2 py-2.5 rounded-lg transition-all duration-200 text-sm",
               hasActiveChild

@@ -269,6 +269,28 @@ const handleUnknownEvent = (
 };
 
 /**
+ * Resolve tenant ID from the GitHub installation ID in the webhook payload.
+ * Returns null if the installation is missing or no tenant is found.
+ */
+const resolveTenantId = async (body: unknown): Promise<string | null> => {
+  const installationId = (body as { installation?: { id?: number } })?.installation?.id;
+  if (!installationId) {
+    return null;
+  }
+
+  try {
+    const tenant = await findByGitHubInstallation(installationId);
+    return tenant?.id ?? null;
+  } catch (error) {
+    logger.warn("Failed to resolve tenant from installation", {
+      installationId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
+
+/**
  * Unified GitHub webhook handler
  * GitHub sends all events to this single endpoint with X-GitHub-Event header
  * Endpoint: POST /api/github/webhook
@@ -296,11 +318,14 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
     return;
   }
 
+  // Resolve tenant from installation ID for webhook activity logging
+  const tenantId = await resolveTenantId(req.body);
+
   // Execute handler and format response
   try {
     const result = await handler.handle(req.body);
     const status = result.handled ? "processed" : "skipped";
-    void logWebhookActivity(deliveryId, eventType, status, startTime, result.tenantId);
+    void logWebhookActivity(deliveryId, eventType, status, startTime, tenantId ?? result.tenantId);
     res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
   } catch (error) {
     void logWebhookActivity(
@@ -308,7 +333,7 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
       eventType,
       "failed",
       startTime,
-      undefined,
+      tenantId,
       getErrorMessage(error)
     );
     throw error;
@@ -329,11 +354,12 @@ router.post(
     const startTime = Date.now();
     const deliveryId = (req.headers["x-github-delivery"] as string) ?? "unknown";
     const webhook = req.body as PullRequestWebhook;
+    const tenantId = await resolveTenantId(req.body);
 
     try {
       const result = await handlePullRequest(webhook);
       const status = result.handled ? "processed" : "skipped";
-      void logWebhookActivity(deliveryId, "pull_request", status, startTime);
+      void logWebhookActivity(deliveryId, "pull_request", status, startTime, tenantId);
       res.status(HTTP_STATUS.OK).json({
         status: result.handled ? "processed" : "skipped",
         message: result.message,
@@ -345,7 +371,7 @@ router.post(
         "pull_request",
         "failed",
         startTime,
-        undefined,
+        tenantId,
         getErrorMessage(error)
       );
       throw error;
@@ -364,11 +390,12 @@ router.post(
     const startTime = Date.now();
     const deliveryId = (req.headers["x-github-delivery"] as string) ?? "unknown";
     const webhook = req.body as CheckRunWebhook;
+    const tenantId = await resolveTenantId(req.body);
 
     try {
       const result = await handleCheckRun(webhook);
       const status = result.handled ? "processed" : "skipped";
-      void logWebhookActivity(deliveryId, "check_run", status, startTime);
+      void logWebhookActivity(deliveryId, "check_run", status, startTime, tenantId);
       res.status(HTTP_STATUS.OK).json({
         status: result.handled ? "processed" : "skipped",
         message: result.message,
@@ -380,7 +407,7 @@ router.post(
         "check_run",
         "failed",
         startTime,
-        undefined,
+        tenantId,
         getErrorMessage(error)
       );
       throw error;

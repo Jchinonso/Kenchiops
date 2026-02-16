@@ -266,7 +266,7 @@ export const DashboardOverview = ({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
           >
             <Download className="w-3.5 h-3.5" />
-            Export
+            Export Dashboard
           </button>
         )}
       </div>
@@ -294,7 +294,10 @@ export const DashboardOverview = ({
                 <CardContent className="px-4 sm:px-6 h-full">
                   <div className="flex items-start justify-between gap-3 h-full">
                     <div className="min-w-0">
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">
+                      <p
+                        className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1 truncate"
+                        title={stat.title}
+                      >
                         {stat.title}
                       </p>
                       {statsLoading ? (

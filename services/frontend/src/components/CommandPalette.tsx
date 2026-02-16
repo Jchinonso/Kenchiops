@@ -104,7 +104,10 @@ export const CommandPalette = ({
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Type a command or search..." />
+      <CommandInput
+        placeholder="Type a command or search..."
+        aria-label="Search commands and pages"
+      />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Navigation">
