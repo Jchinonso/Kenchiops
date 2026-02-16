@@ -35,6 +35,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useAnalyses, type AnalysisRecord } from "@/hooks/useDashboardData";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
@@ -328,14 +329,19 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
               <CardTitle>Analysis Results</CardTitle>
             </div>
             {hasItems && (
-              <button
-                type="button"
-                onClick={() => exportAnalysesToCSV(items)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Export Page
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => exportAnalysesToCSV(items)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Export Page
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Download as CSV</TooltipContent>
+              </Tooltip>
             )}
           </div>
           <CardDescription>

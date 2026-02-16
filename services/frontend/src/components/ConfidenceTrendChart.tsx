@@ -77,6 +77,7 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
   );
 
   const hasData = chartData.length > 0;
+  const hasMinimalData = hasData && chartData.length < 3;
 
   return (
     <Card className="mb-6 sm:mb-8">
@@ -135,43 +136,54 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
             <p className="text-sm text-gray-400 dark:text-gray-500">No data for this period</p>
           </div>
         ) : (
-          <ChartContainer config={CHART_CONFIG} className="h-56 w-full">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="confidenceGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                domain={[0, 1]}
-                tickFormatter={formatPercent}
-                tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
-                tickLine={false}
-                axisLine={false}
-                width={50}
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent formatter={(value) => formatPercent(value as number)} />
-                }
-              />
-              <Area
-                type="monotone"
-                dataKey="avgConfidence"
-                stroke="#6366f1"
-                strokeWidth={2}
-                fill="url(#confidenceGradient)"
-              />
-            </AreaChart>
-          </ChartContainer>
+          <div className="relative">
+            {hasMinimalData && (
+              <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                    More data points needed for trend analysis
+                  </p>
+                </div>
+              </div>
+            )}
+            <ChartContainer config={CHART_CONFIG} className="h-56 w-full">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="confidenceGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  domain={[0, 1]}
+                  tickFormatter={formatPercent}
+                  tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={50}
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent formatter={(value) => formatPercent(value as number)} />
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="avgConfidence"
+                  stroke="#6366f1"
+                  strokeWidth={2}
+                  fill="url(#confidenceGradient)"
+                />
+              </AreaChart>
+            </ChartContainer>
+          </div>
         )}
       </CardContent>
     </Card>

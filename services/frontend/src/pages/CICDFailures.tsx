@@ -34,6 +34,7 @@ import {
   ArrowUp,
   ArrowDown,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
@@ -203,7 +204,13 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
             </Badge>
           </Link>
         ) : (
-          <span className="text-xs text-gray-400 dark:text-gray-500">Pending</span>
+          <Badge
+            variant="outline"
+            className="text-xs bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+          >
+            <Clock className="w-3 h-3 mr-1" />
+            Pending
+          </Badge>
         )}
       </TableCell>
     </TableRow>
@@ -402,14 +409,19 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
               <CardTitle>Failure Events</CardTitle>
             </div>
             {hasItems && (
-              <button
-                type="button"
-                onClick={() => exportFailuresToCSV(items)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Export Page
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => exportFailuresToCSV(items)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Export Page
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Download as CSV</TooltipContent>
+              </Tooltip>
             )}
           </div>
           <CardDescription>

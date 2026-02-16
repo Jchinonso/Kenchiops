@@ -223,12 +223,12 @@ export const DashboardOverview = ({
       </div>
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
         {quickStats.map((stat) => (
           <Link key={stat.title} to={stat.href} className="block group">
-            <Card className="py-4 sm:py-5 group-hover:border-indigo-300 dark:group-hover:border-indigo-700 transition-colors">
-              <CardContent className="px-4 sm:px-6">
-                <div className="flex items-start justify-between">
+            <Card className="py-4 sm:py-5 h-full group-hover:border-indigo-300 dark:group-hover:border-indigo-700 transition-colors">
+              <CardContent className="px-4 sm:px-6 h-full">
+                <div className="flex items-start justify-between h-full">
                   <div className="min-w-0">
                     <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
                       {stat.title}
@@ -247,7 +247,7 @@ export const DashboardOverview = ({
                     )}
                   </div>
                   <div
-                    className={`w-10 h-10 sm:w-12 sm:h-12 ${stat.colorClass} rounded-xl flex items-center justify-center flex-shrink-0`}
+                    className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 ${stat.colorClass} rounded-xl flex items-center justify-center flex-shrink-0`}
                   >
                     {stat.icon}
                   </div>
