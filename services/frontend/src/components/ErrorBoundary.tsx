@@ -112,10 +112,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               Something went wrong
             </h1>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
               The application encountered an unexpected error. Try reloading the page or navigating
               to a different section using the sidebar.
             </p>
+
+            {this.state.error && (
+              <pre className="text-left text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 rounded-lg p-3 mb-4 overflow-auto max-h-40 whitespace-pre-wrap break-words">
+                {this.state.error.message}
+                {"\n\n"}
+                {this.state.error.stack}
+              </pre>
+            )}
 
             <div className="flex items-center gap-3 justify-center mb-4">
               <button

@@ -5,7 +5,7 @@
  * Renders the appropriate sub-page based on the current path.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardSSE } from "@/hooks/useDashboardSSE";
@@ -176,6 +176,7 @@ const Dashboard = () => {
   const { pathname: currentPath } = useLocation();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const { refreshKey } = useDashboardSSE();
+  const { resolved: resolvedTheme, setTheme } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -184,6 +185,11 @@ const Dashboard = () => {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const toggleTheme = useCallback(
+    () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
+    [resolvedTheme, setTheme]
+  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -232,7 +238,7 @@ const Dashboard = () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeydown);
     };
-  }, []);
+  }, [toggleTheme]);
 
   if (isLoading) {
     return (
@@ -272,9 +278,6 @@ const Dashboard = () => {
   };
   const toggleNotifications = () => setNotificationsOpen((prev) => !prev);
   const toggleUserMenu = () => setUserMenuOpen((prev) => !prev);
-
-  const { resolved: resolvedTheme, setTheme } = useTheme();
-  const toggleTheme = () => setTheme(resolvedTheme === "dark" ? "light" : "dark");
 
   const isOverview = currentPath === "/dashboard";
   const isSettings = currentPath === "/dashboard/settings";
