@@ -13,10 +13,24 @@ import {
 } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 
-const SHORTCUTS: ReadonlyArray<{ readonly key: string; readonly description: string }> = [
-  { key: "?", description: "Show keyboard shortcuts" },
-  { key: "/", description: "Focus search (CI/CD pages)" },
-  { key: "Esc", description: "Close dialogs and menus" },
+interface ShortcutGroup {
+  readonly label: string;
+  readonly shortcuts: ReadonlyArray<{ readonly key: string; readonly description: string }>;
+}
+
+const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
+  {
+    label: "General",
+    shortcuts: [
+      { key: "?", description: "Show keyboard shortcuts" },
+      { key: "Esc", description: "Close dialogs and menus" },
+      { key: "t", description: "Toggle light / dark theme" },
+    ],
+  },
+  {
+    label: "Tables",
+    shortcuts: [{ key: "/", description: "Focus repository filter" }],
+  },
 ];
 
 interface KeyboardShortcutsDialogProps {
@@ -31,11 +45,22 @@ export const KeyboardShortcutsDialog = ({ open, onOpenChange }: KeyboardShortcut
         <DialogTitle>Keyboard Shortcuts</DialogTitle>
         <DialogDescription>Quick actions to navigate the dashboard.</DialogDescription>
       </DialogHeader>
-      <div className="space-y-3 pt-2">
-        {SHORTCUTS.map((shortcut) => (
-          <div key={shortcut.key} className="flex items-center justify-between py-1.5">
-            <span className="text-sm text-gray-700 dark:text-gray-300">{shortcut.description}</span>
-            <Kbd>{shortcut.key}</Kbd>
+      <div className="space-y-5 pt-2">
+        {SHORTCUT_GROUPS.map((group) => (
+          <div key={group.label}>
+            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              {group.label}
+            </h4>
+            <div className="space-y-2">
+              {group.shortcuts.map((shortcut) => (
+                <div key={shortcut.key} className="flex items-center justify-between py-1">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    {shortcut.description}
+                  </span>
+                  <Kbd>{shortcut.key}</Kbd>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>

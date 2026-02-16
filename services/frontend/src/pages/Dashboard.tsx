@@ -204,12 +204,14 @@ const Dashboard = () => {
         setNotificationsOpen(false);
         setUserMenuOpen(false);
       }
-      if (event.key === "?" && !isInput) {
+      if (isInput) {
+        return;
+      }
+      if (event.key === "?") {
         event.preventDefault();
         setShortcutsOpen(true);
       }
-      if (event.key === "/" && !isInput) {
-        // Focus the page-level filter input if one exists
+      if (event.key === "/") {
         const filterInput = document.querySelector<HTMLInputElement>(
           'input[id="filter-repository"]'
         );
@@ -217,6 +219,10 @@ const Dashboard = () => {
           event.preventDefault();
           filterInput.focus();
         }
+      }
+      if (event.key === "t") {
+        event.preventDefault();
+        toggleTheme();
       }
     };
 
@@ -278,6 +284,12 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-indigo-500 focus:text-white focus:rounded-lg focus:text-sm focus:font-medium"
+      >
+        Skip to main content
+      </a>
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={closeSidebar} />
       )}
@@ -439,7 +451,7 @@ const Dashboard = () => {
         </header>
 
         {/* Page Content */}
-        <div className="p-4 sm:p-6 lg:p-8">
+        <div id="main-content" className="p-4 sm:p-6 lg:p-8">
           {comingSoonConfig ? (
             <ComingSoon {...comingSoonConfig} />
           ) : isSettings ? (

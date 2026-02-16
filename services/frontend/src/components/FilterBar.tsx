@@ -139,7 +139,7 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
         type="text"
         value={localRepo}
         onChange={handleRepoInput}
-        placeholder="Filter by repository..."
+        placeholder="Filter by repository, e.g. org/repo-name"
         className={cn(INPUT_CLASS, "w-64")}
       />
 
