@@ -48,6 +48,7 @@ interface NavLeafItem {
   readonly icon: React.ReactNode;
   readonly label: string;
   readonly href: string;
+  readonly comingSoon?: boolean;
 }
 
 interface NavGroup {
@@ -55,6 +56,7 @@ interface NavGroup {
   readonly label: string;
   readonly basePath: string;
   readonly children: readonly NavLeafItem[];
+  readonly comingSoon?: boolean;
 }
 
 type NavEntry = NavLeafItem | NavGroup;
@@ -111,6 +113,7 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     icon: <Siren className="w-5 h-5" />,
     label: "Incidents",
     basePath: "/dashboard/incidents",
+    comingSoon: true,
     children: [
       { icon: <Flame className="w-4 h-4" />, label: "Active", href: "/dashboard/incidents/active" },
       {
@@ -129,6 +132,7 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     icon: <Server className="w-5 h-5" />,
     label: "Infrastructure",
     basePath: "/dashboard/infra",
+    comingSoon: true,
     children: [
       {
         icon: <FileCode className="w-4 h-4" />,
@@ -143,6 +147,7 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     icon: <Rocket className="w-5 h-5" />,
     label: "Deployments",
     basePath: "/dashboard/deployments",
+    comingSoon: true,
     children: [
       {
         icon: <ShieldAlert className="w-4 h-4" />,
@@ -160,11 +165,13 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     icon: <BarChart3 className="w-5 h-5" />,
     label: "Analytics",
     href: "/dashboard/analytics",
+    comingSoon: true,
   },
   {
     icon: <Puzzle className="w-5 h-5" />,
     label: "Integrations",
     href: "/dashboard/integrations",
+    comingSoon: true,
   },
   {
     icon: <Settings className="w-5 h-5" />,
@@ -181,10 +188,19 @@ interface LeafItemProps {
   readonly href: string;
   readonly active: boolean;
   readonly indented?: boolean;
+  readonly comingSoon?: boolean;
   readonly onClick?: () => void;
 }
 
-const SidebarLeafItem = ({ icon, label, href, active, indented, onClick }: LeafItemProps) => (
+const SidebarLeafItem = ({
+  icon,
+  label,
+  href,
+  active,
+  indented,
+  comingSoon,
+  onClick,
+}: LeafItemProps) => (
   <Tooltip>
     <TooltipTrigger asChild>
       <Link
@@ -207,6 +223,11 @@ const SidebarLeafItem = ({ icon, label, href, active, indented, onClick }: LeafI
       >
         <span className="flex-shrink-0">{icon}</span>
         <span className="hidden md:hidden lg:inline">{label}</span>
+        {comingSoon && (
+          <span className="ml-auto text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded hidden md:hidden lg:inline-block">
+            Soon
+          </span>
+        )}
       </Link>
     </TooltipTrigger>
     <TooltipContent side="right" className="hidden md:block lg:hidden">
@@ -265,6 +286,11 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: Nav
           <div className="flex items-center gap-3">
             {group.icon}
             <span className="font-medium">{group.label}</span>
+            {group.comingSoon && (
+              <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                Soon
+              </span>
+            )}
           </div>
           <ChevronRight
             className={cn(
@@ -312,7 +338,9 @@ export const DashboardSidebar = ({
       new Set(
         NAV_ENTRIES.filter(
           (entry): entry is NavGroup =>
-            isNavGroup(entry) && entry.children.some((child) => pathname.startsWith(child.href))
+            isNavGroup(entry) &&
+            !entry.comingSoon &&
+            entry.children.some((child) => pathname.startsWith(child.href))
         ).map((group) => group.label)
       )
   );
@@ -321,7 +349,9 @@ export const DashboardSidebar = ({
   useEffect(() => {
     const matchingGroup = NAV_ENTRIES.find(
       (entry): entry is NavGroup =>
-        isNavGroup(entry) && entry.children.some((child) => pathname.startsWith(child.href))
+        isNavGroup(entry) &&
+        !entry.comingSoon &&
+        entry.children.some((child) => pathname.startsWith(child.href))
     );
     if (matchingGroup) {
       setOpenGroups(new Set([matchingGroup.label]));

@@ -140,7 +140,7 @@ const buildQuickStats = (
   avgConfidence: { readonly label: string; readonly subtitle: string }
 ): readonly QuickStat[] => [
   {
-    title: "Failed Builds",
+    title: "Failures",
     value: stats ? String(stats.totalFailures) : "--",
     subtitle: stats
       ? `${stats.totalFailures === 0 ? "No failures detected" : "Total detected"}`
@@ -150,7 +150,7 @@ const buildQuickStats = (
     colorClass: "bg-red-500",
   },
   {
-    title: "Analyses Run",
+    title: "Analyses",
     value: stats ? String(stats.totalAnalyses) : "--",
     subtitle: stats
       ? `${stats.totalAnalyses === 0 ? "No analyses yet" : "Total completed"}`
@@ -160,7 +160,7 @@ const buildQuickStats = (
     colorClass: "bg-indigo-500",
   },
   {
-    title: "Avg Confidence",
+    title: "Confidence",
     value: avgConfidence.label,
     subtitle: avgConfidence.subtitle,
     href: "/dashboard/cicd/analyses",
@@ -168,7 +168,7 @@ const buildQuickStats = (
     colorClass: "bg-blue-500",
   },
   {
-    title: "Connected Repos",
+    title: "Repositories",
     value: stats ? String(stats.connectedRepos) : "--",
     subtitle: stats
       ? `${stats.connectedRepos === 0 ? "None connected yet" : "Receiving webhooks"}`
@@ -489,11 +489,7 @@ export const DashboardOverview = ({
         </Card>
       )}
 
-      {/* Confidence Charts */}
-      <ConfidenceTrendChart refreshKey={refreshKey} />
-      <ConfidenceChart refreshKey={refreshKey} />
-
-      {/* Recent Activity */}
+      {/* Recent Activity — placed above charts for immediate visibility */}
       {(failuresError || analysesError) && !activityLoading ? (
         <Card className="mb-6 sm:mb-8">
           <CardContent className="py-8 text-center space-y-3">
@@ -686,6 +682,10 @@ export const DashboardOverview = ({
           )}
         </div>
       )}
+
+      {/* Confidence Charts */}
+      <ConfidenceTrendChart refreshKey={refreshKey} />
+      <ConfidenceChart refreshKey={refreshKey} />
     </>
   );
 };
