@@ -240,6 +240,8 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
     ["Branch", branch],
     ["Commit SHA", headSha],
     ["Conclusion", conclusion],
+    ["Detected At", event.timestamp ? formatTimestamp(event.timestamp) : "--"],
+    ["Ingested At", event.createdAt ? formatTimestamp(event.createdAt) : "--"],
   ];
   const visibleDetails = allDetails.filter(([, value]) => value !== "--");
 
@@ -247,12 +249,20 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
     <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
       <TableCell colSpan={8} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
         <div className="p-4 space-y-3">
+          {event.severity && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Severity:</span>
+              <Badge variant="outline" className={cn("text-xs", getSeverityStyle(event.severity))}>
+                {titleCase(event.severity)}
+              </Badge>
+            </div>
+          )}
           <div>
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-              Full Payload Details
+              Payload Details
             </h4>
             {visibleDetails.length > 0 ? (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                 {visibleDetails.map(([label, value]) => (
                   <Fragment key={label}>
                     <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>

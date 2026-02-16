@@ -49,6 +49,8 @@ interface ComingSoonConfig {
   readonly title: string;
   readonly description: string;
   readonly icon: React.ReactNode;
+  readonly ctaLabel?: string;
+  readonly ctaHref?: string;
 }
 
 const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
@@ -76,6 +78,8 @@ const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
     description:
       "AI-powered incident correlation, severity classification, and automated postmortem generation. Connect your monitoring tools to enable this.",
     icon: <Siren className="w-8 h-8" />,
+    ctaLabel: "View CI/CD Failures",
+    ctaHref: "/dashboard/cicd/failures",
   },
   // ---- Infrastructure ----
   "/dashboard/infra/iac": {
@@ -101,6 +105,8 @@ const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
     description:
       "IaC change review, drift detection, and cost analysis. Connect Terraform Cloud or your Kubernetes clusters to get started.",
     icon: <Server className="w-8 h-8" />,
+    ctaLabel: "Go to Settings",
+    ctaHref: "/dashboard/settings",
   },
   // ---- Deployments ----
   "/dashboard/deployments/risk": {
@@ -120,6 +126,8 @@ const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
     description:
       "Pre-deploy risk scoring, canary rollout health analysis, and automated rollback triggers. Available once CI/CD data is flowing.",
     icon: <Rocket className="w-8 h-8" />,
+    ctaLabel: "View CI/CD Pipelines",
+    ctaHref: "/dashboard/cicd/pipelines",
   },
   // ---- Analytics & Integrations ----
   "/dashboard/analytics": {
@@ -127,12 +135,16 @@ const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
     description:
       "DORA metrics, team health dashboards, and bottleneck identification — automatically calculated from your DevOps data.",
     icon: <BarChart3 className="w-8 h-8" />,
+    ctaLabel: "View Analyses",
+    ctaHref: "/dashboard/cicd/analyses",
   },
   "/dashboard/integrations": {
     title: "Integrations",
     description:
       "Connect Prometheus, PagerDuty, Datadog, Terraform Cloud, and more. Each integration unlocks new intelligence capabilities.",
     icon: <Puzzle className="w-8 h-8" />,
+    ctaLabel: "Go to Settings",
+    ctaHref: "/dashboard/settings",
   },
 };
 
