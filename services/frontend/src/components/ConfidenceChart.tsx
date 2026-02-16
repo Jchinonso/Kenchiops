@@ -5,7 +5,7 @@
  * (High, Medium, Low) using recharts + shadcn ChartContainer.
  */
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
@@ -75,7 +75,12 @@ export const ConfidenceChart = ({ refreshKey = 0 }: ConfidenceChartProps) => {
         {isLoading ? (
           <Skeleton className="h-48 w-full" />
         ) : (
-          <ChartContainer config={CHART_CONFIG} className="h-48 w-full">
+          <ChartContainer
+            config={CHART_CONFIG}
+            className="h-48 w-full"
+            role="img"
+            aria-label={`Confidence distribution bar chart showing breakdown across ${totalAnalyses} analyses: High, Medium, and Low confidence levels`}
+          >
             <BarChart data={chartData} layout="vertical">
               <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis
@@ -90,7 +95,14 @@ export const ConfidenceChart = ({ refreshKey = 0 }: ConfidenceChartProps) => {
                 tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
               />
               <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="count" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                <LabelList
+                  dataKey="count"
+                  position="right"
+                  fill="hsl(var(--foreground))"
+                  fontSize={12}
+                />
+              </Bar>
             </BarChart>
           </ChartContainer>
         )}

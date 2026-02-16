@@ -5,8 +5,8 @@
  * Renders the appropriate sub-page based on the current path.
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useLocation, Navigate, Link } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useLocation, useNavigate, Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardSSE } from "@/hooks/useDashboardSSE";
 import { Toaster } from "@/components/ui/sonner";
@@ -42,6 +42,9 @@ import { useTheme } from "@/hooks/useTheme";
 import { DashboardBreadcrumb } from "@/components/DashboardBreadcrumb";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
+import { CommandPalette } from "@/components/CommandPalette";
+import { DashboardFooter } from "@/components/DashboardFooter";
+import { formatRelativeTime } from "@/lib/formatters";
 
 // ==================== Coming Soon Configs ====================
 
@@ -190,11 +193,33 @@ const Dashboard = () => {
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [lastRefreshAt, setLastRefreshAt] = useState<Date>(new Date());
+  const [unreadCount, setUnreadCount] = useState(0);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const pendingGotoRef = useRef(false);
+  const gotoTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const navigate = useNavigate();
 
   const toggleTheme = useCallback(
     () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
     [resolvedTheme, setTheme]
+  );
+
+  // Track SSE refresh events for "last updated" and notification badge
+  const isFirstRefresh = useRef(true);
+  useEffect(() => {
+    if (isFirstRefresh.current) {
+      isFirstRefresh.current = false;
+      return;
+    }
+    setLastRefreshAt(new Date());
+    setUnreadCount((prev) => prev + 1);
+  }, [refreshKey]);
+
+  const lastUpdatedLabel = useMemo(
+    () => formatRelativeTime(lastRefreshAt.toISOString()),
+    [lastRefreshAt]
   );
 
   useEffect(() => {
@@ -212,6 +237,11 @@ const Dashboard = () => {
       const { key } = event;
       if (key === "Escape") {
         setNotificationsOpen(false);
+      }
+      if ((event.metaKey || event.ctrlKey) && key === "k") {
+        event.preventDefault();
+        setCommandOpen((prev) => !prev);
+        return;
       }
       if (isInput) {
         return;
@@ -232,6 +262,30 @@ const Dashboard = () => {
       if (key === "t") {
         event.preventDefault();
         toggleTheme();
+      }
+      // Two-key navigation: g then o/f/a
+      if (pendingGotoRef.current) {
+        pendingGotoRef.current = false;
+        clearTimeout(gotoTimerRef.current);
+        const routes: Readonly<Record<string, string>> = {
+          o: "/dashboard",
+          f: "/dashboard/cicd/failures",
+          a: "/dashboard/cicd/analyses",
+          s: "/dashboard/settings",
+          p: "/dashboard/cicd/pipelines",
+        };
+        const route = routes[key];
+        if (route) {
+          event.preventDefault();
+          navigate(route);
+        }
+        return;
+      }
+      if (key === "g") {
+        pendingGotoRef.current = true;
+        gotoTimerRef.current = setTimeout(() => {
+          pendingGotoRef.current = false;
+        }, 1000);
       }
     };
 
@@ -271,7 +325,10 @@ const Dashboard = () => {
     closeSidebar();
     logout();
   };
-  const toggleNotifications = () => setNotificationsOpen((prev) => !prev);
+  const toggleNotifications = () => {
+    setNotificationsOpen((prev) => !prev);
+    setUnreadCount(0);
+  };
 
   const isOverview = currentPath === "/dashboard";
   const isSettings = currentPath === "/dashboard/settings";
@@ -288,7 +345,7 @@ const Dashboard = () => {
         Skip to main content
       </a>
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={closeSidebar} />
+        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={closeSidebar} />
       )}
 
       <DashboardSidebar
@@ -307,7 +364,8 @@ const Dashboard = () => {
             <div className="flex items-center gap-3 flex-1">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                className="md:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                aria-label="Open navigation menu"
               >
                 <Menu className="w-5 h-5" />
               </button>
@@ -317,6 +375,11 @@ const Dashboard = () => {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4">
+              {/* Last Updated */}
+              <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500">
+                Updated {lastUpdatedLabel}
+              </span>
+
               {/* Theme Toggle */}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -342,8 +405,14 @@ const Dashboard = () => {
                     <button
                       onClick={toggleNotifications}
                       className="relative p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                      aria-label={
+                        unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"
+                      }
                     >
                       <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+                      {unreadCount > 0 && (
+                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+                      )}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>Notifications</TooltipContent>
@@ -404,10 +473,19 @@ const Dashboard = () => {
             />
           )}
         </div>
+
+        <DashboardFooter />
       </main>
 
       <Toaster position="bottom-right" theme={resolvedTheme} />
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <CommandPalette
+        open={commandOpen}
+        onOpenChange={setCommandOpen}
+        resolvedTheme={resolvedTheme}
+        onToggleTheme={toggleTheme}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+      />
     </div>
   );
 };

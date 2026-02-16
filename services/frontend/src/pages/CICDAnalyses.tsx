@@ -6,7 +6,8 @@
  * Rows expand inline to show recommended actions and confidence signals.
  */
 
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useCallback } from "react";
+import { useSearchParams, Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -15,6 +16,7 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  TableCaption,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -36,16 +38,14 @@ import {
 } from "lucide-react";
 import { useAnalyses, type AnalysisRecord } from "@/hooks/useDashboardData";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   getConfidenceLabel,
   getConfidenceStyle,
-  formatTimestamp,
-  formatRelativeTime,
   truncateText,
   extractRepoFromKey,
 } from "@/lib/formatters";
+import { TimeDisplay } from "@/components/TimeDisplay";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { FilterBar, parseConfidenceFilter, type FilterValues } from "@/components/FilterBar";
@@ -83,6 +83,7 @@ const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTable
 
   return (
     <TableHead
+      scope="col"
       className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
       onClick={() => onSort(column)}
     >
@@ -117,9 +118,7 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
         />
       </TableCell>
       <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
-        <span title={formatTimestamp(analysis.createdAt)}>
-          {formatRelativeTime(analysis.createdAt)}
-        </span>
+        <TimeDisplay dateTime={analysis.createdAt} />
       </TableCell>
       <TableCell className="text-gray-700 dark:text-gray-300 font-medium text-xs">{repo}</TableCell>
       <TableCell className="max-w-sm">
@@ -224,22 +223,34 @@ interface CICDAnalysesProps {
 }
 
 export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
-  const [filters, setFilters] = useState<FilterValues>({
-    repository: "",
+  const [filters, setFilters] = useState<FilterValues>(() => ({
+    repository: searchParams.get("repository") ?? "",
     severity: "",
-    minConfidence: "",
-  });
+    minConfidence: searchParams.get("confidence") ?? "",
+  }));
 
-  const handleFilterChange = (next: FilterValues) => {
-    setFilters(next);
-    setOffset(0);
-    setExpandedId(null);
-  };
+  const handleFilterChange = useCallback(
+    (next: FilterValues) => {
+      setFilters(next);
+      setOffset(0);
+      setExpandedId(null);
+      const params = new URLSearchParams();
+      if (next.repository) {
+        params.set("repository", next.repository);
+      }
+      if (next.minConfidence) {
+        params.set("confidence", next.minConfidence);
+      }
+      setSearchParams(params, { replace: true });
+    },
+    [setSearchParams]
+  );
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
@@ -387,24 +398,27 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
             <>
               <div className="overflow-x-auto">
                 <Table>
+                  <TableCaption className="sr-only">
+                    CI/CD analysis results table showing repository, confidence, and linked events
+                  </TableCaption>
                   <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
                     <TableRow>
-                      <TableHead className="w-8" />
+                      <TableHead scope="col" className="w-8" />
                       <SortableTableHead
                         label="Time"
                         column="createdAt"
                         currentSort={sort}
                         onSort={handleSort}
                       />
-                      <TableHead>Repository</TableHead>
-                      <TableHead>Summary</TableHead>
+                      <TableHead scope="col">Repository</TableHead>
+                      <TableHead scope="col">Summary</TableHead>
                       <SortableTableHead
                         label="Confidence"
                         column="confidence"
                         currentSort={sort}
                         onSort={handleSort}
                       />
-                      <TableHead>Event</TableHead>
+                      <TableHead scope="col">Event</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

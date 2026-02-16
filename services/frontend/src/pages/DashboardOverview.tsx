@@ -26,8 +26,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
-  formatTimestamp,
-  formatRelativeTime,
   truncateText,
   getConfidenceLabel,
   getConfidenceStyle,
@@ -36,6 +34,7 @@ import {
   getPayloadString,
   titleCase,
 } from "@/lib/formatters";
+import { TimeDisplay } from "@/components/TimeDisplay";
 import {
   AlertTriangle,
   Zap,
@@ -49,6 +48,8 @@ import {
   MessageSquare,
   X,
   CheckCircle2,
+  Download,
+  RefreshCw,
 } from "lucide-react";
 import { ConfidenceChart } from "@/components/ConfidenceChart";
 import { ConfidenceTrendChart } from "@/components/ConfidenceTrendChart";
@@ -193,9 +194,24 @@ export const DashboardOverview = ({
   dismissOnboarding,
   refreshKey = 0,
 }: DashboardOverviewProps) => {
-  const { data: stats, isLoading: statsLoading } = useDashboardStats(refreshKey);
-  const { data: recentAnalyses, isLoading: analysesLoading } = useAnalyses(5, 0, refreshKey);
-  const { data: recentFailures, isLoading: failuresLoading } = useFailures(5, 0, refreshKey);
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    error: statsError,
+    refetch: refetchStats,
+  } = useDashboardStats(refreshKey);
+  const {
+    data: recentAnalyses,
+    isLoading: analysesLoading,
+    error: analysesError,
+    refetch: refetchAnalyses,
+  } = useAnalyses(5, 0, refreshKey);
+  const {
+    data: recentFailures,
+    isLoading: failuresLoading,
+    error: failuresError,
+    refetch: refetchFailures,
+  } = useFailures(5, 0, refreshKey);
   const { data: tenant } = useTenantInfo(refreshKey);
 
   const failureItems = recentFailures?.items ?? [];
@@ -209,61 +225,130 @@ export const DashboardOverview = ({
     tenant?.slackConnected ?? false,
     (stats?.totalAnalyses ?? 0) > 0
   );
-  const allStepsComplete = onboardingSteps.every((step) => step.completed);
+  const completedCount = onboardingSteps.filter((step) => step.completed).length;
+  const allStepsComplete = completedCount === onboardingSteps.length;
+
+  // Zero-data state: brand new user with no data
+  const isNewUser =
+    !statsLoading &&
+    stats !== null &&
+    stats.totalAnalyses === 0 &&
+    stats.totalFailures === 0 &&
+    stats.connectedRepos === 0;
+
+  const handleExportOverview = () => {
+    const rows = [["Metric", "Value"], ...quickStats.map((stat) => [stat.title, stat.value])];
+    const csv = rows.map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "kenchi-overview.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <>
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Welcome back, {firstName}!
-        </h1>
-        <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">
-          Here&apos;s your CI/CD pipeline health at a glance.
-        </p>
+      <div className="mb-6 sm:mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Welcome back, {firstName}!
+          </h1>
+          <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">
+            Here&apos;s your CI/CD pipeline health at a glance.
+          </p>
+        </div>
+        {!statsLoading && stats && (
+          <button
+            type="button"
+            onClick={handleExportOverview}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export
+          </button>
+        )}
       </div>
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-        {quickStats.map((stat) => (
-          <Link key={stat.title} to={stat.href} className="block group">
-            <Card className="py-4 sm:py-5 h-full group-hover:border-indigo-300 dark:group-hover:border-indigo-700 transition-colors">
-              <CardContent className="px-4 sm:px-6 h-full">
-                <div className="flex items-start justify-between h-full">
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
-                      {stat.title}
-                    </p>
-                    {statsLoading ? (
-                      <Skeleton className="h-7 w-12 mt-1" />
-                    ) : (
-                      <>
-                        <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                          {stat.value}
-                        </h3>
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                          {stat.subtitle}
-                        </p>
-                      </>
-                    )}
+      {statsError ? (
+        <Card className="mb-6 sm:mb-8">
+          <CardContent className="py-8 text-center space-y-3">
+            <p className="text-sm text-red-600 dark:text-red-400">{statsError}</p>
+            <button
+              type="button"
+              onClick={refetchStats}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+          {quickStats.map((stat) => (
+            <Link key={stat.title} to={stat.href} className="block group">
+              <Card className="py-4 sm:py-5 h-full group-hover:border-indigo-300 dark:group-hover:border-indigo-700 group-hover:shadow-md group-hover:-translate-y-0.5 group-active:scale-[0.98] transition-all">
+                <CardContent className="px-4 sm:px-6 h-full">
+                  <div className="flex items-start justify-between gap-3 h-full">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                        {stat.title}
+                      </p>
+                      {statsLoading ? (
+                        <Skeleton className="h-7 w-12 mt-1" />
+                      ) : (
+                        <>
+                          <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            {stat.value}
+                          </p>
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                            {stat.subtitle}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    <div
+                      className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 ${stat.colorClass} rounded-xl flex items-center justify-center flex-shrink-0`}
+                    >
+                      {stat.icon}
+                    </div>
                   </div>
-                  <div
-                    className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 ${stat.colorClass} rounded-xl flex items-center justify-center flex-shrink-0`}
-                  >
-                    {stat.icon}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
 
-      {/* Confidence Charts */}
-      <ConfidenceTrendChart refreshKey={refreshKey} />
-      <ConfidenceChart refreshKey={refreshKey} />
-
-      {/* Onboarding (first-time users only) */}
-      {showOnboarding && (
+      {/* Onboarding — placed before charts so it's visible above the fold */}
+      {showOnboarding && completedCount >= 2 && !allStepsComplete ? (
+        <div className="mb-6 sm:mb-8 flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <Rocket className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Setup {completedCount}/{onboardingSteps.length}
+              </span>
+              <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-indigo-500 rounded-full transition-all"
+                  style={{ width: `${(completedCount / onboardingSteps.length) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={dismissOnboarding}
+            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+            aria-label="Dismiss setup checklist"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ) : showOnboarding && !allStepsComplete ? (
         <Card className="mb-6 sm:mb-8">
           <CardHeader className="border-b">
             <div className="flex items-center justify-between">
@@ -274,6 +359,7 @@ export const DashboardOverview = ({
               <button
                 onClick={dismissOnboarding}
                 className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+                aria-label="Dismiss setup checklist"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -346,10 +432,63 @@ export const DashboardOverview = ({
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {/* Zero-data welcome state for brand new users */}
+      {isNewUser && !showOnboarding && (
+        <Card className="mb-6 sm:mb-8">
+          <CardContent className="py-12 text-center">
+            <Rocket className="w-10 h-10 text-indigo-400 mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              Welcome to Kenchi
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-4">
+              Connect your GitHub repositories to start analyzing CI/CD failures automatically.
+              Kenchi will surface root causes and recommend fixes.
+            </p>
+            <a
+              href={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors"
+            >
+              <Github className="w-4 h-4" />
+              Connect GitHub
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </CardContent>
+        </Card>
       )}
 
+      {/* Confidence Charts */}
+      <ConfidenceTrendChart refreshKey={refreshKey} />
+      <ConfidenceChart refreshKey={refreshKey} />
+
       {/* Recent Activity */}
-      {activityLoading ? (
+      {(failuresError || analysesError) && !activityLoading ? (
+        <Card className="mb-6 sm:mb-8">
+          <CardContent className="py-8 text-center space-y-3">
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {failuresError ?? analysesError}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (failuresError) {
+                  refetchFailures();
+                }
+                if (analysesError) {
+                  refetchAnalyses();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </CardContent>
+        </Card>
+      ) : activityLoading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <Card>
             <CardHeader className="border-b">
@@ -418,17 +557,16 @@ export const DashboardOverview = ({
               <CardContent className="pt-2">
                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
                   {failureItems.map((event: EventRecord) => (
-                    <div
+                    <Link
                       key={event.id}
-                      className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+                      to="/dashboard/cicd/failures"
+                      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span
+                        <TimeDisplay
+                          dateTime={event.timestamp}
                           className="text-xs text-gray-400 dark:text-gray-400"
-                          title={formatTimestamp(event.timestamp)}
-                        >
-                          {formatRelativeTime(event.timestamp)}
-                        </span>
+                        />
                         <Badge
                           variant="outline"
                           className={cn(
@@ -445,7 +583,7 @@ export const DashboardOverview = ({
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                         {getPayloadString(event.payload, "checkName")}
                       </p>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </CardContent>
@@ -471,17 +609,16 @@ export const DashboardOverview = ({
               <CardContent className="pt-2">
                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
                   {analysisItems.map((analysis: AnalysisRecord) => (
-                    <div
+                    <Link
                       key={analysis.id}
-                      className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+                      to="/dashboard/cicd/analyses"
+                      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span
+                        <TimeDisplay
+                          dateTime={analysis.createdAt}
                           className="text-xs text-gray-400 dark:text-gray-400"
-                          title={formatTimestamp(analysis.createdAt)}
-                        >
-                          {formatRelativeTime(analysis.createdAt)}
-                        </span>
+                        />
                         <Badge
                           variant="outline"
                           className={cn(
@@ -498,7 +635,7 @@ export const DashboardOverview = ({
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                         {truncateText(analysis.summary, 60)}
                       </p>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </CardContent>

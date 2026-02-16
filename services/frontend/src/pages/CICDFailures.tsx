@@ -6,7 +6,8 @@
  * Rows expand inline to show full payload details and links.
  */
 
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useCallback } from "react";
+import { useSearchParams, Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -15,6 +16,7 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  TableCaption,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -43,17 +45,16 @@ import {
   type EventRecord,
   type AnalysisStatusEntry,
 } from "@/hooks/useDashboardData";
-import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   getConfidenceLabel,
   getConfidenceStyle,
   formatTimestamp,
-  formatRelativeTime,
   getSeverityStyle,
   getPayloadString,
   titleCase,
 } from "@/lib/formatters";
+import { TimeDisplay } from "@/components/TimeDisplay";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { FilterBar, type FilterValues } from "@/components/FilterBar";
@@ -93,6 +94,7 @@ const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTable
 
   return (
     <TableHead
+      scope="col"
       className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
       onClick={() => onSort(column)}
     >
@@ -131,7 +133,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
         />
       </TableCell>
       <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
-        <span title={formatTimestamp(event.timestamp)}>{formatRelativeTime(event.timestamp)}</span>
+        <TimeDisplay dateTime={event.timestamp} />
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
@@ -314,21 +316,33 @@ interface CICDFailuresProps {
 }
 
 export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
-  const [filters, setFilters] = useState<FilterValues>({
-    repository: "",
-    severity: "",
+  const [filters, setFilters] = useState<FilterValues>(() => ({
+    repository: searchParams.get("repository") ?? "",
+    severity: searchParams.get("severity") ?? "",
     minConfidence: "",
-  });
+  }));
 
-  const handleFilterChange = (next: FilterValues) => {
-    setFilters(next);
-    setOffset(0);
-    setExpandedId(null);
-  };
+  const handleFilterChange = useCallback(
+    (next: FilterValues) => {
+      setFilters(next);
+      setOffset(0);
+      setExpandedId(null);
+      const params = new URLSearchParams();
+      if (next.repository) {
+        params.set("repository", next.repository);
+      }
+      if (next.severity) {
+        params.set("severity", next.severity);
+      }
+      setSearchParams(params, { replace: true });
+    },
+    [setSearchParams]
+  );
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
@@ -481,17 +495,20 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
             <>
               <div className="overflow-x-auto">
                 <Table>
+                  <TableCaption className="sr-only">
+                    CI/CD failure events table showing repository, severity, and analysis status
+                  </TableCaption>
                   <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
                     <TableRow>
-                      <TableHead className="w-8" />
+                      <TableHead scope="col" className="w-8" />
                       <SortableTableHead
                         label="Time"
                         column="timestamp"
                         currentSort={sort}
                         onSort={handleSort}
                       />
-                      <TableHead>Repository</TableHead>
-                      <TableHead>Check Name</TableHead>
+                      <TableHead scope="col">Repository</TableHead>
+                      <TableHead scope="col">Check Name</TableHead>
                       <SortableTableHead
                         label="Severity"
                         column="severity"
@@ -504,8 +521,8 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
                         currentSort={sort}
                         onSort={handleSort}
                       />
-                      <TableHead>Commit</TableHead>
-                      <TableHead>Analysis</TableHead>
+                      <TableHead scope="col">Commit</TableHead>
+                      <TableHead scope="col">Analysis</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

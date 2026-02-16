@@ -87,13 +87,18 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
             <TrendingUp className="w-5 h-5 text-indigo-500" />
             <CardTitle>Confidence Trend</CardTitle>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto">
             {/* Bucket toggle */}
-            <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
+            <div
+              role="group"
+              aria-label="Time bucket"
+              className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs flex-shrink-0"
+            >
               {BUCKET_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setBucket(opt.value)}
+                  aria-pressed={bucket === opt.value}
                   className={`px-3 py-1.5 transition-colors ${
                     bucket === opt.value
                       ? "bg-indigo-500 text-white"
@@ -105,11 +110,16 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
               ))}
             </div>
             {/* Range toggle */}
-            <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
+            <div
+              role="group"
+              aria-label="Date range"
+              className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs flex-shrink-0"
+            >
               {RANGE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setRangeDays(opt.value)}
+                  aria-pressed={rangeDays === opt.value}
                   className={`px-3 py-1.5 transition-colors ${
                     rangeDays === opt.value
                       ? "bg-indigo-500 text-white"
@@ -141,12 +151,17 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
               <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
                 <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    More data points needed for trend analysis
+                    Your first analyses are in. Check back soon to see trends forming.
                   </p>
                 </div>
               </div>
             )}
-            <ChartContainer config={CHART_CONFIG} className="h-56 w-full">
+            <ChartContainer
+              config={CHART_CONFIG}
+              className="h-56 w-full"
+              role="img"
+              aria-label={`Confidence trend area chart showing average diagnosis confidence over the last ${rangeDays} days`}
+            >
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="confidenceGradient" x1="0" y1="0" x2="0" y2="1">
