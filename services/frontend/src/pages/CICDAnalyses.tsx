@@ -44,7 +44,6 @@ import {
   formatRelativeTime,
   truncateText,
   extractRepoFromKey,
-  flattenSignalEntries,
 } from "@/lib/formatters";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -167,13 +166,21 @@ interface ExpandedAnalysisRowProps {
 
 const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowProps) => {
   const hasActions = analysis.recommendedActions !== null && analysis.recommendedActions.length > 0;
-  const hasSignals =
-    analysis.confidenceSignals !== null && Object.keys(analysis.confidenceSignals).length > 0;
+  const hasCause = analysis.identifiedCause !== null && analysis.identifiedCause.length > 0;
 
   return (
     <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
       <TableCell colSpan={6} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
         <div className="p-4 space-y-3">
+          {hasCause && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                Root Cause
+              </h4>
+              <p className="text-sm text-gray-900 dark:text-gray-100">{analysis.identifiedCause}</p>
+            </div>
+          )}
+
           <div>
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
               Recommended Actions
@@ -191,24 +198,6 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
             )}
           </div>
 
-          {hasSignals && (
-            <div>
-              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                Confidence Signals
-              </h4>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {flattenSignalEntries(analysis.confidenceSignals ?? {}).map(([label, value]) => (
-                  <Fragment key={label}>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-                    <span className="text-sm text-gray-900 dark:text-gray-100 font-mono">
-                      {value}
-                    </span>
-                  </Fragment>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div>
             <button
               type="button"
@@ -218,7 +207,7 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
                 onViewDetails();
               }}
             >
-              View Full Details
+              View Full Details →
             </button>
           </div>
         </div>
