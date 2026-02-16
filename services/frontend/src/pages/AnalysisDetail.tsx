@@ -1,0 +1,78 @@
+/**
+ * Analysis Detail Page
+ *
+ * Full-page view of a single analysis result. Accessed via
+ * /dashboard/cicd/analyses/:id. Shows comprehensive analysis
+ * details with back navigation and linked event navigation.
+ */
+
+import { Link } from "react-router-dom";
+import { ArrowLeft, Zap } from "lucide-react";
+import { useAnalysisDetail } from "@/hooks/useDashboardData";
+import { extractRepoFromKey, formatTimestamp } from "@/lib/formatters";
+import { DetailSkeleton, DetailContent } from "@/components/AnalysisDetailContent";
+
+// ==================== Props ====================
+
+interface AnalysisDetailProps {
+  readonly analysisId: string;
+  readonly refreshKey?: number;
+}
+
+// ==================== Component ====================
+
+export const AnalysisDetail = ({ analysisId, refreshKey = 0 }: AnalysisDetailProps) => {
+  const { data: analysis, isLoading, error } = useAnalysisDetail(analysisId, refreshKey);
+
+  const repo = analysis ? extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis) : null;
+  const timestamp = analysis ? formatTimestamp(analysis.createdAt) : null;
+
+  return (
+    <div className="space-y-6">
+      {/* Back link */}
+      <Link
+        to="/dashboard/cicd/analyses"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Analyses
+      </Link>
+
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950">
+          <Zap className="w-5 h-5 text-indigo-500" />
+        </div>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {isLoading
+              ? "Loading analysis..."
+              : error
+                ? "Analysis Not Found"
+                : `Analysis for ${repo}`}
+          </h1>
+          {timestamp && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{timestamp}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <DetailSkeleton />
+      ) : error ? (
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-12 text-center">
+          <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <Link
+            to="/dashboard/cicd/analyses"
+            className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
+          >
+            Return to Analyses
+          </Link>
+        </div>
+      ) : analysis ? (
+        <DetailContent analysis={analysis} showLinkedEventLink />
+      ) : null}
+    </div>
+  );
+};

@@ -191,7 +191,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
       <TableCell>
         {analysisStatus ? (
           <Link
-            to="/dashboard/cicd/analyses"
+            to={`/dashboard/cicd/analyses/${analysisStatus.analysisId}`}
             className="inline-flex items-center gap-1.5 group"
             onClick={(linkEvent) => linkEvent.stopPropagation()}
           >
@@ -295,7 +295,7 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
             )}
             {analysisStatus && (
               <Link
-                to="/dashboard/cicd/analyses"
+                to={`/dashboard/cicd/analyses/${analysisStatus.analysisId}`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors"
                 onClick={(linkEvent) => linkEvent.stopPropagation()}
               >

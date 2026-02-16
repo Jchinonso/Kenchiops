@@ -8,7 +8,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate, Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useDashboardSSE } from "@/hooks/useDashboardSSE";
+import { useDashboardSSE, type DashboardNotification } from "@/hooks/useDashboardSSE";
+import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { ComingSoon } from "@/components/ComingSoon";
@@ -18,7 +19,8 @@ import { CICDAnalyses } from "@/pages/CICDAnalyses";
 import { CICDPipelines } from "@/pages/CICDPipelines";
 import { WebhookActivity } from "@/pages/WebhookActivity";
 import { RepositoryDetail } from "@/pages/RepositoryDetail";
-import { Settings as SettingsPage } from "@/pages/Settings";
+import { AnalysisDetail } from "@/pages/AnalysisDetail";
+import { Settings } from "@/pages/Settings";
 import {
   Bell,
   Menu,
@@ -37,6 +39,8 @@ import {
   DollarSign,
   ShieldAlert,
   ArrowUpCircle,
+  AlertTriangle,
+  Search,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { DashboardBreadcrumb } from "@/components/DashboardBreadcrumb";
@@ -160,10 +164,15 @@ const findComingSoonConfig = (pathname: string): ComingSoonConfig | undefined =>
 const isCICDRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/cicd");
 
 const PIPELINES_PREFIX = "/dashboard/cicd/pipelines/";
+const ANALYSES_PREFIX = "/dashboard/cicd/analyses/";
 
 const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode => {
   if (pathname.startsWith("/dashboard/cicd/failures")) {
     return <CICDFailures refreshKey={refreshKey} />;
+  }
+  if (pathname.startsWith(ANALYSES_PREFIX)) {
+    const analysisId = decodeURIComponent(pathname.slice(ANALYSES_PREFIX.length));
+    return <AnalysisDetail analysisId={analysisId} refreshKey={refreshKey} />;
   }
   if (pathname.startsWith("/dashboard/cicd/analyses")) {
     return <CICDAnalyses refreshKey={refreshKey} />;
@@ -181,12 +190,125 @@ const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode =
   return <CICDFailures refreshKey={refreshKey} />;
 };
 
+// ==================== Notification Components ====================
+
+interface NotificationItemProps {
+  readonly notification: DashboardNotification;
+  readonly onClose: () => void;
+}
+
+const NotificationItem = ({ notification, onClose }: NotificationItemProps) => {
+  const { type, read, analysisId, title, description, timestamp } = notification;
+  const isFailure = type === "failure";
+  const Icon = isFailure ? AlertTriangle : Search;
+  const iconColor = isFailure ? "text-red-500" : "text-green-500";
+
+  const linkTarget =
+    !isFailure && analysisId
+      ? `/dashboard/cicd/analyses/${analysisId}`
+      : "/dashboard/cicd/failures";
+
+  return (
+    <Link to={linkTarget} onClick={onClose}>
+      <div
+        className={cn(
+          "px-4 py-3 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors",
+          !read && "bg-indigo-50/50 dark:bg-indigo-950/20"
+        )}
+      >
+        <Icon className={cn("w-4 h-4 mt-0.5 shrink-0", iconColor)} />
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              "text-sm truncate",
+              read
+                ? "text-gray-700 dark:text-gray-300"
+                : "text-gray-900 dark:text-gray-100 font-medium"
+            )}
+          >
+            {title}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{description}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+            {formatRelativeTime(timestamp)}
+          </p>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+interface NotificationDropdownProps {
+  readonly notifications: readonly DashboardNotification[];
+  readonly unreadCount: number;
+  readonly onMarkAllRead: () => void;
+  readonly onClose: () => void;
+}
+
+const NotificationDropdown = ({
+  notifications,
+  unreadCount,
+  onMarkAllRead,
+  onClose,
+}: NotificationDropdownProps) => {
+  const hasNotifications = notifications.length > 0;
+
+  return (
+    <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 z-50">
+      <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+        <h4 className="font-semibold text-gray-900 dark:text-gray-100">Notifications</h4>
+        <button
+          type="button"
+          disabled={unreadCount < 1}
+          onClick={onMarkAllRead}
+          className={cn(
+            "text-xs transition-colors",
+            unreadCount > 0
+              ? "text-indigo-500 hover:text-indigo-600 cursor-pointer"
+              : "text-gray-400 dark:text-gray-500 cursor-not-allowed"
+          )}
+        >
+          Mark all read
+        </button>
+      </div>
+
+      {hasNotifications ? (
+        <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
+          {notifications.map((notification) => (
+            <NotificationItem key={notification.id} notification={notification} onClose={onClose} />
+          ))}
+        </div>
+      ) : (
+        <div className="px-4 py-8 text-center">
+          <Bell className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            No notifications yet
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            CI/CD failure alerts and analysis results will appear here.
+          </p>
+        </div>
+      )}
+
+      <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
+        <Link
+          to="/dashboard/settings"
+          onClick={onClose}
+          className="text-xs text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+        >
+          Notification preferences
+        </Link>
+      </div>
+    </div>
+  );
+};
+
 // ==================== Dashboard ====================
 
 const Dashboard = () => {
   const { pathname: currentPath } = useLocation();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
-  const { refreshKey: sseRefreshKey } = useDashboardSSE();
+  const { refreshKey: sseRefreshKey, notifications, markAllRead } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -195,8 +317,11 @@ const Dashboard = () => {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date>(new Date());
-  const [unreadCount, setUnreadCount] = useState(0);
   const [manualRefreshKey, setManualRefreshKey] = useState(0);
+  const unreadCount = useMemo(
+    () => notifications.filter((notification) => !notification.read).length,
+    [notifications]
+  );
   const refreshKey = sseRefreshKey + manualRefreshKey;
   const notificationsRef = useRef<HTMLDivElement>(null);
   const pendingGotoRef = useRef(false);
@@ -216,7 +341,6 @@ const Dashboard = () => {
       return;
     }
     setLastRefreshAt(new Date());
-    setUnreadCount((prev) => prev + 1);
   }, [sseRefreshKey]);
 
   const lastUpdatedLabel = useMemo(
@@ -329,7 +453,6 @@ const Dashboard = () => {
   };
   const toggleNotifications = () => {
     setNotificationsOpen((prev) => !prev);
-    setUnreadCount(0);
   };
 
   const isOverview = currentPath === "/dashboard";
@@ -443,38 +566,12 @@ const Dashboard = () => {
                   <TooltipContent>Notifications</TooltipContent>
                 </Tooltip>
                 {notificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 z-50">
-                    <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                      <h4 className="font-semibold text-gray-900 dark:text-gray-100">
-                        Notifications
-                      </h4>
-                      <button
-                        type="button"
-                        disabled
-                        className="text-xs text-gray-400 dark:text-gray-500 cursor-not-allowed"
-                      >
-                        Mark all read
-                      </button>
-                    </div>
-                    <div className="px-4 py-8 text-center">
-                      <Bell className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        No notifications yet
-                      </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        CI/CD failure alerts and analysis results will appear here.
-                      </p>
-                    </div>
-                    <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
-                      <Link
-                        to="/dashboard/settings"
-                        onClick={() => setNotificationsOpen(false)}
-                        className="text-xs text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
-                      >
-                        Notification preferences
-                      </Link>
-                    </div>
-                  </div>
+                  <NotificationDropdown
+                    notifications={notifications}
+                    unreadCount={unreadCount}
+                    onMarkAllRead={markAllRead}
+                    onClose={() => setNotificationsOpen(false)}
+                  />
                 )}
               </div>
             </div>
@@ -486,7 +583,7 @@ const Dashboard = () => {
           {comingSoonConfig ? (
             <ComingSoon {...comingSoonConfig} />
           ) : isSettings ? (
-            <SettingsPage />
+            <Settings />
           ) : isCICD ? (
             renderCICDPage(currentPath, refreshKey)
           ) : (
