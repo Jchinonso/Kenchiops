@@ -5,6 +5,8 @@
  * Opened when clicking an analysis row in CICDAnalyses.
  */
 
+import { useState, useEffect, useCallback } from "react";
+import { Link2, Check } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -28,6 +30,21 @@ interface AnalysisDetailPanelProps {
 
 export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetailPanelProps) => {
   const { data: analysis, isLoading, error } = useAnalysisDetail(analysisId);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setCopied(false);
+  }, [analysisId]);
+
+  const handleCopyLink = useCallback(async () => {
+    if (!analysisId) {
+      return;
+    }
+    const url = `${window.location.origin}/dashboard/cicd/analyses/${analysisId}`;
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [analysisId]);
 
   const repo = analysis ? extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis) : null;
 
@@ -52,6 +69,16 @@ export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetai
                 ? `${repo} \u00b7 ${timestamp}`
                 : "Loading analysis details..."}
           </SheetDescription>
+          {analysisId && (
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 transition-colors mt-1 self-start"
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
+              {copied ? "Copied!" : "Copy link"}
+            </button>
+          )}
         </SheetHeader>
 
         {isLoading ? (

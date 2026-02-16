@@ -98,9 +98,17 @@ const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTable
         ? ArrowDown
         : ArrowUpDown;
 
+  const ariaSortValue: "ascending" | "descending" | "none" =
+    isActive && sortDirection === "asc"
+      ? "ascending"
+      : isActive && sortDirection === "desc"
+        ? "descending"
+        : "none";
+
   return (
     <TableHead
       scope="col"
+      aria-sort={ariaSortValue}
       className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
       onClick={() => onSort(column)}
     >
@@ -131,10 +139,20 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
   return (
     <TableRow
       onClick={onClick}
-      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+      onKeyDown={(keyEvent) => {
+        const { key } = keyEvent;
+        if (key === "Enter" || key === " ") {
+          keyEvent.preventDefault();
+          onClick();
+        }
+      }}
+      tabIndex={0}
+      aria-expanded={isExpanded}
+      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
     >
       <TableCell className="w-8">
         <ChevronRight
+          aria-hidden="true"
           className={cn("w-4 h-4 text-gray-400 transition-transform", isExpanded && "rotate-90")}
         />
       </TableCell>
@@ -442,6 +460,14 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
       </div>
 
       <FilterBar variant="failures" filters={filters} onFilterChange={handleFilterChange} />
+
+      <div aria-live="polite" className="sr-only">
+        {isLoading
+          ? "Loading results..."
+          : error
+            ? "Error loading results"
+            : `Showing ${items.length} of ${total} results`}
+      </div>
 
       <Card>
         <CardHeader className="border-b">
