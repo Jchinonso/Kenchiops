@@ -124,12 +124,21 @@ const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => 
     repository: repoParam,
     minConfidence: confParam,
     maxConfidence: maxConfParam,
+    since: sinceParam,
+    until: untilParam,
   } = req.query;
 
   const repository = parseStringParam(repoParam);
   const minConfidence = parseNumericParam(confParam);
   const maxConfidence = parseNumericParam(maxConfParam);
-  const hasFilters = repository !== null || minConfidence !== null || maxConfidence !== null;
+  const since = parseStringParam(sinceParam);
+  const until = parseStringParam(untilParam);
+  const hasFilters =
+    repository !== null ||
+    minConfidence !== null ||
+    maxConfidence !== null ||
+    since !== null ||
+    until !== null;
 
   const result = hasFilters
     ? await dashboardService.getAnalysesFiltered(
@@ -137,6 +146,8 @@ const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => 
         repository,
         minConfidence,
         maxConfidence,
+        since,
+        until,
         limit,
         offset,
         context
@@ -150,17 +161,26 @@ const handleGetFailures = async (req: Request, res: Response): Promise<void> => 
   const tenantId = requireTenantId(req);
   const context = getRequestContext(req);
   const { limit, offset } = parsePaginationParams(req);
-  const { repository: repoParam, severity: sevParam } = req.query;
+  const {
+    repository: repoParam,
+    severity: sevParam,
+    since: sinceParam,
+    until: untilParam,
+  } = req.query;
 
   const repository = parseStringParam(repoParam);
   const severity = parseStringParam(sevParam);
-  const hasFilters = repository !== null || severity !== null;
+  const since = parseStringParam(sinceParam);
+  const until = parseStringParam(untilParam);
+  const hasFilters = repository !== null || severity !== null || since !== null || until !== null;
 
   const result = hasFilters
     ? await dashboardService.getFailuresFiltered(
         tenantId,
         repository,
         severity,
+        since,
+        until,
         limit,
         offset,
         context

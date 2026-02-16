@@ -83,8 +83,10 @@ export const ANALYSIS_QUERIES = {
       AND ($2::text IS NULL OR aggregation_key ILIKE '%' || $2 || '%')
       AND ($3::numeric IS NULL OR diagnosis_confidence >= $3)
       AND ($4::numeric IS NULL OR diagnosis_confidence < $4)
+      AND ($5::timestamp IS NULL OR created_at >= $5)
+      AND ($6::timestamp IS NULL OR created_at < $6)
     ORDER BY created_at DESC
-    LIMIT $5 OFFSET $6
+    LIMIT $7 OFFSET $8
   `,
 
   COUNT_BY_TENANT_FILTERED: `
@@ -93,6 +95,8 @@ export const ANALYSIS_QUERIES = {
       AND ($2::text IS NULL OR aggregation_key ILIKE '%' || $2 || '%')
       AND ($3::numeric IS NULL OR diagnosis_confidence >= $3)
       AND ($4::numeric IS NULL OR diagnosis_confidence < $4)
+      AND ($5::timestamp IS NULL OR created_at >= $5)
+      AND ($6::timestamp IS NULL OR created_at < $6)
   `,
 
   CONFIDENCE_DISTRIBUTION: `

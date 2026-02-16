@@ -48,7 +48,14 @@ import {
 import { TimeDisplay } from "@/components/TimeDisplay";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
-import { FilterBar, parseConfidenceFilter, type FilterValues } from "@/components/FilterBar";
+import {
+  FilterBar,
+  parseConfidenceFilter,
+  timeRangeToSince,
+  loadSavedFilters,
+  saveFilters,
+  type FilterValues,
+} from "@/components/FilterBar";
 import { AnalysisDetailPanel } from "@/pages/AnalysisDetailPanel";
 import { exportAnalysesToCSV } from "@/lib/csvExport";
 
@@ -229,23 +236,31 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
-  const [filters, setFilters] = useState<FilterValues>(() => ({
-    repository: searchParams.get("repository") ?? "",
-    severity: "",
-    minConfidence: searchParams.get("confidence") ?? "",
-  }));
+  const [filters, setFilters] = useState<FilterValues>(() => {
+    const saved = loadSavedFilters("analyses");
+    return {
+      repository: searchParams.get("repository") ?? saved?.repository ?? "",
+      severity: "",
+      minConfidence: searchParams.get("confidence") ?? saved?.minConfidence ?? "",
+      timeRange: searchParams.get("timeRange") ?? saved?.timeRange ?? "",
+    };
+  });
 
   const handleFilterChange = useCallback(
     (next: FilterValues) => {
       setFilters(next);
       setOffset(0);
       setExpandedId(null);
+      saveFilters("analyses", next);
       const params = new URLSearchParams();
       if (next.repository) {
         params.set("repository", next.repository);
       }
       if (next.minConfidence) {
         params.set("confidence", next.minConfidence);
+      }
+      if (next.timeRange) {
+        params.set("timeRange", next.timeRange);
       }
       setSearchParams(params, { replace: true });
     },
@@ -272,13 +287,16 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
     [filters.minConfidence]
   );
 
+  const since = useMemo(() => timeRangeToSince(filters.timeRange), [filters.timeRange]);
+
   const { data, isLoading, error, refetch } = useAnalyses(
     pageSize,
     offset,
     refreshKey,
     filters.repository || undefined,
     confidenceRange.min !== null ? String(confidenceRange.min) : undefined,
-    confidenceRange.max !== null ? String(confidenceRange.max) : undefined
+    confidenceRange.max !== null ? String(confidenceRange.max) : undefined,
+    since
   );
 
   const items = data?.items ?? [];
@@ -383,12 +401,12 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
                   <Search className="w-6 h-6" />
                 </EmptyMedia>
                 <EmptyTitle>
-                  {filters.repository || filters.minConfidence
+                  {filters.repository || filters.minConfidence || filters.timeRange
                     ? "No matching analyses"
                     : "No analyses yet"}
                 </EmptyTitle>
                 <EmptyDescription>
-                  {filters.repository || filters.minConfidence
+                  {filters.repository || filters.minConfidence || filters.timeRange
                     ? "Try adjusting your filters to find what you're looking for."
                     : "When Kenchi detects CI/CD failures, it automatically runs root cause analysis. Results will appear here."}
                 </EmptyDescription>

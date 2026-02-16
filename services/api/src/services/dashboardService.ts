@@ -158,6 +158,8 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
       repository: string | null,
       minConfidence: number | null,
       maxConfidence: number | null,
+      since: string | null,
+      until: string | null,
       limit: number,
       offset: number,
       context: RequestContext
@@ -168,10 +170,19 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
           repository,
           minConfidence,
           maxConfidence,
+          since,
+          until,
           limit,
           offset
         ),
-        countAnalysesByTenantFiltered(tenantId, repository, minConfidence, maxConfidence),
+        countAnalysesByTenantFiltered(
+          tenantId,
+          repository,
+          minConfidence,
+          maxConfidence,
+          since,
+          until
+        ),
       ]);
 
       logger.info("Filtered analyses retrieved", {
@@ -180,6 +191,8 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
         repository,
         minConfidence,
         maxConfidence,
+        since,
+        until,
         ...context,
       });
 
@@ -193,6 +206,8 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
       tenantId: string,
       repository: string | null,
       severity: string | null,
+      since: string | null,
+      until: string | null,
       limit: number,
       offset: number,
       context: RequestContext
@@ -203,10 +218,19 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
           type: CICD_FAILURE_TYPE,
           repository,
           severity,
+          since,
+          until,
           limit,
           offset,
         }),
-        countEventsByTenantFiltered(tenantId, CICD_FAILURE_TYPE, repository, severity),
+        countEventsByTenantFiltered(
+          tenantId,
+          CICD_FAILURE_TYPE,
+          repository,
+          severity,
+          since,
+          until
+        ),
       ]);
 
       logger.info("Filtered failures retrieved", {
@@ -214,6 +238,8 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
         total,
         repository,
         severity,
+        since,
+        until,
         ...context,
       });
 

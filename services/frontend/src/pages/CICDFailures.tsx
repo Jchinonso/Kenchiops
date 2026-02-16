@@ -57,7 +57,13 @@ import {
 import { TimeDisplay } from "@/components/TimeDisplay";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
-import { FilterBar, type FilterValues } from "@/components/FilterBar";
+import {
+  FilterBar,
+  timeRangeToSince,
+  loadSavedFilters,
+  saveFilters,
+  type FilterValues,
+} from "@/components/FilterBar";
 import { exportFailuresToCSV } from "@/lib/csvExport";
 
 // ==================== Helpers ====================
@@ -322,23 +328,31 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
-  const [filters, setFilters] = useState<FilterValues>(() => ({
-    repository: searchParams.get("repository") ?? "",
-    severity: searchParams.get("severity") ?? "",
-    minConfidence: "",
-  }));
+  const [filters, setFilters] = useState<FilterValues>(() => {
+    const saved = loadSavedFilters("failures");
+    return {
+      repository: searchParams.get("repository") ?? saved?.repository ?? "",
+      severity: searchParams.get("severity") ?? saved?.severity ?? "",
+      minConfidence: "",
+      timeRange: searchParams.get("timeRange") ?? saved?.timeRange ?? "",
+    };
+  });
 
   const handleFilterChange = useCallback(
     (next: FilterValues) => {
       setFilters(next);
       setOffset(0);
       setExpandedId(null);
+      saveFilters("failures", next);
       const params = new URLSearchParams();
       if (next.repository) {
         params.set("repository", next.repository);
       }
       if (next.severity) {
         params.set("severity", next.severity);
+      }
+      if (next.timeRange) {
+        params.set("timeRange", next.timeRange);
       }
       setSearchParams(params, { replace: true });
     },
@@ -360,12 +374,15 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
     });
   };
 
+  const since = useMemo(() => timeRangeToSince(filters.timeRange), [filters.timeRange]);
+
   const { data, isLoading, error, refetch } = useFailures(
     pageSize,
     offset,
     refreshKey,
     filters.repository || undefined,
-    filters.severity || undefined
+    filters.severity || undefined,
+    since
   );
 
   const items = data?.items ?? [];
@@ -474,19 +491,19 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
             <Empty className="py-12 border-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  {filters.repository || filters.severity ? (
+                  {filters.repository || filters.severity || filters.timeRange ? (
                     <Search className="w-6 h-6" />
                   ) : (
                     <AlertTriangle className="w-6 h-6" />
                   )}
                 </EmptyMedia>
                 <EmptyTitle>
-                  {filters.repository || filters.severity
+                  {filters.repository || filters.severity || filters.timeRange
                     ? "No matching failures"
                     : "No failures yet"}
                 </EmptyTitle>
                 <EmptyDescription>
-                  {filters.repository || filters.severity
+                  {filters.repository || filters.severity || filters.timeRange
                     ? "Try adjusting your filters to find what you're looking for."
                     : "CI/CD failures from your connected repositories will appear here once Kenchi detects them."}
                 </EmptyDescription>

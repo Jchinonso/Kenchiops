@@ -126,6 +126,8 @@ export const getEventsByTenantFiltered = async (
   options: EventListOptions & {
     readonly repository?: string | null;
     readonly severity?: string | null;
+    readonly since?: string | null;
+    readonly until?: string | null;
   }
 ): Promise<readonly EventRecord[]> => {
   validateEventListOptions(options);
@@ -139,6 +141,8 @@ export const getEventsByTenantFiltered = async (
       options.type ?? "CICD_FAILURE",
       options.repository ?? null,
       options.severity ?? null,
+      options.since ?? null,
+      options.until ?? null,
       limit,
       offset,
     ]);
@@ -146,6 +150,8 @@ export const getEventsByTenantFiltered = async (
   } catch (error) {
     logger.error("Failed to get filtered events by tenant", {
       tenantId: options.tenantId,
+      since: options.since,
+      until: options.until,
       error: getErrorMessage(error),
     });
     throw error;
@@ -167,7 +173,9 @@ export const countEventsByTenantFiltered = async (
   tenantId: string,
   type: string,
   repository: string | null,
-  severity: string | null
+  severity: string | null,
+  since: string | null = null,
+  until: string | null = null
 ): Promise<number> => {
   if (!tenantId?.trim()) {
     throw new ValidationError("tenantId is required", {
@@ -182,11 +190,15 @@ export const countEventsByTenantFiltered = async (
       type,
       repository,
       severity,
+      since,
+      until,
     ]);
     return parseInt(result.rows[0].count, PARSE_INT_RADIX);
   } catch (error) {
     logger.error("Failed to count filtered events by tenant", {
       tenantId,
+      since,
+      until,
       error: getErrorMessage(error),
     });
     throw error;

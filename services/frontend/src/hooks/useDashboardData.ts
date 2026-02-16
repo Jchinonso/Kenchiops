@@ -172,7 +172,8 @@ const buildAnalysesUrl = (
   offset: number,
   repository?: string,
   minConfidence?: string,
-  maxConfidence?: string
+  maxConfidence?: string,
+  since?: string
 ): string => {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
@@ -186,6 +187,9 @@ const buildAnalysesUrl = (
   if (maxConfidence) {
     params.set("maxConfidence", maxConfidence);
   }
+  if (since) {
+    params.set("since", since);
+  }
   return `/api/v1/dashboard/analyses?${params.toString()}`;
 };
 
@@ -193,7 +197,8 @@ const buildFailuresUrl = (
   limit: number,
   offset: number,
   repository?: string,
-  severity?: string
+  severity?: string,
+  since?: string
 ): string => {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
@@ -204,6 +209,9 @@ const buildFailuresUrl = (
   if (severity) {
     params.set("severity", severity);
   }
+  if (since) {
+    params.set("since", since);
+  }
   return `/api/v1/dashboard/failures?${params.toString()}`;
 };
 
@@ -213,11 +221,12 @@ export const useAnalyses = (
   refreshKey: number = 0,
   repository?: string,
   minConfidence?: string,
-  maxConfidence?: string
+  maxConfidence?: string,
+  since?: string
 ): UseFetchResult<PaginatedResult<AnalysisRecord>> =>
   useFetch<PaginatedResult<AnalysisRecord>>(
-    buildAnalysesUrl(limit, offset, repository, minConfidence, maxConfidence),
-    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}:${maxConfidence ?? ""}`
+    buildAnalysesUrl(limit, offset, repository, minConfidence, maxConfidence, since),
+    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}:${maxConfidence ?? ""}:${since ?? ""}`
   );
 
 export const useFailures = (
@@ -225,11 +234,12 @@ export const useFailures = (
   offset: number = 0,
   refreshKey: number = 0,
   repository?: string,
-  severity?: string
+  severity?: string,
+  since?: string
 ): UseFetchResult<PaginatedResult<EventRecord>> =>
   useFetch<PaginatedResult<EventRecord>>(
-    buildFailuresUrl(limit, offset, repository, severity),
-    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${severity ?? ""}`
+    buildFailuresUrl(limit, offset, repository, severity, since),
+    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${severity ?? ""}:${since ?? ""}`
   );
 
 // ==================== Confidence Distribution ====================

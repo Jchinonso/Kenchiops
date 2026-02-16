@@ -271,6 +271,8 @@ export const getAnalysesByTenantFiltered = async (
   repository: string | null,
   minConfidence: number | null,
   maxConfidence: number | null,
+  since: string | null = null,
+  until: string | null = null,
   limit: number = ANALYSIS_DEFAULTS.TENANT_QUERY_LIMIT,
   offset: number = 0
 ): Promise<readonly AnalysisRecord[]> => {
@@ -283,6 +285,8 @@ export const getAnalysesByTenantFiltered = async (
       repository,
       minConfidence,
       maxConfidence,
+      since,
+      until,
       limit,
       offset,
     ]);
@@ -293,6 +297,8 @@ export const getAnalysesByTenantFiltered = async (
       repository,
       minConfidence,
       maxConfidence,
+      since,
+      until,
       error: getErrorMessage(error),
     });
     throw error;
@@ -313,7 +319,9 @@ export const countAnalysesByTenantFiltered = async (
   tenantId: string,
   repository: string | null,
   minConfidence: number | null,
-  maxConfidence: number | null
+  maxConfidence: number | null,
+  since: string | null = null,
+  until: string | null = null
 ): Promise<number> => {
   validateId(tenantId, "tenantId");
 
@@ -323,11 +331,15 @@ export const countAnalysesByTenantFiltered = async (
       repository,
       minConfidence,
       maxConfidence,
+      since,
+      until,
     ]);
     return parseInt(result.rows[0].count, PARSE_INT_RADIX);
   } catch (error) {
     logger.error("Failed to count filtered analyses by tenant", {
       tenantId,
+      since,
+      until,
       error: getErrorMessage(error),
     });
     throw error;

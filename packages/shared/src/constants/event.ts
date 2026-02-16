@@ -52,8 +52,10 @@ export const EVENT_DB_QUERIES = {
     WHERE tenant_id = $1 AND type = $2
       AND ($3::text IS NULL OR payload->>'repository' ILIKE '%' || $3 || '%')
       AND ($4::text IS NULL OR severity = $4)
+      AND ($5::timestamp IS NULL OR created_at >= $5)
+      AND ($6::timestamp IS NULL OR created_at < $6)
     ORDER BY created_at DESC
-    LIMIT $5 OFFSET $6
+    LIMIT $7 OFFSET $8
   `,
 
   COUNT_BY_TENANT_TYPE_FILTERED: `
@@ -61,6 +63,8 @@ export const EVENT_DB_QUERIES = {
     WHERE tenant_id = $1 AND type = $2
       AND ($3::text IS NULL OR payload->>'repository' ILIKE '%' || $3 || '%')
       AND ($4::text IS NULL OR severity = $4)
+      AND ($5::timestamp IS NULL OR created_at >= $5)
+      AND ($6::timestamp IS NULL OR created_at < $6)
   `,
 
   FIND_BY_REPO_AND_COMMIT: `
