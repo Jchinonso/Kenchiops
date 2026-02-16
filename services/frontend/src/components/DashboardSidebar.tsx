@@ -35,6 +35,7 @@ import {
   HelpCircle,
   LogOut,
   Loader2,
+  Keyboard,
   X,
 } from "lucide-react";
 
@@ -57,11 +58,19 @@ type NavEntry = NavLeafItem | NavGroup;
 
 const isNavGroup = (entry: NavEntry): entry is NavGroup => "children" in entry;
 
+interface UserInfo {
+  readonly displayName: string;
+  readonly email: string;
+  readonly avatarUrl?: string | null;
+}
+
 interface DashboardSidebarProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly onLogout: () => void;
   readonly isLoggingOut: boolean;
+  readonly user: UserInfo | null;
+  readonly onOpenShortcuts: () => void;
 }
 
 // ==================== Navigation Data ====================
@@ -252,6 +261,8 @@ export const DashboardSidebar = ({
   onClose,
   onLogout,
   isLoggingOut,
+  user,
+  onOpenShortcuts,
 }: DashboardSidebarProps) => {
   const { pathname } = useLocation();
 
@@ -347,30 +358,75 @@ export const DashboardSidebar = ({
       </nav>
 
       {/* Footer */}
-      <div className="p-3 sm:p-4 border-t border-gray-100 dark:border-gray-700 space-y-1">
-        <a
-          href="https://github.com/kenchiops/kenchi/issues"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors"
-        >
-          <HelpCircle className="w-5 h-5" />
-          <span className="font-medium text-sm">Help & Support</span>
-        </a>
-        <button
-          onClick={onLogout}
-          disabled={isLoggingOut}
-          className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors disabled:opacity-50"
-        >
-          {isLoggingOut ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <LogOut className="w-5 h-5" />
+      <div className="border-t border-gray-100 dark:border-gray-700">
+        <div className="p-3 sm:p-4 space-y-1">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenShortcuts();
+            }}
+            className="flex items-center gap-3 px-4 py-2.5 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors text-sm"
+          >
+            <Keyboard className="w-4 h-4" />
+            <span>Keyboard Shortcuts</span>
+          </button>
+          <a
+            href="https://github.com/kenchiops/kenchi/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-4 py-2.5 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors text-sm"
+          >
+            <HelpCircle className="w-4 h-4" />
+            <span>Help & Support</span>
+          </a>
+        </div>
+
+        {/* User Profile & Sign Out */}
+        <div className="p-3 sm:p-4 border-t border-gray-100 dark:border-gray-700">
+          {user && (
+            <div className="flex items-center gap-3 px-4 py-2 mb-2">
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.displayName}
+                  className="w-8 h-8 rounded-full flex-shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-medium text-xs">
+                    {user.displayName
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2)}
+                  </span>
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {user.displayName}
+                </p>
+                {user.email && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+                )}
+              </div>
+            </div>
           )}
-          <span className="font-medium text-sm">
-            {isLoggingOut ? "Signing out..." : "Sign Out"}
-          </span>
-        </button>
+          <button
+            onClick={onLogout}
+            disabled={isLoggingOut}
+            className="flex items-center gap-3 px-4 py-2.5 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors disabled:opacity-50 text-sm"
+          >
+            {isLoggingOut ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4" />
+            )}
+            <span>{isLoggingOut ? "Signing out..." : "Sign Out"}</span>
+          </button>
+        </div>
       </div>
     </aside>
   );

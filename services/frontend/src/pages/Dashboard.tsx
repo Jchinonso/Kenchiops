@@ -21,9 +21,6 @@ import { RepositoryDetail } from "@/pages/RepositoryDetail";
 import { Settings as SettingsPage } from "@/pages/Settings";
 import {
   Bell,
-  ChevronDown,
-  LogOut,
-  Loader2,
   Menu,
   Rocket,
   Siren,
@@ -40,7 +37,6 @@ import {
   DollarSign,
   ShieldAlert,
   ArrowUpCircle,
-  Keyboard,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { DashboardBreadcrumb } from "@/components/DashboardBreadcrumb";
@@ -177,14 +173,12 @@ const Dashboard = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const { refreshKey } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
-  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const toggleTheme = useCallback(
     () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
@@ -197,27 +191,24 @@ const Dashboard = () => {
       if (notificationsRef.current && !notificationsRef.current.contains(target)) {
         setNotificationsOpen(false);
       }
-      if (userMenuRef.current && !userMenuRef.current.contains(target)) {
-        setUserMenuOpen(false);
-      }
     };
 
     const handleKeydown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
       const isInput = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 
-      if (event.key === "Escape") {
+      const { key } = event;
+      if (key === "Escape") {
         setNotificationsOpen(false);
-        setUserMenuOpen(false);
       }
       if (isInput) {
         return;
       }
-      if (event.key === "?") {
+      if (key === "?") {
         event.preventDefault();
         setShortcutsOpen(true);
       }
-      if (event.key === "/") {
+      if (key === "/") {
         const filterInput = document.querySelector<HTMLInputElement>(
           'input[id="filter-repository"]'
         );
@@ -226,7 +217,7 @@ const Dashboard = () => {
           filterInput.focus();
         }
       }
-      if (event.key === "t") {
+      if (key === "t") {
         event.preventDefault();
         toggleTheme();
       }
@@ -252,14 +243,6 @@ const Dashboard = () => {
     return <Navigate to="/login" replace />;
   }
 
-  const userInitials = user?.displayName
-    ? user.displayName
-        .split(" ")
-        .map((part) => part[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : "?";
   const displayName = user?.displayName ?? "User";
   const displayEmail = user?.email ?? "";
   const firstName = user?.displayName?.split(" ")[0] ?? "there";
@@ -277,7 +260,6 @@ const Dashboard = () => {
     logout();
   };
   const toggleNotifications = () => setNotificationsOpen((prev) => !prev);
-  const toggleUserMenu = () => setUserMenuOpen((prev) => !prev);
 
   const isOverview = currentPath === "/dashboard";
   const isSettings = currentPath === "/dashboard/settings";
@@ -302,6 +284,8 @@ const Dashboard = () => {
         onClose={closeSidebar}
         onLogout={handleLogout}
         isLoggingOut={loggingOut}
+        user={user ? { displayName, email: displayEmail, avatarUrl: user.avatarUrl } : null}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
       />
 
       <main className="flex-1 min-w-0">
@@ -383,68 +367,6 @@ const Dashboard = () => {
                       >
                         Notification preferences
                       </Link>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* User Menu */}
-              <div ref={userMenuRef} className="relative">
-                <button
-                  onClick={toggleUserMenu}
-                  className="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                >
-                  {user?.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={displayName}
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full"
-                    />
-                  ) : (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-indigo-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-medium text-xs sm:text-sm">
-                        {userInitials}
-                      </span>
-                    </div>
-                  )}
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {displayName}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{displayEmail}</p>
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
-                </button>
-                {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 py-2 z-50">
-                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                      <p className="font-medium text-gray-900 dark:text-gray-100">{displayName}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{displayEmail}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        setShortcutsOpen(true);
-                      }}
-                      className="flex items-center gap-3 px-4 py-2 w-full text-left text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <Keyboard className="w-4 h-4" />
-                      Keyboard Shortcuts
-                    </button>
-                    <div className="border-t border-gray-100 dark:border-gray-800 mt-1 pt-1">
-                      <button
-                        onClick={handleLogout}
-                        disabled={loggingOut}
-                        className="flex items-center gap-3 px-4 py-2 w-full text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50"
-                      >
-                        {loggingOut ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <LogOut className="w-4 h-4" />
-                        )}
-                        {loggingOut ? "Signing out..." : "Sign Out"}
-                      </button>
                     </div>
                   </div>
                 )}
