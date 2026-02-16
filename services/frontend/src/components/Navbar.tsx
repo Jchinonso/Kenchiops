@@ -31,7 +31,7 @@ const Navbar = () => {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100">
+    <nav className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -51,7 +51,7 @@ const Navbar = () => {
                 />
               </svg>
             </div>
-            <span className="text-xl font-bold text-gray-900">Kenchi</span>
+            <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Kenchi</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -60,7 +60,7 @@ const Navbar = () => {
               <div key={link.name} className="relative">
                 {link.dropdown ? (
                   <button
-                    className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     onMouseEnter={() => {
                       if (link.name === "Product") {
                         setProductDropdownOpen(true);
@@ -84,7 +84,7 @@ const Navbar = () => {
                 ) : (
                   <a
                     href={link.href}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                   >
                     {link.name}
                   </a>
@@ -93,7 +93,7 @@ const Navbar = () => {
                 {/* Dropdown */}
                 {link.dropdown && (
                   <div
-                    className={`absolute top-full left-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 transition-all duration-200 ${
+                    className={`absolute top-full left-0 mt-1 w-56 bg-white dark:bg-gray-900 rounded-xl shadow-lg dark:shadow-gray-950/50 border border-gray-100 dark:border-gray-800 py-2 transition-all duration-200 ${
                       (link.name === "Product" && productDropdownOpen) ||
                       (link.name === "Resources" && resourcesDropdownOpen)
                         ? "opacity-100 visible translate-y-0"
@@ -120,7 +120,7 @@ const Navbar = () => {
                       <a
                         key={item.name}
                         href={item.href}
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600 transition-colors"
+                        className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                       >
                         {item.name}
                       </a>
@@ -135,7 +135,7 @@ const Navbar = () => {
           <div className="hidden lg:flex items-center gap-3">
             <a
               href="/#cta"
-              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               BOOK A DEMO
             </a>
@@ -149,7 +149,7 @@ const Navbar = () => {
 
           {/* Mobile Menu Button */}
           <button
-            className="lg:hidden p-2 text-gray-700 hover:text-gray-900"
+            className="lg:hidden p-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -159,13 +159,13 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-white border-t border-gray-100">
+        <div className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
           <div className="px-4 py-4 space-y-2">
             {navLinks.map((link) => (
               <div key={link.name}>
                 {link.dropdown ? (
                   <>
-                    <span className="block px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <span className="block px-3 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                       {link.name}
                     </span>
                     {link.items?.map((item) => (
@@ -173,7 +173,7 @@ const Navbar = () => {
                         key={item.name}
                         href={item.href}
                         onClick={() => setMobileMenuOpen(false)}
-                        className="block px-3 py-2 pl-6 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-lg"
+                        className="block px-3 py-2 pl-6 text-base font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg"
                       >
                         {item.name}
                       </a>
@@ -183,7 +183,7 @@ const Navbar = () => {
                   <a
                     href={link.href ?? "#"}
                     onClick={() => setMobileMenuOpen(false)}
-                    className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-lg"
+                    className="block px-3 py-2 text-base font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg"
                   >
                     {link.name}
                   </a>
@@ -194,7 +194,7 @@ const Navbar = () => {
               <a
                 href="/#cta"
                 onClick={() => setMobileMenuOpen(false)}
-                className="block w-full px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg text-center"
+                className="block w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg text-center"
               >
                 BOOK A DEMO
               </a>

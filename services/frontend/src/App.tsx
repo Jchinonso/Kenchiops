@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import AuthCallback from "./pages/AuthCallback";
 import { AuthProvider } from "./hooks/useAuth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import ThemeInitializer from "./components/ThemeInitializer";
 
 const HomePage = () => (
   <>
@@ -36,6 +37,7 @@ const App = () => (
   <ErrorBoundary>
     <Router>
       <AuthProvider>
+        <ThemeInitializer />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />

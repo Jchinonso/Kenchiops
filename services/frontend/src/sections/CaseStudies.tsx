@@ -12,7 +12,8 @@ const CaseStudies = () => {
       badge: "120-person eng team",
       metric: "73%",
       metricLabel: "faster CI failure resolution",
-      image: "bg-gradient-to-br from-indigo-100 to-purple-100",
+      image:
+        "bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30",
     },
     {
       company: "ScaleOps",
@@ -24,7 +25,8 @@ const CaseStudies = () => {
       badge: "Series B startup",
       metric: "6hrs",
       metricLabel: "saved per developer per week",
-      image: "bg-gradient-to-br from-cyan-100 to-blue-100",
+      image:
+        "bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-cyan-900/30 dark:to-blue-900/30",
     },
     {
       company: "DeployHQ",
@@ -36,18 +38,19 @@ const CaseStudies = () => {
       badge: "Enterprise, 500+ devs",
       metric: "62%",
       metricLabel: "reduction in mean time to recovery",
-      image: "bg-gradient-to-br from-violet-100 to-pink-100",
+      image:
+        "bg-gradient-to-br from-violet-100 to-pink-100 dark:from-violet-900/30 dark:to-pink-900/30",
     },
   ];
 
   return (
-    <section id="case-studies" className="py-20 bg-white">
+    <section id="case-studies" className="py-20 bg-white dark:bg-gray-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
             Teams Shipping Faster with Kenchi
           </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
             See how engineering teams are cutting their CI/CD debugging time dramatically
           </p>
         </div>
@@ -56,13 +59,15 @@ const CaseStudies = () => {
           {caseStudies.map((study, index) => (
             <div key={index} className="feature-card group hover:shadow-feature transition-shadow">
               {/* Header */}
-              <div className="p-6 border-b border-gray-100">
+              <div className="p-6 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     {study.logo}
-                    <span className="font-bold text-gray-900">{study.company}</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">
+                      {study.company}
+                    </span>
                   </div>
-                  <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                  <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-3 py-1 rounded-full">
                     {study.badge}
                   </span>
                 </div>
@@ -74,9 +79,9 @@ const CaseStudies = () => {
                   {[1, 2, 3].map((avatarIndex) => (
                     <div
                       key={avatarIndex}
-                      className="w-16 h-16 bg-white rounded-full border-4 border-white shadow-lg flex items-center justify-center"
+                      className="w-16 h-16 bg-white dark:bg-gray-800 rounded-full border-4 border-white dark:border-gray-800 shadow-lg flex items-center justify-center"
                     >
-                      <Users className="w-8 h-8 text-gray-400" />
+                      <Users className="w-8 h-8 text-gray-400 dark:text-gray-500" />
                     </div>
                   ))}
                 </div>
@@ -86,9 +91,9 @@ const CaseStudies = () => {
               <div className="p-6">
                 <div className="flex items-baseline gap-2 mb-2">
                   <span className="text-4xl font-bold text-indigo-500">{study.metric}</span>
-                  <span className="text-gray-600">{study.metricLabel}</span>
+                  <span className="text-gray-600 dark:text-gray-400">{study.metricLabel}</span>
                 </div>
-                <button className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors group-hover:border-indigo-300">
+                <button className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group-hover:border-indigo-300 dark:group-hover:border-indigo-700">
                   READ FULL CASE STUDY
                   <ArrowRight className="w-4 h-4" />
                 </button>

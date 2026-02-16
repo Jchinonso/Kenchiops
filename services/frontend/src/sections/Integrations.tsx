@@ -32,13 +32,13 @@ const Integrations = () => {
   ];
 
   return (
-    <section id="integrations" className="py-20 bg-gray-50">
+    <section id="integrations" className="py-20 bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
             Works Where You Work
           </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
             Kenchi plugs into your existing CI/CD workflow. No migration, no disruption.
           </p>
         </div>
@@ -48,30 +48,36 @@ const Integrations = () => {
           {activeIntegrations.map((integration, index) => (
             <div
               key={index}
-              className="flex flex-col items-center gap-3 p-8 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow group"
+              className="flex flex-col items-center gap-3 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-shadow group"
             >
               <div
                 className={`w-14 h-14 ${integration.color} rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform`}
               >
                 {integration.icon}
               </div>
-              <span className="text-lg font-semibold text-gray-900">{integration.name}</span>
-              <span className="text-sm text-gray-500 text-center">{integration.description}</span>
+              <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {integration.name}
+              </span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                {integration.description}
+              </span>
             </div>
           ))}
         </div>
 
         {/* Coming Soon */}
         <div className="text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-full mb-6">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-950 rounded-full mb-6">
             <Clock className="w-4 h-4 text-indigo-500" />
-            <span className="text-sm font-medium text-indigo-600">Coming Soon</span>
+            <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+              Coming Soon
+            </span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4">
             {comingSoon.map((item, index) => (
               <span
                 key={index}
-                className="px-4 py-2 bg-white rounded-lg border border-gray-200 text-sm font-medium text-gray-500"
+                className="px-4 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400"
               >
                 {item.name}
               </span>

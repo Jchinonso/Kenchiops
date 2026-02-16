@@ -183,12 +183,12 @@ const Login = () => {
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-[55%] flex items-center justify-center p-6 sm:p-12 bg-white">
+      <div className="w-full lg:w-[55%] flex items-center justify-center p-6 sm:p-12 bg-white dark:bg-gray-950">
         <div className="w-full max-w-[420px]">
           {/* Back to Home */}
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 mb-10 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 mb-10 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to home
@@ -196,21 +196,26 @@ const Login = () => {
 
           {/* Heading */}
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Get started</h1>
-            <p className="text-gray-500 text-[15px]">
-              Start your <span className="font-semibold text-gray-700">free 14-day trial</span> — no
-              credit card required.
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+              Get started
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 text-[15px]">
+              Start your{" "}
+              <span className="font-semibold text-gray-700 dark:text-gray-300">
+                free 14-day trial
+              </span>{" "}
+              — no credit card required.
             </p>
           </div>
 
           {/* Tabs */}
-          <div className="flex mb-6 bg-gray-100 rounded-xl p-1">
+          <div className="flex mb-6 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
             <button
               onClick={() => setActiveTab("saas")}
               className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-all duration-200 ${
                 activeTab === "saas"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               }`}
             >
               Cloud
@@ -219,8 +224,8 @@ const Login = () => {
               onClick={() => setActiveTab("selfhosted")}
               className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-all duration-200 ${
                 activeTab === "selfhosted"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               }`}
             >
               Self-Hosted
@@ -232,7 +237,7 @@ const Login = () => {
             <div className="mb-5">
               <label
                 htmlFor="instance-url"
-                className="block text-sm font-medium text-gray-700 mb-1.5"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
               >
                 Instance URL
               </label>
@@ -242,7 +247,7 @@ const Login = () => {
                 value={instanceUrl}
                 onChange={(event) => setInstanceUrl(event.target.value)}
                 placeholder="https://git.yourcompany.com"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-sm placeholder:text-gray-400 transition-all"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
               />
             </div>
           )}
@@ -250,7 +255,7 @@ const Login = () => {
           {authChecking ? (
             <div className="py-12 flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-              <p className="text-sm text-gray-400">Checking authentication...</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">Checking authentication...</p>
             </div>
           ) : (
             <>
@@ -263,7 +268,7 @@ const Login = () => {
                       key={provider.name}
                       onClick={() => handleProviderClick(provider.id)}
                       disabled={loadingProvider !== null}
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-medium transition-all duration-200 shadow-lg shadow-gray-900/10 hover:shadow-xl hover:shadow-gray-900/15 group disabled:opacity-70 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-gray-900 font-medium transition-all duration-200 shadow-lg shadow-gray-900/10 dark:shadow-gray-100/10 hover:shadow-xl hover:shadow-gray-900/15 group disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                       {loadingProvider === provider.id ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
@@ -284,10 +289,10 @@ const Login = () => {
               {/* Divider */}
               <div className="relative my-5">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200" />
+                  <div className="w-full border-t border-gray-200 dark:border-gray-700" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-white px-3 text-gray-400 uppercase tracking-wider">
+                  <span className="bg-white dark:bg-gray-950 px-3 text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                     or continue with
                   </span>
                 </div>
@@ -302,12 +307,12 @@ const Login = () => {
                       key={provider.name}
                       onClick={() => handleProviderClick(provider.id)}
                       disabled={loadingProvider !== null}
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700 font-medium transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loadingProvider === provider.id ? (
                         <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
                       ) : (
-                        <span className="text-gray-500 group-hover:scale-110 transition-transform duration-200">
+                        <span className="text-gray-500 dark:text-gray-400 group-hover:scale-110 transition-transform duration-200">
                           {provider.icon}
                         </span>
                       )}
@@ -324,7 +329,7 @@ const Login = () => {
 
           {/* Help Link */}
           <div className="mt-8 text-center">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Need help?{" "}
               <a
                 href="/#cta"
@@ -337,18 +342,18 @@ const Login = () => {
 
           {/* Privacy Policy */}
           <div className="mt-4 text-center">
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
               By continuing, you agree to Kenchi&apos;s{" "}
               <a
                 href="#"
-                className="text-gray-500 hover:text-gray-700 underline underline-offset-2 transition-colors"
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-2 transition-colors"
               >
                 Terms of Service
               </a>{" "}
               and{" "}
               <a
                 href="#"
-                className="text-gray-500 hover:text-gray-700 underline underline-offset-2 transition-colors"
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-2 transition-colors"
               >
                 Privacy Policy
               </a>

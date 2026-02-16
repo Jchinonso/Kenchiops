@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const CTA = () => (
-  <section id="cta" className="py-20 bg-white">
+  <section id="cta" className="py-20 bg-white dark:bg-gray-950">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="bg-cta-gradient rounded-3xl p-12 md:p-16 text-center">
         <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">

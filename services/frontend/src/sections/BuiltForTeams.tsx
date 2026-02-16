@@ -41,13 +41,13 @@ const BuiltForTeams = () => {
   ];
 
   return (
-    <section id="teams" className="py-20 bg-white">
+    <section id="teams" className="py-20 bg-white dark:bg-gray-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
             Built for Every Engineering Team
           </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
             Whether you run the platform or ship features on it — Kenchi helps your team move faster
             with confidence.
           </p>
@@ -57,13 +57,15 @@ const BuiltForTeams = () => {
           {teams.map((team, index) => (
             <div
               key={index}
-              className="bg-gray-50 rounded-2xl p-8 hover:shadow-lg transition-all duration-300 group"
+              className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-8 hover:shadow-lg transition-all duration-300 group"
             >
-              <div className="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 mb-6 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+              <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-950 rounded-xl flex items-center justify-center text-indigo-500 mb-6 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
                 {team.icon}
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">{team.title}</h3>
-              <p className="text-gray-600">{team.description}</p>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
+                {team.title}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">{team.description}</p>
             </div>
           ))}
         </div>

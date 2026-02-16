@@ -43,11 +43,15 @@ const AuthCallback = () => {
   }, [navigate, searchParams]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
       <div className="text-center">
         <div className="w-12 h-12 mx-auto mb-4 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        <h1 className="text-xl font-semibold text-gray-900 mb-2">Signing you in...</h1>
-        <p className="text-sm text-gray-500">Please wait while we complete authentication.</p>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          Signing you in...
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Please wait while we complete authentication.
+        </p>
       </div>
     </div>
   );

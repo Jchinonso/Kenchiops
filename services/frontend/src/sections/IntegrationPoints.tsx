@@ -33,11 +33,13 @@ const IntegrationPoints = () => {
   ];
 
   return (
-    <section id="how-it-works" className="py-20 bg-gray-50">
+    <section id="how-it-works" className="py-20 bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">How Kenchi Works</h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+            How Kenchi Works
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
             From failure to fix in minutes, not hours
           </p>
         </div>
@@ -46,7 +48,7 @@ const IntegrationPoints = () => {
           {points.map((point, index) => (
             <div
               key={index}
-              className="relative bg-white rounded-2xl p-8 shadow-sm hover:shadow-lg transition-all duration-300 group"
+              className="relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm hover:shadow-lg transition-all duration-300 group"
             >
               {/* Number */}
               <div className="absolute -top-4 -left-2 w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg">
@@ -54,13 +56,15 @@ const IntegrationPoints = () => {
               </div>
 
               {/* Icon */}
-              <div className="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 mb-6 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+              <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-950 rounded-xl flex items-center justify-center text-indigo-500 mb-6 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
                 {point.icon}
               </div>
 
               {/* Content */}
-              <h3 className="text-xl font-bold text-gray-900 mb-3">{point.title}</h3>
-              <p className="text-gray-600">{point.description}</p>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
+                {point.title}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">{point.description}</p>
             </div>
           ))}
         </div>
