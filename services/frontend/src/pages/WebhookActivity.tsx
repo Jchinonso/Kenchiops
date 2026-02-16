@@ -6,7 +6,7 @@
  * Rows expand inline to show error messages and metadata.
  */
 
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -24,10 +24,19 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { Webhook, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
+import {
+  Webhook,
+  ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  RefreshCw,
+  Copy,
+  Check,
+} from "lucide-react";
 import { useWebhookActivity, type WebhookActivityRecord } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
-import { titleCase } from "@/lib/formatters";
+import { titleCase, formatTimestamp } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -144,11 +153,60 @@ interface ExpandedWebhookRowProps {
 const ExpandedWebhookRow = ({ activity }: ExpandedWebhookRowProps) => {
   const hasError = activity.errorMessage !== null && activity.errorMessage.length > 0;
   const hasMetadata = Object.keys(activity.metadata).length > 0;
+  const [copiedId, setCopiedId] = useState(false);
+
+  const handleCopyDeliveryId = useCallback(async () => {
+    await navigator.clipboard.writeText(activity.deliveryId);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  }, [activity.deliveryId]);
+
+  const details: ReadonlyArray<readonly [string, string]> = [
+    ["Delivery ID", activity.deliveryId],
+    ["Event Type", activity.eventType],
+    ["Source", titleCase(activity.source)],
+    ["Status", titleCase(activity.status)],
+    ["Processing Time", formatDuration(activity.processingTimeMs)],
+    ["Received At", formatTimestamp(activity.createdAt)],
+  ];
 
   return (
     <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
       <TableCell colSpan={7} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
         <div className="p-4 space-y-3">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Delivery Details
+              </h4>
+              <button
+                type="button"
+                onClick={handleCopyDeliveryId}
+                className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-500 dark:text-gray-500 dark:hover:text-indigo-400 transition-colors"
+              >
+                {copiedId ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                {copiedId ? "Copied!" : "Copy ID"}
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+              {details.map(([label, value]) => (
+                <div key={label} className="flex items-baseline gap-2">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                    {label}:
+                  </span>
+                  <span
+                    className={cn(
+                      "text-sm text-gray-900 dark:text-gray-100",
+                      label === "Delivery ID" && "font-mono text-xs break-all"
+                    )}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {hasError && (
             <div>
               <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
@@ -165,23 +223,19 @@ const ExpandedWebhookRow = ({ activity }: ExpandedWebhookRowProps) => {
               <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                 Metadata
               </h4>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
                 {Object.entries(activity.metadata).map(([label, value]) => (
-                  <Fragment key={label}>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+                  <div key={label} className="flex items-baseline gap-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                      {label}:
+                    </span>
                     <span className="text-sm text-gray-900 dark:text-gray-100">
                       {typeof value === "string" ? value : JSON.stringify(value)}
                     </span>
-                  </Fragment>
+                  </div>
                 ))}
               </div>
             </div>
-          )}
-
-          {!hasError && !hasMetadata && (
-            <p className="text-sm text-gray-400 dark:text-gray-500">
-              No additional details for this delivery.
-            </p>
           )}
         </div>
       </TableCell>
