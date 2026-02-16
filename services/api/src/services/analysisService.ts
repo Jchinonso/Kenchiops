@@ -32,6 +32,7 @@ import {
   type LLMAnalysisResult,
   type ModelSelectionResult,
   type RequestContext,
+  findEventIdByRepoAndCommit,
 } from "@kenchi/shared";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
@@ -312,14 +313,18 @@ export const performAnalysis = async (
   const confidenceResult = calculateConfidenceScore(analysisResult, enrichedEvidence);
 
   // Persist analysis to database for evaluation and fine-tuning
-  // Note: eventId is null because we don't persist events to the events table
-  // aggregationKey links to feedback via repo:commit format
   const aggregationKey = request.commit
     ? `${request.repository}:${request.commit}`
     : request.repository;
 
+  // Link analysis to the corresponding failure event in the events table
+  const linkedEventId =
+    request.tenant_id && request.commit
+      ? await findEventIdByRepoAndCommit(request.tenant_id, request.repository, request.commit)
+      : null;
+
   const savedAnalysis = await createAnalysis({
-    eventId: null,
+    eventId: linkedEventId,
     summary: analysisResult.summary,
     identifiedCause: analysisResult.identifiedCause,
     diagnosisConfidence: confidenceResult.finalScore,

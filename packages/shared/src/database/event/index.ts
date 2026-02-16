@@ -25,4 +25,5 @@ export {
   countEventsByTenant,
   getEventsByTenantFiltered,
   countEventsByTenantFiltered,
+  findEventIdByRepoAndCommit,
 } from "./repository.js";

@@ -62,4 +62,13 @@ export const EVENT_DB_QUERIES = {
       AND ($3::text IS NULL OR payload->>'repository' ILIKE '%' || $3 || '%')
       AND ($4::text IS NULL OR severity = $4)
   `,
+
+  FIND_BY_REPO_AND_COMMIT: `
+    SELECT id FROM events
+    WHERE tenant_id = $1
+      AND payload->>'repository' = $2
+      AND payload->>'headSha' = $3
+    ORDER BY created_at DESC
+    LIMIT 1
+  `,
 } as const;

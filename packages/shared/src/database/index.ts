@@ -145,6 +145,7 @@ export {
   countEventsByTenant,
   getEventsByTenantFiltered,
   countEventsByTenantFiltered,
+  findEventIdByRepoAndCommit,
   type EventRecord,
   type EventListOptions,
   type CreateEventInput,

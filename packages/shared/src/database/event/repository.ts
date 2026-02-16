@@ -202,6 +202,41 @@ export const countEventsByTenantFiltered = async (
  * @throws ValidationError if tenantId is empty
  * @throws Error if database operation fails
  */
+/**
+ * Finds the most recent event matching a repository and commit SHA.
+ *
+ * @param tenantId - The tenant ID
+ * @param repository - The repository full name (e.g. "owner/repo")
+ * @param commitSha - The commit SHA
+ * @returns The event ID, or null if no matching event found
+ */
+export const findEventIdByRepoAndCommit = async (
+  tenantId: string,
+  repository: string,
+  commitSha: string
+): Promise<string | null> => {
+  if (!tenantId?.trim() || !repository?.trim() || !commitSha?.trim()) {
+    return null;
+  }
+
+  try {
+    const result = await query<{ readonly id: string }>(EVENT_DB_QUERIES.FIND_BY_REPO_AND_COMMIT, [
+      tenantId,
+      repository,
+      commitSha,
+    ]);
+
+    return result.rows[0]?.id ?? null;
+  } catch (error) {
+    logger.warn("Failed to find event by repo and commit", {
+      tenantId,
+      repository,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
+
 export const countEventsByTenant = async (tenantId: string, type?: string): Promise<number> => {
   if (!tenantId?.trim()) {
     throw new ValidationError("tenantId is required", {
