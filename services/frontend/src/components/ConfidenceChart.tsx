@@ -63,7 +63,9 @@ export const ConfidenceChart = ({ refreshKey = 0 }: ConfidenceChartProps) => {
       <CardHeader className="border-b">
         <div className="flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-indigo-500" />
-          <CardTitle>Confidence Distribution</CardTitle>
+          <CardTitle>
+            <h2>Confidence Distribution</h2>
+          </CardTitle>
         </div>
         <CardDescription>
           {totalAnalyses > 0

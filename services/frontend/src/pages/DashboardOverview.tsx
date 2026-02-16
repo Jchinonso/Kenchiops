@@ -354,7 +354,9 @@ export const DashboardOverview = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Rocket className="w-5 h-5 text-indigo-500" />
-                <CardTitle>Get Set Up</CardTitle>
+                <CardTitle>
+                  <h2>Get Set Up</h2>
+                </CardTitle>
               </div>
               <button
                 onClick={dismissOnboarding}
@@ -528,7 +530,9 @@ export const DashboardOverview = ({
           <CardHeader className="border-b">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle>
+                <h2>Recent Activity</h2>
+              </CardTitle>
             </div>
             <CardDescription>
               CI failures and analysis results from your connected repositories.
@@ -551,7 +555,9 @@ export const DashboardOverview = ({
               <CardHeader className="border-b">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
-                  <CardTitle>Recent Failures</CardTitle>
+                  <CardTitle>
+                    <h2>Recent Failures</h2>
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
@@ -603,7 +609,9 @@ export const DashboardOverview = ({
               <CardHeader className="border-b">
                 <div className="flex items-center gap-2">
                   <Search className="w-5 h-5 text-indigo-500" />
-                  <CardTitle>Recent Analyses</CardTitle>
+                  <CardTitle>
+                    <h2>Recent Analyses</h2>
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-2">

@@ -198,7 +198,7 @@ const Dashboard = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const pendingGotoRef = useRef(false);
-  const gotoTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const gotoTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const navigate = useNavigate();
 
   const toggleTheme = useCallback(

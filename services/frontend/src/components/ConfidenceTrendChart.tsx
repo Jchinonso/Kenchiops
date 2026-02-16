@@ -85,7 +85,9 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-indigo-500" />
-            <CardTitle>Confidence Trend</CardTitle>
+            <CardTitle>
+              <h2>Confidence Trend</h2>
+            </CardTitle>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto">
             {/* Bucket toggle */}
