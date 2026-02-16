@@ -145,6 +145,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
                   href={`https://github.com/${repository}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label={`Open ${repository} on GitHub`}
                   className="text-gray-400 hover:text-indigo-500 transition-colors"
                   onClick={(linkEvent) => linkEvent.stopPropagation()}
                 >

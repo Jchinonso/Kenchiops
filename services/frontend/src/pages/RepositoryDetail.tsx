@@ -25,8 +25,6 @@ import {
 } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 import {
-  formatTimestamp,
-  formatRelativeTime,
   truncateText,
   getConfidenceLabel,
   getConfidenceStyle,
@@ -34,6 +32,7 @@ import {
   getPayloadString,
   titleCase,
 } from "@/lib/formatters";
+import { TimeDisplay } from "@/components/TimeDisplay";
 import { PaginationControls } from "@/components/PaginationControls";
 import {
   ArrowLeft,
@@ -74,12 +73,10 @@ const FailureItem = ({ event }: FailureItemProps) => {
   return (
     <div className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span
+        <TimeDisplay
+          dateTime={event.timestamp}
           className="text-xs text-gray-400 dark:text-gray-400"
-          title={formatTimestamp(event.timestamp)}
-        >
-          {formatRelativeTime(event.timestamp)}
-        </span>
+        />
         <Badge
           variant="outline"
           className={cn("text-[10px] px-1.5 py-0", getSeverityStyle(event.severity))}
@@ -100,12 +97,10 @@ interface AnalysisItemProps {
 const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
   <div className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors">
     <div className="flex items-center justify-between gap-2 mb-1">
-      <span
+      <TimeDisplay
+        dateTime={analysis.createdAt}
         className="text-xs text-gray-400 dark:text-gray-400"
-        title={formatTimestamp(analysis.createdAt)}
-      >
-        {formatRelativeTime(analysis.createdAt)}
-      </span>
+      />
       <Badge
         variant="outline"
         className={cn("text-[10px] px-1.5 py-0", getConfidenceStyle(analysis.diagnosisConfidence))}
@@ -213,9 +208,9 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
                 {failuresLoading ? (
                   <Skeleton className="h-7 w-10 mt-1" />
                 ) : (
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                     {failuresTotal}
-                  </h3>
+                  </p>
                 )}
               </div>
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-red-500 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -232,9 +227,9 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
                 {analysesLoading ? (
                   <Skeleton className="h-7 w-10 mt-1" />
                 ) : (
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                     {analysesTotal}
-                  </h3>
+                  </p>
                 )}
               </div>
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-500 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -253,9 +248,9 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
                 {analysesLoading ? (
                   <Skeleton className="h-7 w-10 mt-1" />
                 ) : (
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                     {formatAvgConfidence(analysisItems)}
-                  </h3>
+                  </p>
                 )}
               </div>
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">

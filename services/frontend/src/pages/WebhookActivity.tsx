@@ -27,7 +27,8 @@ import {
 import { Webhook, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 import { useWebhookActivity, type WebhookActivityRecord } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
-import { formatTimestamp, formatRelativeTime, titleCase } from "@/lib/formatters";
+import { titleCase } from "@/lib/formatters";
+import { TimeDisplay } from "@/components/TimeDisplay";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 
@@ -114,9 +115,7 @@ const WebhookRow = ({ activity, isExpanded, onClick }: WebhookRowProps) => (
       />
     </TableCell>
     <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
-      <span title={formatTimestamp(activity.createdAt)}>
-        {formatRelativeTime(activity.createdAt)}
-      </span>
+      <TimeDisplay dateTime={activity.createdAt} />
     </TableCell>
     <TableCell className="font-mono text-xs text-gray-700 dark:text-gray-300 max-w-[160px] truncate">
       {activity.deliveryId}
@@ -345,17 +344,17 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
                 <Table>
                   <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
                     <TableRow>
-                      <TableHead className="w-8" />
+                      <TableHead scope="col" className="w-8" />
                       <SortableTableHead
                         label="Time"
                         column="createdAt"
                         currentSort={sort}
                         onSort={handleSort}
                       />
-                      <TableHead>Delivery ID</TableHead>
-                      <TableHead>Event Type</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead scope="col">Delivery ID</TableHead>
+                      <TableHead scope="col">Event Type</TableHead>
+                      <TableHead scope="col">Source</TableHead>
+                      <TableHead scope="col">Status</TableHead>
                       <SortableTableHead
                         label="Duration"
                         column="duration"

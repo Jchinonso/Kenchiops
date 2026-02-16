@@ -186,7 +186,7 @@ const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode =
 const Dashboard = () => {
   const { pathname: currentPath } = useLocation();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
-  const { refreshKey } = useDashboardSSE();
+  const { refreshKey: sseRefreshKey } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -196,6 +196,8 @@ const Dashboard = () => {
   const [commandOpen, setCommandOpen] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date>(new Date());
   const [unreadCount, setUnreadCount] = useState(0);
+  const [manualRefreshKey, setManualRefreshKey] = useState(0);
+  const refreshKey = sseRefreshKey + manualRefreshKey;
   const notificationsRef = useRef<HTMLDivElement>(null);
   const pendingGotoRef = useRef(false);
   const gotoTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -215,7 +217,7 @@ const Dashboard = () => {
     }
     setLastRefreshAt(new Date());
     setUnreadCount((prev) => prev + 1);
-  }, [refreshKey]);
+  }, [sseRefreshKey]);
 
   const lastUpdatedLabel = useMemo(
     () => formatRelativeTime(lastRefreshAt.toISOString()),
@@ -375,10 +377,28 @@ const Dashboard = () => {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4">
-              {/* Last Updated */}
-              <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500">
-                Updated {lastUpdatedLabel}
-              </span>
+              {/* Last Updated + Refresh */}
+              <div className="hidden sm:flex items-center gap-1.5">
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  Updated {lastUpdatedLabel}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManualRefreshKey((prev) => prev + 1);
+                        setLastRefreshAt(new Date());
+                      }}
+                      className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded transition-colors"
+                      aria-label="Refresh data"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Refresh</TooltipContent>
+                </Tooltip>
+              </div>
 
               {/* Theme Toggle */}
               <Tooltip>
