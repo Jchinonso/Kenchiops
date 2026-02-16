@@ -434,19 +434,17 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
                 </Table>
               </div>
 
-              {totalPages > 1 && (
-                <PaginationControls
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  hasPrev={hasPrev}
-                  hasNext={hasNext}
-                  onPrev={goPrev}
-                  onNext={goNext}
-                  totalItems={total}
-                  pageSize={pageSize}
-                  onPageSizeChange={handlePageSizeChange}
-                />
-              )}
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                hasPrev={hasPrev}
+                hasNext={hasNext}
+                onPrev={goPrev}
+                onNext={goNext}
+                totalItems={total}
+                pageSize={pageSize}
+                onPageSizeChange={handlePageSizeChange}
+              />
             </>
           )}
         </CardContent>
