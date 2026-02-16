@@ -35,12 +35,31 @@ import {
   titleCase,
 } from "@/lib/formatters";
 import { PaginationControls } from "@/components/PaginationControls";
-import { ArrowLeft, ExternalLink, AlertTriangle, Search, GitBranch } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  AlertTriangle,
+  Search,
+  GitBranch,
+  Zap,
+  TrendingUp,
+} from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 // ==================== Constants ====================
 
 const PAGE_SIZE = 10;
+
+const PERCENTAGE_MULTIPLIER = 100;
+
+const formatAvgConfidence = (analyses: readonly AnalysisRecord[]): string => {
+  const { length: count } = analyses;
+  if (count === 0) {
+    return "--";
+  }
+  const sum = analyses.reduce((acc, a) => acc + a.diagnosisConfidence, 0);
+  return `${Math.round((sum / count) * PERCENTAGE_MULTIPLIER)}%`;
+};
 
 // ==================== Sub-components ====================
 
@@ -182,6 +201,69 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
             </Tooltip>
           </div>
         </div>
+      </div>
+
+      {/* Repository Stats */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <Card className="py-4">
+          <CardContent className="px-4 sm:px-6">
+            <div className="flex items-start justify-between">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">Failures</p>
+                {failuresLoading ? (
+                  <Skeleton className="h-7 w-10 mt-1" />
+                ) : (
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {failuresTotal}
+                  </h3>
+                )}
+              </div>
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-red-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="py-4">
+          <CardContent className="px-4 sm:px-6">
+            <div className="flex items-start justify-between">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">Analyses</p>
+                {analysesLoading ? (
+                  <Skeleton className="h-7 w-10 mt-1" />
+                ) : (
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {analysesTotal}
+                  </h3>
+                )}
+              </div>
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="py-4">
+          <CardContent className="px-4 sm:px-6">
+            <div className="flex items-start justify-between">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Avg Confidence
+                </p>
+                {analysesLoading ? (
+                  <Skeleton className="h-7 w-10 mt-1" />
+                ) : (
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {formatAvgConfidence(analysisItems)}
+                  </h3>
+                )}
+              </div>
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Two-column layout */}

@@ -326,14 +326,30 @@ router.post(
   "/webhook/pull_request",
   verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    const deliveryId = (req.headers["x-github-delivery"] as string) ?? "unknown";
     const webhook = req.body as PullRequestWebhook;
-    const result = await handlePullRequest(webhook);
 
-    res.status(HTTP_STATUS.OK).json({
-      status: result.handled ? "processed" : "skipped",
-      message: result.message,
-      eventId: result.eventId,
-    });
+    try {
+      const result = await handlePullRequest(webhook);
+      const status = result.handled ? "processed" : "skipped";
+      void logWebhookActivity(deliveryId, "pull_request", status, startTime);
+      res.status(HTTP_STATUS.OK).json({
+        status: result.handled ? "processed" : "skipped",
+        message: result.message,
+        eventId: result.eventId,
+      });
+    } catch (error) {
+      void logWebhookActivity(
+        deliveryId,
+        "pull_request",
+        "failed",
+        startTime,
+        undefined,
+        getErrorMessage(error)
+      );
+      throw error;
+    }
   })
 );
 
@@ -345,14 +361,30 @@ router.post(
   "/webhook/check_run",
   verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    const deliveryId = (req.headers["x-github-delivery"] as string) ?? "unknown";
     const webhook = req.body as CheckRunWebhook;
-    const result = await handleCheckRun(webhook);
 
-    res.status(HTTP_STATUS.OK).json({
-      status: result.handled ? "processed" : "skipped",
-      message: result.message,
-      eventId: result.eventId,
-    });
+    try {
+      const result = await handleCheckRun(webhook);
+      const status = result.handled ? "processed" : "skipped";
+      void logWebhookActivity(deliveryId, "check_run", status, startTime);
+      res.status(HTTP_STATUS.OK).json({
+        status: result.handled ? "processed" : "skipped",
+        message: result.message,
+        eventId: result.eventId,
+      });
+    } catch (error) {
+      void logWebhookActivity(
+        deliveryId,
+        "check_run",
+        "failed",
+        startTime,
+        undefined,
+        getErrorMessage(error)
+      );
+      throw error;
+    }
   })
 );
 

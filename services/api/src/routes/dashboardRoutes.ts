@@ -15,6 +15,7 @@ import {
   HTTP_STATUS,
   PARSE_INT_RADIX,
   DASHBOARD_PAGINATION,
+  ANALYSIS_DEFAULTS,
   type RequestContext,
 } from "@kenchi/shared";
 import { createGitHubInstallationAdapter } from "../adapters/githubInstallationAdapter.js";
@@ -235,6 +236,27 @@ const handleGetWebhookActivity = async (req: Request, res: Response): Promise<vo
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+const VALID_TREND_BUCKETS = new Set(["day", "week"]);
+
+const handleGetConfidenceTrend = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
+
+  const bucketParam = parseStringParam(req.query.bucket);
+  const bucket: "day" | "week" =
+    bucketParam !== null && VALID_TREND_BUCKETS.has(bucketParam)
+      ? (bucketParam as "day" | "week")
+      : "day";
+
+  const sinceParam = parseStringParam(req.query.since);
+  const since =
+    sinceParam ??
+    new Date(Date.now() - ANALYSIS_DEFAULTS.DEFAULT_TREND_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const result = await dashboardService.getConfidenceTrendData(tenantId, bucket, since, context);
+  res.status(HTTP_STATUS.OK).json({ data: result });
+};
+
 // ==================== Route Definitions ====================
 
 router.get("/api/v1/dashboard/tenant", asyncHandler(handleGetTenantInfo));
@@ -243,6 +265,7 @@ router.get(
   "/api/v1/dashboard/stats/confidence-distribution",
   asyncHandler(handleGetConfidenceDistribution)
 );
+router.get("/api/v1/dashboard/stats/confidence-trend", asyncHandler(handleGetConfidenceTrend));
 router.get("/api/v1/dashboard/repositories", asyncHandler(handleGetRepositories));
 router.post("/api/v1/dashboard/analyses/by-events", asyncHandler(handleGetAnalysisStatusByEvents));
 router.get("/api/v1/dashboard/analyses/:id", asyncHandler(handleGetAnalysisDetail));

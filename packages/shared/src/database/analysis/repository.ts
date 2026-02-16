@@ -23,6 +23,8 @@ import type {
   AnalysisCountRow,
   AnalysisEventRow,
   ConfidenceDistributionRow,
+  ConfidenceTrendRow,
+  ConfidenceTrendPoint,
 } from "./types.js";
 import {
   ANALYSIS_ID_PREFIX,
@@ -389,6 +391,45 @@ export const getConfidenceDistribution = async (
   } catch (error) {
     logger.error("Failed to get confidence distribution", {
       tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Returns a time-series of average confidence, bucketed by day or week.
+ *
+ * @param tenantId - The tenant ID
+ * @param bucket - Time bucket: "day" or "week"
+ * @param since - ISO timestamp for the start of the window
+ * @returns Array of trend data points ordered by date
+ */
+export const getConfidenceTrend = async (
+  tenantId: string,
+  bucket: "day" | "week" = "day",
+  since: string = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+): Promise<readonly ConfidenceTrendPoint[]> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<ConfidenceTrendRow>(ANALYSIS_QUERIES.CONFIDENCE_TREND, [
+      tenantId,
+      bucket,
+      since,
+    ]);
+
+    return Object.freeze(
+      result.rows.map((row) => ({
+        date: row.bucket,
+        avgConfidence: parseFloat(row.avg_confidence),
+        count: row.count,
+      }))
+    );
+  } catch (error) {
+    logger.error("Failed to get confidence trend", {
+      tenantId,
+      bucket,
       error: getErrorMessage(error),
     });
     throw error;

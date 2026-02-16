@@ -49,6 +49,7 @@ import {
   X,
 } from "lucide-react";
 import { ConfidenceChart } from "@/components/ConfidenceChart";
+import { ConfidenceTrendChart } from "@/components/ConfidenceTrendChart";
 
 // ==================== Constants ====================
 
@@ -214,7 +215,8 @@ export const DashboardOverview = ({
         ))}
       </div>
 
-      {/* Confidence Distribution Chart */}
+      {/* Confidence Charts */}
+      <ConfidenceTrendChart refreshKey={refreshKey} />
       <ConfidenceChart refreshKey={refreshKey} />
 
       {/* Onboarding (first-time users only) */}

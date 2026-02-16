@@ -14,6 +14,7 @@ export type {
   AnalysisEventRow,
   AnalysisCountRow,
   ConfidenceDistributionRow,
+  ConfidenceTrendPoint,
   CreateAnalysisValidationRule,
 } from "./types.js";
 
@@ -40,4 +41,5 @@ export {
   countAnalysesByTenantFiltered,
   getAnalysesByEventIds,
   getConfidenceDistribution,
+  getConfidenceTrend,
 } from "./repository.js";

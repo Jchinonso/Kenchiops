@@ -20,6 +20,8 @@ export const ANALYSIS_DEFAULTS = {
   TENANT_QUERY_LIMIT: 50,
   /** Maximum limit for tenant queries. */
   MAX_TENANT_QUERY_LIMIT: 200,
+  /** Default number of days for confidence trend lookback. */
+  DEFAULT_TREND_DAYS: 30,
 } as const;
 
 // ==================== SQL Queries ====================
@@ -104,5 +106,16 @@ export const ANALYSIS_QUERIES = {
     FROM analyses
     WHERE tenant_id = $1
     GROUP BY level
+  `,
+
+  CONFIDENCE_TREND: `
+    SELECT
+      DATE_TRUNC($2, created_at)::date AS bucket,
+      ROUND(AVG(diagnosis_confidence)::numeric, 3) AS avg_confidence,
+      COUNT(*)::int AS count
+    FROM analyses
+    WHERE tenant_id = $1 AND created_at >= $3::timestamptz
+    GROUP BY bucket
+    ORDER BY bucket
   `,
 } as const;

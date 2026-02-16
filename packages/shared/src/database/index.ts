@@ -132,8 +132,10 @@ export {
   countAnalysesByTenantFiltered,
   getAnalysesByEventIds,
   getConfidenceDistribution,
+  getConfidenceTrend,
   type CreateAnalysisInput,
   type AnalysisRecord,
+  type ConfidenceTrendPoint,
 } from "./analysis/index.js";
 
 // Event module

@@ -18,6 +18,7 @@ import {
   countAnalysesByTenantFiltered,
   getAnalysesByEventIds,
   getConfidenceDistribution,
+  getConfidenceTrend,
   getEventsByTenant,
   countEventsByTenant,
   getEventsByTenantFiltered,
@@ -28,6 +29,7 @@ import {
   type AnalysisRecord,
   type EventRecord,
   type WebhookActivityRecord,
+  type ConfidenceTrendPoint,
 } from "@kenchi/shared";
 import type {
   GitHubInstallationPort,
@@ -328,6 +330,24 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
       });
 
       return { items, total, limit, offset };
+    },
+
+    /**
+     * Returns time-series confidence trend data for a tenant.
+     */
+    getConfidenceTrendData: async (
+      tenantId: string,
+      bucket: "day" | "week",
+      since: string,
+      context: RequestContext
+    ): Promise<readonly ConfidenceTrendPoint[]> => {
+      const trend = await getConfidenceTrend(tenantId, bucket, since);
+      logger.info("Confidence trend retrieved", {
+        points: trend.length,
+        bucket,
+        ...context,
+      });
+      return trend;
     },
   };
 };

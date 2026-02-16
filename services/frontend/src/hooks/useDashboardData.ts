@@ -338,6 +338,33 @@ export const useAnalysisStatusByEvents = (
   return state;
 };
 
+// ==================== Confidence Trend ====================
+
+interface ConfidenceTrendPoint {
+  readonly date: string;
+  readonly avgConfidence: number;
+  readonly count: number;
+}
+
+const buildConfidenceTrendUrl = (bucket: "day" | "week", since?: string): string => {
+  const params = new URLSearchParams();
+  params.set("bucket", bucket);
+  if (since) {
+    params.set("since", since);
+  }
+  return `/api/v1/dashboard/stats/confidence-trend?${params.toString()}`;
+};
+
+export const useConfidenceTrend = (
+  bucket: "day" | "week" = "day",
+  since?: string,
+  refreshKey: number = 0
+): UseFetchResult<readonly ConfidenceTrendPoint[]> =>
+  useFetch<readonly ConfidenceTrendPoint[]>(
+    buildConfidenceTrendUrl(bucket, since),
+    `${bucket}:${since ?? ""}:${refreshKey}`
+  );
+
 // ==================== Webhook Activity ====================
 
 interface WebhookActivityRecord {
@@ -393,5 +420,6 @@ export type {
   PaginatedResult,
   AnalysisStatusEntry,
   AnalysisStatusMap,
+  ConfidenceTrendPoint,
   WebhookActivityRecord,
 };

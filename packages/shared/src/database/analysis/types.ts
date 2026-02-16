@@ -93,6 +93,24 @@ export interface ConfidenceDistributionRow {
   readonly count: number;
 }
 
+/**
+ * Database row type for confidence trend aggregation.
+ */
+export interface ConfidenceTrendRow {
+  readonly bucket: string;
+  readonly avg_confidence: string;
+  readonly count: number;
+}
+
+/**
+ * Domain record for a confidence trend data point.
+ */
+export interface ConfidenceTrendPoint {
+  readonly date: string;
+  readonly avgConfidence: number;
+  readonly count: number;
+}
+
 // ==================== Validation Types ====================
 
 /**
