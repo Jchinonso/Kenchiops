@@ -294,7 +294,7 @@ export const DashboardOverview = ({
                 <CardContent className="px-4 sm:px-6 h-full">
                   <div className="flex items-start justify-between gap-3 h-full">
                     <div className="min-w-0">
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">
                         {stat.title}
                       </p>
                       {statsLoading ? (

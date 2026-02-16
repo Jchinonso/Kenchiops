@@ -3,7 +3,7 @@
  *
  * Path-based breadcrumb navigation for all dashboard sub-pages.
  * Uses the shadcn breadcrumb primitives with route-to-label mapping.
- * Hidden on the overview page (it's the root).
+ * Shows "Dashboard" on overview, full path on sub-pages.
  */
 
 import { Fragment } from "react";
@@ -45,11 +45,8 @@ const SEGMENT_LABELS: Readonly<Record<string, string>> = {
 export const DashboardBreadcrumb = () => {
   const { pathname } = useLocation();
 
-  if (pathname === "/dashboard") {
-    return null;
-  }
-
-  const segments = pathname.replace("/dashboard/", "").split("/").filter(Boolean);
+  const isOverview = pathname === "/dashboard";
+  const segments = isOverview ? [] : pathname.replace("/dashboard/", "").split("/").filter(Boolean);
   const crumbs = segments.map((segment, index) => ({
     label: SEGMENT_LABELS[segment] ?? decodeURIComponent(segment),
     href: `/dashboard/${segments.slice(0, index + 1).join("/")}`,
@@ -59,9 +56,13 @@ export const DashboardBreadcrumb = () => {
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <Link to="/dashboard">Dashboard</Link>
-          </BreadcrumbLink>
+          {isOverview ? (
+            <BreadcrumbPage>Dashboard</BreadcrumbPage>
+          ) : (
+            <BreadcrumbLink asChild>
+              <Link to="/dashboard">Dashboard</Link>
+            </BreadcrumbLink>
+          )}
         </BreadcrumbItem>
         {crumbs.map((crumb, index) => (
           <Fragment key={crumb.href}>
