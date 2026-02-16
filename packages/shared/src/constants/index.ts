@@ -318,6 +318,9 @@ export { ANALYSIS_DEFAULTS, ANALYSIS_QUERIES } from "./analysis.js";
 // Event database constants
 export { EVENT_DB_DEFAULTS, EVENT_DB_QUERIES } from "./event.js";
 
+// Webhook activity constants
+export { WEBHOOK_ACTIVITY_DEFAULTS, WEBHOOK_ACTIVITY_QUERIES } from "./webhookActivity.js";
+
 // Dashboard constants
 export { SSE_CONFIG, DASHBOARD_EVENT_TYPES } from "./dashboard.js";
 

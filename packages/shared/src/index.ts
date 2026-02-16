@@ -280,6 +280,15 @@ export {
   type EventListOptions,
   type CreateEventInput,
 } from "./database/index.js";
+export {
+  // Webhook activity module
+  createWebhookActivity,
+  getWebhookActivitiesByTenant,
+  countWebhookActivitiesByTenant,
+  type WebhookActivityRecord,
+  type WebhookActivityListOptions,
+  type CreateWebhookActivityInput,
+} from "./database/index.js";
 
 // User module (Authentication)
 export {

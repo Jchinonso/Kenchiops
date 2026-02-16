@@ -322,6 +322,16 @@ export {
   cleanupExpiredRefreshTokens,
 } from "./user/index.js";
 
+// Webhook activity module
+export {
+  createWebhookActivity,
+  getWebhookActivitiesByTenant,
+  countWebhookActivitiesByTenant,
+  type WebhookActivityRecord,
+  type WebhookActivityListOptions,
+  type CreateWebhookActivityInput,
+} from "./webhookActivity/index.js";
+
 // Risk rules module (Context-Aware Risk Scoring)
 // Note: CustomRiskRuleRow, RiskAssessmentRow, and row mappers are internal.
 export {
