@@ -6,7 +6,7 @@
  * Rows expand inline to show full payload details and links.
  */
 
-import { Fragment, useState, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -116,7 +116,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
   const checkName = getPayloadString(event.payload, "checkName");
   const conclusion = getPayloadString(event.payload, "conclusion");
   const headSha = getPayloadString(event.payload, "headSha");
-  const shortSha = headSha !== "--" ? headSha.slice(0, 7) : "--";
+  const shortSha = headSha !== "--" ? headSha.slice(0, 7) : null;
 
   return (
     <TableRow
@@ -167,7 +167,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
         </Badge>
       </TableCell>
       <TableCell className="text-gray-500 dark:text-gray-400 font-mono text-xs">
-        {headSha !== "--" && repository !== "--" ? (
+        {shortSha && repository !== "--" ? (
           <a
             href={`https://github.com/${repository}/commit/${headSha}`}
             target="_blank"
@@ -177,8 +177,10 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
           >
             {shortSha}
           </a>
+        ) : shortSha ? (
+          <span>{shortSha}</span>
         ) : (
-          shortSha
+          <span className="font-sans text-gray-400 dark:text-gray-500">N/A</span>
         )}
       </TableCell>
       <TableCell>
@@ -200,7 +202,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
             </Badge>
           </Link>
         ) : (
-          <span className="text-xs text-gray-400 dark:text-gray-500">--</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">Pending</span>
         )}
       </TableCell>
     </TableRow>
@@ -291,24 +293,18 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
 
 interface CICDFailuresProps {
   readonly refreshKey?: number;
-  readonly searchQuery?: string;
 }
 
-export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps) => {
+export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
   const [filters, setFilters] = useState<FilterValues>({
-    repository: searchQuery ?? "",
+    repository: "",
     severity: "",
     minConfidence: "",
   });
-
-  // Sync repository filter when searchQuery prop changes
-  useEffect(() => {
-    setFilters((prev) => ({ ...prev, repository: searchQuery ?? "" }));
-  }, [searchQuery]);
 
   const handleFilterChange = (next: FilterValues) => {
     setFilters(next);
@@ -432,12 +428,21 @@ export const CICDFailures = ({ refreshKey = 0, searchQuery }: CICDFailuresProps)
             <Empty className="py-12 border-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <AlertTriangle className="w-6 h-6" />
+                  {filters.repository || filters.severity ? (
+                    <Search className="w-6 h-6" />
+                  ) : (
+                    <AlertTriangle className="w-6 h-6" />
+                  )}
                 </EmptyMedia>
-                <EmptyTitle>No failures yet</EmptyTitle>
+                <EmptyTitle>
+                  {filters.repository || filters.severity
+                    ? "No matching failures"
+                    : "No failures yet"}
+                </EmptyTitle>
                 <EmptyDescription>
-                  CI/CD failures from your connected repositories will appear here once Kenchi
-                  detects them.
+                  {filters.repository || filters.severity
+                    ? "Try adjusting your filters to find what you're looking for."
+                    : "CI/CD failures from your connected repositories will appear here once Kenchi detects them."}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>

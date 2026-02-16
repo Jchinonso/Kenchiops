@@ -6,7 +6,7 @@
  * Rows expand inline to show recommended actions and confidence signals.
  */
 
-import { Fragment, useState, useEffect, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -43,7 +43,7 @@ import {
   formatRelativeTime,
   truncateText,
   extractRepoFromKey,
-  formatSignalValue,
+  flattenSignalEntries,
 } from "@/lib/formatters";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -150,7 +150,7 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
             <span className="text-xs underline">Linked</span>
           </Link>
         ) : (
-          <span className="text-xs text-gray-400 dark:text-gray-500">--</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">No event</span>
         )}
       </TableCell>
     </TableRow>
@@ -196,11 +196,11 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
                 Confidence Signals
               </h4>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {Object.entries(analysis.confidenceSignals ?? {}).map(([label, value]) => (
+                {flattenSignalEntries(analysis.confidenceSignals ?? {}).map(([label, value]) => (
                   <Fragment key={label}>
                     <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-                    <span className="text-sm text-gray-900 dark:text-gray-100">
-                      {formatSignalValue(value)}
+                    <span className="text-sm text-gray-900 dark:text-gray-100 font-mono">
+                      {value}
                     </span>
                   </Fragment>
                 ))}
@@ -230,25 +230,19 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
 
 interface CICDAnalysesProps {
   readonly refreshKey?: number;
-  readonly searchQuery?: string;
 }
 
-export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps) => {
+export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
   const [filters, setFilters] = useState<FilterValues>({
-    repository: searchQuery ?? "",
+    repository: "",
     severity: "",
     minConfidence: "",
   });
-
-  // Sync repository filter when searchQuery prop changes
-  useEffect(() => {
-    setFilters((prev) => ({ ...prev, repository: searchQuery ?? "" }));
-  }, [searchQuery]);
 
   const handleFilterChange = (next: FilterValues) => {
     setFilters(next);
@@ -373,10 +367,15 @@ export const CICDAnalyses = ({ refreshKey = 0, searchQuery }: CICDAnalysesProps)
                 <EmptyMedia variant="icon">
                   <Search className="w-6 h-6" />
                 </EmptyMedia>
-                <EmptyTitle>No analyses yet</EmptyTitle>
+                <EmptyTitle>
+                  {filters.repository || filters.minConfidence
+                    ? "No matching analyses"
+                    : "No analyses yet"}
+                </EmptyTitle>
                 <EmptyDescription>
-                  When Kenchi detects CI/CD failures, it automatically runs root cause analysis.
-                  Results will appear here.
+                  {filters.repository || filters.minConfidence
+                    ? "Try adjusting your filters to find what you're looking for."
+                    : "When Kenchi detects CI/CD failures, it automatically runs root cause analysis. Results will appear here."}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>

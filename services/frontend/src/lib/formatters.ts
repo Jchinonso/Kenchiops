@@ -87,13 +87,48 @@ export const getPayloadString = (
   key: string
 ): string => (typeof payload[key] === "string" ? String(payload[key]) : "--");
 
-/** Safely format an unknown value for display. Objects/arrays become JSON. */
+/** Safely format a primitive value for display. */
 export const formatSignalValue = (value: unknown): string => {
   if (value === null || value === undefined) {
     return "--";
   }
+  if (typeof value === "number") {
+    return value % 1 === 0 ? String(value) : value.toFixed(3);
+  }
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
   if (typeof value === "object") {
-    return JSON.stringify(value);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "[complex value]";
+    }
   }
   return String(value);
+};
+
+/**
+ * Flattens nested confidence signal objects into a flat list of
+ * key-value pairs suitable for display. Nested objects get
+ * expanded into "parent.child" keys.
+ */
+export const flattenSignalEntries = (
+  signals: Readonly<Record<string, unknown>>
+): ReadonlyArray<readonly [string, string]> => {
+  const result: Array<readonly [string, string]> = [];
+
+  const walk = (obj: Readonly<Record<string, unknown>>, prefix: string): void => {
+    Object.entries(obj).forEach(([key, value]) => {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        walk(value as Readonly<Record<string, unknown>>, fullKey);
+      } else {
+        result.push([fullKey, formatSignalValue(value)] as const);
+      }
+    });
+  };
+
+  walk(signals, "");
+  return result;
 };

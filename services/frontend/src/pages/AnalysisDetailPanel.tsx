@@ -32,7 +32,7 @@ import {
   getConfidenceStyle,
   formatTimestamp,
   extractRepoFromKey,
-  formatSignalValue,
+  flattenSignalEntries,
 } from "@/lib/formatters";
 import { useAnalysisDetail, type AnalysisRecord } from "@/hooks/useDashboardData";
 
@@ -106,7 +106,7 @@ interface DetailContentProps {
 const DetailContent = ({ analysis }: DetailContentProps) => {
   const [rawOpen, setRawOpen] = useState(false);
   const confidenceSignalEntries = analysis.confidenceSignals
-    ? Object.entries(analysis.confidenceSignals)
+    ? flattenSignalEntries(analysis.confidenceSignals)
     : [];
 
   return (
@@ -166,8 +166,8 @@ const DetailContent = ({ analysis }: DetailContentProps) => {
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
                   {key}
                 </span>
-                <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
-                  {formatSignalValue(value)}
+                <span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">
+                  {value}
                 </span>
               </div>
             ))}

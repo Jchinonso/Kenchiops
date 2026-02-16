@@ -10,6 +10,7 @@ import {
   useDashboardStats,
   useAnalyses,
   useFailures,
+  useTenantInfo,
   type AnalysisRecord,
   type EventRecord,
 } from "@/hooks/useDashboardData";
@@ -47,6 +48,7 @@ import {
   Search,
   MessageSquare,
   X,
+  CheckCircle2,
 } from "lucide-react";
 import { ConfidenceChart } from "@/components/ConfidenceChart";
 import { ConfidenceTrendChart } from "@/components/ConfidenceTrendChart";
@@ -58,34 +60,46 @@ const GITHUB_APP_SLUG = import.meta.env.VITE_GITHUB_APP_SLUG ?? "kenchi-devops";
 interface OnboardingStep {
   readonly title: string;
   readonly description: string;
+  readonly completedDescription: string;
   readonly ctaLabel: string;
   readonly href: string;
   readonly external?: boolean;
   readonly icon: React.ReactNode;
+  readonly completed: boolean;
 }
 
-const ONBOARDING_STEPS: readonly OnboardingStep[] = [
+const buildOnboardingSteps = (
+  githubConnected: boolean,
+  slackConnected: boolean,
+  hasAnalyses: boolean
+): readonly OnboardingStep[] => [
   {
     title: "Install Kenchi GitHub App",
     description: "One click connects your repos and sets up webhooks — no manual config needed.",
-    ctaLabel: "Install GitHub App",
+    completedDescription: "GitHub App is installed and receiving webhooks.",
+    ctaLabel: githubConnected ? "Manage Installation" : "Install GitHub App",
     href: `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`,
     external: true,
     icon: <Github className="w-5 h-5 text-gray-900 dark:text-gray-100" />,
+    completed: githubConnected,
   },
   {
     title: "Connect Slack (optional)",
     description: "Get failure alerts and analysis results delivered to your team's Slack channels.",
-    ctaLabel: "Add to Slack",
+    completedDescription: "Slack is connected and receiving notifications.",
+    ctaLabel: slackConnected ? "Manage Slack" : "Add to Slack",
     href: "/dashboard/settings",
     icon: <MessageSquare className="w-5 h-5 text-purple-600" />,
+    completed: slackConnected,
   },
   {
     title: "Your First Analysis",
     description: "Once connected, Kenchi automatically analyzes CI failures on every push.",
+    completedDescription: "Kenchi has analyzed CI failures from your repos.",
     ctaLabel: "View Analyses",
     href: "/dashboard/cicd/analyses",
     icon: <Zap className="w-5 h-5 text-amber-500" />,
+    completed: hasAnalyses,
   },
 ];
 
@@ -163,12 +177,20 @@ export const DashboardOverview = ({
   const { data: stats, isLoading: statsLoading } = useDashboardStats(refreshKey);
   const { data: recentAnalyses, isLoading: analysesLoading } = useAnalyses(5, 0, refreshKey);
   const { data: recentFailures, isLoading: failuresLoading } = useFailures(5, 0, refreshKey);
+  const { data: tenant } = useTenantInfo(refreshKey);
 
   const failureItems = recentFailures?.items ?? [];
   const analysisItems = recentAnalyses?.items ?? [];
   const quickStats = buildQuickStats(stats, formatAvgConfidence(analysisItems));
   const hasActivity = failureItems.length > 0 || analysisItems.length > 0;
   const activityLoading = analysesLoading || failuresLoading;
+
+  const onboardingSteps = buildOnboardingSteps(
+    tenant?.githubConnected ?? false,
+    tenant?.slackConnected ?? false,
+    (stats?.totalAnalyses ?? 0) > 0
+  );
+  const allStepsComplete = onboardingSteps.every((step) => step.completed);
 
   return (
     <>
@@ -236,30 +258,55 @@ export const DashboardOverview = ({
               </button>
             </div>
             <CardDescription>
-              Complete these steps to start analyzing your CI/CD failures.
+              {allStepsComplete
+                ? "You're all set! Kenchi is monitoring your CI/CD pipelines."
+                : "Complete these steps to start analyzing your CI/CD failures."}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
-              {ONBOARDING_STEPS.map((step, stepIndex) => (
+              {onboardingSteps.map((step, stepIndex) => (
                 <div
                   key={step.title}
-                  className="flex items-start gap-4 p-4 rounded-lg border border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
+                  className={cn(
+                    "flex items-start gap-4 p-4 rounded-lg border transition-colors",
+                    step.completed
+                      ? "border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/30"
+                      : "border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700"
+                  )}
                 >
-                  <div className="flex-shrink-0 mt-1">{step.icon}</div>
+                  <div className="flex-shrink-0 mt-1">
+                    {step.completed ? (
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    ) : (
+                      step.icon
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm mb-1">
+                    <h4
+                      className={cn(
+                        "font-medium text-sm mb-1",
+                        step.completed
+                          ? "text-green-800 dark:text-green-300"
+                          : "text-gray-900 dark:text-gray-100"
+                      )}
+                    >
                       {stepIndex + 1}. {step.title}
                     </h4>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                      {step.description}
+                      {step.completed ? step.completedDescription : step.description}
                     </p>
                     {step.external ? (
                       <a
                         href={step.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-colors"
+                        className={cn(
+                          "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
+                          step.completed
+                            ? "text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            : "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900"
+                        )}
                       >
                         {step.ctaLabel}
                         <ExternalLink className="w-3.5 h-3.5" />

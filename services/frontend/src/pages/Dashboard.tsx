@@ -21,7 +21,6 @@ import { RepositoryDetail } from "@/pages/RepositoryDetail";
 import { Settings as SettingsPage } from "@/pages/Settings";
 import {
   Bell,
-  Search,
   ChevronDown,
   LogOut,
   Loader2,
@@ -151,12 +150,12 @@ const isCICDRoute = (pathname: string): boolean => pathname.startsWith("/dashboa
 
 const PIPELINES_PREFIX = "/dashboard/cicd/pipelines/";
 
-const renderCICDPage = (pathname: string, refreshKey: number, query: string): React.ReactNode => {
+const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode => {
   if (pathname.startsWith("/dashboard/cicd/failures")) {
-    return <CICDFailures refreshKey={refreshKey} searchQuery={query} />;
+    return <CICDFailures refreshKey={refreshKey} />;
   }
   if (pathname.startsWith("/dashboard/cicd/analyses")) {
-    return <CICDAnalyses refreshKey={refreshKey} searchQuery={query} />;
+    return <CICDAnalyses refreshKey={refreshKey} />;
   }
   if (pathname.startsWith(PIPELINES_PREFIX)) {
     const repoFullName = decodeURIComponent(pathname.slice(PIPELINES_PREFIX.length));
@@ -168,7 +167,7 @@ const renderCICDPage = (pathname: string, refreshKey: number, query: string): Re
   if (pathname.startsWith("/dashboard/cicd/webhooks")) {
     return <WebhookActivity refreshKey={refreshKey} />;
   }
-  return <CICDFailures refreshKey={refreshKey} searchQuery={query} />;
+  return <CICDFailures refreshKey={refreshKey} />;
 };
 
 // ==================== Dashboard ====================
@@ -183,9 +182,6 @@ const Dashboard = () => {
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [localSearch, setLocalSearch] = useState("");
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -213,12 +209,13 @@ const Dashboard = () => {
         setShortcutsOpen(true);
       }
       if (event.key === "/" && !isInput) {
-        const searchInput = document.querySelector<HTMLInputElement>(
-          'input[placeholder="Search repositories..."]'
+        // Focus the page-level filter input if one exists
+        const filterInput = document.querySelector<HTMLInputElement>(
+          'input[id="filter-repository"]'
         );
-        if (searchInput) {
+        if (filterInput) {
           event.preventDefault();
-          searchInput.focus();
+          filterInput.focus();
         }
       }
     };
@@ -303,33 +300,9 @@ const Dashboard = () => {
               >
                 <Menu className="w-5 h-5" />
               </button>
-              {isCICD ? (
-                <div className="flex-1 max-w-xl">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                    <input
-                      type="text"
-                      value={localSearch}
-                      onChange={(event) => {
-                        const { value } = event.target;
-                        setLocalSearch(value);
-                        if (searchTimerRef.current) {
-                          clearTimeout(searchTimerRef.current);
-                        }
-                        Object.assign(searchTimerRef, {
-                          current: setTimeout(() => setSearchQuery(value), 300),
-                        });
-                      }}
-                      placeholder="Search repositories..."
-                      className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm dark:text-gray-100 dark:placeholder-gray-500"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="hidden sm:block">
-                  <DashboardBreadcrumb />
-                </div>
-              )}
+              <div className="hidden sm:block">
+                <DashboardBreadcrumb />
+              </div>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4">
@@ -472,7 +445,7 @@ const Dashboard = () => {
           ) : isSettings ? (
             <SettingsPage />
           ) : isCICD ? (
-            renderCICDPage(currentPath, refreshKey, searchQuery)
+            renderCICDPage(currentPath, refreshKey)
           ) : (
             <DashboardOverview
               firstName={firstName}
