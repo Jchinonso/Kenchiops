@@ -12,6 +12,7 @@ import {
   handleDocUpdateEvent,
   findByGitHubInstallation,
   getErrorMessage,
+  createWebhookActivity,
 } from "@kenchi/shared";
 import { handlePullRequest } from "../handlers/pullRequestHandler.js";
 import { handleCheckRun } from "../handlers/checkRunHandler.js";
@@ -27,6 +28,38 @@ import type { WebhookHandlerResult, GitHubEventHandler } from "./webhookRoutesTy
 
 const router = Router();
 const logger = createLogger("github-app");
+
+/**
+ * Safely log webhook activity — failures must never break webhook processing.
+ */
+const logWebhookActivity = async (
+  deliveryId: string,
+  eventType: string,
+  status: string,
+  startTime: number,
+  tenantId?: string | null,
+  errorMessage?: string | null,
+  metadata?: Readonly<Record<string, unknown>> | null
+): Promise<void> => {
+  try {
+    await createWebhookActivity({
+      deliveryId,
+      eventType,
+      source: "github",
+      status,
+      tenantId: tenantId ?? null,
+      processingTimeMs: Date.now() - startTime,
+      errorMessage: errorMessage ?? null,
+      metadata,
+    });
+  } catch (error) {
+    logger.warn("Failed to log webhook activity", {
+      deliveryId,
+      eventType,
+      error: getErrorMessage(error),
+    });
+  }
+};
 
 /**
  * Format standard webhook response
@@ -209,8 +242,9 @@ const eventHandlers: Record<string, GitHubEventHandler> = {
 /**
  * Handle ping event
  */
-const handlePing = (deliveryId: string, res: Response): void => {
+const handlePing = (deliveryId: string, startTime: number, res: Response): void => {
   logger.info("GitHub webhook ping received", { deliveryId });
+  void logWebhookActivity(deliveryId, "ping", "processed", startTime);
   res.status(HTTP_STATUS.OK).json({
     status: "ok",
     message: "Webhook configured successfully",
@@ -220,8 +254,14 @@ const handlePing = (deliveryId: string, res: Response): void => {
 /**
  * Handle unknown event type
  */
-const handleUnknownEvent = (eventType: string, deliveryId: string, res: Response): void => {
+const handleUnknownEvent = (
+  eventType: string,
+  deliveryId: string,
+  startTime: number,
+  res: Response
+): void => {
   logger.info("Unhandled GitHub event type", { eventType, deliveryId });
+  void logWebhookActivity(deliveryId, eventType, "ignored", startTime);
   res.status(HTTP_STATUS.OK).json({
     status: "ignored",
     message: `Event type '${eventType}' not handled`,
@@ -236,6 +276,7 @@ const handleUnknownEvent = (eventType: string, deliveryId: string, res: Response
 const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => {
   const eventType = req.headers["x-github-event"] as string;
   const deliveryId = req.headers["x-github-delivery"] as string;
+  const startTime = Date.now();
 
   logger.info("Received GitHub webhook", {
     eventType,
@@ -244,20 +285,34 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
 
   // Handle ping separately (no async processing needed)
   if (eventType === "ping") {
-    handlePing(deliveryId, res);
+    handlePing(deliveryId, startTime, res);
     return;
   }
 
   // Look up handler in table
   const handler = eventHandlers[eventType];
   if (!handler) {
-    handleUnknownEvent(eventType, deliveryId, res);
+    handleUnknownEvent(eventType, deliveryId, startTime, res);
     return;
   }
 
   // Execute handler and format response
-  const result = await handler.handle(req.body);
-  res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
+  try {
+    const result = await handler.handle(req.body);
+    const status = result.handled ? "processed" : "skipped";
+    void logWebhookActivity(deliveryId, eventType, status, startTime, result.tenantId);
+    res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
+  } catch (error) {
+    void logWebhookActivity(
+      deliveryId,
+      eventType,
+      "failed",
+      startTime,
+      undefined,
+      getErrorMessage(error)
+    );
+    throw error;
+  }
 });
 
 // Main webhook endpoint (full path: /api/github/webhook)

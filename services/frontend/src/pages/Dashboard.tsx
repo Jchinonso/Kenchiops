@@ -16,6 +16,7 @@ import { DashboardOverview } from "@/pages/DashboardOverview";
 import { CICDFailures } from "@/pages/CICDFailures";
 import { CICDAnalyses } from "@/pages/CICDAnalyses";
 import { CICDPipelines } from "@/pages/CICDPipelines";
+import { WebhookActivity } from "@/pages/WebhookActivity";
 import { RepositoryDetail } from "@/pages/RepositoryDetail";
 import { Settings as SettingsPage } from "@/pages/Settings";
 import {
@@ -163,6 +164,9 @@ const renderCICDPage = (pathname: string, refreshKey: number, query: string): Re
   }
   if (pathname.startsWith("/dashboard/cicd/pipelines")) {
     return <CICDPipelines />;
+  }
+  if (pathname.startsWith("/dashboard/cicd/webhooks")) {
+    return <WebhookActivity refreshKey={refreshKey} />;
   }
   return <CICDFailures refreshKey={refreshKey} searchQuery={query} />;
 };

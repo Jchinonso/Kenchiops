@@ -22,9 +22,12 @@ import {
   countEventsByTenant,
   getEventsByTenantFiltered,
   countEventsByTenantFiltered,
+  getWebhookActivitiesByTenant,
+  countWebhookActivitiesByTenant,
   type RequestContext,
   type AnalysisRecord,
   type EventRecord,
+  type WebhookActivityRecord,
 } from "@kenchi/shared";
 import type {
   GitHubInstallationPort,
@@ -292,6 +295,39 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
         ...context,
       });
       return distribution;
+    },
+
+    /**
+     * Retrieves paginated webhook activity for a tenant with optional filters.
+     */
+    getWebhookActivity: async (
+      tenantId: string,
+      source: string | null,
+      status: string | null,
+      limit: number,
+      offset: number,
+      context: RequestContext
+    ): Promise<PaginatedResult<WebhookActivityRecord>> => {
+      const [items, total] = await Promise.all([
+        getWebhookActivitiesByTenant({
+          tenantId,
+          source,
+          status,
+          limit,
+          offset,
+        }),
+        countWebhookActivitiesByTenant(tenantId, source, status),
+      ]);
+
+      logger.info("Webhook activity retrieved", {
+        count: items.length,
+        total,
+        source,
+        status,
+        ...context,
+      });
+
+      return { items, total, limit, offset };
     },
   };
 };

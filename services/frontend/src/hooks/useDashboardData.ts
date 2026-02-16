@@ -338,6 +338,51 @@ export const useAnalysisStatusByEvents = (
   return state;
 };
 
+// ==================== Webhook Activity ====================
+
+interface WebhookActivityRecord {
+  readonly id: string;
+  readonly tenantId: string | null;
+  readonly deliveryId: string;
+  readonly eventType: string;
+  readonly source: string;
+  readonly status: string;
+  readonly processingTimeMs: number | null;
+  readonly errorMessage: string | null;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly createdAt: string;
+}
+
+const buildWebhookActivityUrl = (
+  limit: number,
+  offset: number,
+  source?: string,
+  status?: string
+): string => {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  if (source) {
+    params.set("source", source);
+  }
+  if (status) {
+    params.set("status", status);
+  }
+  return `/api/v1/dashboard/webhook-activity?${params.toString()}`;
+};
+
+export const useWebhookActivity = (
+  limit: number = 20,
+  offset: number = 0,
+  refreshKey: number = 0,
+  source?: string,
+  status?: string
+): UseFetchResult<PaginatedResult<WebhookActivityRecord>> =>
+  useFetch<PaginatedResult<WebhookActivityRecord>>(
+    buildWebhookActivityUrl(limit, offset, source, status),
+    `${limit}:${offset}:${refreshKey}:${source ?? ""}:${status ?? ""}`
+  );
+
 // Re-export types for use in page components
 export type {
   TenantInfo,
@@ -348,4 +393,5 @@ export type {
   PaginatedResult,
   AnalysisStatusEntry,
   AnalysisStatusMap,
+  WebhookActivityRecord,
 };

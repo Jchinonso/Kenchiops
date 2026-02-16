@@ -216,6 +216,25 @@ const handleGetConfidenceDistribution = async (req: Request, res: Response): Pro
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+const handleGetWebhookActivity = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
+  const { limit, offset } = parsePaginationParams(req);
+  const source = parseStringParam(req.query.source);
+  const status = parseStringParam(req.query.status);
+
+  const result = await dashboardService.getWebhookActivity(
+    tenantId,
+    source,
+    status,
+    limit,
+    offset,
+    context
+  );
+
+  res.status(HTTP_STATUS.OK).json({ data: result });
+};
+
 // ==================== Route Definitions ====================
 
 router.get("/api/v1/dashboard/tenant", asyncHandler(handleGetTenantInfo));
@@ -229,5 +248,6 @@ router.post("/api/v1/dashboard/analyses/by-events", asyncHandler(handleGetAnalys
 router.get("/api/v1/dashboard/analyses/:id", asyncHandler(handleGetAnalysisDetail));
 router.get("/api/v1/dashboard/analyses", asyncHandler(handleGetAnalyses));
 router.get("/api/v1/dashboard/failures", asyncHandler(handleGetFailures));
+router.get("/api/v1/dashboard/webhook-activity", asyncHandler(handleGetWebhookActivity));
 
 export { router as dashboardRoutes };
