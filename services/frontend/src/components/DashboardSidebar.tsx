@@ -9,6 +9,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -36,6 +37,7 @@ import {
   LogOut,
   Loader2,
   Keyboard,
+  ChevronsUpDown,
   X,
 } from "lucide-react";
 
@@ -357,36 +359,15 @@ export const DashboardSidebar = ({
         )}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-gray-100 dark:border-gray-700">
-        <div className="p-3 sm:p-4 space-y-1">
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onOpenShortcuts();
-            }}
-            className="flex items-center gap-3 px-4 py-2.5 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors text-sm"
-          >
-            <Keyboard className="w-4 h-4" />
-            <span>Keyboard Shortcuts</span>
-          </button>
-          <a
-            href="https://github.com/kenchiops/kenchi/issues"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 px-4 py-2.5 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors text-sm"
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span>Help & Support</span>
-          </a>
-        </div>
-
-        {/* User Profile & Sign Out */}
-        <div className="p-3 sm:p-4 border-t border-gray-100 dark:border-gray-700">
-          {user && (
-            <div className="flex items-center gap-3 px-4 py-2 mb-2">
-              {user.avatarUrl ? (
+      {/* User Menu (Popover) */}
+      <div className="border-t border-gray-100 dark:border-gray-700 p-3 sm:p-4">
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              {user?.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
                   alt={user.displayName}
@@ -395,7 +376,7 @@ export const DashboardSidebar = ({
               ) : (
                 <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-white font-medium text-xs">
-                    {user.displayName
+                    {(user?.displayName ?? "U")
                       .split(" ")
                       .map((part) => part[0])
                       .join("")
@@ -404,29 +385,54 @@ export const DashboardSidebar = ({
                   </span>
                 </div>
               )}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1 text-left">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                  {user.displayName}
+                  {user?.displayName ?? "User"}
                 </p>
-                {user.email && (
+                {user?.email && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
                 )}
               </div>
-            </div>
-          )}
-          <button
-            onClick={onLogout}
-            disabled={isLoggingOut}
-            className="flex items-center gap-3 px-4 py-2.5 w-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg transition-colors disabled:opacity-50 text-sm"
-          >
-            {isLoggingOut ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <LogOut className="w-4 h-4" />
-            )}
-            <span>{isLoggingOut ? "Signing out..." : "Sign Out"}</span>
-          </button>
-        </div>
+              <ChevronsUpDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="top" align="start" sideOffset={8} className="w-56 p-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenShortcuts();
+              }}
+              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+            >
+              <Keyboard className="w-4 h-4" />
+              <span>Keyboard Shortcuts</span>
+            </button>
+            <a
+              href="https://github.com/kenchiops/kenchi/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>Help & Support</span>
+            </a>
+            <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+            <button
+              type="button"
+              onClick={onLogout}
+              disabled={isLoggingOut}
+              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50"
+            >
+              {isLoggingOut ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <LogOut className="w-4 h-4" />
+              )}
+              <span>{isLoggingOut ? "Signing out..." : "Sign Out"}</span>
+            </button>
+          </PopoverContent>
+        </Popover>
       </div>
     </aside>
   );
