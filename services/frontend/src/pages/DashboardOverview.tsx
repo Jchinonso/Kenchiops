@@ -327,9 +327,9 @@ export const DashboardOverview = ({
       {showOnboarding && completedCount >= 2 && !allStepsComplete ? (
         <div className="mb-6 sm:mb-8 flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
           <Rocket className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex-shrink-0">
                 Setup {completedCount}/{onboardingSteps.length}
               </span>
               <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -339,10 +339,34 @@ export const DashboardOverview = ({
                 />
               </div>
             </div>
+            {onboardingSteps
+              .filter((step) => !step.completed)
+              .map((step) => (
+                <div key={step.title} className="mt-1.5 flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Next:</span>
+                  {step.external ? (
+                    <a
+                      href={step.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors"
+                    >
+                      {step.title} &rarr;
+                    </a>
+                  ) : (
+                    <Link
+                      to={step.href}
+                      className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors"
+                    >
+                      {step.title} &rarr;
+                    </Link>
+                  )}
+                </div>
+              ))}
           </div>
           <button
             onClick={dismissOnboarding}
-            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors flex-shrink-0"
             aria-label="Dismiss setup checklist"
           >
             <X className="w-4 h-4" />
