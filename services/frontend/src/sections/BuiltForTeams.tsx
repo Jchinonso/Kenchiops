@@ -1,4 +1,5 @@
 import { Server, Activity, Wrench, Code2, HardDrive, TestTube } from "lucide-react";
+import { useScrollFadeIn } from "@/hooks/useScrollFadeIn";
 
 const teams = [
   {
@@ -39,41 +40,48 @@ const teams = [
   },
 ] as const;
 
-const BuiltForTeams = () => (
-  <section
-    id="teams"
-    aria-label="Built for engineering teams"
-    className="py-20 bg-white dark:bg-gray-950"
-  >
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="text-center mb-16">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Built for Every Engineering Team
-        </h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-          Whether you run the platform or ship features on it — Kenchi helps your team move faster
-          with confidence.
-        </p>
-      </div>
+const BuiltForTeams = () => {
+  const { ref, fadeClass } = useScrollFadeIn();
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {teams.map((team) => (
-          <div
-            key={team.title}
-            className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-8 hover:shadow-lg transition-all duration-300 group"
-          >
-            <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-950 rounded-xl flex items-center justify-center text-indigo-500 mb-6 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-              {team.icon}
+  return (
+    <section
+      id="teams"
+      aria-label="Built for engineering teams"
+      className="py-20 bg-white dark:bg-gray-950"
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div
+          ref={ref as React.RefObject<HTMLDivElement>}
+          className={`text-center mb-16 ${fadeClass}`}
+        >
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+            Built for Every Engineering Team
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Whether you run the platform or ship features on it — Kenchi helps your team move faster
+            with confidence.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {teams.map((team) => (
+            <div
+              key={team.title}
+              className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-8 hover:shadow-lg transition-all duration-300 group"
+            >
+              <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-950 rounded-xl flex items-center justify-center text-indigo-500 mb-6 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                {team.icon}
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
+                {team.title}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">{team.description}</p>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-              {team.title}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">{team.description}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 export default BuiltForTeams;
