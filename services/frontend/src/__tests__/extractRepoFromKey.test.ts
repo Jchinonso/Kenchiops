@@ -15,7 +15,7 @@
  * - aggregationKey starts with colon (colonIndex === 0) -> returns full key
  */
 
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { extractRepoFromKey } from "../lib/formatters";
 
 // ==================== Tests ====================

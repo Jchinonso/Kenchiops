@@ -241,7 +241,7 @@ export const USER_QUERIES = {
   `,
   UPDATE_TENANT: `
     UPDATE users SET tenant_id = $1, updated_at = NOW()
-    WHERE id = $2 RETURNING *
+    WHERE id = $2 AND tenant_id IS NULL RETURNING *
   `,
   UPDATE_STATUS: `
     UPDATE users SET status = $1, updated_at = NOW()

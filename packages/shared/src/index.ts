@@ -323,6 +323,7 @@ export {
   createUser,
   updateLastLogin,
   updateUserTenant,
+  deleteUser,
   upsertOAuthIdentity,
   // OAuth state operations
   createOAuthState,

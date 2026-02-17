@@ -195,14 +195,16 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
 
   return (
     <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
-      <TableCell colSpan={6} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
+      <TableCell colSpan={6} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0 max-w-0">
         <div className="p-4 space-y-3">
           {hasCause && (
             <div>
               <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                 Root Cause
               </h4>
-              <p className="text-sm text-gray-900 dark:text-gray-100">{analysis.identifiedCause}</p>
+              <p className="text-sm text-gray-900 dark:text-gray-100 break-words whitespace-pre-wrap">
+                {analysis.identifiedCause}
+              </p>
             </div>
           )}
 
@@ -212,8 +214,8 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
             </h4>
             {hasActions ? (
               <ol className="list-decimal list-inside space-y-1">
-                {(analysis.recommendedActions ?? []).map((action, index) => (
-                  <li key={index} className="text-sm text-gray-900 dark:text-gray-100">
+                {(analysis.recommendedActions ?? []).map((action) => (
+                  <li key={action} className="text-sm text-gray-900 dark:text-gray-100 break-words">
                     {action}
                   </li>
                 ))}

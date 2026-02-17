@@ -6,6 +6,43 @@ import { useTheme } from "@/hooks/useTheme";
 
 const THEME_CYCLE = ["light", "dark", "system"] as const;
 
+interface NavLinkDropdown {
+  readonly name: string;
+  readonly dropdown: true;
+  readonly items: ReadonlyArray<{ readonly name: string; readonly href: string }>;
+}
+
+interface NavLinkSimple {
+  readonly name: string;
+  readonly href: string;
+  readonly dropdown?: false;
+}
+
+type NavLink = NavLinkDropdown | NavLinkSimple;
+
+const navLinks: readonly NavLink[] = [
+  {
+    name: "Product",
+    dropdown: true,
+    items: [
+      { name: "CI/CD Analysis", href: "/#features" },
+      { name: "Root Cause Detection", href: "/#features" },
+      { name: "Risk Assessment", href: "/#features" },
+      { name: "How It Works", href: "/#how-it-works" },
+    ],
+  },
+  {
+    name: "Resources",
+    dropdown: true,
+    items: [
+      { name: "Case Studies", href: "/#case-studies" },
+      { name: "Integrations", href: "/#integrations" },
+    ],
+  },
+  { name: "Customers", href: "/#case-studies" },
+  { name: "Pricing", href: "/#pricing" },
+];
+
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
@@ -38,29 +75,6 @@ const Navbar = () => {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  const navLinks = [
-    {
-      name: "Product",
-      dropdown: true,
-      items: [
-        { name: "CI/CD Analysis", href: "/#features" },
-        { name: "Root Cause Detection", href: "/#features" },
-        { name: "Risk Assessment", href: "/#features" },
-        { name: "How It Works", href: "/#how-it-works" },
-      ],
-    },
-    {
-      name: "Resources",
-      dropdown: true,
-      items: [
-        { name: "Case Studies", href: "/#case-studies" },
-        { name: "Integrations", href: "/#integrations" },
-      ],
-    },
-    { name: "Customers", href: "/#case-studies" },
-    { name: "Pricing", href: "/#pricing" },
-  ];
 
   return (
     <nav
@@ -271,7 +285,7 @@ const Navbar = () => {
                   </>
                 ) : (
                   <a
-                    href={link.href ?? "#"}
+                    href={link.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className="block px-3 py-2 text-base font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg"
                   >

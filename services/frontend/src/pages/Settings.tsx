@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
+  AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -173,7 +174,11 @@ export const Settings = () => {
   const handleDeleteAccount = useCallback(async () => {
     setDeleteLoading(true);
     try {
-      const response = await apiClient("/auth/me", { method: "DELETE" });
+      const response = await apiClient("/auth/me", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      });
       if (response.ok) {
         await logout();
       } else {
@@ -456,21 +461,20 @@ export const Settings = () => {
                 />
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <button
-                    type="button"
+                  <AlertDialogAction
                     disabled={!isDeleteConfirmed || deleteLoading}
-                    onClick={() => {
+                    onClick={(event) => {
+                      event.preventDefault();
                       void handleDeleteAccount();
                     }}
                     className={cn(
-                      "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors",
                       isDeleteConfirmed && !deleteLoading
                         ? "bg-red-600 text-white hover:bg-red-700"
-                        : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
+                        : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed pointer-events-none"
                     )}
                   >
                     {deleteLoading ? "Deleting..." : "Delete Account"}
-                  </button>
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>

@@ -13,6 +13,7 @@
 import crypto from "node:crypto";
 import { config } from "../core/config.js";
 import { createLogger } from "../core/logger.js";
+import { invariant } from "../core/errors.js";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_BYTE_LENGTH = 12;
@@ -38,8 +39,13 @@ const getEncryptionKey = (): Buffer | null => {
 
   const rawKey = config.ENCRYPTION_KEY;
   if (!rawKey) {
+    // Fail fast in production — plaintext token storage is not acceptable
+    invariant(
+      config.NODE_ENV !== "production",
+      "ENCRYPTION_KEY must be configured in production (64 hex characters / 32 bytes)"
+    );
     if (!warnedMissingKey) {
-      logger.warn("ENCRYPTION_KEY not configured — OAuth tokens stored in plaintext");
+      logger.warn("ENCRYPTION_KEY not configured — OAuth tokens stored in plaintext (dev only)");
       warnedMissingKey = true;
     }
     return null;

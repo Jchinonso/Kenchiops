@@ -168,16 +168,19 @@ export const createAuthService = () => ({
       const tenant = await findByGitHubOrg(org.login);
 
       if (tenant) {
-        await updateUserTenant(user.id, tenant.id);
+        const linked = await updateUserTenant(user.id, tenant.id);
 
-        logger.info("User auto-linked to tenant", {
-          ...context,
-          userId: user.id,
-          linkedTenantId: tenant.id,
-          provider,
-          orgLogin: org.login,
-        });
+        if (linked) {
+          logger.info("User auto-linked to tenant", {
+            ...context,
+            userId: user.id,
+            linkedTenantId: tenant.id,
+            provider,
+            orgLogin: org.login,
+          });
+        }
 
+        // Whether we linked or a concurrent request did, tenant is now set
         return;
       }
     }

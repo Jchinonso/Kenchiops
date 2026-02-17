@@ -25,6 +25,7 @@ import {
   getErrorMessage,
   findUserById,
   findOAuthIdentitiesByUser,
+  deleteUser,
   setAuthCookies,
   clearAuthCookies,
   extractRefreshToken,
@@ -174,7 +175,10 @@ const isBlockedHostname = (hostname: string): boolean => {
   );
   // Also block 172.16.0.0/12 private range
   const matchesPrivate172 = /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
-  return matchesPrefix || matchesPrivate172;
+  // Block IPv6 private/loopback ranges wrapped in brackets by URL constructor:
+  // [::1] (loopback), [fe80:...] (link-local), [fc00:...]/[fd...] (unique local)
+  const matchesIpv6Private = /^\[?(::1|fe80:|fc00:|fd[0-9a-f]{2}:)/i.test(hostname);
+  return matchesPrefix || matchesPrivate172 || matchesIpv6Private;
 };
 
 /** Check whether a hostname is a bare IPv4 address. */
@@ -524,6 +528,43 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
   });
 };
 
+/**
+ * DELETE /auth/me
+ * Permanently delete the authenticated user's account and all associated data.
+ * Requires a valid JWT and "DELETE" confirmation in the request body.
+ */
+const handleDeleteAccount = async (req: Request, res: Response): Promise<void> => {
+  const context = getRequestContext(req);
+
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleDeleteAccount",
+    });
+  }
+
+  const body = req.body as { readonly confirmation?: string } | undefined;
+  const confirmation = body?.confirmation;
+
+  if (confirmation !== "DELETE") {
+    throw new ValidationError('Confirmation required: send { confirmation: "DELETE" }', {
+      operation: "handleDeleteAccount",
+    });
+  }
+
+  const { userId } = req.user;
+
+  await deleteUser(userId);
+
+  clearAuthCookies(res);
+
+  logger.info("User account deleted", {
+    userId,
+    ...context,
+  });
+
+  res.status(HTTP_STATUS.OK).json({ success: true });
+};
+
 // ==================== Endpoint Rate Limiter ====================
 
 /** Rate limit error shown to clients who exceed the endpoint limit. */
@@ -556,5 +597,6 @@ router.post(
 );
 router.post("/auth/logout", sensitiveEndpointLimiter.middleware(), asyncHandler(handleLogout));
 router.get("/auth/me", asyncHandler(handleGetCurrentUser));
+router.delete("/auth/me", sensitiveEndpointLimiter.middleware(), asyncHandler(handleDeleteAccount));
 
 export { router as authRoutes };

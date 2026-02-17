@@ -8,6 +8,7 @@
 
 import {
   query,
+  transaction,
   createLogger,
   getErrorMessage,
   ValidationError,
@@ -97,21 +98,20 @@ export const updateLastLogin = async (userId: string): Promise<User> => {
   }
 };
 
-export const updateUserTenant = async (userId: string, tenantId: string): Promise<User> => {
+export const updateUserTenant = async (userId: string, tenantId: string): Promise<User | null> => {
   validateId(userId, "userId");
   validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<UserRow>(USER_QUERIES.UPDATE_TENANT, [tenantId, userId]);
+    const { rows } = await query<UserRow>(USER_QUERIES.UPDATE_TENANT, [tenantId, userId]);
 
-    if (result.rows.length === 0) {
-      throw new ValidationError("User not found", {
-        operation: "updateUserTenant",
-        metadata: { userId, tenantId },
-      });
+    if (rows.length < 1) {
+      // No row returned — user does not exist or a concurrent
+      // request already linked a tenant (WHERE tenant_id IS NULL guard).
+      return null;
     }
 
-    const user = rowToUser(result.rows[0]);
+    const user = rowToUser(rows[0]);
 
     logger.info("User tenant updated", {
       userId,
@@ -120,13 +120,48 @@ export const updateUserTenant = async (userId: string, tenantId: string): Promis
 
     return user;
   } catch (error) {
+    logger.error("Failed to update user tenant", {
+      userId,
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Permanently delete a user and all associated data.
+ * Removes OAuth identities, refresh tokens, and the user record
+ * within a single transaction to ensure atomicity.
+ */
+export const deleteUser = async (userId: string): Promise<void> => {
+  validateId(userId, "userId");
+
+  try {
+    await transaction(async (client) => {
+      // Delete refresh tokens first (references user_id)
+      await client.query("DELETE FROM refresh_tokens WHERE user_id = $1", [userId]);
+      // Delete OAuth identities (references user_id)
+      await client.query("DELETE FROM oauth_identities WHERE user_id = $1", [userId]);
+      // Delete the user record
+      const { rowCount } = await client.query("DELETE FROM users WHERE id = $1", [userId]);
+
+      if (rowCount === 0) {
+        throw new ValidationError("User not found", {
+          operation: "deleteUser",
+          metadata: { userId },
+        });
+      }
+    });
+
+    logger.info("User permanently deleted", { userId });
+  } catch (error) {
     if (error instanceof ValidationError) {
       throw error;
     }
 
-    logger.error("Failed to update user tenant", {
+    logger.error("Failed to delete user", {
       userId,
-      tenantId,
       error: getErrorMessage(error),
     });
     throw error;

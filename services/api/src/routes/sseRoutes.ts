@@ -240,6 +240,8 @@ const handleSSEStream = (req: Request, res: Response): void => {
   // Track unsubscribe function for cleanup
   // let: assigned asynchronously after subscribe resolves
   let unsubscribe: (() => Promise<void>) | null = null; // let: set after async subscribe completes
+  // let: tracks whether client disconnected before subscribe resolved
+  let connectionClosed = false; // let: set to true on disconnect for early-cleanup
 
   // Subscribe to Redis dashboard channel
   const capturedTenantId = tenantId;
@@ -264,6 +266,12 @@ const handleSSEStream = (req: Request, res: Response): void => {
         }
       );
 
+      // If client disconnected while we were subscribing, clean up immediately
+      if (connectionClosed) {
+        await unsubscribe();
+        return;
+      }
+
       logger.debug("SSE Redis subscription active", {
         ...context,
         tenantId: capturedTenantId,
@@ -280,6 +288,7 @@ const handleSSEStream = (req: Request, res: Response): void => {
 
   // Cleanup on client disconnect
   req.on("close", () => {
+    connectionClosed = true;
     clearInterval(heartbeatTimer);
     releaseConnection(capturedTenantId);
 

@@ -9,7 +9,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { config } from "../core/config.js";
-import { AuthenticationError } from "../core/errors.js";
+import { AuthenticationError, invariant } from "../core/errors.js";
 import { createLogger } from "../core/logger.js";
 import type { RequestContext } from "../core/types.js";
 import { INTERNAL_AUTH_HEADERS, verifyInternalSignature } from "./internalAuth.js";
@@ -55,8 +55,13 @@ export const createInternalAuthMiddleware = (
 
     const secret = config.INTERNAL_SERVICE_SECRET;
     if (!secret) {
+      // Fail fast in production — unauthenticated internal requests are not acceptable
+      invariant(
+        config.NODE_ENV !== "production",
+        "INTERNAL_SERVICE_SECRET must be configured in production"
+      );
       if (!warnedMissingSecret) {
-        logger.warn("INTERNAL_SERVICE_SECRET not configured — internal auth disabled");
+        logger.warn("INTERNAL_SERVICE_SECRET not configured — internal auth disabled (dev only)");
         warnedMissingSecret = true;
       }
       next();

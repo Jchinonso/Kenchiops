@@ -25,8 +25,8 @@ const FeatureCard = ({ title, description, features, icon, color, mockup }: Feat
         <p className="text-gray-600 dark:text-gray-400 mb-6">{description}</p>
 
         <ul className="space-y-3">
-          {features.map((feature, index) => (
-            <li key={index} className="flex items-center gap-3">
+          {features.map((feature) => (
+            <li key={feature} className="flex items-center gap-3">
               <Check className="w-5 h-5 text-indigo-500 flex-shrink-0" />
               <span className="text-gray-700 dark:text-gray-300">{feature}</span>
             </li>
@@ -210,85 +210,79 @@ const KnowledgeMockup = () => (
   </div>
 );
 
-const Features = () => {
-  const features = [
-    {
-      title: "CI/CD Analysis",
-      description:
-        "Stop wasting hours debugging failed builds. Kenchi analyzes your CI logs automatically and tells you exactly what went wrong.",
-      features: [
-        "Intelligent log chunking pipeline",
-        "Multi-model analysis for accuracy",
-        "Automatic pattern recognition",
-      ],
-      icon: <AlertTriangle className="w-5 h-5 text-white" />,
-      color: "bg-indigo-500",
-      mockup: <CIAnalysisMockup />,
-    },
-    {
-      title: "Root Cause Detection",
-      description:
-        "Get confidence-scored root causes, not guesswork. Every diagnosis backed by evidence.",
-      features: [
-        "Confidence scoring (0-1 scale)",
-        "Factor breakdown per diagnosis",
-        "Historical pattern matching",
-      ],
-      icon: <Search className="w-5 h-5 text-white" />,
-      color: "bg-cyan-500",
-      mockup: <RootCauseMockup />,
-    },
-    {
-      title: "Risk Assessment",
-      description:
-        "Catch risky changes before they break production. Know which PRs need extra attention.",
-      features: ["Custom rule engine", "PR risk scoring", "Automated GitHub check runs"],
-      icon: <Shield className="w-5 h-5 text-white" />,
-      color: "bg-amber-500",
-      mockup: <RiskMockup />,
-    },
-    {
-      title: "RAG-Enhanced Learning",
-      description:
-        "Kenchi learns from your team's past fixes to get smarter over time. The more you use it, the better it gets.",
-      features: [
-        "Team-specific knowledge base",
-        "Historical analysis patterns",
-        "Continuous improvement loop",
-      ],
-      icon: <Brain className="w-5 h-5 text-white" />,
-      color: "bg-violet-500",
-      mockup: <KnowledgeMockup />,
-    },
-  ];
+const featureCards = [
+  {
+    title: "CI/CD Analysis",
+    description:
+      "Stop wasting hours debugging failed builds. Kenchi analyzes your CI logs automatically and tells you exactly what went wrong.",
+    features: [
+      "Intelligent log chunking pipeline",
+      "Multi-model analysis for accuracy",
+      "Automatic pattern recognition",
+    ],
+    icon: <AlertTriangle className="w-5 h-5 text-white" />,
+    color: "bg-indigo-500",
+    mockup: <CIAnalysisMockup />,
+  },
+  {
+    title: "Root Cause Detection",
+    description:
+      "Get confidence-scored root causes, not guesswork. Every diagnosis backed by evidence.",
+    features: [
+      "Confidence scoring (0-1 scale)",
+      "Factor breakdown per diagnosis",
+      "Historical pattern matching",
+    ],
+    icon: <Search className="w-5 h-5 text-white" />,
+    color: "bg-cyan-500",
+    mockup: <RootCauseMockup />,
+  },
+  {
+    title: "Risk Assessment",
+    description:
+      "Catch risky changes before they break production. Know which PRs need extra attention.",
+    features: ["Custom rule engine", "PR risk scoring", "Automated GitHub check runs"],
+    icon: <Shield className="w-5 h-5 text-white" />,
+    color: "bg-amber-500",
+    mockup: <RiskMockup />,
+  },
+  {
+    title: "RAG-Enhanced Learning",
+    description:
+      "Kenchi learns from your team's past fixes to get smarter over time. The more you use it, the better it gets.",
+    features: [
+      "Team-specific knowledge base",
+      "Historical analysis patterns",
+      "Continuous improvement loop",
+    ],
+    icon: <Brain className="w-5 h-5 text-white" />,
+    color: "bg-violet-500",
+    mockup: <KnowledgeMockup />,
+  },
+] as const;
 
-  return (
-    <section
-      id="features"
-      aria-label="Product features"
-      className="py-20 bg-white dark:bg-gray-950"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            AI-Powered CI/CD Intelligence
-          </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            From failure detection to root cause analysis — Kenchi automates the debugging workflow
-            so your team ships faster.
-          </p>
-        </div>
-
-        {/* Feature Cards */}
-        <div className="space-y-8">
-          {features.map((feature, index) => (
-            <FeatureCard key={index} {...feature} />
-          ))}
-        </div>
+const Features = () => (
+  <section id="features" aria-label="Product features" className="py-20 bg-white dark:bg-gray-950">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Section Header */}
+      <div className="text-center mb-16">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+          AI-Powered CI/CD Intelligence
+        </h2>
+        <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+          From failure detection to root cause analysis — Kenchi automates the debugging workflow so
+          your team ships faster.
+        </p>
       </div>
-    </section>
-  );
-};
+
+      {/* Feature Cards */}
+      <div className="space-y-8">
+        {featureCards.map((feature) => (
+          <FeatureCard key={feature.title} {...feature} />
+        ))}
+      </div>
+    </div>
+  </section>
+);
 
 export default Features;

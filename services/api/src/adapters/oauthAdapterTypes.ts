@@ -70,6 +70,7 @@ export interface GitLabUserProfile {
   readonly avatar_url: string | null;
   readonly state: string;
   readonly web_url: string;
+  readonly confirmed_at: string | null;
 }
 
 // ==================== GitLab Groups ====================

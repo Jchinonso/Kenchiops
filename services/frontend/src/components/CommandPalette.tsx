@@ -36,6 +36,7 @@ interface PaletteItem {
   readonly label: string;
   readonly href: string;
   readonly icon: React.ReactNode;
+  readonly comingSoon?: boolean;
 }
 
 const NAV_ITEMS: readonly PaletteItem[] = [
@@ -60,8 +61,18 @@ const NAV_ITEMS: readonly PaletteItem[] = [
     href: "/dashboard/cicd/webhooks",
     icon: <Webhook className="w-4 h-4" />,
   },
-  { label: "Analytics", href: "/dashboard/analytics", icon: <BarChart3 className="w-4 h-4" /> },
-  { label: "Integrations", href: "/dashboard/integrations", icon: <Puzzle className="w-4 h-4" /> },
+  {
+    label: "Analytics",
+    href: "/dashboard/analytics",
+    icon: <BarChart3 className="w-4 h-4" />,
+    comingSoon: true,
+  },
+  {
+    label: "Integrations",
+    href: "/dashboard/integrations",
+    icon: <Puzzle className="w-4 h-4" />,
+    comingSoon: true,
+  },
   { label: "Settings", href: "/dashboard/settings", icon: <Settings className="w-4 h-4" /> },
 ] as const;
 
@@ -115,6 +126,11 @@ export const CommandPalette = ({
             <CommandItem key={item.href} onSelect={() => handleSelect(item.href)}>
               {item.icon}
               <span>{item.label}</span>
+              {item.comingSoon && (
+                <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">
+                  Soon
+                </span>
+              )}
             </CommandItem>
           ))}
         </CommandGroup>

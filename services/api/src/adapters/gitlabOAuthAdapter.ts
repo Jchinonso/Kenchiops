@@ -243,8 +243,10 @@ const getUserProfile = async (
       providerUserId: String(profile.id),
       username: profile.username,
       email: profile.email,
-      // GitLab's /api/v4/user only returns email if confirmed by the user
-      emailVerified: profile.email !== null,
+      // GitLab's confirmed_at field indicates whether the email was verified.
+      // Self-hosted GitLab instances can disable email confirmation, so
+      // presence of email alone is NOT proof of verification.
+      emailVerified: profile.confirmed_at !== null && profile.confirmed_at !== undefined,
       displayName: profile.name ?? profile.username,
       avatarUrl: profile.avatar_url,
       rawProfile: profile as unknown as Record<string, unknown>,
