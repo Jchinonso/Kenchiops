@@ -32,7 +32,7 @@ const getSystemPreference = (): ResolvedTheme =>
 
 const readStoredPreference = (): ThemePreference => {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored && VALID_PREFERENCES.has(stored) ? (stored as ThemePreference) : "system";
+  return stored && VALID_PREFERENCES.has(stored) ? (stored as ThemePreference) : "dark";
 };
 
 const resolveTheme = (preference: ThemePreference): ResolvedTheme =>
