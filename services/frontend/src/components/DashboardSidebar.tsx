@@ -214,7 +214,7 @@ const SidebarLeafItem = ({
             : "px-4 py-2.5 md:justify-center md:px-2 lg:justify-start lg:px-4",
           active
             ? indented
-              ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-medium"
+              ? "border-indigo-400 dark:border-indigo-500 bg-indigo-50/80 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-medium"
               : "bg-indigo-500 text-white shadow-md font-medium"
             : indented
               ? "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
