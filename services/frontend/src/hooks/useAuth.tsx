@@ -28,6 +28,11 @@ const LOGGED_OUT_KEY = "kenchi_logged_out";
 
 // ==================== Types ====================
 
+interface AuthUserProvider {
+  readonly provider: string;
+  readonly username: string | null;
+}
+
 interface AuthUser {
   readonly id: string;
   readonly email: string | null;
@@ -35,6 +40,8 @@ interface AuthUser {
   readonly avatarUrl: string | null;
   readonly role: string;
   readonly tenantId: string | null;
+  readonly providers?: readonly AuthUserProvider[];
+  readonly createdAt?: string;
 }
 
 interface AuthContextValue {

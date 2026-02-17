@@ -16,8 +16,9 @@
  * Cookies are sent automatically for same-origin requests (cookie-based auth).
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const SSE_ENDPOINT = `${API_URL}/api/v1/dashboard/events/stream`;
@@ -88,12 +89,26 @@ const parseEventData = <T>(event: MessageEvent): T | null => {
 
 const formatConfidence = (confidence: number): string => `${Math.round(confidence * 100)}%`;
 
+/** Show a browser notification if the Notification API is available and permission is granted */
+const showBrowserNotification = (title: string, body: string): void => {
+  if (typeof Notification === "undefined") {
+    return;
+  }
+  if (Notification.permission !== "granted") {
+    return;
+  }
+  // eslint-disable-next-line no-new -- Notification constructor fires side effect by design
+  new Notification(title, { body });
+};
+
 // ==================== Hook ====================
 
 interface UseDashboardSSEResult {
   readonly refreshKey: number;
   readonly notifications: readonly DashboardNotification[];
   readonly markAllRead: () => void;
+  readonly markAsRead: (id: string) => void;
+  readonly dismissNotification: (id: string) => void;
 }
 
 /**
@@ -108,12 +123,41 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [notifications, setNotifications] =
     useState<readonly DashboardNotification[]>(loadNotifications);
+  const { toastEnabled, browserEnabled } = useNotificationPreferences();
+  const toastEnabledRef = useRef(toastEnabled);
+  const browserEnabledRef = useRef(browserEnabled);
+  useEffect(() => {
+    Object.assign(toastEnabledRef, { current: toastEnabled });
+  }, [toastEnabled]);
+  useEffect(() => {
+    Object.assign(browserEnabledRef, { current: browserEnabled });
+  }, [browserEnabled]);
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => {
-      const next = prev.map((notification) =>
-        notification.read ? notification : { ...notification, read: true }
-      );
+      const next = prev.map((item) => (item.read ? item : { ...item, read: true }));
+      saveNotifications(next);
+      return next;
+    });
+  }, []);
+
+  const markAsRead = useCallback((targetId: string) => {
+    setNotifications((prev) => {
+      const next = prev.map((item) => {
+        const { id } = item;
+        return id === targetId ? { ...item, read: true } : item;
+      });
+      saveNotifications(next);
+      return next;
+    });
+  }, []);
+
+  const dismissNotification = useCallback((targetId: string) => {
+    setNotifications((prev) => {
+      const next = prev.filter((item) => {
+        const { id } = item;
+        return id !== targetId;
+      });
       saveNotifications(next);
       return next;
     });
@@ -144,9 +188,14 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       if (data) {
         const repo = data.repository ?? "Unknown repository";
         const checkName = data.checkName ? ` (${data.checkName})` : "";
-        toast.error(`CI failure in ${repo}${checkName}`, {
-          description: "Kenchi is analyzing the failure...",
-        });
+        const failureTitle = `CI failure in ${repo}${checkName}`;
+        const failureBody = "Kenchi is analyzing the failure...";
+        if (toastEnabledRef.current) {
+          toast.error(failureTitle, { description: failureBody });
+        }
+        if (browserEnabledRef.current) {
+          showBrowserNotification(failureTitle, failureBody);
+        }
 
         addNotification({
           id: crypto.randomUUID(),
@@ -169,7 +218,13 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
         const confidence = data.confidence
           ? ` \u2014 ${formatConfidence(data.confidence)} confidence`
           : "";
-        toast.success(`Analysis complete for ${repo}${confidence}`);
+        const analysisTitle = `Analysis complete for ${repo}${confidence}`;
+        if (toastEnabledRef.current) {
+          toast.success(analysisTitle);
+        }
+        if (browserEnabledRef.current) {
+          showBrowserNotification(analysisTitle, "Root cause analysis finished");
+        }
 
         addNotification({
           id: crypto.randomUUID(),
@@ -196,5 +251,5 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
   }, []);
 
-  return { refreshKey, notifications, markAllRead };
+  return { refreshKey, notifications, markAllRead, markAsRead, dismissNotification };
 };

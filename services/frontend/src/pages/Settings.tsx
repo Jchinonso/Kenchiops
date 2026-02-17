@@ -5,12 +5,27 @@
  * and appearance (dark mode) settings.
  */
 
+import { useState, useCallback } from "react";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenantInfo } from "@/hooks/useDashboardData";
 import { useTheme } from "@/hooks/useTheme";
+import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
+import { apiClient } from "@/lib/apiClient";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 import {
   User,
   Building2,
@@ -27,10 +42,21 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
+import { TimeDisplay } from "@/components/TimeDisplay";
+import { Switch } from "@/components/ui/switch";
 
 // ==================== Constants ====================
 
 const GITHUB_APP_SLUG = import.meta.env.VITE_GITHUB_APP_SLUG ?? "kenchi-devops";
+
+/** Check if browser notification permission has been denied */
+const isBrowserNotificationDenied = (): boolean => {
+  if (typeof Notification === "undefined") {
+    return false;
+  }
+  const { permission } = Notification;
+  return permission === "denied";
+};
 
 // ==================== Sub-components ====================
 
@@ -128,10 +154,37 @@ const ConnectionCard = ({
 
 // ==================== Main Component ====================
 
+const DELETE_CONFIRMATION = "DELETE";
+
 export const Settings = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { data: tenant, isLoading: tenantLoading } = useTenantInfo();
   const { preference, setTheme } = useTheme();
+  const { toastEnabled, browserEnabled, setToastEnabled, setBrowserEnabled } =
+    useNotificationPreferences();
+
+  const browserPermissionDenied = isBrowserNotificationDenied();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const isDeleteConfirmed = deleteConfirmation === DELETE_CONFIRMATION;
+
+  const handleDeleteAccount = useCallback(async () => {
+    setDeleteLoading(true);
+    try {
+      const response = await apiClient("/auth/me", { method: "DELETE" });
+      if (response.ok) {
+        await logout();
+      } else {
+        toast.error("Failed to delete account. Please try again later.");
+      }
+    } catch {
+      toast.error("Failed to delete account. Please try again later.");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [logout]);
 
   const displayName = user?.displayName ?? "User";
   const displayEmail = user?.email ?? "";
@@ -179,6 +232,21 @@ export const Settings = () => {
               <Badge variant="outline" className="mt-1.5 text-xs">
                 {titleCase(user?.role ?? "member")}
               </Badge>
+              {user?.createdAt && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Member since <TimeDisplay dateTime={user.createdAt} />
+                </p>
+              )}
+              {user?.providers && user.providers.length > 0 && (
+                <div className="flex items-center gap-2 mt-2">
+                  {user.providers.map((providerInfo) => (
+                    <Badge key={providerInfo.provider} variant="outline" className="text-xs gap-1">
+                      <Github className="w-3 h-3" />
+                      {providerInfo.username ?? titleCase(providerInfo.provider)}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -306,28 +374,34 @@ export const Settings = () => {
           <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                Email Notifications
+                In-App Toast Notifications
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Receive failure alerts and analysis summaries via email.
+                Show popup alerts when failures are detected or analyses complete.
               </p>
             </div>
-            <Badge variant="outline" className="text-xs">
-              Coming Soon
-            </Badge>
+            <Switch checked={toastEnabled} onCheckedChange={setToastEnabled} />
           </div>
           <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                Slack Notifications
+                Browser Notifications
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Get real-time alerts delivered to your Slack channels.
+                Receive system notifications even when Kenchi is in the background.
               </p>
+              {browserEnabled && browserPermissionDenied && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Browser notifications are blocked. Please allow them in your browser settings.
+                </p>
+              )}
             </div>
-            <Badge variant="outline" className="text-xs">
-              Coming Soon
-            </Badge>
+            <Switch
+              checked={browserEnabled}
+              onCheckedChange={(checked) => {
+                void setBrowserEnabled(checked);
+              }}
+            />
           </div>
         </CardContent>
       </Card>
@@ -349,13 +423,57 @@ export const Settings = () => {
                 Permanently delete your account and all associated data. This cannot be undone.
               </p>
             </div>
-            <button
-              type="button"
-              disabled
-              className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-md opacity-50 cursor-not-allowed"
+            <AlertDialog
+              open={deleteDialogOpen}
+              onOpenChange={(open) => {
+                setDeleteDialogOpen(open);
+                if (!open) {
+                  setDeleteConfirmation("");
+                }
+              }}
             >
-              Delete Account
-            </button>
+              <AlertDialogTrigger asChild>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                >
+                  Delete Account
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. All your data, settings, and linked accounts will
+                    be permanently deleted. Type <strong>DELETE</strong> below to confirm.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <Input
+                  value={deleteConfirmation}
+                  onChange={(event) => setDeleteConfirmation(event.target.value)}
+                  placeholder='Type "DELETE" to confirm'
+                  className="font-mono"
+                />
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <button
+                    type="button"
+                    disabled={!isDeleteConfirmed || deleteLoading}
+                    onClick={() => {
+                      void handleDeleteAccount();
+                    }}
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                      isDeleteConfirmed && !deleteLoading
+                        ? "bg-red-600 text-white hover:bg-red-700"
+                        : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
+                    )}
+                  >
+                    {deleteLoading ? "Deleting..." : "Delete Account"}
+                  </button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </CardContent>
       </Card>

@@ -71,7 +71,10 @@ const FailureItem = ({ event }: FailureItemProps) => {
   const conclusion = getPayloadString(event.payload, "conclusion");
 
   return (
-    <div className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors">
+    <Link
+      to="/dashboard/cicd/failures"
+      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+    >
       <div className="flex items-center justify-between gap-2 mb-1">
         <TimeDisplay
           dateTime={event.timestamp}
@@ -86,7 +89,7 @@ const FailureItem = ({ event }: FailureItemProps) => {
       </div>
       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{checkName}</p>
       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{conclusion}</p>
-    </div>
+    </Link>
   );
 };
 
@@ -95,7 +98,10 @@ interface AnalysisItemProps {
 }
 
 const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
-  <div className="py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors">
+  <Link
+    to={`/dashboard/cicd/analyses/${analysis.id}`}
+    className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+  >
     <div className="flex items-center justify-between gap-2 mb-1">
       <TimeDisplay
         dateTime={analysis.createdAt}
@@ -114,7 +120,7 @@ const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
       {analysis.identifiedCause ? truncateText(analysis.identifiedCause, 60) : "--"}
     </p>
-  </div>
+  </Link>
 );
 
 // ==================== Main Component ====================
@@ -306,7 +312,7 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
               </div>
             )}
           </CardContent>
-          {failuresTotalPages > 1 && (
+          {failureItems.length > 0 && (
             <PaginationControls
               currentPage={failuresCurrentPage}
               totalPages={failuresTotalPages}
@@ -362,7 +368,7 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
               </div>
             )}
           </CardContent>
-          {analysesTotalPages > 1 && (
+          {analysisItems.length > 0 && (
             <PaginationControls
               currentPage={analysesCurrentPage}
               totalPages={analysesTotalPages}

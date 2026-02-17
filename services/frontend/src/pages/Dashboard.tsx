@@ -41,6 +41,7 @@ import {
   ArrowUpCircle,
   AlertTriangle,
   Search,
+  X,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { DashboardBreadcrumb } from "@/components/DashboardBreadcrumb";
@@ -195,10 +196,25 @@ const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode =
 interface NotificationItemProps {
   readonly notification: DashboardNotification;
   readonly onClose: () => void;
+  readonly onMarkAsRead: (id: string) => void;
+  readonly onDismiss: (id: string) => void;
 }
 
-const NotificationItem = ({ notification, onClose }: NotificationItemProps) => {
-  const { type, read, analysisId, title, description, timestamp } = notification;
+const NotificationItem = ({
+  notification,
+  onClose,
+  onMarkAsRead,
+  onDismiss,
+}: NotificationItemProps) => {
+  const {
+    id: notificationId,
+    type,
+    read,
+    analysisId,
+    title,
+    description,
+    timestamp,
+  } = notification;
   const isFailure = type === "failure";
   const Icon = isFailure ? AlertTriangle : Search;
   const iconColor = isFailure ? "text-red-500" : "text-green-500";
@@ -208,11 +224,22 @@ const NotificationItem = ({ notification, onClose }: NotificationItemProps) => {
       ? `/dashboard/cicd/analyses/${analysisId}`
       : "/dashboard/cicd/failures";
 
+  const handleClick = () => {
+    onMarkAsRead(notificationId);
+    onClose();
+  };
+
+  const handleDismiss = (clickEvent: React.MouseEvent) => {
+    clickEvent.preventDefault();
+    clickEvent.stopPropagation();
+    onDismiss(notificationId);
+  };
+
   return (
-    <Link to={linkTarget} onClick={onClose}>
+    <Link to={linkTarget} onClick={handleClick}>
       <div
         className={cn(
-          "px-4 py-3 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors",
+          "px-4 py-3 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group",
           !read && "bg-indigo-50/50 dark:bg-indigo-950/20"
         )}
       >
@@ -233,6 +260,14 @@ const NotificationItem = ({ notification, onClose }: NotificationItemProps) => {
             {formatRelativeTime(timestamp)}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          aria-label="Dismiss notification"
+          className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
     </Link>
   );
@@ -242,6 +277,8 @@ interface NotificationDropdownProps {
   readonly notifications: readonly DashboardNotification[];
   readonly unreadCount: number;
   readonly onMarkAllRead: () => void;
+  readonly onMarkAsRead: (id: string) => void;
+  readonly onDismiss: (id: string) => void;
   readonly onClose: () => void;
 }
 
@@ -249,6 +286,8 @@ const NotificationDropdown = ({
   notifications,
   unreadCount,
   onMarkAllRead,
+  onMarkAsRead,
+  onDismiss,
   onClose,
 }: NotificationDropdownProps) => {
   const hasNotifications = notifications.length > 0;
@@ -275,7 +314,13 @@ const NotificationDropdown = ({
       {hasNotifications ? (
         <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
           {notifications.map((notification) => (
-            <NotificationItem key={notification.id} notification={notification} onClose={onClose} />
+            <NotificationItem
+              key={notification.id}
+              notification={notification}
+              onClose={onClose}
+              onMarkAsRead={onMarkAsRead}
+              onDismiss={onDismiss}
+            />
           ))}
         </div>
       ) : (
@@ -308,7 +353,13 @@ const NotificationDropdown = ({
 const Dashboard = () => {
   const { pathname: currentPath } = useLocation();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
-  const { refreshKey: sseRefreshKey, notifications, markAllRead } = useDashboardSSE();
+  const {
+    refreshKey: sseRefreshKey,
+    notifications,
+    markAllRead,
+    markAsRead,
+    dismissNotification,
+  } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -570,6 +621,8 @@ const Dashboard = () => {
                     notifications={notifications}
                     unreadCount={unreadCount}
                     onMarkAllRead={markAllRead}
+                    onMarkAsRead={markAsRead}
+                    onDismiss={dismissNotification}
                     onClose={() => setNotificationsOpen(false)}
                   />
                 )}
