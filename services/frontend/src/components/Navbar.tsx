@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -6,6 +6,15 @@ const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [resourcesDropdownOpen, setResourcesDropdownOpen] = useState(false);
+  const [showNavCTA, setShowNavCTA] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowNavCTA(window.scrollY > 600);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const navLinks = [
     {
@@ -27,11 +36,14 @@ const Navbar = () => {
       ],
     },
     { name: "Customers", href: "/#case-studies" },
-    { name: "Pricing", href: "/#cta" },
+    { name: "Pricing", href: "/#pricing" },
   ];
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
+    <nav
+      aria-label="Main navigation"
+      className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -61,6 +73,11 @@ const Navbar = () => {
                 {link.dropdown ? (
                   <button
                     className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    aria-haspopup="true"
+                    aria-expanded={
+                      link.name === "Product" ? productDropdownOpen : resourcesDropdownOpen
+                    }
+                    aria-controls={`dropdown-${link.name.toLowerCase()}`}
                     onMouseEnter={() => {
                       if (link.name === "Product") {
                         setProductDropdownOpen(true);
@@ -93,6 +110,8 @@ const Navbar = () => {
                 {/* Dropdown */}
                 {link.dropdown && (
                   <div
+                    id={`dropdown-${link.name.toLowerCase()}`}
+                    role="menu"
                     className={`absolute top-full left-0 mt-1 w-56 bg-white dark:bg-gray-900 rounded-xl shadow-lg dark:shadow-gray-950/50 border border-gray-100 dark:border-gray-800 py-2 transition-all duration-200 ${
                       (link.name === "Product" && productDropdownOpen) ||
                       (link.name === "Resources" && resourcesDropdownOpen)
@@ -120,6 +139,7 @@ const Navbar = () => {
                       <a
                         key={item.name}
                         href={item.href}
+                        role="menuitem"
                         className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                       >
                         {item.name}
@@ -133,12 +153,21 @@ const Navbar = () => {
 
           {/* CTA Buttons */}
           <div className="hidden lg:flex items-center gap-3">
-            <a
-              href="/#cta"
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              BOOK A DEMO
-            </a>
+            {showNavCTA ? (
+              <Link
+                to="/login"
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
+              >
+                START FREE TRIAL
+              </Link>
+            ) : (
+              <a
+                href="/#cta"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                BOOK A DEMO
+              </a>
+            )}
             <Link
               to="/login"
               className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors"
@@ -151,6 +180,8 @@ const Navbar = () => {
           <button
             className="lg:hidden p-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>

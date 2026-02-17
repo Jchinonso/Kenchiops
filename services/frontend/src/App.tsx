@@ -7,9 +7,15 @@ import Integrations from "./sections/Integrations";
 import CaseStudies from "./sections/CaseStudies";
 import IntegrationPoints from "./sections/IntegrationPoints";
 import Stats from "./sections/Stats";
+import Testimonials from "./sections/Testimonials";
 import BuiltForTeams from "./sections/BuiltForTeams";
+import GetStarted from "./sections/GetStarted";
+import Pricing from "./sections/Pricing";
+import FAQ from "./sections/FAQ";
 import CTA from "./sections/CTA";
 import Login from "./pages/Login";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import Dashboard from "./pages/Dashboard";
 import AuthCallback from "./pages/AuthCallback";
 import { AuthProvider } from "./hooks/useAuth";
@@ -18,15 +24,25 @@ import ThemeInitializer from "./components/ThemeInitializer";
 
 const HomePage = () => (
   <>
+    <a
+      href="#main-content"
+      className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:bg-indigo-500 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg"
+    >
+      Skip to main content
+    </a>
     <Navbar />
-    <main>
+    <main id="main-content">
       <Hero />
       <Features />
       <Integrations />
       <CaseStudies />
+      <GetStarted />
       <IntegrationPoints />
       <Stats />
+      <Testimonials />
       <BuiltForTeams />
+      <Pricing />
+      <FAQ />
       <CTA />
     </main>
     <Footer />
@@ -41,6 +57,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/oauth/callback" element={<AuthCallback />} />
           {/* Backward-compatible redirects for old URLs */}
           <Route

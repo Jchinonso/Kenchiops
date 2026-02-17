@@ -344,19 +344,19 @@ const Login = () => {
           <div className="mt-4 text-center">
             <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
               By continuing, you agree to Kenchi&apos;s{" "}
-              <a
-                href="#"
+              <Link
+                to="/terms"
                 className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-2 transition-colors"
               >
                 Terms of Service
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a
-                href="#"
+              <Link
+                to="/privacy"
                 className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-2 transition-colors"
               >
                 Privacy Policy
-              </a>
+              </Link>
             </p>
           </div>
         </div>

@@ -1,8 +1,9 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { CIAnalysisMockup } from "@/components/CIAnalysisMockup";
 
 const Hero = () => (
-  <section id="hero" className="relative overflow-hidden">
+  <section id="hero" aria-label="Hero" className="relative overflow-hidden">
     {/* Background Gradient */}
     <div className="absolute inset-0 bg-hero-gradient" />
     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/50 to-white dark:via-gray-950/50 dark:to-gray-950" />
@@ -20,8 +21,7 @@ const Hero = () => (
 
         {/* Headline */}
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 dark:text-gray-100 mb-6">
-          Fix CI/CD failures
-          <br />
+          Fix CI/CD failures <br className="hidden sm:block" />
           <span className="gradient-text">before they slow you down</span>
         </h1>
 
@@ -32,13 +32,15 @@ const Hero = () => (
         </p>
 
         {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
           <Link
             to="/login"
-            className="group flex items-center gap-2 px-8 py-4 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg shadow-indigo-500/25"
+            className="group flex items-center gap-2 px-8 py-4 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg shadow-indigo-500/25 whitespace-nowrap"
           >
             START FREE TRIAL
-            <span className="text-xs bg-white/20 px-2 py-0.5 rounded">NO CC REQUIRED</span>
+            <span className="text-xs bg-white/20 px-2 py-0.5 rounded hidden sm:inline">
+              NO CC REQUIRED
+            </span>
           </Link>
           <a
             href="/#cta"
@@ -48,18 +50,27 @@ const Hero = () => (
             <ArrowRight className="w-4 h-4" />
           </a>
         </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 sm:hidden mb-12">
+          No credit card required
+        </p>
+        <div className="hidden sm:block mb-12" />
+
+        {/* Product Preview */}
+        <div className="max-w-lg mx-auto mb-16">
+          <CIAnalysisMockup />
+        </div>
 
         {/* Trusted By */}
         <div className="pt-8 border-t border-gray-200 dark:border-gray-800">
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
             Trusted by engineering teams everywhere
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 opacity-60">
+          <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
             {["Vercel", "LaunchDarkly", "CircleCI", "Buildkite", "Render", "Railway"].map(
               (name) => (
                 <span
                   key={name}
-                  className="text-gray-400 dark:text-gray-500 font-semibold text-lg tracking-tight"
+                  className="text-gray-400 dark:text-gray-600 font-bold text-xl tracking-tighter uppercase select-none"
                 >
                   {name}
                 </span>
