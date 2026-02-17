@@ -21,6 +21,9 @@ import AuthCallback from "./pages/AuthCallback";
 import { AuthProvider } from "./hooks/useAuth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import ThemeInitializer from "./components/ThemeInitializer";
+import { StickyCTA } from "./components/StickyCTA";
+import { BackToTop } from "./components/BackToTop";
+import { SocialProofToast } from "./components/SocialProofToast";
 
 const HomePage = () => (
   <>
@@ -30,6 +33,7 @@ const HomePage = () => (
     >
       Skip to main content
     </a>
+    <StickyCTA />
     <Navbar />
     <main id="main-content">
       <Hero />
@@ -46,6 +50,8 @@ const HomePage = () => (
       <CTA />
     </main>
     <Footer />
+    <BackToTop />
+    <SocialProofToast />
   </>
 );
 

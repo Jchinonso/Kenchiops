@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
+import { useScrollFadeIn } from "@/hooks/useScrollFadeIn";
 
 const faqs = [
   {
@@ -38,36 +40,61 @@ const faqs = [
   },
 ] as const;
 
-const FAQ = () => (
-  <section
-    id="faq"
-    aria-label="Frequently asked questions"
-    className="py-20 bg-white dark:bg-gray-950"
-  >
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="text-center mb-16">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Frequently Asked Questions
-        </h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400">
-          Everything you need to know about Kenchi.
-        </p>
-      </div>
+const FAQ = () => {
+  const { ref, fadeClass } = useScrollFadeIn();
 
-      <Accordion type="single" collapsible className="w-full">
-        {faqs.map((faq) => (
-          <AccordionItem key={faq.question} value={faq.question}>
-            <AccordionTrigger className="text-left text-gray-900 dark:text-gray-100">
-              {faq.question}
-            </AccordionTrigger>
-            <AccordionContent className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              {faq.answer}
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
-    </div>
-  </section>
-);
+  const faqSchema = useMemo(
+    () =>
+      JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqs.map((faq) => ({
+          "@type": "Question",
+          name: faq.question,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: faq.answer,
+          },
+        })),
+      }),
+    []
+  );
+
+  return (
+    <section
+      id="faq"
+      aria-label="Frequently asked questions"
+      className="py-20 bg-white dark:bg-gray-950"
+    >
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqSchema }} />
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div
+          ref={ref as React.RefObject<HTMLDivElement>}
+          className={`text-center mb-16 ${fadeClass}`}
+        >
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-400">
+            Everything you need to know about Kenchi.
+          </p>
+        </div>
+
+        <Accordion type="single" collapsible className="w-full">
+          {faqs.map((faq) => (
+            <AccordionItem key={faq.question} value={faq.question}>
+              <AccordionTrigger className="text-left text-gray-900 dark:text-gray-100">
+                {faq.question}
+              </AccordionTrigger>
+              <AccordionContent className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                {faq.answer}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </div>
+    </section>
+  );
+};
 
 export default FAQ;

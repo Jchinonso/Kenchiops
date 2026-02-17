@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Github, Twitter, Linkedin } from "lucide-react";
 
 const footerLinks = {
   Product: [
@@ -45,6 +46,35 @@ const Footer = () => (
           <p className="text-sm text-gray-400 mb-6">
             AI-powered CI/CD failure analysis for engineering teams.
           </p>
+          <div className="flex items-center gap-4">
+            <a
+              href="https://github.com/kenchi-dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Kenchi on GitHub"
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <Github className="w-5 h-5" aria-hidden="true" />
+            </a>
+            <a
+              href="https://x.com/kenchi_dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Kenchi on X (Twitter)"
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <Twitter className="w-5 h-5" aria-hidden="true" />
+            </a>
+            <a
+              href="https://linkedin.com/company/kenchi-dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Kenchi on LinkedIn"
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <Linkedin className="w-5 h-5" aria-hidden="true" />
+            </a>
+          </div>
         </div>
 
         {/* Link Columns */}

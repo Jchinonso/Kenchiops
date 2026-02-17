@@ -1,5 +1,6 @@
 import { Check, AlertTriangle, Search, Shield, Brain } from "lucide-react";
 import { CIAnalysisMockup } from "@/components/CIAnalysisMockup";
+import { useScrollFadeIn } from "@/hooks/useScrollFadeIn";
 
 interface FeatureCardProps {
   readonly title: string;
@@ -14,7 +15,7 @@ const FeatureCard = ({ title, description, features, icon, color, mockup }: Feat
   <div className="feature-card">
     <div className="grid lg:grid-cols-2 gap-0">
       {/* Left Content */}
-      <div className="p-8 lg:p-10">
+      <div className="p-8 lg:p-10 min-w-0">
         <div className="flex items-center gap-3 mb-4">
           <div className={`w-10 h-10 ${color} rounded-lg flex items-center justify-center`}>
             {icon}
@@ -35,7 +36,7 @@ const FeatureCard = ({ title, description, features, icon, color, mockup }: Feat
       </div>
 
       {/* Right Mockup */}
-      <div className="bg-gray-50 dark:bg-gray-800 p-8 lg:p-10 flex items-center justify-center">
+      <div className="bg-gray-50 dark:bg-gray-800 p-8 lg:p-10 flex items-center justify-center min-w-0 overflow-hidden">
         {mockup}
       </div>
     </div>
@@ -261,28 +262,39 @@ const featureCards = [
   },
 ] as const;
 
-const Features = () => (
-  <section id="features" aria-label="Product features" className="py-20 bg-white dark:bg-gray-950">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Section Header */}
-      <div className="text-center mb-16">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          AI-Powered CI/CD Intelligence
-        </h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-          From failure detection to root cause analysis — Kenchi automates the debugging workflow so
-          your team ships faster.
-        </p>
-      </div>
+const Features = () => {
+  const { ref, fadeClass } = useScrollFadeIn();
 
-      {/* Feature Cards */}
-      <div className="space-y-8">
-        {featureCards.map((feature) => (
-          <FeatureCard key={feature.title} {...feature} />
-        ))}
+  return (
+    <section
+      id="features"
+      aria-label="Product features"
+      className="py-20 bg-white dark:bg-gray-950"
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Section Header */}
+        <div
+          ref={ref as React.RefObject<HTMLDivElement>}
+          className={`text-center mb-16 ${fadeClass}`}
+        >
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+            AI-Powered CI/CD Intelligence
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            From failure detection to root cause analysis — Kenchi automates the debugging workflow
+            so your team ships faster.
+          </p>
+        </div>
+
+        {/* Feature Cards */}
+        <div className="space-y-8">
+          {featureCards.map((feature) => (
+            <FeatureCard key={feature.title} {...feature} />
+          ))}
+        </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 export default Features;
