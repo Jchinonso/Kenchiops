@@ -130,11 +130,8 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
           title="Recommended Actions"
         >
           <ol className="list-decimal list-inside space-y-2">
-            {analysis.recommendedActions.map((action, index) => (
-              <li
-                key={`action-${index}`}
-                className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
-              >
+            {analysis.recommendedActions.map((action) => (
+              <li key={action} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                 {action}
               </li>
             ))}

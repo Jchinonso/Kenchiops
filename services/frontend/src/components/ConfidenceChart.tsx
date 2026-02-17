@@ -37,6 +37,8 @@ const LEVEL_LABELS: Readonly<Record<string, string>> = {
   low: "Low (<50%)",
 } as const;
 
+const ALL_LEVELS = ["high", "medium", "low"] as const;
+
 // ==================== Props ====================
 
 interface ConfidenceChartProps {
@@ -48,7 +50,6 @@ interface ConfidenceChartProps {
 export const ConfidenceChart = ({ refreshKey = 0 }: ConfidenceChartProps) => {
   const { data, isLoading } = useConfidenceDistribution(refreshKey);
 
-  const ALL_LEVELS = ["high", "medium", "low"] as const;
   const apiMap = new Map((data ?? []).map((bucket) => [bucket.level, bucket.count]));
   const chartData = ALL_LEVELS.map((level) => ({
     level: LEVEL_LABELS[level] ?? level,
