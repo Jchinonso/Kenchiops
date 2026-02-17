@@ -34,9 +34,6 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     css: false,
     deps: {
-      // Inline testing-library and react-dom so Vite's aliasing applies
-      // to their internal imports. Prevents dual-React in npm workspace
-      // monorepos where root has React 18 and frontend has React 19.
       optimizer: {
         web: {
           include: [

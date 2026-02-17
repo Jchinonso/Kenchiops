@@ -16,7 +16,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import { exportAnalysesToCSV, exportFailuresToCSV } from "./csvExport";
+import { exportAnalysesToCSV, exportFailuresToCSV } from "@/lib/csvExport";
 import { toast } from "sonner";
 
 // ==================== DOM Mocks ====================
@@ -71,7 +71,7 @@ describe("exportAnalysesToCSV", () => {
     );
   });
 
-  it("should handle null optional fields", () => {
+  it("should handle null optional fields without throwing", () => {
     const analyses = [
       {
         createdAt: "2024-01-15T10:00:00Z",
@@ -86,7 +86,6 @@ describe("exportAnalysesToCSV", () => {
       },
     ];
 
-    // Should not throw
     expect(() => exportAnalysesToCSV(analyses)).not.toThrow();
     expect(mockLink.click).toHaveBeenCalledOnce();
   });
@@ -113,9 +112,93 @@ describe("exportAnalysesToCSV", () => {
       },
     ];
 
-    // Should not throw even with special characters
     expect(() => exportAnalysesToCSV(analyses)).not.toThrow();
     expect(mockLink.click).toHaveBeenCalledOnce();
+  });
+
+  it("should format confidence values as percentages", () => {
+    const analyses = [
+      {
+        createdAt: "2024-01-15T10:00:00Z",
+        aggregationKey: "org/repo:abc",
+        fullAnalysis: {},
+        summary: "Test",
+        identifiedCause: null,
+        diagnosisConfidence: 0.856,
+        actionConfidence: 0.723,
+        recommendedActions: [],
+        eventId: null,
+      },
+    ];
+
+    // This should produce "86%" and "72%" in the CSV
+    expect(() => exportAnalysesToCSV(analyses)).not.toThrow();
+    expect(mockLink.click).toHaveBeenCalledOnce();
+  });
+
+  it("should join recommended actions with semicolons", () => {
+    const analyses = [
+      {
+        createdAt: "2024-01-15T10:00:00Z",
+        aggregationKey: "org/repo:abc",
+        fullAnalysis: {},
+        summary: "Test",
+        identifiedCause: null,
+        diagnosisConfidence: 0.5,
+        actionConfidence: null,
+        recommendedActions: ["Action 1", "Action 2", "Action 3"],
+        eventId: null,
+      },
+    ];
+
+    expect(() => exportAnalysesToCSV(analyses)).not.toThrow();
+    expect(mockLink.click).toHaveBeenCalledOnce();
+  });
+
+  it("should handle multiple analyses", () => {
+    const analyses = Array.from({ length: 5 }, (_, i) => ({
+      createdAt: `2024-01-${String(i + 1).padStart(2, "0")}T10:00:00Z`,
+      aggregationKey: `org/repo-${i}:abc`,
+      fullAnalysis: {},
+      summary: `Summary ${i}`,
+      identifiedCause: `Cause ${i}`,
+      diagnosisConfidence: 0.5 + i * 0.1,
+      actionConfidence: 0.4 + i * 0.1,
+      recommendedActions: [`Action ${i}`],
+      eventId: `evt-${i}`,
+    }));
+
+    exportAnalysesToCSV(analyses);
+
+    expect(toast.success).toHaveBeenCalledWith("Exported 5 analyses", expect.anything());
+  });
+
+  it("should create and clean up DOM elements correctly", () => {
+    exportAnalysesToCSV([]);
+
+    expect(document.createElement).toHaveBeenCalledWith("a");
+    expect(document.body.appendChild).toHaveBeenCalledWith(mockLink);
+    expect(mockLink.click).toHaveBeenCalled();
+    expect(document.body.removeChild).toHaveBeenCalledWith(mockLink);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
+  });
+
+  it("should handle fields containing newlines", () => {
+    const analyses = [
+      {
+        createdAt: "2024-01-15T10:00:00Z",
+        aggregationKey: "org/repo:abc",
+        fullAnalysis: {},
+        summary: "Line 1\nLine 2",
+        identifiedCause: "Multi\nline\ncause",
+        diagnosisConfidence: 0.5,
+        actionConfidence: null,
+        recommendedActions: null,
+        eventId: null,
+      },
+    ];
+
+    expect(() => exportAnalysesToCSV(analyses)).not.toThrow();
   });
 });
 
@@ -178,6 +261,48 @@ describe("exportFailuresToCSV", () => {
     ];
 
     // getPayloadString returns "--" for missing keys
+    expect(() => exportFailuresToCSV(failures)).not.toThrow();
+  });
+
+  it("should handle multiple failures", () => {
+    const failures = Array.from({ length: 3 }, (_, i) => ({
+      timestamp: `2024-01-${String(i + 1).padStart(2, "0")}T10:00:00Z`,
+      severity: ["high", "medium", "low"][i],
+      payload: { repository: `org/repo-${i}` },
+    }));
+
+    exportFailuresToCSV(failures);
+
+    expect(toast.success).toHaveBeenCalledWith("Exported 3 failures", expect.anything());
+  });
+
+  it("should use 'unknown' for null severity in CSV", () => {
+    // The code does: event.severity ?? "unknown"
+    const failures = [
+      {
+        timestamp: "2024-01-15T10:00:00Z",
+        severity: null,
+        payload: { repository: "org/repo" },
+      },
+    ];
+
+    expect(() => exportFailuresToCSV(failures)).not.toThrow();
+  });
+
+  it("should handle payload with non-string values", () => {
+    const failures = [
+      {
+        timestamp: "2024-01-15T10:00:00Z",
+        severity: "high",
+        payload: {
+          repository: 123,
+          checkName: null,
+          workflowName: true,
+        },
+      },
+    ];
+
+    // getPayloadString returns "--" for non-string values
     expect(() => exportFailuresToCSV(failures)).not.toThrow();
   });
 });

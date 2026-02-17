@@ -8,6 +8,10 @@
 
 import "@testing-library/jest-dom/vitest";
 
+// Global mocks for Radix UI components that conflict with React 19
+// in the monorepo (pre-compiled against React 18 at root level).
+import "./__tests__/__mocks__/radix-ui";
+
 // ==================== Browser API Mocks ====================
 
 /**

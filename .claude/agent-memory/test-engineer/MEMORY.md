@@ -52,6 +52,52 @@
 - Mock Express req/res/next: `createMockRequest()`, `createMockResponse()`, `createMockNext()`
 - For middleware tests: pass `context` via custom property on req, use `jest.fn<NextFunction>()`
 
+## Frontend Testing (Vitest + React Testing Library)
+
+- **Framework**: Vitest 4.x with jsdom, `@testing-library/react`, `@testing-library/jest-dom/vitest`, `@testing-library/user-event`
+- **Config**: `services/frontend/vite.config.ts` has `test` block with `environment: "jsdom"`, `setupFiles: ["./src/test-setup.ts"]`
+- **Test setup**: `src/test-setup.ts` imports `@testing-library/jest-dom/vitest`, mocks matchMedia, IntersectionObserver, ResizeObserver
+- **Run**: `npm test` in `services/frontend/` (triggers `pretest` script first)
+- **Import**: `import { describe, it, expect, vi, beforeEach } from "vitest"` (NOT `@jest/globals`)
+
+### Dual React Monorepo Problem (Critical)
+
+- Root monorepo has React 18.3.1, frontend has React 19.2.4
+- npm workspace hoists `@testing-library/react`, `lucide-react`, `react-router-dom` to root `node_modules/`
+- These packages internally `require('react')` which resolves to React 18 at root
+- **Fix**: `pretest` script in package.json copies hoisted packages to local `node_modules/`
+- Vite `resolve.alias` with regex patterns pins React resolution: `{ find: /^react($|\/)/, replacement: ... }`
+- Radix UI pre-compiled with React 18 JSX cannot be fixed by copying -- must mock `@/components/ui/select` etc.
+
+### Frontend Mock Patterns
+
+- Mock Radix UI Select: `vi.mock("@/components/ui/select", () => ({ Select: ..., SelectTrigger: ..., ... }))` renders native elements
+- Mock `sonner` toast: `vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))`
+- Mock `globalThis.fetch` for apiClient tests
+- Mock `navigator.clipboard`: use `Object.defineProperty(navigator, "clipboard", { value: ..., writable: true, configurable: true })`
+- Mock DOM for CSV download: mock `document.createElement`, `URL.createObjectURL`, etc.
+- `userEvent.type` + `vi.useFakeTimers` causes hangs -- use `fireEvent.change` for debounce tests
+- Multiple elements with same text in mocked Select -- use `getAllByText(...).length >= 1`
+
+### Frontend Test Coverage (2026-02-17)
+
+- 200 tests across 15 files, ~2s runtime
+- `src/lib/formatters.test.ts` - 49 tests (all formatter functions)
+- `src/lib/utils.test.ts` - 8 tests (cn utility)
+- `src/lib/csvExport.test.ts` - 8 tests (CSV export + download)
+- `src/lib/apiClient.test.ts` - 12 tests (fetch wrapper, 401 refresh, login URL)
+- `src/hooks/useTheme.test.ts` - 11 tests (localStorage, system pref, dark class toggle)
+- `src/hooks/useAuth.test.tsx` - 11 tests (context provider, login, logout, refresh)
+- `src/hooks/useNotificationPreferences.test.ts` - 10 tests (localStorage, Notification API)
+- `src/hooks/use-mobile.test.ts` - 7 tests (breakpoint detection)
+- `src/components/FilterBar.test.tsx` - 27 tests (pure fns + component)
+- `src/components/PaginationControls.test.tsx` - 13 tests
+- `src/components/ErrorBoundary.test.tsx` - 9 tests
+- `src/components/ComingSoon.test.tsx` - 7 tests
+- `src/components/TimeDisplay.test.tsx` - 5 tests
+- `src/components/DashboardFooter.test.tsx` - 5 tests
+- `src/__tests__/extractRepoFromKey.test.ts` - 18 tests (migrated from Jest to Vitest)
+
 ## Common Gotchas
 
 - `jwt.sign()` with `expiresIn: -10` creates an already-expired token for testing
@@ -59,3 +105,13 @@
 - base64url length for N bytes = `Math.ceil(N * 4 / 3)`
 - Auth middleware `applyAuthToRequest` uses `Object.assign` - req mutation is expected at handler boundary
 - When `user.tenantId` is null, middleware does NOT overwrite `req.context.tenantId`
+- `userEvent.type` with `vi.useFakeTimers` causes timeout -- use `fireEvent.change` instead
+- `navigator.clipboard` is read-only in jsdom -- use `Object.defineProperty` to mock
+- Radix UI components pre-compiled with React 18 JSX cannot run in React 19 tests -- mock the ui/ imports
+- shadcn Collapsible mock needs React.createContext for open/close state flow (see AnalysisDetailContent.test.tsx)
+- Global radix mock `@radix-ui/react-collapsible` must export both `Trigger` and `CollapsibleTrigger`
+- recharts mock must include `Tooltip` export (chart.tsx re-exports it as ChartTooltip)
+- cmdk `scrollIntoView` not available in jsdom -- mock `@/components/ui/command` wrapper
+- Pages rendering Navbar need `vi.mock("@/hooks/useAuth")` AND `vi.mock("@/hooks/useTheme")`
+- "Found multiple elements" errors: use `getAllByText()` when filter buttons share text with table badges
+- DashboardOverview onboarding: full card only shows when `completedCount < 2`, test mock must set githubConnected=false + totalAnalyses=0

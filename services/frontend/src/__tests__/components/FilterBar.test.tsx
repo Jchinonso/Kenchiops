@@ -6,15 +6,20 @@
  * - loadSavedFilters / saveFilters persistence helpers
  * - timeRangeToSince conversion
  * - FilterBar component rendering and interaction
+ *   - Repository input with debounce
+ *   - Variant-specific dropdowns (severity for failures, confidence for analyses)
+ *   - Time range dropdown (always shown)
+ *   - Clear all filters button
+ *   - Accessibility (search role, labels)
  *
  * Note: Radix UI Select is mocked because the root monorepo has React 18
  * while the frontend uses React 19, causing dual-React issues in tests.
- * The mock renders a native <select> element for testing purposes.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
 import {
   FilterBar,
   parseConfidenceFilter,
@@ -22,7 +27,7 @@ import {
   saveFilters,
   timeRangeToSince,
   type FilterValues,
-} from "./FilterBar";
+} from "@/components/FilterBar";
 
 // Mock the Radix UI Select component to avoid dual-React issues in monorepo
 vi.mock("@/components/ui/select", () => ({
@@ -66,13 +71,24 @@ describe("parseConfidenceFilter", () => {
     expect(parseConfidenceFilter("min:0.5,max:0.8")).toEqual({ min: 0.5, max: 0.8 });
   });
 
-  it("should return null for malformed values", () => {
+  it("should return null for malformed numeric values", () => {
     expect(parseConfidenceFilter("min:abc")).toEqual({ min: null, max: null });
+  });
+
+  it("should return null for completely invalid format", () => {
     expect(parseConfidenceFilter("invalid")).toEqual({ min: null, max: null });
   });
 
-  it("should handle reversed order", () => {
+  it("should handle reversed order (max before min)", () => {
     expect(parseConfidenceFilter("max:0.3,min:0.1")).toEqual({ min: 0.1, max: 0.3 });
+  });
+
+  it("should parse integer values", () => {
+    expect(parseConfidenceFilter("min:1")).toEqual({ min: 1, max: null });
+  });
+
+  it("should parse zero values", () => {
+    expect(parseConfidenceFilter("min:0,max:0")).toEqual({ min: 0, max: 0 });
   });
 });
 
@@ -99,6 +115,14 @@ describe("loadSavedFilters", () => {
 
     expect(loadSavedFilters("failures")).toBeNull();
   });
+
+  it("should use the correct storage key prefix", () => {
+    const filters = { repository: "test" };
+    localStorage.setItem("kenchi_filters_mypage", JSON.stringify(filters));
+
+    expect(loadSavedFilters("mypage")).toEqual(filters);
+    expect(loadSavedFilters("otherpage")).toBeNull();
+  });
 });
 
 describe("saveFilters", () => {
@@ -118,11 +142,10 @@ describe("saveFilters", () => {
 
     const raw = localStorage.getItem("kenchi_filters_analyses");
     expect(raw).not.toBeNull();
-    const stored: unknown = JSON.parse(raw as string);
-    expect(stored).toEqual(filters);
+    expect(JSON.parse(raw as string)).toEqual(filters);
   });
 
-  it("should silently handle localStorage errors", () => {
+  it("should silently handle localStorage errors (quota exceeded)", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("QuotaExceededError");
     });
@@ -138,6 +161,27 @@ describe("saveFilters", () => {
 
     vi.restoreAllMocks();
   });
+
+  it("should overwrite existing saved filters", () => {
+    const original: FilterValues = {
+      repository: "old/repo",
+      severity: "",
+      minConfidence: "",
+      timeRange: "",
+    };
+    saveFilters("test", original);
+
+    const updated: FilterValues = {
+      repository: "new/repo",
+      severity: "high",
+      minConfidence: "",
+      timeRange: "24h",
+    };
+    saveFilters("test", updated);
+
+    const raw = localStorage.getItem("kenchi_filters_test");
+    expect(JSON.parse(raw as string)).toEqual(updated);
+  });
 });
 
 // ==================== timeRangeToSince ====================
@@ -151,7 +195,7 @@ describe("timeRangeToSince", () => {
     expect(timeRangeToSince("1y")).toBeUndefined();
   });
 
-  it("should return an ISO timestamp for valid time ranges", () => {
+  it("should return an ISO timestamp for '24h'", () => {
     const before = Date.now();
     const result = timeRangeToSince("24h");
     const after = Date.now();
@@ -163,13 +207,24 @@ describe("timeRangeToSince", () => {
     expect(after - timestamp).toBeLessThanOrEqual(expected24h + 100);
   });
 
-  it("should return correct timestamps for all supported ranges", () => {
+  it("should return valid ISO timestamps for all supported ranges", () => {
     const ranges = ["24h", "7d", "30d", "90d"];
     for (const range of ranges) {
       const result = timeRangeToSince(range);
       expect(result).toBeDefined();
       expect(new Date(result as string).toISOString()).toBe(result);
     }
+  });
+
+  it("should return progressively older timestamps for increasing ranges", () => {
+    const t24h = new Date(timeRangeToSince("24h") as string).getTime();
+    const t7d = new Date(timeRangeToSince("7d") as string).getTime();
+    const t30d = new Date(timeRangeToSince("30d") as string).getTime();
+    const t90d = new Date(timeRangeToSince("90d") as string).getTime();
+
+    expect(t24h).toBeGreaterThan(t7d);
+    expect(t7d).toBeGreaterThan(t30d);
+    expect(t30d).toBeGreaterThan(t90d);
   });
 });
 
@@ -194,10 +249,12 @@ describe("FilterBar", () => {
   });
 
   describe("rendering", () => {
-    it("should render the repository input", () => {
+    it("should render the repository input with placeholder", () => {
       render(<FilterBar {...defaultProps} />);
 
-      expect(screen.getByLabelText("Filter by repository")).toBeInTheDocument();
+      const input = screen.getByLabelText("Filter by repository");
+      expect(input).toBeInTheDocument();
+      expect(input).toHaveAttribute("placeholder", "Filter by repository, e.g. org/repo-name");
     });
 
     it("should have a search role on the container", () => {
@@ -209,7 +266,6 @@ describe("FilterBar", () => {
     it("should render confidence options for analyses variant", () => {
       render(<FilterBar {...defaultProps} variant="analyses" />);
 
-      // Mock renders both placeholder and option text; verify at least one exists
       expect(screen.getAllByText("All Confidence").length).toBeGreaterThanOrEqual(1);
     });
 
@@ -230,6 +286,11 @@ describe("FilterBar", () => {
 
       expect(screen.queryByText("All Confidence")).not.toBeInTheDocument();
     });
+
+    it("should always render time range dropdown regardless of variant", () => {
+      render(<FilterBar {...defaultProps} variant="analyses" />);
+      expect(screen.getAllByText("All Time").length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   describe("clear filters", () => {
@@ -239,10 +300,36 @@ describe("FilterBar", () => {
       expect(screen.queryByLabelText("Clear all filters")).not.toBeInTheDocument();
     });
 
-    it("should show Clear button when a filter is active", () => {
+    it("should show Clear button when repository filter is active", () => {
       render(
         <FilterBar {...defaultProps} filters={{ ...defaultFilters, repository: "org/repo" }} />
       );
+
+      expect(screen.getByLabelText("Clear all filters")).toBeInTheDocument();
+    });
+
+    it("should show Clear button when severity filter is active", () => {
+      render(
+        <FilterBar
+          {...defaultProps}
+          variant="failures"
+          filters={{ ...defaultFilters, severity: "high" }}
+        />
+      );
+
+      expect(screen.getByLabelText("Clear all filters")).toBeInTheDocument();
+    });
+
+    it("should show Clear button when minConfidence filter is active", () => {
+      render(
+        <FilterBar {...defaultProps} filters={{ ...defaultFilters, minConfidence: "min:0.8" }} />
+      );
+
+      expect(screen.getByLabelText("Clear all filters")).toBeInTheDocument();
+    });
+
+    it("should show Clear button when timeRange filter is active", () => {
+      render(<FilterBar {...defaultProps} filters={{ ...defaultFilters, timeRange: "7d" }} />);
 
       expect(screen.getByLabelText("Clear all filters")).toBeInTheDocument();
     });
@@ -280,16 +367,13 @@ describe("FilterBar", () => {
       expect(input.value).toBe("org/repo");
     });
 
-    it("should debounce repository input and call onFilterChange", async () => {
+    it("should debounce repository input and call onFilterChange after delay", async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const onFilterChange = vi.fn();
 
       render(<FilterBar {...defaultProps} onFilterChange={onFilterChange} />);
 
       const input = screen.getByLabelText("Filter by repository") as HTMLInputElement;
-
-      // Use fireEvent instead of userEvent to avoid timeout issues with fake timers
-      const { fireEvent } = await import("@testing-library/react");
       fireEvent.change(input, { target: { value: "org/repo" } });
 
       // Should not have been called yet (debounced at 300ms)
@@ -305,11 +389,56 @@ describe("FilterBar", () => {
       vi.useRealTimers();
     });
 
+    it("should reset debounce timer on rapid input changes", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const onFilterChange = vi.fn();
+
+      render(<FilterBar {...defaultProps} onFilterChange={onFilterChange} />);
+
+      const input = screen.getByLabelText("Filter by repository") as HTMLInputElement;
+
+      // Type rapidly
+      fireEvent.change(input, { target: { value: "o" } });
+      vi.advanceTimersByTime(100);
+      fireEvent.change(input, { target: { value: "or" } });
+      vi.advanceTimersByTime(100);
+      fireEvent.change(input, { target: { value: "org" } });
+      vi.advanceTimersByTime(100);
+
+      // Should not have fired yet
+      expect(onFilterChange).not.toHaveBeenCalled();
+
+      // Wait for debounce
+      vi.advanceTimersByTime(300);
+
+      // Should fire once with final value
+      expect(onFilterChange).toHaveBeenCalledTimes(1);
+      expect(onFilterChange.mock.calls[0][0].repository).toBe("org");
+
+      vi.useRealTimers();
+    });
+
     it("should have an accessible label for the repository input", () => {
       render(<FilterBar {...defaultProps} />);
 
       const input = screen.getByLabelText("Filter by repository");
       expect(input).toHaveAttribute("type", "text");
+      expect(input).toHaveAttribute("id", "filter-repository");
+    });
+  });
+
+  describe("external filter sync", () => {
+    it("should sync local repo state when filters.repository changes externally", () => {
+      const { rerender } = render(<FilterBar {...defaultProps} />);
+
+      const input = screen.getByLabelText("Filter by repository") as HTMLInputElement;
+      expect(input.value).toBe("");
+
+      rerender(
+        <FilterBar {...defaultProps} filters={{ ...defaultFilters, repository: "new/repo" }} />
+      );
+
+      expect(input.value).toBe("new/repo");
     });
   });
 });
