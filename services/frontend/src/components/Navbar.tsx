@@ -1,12 +1,35 @@
 import { useState, useEffect } from "react";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, Menu, X, Moon, Sun, Monitor } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
+
+const THEME_CYCLE = ["light", "dark", "system"] as const;
 
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [resourcesDropdownOpen, setResourcesDropdownOpen] = useState(false);
   const [showNavCTA, setShowNavCTA] = useState(false);
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const { preference, setTheme } = useTheme();
+
+  const cycleTheme = () => {
+    const currentIndex = THEME_CYCLE.indexOf(preference);
+    const nextIndex = (currentIndex + 1) % THEME_CYCLE.length;
+    setTheme(THEME_CYCLE[nextIndex]);
+  };
+
+  const themeIcon =
+    preference === "dark" ? (
+      <Moon className="w-4 h-4" />
+    ) : preference === "light" ? (
+      <Sun className="w-4 h-4" />
+    ) : (
+      <Monitor className="w-4 h-4" />
+    );
+
+  const themeLabel = preference === "dark" ? "Dark" : preference === "light" ? "Light" : "System";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -153,27 +176,63 @@ const Navbar = () => {
 
           {/* CTA Buttons */}
           <div className="hidden lg:flex items-center gap-3">
-            {showNavCTA ? (
-              <Link
-                to="/login"
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
-              >
-                START FREE TRIAL
-              </Link>
-            ) : (
-              <a
-                href="/#cta"
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              >
-                BOOK A DEMO
-              </a>
-            )}
-            <Link
-              to="/login"
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors"
+            {/* Theme Toggle */}
+            <button
+              onClick={cycleTheme}
+              className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              aria-label={`Theme: ${themeLabel}. Click to change.`}
+              title={`Theme: ${themeLabel}`}
             >
-              LOGIN
-            </Link>
+              {themeIcon}
+            </button>
+
+            {isAuthenticated ? (
+              <>
+                <Link
+                  to="/dashboard"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  DASHBOARD
+                </Link>
+                <Link
+                  to="/dashboard"
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <div className="w-7 h-7 bg-indigo-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">
+                      {user?.displayName?.charAt(0)?.toUpperCase() ?? "U"}
+                    </span>
+                  </div>
+                  <span className="max-w-[120px] truncate">{user?.displayName ?? "User"}</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                {showNavCTA ? (
+                  <Link
+                    to="/login"
+                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
+                  >
+                    START FREE TRIAL
+                  </Link>
+                ) : (
+                  <a
+                    href="/#cta"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    BOOK A DEMO
+                  </a>
+                )}
+                {!isLoading && (
+                  <Link
+                    to="/login"
+                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors"
+                  >
+                    LOGIN
+                  </Link>
+                )}
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -222,19 +281,55 @@ const Navbar = () => {
               </div>
             ))}
             <div className="pt-4 space-y-2">
-              <a
-                href="/#cta"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg text-center"
+              {/* Mobile Theme Toggle */}
+              <button
+                onClick={cycleTheme}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg"
               >
-                BOOK A DEMO
-              </a>
-              <Link
-                to="/login"
-                className="block w-full px-4 py-2 text-sm font-medium text-white bg-indigo-500 rounded-lg text-center"
-              >
-                LOGIN
-              </Link>
+                {themeIcon}
+                <span>Theme: {themeLabel}</span>
+              </button>
+
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block w-full px-4 py-2 text-sm font-medium text-white bg-indigo-500 rounded-lg text-center"
+                  >
+                    DASHBOARD
+                  </Link>
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <div className="w-7 h-7 bg-indigo-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">
+                        {user?.displayName?.charAt(0)?.toUpperCase() ?? "U"}
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                      {user?.displayName ?? "User"}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <a
+                    href="/#cta"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg text-center"
+                  >
+                    BOOK A DEMO
+                  </a>
+                  {!isLoading && (
+                    <Link
+                      to="/login"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block w-full px-4 py-2 text-sm font-medium text-white bg-indigo-500 rounded-lg text-center"
+                    >
+                      LOGIN
+                    </Link>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
