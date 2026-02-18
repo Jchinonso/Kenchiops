@@ -7,6 +7,15 @@
  * @module llm/providers/llmProvider
  */
 
+// Client factory (shared provider detection + SDK client creation)
+export {
+  isOpenRouterProvider,
+  getEffectiveBaseUrl,
+  createLLMSDKClient,
+  getLLMSDKClient,
+  resetLLMSDKClient,
+} from "./clientFactory.js";
+
 // Client exports
 export { LLMClient } from "./client.js";
 

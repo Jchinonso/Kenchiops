@@ -91,6 +91,13 @@ export { manageTokenBudget } from "./tokenManager.js";
 // ==================== LLM Provider ====================
 
 export {
+  // Client factory
+  isOpenRouterProvider,
+  getEffectiveBaseUrl,
+  createLLMSDKClient,
+  getLLMSDKClient,
+  resetLLMSDKClient,
+  // Client classes
   LLMClient,
   EmbeddingClient,
   getEmbeddingClient,

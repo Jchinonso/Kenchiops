@@ -2,69 +2,17 @@
  * LLM Extraction Adapter
  *
  * Wraps the LLM SDK for chunk extraction operations.
- * Uses the OpenAI SDK client which supports OpenRouter
+ * Uses the shared LLM client factory which supports OpenRouter
  * and other compatible providers.
  * Keeps vendor SDK out of the service layer per CLAUDE.md.
  *
  * @module adapters/llmExtraction
  */
 
-import OpenAI from "openai";
-import { config, OPENROUTER_DEFAULTS } from "@kenchi/shared";
+import { getLLMSDKClient, withTimeout } from "@kenchi/shared";
 import type { ExtractionOptions, ExtractorFunction } from "./llmExtractionTypes.js";
 
 export type { ExtractionOptions, ExtractorFunction };
-
-// ==================== Provider Configuration ====================
-
-/**
- * Checks if we're using OpenRouter provider.
- */
-const isOpenRouterProvider = (): boolean => config.LLM_PROVIDER === "openrouter";
-
-/**
- * Gets the effective base URL for the LLM provider.
- */
-const getEffectiveBaseUrl = (): string | undefined => {
-  if (config.LLM_BASE_URL) {
-    return config.LLM_BASE_URL;
-  }
-  if (isOpenRouterProvider()) {
-    return OPENROUTER_DEFAULTS.BASE_URL;
-  }
-  return undefined;
-};
-
-// ==================== Singleton Client ====================
-
-// let: lazy-initialized singleton, assigned once on first call
-let clientInstance: OpenAI | null = null;
-
-const getClient = (): OpenAI => {
-  if (!clientInstance) {
-    const baseURL = getEffectiveBaseUrl();
-    clientInstance = new OpenAI({
-      apiKey: config.OPENAI_API_KEY,
-      ...(baseURL && { baseURL }),
-    });
-  }
-  return clientInstance;
-};
-
-// ==================== Timeout Utilities ====================
-
-/**
- * Wraps a promise with a hard timeout using Promise.race.
- * Guarantees the promise resolves or rejects within timeoutMs,
- * since the OpenAI SDK timeout is not reliably enforced.
- */
-const withHardTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
-  Promise.race([
-    promise,
-    new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`Extraction timeout after ${timeoutMs}ms`)), timeoutMs);
-    }),
-  ]);
 
 // ==================== Extractor Factory ====================
 
@@ -72,7 +20,7 @@ const withHardTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> 
  * Creates an extractor function for chunk artifact extraction.
  */
 export const createLLMExtractor = (): ExtractorFunction => {
-  const client = getClient();
+  const client = getLLMSDKClient();
 
   return async (
     systemPrompt: string,
@@ -91,7 +39,11 @@ export const createLLMExtractor = (): ExtractorFunction => {
       { timeout: options.timeoutMs }
     );
 
-    const response = await withHardTimeout(apiCall, options.timeoutMs);
+    const response = await withTimeout(
+      apiCall,
+      options.timeoutMs,
+      `Extraction timeout after ${String(options.timeoutMs)}ms`
+    );
     return response.choices[0]?.message?.content ?? "[]";
   };
 };

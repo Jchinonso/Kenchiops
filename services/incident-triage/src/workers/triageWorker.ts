@@ -14,6 +14,7 @@ import crypto from "node:crypto";
 import {
   createLogger,
   createQueue,
+  delay,
   getAlertById,
   updateAlertStatus,
   createTriageResult,
@@ -156,11 +157,6 @@ const pagerDutyDispatchPort = createPagerDutyDispatchAdapter();
 const dispatchService = createDispatchService(slackDispatchPort, pagerDutyDispatchPort);
 
 // ==================== Helper Functions ====================
-
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /**
  * Converts an IncidentAlertRecord to a NormalizedAlert for severity scoring.

@@ -748,6 +748,15 @@ export type {
 // LLM JSON extraction
 export { extractJsonFromResponse, parseJsonObject } from "./llm/index.js";
 
+// LLM client factory (shared provider detection + SDK client creation)
+export {
+  isOpenRouterProvider,
+  getEffectiveBaseUrl,
+  createLLMSDKClient,
+  getLLMSDKClient,
+  resetLLMSDKClient,
+} from "./llm/index.js";
+
 // LLM client (via llm module)
 export { LLMClient } from "./llm/index.js";
 export {

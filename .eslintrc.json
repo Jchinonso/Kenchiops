@@ -230,7 +230,7 @@
       }
     },
     {
-      "files": ["**/adapters/**/*.ts"],
+      "files": ["**/adapters/**/*.ts", "**/llm/providers/**/*.ts"],
       "rules": {
         "no-restricted-imports": "off"
       }

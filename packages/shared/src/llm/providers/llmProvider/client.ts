@@ -10,7 +10,7 @@
  * @module llm/providers/llmProvider/client
  */
 
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import { config } from "../../../core/config.js";
 import { createLogger } from "../../../core/logger.js";
 import { LLMError, getErrorMessage, ExternalServiceError } from "../../../core/errors.js";
@@ -34,43 +34,9 @@ import {
   SERVICE_KEYS,
 } from "../../../http/circuitBreaker.js";
 import type { LLMAnalysisProvider, LLMConfig } from "../../types.js";
+import { isOpenRouterProvider, getEffectiveBaseUrl, createLLMSDKClient } from "./clientFactory.js";
 
 const logger = createLogger("llm-client");
-
-/**
- * Checks if we're using OpenRouter provider.
- */
-const isOpenRouterProvider = (): boolean => config.LLM_PROVIDER === "openrouter";
-
-/**
- * Gets the effective base URL for the LLM provider.
- * Returns undefined for direct OpenAI (uses default), or the configured URL for OpenRouter.
- */
-const getEffectiveBaseUrl = (): string | undefined => {
-  if (config.LLM_BASE_URL) {
-    return config.LLM_BASE_URL;
-  }
-  if (isOpenRouterProvider()) {
-    return OPENROUTER_DEFAULTS.BASE_URL;
-  }
-  return undefined;
-};
-
-/**
- * Creates OpenAI-compatible client from environment variables.
- * Supports custom base URLs for OpenRouter and other OpenAI-compatible providers.
- *
- * @returns Configured OpenAI SDK client instance
- */
-const createLLMClient = (timeout: number): OpenAI => {
-  const baseURL = getEffectiveBaseUrl();
-
-  return new OpenAI({
-    apiKey: config.OPENAI_API_KEY,
-    timeout,
-    ...(baseURL && { baseURL }),
-  });
-};
 
 /**
  * Creates client configuration from environment variables with defaults.
@@ -107,7 +73,7 @@ export class LLMClient implements LLMAnalysisProvider {
 
   constructor() {
     this.clientConfig = createClientConfig();
-    this.client = createLLMClient(this.clientConfig.timeout);
+    this.client = createLLMSDKClient(this.clientConfig.timeout);
 
     logger.info("LLM client initialized", {
       provider: config.LLM_PROVIDER,

@@ -1,18 +1,19 @@
 /**
  * LLM Completion Adapter
  *
- * Implements the LLMCompletionPort using the OpenAI SDK (compatible with
- * OpenRouter and other providers). Keeps vendor SDK calls isolated per CLAUDE.md.
+ * Implements the LLMCompletionPort using the shared LLM client factory
+ * (compatible with OpenRouter and other providers). Keeps vendor SDK
+ * calls isolated per CLAUDE.md.
  *
- * Uses lazy-initialized singleton client and hard timeout via Promise.race
+ * Uses the shared singleton client and withTimeout (Promise.race)
  * since the OpenAI SDK timeout is unreliable.
  *
  * @module adapters/llmCompletionAdapter
  */
 
-import OpenAI from "openai";
 import {
-  config,
+  getLLMSDKClient,
+  withTimeout,
   OPENROUTER_DEFAULTS,
   createLogger,
   ExternalServiceError,
@@ -20,51 +21,6 @@ import {
   type RequestContext,
 } from "@kenchi/shared";
 import type { LLMCompletionPort, LLMCompletionOptions } from "../types/summaryTypes.js";
-
-// ==================== Provider Configuration ====================
-
-const isOpenRouterProvider = (): boolean => config.LLM_PROVIDER === "openrouter";
-
-const getEffectiveBaseUrl = (): string | undefined => {
-  if (config.LLM_BASE_URL) {
-    return config.LLM_BASE_URL;
-  }
-  return isOpenRouterProvider() ? OPENROUTER_DEFAULTS.BASE_URL : undefined;
-};
-
-// ==================== Singleton Client ====================
-
-// let: lazy-initialized singleton, assigned once on first call
-let clientInstance: OpenAI | null = null;
-
-const getClient = (): OpenAI => {
-  if (!clientInstance) {
-    const baseURL = getEffectiveBaseUrl();
-    clientInstance = new OpenAI({
-      apiKey: config.OPENAI_API_KEY,
-      ...(baseURL && { baseURL }),
-    });
-  }
-  return clientInstance;
-};
-
-// ==================== Hard Timeout ====================
-
-/**
- * Wraps a promise with a hard timeout using Promise.race.
- * Guarantees the promise resolves or rejects within timeoutMs,
- * since the OpenAI SDK timeout is not reliably enforced.
- */
-const withHardTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
-  Promise.race([
-    promise,
-    new Promise<never>((_, reject) => {
-      setTimeout(
-        () => reject(new Error(`LLM completion timeout after ${String(timeoutMs)}ms`)),
-        timeoutMs
-      );
-    }),
-  ]);
 
 // ==================== Adapter Implementation ====================
 
@@ -82,7 +38,7 @@ export const createLLMCompletionAdapter = (): LLMCompletionPort => ({
   ): Promise<string> => {
     const adapterLogger = createLogger("llm-completion-adapter");
     const startTime = Date.now();
-    const client = getClient();
+    const client = getLLMSDKClient();
 
     const temperature = options.temperature ?? 0;
     const maxTokens = options.maxTokens ?? OPENROUTER_DEFAULTS.MAX_TOKENS;
@@ -101,7 +57,11 @@ export const createLLMCompletionAdapter = (): LLMCompletionPort => ({
         { timeout: options.timeoutMs }
       );
 
-      const response = await withHardTimeout(apiCall, options.timeoutMs);
+      const response = await withTimeout(
+        apiCall,
+        options.timeoutMs,
+        `LLM completion timeout after ${String(options.timeoutMs)}ms`
+      );
       const durationMs = Date.now() - startTime;
       const content = response.choices[0]?.message?.content ?? "";
 

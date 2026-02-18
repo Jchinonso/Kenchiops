@@ -9,7 +9,7 @@
  * @module llm/providers/llmProvider/embedding
  */
 
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import { config } from "../../../core/config.js";
 import { createLogger } from "../../../core/logger.js";
 import { ExternalServiceError, getErrorMessage } from "../../../core/errors.js";
@@ -17,7 +17,6 @@ import {
   EMBEDDING_CONFIG,
   LLM_CONSTANTS,
   EMBEDDING_TIERS,
-  OPENROUTER_DEFAULTS,
   type EmbeddingTierName,
 } from "../../../constants/index.js";
 import {
@@ -31,45 +30,12 @@ import type {
   EmbeddingProvider,
   EmbeddingClientConfig,
 } from "../../types.js";
+import { getEffectiveBaseUrl, createLLMSDKClient } from "./clientFactory.js";
 
 // Re-export types for backward compatibility
 export type { EmbeddingResult, BatchEmbeddingResult, EmbeddingProvider };
 
 const logger = createLogger("embedding-client");
-
-/**
- * Checks if we're using OpenRouter provider.
- */
-const isOpenRouterProvider = (): boolean => config.LLM_PROVIDER === "openrouter";
-
-/**
- * Gets the effective base URL for the LLM provider.
- */
-const getEffectiveBaseUrl = (): string | undefined => {
-  if (config.LLM_BASE_URL) {
-    return config.LLM_BASE_URL;
-  }
-  if (isOpenRouterProvider()) {
-    return OPENROUTER_DEFAULTS.BASE_URL;
-  }
-  return undefined;
-};
-
-/**
- * Creates the OpenAI client instance for embeddings.
- * Supports OpenRouter and other OpenAI-compatible providers.
- *
- * Note: Embedding models may vary by provider. OpenRouter may not support
- * all OpenAI embedding models (text-embedding-3-small/large).
- */
-const createLLMClient = (): OpenAI => {
-  const baseURL = getEffectiveBaseUrl();
-  return new OpenAI({
-    apiKey: config.OPENAI_API_KEY,
-    timeout: EMBEDDING_CONFIG.TIMEOUT_MS,
-    ...(baseURL && { baseURL }),
-  });
-};
 
 /**
  * Creates embedding client configuration from tier.
@@ -143,7 +109,7 @@ export class EmbeddingClient {
   private readonly clientConfig: EmbeddingClientConfig;
 
   constructor(tier: EmbeddingTierName = "STANDARD") {
-    this.client = createLLMClient();
+    this.client = createLLMSDKClient(EMBEDDING_CONFIG.TIMEOUT_MS);
     this.clientConfig = createClientConfig(tier);
 
     logger.info("Embedding client initialized", {

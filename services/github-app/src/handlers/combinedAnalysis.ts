@@ -14,6 +14,7 @@
 import {
   createLogger,
   config,
+  delay,
   resilientPost,
   resilientGet,
   getErrorMessage,
@@ -334,14 +335,6 @@ const createFallbackFailure = (
   lintErrors: [],
   timestamp,
 });
-
-/**
- * Helper to delay execution.
- */
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /**
  * Post a placeholder comment on a single PR.
