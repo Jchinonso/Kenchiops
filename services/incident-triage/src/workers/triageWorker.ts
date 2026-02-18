@@ -19,6 +19,7 @@ import {
   createTriageResult,
   updateTriageEnrichment,
   updateTriageAiSummary,
+  updateTriageDispatchResults,
   searchSimilarTriageResults,
   searchSimilarKnowledgeDocs,
   generateBudgetAwareEmbedding,
@@ -41,14 +42,23 @@ import type {
 import type { NormalizedAlert } from "../types/incidentTypes.js";
 import type { EmbeddingPort, KnowledgeSearchPort } from "../types/runbookTypes.js";
 import type { TriageSearchPort } from "../types/correlationTypes.js";
+import type { TriagePolicyContext } from "../types/policyTypes.js";
+import type { IncidentSummaryResponse } from "../types/summaryTypes.js";
 import { classifyAlertSeverity } from "../services/severityClassifier.js";
 import { createDeduplicationService } from "../services/deduplicationService.js";
 import { createRunbookMatcher } from "../services/runbookMatcher.js";
 import { createIncidentCorrelator } from "../services/incidentCorrelator.js";
 import { aggregateEvidence } from "../services/evidenceAggregator.js";
 import { createAiSummarizer } from "../services/aiSummarizer.js";
+import { evaluatePolicy } from "../services/policyEngine.js";
+import { createDispatchService } from "../services/dispatchService.js";
 import { createLLMCompletionAdapter } from "../adapters/llmCompletionAdapter.js";
+import { createSlackDispatchAdapter } from "../adapters/slackDispatchAdapter.js";
+import { createPagerDutyDispatchAdapter } from "../adapters/pagerDutyDispatchAdapter.js";
+import { formatSlackBlocks } from "../formatters/slackFormatter.js";
 import { TRIAGE_WORKER_DEFAULTS, DEFAULT_SEVERITY_CONFIG } from "../constants/triageConstants.js";
+import { DEFAULT_POLICY_RULES } from "../constants/policyRules.js";
+import { appConfig } from "../config/appConfig.js";
 
 const logger = createLogger(SERVICE_NAMES.INCIDENT_TRIAGE);
 
@@ -139,6 +149,12 @@ const incidentCorrelator = createIncidentCorrelator(triageSearchPort);
 const llmCompletionPort = createLLMCompletionAdapter();
 const aiSummarizer = createAiSummarizer(llmCompletionPort);
 
+// ==================== Phase 5 Services ====================
+
+const slackDispatchPort = createSlackDispatchAdapter(appConfig.slackIncidentWebhookUrl);
+const pagerDutyDispatchPort = createPagerDutyDispatchAdapter();
+const dispatchService = createDispatchService(slackDispatchPort, pagerDutyDispatchPort);
+
 // ==================== Helper Functions ====================
 
 const delay = (ms: number): Promise<void> =>
@@ -206,6 +222,96 @@ const incrementCounter = (
   Object.assign(state, { [field]: state[field] + 1 });
 };
 
+// ==================== Phase 5 Helper ====================
+
+/**
+ * Runs policy evaluation, formats Slack blocks, dispatches notifications,
+ * and persists dispatch results. Extracted from processAlert to stay under
+ * the max-lines-per-function limit.
+ */
+const runPolicyAndDispatch = async (
+  alertId: string,
+  tenantId: string,
+  normalizedAlert: NormalizedAlert,
+  severityScore: {
+    readonly label: string;
+    readonly total: number;
+  },
+  evidenceCatalog: {
+    readonly confidence: { readonly total: number };
+    readonly completeness: { readonly total: number };
+  },
+  summaryResult: IncidentSummaryResponse,
+  triageResultId: string,
+  startTime: number,
+  context: RequestContext
+): Promise<{
+  readonly dispatchResults: {
+    readonly totalTargets: number;
+    readonly successCount: number;
+    readonly failureCount: number;
+  };
+  readonly dispatchDurationMs: number;
+}> => {
+  // Step 12: Policy evaluation
+  const triagePolicyContext: TriagePolicyContext = {
+    alertId,
+    tenantId,
+    severityLabel: severityScore.label as TriagePolicyContext["severityLabel"],
+    severityScore: severityScore.total,
+    environment: normalizedAlert.environment,
+    serviceName: normalizedAlert.serviceName,
+    confidence: evidenceCatalog.confidence.total,
+    completeness: evidenceCatalog.completeness.total,
+    headline: summaryResult.headline,
+    summarySource: summaryResult.summarySource,
+  };
+
+  const routingDecision = evaluatePolicy(triagePolicyContext, DEFAULT_POLICY_RULES);
+
+  // Step 13: Format and dispatch notifications
+  const slackBlocks = formatSlackBlocks({
+    alertId,
+    headline: summaryResult.headline,
+    rootCauseSummary: summaryResult.rootCauseSummary,
+    impactAssessment: summaryResult.impactAssessment,
+    severityLabel: severityScore.label as TriagePolicyContext["severityLabel"],
+    severityScore: severityScore.total,
+    confidence: evidenceCatalog.confidence.total,
+    completeness: evidenceCatalog.completeness.total,
+    summarySource: summaryResult.summarySource,
+    environment: normalizedAlert.environment,
+    serviceName: normalizedAlert.serviceName,
+    matchedRules: routingDecision.matchedRules,
+  });
+
+  const results = await dispatchService.dispatch(
+    routingDecision,
+    triagePolicyContext,
+    slackBlocks as Array<Record<string, unknown>>,
+    context
+  );
+
+  // Step 14: Persist dispatch results
+  const dispatchDurationMs = Date.now() - startTime;
+
+  await updateTriageDispatchResults({
+    triageResultId,
+    routingDecision: routingDecision as unknown as Record<string, unknown>,
+    dispatchedTo: results.results.map((dr) => ({
+      targetType: dr.target.type,
+      channel: dr.target.channel,
+      success: dr.success,
+      statusCode: dr.statusCode,
+      error: dr.error,
+      durationMs: dr.durationMs,
+    })),
+    pipelineDurationMs: dispatchDurationMs,
+  });
+
+  return { dispatchResults: results, dispatchDurationMs };
+};
+
 // ==================== Job Processing ====================
 
 /**
@@ -241,7 +347,10 @@ const serializeSeverityFactors = (
  * 9. Update triage result with enrichment
  * 10. AI summarization with validation + fallback (Phase 4)
  * 11. Persist AI summary
- * 12. Mark alert as triaged
+ * 12. Policy evaluation (Phase 5)
+ * 13. Dispatch notifications (Phase 5)
+ * 14. Persist dispatch results
+ * 15. Mark alert as triaged
  */
 const processAlert = async (alertId: string, state: TriageWorkerState): Promise<void> => {
   const alert = await getAlertById(alertId);
@@ -375,7 +484,21 @@ const processAlert = async (alertId: string, state: TriageWorkerState): Promise<
     pipelineDurationMs: summaryDurationMs,
   });
 
-  // Step 12: Mark alert as triaged
+  // Steps 12-14: Policy evaluation, dispatch, persist (Phase 5)
+  const typedSummary = summaryResult as IncidentSummaryResponse;
+  const { dispatchResults, dispatchDurationMs } = await runPolicyAndDispatch(
+    alertId,
+    tenantId,
+    normalizedAlert,
+    severityScore,
+    evidenceCatalog,
+    typedSummary,
+    triageResult.id,
+    startTime,
+    context
+  );
+
+  // Step 15: Mark alert as triaged
   await updateAlertStatus(alertId, "triaged");
 
   const { length: matchCount } = runbookResult.matches;
@@ -389,7 +512,10 @@ const processAlert = async (alertId: string, state: TriageWorkerState): Promise<
     runbookMatches: matchCount,
     correlations: corrCount,
     summarySource: summaryResult.summarySource,
-    durationMs: summaryDurationMs,
+    dispatchTargets: dispatchResults.totalTargets,
+    dispatchSuccess: dispatchResults.successCount,
+    dispatchFailures: dispatchResults.failureCount,
+    durationMs: dispatchDurationMs,
     ...context,
   });
 };

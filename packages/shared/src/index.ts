@@ -311,11 +311,13 @@ export {
   getTriageResultByAlertId,
   updateTriageEnrichment,
   updateTriageAiSummary,
+  updateTriageDispatchResults,
   searchSimilarTriageResults,
   type IncidentTriageResultRecord,
   type CreateTriageResultInput,
   type UpdateTriageEnrichmentInput,
   type UpdateTriageAiSummaryInput,
+  type UpdateTriageDispatchInput,
   type TriageSimilarityResult,
 } from "./database/index.js";
 

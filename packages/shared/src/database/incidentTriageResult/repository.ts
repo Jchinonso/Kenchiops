@@ -20,6 +20,7 @@ import type {
   CreateTriageResultInput,
   UpdateTriageEnrichmentInput,
   UpdateTriageAiSummaryInput,
+  UpdateTriageDispatchInput,
   TriageResultSimilarityRow,
   TriageSimilarityResult,
 } from "./types.js";
@@ -257,6 +258,45 @@ export const searchSimilarTriageResults = async (
     logger.error("Failed to search similar triage results", {
       tenantId,
       excludeAlertId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Updates a triage result with dispatch results (Phase 5).
+ *
+ * @param input - The dispatch result data to store
+ * @returns The updated triage result record
+ */
+export const updateTriageDispatchResults = async (
+  input: UpdateTriageDispatchInput
+): Promise<IncidentTriageResultRecord> => {
+  validateTriageResultId(input.triageResultId);
+
+  try {
+    const result = await query<IncidentTriageResultRow>(
+      INCIDENT_TRIAGE_RESULT_QUERIES.UPDATE_DISPATCH_RESULTS,
+      [
+        input.triageResultId,
+        JSON.stringify(input.routingDecision),
+        JSON.stringify(input.dispatchedTo),
+        input.pipelineDurationMs,
+      ]
+    );
+
+    const record = mapRowToTriageResult(result.rows[0]);
+
+    logger.info("Triage result dispatch updated", {
+      id: record.id,
+      alertId: record.alertId,
+    });
+
+    return record;
+  } catch (error) {
+    logger.error("Failed to update triage dispatch results", {
+      triageResultId: input.triageResultId,
       error: getErrorMessage(error),
     });
     throw error;

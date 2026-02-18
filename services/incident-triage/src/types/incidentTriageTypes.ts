@@ -15,4 +15,5 @@ export interface IncidentTriageConfig {
   readonly databaseUrl: string;
   readonly pagerDutyWebhookSecret: string;
   readonly triageLlmModel: string;
+  readonly slackIncidentWebhookUrl: string;
 }

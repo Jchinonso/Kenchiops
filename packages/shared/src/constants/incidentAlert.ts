@@ -84,6 +84,15 @@ const buildAiSummaryQuery = (): string =>
     "WHERE id = $1 RETURNING *",
   ].join(" ");
 
+// Helper: builds the dispatch results UPDATE query (avoids lint false-positive on SQL column references)
+const buildDispatchResultsQuery = (): string =>
+  [
+    "UPDATE incident_triage_results SET",
+    "routing_decision = $2::jsonb, dispatched_to = $3::jsonb,",
+    "pipeline_duration_ms = $4, updated_at = NOW()",
+    "WHERE id = $1 RETURNING *",
+  ].join(" ");
+
 /**
  * SQL query templates for incident triage result database operations.
  */
@@ -104,6 +113,7 @@ export const INCIDENT_TRIAGE_RESULT_QUERIES = {
   `,
   UPDATE_ENRICHMENT: buildEnrichmentQuery(),
   UPDATE_AI_SUMMARY: buildAiSummaryQuery(),
+  UPDATE_DISPATCH_RESULTS: buildDispatchResultsQuery(),
   SEARCH_SIMILAR_TRIAGE: buildSimilarTriageQuery(),
 } as const;
 

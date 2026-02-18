@@ -100,6 +100,16 @@ export interface UpdateTriageAiSummaryInput {
 }
 
 /**
+ * Input for updating a triage result with dispatch results (Phase 5).
+ */
+export interface UpdateTriageDispatchInput {
+  readonly triageResultId: string;
+  readonly routingDecision: Readonly<Record<string, unknown>>;
+  readonly dispatchedTo: readonly Record<string, unknown>[];
+  readonly pipelineDurationMs: number;
+}
+
+/**
  * Row type returned by the similarity search query (extends base row with joined fields).
  */
 export interface TriageResultSimilarityRow extends IncidentTriageResultRow {

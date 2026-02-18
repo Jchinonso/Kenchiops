@@ -33,4 +33,6 @@ export const appConfig: IncidentTriageConfig = {
   pagerDutyWebhookSecret: process.env.PAGERDUTY_WEBHOOK_SECRET ?? "",
   // Service-specific LLM model override — not in shared config
   triageLlmModel: process.env.TRIAGE_LLM_MODEL ?? OPENROUTER_DEFAULTS.MODEL,
+  // Service-specific Slack webhook URL for incident notifications — not in shared config
+  slackIncidentWebhookUrl: process.env.SLACK_INCIDENT_WEBHOOK_URL ?? "",
 } as const;
