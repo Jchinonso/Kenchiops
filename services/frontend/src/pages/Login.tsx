@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   Github,
   Gitlab,
@@ -11,6 +11,7 @@ import {
   Brain,
   BarChart3,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { getLoginUrl } from "@/lib/apiClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -64,21 +65,57 @@ const stats = [
   { value: "6hrs", label: "Saved per dev/week" },
 ] as const;
 
+const ERROR_MESSAGES: Readonly<Record<string, string>> = {
+  access_denied: "Access was denied. Please try again or use a different account.",
+  invalid_state: "Authentication session expired. Please try again.",
+  server_error: "An error occurred during authentication. Please try again.",
+};
+
 const Login = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"saas" | "selfhosted">("saas");
   const [instanceUrl, setInstanceUrl] = useState("");
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  // OAuth error forwarded from AuthCallback via ?error= query param
+  const oauthError = searchParams.get("error");
+  const oauthErrorMessage = oauthError
+    ? (ERROR_MESSAGES[oauthError] ?? `Authentication failed: ${oauthError}`)
+    : null;
 
   // Redirect authenticated users to dashboard
   if (isAuthenticated && !isLoading) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Show loading spinner while checking auth state on initial load
   const authChecking = isLoading;
 
+  const validateInstanceUrl = (): boolean => {
+    if (activeTab !== "selfhosted") {
+      return true;
+    }
+    if (!instanceUrl.trim()) {
+      setUrlError("Instance URL is required");
+      return false;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const parsed = new URL(instanceUrl);
+      setUrlError(null);
+      return true;
+    } catch {
+      setUrlError("Please enter a valid URL (e.g., https://git.yourcompany.com)");
+      return false;
+    }
+  };
+
   const handleProviderClick = (providerId: string): void => {
+    if (!validateInstanceUrl()) {
+      return;
+    }
+
     setLoadingProvider(providerId);
     const url =
       activeTab === "selfhosted" && instanceUrl
@@ -87,12 +124,23 @@ const Login = () => {
     window.location.assign(url);
   };
 
+  const handleSelfHostedSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    const primaryProvider = selfHostedProviders.find((p) => p.primary);
+    if (primaryProvider) {
+      handleProviderClick(primaryProvider.id);
+    }
+  };
+
   const providers = activeTab === "saas" ? saasProviders : selfHostedProviders;
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Panel - Gradient with content */}
-      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden">
+      {/* Left Panel - Gradient with social proof */}
+      <aside
+        className="hidden lg:flex lg:w-[45%] relative overflow-hidden"
+        aria-label="Product highlights"
+      >
         {/* Gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700" />
 
@@ -113,13 +161,14 @@ const Login = () => {
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           {/* Logo */}
-          <div className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5" aria-label="Kenchi home">
             <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/10">
               <svg
                 className="w-5 h-5 text-white"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -130,30 +179,30 @@ const Login = () => {
               </svg>
             </div>
             <span className="text-xl font-bold text-white">Kenchi</span>
-          </div>
+          </Link>
 
           {/* Main content */}
           <div className="space-y-10">
             <div>
-              <h2 className="text-3xl font-bold text-white leading-tight mb-3">
+              <p className="text-3xl font-bold text-white leading-tight mb-3">
                 Stop debugging CI failures manually.
-              </h2>
+              </p>
               <p className="text-indigo-100/80 text-lg leading-relaxed">
                 Kenchi analyzes your pipeline failures in seconds, not hours.
               </p>
             </div>
 
             {/* Feature list */}
-            <div className="space-y-4">
+            <ul className="space-y-4" aria-label="Key features">
               {features.map((feature) => (
-                <div key={feature.text} className="flex items-center gap-3">
+                <li key={feature.text} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-sm flex items-center justify-center text-white/90 border border-white/5">
                     {feature.icon}
                   </div>
                   <span className="text-white/90 text-sm font-medium">{feature.text}</span>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
 
             {/* Stats row */}
             <div className="flex gap-8">
@@ -166,12 +215,12 @@ const Login = () => {
             </div>
 
             {/* Testimonial */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/10">
+            <blockquote className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/10">
               <p className="text-white/90 text-sm leading-relaxed italic">
                 &ldquo;Kenchi cut our CI debugging time by 80%. What used to take an hour now takes
                 minutes.&rdquo;
               </p>
-              <div className="mt-3 flex items-center gap-3">
+              <footer className="mt-3 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-400/30 flex items-center justify-center text-white text-xs font-bold">
                   JK
                 </div>
@@ -179,8 +228,8 @@ const Login = () => {
                   <div className="text-white text-sm font-medium">James K.</div>
                   <div className="text-indigo-200/60 text-xs">Staff Engineer, Series B Startup</div>
                 </div>
-              </div>
-            </div>
+              </footer>
+            </blockquote>
           </div>
 
           {/* Trusted by */}
@@ -197,11 +246,36 @@ const Login = () => {
             </div>
           </div>
         </div>
-      </div>
+      </aside>
 
       {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-[55%] flex items-center justify-center p-6 sm:p-12 bg-white dark:bg-gray-950">
+      <main className="w-full lg:w-[55%] flex items-center justify-center p-6 sm:p-12 bg-white dark:bg-gray-950">
         <div className="w-full max-w-[420px]">
+          {/* Mobile Logo (visible only when aside is hidden) */}
+          <Link
+            to="/"
+            className="flex lg:hidden items-center gap-2.5 mb-8"
+            aria-label="Kenchi home"
+          >
+            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center">
+              <svg
+                className="w-5 h-5 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                />
+              </svg>
+            </div>
+            <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Kenchi</span>
+          </Link>
+
           {/* Back to Home */}
           <Link
             to="/"
@@ -225,10 +299,32 @@ const Login = () => {
             </p>
           </div>
 
+          {/* OAuth error banner (forwarded from AuthCallback) */}
+          {oauthErrorMessage && (
+            <div
+              className="mb-6 p-3.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400"
+              role="alert"
+            >
+              {oauthErrorMessage}
+            </div>
+          )}
+
           {/* Tabs */}
-          <div className="flex mb-6 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+          <div
+            className="flex mb-6 bg-gray-100 dark:bg-gray-800 rounded-xl p-1"
+            role="tablist"
+            aria-label="Hosting type"
+          >
             <button
-              onClick={() => setActiveTab("saas")}
+              type="button"
+              role="tab"
+              id="tab-saas"
+              aria-selected={activeTab === "saas"}
+              aria-controls="tabpanel-saas"
+              onClick={() => {
+                setActiveTab("saas");
+                setUrlError(null);
+              }}
               className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-all duration-200 ${
                 activeTab === "saas"
                   ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
@@ -238,6 +334,11 @@ const Login = () => {
               Cloud
             </button>
             <button
+              type="button"
+              role="tab"
+              id="tab-selfhosted"
+              aria-selected={activeTab === "selfhosted"}
+              aria-controls="tabpanel-selfhosted"
               onClick={() => setActiveTab("selfhosted")}
               className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-all duration-200 ${
                 activeTab === "selfhosted"
@@ -249,116 +350,150 @@ const Login = () => {
             </button>
           </div>
 
-          {/* Self-hosted URL input */}
-          {activeTab === "selfhosted" && (
-            <div className="mb-5">
-              <label
-                htmlFor="instance-url"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
-              >
-                Instance URL
-              </label>
-              <input
-                id="instance-url"
-                type="url"
-                value={instanceUrl}
-                onChange={(event) => setInstanceUrl(event.target.value)}
-                placeholder="https://git.yourcompany.com"
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
-              />
-            </div>
-          )}
+          {/* Tab Panel */}
+          <div id={`tabpanel-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
+            {/* Self-hosted URL input wrapped in form */}
+            {activeTab === "selfhosted" && (
+              <form onSubmit={handleSelfHostedSubmit} noValidate className="mb-5">
+                <label
+                  htmlFor="instance-url"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                >
+                  Instance URL
+                </label>
+                <input
+                  id="instance-url"
+                  name="instanceUrl"
+                  type="url"
+                  required
+                  autoComplete="url"
+                  value={instanceUrl}
+                  onChange={(event) => {
+                    setInstanceUrl(event.target.value);
+                    setUrlError(null);
+                  }}
+                  placeholder="https://git.yourcompany.com"
+                  aria-invalid={urlError ? "true" : undefined}
+                  aria-describedby={urlError ? "instance-url-error" : undefined}
+                  className={`w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all ${
+                    urlError
+                      ? "border-red-400 dark:border-red-500"
+                      : "border-gray-200 dark:border-gray-700"
+                  }`}
+                />
+                {urlError && (
+                  <p id="instance-url-error" className="mt-1.5 text-sm text-red-500" role="alert">
+                    {urlError}
+                  </p>
+                )}
+              </form>
+            )}
 
-          {authChecking ? (
-            <div className="py-12 flex flex-col items-center gap-3">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-              <p className="text-sm text-gray-400 dark:text-gray-500">Checking authentication...</p>
-            </div>
-          ) : (
-            <>
-              {/* Primary Provider (GitHub) */}
-              <div className="space-y-2.5">
-                {providers
-                  .filter((entry) => entry.primary)
-                  .map((provider) => (
-                    <button
-                      key={provider.name}
-                      onClick={() => handleProviderClick(provider.id)}
-                      disabled={loadingProvider !== null}
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-gray-900 font-medium transition-all duration-200 shadow-lg shadow-gray-900/10 dark:shadow-gray-100/10 hover:shadow-xl hover:shadow-gray-900/15 group disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                      {loadingProvider === provider.id ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <span className="group-hover:scale-110 transition-transform duration-200">
-                          {provider.icon}
+            {authChecking ? (
+              <div className="py-12 flex flex-col items-center gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                <p className="text-sm text-gray-400 dark:text-gray-500">
+                  Checking authentication...
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Primary Provider (GitHub) */}
+                <div className="space-y-2.5">
+                  {providers
+                    .filter((entry) => entry.primary)
+                    .map((provider) => (
+                      <button
+                        key={provider.name}
+                        type="button"
+                        onClick={() => handleProviderClick(provider.id)}
+                        disabled={loadingProvider !== null}
+                        className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-gray-900 font-medium transition-all duration-200 shadow-lg shadow-gray-900/10 dark:shadow-gray-100/10 hover:shadow-xl hover:shadow-gray-900/15 group disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                        {loadingProvider === provider.id ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <span className="group-hover:scale-110 transition-transform duration-200">
+                            {provider.icon}
+                          </span>
+                        )}
+                        <span>
+                          {loadingProvider === provider.id
+                            ? `Connecting to ${provider.name}...`
+                            : `Continue with ${provider.name}`}
                         </span>
-                      )}
-                      <span>
-                        {loadingProvider === provider.id
-                          ? `Connecting to ${provider.name}...`
-                          : `Continue with ${provider.name}`}
-                      </span>
-                    </button>
-                  ))}
-              </div>
-
-              {/* Divider */}
-              <div className="relative my-5">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                      </button>
+                    ))}
                 </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-white dark:bg-gray-950 px-3 text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                    or continue with
-                  </span>
-                </div>
-              </div>
 
-              {/* Secondary Providers */}
-              <div className="space-y-2.5">
-                {providers
-                  .filter((entry) => !entry.primary)
-                  .map((provider) => (
-                    <button
-                      key={provider.name}
-                      onClick={() => {
-                        if (!provider.comingSoon) {
-                          handleProviderClick(provider.id);
+                {/* Security reassurance */}
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+                  <Lock className="w-3 h-3" aria-hidden="true" />
+                  Secure OAuth — we never see your password
+                </p>
+
+                {/* Divider */}
+                <div className="relative my-5">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-white dark:bg-gray-950 px-3 text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                      or continue with
+                    </span>
+                  </div>
+                </div>
+
+                {/* Secondary Providers */}
+                <div className="space-y-2.5">
+                  {providers
+                    .filter((entry) => !entry.primary)
+                    .map((provider) => (
+                      <button
+                        key={provider.name}
+                        type="button"
+                        onClick={() => {
+                          if (!provider.comingSoon) {
+                            handleProviderClick(provider.id);
+                          }
+                        }}
+                        disabled={loadingProvider !== null || provider.comingSoon}
+                        aria-disabled={provider.comingSoon ? "true" : undefined}
+                        aria-label={
+                          provider.comingSoon ? `${provider.name} — coming soon` : provider.name
                         }
-                      }}
-                      disabled={loadingProvider !== null || provider.comingSoon}
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {loadingProvider === provider.id ? (
-                        <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-                      ) : (
-                        <span className="text-gray-500 dark:text-gray-400 group-hover:scale-110 transition-transform duration-200">
-                          {provider.icon}
+                        className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loadingProvider === provider.id ? (
+                          <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                        ) : (
+                          <span className="text-gray-500 dark:text-gray-400 group-hover:scale-110 transition-transform duration-200">
+                            {provider.icon}
+                          </span>
+                        )}
+                        <span>
+                          {loadingProvider === provider.id
+                            ? `Connecting to ${provider.name}...`
+                            : provider.name}
                         </span>
-                      )}
-                      <span>
-                        {loadingProvider === provider.id
-                          ? `Connecting to ${provider.name}...`
-                          : provider.name}
-                      </span>
-                      {provider.comingSoon && (
-                        <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
-                          Soon
-                        </span>
-                      )}
-                    </button>
-                  ))}
-              </div>
-            </>
-          )}
+                        {provider.comingSoon && (
+                          <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
+                            Soon
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Help Link */}
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Need help?{" "}
               <a
-                href="/#cta"
+                href="mailto:hello@kenchi.dev"
                 className="text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
               >
                 Contact us
@@ -386,7 +521,7 @@ const Login = () => {
             </p>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

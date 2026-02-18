@@ -103,3 +103,29 @@ The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 
 - CLAUDE.md mentions `startTimer` but it's NOT actually exported from `@kenchi/shared`
 - Use `Date.now()` pattern instead for timing: `const startTime = Date.now()` / `const durationMs = Date.now() - startTime`
+
+## New Service Scaffold Patterns
+
+### createQueue API
+
+- `createQueue(config: QueueConfig)` takes an object, not a string
+- `QueueConfig` requires `name`, optional `maxRetries`, `visibilityTimeout`, `deadLetterQueue`
+- `enqueue(type: string, payload: T, metadata?)` requires a type string as first arg
+
+### Server Timeout Workaround
+
+- `server.keepAliveTimeout = X` triggers the validate-standards `object-mutation` rule
+- Workaround: use `Object.assign(server, { keepAliveTimeout: X, headersTimeout: Y })` in a helper function
+
+### Service-Specific Env Vars
+
+- Service-specific secrets (e.g., `PAGERDUTY_WEBHOOK_SECRET`) that aren't in shared Config type
+- Use `process.env.X ?? ""` in appConfig with a justification comment
+- Do NOT add every service's secrets to the shared Config interface
+
+### Incident Triage Service
+
+- Port 3004, queue name `kenchi:incident-triage`
+- DB modules: `incidentAlert/`, `incidentDedup/` in shared database
+- Constants: `constants/incidentAlert.ts` for SQL queries
+- PagerDuty signature: `x-pagerduty-signature` header, `v1=` prefix, HMAC-SHA256

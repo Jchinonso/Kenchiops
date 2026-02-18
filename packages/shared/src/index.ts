@@ -292,6 +292,20 @@ export {
   type WebhookActivityListOptions,
   type CreateWebhookActivityInput,
 } from "./database/index.js";
+export {
+  // Incident alert module
+  createIncidentAlert,
+  getAlertById,
+  findAlertByDeliveryId,
+  updateAlertStatus,
+  type IncidentAlertRecord,
+  type CreateIncidentAlertInput,
+  // Incident dedup module
+  findByFingerprint,
+  upsertDedupEntry,
+  cleanupExpiredEntries as cleanupExpiredDedupEntries,
+  type IncidentDedupRecord,
+} from "./database/index.js";
 
 // User module (Authentication)
 export {

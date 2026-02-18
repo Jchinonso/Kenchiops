@@ -342,6 +342,8 @@ export const QUEUE_RETRY_CONFIG = {
   SLACK_NOTIFICATION: 5,
   /** GitHub action queue max retries */
   GITHUB_ACTION: 3,
+  /** Incident triage queue max retries */
+  INCIDENT_TRIAGE: 3,
 } as const;
 
 /**
@@ -354,6 +356,8 @@ export const QUEUE_VISIBILITY_TIMEOUT = {
   SLACK_NOTIFICATION: 30,
   /** GitHub action visibility timeout */
   GITHUB_ACTION: 120,
+  /** Incident triage visibility timeout (2 minutes for enrichment pipeline) */
+  INCIDENT_TRIAGE: 120,
 } as const;
 
 /**
@@ -366,6 +370,8 @@ export const QUEUE_NAMES = {
   SLACK_NOTIFICATIONS: "kenchi:slack-notifications",
   /** GitHub action jobs queue */
   GITHUB_ACTIONS: "kenchi:github-actions",
+  /** Incident triage jobs queue */
+  INCIDENT_TRIAGE: "kenchi:incident-triage",
 } as const;
 
 /**
@@ -380,4 +386,6 @@ export const PUBSUB_CHANNELS = {
   HEALTH_EVENTS: "kenchi:events:health",
   /** Dashboard real-time events (SSE) */
   DASHBOARD: "kenchi:events:dashboard",
+  /** Incident triage events */
+  INCIDENT_TRIAGE: "kenchi:events:incident-triage",
 } as const;

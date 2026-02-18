@@ -321,6 +321,13 @@ export { EVENT_DB_DEFAULTS, EVENT_DB_QUERIES } from "./event.js";
 // Webhook activity constants
 export { WEBHOOK_ACTIVITY_DEFAULTS, WEBHOOK_ACTIVITY_QUERIES } from "./webhookActivity.js";
 
+// Incident alert constants
+export {
+  INCIDENT_ALERT_DEFAULTS,
+  INCIDENT_ALERT_QUERIES,
+  INCIDENT_DEDUP_QUERIES,
+} from "./incidentAlert.js";
+
 // Dashboard constants
 export { SSE_CONFIG, DASHBOARD_EVENT_TYPES } from "./dashboard.js";
 

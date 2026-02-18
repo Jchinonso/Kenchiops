@@ -336,6 +336,24 @@ export {
   type CreateWebhookActivityInput,
 } from "./webhookActivity/index.js";
 
+// Incident alert module
+export {
+  createIncidentAlert,
+  getAlertById,
+  findAlertByDeliveryId,
+  updateAlertStatus,
+  type IncidentAlertRecord,
+  type CreateIncidentAlertInput,
+} from "./incidentAlert/index.js";
+
+// Incident dedup module
+export {
+  findByFingerprint,
+  upsertDedupEntry,
+  cleanupExpiredEntries,
+  type IncidentDedupRecord,
+} from "./incidentDedup/index.js";
+
 // Risk rules module (Context-Aware Risk Scoring)
 // Note: CustomRiskRuleRow, RiskAssessmentRow, and row mappers are internal.
 export {

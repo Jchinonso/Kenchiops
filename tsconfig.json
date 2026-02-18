@@ -21,6 +21,7 @@
     { "path": "./packages/shared" },
     { "path": "./services/api" },
     { "path": "./services/slack-bot" },
-    { "path": "./services/github-app" }
+    { "path": "./services/github-app" },
+    { "path": "./services/incident-triage" }
   ]
 }
