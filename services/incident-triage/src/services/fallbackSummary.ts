@@ -10,28 +10,18 @@
  * @module services/fallbackSummary
  */
 
+import { truncateText } from "@kenchi/shared";
 import type { EvidenceCatalog } from "../types/evidenceTypes.js";
 import type { NormalizedAlert } from "../types/incidentTypes.js";
-import type { SeverityScore } from "../types/severityTypes.js";
 import type { RunbookMatch } from "../types/runbookTypes.js";
-import type { IncidentSummaryResponse, SuggestedAction } from "../types/summaryTypes.js";
-
-// ==================== Fallback Input ====================
-
-/**
- * Input for the fallback summary generator.
- */
-export interface FallbackSummaryInput {
-  readonly alert: NormalizedAlert;
-  readonly severity: SeverityScore;
-  readonly runbooks: readonly RunbookMatch[];
-  readonly evidenceCatalog: EvidenceCatalog;
-}
+import type { SeverityScore } from "../types/severityTypes.js";
+import type {
+  FallbackSummaryInput,
+  IncidentSummaryResponse,
+  SuggestedAction,
+} from "../types/summaryTypes.js";
 
 // ==================== Helpers ====================
-
-const clipText = (text: string, maxLen: number): string =>
-  text.length > maxLen ? `${text.slice(0, maxLen - 3)}...` : text;
 
 const capitalize = (text: string): string =>
   text.length > 0 ? text.charAt(0).toUpperCase() + text.slice(1) : text;
@@ -71,7 +61,7 @@ const buildHeadline = (alert: NormalizedAlert, severity: SeverityScore): string 
   const { serviceName, environment, title } = alert;
   const svc = serviceName ?? "unknown service";
   const env = environment ?? "unknown environment";
-  return clipText(`${capitalize(label)} alert on ${svc} in ${env}: ${title}`, 200);
+  return truncateText(`${capitalize(label)} alert on ${svc} in ${env}: ${title}`, 200);
 };
 
 /**
@@ -79,7 +69,7 @@ const buildHeadline = (alert: NormalizedAlert, severity: SeverityScore): string 
  */
 const buildRootCauseSummary = (alert: NormalizedAlert, severity: SeverityScore): string => {
   const { description, title } = alert;
-  const descExcerpt = description ? clipText(description, 300) : title;
+  const descExcerpt = description ? truncateText(description, 300) : title;
 
   const topFactors = severity.factors
     .filter(({ score }) => score > 0)
@@ -88,7 +78,7 @@ const buildRootCauseSummary = (alert: NormalizedAlert, severity: SeverityScore):
     .join(". ");
 
   const factorSuffix = topFactors ? ` Contributing factors: ${topFactors}.` : "";
-  return clipText(`Alert triggered: ${descExcerpt}.${factorSuffix}`, 1000);
+  return truncateText(`Alert triggered: ${descExcerpt}.${factorSuffix}`, 1000);
 };
 
 /**
@@ -99,7 +89,7 @@ const buildImpactAssessment = (alert: NormalizedAlert, severity: SeverityScore):
   const { label, total } = severity;
   const svc = serviceName ?? "unknown service";
   const env = environment ?? "unknown environment";
-  return clipText(
+  return truncateText(
     `${capitalize(label)} severity (score: ${total}/100) affecting ${svc} in ${env}. Source severity: ${sourceSev}.`,
     500
   );
@@ -128,7 +118,7 @@ const buildFallbackActions = (
   const runbookAction: SuggestedAction | null =
     runbookCount > 0
       ? {
-          action: `Follow runbook: ${clipText(runbooks[0].title, 200)}`,
+          action: `Follow runbook: ${truncateText(runbooks[0].title, 200)}`,
           reasoning: `Matched runbook with similarity ${runbooks[0].similarity.toFixed(3)} (RB-0)`,
           priority: "immediate",
         }

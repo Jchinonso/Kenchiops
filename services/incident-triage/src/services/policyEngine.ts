@@ -11,6 +11,7 @@
  * @module services/policyEngine
  */
 
+import { deduplicateByKey } from "@kenchi/shared";
 import type {
   PolicyRule,
   PolicyCondition,
@@ -110,24 +111,10 @@ const evaluateCondition = (
 // ==================== Target Deduplication ====================
 
 /**
- * Creates a unique key for a dispatch target for deduplication.
- */
-const targetKey = (target: DispatchTarget): string => `${target.type}:${target.channel}`;
-
-/**
  * Deduplicates dispatch targets by type+channel, keeping the first occurrence.
  */
-const deduplicateTargets = (targets: readonly DispatchTarget[]): readonly DispatchTarget[] => {
-  const seen = new Set<string>();
-  return targets.filter((target) => {
-    const key = targetKey(target);
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-};
+const deduplicateTargets = (targets: readonly DispatchTarget[]): readonly DispatchTarget[] =>
+  deduplicateByKey(targets, (target) => `${target.type}:${target.channel}`);
 
 // ==================== Rule Sorting ====================
 

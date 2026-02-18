@@ -39,6 +39,7 @@ const verifySignature = (payload: string, signature: string, secret: string): bo
       Buffer.from(computedSignature, "hex")
     );
   } catch {
+    // Intentional: hex decode failure means invalid signature format -- return false to reject
     return false;
   }
 };

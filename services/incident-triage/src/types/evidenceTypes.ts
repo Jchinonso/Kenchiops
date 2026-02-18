@@ -5,6 +5,11 @@
  * and completeness scoring in the incident triage pipeline.
  */
 
+import type { NormalizedAlert } from "./incidentTypes.js";
+import type { SeverityScore } from "./severityTypes.js";
+import type { RunbookMatch } from "./runbookTypes.js";
+import type { CorrelatedIncident } from "./correlationTypes.js";
+
 // ==================== Evidence ID Prefixes ====================
 
 /**
@@ -94,6 +99,18 @@ export type ConfidenceSignalName =
   | "environment_known"
   | "has_description"
   | "has_labels";
+
+// ==================== Aggregate Evidence Input ====================
+
+/**
+ * Input for the evidence aggregation function.
+ */
+export interface AggregateEvidenceInput {
+  readonly alert: NormalizedAlert;
+  readonly severity: SeverityScore;
+  readonly runbooks: readonly RunbookMatch[];
+  readonly correlations: readonly CorrelatedIncident[];
+}
 
 // ==================== Configuration ====================
 

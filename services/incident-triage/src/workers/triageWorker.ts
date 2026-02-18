@@ -173,7 +173,10 @@ const toNormalizedAlert = (record: IncidentAlertRecord): NormalizedAlert => ({
   environment: record.environment,
   metrics: record.metrics,
   labels: record.labels,
-  receivedAt: record.receivedAt.toISOString(),
+  receivedAt:
+    record.receivedAt instanceof Date && !isNaN(record.receivedAt.getTime())
+      ? record.receivedAt.toISOString()
+      : new Date().toISOString(),
   sourcePayload: record.sourcePayload,
 });
 
@@ -311,64 +314,16 @@ const runPolicyAndDispatch = async (
 // ==================== Job Processing ====================
 
 /**
- * Serializes severity factors for database storage.
+ * Runs the full triage pipeline after the alert status has been set to "processing".
+ * Extracted so processAlert can catch errors and reset status to "error".
  */
-const serializeSeverityFactors = (
-  factors: ReadonlyArray<{
-    readonly name: string;
-    readonly weight: number;
-    readonly score: number;
-    readonly maxScore: number;
-    readonly reason: string;
-  }>
-): ReadonlyArray<Record<string, unknown>> =>
-  factors.map((factor) => ({
-    name: factor.name,
-    weight: factor.weight,
-    score: factor.score,
-    maxScore: factor.maxScore,
-    reason: factor.reason,
-  }));
-
-/**
- * Processes a single alert through the full triage pipeline:
- * 1. Fetch alert from DB
- * 2. Update status to processing
- * 3. Run deduplication check
- * 4. Severity classification
- * 5. Create initial triage result
- * 6. Runbook matching (Phase 3)
- * 7. Incident correlation (Phase 3)
- * 8. Evidence aggregation (Phase 3)
- * 9. Update triage result with enrichment
- * 10. AI summarization with validation + fallback (Phase 4)
- * 11. Persist AI summary
- * 12. Policy evaluation (Phase 5)
- * 13. Dispatch notifications (Phase 5)
- * 14. Persist dispatch results
- * 15. Mark alert as triaged
- */
-const processAlert = async (alertId: string, state: TriageWorkerState): Promise<void> => {
-  const alert = await getAlertById(alertId);
-
-  if (!alert) {
-    logger.warn("Alert not found for triage", { alertId });
-    return;
-  }
-
-  const context = createJobContext(alert);
-  const startTime = Date.now();
-
-  logger.info("Processing alert for triage", {
-    alertId,
-    source: alert.source,
-    severity: alert.severity,
-    ...context,
-  });
-
-  // Step 1: Mark as processing
-  await updateAlertStatus(alertId, "processing");
-
+const runTriagePipeline = async (
+  alert: IncidentAlertRecord,
+  alertId: string,
+  state: TriageWorkerState,
+  startTime: number,
+  context: RequestContext
+): Promise<void> => {
   // Step 2: Deduplication check
   const tenantId = alert.tenantId ?? "system";
   const fingerprint = alert.fingerprint ?? "";
@@ -408,13 +363,12 @@ const processAlert = async (alertId: string, state: TriageWorkerState): Promise<
     pipelineDurationMs: severityDurationMs,
   });
 
-  // Step 6: Runbook matching (Phase 3)
+  // Step 6: Runbook matching (Phase 3) — also returns embedding for reuse
   const embeddingText = buildEmbeddingText(normalizedAlert);
   const runbookResult = await runbookMatcher.matchRunbooks(embeddingText, tenantId, context);
 
-  // Step 7: Incident correlation (Phase 3)
-  // Re-generate embedding for correlation (reuses the same text)
-  const { embedding: alertEmbedding } = await embeddingPort.generate(tenantId, embeddingText);
+  // Step 7: Incident correlation (Phase 3) — reuse embedding from runbook matcher (H2)
+  const alertEmbedding = runbookResult.embedding;
 
   const correlationResult = await incidentCorrelator.correlateIncident(
     alertEmbedding,
@@ -514,6 +468,74 @@ const processAlert = async (alertId: string, state: TriageWorkerState): Promise<
     durationMs: dispatchDurationMs,
     ...context,
   });
+};
+
+/**
+ * Serializes severity factors for database storage.
+ */
+const serializeSeverityFactors = (
+  factors: ReadonlyArray<{
+    readonly name: string;
+    readonly weight: number;
+    readonly score: number;
+    readonly maxScore: number;
+    readonly reason: string;
+  }>
+): ReadonlyArray<Record<string, unknown>> =>
+  factors.map((factor) => ({
+    name: factor.name,
+    weight: factor.weight,
+    score: factor.score,
+    maxScore: factor.maxScore,
+    reason: factor.reason,
+  }));
+
+/**
+ * Processes a single alert through the full triage pipeline:
+ * 1. Fetch alert from DB
+ * 2. Update status to processing
+ * 3. Run deduplication check
+ * 4. Severity classification
+ * 5. Create initial triage result
+ * 6. Runbook matching (Phase 3)
+ * 7. Incident correlation (Phase 3)
+ * 8. Evidence aggregation (Phase 3)
+ * 9. Update triage result with enrichment
+ * 10. AI summarization with validation + fallback (Phase 4)
+ * 11. Persist AI summary
+ * 12. Policy evaluation (Phase 5)
+ * 13. Dispatch notifications (Phase 5)
+ * 14. Persist dispatch results
+ * 15. Mark alert as triaged
+ */
+const processAlert = async (alertId: string, state: TriageWorkerState): Promise<void> => {
+  const alert = await getAlertById(alertId);
+
+  if (!alert) {
+    logger.warn("Alert not found for triage", { alertId });
+    return;
+  }
+
+  const context = createJobContext(alert);
+  const startTime = Date.now();
+
+  logger.info("Processing alert for triage", {
+    alertId,
+    source: alert.source,
+    severity: alert.severity,
+    ...context,
+  });
+
+  // Step 1: Mark as processing
+  await updateAlertStatus(alertId, "processing");
+
+  // Wrap pipeline in try/catch to reset status on failure (C1: prevent stuck "processing")
+  try {
+    await runTriagePipeline(alert, alertId, state, startTime, context);
+  } catch (error) {
+    await updateAlertStatus(alertId, "error");
+    throw error;
+  }
 };
 
 /**

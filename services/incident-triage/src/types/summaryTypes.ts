@@ -91,6 +91,31 @@ export interface LLMCompletionPort {
   ) => Promise<string>;
 }
 
+// ==================== Fallback Summary Input ====================
+
+/**
+ * Input for the fallback summary generator.
+ */
+export interface FallbackSummaryInput {
+  readonly alert: NormalizedAlert;
+  readonly severity: SeverityScore;
+  readonly runbooks: readonly RunbookMatch[];
+  readonly evidenceCatalog: EvidenceCatalog;
+}
+
+// ==================== Triage User Prompt Input ====================
+
+/**
+ * Input for building the triage user prompt.
+ */
+export interface TriageUserPromptInput {
+  readonly alert: NormalizedAlert;
+  readonly severity: SeverityScore;
+  readonly runbooks: readonly RunbookMatch[];
+  readonly correlations: readonly CorrelatedIncident[];
+  readonly evidenceCatalog: EvidenceCatalog;
+}
+
 // ==================== AI Summarizer Input ====================
 
 /**

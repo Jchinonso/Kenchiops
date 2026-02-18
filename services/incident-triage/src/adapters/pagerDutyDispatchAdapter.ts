@@ -85,12 +85,15 @@ export const createPagerDutyDispatchAdapter = (): PagerDutyDispatchPort => {
       } catch (error) {
         const durationMs = Date.now() - startTime;
         const errorMsg = getErrorMessage(error);
-        const isRetryable = errorMsg.includes("timeout") || errorMsg.includes("5");
+        const statusCode = (error as { status?: number }).status;
+        const isRetryable =
+          errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
 
         adapterLogger.error("PagerDuty event failed", {
           provider: "pagerduty",
           operation: "triggerIncidentEvent",
           durationMs,
+          statusCode,
           routingKey,
           category: isRetryable ? "retryable" : "non_retryable",
           retryable: isRetryable,

@@ -7,18 +7,17 @@
  * @module prompts/triageUserPrompt
  */
 
+import { truncateText } from "@kenchi/shared";
 import type { NormalizedAlert } from "../types/incidentTypes.js";
 import type { SeverityScore } from "../types/severityTypes.js";
 import type { RunbookMatch } from "../types/runbookTypes.js";
 import type { CorrelatedIncident } from "../types/correlationTypes.js";
 import type { EvidenceCatalog, EvidenceItem } from "../types/evidenceTypes.js";
+import type { TriageUserPromptInput } from "../types/summaryTypes.js";
 
 // ==================== Helpers ====================
 
 const formatSimilarity = (value: number): string => value.toFixed(3);
-
-const truncateStr = (value: string, maxLen: number): string =>
-  value.length > maxLen ? `${value.slice(0, maxLen)}...` : value;
 
 const isEmpty = (arr: readonly unknown[]): boolean => {
   const { length: count } = arr;
@@ -41,7 +40,7 @@ const formatAlertSection = (alert: NormalizedAlert): string => {
     `Environment: ${environment ?? "unknown"}`,
   ];
 
-  const descBlock = description ? [`Description: ${truncateStr(description, 500)}`] : [];
+  const descBlock = description ? [`Description: ${truncateText(description, 500)}`] : [];
 
   const metricKeys = Object.keys(metrics);
   const metricsBlock =
@@ -117,8 +116,8 @@ const formatEvidenceEntry = (item: EvidenceItem): string => {
   const { id, label, value, source: src } = item;
   const valueStr =
     typeof value === "object"
-      ? truncateStr(JSON.stringify(value), 200)
-      : truncateStr(String(value), 200);
+      ? truncateText(JSON.stringify(value), 200)
+      : truncateText(String(value), 200);
   return `  ${id}: ${label} -- ${valueStr} [source: ${src}]`;
 };
 
@@ -149,16 +148,8 @@ const formatComputedValues = (severity: SeverityScore, catalog: EvidenceCatalog)
 
 // ==================== Public API ====================
 
-/**
- * Input for building the triage user prompt.
- */
-export interface TriageUserPromptInput {
-  readonly alert: NormalizedAlert;
-  readonly severity: SeverityScore;
-  readonly runbooks: readonly RunbookMatch[];
-  readonly correlations: readonly CorrelatedIncident[];
-  readonly evidenceCatalog: EvidenceCatalog;
-}
+// Re-export for backward compatibility with existing consumers
+export type { TriageUserPromptInput } from "../types/summaryTypes.js";
 
 /**
  * Builds the user prompt for the AI summarizer.

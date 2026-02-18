@@ -5,6 +5,7 @@
  * normalizes them, and runs a triage pipeline for severity assessment and routing.
  */
 
+import crypto from "node:crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
@@ -30,9 +31,11 @@ import { startTriageWorker } from "./workers/triageWorker.js";
 import { startDedupCleanup } from "./jobs/dedupCleanup.js";
 
 // Augment Express Request with rawBody for HMAC signature verification
+// and RequestContext for tracing (CLAUDE.md Hard Rule #8)
 declare module "express-serve-static-core" {
   interface Request {
     rawBody?: Buffer;
+    context: import("@kenchi/shared").RequestContext;
   }
 }
 
@@ -102,6 +105,20 @@ const createApp = (): express.Express => {
     })
   );
   app.use(requestLogger);
+
+  // Create RequestContext for every request (CLAUDE.md Hard Rule #8).
+  // Object.assign is required because Express middleware must mutate req by design
+  // (framework-boundary side effect, same pattern as rawBody capture above).
+  app.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    Object.assign(req, {
+      context: {
+        requestId: crypto.randomUUID(),
+        tenantId: (req.headers["x-tenant-id"] as string) ?? "system",
+      },
+    });
+    next();
+  });
+
   app.use(triageRateLimiter.middleware());
 
   // Register all routes

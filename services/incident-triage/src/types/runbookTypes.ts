@@ -24,6 +24,7 @@ export interface RunbookMatch {
  */
 export interface RunbookMatchResult {
   readonly matches: readonly RunbookMatch[];
+  readonly embedding: readonly number[];
   readonly embeddingTokenCount: number;
   readonly durationMs: number;
 }

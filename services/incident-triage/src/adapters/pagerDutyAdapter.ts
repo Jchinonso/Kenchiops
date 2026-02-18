@@ -6,7 +6,7 @@
  */
 
 import crypto from "crypto";
-import { ValidationError, createLogger } from "@kenchi/shared";
+import { ValidationError, createLogger, redactObject } from "@kenchi/shared";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
 import {
@@ -98,27 +98,15 @@ const extractMetrics = (data: PagerDutyIncidentData): Readonly<Record<string, un
 /**
  * Extracts labels from PagerDuty incident data.
  */
-const extractLabels = (data: PagerDutyIncidentData): Readonly<Record<string, string>> => {
-  const labels: Record<string, string> = {};
-
-  if (data.service?.id) {
-    labels.pd_service_id = data.service.id;
-  }
-  if (data.service?.summary) {
-    labels.pd_service_name = data.service.summary;
-  }
-  if (data.escalation_policy?.summary) {
-    labels.pd_escalation_policy = data.escalation_policy.summary;
-  }
-  if (data.urgency) {
-    labels.pd_urgency = data.urgency;
-  }
-  if (data.body?.cef_details?.class) {
-    labels.pd_alert_class = data.body.cef_details.class;
-  }
-
-  return labels;
-};
+const extractLabels = (data: PagerDutyIncidentData): Readonly<Record<string, string>> => ({
+  ...(data.service?.id ? { pd_service_id: data.service.id } : {}),
+  ...(data.service?.summary ? { pd_service_name: data.service.summary } : {}),
+  ...(data.escalation_policy?.summary
+    ? { pd_escalation_policy: data.escalation_policy.summary }
+    : {}),
+  ...(data.urgency ? { pd_urgency: data.urgency } : {}),
+  ...(data.body?.cef_details?.class ? { pd_alert_class: data.body.cef_details.class } : {}),
+});
 
 /**
  * Validates that the incoming body matches expected PagerDuty v3 structure.
@@ -212,7 +200,9 @@ export const createPagerDutyAdapter = (): AlertSourcePort => ({
       metrics: extractMetrics(data),
       labels: extractLabels(data),
       receivedAt: new Date().toISOString(),
-      sourcePayload: body as Readonly<Record<string, unknown>>,
+      sourcePayload: redactObject(body as Record<string, unknown>) as Readonly<
+        Record<string, unknown>
+      >,
     };
 
     const fingerprint = computeFingerprint(partialAlert);

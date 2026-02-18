@@ -88,12 +88,15 @@ export const createSlackDispatchAdapter = (webhookUrl: string): SlackDispatchPor
       } catch (error) {
         const durationMs = Date.now() - startTime;
         const errorMsg = getErrorMessage(error);
-        const isRetryable = errorMsg.includes("timeout") || errorMsg.includes("5");
+        const statusCode = (error as { status?: number }).status;
+        const isRetryable =
+          errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
 
         adapterLogger.error("Slack message failed", {
           provider: "slack",
           operation: "postIncidentMessage",
           durationMs,
+          statusCode,
           channel,
           category: isRetryable ? "retryable" : "non_retryable",
           retryable: isRetryable,

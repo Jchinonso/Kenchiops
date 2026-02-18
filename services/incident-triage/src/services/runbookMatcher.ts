@@ -61,6 +61,7 @@ export const createRunbookMatcher = (
     if (isEmptyText(text)) {
       return {
         matches: [],
+        embedding: [],
         embeddingTokenCount: 0,
         durationMs: Date.now() - startTime,
       };
@@ -88,7 +89,7 @@ export const createRunbookMatcher = (
       ...context,
     });
 
-    return { matches, embeddingTokenCount: tokenCount, durationMs };
+    return { matches, embedding, embeddingTokenCount: tokenCount, durationMs };
   };
 
   return { matchRunbooks };

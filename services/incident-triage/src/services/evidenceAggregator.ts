@@ -15,6 +15,7 @@ import type { SeverityScore, SeverityFactor } from "../types/severityTypes.js";
 import type { RunbookMatch } from "../types/runbookTypes.js";
 import type { CorrelatedIncident } from "../types/correlationTypes.js";
 import type {
+  AggregateEvidenceInput,
   EvidenceCatalog,
   EvidenceItem,
   EvidenceIdPrefix,
@@ -385,15 +386,8 @@ const computeCompleteness = (
 
 // ==================== Public API ====================
 
-/**
- * Input for the evidence aggregation function.
- */
-export interface AggregateEvidenceInput {
-  readonly alert: NormalizedAlert;
-  readonly severity: SeverityScore;
-  readonly runbooks: readonly RunbookMatch[];
-  readonly correlations: readonly CorrelatedIncident[];
-}
+// Re-export for backward compatibility with existing consumers
+export type { AggregateEvidenceInput } from "../types/evidenceTypes.js";
 
 /**
  * Aggregates all evidence from the triage pipeline into a single catalog

@@ -81,7 +81,7 @@ router.post(
 
     // Persist the alert
     const alertRecord = await createIncidentAlert({
-      tenantId: null,
+      tenantId: req.context.tenantId !== "system" ? req.context.tenantId : null,
       source: normalizedAlert.source,
       sourceAlertId: normalizedAlert.sourceAlertId,
       deliveryId: normalizedAlert.deliveryId,

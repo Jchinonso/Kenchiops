@@ -153,6 +153,14 @@ The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 - Adapters use `resilientPost()` from shared -- includes retry, circuit breaker, timeout
 - Config: `slackIncidentWebhookUrl` added to `IncidentTriageConfig` and `appConfig`
 - Worker pipeline now 15 steps (was 12): steps 12-14 are policy eval, dispatch, persist results
+- Phase 6 files: `routes/incidentRoutes.ts`, `routes/triageRoutes.ts`, `services/metricsService.ts`, `jobs/dedupCleanup.ts`
+- Phase 6 types: `types/metricsTypes.ts` for PipelineMetricsResponse DTO
+- Phase 6 shared additions: `listIncidents()`, `countIncidents()`, `getAlertWithTriageResult()` in alert repo
+- Phase 6 shared additions: `getTriageStats()` in triage result repo (severity dist, pipeline stats, dedup rate)
+- Phase 6 constants: `DEDUP_CLEANUP_INTERVAL_MS`, `DEDUP_CLEANUP_INITIAL_DELAY_MS` in INCIDENT_ALERT_DEFAULTS
+- Phase 6 SQL queries: LIST_INCIDENTS, COUNT_INCIDENTS, GET_ALERT_WITH_TRIAGE, GET_SEVERITY_DISTRIBUTION, GET_PIPELINE_STATS, GET_DEDUP_RATE
+- Express route ordering matters: `/api/v1/triage/stats` registered BEFORE `/api/v1/triage/:id`
+- Dedup cleanup job uses setInterval with stop/isRunning interface, registered in graceful shutdown
 
 ## createLogger Signature
 

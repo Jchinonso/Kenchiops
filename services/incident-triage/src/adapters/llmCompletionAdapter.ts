@@ -78,12 +78,14 @@ export const createLLMCompletionAdapter = (): LLMCompletionPort => ({
     } catch (error) {
       const durationMs = Date.now() - startTime;
       const errorMsg = getErrorMessage(error);
+      const statusCode = (error as { status?: number }).status;
       const isTimeout = errorMsg.includes("timeout");
 
       adapterLogger.error("LLM completion failed", {
         provider: "openai",
         operation: "generateTriageSummary",
         durationMs,
+        statusCode,
         model: options.model,
         category: isTimeout ? "retryable" : "unknown",
         retryable: isTimeout,
@@ -92,6 +94,7 @@ export const createLLMCompletionAdapter = (): LLMCompletionPort => ({
 
       throw new ExternalServiceError("openai", `LLM completion failed: ${errorMsg}`, {
         retryable: isTimeout,
+        metadata: { statusCode, model: options.model },
       });
     }
   },
