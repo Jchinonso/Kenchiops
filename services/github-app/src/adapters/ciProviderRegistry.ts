@@ -12,6 +12,9 @@ import type { CIProviderAdapters } from "../types/githubTypes.js";
 import { githubWebhookAdapter } from "./githubWebhookAdapter.js";
 import { githubLogFetcherAdapter } from "./githubLogFetcherAdapter.js";
 import { githubOutputAdapter } from "./githubOutputAdapter.js";
+import { vercelWebhookAdapter } from "./vercelWebhookAdapter.js";
+import { vercelLogFetcherAdapter } from "./vercelLogFetcherAdapter.js";
+import { vercelOutputAdapter } from "./vercelOutputAdapter.js";
 
 // ==================== Registry ====================
 
@@ -20,6 +23,11 @@ const ADAPTERS: Readonly<Partial<Record<CIProvider, CIProviderAdapters>>> = {
     webhook: githubWebhookAdapter,
     logFetcher: githubLogFetcherAdapter,
     output: githubOutputAdapter,
+  },
+  vercel: {
+    webhook: vercelWebhookAdapter,
+    logFetcher: vercelLogFetcherAdapter,
+    output: vercelOutputAdapter,
   },
 };
 

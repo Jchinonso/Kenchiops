@@ -142,6 +142,10 @@ export const config: Config = {
   GITHUB_WEBHOOK_SECRET: requireEnv("GITHUB_WEBHOOK_SECRET"),
   GITHUB_APP_SLUG: optionalString("GITHUB_APP_SLUG", CONFIG_DEFAULTS.GITHUB_APP_SLUG),
 
+  // Vercel CI Provider
+  VERCEL_WEBHOOK_SECRET: optionalString("VERCEL_WEBHOOK_SECRET", ""),
+  VERCEL_API_TOKEN: optionalString("VERCEL_API_TOKEN", ""),
+
   // Database
   DATABASE_URL: requireEnv("DATABASE_URL"),
   VECTOR_DB_URL: requireEnv("VECTOR_DB_URL"),

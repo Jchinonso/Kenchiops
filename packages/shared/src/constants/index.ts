@@ -584,6 +584,16 @@ export {
 // CI provider constants
 export { CI_PROVIDERS, type CIProvider } from "./ciProviders.js";
 
+// Vercel constants
+export {
+  VERCEL_SIGNATURE,
+  VERCEL_DEPLOYMENT_EVENTS,
+  type VercelDeploymentEventType,
+  VERCEL_FAILURE_EVENTS,
+  VERCEL_API_BASE_URL,
+  VERCEL_TARGETS,
+} from "./vercel.js";
+
 // Auth constants
 export {
   USER_STATUS,

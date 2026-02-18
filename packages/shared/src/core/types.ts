@@ -880,6 +880,10 @@ export interface Config {
   readonly GITHUB_WEBHOOK_SECRET: string;
   readonly GITHUB_APP_SLUG?: string;
 
+  // Vercel CI Provider Configuration
+  readonly VERCEL_WEBHOOK_SECRET?: string;
+  readonly VERCEL_API_TOKEN?: string;
+
   // Database Configuration
   readonly DATABASE_URL: string;
   readonly VECTOR_DB_URL: string;
