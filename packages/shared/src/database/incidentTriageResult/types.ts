@@ -128,3 +128,60 @@ export interface TriageSimilarityResult {
   readonly serviceName: string | null;
   readonly createdAt: Date;
 }
+
+// ==================== Stats Types ====================
+
+/**
+ * Row type for severity distribution query.
+ */
+export interface SeverityDistributionRow {
+  readonly severity_label: string;
+  readonly count: string;
+}
+
+/**
+ * Domain type for severity distribution entry.
+ */
+export interface SeverityDistributionEntry {
+  readonly severityLabel: string;
+  readonly count: number;
+}
+
+/**
+ * Row type for pipeline stats aggregation query.
+ */
+export interface PipelineStatsRow {
+  readonly total_triaged: string;
+  readonly avg_duration_ms: string | null;
+  readonly p50_duration_ms: string | null;
+  readonly p95_duration_ms: string | null;
+  readonly ai_summary_count: string;
+  readonly fallback_summary_count: string;
+  readonly dispatched_count: string;
+  readonly routed_count: string;
+}
+
+/**
+ * Row type for dedup rate query.
+ */
+export interface DedupRateRow {
+  readonly total_alerts: string;
+  readonly deduped_count: string;
+}
+
+/**
+ * Domain type for triage pipeline statistics.
+ */
+export interface TriageStats {
+  readonly severityDistribution: readonly SeverityDistributionEntry[];
+  readonly totalTriaged: number;
+  readonly avgDurationMs: number | null;
+  readonly p50DurationMs: number | null;
+  readonly p95DurationMs: number | null;
+  readonly aiSummaryCount: number;
+  readonly fallbackSummaryCount: number;
+  readonly dispatchedCount: number;
+  readonly routedCount: number;
+  readonly totalAlerts: number;
+  readonly dedupedCount: number;
+}

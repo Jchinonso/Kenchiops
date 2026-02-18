@@ -15,6 +15,8 @@ export type {
   UpdateTriageAiSummaryInput,
   UpdateTriageDispatchInput,
   TriageSimilarityResult,
+  SeverityDistributionEntry,
+  TriageStats,
 } from "./types.js";
 
 // Helpers
@@ -33,4 +35,5 @@ export {
   updateTriageAiSummary,
   updateTriageDispatchResults,
   searchSimilarTriageResults,
+  getTriageStats,
 } from "./repository.js";

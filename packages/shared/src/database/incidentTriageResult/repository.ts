@@ -23,6 +23,11 @@ import type {
   UpdateTriageDispatchInput,
   TriageResultSimilarityRow,
   TriageSimilarityResult,
+  SeverityDistributionRow,
+  SeverityDistributionEntry,
+  PipelineStatsRow,
+  DedupRateRow,
+  TriageStats,
 } from "./types.js";
 import {
   mapRowToTriageResult,
@@ -297,6 +302,66 @@ export const updateTriageDispatchResults = async (
   } catch (error) {
     logger.error("Failed to update triage dispatch results", {
       triageResultId: input.triageResultId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/** Maps a severity distribution row to domain entry */
+const mapSeverityRow = (row: SeverityDistributionRow): SeverityDistributionEntry => ({
+  severityLabel: row.severity_label,
+  count: parseInt(row.count, 10),
+});
+
+/** Safely parses a nullable numeric string */
+const parseNullableFloat = (value: string | null): number | null =>
+  value !== null ? parseFloat(value) : null;
+
+/**
+ * Retrieves triage pipeline statistics for a tenant.
+ *
+ * @param tenantId - The tenant to query stats for
+ * @returns Aggregated pipeline metrics
+ */
+export const getTriageStats = async (tenantId: string): Promise<TriageStats> => {
+  try {
+    const [distResult, statsResult, dedupResult] = await Promise.all([
+      query<SeverityDistributionRow>(INCIDENT_TRIAGE_RESULT_QUERIES.GET_SEVERITY_DISTRIBUTION, [
+        tenantId,
+      ]),
+      query<PipelineStatsRow>(INCIDENT_TRIAGE_RESULT_QUERIES.GET_PIPELINE_STATS, [tenantId]),
+      query<DedupRateRow>(INCIDENT_TRIAGE_RESULT_QUERIES.GET_DEDUP_RATE, [tenantId]),
+    ]);
+
+    const severityDistribution = distResult.rows.map(mapSeverityRow);
+    const stats = statsResult.rows[0];
+    const dedup = dedupResult.rows[0];
+
+    const result: TriageStats = {
+      severityDistribution,
+      totalTriaged: parseInt(stats?.total_triaged ?? "0", 10),
+      avgDurationMs: parseNullableFloat(stats?.avg_duration_ms ?? null),
+      p50DurationMs: parseNullableFloat(stats?.p50_duration_ms ?? null),
+      p95DurationMs: parseNullableFloat(stats?.p95_duration_ms ?? null),
+      aiSummaryCount: parseInt(stats?.ai_summary_count ?? "0", 10),
+      fallbackSummaryCount: parseInt(stats?.fallback_summary_count ?? "0", 10),
+      dispatchedCount: parseInt(stats?.dispatched_count ?? "0", 10),
+      routedCount: parseInt(stats?.routed_count ?? "0", 10),
+      totalAlerts: parseInt(dedup?.total_alerts ?? "0", 10),
+      dedupedCount: parseInt(dedup?.deduped_count ?? "0", 10),
+    };
+
+    logger.info("Retrieved triage stats", {
+      tenantId,
+      totalTriaged: result.totalTriaged,
+      totalAlerts: result.totalAlerts,
+    });
+
+    return result;
+  } catch (error) {
+    logger.error("Failed to get triage stats", {
+      tenantId,
       error: getErrorMessage(error),
     });
     throw error;

@@ -298,8 +298,14 @@ export {
   getAlertById,
   findAlertByDeliveryId,
   updateAlertStatus,
+  listIncidents,
+  countIncidents,
+  getAlertWithTriageResult,
   type IncidentAlertRecord,
   type CreateIncidentAlertInput,
+  type ListIncidentFilters,
+  type PaginatedIncidentAlerts,
+  type AlertWithTriageResult,
   // Incident dedup module
   findByFingerprint,
   upsertDedupEntry,
@@ -313,12 +319,15 @@ export {
   updateTriageAiSummary,
   updateTriageDispatchResults,
   searchSimilarTriageResults,
+  getTriageStats,
   type IncidentTriageResultRecord,
   type CreateTriageResultInput,
   type UpdateTriageEnrichmentInput,
   type UpdateTriageAiSummaryInput,
   type UpdateTriageDispatchInput,
   type TriageSimilarityResult,
+  type SeverityDistributionEntry,
+  type TriageStats,
 } from "./database/index.js";
 
 // User module (Authentication)

@@ -13,7 +13,15 @@ import {
   getErrorMessage,
   INCIDENT_ALERT_QUERIES,
 } from "../common.js";
-import type { IncidentAlertRow, IncidentAlertRecord, CreateIncidentAlertInput } from "./types.js";
+import type {
+  IncidentAlertRow,
+  IncidentAlertRecord,
+  CreateIncidentAlertInput,
+  ListIncidentFilters,
+  PaginatedIncidentAlerts,
+  AlertWithTriageRow,
+  AlertWithTriageResult,
+} from "./types.js";
 import {
   mapRowToIncidentAlert,
   validateCreateIncidentAlertInput,
@@ -154,6 +162,121 @@ export const updateAlertStatus = async (
     logger.error("Failed to update incident alert status", {
       id,
       status,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/** Extracts the count from a count query row */
+const parseCountRow = (rows: ReadonlyArray<{ readonly count: string }>): number =>
+  parseInt(rows[0]?.count ?? "0", 10);
+
+/** Extracts triage JSON from the joined row via destructuring */
+const extractTriageJson = ({
+  triage_result,
+}: AlertWithTriageRow): Readonly<Record<string, unknown>> | null => triage_result;
+
+/**
+ * Lists incident alerts with pagination and optional filters.
+ *
+ * @param filters - Filtering and pagination parameters
+ * @returns Paginated list of incident alerts with total count
+ */
+export const listIncidents = async (
+  filters: ListIncidentFilters
+): Promise<PaginatedIncidentAlerts> => {
+  const { tenantId, status, severity, source, limit, offset } = filters;
+  const filterParams = [tenantId, status ?? null, severity ?? null, source ?? null] as const;
+
+  try {
+    const [itemsResult, countResult] = await Promise.all([
+      query<IncidentAlertRow>(INCIDENT_ALERT_QUERIES.LIST_INCIDENTS, [
+        ...filterParams,
+        limit,
+        offset,
+      ]),
+      query<{ readonly count: string }>(INCIDENT_ALERT_QUERIES.COUNT_INCIDENTS, [...filterParams]),
+    ]);
+
+    const items = itemsResult.rows.map(mapRowToIncidentAlert);
+    const total = parseCountRow(countResult.rows);
+
+    logger.info("Listed incident alerts", {
+      tenantId,
+      resultCount: items.length,
+      total,
+      limit,
+      offset,
+    });
+
+    return { items, total, limit, offset };
+  } catch (error) {
+    logger.error("Failed to list incident alerts", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Counts incident alerts matching the given filters.
+ *
+ * @param filters - Filtering parameters (limit/offset ignored)
+ * @returns Total count of matching alerts
+ */
+export const countIncidents = async (
+  filters: Pick<ListIncidentFilters, "tenantId" | "status" | "severity" | "source">
+): Promise<number> => {
+  const { tenantId, status, severity, source } = filters;
+
+  try {
+    const result = await query<{ readonly count: string }>(INCIDENT_ALERT_QUERIES.COUNT_INCIDENTS, [
+      tenantId,
+      status ?? null,
+      severity ?? null,
+      source ?? null,
+    ]);
+    return parseCountRow(result.rows);
+  } catch (error) {
+    logger.error("Failed to count incident alerts", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Retrieves an incident alert with its associated triage result (joined query).
+ *
+ * @param alertId - The incident alert ID
+ * @returns The alert with triage result, or null if alert not found
+ */
+export const getAlertWithTriageResult = async (
+  alertId: string
+): Promise<AlertWithTriageResult | null> => {
+  validateIncidentAlertId(alertId);
+
+  try {
+    const { rows } = await query<AlertWithTriageRow>(INCIDENT_ALERT_QUERIES.GET_ALERT_WITH_TRIAGE, [
+      alertId,
+    ]);
+
+    const { length: rowCount } = rows;
+    if (rowCount === 0) {
+      return null;
+    }
+
+    const row = rows[0];
+    const alert = mapRowToIncidentAlert(row);
+    const triageResult = extractTriageJson(row);
+
+    return { alert, triageResult };
+  } catch (error) {
+    logger.error("Failed to get alert with triage result", {
+      alertId,
       error: getErrorMessage(error),
     });
     throw error;

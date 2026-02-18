@@ -80,3 +80,42 @@ export interface CreateIncidentAlertInput {
   readonly sourcePayload: Readonly<Record<string, unknown>>;
   readonly receivedAt: string;
 }
+
+// ==================== Query Types ====================
+
+/**
+ * Filters for listing incident alerts.
+ */
+export interface ListIncidentFilters {
+  readonly tenantId: string;
+  readonly status?: string | null;
+  readonly severity?: string | null;
+  readonly source?: string | null;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+/**
+ * Paginated list result for incident alerts.
+ */
+export interface PaginatedIncidentAlerts {
+  readonly items: readonly IncidentAlertRecord[];
+  readonly total: number;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+/**
+ * Row type for the alert-with-triage join query.
+ */
+export interface AlertWithTriageRow extends IncidentAlertRow {
+  readonly triage_result: Readonly<Record<string, unknown>> | null;
+}
+
+/**
+ * Domain result for an alert with its associated triage result.
+ */
+export interface AlertWithTriageResult {
+  readonly alert: IncidentAlertRecord;
+  readonly triageResult: Readonly<Record<string, unknown>> | null;
+}

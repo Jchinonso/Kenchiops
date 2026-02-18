@@ -7,6 +7,8 @@
 import type { Express } from "express";
 import { healthRoutes } from "./healthRoutes.js";
 import { webhookRoutes } from "./webhookRoutes.js";
+import { incidentRoutes } from "./incidentRoutes.js";
+import { triageRoutes } from "./triageRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -17,4 +19,10 @@ export const registerRoutes = (app: Express): void => {
 
   // Webhook routes (alert ingestion)
   app.use(webhookRoutes);
+
+  // Incident query and management routes
+  app.use(incidentRoutes);
+
+  // Triage result and metrics routes
+  app.use(triageRoutes);
 };

@@ -27,6 +27,7 @@ import {
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { startTriageWorker } from "./workers/triageWorker.js";
+import { startDedupCleanup } from "./jobs/dedupCleanup.js";
 
 // Augment Express Request with rawBody for HMAC signature verification
 declare module "express-serve-static-core" {
@@ -150,8 +151,14 @@ const startServer = async (): Promise<void> => {
   // Start the triage worker (polls queue for incoming alerts)
   const triageWorker = startTriageWorker();
 
-  // Register cleanup handler for graceful shutdown of the triage worker
+  // Start the dedup cleanup job (periodic expired entry removal)
+  const dedupCleanup = startDedupCleanup();
+
+  // Register cleanup handler for graceful shutdown of the triage worker and dedup job
   registerCleanupHandler(async () => {
+    dedupCleanup.stop();
+    logger.info("Dedup cleanup job shut down");
+
     triageWorker.stop();
     const stats = triageWorker.getStats();
     logger.info("Triage worker shut down", {

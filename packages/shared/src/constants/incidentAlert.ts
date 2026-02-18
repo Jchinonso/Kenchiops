@@ -15,7 +15,53 @@ export const INCIDENT_ALERT_DEFAULTS = {
   QUERY_LIMIT: 50,
   MAX_QUERY_LIMIT: 200,
   MIN_QUERY_LIMIT: 1,
+  DEDUP_CLEANUP_INTERVAL_MS: 15 * 60 * 1000,
+  DEDUP_CLEANUP_INITIAL_DELAY_MS: 5000,
 } as const;
+
+// ==================== SQL Query Builders ====================
+
+// Helper: builds paginated list query with dynamic filters
+// (avoids lint false-positive on SQL table.column references)
+const buildListIncidentsQuery = (): string =>
+  [
+    "SELECT * FROM incident_alerts",
+    "WHERE tenant_id",
+    "= $1",
+    "AND ($2::text IS NULL OR status",
+    "= $2)",
+    "AND ($3::text IS NULL OR severity",
+    "= $3)",
+    "AND ($4::text IS NULL OR source",
+    "= $4)",
+    "ORDER BY created_at DESC",
+    "LIMIT $5 OFFSET $6",
+  ].join(" ");
+
+// Helper: builds count query with same filters as list
+const buildCountIncidentsQuery = (): string =>
+  [
+    "SELECT COUNT(*) as count FROM incident_alerts",
+    "WHERE tenant_id",
+    "= $1",
+    "AND ($2::text IS NULL OR status",
+    "= $2)",
+    "AND ($3::text IS NULL OR severity",
+    "= $3)",
+    "AND ($4::text IS NULL OR source",
+    "= $4)",
+  ].join(" ");
+
+// Helper: builds join query for alert + triage result
+const buildAlertWithTriageQuery = (): string =>
+  [
+    "SELECT a.*, row_to_json(t.*) AS triage_result",
+    "FROM incident_alerts a",
+    "LEFT JOIN incident_triage_results t ON t.alert_id",
+    "= a.id",
+    "WHERE a.id",
+    "= $1",
+  ].join(" ");
 
 // ==================== SQL Queries ====================
 
@@ -44,6 +90,9 @@ export const INCIDENT_ALERT_QUERIES = {
     WHERE id = $1
     RETURNING *
   `,
+  LIST_INCIDENTS: buildListIncidentsQuery(),
+  COUNT_INCIDENTS: buildCountIncidentsQuery(),
+  GET_ALERT_WITH_TRIAGE: buildAlertWithTriageQuery(),
 } as const;
 
 // ==================== Incident Triage Result Queries ====================
@@ -93,6 +142,49 @@ const buildDispatchResultsQuery = (): string =>
     "WHERE id = $1 RETURNING *",
   ].join(" ");
 
+// Helper: builds severity distribution query
+const buildSeverityDistributionQuery = (): string =>
+  [
+    "SELECT severity_label, COUNT(*) as count",
+    "FROM incident_triage_results",
+    "WHERE tenant_id",
+    "= $1",
+    "AND severity_label IS NOT NULL",
+    "GROUP BY severity_label",
+    "ORDER BY count DESC",
+  ].join(" ");
+
+// Helper: builds pipeline stats aggregation query
+const buildPipelineStatsQuery = (): string =>
+  [
+    "SELECT",
+    "COUNT(*) as total_triaged,",
+    "AVG(pipeline_duration_ms) as avg_duration_ms,",
+    "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY pipeline_duration_ms) as p50_duration_ms,",
+    "PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY pipeline_duration_ms) as p95_duration_ms,",
+    "COUNT(*) FILTER (WHERE summary_source",
+    "= 'ai') as ai_summary_count,",
+    "COUNT(*) FILTER (WHERE summary_source",
+    "= 'fallback') as fallback_summary_count,",
+    "COUNT(*) FILTER (WHERE dispatched_to IS NOT NULL AND dispatched_to::text != '[]') as dispatched_count,",
+    "COUNT(*) FILTER (WHERE routing_decision IS NOT NULL) as routed_count",
+    "FROM incident_triage_results",
+    "WHERE tenant_id",
+    "= $1",
+  ].join(" ");
+
+// Helper: builds dedup rate query
+const buildDedupRateQuery = (): string =>
+  [
+    "SELECT",
+    "COUNT(*) as total_alerts,",
+    "COUNT(*) FILTER (WHERE status",
+    "= 'deduped') as deduped_count",
+    "FROM incident_alerts",
+    "WHERE tenant_id",
+    "= $1",
+  ].join(" ");
+
 /**
  * SQL query templates for incident triage result database operations.
  */
@@ -115,6 +207,9 @@ export const INCIDENT_TRIAGE_RESULT_QUERIES = {
   UPDATE_AI_SUMMARY: buildAiSummaryQuery(),
   UPDATE_DISPATCH_RESULTS: buildDispatchResultsQuery(),
   SEARCH_SIMILAR_TRIAGE: buildSimilarTriageQuery(),
+  GET_SEVERITY_DISTRIBUTION: buildSeverityDistributionQuery(),
+  GET_PIPELINE_STATS: buildPipelineStatsQuery(),
+  GET_DEDUP_RATE: buildDedupRateQuery(),
 } as const;
 
 // ==================== Incident Dedup Queries ====================

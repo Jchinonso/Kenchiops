@@ -7,7 +7,14 @@
  */
 
 // Types
-export type { IncidentAlertRow, IncidentAlertRecord, CreateIncidentAlertInput } from "./types.js";
+export type {
+  IncidentAlertRow,
+  IncidentAlertRecord,
+  CreateIncidentAlertInput,
+  ListIncidentFilters,
+  PaginatedIncidentAlerts,
+  AlertWithTriageResult,
+} from "./types.js";
 
 // Helpers (includes validation and mappers)
 export {
@@ -22,4 +29,7 @@ export {
   getAlertById,
   findAlertByDeliveryId,
   updateAlertStatus,
+  listIncidents,
+  countIncidents,
+  getAlertWithTriageResult,
 } from "./repository.js";

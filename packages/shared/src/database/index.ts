@@ -342,8 +342,14 @@ export {
   getAlertById,
   findAlertByDeliveryId,
   updateAlertStatus,
+  listIncidents,
+  countIncidents,
+  getAlertWithTriageResult,
   type IncidentAlertRecord,
   type CreateIncidentAlertInput,
+  type ListIncidentFilters,
+  type PaginatedIncidentAlerts,
+  type AlertWithTriageResult,
 } from "./incidentAlert/index.js";
 
 // Incident dedup module
@@ -363,12 +369,15 @@ export {
   updateTriageAiSummary,
   updateTriageDispatchResults,
   searchSimilarTriageResults,
+  getTriageStats,
   type IncidentTriageResultRecord,
   type CreateTriageResultInput,
   type UpdateTriageEnrichmentInput,
   type UpdateTriageAiSummaryInput,
   type UpdateTriageDispatchInput,
   type TriageSimilarityResult,
+  type SeverityDistributionEntry,
+  type TriageStats,
 } from "./incidentTriageResult/index.js";
 
 // Risk rules module (Context-Aware Risk Scoring)
