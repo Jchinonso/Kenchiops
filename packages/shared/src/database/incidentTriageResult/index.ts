@@ -12,6 +12,7 @@ export type {
   IncidentTriageResultRecord,
   CreateTriageResultInput,
   UpdateTriageEnrichmentInput,
+  UpdateTriageAiSummaryInput,
   TriageSimilarityResult,
 } from "./types.js";
 
@@ -28,5 +29,6 @@ export {
   getTriageResultById,
   getTriageResultByAlertId,
   updateTriageEnrichment,
+  updateTriageAiSummary,
   searchSimilarTriageResults,
 } from "./repository.js";

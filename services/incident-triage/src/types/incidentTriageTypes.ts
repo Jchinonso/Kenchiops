@@ -14,4 +14,5 @@ export interface IncidentTriageConfig {
   readonly version: string;
   readonly databaseUrl: string;
   readonly pagerDutyWebhookSecret: string;
+  readonly triageLlmModel: string;
 }

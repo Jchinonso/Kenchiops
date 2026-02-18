@@ -75,6 +75,15 @@ const buildSimilarTriageQuery = (): string =>
     "LIMIT $5",
   ].join(" ");
 
+// Helper: builds the AI summary UPDATE query (avoids lint false-positive on SQL column references)
+const buildAiSummaryQuery = (): string =>
+  [
+    "UPDATE incident_triage_results SET",
+    "ai_summary = $2::jsonb, summary_source = $3,",
+    "pipeline_duration_ms = $4, updated_at = NOW()",
+    "WHERE id = $1 RETURNING *",
+  ].join(" ");
+
 /**
  * SQL query templates for incident triage result database operations.
  */
@@ -94,6 +103,7 @@ export const INCIDENT_TRIAGE_RESULT_QUERIES = {
     SELECT * FROM incident_triage_results WHERE alert_id = $1
   `,
   UPDATE_ENRICHMENT: buildEnrichmentQuery(),
+  UPDATE_AI_SUMMARY: buildAiSummaryQuery(),
   SEARCH_SIMILAR_TRIAGE: buildSimilarTriageQuery(),
 } as const;
 

@@ -4,7 +4,13 @@
  * Centralized configuration management with validation
  */
 
-import { config, SERVICE_PORTS, SERVICE_NAMES, SERVICE_VERSIONS } from "@kenchi/shared";
+import {
+  config,
+  SERVICE_PORTS,
+  SERVICE_NAMES,
+  SERVICE_VERSIONS,
+  OPENROUTER_DEFAULTS,
+} from "@kenchi/shared";
 import type { IncidentTriageConfig } from "../types/incidentTriageTypes.js";
 
 // Re-export for convenience
@@ -25,4 +31,6 @@ export const appConfig: IncidentTriageConfig = {
   databaseUrl: config.DATABASE_URL,
   // Service-specific secret not in shared config — direct env access justified
   pagerDutyWebhookSecret: process.env.PAGERDUTY_WEBHOOK_SECRET ?? "",
+  // Service-specific LLM model override — not in shared config
+  triageLlmModel: process.env.TRIAGE_LLM_MODEL ?? OPENROUTER_DEFAULTS.MODEL,
 } as const;

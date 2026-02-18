@@ -18,6 +18,7 @@ import {
   updateAlertStatus,
   createTriageResult,
   updateTriageEnrichment,
+  updateTriageAiSummary,
   searchSimilarTriageResults,
   searchSimilarKnowledgeDocs,
   generateBudgetAwareEmbedding,
@@ -45,6 +46,8 @@ import { createDeduplicationService } from "../services/deduplicationService.js"
 import { createRunbookMatcher } from "../services/runbookMatcher.js";
 import { createIncidentCorrelator } from "../services/incidentCorrelator.js";
 import { aggregateEvidence } from "../services/evidenceAggregator.js";
+import { createAiSummarizer } from "../services/aiSummarizer.js";
+import { createLLMCompletionAdapter } from "../adapters/llmCompletionAdapter.js";
 import { TRIAGE_WORKER_DEFAULTS, DEFAULT_SEVERITY_CONFIG } from "../constants/triageConstants.js";
 
 const logger = createLogger(SERVICE_NAMES.INCIDENT_TRIAGE);
@@ -130,6 +133,11 @@ const triageSearchPort: TriageSearchPort = {
 
 const runbookMatcher = createRunbookMatcher(embeddingPort, knowledgeSearchPort);
 const incidentCorrelator = createIncidentCorrelator(triageSearchPort);
+
+// ==================== Phase 4 Services ====================
+
+const llmCompletionPort = createLLMCompletionAdapter();
+const aiSummarizer = createAiSummarizer(llmCompletionPort);
 
 // ==================== Helper Functions ====================
 
@@ -231,7 +239,9 @@ const serializeSeverityFactors = (
  * 7. Incident correlation (Phase 3)
  * 8. Evidence aggregation (Phase 3)
  * 9. Update triage result with enrichment
- * 10. Mark alert as triaged
+ * 10. AI summarization with validation + fallback (Phase 4)
+ * 11. Persist AI summary
+ * 12. Mark alert as triaged
  */
 const processAlert = async (alertId: string, state: TriageWorkerState): Promise<void> => {
   const alert = await getAlertById(alertId);
@@ -343,18 +353,43 @@ const processAlert = async (alertId: string, state: TriageWorkerState): Promise<
     pipelineDurationMs: fullDurationMs,
   });
 
-  // Step 10: Mark alert as triaged
+  // Step 10: AI summarization with validation + fallback (Phase 4)
+  const summaryResult = await aiSummarizer.summarize(
+    {
+      alert: normalizedAlert,
+      severity: severityScore,
+      runbooks: runbookResult.matches,
+      correlations: correlationResult.correlations,
+      evidenceCatalog,
+    },
+    context
+  );
+
+  // Step 11: Persist AI summary
+  const summaryDurationMs = Date.now() - startTime;
+
+  await updateTriageAiSummary({
+    triageResultId: triageResult.id,
+    aiSummary: summaryResult as unknown as Record<string, unknown>,
+    summarySource: summaryResult.summarySource,
+    pipelineDurationMs: summaryDurationMs,
+  });
+
+  // Step 12: Mark alert as triaged
   await updateAlertStatus(alertId, "triaged");
 
+  const { length: matchCount } = runbookResult.matches;
+  const { length: corrCount } = correlationResult.correlations;
   logger.info("Alert triage completed", {
     alertId,
     severityLabel: severityScore.label,
-    severityScore: severityScore.total,
+    severityTotal: severityScore.total,
     confidence: evidenceCatalog.confidence.total,
     completeness: evidenceCatalog.completeness.total,
-    runbookMatches: runbookResult.matches.length,
-    correlations: correlationResult.correlations.length,
-    durationMs: fullDurationMs,
+    runbookMatches: matchCount,
+    correlations: corrCount,
+    summarySource: summaryResult.summarySource,
+    durationMs: summaryDurationMs,
     ...context,
   });
 };
@@ -407,7 +442,7 @@ const createStatsSnapshot = (state: TriageWorkerState): TriageWorkerStats => ({
  *
  * Polls the incident triage queue for messages and processes each alert
  * through the full triage pipeline (dedup, severity, runbooks, correlation,
- * evidence aggregation).
+ * evidence aggregation, AI summarization).
  *
  * @returns Control interface with stop() and getStats() methods
  */

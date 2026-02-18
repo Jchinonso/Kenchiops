@@ -90,6 +90,16 @@ export interface UpdateTriageEnrichmentInput {
 }
 
 /**
+ * Input for updating a triage result with AI summary data (Phase 4).
+ */
+export interface UpdateTriageAiSummaryInput {
+  readonly triageResultId: string;
+  readonly aiSummary: Readonly<Record<string, unknown>>;
+  readonly summarySource: string;
+  readonly pipelineDurationMs: number;
+}
+
+/**
  * Row type returned by the similarity search query (extends base row with joined fields).
  */
 export interface TriageResultSimilarityRow extends IncidentTriageResultRow {

@@ -360,10 +360,12 @@ export {
   getTriageResultById,
   getTriageResultByAlertId,
   updateTriageEnrichment,
+  updateTriageAiSummary,
   searchSimilarTriageResults,
   type IncidentTriageResultRecord,
   type CreateTriageResultInput,
   type UpdateTriageEnrichmentInput,
+  type UpdateTriageAiSummaryInput,
   type TriageSimilarityResult,
 } from "./incidentTriageResult/index.js";
 

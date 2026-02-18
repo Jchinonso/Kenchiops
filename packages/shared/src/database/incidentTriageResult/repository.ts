@@ -19,6 +19,7 @@ import type {
   IncidentTriageResultRecord,
   CreateTriageResultInput,
   UpdateTriageEnrichmentInput,
+  UpdateTriageAiSummaryInput,
   TriageResultSimilarityRow,
   TriageSimilarityResult,
 } from "./types.js";
@@ -170,6 +171,46 @@ export const updateTriageEnrichment = async (
     return record;
   } catch (error) {
     logger.error("Failed to update triage enrichment", {
+      triageResultId: input.triageResultId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Updates a triage result with AI summary data (Phase 4).
+ *
+ * @param input - The AI summary data to store
+ * @returns The updated triage result record
+ */
+export const updateTriageAiSummary = async (
+  input: UpdateTriageAiSummaryInput
+): Promise<IncidentTriageResultRecord> => {
+  validateTriageResultId(input.triageResultId);
+
+  try {
+    const result = await query<IncidentTriageResultRow>(
+      INCIDENT_TRIAGE_RESULT_QUERIES.UPDATE_AI_SUMMARY,
+      [
+        input.triageResultId,
+        JSON.stringify(input.aiSummary),
+        input.summarySource,
+        input.pipelineDurationMs,
+      ]
+    );
+
+    const record = mapRowToTriageResult(result.rows[0]);
+
+    logger.info("Triage result AI summary updated", {
+      id: record.id,
+      alertId: record.alertId,
+      summarySource: record.summarySource,
+    });
+
+    return record;
+  } catch (error) {
+    logger.error("Failed to update triage AI summary", {
       triageResultId: input.triageResultId,
       error: getErrorMessage(error),
     });

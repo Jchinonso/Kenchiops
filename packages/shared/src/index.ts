@@ -310,10 +310,12 @@ export {
   getTriageResultById,
   getTriageResultByAlertId,
   updateTriageEnrichment,
+  updateTriageAiSummary,
   searchSimilarTriageResults,
   type IncidentTriageResultRecord,
   type CreateTriageResultInput,
   type UpdateTriageEnrichmentInput,
+  type UpdateTriageAiSummaryInput,
   type TriageSimilarityResult,
 } from "./database/index.js";
 
@@ -731,6 +733,9 @@ export type {
   EmbeddingProviderConfig,
   LLMProviderName,
 } from "./llm/index.js";
+
+// LLM JSON extraction
+export { extractJsonFromResponse, parseJsonObject } from "./llm/index.js";
 
 // LLM client (via llm module)
 export { LLMClient } from "./llm/index.js";
