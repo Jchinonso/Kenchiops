@@ -11,6 +11,7 @@ import {
   AGGREGATION_KEY_PATTERN,
   DISPLAY_DEFAULTS,
   TIME_CONSTANTS,
+  type CIProvider,
 } from "../constants/index.js";
 import {
   AGGREGATION_KEYS,
@@ -108,6 +109,7 @@ export const reconstructAggregation = (
   workflowContext: parseOptional<WorkflowContext>(metadata.workflowContext),
   firstFailureAt: new Date(metadata.firstFailureAt),
   lastFailureAt: new Date(metadata.lastFailureAt),
+  ...(metadata.provider ? { provider: metadata.provider as CIProvider } : {}),
 });
 
 // ==================== Key Parsing ====================

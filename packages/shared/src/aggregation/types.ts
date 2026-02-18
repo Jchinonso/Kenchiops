@@ -112,7 +112,7 @@ export interface PendingAggregationPayload {
     readonly pendingChecks: readonly SerializedPendingCheckRun[];
     readonly firstFailureAt: string;
     readonly lastFailureAt: string;
-    /** CI provider identifier. Optional for backward compat. */
+    /** CI provider identifier. Uses string (not CIProvider) for forward compat with unknown providers in queue. */
     readonly provider?: string;
   };
 }
@@ -270,7 +270,12 @@ export interface AggregationKey {
 }
 
 /**
- * Serializes aggregation key to string for Redis storage
+ * Serializes aggregation key to string for Redis storage.
+ *
+ * NOTE: Provider is intentionally excluded from the key format in Phase 1.
+ * Currently safe because only github_actions is supported. When Phase 2
+ * adds non-GitHub providers, the key format must include provider to prevent
+ * collisions for the same commit analyzed by different CI providers.
  */
 export const serializeAggregationKey = (key: AggregationKey): string =>
   `${key.repositoryFullName}:${key.commitSha}`;

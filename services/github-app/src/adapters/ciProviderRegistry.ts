@@ -7,31 +7,15 @@
  * @module adapters/ciProviderRegistry
  */
 
-import {
-  ValidationError,
-  type CIProvider,
-  type CIWebhookPort,
-  type CILogFetcherPort,
-  type CIOutputPort,
-} from "@kenchi/shared";
+import { ValidationError, type CIProvider } from "@kenchi/shared";
+import type { CIProviderAdapters } from "../types/githubTypes.js";
 import { githubWebhookAdapter } from "./githubWebhookAdapter.js";
 import { githubLogFetcherAdapter } from "./githubLogFetcherAdapter.js";
 import { githubOutputAdapter } from "./githubOutputAdapter.js";
 
-// ==================== Types ====================
-
-/**
- * Bundled adapters for a CI provider.
- */
-export interface CIProviderAdapters {
-  readonly webhook: CIWebhookPort;
-  readonly logFetcher: CILogFetcherPort;
-  readonly output: CIOutputPort;
-}
-
 // ==================== Registry ====================
 
-const ADAPTERS: Partial<Record<CIProvider, CIProviderAdapters>> = {
+const ADAPTERS: Readonly<Partial<Record<CIProvider, CIProviderAdapters>>> = {
   github_actions: {
     webhook: githubWebhookAdapter,
     logFetcher: githubLogFetcherAdapter,

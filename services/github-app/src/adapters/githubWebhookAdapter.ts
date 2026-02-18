@@ -9,6 +9,7 @@
 
 import crypto from "crypto";
 import {
+  createLogger,
   CI_PROVIDERS,
   GITHUB_SIGNATURE,
   type CIWebhookPort,
@@ -16,35 +17,11 @@ import {
   type RequestContext,
 } from "@kenchi/shared";
 import { GITHUB_CHECK_CONCLUSIONS, type CheckRunWebhook } from "../types/githubTypes.js";
+import { SKIP_CONCLUSIONS, isStatusCheck } from "../helpers/githubCheckFilters.js";
 
-// ==================== Constants ====================
-
-/**
- * Conclusions that should be skipped (not actual failures).
- * Mirrors the set in checkRunAnalysis.ts.
- */
-const SKIP_CONCLUSIONS: ReadonlySet<string> = new Set([
-  GITHUB_CHECK_CONCLUSIONS.CANCELLED,
-  GITHUB_CHECK_CONCLUSIONS.SKIPPED,
-  GITHUB_CHECK_CONCLUSIONS.STALE,
-]);
-
-/**
- * Check names that are status/summary checks and should be skipped.
- */
-const STATUS_CHECK_PATTERNS: readonly RegExp[] = [
-  /^ci[\s-_]?success$/i,
-  /^ci[\s-_]?status$/i,
-  /^all[\s-_]?checks/i,
-  /^status[\s-_]?check/i,
-  /^branch[\s-_]?protection/i,
-  /^required[\s-_]?checks/i,
-];
+const logger = createLogger("github-webhook");
 
 // ==================== Helpers ====================
-
-const isStatusCheck = (checkName: string): boolean =>
-  STATUS_CHECK_PATTERNS.some((pattern) => pattern.test(checkName));
 
 const isCheckRunWebhook = (payload: unknown): payload is CheckRunWebhook =>
   typeof payload === "object" &&
@@ -57,6 +34,10 @@ const isCheckRunWebhook = (payload: unknown): payload is CheckRunWebhook =>
 export const githubWebhookAdapter: CIWebhookPort = {
   verifySignature: (rawBody: Buffer, signature: string, secret: string): boolean => {
     if (!signature.startsWith(GITHUB_SIGNATURE.PREFIX)) {
+      logger.warn("Invalid signature prefix", {
+        provider: "github",
+        operation: "verifySignature",
+      });
       return false;
     }
 
@@ -69,11 +50,15 @@ export const githubWebhookAdapter: CIWebhookPort = {
         Buffer.from(computedSignature, "hex")
       );
     } catch {
+      // timingSafeEqual throws if buffer lengths differ — treat as invalid signature
       return false;
     }
   },
 
-  normalizeEvent: (payload: unknown, _context: RequestContext): NormalizedBuildEvent | null => {
+  normalizeEvent: (
+    payload: unknown,
+    _context: RequestContext // Unused: normalization is a pure sync transform; context available for providers needing I/O
+  ): NormalizedBuildEvent | null => {
     if (!isCheckRunWebhook(payload)) {
       return null;
     }

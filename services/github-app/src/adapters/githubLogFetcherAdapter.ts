@@ -54,6 +54,7 @@ export const githubLogFetcherAdapter: CILogFetcherPort = {
         provider: "github",
         operation: "fetchBuildLogs",
         durationMs,
+        // statusCode: N/A — wraps internal Octokit SDK, HTTP status not propagated
         buildId,
         jobFound: !!job,
         ...context,
@@ -118,6 +119,7 @@ export const githubLogFetcherAdapter: CILogFetcherPort = {
         provider: "github",
         operation: "fetchAllFailedLogs",
         durationMs,
+        // statusCode: N/A — wraps internal Octokit SDK, HTTP status not propagated
         commitSha: commitSha.substring(0, 7),
         jobCount: logs.length,
         ...context,

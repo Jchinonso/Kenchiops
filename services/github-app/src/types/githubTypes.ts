@@ -4,6 +4,17 @@
  * Types specific to the GitHub App service
  */
 
+import type { CIWebhookPort, CILogFetcherPort, CIOutputPort } from "@kenchi/shared";
+
+/**
+ * Bundled adapters for a CI provider.
+ */
+export interface CIProviderAdapters {
+  readonly webhook: CIWebhookPort;
+  readonly logFetcher: CILogFetcherPort;
+  readonly output: CIOutputPort;
+}
+
 /**
  * GitHub webhook actions for pull requests
  */

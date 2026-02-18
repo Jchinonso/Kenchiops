@@ -22,39 +22,10 @@ import {
   type PendingCheckContext,
   type AggregationKey,
 } from "@kenchi/shared";
-import { GITHUB_CHECK_CONCLUSIONS, type CheckRunWebhook } from "../types/githubTypes.js";
+import type { CheckRunWebhook } from "../types/githubTypes.js";
+import { isStatusCheck } from "../helpers/githubCheckFilters.js";
 
 const logger = createLogger("github-app");
-
-// ==================== Constants ====================
-
-/**
- * Conclusions that should be skipped (not actual failures)
- */
-export const SKIP_CONCLUSIONS: ReadonlySet<string> = new Set([
-  GITHUB_CHECK_CONCLUSIONS.CANCELLED,
-  GITHUB_CHECK_CONCLUSIONS.SKIPPED,
-  GITHUB_CHECK_CONCLUSIONS.STALE,
-]);
-
-/**
- * Check names that are status/summary checks and should be skipped.
- * These checks aggregate other check results and have no actual failure logs.
- */
-const STATUS_CHECK_PATTERNS: readonly RegExp[] = [
-  /^ci[\s-_]?success$/i,
-  /^ci[\s-_]?status$/i,
-  /^all[\s-_]?checks/i,
-  /^status[\s-_]?check/i,
-  /^branch[\s-_]?protection/i,
-  /^required[\s-_]?checks/i,
-];
-
-/**
- * Check if a check name is a status/summary check that should be skipped.
- */
-const isStatusCheck = (checkName: string): boolean =>
-  STATUS_CHECK_PATTERNS.some((pattern) => pattern.test(checkName));
 
 // ==================== Helpers ====================
 

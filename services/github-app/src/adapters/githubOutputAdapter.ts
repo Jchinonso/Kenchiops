@@ -38,6 +38,7 @@ export const githubOutputAdapter: CIOutputPort = {
         provider: "github",
         operation: "postAnalysisResults",
         durationMs,
+        // statusCode: N/A — wraps internal consolidatedPoster, HTTP status not propagated
         repository: aggregation.repository.fullName,
         prCommentsPosted: result.prCommentsPosted,
         slackMessageSent: result.slackMessageSent,
