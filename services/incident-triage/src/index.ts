@@ -16,6 +16,7 @@ import {
   createRateLimitMiddleware,
   createSecurityHeaders,
   setupGracefulShutdown,
+  registerCleanupHandler,
   initDatabase,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
@@ -25,6 +26,7 @@ import {
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
+import { startTriageWorker } from "./workers/triageWorker.js";
 
 // Augment Express Request with rawBody for HMAC signature verification
 declare module "express-serve-static-core" {
@@ -144,6 +146,20 @@ const startServer = async (): Promise<void> => {
 
   // Configure server timeouts for slowloris attack protection
   configureServerTimeouts(server);
+
+  // Start the triage worker (polls queue for incoming alerts)
+  const triageWorker = startTriageWorker();
+
+  // Register cleanup handler for graceful shutdown of the triage worker
+  registerCleanupHandler(async () => {
+    triageWorker.stop();
+    const stats = triageWorker.getStats();
+    logger.info("Triage worker shut down", {
+      totalProcessed: stats.totalProcessed,
+      totalErrors: stats.totalErrors,
+      totalDeduped: stats.totalDeduped,
+    });
+  });
 
   // Set up graceful shutdown
   setupGracefulShutdown(server, {

@@ -46,6 +46,28 @@ export const INCIDENT_ALERT_QUERIES = {
   `,
 } as const;
 
+// ==================== Incident Triage Result Queries ====================
+
+/**
+ * SQL query templates for incident triage result database operations.
+ */
+export const INCIDENT_TRIAGE_RESULT_QUERIES = {
+  INSERT: `
+    INSERT INTO incident_triage_results (
+      id, alert_id, tenant_id, severity_score, severity_label, severity_factors,
+      pipeline_duration_ms
+    )
+    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+    RETURNING *
+  `,
+  GET_BY_ID: `
+    SELECT * FROM incident_triage_results WHERE id = $1
+  `,
+  GET_BY_ALERT_ID: `
+    SELECT * FROM incident_triage_results WHERE alert_id = $1
+  `,
+} as const;
+
 // ==================== Incident Dedup Queries ====================
 
 /**

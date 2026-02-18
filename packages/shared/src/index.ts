@@ -305,6 +305,12 @@ export {
   upsertDedupEntry,
   cleanupExpiredEntries as cleanupExpiredDedupEntries,
   type IncidentDedupRecord,
+  // Incident triage result module
+  createTriageResult,
+  getTriageResultById,
+  getTriageResultByAlertId,
+  type IncidentTriageResultRecord,
+  type CreateTriageResultInput,
 } from "./database/index.js";
 
 // User module (Authentication)

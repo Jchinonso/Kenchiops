@@ -354,6 +354,15 @@ export {
   type IncidentDedupRecord,
 } from "./incidentDedup/index.js";
 
+// Incident triage result module
+export {
+  createTriageResult,
+  getTriageResultById,
+  getTriageResultByAlertId,
+  type IncidentTriageResultRecord,
+  type CreateTriageResultInput,
+} from "./incidentTriageResult/index.js";
+
 // Risk rules module (Context-Aware Risk Scoring)
 // Note: CustomRiskRuleRow, RiskAssessmentRow, and row mappers are internal.
 export {
