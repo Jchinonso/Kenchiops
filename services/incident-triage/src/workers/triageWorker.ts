@@ -1,8 +1,9 @@
 /**
  * Triage Worker
  *
- * Polls the incident triage queue for incoming alerts, runs deduplication
- * and severity classification, then persists triage results.
+ * Polls the incident triage queue for incoming alerts, runs deduplication,
+ * severity classification, runbook matching, incident correlation, and
+ * evidence aggregation, then persists triage results.
  *
  * Follows the polling loop pattern from services/api/src/workers/analysisWorker.ts.
  *
@@ -16,6 +17,10 @@ import {
   getAlertById,
   updateAlertStatus,
   createTriageResult,
+  updateTriageEnrichment,
+  searchSimilarTriageResults,
+  searchSimilarKnowledgeDocs,
+  generateBudgetAwareEmbedding,
   findByFingerprint,
   upsertDedupEntry,
   getErrorMessage,
@@ -33,8 +38,13 @@ import type {
   TriageWorkerControl,
 } from "../types/severityTypes.js";
 import type { NormalizedAlert } from "../types/incidentTypes.js";
+import type { EmbeddingPort, KnowledgeSearchPort } from "../types/runbookTypes.js";
+import type { TriageSearchPort } from "../types/correlationTypes.js";
 import { classifyAlertSeverity } from "../services/severityClassifier.js";
 import { createDeduplicationService } from "../services/deduplicationService.js";
+import { createRunbookMatcher } from "../services/runbookMatcher.js";
+import { createIncidentCorrelator } from "../services/incidentCorrelator.js";
+import { aggregateEvidence } from "../services/evidenceAggregator.js";
 import { TRIAGE_WORKER_DEFAULTS, DEFAULT_SEVERITY_CONFIG } from "../constants/triageConstants.js";
 
 const logger = createLogger(SERVICE_NAMES.INCIDENT_TRIAGE);
@@ -56,6 +66,70 @@ const dedupService = createDeduplicationService({
   },
   upsertDedupEntry,
 });
+
+// ==================== Port Adapters (Phase 3) ====================
+
+/**
+ * Adapter bridging the EmbeddingPort interface to the shared
+ * generateBudgetAwareEmbedding function.
+ */
+const embeddingPort: EmbeddingPort = {
+  generate: async (tenantId, text) => {
+    const result = await generateBudgetAwareEmbedding({ tenantId, text });
+    return { embedding: result.embedding, tokenCount: result.tokenCount };
+  },
+};
+
+/**
+ * Adapter bridging the KnowledgeSearchPort interface to the shared
+ * searchSimilarKnowledgeDocs function.
+ */
+const knowledgeSearchPort: KnowledgeSearchPort = {
+  searchRunbooks: async (embedding, tenantId, limit, minSimilarity) => {
+    const results = await searchSimilarKnowledgeDocs(embedding as number[], {
+      docType: "runbook",
+      tenantId,
+      limit,
+      minSimilarity,
+    });
+    return results.map(({ item, similarity }) => ({
+      id: item.id,
+      title: item.title,
+      content: item.content,
+      sourceUrl: item.sourceUrl ?? null,
+      similarity,
+    }));
+  },
+};
+
+/**
+ * Adapter bridging the TriageSearchPort interface to the shared
+ * searchSimilarTriageResults function.
+ */
+const triageSearchPort: TriageSearchPort = {
+  searchSimilar: async (embedding, tenantId, excludeAlertId, limit, minSimilarity) => {
+    const results = await searchSimilarTriageResults(
+      embedding,
+      tenantId,
+      excludeAlertId,
+      minSimilarity,
+      limit
+    );
+    return results.map((result) => ({
+      triageResultId: result.triageResultId,
+      alertId: result.alertId,
+      similarity: result.similarity,
+      severityLabel: result.severityLabel,
+      serviceName: result.serviceName,
+      createdAt: result.createdAt,
+    }));
+  },
+};
+
+// ==================== Phase 3 Services ====================
+
+const runbookMatcher = createRunbookMatcher(embeddingPort, knowledgeSearchPort);
+const incidentCorrelator = createIncidentCorrelator(triageSearchPort);
 
 // ==================== Helper Functions ====================
 
@@ -82,6 +156,18 @@ const toNormalizedAlert = (record: IncidentAlertRecord): NormalizedAlert => ({
   receivedAt: record.receivedAt.toISOString(),
   sourcePayload: record.sourcePayload,
 });
+
+/**
+ * Builds the text to embed for runbook matching and correlation.
+ * Combines alert title and description for richer semantic context.
+ */
+const buildEmbeddingText = (alert: NormalizedAlert): string => {
+  const parts = [alert.title];
+  if (alert.description) {
+    return [...parts, alert.description].join(" - ");
+  }
+  return parts.join("");
+};
 
 /**
  * Creates a RequestContext for a worker job.
@@ -115,13 +201,37 @@ const incrementCounter = (
 // ==================== Job Processing ====================
 
 /**
- * Processes a single alert through the triage pipeline:
+ * Serializes severity factors for database storage.
+ */
+const serializeSeverityFactors = (
+  factors: ReadonlyArray<{
+    readonly name: string;
+    readonly weight: number;
+    readonly score: number;
+    readonly maxScore: number;
+    readonly reason: string;
+  }>
+): ReadonlyArray<Record<string, unknown>> =>
+  factors.map((factor) => ({
+    name: factor.name,
+    weight: factor.weight,
+    score: factor.score,
+    maxScore: factor.maxScore,
+    reason: factor.reason,
+  }));
+
+/**
+ * Processes a single alert through the full triage pipeline:
  * 1. Fetch alert from DB
  * 2. Update status to processing
  * 3. Run deduplication check
- * 4. If not duplicate, run severity classification
- * 5. Create triage result in DB
- * 6. Update alert status
+ * 4. Severity classification
+ * 5. Create initial triage result
+ * 6. Runbook matching (Phase 3)
+ * 7. Incident correlation (Phase 3)
+ * 8. Evidence aggregation (Phase 3)
+ * 9. Update triage result with enrichment
+ * 10. Mark alert as triaged
  */
 const processAlert = async (alertId: string, state: TriageWorkerState): Promise<void> => {
   const alert = await getAlertById(alertId);
@@ -171,32 +281,80 @@ const processAlert = async (alertId: string, state: TriageWorkerState): Promise<
   const normalizedAlert = toNormalizedAlert(alert);
   const severityScore = classifyAlertSeverity(normalizedAlert, DEFAULT_SEVERITY_CONFIG);
 
-  // Step 5: Create initial triage result
-  const durationMs = Date.now() - startTime;
+  // Step 5: Create initial triage result (severity only)
+  const severityDurationMs = Date.now() - startTime;
 
-  await createTriageResult({
+  const triageResult = await createTriageResult({
     alertId,
     tenantId: alert.tenantId,
     severityScore: severityScore.total,
     severityLabel: severityScore.label,
-    severityFactors: severityScore.factors.map((factor) => ({
-      name: factor.name,
-      weight: factor.weight,
-      score: factor.score,
-      maxScore: factor.maxScore,
-      reason: factor.reason,
-    })),
-    pipelineDurationMs: durationMs,
+    severityFactors: serializeSeverityFactors(severityScore.factors),
+    pipelineDurationMs: severityDurationMs,
   });
 
-  // Step 6: Mark alert as triaged
+  // Step 6: Runbook matching (Phase 3)
+  const embeddingText = buildEmbeddingText(normalizedAlert);
+  const runbookResult = await runbookMatcher.matchRunbooks(embeddingText, tenantId, context);
+
+  // Step 7: Incident correlation (Phase 3)
+  // Re-generate embedding for correlation (reuses the same text)
+  const { embedding: alertEmbedding } = await embeddingPort.generate(tenantId, embeddingText);
+
+  const correlationResult = await incidentCorrelator.correlateIncident(
+    alertEmbedding,
+    alertId,
+    tenantId,
+    normalizedAlert.serviceName,
+    context
+  );
+
+  // Step 8: Evidence aggregation (Phase 3)
+  const evidenceCatalog = aggregateEvidence({
+    alert: normalizedAlert,
+    severity: severityScore,
+    runbooks: runbookResult.matches,
+    correlations: correlationResult.correlations,
+  });
+
+  // Step 9: Update triage result with enrichment data
+  const fullDurationMs = Date.now() - startTime;
+
+  await updateTriageEnrichment({
+    triageResultId: triageResult.id,
+    confidence: evidenceCatalog.confidence.total,
+    completeness: evidenceCatalog.completeness.total,
+    missingFields: evidenceCatalog.completeness.missingFields,
+    matchedRunbooks: runbookResult.matches.map((match) => ({
+      docId: match.docId,
+      title: match.title,
+      similarity: match.similarity,
+      sourceUrl: match.sourceUrl,
+    })),
+    correlatedIncidents: correlationResult.correlations.map((corr) => ({
+      triageResultId: corr.triageResultId,
+      alertId: corr.alertId,
+      similarity: corr.similarity,
+      correlationType: corr.correlationType,
+      severityLabel: corr.severityLabel,
+    })),
+    evidenceCatalog: evidenceCatalog as unknown as Record<string, unknown>,
+    alertEmbedding,
+    pipelineDurationMs: fullDurationMs,
+  });
+
+  // Step 10: Mark alert as triaged
   await updateAlertStatus(alertId, "triaged");
 
   logger.info("Alert triage completed", {
     alertId,
     severityLabel: severityScore.label,
     severityScore: severityScore.total,
-    durationMs,
+    confidence: evidenceCatalog.confidence.total,
+    completeness: evidenceCatalog.completeness.total,
+    runbookMatches: runbookResult.matches.length,
+    correlations: correlationResult.correlations.length,
+    durationMs: fullDurationMs,
     ...context,
   });
 };
@@ -248,7 +406,8 @@ const createStatsSnapshot = (state: TriageWorkerState): TriageWorkerStats => ({
  * Starts the triage worker polling loop.
  *
  * Polls the incident triage queue for messages and processes each alert
- * through the dedup + severity classification pipeline.
+ * through the full triage pipeline (dedup, severity, runbooks, correlation,
+ * evidence aggregation).
  *
  * @returns Control interface with stop() and getStats() methods
  */

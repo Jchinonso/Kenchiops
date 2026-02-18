@@ -11,6 +11,7 @@ import type {
   SeverityThreshold,
   ServiceTier,
 } from "../types/severityTypes.js";
+import type { ConfidenceWeights, CompletenessFieldConfig } from "../types/evidenceTypes.js";
 
 // ==================== Deduplication ====================
 
@@ -169,4 +170,62 @@ export const DEFAULT_SEVERITY_CONFIG: SeverityConfig = {
   keywordPatterns: KEYWORD_PATTERNS,
   sourceSeverityMap: SOURCE_SEVERITY_MAP,
   severityThresholds: SEVERITY_THRESHOLDS,
+} as const;
+
+// ==================== Runbook Matching ====================
+
+/**
+ * Defaults for runbook matching via vector similarity search.
+ */
+export const RUNBOOK_MATCH_DEFAULTS = {
+  /** Maximum number of runbook matches to return */
+  MAX_RESULTS: 5,
+  /** Minimum cosine similarity threshold for a match */
+  MIN_SIMILARITY: 0.65,
+} as const;
+
+// ==================== Incident Correlation ====================
+
+/**
+ * Defaults for incident correlation via vector similarity search.
+ */
+export const CORRELATION_DEFAULTS = {
+  /** Maximum number of correlated incidents to return */
+  MAX_RESULTS: 10,
+  /** Minimum cosine similarity for "same root cause" classification */
+  SAME_ROOT_CAUSE_THRESHOLD: 0.92,
+  /** Minimum cosine similarity for "similar symptoms" classification */
+  SIMILAR_SYMPTOMS_THRESHOLD: 0.75,
+  /** Minimum cosine similarity to be included at all */
+  MIN_SIMILARITY: 0.6,
+} as const;
+
+// ==================== Confidence Scoring ====================
+
+/**
+ * Weights for confidence signals. Must sum to 1.0.
+ * Higher weight = more impact on confidence when present/absent.
+ */
+export const CONFIDENCE_WEIGHTS: ConfidenceWeights = {
+  has_metrics: 0.2,
+  has_runbook: 0.2,
+  has_similar_incident: 0.15,
+  service_known: 0.15,
+  environment_known: 0.1,
+  has_description: 0.1,
+  has_labels: 0.1,
+} as const;
+
+// ==================== Completeness Scoring ====================
+
+/**
+ * Field categorization for completeness scoring.
+ * - required: must-have fields (weighted 3x)
+ * - expected: should-have fields (weighted 2x)
+ * - optional: nice-to-have fields (weighted 1x)
+ */
+export const COMPLETENESS_FIELDS: CompletenessFieldConfig = {
+  required: ["title", "source", "severity", "fingerprint"],
+  expected: ["serviceName", "environment", "description"],
+  optional: ["metrics", "labels", "runbooks", "correlatedIncidents"],
 } as const;

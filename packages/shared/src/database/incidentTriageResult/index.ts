@@ -11,10 +11,22 @@ export type {
   IncidentTriageResultRow,
   IncidentTriageResultRecord,
   CreateTriageResultInput,
+  UpdateTriageEnrichmentInput,
+  TriageSimilarityResult,
 } from "./types.js";
 
 // Helpers
-export { mapRowToTriageResult, validateTriageResultId } from "./helpers.js";
+export {
+  mapRowToTriageResult,
+  mapRowToSimilarityResult,
+  validateTriageResultId,
+} from "./helpers.js";
 
 // Repository operations
-export { createTriageResult, getTriageResultById, getTriageResultByAlertId } from "./repository.js";
+export {
+  createTriageResult,
+  getTriageResultById,
+  getTriageResultByAlertId,
+  updateTriageEnrichment,
+  searchSimilarTriageResults,
+} from "./repository.js";

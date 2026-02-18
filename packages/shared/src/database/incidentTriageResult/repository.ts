@@ -11,14 +11,22 @@ import {
   createLogger,
   generateEventId,
   getErrorMessage,
+  formatEmbeddingVector,
   INCIDENT_TRIAGE_RESULT_QUERIES,
 } from "../common.js";
 import type {
   IncidentTriageResultRow,
   IncidentTriageResultRecord,
   CreateTriageResultInput,
+  UpdateTriageEnrichmentInput,
+  TriageResultSimilarityRow,
+  TriageSimilarityResult,
 } from "./types.js";
-import { mapRowToTriageResult, validateTriageResultId } from "./helpers.js";
+import {
+  mapRowToTriageResult,
+  mapRowToSimilarityResult,
+  validateTriageResultId,
+} from "./helpers.js";
 
 /** ID prefix for generated triage result IDs */
 const TRIAGE_RESULT_ID_PREFIX = "tri";
@@ -115,6 +123,99 @@ export const getTriageResultByAlertId = async (
   } catch (error) {
     logger.error("Failed to get triage result by alert id", {
       alertId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Updates a triage result with Phase 3 enrichment data (runbooks, correlations, evidence).
+ *
+ * @param input - The enrichment data to update
+ * @returns The updated triage result record
+ */
+export const updateTriageEnrichment = async (
+  input: UpdateTriageEnrichmentInput
+): Promise<IncidentTriageResultRecord> => {
+  validateTriageResultId(input.triageResultId);
+
+  const embeddingVector = formatEmbeddingVector(input.alertEmbedding);
+
+  try {
+    const result = await query<IncidentTriageResultRow>(
+      INCIDENT_TRIAGE_RESULT_QUERIES.UPDATE_ENRICHMENT,
+      [
+        input.triageResultId,
+        input.confidence,
+        input.completeness,
+        input.missingFields,
+        JSON.stringify(input.matchedRunbooks),
+        JSON.stringify(input.correlatedIncidents),
+        JSON.stringify(input.evidenceCatalog),
+        embeddingVector,
+        input.pipelineDurationMs,
+      ]
+    );
+
+    const record = mapRowToTriageResult(result.rows[0]);
+
+    logger.info("Triage result enrichment updated", {
+      id: record.id,
+      alertId: record.alertId,
+      confidence: record.confidence,
+      completeness: record.completeness,
+    });
+
+    return record;
+  } catch (error) {
+    logger.error("Failed to update triage enrichment", {
+      triageResultId: input.triageResultId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Searches for similar triage results using vector similarity on alert embeddings.
+ *
+ * @param embedding - Query embedding vector
+ * @param tenantId - Tenant to search within
+ * @param excludeAlertId - Alert ID to exclude from results (the current alert)
+ * @param minSimilarity - Minimum cosine similarity threshold
+ * @param limit - Maximum number of results
+ * @returns Array of similar triage results with similarity scores
+ */
+export const searchSimilarTriageResults = async (
+  embedding: readonly number[],
+  tenantId: string,
+  excludeAlertId: string,
+  minSimilarity: number,
+  limit: number
+): Promise<readonly TriageSimilarityResult[]> => {
+  const embeddingVector = formatEmbeddingVector(embedding);
+
+  try {
+    const result = await query<TriageResultSimilarityRow>(
+      INCIDENT_TRIAGE_RESULT_QUERIES.SEARCH_SIMILAR_TRIAGE,
+      [embeddingVector, tenantId, excludeAlertId, minSimilarity, limit]
+    );
+
+    const results = result.rows.map(mapRowToSimilarityResult);
+
+    logger.info("Searched similar triage results", {
+      resultCount: results.length,
+      tenantId,
+      excludeAlertId,
+      minSimilarity,
+    });
+
+    return Object.freeze(results);
+  } catch (error) {
+    logger.error("Failed to search similar triage results", {
+      tenantId,
+      excludeAlertId,
       error: getErrorMessage(error),
     });
     throw error;

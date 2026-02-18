@@ -359,8 +359,12 @@ export {
   createTriageResult,
   getTriageResultById,
   getTriageResultByAlertId,
+  updateTriageEnrichment,
+  searchSimilarTriageResults,
   type IncidentTriageResultRecord,
   type CreateTriageResultInput,
+  type UpdateTriageEnrichmentInput,
+  type TriageSimilarityResult,
 } from "./incidentTriageResult/index.js";
 
 // Risk rules module (Context-Aware Risk Scoring)

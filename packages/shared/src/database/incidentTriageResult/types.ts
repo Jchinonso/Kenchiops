@@ -73,3 +73,38 @@ export interface CreateTriageResultInput {
   readonly severityFactors: readonly Record<string, unknown>[];
   readonly pipelineDurationMs: number;
 }
+
+/**
+ * Input for updating a triage result with Phase 3 enrichment data.
+ */
+export interface UpdateTriageEnrichmentInput {
+  readonly triageResultId: string;
+  readonly confidence: number;
+  readonly completeness: number;
+  readonly missingFields: readonly string[];
+  readonly matchedRunbooks: readonly Record<string, unknown>[];
+  readonly correlatedIncidents: readonly Record<string, unknown>[];
+  readonly evidenceCatalog: Readonly<Record<string, unknown>>;
+  readonly alertEmbedding: readonly number[];
+  readonly pipelineDurationMs: number;
+}
+
+/**
+ * Row type returned by the similarity search query (extends base row with joined fields).
+ */
+export interface TriageResultSimilarityRow extends IncidentTriageResultRow {
+  readonly joined_service_name: string | null;
+  readonly similarity: number;
+}
+
+/**
+ * Domain result from a triage similarity search.
+ */
+export interface TriageSimilarityResult {
+  readonly triageResultId: string;
+  readonly alertId: string;
+  readonly similarity: number;
+  readonly severityLabel: string | null;
+  readonly serviceName: string | null;
+  readonly createdAt: Date;
+}

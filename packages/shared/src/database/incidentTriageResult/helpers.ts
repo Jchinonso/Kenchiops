@@ -7,7 +7,12 @@
  */
 
 import { ValidationError } from "../common.js";
-import type { IncidentTriageResultRow, IncidentTriageResultRecord } from "./types.js";
+import type {
+  IncidentTriageResultRow,
+  IncidentTriageResultRecord,
+  TriageResultSimilarityRow,
+  TriageSimilarityResult,
+} from "./types.js";
 
 /**
  * Maps a database row to an IncidentTriageResultRecord domain object.
@@ -32,6 +37,20 @@ export const mapRowToTriageResult = (row: IncidentTriageResultRow): IncidentTria
   pipelineDurationMs: row.pipeline_duration_ms,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+});
+
+/**
+ * Maps a similarity search row to a TriageSimilarityResult domain object.
+ */
+export const mapRowToSimilarityResult = (
+  row: TriageResultSimilarityRow
+): TriageSimilarityResult => ({
+  triageResultId: row.id,
+  alertId: row.alert_id,
+  similarity: row.similarity,
+  severityLabel: row.severity_label,
+  serviceName: row.joined_service_name,
+  createdAt: row.created_at,
 });
 
 /**
