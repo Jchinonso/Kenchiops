@@ -1077,6 +1077,7 @@ export {
   type TestFailureInfo,
   type RelatedKnowledgeDoc,
   type SuggestedFix,
+  type NormalizedBuildEvent,
   type PendingCheckRun,
   type SerializedPendingCheckRun,
   type PendingAggregation,
@@ -1120,6 +1121,14 @@ export {
   type WorkerControl,
   type ProcessorControl,
 } from "./aggregation/index.js";
+
+// CI provider port interfaces
+export type {
+  CIWebhookPort,
+  CILogFetcherPort,
+  FetchedBuildLogs,
+  CIOutputPort,
+} from "./ports/index.js";
 
 // Health check utilities
 export {

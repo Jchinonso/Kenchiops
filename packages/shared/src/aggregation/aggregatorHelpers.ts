@@ -87,6 +87,7 @@ export const buildMetadata = (
   workflowContext: stringifyOptional(context.workflowContext),
   firstFailureAt: firstFailureAt.toISOString(),
   lastFailureAt: lastFailureAt.toISOString(),
+  ...(context.provider ? { provider: context.provider } : {}),
 });
 
 /** Reconstructs AggregatedFailures from Redis metadata and failure list. */

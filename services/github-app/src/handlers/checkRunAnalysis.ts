@@ -17,6 +17,7 @@ import {
   EVENT_TYPES,
   EVENT_SOURCES,
   EVENT_SEVERITY,
+  CI_PROVIDERS,
   type PendingCheckRun,
   type PendingCheckContext,
   type AggregationKey,
@@ -89,6 +90,7 @@ const buildPendingCheckContext = (webhook: CheckRunWebhook): PendingCheckContext
     },
     installationId: installation?.id ?? 0,
     pullRequestNumbers: check_run.pull_requests.map((pr) => pr.number),
+    provider: CI_PROVIDERS.GITHUB_ACTIONS,
   };
 };
 

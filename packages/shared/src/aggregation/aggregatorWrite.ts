@@ -194,6 +194,7 @@ export const addPendingCheckToRedis = async (
       pullRequestNumbers: context.pullRequestNumbers,
       prContext: null,
       workflowContext: null,
+      ...(context.provider ? { provider: context.provider } : {}),
     },
     config,
     itemType: "pending_check",

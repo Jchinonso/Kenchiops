@@ -42,6 +42,7 @@ import {
   type LLMLintError,
   type LLMChangeCorrelation,
   type SanitizationResultWithMapping,
+  CI_PROVIDERS,
 } from "@kenchi/shared";
 import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
@@ -839,6 +840,7 @@ export const processCombinedAnalysis = async (
       },
       firstFailureAt: pending.firstFailureAt,
       lastFailureAt: pending.lastFailureAt,
+      provider: CI_PROVIDERS.GITHUB_ACTIONS,
     };
 
     logger.info("Per-job analysis complete, posting results", {

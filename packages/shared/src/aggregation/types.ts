@@ -7,7 +7,7 @@
  * @module aggregation/types
  */
 
-import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
+import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS, type CIProvider } from "../constants/index.js";
 import type { getRedisClient } from "../queue/redisClient.js";
 import type { ProcessResult } from "../queue/types.js";
 import type {
@@ -112,6 +112,8 @@ export interface PendingAggregationPayload {
     readonly pendingChecks: readonly SerializedPendingCheckRun[];
     readonly firstFailureAt: string;
     readonly lastFailureAt: string;
+    /** CI provider identifier. Optional for backward compat. */
+    readonly provider?: string;
   };
 }
 
@@ -220,6 +222,27 @@ export interface RepositoryInfo {
 }
 
 /**
+ * Provider-agnostic build failure event.
+ *
+ * All CI providers normalize their webhook payloads to this shape
+ * before entering the aggregation pipeline. This is the single
+ * type that webhook adapters produce.
+ */
+export interface NormalizedBuildEvent {
+  readonly provider: CIProvider;
+  readonly buildId: string;
+  readonly buildName: string;
+  readonly conclusion: string;
+  readonly commitSha: string;
+  readonly branch?: string;
+  readonly repository: RepositoryInfo;
+  readonly pullRequestNumbers: readonly number[];
+  readonly installationId: number;
+  readonly timestamp: Date;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/**
  * Aggregated failures for a single commit
  */
 export interface AggregatedFailures {
@@ -232,6 +255,8 @@ export interface AggregatedFailures {
   readonly workflowContext: WorkflowContext | null;
   readonly firstFailureAt: Date;
   readonly lastFailureAt: Date;
+  /** CI provider identifier. Optional for backward compat. */
+  readonly provider?: CIProvider;
 }
 
 /**
@@ -240,6 +265,8 @@ export interface AggregatedFailures {
 export interface AggregationKey {
   readonly repositoryFullName: string;
   readonly commitSha: string;
+  /** CI provider identifier. Optional for backward compat (defaults to github_actions). */
+  readonly provider?: CIProvider;
 }
 
 /**
@@ -317,6 +344,8 @@ export interface FailureContext {
   readonly pullRequestNumbers: readonly number[];
   readonly prContext: PRContext | null;
   readonly workflowContext: WorkflowContext | null;
+  /** CI provider identifier. Optional for backward compat. */
+  readonly provider?: CIProvider;
 }
 
 /**
@@ -333,6 +362,8 @@ export interface AggregationMetadata {
   readonly workflowContext: string | null;
   readonly firstFailureAt: string;
   readonly lastFailureAt: string;
+  /** CI provider identifier. Optional for backward compat. */
+  readonly provider?: string;
 }
 
 /**
@@ -359,6 +390,8 @@ export interface PendingCheckContext {
   readonly repositoryInfo: RepositoryInfo;
   readonly installationId: number;
   readonly pullRequestNumbers: readonly number[];
+  /** CI provider identifier. Optional for backward compat. */
+  readonly provider?: CIProvider;
 }
 
 /**

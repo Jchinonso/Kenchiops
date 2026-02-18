@@ -581,6 +581,9 @@ export {
   PERCENTAGE_MULTIPLIER,
 } from "./formatting.js";
 
+// CI provider constants
+export { CI_PROVIDERS, type CIProvider } from "./ciProviders.js";
+
 // Auth constants
 export {
   USER_STATUS,
