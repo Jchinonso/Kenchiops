@@ -11,13 +11,14 @@ import {
   HTTP_STATUS,
   handleDocUpdateEvent,
   findByGitHubInstallation,
+  findWebhookActivityByDeliveryId,
   getErrorMessage,
-  createWebhookActivity,
 } from "@kenchi/shared";
 import { handlePullRequest } from "../handlers/pullRequestHandler.js";
 import { handleCheckRun } from "../handlers/checkRunHandler.js";
 import { handleInstallation } from "../handlers/installationHandler.js";
 import { verifyGitHubWebhook } from "../middleware/verifyGithub.js";
+import { logWebhookActivity } from "../helpers/webhookActivityLogger.js";
 import type {
   PullRequestWebhook,
   CheckRunWebhook,
@@ -28,38 +29,6 @@ import type { WebhookHandlerResult, GitHubEventHandler } from "./webhookRoutesTy
 
 const router = Router();
 const logger = createLogger("github-app");
-
-/**
- * Safely log webhook activity — failures must never break webhook processing.
- */
-const logWebhookActivity = async (
-  deliveryId: string,
-  eventType: string,
-  status: string,
-  startTime: number,
-  tenantId?: string | null,
-  errorMessage?: string | null,
-  metadata?: Readonly<Record<string, unknown>> | null
-): Promise<void> => {
-  try {
-    await createWebhookActivity({
-      deliveryId,
-      eventType,
-      source: "github",
-      status,
-      tenantId: tenantId ?? null,
-      processingTimeMs: Date.now() - startTime,
-      errorMessage: errorMessage ?? null,
-      metadata,
-    });
-  } catch (error) {
-    logger.warn("Failed to log webhook activity", {
-      deliveryId,
-      eventType,
-      error: getErrorMessage(error),
-    });
-  }
-};
 
 /**
  * Format standard webhook response
@@ -244,7 +213,13 @@ const eventHandlers: Record<string, GitHubEventHandler> = {
  */
 const handlePing = (deliveryId: string, startTime: number, res: Response): void => {
   logger.info("GitHub webhook ping received", { deliveryId });
-  void logWebhookActivity(deliveryId, "ping", "processed", startTime);
+  void logWebhookActivity({
+    deliveryId,
+    eventType: "ping",
+    source: "github",
+    status: "processed",
+    startTime,
+  });
   res.status(HTTP_STATUS.OK).json({
     status: "ok",
     message: "Webhook configured successfully",
@@ -261,7 +236,13 @@ const handleUnknownEvent = (
   res: Response
 ): void => {
   logger.info("Unhandled GitHub event type", { eventType, deliveryId });
-  void logWebhookActivity(deliveryId, eventType, "ignored", startTime);
+  void logWebhookActivity({
+    deliveryId,
+    eventType,
+    source: "github",
+    status: "ignored",
+    startTime,
+  });
   res.status(HTTP_STATUS.OK).json({
     status: "ignored",
     message: `Event type '${eventType}' not handled`,
@@ -318,6 +299,30 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
     return;
   }
 
+  // Replay protection: skip if already processed
+  try {
+    const existing = await findWebhookActivityByDeliveryId(deliveryId);
+    if (existing) {
+      logger.info("Duplicate GitHub webhook, skipping", {
+        provider: "github",
+        operation: "receiveWebhook",
+        deliveryId,
+        existingId: existing.id,
+      });
+      res.status(HTTP_STATUS.OK).json({
+        status: "duplicate",
+        message: "Webhook already processed",
+      });
+      return;
+    }
+  } catch (error) {
+    // Replay check is best-effort — proceed with processing if it fails
+    logger.warn("Replay protection check failed, proceeding with processing", {
+      deliveryId,
+      error: getErrorMessage(error),
+    });
+  }
+
   // Resolve tenant from installation ID for webhook activity logging
   const tenantId = await resolveTenantId(req.body);
 
@@ -325,17 +330,25 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
   try {
     const result = await handler.handle(req.body);
     const status = result.handled ? "processed" : "skipped";
-    void logWebhookActivity(deliveryId, eventType, status, startTime, tenantId ?? result.tenantId);
-    res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
-  } catch (error) {
-    void logWebhookActivity(
+    void logWebhookActivity({
       deliveryId,
       eventType,
-      "failed",
+      source: "github",
+      status,
+      startTime,
+      tenantId: tenantId ?? result.tenantId,
+    });
+    res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
+  } catch (error) {
+    void logWebhookActivity({
+      deliveryId,
+      eventType,
+      source: "github",
+      status: "failed",
       startTime,
       tenantId,
-      getErrorMessage(error)
-    );
+      errorMessage: getErrorMessage(error),
+    });
     throw error;
   }
 });
@@ -359,21 +372,29 @@ router.post(
     try {
       const result = await handlePullRequest(webhook);
       const status = result.handled ? "processed" : "skipped";
-      void logWebhookActivity(deliveryId, "pull_request", status, startTime, tenantId);
+      void logWebhookActivity({
+        deliveryId,
+        eventType: "pull_request",
+        source: "github",
+        status,
+        startTime,
+        tenantId,
+      });
       res.status(HTTP_STATUS.OK).json({
         status: result.handled ? "processed" : "skipped",
         message: result.message,
         eventId: result.eventId,
       });
     } catch (error) {
-      void logWebhookActivity(
+      void logWebhookActivity({
         deliveryId,
-        "pull_request",
-        "failed",
+        eventType: "pull_request",
+        source: "github",
+        status: "failed",
         startTime,
         tenantId,
-        getErrorMessage(error)
-      );
+        errorMessage: getErrorMessage(error),
+      });
       throw error;
     }
   })
@@ -395,21 +416,29 @@ router.post(
     try {
       const result = await handleCheckRun(webhook);
       const status = result.handled ? "processed" : "skipped";
-      void logWebhookActivity(deliveryId, "check_run", status, startTime, tenantId);
+      void logWebhookActivity({
+        deliveryId,
+        eventType: "check_run",
+        source: "github",
+        status,
+        startTime,
+        tenantId,
+      });
       res.status(HTTP_STATUS.OK).json({
         status: result.handled ? "processed" : "skipped",
         message: result.message,
         eventId: result.eventId,
       });
     } catch (error) {
-      void logWebhookActivity(
+      void logWebhookActivity({
         deliveryId,
-        "check_run",
-        "failed",
+        eventType: "check_run",
+        source: "github",
+        status: "failed",
         startTime,
         tenantId,
-        getErrorMessage(error)
-      );
+        errorMessage: getErrorMessage(error),
+      });
       throw error;
     }
   })

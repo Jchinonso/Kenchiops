@@ -46,6 +46,17 @@ export interface VercelDeployment {
 }
 
 /**
+ * Git context extracted from Vercel deployment metadata.
+ */
+export interface VercelGitContext {
+  readonly commitSha: string;
+  readonly owner: string;
+  readonly repo: string;
+  readonly branch: string | undefined;
+  readonly prNumber: number | undefined;
+}
+
+/**
  * A single event from the Vercel /v6/deployments/:id/events API.
  * Used for fetching deployment build logs.
  */

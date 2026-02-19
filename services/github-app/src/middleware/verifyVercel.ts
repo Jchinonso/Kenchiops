@@ -7,35 +7,18 @@
  * @module middleware/verifyVercel
  */
 
-import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { createLogger, VERCEL_SIGNATURE } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
+import { vercelWebhookAdapter } from "../adapters/vercelWebhookAdapter.js";
 
 const logger = createLogger("github-app");
 
 /**
- * Verifies Vercel webhook HMAC-SHA1 signature.
- */
-const verifySignature = (rawBody: Buffer, signature: string, secret: string): boolean => {
-  const computedSignature = crypto
-    .createHmac(VERCEL_SIGNATURE.ALGORITHM, secret)
-    .update(rawBody)
-    .digest("hex");
-
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(signature, "hex"),
-      Buffer.from(computedSignature, "hex")
-    );
-  } catch {
-    // timingSafeEqual throws if buffer lengths differ — treat as invalid
-    return false;
-  }
-};
-
-/**
  * Express middleware to verify Vercel webhook signatures.
+ *
+ * Delegates crypto verification to vercelWebhookAdapter.verifySignature()
+ * to avoid duplicating HMAC-SHA1 logic.
  *
  * Requires raw body to be captured via express.json({ verify: ... }) in index.ts.
  */
@@ -71,7 +54,7 @@ export const verifyVercelWebhook = (req: Request, res: Response, next: NextFunct
     return;
   }
 
-  if (!verifySignature(rawBody, signature, secret)) {
+  if (!vercelWebhookAdapter.verifySignature(rawBody, signature, secret)) {
     logger.error("Invalid Vercel webhook signature", {
       provider: "vercel",
       operation: "verifySignature",

@@ -13,45 +13,15 @@ import {
   createLogger,
   HTTP_STATUS,
   getErrorMessage,
-  createWebhookActivity,
   findWebhookActivityByDeliveryId,
 } from "@kenchi/shared";
 import { verifyVercelWebhook } from "../middleware/verifyVercel.js";
 import { handleVercelDeployment } from "../handlers/vercelDeploymentHandler.js";
+import { logWebhookActivity } from "../helpers/webhookActivityLogger.js";
 import type { VercelWebhook } from "../types/vercelTypes.js";
 
 const router = Router();
 const logger = createLogger("github-app");
-
-/**
- * Safely log webhook activity — failures must never break webhook processing.
- */
-const logWebhookActivity = async (
-  deliveryId: string,
-  eventType: string,
-  status: string,
-  startTime: number,
-  errorMessage?: string | null,
-  metadata?: Readonly<Record<string, unknown>> | null
-): Promise<void> => {
-  try {
-    await createWebhookActivity({
-      deliveryId,
-      eventType,
-      source: "vercel",
-      status,
-      tenantId: null,
-      processingTimeMs: Date.now() - startTime,
-      errorMessage: errorMessage ?? null,
-      metadata,
-    });
-  } catch (error) {
-    logger.warn("Failed to log Vercel webhook activity", {
-      deliveryId,
-      error: getErrorMessage(error),
-    });
-  }
-};
 
 /**
  * POST /api/vercel/webhook
@@ -97,7 +67,13 @@ router.post(
     try {
       const result = await handleVercelDeployment(webhook);
       const status = result.handled ? "processed" : "skipped";
-      void logWebhookActivity(deliveryId, webhook.type, status, startTime);
+      void logWebhookActivity({
+        deliveryId,
+        eventType: webhook.type,
+        source: "vercel",
+        status,
+        startTime,
+      });
 
       res.status(HTTP_STATUS.OK).json({
         status: result.handled ? "processed" : "skipped",
@@ -105,13 +81,14 @@ router.post(
         eventId: result.eventId,
       });
     } catch (error) {
-      void logWebhookActivity(
+      void logWebhookActivity({
         deliveryId,
-        webhook.type,
-        "failed",
+        eventType: webhook.type,
+        source: "vercel",
+        status: "failed",
         startTime,
-        getErrorMessage(error)
-      );
+        errorMessage: getErrorMessage(error),
+      });
       throw error;
     }
   })

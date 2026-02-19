@@ -100,7 +100,7 @@ const persistEventAndNotify = async (
         headSha: git.commitSha,
         checkRunId: 0,
         pullRequestCount: git.prNumber !== undefined ? 1 : 0,
-        provider: "vercel",
+        provider: CI_PROVIDERS.VERCEL,
       },
       metadata: {
         owner: git.owner,
@@ -116,7 +116,7 @@ const persistEventAndNotify = async (
       repository: repoFullName,
       checkName,
       commitSha: git.commitSha,
-      provider: "vercel",
+      provider: CI_PROVIDERS.VERCEL,
     });
   } catch (error) {
     logger.warn("Failed to persist Vercel event or publish notification", {

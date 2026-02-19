@@ -8,17 +8,9 @@
  */
 
 import { VERCEL_DEPLOYMENT_EVENTS } from "@kenchi/shared";
+import type { VercelGitContext } from "../types/vercelTypes.js";
 
-/**
- * Git context extracted from Vercel deployment metadata.
- */
-export interface VercelGitContext {
-  readonly commitSha: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly branch: string | undefined;
-  readonly prNumber: number | undefined;
-}
+export type { VercelGitContext } from "../types/vercelTypes.js";
 
 /**
  * Extract git context from Vercel deployment metadata.

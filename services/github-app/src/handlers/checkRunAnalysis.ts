@@ -94,6 +94,7 @@ const persistEventAndNotify = async (webhook: CheckRunWebhook): Promise<void> =>
         headSha: check_run.head_sha,
         checkRunId: check_run.id,
         pullRequestCount: check_run.pull_requests.length,
+        provider: CI_PROVIDERS.GITHUB_ACTIONS,
       },
       metadata: {
         owner: repository.owner.login,
@@ -109,6 +110,7 @@ const persistEventAndNotify = async (webhook: CheckRunWebhook): Promise<void> =>
       repository: repository.full_name,
       checkName: check_run.name,
       commitSha: check_run.head_sha,
+      provider: CI_PROVIDERS.GITHUB_ACTIONS,
     });
   } catch (error) {
     logger.warn("Failed to persist event or publish dashboard notification", {
