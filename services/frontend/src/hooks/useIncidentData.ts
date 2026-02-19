@@ -110,7 +110,6 @@ const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
 
   useEffect(() => {
     if (!path) {
-      setState({ data: null, isLoading: false, error: null });
       return;
     }
 
@@ -163,7 +162,10 @@ const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
     };
   }, [path, refreshKey, depsKey]);
 
-  return { ...state, refetch };
+  // Derive final state: when path is empty, override to idle (avoids synchronous setState in effect)
+  const resolvedState: FetchState<T> = path ? state : { data: null, isLoading: false, error: null };
+
+  return { ...resolvedState, refetch };
 };
 
 // ==================== URL Builders ====================

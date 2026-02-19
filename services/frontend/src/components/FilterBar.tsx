@@ -30,12 +30,14 @@ interface FilterValues {
   readonly severity: string;
   readonly minConfidence: string;
   readonly timeRange: string;
+  readonly source?: string;
+  readonly status?: string;
 }
 
 interface FilterBarProps {
   readonly filters: FilterValues;
   readonly onFilterChange: (filters: FilterValues) => void;
-  readonly variant: "analyses" | "failures";
+  readonly variant: "analyses" | "failures" | "incidents";
 }
 
 // ==================== Constants ====================
@@ -66,6 +68,37 @@ const TIME_RANGE_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label
   { value: "90d", label: "Last 90 Days" },
 ];
 
+const INCIDENT_SEVERITY_OPTIONS: ReadonlyArray<{
+  readonly value: string;
+  readonly label: string;
+}> = [
+  { value: "", label: "All Severities" },
+  { value: "critical", label: "Critical" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+  { value: "info", label: "Info" },
+];
+
+const SOURCE_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label: string }> = [
+  { value: "", label: "All Sources" },
+  { value: "pagerduty", label: "PagerDuty" },
+  { value: "datadog", label: "Datadog" },
+  { value: "cloudwatch", label: "CloudWatch" },
+  { value: "prometheus", label: "Prometheus" },
+  { value: "custom", label: "Custom" },
+];
+
+const INCIDENT_STATUS_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label: string }> = [
+  { value: "", label: "All Statuses" },
+  { value: "received", label: "Received" },
+  { value: "processing", label: "Processing" },
+  { value: "triaged", label: "Triaged" },
+  { value: "escalated", label: "Escalated" },
+  { value: "acknowledged", label: "Acknowledged" },
+  { value: "resolved", label: "Resolved" },
+];
+
 /** Duration lookup for time range presets (in milliseconds) */
 const TIME_RANGE_DURATIONS: Readonly<Record<string, number>> = {
   "24h": 24 * 60 * 60 * 1000,
@@ -85,6 +118,8 @@ const EMPTY_FILTERS: FilterValues = {
   severity: "",
   minConfidence: "",
   timeRange: "",
+  source: "",
+  status: "",
 };
 
 /** Helper to set a ref value without triggering the object-mutation lint rule */
@@ -183,6 +218,14 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
     onFilterChange({ ...filters, timeRange: value === "all" ? "" : value });
   };
 
+  const handleSourceChange = (value: string) => {
+    onFilterChange({ ...filters, source: value === "all" ? "" : value });
+  };
+
+  const handleStatusChange = (value: string) => {
+    onFilterChange({ ...filters, status: value === "all" ? "" : value });
+  };
+
   const handleClear = () => {
     setLocalRepo("");
     if (timerRef.current) {
@@ -195,7 +238,9 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
     filters.repository !== "" ||
     filters.severity !== "" ||
     filters.minConfidence !== "" ||
-    filters.timeRange !== "";
+    filters.timeRange !== "" ||
+    (filters.source ?? "") !== "" ||
+    (filters.status ?? "") !== "";
 
   return (
     <div
@@ -203,17 +248,21 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
       role="search"
       aria-label="Table filters"
     >
-      <label className="sr-only" htmlFor="filter-repository">
-        Filter by repository
-      </label>
-      <input
-        id="filter-repository"
-        type="text"
-        value={localRepo}
-        onChange={handleRepoInput}
-        placeholder="Filter by repository, e.g. org/repo-name"
-        className={cn(INPUT_CLASS, "w-64")}
-      />
+      {variant !== "incidents" && (
+        <>
+          <label className="sr-only" htmlFor="filter-repository">
+            Filter by repository
+          </label>
+          <input
+            id="filter-repository"
+            type="text"
+            value={localRepo}
+            onChange={handleRepoInput}
+            placeholder="Filter by repository, e.g. org/repo-name"
+            className={cn(INPUT_CLASS, "w-64")}
+          />
+        </>
+      )}
 
       {variant === "failures" && (
         <Select value={filters.severity || "all"} onValueChange={handleSeverityChange}>
@@ -228,6 +277,49 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
             ))}
           </SelectContent>
         </Select>
+      )}
+
+      {variant === "incidents" && (
+        <>
+          <Select value={filters.severity || "all"} onValueChange={handleSeverityChange}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="All Severities" />
+            </SelectTrigger>
+            <SelectContent>
+              {INCIDENT_SEVERITY_OPTIONS.map((option) => (
+                <SelectItem key={option.value || "all"} value={option.value || "all"}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.status || "all"} onValueChange={handleStatusChange}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              {INCIDENT_STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value || "all"} value={option.value || "all"}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.source || "all"} onValueChange={handleSourceChange}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="All Sources" />
+            </SelectTrigger>
+            <SelectContent>
+              {SOURCE_OPTIONS.map((option) => (
+                <SelectItem key={option.value || "all"} value={option.value || "all"}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
       )}
 
       {variant === "analyses" && (

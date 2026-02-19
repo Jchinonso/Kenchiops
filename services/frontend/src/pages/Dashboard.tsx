@@ -20,18 +20,17 @@ import { CICDPipelines } from "@/pages/CICDPipelines";
 import { WebhookActivity } from "@/pages/WebhookActivity";
 import { RepositoryDetail } from "@/pages/RepositoryDetail";
 import { AnalysisDetail } from "@/pages/AnalysisDetail";
+import { ActiveIncidents } from "@/pages/ActiveIncidents";
 import { Settings } from "@/pages/Settings";
 import {
   Bell,
   Menu,
   Rocket,
-  Siren,
   Server,
   Puzzle,
   BarChart3,
   Moon,
   Sun,
-  Flame,
   Clock,
   FileText,
   FileCode,
@@ -63,12 +62,6 @@ interface ComingSoonConfig {
 
 const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
   // ---- Incidents ----
-  "/dashboard/incidents/active": {
-    title: "Active Incidents",
-    description:
-      "Real-time incident detection with auto-severity classification. Connect your monitoring tools to surface active incidents here.",
-    icon: <Flame className="w-8 h-8" />,
-  },
   "/dashboard/incidents/timeline": {
     title: "Incident Timeline",
     description:
@@ -80,14 +73,6 @@ const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
     description:
       "AI-generated postmortem drafts from incident data — root cause, timeline, and action items ready for review.",
     icon: <FileText className="w-8 h-8" />,
-  },
-  "/dashboard/incidents": {
-    title: "Incident Triage",
-    description:
-      "AI-powered incident correlation, severity classification, and automated postmortem generation. Connect your monitoring tools to enable this.",
-    icon: <Siren className="w-8 h-8" />,
-    ctaLabel: "View CI/CD Failures",
-    ctaHref: "/dashboard/cicd/failures",
   },
   // ---- Infrastructure ----
   "/dashboard/infra/iac": {
@@ -163,6 +148,15 @@ const findComingSoonConfig = (pathname: string): ComingSoonConfig | undefined =>
   Object.entries(COMING_SOON_PAGES).find(([prefix]) => pathname.startsWith(prefix))?.[1];
 
 const isCICDRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/cicd");
+const isIncidentRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/incidents");
+
+const renderIncidentPage = (pathname: string, refreshKey: number): React.ReactNode => {
+  if (pathname.startsWith("/dashboard/incidents/active") || pathname === "/dashboard/incidents") {
+    return <ActiveIncidents refreshKey={refreshKey} />;
+  }
+  // Timeline and Postmortems are still Coming Soon — handled by findComingSoonConfig
+  return null;
+};
 
 const PIPELINES_PREFIX = "/dashboard/cicd/pipelines/";
 const ANALYSES_PREFIX = "/dashboard/cicd/analyses/";
@@ -450,6 +444,7 @@ const Dashboard = () => {
           a: "/dashboard/cicd/analyses",
           s: "/dashboard/settings",
           p: "/dashboard/cicd/pipelines",
+          i: "/dashboard/incidents/active",
         };
         const route = routes[key];
         if (route) {
@@ -509,8 +504,12 @@ const Dashboard = () => {
   const isOverview = currentPath === "/dashboard";
   const isSettings = currentPath === "/dashboard/settings";
   const isCICD = isCICDRoute(currentPath);
+  const isIncident = isIncidentRoute(currentPath);
+  const incidentPage = isIncident ? renderIncidentPage(currentPath, refreshKey) : null;
   const comingSoonConfig =
-    isOverview || isCICD || isSettings ? undefined : findComingSoonConfig(currentPath);
+    isOverview || isCICD || isSettings || incidentPage
+      ? undefined
+      : findComingSoonConfig(currentPath);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
@@ -639,6 +638,8 @@ const Dashboard = () => {
             <Settings />
           ) : isCICD ? (
             renderCICDPage(currentPath, refreshKey)
+          ) : incidentPage ? (
+            incidentPage
           ) : (
             <DashboardOverview
               firstName={firstName}
