@@ -27,6 +27,7 @@ import {
 } from "@kenchi/shared";
 import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
+import { createTriageContainer } from "./container.js";
 import { startTriageWorker } from "./workers/triageWorker.js";
 import { startDedupCleanup } from "./jobs/dedupCleanup.js";
 
@@ -165,8 +166,9 @@ const startServer = async (): Promise<void> => {
   // Configure server timeouts for slowloris attack protection
   configureServerTimeouts(server);
 
-  // Start the triage worker (polls queue for incoming alerts)
-  const triageWorker = startTriageWorker();
+  // Create composition root and start the triage worker
+  const container = createTriageContainer();
+  const triageWorker = startTriageWorker(container);
 
   // Start the dedup cleanup job (periodic expired entry removal)
   const dedupCleanup = startDedupCleanup();

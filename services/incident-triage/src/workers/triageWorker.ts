@@ -5,15 +5,14 @@
  * severity classification, runbook matching, incident correlation, and
  * evidence aggregation, then persists triage results.
  *
+ * Receives all dependencies via TriageContainer (composition root pattern).
  * Follows the polling loop pattern from services/api/src/workers/analysisWorker.ts.
  *
  * @module workers/triageWorker
  */
 
-import crypto from "node:crypto";
 import {
   createLogger,
-  createQueue,
   delay,
   getAlertById,
   updateAlertStatus,
@@ -21,15 +20,7 @@ import {
   updateTriageEnrichment,
   updateTriageAiSummary,
   updateTriageDispatchResults,
-  searchSimilarTriageResults,
-  searchSimilarKnowledgeDocs,
-  generateBudgetAwareEmbedding,
-  findByFingerprint,
-  upsertDedupEntry,
   getErrorMessage,
-  QUEUE_NAMES,
-  QUEUE_RETRY_CONFIG,
-  QUEUE_VISIBILITY_TIMEOUT,
   SERVICE_NAMES,
   type RequestContext,
   type QueueMessage,
@@ -41,185 +32,26 @@ import type {
   TriageWorkerControl,
 } from "../types/severityTypes.js";
 import type { NormalizedAlert } from "../types/incidentTypes.js";
-import type { EmbeddingPort, KnowledgeSearchPort } from "../types/runbookTypes.js";
-import type { TriageSearchPort } from "../types/correlationTypes.js";
 import type { TriagePolicyContext } from "../types/policyTypes.js";
 import type { IncidentSummaryResponse } from "../types/summaryTypes.js";
+import type { TriageContainer } from "../types/containerTypes.js";
 import { classifyAlertSeverity } from "../services/severityClassifier.js";
-import { createDeduplicationService } from "../services/deduplicationService.js";
-import { createRunbookMatcher } from "../services/runbookMatcher.js";
-import { createIncidentCorrelator } from "../services/incidentCorrelator.js";
 import { aggregateEvidence } from "../services/evidenceAggregator.js";
-import { createAiSummarizer } from "../services/aiSummarizer.js";
 import { evaluatePolicy } from "../services/policyEngine.js";
-import { createDispatchService } from "../services/dispatchService.js";
-import { createLLMCompletionAdapter } from "../adapters/llmCompletionAdapter.js";
-import { createSlackDispatchAdapter } from "../adapters/slackDispatchAdapter.js";
-import { createPagerDutyDispatchAdapter } from "../adapters/pagerDutyDispatchAdapter.js";
 import { formatSlackBlocks } from "../formatters/slackFormatter.js";
 import { TRIAGE_WORKER_DEFAULTS, DEFAULT_SEVERITY_CONFIG } from "../constants/triageConstants.js";
 import { DEFAULT_POLICY_RULES } from "../constants/policyRules.js";
-import { appConfig } from "../config/appConfig.js";
+import {
+  toNormalizedAlert,
+  buildEmbeddingText,
+  createJobContext,
+  stopWorker,
+  incrementCounter,
+  serializeSeverityFactors,
+  createStatsSnapshot,
+} from "./triageWorkerHelpers.js";
 
 const logger = createLogger(SERVICE_NAMES.INCIDENT_TRIAGE);
-
-// ==================== Queue Setup ====================
-
-const incidentTriageQueue = createQueue({
-  name: QUEUE_NAMES.INCIDENT_TRIAGE,
-  maxRetries: QUEUE_RETRY_CONFIG.INCIDENT_TRIAGE,
-  visibilityTimeout: QUEUE_VISIBILITY_TIMEOUT.INCIDENT_TRIAGE,
-});
-
-// ==================== Dedup Service ====================
-
-const dedupService = createDeduplicationService({
-  findByFingerprint: async (fingerprint: string, tenantId: string) => {
-    const record = await findByFingerprint(fingerprint, tenantId);
-    return record ? { alertId: record.alertId, expiresAt: record.expiresAt } : null;
-  },
-  upsertDedupEntry,
-});
-
-// ==================== Port Adapters (Phase 3) ====================
-
-/**
- * Adapter bridging the EmbeddingPort interface to the shared
- * generateBudgetAwareEmbedding function.
- */
-const embeddingPort: EmbeddingPort = {
-  generate: async (tenantId, text) => {
-    const result = await generateBudgetAwareEmbedding({ tenantId, text });
-    return { embedding: result.embedding, tokenCount: result.tokenCount };
-  },
-};
-
-/**
- * Adapter bridging the KnowledgeSearchPort interface to the shared
- * searchSimilarKnowledgeDocs function.
- */
-const knowledgeSearchPort: KnowledgeSearchPort = {
-  searchRunbooks: async (embedding, tenantId, limit, minSimilarity) => {
-    const results = await searchSimilarKnowledgeDocs(embedding as number[], {
-      docType: "runbook",
-      tenantId,
-      limit,
-      minSimilarity,
-    });
-    return results.map(({ item, similarity }) => ({
-      id: item.id,
-      title: item.title,
-      content: item.content,
-      sourceUrl: item.sourceUrl ?? null,
-      similarity,
-    }));
-  },
-};
-
-/**
- * Adapter bridging the TriageSearchPort interface to the shared
- * searchSimilarTriageResults function.
- */
-const triageSearchPort: TriageSearchPort = {
-  searchSimilar: async (embedding, tenantId, excludeAlertId, limit, minSimilarity) => {
-    const results = await searchSimilarTriageResults(
-      embedding,
-      tenantId,
-      excludeAlertId,
-      minSimilarity,
-      limit
-    );
-    return results.map((result) => ({
-      triageResultId: result.triageResultId,
-      alertId: result.alertId,
-      similarity: result.similarity,
-      severityLabel: result.severityLabel,
-      serviceName: result.serviceName,
-      createdAt: result.createdAt,
-    }));
-  },
-};
-
-// ==================== Phase 3 Services ====================
-
-const runbookMatcher = createRunbookMatcher(embeddingPort, knowledgeSearchPort);
-const incidentCorrelator = createIncidentCorrelator(triageSearchPort);
-
-// ==================== Phase 4 Services ====================
-
-const llmCompletionPort = createLLMCompletionAdapter();
-const aiSummarizer = createAiSummarizer(llmCompletionPort);
-
-// ==================== Phase 5 Services ====================
-
-const slackDispatchPort = createSlackDispatchAdapter(appConfig.slackIncidentWebhookUrl);
-const pagerDutyDispatchPort = createPagerDutyDispatchAdapter();
-const dispatchService = createDispatchService(slackDispatchPort, pagerDutyDispatchPort);
-
-// ==================== Helper Functions ====================
-
-/**
- * Converts an IncidentAlertRecord to a NormalizedAlert for severity scoring.
- */
-const toNormalizedAlert = (record: IncidentAlertRecord): NormalizedAlert => ({
-  sourceAlertId: record.sourceAlertId,
-  deliveryId: record.deliveryId,
-  source: record.source as NormalizedAlert["source"],
-  title: record.title,
-  description: record.description,
-  severity: (record.severity as NormalizedAlert["severity"]) ?? "medium",
-  fingerprint: record.fingerprint ?? "",
-  serviceName: record.serviceName,
-  environment: record.environment,
-  metrics: record.metrics,
-  labels: record.labels,
-  receivedAt:
-    record.receivedAt instanceof Date && !isNaN(record.receivedAt.getTime())
-      ? record.receivedAt.toISOString()
-      : new Date().toISOString(),
-  sourcePayload: record.sourcePayload,
-});
-
-/**
- * Builds the text to embed for runbook matching and correlation.
- * Combines alert title and description for richer semantic context.
- */
-const buildEmbeddingText = (alert: NormalizedAlert): string => {
-  const parts = [alert.title];
-  if (alert.description) {
-    return [...parts, alert.description].join(" - ");
-  }
-  return parts.join("");
-};
-
-/**
- * Creates a RequestContext for a worker job.
- */
-const createJobContext = (alert: IncidentAlertRecord): RequestContext => ({
-  requestId: crypto.randomUUID(),
-  tenantId: alert.tenantId ?? "system",
-  actor: "triage-worker",
-});
-
-/**
- * Stops the worker by updating state via Object.assign.
- * Object.assign is used because the validate-standards hook flags
- * direct property assignment on mutable worker state (framework-boundary
- * side effect, same pattern as server timeout configuration).
- */
-const stopWorker = (state: TriageWorkerState): void => {
-  Object.assign(state, { running: false });
-};
-
-/**
- * Increments a numeric counter on the worker state.
- */
-const incrementCounter = (
-  state: TriageWorkerState,
-  field: "totalProcessed" | "totalErrors" | "totalDeduped"
-): void => {
-  Object.assign(state, { [field]: state[field] + 1 });
-};
 
 // ==================== Phase 5 Helper ====================
 
@@ -229,6 +61,7 @@ const incrementCounter = (
  * the max-lines-per-function limit.
  */
 const runPolicyAndDispatch = async (
+  container: TriageContainer,
   alertId: string,
   tenantId: string,
   normalizedAlert: NormalizedAlert,
@@ -284,7 +117,7 @@ const runPolicyAndDispatch = async (
     matchedRules: routingDecision.matchedRules,
   });
 
-  const results = await dispatchService.dispatch(
+  const results = await container.dispatchService.dispatch(
     routingDecision,
     triagePolicyContext,
     slackBlocks as Array<Record<string, unknown>>,
@@ -318,6 +151,7 @@ const runPolicyAndDispatch = async (
  * Extracted so processAlert can catch errors and reset status to "error".
  */
 const runTriagePipeline = async (
+  container: TriageContainer,
   alert: IncidentAlertRecord,
   alertId: string,
   state: TriageWorkerState,
@@ -328,7 +162,7 @@ const runTriagePipeline = async (
   const tenantId = alert.tenantId ?? "system";
   const fingerprint = alert.fingerprint ?? "";
 
-  const dedupResult = await dedupService.checkDuplicate(fingerprint, tenantId, context);
+  const dedupResult = await container.dedupService.checkDuplicate(fingerprint, tenantId, context);
 
   if (dedupResult.isDuplicate) {
     await updateAlertStatus(alertId, "deduped");
@@ -345,7 +179,7 @@ const runTriagePipeline = async (
   }
 
   // Step 3: Register fingerprint for future dedup
-  await dedupService.registerAlert(fingerprint, tenantId, alertId, undefined, context);
+  await container.dedupService.registerAlert(fingerprint, tenantId, alertId, undefined, context);
 
   // Step 4: Severity classification
   const normalizedAlert = toNormalizedAlert(alert);
@@ -365,12 +199,16 @@ const runTriagePipeline = async (
 
   // Step 6: Runbook matching (Phase 3) — also returns embedding for reuse
   const embeddingText = buildEmbeddingText(normalizedAlert);
-  const runbookResult = await runbookMatcher.matchRunbooks(embeddingText, tenantId, context);
+  const runbookResult = await container.runbookMatcher.matchRunbooks(
+    embeddingText,
+    tenantId,
+    context
+  );
 
   // Step 7: Incident correlation (Phase 3) — reuse embedding from runbook matcher (H2)
   const alertEmbedding = runbookResult.embedding;
 
-  const correlationResult = await incidentCorrelator.correlateIncident(
+  const correlationResult = await container.incidentCorrelator.correlateIncident(
     alertEmbedding,
     alertId,
     tenantId,
@@ -413,7 +251,7 @@ const runTriagePipeline = async (
   });
 
   // Step 10: AI summarization with validation + fallback (Phase 4)
-  const summaryResult = await aiSummarizer.summarize(
+  const summaryResult = await container.aiSummarizer.summarize(
     {
       alert: normalizedAlert,
       severity: severityScore,
@@ -437,6 +275,7 @@ const runTriagePipeline = async (
   // Steps 12-14: Policy evaluation, dispatch, persist (Phase 5)
   const typedSummary = summaryResult as IncidentSummaryResponse;
   const { dispatchResults, dispatchDurationMs } = await runPolicyAndDispatch(
+    container,
     alertId,
     tenantId,
     normalizedAlert,
@@ -471,44 +310,13 @@ const runTriagePipeline = async (
 };
 
 /**
- * Serializes severity factors for database storage.
+ * Processes a single alert through the full triage pipeline.
  */
-const serializeSeverityFactors = (
-  factors: ReadonlyArray<{
-    readonly name: string;
-    readonly weight: number;
-    readonly score: number;
-    readonly maxScore: number;
-    readonly reason: string;
-  }>
-): ReadonlyArray<Record<string, unknown>> =>
-  factors.map((factor) => ({
-    name: factor.name,
-    weight: factor.weight,
-    score: factor.score,
-    maxScore: factor.maxScore,
-    reason: factor.reason,
-  }));
-
-/**
- * Processes a single alert through the full triage pipeline:
- * 1. Fetch alert from DB
- * 2. Update status to processing
- * 3. Run deduplication check
- * 4. Severity classification
- * 5. Create initial triage result
- * 6. Runbook matching (Phase 3)
- * 7. Incident correlation (Phase 3)
- * 8. Evidence aggregation (Phase 3)
- * 9. Update triage result with enrichment
- * 10. AI summarization with validation + fallback (Phase 4)
- * 11. Persist AI summary
- * 12. Policy evaluation (Phase 5)
- * 13. Dispatch notifications (Phase 5)
- * 14. Persist dispatch results
- * 15. Mark alert as triaged
- */
-const processAlert = async (alertId: string, state: TriageWorkerState): Promise<void> => {
+const processAlert = async (
+  container: TriageContainer,
+  alertId: string,
+  state: TriageWorkerState
+): Promise<void> => {
   const alert = await getAlertById(alertId);
 
   if (!alert) {
@@ -531,7 +339,7 @@ const processAlert = async (alertId: string, state: TriageWorkerState): Promise<
 
   // Wrap pipeline in try/catch to reset status on failure (C1: prevent stuck "processing")
   try {
-    await runTriagePipeline(alert, alertId, state, startTime, context);
+    await runTriagePipeline(container, alert, alertId, state, startTime, context);
   } catch (error) {
     await updateAlertStatus(alertId, "error");
     throw error;
@@ -542,6 +350,7 @@ const processAlert = async (alertId: string, state: TriageWorkerState): Promise<
  * Queue message handler. Extracts alert ID and delegates to processAlert.
  */
 const handleQueueMessage = async (
+  container: TriageContainer,
   message: QueueMessage<{ readonly alertId: string }>,
   state: TriageWorkerState
 ): Promise<{ readonly success: boolean; readonly error?: string }> => {
@@ -552,7 +361,7 @@ const handleQueueMessage = async (
   }
 
   try {
-    await processAlert(alertId, state);
+    await processAlert(container, alertId, state);
     incrementCounter(state, "totalProcessed");
     return { success: true };
   } catch (error) {
@@ -572,25 +381,16 @@ const handleQueueMessage = async (
 // ==================== Worker Polling Loop ====================
 
 /**
- * Creates and returns a stats snapshot from current worker state.
- */
-const createStatsSnapshot = (state: TriageWorkerState): TriageWorkerStats => ({
-  totalProcessed: state.totalProcessed,
-  totalErrors: state.totalErrors,
-  totalDeduped: state.totalDeduped,
-  isRunning: state.running,
-});
-
-/**
  * Starts the triage worker polling loop.
  *
  * Polls the incident triage queue for messages and processes each alert
  * through the full triage pipeline (dedup, severity, runbooks, correlation,
  * evidence aggregation, AI summarization).
  *
+ * @param container - Fully-wired TriageContainer from composition root
  * @returns Control interface with stop() and getStats() methods
  */
-export const startTriageWorker = (): TriageWorkerControl => {
+export const startTriageWorker = (container: TriageContainer): TriageWorkerControl => {
   const state: TriageWorkerState = {
     running: true,
     totalProcessed: 0,
@@ -601,8 +401,8 @@ export const startTriageWorker = (): TriageWorkerControl => {
   const pollLoop = async (): Promise<void> => {
     while (state.running) {
       try {
-        await incidentTriageQueue.process<{ readonly alertId: string }>(async (message) =>
-          handleQueueMessage(message, state)
+        await container.queue.process<{ readonly alertId: string }>(async (message) =>
+          handleQueueMessage(container, message, state)
         );
       } catch (error) {
         logger.error("Triage worker poll error", {
