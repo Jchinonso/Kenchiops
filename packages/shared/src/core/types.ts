@@ -939,6 +939,14 @@ export interface Config {
   readonly AZURE_DEVOPS_OAUTH_CLIENT_ID?: string;
   readonly AZURE_DEVOPS_OAUTH_CLIENT_SECRET?: string;
 
+  // Vercel Integration OAuth
+  readonly VERCEL_OAUTH_CLIENT_ID?: string;
+  readonly VERCEL_OAUTH_CLIENT_SECRET?: string;
+
+  // Netlify Integration OAuth
+  readonly NETLIFY_OAUTH_CLIENT_ID?: string;
+  readonly NETLIFY_OAUTH_CLIENT_SECRET?: string;
+
   // Frontend URL (for OAuth redirects)
   readonly FRONTEND_URL: string;
   readonly OAUTH_CALLBACK_BASE_URL: string;

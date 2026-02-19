@@ -7,6 +7,8 @@
  * @module database/user/types
  */
 
+import type { IntegrationProvider } from "../../constants/auth.js";
+
 // ==================== Enum Types ====================
 
 export type OAuthProvider = "github" | "gitlab" | "bitbucket" | "azure_devops";
@@ -157,7 +159,7 @@ export interface UpsertOAuthIdentityInput {
 }
 
 export interface OAuthStateInput {
-  readonly provider: OAuthProvider;
+  readonly provider: OAuthProvider | IntegrationProvider;
   readonly instanceUrl: string | null;
   readonly redirectAfter: string | null;
   readonly metadata?: Record<string, unknown>;

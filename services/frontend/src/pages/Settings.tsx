@@ -5,13 +5,17 @@
  * and appearance (dark mode) settings.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenantInfo } from "@/hooks/useDashboardData";
+import { useIntegrationConnections } from "@/hooks/useIntegrationConnections";
 import { useTheme } from "@/hooks/useTheme";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
 import { apiClient } from "@/lib/apiClient";
+import { VercelIcon } from "@/components/icons/VercelIcon";
+import { NetlifyIcon } from "@/components/icons/NetlifyIcon";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +44,8 @@ import {
   XCircle,
   Bell,
   AlertTriangle,
+  Loader2,
+  Link as LinkIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
@@ -107,6 +113,8 @@ interface ConnectionCardProps {
   readonly actionLabel: string;
   readonly actionHref: string;
   readonly external?: boolean;
+  readonly onDisconnect?: () => void;
+  readonly disconnecting?: boolean;
 }
 
 const ConnectionCard = ({
@@ -116,6 +124,8 @@ const ConnectionCard = ({
   actionLabel,
   actionHref,
   external,
+  onDisconnect,
+  disconnecting,
 }: ConnectionCardProps) => (
   <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
     <div className="flex items-center gap-3">
@@ -137,19 +147,41 @@ const ConnectionCard = ({
         </div>
       </div>
     </div>
-    {external ? (
-      <a
-        href={actionHref}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-      >
-        {actionLabel}
-        <ExternalLink className="w-3 h-3" />
-      </a>
-    ) : (
-      <span className="text-xs text-gray-400">Coming soon</span>
-    )}
+    <div className="flex items-center gap-2">
+      {connected && onDisconnect && (
+        <button
+          type="button"
+          onClick={onDisconnect}
+          disabled={disconnecting}
+          className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-50"
+        >
+          {disconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : "Disconnect"}
+        </button>
+      )}
+      {!connected && external && (
+        <a
+          href={actionHref}
+          target={actionHref.startsWith("http") ? "_blank" : undefined}
+          rel={actionHref.startsWith("http") ? "noopener noreferrer" : undefined}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          {actionLabel}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      )}
+      {connected && external && !onDisconnect && (
+        <a
+          href={actionHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          {actionLabel}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      )}
+      {!connected && !external && <span className="text-xs text-gray-400">Coming soon</span>}
+    </div>
   </div>
 );
 
@@ -157,17 +189,79 @@ const ConnectionCard = ({
 
 const DELETE_CONFIRMATION = "DELETE";
 
+const API_URL = import.meta.env.VITE_API_URL ?? "";
+
 export const Settings = () => {
   const { user, logout } = useAuth();
   const { data: tenant, isLoading: tenantLoading } = useTenantInfo();
+  const { connections, refetch: refetchConnections } = useIntegrationConnections();
   const { preference, setTheme } = useTheme();
   const { toastEnabled, browserEnabled, setToastEnabled, setBrowserEnabled } =
     useNotificationPreferences();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const browserPermissionDenied = isBrowserNotificationDenied();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+
+  // Show toast for integration connect results from URL params
+  useEffect(() => {
+    const integration = searchParams.get("integration");
+    const status = searchParams.get("status");
+    const integrationError = searchParams.get("integration_error");
+
+    if (integration && status === "connected") {
+      toast.success(`${titleCase(integration)} connected successfully`);
+      setSearchParams({}, { replace: true });
+    } else if (integration && status === "error") {
+      toast.error(`Failed to connect ${titleCase(integration)}. Please try again.`);
+      setSearchParams({}, { replace: true });
+    } else if (integrationError) {
+      const ERROR_MESSAGES: Readonly<Record<string, string>> = {
+        oauth_denied: "OAuth authorization was denied",
+        missing_params: "Missing OAuth parameters",
+        invalid_state: "Invalid or expired OAuth state",
+        provider_mismatch: "Provider mismatch in OAuth flow",
+        invalid_params: "Invalid OAuth parameters",
+      };
+      toast.error(ERROR_MESSAGES[integrationError] ?? "Integration connection failed");
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const vercelConnection = connections.find(
+    ({ provider, connected }) => provider === "vercel" && connected
+  );
+  const netlifyConnection = connections.find(
+    ({ provider, connected }) => provider === "netlify" && connected
+  );
+
+  const vercelConnectionId = vercelConnection?.connectionId ?? null;
+  const netlifyConnectionId = netlifyConnection?.connectionId ?? null;
+
+  const handleDisconnect = useCallback(
+    async (connectionId: string) => {
+      setDisconnectingId(connectionId);
+      try {
+        const response = await apiClient(`/integrations/${connectionId}`, {
+          method: "DELETE",
+        });
+        if (response.ok) {
+          toast.success("Integration disconnected");
+          refetchConnections();
+        } else {
+          toast.error("Failed to disconnect integration");
+        }
+      } catch {
+        toast.error("Failed to disconnect integration");
+      } finally {
+        setDisconnectingId(null);
+      }
+    },
+    [refetchConnections]
+  );
 
   const isDeleteConfirmed = deleteConfirmation === DELETE_CONFIRMATION;
 
@@ -309,7 +403,7 @@ export const Settings = () => {
       <Card>
         <CardHeader className="border-b">
           <div className="flex items-center gap-2">
-            <Github className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+            <LinkIcon className="w-5 h-5 text-indigo-500" />
             <CardTitle>Connections</CardTitle>
           </div>
           <CardDescription>Manage your service integrations.</CardDescription>
@@ -322,6 +416,38 @@ export const Settings = () => {
             actionLabel={tenant?.githubConnected ? "Manage" : "Install"}
             actionHref={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
             external
+          />
+          <ConnectionCard
+            name="Vercel"
+            icon={<VercelIcon className="w-8 h-8 text-gray-900 dark:text-gray-100" />}
+            connected={!!vercelConnection}
+            actionLabel="Connect"
+            actionHref={`${API_URL}/integrations/vercel/connect`}
+            external
+            onDisconnect={
+              vercelConnectionId
+                ? () => {
+                    handleDisconnect(vercelConnectionId);
+                  }
+                : undefined
+            }
+            disconnecting={disconnectingId === vercelConnectionId}
+          />
+          <ConnectionCard
+            name="Netlify"
+            icon={<NetlifyIcon className="w-8 h-8 text-teal-600 dark:text-teal-400" />}
+            connected={!!netlifyConnection}
+            actionLabel="Connect"
+            actionHref={`${API_URL}/integrations/netlify/connect`}
+            external
+            onDisconnect={
+              netlifyConnectionId
+                ? () => {
+                    handleDisconnect(netlifyConnectionId);
+                  }
+                : undefined
+            }
+            disconnecting={disconnectingId === netlifyConnectionId}
           />
           <ConnectionCard
             name="Slack"

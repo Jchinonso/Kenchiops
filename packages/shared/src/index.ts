@@ -377,6 +377,21 @@ export {
   cleanupExpiredRefreshTokens,
 } from "./database/index.js";
 
+// Provider connection module
+export {
+  type CIProviderType,
+  type ProviderConnection,
+  type CreateProviderConnectionInput,
+  type UpdateProviderConnectionInput,
+  findByTenant,
+  findByTenantAndProvider,
+  findConnectionById,
+  findByExternalOrgId,
+  createProviderConnection,
+  updateProviderConnection,
+  deactivateConnection,
+} from "./database/index.js";
+
 // Risk rules repository operations
 export {
   createCustomRiskRule,

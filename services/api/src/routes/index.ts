@@ -15,6 +15,7 @@ import { fineTuningRoutes } from "./fineTuningRoutes.js";
 import { riskRulesRoutes } from "./riskRulesRoutes.js";
 import { dashboardRoutes } from "./dashboardRoutes.js";
 import { sseRoutes } from "./sseRoutes.js";
+import { integrationRoutes } from "./integrationRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -49,4 +50,7 @@ export const registerRoutes = (app: Express): void => {
 
   // SSE routes (real-time dashboard events)
   app.use(sseRoutes);
+
+  // Integration OAuth routes (Vercel, Netlify connections)
+  app.use(integrationRoutes);
 };

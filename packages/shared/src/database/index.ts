@@ -381,6 +381,21 @@ export {
   type TriageStats,
 } from "./incidentTriageResult/index.js";
 
+// Provider connection module (CI provider OAuth connections)
+export {
+  type CIProviderType,
+  type ProviderConnection,
+  type CreateProviderConnectionInput,
+  type UpdateProviderConnectionInput,
+  findByTenant,
+  findByTenantAndProvider,
+  findConnectionById,
+  findByExternalOrgId,
+  createProviderConnection,
+  updateProviderConnection,
+  deactivateConnection,
+} from "./providerConnection/index.js";
+
 // Risk rules module (Context-Aware Risk Scoring)
 // Note: CustomRiskRuleRow, RiskAssessmentRow, and row mappers are internal.
 export {

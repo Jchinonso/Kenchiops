@@ -101,8 +101,11 @@ const Login = () => {
       return false;
     }
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const parsed = new URL(instanceUrl);
+      if (!parsed.protocol) {
+        setUrlError("Please enter a valid URL (e.g., https://git.yourcompany.com)");
+        return false;
+      }
       setUrlError(null);
       return true;
     } catch {

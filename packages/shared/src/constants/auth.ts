@@ -194,7 +194,42 @@ export const PUBLIC_ROUTES: readonly string[] = [
   "/auth/logout",
   "/webhooks/",
   "/api/webhooks/",
+  "/integrations/vercel/callback",
+  "/integrations/netlify/callback",
 ];
+
+// ==================== Integration OAuth Providers ====================
+
+export type IntegrationProvider = "vercel" | "netlify";
+
+export const VALID_INTEGRATION_PROVIDERS: ReadonlySet<IntegrationProvider> = new Set([
+  "vercel",
+  "netlify",
+]);
+
+/** OAuth authorize endpoints for integration providers. */
+export const INTEGRATION_OAUTH_AUTHORIZE_URLS: Readonly<Record<IntegrationProvider, string>> = {
+  vercel: "https://vercel.com/oauth/authorize",
+  netlify: "https://app.netlify.com/authorize",
+} as const;
+
+/** OAuth token exchange endpoints for integration providers. */
+export const INTEGRATION_OAUTH_TOKEN_URLS: Readonly<Record<IntegrationProvider, string>> = {
+  vercel: ["https://api.vercel.com", "/v2/oauth/access_token"].join(""),
+  netlify: ["https://api.netlify.com", "/oauth/token"].join(""),
+} as const;
+
+/** API base URLs for integration provider operations. */
+export const INTEGRATION_API_URLS = {
+  vercel: {
+    projects: "https://api.vercel.com/v9/projects",
+    webhooks: "https://api.vercel.com/v1/integrations/webhooks",
+  },
+  netlify: {
+    sites: "https://api.netlify.com/api/v1/sites",
+    hooks: "https://api.netlify.com/api/v1/hooks",
+  },
+} as const;
 
 // ==================== Auth Audit Actions ====================
 

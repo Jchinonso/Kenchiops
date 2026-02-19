@@ -202,6 +202,14 @@ export const config: Config = {
   AZURE_DEVOPS_OAUTH_CLIENT_ID: process.env.AZURE_DEVOPS_OAUTH_CLIENT_ID,
   AZURE_DEVOPS_OAUTH_CLIENT_SECRET: process.env.AZURE_DEVOPS_OAUTH_CLIENT_SECRET,
 
+  // Vercel Integration OAuth
+  VERCEL_OAUTH_CLIENT_ID: process.env.VERCEL_OAUTH_CLIENT_ID,
+  VERCEL_OAUTH_CLIENT_SECRET: process.env.VERCEL_OAUTH_CLIENT_SECRET,
+
+  // Netlify Integration OAuth
+  NETLIFY_OAUTH_CLIENT_ID: process.env.NETLIFY_OAUTH_CLIENT_ID,
+  NETLIFY_OAUTH_CLIENT_SECRET: process.env.NETLIFY_OAUTH_CLIENT_SECRET,
+
   // Frontend URL (for OAuth redirects)
   // Defaults match Vite dev server; Docker overrides via docker-compose env vars
   FRONTEND_URL: optionalString("FRONTEND_URL", "http://localhost:5173"),
