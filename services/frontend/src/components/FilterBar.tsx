@@ -337,18 +337,20 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
         </Select>
       )}
 
-      <Select value={filters.timeRange || "all"} onValueChange={handleTimeRangeChange}>
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="All Time" />
-        </SelectTrigger>
-        <SelectContent>
-          {TIME_RANGE_OPTIONS.map((option) => (
-            <SelectItem key={option.value || "all"} value={option.value || "all"}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {variant !== "incidents" && (
+        <Select value={filters.timeRange || "all"} onValueChange={handleTimeRangeChange}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="All Time" />
+          </SelectTrigger>
+          <SelectContent>
+            {TIME_RANGE_OPTIONS.map((option) => (
+              <SelectItem key={option.value || "all"} value={option.value || "all"}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {hasActiveFilters && (
         <button

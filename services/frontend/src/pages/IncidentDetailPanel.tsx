@@ -5,7 +5,7 @@
  * Opened from the Active Incidents table when "View Full Details" is clicked.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Sheet,
   SheetContent,
@@ -43,6 +43,10 @@ export const IncidentDetailPanel = ({
   const { acknowledge, isLoading: ackLoading } = useAcknowledgeIncident();
   const { resolve, isLoading: resolveLoading } = useResolveIncident();
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setCopied(false);
+  }, [incidentId]);
 
   const handleCopyLink = useCallback(async () => {
     if (!incidentId) {

@@ -87,9 +87,6 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
       if (next.source) {
         params.set("source", next.source);
       }
-      if (next.timeRange) {
-        params.set("timeRange", next.timeRange);
-      }
       setSearchParams(params, { replace: true });
     },
     [setSearchParams]
@@ -152,10 +149,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
   const hasPrev = offset > 0;
   const hasNext = offset + pageSize < total;
   const hasActiveFilters =
-    filters.severity !== "" ||
-    (filters.status ?? "") !== "" ||
-    (filters.source ?? "") !== "" ||
-    filters.timeRange !== "";
+    filters.severity !== "" || (filters.status ?? "") !== "" || (filters.source ?? "") !== "";
 
   const goNext = () => {
     setOffset((prev) => prev + pageSize);
