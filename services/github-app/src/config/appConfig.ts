@@ -30,6 +30,10 @@ export interface GitHubAppConfig {
     readonly webhookSecret: string;
     readonly apiToken: string;
   };
+  readonly netlify: {
+    readonly webhookSecret: string;
+    readonly apiToken: string;
+  };
 }
 
 /**
@@ -88,5 +92,9 @@ export const appConfig: GitHubAppConfig = {
   vercel: {
     webhookSecret: config.VERCEL_WEBHOOK_SECRET || "",
     apiToken: config.VERCEL_API_TOKEN || "",
+  },
+  netlify: {
+    webhookSecret: config.NETLIFY_WEBHOOK_SECRET || "",
+    apiToken: config.NETLIFY_API_TOKEN || "",
   },
 } as const;

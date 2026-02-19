@@ -146,6 +146,10 @@ export const config: Config = {
   VERCEL_WEBHOOK_SECRET: optionalString("VERCEL_WEBHOOK_SECRET", ""),
   VERCEL_API_TOKEN: optionalString("VERCEL_API_TOKEN", ""),
 
+  // Netlify CI Provider
+  NETLIFY_WEBHOOK_SECRET: optionalString("NETLIFY_WEBHOOK_SECRET", ""),
+  NETLIFY_API_TOKEN: optionalString("NETLIFY_API_TOKEN", ""),
+
   // Database
   DATABASE_URL: requireEnv("DATABASE_URL"),
   VECTOR_DB_URL: requireEnv("VECTOR_DB_URL"),

@@ -884,6 +884,10 @@ export interface Config {
   readonly VERCEL_WEBHOOK_SECRET?: string;
   readonly VERCEL_API_TOKEN?: string;
 
+  // Netlify CI Provider Configuration
+  readonly NETLIFY_WEBHOOK_SECRET?: string;
+  readonly NETLIFY_API_TOKEN?: string;
+
   // Database Configuration
   readonly DATABASE_URL: string;
   readonly VECTOR_DB_URL: string;

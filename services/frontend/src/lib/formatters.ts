@@ -31,10 +31,13 @@ export const getConfidenceStyle = (confidence: number): string =>
 // ==================== Severity ====================
 
 export const SEVERITY_STYLES: Readonly<Record<string, string>> = {
+  critical:
+    "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-200 border-purple-200 dark:border-purple-800",
   high: "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-200 border-red-200 dark:border-red-800",
   medium:
     "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-200 border-amber-200 dark:border-amber-800",
   low: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-800",
+  info: "bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-200 border-sky-200 dark:border-sky-800",
   default:
     "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700",
 } as const;
@@ -132,3 +135,54 @@ export const flattenSignalEntries = (
   walk(signals, "");
   return result;
 };
+
+// ==================== Incident Status ====================
+
+export const INCIDENT_STATUS_STYLES: Readonly<Record<string, string>> = {
+  received:
+    "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700",
+  processing:
+    "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-800",
+  deduped:
+    "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700",
+  triaged:
+    "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-200 border-indigo-200 dark:border-indigo-800",
+  escalated:
+    "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-200 border-red-200 dark:border-red-800",
+  acknowledged:
+    "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-200 border-amber-200 dark:border-amber-800",
+  resolved:
+    "bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-200 border-green-200 dark:border-green-800",
+  closed:
+    "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700",
+  default:
+    "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700",
+} as const;
+
+export const getIncidentStatusStyle = (status: string): string =>
+  INCIDENT_STATUS_STYLES[status] ?? INCIDENT_STATUS_STYLES.default;
+
+// ==================== Alert Source ====================
+
+export const SOURCE_LABELS: Readonly<Record<string, string>> = {
+  pagerduty: "PagerDuty",
+  datadog: "Datadog",
+  cloudwatch: "CloudWatch",
+  prometheus: "Prometheus",
+  custom: "Custom",
+} as const;
+
+export const getSourceLabel = (source: string): string =>
+  SOURCE_LABELS[source] ?? titleCase(source);
+
+// ==================== Incident Severity Rank ====================
+
+const SEVERITY_RANKS: Readonly<Record<string, number>> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+} as const;
+
+export const getIncidentSeverityRank = (severity: string): number => SEVERITY_RANKS[severity] ?? 5;

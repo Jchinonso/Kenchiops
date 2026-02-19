@@ -594,6 +594,19 @@ export {
   VERCEL_TARGETS,
 } from "./vercel.js";
 
+// Netlify constants
+export {
+  NETLIFY_SIGNATURE,
+  NETLIFY_DEPLOY_EVENTS,
+  type NetlifyDeployEventType,
+  NETLIFY_FAILURE_EVENTS,
+  NETLIFY_FAILURE_STATES,
+  NETLIFY_EVENT_HEADER,
+  NETLIFY_API_BASE_URL,
+  NETLIFY_CONTEXTS,
+  NETLIFY_COMMIT_URL_PATTERN,
+} from "./netlify.js";
+
 // Auth constants
 export {
   USER_STATUS,

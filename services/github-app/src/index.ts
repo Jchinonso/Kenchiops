@@ -130,6 +130,8 @@ const createApp = (): express.Express => {
         "/live",
         "/ready",
         "/api/github/webhook",
+        "/api/vercel/webhook",
+        "/api/netlify/webhook",
         "/github/setup",
         "/api/feedback",
       ],

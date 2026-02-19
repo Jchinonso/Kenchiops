@@ -15,6 +15,9 @@ import { githubOutputAdapter } from "./githubOutputAdapter.js";
 import { vercelWebhookAdapter } from "./vercelWebhookAdapter.js";
 import { vercelLogFetcherAdapter } from "./vercelLogFetcherAdapter.js";
 import { vercelOutputAdapter } from "./vercelOutputAdapter.js";
+import { netlifyWebhookAdapter } from "./netlifyWebhookAdapter.js";
+import { netlifyLogFetcherAdapter } from "./netlifyLogFetcherAdapter.js";
+import { netlifyOutputAdapter } from "./netlifyOutputAdapter.js";
 
 // ==================== Registry ====================
 
@@ -28,6 +31,11 @@ const ADAPTERS: Readonly<Partial<Record<CIProvider, CIProviderAdapters>>> = {
     webhook: vercelWebhookAdapter,
     logFetcher: vercelLogFetcherAdapter,
     output: vercelOutputAdapter,
+  },
+  netlify: {
+    webhook: netlifyWebhookAdapter,
+    logFetcher: netlifyLogFetcherAdapter,
+    output: netlifyOutputAdapter,
   },
 };
 
