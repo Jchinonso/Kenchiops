@@ -22,6 +22,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/auth": "http://localhost:3000",
+      "/integrations": "http://localhost:3000",
       "/api/v1/incidents": "http://localhost:3004",
       "/api/v1/triage": "http://localhost:3004",
       "/api": "http://localhost:3000",
