@@ -6,8 +6,10 @@ WORKDIR /app
 # Accept API URL as build arg (empty = relative URLs proxied through nginx)
 ARG VITE_API_URL=""
 ARG VITE_GITHUB_APP_SLUG="kenchi-devops"
+ARG VITE_PUBLIC_URL=""
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_GITHUB_APP_SLUG=$VITE_GITHUB_APP_SLUG
+ENV VITE_PUBLIC_URL=$VITE_PUBLIC_URL
 
 # Copy package files
 COPY package.json ./

@@ -169,6 +169,8 @@ services:
     build:
       context: ./services/frontend
       dockerfile: Dockerfile
+      args:
+        VITE_PUBLIC_URL: ${VITE_PUBLIC_URL:-}
     container_name: kenchi-frontend
     ports:
       - "3003:80"

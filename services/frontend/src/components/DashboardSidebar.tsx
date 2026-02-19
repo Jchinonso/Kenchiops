@@ -172,7 +172,6 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     icon: <Puzzle className="w-5 h-5" />,
     label: "Integrations",
     href: "/dashboard/integrations",
-    comingSoon: true,
   },
   {
     icon: <Settings className="w-5 h-5" />,

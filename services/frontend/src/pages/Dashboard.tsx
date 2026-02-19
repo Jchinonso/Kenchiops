@@ -22,12 +22,12 @@ import { RepositoryDetail } from "@/pages/RepositoryDetail";
 import { AnalysisDetail } from "@/pages/AnalysisDetail";
 import { ActiveIncidents } from "@/pages/ActiveIncidents";
 import { Settings } from "@/pages/Settings";
+import { Integrations } from "@/pages/Integrations";
 import {
   Bell,
   Menu,
   Rocket,
   Server,
-  Puzzle,
   BarChart3,
   Moon,
   Sun,
@@ -130,14 +130,6 @@ const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
     icon: <BarChart3 className="w-8 h-8" />,
     ctaLabel: "View Analyses",
     ctaHref: "/dashboard/cicd/analyses",
-  },
-  "/dashboard/integrations": {
-    title: "Integrations",
-    description:
-      "Connect Prometheus, PagerDuty, Datadog, Terraform Cloud, and more. Each integration unlocks new intelligence capabilities.",
-    icon: <Puzzle className="w-8 h-8" />,
-    ctaLabel: "Go to Settings",
-    ctaHref: "/dashboard/settings",
   },
 };
 
@@ -503,11 +495,12 @@ const Dashboard = () => {
 
   const isOverview = currentPath === "/dashboard";
   const isSettings = currentPath === "/dashboard/settings";
+  const isIntegrations = currentPath === "/dashboard/integrations";
   const isCICD = isCICDRoute(currentPath);
   const isIncident = isIncidentRoute(currentPath);
   const incidentPage = isIncident ? renderIncidentPage(currentPath, refreshKey) : null;
   const comingSoonConfig =
-    isOverview || isCICD || isSettings || incidentPage
+    isOverview || isCICD || isSettings || isIntegrations || incidentPage
       ? undefined
       : findComingSoonConfig(currentPath);
 
@@ -634,6 +627,8 @@ const Dashboard = () => {
         <div id="main-content" className="p-4 sm:p-6 lg:p-8">
           {comingSoonConfig ? (
             <ComingSoon {...comingSoonConfig} />
+          ) : isIntegrations ? (
+            <Integrations />
           ) : isSettings ? (
             <Settings />
           ) : isCICD ? (

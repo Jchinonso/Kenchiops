@@ -171,12 +171,12 @@ const handleIntegrationCallback = async (req: Request, res: Response): Promise<v
   const { code, state, error: oauthError } = req.query;
 
   if (oauthError) {
-    res.redirect(`${frontendUrl}/dashboard/settings?integration_error=oauth_denied`);
+    res.redirect(`${frontendUrl}/dashboard/integrations?integration_error=oauth_denied`);
     return;
   }
 
   if (!code || !state) {
-    res.redirect(`${frontendUrl}/dashboard/settings?integration_error=missing_params`);
+    res.redirect(`${frontendUrl}/dashboard/integrations?integration_error=missing_params`);
     return;
   }
 
@@ -185,14 +185,14 @@ const handleIntegrationCallback = async (req: Request, res: Response): Promise<v
 
   // Validate input lengths
   if (stateStr.length > 128 || codeStr.length > 2048) {
-    res.redirect(`${frontendUrl}/dashboard/settings?integration_error=invalid_params`);
+    res.redirect(`${frontendUrl}/dashboard/integrations?integration_error=invalid_params`);
     return;
   }
 
   const oauthState = await consumeOAuthState(stateStr);
 
   if (!oauthState) {
-    res.redirect(`${frontendUrl}/dashboard/settings?integration_error=invalid_state`);
+    res.redirect(`${frontendUrl}/dashboard/integrations?integration_error=invalid_state`);
     return;
   }
 
@@ -207,7 +207,7 @@ const handleIntegrationCallback = async (req: Request, res: Response): Promise<v
       hasTenantId: typeof tenantId === "string",
       ...context,
     });
-    res.redirect(`${frontendUrl}/dashboard/settings?integration_error=invalid_state`);
+    res.redirect(`${frontendUrl}/dashboard/integrations?integration_error=invalid_state`);
     return;
   }
 
@@ -219,7 +219,7 @@ const handleIntegrationCallback = async (req: Request, res: Response): Promise<v
       stateProvider: oauthState.provider,
       ...context,
     });
-    res.redirect(`${frontendUrl}/dashboard/settings?integration_error=provider_mismatch`);
+    res.redirect(`${frontendUrl}/dashboard/integrations?integration_error=provider_mismatch`);
     return;
   }
 
@@ -248,7 +248,7 @@ const handleIntegrationCallback = async (req: Request, res: Response): Promise<v
     });
 
     // Redirect to settings with success params
-    const successUrl = new URL(`${frontendUrl}/dashboard/settings`);
+    const successUrl = new URL(`${frontendUrl}/dashboard/integrations`);
     successUrl.searchParams.set("integration", provider);
     successUrl.searchParams.set("status", "connected");
 
@@ -264,7 +264,7 @@ const handleIntegrationCallback = async (req: Request, res: Response): Promise<v
       ...context,
     });
 
-    res.redirect(`${frontendUrl}/dashboard/settings?integration=${provider}&status=error`);
+    res.redirect(`${frontendUrl}/dashboard/integrations?integration=${provider}&status=error`);
   }
 };
 
