@@ -6,6 +6,8 @@
 
 import {
   config,
+  createLogger,
+  invariant,
   SERVICE_PORTS,
   SERVICE_NAMES,
   SERVICE_VERSIONS,
@@ -36,3 +38,33 @@ export const appConfig: IncidentTriageConfig = {
   // Service-specific Slack webhook URL for incident notifications — not in shared config
   slackIncidentWebhookUrl: process.env.SLACK_INCIDENT_WEBHOOK_URL ?? "",
 } as const;
+
+// ==================== Startup Validation ====================
+
+/** Validates required and optional config values at module load. */
+const assertTriageConfig = (cfg: IncidentTriageConfig): void => {
+  // Fail fast on missing required config (CLAUDE.md: config validated at startup)
+  invariant(cfg.databaseUrl, "DATABASE_URL is required for incident triage service");
+
+  // Warn on missing optional secrets in production — service starts but features will fail
+  const env = cfg.environment;
+  if (env !== "production") {
+    return;
+  }
+
+  const startupLogger = createLogger(SERVICE_NAMES.INCIDENT_TRIAGE);
+  const pdSecret = cfg.pagerDutyWebhookSecret;
+  const slackUrl = cfg.slackIncidentWebhookUrl;
+
+  if (!pdSecret) {
+    startupLogger.warn(
+      "PAGERDUTY_WEBHOOK_SECRET is empty — webhook signature verification will fail"
+    );
+  }
+  if (!slackUrl) {
+    startupLogger.warn("SLACK_INCIDENT_WEBHOOK_URL is empty — Slack dispatch will fail");
+  }
+};
+
+// Run validation immediately on import
+assertTriageConfig(appConfig);

@@ -73,7 +73,9 @@ const triageRateLimiter = createRateLimitMiddleware({
 /**
  * Create and configure Express application
  */
-const createApp = (): express.Express => {
+const createApp = (
+  container: import("./types/containerTypes.js").TriageContainer
+): express.Express => {
   const app = express();
 
   // Trust first proxy (nginx/load balancer) for accurate client IP detection
@@ -122,8 +124,8 @@ const createApp = (): express.Express => {
 
   app.use(triageRateLimiter.middleware());
 
-  // Register all routes
-  registerRoutes(app);
+  // Register all routes — container passed for webhook route dependencies
+  registerRoutes(app, container);
 
   // Error handling middleware (must be last)
   app.use(errorHandler);
@@ -154,7 +156,10 @@ const startServer = async (): Promise<void> => {
   });
   logger.info("Database initialized for incident triage");
 
-  const app = createApp();
+  // Create composition root — shared by both routes and worker
+  const container = createTriageContainer();
+
+  const app = createApp(container);
 
   const server = app.listen(appConfig.port, () => {
     logger.info("Incident triage service started", {
@@ -166,8 +171,7 @@ const startServer = async (): Promise<void> => {
   // Configure server timeouts for slowloris attack protection
   configureServerTimeouts(server);
 
-  // Create composition root and start the triage worker
-  const container = createTriageContainer();
+  // Start the triage worker (polls queue for incoming alerts)
   const triageWorker = startTriageWorker(container);
 
   // Start the dedup cleanup job (periodic expired entry removal)

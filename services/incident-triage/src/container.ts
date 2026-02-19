@@ -30,6 +30,7 @@ import { createDispatchService } from "./services/dispatchService.js";
 import { createLLMCompletionAdapter } from "./adapters/llmCompletionAdapter.js";
 import { createSlackDispatchAdapter } from "./adapters/slackDispatchAdapter.js";
 import { createPagerDutyDispatchAdapter } from "./adapters/pagerDutyDispatchAdapter.js";
+import { createPagerDutyAdapter } from "./adapters/pagerDutyAdapter.js";
 import { appConfig } from "./config/appConfig.js";
 
 /**
@@ -119,6 +120,10 @@ export const createTriageContainer = (): TriageContainer => {
   const pagerDutyDispatchPort = createPagerDutyDispatchAdapter();
   const dispatchService = createDispatchService(slackDispatchPort, pagerDutyDispatchPort);
 
+  // ==================== Webhook Adapters ====================
+
+  const pagerDutyAdapter = createPagerDutyAdapter();
+
   return {
     queue,
     dedupService,
@@ -126,5 +131,6 @@ export const createTriageContainer = (): TriageContainer => {
     incidentCorrelator,
     aiSummarizer,
     dispatchService,
+    pagerDutyAdapter,
   };
 };

@@ -13,11 +13,12 @@ import type { RunbookMatcherService } from "./runbookTypes.js";
 import type { IncidentCorrelatorService } from "./correlationTypes.js";
 import type { AiSummarizerService } from "./summaryTypes.js";
 import type { DispatchService } from "./policyTypes.js";
+import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 
 /**
  * Composition root interface for the incident triage service.
  *
- * Only exposes services the worker directly calls. Intermediate
+ * Only exposes services the worker and routes directly call. Intermediate
  * ports (embeddingPort, knowledgeSearchPort, triageSearchPort,
  * llmCompletionPort) are internal wiring details of the container.
  */
@@ -28,4 +29,5 @@ export interface TriageContainer {
   readonly incidentCorrelator: IncidentCorrelatorService;
   readonly aiSummarizer: AiSummarizerService;
   readonly dispatchService: DispatchService;
+  readonly pagerDutyAdapter: AlertSourcePort;
 }

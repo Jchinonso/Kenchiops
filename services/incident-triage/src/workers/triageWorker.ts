@@ -129,6 +129,7 @@ const runPolicyAndDispatch = async (
 
   await updateTriageDispatchResults({
     triageResultId,
+    // Cast for JSONB column storage — typed object is structurally compatible
     routingDecision: routingDecision as unknown as Record<string, unknown>,
     dispatchedTo: results.results.map((dr) => ({
       targetType: dr.target.type,
@@ -245,6 +246,7 @@ const runTriagePipeline = async (
       correlationType: corr.correlationType,
       severityLabel: corr.severityLabel,
     })),
+    // Cast for JSONB column storage — typed object is structurally compatible
     evidenceCatalog: evidenceCatalog as unknown as Record<string, unknown>,
     alertEmbedding,
     pipelineDurationMs: fullDurationMs,
@@ -267,6 +269,7 @@ const runTriagePipeline = async (
 
   await updateTriageAiSummary({
     triageResultId: triageResult.id,
+    // Cast for JSONB column storage — typed object is structurally compatible
     aiSummary: summaryResult as unknown as Record<string, unknown>,
     summarySource: summaryResult.summarySource,
     pipelineDurationMs: summaryDurationMs,
