@@ -51,4 +51,10 @@ export const WEBHOOK_ACTIVITY_QUERIES = {
       AND ($2::text IS NULL OR source = $2)
       AND ($3::text IS NULL OR status = $3)
   `,
+  FIND_BY_DELIVERY_ID: `
+    SELECT * FROM webhook_activity
+    WHERE delivery_id = $1
+    ORDER BY created_at DESC
+    LIMIT 1
+  `,
 } as const;

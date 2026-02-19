@@ -274,10 +274,12 @@ export const AGGREGATION_DEFAULTS = {
 
 /**
  * Regex pattern for parsing aggregation metadata keys.
- * Matches format: kenchi:agg:{repo}:{sha}:meta
+ * Matches format: kenchi:agg:{provider}:{repo}:{sha}:meta
+ * Provider is a lowercase identifier (e.g., "github_actions", "vercel").
+ * Repo is in "owner/repo" format (contains "/").
  */
 export const AGGREGATION_KEY_PATTERN = new RegExp(
-  `^${REDIS_KEY_PREFIXES.AGGREGATION.replace(":", "\\:")}:(.+):([a-f0-9]+):meta$`
+  `^${REDIS_KEY_PREFIXES.AGGREGATION.replace(":", "\\:")}:([a-z_]+):(.+):([a-f0-9]+):meta$`
 );
 
 /**

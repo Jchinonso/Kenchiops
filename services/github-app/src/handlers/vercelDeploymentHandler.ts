@@ -16,7 +16,6 @@ import {
   publish,
   CI_PROVIDERS,
   VERCEL_FAILURE_EVENTS,
-  VERCEL_DEPLOYMENT_EVENTS,
   PUBSUB_CHANNELS,
   DASHBOARD_EVENT_TYPES,
   EVENT_TYPES,
@@ -28,44 +27,24 @@ import {
 } from "@kenchi/shared";
 import type { VercelWebhook } from "../types/vercelTypes.js";
 import type { WebhookHandlerResult } from "../routes/webhookRoutesTypes.js";
+import {
+  extractGitContext,
+  mapVercelConclusion,
+  type VercelGitContext,
+} from "../helpers/vercelHelpers.js";
 
 const logger = createLogger("github-app");
 
 // ==================== Helpers ====================
 
-/** Map Vercel event type to a conclusion string. */
-const mapConclusion = (eventType: string): string =>
-  eventType === VERCEL_DEPLOYMENT_EVENTS.ERROR ? "failure" : "cancelled";
-
-/**
- * Extract git context from Vercel deployment metadata.
- * Vercel stores GitHub info in `deployment.meta` when linked to a GitHub repo.
- */
-const extractGitContext = (
-  meta: Readonly<Record<string, string>>
-): {
-  readonly commitSha: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly branch: string | undefined;
-  readonly prNumber: number | undefined;
-} => {
-  const commitSha = meta.githubCommitSha ?? meta.gitCommitSha ?? "";
-  const owner = meta.githubOrg ?? meta.githubCommitOrg ?? "";
-  const repo = meta.githubRepo ?? meta.githubCommitRepo ?? "";
-  const branch = meta.githubCommitRef ?? meta.gitBranch ?? undefined;
-  const prNumberStr = meta.githubPrId;
-  const prNumber = prNumberStr ? parseInt(prNumberStr, 10) : undefined;
-
-  return { commitSha, owner, repo, branch, prNumber };
-};
-
 /**
  * Build aggregation key from git context.
+ * Includes provider to prevent cross-provider key collisions.
  */
-const buildAggregationKey = (git: ReturnType<typeof extractGitContext>): AggregationKey => ({
+const buildAggregationKey = (git: VercelGitContext): AggregationKey => ({
   repositoryFullName: `${git.owner}/${git.repo}`,
   commitSha: git.commitSha,
+  provider: CI_PROVIDERS.VERCEL,
 });
 
 /**
@@ -74,16 +53,14 @@ const buildAggregationKey = (git: ReturnType<typeof extractGitContext>): Aggrega
 const buildPendingCheck = (webhook: VercelWebhook): PendingCheckRun => ({
   checkRunId: 0,
   checkName: `vercel-${webhook.payload.deployment.name}`,
-  conclusion: mapConclusion(webhook.type),
+  conclusion: mapVercelConclusion(webhook.type),
   timestamp: new Date(webhook.createdAt),
 });
 
 /**
  * Build pending check context from git context.
  */
-const buildPendingCheckContext = (
-  git: ReturnType<typeof extractGitContext>
-): PendingCheckContext => ({
+const buildPendingCheckContext = (git: VercelGitContext): PendingCheckContext => ({
   repositoryInfo: {
     owner: git.owner,
     name: git.repo,
@@ -103,12 +80,12 @@ const buildPendingCheckContext = (
  */
 const persistEventAndNotify = async (
   webhook: VercelWebhook,
-  git: ReturnType<typeof extractGitContext>
+  git: VercelGitContext
 ): Promise<void> => {
   const { deployment } = webhook.payload;
   const repoFullName = `${git.owner}/${git.repo}`;
   const checkName = `vercel-${deployment.name}`;
-  const conclusion = mapConclusion(webhook.type);
+  const conclusion = mapVercelConclusion(webhook.type);
 
   try {
     await createEvent({

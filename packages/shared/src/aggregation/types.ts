@@ -272,23 +272,27 @@ export interface AggregationKey {
 /**
  * Serializes aggregation key to string for Redis storage.
  *
- * NOTE: Provider is intentionally excluded from the key format in Phase 1.
- * Currently safe because only github_actions is supported. When Phase 2
- * adds non-GitHub providers, the key format must include provider to prevent
- * collisions for the same commit analyzed by different CI providers.
+ * Format: {provider}:{repositoryFullName}:{commitSha}
+ * Provider defaults to "github_actions" for backward compatibility.
  */
 export const serializeAggregationKey = (key: AggregationKey): string =>
-  `${key.repositoryFullName}:${key.commitSha}`;
+  `${key.provider ?? "github_actions"}:${key.repositoryFullName}:${key.commitSha}`;
 
 /**
- * Deserializes aggregation key from string
+ * Deserializes aggregation key from string.
+ *
+ * Expected format: {provider}:{owner}/{repo}:{commitSha}
+ * The provider is the first segment (no "/" character).
+ * The repo name always contains "/" (owner/repo format).
  */
 export const deserializeAggregationKey = (serialized: string): AggregationKey => {
+  const firstColonIndex = serialized.indexOf(":");
   const lastColonIndex = serialized.lastIndexOf(":");
-  return {
-    repositoryFullName: serialized.substring(0, lastColonIndex),
-    commitSha: serialized.substring(lastColonIndex + 1),
-  };
+  const provider = serialized.substring(0, firstColonIndex) as CIProvider;
+  const repositoryFullName = serialized.substring(firstColonIndex + 1, lastColonIndex);
+  const commitSha = serialized.substring(lastColonIndex + 1);
+
+  return { repositoryFullName, commitSha, provider };
 };
 
 /**
@@ -327,15 +331,15 @@ export interface ConsolidatedPostResult {
  * Redis key prefixes for aggregation
  */
 export const AGGREGATION_KEYS = {
-  /** Hash storing failure data: kenchi:agg:{repo}:{sha}:failures */
+  /** Hash storing failure data: kenchi:agg:{provider}:{repo}:{sha}:failures */
   failures: (key: AggregationKey) =>
-    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:failures`,
-  /** Hash storing metadata: kenchi:agg:{repo}:{sha}:meta */
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.provider ?? "github_actions"}:${key.repositoryFullName}:${key.commitSha}:failures`,
+  /** Hash storing metadata: kenchi:agg:{provider}:{repo}:{sha}:meta */
   metadata: (key: AggregationKey) =>
-    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:meta`,
-  /** Debounce lock key: kenchi:agg:{repo}:{sha}:debounce */
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.provider ?? "github_actions"}:${key.repositoryFullName}:${key.commitSha}:meta`,
+  /** Debounce lock key: kenchi:agg:{provider}:{repo}:{sha}:debounce */
   debounce: (key: AggregationKey) =>
-    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:debounce`,
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.provider ?? "github_actions"}:${key.repositoryFullName}:${key.commitSha}:debounce`,
   /** Pattern to find all aggregation keys */
   pattern: `${REDIS_KEY_PREFIXES.AGGREGATION}:*:meta`,
 } as const;

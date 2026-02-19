@@ -11,6 +11,7 @@ import {
   createLogger,
   getErrorMessage,
   ExternalServiceError,
+  stripAnsiCodes,
   VERCEL_API_BASE_URL,
   type CILogFetcherPort,
   type FetchedBuildLogs,
@@ -30,12 +31,16 @@ const FETCH_TIMEOUT_MS = 30_000;
 /**
  * Concatenate log text from deployment events,
  * filtering to stdout/stderr/command events only.
+ * Strips ANSI escape codes (common in Next.js/TypeScript compiler output).
  */
-const buildLogText = (events: readonly VercelDeploymentLogEvent[]): string =>
-  events
+const buildLogText = (events: readonly VercelDeploymentLogEvent[]): string => {
+  const rawText = events
     .filter((event) => LOG_EVENT_TYPES.has(event.type) && event.payload.text)
     .map((event) => event.payload.text)
     .join("\n");
+
+  return stripAnsiCodes(rawText);
+};
 
 // ==================== Adapter ====================
 
@@ -94,6 +99,7 @@ export const vercelLogFetcherAdapter: CILogFetcherPort = {
 
       return {
         buildId,
+        // Deployment name is not available at fetch time — only the buildId (deployment ID) is passed
         buildName: buildId,
         logs,
         durationMs,

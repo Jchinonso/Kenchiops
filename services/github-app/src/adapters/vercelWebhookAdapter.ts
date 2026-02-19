@@ -18,6 +18,7 @@ import {
   type RequestContext,
 } from "@kenchi/shared";
 import type { VercelWebhook } from "../types/vercelTypes.js";
+import { extractGitContext, mapVercelConclusion } from "../helpers/vercelHelpers.js";
 
 const logger = createLogger("vercel-webhook");
 
@@ -29,29 +30,6 @@ const isVercelWebhook = (payload: unknown): payload is VercelWebhook =>
   "type" in payload &&
   "payload" in payload &&
   typeof (payload as Record<string, unknown>).type === "string";
-
-/**
- * Extract git context from Vercel deployment metadata.
- * Vercel stores GitHub info in `deployment.meta` when linked to a GitHub repo.
- */
-const extractGitContext = (
-  meta: Readonly<Record<string, string>>
-): {
-  readonly commitSha: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly branch: string | undefined;
-  readonly prNumber: number | undefined;
-} => {
-  const commitSha = meta.githubCommitSha ?? meta.gitCommitSha ?? "";
-  const owner = meta.githubOrg ?? meta.githubCommitOrg ?? "";
-  const repo = meta.githubRepo ?? meta.githubCommitRepo ?? "";
-  const branch = meta.githubCommitRef ?? meta.gitBranch ?? undefined;
-  const prNumberStr = meta.githubPrId;
-  const prNumber = prNumberStr ? parseInt(prNumberStr, 10) : undefined;
-
-  return { commitSha, owner, repo, branch, prNumber };
-};
 
 // ==================== Adapter ====================
 
@@ -100,7 +78,7 @@ export const vercelWebhookAdapter: CIWebhookPort = {
       provider: CI_PROVIDERS.VERCEL,
       buildId: deployment.id,
       buildName: deployment.name,
-      conclusion: payload.type === "deployment.error" ? "failure" : "cancelled",
+      conclusion: mapVercelConclusion(payload.type),
       commitSha: git.commitSha,
       branch: git.branch,
       repository: {

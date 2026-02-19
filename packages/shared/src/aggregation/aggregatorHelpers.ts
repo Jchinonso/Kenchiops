@@ -121,8 +121,8 @@ export const parseAggregationKey = (metaKey: string): AggregationKey | null => {
     return null;
   }
 
-  const [, repoFullName, commitSha] = match;
-  return { repositoryFullName: repoFullName, commitSha };
+  const [, provider, repoFullName, commitSha] = match;
+  return { provider: provider as CIProvider, repositoryFullName: repoFullName, commitSha };
 };
 
 /** Builds all Redis keys for an aggregation. */

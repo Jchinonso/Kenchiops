@@ -35,6 +35,7 @@ const logger = createLogger("github-app");
 const buildAggregationKey = (webhook: CheckRunWebhook): AggregationKey => ({
   repositoryFullName: webhook.repository.full_name,
   commitSha: webhook.check_run.head_sha,
+  provider: CI_PROVIDERS.GITHUB_ACTIONS,
 });
 
 /**

@@ -329,6 +329,7 @@ export {
 // Webhook activity module
 export {
   createWebhookActivity,
+  findWebhookActivityByDeliveryId,
   getWebhookActivitiesByTenant,
   countWebhookActivitiesByTenant,
   type WebhookActivityRecord,

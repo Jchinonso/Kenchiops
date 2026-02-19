@@ -138,6 +138,43 @@ export const getWebhookActivitiesByTenant = async (
  * @throws ValidationError if tenantId is empty
  * @throws Error if database operation fails
  */
+/**
+ * Finds a webhook activity record by its delivery ID (for replay protection).
+ *
+ * @param deliveryId - The webhook delivery ID
+ * @returns The webhook activity record, or null if not found
+ */
+export const findWebhookActivityByDeliveryId = async (
+  deliveryId: string
+): Promise<WebhookActivityRecord | null> => {
+  if (!deliveryId?.trim()) {
+    return null;
+  }
+
+  try {
+    const result = await query<WebhookActivityRow>(WEBHOOK_ACTIVITY_QUERIES.FIND_BY_DELIVERY_ID, [
+      deliveryId,
+    ]);
+    return result.rows.length > 0 ? mapRowToWebhookActivity(result.rows[0]) : null;
+  } catch (error) {
+    logger.error("Failed to find webhook activity by delivery id", {
+      deliveryId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Counts webhook activity by tenant with optional source and status filters.
+ *
+ * @param tenantId - The tenant ID
+ * @param source - Optional source filter (e.g., "github")
+ * @param status - Optional status filter (e.g., "processed", "failed")
+ * @returns The count of matching records
+ * @throws ValidationError if tenantId is empty
+ * @throws Error if database operation fails
+ */
 export const countWebhookActivitiesByTenant = async (
   tenantId: string,
   source?: string | null,

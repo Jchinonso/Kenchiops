@@ -25,6 +25,7 @@ export {
 // Repository operations
 export {
   createWebhookActivity,
+  findWebhookActivityByDeliveryId,
   getWebhookActivitiesByTenant,
   countWebhookActivitiesByTenant,
 } from "./repository.js";
