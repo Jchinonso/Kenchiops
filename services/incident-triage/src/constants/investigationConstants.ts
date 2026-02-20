@@ -56,6 +56,14 @@ export const INVESTIGATION_RELEVANCE = {
   TRIAGE_BASE: 0.65,
   /** Boosted relevance when triage matches service */
   TRIAGE_SERVICE_MATCH: 0.88,
+  /** Base relevance for monitoring metrics/deployment evidence */
+  MONITORING_BASE: 0.75,
+  /** Boosted relevance when monitoring data matches the queried service */
+  MONITORING_SERVICE_MATCH: 0.92,
+  /** Base relevance for active monitoring alerts (stronger signal) */
+  MONITORING_ALERT_BASE: 0.8,
+  /** Boosted relevance when monitoring alert matches the queried service */
+  MONITORING_ALERT_SERVICE_MATCH: 0.95,
 } as const;
 
 // ==================== Symptom Validation ====================

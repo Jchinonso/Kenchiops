@@ -43,6 +43,19 @@ export const appConfig: IncidentTriageConfig = {
   triageLlmModel: process.env.TRIAGE_LLM_MODEL ?? OPENROUTER_DEFAULTS.MODEL,
   // Service-specific Slack webhook URL for incident notifications — not in shared config
   slackIncidentWebhookUrl: process.env.SLACK_INCIDENT_WEBHOOK_URL ?? "",
+  // Monitoring API keys (optional — adapters skip when key is empty) — not in shared config
+  datadogApiKey: process.env.DATADOG_API_KEY ?? "",
+  datadogAppKey: process.env.DATADOG_APP_KEY ?? "",
+  datadogApiBaseUrl: process.env.DATADOG_API_BASE_URL ?? "https://api.datadoghq.com",
+  grafanaApiToken: process.env.GRAFANA_API_TOKEN ?? "",
+  grafanaApiBaseUrl: process.env.GRAFANA_API_BASE_URL ?? "",
+  // Prometheus is typically internal (no auth), only base URL required
+  prometheusApiBaseUrl: process.env.PROMETHEUS_API_BASE_URL ?? "",
+  pagerdutyApiToken: process.env.PAGERDUTY_API_TOKEN ?? "",
+  vercelApiToken: process.env.VERCEL_MONITORING_API_TOKEN ?? "",
+  vercelTeamId: process.env.VERCEL_TEAM_ID ?? "",
+  netlifyApiToken: process.env.NETLIFY_API_TOKEN ?? "",
+  netlifySiteId: process.env.NETLIFY_SITE_ID ?? "",
 } as const;
 
 // ==================== Startup Validation ====================
@@ -86,6 +99,26 @@ const assertTriageConfig = (cfg: IncidentTriageConfig): void => {
   }
   if (!slackUrl) {
     startupLogger.warn("SLACK_INCIDENT_WEBHOOK_URL is empty — Slack dispatch will fail");
+  }
+
+  // Monitoring adapters — info-level since these are genuinely optional
+  if (!cfg.datadogApiKey) {
+    startupLogger.info("DATADOG_API_KEY not set — Datadog monitoring evidence disabled");
+  }
+  if (!cfg.grafanaApiToken) {
+    startupLogger.info("GRAFANA_API_TOKEN not set — Grafana monitoring evidence disabled");
+  }
+  if (!cfg.prometheusApiBaseUrl) {
+    startupLogger.info("PROMETHEUS_API_BASE_URL not set — Prometheus monitoring evidence disabled");
+  }
+  if (!cfg.pagerdutyApiToken) {
+    startupLogger.info("PAGERDUTY_API_TOKEN not set — PagerDuty monitoring evidence disabled");
+  }
+  if (!cfg.vercelApiToken) {
+    startupLogger.info("VERCEL_MONITORING_API_TOKEN not set — Vercel monitoring evidence disabled");
+  }
+  if (!cfg.netlifyApiToken) {
+    startupLogger.info("NETLIFY_API_TOKEN not set — Netlify monitoring evidence disabled");
   }
 };
 

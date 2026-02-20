@@ -47,7 +47,17 @@ export interface InvestigationIntent {
 /**
  * Discriminator for the source of an investigation evidence item.
  */
-export type EvidenceSourceType = "past_incidents" | "ci_analyses" | "triage_results";
+export type EvidenceSourceType =
+  | "past_incidents"
+  | "ci_analyses"
+  | "triage_results"
+  | "datadog_metrics"
+  | "datadog_events"
+  | "grafana_alerts"
+  | "prometheus_alerts"
+  | "pagerduty_incidents"
+  | "vercel_deployments"
+  | "netlify_deploys";
 
 /**
  * A single piece of evidence gathered during investigation.

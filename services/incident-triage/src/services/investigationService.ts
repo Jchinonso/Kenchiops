@@ -24,6 +24,7 @@ import {
   type InvestigationCorrelation,
   type InvestigationDiagnosis,
 } from "../types/investigationTypes.js";
+import type { MonitoringPort } from "../types/monitoringTypes.js";
 import {
   INVESTIGATION_INTENT_SYSTEM_PROMPT,
   buildIntentUserPrompt,
@@ -109,9 +110,11 @@ const parseIntent = async (
 
 /**
  * Queries all evidence sources in parallel, sorts by relevance, and truncates.
+ * Includes monitoring evidence from external providers when configured.
  */
 const gatherEvidence = async (
   searchPort: InvestigationSearchPort,
+  monitoringPort: MonitoringPort,
   intent: InvestigationIntent,
   tenantId: string,
   context: RequestContext
@@ -121,13 +124,24 @@ const gatherEvidence = async (
   const hoursBack = getLookbackHours(intent);
   const perSourceLimit = INVESTIGATION_DEFAULTS.PER_SOURCE_LIMIT;
 
-  const [incidents, analyses, triageResults] = await Promise.all([
+  const [incidents, analyses, triageResults, monitoringEvidence] = await Promise.all([
     searchPort.searchRecentIncidents(tenantId, intent.serviceName, hoursBack, perSourceLimit),
     searchPort.searchRecentAnalyses(tenantId, intent.serviceName, hoursBack, perSourceLimit),
     searchPort.searchRecentTriageResults(tenantId, intent.serviceName, hoursBack, perSourceLimit),
+    monitoringPort.gatherMetrics(
+      {
+        tenantId,
+        serviceName: intent.serviceName,
+        environment: intent.environment,
+        symptom: intent.symptom,
+        hoursBack,
+        limit: perSourceLimit,
+      },
+      context
+    ),
   ]);
 
-  const allEvidence = [...incidents, ...analyses, ...triageResults];
+  const allEvidence = [...incidents, ...analyses, ...triageResults, ...monitoringEvidence];
   const sorted = [...allEvidence].sort(compareEvidence);
   const truncated = sorted.slice(0, INVESTIGATION_DEFAULTS.MAX_EVIDENCE_ITEMS);
 
@@ -137,6 +151,7 @@ const gatherEvidence = async (
     incidentCount: incidents.length,
     analysisCount: analyses.length,
     triageCount: triageResults.length,
+    monitoringCount: monitoringEvidence.length,
     totalBeforeTruncation: allEvidence.length,
     totalAfterTruncation: truncated.length,
     hoursBack,
@@ -251,15 +266,17 @@ const diagnose = async (
  *
  * @param llmPort - Port for LLM text completion
  * @param searchPort - Port for searching historical evidence
+ * @param monitoringPort - Port for gathering monitoring evidence from external providers
  * @returns InvestigationService with parseIntent, gatherEvidence, correlateEvidence, diagnose
  */
 export const createInvestigationService = (
   llmPort: LLMCompletionPort,
-  searchPort: InvestigationSearchPort
+  searchPort: InvestigationSearchPort,
+  monitoringPort: MonitoringPort
 ): InvestigationService => ({
   parseIntent: (description, context) => parseIntent(llmPort, description, context),
   gatherEvidence: (intent, tenantId, context) =>
-    gatherEvidence(searchPort, intent, tenantId, context),
+    gatherEvidence(searchPort, monitoringPort, intent, tenantId, context),
   correlateEvidence: (evidence, intent, context) => correlateEvidence(evidence, intent, context),
   diagnose: (intent, evidence, correlation, context) =>
     diagnose(llmPort, intent, evidence, correlation, context),

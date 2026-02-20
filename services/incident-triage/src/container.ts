@@ -38,6 +38,14 @@ import { createGrafanaAdapter } from "./adapters/grafanaAdapter.js";
 import { createPrometheusAdapter } from "./adapters/prometheusAdapter.js";
 import { createInvestigationSearchAdapter } from "./adapters/investigationSearchAdapter.js";
 import { createInvestigationService } from "./services/investigationService.js";
+import { createDatadogMonitoringAdapter } from "./adapters/datadogMonitoringAdapter.js";
+import { createGrafanaMonitoringAdapter } from "./adapters/grafanaMonitoringAdapter.js";
+import { createPrometheusMonitoringAdapter } from "./adapters/prometheusMonitoringAdapter.js";
+import { createPagerDutyMonitoringAdapter } from "./adapters/pagerdutyMonitoringAdapter.js";
+import { createVercelMonitoringAdapter } from "./adapters/vercelMonitoringAdapter.js";
+import { createNetlifyMonitoringAdapter } from "./adapters/netlifyMonitoringAdapter.js";
+import { createMonitoringPort } from "./adapters/monitoringPortAdapter.js";
+import type { MonitoringAdapter } from "./types/monitoringTypes.js";
 import { appConfig } from "./config/appConfig.js";
 
 /**
@@ -136,9 +144,28 @@ export const createTriageContainer = (): TriageContainer => {
   });
 
   const investigationSearchAdapter = createInvestigationSearchAdapter();
+
+  // ==================== Monitoring Port ====================
+
+  const monitoringAdapters: readonly MonitoringAdapter[] = [
+    createDatadogMonitoringAdapter(
+      appConfig.datadogApiKey,
+      appConfig.datadogAppKey,
+      appConfig.datadogApiBaseUrl
+    ),
+    createGrafanaMonitoringAdapter(appConfig.grafanaApiToken, appConfig.grafanaApiBaseUrl),
+    createPrometheusMonitoringAdapter(appConfig.prometheusApiBaseUrl),
+    createPagerDutyMonitoringAdapter(appConfig.pagerdutyApiToken),
+    createVercelMonitoringAdapter(appConfig.vercelApiToken, appConfig.vercelTeamId),
+    createNetlifyMonitoringAdapter(appConfig.netlifyApiToken, appConfig.netlifySiteId),
+  ];
+
+  const monitoringPort = createMonitoringPort(monitoringAdapters);
+
   const investigationService = createInvestigationService(
     llmCompletionPort,
-    investigationSearchAdapter
+    investigationSearchAdapter,
+    monitoringPort
   );
 
   // ==================== Webhook Adapters ====================

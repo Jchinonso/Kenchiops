@@ -9,6 +9,7 @@
 
 import { truncateText } from "@kenchi/shared";
 import type {
+  EvidenceSourceType,
   InvestigationIntent,
   InvestigationEvidenceItem,
   InvestigationCorrelation,
@@ -43,6 +44,13 @@ Evidence items have an "id" field and a "source" field indicating where they cam
 - **past_incidents**: Previous incidents involving the same or related services. These show historical patterns and how similar issues were resolved.
 - **ci_analyses**: CI/CD analysis results (build failures, test failures, deployment issues). These may reveal recent changes that could have caused the issue.
 - **triage_results**: Previous automated triage results with severity scores and summaries. These provide context on how similar alerts were previously assessed.
+- **datadog_metrics**: Time-series metric data from Datadog (CPU, memory, latency, error rates). These provide quantitative measurements of system behavior during the incident window.
+- **datadog_events**: Datadog events and alerts (deployments, config changes, triggered monitors). These provide temporal markers that may correlate with the incident.
+- **grafana_alerts**: Active Grafana alert rules and annotations. Firing alerts are strong signals of ongoing issues; annotations mark manual events or automated deployments.
+- **prometheus_alerts**: Active Prometheus alerts and metric range data. Firing/pending alerts indicate threshold violations; metric ranges show system behavior trends during the incident window.
+- **pagerduty_incidents**: Active PagerDuty incidents (triggered or acknowledged). These show what the on-call team is currently responding to and provide urgency/assignment context.
+- **vercel_deployments**: Recent failed or errored Vercel deployments. These may indicate deployment-related root causes, especially for frontend or serverless issues.
+- **netlify_deploys**: Recent failed Netlify deploys. These may indicate build failures or deployment issues for static sites and Jamstack applications.
 
 ## CORRELATION DATA
 
@@ -185,6 +193,51 @@ const formatCorrelationSection = (correlation: InvestigationCorrelation): string
   return [patternsBlock, "", timelineBlock, "", servicesBlock, "", factorsBlock].join("\n");
 };
 
+// ==================== Monitoring Evidence ====================
+
+/**
+ * Source types that come from external monitoring providers.
+ */
+const MONITORING_SOURCES: ReadonlySet<EvidenceSourceType> = new Set([
+  "datadog_metrics",
+  "datadog_events",
+  "grafana_alerts",
+  "prometheus_alerts",
+  "pagerduty_incidents",
+  "vercel_deployments",
+  "netlify_deploys",
+]) as ReadonlySet<EvidenceSourceType>;
+
+/**
+ * Partitions evidence into database-sourced and monitoring-sourced items.
+ */
+const partitionEvidence = (
+  evidence: readonly InvestigationEvidenceItem[]
+): {
+  readonly dbEvidence: readonly InvestigationEvidenceItem[];
+  readonly monitoringEvidence: readonly InvestigationEvidenceItem[];
+} => ({
+  dbEvidence: evidence.filter((item) => !MONITORING_SOURCES.has(item.source)),
+  monitoringEvidence: evidence.filter((item) => MONITORING_SOURCES.has(item.source)),
+});
+
+/**
+ * Formats the monitoring data section when monitoring evidence is present.
+ * Returns empty string when no monitoring evidence exists.
+ */
+const formatMonitoringSection = (
+  monitoringEvidence: readonly InvestigationEvidenceItem[]
+): string =>
+  isEmpty(monitoringEvidence)
+    ? ""
+    : [
+        "",
+        "## MONITORING DATA",
+        "The following metrics, alerts, and events were gathered from external monitoring tools:",
+        "",
+        ...monitoringEvidence.map(formatEvidenceItemEntry),
+      ].join("\n");
+
 // ==================== Public API ====================
 
 /**
@@ -201,16 +254,21 @@ export const buildDiagnosisUserPrompt = (
   intent: InvestigationIntent,
   evidence: readonly InvestigationEvidenceItem[],
   correlation: InvestigationCorrelation
-): string =>
-  [
+): string => {
+  const { dbEvidence, monitoringEvidence } = partitionEvidence(evidence);
+  const monitoringSection = formatMonitoringSection(monitoringEvidence);
+
+  return [
     "## INVESTIGATION INTENT",
     formatIntentSection(intent),
     "",
     "## GATHERED EVIDENCE",
-    formatEvidenceSection(evidence),
+    formatEvidenceSection(dbEvidence),
+    monitoringSection,
     "",
     "## CORRELATION ANALYSIS",
     formatCorrelationSection(correlation),
     "",
     "Produce a structured diagnosis based ONLY on the evidence above. Cite evidence IDs for every claim.",
   ].join("\n");
+};
