@@ -210,14 +210,14 @@ const SidebarLeafItem = ({
         className={cn(
           "flex items-center gap-3 rounded-lg transition-all duration-200 text-sm",
           indented
-            ? "ml-5 pl-3 py-2 border-l-2 md:ml-0 md:pl-0 md:border-l-0 md:justify-center md:px-2 lg:ml-5 lg:pl-3 lg:border-l-2 lg:justify-start lg:px-0"
+            ? "ml-5 pl-4 py-2 border-l-2 md:ml-0 md:pl-0 md:border-l-0 md:justify-center md:px-2 lg:ml-5 lg:pl-4 lg:border-l-2 lg:justify-start lg:px-0"
             : "px-4 py-2.5 md:justify-center md:px-2 lg:justify-start lg:px-4",
           active
             ? indented
-              ? "border-indigo-400 dark:border-indigo-500 bg-indigo-50/80 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-medium"
+              ? "border-indigo-400 dark:border-indigo-500 bg-indigo-50/80 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-medium pl-5 lg:pl-5"
               : "bg-indigo-500 text-white shadow-md font-medium"
             : indented
-              ? "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+              ? "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:pl-5 lg:hover:pl-5"
               : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
         )}
       >
