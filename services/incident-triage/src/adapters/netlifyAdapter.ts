@@ -10,6 +10,7 @@ import {
   createLogger,
   redactObject,
   NETLIFY_COMMIT_URL_PATTERN,
+  NETLIFY_FAILURE_STATES,
 } from "@kenchi/shared";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
@@ -47,6 +48,14 @@ const validatePayload = (body: unknown): NetlifyDeployPayload => {
     });
   }
 
+  // Only process failure states — skip successful deploys
+  if (!NETLIFY_FAILURE_STATES.has(body.state)) {
+    throw new ValidationError("Netlify deploy is not a failure state -- skipping triage", {
+      operation: "validatePayload",
+      metadata: { state: body.state },
+    });
+  }
+
   return body;
 };
 
@@ -69,12 +78,12 @@ const extractLabels = (payload: NetlifyDeployPayload): Readonly<Record<string, s
     payload.review_id !== null && payload.review_id !== undefined ? String(payload.review_id) : "";
 
   return {
-    ...(owner ? { owner } : {}),
-    ...(repo ? { repo } : {}),
-    ...(commitSha ? { commitSha } : {}),
-    ...(branch ? { branch } : {}),
-    ...(prNumber ? { prNumber } : {}),
-    ...(payload.site_id ? { siteId: payload.site_id } : {}),
+    ...(owner ? { netlify_owner: owner } : {}),
+    ...(repo ? { netlify_repo: repo } : {}),
+    ...(commitSha ? { netlify_commit_sha: commitSha } : {}),
+    ...(branch ? { netlify_branch: branch } : {}),
+    ...(prNumber ? { netlify_pr_number: prNumber } : {}),
+    ...(payload.site_id ? { netlify_site_id: payload.site_id } : {}),
   };
 };
 
@@ -105,8 +114,8 @@ const buildDescription = (payload: NetlifyDeployPayload): string => {
  * Uses sha256 hash of: netlify | siteId | commitRef
  */
 const computeFingerprint = (alert: NormalizedAlert): string => {
-  const siteId = alert.labels.siteId ?? "";
-  const commitSha = alert.labels.commitSha ?? "";
+  const siteId = alert.labels.netlify_site_id ?? "";
+  const commitSha = alert.labels.netlify_commit_sha ?? "";
 
   return computeHash(["netlify", siteId, commitSha]);
 };
@@ -125,7 +134,7 @@ export const createNetlifyAdapter = (): AlertSourcePort => ({
 
     const partialAlert: NormalizedAlert = {
       sourceAlertId: payload.id,
-      deliveryId: payload.id,
+      deliveryId: computeHash(["netlify", payload.id, payload.state]),
       source: "netlify",
       title: `Netlify deploy failed: ${payload.name}`,
       description: buildDescription(payload),

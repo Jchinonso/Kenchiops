@@ -10,6 +10,7 @@ import {
   createLogger,
   redactObject,
   VERCEL_DEPLOYMENT_EVENTS,
+  VERCEL_FAILURE_EVENTS,
 } from "@kenchi/shared";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
@@ -56,6 +57,14 @@ const validatePayload = (body: unknown): VercelWebhook => {
     });
   }
 
+  // Only process failure events — skip success/created/ready events
+  if (!VERCEL_FAILURE_EVENTS.has(body.type)) {
+    throw new ValidationError("Vercel event is not a failure -- skipping triage", {
+      operation: "validatePayload",
+      metadata: { eventType: body.type },
+    });
+  }
+
   return body;
 };
 
@@ -65,6 +74,15 @@ const validatePayload = (body: unknown): VercelWebhook => {
  */
 const mapSeverity = (eventType: string): AlertSeverity =>
   eventType === VERCEL_DEPLOYMENT_EVENTS.ERROR ? "high" : "medium";
+
+/** Event type to human-readable verb for titles/descriptions */
+const EVENT_VERB_MAP: Readonly<Record<string, string>> = {
+  [VERCEL_DEPLOYMENT_EVENTS.ERROR]: "failed",
+  [VERCEL_DEPLOYMENT_EVENTS.CANCELED]: "canceled",
+} as const;
+
+/** Default verb for unknown failure events */
+const DEFAULT_EVENT_VERB = "failed";
 
 /**
  * Extracts git context labels from Vercel deployment metadata.
@@ -80,13 +98,13 @@ const extractLabels = (webhook: VercelWebhook): Readonly<Record<string, string>>
   const prId = meta.githubPrId ?? "";
 
   return {
-    ...(owner ? { owner } : {}),
-    ...(repo ? { repo } : {}),
-    ...(commitSha ? { commitSha } : {}),
-    ...(branch ? { branch } : {}),
-    ...(prId ? { prNumber: prId } : {}),
-    ...(teamId ? { teamId } : {}),
-    ...(projectId ? { projectId } : {}),
+    ...(owner ? { vercel_owner: owner } : {}),
+    ...(repo ? { vercel_repo: repo } : {}),
+    ...(commitSha ? { vercel_commit_sha: commitSha } : {}),
+    ...(branch ? { vercel_branch: branch } : {}),
+    ...(prId ? { vercel_pr_number: prId } : {}),
+    ...(teamId ? { vercel_team_id: teamId } : {}),
+    ...(projectId ? { vercel_project_id: projectId } : {}),
   };
 };
 
@@ -104,7 +122,8 @@ const extractMetrics = (webhook: VercelWebhook): Readonly<Record<string, unknown
 const buildDescription = (webhook: VercelWebhook): string => {
   const { deployment } = webhook.payload;
   const target = webhook.payload.target ?? "unknown";
-  return `Deployment ${deployment.id} to ${target} environment failed. URL: ${deployment.url}`;
+  const verb = EVENT_VERB_MAP[webhook.type] ?? DEFAULT_EVENT_VERB;
+  return `Deployment ${deployment.id} to ${target} environment ${verb}. URL: ${deployment.url}`;
 };
 
 // ==================== Fingerprint Logic ====================
@@ -114,8 +133,8 @@ const buildDescription = (webhook: VercelWebhook): string => {
  * Uses sha256 hash of: vercel | projectId | commitSha
  */
 const computeFingerprint = (alert: NormalizedAlert): string => {
-  const projectId = alert.labels.projectId ?? "";
-  const commitSha = alert.labels.commitSha ?? "";
+  const projectId = alert.labels.vercel_project_id ?? "";
+  const commitSha = alert.labels.vercel_commit_sha ?? "";
 
   return computeHash(["vercel", projectId, commitSha]);
 };
@@ -144,7 +163,7 @@ export const createVercelAdapter = (): AlertSourcePort => ({
       sourceAlertId: deployment.id,
       deliveryId,
       source: "vercel",
-      title: `Vercel deployment failed: ${deployment.name}`,
+      title: `Vercel deployment ${EVENT_VERB_MAP[webhook.type] ?? DEFAULT_EVENT_VERB}: ${deployment.name}`,
       description: buildDescription(webhook),
       severity: mapSeverity(webhook.type),
       fingerprint: "",

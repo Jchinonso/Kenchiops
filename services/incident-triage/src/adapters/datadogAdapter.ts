@@ -5,7 +5,12 @@
  * and generates fingerprints for deduplication.
  */
 
-import { ValidationError, createLogger, redactObject } from "@kenchi/shared";
+import {
+  ValidationError,
+  createLogger,
+  redactObject,
+  DATADOG_FAILURE_STATUSES,
+} from "@kenchi/shared";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
 import { DATADOG_PRIORITY_MAP, type DatadogWebhookPayload } from "../types/datadogTypes.js";
@@ -106,6 +111,14 @@ const validatePayload = (body: unknown): DatadogWebhookPayload => {
   if (!payload.$ALERT_STATUS || typeof payload.$ALERT_STATUS !== "string") {
     throw new ValidationError("Invalid Datadog webhook payload: missing $ALERT_STATUS", {
       operation: "validatePayload",
+    });
+  }
+
+  // Only process failure statuses — skip recovered/resolved alerts
+  if (!DATADOG_FAILURE_STATUSES.has(payload.$ALERT_STATUS as string)) {
+    throw new ValidationError("Datadog alert is not a failure status -- skipping triage", {
+      operation: "validatePayload",
+      metadata: { status: payload.$ALERT_STATUS },
     });
   }
 
