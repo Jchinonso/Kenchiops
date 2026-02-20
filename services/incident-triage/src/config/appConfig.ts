@@ -21,9 +21,9 @@ export type { IncidentTriageConfig } from "../types/incidentTriageTypes.js";
 /**
  * Validated incident triage configuration.
  *
- * PAGERDUTY_WEBHOOK_SECRET is read from the environment via process.env
- * because it is service-specific and not part of the shared config module.
- * This is the only allowed direct process.env access in this service.
+ * Service-specific secrets (PagerDuty, Datadog, Grafana, Prometheus, Slack, LLM)
+ * use process.env because they are not in the shared config module.
+ * Vercel/Netlify webhook secrets use shared config (already defined there).
  */
 export const appConfig: IncidentTriageConfig = {
   port: config.PORT ? parseInt(String(config.PORT), 10) : SERVICE_PORTS.INCIDENT_TRIAGE,
@@ -36,8 +36,9 @@ export const appConfig: IncidentTriageConfig = {
   datadogWebhookSecret: process.env.DATADOG_WEBHOOK_SECRET ?? "",
   grafanaWebhookSecret: process.env.GRAFANA_WEBHOOK_SECRET ?? "",
   prometheusWebhookSecret: process.env.PROMETHEUS_WEBHOOK_SECRET ?? "",
-  vercelWebhookSecret: process.env.VERCEL_WEBHOOK_SECRET ?? "",
-  netlifyWebhookSecret: process.env.NETLIFY_WEBHOOK_SECRET ?? "",
+  // Vercel/Netlify secrets available via shared config
+  vercelWebhookSecret: config.VERCEL_WEBHOOK_SECRET ?? "",
+  netlifyWebhookSecret: config.NETLIFY_WEBHOOK_SECRET ?? "",
   // Service-specific LLM model override — not in shared config
   triageLlmModel: process.env.TRIAGE_LLM_MODEL ?? OPENROUTER_DEFAULTS.MODEL,
   // Service-specific Slack webhook URL for incident notifications — not in shared config

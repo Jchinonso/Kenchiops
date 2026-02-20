@@ -5,7 +5,6 @@
  * and generates fingerprints for deduplication.
  */
 
-import crypto from "crypto";
 import { ValidationError, createLogger, redactObject } from "@kenchi/shared";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
@@ -15,6 +14,7 @@ import {
   type PagerDutyWebhookV3Event,
   type PagerDutyIncidentData,
 } from "../types/pagerDutyTypes.js";
+import { computeHash } from "../helpers/fingerprint.js";
 
 const logger = createLogger("pagerduty-adapter");
 
@@ -23,15 +23,6 @@ const PAGERDUTY_DELIVERY_HEADER = "x-webhook-id";
 
 /** Default severity when no priority or urgency is available */
 const DEFAULT_SEVERITY: AlertSeverity = "medium";
-
-/** Fingerprint hash algorithm */
-const FINGERPRINT_ALGORITHM = "sha256";
-
-/** Fingerprint separator */
-const FINGERPRINT_SEPARATOR = "|";
-
-/** Fingerprint hash encoding length (hex substring) */
-const FINGERPRINT_HASH_LENGTH = 40;
 
 // ==================== Internal Helpers ====================
 
@@ -158,18 +149,10 @@ const validatePayload = (body: unknown): PagerDutyWebhookV3Event => {
  * Uses sha256 hash of: source | service_name | pd_service_id | pd_alert_class
  */
 const computeFingerprint = (alert: NormalizedAlert): string => {
-  const pdServiceId = (alert.labels as Record<string, string>).pd_service_id ?? "";
-  const alertClass = (alert.labels as Record<string, string>).pd_alert_class ?? "";
+  const pdServiceId = alert.labels.pd_service_id ?? "";
+  const alertClass = alert.labels.pd_alert_class ?? "";
 
-  const components = [alert.source, alert.serviceName ?? "", pdServiceId, alertClass].join(
-    FINGERPRINT_SEPARATOR
-  );
-
-  return crypto
-    .createHash(FINGERPRINT_ALGORITHM)
-    .update(components)
-    .digest("hex")
-    .substring(0, FINGERPRINT_HASH_LENGTH);
+  return computeHash([alert.source, alert.serviceName ?? "", pdServiceId, alertClass]);
 };
 
 // ==================== Adapter Implementation ====================
