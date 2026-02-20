@@ -36,6 +36,8 @@ import { createNetlifyAdapter } from "./adapters/netlifyAdapter.js";
 import { createDatadogAdapter } from "./adapters/datadogAdapter.js";
 import { createGrafanaAdapter } from "./adapters/grafanaAdapter.js";
 import { createPrometheusAdapter } from "./adapters/prometheusAdapter.js";
+import { createInvestigationSearchAdapter } from "./adapters/investigationSearchAdapter.js";
+import { createInvestigationService } from "./services/investigationService.js";
 import { appConfig } from "./config/appConfig.js";
 
 /**
@@ -125,6 +127,20 @@ export const createTriageContainer = (): TriageContainer => {
   const pagerDutyDispatchPort = createPagerDutyDispatchAdapter();
   const dispatchService = createDispatchService(slackDispatchPort, pagerDutyDispatchPort);
 
+  // ==================== Investigation ====================
+
+  const investigationQueue = createQueue({
+    name: QUEUE_NAMES.INVESTIGATION,
+    maxRetries: QUEUE_RETRY_CONFIG.INVESTIGATION,
+    visibilityTimeout: QUEUE_VISIBILITY_TIMEOUT.INVESTIGATION,
+  });
+
+  const investigationSearchAdapter = createInvestigationSearchAdapter();
+  const investigationService = createInvestigationService(
+    llmCompletionPort,
+    investigationSearchAdapter
+  );
+
   // ==================== Webhook Adapters ====================
 
   const alertAdapters = {
@@ -143,6 +159,8 @@ export const createTriageContainer = (): TriageContainer => {
     incidentCorrelator,
     aiSummarizer,
     dispatchService,
+    investigationQueue,
+    investigationService,
     alertAdapters,
   };
 };

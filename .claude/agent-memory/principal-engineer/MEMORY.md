@@ -176,6 +176,21 @@ The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 - `direct-fetch` rule has `skipInAdapters: true` -- bare `fetch()` is allowed in adapter files
 - `misplaced-regex-constant` rule flags regex constants outside `packages/shared/src/constants/` -- move them to shared
 
+## Validate-Standards Hook -- nested-loop-pattern
+
+- Regex: `/\.(map|forEach|filter)\s*\([^)]*\)\s*\.\s*(?:map|forEach|filter)\s*\(/g`
+- Matches any **chained** `.map(...).filter(` or `.filter(...).map(` patterns
+- Example that triggers: `evidence.map(getServiceName).filter((name) => name !== null)`
+- Workaround: use `.flatMap()` instead of `.map().filter()`, or break into two separate const bindings
+- Example fix: `evidence.flatMap((item) => { const name = getName(item); return name !== null ? [name] : []; })`
+
+## Validate-Standards Hook -- misplaced-numeric-constant (service-level ok in config objects)
+
+- Numeric constants as standalone `const FOO = 42` are flagged
+- BUT numeric values inside `as const` config objects are allowed (e.g., `{ MIN_LENGTH: 4 } as const`)
+- Place service-specific numeric config in service's own constants directory, not in shared
+- Use `as const` object grouping to pass the hook
+
 ## SQL Queries and object-mutation Hook
 
 - SQL queries with `table.column = $N` trigger the `object-mutation` false positive

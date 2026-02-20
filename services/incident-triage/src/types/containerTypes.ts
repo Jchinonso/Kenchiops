@@ -13,6 +13,7 @@ import type { RunbookMatcherService } from "./runbookTypes.js";
 import type { IncidentCorrelatorService } from "./correlationTypes.js";
 import type { AiSummarizerService } from "./summaryTypes.js";
 import type { DispatchService } from "./policyTypes.js";
+import type { InvestigationService } from "./investigationTypes.js";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { AlertSource } from "./incidentTypes.js";
 
@@ -30,5 +31,7 @@ export interface TriageContainer {
   readonly incidentCorrelator: IncidentCorrelatorService;
   readonly aiSummarizer: AiSummarizerService;
   readonly dispatchService: DispatchService;
+  readonly investigationQueue: QueueManager;
+  readonly investigationService: InvestigationService;
   readonly alertAdapters: Readonly<Partial<Record<AlertSource, AlertSourcePort>>>;
 }

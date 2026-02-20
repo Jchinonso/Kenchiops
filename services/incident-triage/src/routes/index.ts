@@ -9,6 +9,7 @@ import type { Express } from "express";
 import type { TriageContainer } from "../types/containerTypes.js";
 import { healthRoutes } from "./healthRoutes.js";
 import { createWebhookRoutes } from "./webhookRoutes.js";
+import { createInvestigationRoutes } from "./investigationRoutes.js";
 import { incidentRoutes } from "./incidentRoutes.js";
 import { triageRoutes } from "./triageRoutes.js";
 
@@ -27,6 +28,13 @@ export const registerRoutes = (app: Express, container: TriageContainer): void =
     createWebhookRoutes({
       queue: container.queue,
       alertAdapters: container.alertAdapters,
+    })
+  );
+
+  // Investigation routes (on-demand diagnostic investigations) — dependencies from container
+  app.use(
+    createInvestigationRoutes({
+      queue: container.investigationQueue,
     })
   );
 

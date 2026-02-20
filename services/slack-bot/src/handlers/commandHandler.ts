@@ -9,6 +9,7 @@
  * - /kenchi status - Check connection status
  * - /kenchi configure - Select repository for channel
  * - /kenchi unconfigure - Remove repository from channel
+ * - /kenchi investigate <description> - Investigate a production issue
  * - /kenchi add-doc - Add document to knowledge base
  * - /kenchi help - Show available commands
  * - /kenchi <text> - AI analysis (default)
@@ -30,6 +31,7 @@ import {
   handleConfigure,
   handleUnconfigure,
   handleAddDoc,
+  handleInvestigate,
   handleAnalysis,
 } from "./commandSubhandlers.js";
 
@@ -48,6 +50,7 @@ const subcommandHandlers: ReadonlyMap<string, SubcommandHandler> = new Map([
   ["unconfigure", handleUnconfigure],
   ["connect", handleConnect],
   ["status", handleStatus],
+  ["investigate", handleInvestigate],
   ["add-doc", handleAddDoc],
   ["help", handleHelp],
 ]);

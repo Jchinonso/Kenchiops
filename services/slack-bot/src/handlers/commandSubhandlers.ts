@@ -7,14 +7,30 @@
 import type { View } from "@slack/types";
 import {
   createLogger,
+  config,
+  delay,
   findBySlackWorkspace,
   findAllMappingsForTenant,
   getErrorMessage,
+  resilientGet,
+  resilientPost,
   SLACK_UI_ERROR_MESSAGES,
   type ActionProposal,
   type ActionType,
+  type InvestigationRecord,
 } from "@kenchi/shared";
 import { formatAnalysisMessage, formatActionButtons, formatErrorMessage } from "../formatters.js";
+import {
+  formatInvestigationStartedBlocks,
+  formatInvestigationResultBlocks,
+  formatInvestigationErrorBlocks,
+  formatInvestigationTimeoutBlocks,
+} from "../formatters/investigationFormatter.js";
+import {
+  INVESTIGATION_POLL_CONFIG,
+  type InvestigationApiResponse,
+  type InvestigationCreateResponse,
+} from "./investigateHandlerTypes.js";
 import { createEventFromCommand, performAnalysis } from "../services/analysisService.js";
 import {
   getGitHubInstallUrl,
@@ -168,6 +184,7 @@ export const handleHelp: SubcommandHandler = async ({ respond }): Promise<void> 
             "• `/kenchi unconfigure` - Remove the repository from this channel\n" +
             "• `/kenchi connect` - Get the GitHub App install link\n" +
             "• `/kenchi status` - Check your GitHub connection status\n" +
+            "• `/kenchi investigate <description>` - Investigate a production issue\n" +
             "• `/kenchi add-doc` - Add a document to the knowledge base\n" +
             "• `/kenchi help` - Show this help message\n" +
             "• `/kenchi <question>` - Ask Kenchi a question or analyze a CI issue",
@@ -319,6 +336,190 @@ export const handleAddDoc: SubcommandHandler = async ({
   client,
 }): Promise<void> => {
   await handleAddDocCommand(command, respond, client);
+};
+
+// ==================== Investigation Helpers ====================
+
+const investigateLogger = createLogger("slack-investigate");
+
+/**
+ * Builds the base URL for the incident-triage service.
+ */
+const getTriageServiceUrl = (): string => config.INCIDENT_TRIAGE_URL;
+
+/**
+ * Checks whether an investigation has reached a terminal status.
+ */
+const isTerminalStatus = (status: string): boolean => status === "completed" || status === "error";
+
+/**
+ * Polls the incident-triage service for a completed investigation.
+ * Returns the investigation record when complete/errored, or null on timeout.
+ */
+const pollInvestigation = async (
+  investigationId: string,
+  tenantId: string
+): Promise<InvestigationRecord | null> => {
+  // let: loop counter for polling with early-exit
+  for (let attempt = 0; attempt < INVESTIGATION_POLL_CONFIG.MAX_ATTEMPTS; attempt++) {
+    await delay(INVESTIGATION_POLL_CONFIG.INTERVAL_MS);
+
+    try {
+      const response = await resilientGet<InvestigationApiResponse>(
+        `${getTriageServiceUrl()}/api/v1/investigations/${investigationId}`,
+        {
+          timeout: INVESTIGATION_POLL_CONFIG.REQUEST_TIMEOUT_MS,
+          headers: { "x-tenant-id": tenantId },
+          skipCircuitBreaker: true,
+        }
+      );
+
+      const investigation = response.data?.data;
+      if (investigation && isTerminalStatus(investigation.status)) {
+        return investigation;
+      }
+    } catch (pollError) {
+      investigateLogger.warn("Poll attempt failed", {
+        investigationId,
+        attempt,
+        error: getErrorMessage(pollError),
+      });
+    }
+  }
+
+  return null;
+};
+
+// ==================== Investigate Handler ====================
+
+/**
+ * Handle /kenchi investigate <description> - Start a diagnostic investigation.
+ *
+ * Flow:
+ * 1. Validate args (description required)
+ * 2. Resolve tenant from Slack workspace
+ * 3. Send immediate ephemeral "starting" message (Slack 3s requirement)
+ * 4. POST to incident-triage service to create investigation
+ * 5. Poll for results (max ~24s)
+ * 6. Update message with results, error, or timeout
+ */
+export const handleInvestigate: SubcommandHandler = async ({
+  command,
+  args,
+  respond,
+}): Promise<void> => {
+  if (!args.trim()) {
+    await respond({
+      text:
+        "Please describe the issue to investigate.\n\n" +
+        "Usage: `/kenchi investigate <description>`\n" +
+        "Example: `/kenchi investigate payment API is returning 500 errors in production`",
+      response_type: "ephemeral",
+    });
+    return;
+  }
+
+  const description = args.trim();
+  const workspaceId = command.team_id;
+
+  investigateLogger.info("Investigate command received", {
+    user: command.user_id,
+    workspaceId,
+  });
+
+  // Resolve tenant
+  const tenant = await findBySlackWorkspace(workspaceId);
+  if (!tenant) {
+    await respond({
+      text: "Workspace not configured. Run `/kenchi connect` first.",
+      response_type: "ephemeral",
+    });
+    return;
+  }
+
+  try {
+    // Start the investigation via incident-triage service
+    const createResponse = await resilientPost<InvestigationCreateResponse>(
+      `${getTriageServiceUrl()}/api/v1/investigations`,
+      {
+        description,
+        tenantId: tenant.id,
+        initiatedBy: command.user_id,
+        initiatedFrom: "slack",
+      },
+      {
+        timeout: INVESTIGATION_POLL_CONFIG.REQUEST_TIMEOUT_MS,
+        headers: { "x-tenant-id": tenant.id },
+        skipCircuitBreaker: true,
+      }
+    );
+
+    const investigationId = createResponse.data?.data?.id;
+    if (!investigationId) {
+      await respond({
+        text: "Failed to start investigation. The service returned an unexpected response.",
+        response_type: "ephemeral",
+      });
+      return;
+    }
+
+    // Send immediate "started" message within the 3-second Slack window
+    await respond({
+      blocks: [...formatInvestigationStartedBlocks(investigationId, description)] as SlackBlocks,
+      response_type: "ephemeral",
+    });
+
+    investigateLogger.info("Investigation started", {
+      investigationId,
+      tenantId: tenant.id,
+      user: command.user_id,
+    });
+
+    // Poll for results
+    const result = await pollInvestigation(investigationId, tenant.id);
+
+    // Send final message based on result
+    if (!result) {
+      await respond({
+        replace_original: true,
+        blocks: [...formatInvestigationTimeoutBlocks(investigationId)] as SlackBlocks,
+        response_type: "ephemeral",
+      });
+      return;
+    }
+
+    const { status: resultStatus } = result;
+    const resultBlocks =
+      resultStatus === "completed"
+        ? formatInvestigationResultBlocks(result)
+        : formatInvestigationErrorBlocks(
+            investigationId,
+            result.errorMessage ?? "Unknown error occurred during investigation"
+          );
+
+    await respond({
+      replace_original: true,
+      blocks: [...resultBlocks] as SlackBlocks,
+      response_type: "ephemeral",
+    });
+
+    investigateLogger.info("Investigation result delivered", {
+      investigationId,
+      status: resultStatus,
+      durationMs: result.durationMs,
+    });
+  } catch (error) {
+    investigateLogger.error("Investigation command failed", {
+      error: getErrorMessage(error),
+      workspaceId,
+      user: command.user_id,
+    });
+
+    await respond({
+      text: "An error occurred while starting the investigation. Please try again.",
+      response_type: "ephemeral",
+    });
+  }
 };
 
 /**

@@ -29,6 +29,7 @@ import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { createTriageContainer } from "./container.js";
 import { startTriageWorker } from "./workers/triageWorker.js";
+import { startInvestigationWorker } from "./workers/investigationWorker.js";
 import { startDedupCleanup } from "./jobs/dedupCleanup.js";
 
 // Augment Express Request with rawBody for HMAC signature verification
@@ -176,20 +177,30 @@ const startServer = async (): Promise<void> => {
   // Start the triage worker (polls queue for incoming alerts)
   const triageWorker = startTriageWorker(container);
 
+  // Start the investigation worker (polls queue for on-demand investigations)
+  const investigationWorker = startInvestigationWorker(container);
+
   // Start the dedup cleanup job (periodic expired entry removal)
   const dedupCleanup = startDedupCleanup();
 
-  // Register cleanup handler for graceful shutdown of the triage worker and dedup job
+  // Register cleanup handler for graceful shutdown of workers and dedup job
   registerCleanupHandler(async () => {
     dedupCleanup.stop();
     logger.info("Dedup cleanup job shut down");
 
     triageWorker.stop();
-    const stats = triageWorker.getStats();
+    const triageStats = triageWorker.getStats();
     logger.info("Triage worker shut down", {
-      totalProcessed: stats.totalProcessed,
-      totalErrors: stats.totalErrors,
-      totalDeduped: stats.totalDeduped,
+      totalProcessed: triageStats.totalProcessed,
+      totalErrors: triageStats.totalErrors,
+      totalDeduped: triageStats.totalDeduped,
+    });
+
+    investigationWorker.stop();
+    const investigationStats = investigationWorker.getStats();
+    logger.info("Investigation worker shut down", {
+      totalProcessed: investigationStats.totalProcessed,
+      totalErrors: investigationStats.totalErrors,
     });
   });
 
