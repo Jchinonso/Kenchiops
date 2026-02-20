@@ -41,7 +41,7 @@ import {
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
 import { SSE_STREAM_PATH } from "./routes/sseRoutes.js";
-import { setupSwagger } from "./swagger.js";
+import { setupSwagger } from "./swagger/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
 
