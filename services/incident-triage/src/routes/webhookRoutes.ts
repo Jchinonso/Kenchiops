@@ -2,128 +2,162 @@
  * Webhook Routes
  *
  * Handles incoming webhook events from monitoring sources.
- * Each route verifies the signature, checks idempotency, normalizes the alert,
- * persists it, and enqueues it for triage processing.
+ * Each route verifies the signature via middleware, then delegates
+ * to the shared processWebhookAlert pipeline for idempotency,
+ * persistence, and queue enqueueing.
  *
- * Dependencies (queue, adapter) are injected from the composition root.
+ * Dependencies (queue, adapters) are injected from the composition root.
  */
 
 import { Router, type Request, type Response } from "express";
-import {
-  HTTP_STATUS,
-  asyncHandler,
-  createLogger,
-  findAlertByDeliveryId,
-  createIncidentAlert,
-  type QueueManager,
-} from "@kenchi/shared";
+import { asyncHandler, GRAFANA_SIGNATURE, invariant, type QueueManager } from "@kenchi/shared";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
+import type { AlertSource } from "../types/incidentTypes.js";
 import { verifyPagerDutyWebhook } from "../middleware/verifyPagerDuty.js";
+import { verifyVercelWebhook } from "../middleware/verifyVercel.js";
+import { verifyNetlifyWebhook } from "../middleware/verifyNetlify.js";
+import { createWebhookVerificationMiddleware } from "../middleware/webhookVerification.js";
+import { appConfig } from "../config/appConfig.js";
+import { processWebhookAlert } from "./processWebhookAlert.js";
 
-/** Queue event type for triage jobs */
-const TRIAGE_JOB_TYPE = "incident-triage";
+/** Shared-secret header used by Datadog and Prometheus */
+const SHARED_SECRET_HEADER = "x-kenchi-webhook-secret";
 
-const logger = createLogger("webhook-routes");
+// ==================== Verification Middleware ====================
+
+const verifyDatadogWebhook = createWebhookVerificationMiddleware({
+  strategy: "shared-secret",
+  provider: "datadog",
+  secretHeader: SHARED_SECRET_HEADER,
+  secret: appConfig.datadogWebhookSecret,
+});
+
+const verifyGrafanaWebhook = createWebhookVerificationMiddleware({
+  strategy: "hmac",
+  provider: "grafana",
+  signatureHeader: GRAFANA_SIGNATURE.HEADER,
+  timestampHeader: GRAFANA_SIGNATURE.TIMESTAMP_HEADER,
+  algorithm: GRAFANA_SIGNATURE.ALGORITHM,
+  secret: appConfig.grafanaWebhookSecret,
+});
+
+const verifyPrometheusWebhook = createWebhookVerificationMiddleware({
+  strategy: "shared-secret",
+  provider: "prometheus",
+  secretHeader: SHARED_SECRET_HEADER,
+  secret: appConfig.prometheusWebhookSecret,
+});
+
+// ==================== Types ====================
 
 /**
  * Dependencies required by webhook routes, provided by the composition root.
  */
 interface WebhookRouteDeps {
   readonly queue: QueueManager;
-  readonly pagerDutyAdapter: AlertSourcePort;
+  readonly alertAdapters: Readonly<Partial<Record<AlertSource, AlertSourcePort>>>;
 }
+
+// ==================== Route Helpers ====================
+
+/**
+ * Resolves an adapter from the map or throws an invariant error.
+ */
+const getAdapter = (
+  adapters: Readonly<Partial<Record<AlertSource, AlertSourcePort>>>,
+  source: AlertSource
+): AlertSourcePort => {
+  const adapter = adapters[source];
+  invariant(adapter, `No adapter registered for alert source: ${source}`);
+  return adapter;
+};
+
+// ==================== Route Factory ====================
 
 /**
  * Creates webhook routes with injected dependencies.
  *
- * @param deps - Queue and adapter from the composition root
+ * @param deps - Queue and adapters from the composition root
  * @returns Express Router with webhook routes registered
  */
 export const createWebhookRoutes = (deps: WebhookRouteDeps): Router => {
   const router = Router();
+  const { queue, alertAdapters } = deps;
 
-  /**
-   * POST /webhooks/pagerduty
-   *
-   * Receives PagerDuty v3 webhook events.
-   * 1. Verify signature (middleware)
-   * 2. Check idempotency via delivery_id
-   * 3. Parse payload via adapter
-   * 4. Persist alert
-   * 5. Enqueue for triage
-   */
+  // POST /webhooks/pagerduty
   router.post(
     "/webhooks/pagerduty",
     verifyPagerDutyWebhook,
     asyncHandler(async (req: Request, res: Response) => {
-      // Extract delivery ID from headers
-      const deliveryId = req.headers["x-webhook-id"];
-
-      if (!deliveryId || typeof deliveryId !== "string") {
-        logger.warn("Missing PagerDuty delivery ID", {
-          provider: "pagerduty",
-          operation: "receiveWebhook",
-        });
-        res.status(HTTP_STATUS.BAD_REQUEST).json({ error: "Missing delivery ID header" });
-        return;
-      }
-
-      // Idempotency check: skip if already processed
-      const existingAlert = await findAlertByDeliveryId(deliveryId);
-      if (existingAlert) {
-        logger.info("Duplicate PagerDuty webhook, skipping", {
-          provider: "pagerduty",
-          operation: "receiveWebhook",
-          deliveryId,
-          alertId: existingAlert.id,
-        });
-        res.status(HTTP_STATUS.OK).json({
-          status: "duplicate",
-          alertId: existingAlert.id,
-        });
-        return;
-      }
-
-      // Parse the webhook payload into a normalized alert
-      const normalizedAlert = deps.pagerDutyAdapter.parseWebhook(req.body, req.headers);
-
-      // Persist the alert
-      const alertRecord = await createIncidentAlert({
-        tenantId: req.context.tenantId !== "system" ? req.context.tenantId : null,
-        source: normalizedAlert.source,
-        sourceAlertId: normalizedAlert.sourceAlertId,
-        deliveryId: normalizedAlert.deliveryId,
-        fingerprint: normalizedAlert.fingerprint,
-        title: normalizedAlert.title,
-        description: normalizedAlert.description,
-        severity: normalizedAlert.severity,
-        status: "received",
-        serviceName: normalizedAlert.serviceName,
-        environment: normalizedAlert.environment,
-        metrics: normalizedAlert.metrics,
-        labels: normalizedAlert.labels,
-        sourcePayload: normalizedAlert.sourcePayload,
-        receivedAt: normalizedAlert.receivedAt,
-      });
-
-      // Enqueue for triage processing
-      await deps.queue.enqueue(TRIAGE_JOB_TYPE, {
-        alertId: alertRecord.id,
-        source: alertRecord.source,
-        severity: alertRecord.severity,
-      });
-
-      logger.info("PagerDuty alert received and enqueued", {
+      await processWebhookAlert(req, res, {
+        queue,
+        adapter: getAdapter(alertAdapters, "pagerduty"),
         provider: "pagerduty",
-        operation: "receiveWebhook",
-        alertId: alertRecord.id,
-        deliveryId,
-        severity: alertRecord.severity,
       });
+    })
+  );
 
-      res.status(HTTP_STATUS.OK).json({
-        status: "accepted",
-        alertId: alertRecord.id,
+  // POST /webhooks/vercel
+  router.post(
+    "/webhooks/vercel",
+    verifyVercelWebhook,
+    asyncHandler(async (req: Request, res: Response) => {
+      await processWebhookAlert(req, res, {
+        queue,
+        adapter: getAdapter(alertAdapters, "vercel"),
+        provider: "vercel",
+      });
+    })
+  );
+
+  // POST /webhooks/netlify
+  router.post(
+    "/webhooks/netlify",
+    verifyNetlifyWebhook,
+    asyncHandler(async (req: Request, res: Response) => {
+      await processWebhookAlert(req, res, {
+        queue,
+        adapter: getAdapter(alertAdapters, "netlify"),
+        provider: "netlify",
+      });
+    })
+  );
+
+  // POST /webhooks/datadog
+  router.post(
+    "/webhooks/datadog",
+    verifyDatadogWebhook,
+    asyncHandler(async (req: Request, res: Response) => {
+      await processWebhookAlert(req, res, {
+        queue,
+        adapter: getAdapter(alertAdapters, "datadog"),
+        provider: "datadog",
+      });
+    })
+  );
+
+  // POST /webhooks/grafana
+  router.post(
+    "/webhooks/grafana",
+    verifyGrafanaWebhook,
+    asyncHandler(async (req: Request, res: Response) => {
+      await processWebhookAlert(req, res, {
+        queue,
+        adapter: getAdapter(alertAdapters, "grafana"),
+        provider: "grafana",
+      });
+    })
+  );
+
+  // POST /webhooks/prometheus
+  router.post(
+    "/webhooks/prometheus",
+    verifyPrometheusWebhook,
+    asyncHandler(async (req: Request, res: Response) => {
+      await processWebhookAlert(req, res, {
+        queue,
+        adapter: getAdapter(alertAdapters, "prometheus"),
+        provider: "prometheus",
       });
     })
   );

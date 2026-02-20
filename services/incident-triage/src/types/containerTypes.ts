@@ -14,6 +14,7 @@ import type { IncidentCorrelatorService } from "./correlationTypes.js";
 import type { AiSummarizerService } from "./summaryTypes.js";
 import type { DispatchService } from "./policyTypes.js";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
+import type { AlertSource } from "./incidentTypes.js";
 
 /**
  * Composition root interface for the incident triage service.
@@ -29,5 +30,5 @@ export interface TriageContainer {
   readonly incidentCorrelator: IncidentCorrelatorService;
   readonly aiSummarizer: AiSummarizerService;
   readonly dispatchService: DispatchService;
-  readonly pagerDutyAdapter: AlertSourcePort;
+  readonly alertAdapters: Readonly<Partial<Record<AlertSource, AlertSourcePort>>>;
 }

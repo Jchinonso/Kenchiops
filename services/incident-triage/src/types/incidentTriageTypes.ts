@@ -14,6 +14,11 @@ export interface IncidentTriageConfig {
   readonly version: string;
   readonly databaseUrl: string;
   readonly pagerDutyWebhookSecret: string;
+  readonly datadogWebhookSecret: string;
+  readonly grafanaWebhookSecret: string;
+  readonly prometheusWebhookSecret: string;
+  readonly vercelWebhookSecret: string;
+  readonly netlifyWebhookSecret: string;
   readonly triageLlmModel: string;
   readonly slackIncidentWebhookUrl: string;
 }

@@ -6,7 +6,15 @@
 
 // ==================== Alert Enums ====================
 
-export type AlertSource = "pagerduty" | "datadog" | "cloudwatch" | "prometheus" | "custom";
+export type AlertSource =
+  | "pagerduty"
+  | "datadog"
+  | "cloudwatch"
+  | "prometheus"
+  | "grafana"
+  | "vercel"
+  | "netlify"
+  | "custom";
 
 export type AlertSeverity = "critical" | "high" | "medium" | "low" | "info";
 

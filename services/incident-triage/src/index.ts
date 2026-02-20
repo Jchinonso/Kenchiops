@@ -91,17 +91,19 @@ const createApp = (
   // Parse cookies
   app.use(cookieParser());
 
-  // JSON body parser with raw body capture for HMAC verification.
-  // Capture rawBody ONLY when PagerDuty signature header is present,
-  // to avoid retaining a duplicate buffer in memory for regular requests.
+  // JSON body parser with raw body capture for HMAC/JWS verification.
+  // Capture rawBody for all webhook paths so signature verification middleware
+  // can access the original payload. Path-based detection covers all providers
+  // (PagerDuty, Vercel, Netlify, Datadog, Grafana, Prometheus) without
+  // needing to enumerate signature headers.
   // Object.assign is required because Express verify callbacks must mutate req by design
   // (this is a framework-boundary side effect, allowed per CLAUDE.md rule 3).
   app.use(
     express.json({
       limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
       verify: (req: express.Request, _res, buf) => {
-        // Only capture rawBody when PagerDuty signature header is present
-        if (req.headers["x-pagerduty-signature"]) {
+        const isWebhookPath = req.originalUrl?.startsWith("/webhooks/") ?? false;
+        if (isWebhookPath) {
           Object.assign(req, { rawBody: buf });
         }
       },

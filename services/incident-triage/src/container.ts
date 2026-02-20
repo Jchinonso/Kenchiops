@@ -31,6 +31,11 @@ import { createLLMCompletionAdapter } from "./adapters/llmCompletionAdapter.js";
 import { createSlackDispatchAdapter } from "./adapters/slackDispatchAdapter.js";
 import { createPagerDutyDispatchAdapter } from "./adapters/pagerDutyDispatchAdapter.js";
 import { createPagerDutyAdapter } from "./adapters/pagerDutyAdapter.js";
+import { createVercelAdapter } from "./adapters/vercelAdapter.js";
+import { createNetlifyAdapter } from "./adapters/netlifyAdapter.js";
+import { createDatadogAdapter } from "./adapters/datadogAdapter.js";
+import { createGrafanaAdapter } from "./adapters/grafanaAdapter.js";
+import { createPrometheusAdapter } from "./adapters/prometheusAdapter.js";
 import { appConfig } from "./config/appConfig.js";
 
 /**
@@ -122,7 +127,14 @@ export const createTriageContainer = (): TriageContainer => {
 
   // ==================== Webhook Adapters ====================
 
-  const pagerDutyAdapter = createPagerDutyAdapter();
+  const alertAdapters = {
+    pagerduty: createPagerDutyAdapter(),
+    vercel: createVercelAdapter(),
+    netlify: createNetlifyAdapter(),
+    datadog: createDatadogAdapter(),
+    grafana: createGrafanaAdapter(),
+    prometheus: createPrometheusAdapter(),
+  } as const;
 
   return {
     queue,
@@ -131,6 +143,6 @@ export const createTriageContainer = (): TriageContainer => {
     incidentCorrelator,
     aiSummarizer,
     dispatchService,
-    pagerDutyAdapter,
+    alertAdapters,
   };
 };

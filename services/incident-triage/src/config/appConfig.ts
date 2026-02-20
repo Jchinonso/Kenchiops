@@ -31,8 +31,13 @@ export const appConfig: IncidentTriageConfig = {
   serviceName: SERVICE_NAMES.INCIDENT_TRIAGE,
   version: SERVICE_VERSIONS.INCIDENT_TRIAGE,
   databaseUrl: config.DATABASE_URL,
-  // Service-specific secret not in shared config — direct env access justified
+  // Service-specific secrets not in shared config — direct env access justified
   pagerDutyWebhookSecret: process.env.PAGERDUTY_WEBHOOK_SECRET ?? "",
+  datadogWebhookSecret: process.env.DATADOG_WEBHOOK_SECRET ?? "",
+  grafanaWebhookSecret: process.env.GRAFANA_WEBHOOK_SECRET ?? "",
+  prometheusWebhookSecret: process.env.PROMETHEUS_WEBHOOK_SECRET ?? "",
+  vercelWebhookSecret: process.env.VERCEL_WEBHOOK_SECRET ?? "",
+  netlifyWebhookSecret: process.env.NETLIFY_WEBHOOK_SECRET ?? "",
   // Service-specific LLM model override — not in shared config
   triageLlmModel: process.env.TRIAGE_LLM_MODEL ?? OPENROUTER_DEFAULTS.MODEL,
   // Service-specific Slack webhook URL for incident notifications — not in shared config
@@ -59,6 +64,17 @@ const assertTriageConfig = (cfg: IncidentTriageConfig): void => {
   if (!pdSecret) {
     startupLogger.warn(
       "PAGERDUTY_WEBHOOK_SECRET is empty — webhook signature verification will fail"
+    );
+  }
+  if (!cfg.datadogWebhookSecret) {
+    startupLogger.warn("DATADOG_WEBHOOK_SECRET is empty — Datadog webhook verification will fail");
+  }
+  if (!cfg.grafanaWebhookSecret) {
+    startupLogger.warn("GRAFANA_WEBHOOK_SECRET is empty — Grafana webhook verification will fail");
+  }
+  if (!cfg.prometheusWebhookSecret) {
+    startupLogger.warn(
+      "PROMETHEUS_WEBHOOK_SECRET is empty — Prometheus webhook verification will fail"
     );
   }
   if (!slackUrl) {

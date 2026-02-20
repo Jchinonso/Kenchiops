@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Barrel re-export file; line count is inherently proportional to module count */
 /**
  * Centralized constants barrel file.
  * Re-exports all constants from their respective modules.
@@ -606,6 +607,15 @@ export {
   NETLIFY_CONTEXTS,
   NETLIFY_COMMIT_URL_PATTERN,
 } from "./netlify.js";
+
+// Datadog constants
+export { DATADOG_ALERT_STATUSES, DATADOG_FAILURE_STATUSES } from "./datadog.js";
+
+// Grafana constants
+export { GRAFANA_SIGNATURE, GRAFANA_ALERT_STATUSES } from "./grafana.js";
+
+// Prometheus constants
+export { PROMETHEUS_ALERT_STATUSES, PROMETHEUS_WEBHOOK_VERSION } from "./prometheus.js";
 
 // Auth constants
 export {

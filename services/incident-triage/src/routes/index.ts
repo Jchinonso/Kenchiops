@@ -26,7 +26,7 @@ export const registerRoutes = (app: Express, container: TriageContainer): void =
   app.use(
     createWebhookRoutes({
       queue: container.queue,
-      pagerDutyAdapter: container.pagerDutyAdapter,
+      alertAdapters: container.alertAdapters,
     })
   );
 
