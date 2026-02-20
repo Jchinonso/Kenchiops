@@ -98,6 +98,29 @@
 - `src/components/DashboardFooter.test.tsx` - 5 tests
 - `src/__tests__/extractRepoFromKey.test.ts` - 18 tests (migrated from Jest to Vitest)
 
+## Incident Triage Test Coverage (2026-02-20)
+
+- 471 tests across 19 files, ~7s runtime
+- Co-located test files (same directory as source)
+- **Pure functions (no mocks):** severityClassifier (37), policyEngine (36), evidenceAggregator (31), triageWorkerHelpers (35), fallbackSummary (28), outputValidator (28), slackFormatter (24), metricsService (10)
+- **Services with mocked ports:** deduplicationService (9), runbookMatcher (9), incidentCorrelator (11), dispatchService (12), aiSummarizer (10)
+- **Adapter tests:** pagerDutyAdapter (30), datadogAdapter (31), grafanaAdapter (35), prometheusAdapter (32), vercelAdapter (29), netlifyAdapter (37)
+- Service mocks use `jest.fn()` ports with `as unknown as PortType` cast
+
+### Webhook Adapter Testing Pattern (Incident Triage)
+
+- Adapters don't use headers for delivery ID (unlike PagerDuty) -- Datadog/Grafana/Prometheus/Netlify generate synthetic deliveryIds via `computeHash()`
+- Vercel uses `webhook.id` from payload body for deliveryId
+- Status/event filtering: adapters throw ValidationError for non-failure statuses (resolved, recovered, ready, success events)
+- Constants from `@kenchi/shared`: `DATADOG_FAILURE_STATUSES`, `GRAFANA_ALERT_STATUSES`, `PROMETHEUS_ALERT_STATUSES`, `VERCEL_FAILURE_EVENTS`, `NETLIFY_FAILURE_STATES`
+- Grafana/Prometheus share similar structure (Alertmanager format) but with different label prefixes (`grafana_` vs `prometheus_`)
+- Netlify label extraction uses regex `NETLIFY_COMMIT_URL_PATTERN` on `commit_url` for owner/repo
+- Vercel label extraction reads from `deployment.meta` object (githubOrg, githubRepo, etc.)
+- Test `createValidPayload(overrides)` pattern: top-level spread of overrides works for flat payloads; nested objects need manual reconstruction
+- AI summarizer additionally mocks `checkForHallucinations` from `@kenchi/shared` and `../config/appConfig.js`
+- `collectFallbackCitations` generates `RB-${idx}` IDs from runbooks array, not from catalog -- test catalog must include them or use empty runbooks
+- Severity thresholds (from constants): critical >= 75, high >= 55, medium >= 35, low >= 20, info >= 0
+
 ## Common Gotchas
 
 - `jwt.sign()` with `expiresIn: -10` creates an already-expired token for testing

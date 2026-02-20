@@ -16,6 +16,7 @@ export type {
   UpdateTriageDispatchInput,
   TriageSimilarityResult,
   SeverityDistributionEntry,
+  SeverityBySourceEntry,
   TriageStats,
 } from "./types.js";
 
@@ -36,4 +37,5 @@ export {
   updateTriageDispatchResults,
   searchSimilarTriageResults,
   getTriageStats,
+  getSeverityDistributionBySource,
 } from "./repository.js";

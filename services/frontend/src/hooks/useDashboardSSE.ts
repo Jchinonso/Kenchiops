@@ -27,13 +27,15 @@ const SSE_ENDPOINT = `${API_URL}/api/v1/dashboard/events/stream`;
 
 export interface DashboardNotification {
   readonly id: string;
-  readonly type: "failure" | "analysis_complete";
+  readonly type: "failure" | "analysis_complete" | "new_incident" | "incident_triaged";
   readonly title: string;
   readonly description: string;
   readonly timestamp: string;
   readonly read: boolean;
   readonly analysisId?: string;
   readonly repository?: string;
+  readonly severity?: string;
+  readonly source?: string;
 }
 
 /** Configuration for notification storage */
@@ -56,6 +58,22 @@ interface AnalysisCompletePayload {
   readonly repository?: string;
   readonly analysisId?: string;
   readonly confidence?: number;
+}
+
+interface NewIncidentPayload {
+  readonly type: string;
+  readonly source?: string;
+  readonly title?: string;
+  readonly severity?: string;
+  readonly serviceName?: string;
+}
+
+interface IncidentTriagedPayload {
+  readonly type: string;
+  readonly alertId?: string;
+  readonly severity?: string;
+  readonly title?: string;
+  readonly aiSummary?: string;
 }
 
 // ==================== Session Storage Helpers ====================
@@ -241,12 +259,73 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
     };
 
+    const handleNewIncident = (event: MessageEvent) => {
+      setRefreshKey((prev) => prev + 1);
+
+      const data = parseEventData<NewIncidentPayload>(event);
+      if (data) {
+        const source = data.source ?? "unknown";
+        const severity = data.severity ?? "unknown";
+        const title = data.title ?? "New incident alert";
+        const incidentTitle = `${severity.toUpperCase()} alert from ${source}`;
+        const incidentBody = title;
+        if (toastEnabledRef.current) {
+          toast.error(incidentTitle, { description: incidentBody });
+        }
+        if (browserEnabledRef.current) {
+          showBrowserNotification(incidentTitle, incidentBody);
+        }
+
+        addNotification({
+          id: crypto.randomUUID(),
+          type: "new_incident",
+          title: incidentTitle,
+          description: title,
+          timestamp: new Date().toISOString(),
+          read: false,
+          severity,
+          source,
+        });
+      }
+    };
+
+    const handleIncidentTriaged = (event: MessageEvent) => {
+      setRefreshKey((prev) => prev + 1);
+
+      const data = parseEventData<IncidentTriagedPayload>(event);
+      if (data) {
+        const title = data.title ?? "Incident";
+        const headline = data.aiSummary ?? "Triage complete";
+        const triagedTitle = `Triage complete: ${title}`;
+        if (toastEnabledRef.current) {
+          toast.info(triagedTitle, { description: headline });
+        }
+        if (browserEnabledRef.current) {
+          showBrowserNotification(triagedTitle, headline);
+        }
+
+        addNotification({
+          id: crypto.randomUUID(),
+          type: "incident_triaged",
+          title: triagedTitle,
+          description: headline,
+          timestamp: new Date().toISOString(),
+          read: false,
+          severity: data.severity,
+        });
+      }
+    };
+
     eventSource.addEventListener("new_failure", handleNewFailure);
     eventSource.addEventListener("analysis_complete", handleAnalysisComplete);
+    eventSource.addEventListener("new_incident", handleNewIncident);
+    eventSource.addEventListener("incident_triaged", handleIncidentTriaged);
 
     return () => {
       eventSource.removeEventListener("new_failure", handleNewFailure);
       eventSource.removeEventListener("analysis_complete", handleAnalysisComplete);
+      eventSource.removeEventListener("new_incident", handleNewIncident);
+      eventSource.removeEventListener("incident_triaged", handleIncidentTriaged);
       eventSource.close();
     };
   }, []);

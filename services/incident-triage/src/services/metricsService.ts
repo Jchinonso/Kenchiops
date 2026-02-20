@@ -49,6 +49,7 @@ export const mapStatsToMetrics = (stats: TriageStats): PipelineMetricsResponse =
       totalAlerts: stats.totalAlerts,
       dedupedCount: stats.dedupedCount,
       dedupRate: safeRate(stats.dedupedCount, stats.totalAlerts),
+      activeAlerts: stats.activeAlerts,
     },
   };
 };

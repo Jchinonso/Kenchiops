@@ -12,6 +12,7 @@ import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   AuthorizationError,
+  ValidationError,
   HTTP_STATUS,
   PARSE_INT_RADIX,
   DASHBOARD_PAGINATION,
@@ -277,6 +278,19 @@ const handleGetConfidenceTrend = async (req: Request, res: Response): Promise<vo
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+const handleGetCorrelations = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
+  const { commitSha } = req.params;
+
+  if (!commitSha || commitSha.length < DASHBOARD_PAGINATION.MIN_COMMIT_SHA_LENGTH) {
+    throw new ValidationError("Valid commit SHA required (minimum 7 characters)");
+  }
+
+  const result = await dashboardService.getCorrelations(tenantId, commitSha, context);
+  res.status(HTTP_STATUS.OK).json({ data: result });
+};
+
 // ==================== Route Definitions ====================
 
 router.get("/api/v1/dashboard/tenant", asyncHandler(handleGetTenantInfo));
@@ -288,6 +302,7 @@ router.get(
 router.get("/api/v1/dashboard/stats/confidence-trend", asyncHandler(handleGetConfidenceTrend));
 router.get("/api/v1/dashboard/repositories", asyncHandler(handleGetRepositories));
 router.post("/api/v1/dashboard/analyses/by-events", asyncHandler(handleGetAnalysisStatusByEvents));
+router.get("/api/v1/dashboard/correlations/:commitSha", asyncHandler(handleGetCorrelations));
 router.get("/api/v1/dashboard/analyses/:id", asyncHandler(handleGetAnalysisDetail));
 router.get("/api/v1/dashboard/analyses", asyncHandler(handleGetAnalyses));
 router.get("/api/v1/dashboard/failures", asyncHandler(handleGetFailures));

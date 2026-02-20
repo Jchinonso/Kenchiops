@@ -15,6 +15,15 @@ import {
   type EventRecord,
 } from "@/hooks/useDashboardData";
 import {
+  useTriageStats,
+  useActiveCountsBySource,
+  useBalancedRecentIncidents,
+  useSeverityDistributionBySource,
+  type IncidentAlertRecord,
+  type PipelineMetricsResponse,
+  type ActiveCountBySource,
+} from "@/hooks/useIncidentData";
+import {
   Card,
   CardHeader,
   CardTitle,
@@ -50,9 +59,12 @@ import {
   CheckCircle2,
   Download,
   RefreshCw,
+  Siren,
+  ShieldCheck,
 } from "lucide-react";
 import { ConfidenceChart } from "@/components/ConfidenceChart";
 import { ConfidenceTrendChart } from "@/components/ConfidenceTrendChart";
+import { SeverityDistributionChart } from "@/components/SeverityDistributionChart";
 
 // ==================== Constants ====================
 
@@ -111,6 +123,7 @@ interface QuickStat {
   readonly href: string;
   readonly icon: React.ReactNode;
   readonly colorClass: string;
+  readonly sourceBreakdown?: readonly ActiveCountBySource[];
 }
 
 const formatAvgConfidence = (
@@ -137,7 +150,9 @@ const buildQuickStats = (
     readonly totalAnalyses: number;
     readonly connectedRepos: number;
   } | null,
-  avgConfidence: { readonly label: string; readonly subtitle: string }
+  avgConfidence: { readonly label: string; readonly subtitle: string },
+  triageStats: PipelineMetricsResponse | null,
+  sourceBreakdown?: readonly ActiveCountBySource[] | null
 ): readonly QuickStat[] => [
   {
     title: "Failures",
@@ -177,6 +192,23 @@ const buildQuickStats = (
     icon: <FolderGit2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
     colorClass: "bg-green-500",
   },
+  {
+    title: "Active Alerts",
+    value: triageStats ? String(triageStats.dedup.activeAlerts) : "--",
+    subtitle: triageStats ? "Require attention" : "Loading...",
+    href: "/dashboard/incidents/active",
+    icon: <Siren className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
+    colorClass: "bg-orange-500",
+    sourceBreakdown: sourceBreakdown ?? undefined,
+  },
+  {
+    title: "Triaged",
+    value: triageStats ? String(triageStats.pipeline.totalTriaged) : "--",
+    subtitle: triageStats ? "Total triaged" : "Loading...",
+    href: "/dashboard/incidents/active",
+    icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
+    colorClass: "bg-teal-500",
+  },
 ];
 
 // ==================== Component ====================
@@ -213,12 +245,29 @@ export const DashboardOverview = ({
     refetch: refetchFailures,
   } = useFailures(5, 0, refreshKey);
   const { data: tenant } = useTenantInfo(refreshKey);
+  const tenantId = tenant?.id ?? "";
+  const { data: triageStats } = useTriageStats(tenantId, refreshKey);
+  const { data: activeCountsBySource } = useActiveCountsBySource(tenantId, refreshKey);
+  const { data: severityBySource } = useSeverityDistributionBySource(tenantId, refreshKey);
+  const { data: balancedIncidents, isLoading: incidentsLoading } = useBalancedRecentIncidents(
+    tenantId,
+    2,
+    6,
+    refreshKey
+  );
 
   const failureItems = recentFailures?.items ?? [];
   const analysisItems = recentAnalyses?.items ?? [];
-  const quickStats = buildQuickStats(stats, formatAvgConfidence(analysisItems));
-  const hasActivity = failureItems.length > 0 || analysisItems.length > 0;
-  const activityLoading = analysesLoading || failuresLoading;
+  const incidentItems = balancedIncidents ?? [];
+  const quickStats = buildQuickStats(
+    stats,
+    formatAvgConfidence(analysisItems),
+    triageStats,
+    activeCountsBySource
+  );
+  const hasActivity =
+    failureItems.length > 0 || analysisItems.length > 0 || incidentItems.length > 0;
+  const activityLoading = analysesLoading || failuresLoading || incidentsLoading;
 
   const onboardingSteps = buildOnboardingSteps(
     tenant?.githubConnected ?? false,
@@ -256,7 +305,7 @@ export const DashboardOverview = ({
             Welcome back, {firstName}!
           </h1>
           <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">
-            Here&apos;s your CI/CD pipeline health at a glance.
+            Here&apos;s your pipeline and incident health at a glance.
           </p>
         </div>
         {!statsLoading && stats && (
@@ -287,7 +336,7 @@ export const DashboardOverview = ({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
           {quickStats.map((stat) => (
             <Link key={stat.title} to={stat.href} className="block group">
               <Card className="py-4 sm:py-5 h-full group-hover:border-indigo-300 dark:group-hover:border-indigo-700 group-hover:shadow-md group-hover:-translate-y-0.5 group-active:scale-[0.98] transition-all">
@@ -310,6 +359,18 @@ export const DashboardOverview = ({
                           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
                             {stat.subtitle}
                           </p>
+                          {stat.sourceBreakdown && stat.sourceBreakdown.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {stat.sourceBreakdown.map((entry) => (
+                                <span
+                                  key={entry.source}
+                                  className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                >
+                                  {titleCase(entry.source)} {entry.activeCount}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -514,39 +575,25 @@ export const DashboardOverview = ({
           </CardContent>
         </Card>
       ) : activityLoading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-          <Card>
-            <CardHeader className="border-b">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-5 w-5 rounded" />
-                <Skeleton className="h-5 w-32" />
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-3">
-              {Array.from({ length: 3 }, (_, index) => (
-                <div key={`skel-fail-${index}`} className="space-y-1.5 py-2">
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-4 w-full" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          {Array.from({ length: 3 }, (_, cardIndex) => (
+            <Card key={`skel-card-${cardIndex}`}>
+              <CardHeader className="border-b">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-5 rounded" />
+                  <Skeleton className="h-5 w-32" />
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="border-b">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-5 w-5 rounded" />
-                <Skeleton className="h-5 w-32" />
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-3">
-              {Array.from({ length: 3 }, (_, index) => (
-                <div key={`skel-analysis-${index}`} className="space-y-1.5 py-2">
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-4 w-full" />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-3">
+                {Array.from({ length: 3 }, (_, rowIndex) => (
+                  <div key={`skel-row-${cardIndex}-${rowIndex}`} className="space-y-1.5 py-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       ) : !hasActivity ? (
         <Card>
@@ -558,7 +605,7 @@ export const DashboardOverview = ({
               </CardTitle>
             </div>
             <CardDescription>
-              CI failures and analysis results from your connected repositories.
+              CI failures, analyses, and incidents from your connected repositories.
             </CardDescription>
           </CardHeader>
           <CardContent className="py-12 text-center">
@@ -572,7 +619,7 @@ export const DashboardOverview = ({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {failureItems.length > 0 && (
             <Card>
               <CardHeader className="border-b">
@@ -680,12 +727,71 @@ export const DashboardOverview = ({
               </CardFooter>
             </Card>
           )}
+
+          {incidentItems.length > 0 && (
+            <Card>
+              <CardHeader className="border-b">
+                <div className="flex items-center gap-2">
+                  <Siren className="w-5 h-5 text-orange-500" />
+                  <CardTitle>
+                    <h2>Recent Incidents</h2>
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {incidentItems.map((incident: IncidentAlertRecord) => (
+                    <Link
+                      key={incident.id}
+                      to="/dashboard/incidents/active"
+                      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <TimeDisplay
+                          dateTime={incident.receivedAt}
+                          className="text-xs text-gray-400 dark:text-gray-400"
+                        />
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] px-1.5 py-0",
+                            getSeverityStyle(incident.severity)
+                          )}
+                        >
+                          {titleCase(incident.severity)}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {truncateText(incident.title, 60)}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {titleCase(incident.source)}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+              <CardFooter className="border-t">
+                <Link
+                  to="/dashboard/incidents/active"
+                  className="text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                >
+                  View all incidents &rarr;
+                </Link>
+              </CardFooter>
+            </Card>
+          )}
         </div>
       )}
 
-      {/* Confidence Charts */}
+      {/* Charts */}
       <ConfidenceTrendChart refreshKey={refreshKey} />
       <ConfidenceChart refreshKey={refreshKey} />
+      <SeverityDistributionChart
+        distribution={triageStats?.severityDistribution ?? null}
+        distributionBySource={severityBySource ?? null}
+        isLoading={!triageStats && !!tenantId}
+      />
     </>
   );
 };

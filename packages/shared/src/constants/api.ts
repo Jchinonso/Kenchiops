@@ -205,6 +205,8 @@ export const DASHBOARD_PAGINATION = {
   MAX_LIMIT: 200,
   /** Maximum event IDs in a single batch lookup */
   MAX_BATCH_SIZE: 100,
+  /** Minimum length for a valid commit SHA prefix in correlation lookups */
+  MIN_COMMIT_SHA_LENGTH: 7,
 } as const;
 
 // ==================== GitHub API Constants ====================

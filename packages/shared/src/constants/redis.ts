@@ -346,6 +346,8 @@ export const QUEUE_RETRY_CONFIG = {
   GITHUB_ACTION: 3,
   /** Incident triage queue max retries */
   INCIDENT_TRIAGE: 3,
+  /** Investigation queue max retries */
+  INVESTIGATION: 3,
 } as const;
 
 /**
@@ -360,6 +362,8 @@ export const QUEUE_VISIBILITY_TIMEOUT = {
   GITHUB_ACTION: 120,
   /** Incident triage visibility timeout (2 minutes for enrichment pipeline) */
   INCIDENT_TRIAGE: 120,
+  /** Investigation visibility timeout (3 minutes for full diagnostic pipeline) */
+  INVESTIGATION: 180,
 } as const;
 
 /**
@@ -374,6 +378,8 @@ export const QUEUE_NAMES = {
   GITHUB_ACTIONS: "kenchi:github-actions",
   /** Incident triage jobs queue */
   INCIDENT_TRIAGE: "kenchi:incident-triage",
+  /** Investigation jobs queue */
+  INVESTIGATION: "kenchi:investigation",
 } as const;
 
 /**
@@ -390,4 +396,6 @@ export const PUBSUB_CHANNELS = {
   DASHBOARD: "kenchi:events:dashboard",
   /** Incident triage events */
   INCIDENT_TRIAGE: "kenchi:events:incident-triage",
+  /** Investigation events */
+  INVESTIGATION: "kenchi:events:investigation",
 } as const;

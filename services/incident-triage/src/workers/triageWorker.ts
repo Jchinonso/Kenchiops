@@ -21,7 +21,10 @@ import {
   updateTriageAiSummary,
   updateTriageDispatchResults,
   getErrorMessage,
+  publish,
   SERVICE_NAMES,
+  PUBSUB_CHANNELS,
+  DASHBOARD_EVENT_TYPES,
   type RequestContext,
   type QueueMessage,
   type IncidentAlertRecord,
@@ -292,6 +295,24 @@ const runTriagePipeline = async (
 
   // Step 15: Mark alert as triaged
   await updateAlertStatus(alertId, "triaged");
+
+  // Step 16: Publish dashboard SSE notification (fire-and-forget)
+  void (async () => {
+    try {
+      await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.INCIDENT_TRIAGED, {
+        tenantId,
+        alertId,
+        severity: severityScore.label,
+        title: alert.title,
+        aiSummary: typedSummary.headline ?? null,
+      });
+    } catch (publishError) {
+      logger.warn("Failed to publish incident_triaged dashboard event", {
+        alertId,
+        error: getErrorMessage(publishError),
+      });
+    }
+  })();
 
   const { length: matchCount } = runbookResult.matches;
   const { length: corrCount } = correlationResult.correlations;

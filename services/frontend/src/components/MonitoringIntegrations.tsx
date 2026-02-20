@@ -27,6 +27,11 @@ import { cn } from "@/lib/utils";
 
 // ==================== Types ====================
 
+interface SourceHealthInfo {
+  readonly eventCount: number;
+  readonly lastReceived: string | null;
+}
+
 interface MonitoringProvider {
   readonly id: string;
   readonly name: string;
@@ -37,6 +42,56 @@ interface MonitoringProvider {
   readonly setupSteps?: readonly string[];
   readonly requiredHeaders?: readonly string[];
 }
+
+interface MonitoringIntegrationsProps {
+  readonly integrationHealth?: Readonly<Record<string, SourceHealthInfo>> | null;
+  readonly tenantId?: string;
+}
+
+// ==================== Health Helpers ====================
+
+type HealthStatus = "connected" | "stale" | "no_events";
+
+/** Threshold: events received within the last 24 hours are considered "connected" */
+const STALE_MS = 24 * 60 * 60 * 1000;
+
+const computeHealthStatus = (health: SourceHealthInfo | undefined): HealthStatus => {
+  if (!health || !health.lastReceived) {
+    return "no_events";
+  }
+  const ageMs = Date.now() - new Date(health.lastReceived).getTime();
+  return ageMs <= STALE_MS ? "connected" : "stale";
+};
+
+const healthDotColor = (status: HealthStatus): string =>
+  status === "connected" ? "bg-green-500" : status === "stale" ? "bg-yellow-500" : "bg-gray-400";
+
+const healthLabel = (status: HealthStatus): string =>
+  status === "connected" ? "Connected" : status === "stale" ? "Stale" : "No events";
+
+const healthTextColor = (status: HealthStatus): string =>
+  status === "connected"
+    ? "text-green-600 dark:text-green-400"
+    : status === "stale"
+      ? "text-yellow-600 dark:text-yellow-400"
+      : "text-gray-500 dark:text-gray-400";
+
+const formatRelativeTime = (isoString: string): string => {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) {
+    return "just now";
+  }
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+};
 
 // ==================== Provider Config ====================
 
@@ -159,15 +214,20 @@ const MONITORING_PROVIDERS: readonly MonitoringProvider[] = [
 
 interface ProviderCardProps {
   readonly provider: MonitoringProvider;
+  readonly health?: SourceHealthInfo;
+  readonly tenantId?: string;
 }
 
 /** Public base URL for webhook endpoints. Uses VITE_PUBLIC_URL when deployed, falls back to browser origin for local dev. */
 const PUBLIC_BASE_URL = import.meta.env.VITE_PUBLIC_URL || window.location.origin;
 
-const ProviderCard = ({ provider }: ProviderCardProps) => {
+const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
   const [copied, setCopied] = useState(false);
   const Icon = provider.icon;
-  const webhookUrl = provider.webhookPath ? `${PUBLIC_BASE_URL}${provider.webhookPath}` : null;
+  const tenantSuffix = tenantId ? `/${tenantId}` : "";
+  const webhookUrl = provider.webhookPath
+    ? `${PUBLIC_BASE_URL}${provider.webhookPath}${tenantSuffix}`
+    : null;
 
   const handleCopy = useCallback(async () => {
     if (!webhookUrl) {
@@ -222,17 +282,31 @@ const ProviderCard = ({ provider }: ProviderCardProps) => {
             </p>
           </div>
         </div>
-        <Badge
-          variant={provider.active ? "default" : "secondary"}
-          className={cn(
-            "shrink-0 text-xs",
-            provider.active
-              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30"
-              : ""
-          )}
-        >
-          {provider.active ? "Active" : "Coming Soon"}
-        </Badge>
+        {provider.active ? (
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            {(() => {
+              const status = computeHealthStatus(health);
+              return (
+                <div className="flex items-center gap-1.5">
+                  <span className={cn("w-2 h-2 rounded-full", healthDotColor(status))} />
+                  <span className={cn("text-xs font-medium", healthTextColor(status))}>
+                    {healthLabel(status)}
+                  </span>
+                </div>
+              );
+            })()}
+            {health && health.eventCount > 0 && (
+              <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500">
+                <span>{health.eventCount} events</span>
+                {health.lastReceived && <span>Last {formatRelativeTime(health.lastReceived)}</span>}
+              </div>
+            )}
+          </div>
+        ) : (
+          <Badge variant="secondary" className="shrink-0 text-xs">
+            Coming Soon
+          </Badge>
+        )}
       </div>
 
       {provider.active && webhookUrl && (
@@ -308,21 +382,38 @@ const ProviderCard = ({ provider }: ProviderCardProps) => {
 
 // ==================== Main Component ====================
 
-export const MonitoringIntegrations = () => (
-  <Card>
-    <CardHeader className="border-b">
-      <div className="flex items-center gap-2">
-        <Radio className="w-5 h-5 text-indigo-500" />
-        <CardTitle>Monitoring Integrations</CardTitle>
-      </div>
-      <CardDescription>
-        Connect your monitoring tools to receive AI-triaged incident alerts.
-      </CardDescription>
-    </CardHeader>
-    <CardContent className="pt-6 space-y-3">
-      {MONITORING_PROVIDERS.map((provider) => (
-        <ProviderCard key={provider.id} provider={provider} />
-      ))}
-    </CardContent>
-  </Card>
-);
+export const MonitoringIntegrations = ({
+  integrationHealth,
+  tenantId,
+}: MonitoringIntegrationsProps) => {
+  const healthMap = integrationHealth ?? {};
+
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <div className="flex items-center gap-2">
+          <Radio className="w-5 h-5 text-indigo-500" />
+          <CardTitle>Monitoring Integrations</CardTitle>
+        </div>
+        <CardDescription>
+          Connect your monitoring tools to receive AI-triaged incident alerts.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-6 space-y-3">
+        {!tenantId && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+            Connect your GitHub organization to generate tenant-specific webhook URLs.
+          </p>
+        )}
+        {MONITORING_PROVIDERS.map((provider) => (
+          <ProviderCard
+            key={provider.id}
+            provider={provider}
+            health={healthMap[provider.id]}
+            tenantId={tenantId}
+          />
+        ))}
+      </CardContent>
+    </Card>
+  );
+};

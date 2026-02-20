@@ -168,6 +168,14 @@ The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 - Context is spread in individual log calls: `logger.info("msg", { ...context })`
 - CLAUDE.md shows `createLogger("scope", context)` but that's incorrect -- always just pass scope string
 
+## Commit Hook Constraints
+
+- `commit-msg` hook rejects any reference to "Claude" in commit messages (Co-Authored-By, etc.)
+- `pre-commit` runs `prettier --check` on ALL files in repo, not just staged -- pre-existing issues block commit
+- Fix all Prettier issues across repo before committing: `npx prettier --check "**/*.{ts,json,md}"` then `--write` on flagged files
+- `direct-fetch` rule has `skipInAdapters: true` -- bare `fetch()` is allowed in adapter files
+- `misplaced-regex-constant` rule flags regex constants outside `packages/shared/src/constants/` -- move them to shared
+
 ## SQL Queries and object-mutation Hook
 
 - SQL queries with `table.column = $N` trigger the `object-mutation` false positive

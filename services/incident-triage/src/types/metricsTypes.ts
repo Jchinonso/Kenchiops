@@ -33,5 +33,6 @@ export interface PipelineMetricsResponse {
     readonly totalAlerts: number;
     readonly dedupedCount: number;
     readonly dedupRate: number | null;
+    readonly activeAlerts: number;
   };
 }

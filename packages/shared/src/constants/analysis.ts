@@ -122,4 +122,12 @@ export const ANALYSIS_QUERIES = {
     GROUP BY bucket
     ORDER BY bucket
   `,
+
+  FIND_BY_COMMIT_SHA: `
+    SELECT * FROM analyses
+    WHERE tenant_id = $1
+      AND RIGHT(aggregation_key, LENGTH($2) + 1) = ':' || $2
+    ORDER BY created_at DESC
+    LIMIT 10
+  `,
 } as const;

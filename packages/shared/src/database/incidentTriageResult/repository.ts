@@ -25,6 +25,8 @@ import type {
   TriageSimilarityResult,
   SeverityDistributionRow,
   SeverityDistributionEntry,
+  SeverityBySourceRow,
+  SeverityBySourceEntry,
   PipelineStatsRow,
   DedupRateRow,
   TriageStats,
@@ -350,6 +352,7 @@ export const getTriageStats = async (tenantId: string): Promise<TriageStats> => 
       routedCount: parseInt(stats?.routed_count ?? "0", 10),
       totalAlerts: parseInt(dedup?.total_alerts ?? "0", 10),
       dedupedCount: parseInt(dedup?.deduped_count ?? "0", 10),
+      activeAlerts: parseInt(dedup?.active_alerts ?? "0", 10),
     };
 
     logger.info("Retrieved triage stats", {
@@ -361,6 +364,45 @@ export const getTriageStats = async (tenantId: string): Promise<TriageStats> => 
     return result;
   } catch (error) {
     logger.error("Failed to get triage stats", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/** Maps a severity-by-source row to the domain type */
+const mapSeverityBySourceRow = (row: SeverityBySourceRow): SeverityBySourceEntry => ({
+  source: row.source,
+  severityLabel: row.severity_label,
+  count: row.count,
+});
+
+/**
+ * Retrieves severity distribution grouped by alert source.
+ *
+ * @param tenantId - The tenant to query
+ * @returns Array of severity distribution entries grouped by source
+ */
+export const getSeverityDistributionBySource = async (
+  tenantId: string
+): Promise<readonly SeverityBySourceEntry[]> => {
+  try {
+    const result = await query<SeverityBySourceRow>(
+      INCIDENT_TRIAGE_RESULT_QUERIES.GET_SEVERITY_BY_SOURCE,
+      [tenantId]
+    );
+
+    const entries = result.rows.map(mapSeverityBySourceRow);
+
+    logger.info("Retrieved severity distribution by source", {
+      tenantId,
+      entryCount: entries.length,
+    });
+
+    return entries;
+  } catch (error) {
+    logger.error("Failed to get severity distribution by source", {
       tenantId,
       error: getErrorMessage(error),
     });

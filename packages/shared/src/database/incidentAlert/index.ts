@@ -14,6 +14,8 @@ export type {
   ListIncidentFilters,
   PaginatedIncidentAlerts,
   AlertWithTriageResult,
+  SourceStats,
+  ActiveCountBySource,
 } from "./types.js";
 
 // Helpers (includes validation and mappers)
@@ -32,4 +34,8 @@ export {
   listIncidents,
   countIncidents,
   getAlertWithTriageResult,
+  getStatsBySource,
+  getActiveCountsBySource,
+  getBalancedRecentIncidents,
+  findIncidentsByCommitSha,
 } from "./repository.js";

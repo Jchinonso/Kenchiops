@@ -267,6 +267,7 @@ export {
   getAnalysesByEventIds,
   getConfidenceDistribution,
   getConfidenceTrend,
+  findAnalysesByCommitSha,
   type CreateAnalysisInput,
   type AnalysisRecord,
   type ConfidenceTrendPoint,
@@ -302,11 +303,17 @@ export {
   listIncidents,
   countIncidents,
   getAlertWithTriageResult,
+  getStatsBySource,
+  getActiveCountsBySource,
+  getBalancedRecentIncidents,
+  findIncidentsByCommitSha,
   type IncidentAlertRecord,
   type CreateIncidentAlertInput,
   type ListIncidentFilters,
   type PaginatedIncidentAlerts,
   type AlertWithTriageResult,
+  type SourceStats,
+  type ActiveCountBySource,
   // Incident dedup module
   findByFingerprint,
   upsertDedupEntry,
@@ -321,6 +328,7 @@ export {
   updateTriageDispatchResults,
   searchSimilarTriageResults,
   getTriageStats,
+  getSeverityDistributionBySource,
   type IncidentTriageResultRecord,
   type CreateTriageResultInput,
   type UpdateTriageEnrichmentInput,
@@ -328,7 +336,26 @@ export {
   type UpdateTriageDispatchInput,
   type TriageSimilarityResult,
   type SeverityDistributionEntry,
+  type SeverityBySourceEntry,
   type TriageStats,
+} from "./database/index.js";
+
+// Investigation module
+export {
+  createInvestigation,
+  getInvestigationById,
+  listInvestigations,
+  updateInvestigationStatus,
+  updateInvestigationIntent,
+  updateInvestigationEvidence,
+  updateInvestigationCorrelation,
+  updateInvestigationDiagnosis,
+  updateInvestigationError,
+  type InvestigationRecord,
+  type CreateInvestigationInput,
+  type UpdateInvestigationIntentInput,
+  type ListInvestigationFilters,
+  type PaginatedInvestigations,
 } from "./database/index.js";
 
 // User module (Authentication)

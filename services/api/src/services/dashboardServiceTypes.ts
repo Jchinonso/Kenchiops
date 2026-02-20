@@ -24,3 +24,15 @@ export interface PaginatedResult<T> {
   readonly limit: number;
   readonly offset: number;
 }
+
+export interface CorrelationSummary {
+  readonly id: string;
+  readonly title: string;
+  readonly createdAt: string;
+}
+
+export interface CorrelationResult {
+  readonly commitSha: string;
+  readonly analyses: readonly CorrelationSummary[];
+  readonly incidents: readonly CorrelationSummary[];
+}

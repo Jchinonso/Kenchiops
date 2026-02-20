@@ -29,6 +29,10 @@ export const DASHBOARD_EVENT_TYPES = {
   NEW_FAILURE: "new_failure",
   /** LLM analysis completed and persisted */
   ANALYSIS_COMPLETE: "analysis_complete",
+  /** New incident alert received from a monitoring webhook */
+  NEW_INCIDENT: "new_incident",
+  /** Incident triage pipeline completed */
+  INCIDENT_TRIAGED: "incident_triaged",
   /** SSE keepalive heartbeat */
   HEARTBEAT: "heartbeat",
 } as const;

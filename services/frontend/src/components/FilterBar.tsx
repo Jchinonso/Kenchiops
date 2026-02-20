@@ -38,6 +38,7 @@ interface FilterBarProps {
   readonly filters: FilterValues;
   readonly onFilterChange: (filters: FilterValues) => void;
   readonly variant: "analyses" | "failures" | "incidents";
+  readonly hideSource?: boolean;
 }
 
 // ==================== Constants ====================
@@ -167,7 +168,7 @@ export const timeRangeToSince = (timeRange: string): string | undefined => {
 
 // ==================== Component ====================
 
-export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) => {
+export const FilterBar = ({ filters, onFilterChange, variant, hideSource }: FilterBarProps) => {
   const [localRepo, setLocalRepo] = useState(filters.repository);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Use a ref to always access the latest filters inside the debounced callback,
@@ -307,18 +308,20 @@ export const FilterBar = ({ filters, onFilterChange, variant }: FilterBarProps) 
             </SelectContent>
           </Select>
 
-          <Select value={filters.source || "all"} onValueChange={handleSourceChange}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="All Sources" />
-            </SelectTrigger>
-            <SelectContent>
-              {SOURCE_OPTIONS.map((option) => (
-                <SelectItem key={option.value || "all"} value={option.value || "all"}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!hideSource && (
+            <Select value={filters.source || "all"} onValueChange={handleSourceChange}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="All Sources" />
+              </SelectTrigger>
+              <SelectContent>
+                {SOURCE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value || "all"} value={option.value || "all"}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </>
       )}
 

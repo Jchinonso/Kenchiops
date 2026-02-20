@@ -420,6 +420,29 @@ export const useWebhookActivity = (
     `${limit}:${offset}:${refreshKey}:${source ?? ""}:${status ?? ""}`
   );
 
+// ==================== Correlation Types ====================
+
+interface CorrelationSummary {
+  readonly id: string;
+  readonly title: string;
+  readonly createdAt: string;
+}
+
+interface CorrelationResult {
+  readonly commitSha: string;
+  readonly analyses: readonly CorrelationSummary[];
+  readonly incidents: readonly CorrelationSummary[];
+}
+
+export const useCorrelation = (
+  commitSha: string | null,
+  refreshKey: number = 0
+): UseFetchResult<CorrelationResult> =>
+  useFetch<CorrelationResult>(
+    commitSha ? `/api/v1/dashboard/correlations/${commitSha}` : "",
+    `${commitSha ?? ""}:${refreshKey}`
+  );
+
 // Re-export types for use in page components
 export type {
   TenantInfo,
@@ -432,4 +455,6 @@ export type {
   AnalysisStatusMap,
   ConfidenceTrendPoint,
   WebhookActivityRecord,
+  CorrelationSummary,
+  CorrelationResult,
 };

@@ -42,4 +42,5 @@ export {
   getAnalysesByEventIds,
   getConfidenceDistribution,
   getConfidenceTrend,
+  findAnalysesByCommitSha,
 } from "./repository.js";

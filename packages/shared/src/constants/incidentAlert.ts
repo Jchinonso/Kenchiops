@@ -63,6 +63,56 @@ const buildAlertWithTriageQuery = (): string =>
     "= $1",
   ].join(" ");
 
+// Helper: builds per-source stats aggregation query
+const buildStatsBySourceQuery = (): string =>
+  [
+    "SELECT source, COUNT(*) as event_count, MAX(received_at) as last_received",
+    "FROM incident_alerts",
+    "WHERE tenant_id",
+    "= $1",
+    "GROUP BY source",
+    "ORDER BY event_count DESC",
+  ].join(" ");
+
+// Helper: builds active-counts-by-source query (Phase 3)
+const buildActiveCountsBySourceQuery = (): string =>
+  [
+    "SELECT source, COUNT(*)::int as active_count",
+    "FROM incident_alerts",
+    "WHERE tenant_id",
+    "= $1",
+    "AND status NOT IN ('resolved', 'closed', 'deduped')",
+    "GROUP BY source",
+    "ORDER BY active_count DESC",
+  ].join(" ");
+
+// Helper: builds balanced recent incidents using window function (Phase 5)
+const buildBalancedRecentQuery = (): string =>
+  [
+    "SELECT * FROM (",
+    "SELECT *, ROW_NUMBER() OVER (PARTITION BY source ORDER BY created_at DESC) as rn",
+    "FROM incident_alerts",
+    "WHERE tenant_id",
+    "= $1",
+    ") sub",
+    "WHERE rn <= $2",
+    "ORDER BY created_at DESC",
+    "LIMIT $3",
+  ].join(" ");
+
+// Helper: builds JSONB label search for commit SHA correlation
+const buildFindByCommitShaQuery = (): string =>
+  [
+    "SELECT * FROM incident_alerts",
+    "WHERE tenant_id",
+    "= $1",
+    "AND (labels->>'vercel_commit_sha'",
+    "= $2 OR labels->>'netlify_commit_sha'",
+    "= $2)",
+    "ORDER BY created_at DESC",
+    "LIMIT 10",
+  ].join(" ");
+
 // ==================== SQL Queries ====================
 
 /**
@@ -93,6 +143,10 @@ export const INCIDENT_ALERT_QUERIES = {
   LIST_INCIDENTS: buildListIncidentsQuery(),
   COUNT_INCIDENTS: buildCountIncidentsQuery(),
   GET_ALERT_WITH_TRIAGE: buildAlertWithTriageQuery(),
+  GET_STATS_BY_SOURCE: buildStatsBySourceQuery(),
+  GET_ACTIVE_COUNTS_BY_SOURCE: buildActiveCountsBySourceQuery(),
+  GET_BALANCED_RECENT: buildBalancedRecentQuery(),
+  FIND_BY_COMMIT_SHA: buildFindByCommitShaQuery(),
 } as const;
 
 // ==================== Incident Triage Result Queries ====================
@@ -154,6 +208,19 @@ const buildSeverityDistributionQuery = (): string =>
     "ORDER BY count DESC",
   ].join(" ");
 
+// Helper: builds severity distribution grouped by source (Phase 4)
+const buildSeverityBySourceQuery = (): string =>
+  [
+    "SELECT a.source, t.severity_label, COUNT(*)::int as count",
+    "FROM incident_triage_results t",
+    "JOIN incident_alerts a ON a.id",
+    "= t.alert_id",
+    "WHERE t.tenant_id",
+    "= $1 AND t.severity_label IS NOT NULL",
+    "GROUP BY a.source, t.severity_label",
+    "ORDER BY a.source, count DESC",
+  ].join(" ");
+
 // Helper: builds pipeline stats aggregation query
 const buildPipelineStatsQuery = (): string =>
   [
@@ -179,7 +246,8 @@ const buildDedupRateQuery = (): string =>
     "SELECT",
     "COUNT(*) as total_alerts,",
     "COUNT(*) FILTER (WHERE status",
-    "= 'deduped') as deduped_count",
+    "= 'deduped') as deduped_count,",
+    "COUNT(*) FILTER (WHERE status NOT IN ('resolved', 'closed', 'deduped')) as active_alerts",
     "FROM incident_alerts",
     "WHERE tenant_id",
     "= $1",
@@ -208,6 +276,7 @@ export const INCIDENT_TRIAGE_RESULT_QUERIES = {
   UPDATE_DISPATCH_RESULTS: buildDispatchResultsQuery(),
   SEARCH_SIMILAR_TRIAGE: buildSimilarTriageQuery(),
   GET_SEVERITY_DISTRIBUTION: buildSeverityDistributionQuery(),
+  GET_SEVERITY_BY_SOURCE: buildSeverityBySourceQuery(),
   GET_PIPELINE_STATS: buildPipelineStatsQuery(),
   GET_DEDUP_RATE: buildDedupRateQuery(),
 } as const;

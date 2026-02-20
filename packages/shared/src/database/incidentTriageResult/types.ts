@@ -148,6 +148,24 @@ export interface SeverityDistributionEntry {
 }
 
 /**
+ * Row type for severity-by-source aggregation query.
+ */
+export interface SeverityBySourceRow {
+  readonly source: string;
+  readonly severity_label: string;
+  readonly count: number;
+}
+
+/**
+ * Domain type for severity distribution grouped by source.
+ */
+export interface SeverityBySourceEntry {
+  readonly source: string;
+  readonly severityLabel: string;
+  readonly count: number;
+}
+
+/**
  * Row type for pipeline stats aggregation query.
  */
 export interface PipelineStatsRow {
@@ -167,6 +185,7 @@ export interface PipelineStatsRow {
 export interface DedupRateRow {
   readonly total_alerts: string;
   readonly deduped_count: string;
+  readonly active_alerts: string;
 }
 
 /**
@@ -184,4 +203,5 @@ export interface TriageStats {
   readonly routedCount: number;
   readonly totalAlerts: number;
   readonly dedupedCount: number;
+  readonly activeAlerts: number;
 }

@@ -21,6 +21,10 @@ import type {
   PaginatedIncidentAlerts,
   AlertWithTriageRow,
   AlertWithTriageResult,
+  SourceStatsRow,
+  SourceStats,
+  ActiveCountBySourceRow,
+  ActiveCountBySource,
 } from "./types.js";
 import {
   mapRowToIncidentAlert,
@@ -277,6 +281,159 @@ export const getAlertWithTriageResult = async (
   } catch (error) {
     logger.error("Failed to get alert with triage result", {
       alertId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Finds incident alerts matching a commit SHA via JSONB label search.
+ * Checks vercel_commit_sha and netlify_commit_sha labels.
+ * Used for cross-pipeline correlation (linking CI/CD analyses to incidents).
+ *
+ * @param tenantId - The tenant ID
+ * @param commitSha - The commit SHA to search for
+ * @returns Array of incident alert records matching the commit
+ */
+export const findIncidentsByCommitSha = async (
+  tenantId: string,
+  commitSha: string
+): Promise<readonly IncidentAlertRecord[]> => {
+  if (!tenantId?.trim() || !commitSha?.trim()) {
+    return [];
+  }
+
+  try {
+    const result = await query<IncidentAlertRow>(INCIDENT_ALERT_QUERIES.FIND_BY_COMMIT_SHA, [
+      tenantId,
+      commitSha,
+    ]);
+
+    const alerts = result.rows.map(mapRowToIncidentAlert);
+
+    logger.info("Found incidents by commit SHA", {
+      tenantId,
+      matchCount: alerts.length,
+    });
+
+    return alerts;
+  } catch (error) {
+    logger.error("Failed to find incidents by commit SHA", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/** Maps a source stats row to the domain type */
+const mapSourceStatsRow = (row: SourceStatsRow): SourceStats => ({
+  source: row.source,
+  eventCount: parseInt(row.event_count, 10),
+  lastReceived: row.last_received ? new Date(row.last_received).toISOString() : null,
+});
+
+/** Maps an active-count row to the domain type */
+const mapActiveCountRow = (row: ActiveCountBySourceRow): ActiveCountBySource => ({
+  source: row.source,
+  activeCount: row.active_count,
+});
+
+/**
+ * Retrieves per-source aggregation stats for integration health.
+ *
+ * @param tenantId - The tenant to query stats for
+ * @returns Array of per-source stats with event count and last received time
+ */
+export const getStatsBySource = async (tenantId: string): Promise<readonly SourceStats[]> => {
+  try {
+    const result = await query<SourceStatsRow>(INCIDENT_ALERT_QUERIES.GET_STATS_BY_SOURCE, [
+      tenantId,
+    ]);
+
+    const stats = result.rows.map(mapSourceStatsRow);
+
+    logger.info("Retrieved stats by source", {
+      tenantId,
+      sourceCount: stats.length,
+    });
+
+    return stats;
+  } catch (error) {
+    logger.error("Failed to get stats by source", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Retrieves active (non-resolved/closed/deduped) alert counts grouped by source.
+ *
+ * @param tenantId - The tenant to query
+ * @returns Array of per-source active alert counts
+ */
+export const getActiveCountsBySource = async (
+  tenantId: string
+): Promise<readonly ActiveCountBySource[]> => {
+  try {
+    const result = await query<ActiveCountBySourceRow>(
+      INCIDENT_ALERT_QUERIES.GET_ACTIVE_COUNTS_BY_SOURCE,
+      [tenantId]
+    );
+
+    const counts = result.rows.map(mapActiveCountRow);
+
+    logger.info("Retrieved active counts by source", {
+      tenantId,
+      sourceCount: counts.length,
+    });
+
+    return counts;
+  } catch (error) {
+    logger.error("Failed to get active counts by source", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Retrieves a balanced selection of recent incidents across sources.
+ * Uses window function to pick top N incidents per source, then limits to maxTotal.
+ *
+ * @param tenantId - The tenant to query
+ * @param perSource - Maximum incidents per source
+ * @param maxTotal - Maximum total incidents to return
+ * @returns Array of recent incident alerts balanced across sources
+ */
+export const getBalancedRecentIncidents = async (
+  tenantId: string,
+  perSource: number,
+  maxTotal: number
+): Promise<readonly IncidentAlertRecord[]> => {
+  try {
+    const result = await query<IncidentAlertRow & { readonly rn: number }>(
+      INCIDENT_ALERT_QUERIES.GET_BALANCED_RECENT,
+      [tenantId, perSource, maxTotal]
+    );
+
+    const alerts = result.rows.map(mapRowToIncidentAlert);
+
+    logger.info("Retrieved balanced recent incidents", {
+      tenantId,
+      perSource,
+      maxTotal,
+      resultCount: alerts.length,
+    });
+
+    return alerts;
+  } catch (error) {
+    logger.error("Failed to get balanced recent incidents", {
+      tenantId,
       error: getErrorMessage(error),
     });
     throw error;

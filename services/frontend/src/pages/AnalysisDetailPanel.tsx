@@ -5,7 +5,7 @@
  * Opened when clicking an analysis row in CICDAnalyses.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link2, Check } from "lucide-react";
 import {
   Sheet,
@@ -17,6 +17,7 @@ import {
 import { formatTimestamp, extractRepoFromKey } from "@/lib/formatters";
 import { useAnalysisDetail } from "@/hooks/useDashboardData";
 import { DetailSkeleton, DetailContent } from "@/components/AnalysisDetailContent";
+import { CorrelatedPipelineItems } from "@/components/CorrelatedPipelineItems";
 
 // ==================== Props ====================
 
@@ -47,6 +48,15 @@ export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetai
   }, [analysisId]);
 
   const repo = analysis ? extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis) : null;
+
+  const commitSha = useMemo(() => {
+    const key = analysis?.aggregationKey;
+    if (!key) {
+      return null;
+    }
+    const colonIndex = key.lastIndexOf(":");
+    return colonIndex >= 0 ? key.slice(colonIndex + 1) : null;
+  }, [analysis?.aggregationKey]);
 
   const timestamp = analysis ? formatTimestamp(analysis.createdAt) : null;
 
@@ -88,7 +98,12 @@ export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetai
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
         ) : analysis ? (
-          <DetailContent analysis={analysis} />
+          <>
+            <DetailContent analysis={analysis} />
+            <div className="px-4 pb-4">
+              <CorrelatedPipelineItems commitSha={commitSha} sourcePipeline="cicd" />
+            </div>
+          </>
         ) : null}
       </SheetContent>
     </Sheet>

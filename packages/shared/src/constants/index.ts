@@ -330,6 +330,14 @@ export {
   INCIDENT_DEDUP_QUERIES,
 } from "./incidentAlert.js";
 
+// Investigation constants
+export {
+  INVESTIGATION_STATUS,
+  INVESTIGATION_INITIATED_FROM,
+  INVESTIGATION_DEFAULTS,
+  INVESTIGATION_QUERIES,
+} from "./investigations.js";
+
 // Dashboard constants
 export { SSE_CONFIG, DASHBOARD_EVENT_TYPES } from "./dashboard.js";
 

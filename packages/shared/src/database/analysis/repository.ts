@@ -410,6 +410,37 @@ export const getConfidenceDistribution = async (
 };
 
 /**
+ * Finds analyses matching a commit SHA via aggregation_key suffix.
+ * Used for cross-pipeline correlation (linking incidents to CI/CD analyses).
+ *
+ * @param tenantId - The tenant ID
+ * @param commitSha - The commit SHA to search for
+ * @returns Array of analysis records matching the commit
+ */
+export const findAnalysesByCommitSha = async (
+  tenantId: string,
+  commitSha: string
+): Promise<readonly AnalysisRecord[]> => {
+  validateId(tenantId, "tenantId");
+  validateId(commitSha, "commitSha");
+
+  try {
+    const result = await query<AnalysisRow>(ANALYSIS_QUERIES.FIND_BY_COMMIT_SHA, [
+      tenantId,
+      commitSha,
+    ]);
+
+    return Object.freeze(result.rows.map(mapRowToAnalysis));
+  } catch (error) {
+    logger.error("Failed to find analyses by commit SHA", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Returns a time-series of average confidence, bucketed by day or week.
  *
  * @param tenantId - The tenant ID

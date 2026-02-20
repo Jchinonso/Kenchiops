@@ -5,10 +5,11 @@
  * and monitoring tools (PagerDuty, Datadog, Vercel, Netlify, etc.).
  */
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useTenantInfo } from "@/hooks/useDashboardData";
+import { useIntegrationHealth } from "@/hooks/useIncidentData";
 import { titleCase } from "@/lib/formatters";
 import { MonitoringIntegrations } from "@/components/MonitoringIntegrations";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -95,7 +96,20 @@ const ConnectionCard = ({
 export const Integrations = () => {
   const { data: tenant } = useTenantInfo();
   const githubConnected = tenant?.githubConnected ?? false;
+  const tenantId = tenant?.id ?? "";
+  const { data: healthData } = useIntegrationHealth(tenantId);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const integrationHealthMap = useMemo(() => {
+    if (!healthData) {
+      return null;
+    }
+    const entries = healthData.map(
+      (entry) =>
+        [entry.source, { eventCount: entry.eventCount, lastReceived: entry.lastReceived }] as const
+    );
+    return Object.fromEntries(entries);
+  }, [healthData]);
 
   // Show toast for integration connect results from URL params
   useEffect(() => {
@@ -155,7 +169,7 @@ export const Integrations = () => {
       </Card>
 
       {/* Monitoring Integrations */}
-      <MonitoringIntegrations />
+      <MonitoringIntegrations integrationHealth={integrationHealthMap} tenantId={tenantId} />
     </div>
   );
 };

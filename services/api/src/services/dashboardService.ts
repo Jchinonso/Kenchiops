@@ -25,6 +25,8 @@ import {
   countEventsByTenantFiltered,
   getWebhookActivitiesByTenant,
   countWebhookActivitiesByTenant,
+  findAnalysesByCommitSha,
+  findIncidentsByCommitSha,
   type RequestContext,
   type AnalysisRecord,
   type EventRecord,
@@ -35,7 +37,13 @@ import type {
   GitHubInstallationPort,
   InstallationRepository,
 } from "../ports/githubInstallationPort.js";
-import type { TenantInfo, DashboardStats, PaginatedResult } from "./dashboardServiceTypes.js";
+import type {
+  TenantInfo,
+  DashboardStats,
+  PaginatedResult,
+  CorrelationResult,
+  CorrelationSummary,
+} from "./dashboardServiceTypes.js";
 
 const CICD_FAILURE_TYPE = "CICD_FAILURE";
 
@@ -374,6 +382,49 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
         ...context,
       });
       return trend;
+    },
+
+    /**
+     * Finds cross-pipeline correlations for a given commit SHA.
+     * Looks up CI/CD analyses and incident alerts that reference the same commit.
+     */
+    getCorrelations: async (
+      tenantId: string,
+      commitSha: string,
+      context: RequestContext
+    ): Promise<CorrelationResult> => {
+      const [analyses, incidents] = await Promise.all([
+        findAnalysesByCommitSha(tenantId, commitSha),
+        findIncidentsByCommitSha(tenantId, commitSha),
+      ]);
+
+      const mapAnalysisToSummary = (a: AnalysisRecord): CorrelationSummary => ({
+        id: a.id,
+        title: a.summary,
+        createdAt: a.createdAt.toISOString(),
+      });
+
+      const mapIncidentToSummary = (i: {
+        readonly id: string;
+        readonly title: string;
+        readonly createdAt: Date;
+      }): CorrelationSummary => ({
+        id: i.id,
+        title: i.title,
+        createdAt: i.createdAt.toISOString(),
+      });
+
+      logger.info("Correlations retrieved", {
+        analysisCount: analyses.length,
+        incidentCount: incidents.length,
+        ...context,
+      });
+
+      return {
+        commitSha,
+        analyses: analyses.map(mapAnalysisToSummary),
+        incidents: incidents.map(mapIncidentToSummary),
+      };
     },
   };
 };

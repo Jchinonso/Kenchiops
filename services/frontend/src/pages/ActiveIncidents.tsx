@@ -19,8 +19,9 @@ import {
 } from "@/components/ui/empty";
 import { Siren, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useIncidents } from "@/hooks/useIncidentData";
-import { getIncidentSeverityRank } from "@/lib/formatters";
+import { useIncidents, useActiveCountsBySource } from "@/hooks/useIncidentData";
+import { getIncidentSeverityRank, titleCase } from "@/lib/formatters";
+import { cn } from "@/lib/utils";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import {
@@ -36,6 +37,7 @@ import {
   type SortConfig,
 } from "@/components/IncidentTableRows";
 import { IncidentDetailPanel } from "@/pages/IncidentDetailPanel";
+import { findDuplicateIds } from "@/lib/duplicateDetection";
 
 // ==================== Constants ====================
 
@@ -70,6 +72,33 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
       timeRange: searchParams.get("timeRange") ?? saved?.timeRange ?? "",
     };
   });
+
+  const { data: activeCountsBySource } = useActiveCountsBySource(tenantId, refreshKey);
+  const hasSourceTabs = (activeCountsBySource?.length ?? 0) > 1;
+  const [activeSourceTab, setActiveSourceTab] = useState<string>("all");
+
+  const handleSourceTabChange = useCallback(
+    (source: string) => {
+      setActiveSourceTab(source);
+      setOffset(0);
+      setExpandedId(null);
+      const nextSource = source === "all" ? "" : source;
+      setFilters((prev) => ({ ...prev, source: nextSource }));
+      const params = new URLSearchParams();
+      if (filters.severity) {
+        params.set("severity", filters.severity);
+      }
+      if (filters.status) {
+        params.set("status", filters.status);
+      }
+      if (nextSource) {
+        params.set("source", nextSource);
+      }
+      setSearchParams(params, { replace: true });
+      saveFilters("incidents", { ...filters, source: nextSource });
+    },
+    [filters, setSearchParams]
+  );
 
   const handleFilterChange = useCallback(
     (next: FilterValues) => {
@@ -143,6 +172,8 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     });
   }, [items, sort]);
 
+  const duplicateIds = useMemo(() => findDuplicateIds(sortedItems), [sortedItems]);
+
   const hasItems = Boolean(items.length);
   const currentPage = Math.floor(offset / pageSize) + 1;
   const totalPages = Math.ceil(total / pageSize);
@@ -198,7 +229,52 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
         </p>
       </div>
 
-      <FilterBar variant="incidents" filters={filters} onFilterChange={handleFilterChange} />
+      {hasSourceTabs && activeCountsBySource && (
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="tablist"
+          aria-label="Filter by source"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeSourceTab === "all"}
+            onClick={() => handleSourceTabChange("all")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
+              activeSourceTab === "all"
+                ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
+                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+            )}
+          >
+            All ({activeCountsBySource.reduce((sum, entry) => sum + entry.activeCount, 0)})
+          </button>
+          {activeCountsBySource.map((entry) => (
+            <button
+              key={entry.source}
+              type="button"
+              role="tab"
+              aria-selected={activeSourceTab === entry.source}
+              onClick={() => handleSourceTabChange(entry.source)}
+              className={cn(
+                "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
+                activeSourceTab === entry.source
+                  ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
+                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+              )}
+            >
+              {titleCase(entry.source)} ({entry.activeCount})
+            </button>
+          ))}
+        </div>
+      )}
+
+      <FilterBar
+        variant="incidents"
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        hideSource={hasSourceTabs}
+      />
 
       <div aria-live="polite" className="sr-only">
         {isLoading
@@ -286,6 +362,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
                         <IncidentRow
                           incident={incident}
                           isExpanded={expandedId === incident.id}
+                          isDuplicate={duplicateIds.has(incident.id)}
                           onClick={() =>
                             setExpandedId((prev) => (prev === incident.id ? null : incident.id))
                           }

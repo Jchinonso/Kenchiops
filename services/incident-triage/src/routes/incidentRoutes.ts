@@ -5,6 +5,8 @@
  *
  * - GET /api/v1/incidents — Paginated list with optional filters
  * - GET /api/v1/incidents/:id — Single alert with full triage result
+ * - GET /api/v1/incidents/stats/active-by-source — Active alert counts by source
+ * - GET /api/v1/incidents/recent/balanced — Balanced recent incidents across sources
  * - POST /api/v1/incidents/:id/acknowledge — Mark alert as acknowledged
  * - POST /api/v1/incidents/:id/resolve — Mark alert as resolved
  *
@@ -21,6 +23,9 @@ import {
   listIncidents,
   getAlertWithTriageResult,
   updateAlertStatus,
+  getStatsBySource,
+  getActiveCountsBySource,
+  getBalancedRecentIncidents,
   INCIDENT_ALERT_DEFAULTS,
 } from "@kenchi/shared";
 
@@ -139,8 +144,82 @@ const handleResolveIncident = async (req: Request, res: Response): Promise<void>
   res.status(HTTP_STATUS.OK).json({ data: updated });
 };
 
-// ==================== Route Registration ====================
+/**
+ * GET /api/v1/incidents/stats/by-source
+ * Per-source aggregation stats for integration health indicators.
+ */
+const handleStatsBySource = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = (req.query.tenantId as string | undefined)?.trim();
+  if (!tenantId) {
+    throw new ValidationError("tenantId query parameter is required");
+  }
 
+  const stats = await getStatsBySource(tenantId);
+
+  logger.info("Retrieved stats by source", {
+    tenantId,
+    sourceCount: stats.length,
+  });
+
+  res.status(HTTP_STATUS.OK).json({ data: stats });
+};
+
+/**
+ * GET /api/v1/incidents/stats/active-by-source
+ * Active (non-resolved/closed/deduped) alert counts grouped by source.
+ */
+const handleActiveCountsBySource = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = (req.query.tenantId as string | undefined)?.trim();
+  if (!tenantId) {
+    throw new ValidationError("tenantId query parameter is required");
+  }
+
+  const counts = await getActiveCountsBySource(tenantId);
+
+  logger.info("Retrieved active counts by source", {
+    tenantId,
+    sourceCount: counts.length,
+  });
+
+  res.status(HTTP_STATUS.OK).json({ data: counts });
+};
+
+/** Default per-source limit for balanced recent incidents */
+const DEFAULT_PER_SOURCE = 2;
+/** Default total limit for balanced recent incidents */
+const DEFAULT_MAX_TOTAL = 6;
+
+/**
+ * GET /api/v1/incidents/recent/balanced
+ * Returns top N incidents per source for a balanced dashboard feed.
+ */
+const handleBalancedRecent = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = (req.query.tenantId as string | undefined)?.trim();
+  if (!tenantId) {
+    throw new ValidationError("tenantId query parameter is required");
+  }
+
+  const perSource = parseIntParam(req.query.perSource as string | undefined, DEFAULT_PER_SOURCE);
+  const maxTotal = parseIntParam(req.query.maxTotal as string | undefined, DEFAULT_MAX_TOTAL);
+
+  const items = await getBalancedRecentIncidents(tenantId, perSource, maxTotal);
+
+  logger.info("Retrieved balanced recent incidents", {
+    tenantId,
+    perSource,
+    maxTotal,
+    resultCount: items.length,
+  });
+
+  res.status(HTTP_STATUS.OK).json({ data: items });
+};
+
+// ==================== Route Registration ====================
+// Static paths registered before :id to avoid matching as param
+
+router.get("/api/v1/incidents/stats/by-source", asyncHandler(handleStatsBySource));
+router.get("/api/v1/incidents/stats/active-by-source", asyncHandler(handleActiveCountsBySource));
+router.get("/api/v1/incidents/recent/balanced", asyncHandler(handleBalancedRecent));
 router.get("/api/v1/incidents", asyncHandler(handleListIncidents));
 router.get("/api/v1/incidents/:id", asyncHandler(handleGetIncident));
 router.post("/api/v1/incidents/:id/acknowledge", asyncHandler(handleAcknowledgeIncident));

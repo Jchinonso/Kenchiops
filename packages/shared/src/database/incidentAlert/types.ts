@@ -106,6 +106,40 @@ export interface PaginatedIncidentAlerts {
 }
 
 /**
+ * Row type for the stats-by-source aggregation query.
+ */
+export interface SourceStatsRow {
+  readonly source: string;
+  readonly event_count: string;
+  readonly last_received: Date | null;
+}
+
+/**
+ * Domain type for per-source integration health stats.
+ */
+export interface SourceStats {
+  readonly source: string;
+  readonly eventCount: number;
+  readonly lastReceived: string | null;
+}
+
+/**
+ * Row type for the active-counts-by-source aggregation query.
+ */
+export interface ActiveCountBySourceRow {
+  readonly source: string;
+  readonly active_count: number;
+}
+
+/**
+ * Domain type for per-source active alert count.
+ */
+export interface ActiveCountBySource {
+  readonly source: string;
+  readonly activeCount: number;
+}
+
+/**
  * Row type for the alert-with-triage join query.
  */
 export interface AlertWithTriageRow extends IncidentAlertRow {

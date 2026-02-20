@@ -81,6 +81,7 @@ export interface PipelineMetricsResponse {
     readonly totalAlerts: number;
     readonly dedupedCount: number;
     readonly dedupRate: number | null;
+    readonly activeAlerts: number;
   };
 }
 
@@ -222,6 +223,76 @@ export const useTriageStats = (
 ): UseFetchResult<PipelineMetricsResponse> =>
   useFetch<PipelineMetricsResponse>(
     tenantId ? `/api/v1/triage/stats?tenantId=${tenantId}` : "",
+    `${tenantId}:${refreshKey}`
+  );
+
+export interface SourceStatsEntry {
+  readonly source: string;
+  readonly eventCount: number;
+  readonly lastReceived: string | null;
+}
+
+export const useIntegrationHealth = (
+  tenantId: string,
+  refreshKey: number = 0
+): UseFetchResult<readonly SourceStatsEntry[]> =>
+  useFetch<readonly SourceStatsEntry[]>(
+    tenantId ? `/api/v1/incidents/stats/by-source?tenantId=${tenantId}` : "",
+    `${tenantId}:${refreshKey}`
+  );
+
+// ==================== Per-Source Stats Types ====================
+
+export interface ActiveCountBySource {
+  readonly source: string;
+  readonly activeCount: number;
+}
+
+export interface SeverityBySourceEntry {
+  readonly source: string;
+  readonly severityLabel: string;
+  readonly count: number;
+}
+
+// ==================== Per-Source Hooks ====================
+
+/**
+ * Fetches active (non-resolved/closed/deduped) alert counts grouped by source.
+ */
+export const useActiveCountsBySource = (
+  tenantId: string,
+  refreshKey: number = 0
+): UseFetchResult<readonly ActiveCountBySource[]> =>
+  useFetch<readonly ActiveCountBySource[]>(
+    tenantId ? `/api/v1/incidents/stats/active-by-source?tenantId=${tenantId}` : "",
+    `${tenantId}:${refreshKey}`
+  );
+
+/**
+ * Fetches a balanced selection of recent incidents across sources.
+ */
+export const useBalancedRecentIncidents = (
+  tenantId: string,
+  perSource: number = 2,
+  maxTotal: number = 6,
+  refreshKey: number = 0
+): UseFetchResult<readonly IncidentAlertRecord[]> =>
+  useFetch<readonly IncidentAlertRecord[]>(
+    tenantId
+      ? `/api/v1/incidents/recent/balanced?tenantId=${tenantId}&perSource=${perSource}&maxTotal=${maxTotal}`
+      : "",
+    `${tenantId}:${perSource}:${maxTotal}:${refreshKey}`
+  );
+
+/**
+ * Fetches severity distribution grouped by alert source.
+ */
+export const useSeverityDistributionBySource = (
+  tenantId: string,
+  refreshKey: number = 0
+): UseFetchResult<readonly SeverityBySourceEntry[]> =>
+  useFetch<readonly SeverityBySourceEntry[]>(
+    tenantId ? `/api/v1/triage/stats/severity-by-source?tenantId=${tenantId}` : "",
     `${tenantId}:${refreshKey}`
   );
 

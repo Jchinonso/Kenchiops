@@ -18,6 +18,7 @@ import {
   NotFoundError,
   getTriageResultById,
   getTriageStats,
+  getSeverityDistributionBySource,
 } from "@kenchi/shared";
 import { mapStatsToMetrics } from "../services/metricsService.js";
 
@@ -68,10 +69,31 @@ const handleGetTriageResult = async (req: Request, res: Response): Promise<void>
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+/**
+ * GET /api/v1/triage/stats/severity-by-source
+ * Severity distribution grouped by alert source.
+ */
+const handleSeverityBySource = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = (req.query.tenantId as string | undefined)?.trim();
+  if (!tenantId) {
+    throw new ValidationError("tenantId query parameter is required");
+  }
+
+  const distribution = await getSeverityDistributionBySource(tenantId);
+
+  logger.info("Retrieved severity distribution by source", {
+    tenantId,
+    entryCount: distribution.length,
+  });
+
+  res.status(HTTP_STATUS.OK).json({ data: distribution });
+};
+
 // ==================== Route Registration ====================
-// /stats registered before /:id to avoid matching "stats" as an ID
+// Static paths registered before /:id to avoid matching "stats" as an ID
 
 router.get("/api/v1/triage/stats", asyncHandler(handleTriageStats));
+router.get("/api/v1/triage/stats/severity-by-source", asyncHandler(handleSeverityBySource));
 router.get("/api/v1/triage/:id", asyncHandler(handleGetTriageResult));
 
 export { router as triageRoutes };

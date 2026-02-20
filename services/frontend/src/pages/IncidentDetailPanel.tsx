@@ -5,7 +5,7 @@
  * Opened from the Active Incidents table when "View Full Details" is clicked.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -21,6 +21,7 @@ import {
 } from "@/hooks/useIncidentData";
 import { getSourceLabel, formatTimestamp } from "@/lib/formatters";
 import { IncidentDetailContent, IncidentDetailSkeleton } from "@/components/IncidentDetailContent";
+import { CorrelatedPipelineItems } from "@/components/CorrelatedPipelineItems";
 
 // ==================== Props ====================
 
@@ -74,6 +75,14 @@ export const IncidentDetailPanel = ({
     onRefresh();
   }, [incidentId, resolve, onRefresh]);
 
+  const commitSha = useMemo(() => {
+    if (!data) {
+      return null;
+    }
+    const labels = data.alert.labels as Readonly<Record<string, string>>;
+    return labels.vercel_commit_sha ?? labels.netlify_commit_sha ?? null;
+  }, [data]);
+
   const title = data?.alert.title ?? "Incident Detail";
   const subtitle = error
     ? "Failed to load incident"
@@ -113,13 +122,18 @@ export const IncidentDetailPanel = ({
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
         ) : data ? (
-          <IncidentDetailContent
-            data={data}
-            onAcknowledge={handleAcknowledge}
-            onResolve={handleResolve}
-            ackLoading={ackLoading}
-            resolveLoading={resolveLoading}
-          />
+          <>
+            <IncidentDetailContent
+              data={data}
+              onAcknowledge={handleAcknowledge}
+              onResolve={handleResolve}
+              ackLoading={ackLoading}
+              resolveLoading={resolveLoading}
+            />
+            <div className="px-4 pb-4">
+              <CorrelatedPipelineItems commitSha={commitSha} sourcePipeline="incident" />
+            </div>
+          </>
         ) : null}
       </SheetContent>
     </Sheet>
