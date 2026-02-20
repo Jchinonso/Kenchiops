@@ -6,7 +6,7 @@
  */
 
 import { Badge } from "@/components/ui/badge";
-import { Zap, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { Zap, AlertTriangle, BarChart3, ListChecks, CheckCircle2, XCircle } from "lucide-react";
 import type { AlertWithTriageResult } from "@/hooks/useIncidentData";
 import { cn } from "@/lib/utils";
 import {
@@ -66,6 +66,37 @@ const canAcknowledge = (status: string): boolean =>
 const canResolve = (status: string): boolean =>
   status !== "resolved" && status !== "closed" && status !== "deduped";
 
+// ==================== Confidence Helpers ====================
+
+interface ConfidenceLevel {
+  readonly label: string;
+  readonly barColor: string;
+  readonly badgeClass: string;
+}
+
+const getConfidenceLevel = (value: number): ConfidenceLevel => {
+  const pct = Math.round(value * 100);
+  if (pct >= 80) {
+    return {
+      label: "High",
+      barColor: "bg-green-500",
+      badgeClass: "bg-green-900/30 text-green-400 border-green-700",
+    };
+  }
+  if (pct >= 50) {
+    return {
+      label: "Medium",
+      barColor: "bg-amber-500",
+      badgeClass: "bg-amber-900/30 text-amber-400 border-amber-700",
+    };
+  }
+  return {
+    label: "Low",
+    barColor: "bg-red-500",
+    badgeClass: "bg-red-900/30 text-red-400 border-red-700",
+  };
+};
+
 // ==================== Sub-components ====================
 
 const SectionHeading = ({ children }: { readonly children: React.ReactNode }) => (
@@ -122,8 +153,6 @@ export const IncidentDetailContent = ({
   const severityScore =
     (triageResult?.severityScore as number | undefined) ?? severityAssessment?.score;
   const confidence = triageResult?.confidence as number | undefined;
-  const completeness = triageResult?.completeness as number | undefined;
-  const missingFields = triageResult?.missingFields as readonly string[] | undefined;
   const routing = triageResult?.routingDecision as RoutingDecision | undefined;
   const correlated = triageResult?.correlatedIncidents as readonly CorrelatedIncident[] | undefined;
   const runbooks = triageResult?.matchedRunbooks as readonly MatchedRunbook[] | undefined;
@@ -198,20 +227,20 @@ export const IncidentDetailContent = ({
 
       {/* Recommended Actions */}
       {aiSummary?.suggestedActions && aiSummary.suggestedActions.length > 0 && (
-        <div>
-          <SectionHeading>Recommended Actions</SectionHeading>
-          <ul className="space-y-1.5">
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <ListChecks className="w-4 h-4 text-indigo-400" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Recommended Actions
+            </h3>
+          </div>
+          <ol className="space-y-2">
             {aiSummary.suggestedActions.map((item, idx) => (
-              <li key={idx} className="flex items-start gap-2 text-sm">
-                {item.priority && (
-                  <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
-                    {item.priority}
-                  </Badge>
-                )}
-                <span className="text-gray-700 dark:text-gray-300">{item.action}</span>
+              <li key={idx} className="text-sm text-gray-700 dark:text-gray-300">
+                {idx + 1}. {item.action}
               </li>
             ))}
-          </ul>
+          </ol>
         </div>
       )}
 
@@ -260,30 +289,39 @@ export const IncidentDetailContent = ({
         </div>
       )}
 
-      {/* Confidence & Completeness */}
-      {(confidence !== undefined || completeness !== undefined) && (
-        <div>
-          <SectionHeading>Confidence & Completeness</SectionHeading>
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-            {confidence !== undefined && (
-              <InfoRow label="Confidence" value={`${Math.round(confidence * 100)}%`} />
-            )}
-            {completeness !== undefined && (
-              <InfoRow label="Completeness" value={`${Math.round(completeness * 100)}%`} />
-            )}
-            {missingFields && missingFields.length > 0 && (
-              <div className="pt-1.5 mt-1.5 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                  Missing Fields
-                </p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  {missingFields.join(", ")}
-                </p>
+      {/* Confidence */}
+      {confidence !== undefined &&
+        (() => {
+          const pct = Math.round(confidence * 100);
+          const level = getConfidenceLevel(confidence);
+          return (
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-indigo-400" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Confidence
+                </h3>
               </div>
-            )}
-          </div>
-        </div>
-      )}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Diagnosis</span>
+                <span
+                  className={cn(
+                    "text-xs font-medium px-2.5 py-0.5 rounded-full border",
+                    level.badgeClass
+                  )}
+                >
+                  {level.label} ({pct}%)
+                </span>
+              </div>
+              <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all", level.barColor)}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })()}
 
       {/* Routing Decision */}
       {routing && (
