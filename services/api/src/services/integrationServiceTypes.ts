@@ -26,7 +26,7 @@ export interface DisconnectIntegrationResult {
 export interface IntegrationConnectionStatus {
   readonly provider: string;
   readonly connected: boolean;
-  readonly connectionId: string | null;
+  readonly connectionId: string;
   readonly connectionName: string | null;
-  readonly connectedAt: string | null;
+  readonly connectedAt: string;
 }

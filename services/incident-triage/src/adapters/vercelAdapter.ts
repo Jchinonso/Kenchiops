@@ -5,7 +5,6 @@
  * and generates fingerprints for deduplication.
  */
 
-import crypto from "crypto";
 import {
   ValidationError,
   createLogger,
@@ -15,17 +14,9 @@ import {
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
 import type { VercelWebhook, VercelDeploymentPayload } from "../types/vercelTypes.js";
+import { computeHash } from "../helpers/fingerprint.js";
 
 const logger = createLogger("vercel-adapter");
-
-/** Fingerprint hash algorithm */
-const FINGERPRINT_ALGORITHM = "sha256";
-
-/** Fingerprint separator */
-const FINGERPRINT_SEPARATOR = "|";
-
-/** Fingerprint hash encoding length (hex substring) */
-const FINGERPRINT_HASH_LENGTH = 40;
 
 // ==================== Internal Helpers ====================
 
@@ -123,17 +114,10 @@ const buildDescription = (webhook: VercelWebhook): string => {
  * Uses sha256 hash of: vercel | projectId | commitSha
  */
 const computeFingerprint = (alert: NormalizedAlert): string => {
-  const labels = alert.labels as Record<string, string>;
-  const projectId = labels.projectId ?? "";
-  const commitSha = labels.commitSha ?? "";
+  const projectId = alert.labels.projectId ?? "";
+  const commitSha = alert.labels.commitSha ?? "";
 
-  const components = ["vercel", projectId, commitSha].join(FINGERPRINT_SEPARATOR);
-
-  return crypto
-    .createHash(FINGERPRINT_ALGORITHM)
-    .update(components)
-    .digest("hex")
-    .substring(0, FINGERPRINT_HASH_LENGTH);
+  return computeHash(["vercel", projectId, commitSha]);
 };
 
 // ==================== Adapter Implementation ====================

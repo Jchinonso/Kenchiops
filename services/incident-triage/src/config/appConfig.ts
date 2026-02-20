@@ -77,6 +77,12 @@ const assertTriageConfig = (cfg: IncidentTriageConfig): void => {
       "PROMETHEUS_WEBHOOK_SECRET is empty — Prometheus webhook verification will fail"
     );
   }
+  if (!cfg.vercelWebhookSecret) {
+    startupLogger.warn("VERCEL_WEBHOOK_SECRET is empty — Vercel webhook verification will fail");
+  }
+  if (!cfg.netlifyWebhookSecret) {
+    startupLogger.warn("NETLIFY_WEBHOOK_SECRET is empty — Netlify webhook verification will fail");
+  }
   if (!slackUrl) {
     startupLogger.warn("SLACK_INCIDENT_WEBHOOK_URL is empty — Slack dispatch will fail");
   }

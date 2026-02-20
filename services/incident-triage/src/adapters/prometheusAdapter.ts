@@ -5,7 +5,6 @@
  * structures and generates fingerprints for deduplication.
  */
 
-import crypto from "crypto";
 import {
   ValidationError,
   createLogger,
@@ -13,6 +12,7 @@ import {
   PROMETHEUS_ALERT_STATUSES,
   PROMETHEUS_WEBHOOK_VERSION,
 } from "@kenchi/shared";
+import { computeHash } from "../helpers/fingerprint.js";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
 import {
@@ -24,15 +24,6 @@ const logger = createLogger("prometheus-adapter");
 
 /** Default severity when no severity label is available */
 const DEFAULT_SEVERITY: AlertSeverity = "medium";
-
-/** Fingerprint hash algorithm */
-const FINGERPRINT_ALGORITHM = "sha256";
-
-/** Fingerprint separator */
-const FINGERPRINT_SEPARATOR = "|";
-
-/** Fingerprint hash encoding length (hex substring) */
-const FINGERPRINT_HASH_LENGTH = 40;
 
 /** Delivery ID prefix for synthetic IDs */
 const DELIVERY_ID_PREFIX = "prometheus";
@@ -155,34 +146,17 @@ const validatePayload = (body: unknown): PrometheusAlertmanagerPayload => {
  * Uses sha256 hash of: source | service_name | alertname | instance
  */
 const computeFingerprint = (alert: NormalizedAlert): string => {
-  const alertname = (alert.labels as Record<string, string>).alertname ?? "";
-  const instance = (alert.labels as Record<string, string>).instance ?? "";
+  const alertname = alert.labels.alertname ?? "";
+  const instance = alert.labels.instance ?? "";
 
-  const components = [alert.source, alert.serviceName ?? "", alertname, instance].join(
-    FINGERPRINT_SEPARATOR
-  );
-
-  return crypto
-    .createHash(FINGERPRINT_ALGORITHM)
-    .update(components)
-    .digest("hex")
-    .substring(0, FINGERPRINT_HASH_LENGTH);
+  return computeHash([alert.source, alert.serviceName ?? "", alertname, instance]);
 };
 
 /**
  * Generates a synthetic delivery ID from groupKey, fingerprint, and timestamp.
  */
-const generateDeliveryId = (groupKey: string, alertFingerprint: string): string => {
-  const components = [DELIVERY_ID_PREFIX, groupKey, alertFingerprint, String(Date.now())].join(
-    FINGERPRINT_SEPARATOR
-  );
-
-  return crypto
-    .createHash(FINGERPRINT_ALGORITHM)
-    .update(components)
-    .digest("hex")
-    .substring(0, FINGERPRINT_HASH_LENGTH);
-};
+const generateDeliveryId = (groupKey: string, alertFingerprint: string, status: string): string =>
+  computeHash([DELIVERY_ID_PREFIX, groupKey, alertFingerprint, status]);
 
 // ==================== Adapter Implementation ====================
 
@@ -197,7 +171,7 @@ export const createPrometheusAdapter = (): AlertSourcePort => ({
     const payload = validatePayload(body);
     const firstAlert = payload.alerts[0];
     const serviceName = payload.commonLabels.service ?? payload.commonLabels.job ?? null;
-    const deliveryId = generateDeliveryId(payload.groupKey, firstAlert.fingerprint);
+    const deliveryId = generateDeliveryId(payload.groupKey, firstAlert.fingerprint, payload.status);
 
     const partialAlert: NormalizedAlert = {
       sourceAlertId: firstAlert.fingerprint,

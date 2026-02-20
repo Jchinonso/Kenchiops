@@ -5,13 +5,13 @@
  * structures and generates fingerprints for deduplication.
  */
 
-import crypto from "crypto";
 import {
   ValidationError,
   createLogger,
   redactObject,
   GRAFANA_ALERT_STATUSES,
 } from "@kenchi/shared";
+import { computeHash } from "../helpers/fingerprint.js";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
 import { GRAFANA_SEVERITY_MAP, type GrafanaWebhookPayload } from "../types/grafanaTypes.js";
@@ -20,15 +20,6 @@ const logger = createLogger("grafana-adapter");
 
 /** Default severity when no severity label is available */
 const DEFAULT_SEVERITY: AlertSeverity = "medium";
-
-/** Fingerprint hash algorithm */
-const FINGERPRINT_ALGORITHM = "sha256";
-
-/** Fingerprint separator */
-const FINGERPRINT_SEPARATOR = "|";
-
-/** Fingerprint hash encoding length (hex substring) */
-const FINGERPRINT_HASH_LENGTH = 40;
 
 /** Delivery ID prefix for synthetic IDs */
 const DELIVERY_ID_PREFIX = "grafana";
@@ -161,34 +152,17 @@ const validatePayload = (body: unknown): GrafanaWebhookPayload => {
  * Uses sha256 hash of: source | service_name | orgId | alertname
  */
 const computeFingerprint = (alert: NormalizedAlert): string => {
-  const alertname = (alert.labels as Record<string, string>).alertname ?? "";
-  const orgId = (alert.labels as Record<string, string>).grafana_org_id ?? "";
+  const alertname = alert.labels.alertname ?? "";
+  const orgId = alert.labels.grafana_org_id ?? "";
 
-  const components = [alert.source, alert.serviceName ?? "", orgId, alertname].join(
-    FINGERPRINT_SEPARATOR
-  );
-
-  return crypto
-    .createHash(FINGERPRINT_ALGORITHM)
-    .update(components)
-    .digest("hex")
-    .substring(0, FINGERPRINT_HASH_LENGTH);
+  return computeHash([alert.source, alert.serviceName ?? "", orgId, alertname]);
 };
 
 /**
  * Generates a synthetic delivery ID from orgId, fingerprint, and timestamp.
  */
-const generateDeliveryId = (orgId: number, alertFingerprint: string): string => {
-  const components = [DELIVERY_ID_PREFIX, String(orgId), alertFingerprint, String(Date.now())].join(
-    FINGERPRINT_SEPARATOR
-  );
-
-  return crypto
-    .createHash(FINGERPRINT_ALGORITHM)
-    .update(components)
-    .digest("hex")
-    .substring(0, FINGERPRINT_HASH_LENGTH);
-};
+const generateDeliveryId = (orgId: number, alertFingerprint: string, status: string): string =>
+  computeHash([DELIVERY_ID_PREFIX, String(orgId), alertFingerprint, status]);
 
 // ==================== Adapter Implementation ====================
 
@@ -203,7 +177,7 @@ export const createGrafanaAdapter = (): AlertSourcePort => ({
     const payload = validatePayload(body);
     const firstAlert = payload.alerts[0];
     const serviceName = payload.commonLabels.service ?? payload.commonLabels.job ?? null;
-    const deliveryId = generateDeliveryId(payload.orgId, firstAlert.fingerprint);
+    const deliveryId = generateDeliveryId(payload.orgId, firstAlert.fingerprint, payload.status);
 
     const partialAlert: NormalizedAlert = {
       sourceAlertId: firstAlert.fingerprint,

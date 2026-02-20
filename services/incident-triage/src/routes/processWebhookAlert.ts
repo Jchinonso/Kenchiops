@@ -24,8 +24,6 @@ import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 /** Queue event type for triage jobs */
 const TRIAGE_JOB_TYPE = "incident-triage";
 
-const logger = createLogger("webhook-alert-pipeline");
-
 // ==================== Types ====================
 
 interface ProcessWebhookAlertDeps {
@@ -48,6 +46,7 @@ export const processWebhookAlert = async (
   deps: ProcessWebhookAlertDeps
 ): Promise<void> => {
   const { queue, adapter, provider } = deps;
+  const logger = createLogger("webhook-alert-pipeline");
 
   // Parse the webhook payload into a normalized alert (adapter extracts deliveryId)
   const normalizedAlert = adapter.parseWebhook(req.body, req.headers);
@@ -61,6 +60,7 @@ export const processWebhookAlert = async (
       operation: "receiveWebhook",
       deliveryId,
       alertId: existingAlert.id,
+      ...req.context,
     });
     res.status(HTTP_STATUS.OK).json({
       status: "duplicate",
@@ -103,6 +103,7 @@ export const processWebhookAlert = async (
     alertId: alertRecord.id,
     deliveryId,
     severity: alertRecord.severity,
+    ...req.context,
   });
 
   res.status(HTTP_STATUS.OK).json({
