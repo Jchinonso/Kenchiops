@@ -38,6 +38,34 @@ export const mapRowToIncidentAlert = (row: IncidentAlertRow): IncidentAlertRecor
 // ==================== Validation ====================
 
 /**
+ * Maps snake_case keys from row_to_json(t.*) triage result to camelCase domain keys.
+ * Mirrors the column names in the incident_triage_results table.
+ */
+export const mapTriageResultKeys = (
+  raw: Readonly<Record<string, unknown>>
+): Readonly<Record<string, unknown>> => ({
+  id: raw.id,
+  alertId: raw.alert_id,
+  tenantId: raw.tenant_id,
+  severityScore: raw.severity_score,
+  severityLabel: raw.severity_label,
+  severityFactors: raw.severity_factors,
+  confidence: raw.confidence,
+  completeness: raw.completeness,
+  missingFields: raw.missing_fields,
+  matchedRunbooks: raw.matched_runbooks,
+  correlatedIncidents: raw.correlated_incidents,
+  evidenceCatalog: raw.evidence_catalog,
+  aiSummary: raw.ai_summary,
+  summarySource: raw.summary_source,
+  routingDecision: raw.routing_decision,
+  dispatchedTo: raw.dispatched_to,
+  pipelineDurationMs: raw.pipeline_duration_ms,
+  createdAt: raw.created_at,
+  updatedAt: raw.updated_at,
+});
+
+/**
  * Validates input for creating a new incident alert record.
  *
  * @throws ValidationError if required fields are missing

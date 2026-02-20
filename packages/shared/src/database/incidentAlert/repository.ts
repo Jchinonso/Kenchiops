@@ -28,6 +28,7 @@ import type {
 } from "./types.js";
 import {
   mapRowToIncidentAlert,
+  mapTriageResultKeys,
   validateCreateIncidentAlertInput,
   validateIncidentAlertId,
 } from "./helpers.js";
@@ -176,10 +177,11 @@ export const updateAlertStatus = async (
 const parseCountRow = (rows: ReadonlyArray<{ readonly count: string }>): number =>
   parseInt(rows[0]?.count ?? "0", 10);
 
-/** Extracts triage JSON from the joined row via destructuring */
+/** Extracts triage JSON from the joined row and maps snake_case keys to camelCase */
 const extractTriageJson = ({
   triage_result,
-}: AlertWithTriageRow): Readonly<Record<string, unknown>> | null => triage_result;
+}: AlertWithTriageRow): Readonly<Record<string, unknown>> | null =>
+  triage_result ? mapTriageResultKeys(triage_result) : null;
 
 /**
  * Lists incident alerts with pagination and optional filters.

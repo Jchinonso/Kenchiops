@@ -170,21 +170,8 @@ export const IncidentDetailContent = ({
         </div>
       </div>
 
-      {/* Alert Info */}
-      <div>
-        <SectionHeading>Alert Info</SectionHeading>
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-          <InfoRow label="Source" value={getSourceLabel(alert.source)} />
-          <InfoRow label="Service" value={alert.serviceName ?? "--"} />
-          <InfoRow label="Environment" value={alert.environment ?? "--"} />
-          {alert.fingerprint && <InfoRow label="Fingerprint" value={alert.fingerprint} />}
-          <InfoRow label="Received" value={formatTimestamp(alert.receivedAt)} />
-          <InfoRow label="Alert ID" value={alert.sourceAlertId} />
-        </div>
-      </div>
-
-      {/* AI Summary */}
-      {aiSummary && (
+      {/* Problem */}
+      {aiSummary && (aiSummary.headline || aiSummary.impactAssessment) && (
         <div>
           <div className="flex items-center gap-1.5 mb-2">
             {summarySource === "ai" ? (
@@ -193,22 +180,17 @@ export const IncidentDetailContent = ({
               <ClipboardList className="w-3.5 h-3.5 text-gray-500" />
             )}
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              {summarySource === "ai" ? "AI Summary" : "Template Summary"}
+              Problem
             </h3>
           </div>
-          <div className="space-y-2">
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-2">
             {aiSummary.headline && (
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {aiSummary.headline}
               </p>
             )}
-            {aiSummary.rootCauseSummary && (
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                {aiSummary.rootCauseSummary}
-              </p>
-            )}
             {aiSummary.impactAssessment && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 {aiSummary.impactAssessment}
               </p>
             )}
@@ -216,10 +198,20 @@ export const IncidentDetailContent = ({
         </div>
       )}
 
-      {/* Suggested Actions */}
+      {/* Root Cause */}
+      {aiSummary?.rootCauseSummary && (
+        <div>
+          <SectionHeading>Root Cause</SectionHeading>
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+            <p className="text-sm text-gray-700 dark:text-gray-300">{aiSummary.rootCauseSummary}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Recommended Actions */}
       {aiSummary?.suggestedActions && aiSummary.suggestedActions.length > 0 && (
         <div>
-          <SectionHeading>Suggested Actions</SectionHeading>
+          <SectionHeading>Recommended Actions</SectionHeading>
           <ul className="space-y-1.5">
             {aiSummary.suggestedActions.map((item, idx) => (
               <li key={idx} className="flex items-start gap-2 text-sm">
@@ -234,6 +226,19 @@ export const IncidentDetailContent = ({
           </ul>
         </div>
       )}
+
+      {/* Alert Info */}
+      <div>
+        <SectionHeading>Alert Info</SectionHeading>
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+          <InfoRow label="Source" value={getSourceLabel(alert.source)} />
+          <InfoRow label="Service" value={alert.serviceName ?? "--"} />
+          <InfoRow label="Environment" value={alert.environment ?? "--"} />
+          {alert.fingerprint && <InfoRow label="Fingerprint" value={alert.fingerprint} />}
+          <InfoRow label="Received" value={formatTimestamp(alert.receivedAt)} />
+          <InfoRow label="Alert ID" value={alert.sourceAlertId} />
+        </div>
+      </div>
 
       {/* Severity Assessment */}
       {(severityScore !== undefined || severityAssessment) && (
