@@ -41,6 +41,7 @@ import {
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
 import { SSE_STREAM_PATH } from "./routes/sseRoutes.js";
+import { setupSwagger } from "./swagger.js";
 import { appConfig } from "./config/appConfig.js";
 import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
 
@@ -311,6 +312,9 @@ const createApp = (): express.Express => {
 
   // Parse cookies for auth token extraction
   app.use(cookieParser());
+
+  // Swagger UI — mounted before auth so docs are publicly accessible
+  setupSwagger(app);
 
   // Middleware - use configured limit for large CI context payloads
   // Capture raw body ONLY when internal HMAC auth headers are present,
