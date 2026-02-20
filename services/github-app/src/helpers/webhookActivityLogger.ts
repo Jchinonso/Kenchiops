@@ -2,7 +2,7 @@
  * Webhook Activity Logger
  *
  * Shared helper for logging webhook processing activity to the database.
- * Used by both GitHub and Vercel webhook routes.
+ * Used by GitHub webhook routes.
  *
  * @module helpers/webhookActivityLogger
  */

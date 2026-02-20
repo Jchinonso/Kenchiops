@@ -26,14 +26,6 @@ export interface GitHubAppConfig {
     readonly webhookSecret: string;
     readonly installationId?: number;
   };
-  readonly vercel: {
-    readonly webhookSecret: string;
-    readonly apiToken: string;
-  };
-  readonly netlify: {
-    readonly webhookSecret: string;
-    readonly apiToken: string;
-  };
 }
 
 /**
@@ -88,13 +80,5 @@ export const appConfig: GitHubAppConfig = {
     installationId: config.GITHUB_INSTALLATION_ID
       ? parseInt(String(config.GITHUB_INSTALLATION_ID), 10)
       : undefined,
-  },
-  vercel: {
-    webhookSecret: config.VERCEL_WEBHOOK_SECRET || "",
-    apiToken: config.VERCEL_API_TOKEN || "",
-  },
-  netlify: {
-    webhookSecret: config.NETLIFY_WEBHOOK_SECRET || "",
-    apiToken: config.NETLIFY_API_TOKEN || "",
   },
 } as const;
