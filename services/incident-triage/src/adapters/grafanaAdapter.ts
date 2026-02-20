@@ -159,10 +159,15 @@ const computeFingerprint = (alert: NormalizedAlert): string => {
 };
 
 /**
- * Generates a synthetic delivery ID from orgId, fingerprint, and timestamp.
+ * Generates a synthetic delivery ID from orgId, fingerprint, status, and startsAt.
+ * Includes startsAt to differentiate re-firing alerts (same fingerprint after resolution).
  */
-const generateDeliveryId = (orgId: number, alertFingerprint: string, status: string): string =>
-  computeHash([DELIVERY_ID_PREFIX, String(orgId), alertFingerprint, status]);
+const generateDeliveryId = (
+  orgId: number,
+  alertFingerprint: string,
+  status: string,
+  startsAt: string
+): string => computeHash([DELIVERY_ID_PREFIX, String(orgId), alertFingerprint, status, startsAt]);
 
 // ==================== Adapter Implementation ====================
 
@@ -177,7 +182,12 @@ export const createGrafanaAdapter = (): AlertSourcePort => ({
     const payload = validatePayload(body);
     const firstAlert = payload.alerts[0];
     const serviceName = payload.commonLabels.service ?? payload.commonLabels.job ?? null;
-    const deliveryId = generateDeliveryId(payload.orgId, firstAlert.fingerprint, payload.status);
+    const deliveryId = generateDeliveryId(
+      payload.orgId,
+      firstAlert.fingerprint,
+      payload.status,
+      firstAlert.startsAt
+    );
 
     const partialAlert: NormalizedAlert = {
       sourceAlertId: firstAlert.fingerprint,

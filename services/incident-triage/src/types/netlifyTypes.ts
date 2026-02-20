@@ -35,22 +35,3 @@ export interface NetlifyDeployPayload {
   readonly deploy_time: number | null;
   readonly committer: string | null;
 }
-
-/**
- * Git context extracted from Netlify deploy payload fields.
- */
-export interface NetlifyGitContext {
-  readonly commitSha: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly branch: string | undefined;
-  readonly prNumber: number | undefined;
-}
-
-/**
- * Decoded JWS payload claims from a Netlify webhook signature.
- */
-export interface NetlifyJWSPayload {
-  readonly iss: string;
-  readonly sha256: string;
-}

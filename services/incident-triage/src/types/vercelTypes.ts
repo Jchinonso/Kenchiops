@@ -44,14 +44,3 @@ export interface VercelDeployment {
   readonly url: string;
   readonly name: string;
 }
-
-/**
- * Git context extracted from Vercel deployment metadata.
- */
-export interface VercelGitContext {
-  readonly commitSha: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly branch: string | undefined;
-  readonly prNumber: number | undefined;
-}

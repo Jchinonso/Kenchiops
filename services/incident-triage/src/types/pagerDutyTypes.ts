@@ -4,6 +4,8 @@
  * Type definitions for PagerDuty webhook v3 event payloads.
  */
 
+import type { AlertSeverity } from "./incidentTypes.js";
+
 // ==================== PagerDuty Webhook V3 ====================
 
 /**
@@ -107,14 +109,9 @@ export interface PagerDutyIncidentData {
 }
 
 /**
- * PagerDuty urgency level.
- */
-export type PagerDutyUrgency = "high" | "low";
-
-/**
  * Mapping from PagerDuty priority names to normalized severity levels.
  */
-export const PAGERDUTY_PRIORITY_MAP: Readonly<Record<string, string>> = {
+export const PAGERDUTY_PRIORITY_MAP: Readonly<Record<string, AlertSeverity>> = {
   P1: "critical",
   P2: "high",
   P3: "medium",
@@ -130,7 +127,7 @@ export const PAGERDUTY_PRIORITY_MAP: Readonly<Record<string, string>> = {
 /**
  * Default severity mapping from PagerDuty urgency.
  */
-export const PAGERDUTY_URGENCY_MAP: Readonly<Record<string, string>> = {
+export const PAGERDUTY_URGENCY_MAP: Readonly<Record<string, AlertSeverity>> = {
   high: "high",
   low: "low",
 } as const;

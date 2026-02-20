@@ -14,6 +14,8 @@ import {
   NotFoundError,
   ValidationError,
   config,
+  encryptValue,
+  decryptValue,
   findByTenantAndProvider,
   findConnectionById,
   createProviderConnection,
@@ -51,7 +53,7 @@ const getWebhookUrl = (provider: IntegrationProvider): string => {
     vercel: "/webhooks/vercel",
     netlify: "/webhooks/netlify",
   };
-  return `${config.INCIDENT_TRIAGE_URL}${WEBHOOK_PATH_MAP[provider]}`;
+  return `${config.OAUTH_CALLBACK_BASE_URL}${WEBHOOK_PATH_MAP[provider]}`;
 };
 
 /** Map provider to config client ID. */
@@ -255,7 +257,7 @@ export const createIntegrationService = (
       webhookSecret: credential,
       tokenExpiresAt: expiresAt,
       config: {
-        ...(tokens.refreshToken ? { refreshToken: tokens.refreshToken } : {}),
+        ...(tokens.refreshToken ? { refreshToken: encryptValue(tokens.refreshToken) } : {}),
         ...(webhookId ? { webhookId } : {}),
       },
     });
@@ -394,10 +396,21 @@ export const createIntegrationService = (
     }
 
     const connectionConfig = connection.config;
-    const stored = getConfigString(connectionConfig, "refreshToken");
+    const encryptedRefresh = getConfigString(connectionConfig, "refreshToken");
+
+    if (!encryptedRefresh) {
+      logger.warn("Expiring but no refresh value stored", {
+        provider: connection.provider,
+        connectionId,
+        ...context,
+      });
+      return;
+    }
+
+    const stored = decryptValue(encryptedRefresh);
 
     if (!stored) {
-      logger.warn("Expiring but no refresh value stored", {
+      logger.warn("Refresh token decryption returned empty", {
         provider: connection.provider,
         connectionId,
         ...context,
@@ -417,7 +430,7 @@ export const createIntegrationService = (
       tokenExpiresAt: newExpiresAt,
       config: {
         ...connectionConfig,
-        ...(newTokens.refreshToken ? { refreshToken: newTokens.refreshToken } : {}),
+        ...(newTokens.refreshToken ? { refreshToken: encryptValue(newTokens.refreshToken) } : {}),
       },
     });
 

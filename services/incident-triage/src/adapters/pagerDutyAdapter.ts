@@ -50,14 +50,14 @@ const mapSeverity = (data: PagerDutyIncidentData): AlertSeverity => {
   const priorityName = data.priority?.name?.toUpperCase() ?? "";
   const prioritySeverity = PAGERDUTY_PRIORITY_MAP[priorityName];
   if (prioritySeverity) {
-    return prioritySeverity as AlertSeverity;
+    return prioritySeverity;
   }
 
   // Fall back to urgency
   const urgency = data.urgency ?? "";
   const urgencySeverity = PAGERDUTY_URGENCY_MAP[urgency];
   if (urgencySeverity) {
-    return urgencySeverity as AlertSeverity;
+    return urgencySeverity;
   }
 
   return DEFAULT_SEVERITY;
