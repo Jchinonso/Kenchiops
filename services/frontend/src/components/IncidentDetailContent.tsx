@@ -6,7 +6,7 @@
  */
 
 import { Badge } from "@/components/ui/badge";
-import { Bot, ClipboardList, CheckCircle2, XCircle } from "lucide-react";
+import { Zap, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import type { AlertWithTriageResult } from "@/hooks/useIncidentData";
 import { cn } from "@/lib/utils";
 import {
@@ -118,7 +118,6 @@ export const IncidentDetailContent = ({
   const { alert, triageResult } = data;
 
   const aiSummary = triageResult?.aiSummary as AISummary | undefined;
-  const summarySource = triageResult?.summarySource as string | undefined;
   const severityAssessment = triageResult?.severityAssessment as SeverityAssessment | undefined;
   const severityScore =
     (triageResult?.severityScore as number | undefined) ?? severityAssessment?.score;
@@ -170,41 +169,30 @@ export const IncidentDetailContent = ({
         </div>
       </div>
 
-      {/* Problem */}
+      {/* Summary */}
       {aiSummary && (aiSummary.headline || aiSummary.impactAssessment) && (
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            {summarySource === "ai" ? (
-              <Bot className="w-3.5 h-3.5 text-indigo-500" />
-            ) : (
-              <ClipboardList className="w-3.5 h-3.5 text-gray-500" />
-            )}
-            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Problem
-            </h3>
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-indigo-400" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Summary</h3>
           </div>
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-2">
-            {aiSummary.headline && (
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {aiSummary.headline}
-              </p>
-            )}
-            {aiSummary.impactAssessment && (
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {aiSummary.impactAssessment}
-              </p>
-            )}
-          </div>
+          {aiSummary.headline && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">{aiSummary.headline}</p>
+          )}
+          {aiSummary.impactAssessment && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">{aiSummary.impactAssessment}</p>
+          )}
         </div>
       )}
 
       {/* Root Cause */}
       {aiSummary?.rootCauseSummary && (
-        <div>
-          <SectionHeading>Root Cause</SectionHeading>
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-            <p className="text-sm text-gray-700 dark:text-gray-300">{aiSummary.rootCauseSummary}</p>
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Root Cause</h3>
           </div>
+          <p className="text-sm text-gray-700 dark:text-gray-300">{aiSummary.rootCauseSummary}</p>
         </div>
       )}
 
