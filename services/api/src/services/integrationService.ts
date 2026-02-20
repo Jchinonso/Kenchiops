@@ -48,10 +48,10 @@ const generateWebhookSecret = (): string =>
 /** Compute the webhook URL for a given provider. */
 const getWebhookUrl = (provider: IntegrationProvider): string => {
   const WEBHOOK_PATH_MAP: Readonly<Record<IntegrationProvider, string>> = {
-    vercel: "/api/webhooks/vercel",
-    netlify: "/api/webhooks/netlify",
+    vercel: "/webhooks/vercel",
+    netlify: "/webhooks/netlify",
   };
-  return `${config.API_URL}${WEBHOOK_PATH_MAP[provider]}`;
+  return `${config.INCIDENT_TRIAGE_URL}${WEBHOOK_PATH_MAP[provider]}`;
 };
 
 /** Map provider to config client ID. */

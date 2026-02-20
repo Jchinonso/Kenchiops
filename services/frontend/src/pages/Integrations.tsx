@@ -1,19 +1,15 @@
 /**
  * Integrations Page
  *
- * Manages all external service connections: CI/CD platforms (GitHub, Vercel,
- * Netlify) and monitoring tools (PagerDuty, Datadog, etc.).
+ * Manages all external service connections: CI/CD platforms (GitHub)
+ * and monitoring tools (PagerDuty, Datadog, Vercel, Netlify, etc.).
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useIntegrationConnections } from "@/hooks/useIntegrationConnections";
 import { useTenantInfo } from "@/hooks/useDashboardData";
-import { apiClient } from "@/lib/apiClient";
 import { titleCase } from "@/lib/formatters";
-import { VercelIcon } from "@/components/icons/VercelIcon";
-import { NetlifyIcon } from "@/components/icons/NetlifyIcon";
 import { MonitoringIntegrations } from "@/components/MonitoringIntegrations";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
@@ -22,14 +18,12 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
-  Loader2,
   Link as LinkIcon,
 } from "lucide-react";
 
 // ==================== Constants ====================
 
 const GITHUB_APP_SLUG = import.meta.env.VITE_GITHUB_APP_SLUG ?? "kenchi-devops";
-const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   oauth_denied: "OAuth authorization was denied",
@@ -48,8 +42,6 @@ interface ConnectionCardProps {
   readonly actionLabel: string;
   readonly actionHref: string;
   readonly external?: boolean;
-  readonly onDisconnect?: () => void;
-  readonly disconnecting?: boolean;
 }
 
 const ConnectionCard = ({
@@ -59,8 +51,6 @@ const ConnectionCard = ({
   actionLabel,
   actionHref,
   external,
-  onDisconnect,
-  disconnecting,
 }: ConnectionCardProps) => (
   <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
     <div className="flex items-center gap-3">
@@ -83,17 +73,7 @@ const ConnectionCard = ({
       </div>
     </div>
     <div className="flex items-center gap-2">
-      {connected && onDisconnect && (
-        <button
-          type="button"
-          onClick={onDisconnect}
-          disabled={disconnecting}
-          className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-50"
-        >
-          {disconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : "Disconnect"}
-        </button>
-      )}
-      {!connected && external && (
+      {external ? (
         <a
           href={actionHref}
           target={actionHref.startsWith("http") ? "_blank" : undefined}
@@ -103,19 +83,9 @@ const ConnectionCard = ({
           {actionLabel}
           <ExternalLink className="w-3 h-3" />
         </a>
+      ) : (
+        !connected && <span className="text-xs text-gray-400">Coming soon</span>
       )}
-      {connected && external && !onDisconnect && (
-        <a
-          href={actionHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          {actionLabel}
-          <ExternalLink className="w-3 h-3" />
-        </a>
-      )}
-      {!connected && !external && <span className="text-xs text-gray-400">Coming soon</span>}
     </div>
   </div>
 );
@@ -124,10 +94,8 @@ const ConnectionCard = ({
 
 export const Integrations = () => {
   const { data: tenant } = useTenantInfo();
-  const { connections, refetch: refetchConnections } = useIntegrationConnections();
   const githubConnected = tenant?.githubConnected ?? false;
   const [searchParams, setSearchParams] = useSearchParams();
-  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
 
   // Show toast for integration connect results from URL params
   useEffect(() => {
@@ -146,38 +114,6 @@ export const Integrations = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
-
-  const vercelConnection = connections.find(
-    ({ provider, connected }) => provider === "vercel" && connected
-  );
-  const netlifyConnection = connections.find(
-    ({ provider, connected }) => provider === "netlify" && connected
-  );
-
-  const vercelConnectionId = vercelConnection?.connectionId ?? null;
-  const netlifyConnectionId = netlifyConnection?.connectionId ?? null;
-
-  const handleDisconnect = useCallback(
-    async (connectionId: string) => {
-      setDisconnectingId(connectionId);
-      try {
-        const response = await apiClient(`/integrations/${connectionId}`, {
-          method: "DELETE",
-        });
-        if (response.ok) {
-          toast.success("Integration disconnected");
-          refetchConnections();
-        } else {
-          toast.error("Failed to disconnect integration");
-        }
-      } catch {
-        toast.error("Failed to disconnect integration");
-      } finally {
-        setDisconnectingId(null);
-      }
-    },
-    [refetchConnections]
-  );
 
   return (
     <div className="space-y-6">
@@ -207,38 +143,6 @@ export const Integrations = () => {
             actionLabel={githubConnected ? "Manage" : "Install"}
             actionHref={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
             external
-          />
-          <ConnectionCard
-            name="Vercel"
-            icon={<VercelIcon className="w-8 h-8 text-gray-900 dark:text-gray-100" />}
-            connected={!!vercelConnection}
-            actionLabel="Connect"
-            actionHref={`${API_URL}/integrations/vercel/connect`}
-            external
-            onDisconnect={
-              vercelConnectionId
-                ? () => {
-                    handleDisconnect(vercelConnectionId);
-                  }
-                : undefined
-            }
-            disconnecting={disconnectingId === vercelConnectionId}
-          />
-          <ConnectionCard
-            name="Netlify"
-            icon={<NetlifyIcon className="w-8 h-8 text-teal-600 dark:text-teal-400" />}
-            connected={!!netlifyConnection}
-            actionLabel="Connect"
-            actionHref={`${API_URL}/integrations/netlify/connect`}
-            external
-            onDisconnect={
-              netlifyConnectionId
-                ? () => {
-                    handleDisconnect(netlifyConnectionId);
-                  }
-                : undefined
-            }
-            disconnecting={disconnectingId === netlifyConnectionId}
           />
           <ConnectionCard
             name="Slack"
