@@ -907,6 +907,7 @@ export interface Config {
   readonly API_URL: string;
   readonly SLACK_BOT_URL: string;
   readonly GITHUB_APP_URL: string;
+  readonly INCIDENT_TRIAGE_URL: string;
 
   // Redis Configuration
   readonly REDIS_URL: string;

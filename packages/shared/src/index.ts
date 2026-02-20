@@ -387,6 +387,7 @@ export {
   findByTenantAndProvider,
   findConnectionById,
   findByExternalOrgId,
+  findActiveByProvider,
   createProviderConnection,
   updateProviderConnection,
   deactivateConnection,

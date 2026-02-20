@@ -47,6 +47,11 @@ const QUERIES = {
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING *
   `,
+  FIND_ACTIVE_BY_PROVIDER: `
+    SELECT * FROM provider_connections
+    WHERE provider = $1 AND is_active = true
+    ORDER BY created_at ASC
+  `,
   DEACTIVATE: `
     UPDATE provider_connections
     SET is_active = false, updated_at = NOW()
@@ -103,6 +108,18 @@ export const findByExternalOrgId = async (
   ]);
   const row = result.rows[0];
   return row ? rowToProviderConnection(row) : null;
+};
+
+/**
+ * Find all active connections for a specific provider (across all tenants).
+ * Used for per-tenant webhook signature verification: iterate connections
+ * to find the matching secret when the static secret fails.
+ */
+export const findActiveByProvider = async (
+  provider: CIProviderType
+): Promise<readonly ProviderConnection[]> => {
+  const result = await query<ProviderConnectionRow>(QUERIES.FIND_ACTIVE_BY_PROVIDER, [provider]);
+  return result.rows.map(rowToProviderConnection);
 };
 
 /**
