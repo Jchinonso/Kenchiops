@@ -278,6 +278,13 @@ const handleGetConfidenceTrend = async (req: Request, res: Response): Promise<vo
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+const handleGetAnalysisCountsByRepo = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
+  const result = await dashboardService.getAnalysisCountsByRepo(tenantId, context);
+  res.status(HTTP_STATUS.OK).json({ data: result });
+};
+
 const handleGetCorrelations = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const context = getRequestContext(req);
@@ -300,6 +307,7 @@ router.get(
   asyncHandler(handleGetConfidenceDistribution)
 );
 router.get("/api/v1/dashboard/stats/confidence-trend", asyncHandler(handleGetConfidenceTrend));
+router.get("/api/v1/dashboard/stats/analyses-by-repo", asyncHandler(handleGetAnalysisCountsByRepo));
 router.get("/api/v1/dashboard/repositories", asyncHandler(handleGetRepositories));
 router.post("/api/v1/dashboard/analyses/by-events", asyncHandler(handleGetAnalysisStatusByEvents));
 router.get("/api/v1/dashboard/correlations/:commitSha", asyncHandler(handleGetCorrelations));

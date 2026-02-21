@@ -111,6 +111,22 @@ export interface ConfidenceTrendPoint {
   readonly count: number;
 }
 
+/**
+ * Database row type for per-repository analysis count aggregation.
+ */
+export interface AnalysisCountByRepoRow {
+  readonly repository: string;
+  readonly analysis_count: string;
+}
+
+/**
+ * Domain record for per-repository analysis count.
+ */
+export interface AnalysisCountByRepo {
+  readonly repository: string;
+  readonly analysisCount: number;
+}
+
 // ==================== Validation Types ====================
 
 /**

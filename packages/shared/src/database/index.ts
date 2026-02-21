@@ -134,8 +134,10 @@ export {
   getConfidenceDistribution,
   getConfidenceTrend,
   findAnalysesByCommitSha,
+  getAnalysisCountsByRepo,
   type CreateAnalysisInput,
   type AnalysisRecord,
+  type AnalysisCountByRepo,
   type ConfidenceTrendPoint,
 } from "./analysis/index.js";
 

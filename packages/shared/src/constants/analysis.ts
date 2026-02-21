@@ -130,4 +130,18 @@ export const ANALYSIS_QUERIES = {
     ORDER BY created_at DESC
     LIMIT 10
   `,
+
+  COUNT_BY_REPO: `
+    SELECT
+      COALESCE(
+        full_analysis->>'repository',
+        SPLIT_PART(aggregation_key, ':', 1)
+      ) AS repository,
+      COUNT(*)::text AS analysis_count
+    FROM analyses
+    WHERE tenant_id = $1
+      AND aggregation_key IS NOT NULL
+    GROUP BY repository
+    ORDER BY COUNT(*) DESC
+  `,
 } as const;

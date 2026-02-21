@@ -27,8 +27,10 @@ import {
   countWebhookActivitiesByTenant,
   findAnalysesByCommitSha,
   findIncidentsByCommitSha,
+  getAnalysisCountsByRepo,
   type RequestContext,
   type AnalysisRecord,
+  type AnalysisCountByRepo,
   type EventRecord,
   type WebhookActivityRecord,
   type ConfidenceTrendPoint,
@@ -382,6 +384,21 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
         ...context,
       });
       return trend;
+    },
+
+    /**
+     * Returns per-repository analysis counts for repo tab filtering.
+     */
+    getAnalysisCountsByRepo: async (
+      tenantId: string,
+      context: RequestContext
+    ): Promise<readonly AnalysisCountByRepo[]> => {
+      const counts = await getAnalysisCountsByRepo(tenantId);
+      logger.info("Analysis counts by repo retrieved", {
+        repoCount: counts.length,
+        ...context,
+      });
+      return counts;
     },
 
     /**

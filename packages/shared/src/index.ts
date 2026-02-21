@@ -268,8 +268,10 @@ export {
   getConfidenceDistribution,
   getConfidenceTrend,
   findAnalysesByCommitSha,
+  getAnalysisCountsByRepo,
   type CreateAnalysisInput,
   type AnalysisRecord,
+  type AnalysisCountByRepo,
   type ConfidenceTrendPoint,
 } from "./database/index.js";
 export {

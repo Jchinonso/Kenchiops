@@ -15,6 +15,7 @@ export type {
   AnalysisCountRow,
   ConfidenceDistributionRow,
   ConfidenceTrendPoint,
+  AnalysisCountByRepo,
   CreateAnalysisValidationRule,
 } from "./types.js";
 
@@ -43,4 +44,5 @@ export {
   getConfidenceDistribution,
   getConfidenceTrend,
   findAnalysesByCommitSha,
+  getAnalysisCountsByRepo,
 } from "./repository.js";

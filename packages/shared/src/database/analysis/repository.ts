@@ -25,6 +25,8 @@ import type {
   ConfidenceDistributionRow,
   ConfidenceTrendRow,
   ConfidenceTrendPoint,
+  AnalysisCountByRepoRow,
+  AnalysisCountByRepo,
 } from "./types.js";
 import {
   ANALYSIS_ID_PREFIX,
@@ -433,6 +435,41 @@ export const findAnalysesByCommitSha = async (
     return Object.freeze(result.rows.map(mapRowToAnalysis));
   } catch (error) {
     logger.error("Failed to find analyses by commit SHA", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Returns per-repository analysis counts for a tenant.
+ * Used for rendering repo filter tabs on the CI/CD Analyses page.
+ *
+ * @param tenantId - The tenant ID
+ * @returns Array of per-repository analysis counts ordered by count desc
+ */
+export const getAnalysisCountsByRepo = async (
+  tenantId: string
+): Promise<readonly AnalysisCountByRepo[]> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<AnalysisCountByRepoRow>(ANALYSIS_QUERIES.COUNT_BY_REPO, [tenantId]);
+
+    const counts = result.rows.map((row) => ({
+      repository: row.repository,
+      analysisCount: parseInt(row.analysis_count, PARSE_INT_RADIX),
+    }));
+
+    logger.info("Retrieved analysis counts by repo", {
+      tenantId,
+      repoCount: counts.length,
+    });
+
+    return Object.freeze(counts);
+  } catch (error) {
+    logger.error("Failed to get analysis counts by repo", {
       tenantId,
       error: getErrorMessage(error),
     });

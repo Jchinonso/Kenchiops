@@ -268,6 +268,21 @@ export const useAnalysisDetail = (
     `${analysisId ?? ""}:${refreshKey}`
   );
 
+// ==================== Analysis Counts by Repo ====================
+
+interface AnalysisCountByRepo {
+  readonly repository: string;
+  readonly analysisCount: number;
+}
+
+export const useAnalysisCountsByRepo = (
+  refreshKey: number = 0
+): UseFetchResult<readonly AnalysisCountByRepo[]> =>
+  useFetch<readonly AnalysisCountByRepo[]>(
+    "/api/v1/dashboard/stats/analyses-by-repo",
+    `${refreshKey}`
+  );
+
 // ==================== Batch Lookup Hook ====================
 
 interface AnalysisStatusEntry {

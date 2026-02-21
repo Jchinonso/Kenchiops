@@ -39,6 +39,7 @@ interface FilterBarProps {
   readonly onFilterChange: (filters: FilterValues) => void;
   readonly variant: "analyses" | "failures" | "incidents";
   readonly hideSource?: boolean;
+  readonly hideRepository?: boolean;
 }
 
 // ==================== Constants ====================
@@ -168,7 +169,13 @@ export const timeRangeToSince = (timeRange: string): string | undefined => {
 
 // ==================== Component ====================
 
-export const FilterBar = ({ filters, onFilterChange, variant, hideSource }: FilterBarProps) => {
+export const FilterBar = ({
+  filters,
+  onFilterChange,
+  variant,
+  hideSource,
+  hideRepository,
+}: FilterBarProps) => {
   const [localRepo, setLocalRepo] = useState(filters.repository);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Use a ref to always access the latest filters inside the debounced callback,
@@ -249,7 +256,7 @@ export const FilterBar = ({ filters, onFilterChange, variant, hideSource }: Filt
       role="search"
       aria-label="Table filters"
     >
-      {variant !== "incidents" && (
+      {variant !== "incidents" && !hideRepository && (
         <>
           <label className="sr-only" htmlFor="filter-repository">
             Filter by repository

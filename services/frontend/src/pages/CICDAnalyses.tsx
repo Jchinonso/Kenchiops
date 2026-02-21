@@ -36,7 +36,11 @@ import {
   ArrowDown,
   RefreshCw,
 } from "lucide-react";
-import { useAnalyses, type AnalysisRecord } from "@/hooks/useDashboardData";
+import {
+  useAnalyses,
+  useAnalysisCountsByRepo,
+  type AnalysisRecord,
+} from "@/hooks/useDashboardData";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
@@ -266,6 +270,33 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
     };
   });
 
+  const { data: analysisCountsByRepo } = useAnalysisCountsByRepo(refreshKey);
+  const hasRepoTabs = (analysisCountsByRepo?.length ?? 0) > 1;
+  const [activeRepoTab, setActiveRepoTab] = useState<string>("all");
+
+  const handleRepoTabChange = useCallback(
+    (repo: string) => {
+      setActiveRepoTab(repo);
+      setOffset(0);
+      setExpandedId(null);
+      const nextRepo = repo === "all" ? "" : repo;
+      setFilters((prev) => ({ ...prev, repository: nextRepo }));
+      const params = new URLSearchParams();
+      if (nextRepo) {
+        params.set("repository", nextRepo);
+      }
+      if (filters.minConfidence) {
+        params.set("confidence", filters.minConfidence);
+      }
+      if (filters.timeRange) {
+        params.set("timeRange", filters.timeRange);
+      }
+      setSearchParams(params, { replace: true });
+      saveFilters("analyses", { ...filters, repository: nextRepo });
+    },
+    [filters, setSearchParams]
+  );
+
   const handleFilterChange = useCallback(
     (next: FilterValues) => {
       setFilters(next);
@@ -368,7 +399,52 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
         </p>
       </div>
 
-      <FilterBar variant="analyses" filters={filters} onFilterChange={handleFilterChange} />
+      {hasRepoTabs && analysisCountsByRepo && (
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="tablist"
+          aria-label="Filter by repository"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeRepoTab === "all"}
+            onClick={() => handleRepoTabChange("all")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
+              activeRepoTab === "all"
+                ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
+                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+            )}
+          >
+            All ({analysisCountsByRepo.reduce((sum, entry) => sum + entry.analysisCount, 0)})
+          </button>
+          {analysisCountsByRepo.map((entry) => (
+            <button
+              key={entry.repository}
+              type="button"
+              role="tab"
+              aria-selected={activeRepoTab === entry.repository}
+              onClick={() => handleRepoTabChange(entry.repository)}
+              className={cn(
+                "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
+                activeRepoTab === entry.repository
+                  ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
+                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+              )}
+            >
+              {entry.repository} ({entry.analysisCount})
+            </button>
+          ))}
+        </div>
+      )}
+
+      <FilterBar
+        variant="analyses"
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        hideRepository={hasRepoTabs}
+      />
 
       <div aria-live="polite" className="sr-only">
         {isLoading
