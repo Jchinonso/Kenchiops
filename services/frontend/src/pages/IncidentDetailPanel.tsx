@@ -40,7 +40,7 @@ export const IncidentDetailPanel = ({
   onClose,
   onRefresh,
 }: IncidentDetailPanelProps) => {
-  const { data, isLoading, error } = useIncidentDetail(incidentId);
+  const { data, isLoading, error, refetch: refetchDetail } = useIncidentDetail(incidentId);
   const { acknowledge, isLoading: ackLoading } = useAcknowledgeIncident();
   const { resolve, isLoading: resolveLoading } = useResolveIncident();
   const [copied, setCopied] = useState(false);
@@ -64,16 +64,18 @@ export const IncidentDetailPanel = ({
       return;
     }
     await acknowledge(incidentId);
+    refetchDetail();
     onRefresh();
-  }, [incidentId, acknowledge, onRefresh]);
+  }, [incidentId, acknowledge, refetchDetail, onRefresh]);
 
   const handleResolve = useCallback(async () => {
     if (!incidentId) {
       return;
     }
     await resolve(incidentId);
+    refetchDetail();
     onRefresh();
-  }, [incidentId, resolve, onRefresh]);
+  }, [incidentId, resolve, refetchDetail, onRefresh]);
 
   const commitSha = useMemo(() => {
     if (!data) {
