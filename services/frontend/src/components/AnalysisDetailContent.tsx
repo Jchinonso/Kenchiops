@@ -6,7 +6,7 @@
  * full-page AnalysisDetail route.
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +20,76 @@ import {
   ListChecks,
   BarChart3,
   Code,
+  Package,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getConfidenceLabel, getConfidenceStyle, flattenSignalEntries } from "@/lib/formatters";
 import type { AnalysisRecord } from "@/hooks/useDashboardData";
+
+// ==================== Types for fullAnalysis enriched data ====================
+
+interface FullAnalysisDependencyChange {
+  readonly name: string;
+  readonly type: string;
+  readonly oldVersion?: string | null;
+  readonly newVersion?: string | null;
+  readonly ecosystem?: string | null;
+}
+
+interface FullAnalysisBuildConfigChange {
+  readonly file: string;
+  readonly changeType?: string | null;
+  readonly summary: string;
+}
+
+interface FullAnalysisAction {
+  readonly description: string;
+  readonly priority?: string | number;
+  readonly actionType?: string;
+}
+
+// ==================== Helpers ====================
+
+const priorityStyles: Readonly<Record<string, string>> = {
+  critical: "text-red-600 dark:text-red-400",
+  immediate: "text-red-600 dark:text-red-400",
+  high: "text-orange-600 dark:text-orange-400",
+  medium: "text-amber-600 dark:text-amber-400",
+  low: "text-green-600 dark:text-green-400",
+};
+
+const depChangeLabels: Readonly<Record<string, string>> = {
+  added: "Added",
+  removed: "Removed",
+  updated: "Updated",
+};
+
+const depChangeBadgeStyles: Readonly<Record<string, string>> = {
+  added: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  removed: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+  updated: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+};
+
+/** Extract typed arrays from the fullAnalysis JSON blob. */
+const extractFullAnalysis = (
+  fullAnalysis: Readonly<Record<string, unknown>>
+): {
+  readonly depChanges: readonly FullAnalysisDependencyChange[];
+  readonly buildChanges: readonly FullAnalysisBuildConfigChange[];
+  readonly richActions: readonly FullAnalysisAction[];
+} => {
+  const depChanges = Array.isArray(fullAnalysis.detectedDependencyChanges)
+    ? (fullAnalysis.detectedDependencyChanges as readonly FullAnalysisDependencyChange[])
+    : [];
+  const buildChanges = Array.isArray(fullAnalysis.detectedBuildConfigChanges)
+    ? (fullAnalysis.detectedBuildConfigChanges as readonly FullAnalysisBuildConfigChange[])
+    : [];
+  const richActions = Array.isArray(fullAnalysis.recommendedActions)
+    ? (fullAnalysis.recommendedActions as readonly FullAnalysisAction[])
+    : [];
+  return { depChanges, buildChanges, richActions };
+};
 
 // ==================== SectionCard ====================
 
@@ -97,6 +163,14 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
     ? flattenSignalEntries(analysis.confidenceSignals)
     : [];
 
+  const { depChanges, buildChanges, richActions } = useMemo(
+    () => extractFullAnalysis(analysis.fullAnalysis),
+    [analysis.fullAnalysis]
+  );
+
+  // Use rich actions from fullAnalysis if available, fall back to flat string array
+  const hasRichActions = richActions.length > 0 && typeof richActions[0]?.description === "string";
+
   return (
     <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
       {/* Summary */}
@@ -123,19 +197,106 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
         </div>
       </SectionCard>
 
-      {/* Recommended Actions */}
-      {analysis.recommendedActions && analysis.recommendedActions.length > 0 && (
+      {/* Recommended Actions (enriched with priority from fullAnalysis) */}
+      {hasRichActions ? (
         <SectionCard
           icon={<ListChecks className="h-4 w-4 text-green-500" />}
           title="Recommended Actions"
         >
           <ol className="list-decimal list-inside space-y-2">
-            {analysis.recommendedActions.map((action) => (
-              <li key={action} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                {action}
+            {richActions.map((action) => {
+              const priorityKey = String(action.priority ?? "medium").toLowerCase();
+              const style = priorityStyles[priorityKey] ?? "text-gray-600 dark:text-gray-400";
+              const label = `${priorityKey.charAt(0).toUpperCase()}${priorityKey.slice(1)}`;
+              return (
+                <li
+                  key={action.description}
+                  className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+                >
+                  <Badge variant="outline" className={cn("text-[10px] mr-2 py-0", style)}>
+                    {label}
+                  </Badge>
+                  {action.description}
+                </li>
+              );
+            })}
+          </ol>
+        </SectionCard>
+      ) : (
+        analysis.recommendedActions &&
+        analysis.recommendedActions.length > 0 && (
+          <SectionCard
+            icon={<ListChecks className="h-4 w-4 text-green-500" />}
+            title="Recommended Actions"
+          >
+            <ol className="list-decimal list-inside space-y-2">
+              {analysis.recommendedActions.map((action) => (
+                <li
+                  key={action}
+                  className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+                >
+                  {action}
+                </li>
+              ))}
+            </ol>
+          </SectionCard>
+        )
+      )}
+
+      {/* Dependency Changes */}
+      {depChanges.length > 0 && (
+        <SectionCard
+          icon={<Package className="h-4 w-4 text-cyan-500" />}
+          title={`Dependency Changes (${depChanges.length})`}
+        >
+          <div className="space-y-2">
+            {depChanges.map((dep) => (
+              <div
+                key={`${dep.name}-${dep.type}`}
+                className="flex items-center justify-between text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] py-0",
+                      depChangeBadgeStyles[dep.type] ?? "bg-gray-100 text-gray-700"
+                    )}
+                  >
+                    {depChangeLabels[dep.type] ?? dep.type}
+                  </Badge>
+                  <span className="font-mono text-gray-800 dark:text-gray-200">{dep.name}</span>
+                </div>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {dep.oldVersion && dep.newVersion
+                    ? `${dep.oldVersion} → ${dep.newVersion}`
+                    : (dep.newVersion ?? dep.oldVersion ?? "")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Build Config Changes */}
+      {buildChanges.length > 0 && (
+        <SectionCard
+          icon={<Wrench className="h-4 w-4 text-orange-500" />}
+          title={`Build Config Changes (${buildChanges.length})`}
+        >
+          <ul className="space-y-2">
+            {buildChanges.map((change) => (
+              <li key={change.file} className="text-sm">
+                <span className="font-mono text-gray-800 dark:text-gray-200">{change.file}</span>
+                {change.changeType && (
+                  <Badge variant="outline" className="text-[10px] ml-2 py-0">
+                    {change.changeType}
+                  </Badge>
+                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{change.summary}</p>
               </li>
             ))}
-          </ol>
+          </ul>
         </SectionCard>
       )}
 
