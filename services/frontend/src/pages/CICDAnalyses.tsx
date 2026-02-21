@@ -124,10 +124,8 @@ interface AnalysisRowProps {
 const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
   const repo = extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis);
   const confidence = Math.round(analysis.diagnosisConfidence * 100);
-  const commitSha = analysis.aggregationKey
-    ? analysis.aggregationKey.slice(analysis.aggregationKey.lastIndexOf(":") + 1)
-    : null;
-  const shortSha = commitSha && commitSha.length >= 7 ? commitSha.slice(0, 7) : null;
+  const commitSha = analysis.headSha ?? null;
+  const shortSha = commitSha ? commitSha.slice(0, 7) : null;
 
   return (
     <TableRow

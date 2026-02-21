@@ -88,7 +88,11 @@ export const NewInvestigation = () => {
     [form, submit, navigate]
   );
 
-  const isValid = form.description.trim().length > 0;
+  const isValid =
+    form.description.trim().length > 0 &&
+    form.description.length <= 2000 &&
+    form.serviceName.length <= 200 &&
+    form.endpoint.length <= 500;
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -136,6 +140,7 @@ export const NewInvestigation = () => {
                 placeholder="Describe the problem, e.g. 'API response times are slow on /api/orders since this morning'"
                 rows={4}
                 required
+                maxLength={2000}
                 className={INPUT_CLASS}
               />
             </div>
@@ -154,6 +159,7 @@ export const NewInvestigation = () => {
                 value={form.serviceName}
                 onChange={(event) => updateField("serviceName", event.target.value)}
                 placeholder="e.g. api-gateway, payment-service"
+                maxLength={200}
                 className={INPUT_CLASS}
               />
             </div>
@@ -227,6 +233,7 @@ export const NewInvestigation = () => {
                 value={form.endpoint}
                 onChange={(event) => updateField("endpoint", event.target.value)}
                 placeholder="e.g. /api/v1/orders, /health"
+                maxLength={500}
                 className={INPUT_CLASS}
               />
             </div>

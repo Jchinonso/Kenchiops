@@ -61,9 +61,17 @@ export const ANALYSIS_QUERIES = {
   `,
 
   GET_BY_TENANT: `
-    SELECT * FROM analyses
-    WHERE tenant_id = $1
-    ORDER BY created_at DESC
+    SELECT a.*,
+      (SELECT e.payload->>'headSha'
+       FROM events e
+       WHERE e.payload->>'repository' = a.aggregation_key
+         AND e.tenant_id = a.tenant_id
+         AND e.payload->>'headSha' IS NOT NULL
+         AND e.created_at <= a.created_at
+       ORDER BY e.created_at DESC LIMIT 1) AS head_sha
+    FROM analyses a
+    WHERE a.tenant_id = $1
+    ORDER BY a.created_at DESC
     LIMIT $2 OFFSET $3
   `,
 
@@ -78,14 +86,22 @@ export const ANALYSIS_QUERIES = {
   `,
 
   GET_BY_TENANT_FILTERED: `
-    SELECT * FROM analyses
-    WHERE tenant_id = $1
-      AND ($2::text IS NULL OR aggregation_key ILIKE '%' || $2 || '%')
-      AND ($3::numeric IS NULL OR diagnosis_confidence >= $3)
-      AND ($4::numeric IS NULL OR diagnosis_confidence < $4)
-      AND ($5::timestamp IS NULL OR created_at >= $5)
-      AND ($6::timestamp IS NULL OR created_at < $6)
-    ORDER BY created_at DESC
+    SELECT a.*,
+      (SELECT e.payload->>'headSha'
+       FROM events e
+       WHERE e.payload->>'repository' = a.aggregation_key
+         AND e.tenant_id = a.tenant_id
+         AND e.payload->>'headSha' IS NOT NULL
+         AND e.created_at <= a.created_at
+       ORDER BY e.created_at DESC LIMIT 1) AS head_sha
+    FROM analyses a
+    WHERE a.tenant_id = $1
+      AND ($2::text IS NULL OR a.aggregation_key ILIKE '%' || $2 || '%')
+      AND ($3::numeric IS NULL OR a.diagnosis_confidence >= $3)
+      AND ($4::numeric IS NULL OR a.diagnosis_confidence < $4)
+      AND ($5::timestamp IS NULL OR a.created_at >= $5)
+      AND ($6::timestamp IS NULL OR a.created_at < $6)
+    ORDER BY a.created_at DESC
     LIMIT $7 OFFSET $8
   `,
 

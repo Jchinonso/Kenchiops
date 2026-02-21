@@ -25,6 +25,16 @@ interface EvidenceGroup {
 
 // ==================== Helpers ====================
 
+/** Validate that a URL uses a safe protocol (http/https only). Blocks javascript: URIs. */
+const isSafeUrl = (url: string): boolean => {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
 const groupEvidenceBySources = (
   evidence: readonly InvestigationEvidenceItem[]
 ): readonly EvidenceGroup[] => {
@@ -71,7 +81,7 @@ const EvidenceItemCard = ({ item }: EvidenceItemCardProps) => {
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <span className={cn("text-xs font-medium", relevanceColor)}>{relevancePercent}%</span>
-          {typeof item.metadata?.url === "string" && (
+          {typeof item.metadata?.url === "string" && isSafeUrl(item.metadata.url) && (
             <a
               href={item.metadata.url}
               target="_blank"

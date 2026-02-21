@@ -45,6 +45,8 @@ export interface AnalysisRecord {
   readonly modelVersionId: string | null;
   /** Links to feedback via repo:commit format (e.g., "owner/repo:sha") */
   readonly aggregationKey: string | null;
+  /** Git commit SHA from the linked event (resolved via correlated subquery) */
+  readonly headSha: string | null;
   readonly createdAt: Date;
 }
 
@@ -66,6 +68,8 @@ export interface AnalysisRow {
   readonly tenant_id: string | null;
   readonly model_version_id: string | null;
   readonly aggregation_key: string | null;
+  /** Git commit SHA from joined event (may be null if no matching event) */
+  readonly head_sha: string | null;
   readonly created_at: Date;
 }
 

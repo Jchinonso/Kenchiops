@@ -43,6 +43,16 @@ export const INVESTIGATION_DEFAULTS = {
   MAX_EVIDENCE_ITEMS: 20,
 } as const;
 
+/**
+ * Frontend polling configuration for active investigations.
+ */
+export const INVESTIGATION_POLLING = {
+  /** Polling interval in ms for active investigation status checks */
+  INTERVAL_MS: 3000,
+  /** Maximum number of polls before stopping (~10 minutes at 3s intervals) */
+  MAX_POLL_COUNT: 200,
+} as const;
+
 // ==================== SQL Query Builders ====================
 
 // Helper: builds paginated list query with dynamic filters

@@ -8,6 +8,12 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiClient } from "@/lib/apiClient";
+// Inlined from @kenchi/shared — frontend Docker build context does not include shared package
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const investigationPollingConfig = {
+  intervalMs: 3000,
+  maxPollCount: 200,
+} as const;
 
 // ==================== Types ====================
 
@@ -115,9 +121,16 @@ const setRef = <T>(ref: React.MutableRefObject<T>, value: T): void => {
   Object.assign(ref, { current: value });
 };
 
-// ==================== Polling Constants ====================
+/** Truncate error messages to prevent internal details from leaking to the UI */
+const sanitizeErrorMessage = (message: string): string =>
+  message.length > 200 ? `${message.slice(0, 200)}...` : message;
 
-const POLL_INTERVAL_MS = 3000;
+// ==================== Validation ====================
+
+/** Validates that an ID is a UUID to prevent path traversal via crafted IDs */
+const isValidUuid = (value: string): boolean => uuidPattern.test(value);
+
+// ==================== Polling Constants ====================
 
 const isActiveStatus = (status: string): boolean =>
   status === "queued" || status === "gathering" || status === "analyzing";
@@ -173,7 +186,7 @@ const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
             // Response body not parseable as JSON — use default message
           }
 
-          setState({ data: null, isLoading: false, error: errorMessage });
+          setState({ data: null, isLoading: false, error: sanitizeErrorMessage(errorMessage) });
           return;
         }
 
@@ -184,7 +197,7 @@ const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
           return;
         }
         const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ data: null, isLoading: false, error: message });
+        setState({ data: null, isLoading: false, error: sanitizeErrorMessage(message) });
       }
     };
 
@@ -237,22 +250,38 @@ export const useInvestigationDetail = (
   id: string | null,
   refreshKey: number = 0
 ): UseFetchResult<InvestigationRecord> => {
+  // Validate ID format to prevent path traversal (e.g., "../../admin/users")
+  const safeId = id && isValidUuid(id) ? id : null;
+
   const result = useFetch<InvestigationRecord>(
-    id ? `/api/v1/investigations/${id}` : "",
-    `${id ?? ""}:${refreshKey}`
+    safeId ? `/api/v1/investigations/${safeId}` : "",
+    `${safeId ?? ""}:${refreshKey}`
   );
 
-  // Auto-poll when investigation is in an active state
+  // Auto-poll when investigation is in an active state, with bounded retries
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const pollCountRef = useRef(0);
   const currentStatus = result.data?.status;
 
   useEffect(() => {
+    // Reset poll count when status changes
+    setRef(pollCountRef, 0);
+
     if (currentStatus && isActiveStatus(currentStatus)) {
       setRef(
         intervalRef,
         setInterval(() => {
+          const nextCount = pollCountRef.current + 1;
+          setRef(pollCountRef, nextCount);
+          if (nextCount >= investigationPollingConfig.maxPollCount) {
+            // Stop polling after max attempts to prevent indefinite load
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+            }
+            return;
+          }
           result.refetch();
-        }, POLL_INTERVAL_MS)
+        }, investigationPollingConfig.intervalMs)
       );
     }
 
@@ -269,14 +298,14 @@ export const useInvestigationDetail = (
 
 // ==================== Mutation Helpers ====================
 
-/** Safely parse an error message from an API response body */
+/** Safely parse an error message from an API response body, truncated for display safety */
 const parseErrorBody = async (response: Response, fallback: string): Promise<string> => {
   try {
     const body: unknown = await response.json();
     const parsed = body as { readonly error?: { readonly message?: string } } | null;
-    return parsed?.error?.message ?? fallback;
+    return sanitizeErrorMessage(parsed?.error?.message ?? fallback);
   } catch {
-    return fallback;
+    return sanitizeErrorMessage(fallback);
   }
 };
 
@@ -311,7 +340,7 @@ export const useStartInvestigation = (): MutationState & {
         return json.data;
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ isLoading: false, error: message });
+        setState({ isLoading: false, error: sanitizeErrorMessage(message) });
         return null;
       }
     },

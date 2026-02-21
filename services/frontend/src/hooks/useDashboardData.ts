@@ -67,6 +67,7 @@ interface AnalysisRecord {
   readonly tenantId: string | null;
   readonly modelVersionId: string | null;
   readonly aggregationKey: string | null;
+  readonly headSha: string | null;
   readonly createdAt: string;
 }
 

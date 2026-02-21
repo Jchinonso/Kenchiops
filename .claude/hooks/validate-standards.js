@@ -475,6 +475,7 @@ const VALIDATION_RULES = [
     skipInTests: true,
     skipInAdapters: true,
     skipInConstructors: true,
+    stripTemplateLiterals: true,
   },
 ];
 
