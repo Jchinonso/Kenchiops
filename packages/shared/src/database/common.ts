@@ -109,6 +109,15 @@ export {
   type RelationshipType,
   type ExternalSourceType,
   type TechStackTag,
+  // Subscription
+  PLAN_QUERIES,
+  SUBSCRIPTION_QUERIES,
+  SUBSCRIPTION_DEFAULTS,
+  DEFAULT_PLAN_ID,
+  VALID_PLAN_TIERS,
+  PLAN_LIMIT_KEYS,
+  LIMIT_KEY_TO_PLAN_FIELD,
+  LIMIT_KEY_TO_USAGE_FIELD,
   // Auth
   USER_QUERIES,
   OAUTH_IDENTITY_QUERIES,

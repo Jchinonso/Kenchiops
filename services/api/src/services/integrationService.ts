@@ -16,6 +16,7 @@ import {
   config,
   encryptValue,
   decryptValue,
+  enforcePlanLimit,
   findByTenantAndProvider,
   findConnectionById,
   createProviderConnection,
@@ -210,6 +211,9 @@ export const createIntegrationService = (
         }
       );
     }
+
+    // Enforce plan limit on integrations
+    await enforcePlanLimit(tenantId, "max_integrations");
 
     // Check for existing active connection
     const existing = await findByTenantAndProvider(tenantId, provider);

@@ -24,6 +24,7 @@ import { Investigations } from "@/pages/Investigations";
 import { NewInvestigation } from "@/pages/NewInvestigation";
 import { InvestigationDetail } from "@/pages/InvestigationDetail";
 import { Settings } from "@/pages/Settings";
+import { PlanSelection } from "@/pages/PlanSelection";
 import { Integrations } from "@/pages/Integrations";
 import {
   Bell,
@@ -512,12 +513,13 @@ const Dashboard = () => {
 
   const isOverview = currentPath === "/dashboard";
   const isSettings = currentPath === "/dashboard/settings";
+  const isPlanSelection = currentPath === "/dashboard/settings/plan";
   const isIntegrations = currentPath === "/dashboard/integrations";
   const isCICD = isCICDRoute(currentPath);
   const isIncident = isIncidentRoute(currentPath);
   const incidentPage = isIncident ? renderIncidentPage(currentPath, refreshKey) : null;
   const comingSoonConfig =
-    isOverview || isCICD || isSettings || isIntegrations || incidentPage
+    isOverview || isCICD || isSettings || isPlanSelection || isIntegrations || incidentPage
       ? undefined
       : findComingSoonConfig(currentPath);
 
@@ -646,6 +648,8 @@ const Dashboard = () => {
             <ComingSoon {...comingSoonConfig} />
           ) : isIntegrations ? (
             <Integrations />
+          ) : isPlanSelection ? (
+            <PlanSelection />
           ) : isSettings ? (
             <Settings />
           ) : isCICD ? (

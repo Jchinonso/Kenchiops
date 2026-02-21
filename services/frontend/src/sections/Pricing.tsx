@@ -46,6 +46,22 @@ const tiers: readonly PricingTier[] = [
     highlighted: true,
   },
   {
+    name: "Team",
+    price: "$149",
+    period: "per month / 25 seats",
+    description: "For larger teams with advanced collaboration needs.",
+    features: [
+      "Everything in Pro",
+      "Up to 50 team members",
+      "Unlimited integrations",
+      "Audit log",
+      "Advanced team analytics",
+      "API access",
+    ],
+    cta: "Start 14-Day Trial",
+    ctaHref: "/login",
+  },
+  {
     name: "Enterprise",
     price: "Custom",
     period: "contact us",
@@ -75,7 +91,7 @@ const Pricing = () => (
         </p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+      <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
         {tiers.map((tier) => (
           <div
             key={tier.name}

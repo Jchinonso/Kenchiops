@@ -29,15 +29,55 @@ import {
 
 /**
  * Build the header section of the PR comment.
+ * Includes commit info, PR context, and workflow timing when available.
  */
-export const buildHeaderSection = (shortSha: string, failureCount: number): string[] => [
-  `## ${UI_EMOJI.failure} CI Failure Analysis`,
-  "",
-  `| ${UI_EMOJI.info} **Commit** | ${UI_EMOJI.warning} **Failed Checks** |`,
-  "| :--- | :--- |",
-  `| \`${shortSha}\` | ${failureCount} |`,
-  "",
-];
+export const buildHeaderSection = (aggregation: AggregatedFailures): string[] => {
+  const shortSha = aggregation.commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH);
+  const lines: string[] = [
+    `## ${UI_EMOJI.failure} CI Failure Analysis`,
+    "",
+    `| ${UI_EMOJI.info} **Commit** | ${UI_EMOJI.warning} **Failed Checks** |`,
+    "| :--- | :--- |",
+    `| \`${shortSha}\` | ${aggregation.failures.length} |`,
+    "",
+  ];
+
+  const { prContext } = aggregation;
+  const { workflowContext } = aggregation;
+
+  if (prContext ?? workflowContext) {
+    const contextParts: string[] = [];
+
+    if (prContext) {
+      contextParts.push(
+        `${UI_EMOJI.branch} **Branch:** \`${prContext.branch}\` → \`${prContext.baseBranch}\``
+      );
+      contextParts.push(`${UI_EMOJI.user} **Author:** ${prContext.author}`);
+      if (prContext.labels.length > 0) {
+        const labelBadges = prContext.labels.map((label) => `\`${label}\``).join(" ");
+        contextParts.push(`${UI_EMOJI.target} **Labels:** ${labelBadges}`);
+      }
+    }
+
+    if (workflowContext) {
+      contextParts.push(`${UI_EMOJI.workflow} **Workflow:** ${workflowContext.name}`);
+      if (workflowContext.duration) {
+        contextParts.push(`${UI_EMOJI.timer} **Duration:** ${workflowContext.duration}`);
+      }
+    }
+
+    lines.push(
+      `<details open><summary>${UI_EMOJI.details} <strong>Context</strong></summary>`,
+      "",
+      ...contextParts,
+      "",
+      "</details>",
+      ""
+    );
+  }
+
+  return lines;
+};
 
 /**
  * Build summary line for test failures.
@@ -456,10 +496,8 @@ export const buildConsolidatedPRComment = (
   aggregation: AggregatedFailures,
   feedbackLinks?: FeedbackLinks
 ): string => {
-  const shortSha = aggregation.commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH);
-
   const sections = [
-    ...buildHeaderSection(shortSha, aggregation.failures.length),
+    ...buildHeaderSection(aggregation),
     ...aggregation.failures.flatMap(buildFailureSection),
     ...buildFooterSection(feedbackLinks),
   ];

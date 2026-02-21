@@ -16,6 +16,7 @@ import { riskRulesRoutes } from "./riskRulesRoutes.js";
 import { dashboardRoutes } from "./dashboardRoutes.js";
 import { sseRoutes } from "./sseRoutes.js";
 import { integrationRoutes } from "./integrationRoutes.js";
+import { subscriptionRoutes } from "./subscriptionRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -53,4 +54,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Integration OAuth routes (Vercel, Netlify connections)
   app.use(integrationRoutes);
+
+  // Subscription routes (plan management)
+  app.use(subscriptionRoutes);
 };

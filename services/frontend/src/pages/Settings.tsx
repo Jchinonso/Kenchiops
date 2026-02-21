@@ -5,16 +5,19 @@
  * notification preferences, and account management (danger zone).
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenantInfo } from "@/hooks/useDashboardData";
 import { useTheme } from "@/hooks/useTheme";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
+import { useSubscription, useSubscriptionUsage, type UsageLimitDTO } from "@/hooks/useSubscription";
 import { apiClient } from "@/lib/apiClient";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -27,7 +30,17 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { User, Building2, Github, Sun, Moon, Monitor, Bell, AlertTriangle } from "lucide-react";
+import {
+  User,
+  Building2,
+  Github,
+  Sun,
+  Moon,
+  Monitor,
+  Bell,
+  AlertTriangle,
+  CreditCard,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
@@ -85,6 +98,58 @@ const ThemeOption = ({ label, icon, active, onClick }: ThemeOptionProps) => (
   </button>
 );
 
+// ==================== Plan Badge Helpers ====================
+
+const PLAN_BADGE_STYLES: Readonly<Record<string, string>> = {
+  free: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800",
+  pro: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800",
+  team: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-200 dark:border-purple-800",
+  enterprise:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800",
+};
+
+const getPlanBadgeStyle = (planId: string): string =>
+  PLAN_BADGE_STYLES[planId] ?? PLAN_BADGE_STYLES.free;
+
+// ==================== Usage Bar ====================
+
+interface UsageBarProps {
+  readonly label: string;
+  readonly usage: UsageLimitDTO;
+}
+
+const UsageBar = ({ label, usage }: UsageBarProps) => {
+  const percent = usage.limited
+    ? Math.min(Math.round((usage.current / (usage.limit ?? 1)) * 100), 100)
+    : 0;
+  const exceeded = usage.limited && usage.limit !== null && usage.current >= usage.limit;
+  const displayLimit = usage.limited && usage.limit !== null ? String(usage.limit) : "Unlimited";
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{label}</span>
+        <span
+          className={cn(
+            "text-xs font-medium",
+            exceeded ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"
+          )}
+        >
+          {usage.current} / {displayLimit}
+        </span>
+      </div>
+      {usage.limited ? (
+        <Progress
+          value={percent}
+          className={cn("h-1.5", exceeded && "[&>[data-slot=progress-indicator]]:bg-red-500")}
+        />
+      ) : (
+        <div className="h-1.5 w-full rounded-full bg-green-100 dark:bg-green-900" />
+      )}
+    </div>
+  );
+};
+
 // ==================== Main Component ====================
 
 const DELETE_CONFIRMATION = "DELETE";
@@ -92,9 +157,15 @@ const DELETE_CONFIRMATION = "DELETE";
 export const Settings = () => {
   const { user, logout } = useAuth();
   const { data: tenant, isLoading: tenantLoading } = useTenantInfo();
+  const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
+  const { data: usageData, isLoading: usageLoading } = useSubscriptionUsage();
   const { preference, setTheme } = useTheme();
   const { toastEnabled, browserEnabled, setToastEnabled, setBrowserEnabled } =
     useNotificationPreferences();
+
+  const planId = useMemo(() => subscription?.plan.id ?? "free", [subscription]);
+  const planDisplayName = useMemo(() => subscription?.plan.displayName ?? "Free", [subscription]);
+  const isSubLoading = subscriptionLoading || usageLoading;
 
   const browserPermissionDenied = isBrowserNotificationDenied();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -233,6 +304,59 @@ export const Settings = () => {
             </div>
           ) : (
             <p className="text-sm text-gray-500 dark:text-gray-400">No organization found.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Subscription Plan */}
+      <Card>
+        <CardHeader className="border-b">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-indigo-500" />
+            <CardTitle>Subscription Plan</CardTitle>
+          </div>
+          <CardDescription>Your current plan and resource usage.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {isSubLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-full" />
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    Current Plan
+                  </span>
+                  <Badge variant="outline" className={cn("text-xs", getPlanBadgeStyle(planId))}>
+                    {planDisplayName}
+                  </Badge>
+                </div>
+                <Link
+                  to="/dashboard/settings/plan"
+                  className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors"
+                >
+                  Manage Plan
+                </Link>
+              </div>
+              {usageData ? (
+                <div className="space-y-3">
+                  <UsageBar label="Repositories" usage={usageData.usage.repositories} />
+                  <UsageBar label="Analyses This Month" usage={usageData.usage.analysesThisMonth} />
+                  <UsageBar label="Integrations" usage={usageData.usage.integrations} />
+                  <UsageBar label="Team Members" usage={usageData.usage.teamMembers} />
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Unable to load usage data.
+                </p>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

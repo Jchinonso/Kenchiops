@@ -422,6 +422,42 @@ export {
   deactivateConnection,
 } from "./database/index.js";
 
+// Subscription module (Plan tiers and tenant subscriptions)
+export {
+  // Types
+  type PlanId,
+  type SubscriptionStatus,
+  type PlanLimitKey,
+  type PlanFeatureKey,
+  type PlanLimits,
+  type PlanFeatures,
+  type Plan,
+  type TenantSubscription,
+  type ChangePlanInput,
+  type PlanUsage,
+  type PlanLimitCheckResult,
+  type SubscriptionWithPlan,
+  type UsageLimitDetail,
+  type SubscriptionUsageResponse,
+  // Helpers
+  validatePlanId,
+  validateChangePlanInput,
+  isWithinLimit,
+  getPlanLimit,
+  hasPlanFeature,
+  getUsageForLimitKey,
+  // Repository
+  getAllPlans,
+  getPlanById,
+  getSubscriptionByTenant,
+  getSubscriptionWithPlan,
+  ensureSubscription,
+  changePlan,
+  getTenantUsage,
+  checkPlanLimit,
+  enforcePlanLimit,
+} from "./database/index.js";
+
 // Risk rules repository operations
 export {
   createCustomRiskRule,

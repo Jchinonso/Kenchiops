@@ -426,6 +426,44 @@ export {
   deactivateConnection,
 } from "./providerConnection/index.js";
 
+// Subscription module (Plan tiers and tenant subscriptions)
+export {
+  // Types
+  type PlanId,
+  type SubscriptionStatus,
+  type PlanLimitKey,
+  type PlanFeatureKey,
+  type PlanLimits,
+  type PlanFeatures,
+  type Plan,
+  type TenantSubscription,
+  type ChangePlanInput,
+  type PlanUsage,
+  type PlanLimitCheckResult,
+  type SubscriptionWithPlan,
+  type UsageLimitDetail,
+  type SubscriptionUsageResponse,
+  // Helpers
+  rowToPlan,
+  rowToSubscription,
+  validatePlanId,
+  validateChangePlanInput,
+  isWithinLimit,
+  getPlanLimit,
+  hasPlanFeature,
+  getUsageForLimitKey,
+  // Repository
+  getAllPlans,
+  getPlanById,
+  getSubscriptionByTenant,
+  getSubscriptionWithPlan,
+  ensureSubscription,
+  changePlan,
+  getTenantUsage,
+  checkPlanLimit,
+  enforcePlanLimit,
+} from "./subscription/index.js";
+
 // Risk rules module (Context-Aware Risk Scoring)
 // Note: CustomRiskRuleRow, RiskAssessmentRow, and row mappers are internal.
 export {
