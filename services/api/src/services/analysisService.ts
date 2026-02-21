@@ -309,7 +309,11 @@ export const performAnalysis = async (
     ...logContext,
   });
 
-  const analysisResult = await analyzeFailure(event, enrichedEvidence, context);
+  // Strip raw log from event payload — evidence already contains processed log data.
+  // The failureLog can be 500K+ chars, which overwhelms the LLM prompt token budget.
+  const { failureLog: _rawLog, ...llmPayload } = event.payload as Record<string, unknown>;
+  const llmEvent: Event = { ...event, payload: llmPayload };
+  const analysisResult = await analyzeFailure(llmEvent, enrichedEvidence, context);
   const confidenceResult = calculateConfidenceScore(analysisResult, enrichedEvidence);
 
   // Persist analysis to database for evaluation and fine-tuning
