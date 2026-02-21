@@ -15,7 +15,7 @@ export const PLAN_TIERS = {
 
 export const VALID_PLAN_TIERS = new Set(["free", "pro", "team", "enterprise"] as const);
 
-export const DEFAULT_PLAN_ID = "free" as const;
+export const DEFAULT_PLAN_ID = PLAN_TIERS.FREE;
 
 // ==================== Subscription Status ====================
 
@@ -88,8 +88,8 @@ export const SUBSCRIPTION_QUERIES = {
                 WHERE tenant_id = $3
                 RETURNING *`,
 
-  COUNT_REPOSITORIES: `SELECT COUNT(DISTINCT repository) AS count
-                       FROM events
+  COUNT_REPOSITORIES: `SELECT COUNT(*) AS count
+                       FROM repository_channel_mappings
                        WHERE tenant_id = $1`,
 
   COUNT_ANALYSES_THIS_MONTH: `SELECT COUNT(*) AS count

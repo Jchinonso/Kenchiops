@@ -14,7 +14,6 @@
  * @module routes/sseRoutes
  */
 
-import crypto from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import {
   createLogger,
@@ -24,7 +23,6 @@ import {
   SSE_CONFIG,
   PUBSUB_CHANNELS,
   SERVICE_NAMES,
-  type RequestContext,
   type QueueMessage,
 } from "@kenchi/shared";
 
@@ -85,19 +83,6 @@ const releaseConnection = (tenantId: string): void => {
 };
 
 // ==================== Helpers ====================
-
-/**
- * Extract the RequestContext from an Express request.
- */
-const getRequestContext = (req: Request): RequestContext => {
-  const reqWithContext = req as Request & { readonly context?: RequestContext };
-  return (
-    reqWithContext.context ?? {
-      requestId: crypto.randomUUID(),
-      tenantId: "anonymous",
-    }
-  );
-};
 
 /**
  * Extract tenantId from authenticated user or throw.
@@ -165,7 +150,7 @@ interface DashboardEventPayload {
  * - Socket timeout disabled: prevents premature connection drops
  */
 const handleSSEStream = (req: Request, res: Response): void => {
-  const context = getRequestContext(req);
+  const { context } = req;
 
   // Validate auth — this throws AuthorizationError if no tenant
   // let: tenantId may throw synchronously before SSE headers are sent

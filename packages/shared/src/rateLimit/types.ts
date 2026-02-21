@@ -7,6 +7,7 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
+import type { RequestContext } from "../core/types.js";
 
 // ==================== Security Constants ====================
 
@@ -699,13 +700,14 @@ export const GEO_RESTRICTION_DEFAULTS = {
 } as const;
 
 /**
- * Express Request with optional trusted proxy context.
+ * Express Request with trusted proxy context enrichment.
  * Used by geo restriction to verify header trustworthiness.
+ * Extends the global RequestContext (set by requestContextMiddleware)
+ * with an optional isTrustedProxy flag.
  */
 export interface RequestWithProxyContext extends Request {
-  context?: {
-    isTrustedProxy?: boolean;
-    [key: string]: unknown;
+  readonly context: RequestContext & {
+    readonly isTrustedProxy?: boolean;
   };
 }
 
@@ -1081,14 +1083,15 @@ export interface ClientIPOptions {
 export interface SecureKeyOptions extends ClientIPOptions {}
 
 /**
- * Express Request extended with optional context from auth middleware.
+ * Express Request extended with identity context from auth middleware.
  * This is the preferred source for identity over headers.
+ * Extends the global RequestContext (set by requestContextMiddleware)
+ * with optional userId and installationId for rate limit keying.
  */
 export interface RequestWithContext extends Request {
-  context?: {
-    tenantId?: string;
-    userId?: string;
-    installationId?: string;
+  readonly context: RequestContext & {
+    readonly userId?: string;
+    readonly installationId?: string;
   };
 }
 

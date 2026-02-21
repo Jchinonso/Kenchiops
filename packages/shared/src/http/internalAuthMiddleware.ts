@@ -11,7 +11,6 @@ import type { Request, Response, NextFunction } from "express";
 import { config } from "../core/config.js";
 import { AuthenticationError, invariant } from "../core/errors.js";
 import { createLogger } from "../core/logger.js";
-import type { RequestContext } from "../core/types.js";
 import { INTERNAL_AUTH_HEADERS, verifyInternalSignature } from "./internalAuth.js";
 
 const logger = createLogger("internal-auth-middleware");
@@ -20,12 +19,11 @@ const logger = createLogger("internal-auth-middleware");
 let warnedMissingSecret = false;
 
 /**
- * Extended Express Request that may carry rawBody (from express.json verify)
- * and context (from upstream RequestContext middleware).
+ * Extended Express Request that may carry rawBody (from express.json verify).
+ * `req.context` is globally augmented by requestContextMiddleware.
  */
 interface InternalAuthRequest extends Request {
   readonly rawBody?: Buffer;
-  readonly context?: RequestContext;
 }
 
 /** Configuration options for the internal auth middleware. */
@@ -102,13 +100,9 @@ export const createInternalAuthMiddleware = (
     }
 
     // Enrich request context with calling service info
-    if (serviceName && typedReq.context) {
-      const enrichedContext = { ...typedReq.context, actor: `service:${serviceName}` };
-      Object.defineProperty(req, "context", {
-        value: enrichedContext,
-        writable: true,
-        configurable: true,
-        enumerable: true,
+    if (serviceName) {
+      Object.assign(req, {
+        context: { ...req.context, actor: `service:${serviceName}` },
       });
     }
 

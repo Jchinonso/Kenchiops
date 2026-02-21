@@ -475,6 +475,7 @@ export {
   errorHandler,
   asyncHandler,
   requestLogger,
+  requestContextMiddleware,
   authMiddleware,
   requireRole,
 } from "./http/index.js";

@@ -7,7 +7,6 @@
  * @module routes/integrationRoutes
  */
 
-import crypto from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
@@ -21,7 +20,6 @@ import {
   createOAuthState,
   consumeOAuthState,
   type IntegrationProvider,
-  type RequestContext,
 } from "@kenchi/shared";
 
 import { createIntegrationService } from "../services/integrationService.js";
@@ -35,17 +33,6 @@ const logger = createLogger("integration-routes");
 const integrationService = createIntegrationService(getIntegrationAdapter);
 
 // ==================== Helpers ====================
-
-/** Extract the RequestContext from an Express request. */
-const getRequestContext = (req: Request): RequestContext => {
-  const reqWithContext = req as Request & { readonly context?: RequestContext };
-  return (
-    reqWithContext.context ?? {
-      requestId: crypto.randomUUID(),
-      tenantId: "anonymous",
-    }
-  );
-};
 
 /** Validate and cast a route parameter to IntegrationProvider. */
 const validateIntegrationProvider = (providerParam: string): IntegrationProvider => {
@@ -102,7 +89,7 @@ const buildIntegrationAuthorizeUrl = (
  * List all integration connections for the authenticated tenant.
  */
 const handleListIntegrations = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
 
   if (!req.user) {
     throw new AuthenticationError("Authentication required", {
@@ -126,7 +113,7 @@ const handleListIntegrations = async (req: Request, res: Response): Promise<void
  * Initiate OAuth flow: generate CSRF state and redirect to provider.
  */
 const handleIntegrationConnect = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
 
   if (!req.user) {
     throw new AuthenticationError("Authentication required", {
@@ -166,7 +153,7 @@ const handleIntegrationConnect = async (req: Request, res: Response): Promise<vo
  * Handle OAuth callback: exchange code, create connection, redirect to frontend.
  */
 const handleIntegrationCallback = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
   const frontendUrl = config.FRONTEND_URL;
   const { code, state, error: oauthError } = req.query;
 
@@ -273,7 +260,7 @@ const handleIntegrationCallback = async (req: Request, res: Response): Promise<v
  * Disconnect an integration (delete webhook + deactivate connection).
  */
 const handleIntegrationDisconnect = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
 
   if (!req.user) {
     throw new AuthenticationError("Authentication required", {

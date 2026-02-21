@@ -7,7 +7,6 @@
  * @module routes/dashboardRoutes
  */
 
-import crypto from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
@@ -17,7 +16,6 @@ import {
   PARSE_INT_RADIX,
   DASHBOARD_PAGINATION,
   ANALYSIS_DEFAULTS,
-  type RequestContext,
 } from "@kenchi/shared";
 import { createGitHubInstallationAdapter } from "../adapters/githubInstallationAdapter.js";
 import { createDashboardService } from "../services/dashboardService.js";
@@ -30,21 +28,6 @@ const githubAdapter = createGitHubInstallationAdapter();
 const dashboardService = createDashboardService(githubAdapter);
 
 // ==================== Helpers ====================
-
-/**
- * Extract the RequestContext from an Express request.
- * Context is set by upstream middleware; if missing, creates a
- * minimal context from the request to ensure propagation.
- */
-const getRequestContext = (req: Request): RequestContext => {
-  const reqWithContext = req as Request & { readonly context?: RequestContext };
-  return (
-    reqWithContext.context ?? {
-      requestId: crypto.randomUUID(),
-      tenantId: "anonymous",
-    }
-  );
-};
 
 /**
  * Extract tenantId from authenticated user or throw.
@@ -87,21 +70,21 @@ const parsePaginationParams = (
 
 const handleGetTenantInfo = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const result = await dashboardService.getTenantInfo(tenantId, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
 const handleGetDashboardStats = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const result = await dashboardService.getDashboardStats(tenantId, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
 const handleGetRepositories = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const result = await dashboardService.getRepositories(tenantId, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
@@ -119,7 +102,7 @@ const parseNumericParam = (value: unknown): number | null => {
 
 const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const { limit, offset } = parsePaginationParams(req);
   const {
     repository: repoParam,
@@ -160,7 +143,7 @@ const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => 
 
 const handleGetFailures = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const { limit, offset } = parsePaginationParams(req);
   const {
     repository: repoParam,
@@ -193,7 +176,7 @@ const handleGetFailures = async (req: Request, res: Response): Promise<void> => 
 
 const handleGetAnalysisDetail = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const { id } = req.params;
 
   if (!id) {
@@ -209,7 +192,7 @@ const handleGetAnalysisDetail = async (req: Request, res: Response): Promise<voi
 
 const handleGetAnalysisStatusByEvents = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const { eventIds } = req.body as { readonly eventIds?: readonly string[] };
   const { length: idCount } = Array.isArray(eventIds) ? eventIds : [];
 
@@ -233,14 +216,14 @@ const handleGetAnalysisStatusByEvents = async (req: Request, res: Response): Pro
 
 const handleGetConfidenceDistribution = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const result = await dashboardService.getConfidenceDistributionStats(tenantId, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
 const handleGetWebhookActivity = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const { limit, offset } = parsePaginationParams(req);
   const source = parseStringParam(req.query.source);
   const status = parseStringParam(req.query.status);
@@ -261,7 +244,7 @@ const VALID_TREND_BUCKETS = new Set(["day", "week"]);
 
 const handleGetConfidenceTrend = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
 
   const bucketParam = parseStringParam(req.query.bucket);
   const bucket: "day" | "week" =
@@ -280,14 +263,14 @@ const handleGetConfidenceTrend = async (req: Request, res: Response): Promise<vo
 
 const handleGetAnalysisCountsByRepo = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const result = await dashboardService.getAnalysisCountsByRepo(tenantId, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
 const handleGetCorrelations = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
   const { commitSha } = req.params;
 
   if (!commitSha || commitSha.length < DASHBOARD_PAGINATION.MIN_COMMIT_SHA_LENGTH) {

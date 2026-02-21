@@ -7,11 +7,9 @@
  * @module routes/subscriptionRoutes
  */
 
-import crypto from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
-  requireRole,
   createLogger,
   AuthorizationError,
   ValidationError,
@@ -21,7 +19,6 @@ import {
   type PlanId,
   type TenantSubscription,
   type UsageLimitDetail,
-  type RequestContext,
   // Repository
   getAllPlans,
   getPlanById,
@@ -36,21 +33,6 @@ const router = Router();
 const logger = createLogger("subscription-routes");
 
 // ==================== Helpers ====================
-
-/**
- * Extract the RequestContext from an Express request.
- * Context is set by upstream middleware; if missing, creates a
- * minimal context from the request to ensure propagation.
- */
-const getRequestContext = (req: Request): RequestContext => {
-  const reqWithContext = req as Request & { readonly context?: RequestContext };
-  return (
-    reqWithContext.context ?? {
-      requestId: crypto.randomUUID(),
-      tenantId: "anonymous",
-    }
-  );
-};
 
 /**
  * Extract tenantId from authenticated user or throw.
@@ -103,7 +85,7 @@ const buildUsageLimitDetail = (current: number, limit: number | null): UsageLimi
  */
 const handleGetSubscription = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
 
   const subscriptionWithPlan = await getSubscriptionWithPlan(tenantId);
 
@@ -152,7 +134,7 @@ const handleGetSubscription = async (req: Request, res: Response): Promise<void>
  * Returns all available plans.
  */
 const handleGetPlans = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
 
   const plans = await getAllPlans();
 
@@ -168,7 +150,7 @@ const handleGetPlans = async (req: Request, res: Response): Promise<void> => {
  */
 const handleGetUsage = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
 
   // Fetch subscription, usage, and free plan in parallel
   const [subscriptionWithPlan, usage, freePlan] = await Promise.all([
@@ -211,7 +193,7 @@ const handleGetUsage = async (req: Request, res: Response): Promise<void> => {
  */
 const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
-  const context = getRequestContext(req);
+  const { context } = req;
 
   const userId = req.user?.userId;
 
@@ -263,10 +245,7 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
 router.get("/api/v1/subscription", asyncHandler(handleGetSubscription));
 router.get("/api/v1/subscription/plans", asyncHandler(handleGetPlans));
 router.get("/api/v1/subscription/usage", asyncHandler(handleGetUsage));
-router.put(
-  "/api/v1/subscription/plan",
-  requireRole("admin", "owner"),
-  asyncHandler(handleChangePlan)
-);
+// Re-add requireRole("admin", "owner") when billing integration is added (KEN-142)
+router.put("/api/v1/subscription/plan", asyncHandler(handleChangePlan));
 
 export { router as subscriptionRoutes };

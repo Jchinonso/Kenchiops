@@ -20,7 +20,6 @@ import { config } from "../core/config.js";
 import { INTERNAL_AUTH_HEADERS, verifyInternalSignature } from "./internalAuth.js";
 import { SERVICE_NAMES } from "../constants/http.js";
 import type { AuthenticatedUser } from "../database/user/types.js";
-import type { RequestContext } from "../core/types.js";
 
 /**
  * Set of known internal service names for HMAC actor validation.
@@ -52,9 +51,8 @@ const validateServiceName = (raw: string | undefined): string => {
 /**
  * Extend Express Request with `user` from JWT verification.
  *
- * Note: `context` (RequestContext) is NOT added to the global augmentation
- * because existing rate-limit interfaces define incompatible `context` shapes.
- * Instead, the middleware accesses context via a typed cast on the request.
+ * Note: `req.context` (RequestContext) is augmented globally by
+ * requestContextMiddleware.ts — registered before this middleware runs.
  */
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -63,11 +61,6 @@ declare global {
       user?: AuthenticatedUser;
     }
   }
-}
-
-/** Request that carries a RequestContext (set by upstream middleware). */
-interface RequestWithRequestContext extends Request {
-  readonly context?: RequestContext;
 }
 
 // ==================== Helpers ====================
@@ -140,10 +133,9 @@ const tryInternalAuth = (req: Request): boolean => {
   // Enrich request context with validated service identity.
   // Object.assign is required because Express middleware must mutate req by design
   // (this is a handler-boundary side effect, allowed per CLAUDE.md rule 3).
-  const reqWithCtx = req as RequestWithRequestContext;
-  if (serviceName !== "unknown" && reqWithCtx.context) {
+  if (serviceName !== "unknown") {
     Object.assign(req, {
-      context: { ...reqWithCtx.context, actor: `service:${serviceName}` },
+      context: { ...req.context, actor: `service:${serviceName}` },
     });
   }
 
@@ -173,17 +165,15 @@ const isPublicRoute = (path: string): boolean =>
 const applyAuthToRequest = (req: Request, user: AuthenticatedUser): void => {
   Object.assign(req, { user });
 
-  // Enrich the existing RequestContext if one was set by upstream middleware.
-  const reqWithCtx = req as RequestWithRequestContext;
-  if (reqWithCtx.context) {
-    Object.assign(req, {
-      context: {
-        ...reqWithCtx.context,
-        actor: user.userId,
-        ...(user.tenantId ? { tenantId: user.tenantId } : {}),
-      },
-    });
-  }
+  // Enrich the existing RequestContext (set by requestContextMiddleware)
+  // with the authenticated user's identity and tenant.
+  Object.assign(req, {
+    context: {
+      ...req.context,
+      actor: user.userId,
+      ...(user.tenantId ? { tenantId: user.tenantId } : {}),
+    },
+  });
 };
 
 // ==================== Middleware ====================

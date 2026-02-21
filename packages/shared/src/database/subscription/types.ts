@@ -125,6 +125,7 @@ export interface PlanLimitCheckResult {
   readonly currentUsage: number;
   readonly limit: number | null;
   readonly limitKey: PlanLimitKey;
+  readonly planId: PlanId;
 }
 
 export interface SubscriptionWithPlan {

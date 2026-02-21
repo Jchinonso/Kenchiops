@@ -6,14 +6,12 @@
  * @module database/subscription
  */
 
-// Types
+// Types (domain-only; PlanRow and TenantSubscriptionRow are internal)
 export type {
   PlanId,
   SubscriptionStatus,
   PlanLimitKey,
   PlanFeatureKey,
-  PlanRow,
-  TenantSubscriptionRow,
   PlanLimits,
   PlanFeatures,
   Plan,
@@ -26,10 +24,8 @@ export type {
   SubscriptionUsageResponse,
 } from "./types.js";
 
-// Helpers
+// Helpers (public validators and limit checkers; row mappers are internal)
 export {
-  rowToPlan,
-  rowToSubscription,
   validatePlanId,
   validateChangePlanInput,
   isWithinLimit,

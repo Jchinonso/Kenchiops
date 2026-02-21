@@ -31,6 +31,7 @@ export const AUDIT_ACTIONS = {
   ACTIVATED: "activated",
   SUSPENDED: "suspended",
   DELETED: "deleted",
+  PLAN_CHANGED: "plan_changed",
 } as const;
 
 /**

@@ -427,6 +427,7 @@ export {
 } from "./providerConnection/index.js";
 
 // Subscription module (Plan tiers and tenant subscriptions)
+// Note: PlanRow, TenantSubscriptionRow, rowToPlan, rowToSubscription are internal.
 export {
   // Types
   type PlanId,
@@ -444,8 +445,6 @@ export {
   type UsageLimitDetail,
   type SubscriptionUsageResponse,
   // Helpers
-  rowToPlan,
-  rowToSubscription,
   validatePlanId,
   validateChangePlanInput,
   isWithinLimit,

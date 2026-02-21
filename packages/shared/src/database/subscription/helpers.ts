@@ -113,7 +113,9 @@ export const validateChangePlanInput = (input: ChangePlanInput): void => {
 
 /**
  * Check whether a usage count is within the plan limit.
- * Returns true if under limit. NULL limit means unlimited (always within).
+ * Returns true when `currentUsage < limit` (strict less-than).
+ * At-limit (currentUsage === limit) is NOT allowed — returns false.
+ * NULL limit means unlimited (always within).
  */
 export const isWithinLimit = (currentUsage: number, limit: number | null): boolean =>
   limit === null || currentUsage < limit;

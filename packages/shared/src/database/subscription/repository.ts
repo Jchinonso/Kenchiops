@@ -21,6 +21,7 @@ import {
   SUBSCRIPTION_DEFAULTS,
   DEFAULT_PLAN_ID,
 } from "../../constants/subscription.js";
+import { AUDIT_ACTIONS } from "../../constants/tenant.js";
 import type {
   PlanRow,
   TenantSubscriptionRow,
@@ -173,12 +174,11 @@ export const changePlan = async (input: ChangePlanInput): Promise<TenantSubscrip
       input.tenantId,
     ]);
 
-    if (result.rows.length === 0) {
-      throw new NotFoundError("Subscription not found for tenant", {
-        operation: "changePlan",
-        metadata: { tenantId: input.tenantId },
-      });
-    }
+    // ensureSubscription guarantees a row exists, so UPDATE must return it
+    invariant(
+      result.rows.length > 0,
+      `Subscription row must exist after ensureSubscription for tenant ${input.tenantId}`
+    );
 
     const updated = rowToSubscription(result.rows[0]);
 
@@ -191,7 +191,7 @@ export const changePlan = async (input: ChangePlanInput): Promise<TenantSubscrip
     // Log audit event (best-effort; don't fail the plan change if audit fails)
     try {
       const { logAuditEvent } = await import("../tenant/index.js");
-      await logAuditEvent(input.tenantId, "plan_changed", {
+      await logAuditEvent(input.tenantId, AUDIT_ACTIONS.PLAN_CHANGED, {
         newPlanId: input.newPlanId,
         changedBy: input.changedBy,
       });
@@ -204,9 +204,6 @@ export const changePlan = async (input: ChangePlanInput): Promise<TenantSubscrip
 
     return updated;
   } catch (error) {
-    if (error instanceof NotFoundError) {
-      throw error;
-    }
     logger.error("Failed to change plan", {
       tenantId: input.tenantId,
       newPlanId: input.newPlanId,
@@ -260,9 +257,10 @@ export const checkPlanLimit = async (
 
   const limit = getPlanLimit(plan, limitKey);
 
-  // NULL limit = unlimited, always allowed
+  // NULL limit = unlimited, always allowed.
+  // currentUsage: 0 is a sentinel — actual usage is not fetched for unlimited plans.
   if (limit === null) {
-    return { allowed: true, currentUsage: 0, limit: null, limitKey };
+    return { allowed: true, currentUsage: 0, limit: null, limitKey, planId: plan.id };
   }
 
   const usage = await getTenantUsage(tenantId);
@@ -273,6 +271,7 @@ export const checkPlanLimit = async (
     currentUsage,
     limit,
     limitKey,
+    planId: plan.id,
   };
 };
 
@@ -286,10 +285,6 @@ export const enforcePlanLimit = async (tenantId: string, limitKey: PlanLimitKey)
   const result = await checkPlanLimit(tenantId, limitKey);
 
   if (!result.allowed) {
-    // Get the plan ID for error metadata
-    const subscription = await getSubscriptionByTenant(tenantId);
-    const currentPlan = subscription?.planId ?? DEFAULT_PLAN_ID;
-
     throw new AuthorizationError("Plan limit exceeded", {
       operation: "enforcePlanLimit",
       metadata: {
@@ -297,7 +292,7 @@ export const enforcePlanLimit = async (tenantId: string, limitKey: PlanLimitKey)
         limitKey,
         currentUsage: result.currentUsage,
         limit: result.limit,
-        currentPlan,
+        currentPlan: result.planId,
       },
     });
   }

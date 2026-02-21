@@ -7,7 +7,6 @@
  * @module routes/authRoutes
  */
 
-import crypto from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
@@ -32,26 +31,10 @@ import {
   INSTANCE_URL_CONFIG,
   createRateLimitMiddleware,
   type OAuthProvider,
-  type RequestContext,
 } from "@kenchi/shared";
 
 import { createAuthService } from "../services/authService.js";
 import { getOAuthAdapter, hasOAuthAdapter } from "../adapters/oauthAdapterRegistry.js";
-
-/**
- * Extract the RequestContext from an Express request.
- * Context is set by upstream middleware; if missing, creates a
- * minimal context from the request to ensure propagation.
- */
-const getRequestContext = (req: Request): RequestContext => {
-  const reqWithContext = req as Request & { readonly context?: RequestContext };
-  return (
-    reqWithContext.context ?? {
-      requestId: crypto.randomUUID(),
-      tenantId: "anonymous",
-    }
-  );
-};
 
 const router = Router();
 const logger = createLogger("auth-routes");
@@ -281,7 +264,7 @@ const extractTokenMeta = (
  * Generate CSRF state and redirect to the OAuth provider's authorize URL.
  */
 const handleOAuthLogin = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
   const provider = validateProvider(req.params.provider);
   const rawInstanceUrl = (req.query.instance_url as string) ?? null;
   // Validate instance URL to prevent SSRF (only for self-hosted providers)
@@ -319,7 +302,7 @@ const handleOAuthLogin = async (req: Request, res: Response): Promise<void> => {
  * Exchange authorization code for tokens, find/create user, issue JWT pair.
  */
 const handleOAuthCallback = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
   const frontendUrl = config.FRONTEND_URL;
   const { code, state, error: oauthError } = req.query;
 
@@ -431,7 +414,7 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
  * Rotate a refresh token and return a new token pair.
  */
 const handleTokenRefresh = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
   const refreshToken = extractRefreshToken(req);
 
   if (!refreshToken) {
@@ -463,7 +446,7 @@ const handleTokenRefresh = async (req: Request, res: Response): Promise<void> =>
  * Revoke the refresh token family. Idempotent.
  */
 const handleLogout = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
   const refreshToken = extractRefreshToken(req);
 
   if (refreshToken) {
@@ -482,7 +465,7 @@ const handleLogout = async (req: Request, res: Response): Promise<void> => {
  * Requires a valid JWT (auth middleware enforced).
  */
 const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
 
   if (!req.user) {
     throw new AuthenticationError("Authentication required", {
@@ -534,7 +517,7 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
  * Requires a valid JWT and "DELETE" confirmation in the request body.
  */
 const handleDeleteAccount = async (req: Request, res: Response): Promise<void> => {
-  const context = getRequestContext(req);
+  const { context } = req;
 
   if (!req.user) {
     throw new AuthenticationError("Authentication required", {

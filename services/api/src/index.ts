@@ -16,6 +16,7 @@ import {
   createLogger,
   errorHandler,
   requestLogger,
+  requestContextMiddleware,
   authMiddleware,
   createRateLimitMiddleware,
   createSecurityHeaders,
@@ -335,6 +336,7 @@ const createApp = (): express.Express => {
   );
   app.use(requestLogger);
   app.use(apiRateLimiter.middleware());
+  app.use(requestContextMiddleware);
   app.use(authMiddleware);
 
   // Register all routes
