@@ -88,14 +88,31 @@ export const manageTokenBudget = (
 ): Evidence => {
   validateTokenBudget(maxTokens);
 
+  // Cap log entries to prevent output JSON from exceeding max completion tokens.
+  // Each log entry produces ~500 chars in the LLM's JSON response; 50 entries keeps
+  // the output well under the 16K completion token limit.
+  const cappedEvidence =
+    evidence.logs && evidence.logs.length > LLM_CONSTANTS.MAX_EVIDENCE_LOGS
+      ? { ...evidence, logs: evidence.logs.slice(0, LLM_CONSTANTS.MAX_EVIDENCE_LOGS) }
+      : evidence;
+
   const originalLogCount = evidence.logs?.length ?? 0;
+  const cappedLogCount = cappedEvidence.logs?.length ?? 0;
   const templateOverhead = measureTemplateOverhead(event);
   const evidenceTokenBudget = Math.max(1, maxTokens - templateOverhead);
-  const estimate = estimateTokenBudget(evidence, maxTokens);
+  const estimate = estimateTokenBudget(cappedEvidence, maxTokens);
+
+  if (cappedLogCount < originalLogCount) {
+    logger.info("Evidence logs capped for output size", {
+      originalLogCount,
+      cappedLogCount,
+      maxEvidenceLogs: LLM_CONSTANTS.MAX_EVIDENCE_LOGS,
+    });
+  }
 
   // Early return: estimate clearly exceeds budget - truncate immediately
   if (estimate.requiresTruncation) {
-    const truncated = truncateEvidence(evidence, evidenceTokenBudget);
+    const truncated = truncateEvidence(cappedEvidence, evidenceTokenBudget);
     const verified = enforceTokenBudget(event, truncated, maxTokens);
     const verifiedLogCount = verified.logs?.length ?? 0;
 
@@ -113,21 +130,21 @@ export const manageTokenBudget = (
   }
 
   // Estimate suggests it might fit - verify with actual prompt
-  const prompt = buildAnalysisPrompt(event, evidence);
+  const prompt = buildAnalysisPrompt(event, cappedEvidence);
   const actualTokens = estimateTokens(prompt);
 
-  // Early return: actual tokens fit - return original evidence
+  // Early return: actual tokens fit - return capped evidence
   if (actualTokens <= maxTokens) {
     logger.debug("Evidence fits within token budget", {
-      logCount: originalLogCount,
+      logCount: cappedLogCount,
       actualTokens,
       maxTokens,
     });
-    return evidence;
+    return cappedEvidence;
   }
 
   // Actual tokens exceed budget - truncate evidence with safety enforcement
-  const truncated = truncateEvidence(evidence, evidenceTokenBudget);
+  const truncated = truncateEvidence(cappedEvidence, evidenceTokenBudget);
   const verified = enforceTokenBudget(event, truncated, maxTokens);
   const verifiedLogCount = verified.logs?.length ?? 0;
 

@@ -469,6 +469,12 @@ export class LLMClient implements LLMAnalysisProvider {
     try {
       return parseLLMResponse(responseContent, eventId);
     } catch (error) {
+      logger.warn("JSON extraction from LLM output failed — logging preview for diagnostics", {
+        eventId,
+        outputLength: responseContent.length,
+        outputPreview: responseContent.slice(0, 500),
+        outputTail: responseContent.slice(-200),
+      });
       throw new LLMError(`Failed to parse LLM response: ${getErrorMessage(error)}`, {
         service: this.getProviderName(),
       });
