@@ -168,7 +168,7 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
             Linked to failure event:{" "}
             {showLinkedEventLink ? (
               <Link
-                to="/dashboard/cicd/failures"
+                to="/dashboard/cicd/analyses"
                 className="font-mono text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 underline decoration-dotted underline-offset-2 transition-colors"
               >
                 {analysis.eventId}
