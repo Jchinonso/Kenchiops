@@ -21,35 +21,19 @@ interface GitProvider {
   readonly name: string;
   readonly icon: React.ReactNode;
   readonly primary?: boolean;
-  readonly comingSoon?: boolean;
 }
 
 const saasProviders: readonly GitProvider[] = [
   { id: "github", name: "GitHub", icon: <Github className="w-5 h-5" />, primary: true },
-  { id: "gitlab", name: "GitLab", icon: <Gitlab className="w-5 h-5" />, comingSoon: true },
-  { id: "bitbucket", name: "Bitbucket", icon: <Cloud className="w-5 h-5" />, comingSoon: true },
-  {
-    id: "azure_devops",
-    name: "Azure DevOps",
-    icon: <Server className="w-5 h-5" />,
-    comingSoon: true,
-  },
+  { id: "gitlab", name: "GitLab", icon: <Gitlab className="w-5 h-5" /> },
+  { id: "bitbucket", name: "Bitbucket", icon: <Cloud className="w-5 h-5" /> },
+  { id: "azure_devops", name: "Azure DevOps", icon: <Server className="w-5 h-5" /> },
 ];
 
 const selfHostedProviders: readonly GitProvider[] = [
   { id: "github", name: "GitHub Enterprise", icon: <Github className="w-5 h-5" />, primary: true },
-  {
-    id: "gitlab",
-    name: "GitLab Self-Managed",
-    icon: <Gitlab className="w-5 h-5" />,
-    comingSoon: true,
-  },
-  {
-    id: "bitbucket",
-    name: "Bitbucket Server",
-    icon: <Cloud className="w-5 h-5" />,
-    comingSoon: true,
-  },
+  { id: "gitlab", name: "GitLab Self-Managed", icon: <Gitlab className="w-5 h-5" /> },
+  { id: "bitbucket", name: "Bitbucket Server", icon: <Cloud className="w-5 h-5" /> },
 ];
 
 const features = [
@@ -456,15 +440,10 @@ const Login = () => {
                         key={provider.name}
                         type="button"
                         onClick={() => {
-                          if (!provider.comingSoon) {
-                            handleProviderClick(provider.id);
-                          }
+                          handleProviderClick(provider.id);
                         }}
-                        disabled={loadingProvider !== null || provider.comingSoon}
-                        aria-disabled={provider.comingSoon ? "true" : undefined}
-                        aria-label={
-                          provider.comingSoon ? `${provider.name} — coming soon` : provider.name
-                        }
+                        disabled={loadingProvider !== null}
+                        aria-label={provider.name}
                         className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {loadingProvider === provider.id ? (
@@ -479,11 +458,6 @@ const Login = () => {
                             ? `Connecting to ${provider.name}...`
                             : provider.name}
                         </span>
-                        {provider.comingSoon && (
-                          <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
-                            Soon
-                          </span>
-                        )}
                       </button>
                     ))}
                 </div>
