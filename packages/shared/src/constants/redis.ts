@@ -259,11 +259,13 @@ export const QUEUE_WORKER_DEFAULTS = {
  */
 export const AGGREGATION_DEFAULTS = {
   /** Time to wait after last failure before consolidating (ms).
-   * CI checks finish at different times (lint ~1min, tests ~3min).
-   * 90s ensures all check failures land in the same aggregation window. */
-  DEBOUNCE_MS: 90_000,
-  /** Maximum time to wait for aggregation (ms) */
-  MAX_WAIT_MS: 120_000,
+   * CI checks finish at different times (lint ~1min, tests ~3-4min).
+   * This is the minimum quiet period — if new failures arrive, the timer resets.
+   * The aggregation worker also checks GitHub for in-progress checks before processing. */
+  DEBOUNCE_MS: 30_000,
+  /** Maximum time to wait for aggregation (ms).
+   * Hard ceiling regardless of in-progress checks. */
+  MAX_WAIT_MS: 300_000,
   /** Maximum failures to aggregate per commit */
   MAX_FAILURES_PER_COMMIT: 20,
   /** TTL buffer added to max wait for cleanup safety (seconds) */

@@ -46,9 +46,11 @@ import {
   CI_PROVIDERS,
 } from "@kenchi/shared";
 import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
+import { fetchCheckRunAnnotations } from "../services/context/annotationFetcher.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
 import { postPRComment } from "../services/githubComments.js";
 import { getOctokit } from "../services/githubService.js";
+import type { CheckRunAnnotation } from "../services/context/types.js";
 import type {
   JobSubmissionResponse,
   JobStatusResponse,
@@ -75,6 +77,198 @@ const POLLING_CONFIG = {
   /** Timeout for individual HTTP requests */
   REQUEST_TIMEOUT_MS: 30_000,
 } as const;
+
+// ==================== Check Run Readiness ====================
+
+/**
+ * Configuration for waiting on in-progress check runs before analysis.
+ * Replaces long static debounce with an active GitHub API check.
+ */
+const CHECK_RUN_WAIT_CONFIG = {
+  /** Maximum time to wait for in-progress checks to complete (2 minutes) */
+  MAX_WAIT_MS: 120_000,
+  /** Interval between GitHub API polls */
+  POLL_INTERVAL_MS: 15_000,
+} as const;
+
+/**
+ * Waits for all check runs on a commit to complete before starting analysis.
+ *
+ * Polls GitHub's check runs API to detect in-progress checks. This allows
+ * the aggregation debounce to be short (30s) while still ensuring all
+ * check failures are included in the analysis.
+ *
+ * @param installationId - GitHub App installation ID
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param commitSha - Commit SHA to check
+ * @returns Number of additional failed checks discovered while waiting
+ */
+const waitForPendingCheckRuns = async (
+  installationId: number,
+  owner: string,
+  repo: string,
+  commitSha: string
+): Promise<number> => {
+  const startTime = Date.now();
+  const octokit = await getOctokit(installationId);
+
+  // let: inProgressCount changes each poll iteration
+  let inProgressCount = 0;
+
+  while (Date.now() - startTime < CHECK_RUN_WAIT_CONFIG.MAX_WAIT_MS) {
+    try {
+      const { data } = await octokit.rest.checks.listForRef({
+        owner,
+        repo,
+        ref: commitSha,
+        per_page: 100,
+      });
+
+      inProgressCount = data.check_runs.filter((run) => run.status !== "completed").length;
+
+      if (inProgressCount === 0) {
+        const additionalFailed = data.check_runs.filter(
+          (run) => run.conclusion === "failure"
+        ).length;
+
+        logger.info("All check runs completed, proceeding with analysis", {
+          owner,
+          repo,
+          commitSha: commitSha.substring(0, 7),
+          totalCheckRuns: data.total_count,
+          failedCount: additionalFailed,
+          waitedMs: Date.now() - startTime,
+        });
+
+        return additionalFailed;
+      }
+
+      logger.info("Waiting for in-progress check runs to complete", {
+        owner,
+        repo,
+        commitSha: commitSha.substring(0, 7),
+        inProgressCount,
+        totalCheckRuns: data.total_count,
+        waitedMs: Date.now() - startTime,
+      });
+
+      await delay(CHECK_RUN_WAIT_CONFIG.POLL_INTERVAL_MS);
+    } catch (error) {
+      logger.warn("Failed to check for in-progress check runs, proceeding anyway", {
+        owner,
+        repo,
+        commitSha: commitSha.substring(0, 7),
+        error: getErrorMessage(error),
+      });
+      return 0;
+    }
+  }
+
+  logger.warn("Timed out waiting for in-progress check runs", {
+    owner,
+    repo,
+    commitSha: commitSha.substring(0, 7),
+    remainingInProgress: inProgressCount,
+    maxWaitMs: CHECK_RUN_WAIT_CONFIG.MAX_WAIT_MS,
+  });
+
+  return 0;
+};
+
+// ==================== Annotation Enrichment ====================
+
+/**
+ * Formats check run annotations as text to append to job logs.
+ * Provides structured lint/type error context that the LLM can analyze.
+ */
+const formatAnnotationsAsText = (annotations: readonly CheckRunAnnotation[]): string => {
+  const header = `${"=".repeat(60)}\nCHECK RUN ANNOTATIONS (file-level errors/warnings)\n${"=".repeat(60)}`;
+
+  const lines = annotations.map((annotation) => {
+    const level = annotation.level.toUpperCase();
+    const location = `${annotation.path}:${annotation.startLine}`;
+    const title = annotation.title ? ` [${annotation.title}]` : "";
+    return `${level}: ${location}${title}\n  ${annotation.message}`;
+  });
+
+  return `${header}\n${lines.join("\n\n")}`;
+};
+
+/**
+ * Enriches job logs with check run annotations from GitHub.
+ *
+ * For lint/format checks, job logs are often minimal (1-3 lines like "5 errors found").
+ * Annotations contain the actual file-level errors (path, line, message) that the
+ * LLM needs for meaningful analysis.
+ *
+ * @param jobs - Job logs from the workflow run
+ * @param pendingChecks - Pending check runs with checkRunIds for annotation lookup
+ * @param installationId - GitHub App installation ID
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @returns Enriched jobs with annotations appended to logs
+ */
+const enrichJobLogsWithAnnotations = async (
+  jobs: ReadonlyArray<{ readonly jobName: string; readonly jobId: number; readonly logs: string }>,
+  pendingChecks: ReadonlyArray<{ readonly checkRunId: number; readonly checkName: string }>,
+  installationId: number,
+  owner: string,
+  repo: string
+): Promise<
+  ReadonlyArray<{ readonly jobName: string; readonly jobId: number; readonly logs: string }>
+> => {
+  // Fetch annotations for all pending checks in parallel (bounded — typically 2-5 checks)
+  const annotationResults = await Promise.all(
+    pendingChecks.map(async (check) => {
+      const annotations = await fetchCheckRunAnnotations(
+        installationId,
+        owner,
+        repo,
+        check.checkRunId
+      );
+      return { checkName: check.checkName.toLowerCase(), annotations };
+    })
+  );
+
+  // Build lookup map: lowercased check name → annotation text
+  const annotationsMap = new Map<string, string>();
+  annotationResults
+    .filter((result) => result.annotations.length > 0)
+    .forEach((result) => {
+      annotationsMap.set(result.checkName, formatAnnotationsAsText(result.annotations));
+    });
+
+  if (annotationsMap.size === 0) {
+    return jobs;
+  }
+
+  logger.info("Enriching job logs with annotations", {
+    checksWithAnnotations: [...annotationsMap.keys()],
+    totalAnnotationChecks: annotationsMap.size,
+  });
+
+  // Enrich matching jobs by appending annotations to their logs
+  return jobs.map((job) => {
+    const jobNameLower = job.jobName.toLowerCase();
+
+    // Try exact match, then partial match (e.g., check "Lint & Format" matches job "lint")
+    const annotationText =
+      annotationsMap.get(jobNameLower) ??
+      [...annotationsMap.entries()].find(
+        ([checkName]) => jobNameLower.includes(checkName) || checkName.includes(jobNameLower)
+      )?.[1];
+
+    if (!annotationText) {
+      return job;
+    }
+
+    return {
+      ...job,
+      logs: `${job.logs}\n\n${annotationText}`,
+    };
+  });
+};
 
 /**
  * Fetch PR diff context for the first associated PR.
@@ -677,6 +871,11 @@ export const processCombinedAnalysis = async (
   });
 
   try {
+    // Step 0: Wait for any in-progress check runs to complete before analysis.
+    // This replaces long static debounce with an active GitHub API check,
+    // ensuring fast turnaround for simple repos while catching staggered checks.
+    await waitForPendingCheckRuns(installationId, repository.owner, repository.name, commitSha);
+
     // Step 1: Fetch logs for ALL failed jobs
     const allJobsLogs = await fetchAllFailedJobsLogs(
       installationId,
@@ -731,20 +930,31 @@ export const processCombinedAnalysis = async (
       pending.pullRequestNumbers
     );
 
+    // Step 1.5: Enrich job logs with check run annotations.
+    // Lint/format checks often have minimal logs (1-3 lines) but detailed annotations
+    // (file-level errors). Appending annotations gives the LLM actual error context.
+    const enrichedJobs = await enrichJobLogsWithAnnotations(
+      allJobsLogs.jobs,
+      pending.pendingChecks,
+      installationId,
+      repository.owner,
+      repository.name
+    );
+
     // Step 2: Analyze each job separately (with concurrency limit)
     const maxConcurrent =
       config.LLM_MAX_CONCURRENT_ANALYSIS ?? LLM_CONCURRENCY_DEFAULTS.MAX_CONCURRENT_ANALYSIS;
 
     logger.info("Analyzing jobs with concurrency limit", {
       repository: repository.fullName,
-      jobCount: allJobsLogs.jobs.length,
+      jobCount: enrichedJobs.length,
       maxConcurrent,
-      jobNames: allJobsLogs.jobs.map((job) => job.jobName),
+      jobNames: enrichedJobs.map((job) => job.jobName),
     });
 
     // Analyze all jobs with concurrency limiting to avoid rate limits
     const analysisResults = await mapWithConcurrency(
-      allJobsLogs.jobs,
+      enrichedJobs,
       (job) =>
         analyzeJobWithErrorHandling(
           job,
