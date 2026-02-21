@@ -12,6 +12,7 @@ import {
   resilientGet,
   createLogger,
   getErrorMessage,
+  redactSecrets,
   truncateText,
   type RequestContext,
 } from "@kenchi/shared";
@@ -30,9 +31,12 @@ import {
   PROMETHEUS_API,
   SYMPTOM_PROMQL_QUERIES,
   PROMETHEUS_ACTIVE_ALERT_STATES,
+  SECONDS_PER_HOUR,
+  sanitizeServiceName,
+  validateBaseUrl,
 } from "../constants/monitoringConstants.js";
 
-const SECONDS_PER_HOUR = 3600;
+const logger = createLogger("prometheus-monitoring-adapter");
 const PROMQL_STEP_SECONDS = 60;
 
 // ==================== Internal Helpers ====================
@@ -45,7 +49,9 @@ const buildPromqlQuery = (
   serviceName: string | null
 ): string => {
   const template = SYMPTOM_PROMQL_QUERIES[symptom];
-  const service = serviceName ?? ".*";
+  // Sanitize service name to prevent PromQL injection (e.g., closing "} or vector(1))
+  const sanitized = sanitizeServiceName(serviceName);
+  const service = sanitized ?? ".*";
   return template.replace("$SERVICE", service);
 };
 
@@ -143,7 +149,6 @@ const fetchPrometheusAlerts = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("prometheus-monitoring-adapter");
   const url = `${baseUrl}${PROMETHEUS_API.ALERTS}`;
   const startTime = Date.now();
 
@@ -161,7 +166,7 @@ const fetchPrometheusAlerts = async (
       PROMETHEUS_ACTIVE_ALERT_STATES.has(alert.state)
     );
 
-    adapterLogger.info("Prometheus alerts fetched", {
+    logger.info("Prometheus alerts fetched", {
       provider: "prometheus",
       operation: "fetchAlerts",
       durationMs,
@@ -176,11 +181,18 @@ const fetchPrometheusAlerts = async (
       .map((alert) => mapAlertToEvidence(alert, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("Prometheus alerts fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("Prometheus alerts fetch failed", {
       provider: "prometheus",
       operation: "fetchAlerts",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -195,7 +207,6 @@ const fetchPrometheusMetrics = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("prometheus-monitoring-adapter");
   const promqlQuery = buildPromqlQuery(query.symptom, query.serviceName);
   const now = Math.floor(Date.now() / 1000);
   const start = now - query.hoursBack * SECONDS_PER_HOUR;
@@ -211,7 +222,7 @@ const fetchPrometheusMetrics = async (
     const durationMs = Date.now() - startTime;
     const samples = response.data.data?.result ?? [];
 
-    adapterLogger.info("Prometheus metrics fetched", {
+    logger.info("Prometheus metrics fetched", {
       provider: "prometheus",
       operation: "fetchMetrics",
       durationMs,
@@ -225,11 +236,18 @@ const fetchPrometheusMetrics = async (
       .map((sample) => mapRangeSampleToEvidence(sample, promqlQuery, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("Prometheus metrics fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("Prometheus metrics fetch failed", {
       provider: "prometheus",
       operation: "fetchMetrics",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -247,13 +265,12 @@ const fetchPrometheusMetrics = async (
 export const createPrometheusMonitoringAdapter = (baseUrl: string): MonitoringAdapter => ({
   name: "prometheus",
 
-  isConfigured: (): boolean => baseUrl.length > 0,
+  isConfigured: (): boolean => validateBaseUrl(baseUrl) !== null,
 
   fetchEvidence: async (
     query: MonitoringQuery,
     context: RequestContext
   ): Promise<readonly InvestigationEvidenceItem[]> => {
-    const adapterLogger = createLogger("prometheus-monitoring-adapter");
     const startTime = Date.now();
 
     try {
@@ -265,7 +282,7 @@ export const createPrometheusMonitoringAdapter = (baseUrl: string): MonitoringAd
       const evidence = [...alerts, ...metrics];
       const durationMs = Date.now() - startTime;
 
-      adapterLogger.info("Prometheus evidence gathered", {
+      logger.info("Prometheus evidence gathered", {
         provider: "prometheus",
         operation: "gatherEvidence",
         durationMs,
@@ -277,11 +294,18 @@ export const createPrometheusMonitoringAdapter = (baseUrl: string): MonitoringAd
       return evidence;
     } catch (error) {
       const durationMs = Date.now() - startTime;
-      adapterLogger.warn("Prometheus evidence gathering failed", {
+      const errorMsg = getErrorMessage(error);
+      const statusCode = (error as { status?: number }).status;
+      const isRetryable =
+        errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+      logger.warn("Prometheus evidence gathering failed", {
         provider: "prometheus",
         operation: "gatherEvidence",
         durationMs,
-        error: getErrorMessage(error),
+        statusCode,
+        retryable: isRetryable,
+        error: redactSecrets(errorMsg),
         ...context,
       });
       return [];

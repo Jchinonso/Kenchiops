@@ -14,6 +14,7 @@ import {
   OPENROUTER_DEFAULTS,
 } from "@kenchi/shared";
 import type { IncidentTriageConfig } from "../types/incidentTriageTypes.js";
+import { validateBaseUrl } from "../constants/monitoringConstants.js";
 
 // Re-export for convenience
 export type { IncidentTriageConfig } from "../types/incidentTriageTypes.js";
@@ -119,6 +120,26 @@ const assertTriageConfig = (cfg: IncidentTriageConfig): void => {
   }
   if (!cfg.netlifyApiToken) {
     startupLogger.info("NETLIFY_API_TOKEN not set — Netlify monitoring evidence disabled");
+  }
+
+  // Validate monitoring base URLs to prevent SSRF via misconfigured env vars
+  const ddBaseUrl = cfg.datadogApiBaseUrl;
+  if (ddBaseUrl && !validateBaseUrl(ddBaseUrl)) {
+    startupLogger.warn(
+      "DATADOG_API_BASE_URL has invalid format — Datadog monitoring will be disabled"
+    );
+  }
+  const grafanaUrl = cfg.grafanaApiBaseUrl;
+  if (grafanaUrl && !validateBaseUrl(grafanaUrl)) {
+    startupLogger.warn(
+      "GRAFANA_API_BASE_URL has invalid format — Grafana monitoring will be disabled"
+    );
+  }
+  const promUrl = cfg.prometheusApiBaseUrl;
+  if (promUrl && !validateBaseUrl(promUrl)) {
+    startupLogger.warn(
+      "PROMETHEUS_API_BASE_URL has invalid format — Prometheus monitoring will be disabled"
+    );
   }
 };
 

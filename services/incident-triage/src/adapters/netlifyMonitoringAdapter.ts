@@ -12,6 +12,7 @@ import {
   resilientGet,
   createLogger,
   getErrorMessage,
+  redactSecrets,
   truncateText,
   type RequestContext,
 } from "@kenchi/shared";
@@ -27,7 +28,10 @@ import {
   MONITORING_DEFAULTS,
   NETLIFY_API,
   NETLIFY_ERROR_DEPLOY_STATES,
+  MS_PER_HOUR,
 } from "../constants/monitoringConstants.js";
+
+const logger = createLogger("netlify-monitoring-adapter");
 
 // ==================== Internal Helpers ====================
 
@@ -102,7 +106,6 @@ const fetchNetlifyDeploys = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("netlify-monitoring-adapter");
   const perPage = Math.min(query.limit, MONITORING_DEFAULTS.MAX_RESULTS_PER_PROVIDER);
   const url = `${NETLIFY_API.BASE_URL}${NETLIFY_API.DEPLOYS_PATH_PREFIX}${encodeURIComponent(siteId)}${NETLIFY_API.DEPLOYS_PATH_SUFFIX}?per_page=${String(perPage)}`;
   const startTime = Date.now();
@@ -119,18 +122,24 @@ const fetchNetlifyDeploys = async (
     const durationMs = Date.now() - startTime;
     const allDeploys = response.data;
 
-    // Filter to only error/build_failed deploys
-    const failedDeploys = allDeploys.filter(
+    // Filter by time window first, then by error state
+    const cutoffMs = Date.now() - query.hoursBack * MS_PER_HOUR;
+    const recentDeploys = allDeploys.filter(
+      (deploy) => new Date(deploy.created_at).getTime() >= cutoffMs
+    );
+
+    const failedDeploys = recentDeploys.filter(
       (deploy) =>
         NETLIFY_ERROR_DEPLOY_STATES.has(deploy.state) || deploy.error_message !== undefined
     );
 
-    adapterLogger.info("Netlify deploys fetched", {
+    logger.info("Netlify deploys fetched", {
       provider: "netlify",
       operation: "fetchDeploys",
       durationMs,
       statusCode: response.status,
       totalDeploys: allDeploys.length,
+      recentDeploys: recentDeploys.length,
       failedDeploys: failedDeploys.length,
       ...context,
     });
@@ -140,11 +149,18 @@ const fetchNetlifyDeploys = async (
       .map((deploy) => mapDeployToEvidence(deploy, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("Netlify deploys fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("Netlify deploys fetch failed", {
       provider: "netlify",
       operation: "fetchDeploys",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -172,14 +188,13 @@ export const createNetlifyMonitoringAdapter = (
     query: MonitoringQuery,
     context: RequestContext
   ): Promise<readonly InvestigationEvidenceItem[]> => {
-    const adapterLogger = createLogger("netlify-monitoring-adapter");
     const startTime = Date.now();
 
     try {
       const evidence = await fetchNetlifyDeploys(apiToken, siteId, query, context);
       const durationMs = Date.now() - startTime;
 
-      adapterLogger.info("Netlify evidence gathered", {
+      logger.info("Netlify evidence gathered", {
         provider: "netlify",
         operation: "gatherEvidence",
         durationMs,
@@ -190,11 +205,18 @@ export const createNetlifyMonitoringAdapter = (
       return evidence;
     } catch (error) {
       const durationMs = Date.now() - startTime;
-      adapterLogger.warn("Netlify evidence gathering failed", {
+      const errorMsg = getErrorMessage(error);
+      const statusCode = (error as { status?: number }).status;
+      const isRetryable =
+        errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+      logger.warn("Netlify evidence gathering failed", {
         provider: "netlify",
         operation: "gatherEvidence",
         durationMs,
-        error: getErrorMessage(error),
+        statusCode,
+        retryable: isRetryable,
+        error: redactSecrets(errorMsg),
         ...context,
       });
       return [];

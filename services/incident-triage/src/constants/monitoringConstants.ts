@@ -10,6 +10,14 @@
 
 import type { InvestigationSymptom } from "../types/investigationTypes.js";
 
+// ==================== Time Constants ====================
+
+/** Milliseconds in one hour */
+export const MS_PER_HOUR = 3_600_000;
+
+/** Seconds in one hour */
+export const SECONDS_PER_HOUR = 3_600;
+
 // ==================== Defaults ====================
 
 /**
@@ -24,7 +32,72 @@ export const MONITORING_DEFAULTS = {
   MAX_RESULTS_PER_PROVIDER: 10,
   /** Datadog API hard limit: query window must be < 24 hours */
   DATADOG_MAX_QUERY_WINDOW_HOURS: 24,
+  /** Maximum lookback window for any monitoring query (hours) */
+  MAX_LOOKBACK_HOURS: 168,
+  /** Maximum concurrency for parallel adapter fan-out */
+  ADAPTER_CONCURRENCY: 4,
 } as const;
+
+// ==================== Service Name Sanitization ====================
+
+/**
+ * Allowed characters in service names for metric queries.
+ * Only alphanumeric, hyphens, underscores, and dots are permitted.
+ * Prevents PromQL injection, Datadog query injection, and other
+ * query language escaping attacks.
+ */
+const allowedServiceNameChars: ReadonlySet<string> = new Set(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.".split("")
+);
+
+/**
+ * Sanitizes a service name for safe use in PromQL and Datadog metric queries.
+ * Strips any characters that could break out of query label matchers.
+ * Returns null if the service name is invalid or empty after sanitization.
+ */
+export const sanitizeServiceName = (serviceName: string | null): string | null => {
+  if (serviceName === null) {
+    return null;
+  }
+  const trimmed = serviceName.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const allCharsAllowed = [...trimmed].every((ch) => allowedServiceNameChars.has(ch));
+  return allCharsAllowed ? trimmed : null;
+};
+
+// ==================== Base URL Validation ====================
+
+/**
+ * Validates that a base URL uses HTTPS (or HTTP for local development)
+ * and does not contain path traversal or unexpected components.
+ * Returns the validated URL or null if invalid.
+ */
+export const validateBaseUrl = (baseUrl: string): string | null => {
+  if (baseUrl === "") {
+    return null;
+  }
+  try {
+    const { protocol, pathname, origin } = new URL(baseUrl);
+    // Only allow http/https protocols
+    const isHttps = protocol === "https:";
+    const isHttp = protocol === "http:";
+    if (!isHttps && !isHttp) {
+      return null;
+    }
+    // Reject URLs with path traversal
+    if (pathname.includes("..")) {
+      return null;
+    }
+    // Return origin + pathname stripped of trailing slashes
+    const normalizedPath = pathname === "/" ? "" : pathname;
+    return `${origin}${normalizedPath}`.replace(/\/+$/, "");
+  } catch {
+    // Intentional: invalid URL format
+    return null;
+  }
+};
 
 // ==================== Datadog API Endpoints ====================
 

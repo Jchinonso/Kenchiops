@@ -25,6 +25,7 @@ import {
   FALLBACK_DIAGNOSIS_CONFIDENCE,
   COMMON_FACTOR_CONFIG,
 } from "../constants/investigationConstants.js";
+import { MONITORING_DEFAULTS } from "../constants/monitoringConstants.js";
 
 // ==================== Shared Utilities ====================
 
@@ -491,7 +492,8 @@ export const getLookbackHours = (intent: InvestigationIntent): number => {
     if (!Number.isNaN(fromMs)) {
       const hoursBack = (Date.now() - fromMs) / (1000 * 60 * 60);
       if (hoursBack > 0) {
-        return Math.ceil(hoursBack);
+        // Clamp to MAX_LOOKBACK_HOURS to prevent excessive queries to monitoring providers
+        return Math.min(Math.ceil(hoursBack), MONITORING_DEFAULTS.MAX_LOOKBACK_HOURS);
       }
     }
   }

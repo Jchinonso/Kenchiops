@@ -12,6 +12,7 @@ import {
   resilientGet,
   createLogger,
   getErrorMessage,
+  redactSecrets,
   truncateText,
   VERCEL_API_BASE_URL,
   type RequestContext,
@@ -28,7 +29,10 @@ import {
   MONITORING_DEFAULTS,
   VERCEL_API,
   VERCEL_ERROR_DEPLOYMENT_STATES,
+  MS_PER_HOUR,
 } from "../constants/monitoringConstants.js";
+
+const logger = createLogger("vercel-monitoring-adapter");
 
 // ==================== Internal Helpers ====================
 
@@ -94,9 +98,8 @@ const fetchVercelDeployments = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("vercel-monitoring-adapter");
   const now = Date.now();
-  const since = now - query.hoursBack * 3600000;
+  const since = now - query.hoursBack * MS_PER_HOUR;
   const teamParam = teamId ? `&teamId=${encodeURIComponent(teamId)}` : "";
   const url = `${VERCEL_API_BASE_URL}${VERCEL_API.DEPLOYMENTS}?limit=${String(query.limit)}${teamParam}&since=${String(since)}`;
   const startTime = Date.now();
@@ -118,7 +121,7 @@ const fetchVercelDeployments = async (
       VERCEL_ERROR_DEPLOYMENT_STATES.has(deployment.state)
     );
 
-    adapterLogger.info("Vercel deployments fetched", {
+    logger.info("Vercel deployments fetched", {
       provider: "vercel",
       operation: "fetchDeployments",
       durationMs,
@@ -133,11 +136,18 @@ const fetchVercelDeployments = async (
       .map((deployment) => mapDeploymentToEvidence(deployment, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("Vercel deployments fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("Vercel deployments fetch failed", {
       provider: "vercel",
       operation: "fetchDeployments",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -165,14 +175,13 @@ export const createVercelMonitoringAdapter = (
     query: MonitoringQuery,
     context: RequestContext
   ): Promise<readonly InvestigationEvidenceItem[]> => {
-    const adapterLogger = createLogger("vercel-monitoring-adapter");
     const startTime = Date.now();
 
     try {
       const evidence = await fetchVercelDeployments(apiToken, teamId, query, context);
       const durationMs = Date.now() - startTime;
 
-      adapterLogger.info("Vercel evidence gathered", {
+      logger.info("Vercel evidence gathered", {
         provider: "vercel",
         operation: "gatherEvidence",
         durationMs,
@@ -183,11 +192,18 @@ export const createVercelMonitoringAdapter = (
       return evidence;
     } catch (error) {
       const durationMs = Date.now() - startTime;
-      adapterLogger.warn("Vercel evidence gathering failed", {
+      const errorMsg = getErrorMessage(error);
+      const statusCode = (error as { status?: number }).status;
+      const isRetryable =
+        errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+      logger.warn("Vercel evidence gathering failed", {
         provider: "vercel",
         operation: "gatherEvidence",
         durationMs,
-        error: getErrorMessage(error),
+        statusCode,
+        retryable: isRetryable,
+        error: redactSecrets(errorMsg),
         ...context,
       });
       return [];

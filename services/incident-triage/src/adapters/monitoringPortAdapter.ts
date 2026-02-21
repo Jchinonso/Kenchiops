@@ -8,13 +8,14 @@
  * @module adapters/monitoringPortAdapter
  */
 
-import { createLogger, type RequestContext } from "@kenchi/shared";
+import { createLogger, mapWithConcurrency, type RequestContext } from "@kenchi/shared";
 import type { InvestigationEvidenceItem } from "../types/investigationTypes.js";
 import type {
   MonitoringPort,
   MonitoringAdapter,
   MonitoringQuery,
 } from "../types/monitoringTypes.js";
+import { MONITORING_DEFAULTS } from "../constants/monitoringConstants.js";
 
 // ==================== Factory ====================
 
@@ -46,10 +47,12 @@ export const createMonitoringPort = (adapters: readonly MonitoringAdapter[]): Mo
       ...context,
     });
 
-    // Fan out to all active adapters in parallel
+    // Fan out to all active adapters with bounded concurrency
     // Each adapter handles its own errors internally and returns [] on failure
-    const results = await Promise.all(
-      activeAdapters.map((adapter) => adapter.fetchEvidence(query, context))
+    const results = await mapWithConcurrency(
+      activeAdapters,
+      (adapter) => adapter.fetchEvidence(query, context),
+      MONITORING_DEFAULTS.ADAPTER_CONCURRENCY
     );
 
     const allEvidence = results.flat();

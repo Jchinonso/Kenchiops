@@ -12,6 +12,7 @@ import {
   resilientGet,
   createLogger,
   getErrorMessage,
+  redactSecrets,
   truncateText,
   type RequestContext,
 } from "@kenchi/shared";
@@ -29,9 +30,12 @@ import {
   MONITORING_DEFAULTS,
   DATADOG_API,
   SYMPTOM_METRIC_QUERIES,
+  SECONDS_PER_HOUR,
+  sanitizeServiceName,
+  validateBaseUrl,
 } from "../constants/monitoringConstants.js";
 
-const SECONDS_PER_HOUR = 3600;
+const logger = createLogger("datadog-monitoring-adapter");
 
 // ==================== Internal Helpers ====================
 
@@ -43,7 +47,9 @@ const buildMetricQuery = (
   serviceName: string | null
 ): string => {
   const template = SYMPTOM_METRIC_QUERIES[symptom];
-  const service = serviceName ?? "*";
+  // Sanitize service name to prevent Datadog query injection (e.g., closing })
+  const sanitized = sanitizeServiceName(serviceName);
+  const service = sanitized ?? "*";
   return template.replace("$SERVICE", service);
 };
 
@@ -144,7 +150,6 @@ const fetchDatadogMetrics = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("datadog-monitoring-adapter");
   const metricQuery = buildMetricQuery(query.symptom, query.serviceName);
   const { from, to } = computeTimeRange(query.hoursBack);
   const url = `${baseUrl}${DATADOG_API.METRICS_QUERY}?query=${encodeURIComponent(metricQuery)}&from=${String(from)}&to=${String(to)}`;
@@ -163,7 +168,7 @@ const fetchDatadogMetrics = async (
     const durationMs = Date.now() - startTime;
     const seriesList = response.data.series ?? [];
 
-    adapterLogger.info("Datadog metrics fetched", {
+    logger.info("Datadog metrics fetched", {
       provider: "datadog",
       operation: "fetchMetrics",
       durationMs,
@@ -177,11 +182,18 @@ const fetchDatadogMetrics = async (
       .map((series) => mapMetricSeriesToEvidence(series, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("Datadog metrics fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("Datadog metrics fetch failed", {
       provider: "datadog",
       operation: "fetchMetrics",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -198,10 +210,10 @@ const fetchDatadogEvents = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("datadog-monitoring-adapter");
   const { from, to } = computeTimeRange(query.hoursBack);
-  const tagsParam = query.serviceName
-    ? `&tags=service:${encodeURIComponent(query.serviceName)}`
+  const sanitizedEventService = sanitizeServiceName(query.serviceName);
+  const tagsParam = sanitizedEventService
+    ? `&tags=service:${encodeURIComponent(sanitizedEventService)}`
     : "";
   const url = `${baseUrl}${DATADOG_API.EVENTS_LIST}?start=${String(from)}&end=${String(to)}${tagsParam}`;
   const startTime = Date.now();
@@ -219,7 +231,7 @@ const fetchDatadogEvents = async (
     const durationMs = Date.now() - startTime;
     const events = response.data.events ?? [];
 
-    adapterLogger.info("Datadog events fetched", {
+    logger.info("Datadog events fetched", {
       provider: "datadog",
       operation: "fetchEvents",
       durationMs,
@@ -233,11 +245,18 @@ const fetchDatadogEvents = async (
       .map((event) => mapEventToEvidence(event, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("Datadog events fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("Datadog events fetch failed", {
       provider: "datadog",
       operation: "fetchEvents",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -261,13 +280,13 @@ export const createDatadogMonitoringAdapter = (
 ): MonitoringAdapter => ({
   name: "datadog",
 
-  isConfigured: (): boolean => apiKey.length > 0 && appKey.length > 0,
+  isConfigured: (): boolean =>
+    apiKey.length > 0 && appKey.length > 0 && validateBaseUrl(baseUrl) !== null,
 
   fetchEvidence: async (
     query: MonitoringQuery,
     context: RequestContext
   ): Promise<readonly InvestigationEvidenceItem[]> => {
-    const adapterLogger = createLogger("datadog-monitoring-adapter");
     const startTime = Date.now();
 
     try {
@@ -279,7 +298,7 @@ export const createDatadogMonitoringAdapter = (
       const evidence = [...metrics, ...events];
       const durationMs = Date.now() - startTime;
 
-      adapterLogger.info("Datadog evidence gathered", {
+      logger.info("Datadog evidence gathered", {
         provider: "datadog",
         operation: "gatherEvidence",
         durationMs,
@@ -291,11 +310,18 @@ export const createDatadogMonitoringAdapter = (
       return evidence;
     } catch (error) {
       const durationMs = Date.now() - startTime;
-      adapterLogger.warn("Datadog evidence gathering failed", {
+      const errorMsg = getErrorMessage(error);
+      const statusCode = (error as { status?: number }).status;
+      const isRetryable =
+        errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+      logger.warn("Datadog evidence gathering failed", {
         provider: "datadog",
         operation: "gatherEvidence",
         durationMs,
-        error: getErrorMessage(error),
+        statusCode,
+        retryable: isRetryable,
+        error: redactSecrets(errorMsg),
         ...context,
       });
       return [];

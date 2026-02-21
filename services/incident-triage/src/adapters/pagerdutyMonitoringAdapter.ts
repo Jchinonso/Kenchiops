@@ -12,6 +12,7 @@ import {
   resilientGet,
   createLogger,
   getErrorMessage,
+  redactSecrets,
   truncateText,
   type RequestContext,
 } from "@kenchi/shared";
@@ -27,9 +28,10 @@ import {
   MONITORING_DEFAULTS,
   PAGERDUTY_API,
   PAGERDUTY_ACTIVE_STATUSES,
+  MS_PER_HOUR,
 } from "../constants/monitoringConstants.js";
 
-const MS_PER_HOUR = 3600000;
+const logger = createLogger("pagerduty-monitoring-adapter");
 
 // ==================== Internal Helpers ====================
 
@@ -118,7 +120,6 @@ const fetchPagerDutyIncidents = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("pagerduty-monitoring-adapter");
   const now = new Date();
   const since = new Date(now.getTime() - query.hoursBack * MS_PER_HOUR);
 
@@ -146,7 +147,7 @@ const fetchPagerDutyIncidents = async (
     const durationMs = Date.now() - startTime;
     const incidents = response.data.incidents ?? [];
 
-    adapterLogger.info("PagerDuty incidents fetched", {
+    logger.info("PagerDuty incidents fetched", {
       provider: "pagerduty",
       operation: "fetchIncidents",
       durationMs,
@@ -160,11 +161,18 @@ const fetchPagerDutyIncidents = async (
       .map((incident) => mapIncidentToEvidence(incident, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("PagerDuty incidents fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("PagerDuty incidents fetch failed", {
       provider: "pagerduty",
       operation: "fetchIncidents",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -188,14 +196,13 @@ export const createPagerDutyMonitoringAdapter = (apiToken: string): MonitoringAd
     query: MonitoringQuery,
     context: RequestContext
   ): Promise<readonly InvestigationEvidenceItem[]> => {
-    const adapterLogger = createLogger("pagerduty-monitoring-adapter");
     const startTime = Date.now();
 
     try {
       const evidence = await fetchPagerDutyIncidents(apiToken, query, context);
       const durationMs = Date.now() - startTime;
 
-      adapterLogger.info("PagerDuty evidence gathered", {
+      logger.info("PagerDuty evidence gathered", {
         provider: "pagerduty",
         operation: "gatherEvidence",
         durationMs,
@@ -206,11 +213,18 @@ export const createPagerDutyMonitoringAdapter = (apiToken: string): MonitoringAd
       return evidence;
     } catch (error) {
       const durationMs = Date.now() - startTime;
-      adapterLogger.warn("PagerDuty evidence gathering failed", {
+      const errorMsg = getErrorMessage(error);
+      const statusCode = (error as { status?: number }).status;
+      const isRetryable =
+        errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+      logger.warn("PagerDuty evidence gathering failed", {
         provider: "pagerduty",
         operation: "gatherEvidence",
         durationMs,
-        error: getErrorMessage(error),
+        statusCode,
+        retryable: isRetryable,
+        error: redactSecrets(errorMsg),
         ...context,
       });
       return [];

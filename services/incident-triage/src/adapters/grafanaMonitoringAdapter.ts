@@ -12,6 +12,7 @@ import {
   resilientGet,
   createLogger,
   getErrorMessage,
+  redactSecrets,
   truncateText,
   type RequestContext,
 } from "@kenchi/shared";
@@ -28,9 +29,11 @@ import {
   MONITORING_DEFAULTS,
   GRAFANA_API,
   GRAFANA_ACTIVE_ALERT_STATES,
+  MS_PER_HOUR,
+  validateBaseUrl,
 } from "../constants/monitoringConstants.js";
 
-const MS_PER_HOUR = 3600000;
+const logger = createLogger("grafana-monitoring-adapter");
 
 // ==================== Internal Helpers ====================
 
@@ -151,7 +154,6 @@ const fetchGrafanaAlerts = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("grafana-monitoring-adapter");
   const url = `${baseUrl}${GRAFANA_API.RULES}`;
   const startTime = Date.now();
 
@@ -167,7 +169,7 @@ const fetchGrafanaAlerts = async (
     const durationMs = Date.now() - startTime;
     const activeAlerts = extractActiveAlerts(response.data);
 
-    adapterLogger.info("Grafana alerts fetched", {
+    logger.info("Grafana alerts fetched", {
       provider: "grafana",
       operation: "fetchAlerts",
       durationMs,
@@ -181,11 +183,18 @@ const fetchGrafanaAlerts = async (
       .map((alert) => mapAlertToEvidence(alert, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("Grafana alerts fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("Grafana alerts fetch failed", {
       provider: "grafana",
       operation: "fetchAlerts",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -201,7 +210,6 @@ const fetchGrafanaAnnotations = async (
   query: MonitoringQuery,
   context: RequestContext
 ): Promise<readonly InvestigationEvidenceItem[]> => {
-  const adapterLogger = createLogger("grafana-monitoring-adapter");
   const now = Date.now();
   const from = now - query.hoursBack * MS_PER_HOUR;
   const tagsParam = query.serviceName ? `&tags=${encodeURIComponent(query.serviceName)}` : "";
@@ -220,7 +228,7 @@ const fetchGrafanaAnnotations = async (
     const durationMs = Date.now() - startTime;
     const annotations = response.data;
 
-    adapterLogger.info("Grafana annotations fetched", {
+    logger.info("Grafana annotations fetched", {
       provider: "grafana",
       operation: "fetchAnnotations",
       durationMs,
@@ -234,11 +242,18 @@ const fetchGrafanaAnnotations = async (
       .map((annotation) => mapAnnotationToEvidence(annotation, query.serviceName));
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    adapterLogger.warn("Grafana annotations fetch failed", {
+    const errorMsg = getErrorMessage(error);
+    const statusCode = (error as { status?: number }).status;
+    const isRetryable =
+      errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+    logger.warn("Grafana annotations fetch failed", {
       provider: "grafana",
       operation: "fetchAnnotations",
       durationMs,
-      error: getErrorMessage(error),
+      statusCode,
+      retryable: isRetryable,
+      error: redactSecrets(errorMsg),
       ...context,
     });
     return [];
@@ -260,13 +275,12 @@ export const createGrafanaMonitoringAdapter = (
 ): MonitoringAdapter => ({
   name: "grafana",
 
-  isConfigured: (): boolean => apiToken.length > 0 && baseUrl.length > 0,
+  isConfigured: (): boolean => apiToken.length > 0 && validateBaseUrl(baseUrl) !== null,
 
   fetchEvidence: async (
     query: MonitoringQuery,
     context: RequestContext
   ): Promise<readonly InvestigationEvidenceItem[]> => {
-    const adapterLogger = createLogger("grafana-monitoring-adapter");
     const startTime = Date.now();
 
     try {
@@ -278,7 +292,7 @@ export const createGrafanaMonitoringAdapter = (
       const evidence = [...alerts, ...annotations];
       const durationMs = Date.now() - startTime;
 
-      adapterLogger.info("Grafana evidence gathered", {
+      logger.info("Grafana evidence gathered", {
         provider: "grafana",
         operation: "gatherEvidence",
         durationMs,
@@ -290,11 +304,18 @@ export const createGrafanaMonitoringAdapter = (
       return evidence;
     } catch (error) {
       const durationMs = Date.now() - startTime;
-      adapterLogger.warn("Grafana evidence gathering failed", {
+      const errorMsg = getErrorMessage(error);
+      const statusCode = (error as { status?: number }).status;
+      const isRetryable =
+        errorMsg.includes("timeout") || (statusCode !== undefined && statusCode >= 500);
+
+      logger.warn("Grafana evidence gathering failed", {
         provider: "grafana",
         operation: "gatherEvidence",
         durationMs,
-        error: getErrorMessage(error),
+        statusCode,
+        retryable: isRetryable,
+        error: redactSecrets(errorMsg),
         ...context,
       });
       return [];
