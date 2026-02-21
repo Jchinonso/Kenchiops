@@ -258,8 +258,10 @@ export const QUEUE_WORKER_DEFAULTS = {
  * Aggregation configuration defaults
  */
 export const AGGREGATION_DEFAULTS = {
-  /** Time to wait after last failure before consolidating (ms) */
-  DEBOUNCE_MS: 30_000,
+  /** Time to wait after last failure before consolidating (ms).
+   * CI checks finish at different times (lint ~1min, tests ~3min).
+   * 90s ensures all check failures land in the same aggregation window. */
+  DEBOUNCE_MS: 90_000,
   /** Maximum time to wait for aggregation (ms) */
   MAX_WAIT_MS: 120_000,
   /** Maximum failures to aggregate per commit */
