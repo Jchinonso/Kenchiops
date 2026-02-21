@@ -212,9 +212,6 @@ export const createIntegrationService = (
       );
     }
 
-    // Enforce plan limit on integrations
-    await enforcePlanLimit(tenantId, "max_integrations");
-
     // Check for existing active connection
     const existing = await findByTenantAndProvider(tenantId, provider);
     if (existing) {
@@ -223,6 +220,9 @@ export const createIntegrationService = (
         metadata: { provider, connectionId: existing.id },
       });
     }
+
+    // Enforce plan limit on integrations (after validation, before external calls)
+    await enforcePlanLimit(tenantId, "max_integrations");
 
     const adapter = getAdapter(provider);
 

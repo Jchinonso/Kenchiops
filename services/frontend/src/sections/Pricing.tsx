@@ -67,7 +67,8 @@ const tiers: readonly PricingTier[] = [
     period: "contact us",
     description: "For organizations with advanced security and compliance needs.",
     features: [
-      "Everything in Pro",
+      "Everything in Team",
+      "Unlimited team members",
       "SSO / SAML authentication",
       "SLA & uptime guarantee",
       "Dedicated support engineer",

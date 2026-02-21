@@ -7,10 +7,12 @@
  * @module routes/subscriptionRoutes
  */
 
+import crypto from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   requireRole,
+  createLogger,
   AuthorizationError,
   ValidationError,
   HTTP_STATUS,
@@ -18,8 +20,8 @@ import {
   type Plan,
   type PlanId,
   type TenantSubscription,
-  type PlanLimits,
   type UsageLimitDetail,
+  type RequestContext,
   // Repository
   getAllPlans,
   getPlanById,
@@ -31,8 +33,24 @@ import {
 } from "@kenchi/shared";
 
 const router = Router();
+const logger = createLogger("subscription-routes");
 
 // ==================== Helpers ====================
+
+/**
+ * Extract the RequestContext from an Express request.
+ * Context is set by upstream middleware; if missing, creates a
+ * minimal context from the request to ensure propagation.
+ */
+const getRequestContext = (req: Request): RequestContext => {
+  const reqWithContext = req as Request & { readonly context?: RequestContext };
+  return (
+    reqWithContext.context ?? {
+      requestId: crypto.randomUUID(),
+      tenantId: "anonymous",
+    }
+  );
+};
 
 /**
  * Extract tenantId from authenticated user or throw.
@@ -85,10 +103,12 @@ const buildUsageLimitDetail = (current: number, limit: number | null): UsageLimi
  */
 const handleGetSubscription = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
 
   const subscriptionWithPlan = await getSubscriptionWithPlan(tenantId);
 
   if (subscriptionWithPlan) {
+    logger.info("Subscription fetched", { ...context, planId: subscriptionWithPlan.plan.id });
     res.status(HTTP_STATUS.OK).json({
       data: {
         plan: mapPlanToResponse(subscriptionWithPlan.plan),
@@ -103,6 +123,7 @@ const handleGetSubscription = async (req: Request, res: Response): Promise<void>
 
   if (!freePlan) {
     // Should never happen if migrations ran correctly
+    logger.warn("Free plan not found in database", { ...context });
     res.status(HTTP_STATUS.OK).json({
       data: {
         plan: null,
@@ -112,6 +133,7 @@ const handleGetSubscription = async (req: Request, res: Response): Promise<void>
     return;
   }
 
+  logger.info("Subscription fetched (default free)", { ...context });
   res.status(HTTP_STATUS.OK).json({
     data: {
       plan: mapPlanToResponse(freePlan),
@@ -129,8 +151,12 @@ const handleGetSubscription = async (req: Request, res: Response): Promise<void>
  * GET /api/v1/subscription/plans
  * Returns all available plans.
  */
-const handleGetPlans = async (_req: Request, res: Response): Promise<void> => {
+const handleGetPlans = async (req: Request, res: Response): Promise<void> => {
+  const context = getRequestContext(req);
+
   const plans = await getAllPlans();
+
+  logger.info("Plans listed", { count: plans.length, ...context });
   res.status(HTTP_STATUS.OK).json({
     data: plans.map(mapPlanToResponse),
   });
@@ -142,22 +168,26 @@ const handleGetPlans = async (_req: Request, res: Response): Promise<void> => {
  */
 const handleGetUsage = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
 
-  // Fetch subscription and usage in parallel
-  const [subscriptionWithPlan, usage] = await Promise.all([
+  // Fetch subscription, usage, and free plan in parallel
+  const [subscriptionWithPlan, usage, freePlan] = await Promise.all([
     getSubscriptionWithPlan(tenantId),
     getTenantUsage(tenantId),
+    getPlanById(DEFAULT_PLAN_ID as PlanId),
   ]);
 
-  // Determine plan limits (fall back to free plan)
+  // Determine plan limits (fall back to free plan from DB)
   const planId = subscriptionWithPlan?.plan.id ?? (DEFAULT_PLAN_ID as PlanId);
-  const limits: PlanLimits = subscriptionWithPlan?.plan.limits ?? {
-    maxRepositories: 3,
-    maxAnalysesMonthly: 50,
-    maxIntegrations: 1,
-    maxTeamMembers: 1,
-  };
+  const limits = subscriptionWithPlan?.plan.limits ??
+    freePlan?.limits ?? {
+      maxRepositories: 3,
+      maxAnalysesMonthly: 50,
+      maxIntegrations: 1,
+      maxTeamMembers: 1,
+    };
 
+  logger.info("Usage fetched", { ...context, planId });
   res.status(HTTP_STATUS.OK).json({
     data: {
       planId,
@@ -181,6 +211,8 @@ const handleGetUsage = async (req: Request, res: Response): Promise<void> => {
  */
 const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
+  const context = getRequestContext(req);
+
   const userId = req.user?.userId;
 
   if (!userId) {
@@ -207,6 +239,13 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
 
   const updated = await changePlan({
     tenantId,
+    newPlanId: validatedPlanId,
+    changedBy: userId,
+  });
+
+  logger.info("Plan changed", {
+    ...context,
+    previousPlanId,
     newPlanId: validatedPlanId,
     changedBy: userId,
   });

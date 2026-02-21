@@ -218,7 +218,7 @@ export const PlanSelection = () => {
         <div className="grid lg:grid-cols-4 md:grid-cols-2 grid-cols-1 gap-6">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
-              key={index}
+              key={`skeleton-${index}`}
               className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700"
             >
               <Skeleton className="h-6 w-20 mb-3" />

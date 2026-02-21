@@ -191,7 +191,7 @@ export const changePlan = async (input: ChangePlanInput): Promise<TenantSubscrip
     // Log audit event (best-effort; don't fail the plan change if audit fails)
     try {
       const { logAuditEvent } = await import("../tenant/index.js");
-      await logAuditEvent(input.tenantId, "plan_changed" as never, {
+      await logAuditEvent(input.tenantId, "plan_changed", {
         newPlanId: input.newPlanId,
         changedBy: input.changedBy,
       });
