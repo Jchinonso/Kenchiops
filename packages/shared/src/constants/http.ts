@@ -69,6 +69,7 @@ export const RATE_LIMIT_MESSAGES = {
  */
 export const EXTERNAL_SERVICE_NAMES = {
   OPENAI: "OpenAI",
+  OPENROUTER: "OpenRouter",
 } as const;
 
 /**

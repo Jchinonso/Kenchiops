@@ -259,7 +259,7 @@ export class ExternalServiceError extends AppError {
  */
 export class LLMError extends ExternalServiceError {
   constructor(message: string, context: ErrorContext = {}) {
-    super(EXTERNAL_SERVICE_NAMES.OPENAI, message, {
+    super(context.service ?? EXTERNAL_SERVICE_NAMES.OPENAI, message, {
       ...context,
       operation: context.operation ?? DEFAULT_LLM_OPERATION,
       suggestion: context.suggestion ?? DEFAULT_SUGGESTIONS.AI_SERVICE,

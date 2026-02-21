@@ -26,7 +26,9 @@ export const OPENROUTER_DEFAULTS = {
  * LLM API configuration constants.
  */
 export const LLM_CONSTANTS = {
-  MAX_PROMPT_TOKENS: 128000, // Conservative limit; Gemini 2.5 Flash supports 1M context
+  // Reduced from 128k to 80k for reliable JSON output with Gemini
+  // Larger prompts cause JSON parsing failures even with response_format
+  MAX_PROMPT_TOKENS: 80000, // ~320KB log files, optimal for cost/performance
   MAX_RETRIES: 3,
   DEFAULT_TIMEOUT_MS: 90000,
   TOKEN_BUFFER: 1000,

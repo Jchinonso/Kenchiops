@@ -17,6 +17,7 @@ import {
   EMBEDDING_CONFIG,
   LLM_CONSTANTS,
   EMBEDDING_TIERS,
+  EXTERNAL_SERVICE_NAMES,
   type EmbeddingTierName,
 } from "../../../constants/index.js";
 import {
@@ -24,13 +25,13 @@ import {
   getCircuitStatus,
   SERVICE_KEYS,
 } from "../../../http/circuitBreaker.js";
+import { isOpenRouterProvider, getEffectiveBaseUrl, createLLMSDKClient } from "./clientFactory.js";
 import type {
   EmbeddingResult,
   BatchEmbeddingResult,
   EmbeddingProvider,
   EmbeddingClientConfig,
 } from "../../types.js";
-import { getEffectiveBaseUrl, createLLMSDKClient } from "./clientFactory.js";
 
 // Re-export types for backward compatibility
 export type { EmbeddingResult, BatchEmbeddingResult, EmbeddingProvider };
@@ -152,6 +153,14 @@ export class EmbeddingClient {
   }
 
   /**
+   * Gets the provider name for error messages and logging.
+   *
+   * @returns Provider name ("OpenRouter" or "OpenAI")
+   */
+  private getProviderName = (): string =>
+    isOpenRouterProvider() ? EXTERNAL_SERVICE_NAMES.OPENROUTER : EXTERNAL_SERVICE_NAMES.OPENAI;
+
+  /**
    * Generates a vector embedding for a single text.
    *
    * @param text - The text to embed
@@ -161,7 +170,10 @@ export class EmbeddingClient {
   readonly generateEmbedding = async (text: string): Promise<EmbeddingResult> => {
     const validationError = validateEmbeddingInput(text);
     if (validationError) {
-      throw new ExternalServiceError("openai", `Embedding validation failed: ${validationError}`);
+      throw new ExternalServiceError(
+        this.getProviderName(),
+        `Embedding validation failed: ${validationError}`
+      );
     }
 
     const startTime = Date.now();
@@ -171,7 +183,10 @@ export class EmbeddingClient {
       const embedding = response.data[0]?.embedding;
 
       if (!embedding) {
-        throw new ExternalServiceError("openai", "No embedding returned from OpenAI");
+        throw new ExternalServiceError(
+          this.getProviderName(),
+          "No embedding returned from embedding API"
+        );
       }
 
       const result: EmbeddingResult = {
@@ -203,7 +218,7 @@ export class EmbeddingClient {
     const validationError = validateBatchInput(texts, this.clientConfig.maxBatchSize);
     if (validationError) {
       throw new ExternalServiceError(
-        "openai",
+        this.getProviderName(),
         `Batch embedding validation failed: ${validationError}`
       );
     }
@@ -266,7 +281,7 @@ export class EmbeddingClient {
     durationMs: number
   ): void => {
     logger.info("Embedding API call completed", {
-      provider: "openai",
+      provider: this.getProviderName(),
       operation: "generateEmbedding",
       durationMs,
       textCount,
@@ -292,7 +307,7 @@ export class EmbeddingClient {
     const message = getErrorMessage(error);
 
     logger.error("Embedding API call failed", {
-      provider: "openai",
+      provider: this.getProviderName(),
       operation: "generateEmbedding",
       durationMs,
       error: message,
@@ -300,7 +315,10 @@ export class EmbeddingClient {
       tier: this.clientConfig.tier,
     });
 
-    return new ExternalServiceError("openai", `Embedding generation failed: ${message}`);
+    return new ExternalServiceError(
+      this.getProviderName(),
+      `Embedding generation failed: ${message}`
+    );
   };
 }
 

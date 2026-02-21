@@ -778,7 +778,8 @@ export type TenantAuditAction =
   | "deleted"
   | "ci_failure_processed"
   | "slack_message_sent"
-  | "github_comment_posted";
+  | "github_comment_posted"
+  | "plan_changed";
 
 /**
  * Tenant audit log entry.
@@ -1016,6 +1017,8 @@ export interface ErrorContext {
   readonly suggestion?: string;
   /** Additional metadata for logging. */
   readonly metadata?: Record<string, unknown>;
+  /** External service name override (e.g., "OpenRouter" vs "OpenAI"). */
+  readonly service?: string;
 }
 
 /**

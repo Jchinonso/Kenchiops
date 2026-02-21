@@ -20,6 +20,7 @@ import {
   LLM_CONSTANTS,
   TIME_CONSTANTS,
   LLM_MESSAGES,
+  EXTERNAL_SERVICE_NAMES,
 } from "../../../constants/index.js";
 import type { Event, Evidence, LLMAnalysisResult } from "../../../core/types.js";
 import { buildAnalysisPrompt } from "../../../integrations/prompts.js";
@@ -117,6 +118,14 @@ export class LLMClient implements LLMAnalysisProvider {
   readonly isAvailable = (): boolean => LLMClient.isAvailable();
 
   /**
+   * Gets the provider name for error messages and logging.
+   *
+   * @returns Provider name ("OpenRouter" or "OpenAI")
+   */
+  private getProviderName = (): string =>
+    isOpenRouterProvider() ? EXTERNAL_SERVICE_NAMES.OPENROUTER : EXTERNAL_SERVICE_NAMES.OPENAI;
+
+  /**
    * Analyzes an incident using LLM API with proper prompt construction,
    * response parsing, and anti-hallucination validation.
    *
@@ -152,7 +161,7 @@ export class LLMClient implements LLMAnalysisProvider {
       this.logValidationResults(validation, event.id);
 
       logger.info("LLM analyzeIncident completed", {
-        provider: "openai",
+        provider: this.getProviderName(),
         operation: "analyzeIncident",
         durationMs,
         eventId: event.id,
@@ -163,13 +172,13 @@ export class LLMClient implements LLMAnalysisProvider {
     } catch (error) {
       const durationMs = Date.now() - startTime;
       logger.error("LLM analyzeIncident failed", {
-        provider: "openai",
+        provider: this.getProviderName(),
         operation: "analyzeIncident",
         durationMs,
         eventId: event.id,
         model: this.clientConfig.model,
       });
-      throw handleLLMError(error, this.clientConfig.timeout);
+      throw handleLLMError(error, this.clientConfig.timeout, this.getProviderName());
     }
   }
 
@@ -278,18 +287,32 @@ export class LLMClient implements LLMAnalysisProvider {
   /**
    * Creates LLM API request configuration.
    *
+   * Note: response_format is set for direct OpenAI and OpenRouter with Gemini.
+   * OpenRouter supports this for Gemini models which reliably return JSON.
+   *
    * @param prompt - The prompt to send
    * @returns API request configuration
    */
   private createRequestConfig = (
     prompt: string
-  ): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming => ({
-    model: this.clientConfig.model,
-    messages: [{ role: "user" as const, content: prompt }],
-    max_tokens: this.clientConfig.maxTokens,
-    temperature: this.clientConfig.temperature,
-    response_format: { type: "json_object" as const },
-  });
+  ): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming => {
+    const isOpenRouter = isOpenRouterProvider();
+    const isGeminiModel = this.clientConfig.model.includes("gemini");
+
+    // Enable JSON response format for:
+    // - Direct OpenAI (always supported)
+    // - OpenRouter with Gemini (supported and reliable)
+    const shouldUseJsonFormat = !isOpenRouter || isGeminiModel;
+
+    return {
+      model: this.clientConfig.model,
+      messages: [{ role: "user" as const, content: prompt }],
+      max_tokens: this.clientConfig.maxTokens,
+      temperature: this.clientConfig.temperature,
+      // Enable JSON response format for supported providers/models
+      ...(shouldUseJsonFormat && { response_format: { type: "json_object" as const } }),
+    };
+  };
 
   /**
    * Extracts content from LLM completion response.
@@ -298,11 +321,13 @@ export class LLMClient implements LLMAnalysisProvider {
    * @returns Response content
    * @throws {LLMError} If no content is found
    */
-  private extractResponseContent = (completion: OpenAI.Chat.Completions.ChatCompletion): string =>
-    completion.choices?.[0]?.message?.content ??
-    (() => {
-      throw new LLMError(LLM_MESSAGES.NO_CONTENT);
-    })();
+  private extractResponseContent = (completion: OpenAI.Chat.Completions.ChatCompletion): string => {
+    const content = completion.choices?.[0]?.message?.content;
+    if (content === undefined || content === null) {
+      throw new LLMError(LLM_MESSAGES.NO_CONTENT, { service: this.getProviderName() });
+    }
+    return content;
+  };
 
   /**
    * Calculates exponential backoff delay for retry attempts.
@@ -444,7 +469,9 @@ export class LLMClient implements LLMAnalysisProvider {
     try {
       return parseLLMResponse(responseContent, eventId);
     } catch (error) {
-      throw new LLMError(`Failed to parse LLM response: ${getErrorMessage(error)}`);
+      throw new LLMError(`Failed to parse LLM response: ${getErrorMessage(error)}`, {
+        service: this.getProviderName(),
+      });
     }
   };
 }
