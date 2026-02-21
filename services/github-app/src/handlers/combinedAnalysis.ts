@@ -78,104 +78,6 @@ const POLLING_CONFIG = {
   REQUEST_TIMEOUT_MS: 30_000,
 } as const;
 
-// ==================== Check Run Readiness ====================
-
-/**
- * Configuration for waiting on in-progress check runs before analysis.
- * Replaces long static debounce with an active GitHub API check.
- */
-const CHECK_RUN_WAIT_CONFIG = {
-  /** Maximum time to wait for in-progress checks to complete (2 minutes) */
-  MAX_WAIT_MS: 120_000,
-  /** Interval between GitHub API polls */
-  POLL_INTERVAL_MS: 15_000,
-} as const;
-
-/**
- * Waits for all check runs on a commit to complete before starting analysis.
- *
- * Polls GitHub's check runs API to detect in-progress checks. This allows
- * the aggregation debounce to be short (30s) while still ensuring all
- * check failures are included in the analysis.
- *
- * @param installationId - GitHub App installation ID
- * @param owner - Repository owner
- * @param repo - Repository name
- * @param commitSha - Commit SHA to check
- * @returns Number of additional failed checks discovered while waiting
- */
-const waitForPendingCheckRuns = async (
-  installationId: number,
-  owner: string,
-  repo: string,
-  commitSha: string
-): Promise<number> => {
-  const startTime = Date.now();
-  const octokit = await getOctokit(installationId);
-
-  // let: inProgressCount changes each poll iteration
-  let inProgressCount = 0;
-
-  while (Date.now() - startTime < CHECK_RUN_WAIT_CONFIG.MAX_WAIT_MS) {
-    try {
-      const { data } = await octokit.rest.checks.listForRef({
-        owner,
-        repo,
-        ref: commitSha,
-        per_page: 100,
-      });
-
-      inProgressCount = data.check_runs.filter((run) => run.status !== "completed").length;
-
-      if (inProgressCount === 0) {
-        const additionalFailed = data.check_runs.filter(
-          (run) => run.conclusion === "failure"
-        ).length;
-
-        logger.info("All check runs completed, proceeding with analysis", {
-          owner,
-          repo,
-          commitSha: commitSha.substring(0, 7),
-          totalCheckRuns: data.total_count,
-          failedCount: additionalFailed,
-          waitedMs: Date.now() - startTime,
-        });
-
-        return additionalFailed;
-      }
-
-      logger.info("Waiting for in-progress check runs to complete", {
-        owner,
-        repo,
-        commitSha: commitSha.substring(0, 7),
-        inProgressCount,
-        totalCheckRuns: data.total_count,
-        waitedMs: Date.now() - startTime,
-      });
-
-      await delay(CHECK_RUN_WAIT_CONFIG.POLL_INTERVAL_MS);
-    } catch (error) {
-      logger.warn("Failed to check for in-progress check runs, proceeding anyway", {
-        owner,
-        repo,
-        commitSha: commitSha.substring(0, 7),
-        error: getErrorMessage(error),
-      });
-      return 0;
-    }
-  }
-
-  logger.warn("Timed out waiting for in-progress check runs", {
-    owner,
-    repo,
-    commitSha: commitSha.substring(0, 7),
-    remainingInProgress: inProgressCount,
-    maxWaitMs: CHECK_RUN_WAIT_CONFIG.MAX_WAIT_MS,
-  });
-
-  return 0;
-};
-
 // ==================== Annotation Enrichment ====================
 
 /**
@@ -871,11 +773,6 @@ export const processCombinedAnalysis = async (
   });
 
   try {
-    // Step 0: Wait for any in-progress check runs to complete before analysis.
-    // This replaces long static debounce with an active GitHub API check,
-    // ensuring fast turnaround for simple repos while catching staggered checks.
-    await waitForPendingCheckRuns(installationId, repository.owner, repository.name, commitSha);
-
     // Step 1: Fetch logs for ALL failed jobs
     const allJobsLogs = await fetchAllFailedJobsLogs(
       installationId,

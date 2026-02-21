@@ -38,13 +38,59 @@ const enqueueWithErrorCapture = async (key: AggregationKey): Promise<Aggregation
   }
 };
 
+/**
+ * Filters ready keys through the beforeEnqueue callback.
+ * Keys where the callback returns false are deferred (left in Redis).
+ */
+const filterKeysForEnqueue = async (
+  readyKeys: readonly AggregationKey[],
+  beforeEnqueue: (key: AggregationKey) => Promise<boolean>
+): Promise<readonly AggregationKey[]> => {
+  const results = await Promise.all(
+    readyKeys.map(async (key) => {
+      try {
+        const shouldEnqueue = await beforeEnqueue(key);
+
+        if (!shouldEnqueue) {
+          logger.info("Aggregation deferred by beforeEnqueue check", {
+            repository: key.repositoryFullName,
+            commitSha: key.commitSha,
+          });
+        }
+
+        return { key, shouldEnqueue };
+      } catch (error) {
+        // On error, proceed with enqueue (fail-open)
+        logger.warn("beforeEnqueue check failed, proceeding with enqueue", {
+          repository: key.repositoryFullName,
+          commitSha: key.commitSha,
+          error: getErrorMessage(error),
+        });
+        return { key, shouldEnqueue: true };
+      }
+    })
+  );
+
+  return results.filter((result) => result.shouldEnqueue).map((result) => result.key);
+};
+
 /** Processes all ready aggregations, handling individual failures gracefully. */
 const processReadyAggregations = async (
   readyKeys: readonly AggregationKey[],
   state: AggregatorWorkerState,
-  onError?: WorkerErrorCallback
+  onError?: WorkerErrorCallback,
+  beforeEnqueue?: (key: AggregationKey) => Promise<boolean>
 ): Promise<void> => {
-  const results = await Promise.all(readyKeys.map(enqueueWithErrorCapture));
+  // Filter through beforeEnqueue if provided (e.g., check GitHub for in-progress runs)
+  const keysToEnqueue = beforeEnqueue
+    ? await filterKeysForEnqueue(readyKeys, beforeEnqueue)
+    : readyKeys;
+
+  if (keysToEnqueue.length === 0) {
+    return;
+  }
+
+  const results = await Promise.all(keysToEnqueue.map(enqueueWithErrorCapture));
 
   const successCount = results.filter((result) => result.status === "success").length;
   const failures = results.filter(
@@ -86,7 +132,8 @@ const createPollingLoop = (
   config: AggregationConfig,
   pollIntervalMs: number,
   state: AggregatorWorkerState,
-  onError?: WorkerErrorCallback
+  onError?: WorkerErrorCallback,
+  beforeEnqueue?: (key: AggregationKey) => Promise<boolean>
 ): PollingLoop => {
   const poll = async (): Promise<void> => {
     if (!state.running) {
@@ -100,7 +147,7 @@ const createPollingLoop = (
 
       if (readyKeys.length > 0) {
         logger.info("Found ready aggregations", { count: readyKeys.length });
-        await processReadyAggregations(readyKeys, state, onError);
+        await processReadyAggregations(readyKeys, state, onError, beforeEnqueue);
       }
     } catch (caughtError) {
       const errorMessage = getErrorMessage(caughtError);
@@ -158,6 +205,7 @@ export const startAggregatorWorker = (options: AggregatorWorkerOptions = {}): Wo
     config = DEFAULT_AGGREGATION_CONFIG,
     pollIntervalMs = QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS,
     onError,
+    beforeEnqueue,
   } = options;
 
   const state: AggregatorWorkerState = {
@@ -172,9 +220,10 @@ export const startAggregatorWorker = (options: AggregatorWorkerOptions = {}): Wo
     pollIntervalMs,
     debounceMs: config.debounceMs,
     maxWaitMs: config.maxWaitMs,
+    hasBeforeEnqueue: !!beforeEnqueue,
   });
 
-  const poll = createPollingLoop(config, pollIntervalMs, state, onError);
+  const poll = createPollingLoop(config, pollIntervalMs, state, onError, beforeEnqueue);
   void runPollingLoop(poll, state, onError);
 
   return {

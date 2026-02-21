@@ -50,6 +50,7 @@ import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { postConsolidatedAnalysis } from "./services/aggregation/consolidatedPoster.js";
 import { processCombinedAnalysis } from "./handlers/combinedAnalysis.js";
+import { checkAllRunsCompleted } from "./services/aggregationReadiness.js";
 
 const logger = createLogger("github-app");
 
@@ -192,9 +193,12 @@ const initializeFailureAggregator = (): void => {
   };
 
   // Start the aggregator worker (checks for ready aggregations and enqueues them)
+  // beforeEnqueue: checks GitHub for in-progress check runs before dequeuing.
+  // This allows short debounce (30s) while ensuring staggered checks are consolidated.
   aggregatorWorkerControl = startAggregatorWorker({
     config: aggregationConfig,
     pollIntervalMs: QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS,
+    beforeEnqueue: checkAllRunsCompleted,
   });
 
   // Start the analysis queue processor (processes enqueued aggregations)

@@ -529,6 +529,14 @@ export interface AggregatorWorkerOptions {
   readonly pollIntervalMs?: number;
   /** Optional callback for worker errors (for health monitoring). */
   readonly onError?: WorkerErrorCallback;
+  /**
+   * Optional pre-enqueue readiness check. Called for each aggregation
+   * before it is dequeued from Redis. Return false to defer the aggregation
+   * (it stays in Redis and will be checked again on the next poll).
+   *
+   * Use case: check GitHub for in-progress check runs before processing.
+   */
+  readonly beforeEnqueue?: (key: AggregationKey) => Promise<boolean>;
 }
 
 // ==================== Internal Aggregator Types ====================
