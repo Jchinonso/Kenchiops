@@ -68,9 +68,9 @@ const SuggestedActionsSection = ({ actions }: SuggestedActionsSectionProps) => (
   <div>
     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Suggested Actions</h4>
     <div className="space-y-2">
-      {actions.map((action, index) => (
+      {actions.map((action) => (
         <div
-          key={`action-${index}`}
+          key={`${action.priority}-${action.action}`}
           className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
         >
           <span
@@ -197,7 +197,7 @@ export const TimelineSection = ({ events }: TimelineSectionProps) => {
         ) : (
           <div className="space-y-0">
             {sortedEvents.map((event, index) => (
-              <div key={`timeline-${index}`} className="flex gap-3 pb-4 last:pb-0">
+              <div key={`${event.timestamp}-${event.type}`} className="flex gap-3 pb-4 last:pb-0">
                 <div className="flex flex-col items-center">
                   <div className="w-2 h-2 rounded-full bg-indigo-500 mt-2" />
                   {index < eventCount - 1 && (
@@ -273,9 +273,9 @@ export const CorrelationSection = ({ correlation }: CorrelationSectionProps) => 
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Patterns</h4>
             <ul className="space-y-1.5">
-              {patterns.map((pattern, index) => (
+              {patterns.map((pattern) => (
                 <li
-                  key={`pattern-${index}`}
+                  key={pattern}
                   className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400"
                 >
                   <span className="text-indigo-400 mt-1 flex-shrink-0">&#8226;</span>
@@ -292,9 +292,9 @@ export const CorrelationSection = ({ correlation }: CorrelationSectionProps) => 
               Common Factors
             </h4>
             <ul className="space-y-1.5">
-              {commonFactors.map((factor, index) => (
+              {commonFactors.map((factor) => (
                 <li
-                  key={`factor-${index}`}
+                  key={factor}
                   className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400"
                 >
                   <span className="text-indigo-400 mt-1 flex-shrink-0">&#8226;</span>

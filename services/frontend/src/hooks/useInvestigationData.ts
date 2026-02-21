@@ -2,12 +2,19 @@
  * Investigation Data Hooks
  *
  * Custom hooks for fetching investigation data from the API.
- * Uses native fetch via apiClient with useState/useEffect.
- * Follows the same pattern as useIncidentData.ts.
+ * Uses shared useFetch hook with polling for active investigations.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiClient } from "@/lib/apiClient";
+import {
+  useFetch,
+  sanitizeErrorMessage,
+  parseErrorBody,
+  type UseFetchResult,
+  type MutationState,
+} from "@/hooks/useFetch";
+
 // Inlined from @kenchi/shared — frontend Docker build context does not include shared package
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const investigationPollingConfig = {
@@ -16,16 +23,6 @@ const investigationPollingConfig = {
 } as const;
 
 // ==================== Types ====================
-
-interface FetchState<T> {
-  readonly data: T | null;
-  readonly isLoading: boolean;
-  readonly error: string | null;
-}
-
-interface UseFetchResult<T> extends FetchState<T> {
-  readonly refetch: () => void;
-}
 
 export interface InvestigationEvidenceItem {
   readonly id: string;
@@ -96,11 +93,6 @@ export interface PaginatedInvestigations {
   readonly offset: number;
 }
 
-interface MutationState {
-  readonly isLoading: boolean;
-  readonly error: string | null;
-}
-
 interface StartInvestigationInput {
   readonly description: string;
   readonly serviceName?: string;
@@ -121,10 +113,6 @@ const setRef = <T>(ref: React.MutableRefObject<T>, value: T): void => {
   Object.assign(ref, { current: value });
 };
 
-/** Truncate error messages to prevent internal details from leaking to the UI */
-const sanitizeErrorMessage = (message: string): string =>
-  message.length > 200 ? `${message.slice(0, 200)}...` : message;
-
 // ==================== Validation ====================
 
 /** Validates that an ID is a UUID to prevent path traversal via crafted IDs */
@@ -134,85 +122,6 @@ const isValidUuid = (value: string): boolean => uuidPattern.test(value);
 
 const isActiveStatus = (status: string): boolean =>
   status === "queued" || status === "gathering" || status === "analyzing";
-
-// ==================== Generic Fetch Hook ====================
-
-/**
- * Generic data-fetching hook with loading/error states and cancellation.
- * Replicates the same pattern as useIncidentData.ts useFetch.
- */
-const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
-  const [state, setState] = useState<FetchState<T>>({
-    data: null,
-    isLoading: true,
-    error: null,
-  });
-
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const refetch = useCallback(() => {
-    setRefreshKey((prev) => prev + 1);
-  }, []);
-
-  useEffect(() => {
-    if (!path) {
-      return;
-    }
-
-    // let: mutable flag for async cleanup coordination
-    let cancelled = false; // let: tracks if effect was cleaned up during async fetch
-
-    const fetchData = async () => {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-      try {
-        const response = await apiClient(path);
-
-        if (cancelled) {
-          return;
-        }
-
-        if (!response.ok) {
-          // let: error message may come from response body or fallback to status text
-          let errorMessage = `Request failed (${response.status})`; // let: conditionally updated from response body
-
-          try {
-            const errorBody: unknown = await response.json();
-            const parsed = errorBody as { readonly error?: { readonly message?: string } };
-            if (parsed?.error?.message) {
-              errorMessage = parsed.error.message;
-            }
-          } catch {
-            // Response body not parseable as JSON — use default message
-          }
-
-          setState({ data: null, isLoading: false, error: sanitizeErrorMessage(errorMessage) });
-          return;
-        }
-
-        const json: { readonly data: T } = await response.json();
-        setState({ data: json.data, isLoading: false, error: null });
-      } catch (caught) {
-        if (cancelled) {
-          return;
-        }
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ data: null, isLoading: false, error: sanitizeErrorMessage(message) });
-      }
-    };
-
-    void fetchData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [path, refreshKey, depsKey]);
-
-  // Derive final state: when path is empty, override to idle
-  const resolvedState: FetchState<T> = path ? state : { data: null, isLoading: false, error: null };
-
-  return { ...resolvedState, refetch };
-};
 
 // ==================== URL Builders ====================
 
@@ -258,6 +167,9 @@ export const useInvestigationDetail = (
     `${safeId ?? ""}:${refreshKey}`
   );
 
+  // Extract stable refetch reference for polling effect deps
+  const refetchFn = result.refetch;
+
   // Auto-poll when investigation is in an active state, with bounded retries
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const pollCountRef = useRef(0);
@@ -280,7 +192,7 @@ export const useInvestigationDetail = (
             }
             return;
           }
-          result.refetch();
+          refetchFn();
         }, investigationPollingConfig.intervalMs)
       );
     }
@@ -290,23 +202,9 @@ export const useInvestigationDetail = (
         clearInterval(intervalRef.current);
       }
     };
-    // Only re-run when status changes (not on every refetch)
-  }, [currentStatus]); // eslint-disable-line
+  }, [currentStatus, refetchFn]);
 
   return result;
-};
-
-// ==================== Mutation Helpers ====================
-
-/** Safely parse an error message from an API response body, truncated for display safety */
-const parseErrorBody = async (response: Response, fallback: string): Promise<string> => {
-  try {
-    const body: unknown = await response.json();
-    const parsed = body as { readonly error?: { readonly message?: string } } | null;
-    return sanitizeErrorMessage(parsed?.error?.message ?? fallback);
-  } catch {
-    return sanitizeErrorMessage(fallback);
-  }
 };
 
 // ==================== Mutation Hooks ====================

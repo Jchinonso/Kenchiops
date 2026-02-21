@@ -63,8 +63,17 @@ const InvestigationTableRow = ({ investigation, onClick }: InvestigationTableRow
 
   return (
     <TableRow
-      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
       onClick={onClick}
+      onKeyDown={(keyEvent) => {
+        const { key } = keyEvent;
+        if (key === "Enter" || key === " ") {
+          keyEvent.preventDefault();
+          onClick();
+        }
+      }}
+      tabIndex={0}
+      role="link"
     >
       <TableCell>
         <span

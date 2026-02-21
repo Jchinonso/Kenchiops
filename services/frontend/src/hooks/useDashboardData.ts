@@ -2,23 +2,12 @@
  * Dashboard Data Hooks
  *
  * Custom hooks for fetching CI/CD dashboard data from the API.
- * Uses native fetch via apiClient with useState/useEffect.
+ * Uses shared useFetch hook with useState/useEffect.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { apiClient } from "@/lib/apiClient";
-
-// ==================== Types ====================
-
-interface FetchState<T> {
-  readonly data: T | null;
-  readonly isLoading: boolean;
-  readonly error: string | null;
-}
-
-interface UseFetchResult<T> extends FetchState<T> {
-  readonly refetch: () => void;
-}
+import { useFetch, type FetchState, type UseFetchResult } from "@/hooks/useFetch";
 
 interface TenantInfo {
   readonly id: string;
@@ -77,83 +66,6 @@ interface PaginatedResult<T> {
   readonly limit: number;
   readonly offset: number;
 }
-
-// ==================== Generic Fetch Hook ====================
-
-/**
- * Generic data-fetching hook with loading/error states and cancellation.
- * Uses a cancelled flag to prevent state updates after effect cleanup.
- */
-const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
-  const [state, setState] = useState<FetchState<T>>({
-    data: null,
-    isLoading: true,
-    error: null,
-  });
-
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const refetch = useCallback(() => {
-    setRefreshKey((prev) => prev + 1);
-  }, []);
-
-  useEffect(() => {
-    if (!path) {
-      setState({ data: null, isLoading: false, error: null });
-      return;
-    }
-
-    // let: mutable flag for async cleanup coordination
-    let cancelled = false; // let: tracks if effect was cleaned up during async fetch
-
-    const fetchData = async () => {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-      try {
-        const response = await apiClient(path);
-
-        if (cancelled) {
-          return;
-        }
-
-        if (!response.ok) {
-          // let: error message may come from response body or fallback to status text
-          let errorMessage = `Request failed (${response.status})`; // let: conditionally updated from response body
-
-          try {
-            const errorBody: unknown = await response.json();
-            const parsed = errorBody as { readonly error?: { readonly message?: string } };
-            if (parsed?.error?.message) {
-              errorMessage = parsed.error.message;
-            }
-          } catch {
-            // Response body not parseable as JSON — use default message
-          }
-
-          setState({ data: null, isLoading: false, error: errorMessage });
-          return;
-        }
-
-        const json: { readonly data: T } = await response.json();
-        setState({ data: json.data, isLoading: false, error: null });
-      } catch (caught) {
-        if (cancelled) {
-          return;
-        }
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ data: null, isLoading: false, error: message });
-      }
-    };
-
-    void fetchData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [path, refreshKey, depsKey]);
-
-  return { ...state, refetch };
-};
 
 // ==================== Typed Hooks ====================
 

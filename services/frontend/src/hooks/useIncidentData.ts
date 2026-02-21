@@ -2,24 +2,17 @@
  * Incident Data Hooks
  *
  * Custom hooks for fetching incident triage data from the API.
- * Uses native fetch via apiClient with useState/useEffect.
- * Follows the same pattern as useDashboardData.ts.
+ * Uses shared useFetch hook.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { apiClient } from "@/lib/apiClient";
-
-// ==================== Types ====================
-
-interface FetchState<T> {
-  readonly data: T | null;
-  readonly isLoading: boolean;
-  readonly error: string | null;
-}
-
-interface UseFetchResult<T> extends FetchState<T> {
-  readonly refetch: () => void;
-}
+import {
+  useFetch,
+  parseErrorBody,
+  type UseFetchResult,
+  type MutationState,
+} from "@/hooks/useFetch";
 
 export interface IncidentAlertRecord {
   readonly id: string;
@@ -84,90 +77,6 @@ export interface PipelineMetricsResponse {
     readonly activeAlerts: number;
   };
 }
-
-interface MutationState {
-  readonly isLoading: boolean;
-  readonly error: string | null;
-}
-
-// ==================== Generic Fetch Hook ====================
-
-/**
- * Generic data-fetching hook with loading/error states and cancellation.
- * Replicates the same pattern as useDashboardData.ts useFetch.
- */
-const useFetch = <T>(path: string, depsKey: string = ""): UseFetchResult<T> => {
-  const [state, setState] = useState<FetchState<T>>({
-    data: null,
-    isLoading: true,
-    error: null,
-  });
-
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const refetch = useCallback(() => {
-    setRefreshKey((prev) => prev + 1);
-  }, []);
-
-  useEffect(() => {
-    if (!path) {
-      return;
-    }
-
-    // let: mutable flag for async cleanup coordination
-    let cancelled = false; // let: tracks if effect was cleaned up during async fetch
-
-    const fetchData = async () => {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-      try {
-        const response = await apiClient(path);
-
-        if (cancelled) {
-          return;
-        }
-
-        if (!response.ok) {
-          // let: error message may come from response body or fallback to status text
-          let errorMessage = `Request failed (${response.status})`; // let: conditionally updated from response body
-
-          try {
-            const errorBody: unknown = await response.json();
-            const parsed = errorBody as { readonly error?: { readonly message?: string } };
-            if (parsed?.error?.message) {
-              errorMessage = parsed.error.message;
-            }
-          } catch {
-            // Response body not parseable as JSON — use default message
-          }
-
-          setState({ data: null, isLoading: false, error: errorMessage });
-          return;
-        }
-
-        const json: { readonly data: T } = await response.json();
-        setState({ data: json.data, isLoading: false, error: null });
-      } catch (caught) {
-        if (cancelled) {
-          return;
-        }
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ data: null, isLoading: false, error: message });
-      }
-    };
-
-    void fetchData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [path, refreshKey, depsKey]);
-
-  // Derive final state: when path is empty, override to idle (avoids synchronous setState in effect)
-  const resolvedState: FetchState<T> = path ? state : { data: null, isLoading: false, error: null };
-
-  return { ...resolvedState, refetch };
-};
 
 // ==================== URL Builders ====================
 
@@ -295,19 +204,6 @@ export const useSeverityDistributionBySource = (
     tenantId ? `/api/v1/triage/stats/severity-by-source?tenantId=${tenantId}` : "",
     `${tenantId}:${refreshKey}`
   );
-
-// ==================== Mutation Helpers ====================
-
-/** Safely parse an error message from an API response body */
-const parseErrorBody = async (response: Response, fallback: string): Promise<string> => {
-  try {
-    const body: unknown = await response.json();
-    const parsed = body as { readonly error?: { readonly message?: string } } | null;
-    return parsed?.error?.message ?? fallback;
-  } catch {
-    return fallback;
-  }
-};
 
 // ==================== Mutation Hooks ====================
 
