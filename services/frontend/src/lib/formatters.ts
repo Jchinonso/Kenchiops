@@ -186,3 +186,58 @@ const SEVERITY_RANKS: Readonly<Record<string, number>> = {
 } as const;
 
 export const getIncidentSeverityRank = (severity: string): number => SEVERITY_RANKS[severity] ?? 5;
+
+// ==================== Investigation Status ====================
+
+export const INVESTIGATION_STATUS_STYLES: Readonly<Record<string, string>> = {
+  queued:
+    "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700",
+  gathering:
+    "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-800",
+  analyzing:
+    "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-200 border-indigo-200 dark:border-indigo-800",
+  completed:
+    "bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-200 border-green-200 dark:border-green-800",
+  failed:
+    "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-200 border-red-200 dark:border-red-800",
+  default:
+    "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700",
+} as const;
+
+export const getInvestigationStatusStyle = (status: string): string =>
+  INVESTIGATION_STATUS_STYLES[status] ?? INVESTIGATION_STATUS_STYLES.default;
+
+// ==================== Evidence Source Labels ====================
+
+export const EVIDENCE_SOURCE_LABELS: Readonly<Record<string, string>> = {
+  past_incidents: "Past Incidents",
+  ci_analyses: "CI Analyses",
+  triage_results: "Triage Results",
+  datadog_metrics: "Datadog Metrics",
+  datadog_events: "Datadog Events",
+  grafana_alerts: "Grafana Alerts",
+  prometheus_alerts: "Prometheus Alerts",
+  pagerduty_incidents: "PagerDuty Incidents",
+  vercel_deployments: "Vercel Deployments",
+  netlify_deploys: "Netlify Deploys",
+} as const;
+
+export const getEvidenceSourceLabel = (source: string): string =>
+  EVIDENCE_SOURCE_LABELS[source] ?? titleCase(source.replace(/_/g, " "));
+
+// ==================== Duration Formatting ====================
+
+export const formatDuration = (ms: number): string => {
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
+};

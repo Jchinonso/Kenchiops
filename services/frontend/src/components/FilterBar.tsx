@@ -37,7 +37,7 @@ interface FilterValues {
 interface FilterBarProps {
   readonly filters: FilterValues;
   readonly onFilterChange: (filters: FilterValues) => void;
-  readonly variant: "analyses" | "failures" | "incidents";
+  readonly variant: "analyses" | "failures" | "incidents" | "investigations";
   readonly hideSource?: boolean;
   readonly hideRepository?: boolean;
 }
@@ -99,6 +99,17 @@ const INCIDENT_STATUS_OPTIONS: ReadonlyArray<{ readonly value: string; readonly 
   { value: "escalated", label: "Escalated" },
   { value: "acknowledged", label: "Acknowledged" },
   { value: "resolved", label: "Resolved" },
+];
+
+const INVESTIGATION_STATUS_OPTIONS: ReadonlyArray<{
+  readonly value: string;
+  readonly label: string;
+}> = [
+  { value: "", label: "All Statuses" },
+  { value: "gathering", label: "Gathering" },
+  { value: "analyzing", label: "Analyzing" },
+  { value: "completed", label: "Completed" },
+  { value: "failed", label: "Failed" },
 ];
 
 /** Duration lookup for time range presets (in milliseconds) */
@@ -256,7 +267,7 @@ export const FilterBar = ({
       role="search"
       aria-label="Table filters"
     >
-      {variant !== "incidents" && !hideRepository && (
+      {variant !== "incidents" && variant !== "investigations" && !hideRepository && (
         <>
           <label className="sr-only" htmlFor="filter-repository">
             Filter by repository
@@ -332,6 +343,36 @@ export const FilterBar = ({
         </>
       )}
 
+      {variant === "investigations" && (
+        <>
+          <Select value={filters.status || "all"} onValueChange={handleStatusChange}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              {INVESTIGATION_STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value || "all"} value={option.value || "all"}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.timeRange || "all"} onValueChange={handleTimeRangeChange}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="All Time" />
+            </SelectTrigger>
+            <SelectContent>
+              {TIME_RANGE_OPTIONS.map((option) => (
+                <SelectItem key={option.value || "all"} value={option.value || "all"}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      )}
+
       {variant === "analyses" && (
         <Select value={filters.minConfidence || "all"} onValueChange={handleConfidenceChange}>
           <SelectTrigger className="w-[180px]">
@@ -347,7 +388,7 @@ export const FilterBar = ({
         </Select>
       )}
 
-      {variant !== "incidents" && (
+      {variant !== "incidents" && variant !== "investigations" && (
         <Select value={filters.timeRange || "all"} onValueChange={handleTimeRangeChange}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All Time" />

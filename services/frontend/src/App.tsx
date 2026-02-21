@@ -69,7 +69,7 @@ const App = () => (
           {/* Backward-compatible redirects for old URLs */}
           <Route
             path="/dashboard/failures"
-            element={<Navigate to="/dashboard/cicd/failures" replace />}
+            element={<Navigate to="/dashboard/cicd/analyses" replace />}
           />
           <Route
             path="/dashboard/analyses"

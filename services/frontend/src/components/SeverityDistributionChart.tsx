@@ -6,7 +6,7 @@
  * When multiple sources have data, shows grouped bars by source.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, Legend } from "recharts";
 import {
   ChartContainer,
@@ -54,6 +54,9 @@ const SEVERITY_LABELS: Readonly<Record<string, string>> = {
   info: "Info",
 } as const;
 
+/** Max time to show skeleton before giving up (ms) */
+const LOADING_TIMEOUT_MS = 5_000;
+
 // ==================== Props ====================
 
 interface SeverityDistributionChartProps {
@@ -69,6 +72,24 @@ export const SeverityDistributionChart = ({
   distributionBySource,
   isLoading,
 }: SeverityDistributionChartProps) => {
+  // Timeout the skeleton so it doesn't spin forever when no data arrives
+  const [timedOut, setTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setTimedOut(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setTimedOut(true);
+    }, LOADING_TIMEOUT_MS);
+
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
+  const showSkeleton = isLoading && !timedOut;
+
   const apiMap = new Map(
     (distribution ?? []).map((entry) => [entry.severityLabel.toLowerCase(), entry.count])
   );
@@ -111,13 +132,10 @@ export const SeverityDistributionChart = ({
 
     return SEVERITY_ORDER.map((severity) => {
       const sourceCounts = lookup.get(severity) ?? new Map<string, number>();
-      const row: Record<string, string | number> = {
+      return {
         severity: SEVERITY_LABELS[severity] ?? severity,
+        ...Object.fromEntries(sources.map((source) => [source, sourceCounts.get(source) ?? 0])),
       };
-      sources.forEach((source) => {
-        row[source] = sourceCounts.get(source) ?? 0;
-      });
-      return row;
     });
   }, [useGrouped, distributionBySource, sources]);
 
@@ -149,15 +167,21 @@ export const SeverityDistributionChart = ({
           </CardTitle>
         </div>
         <CardDescription>
-          {totalIncidents > 0
-            ? `Breakdown of incident severity levels across ${totalIncidents} incident${totalIncidents === 1 ? "" : "s"}.${useGrouped ? " Grouped by source." : ""}`
-            : "No incidents recorded yet. Severity breakdown will appear here."}
+          {showSkeleton
+            ? "Loading severity data\u2026"
+            : totalIncidents > 0
+              ? `Breakdown of incident severity levels across ${totalIncidents} incident${totalIncidents === 1 ? "" : "s"}.${useGrouped ? " Grouped by source." : ""}`
+              : "No incidents recorded yet. Severity breakdown will appear here."}
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6">
-        {isLoading ? (
+        {showSkeleton ? (
           <Skeleton className="h-56 w-full" />
-        ) : totalIncidents === 0 ? null : useGrouped ? (
+        ) : totalIncidents === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No severity data available.
+          </p>
+        ) : useGrouped ? (
           <ChartContainer
             config={groupedConfig}
             className="h-64 w-full"

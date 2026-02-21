@@ -14,13 +14,15 @@ import { Toaster } from "@/components/ui/sonner";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { ComingSoon } from "@/components/ComingSoon";
 import { DashboardOverview } from "@/pages/DashboardOverview";
-import { CICDFailures } from "@/pages/CICDFailures";
 import { CICDAnalyses } from "@/pages/CICDAnalyses";
 import { CICDPipelines } from "@/pages/CICDPipelines";
 import { WebhookActivity } from "@/pages/WebhookActivity";
 import { RepositoryDetail } from "@/pages/RepositoryDetail";
 import { AnalysisDetail } from "@/pages/AnalysisDetail";
 import { ActiveIncidents } from "@/pages/ActiveIncidents";
+import { Investigations } from "@/pages/Investigations";
+import { NewInvestigation } from "@/pages/NewInvestigation";
+import { InvestigationDetail } from "@/pages/InvestigationDetail";
 import { Settings } from "@/pages/Settings";
 import { Integrations } from "@/pages/Integrations";
 import {
@@ -142,7 +144,21 @@ const findComingSoonConfig = (pathname: string): ComingSoonConfig | undefined =>
 const isCICDRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/cicd");
 const isIncidentRoute = (pathname: string): boolean => pathname.startsWith("/dashboard/incidents");
 
+const INVESTIGATIONS_PREFIX = "/dashboard/incidents/investigations/";
+
 const renderIncidentPage = (pathname: string, refreshKey: number): React.ReactNode => {
+  // Investigation routes — most specific first
+  if (pathname.startsWith("/dashboard/incidents/investigations/new")) {
+    return <NewInvestigation />;
+  }
+  if (pathname.startsWith(INVESTIGATIONS_PREFIX)) {
+    const investigationId = decodeURIComponent(pathname.slice(INVESTIGATIONS_PREFIX.length));
+    return <InvestigationDetail investigationId={investigationId} refreshKey={refreshKey} />;
+  }
+  if (pathname.startsWith("/dashboard/incidents/investigations")) {
+    return <Investigations refreshKey={refreshKey} />;
+  }
+  // Active incidents
   if (pathname.startsWith("/dashboard/incidents/active") || pathname === "/dashboard/incidents") {
     return <ActiveIncidents refreshKey={refreshKey} />;
   }
@@ -155,7 +171,7 @@ const ANALYSES_PREFIX = "/dashboard/cicd/analyses/";
 
 const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode => {
   if (pathname.startsWith("/dashboard/cicd/failures")) {
-    return <CICDFailures refreshKey={refreshKey} />;
+    return <CICDAnalyses refreshKey={refreshKey} />;
   }
   if (pathname.startsWith(ANALYSES_PREFIX)) {
     const analysisId = decodeURIComponent(pathname.slice(ANALYSES_PREFIX.length));
@@ -174,7 +190,7 @@ const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode =
   if (pathname.startsWith("/dashboard/cicd/webhooks")) {
     return <WebhookActivity refreshKey={refreshKey} />;
   }
-  return <CICDFailures refreshKey={refreshKey} />;
+  return <CICDAnalyses refreshKey={refreshKey} />;
 };
 
 // ==================== Notification Components ====================
@@ -208,7 +224,7 @@ const NotificationItem = ({
   const linkTarget =
     !isFailure && analysisId
       ? `/dashboard/cicd/analyses/${analysisId}`
-      : "/dashboard/cicd/failures";
+      : "/dashboard/cicd/analyses";
 
   const handleClick = () => {
     onMarkAsRead(notificationId);
@@ -432,11 +448,12 @@ const Dashboard = () => {
         clearTimeout(gotoTimerRef.current);
         const routes: Readonly<Record<string, string>> = {
           o: "/dashboard",
-          f: "/dashboard/cicd/failures",
+          f: "/dashboard/cicd/analyses",
           a: "/dashboard/cicd/analyses",
           s: "/dashboard/settings",
           p: "/dashboard/cicd/pipelines",
           i: "/dashboard/incidents/active",
+          v: "/dashboard/incidents/investigations",
         };
         const route = routes[key];
         if (route) {

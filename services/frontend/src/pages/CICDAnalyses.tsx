@@ -7,7 +7,7 @@
  */
 
 import { Fragment, useState, useMemo, useCallback } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/empty";
 import {
   Search,
-  AlertTriangle,
   ChevronRight,
   Download,
   ArrowUpDown,
@@ -125,6 +124,10 @@ interface AnalysisRowProps {
 const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
   const repo = extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis);
   const confidence = Math.round(analysis.diagnosisConfidence * 100);
+  const commitSha = analysis.aggregationKey
+    ? analysis.aggregationKey.slice(analysis.aggregationKey.lastIndexOf(":") + 1)
+    : null;
+  const shortSha = commitSha && commitSha.length >= 7 ? commitSha.slice(0, 7) : null;
 
   return (
     <TableRow
@@ -168,18 +171,21 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
           {getConfidenceLabel(analysis.diagnosisConfidence)} ({confidence}%)
         </Badge>
       </TableCell>
-      <TableCell>
-        {analysis.eventId ? (
-          <Link
-            to="/dashboard/cicd/failures"
-            className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
-            onClick={(event) => event.stopPropagation()}
+      <TableCell className="text-gray-500 dark:text-gray-400 font-mono text-xs">
+        {shortSha && repo !== "--" ? (
+          <a
+            href={`https://github.com/${repo}/commit/${commitSha}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-indigo-500 underline decoration-dotted underline-offset-2 transition-colors"
+            onClick={(linkEvent) => linkEvent.stopPropagation()}
           >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span className="text-xs underline">Linked</span>
-          </Link>
+            {shortSha}
+          </a>
+        ) : shortSha ? (
+          <span>{shortSha}</span>
         ) : (
-          <span className="text-xs text-gray-400 dark:text-gray-500">No event</span>
+          <span className="font-sans text-gray-400 dark:text-gray-500">--</span>
         )}
       </TableCell>
     </TableRow>
@@ -521,7 +527,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
               <div className="overflow-x-auto">
                 <Table>
                   <TableCaption className="sr-only">
-                    CI/CD analysis results table showing repository, confidence, and linked events
+                    CI/CD analysis results table showing repository, confidence, and commit
                   </TableCaption>
                   <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
                     <TableRow>
@@ -540,7 +546,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
                         currentSort={sort}
                         onSort={handleSort}
                       />
-                      <TableHead scope="col">Event</TableHead>
+                      <TableHead scope="col">Commit</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

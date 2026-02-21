@@ -9,7 +9,7 @@
  */
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { AlertTriangle, RefreshCw, Home, Copy, Check, ExternalLink } from "lucide-react";
+import { AlertTriangle, RefreshCw, Home, Copy, Check, ExternalLink, Search } from "lucide-react";
 
 // ==================== Types ====================
 
@@ -87,11 +87,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             Dashboard
           </a>
           <a
-            href="/dashboard/cicd/failures"
+            href="/dashboard/cicd/analyses"
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors mt-1"
           >
-            <AlertTriangle className="w-4 h-4" />
-            Failures
+            <Search className="w-4 h-4" />
+            Analyses
           </a>
           <a
             href="/dashboard/settings"

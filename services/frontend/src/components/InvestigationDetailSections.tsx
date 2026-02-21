@@ -1,0 +1,369 @@
+/**
+ * Investigation Detail Sub-components
+ *
+ * Reusable sections for the Investigation Detail page:
+ * DiagnosisSection, TimelineSection, CorrelationSection,
+ * ActiveStatusIndicator, FailedStatusDisplay, and StatBadge.
+ */
+
+import { useMemo } from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Loader2, RefreshCw, XCircle, Clock, Sparkles, GitBranch } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type {
+  InvestigationRecord,
+  InvestigationDiagnosis,
+  InvestigationCorrelation,
+  SuggestedInvestigationAction,
+  TimelineEvent,
+} from "@/hooks/useInvestigationData";
+import {
+  getConfidenceStyle,
+  getConfidenceLabel,
+  formatTimestamp,
+  titleCase,
+} from "@/lib/formatters";
+
+// ==================== Constants ====================
+
+const PRIORITY_STYLES: Readonly<Record<string, string>> = {
+  immediate:
+    "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-200 border-red-200 dark:border-red-800",
+  short_term:
+    "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-200 border-amber-200 dark:border-amber-800",
+  long_term:
+    "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-800",
+} as const;
+
+const getPriorityStyle = (priority: string): string =>
+  PRIORITY_STYLES[priority] ?? PRIORITY_STYLES.long_term;
+
+const getPriorityLabel = (priority: string): string =>
+  priority.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+
+// ==================== StatBadge ====================
+
+interface StatBadgeProps {
+  readonly label: string;
+  readonly value: string;
+  readonly className?: string;
+}
+
+export const StatBadge = ({ label, value, className }: StatBadgeProps) => (
+  <div className="flex flex-col items-center gap-1 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+    <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+    <span className={cn("text-sm font-medium text-gray-900 dark:text-gray-100", className)}>
+      {value}
+    </span>
+  </div>
+);
+
+// ==================== SuggestedActions ====================
+
+interface SuggestedActionsSectionProps {
+  readonly actions: readonly SuggestedInvestigationAction[];
+}
+
+const SuggestedActionsSection = ({ actions }: SuggestedActionsSectionProps) => (
+  <div>
+    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Suggested Actions</h4>
+    <div className="space-y-2">
+      {actions.map((action, index) => (
+        <div
+          key={`action-${index}`}
+          className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+        >
+          <span
+            className={cn(
+              "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border flex-shrink-0 mt-0.5",
+              getPriorityStyle(action.priority)
+            )}
+          >
+            {getPriorityLabel(action.priority)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{action.action}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{action.reasoning}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ==================== DiagnosisSection ====================
+
+interface DiagnosisSectionProps {
+  readonly diagnosis: InvestigationDiagnosis;
+}
+
+export const DiagnosisSection = ({ diagnosis }: DiagnosisSectionProps) => {
+  const { confidence, summary, rootCauseHypothesis, suggestedActions, diagnosisSource } = diagnosis;
+  const confidencePercent = Math.round(confidence * 100);
+  const { length: actionCount } = suggestedActions;
+  const isFallback = diagnosisSource === "fallback";
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-indigo-500" />
+          <CardTitle>Diagnosis</CardTitle>
+          {isFallback && (
+            <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+              Fallback
+            </span>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Summary</h4>
+          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{summary}</p>
+        </div>
+
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Root Cause Hypothesis
+          </h4>
+          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+            {rootCauseHypothesis}
+          </p>
+        </div>
+
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Confidence</h4>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  confidencePercent >= 80
+                    ? "bg-green-500"
+                    : confidencePercent >= 50
+                      ? "bg-amber-500"
+                      : "bg-red-500"
+                )}
+                style={{ width: `${confidencePercent}%` }}
+              />
+            </div>
+            <span
+              className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border",
+                getConfidenceStyle(confidence)
+              )}
+            >
+              {confidencePercent}% ({getConfidenceLabel(confidence)})
+            </span>
+          </div>
+        </div>
+
+        {actionCount > 0 && <SuggestedActionsSection actions={suggestedActions} />}
+      </CardContent>
+    </Card>
+  );
+};
+
+// ==================== TimelineSection ====================
+
+interface TimelineSectionProps {
+  readonly events: readonly TimelineEvent[];
+}
+
+export const TimelineSection = ({ events }: TimelineSectionProps) => {
+  const sortedEvents = useMemo(
+    () =>
+      [...events].sort(
+        (left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime()
+      ),
+    [events]
+  );
+
+  const { length: eventCount } = sortedEvents;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Clock className="w-5 h-5 text-indigo-500" />
+          <CardTitle>Timeline</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {eventCount < 1 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+            No timeline events available.
+          </p>
+        ) : (
+          <div className="space-y-0">
+            {sortedEvents.map((event, index) => (
+              <div key={`timeline-${index}`} className="flex gap-3 pb-4 last:pb-0">
+                <div className="flex flex-col items-center">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 mt-2" />
+                  {index < eventCount - 1 && (
+                    <div className="w-px flex-1 bg-gray-200 dark:bg-gray-700 mt-1" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 pb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                      {formatTimestamp(event.timestamp)}
+                    </span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                      {titleCase(event.type)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">
+                    {event.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// ==================== CorrelationSection ====================
+
+interface CorrelationSectionProps {
+  readonly correlation: InvestigationCorrelation;
+}
+
+export const CorrelationSection = ({ correlation }: CorrelationSectionProps) => {
+  const { patterns, relatedServices, commonFactors } = correlation;
+  const { length: patternCount } = patterns;
+  const { length: serviceCount } = relatedServices;
+  const { length: factorCount } = commonFactors;
+
+  if (patternCount < 1 && serviceCount < 1 && factorCount < 1) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <GitBranch className="w-5 h-5 text-indigo-500" />
+          <CardTitle>Correlations</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {serviceCount > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Related Services
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {relatedServices.map((service) => (
+                <span
+                  key={service}
+                  className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                >
+                  {service}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {patternCount > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Patterns</h4>
+            <ul className="space-y-1.5">
+              {patterns.map((pattern, index) => (
+                <li
+                  key={`pattern-${index}`}
+                  className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400"
+                >
+                  <span className="text-indigo-400 mt-1 flex-shrink-0">&#8226;</span>
+                  {pattern}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {factorCount > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Common Factors
+            </h4>
+            <ul className="space-y-1.5">
+              {commonFactors.map((factor, index) => (
+                <li
+                  key={`factor-${index}`}
+                  className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400"
+                >
+                  <span className="text-indigo-400 mt-1 flex-shrink-0">&#8226;</span>
+                  {factor}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// ==================== Status Indicators ====================
+
+interface ActiveStatusProps {
+  readonly status: string;
+}
+
+export const ActiveStatusIndicator = ({ status }: ActiveStatusProps) => (
+  <div className="flex flex-col items-center justify-center py-12 space-y-4">
+    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+    <div className="text-center">
+      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        {status === "queued"
+          ? "Investigation queued"
+          : status === "gathering"
+            ? "Gathering evidence..."
+            : "Analyzing findings..."}
+      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        This page will update automatically.
+      </p>
+    </div>
+  </div>
+);
+
+interface FailedStatusProps {
+  readonly investigation: InvestigationRecord;
+  readonly onRetry: () => void;
+}
+
+export const FailedStatusDisplay = ({ investigation, onRetry }: FailedStatusProps) => {
+  const { errorMessage } = investigation;
+
+  return (
+    <Card>
+      <CardContent className="py-8">
+        <div className="flex flex-col items-center text-center space-y-3">
+          <XCircle className="w-8 h-8 text-red-500" />
+          <div>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              Investigation Failed
+            </p>
+            {errorMessage && (
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">{errorMessage}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Re-investigate
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};

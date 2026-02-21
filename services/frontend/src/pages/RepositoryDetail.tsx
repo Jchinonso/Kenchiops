@@ -72,7 +72,7 @@ const FailureItem = ({ event }: FailureItemProps) => {
 
   return (
     <Link
-      to="/dashboard/cicd/failures"
+      to="/dashboard/cicd/analyses"
       className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
     >
       <div className="flex items-center justify-between gap-2 mb-1">

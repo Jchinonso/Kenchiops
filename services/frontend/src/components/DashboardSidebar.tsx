@@ -14,7 +14,6 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  AlertTriangle,
   Search,
   Workflow,
   Webhook,
@@ -91,11 +90,6 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     label: "CI/CD",
     basePath: "/dashboard/cicd",
     children: [
-      {
-        icon: <AlertTriangle className="w-4 h-4" />,
-        label: "Failures",
-        href: "/dashboard/cicd/failures",
-      },
       { icon: <Search className="w-4 h-4" />, label: "Analyses", href: "/dashboard/cicd/analyses" },
       {
         icon: <Workflow className="w-4 h-4" />,
@@ -115,6 +109,11 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     basePath: "/dashboard/incidents",
     children: [
       { icon: <Flame className="w-4 h-4" />, label: "Active", href: "/dashboard/incidents/active" },
+      {
+        icon: <Search className="w-4 h-4" />,
+        label: "Investigations",
+        href: "/dashboard/incidents/investigations",
+      },
       {
         icon: <Clock className="w-4 h-4" />,
         label: "Timeline",

@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/command";
 import {
   LayoutDashboard,
-  AlertTriangle,
   Search,
   Workflow,
   Webhook,
@@ -41,11 +40,6 @@ interface PaletteItem {
 
 const NAV_ITEMS: readonly PaletteItem[] = [
   { label: "Overview", href: "/dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
-  {
-    label: "CI/CD Failures",
-    href: "/dashboard/cicd/failures",
-    icon: <AlertTriangle className="w-4 h-4" />,
-  },
   {
     label: "CI/CD Analyses",
     href: "/dashboard/cicd/analyses",
