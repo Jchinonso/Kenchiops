@@ -173,6 +173,92 @@ const enrichJobLogsWithAnnotations = async (
 };
 
 /**
+ * Fetch annotations for all pending checks and return as a lookup map.
+ * Uses the cached annotation fetcher — safe to call even if enrichJobLogsWithAnnotations
+ * already fetched them (cache hit will be instant).
+ */
+const fetchAnnotationsForChecks = async (
+  pendingChecks: ReadonlyArray<{ readonly checkRunId: number; readonly checkName: string }>,
+  installationId: number,
+  owner: string,
+  repo: string
+): Promise<ReadonlyMap<string, readonly CheckRunAnnotation[]>> => {
+  const results = await Promise.all(
+    pendingChecks.map(async (check) => {
+      const annotations = await fetchCheckRunAnnotations(
+        installationId,
+        owner,
+        repo,
+        check.checkRunId
+      );
+      return { checkName: check.checkName.toLowerCase(), annotations } as const;
+    })
+  );
+  return new Map(results.map((result) => [result.checkName, result.annotations]));
+};
+
+/**
+ * Convert GitHub check run annotations directly to structured lint errors.
+ * Bypasses LLM extraction for annotations where we already have structured data
+ * (path, line, message) from the GitHub API.
+ */
+const convertAnnotationsToLintErrors = (
+  annotations: readonly CheckRunAnnotation[]
+): readonly LLMLintError[] =>
+  annotations
+    .filter((annotation) => annotation.level === "warning" || annotation.level === "failure")
+    .map((annotation) => ({
+      file: annotation.path,
+      line: annotation.startLine,
+      message: annotation.message,
+      code: annotation.title ?? "lint-error",
+    }));
+
+/**
+ * Merge annotation-derived lint errors with LLM-extracted ones.
+ * Annotation-derived errors take priority (they have accurate file paths from GitHub API).
+ * LLM-extracted errors with unknown/missing file paths are dropped.
+ * Deduplicates by file + line.
+ */
+const mergeLintErrors = (
+  annotationErrors: readonly LLMLintError[],
+  llmErrors: readonly LLMLintError[]
+): readonly LLMLintError[] => {
+  const seen = new Set(annotationErrors.map((error) => `${error.file}:${error.line}`));
+
+  // Keep LLM errors only if they have real file paths and aren't duplicates
+  const uniqueLlmErrors = llmErrors.filter((error) => {
+    if (!error.file || error.file.toLowerCase().includes("unknown")) {
+      return false;
+    }
+    return !seen.has(`${error.file}:${error.line}`);
+  });
+
+  return [...annotationErrors, ...uniqueLlmErrors];
+};
+
+/**
+ * Enrich a job analysis result with annotation-derived lint errors.
+ * If annotations exist for this check, converts them to LLMLintError and merges
+ * with LLM-extracted lint errors (which often have "unknown" file paths).
+ */
+const enrichResultWithAnnotationLintErrors = (
+  result: JobAnalysisResult,
+  annotations: readonly CheckRunAnnotation[]
+): JobAnalysisResult => {
+  if (annotations.length === 0) {
+    return result;
+  }
+
+  const annotationLintErrors = convertAnnotationsToLintErrors(annotations);
+  if (annotationLintErrors.length === 0) {
+    return result;
+  }
+
+  return { ...result, lintErrors: mergeLintErrors(annotationLintErrors, result.lintErrors) };
+};
+
+/**
  * Fetch PR diff context for the first associated PR.
  * Uses cached GitHub API utilities for efficient retrieval.
  * Returns null if no PRs exist or fetch fails (graceful degradation).
@@ -876,14 +962,28 @@ export const processCombinedAnalysis = async (
       failedCount: analysisResults.filter((result) => result.failed).length,
     });
 
+    // Step 2.5: Fetch annotations for direct lint error conversion (cached from enrichment step)
+    const annotationsByCheck = await fetchAnnotationsForChecks(
+      pending.pendingChecks,
+      installationId,
+      repository.owner,
+      repository.name
+    );
+
     // Step 3: Map each pending check to its analysis
     const failures: readonly AnalyzedFailure[] = pending.pendingChecks.map((check) => {
+      const checkAnnotations = annotationsByCheck.get(check.checkName.toLowerCase()) ?? [];
+
       // Try to find matching analysis by check name
       const analysisResult = analysisMap.get(check.checkName.toLowerCase());
 
       if (analysisResult && !analysisResult.failed) {
-        return convertJobResultToFailure(
+        const enrichedResult = enrichResultWithAnnotationLintErrors(
           analysisResult,
+          checkAnnotations
+        );
+        return convertJobResultToFailure(
+          enrichedResult,
           check.checkRunId,
           check.checkName,
           check.timestamp
@@ -898,8 +998,12 @@ export const processCombinedAnalysis = async (
       );
 
       if (partialMatch && !partialMatch[1].failed) {
-        return convertJobResultToFailure(
+        const enrichedResult = enrichResultWithAnnotationLintErrors(
           partialMatch[1],
+          checkAnnotations
+        );
+        return convertJobResultToFailure(
+          enrichedResult,
           check.checkRunId,
           check.checkName,
           check.timestamp
