@@ -179,8 +179,7 @@ export const Settings = () => {
     try {
       const response = await apiClient("/auth/me", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmation: "DELETE" }),
+        body: { confirmation: "DELETE" },
       });
       if (response.ok) {
         await logout();
