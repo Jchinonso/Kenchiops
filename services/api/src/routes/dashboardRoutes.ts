@@ -73,14 +73,14 @@ const parsePaginationParams = (
 const handleGetTenantInfo = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const { context } = req;
-  const result = await dashboardService.getTenantInfo(tenantId, context);
+  const result = await dashboardService.getTenantInfo(tenantId, req.user?.userId, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
 const handleGetDashboardStats = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const { context } = req;
-  const result = await dashboardService.getDashboardStats(tenantId, context);
+  const result = await dashboardService.getDashboardStats(tenantId, req.user?.userId, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 

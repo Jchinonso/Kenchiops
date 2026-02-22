@@ -86,18 +86,27 @@ interface OnboardingStep {
 
 const buildOnboardingSteps = (
   githubConnected: boolean,
+  gitlabConnected: boolean,
   slackConnected: boolean,
   hasAnalyses: boolean
 ): readonly OnboardingStep[] => [
   {
-    title: "Install Kenchi GitHub App",
-    description: "One click connects your repos and sets up webhooks — no manual config needed.",
-    completedDescription: "GitHub App is installed and receiving webhooks.",
-    ctaLabel: githubConnected ? "Manage Installation" : "Install GitHub App",
-    href: `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`,
-    external: true,
-    icon: <Github className="w-5 h-5 text-gray-900 dark:text-gray-100" />,
-    completed: githubConnected,
+    title: "Connect a CI Provider",
+    description:
+      githubConnected || gitlabConnected
+        ? "Add another CI provider to monitor more pipelines."
+        : "Connect GitHub or GitLab to start monitoring your CI/CD pipelines.",
+    completedDescription: `${[githubConnected ? "GitHub" : null, gitlabConnected ? "GitLab" : null]
+      .filter(Boolean)
+      .join(" & ")} connected and receiving webhooks.`,
+    ctaLabel: githubConnected || gitlabConnected ? "Manage Integrations" : "Connect Provider",
+    href: githubConnected || gitlabConnected ? "/dashboard/settings" : `/dashboard/settings`,
+    icon: githubConnected ? (
+      <Github className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+    ) : (
+      <Gitlab className="w-5 h-5 text-orange-500" />
+    ),
+    completed: githubConnected || gitlabConnected,
   },
   {
     title: "Connect Slack (optional)",
@@ -147,11 +156,27 @@ const formatAvgConfidence = (
   };
 };
 
+const buildRepoSubtitle = (githubCount: number, gitlabCount: number): string => {
+  const total = githubCount + gitlabCount;
+  if (total === 0) {
+    return "None connected yet";
+  }
+  const parts: string[] = [];
+  if (githubCount > 0) {
+    parts.push(`${githubCount} GitHub`);
+  }
+  if (gitlabCount > 0) {
+    parts.push(`${gitlabCount} GitLab`);
+  }
+  return parts.join(" · ");
+};
+
 const buildQuickStats = (
   stats: {
     readonly totalFailures: number;
     readonly totalAnalyses: number;
     readonly connectedRepos: number;
+    readonly gitlabProjectCount: number;
   } | null,
   avgConfidence: { readonly label: string; readonly subtitle: string },
   triageStats: PipelineMetricsResponse | null,
@@ -187,9 +212,9 @@ const buildQuickStats = (
   },
   {
     title: "Repositories",
-    value: stats ? String(stats.connectedRepos) : "--",
+    value: stats ? String(stats.connectedRepos + stats.gitlabProjectCount) : "--",
     subtitle: stats
-      ? `${stats.connectedRepos === 0 ? "None connected yet" : "Receiving webhooks"}`
+      ? buildRepoSubtitle(stats.connectedRepos, stats.gitlabProjectCount)
       : "Loading...",
     href: "/dashboard/cicd/pipelines",
     icon: <FolderGit2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
@@ -346,19 +371,19 @@ export const DashboardOverview = ({
 
   const onboardingSteps = buildOnboardingSteps(
     tenant?.githubConnected ?? false,
+    tenant?.gitlabConnected ?? false,
     tenant?.slackConnected ?? false,
     (stats?.totalAnalyses ?? 0) > 0
   );
   const completedCount = onboardingSteps.filter((step) => step.completed).length;
   const allStepsComplete = completedCount === onboardingSteps.length;
 
-  // Zero-data state: brand new user with no data
+  // Zero-data state: brand new user with no data from any provider
   const isNewUser =
     !statsLoading &&
     stats !== null &&
-    stats.totalAnalyses === 0 &&
-    stats.totalFailures === 0 &&
-    stats.connectedRepos === 0;
+    stats.totalAnalyses + stats.totalFailures + stats.connectedRepos + stats.gitlabProjectCount ===
+      0;
 
   const handleExportOverview = () => {
     const rows = [["Metric", "Value"], ...quickStats.map((stat) => [stat.title, stat.value])];
@@ -460,6 +485,11 @@ export const DashboardOverview = ({
             </Link>
           ))}
         </div>
+      )}
+
+      {/* GitLab Projects — shown prominently when user has GitLab connected */}
+      {!gitlabProjectsLoading && gitlabProjects !== null && gitlabProjects.length > 0 && (
+        <GitLabProjectsSection projects={gitlabProjects} />
       )}
 
       {/* Onboarding — placed before charts so it's visible above the fold */}
@@ -608,19 +638,28 @@ export const DashboardOverview = ({
               Welcome to Kenchi
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-4">
-              Connect your GitHub repositories to start analyzing CI/CD failures automatically.
-              Kenchi will surface root causes and recommend fixes.
+              Connect your repositories to start analyzing CI/CD failures automatically. Kenchi
+              supports GitHub and GitLab pipelines.
             </p>
-            <a
-              href={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors"
-            >
-              <Github className="w-4 h-4" />
-              Connect GitHub
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            <div className="flex items-center justify-center gap-3">
+              <a
+                href={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-lg transition-colors"
+              >
+                <Github className="w-4 h-4" />
+                Connect GitHub
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+              <Link
+                to="/dashboard/settings"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+              >
+                <Gitlab className="w-4 h-4" />
+                Connect GitLab
+              </Link>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -857,11 +896,6 @@ export const DashboardOverview = ({
             </Card>
           )}
         </div>
-      )}
-
-      {/* GitLab Projects */}
-      {!gitlabProjectsLoading && gitlabProjects !== null && gitlabProjects.length > 0 && (
-        <GitLabProjectsSection projects={gitlabProjects} />
       )}
 
       {/* Charts */}

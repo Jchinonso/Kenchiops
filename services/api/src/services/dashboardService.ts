@@ -66,7 +66,11 @@ export const createDashboardService = (
      *
      * @throws NotFoundError if tenant does not exist
      */
-    getTenantInfo: async (tenantId: string, context: RequestContext): Promise<TenantInfo> => {
+    getTenantInfo: async (
+      tenantId: string,
+      userId: string | undefined,
+      context: RequestContext
+    ): Promise<TenantInfo> => {
       const tenant = await findTenantById(tenantId);
 
       if (!tenant) {
@@ -75,12 +79,19 @@ export const createDashboardService = (
         });
       }
 
-      logger.info("Tenant info retrieved", { ...context });
+      // Check if the user has a linked GitLab OAuth identity
+      const identities = userId ? await findOAuthIdentitiesByUser(userId) : [];
+      const gitlabConnected = identities.some(
+        (identity) => identity.provider === "gitlab" && identity.accessToken !== null
+      );
+
+      logger.info("Tenant info retrieved", { gitlabConnected, ...context });
 
       return {
         id: tenant.id,
         githubOrg: tenant.githubOrg,
         githubConnected: tenant.githubInstallationId !== null,
+        gitlabConnected,
         slackConnected: tenant.slackWorkspaceId !== null,
         status: tenant.status,
       };
@@ -93,6 +104,7 @@ export const createDashboardService = (
      */
     getDashboardStats: async (
       tenantId: string,
+      userId: string | undefined,
       context: RequestContext
     ): Promise<DashboardStats> => {
       const tenant = await findTenantById(tenantId);
@@ -101,22 +113,46 @@ export const createDashboardService = (
         throw new NotFoundError("Tenant not found", { metadata: { tenantId } });
       }
 
-      const [totalAnalyses, totalFailures, repos] = await Promise.all([
+      // Resolve GitLab project count from user's OAuth identity
+      const resolveGitLabProjects = async (): Promise<readonly GitLabProject[]> => {
+        if (!userId) {
+          return [];
+        }
+        const identities = await findOAuthIdentitiesByUser(userId);
+        const gitlabIdentity = identities.find((identity) => identity.provider === "gitlab");
+        if (!gitlabIdentity?.accessToken) {
+          return [];
+        }
+        return gitlabProjectsPort.getProjects(
+          gitlabIdentity.accessToken,
+          gitlabIdentity.instanceUrl,
+          context
+        );
+      };
+
+      const [totalAnalyses, totalFailures, repos, gitlabProjects] = await Promise.all([
         countAnalysesByTenant(tenantId),
         countEventsByTenant(tenantId, CICD_FAILURE_TYPE),
         tenant.githubInstallationId
           ? githubAdapter.getRepositories(tenant.githubInstallationId, context)
           : Promise.resolve([]),
+        resolveGitLabProjects(),
       ]);
 
       logger.info("Dashboard stats retrieved", {
         totalAnalyses,
         totalFailures,
         connectedRepos: repos.length,
+        gitlabProjectCount: gitlabProjects.length,
         ...context,
       });
 
-      return { totalAnalyses, totalFailures, connectedRepos: repos.length };
+      return {
+        totalAnalyses,
+        totalFailures,
+        connectedRepos: repos.length,
+        gitlabProjectCount: gitlabProjects.length,
+      };
     },
 
     /**

@@ -8,6 +8,7 @@ export interface TenantInfo {
   readonly id: string;
   readonly githubOrg: string;
   readonly githubConnected: boolean;
+  readonly gitlabConnected: boolean;
   readonly slackConnected: boolean;
   readonly status: string;
 }
@@ -16,6 +17,7 @@ export interface DashboardStats {
   readonly totalAnalyses: number;
   readonly totalFailures: number;
   readonly connectedRepos: number;
+  readonly gitlabProjectCount: number;
 }
 
 export interface PaginatedResult<T> {

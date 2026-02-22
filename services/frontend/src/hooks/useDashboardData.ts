@@ -13,6 +13,7 @@ interface TenantInfo {
   readonly id: string;
   readonly githubOrg: string;
   readonly githubConnected: boolean;
+  readonly gitlabConnected: boolean;
   readonly slackConnected: boolean;
   readonly status: string;
 }
@@ -21,6 +22,7 @@ interface DashboardStats {
   readonly totalAnalyses: number;
   readonly totalFailures: number;
   readonly connectedRepos: number;
+  readonly gitlabProjectCount: number;
 }
 
 interface InstallationRepository {
