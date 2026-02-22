@@ -18,6 +18,7 @@ import {
   ANALYSIS_DEFAULTS,
 } from "@kenchi/shared";
 import { createGitHubInstallationAdapter } from "../adapters/githubInstallationAdapter.js";
+import { createGitLabProjectsAdapter } from "../adapters/gitlabProjectsAdapter.js";
 import { createDashboardService } from "../services/dashboardService.js";
 
 const router = Router();
@@ -25,7 +26,8 @@ const router = Router();
 // ==================== Service Wiring ====================
 
 const githubAdapter = createGitHubInstallationAdapter();
-const dashboardService = createDashboardService(githubAdapter);
+const gitlabProjectsAdapter = createGitLabProjectsAdapter();
+const dashboardService = createDashboardService(githubAdapter, gitlabProjectsAdapter);
 
 // ==================== Helpers ====================
 
@@ -268,6 +270,20 @@ const handleGetAnalysisCountsByRepo = async (req: Request, res: Response): Promi
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+const handleGetGitLabProjects = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    throw new AuthorizationError("Authentication required", {
+      operation: "getGitLabProjects",
+    });
+  }
+
+  const { context } = req;
+  const projects = await dashboardService.getGitLabProjects(userId, context);
+  res.status(HTTP_STATUS.OK).json({ data: projects });
+};
+
 const handleGetCorrelations = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const { context } = req;
@@ -292,6 +308,7 @@ router.get(
 router.get("/api/v1/dashboard/stats/confidence-trend", asyncHandler(handleGetConfidenceTrend));
 router.get("/api/v1/dashboard/stats/analyses-by-repo", asyncHandler(handleGetAnalysisCountsByRepo));
 router.get("/api/v1/dashboard/repositories", asyncHandler(handleGetRepositories));
+router.get("/api/v1/dashboard/gitlab/projects", asyncHandler(handleGetGitLabProjects));
 router.post("/api/v1/dashboard/analyses/by-events", asyncHandler(handleGetAnalysisStatusByEvents));
 router.get("/api/v1/dashboard/correlations/:commitSha", asyncHandler(handleGetCorrelations));
 router.get("/api/v1/dashboard/analyses/:id", asyncHandler(handleGetAnalysisDetail));

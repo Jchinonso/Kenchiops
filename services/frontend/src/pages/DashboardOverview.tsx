@@ -11,8 +11,10 @@ import {
   useAnalyses,
   useFailures,
   useTenantInfo,
+  useGitLabProjects,
   type AnalysisRecord,
   type EventRecord,
+  type GitLabProject,
 } from "@/hooks/useDashboardData";
 import {
   useTriageStats,
@@ -50,6 +52,7 @@ import {
   Clock,
   FolderGit2,
   Github,
+  Gitlab,
   Rocket,
   ExternalLink,
   Activity,
@@ -211,6 +214,77 @@ const buildQuickStats = (
   },
 ];
 
+// ==================== GitLab Projects Sub-Component ====================
+
+const VISIBILITY_STYLES: Readonly<Record<string, string>> = {
+  public: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
+  internal: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  private: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+} as const;
+
+const getVisibilityStyle = (visibility: string): string =>
+  VISIBILITY_STYLES[visibility] ?? VISIBILITY_STYLES.private;
+
+interface GitLabProjectsSectionProps {
+  readonly projects: readonly GitLabProject[];
+}
+
+const GitLabProjectsSection = ({ projects }: GitLabProjectsSectionProps) => (
+  <Card className="mb-6 sm:mb-8 mt-6 sm:mt-8">
+    <CardHeader className="border-b">
+      <div className="flex items-center gap-2">
+        <Gitlab className="w-5 h-5 text-orange-500" />
+        <CardTitle>
+          <h2>GitLab Projects</h2>
+        </CardTitle>
+      </div>
+      <CardDescription>Projects from your connected GitLab account.</CardDescription>
+    </CardHeader>
+    <CardContent className="pt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {projects.map((project) => (
+          <a
+            key={project.id}
+            href={project.webUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block p-4 rounded-lg border border-gray-100 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] transition-all group"
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                {project.name}
+              </h3>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] px-1.5 py-0 flex-shrink-0",
+                  getVisibilityStyle(project.visibility)
+                )}
+              >
+                {titleCase(project.visibility)}
+              </Badge>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-2">
+              {project.fullPath}
+            </p>
+            <div className="flex items-center justify-between gap-2">
+              <TimeDisplay
+                dateTime={project.lastActivity}
+                className="text-[10px] text-gray-400 dark:text-gray-500"
+              />
+              {project.defaultBranch && (
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
+                  {project.defaultBranch}
+                </span>
+              )}
+            </div>
+          </a>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+);
+
 // ==================== Component ====================
 
 interface DashboardOverviewProps {
@@ -245,6 +319,7 @@ export const DashboardOverview = ({
     refetch: refetchFailures,
   } = useFailures(5, 0, refreshKey);
   const { data: tenant } = useTenantInfo(refreshKey);
+  const { data: gitlabProjects, isLoading: gitlabProjectsLoading } = useGitLabProjects(refreshKey);
   const tenantId = tenant?.id ?? "";
   const { data: triageStats } = useTriageStats(tenantId, refreshKey);
   const { data: activeCountsBySource } = useActiveCountsBySource(tenantId, refreshKey);
@@ -782,6 +857,11 @@ export const DashboardOverview = ({
             </Card>
           )}
         </div>
+      )}
+
+      {/* GitLab Projects */}
+      {!gitlabProjectsLoading && gitlabProjects !== null && gitlabProjects.length > 0 && (
+        <GitLabProjectsSection projects={gitlabProjects} />
       )}
 
       {/* Charts */}

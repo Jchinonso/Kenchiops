@@ -11,6 +11,7 @@ import {
   createLogger,
   NotFoundError,
   findById as findTenantById,
+  findOAuthIdentitiesByUser,
   getAnalysisById,
   getAnalysesByTenant,
   countAnalysesByTenant,
@@ -39,6 +40,7 @@ import type {
   GitHubInstallationPort,
   InstallationRepository,
 } from "../ports/githubInstallationPort.js";
+import type { GitLabProjectsPort, GitLabProject } from "../ports/gitlabProjectsPort.js";
 import type {
   TenantInfo,
   DashboardStats,
@@ -52,7 +54,10 @@ const CICD_FAILURE_TYPE = "CICD_FAILURE";
 /**
  * Creates the dashboard service with injected dependencies.
  */
-export const createDashboardService = (githubAdapter: GitHubInstallationPort) => {
+export const createDashboardService = (
+  githubAdapter: GitHubInstallationPort,
+  gitlabProjectsPort: GitLabProjectsPort
+) => {
   const logger = createLogger("dashboard-service");
 
   return {
@@ -442,6 +447,28 @@ export const createDashboardService = (githubAdapter: GitHubInstallationPort) =>
         analyses: analyses.map(mapAnalysisToSummary),
         incidents: incidents.map(mapIncidentToSummary),
       };
+    },
+
+    /**
+     * Retrieves GitLab projects for a user via their stored OAuth identity.
+     * Returns empty array if the user has no linked GitLab identity.
+     */
+    getGitLabProjects: async (
+      userId: string,
+      context: RequestContext
+    ): Promise<readonly GitLabProject[]> => {
+      const identities = await findOAuthIdentitiesByUser(userId);
+      const gitlabIdentity = identities.find((identity) => identity.provider === "gitlab");
+
+      if (!gitlabIdentity?.accessToken) {
+        return [];
+      }
+
+      return gitlabProjectsPort.getProjects(
+        gitlabIdentity.accessToken,
+        gitlabIdentity.instanceUrl,
+        context
+      );
     },
   };
 };

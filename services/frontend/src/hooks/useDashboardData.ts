@@ -371,6 +371,23 @@ export const useCorrelation = (
     `${commitSha ?? ""}:${refreshKey}`
   );
 
+// ==================== GitLab Projects ====================
+
+interface GitLabProject {
+  readonly id: number;
+  readonly name: string;
+  readonly fullPath: string;
+  readonly webUrl: string;
+  readonly defaultBranch: string | null;
+  readonly visibility: string;
+  readonly lastActivity: string;
+}
+
+export const useGitLabProjects = (
+  refreshKey: number = 0
+): UseFetchResult<readonly GitLabProject[]> =>
+  useFetch<readonly GitLabProject[]>("/api/v1/dashboard/gitlab/projects", `${refreshKey}`);
+
 // Re-export types for use in page components
 export type {
   TenantInfo,
@@ -385,4 +402,5 @@ export type {
   WebhookActivityRecord,
   CorrelationSummary,
   CorrelationResult,
+  GitLabProject,
 };
