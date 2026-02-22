@@ -255,12 +255,12 @@ interface GitLabProjectsSectionProps {
 }
 
 const GitLabProjectsSection = ({ projects }: GitLabProjectsSectionProps) => (
-  <Card className="mb-6 sm:mb-8 mt-6 sm:mt-8">
+  <Card className="mb-6 sm:mb-8">
     <CardHeader className="border-b">
       <div className="flex items-center gap-2">
         <Gitlab className="w-5 h-5 text-orange-500" />
         <CardTitle>
-          <h2>GitLab Projects</h2>
+          <h2>GitLab Projects ({projects.length})</h2>
         </CardTitle>
       </div>
       <CardDescription>Projects from your connected GitLab account.</CardDescription>
@@ -487,10 +487,68 @@ export const DashboardOverview = ({
         </div>
       )}
 
-      {/* GitLab Projects — shown prominently when user has GitLab connected */}
+      {/* GitLab section — projects + CI setup prompt */}
       {!gitlabProjectsLoading && gitlabProjects !== null && gitlabProjects.length > 0 && (
-        <GitLabProjectsSection projects={gitlabProjects} />
+        <>
+          <GitLabProjectsSection projects={gitlabProjects} />
+          {/* Show CI setup prompt when GitLab is connected but no GitLab CI data exists */}
+          <Card className="mb-6 sm:mb-8 border-orange-200 dark:border-orange-900">
+            <CardContent className="py-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Gitlab className="w-5 h-5 text-orange-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                    Enable GitLab CI Analysis
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                    Your GitLab projects are connected. Set up webhooks to start analyzing GitLab
+                    CI/CD pipeline failures automatically.
+                  </p>
+                  <Link
+                    to="/dashboard/settings"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+                  >
+                    <Gitlab className="w-4 h-4" />
+                    Configure GitLab Webhooks
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
+
+      {/* GitLab connect prompt when user has no GitLab but has GitHub */}
+      {!gitlabProjectsLoading &&
+        (gitlabProjects === null || gitlabProjects.length === 0) &&
+        tenant?.gitlabConnected === false &&
+        tenant?.githubConnected === true && (
+          <Card className="mb-6 sm:mb-8">
+            <CardContent className="py-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Gitlab className="w-5 h-5 text-orange-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                    Also use GitLab?
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                    Connect your GitLab account to monitor GitLab CI/CD pipelines alongside GitHub.
+                  </p>
+                  <Link
+                    to="/dashboard/settings"
+                    className="inline-flex items-center gap-1.5 text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors"
+                  >
+                    Connect GitLab &rarr;
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       {/* Onboarding — placed before charts so it's visible above the fold */}
       {showOnboarding && completedCount >= 2 && !allStepsComplete ? (
@@ -737,11 +795,17 @@ export const DashboardOverview = ({
           {failureItems.length > 0 && (
             <Card>
               <CardHeader className="border-b">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-red-500" />
-                  <CardTitle>
-                    <h2>Recent Failures</h2>
-                  </CardTitle>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-500" />
+                    <CardTitle>
+                      <h2>Recent Failures</h2>
+                    </CardTitle>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-1">
+                    <Github className="w-3 h-3" />
+                    GitHub CI
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
@@ -791,11 +855,17 @@ export const DashboardOverview = ({
           {analysisItems.length > 0 && (
             <Card>
               <CardHeader className="border-b">
-                <div className="flex items-center gap-2">
-                  <Search className="w-5 h-5 text-indigo-500" />
-                  <CardTitle>
-                    <h2>Recent Analyses</h2>
-                  </CardTitle>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Search className="w-5 h-5 text-indigo-500" />
+                    <CardTitle>
+                      <h2>Recent Analyses</h2>
+                    </CardTitle>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-1">
+                    <Github className="w-3 h-3" />
+                    GitHub CI
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
