@@ -44,6 +44,31 @@ export const parseErrorBody = async (response: Response, fallback: string): Prom
   }
 };
 
+// ==================== Structured Error Parsing ====================
+
+/** Structured API error response with optional metadata. */
+export interface ApiErrorResponse {
+  readonly code?: string;
+  readonly message: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Parse a structured error from an API response, preserving code and metadata.
+ * Uses response.clone() so the caller can still read the original response.
+ */
+export const parseStructuredError = async (
+  response: Response
+): Promise<ApiErrorResponse | null> => {
+  try {
+    const body: unknown = await response.clone().json();
+    const parsed = body as { readonly error?: ApiErrorResponse } | null;
+    return parsed?.error ?? null;
+  } catch {
+    return null;
+  }
+};
+
 // ==================== Generic Fetch Hook ====================
 
 /**
