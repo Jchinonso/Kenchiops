@@ -225,6 +225,10 @@ export {
 export { parseTestSummary } from "./testSummaryParser.js";
 export type { ParsedTestSummary } from "./extraction/types.js";
 
+// ==================== Lint Output Parser ====================
+
+export { parseLintOutput } from "./lintOutputParser.js";
+
 // ==================== Pipeline Module ====================
 
 export type {

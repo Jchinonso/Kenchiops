@@ -771,6 +771,8 @@ export type {
 // Test summary parser (deterministic regex-based, no LLM)
 export { parseTestSummary } from "./formatting/index.js";
 export type { ParsedTestSummary } from "./formatting/index.js";
+// Lint output parser (deterministic regex-based, no LLM)
+export { parseLintOutput } from "./formatting/index.js";
 // Simplified pipeline: Output formatting
 export {
   formatGitHubComment,

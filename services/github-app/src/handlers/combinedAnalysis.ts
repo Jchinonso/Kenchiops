@@ -27,8 +27,9 @@ import {
   // V1.1: Chunking pipeline for improved preprocessing and line mapping
   sanitizeForChunkingWithMapping,
   getOriginalLineNumber,
-  // Deterministic test summary parser (regex-based, no LLM)
+  // Deterministic parsers (regex-based, no LLM)
   parseTestSummary,
+  parseLintOutput,
   // Tenant lookup
   findByGitHubInstallation,
   // PR context caching
@@ -215,47 +216,65 @@ const convertAnnotationsToLintErrors = (
     }));
 
 /**
- * Merge annotation-derived lint errors with LLM-extracted ones.
- * Annotation-derived errors take priority (they have accurate file paths from GitHub API).
- * LLM-extracted errors with unknown/missing file paths are dropped.
- * Deduplicates by file + line.
+ * Merge lint errors from multiple sources, deduplicating by file + line.
+ *
+ * Priority order (first source wins for same file:line):
+ * 1. Deterministic parser errors (regex-extracted from raw CI log — most complete)
+ * 2. Annotation-derived errors (from GitHub API — accurate file paths)
+ * 3. LLM-extracted errors with real file paths
+ *
+ * LLM errors with "unknown" file paths are dropped since they're already
+ * captured with proper file paths by the higher-priority sources.
  */
 const mergeLintErrors = (
-  annotationErrors: readonly LLMLintError[],
-  llmErrors: readonly LLMLintError[]
+  ...sources: ReadonlyArray<readonly LLMLintError[]>
 ): readonly LLMLintError[] => {
-  const seen = new Set(annotationErrors.map((error) => `${error.file}:${error.line}`));
+  const seen = new Set<string>();
+  const merged: LLMLintError[] = [];
 
-  // Keep LLM errors only if they have real file paths and aren't duplicates
-  const uniqueLlmErrors = llmErrors.filter((error) => {
-    if (!error.file || error.file.toLowerCase().includes("unknown")) {
-      return false;
+  for (const source of sources) {
+    for (const error of source) {
+      // Skip errors with unknown/missing file paths
+      if (!error.file || error.file.toLowerCase().includes("unknown")) {
+        continue;
+      }
+
+      const dedupeKey = `${error.file}:${error.line}`;
+      if (!seen.has(dedupeKey)) {
+        seen.add(dedupeKey);
+        merged.push(error);
+      }
     }
-    return !seen.has(`${error.file}:${error.line}`);
-  });
+  }
 
-  return [...annotationErrors, ...uniqueLlmErrors];
+  return merged;
 };
 
 /**
- * Enrich a job analysis result with annotation-derived lint errors.
- * If annotations exist for this check, converts them to LLMLintError and merges
- * with LLM-extracted lint errors (which often have "unknown" file paths).
+ * Enrich a job analysis result with lint errors from deterministic parsing
+ * and GitHub annotations. Merges all sources, deduplicating by file + line.
+ *
+ * Priority: parsed (regex) > annotations (GitHub API) > LLM-extracted
  */
-const enrichResultWithAnnotationLintErrors = (
+const enrichResultWithParsedLintErrors = (
   result: JobAnalysisResult,
+  parsedLintErrors: readonly LLMLintError[],
   annotations: readonly CheckRunAnnotation[]
 ): JobAnalysisResult => {
-  if (annotations.length === 0) {
-    return result;
-  }
-
   const annotationLintErrors = convertAnnotationsToLintErrors(annotations);
-  if (annotationLintErrors.length === 0) {
+
+  // If no additional sources, return as-is
+  if (parsedLintErrors.length === 0 && annotationLintErrors.length === 0) {
     return result;
   }
 
-  return { ...result, lintErrors: mergeLintErrors(annotationLintErrors, result.lintErrors) };
+  const mergedLintErrors = mergeLintErrors(
+    parsedLintErrors,
+    annotationLintErrors,
+    result.lintErrors
+  );
+
+  return { ...result, lintErrors: mergedLintErrors };
 };
 
 /**
@@ -962,7 +981,29 @@ export const processCombinedAnalysis = async (
       failedCount: analysisResults.filter((result) => result.failed).length,
     });
 
-    // Step 2.5: Fetch annotations for direct lint error conversion (cached from enrichment step)
+    // Step 2.5a: Parse lint errors deterministically from raw CI logs (no LLM)
+    const parsedLintByJob = new Map(
+      allJobsLogs.jobs.map((job) => [job.jobName.toLowerCase(), parseLintOutput(job.logs)] as const)
+    );
+
+    const totalParsedLint = [...parsedLintByJob.values()].reduce(
+      (sum, errors) => sum + errors.length,
+      0
+    );
+
+    if (totalParsedLint > 0) {
+      logger.info("Deterministic lint parser extracted errors from raw logs", {
+        repository: repository.fullName,
+        totalParsedLint,
+        byJob: Object.fromEntries(
+          [...parsedLintByJob.entries()]
+            .filter(([, errors]) => errors.length > 0)
+            .map(([jobName, errors]) => [jobName, errors.length])
+        ),
+      });
+    }
+
+    // Step 2.5b: Fetch annotations for direct lint error conversion (cached from enrichment step)
     const annotationsByCheck = await fetchAnnotationsForChecks(
       pending.pendingChecks,
       installationId,
@@ -973,13 +1014,15 @@ export const processCombinedAnalysis = async (
     // Step 3: Map each pending check to its analysis
     const failures: readonly AnalyzedFailure[] = pending.pendingChecks.map((check) => {
       const checkAnnotations = annotationsByCheck.get(check.checkName.toLowerCase()) ?? [];
+      const parsedLintErrors = parsedLintByJob.get(check.checkName.toLowerCase()) ?? [];
 
       // Try to find matching analysis by check name
       const analysisResult = analysisMap.get(check.checkName.toLowerCase());
 
       if (analysisResult && !analysisResult.failed) {
-        const enrichedResult = enrichResultWithAnnotationLintErrors(
+        const enrichedResult = enrichResultWithParsedLintErrors(
           analysisResult,
+          parsedLintErrors,
           checkAnnotations
         );
         return convertJobResultToFailure(
@@ -998,8 +1041,9 @@ export const processCombinedAnalysis = async (
       );
 
       if (partialMatch && !partialMatch[1].failed) {
-        const enrichedResult = enrichResultWithAnnotationLintErrors(
+        const enrichedResult = enrichResultWithParsedLintErrors(
           partialMatch[1],
+          parsedLintErrors,
           checkAnnotations
         );
         return convertJobResultToFailure(
