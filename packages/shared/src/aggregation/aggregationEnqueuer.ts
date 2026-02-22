@@ -109,6 +109,7 @@ export const enqueuePendingAggregation = async (key: AggregationKey): Promise<st
         pendingChecks: pendingAgg.pendingChecks.map(serializePendingCheckForPayload),
         firstFailureAt: pendingAgg.firstFailureAt.toISOString(),
         lastFailureAt: pendingAgg.lastFailureAt.toISOString(),
+        provider: pendingAgg.provider ?? key.provider,
       },
     };
 

@@ -9,7 +9,12 @@
 
 import { getRedisClient } from "../queue/redisClient.js";
 import { createLogger, withTimeout, getErrorMessage } from "../core/index.js";
-import { AGGREGATION_DEFAULTS, PARSE_INT_RADIX, REDIS_TIMEOUTS } from "../constants/index.js";
+import {
+  AGGREGATION_DEFAULTS,
+  PARSE_INT_RADIX,
+  REDIS_TIMEOUTS,
+  type CIProvider,
+} from "../constants/index.js";
 import type {
   AggregatedFailures,
   AggregationKey,
@@ -115,6 +120,7 @@ export const getPendingAggregationResult = async (
       pendingChecks,
       firstFailureAt: new Date(metadata.firstFailureAt),
       lastFailureAt: new Date(metadata.lastFailureAt),
+      ...(metadata.provider ? { provider: metadata.provider as CIProvider } : {}),
     });
   } catch (caughtError) {
     const errorMessage = getErrorMessage(caughtError);

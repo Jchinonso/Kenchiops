@@ -7,6 +7,7 @@
  * Uses message queue for Slack notifications for reliable delivery.
  */
 
+import crypto from "node:crypto";
 import {
   createLogger,
   config,
@@ -17,9 +18,12 @@ import {
   generateFeedbackUrl,
   KENCHI_BRANDING,
   SHORT_COMMIT_SHA_LENGTH,
+  CI_PROVIDERS,
   type AggregatedFailures,
   type ConsolidatedPostResult,
+  type RequestContext,
 } from "@kenchi/shared";
+import { getCIProviderAdapters, hasCIProvider } from "../../adapters/ciProviderRegistry.js";
 import {
   postPRComment,
   createCheckRunWithAnnotations,
@@ -271,17 +275,76 @@ const postToSlack = async (
   }
 };
 
+// ==================== Non-GitHub Provider Output ====================
+
+/**
+ * Post analysis results via a non-GitHub CI provider's output adapter.
+ */
+const postToNonGitHubProvider = async (
+  aggregation: AggregatedFailures,
+  context: RequestContext
+): Promise<{
+  readonly prCommentsPosted: number;
+  readonly checkAnnotationsCreated: boolean;
+  readonly errors: readonly string[];
+}> => {
+  const { provider } = aggregation;
+
+  if (!provider || !hasCIProvider(provider)) {
+    return {
+      prCommentsPosted: 0,
+      checkAnnotationsCreated: false,
+      errors: [`No output adapter for provider "${provider ?? "unknown"}"`],
+    };
+  }
+
+  try {
+    const adapters = getCIProviderAdapters(provider);
+    const result = await adapters.output.postAnalysisResults(aggregation, context);
+
+    logger.info("Posted analysis via CI provider adapter", {
+      provider,
+      repository: aggregation.repository.fullName,
+      prCommentsPosted: result.prCommentsPosted,
+      checkAnnotationsCreated: result.checkAnnotationsCreated,
+      ...context,
+    });
+
+    return {
+      prCommentsPosted: result.prCommentsPosted,
+      checkAnnotationsCreated: result.checkAnnotationsCreated,
+      errors: [...result.errors],
+    };
+  } catch (error) {
+    const errorMsg = getErrorMessage(error);
+    logger.error("Failed to post analysis via CI provider adapter", {
+      provider,
+      repository: aggregation.repository.fullName,
+      error: errorMsg,
+      ...context,
+    });
+    return {
+      prCommentsPosted: 0,
+      checkAnnotationsCreated: false,
+      errors: [errorMsg],
+    };
+  }
+};
+
 // ==================== Main Export ====================
 
 /**
- * Post consolidated analysis to all channels (GitHub + Slack).
+ * Post consolidated analysis to all channels (CI provider + Slack).
  *
  * This is the main callback for the FailureAggregator.
+ * Routes to GitHub-specific posting or the provider's output adapter.
  */
 export const postConsolidatedAnalysis = async (
   aggregation: AggregatedFailures
 ): Promise<ConsolidatedPostResult> => {
   const errors: string[] = [];
+  const provider = aggregation.provider ?? CI_PROVIDERS.GITHUB_ACTIONS;
+  const isGitHub = provider === CI_PROVIDERS.GITHUB_ACTIONS;
 
   logger.info("Posting consolidated analysis", {
     repository: aggregation.repository.fullName,
@@ -289,29 +352,35 @@ export const postConsolidatedAnalysis = async (
     failureCount: aggregation.failures.length,
     checkNames: aggregation.failures.map((failure) => failure.checkName),
     prCount: aggregation.pullRequestNumbers.length,
+    provider,
   });
 
-  // Post to GitHub and Slack in parallel
-  const [githubResult, slackResult] = await Promise.all([
-    postToGitHub(aggregation),
-    postToSlack(aggregation),
-  ]);
+  // Post to CI provider and Slack in parallel
+  // GitHub uses the existing postToGitHub; other providers use their output adapter
+  const workerContext: RequestContext = {
+    requestId: crypto.randomUUID(),
+    tenantId: "system",
+  };
+  const ciResultPromise = isGitHub
+    ? postToGitHub(aggregation)
+    : postToNonGitHubProvider(aggregation, workerContext);
+  const [ciResult, slackResult] = await Promise.all([ciResultPromise, postToSlack(aggregation)]);
 
   // Collect errors
-  errors.push(...githubResult.errors);
+  errors.push(...ciResult.errors);
   if (slackResult.error) {
     errors.push(slackResult.error);
   }
 
   const success =
-    (githubResult.prCommentsPosted > 0 || aggregation.pullRequestNumbers.length === 0) &&
+    (ciResult.prCommentsPosted > 0 || aggregation.pullRequestNumbers.length === 0) &&
     slackResult.success;
 
   return {
     success,
-    prCommentsPosted: githubResult.prCommentsPosted,
+    prCommentsPosted: ciResult.prCommentsPosted,
     slackMessageSent: slackResult.success,
-    checkAnnotationsCreated: githubResult.checkAnnotationsCreated,
+    checkAnnotationsCreated: ciResult.checkAnnotationsCreated,
     errors,
   };
 };

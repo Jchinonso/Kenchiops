@@ -32,8 +32,11 @@ import {
   parseLintOutput,
   // Test failure file inference
   TEST_FAILURE_FILE_INFERENCE_PATTERN,
+  TEST_FAILURE_BARE_FILE_PATTERN,
   // Tenant lookup
   findByGitHubInstallation,
+  findById,
+  findActiveByProvider,
   // PR context caching
   getOrFetchPullRequest,
   getOrFetchPullRequestDiff,
@@ -46,6 +49,9 @@ import {
   type LLMLintError,
   type LLMChangeCorrelation,
   type SanitizationResultWithMapping,
+  type CIProvider,
+  type RequestContext,
+  type FetchedBuildLogs,
   CI_PROVIDERS,
 } from "@kenchi/shared";
 import {
@@ -53,10 +59,11 @@ import {
   fetchWorkflowTiming,
 } from "../services/context/workflowFetcher.js";
 import { fetchCheckRunAnnotations } from "../services/context/annotationFetcher.js";
+import { getCIProviderAdapters } from "../adapters/ciProviderRegistry.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
 import { postPRComment } from "../services/githubComments.js";
 import { getOctokit } from "../services/githubService.js";
-import type { CheckRunAnnotation } from "../services/context/types.js";
+import type { CheckRunAnnotation, AllFailedJobsLogs } from "../services/context/types.js";
 import type {
   JobSubmissionResponse,
   JobStatusResponse,
@@ -498,12 +505,19 @@ const inferFileFromError = (testFailure: TestFailureInfo): TestFailureInfo => {
 
   const textToSearch = [testFailure.error, testFailure.testName].filter(Boolean).join(" ");
 
-  // Pattern already requires `/` (real path structure) and `.ext` (file extension).
-  // Language-agnostic — works for any language's file paths.
-  const match = TEST_FAILURE_FILE_INFERENCE_PATTERN.exec(textToSearch);
-  if (match) {
-    const inferredFile = match[1];
-    const inferredLine = match[2] ? Number(match[2]) : testFailure.line;
+  // Primary: requires `/` (real path structure) + `.ext` — high confidence
+  const primaryMatch = TEST_FAILURE_FILE_INFERENCE_PATTERN.exec(textToSearch);
+  if (primaryMatch) {
+    const inferredFile = primaryMatch[1];
+    const inferredLine = primaryMatch[2] ? Number(primaryMatch[2]) : testFailure.line;
+    return { ...testFailure, file: inferredFile, line: inferredLine };
+  }
+
+  // Fallback: bare filename with extension + line number (e.g., `test.ts:123`)
+  const fallbackMatch = TEST_FAILURE_BARE_FILE_PATTERN.exec(textToSearch);
+  if (fallbackMatch) {
+    const inferredFile = fallbackMatch[1];
+    const inferredLine = fallbackMatch[2] ? Number(fallbackMatch[2]) : testFailure.line;
     return { ...testFailure, file: inferredFile, line: inferredLine };
   }
 
@@ -868,6 +882,7 @@ const deserializePendingPayload = (
   }>;
   firstFailureAt: Date;
   lastFailureAt: Date;
+  provider: CIProvider;
 } => {
   const pending = payload.pendingAggregation;
   return {
@@ -883,7 +898,63 @@ const deserializePendingPayload = (
     })),
     firstFailureAt: new Date(pending.firstFailureAt),
     lastFailureAt: new Date(pending.lastFailureAt),
+    provider: (pending.provider as CIProvider) ?? CI_PROVIDERS.GITHUB_ACTIONS,
   };
+};
+
+// ==================== Provider-Agnostic Helpers ====================
+
+/**
+ * Convert FetchedBuildLogs from the CI log fetcher port into the AllFailedJobsLogs
+ * shape expected by the rest of the pipeline.
+ *
+ * For non-GitHub providers, there is no workflow run concept, so we synthesize
+ * a workflow name from the repository and set workflowRunId to 0.
+ */
+const convertFetchedLogsToAllJobsLogs = (
+  fetchedLogs: readonly FetchedBuildLogs[],
+  repositoryFullName: string
+): AllFailedJobsLogs | null => {
+  if (fetchedLogs.length === 0) {
+    return null;
+  }
+
+  const jobs = fetchedLogs.map((fetched) => ({
+    jobName: fetched.buildName,
+    jobId: Number(fetched.buildId) || 0,
+    logs: fetched.logs,
+  }));
+
+  const combinedLogs = jobs.map((job) => `=== ${job.jobName} ===\n${job.logs}`).join("\n\n");
+
+  return {
+    workflowName: `CI Pipeline (${repositoryFullName})`,
+    workflowRunId: 0,
+    jobs,
+    combinedLogs,
+  };
+};
+
+/**
+ * Resolve tenant ID for a non-GitHub provider by looking up the first active
+ * provider connection and finding its tenant.
+ */
+const resolveTenantForProvider = async (provider: CIProvider): Promise<string | undefined> => {
+  try {
+    const connections = await findActiveByProvider(provider);
+    const connection = connections[0];
+    if (!connection) {
+      return undefined;
+    }
+    const tenant = await findById(connection.tenantId);
+    return tenant?.id;
+  } catch (error) {
+    logger.warn("Failed to resolve tenant for provider", {
+      provider,
+      error: getErrorMessage(error),
+    });
+    return undefined;
+  }
 };
 
 // ==================== Main Handler ====================
@@ -942,28 +1013,42 @@ export const processCombinedAnalysis = async (
   payload: PendingAggregationPayload
 ): Promise<ConsolidatedPostResult> => {
   const pending = deserializePendingPayload(payload);
-  const { repository, installationId, commitSha } = pending;
+  const { repository, installationId, commitSha, provider } = pending;
+  const isGitHub = provider === CI_PROVIDERS.GITHUB_ACTIONS;
 
   logger.info("Starting per-job analysis for pending aggregation", {
     repository: repository.fullName,
     commitSha: commitSha.substring(0, 7),
     pendingCheckCount: pending.pendingChecks.length,
     checkNames: pending.pendingChecks.map((check) => check.checkName),
+    provider,
   });
 
   try {
-    // Step 1: Fetch logs for ALL failed jobs
-    const allJobsLogs = await fetchAllFailedJobsLogs(
-      installationId,
-      repository.owner,
-      repository.name,
-      commitSha
-    );
+    // Step 1: Fetch logs for ALL failed jobs (provider-aware)
+    const allJobsLogs: AllFailedJobsLogs | null = isGitHub
+      ? await fetchAllFailedJobsLogs(installationId, repository.owner, repository.name, commitSha)
+      : await (async (): Promise<AllFailedJobsLogs | null> => {
+          const context: RequestContext = {
+            requestId: crypto.randomUUID(),
+            tenantId: "system",
+          };
+          const adapters = getCIProviderAdapters(provider);
+          const fetchedLogs = await adapters.logFetcher.fetchAllFailedLogs(
+            commitSha,
+            repository.owner,
+            repository.name,
+            installationId,
+            context
+          );
+          return convertFetchedLogsToAllJobsLogs(fetchedLogs, repository.fullName);
+        })();
 
     if (!allJobsLogs) {
       logger.warn("No workflow logs available for analysis", {
         repository: repository.fullName,
         commitSha: commitSha.substring(0, 7),
+        provider,
       });
 
       return {
@@ -975,13 +1060,10 @@ export const processCombinedAnalysis = async (
       };
     }
 
-    // Fetch workflow timing in parallel with the rest of setup (non-blocking)
-    const workflowTiming = await fetchWorkflowTiming(
-      installationId,
-      repository.owner,
-      repository.name,
-      commitSha
-    );
+    // Fetch workflow timing (GitHub-only -- other providers don't have this concept)
+    const workflowTiming = isGitHub
+      ? await fetchWorkflowTiming(installationId, repository.owner, repository.name, commitSha)
+      : null;
     const formattedDuration = formatDuration(workflowTiming?.durationMs ?? null);
 
     logger.info("Fetched all failed job logs", {
@@ -990,43 +1072,51 @@ export const processCombinedAnalysis = async (
       jobCount: allJobsLogs.jobs.length,
       durationMs: workflowTiming?.durationMs ?? null,
       formattedDuration,
+      provider,
     });
 
-    // Post placeholder comment so users see analysis is in progress
-    const checkNames = pending.pendingChecks.map((check) => check.checkName);
-    await postAnalyzingPlaceholder(
-      installationId,
-      repository.owner,
-      repository.name,
-      pending.pullRequestNumbers,
-      checkNames
-    );
+    // Post placeholder comment so users see analysis is in progress (GitHub-only)
+    if (isGitHub) {
+      const checkNames = pending.pendingChecks.map((check) => check.checkName);
+      await postAnalyzingPlaceholder(
+        installationId,
+        repository.owner,
+        repository.name,
+        pending.pullRequestNumbers,
+        checkNames
+      );
+    }
 
     const apiUrl = `${config.API_URL}/api/analyze`;
 
-    // Look up tenant for analysis context
-    const tenant = await findByGitHubInstallation(installationId);
-    const tenantId = tenant?.id;
+    // Look up tenant for analysis context (provider-aware)
+    const tenantId = isGitHub
+      ? (await findByGitHubInstallation(installationId))?.id
+      : await resolveTenantForProvider(provider);
     const workflowId = allJobsLogs.workflowName;
 
-    // Fetch PR diff context for LLM correlation (cached, graceful degradation)
-    const prDiffContext = await fetchPRDiffContext(
-      installationId,
-      repository.owner,
-      repository.name,
-      pending.pullRequestNumbers
-    );
+    // Fetch PR diff context for LLM correlation (GitHub-only)
+    const prDiffContext = isGitHub
+      ? await fetchPRDiffContext(
+          installationId,
+          repository.owner,
+          repository.name,
+          pending.pullRequestNumbers
+        )
+      : null;
 
-    // Step 1.5: Enrich job logs with check run annotations.
+    // Step 1.5: Enrich job logs with check run annotations (GitHub-only).
     // Lint/format checks often have minimal logs (1-3 lines) but detailed annotations
     // (file-level errors). Appending annotations gives the LLM actual error context.
-    const enrichedJobs = await enrichJobLogsWithAnnotations(
-      allJobsLogs.jobs,
-      pending.pendingChecks,
-      installationId,
-      repository.owner,
-      repository.name
-    );
+    const enrichedJobs = isGitHub
+      ? await enrichJobLogsWithAnnotations(
+          allJobsLogs.jobs,
+          pending.pendingChecks,
+          installationId,
+          repository.owner,
+          repository.name
+        )
+      : allJobsLogs.jobs;
 
     // Step 2: Analyze each job separately (with concurrency limit)
     const maxConcurrent =
@@ -1088,13 +1178,15 @@ export const processCombinedAnalysis = async (
       });
     }
 
-    // Step 2.5b: Fetch annotations for direct lint error conversion (cached from enrichment step)
-    const annotationsByCheck = await fetchAnnotationsForChecks(
-      pending.pendingChecks,
-      installationId,
-      repository.owner,
-      repository.name
-    );
+    // Step 2.5b: Fetch annotations for direct lint error conversion (GitHub-only)
+    const annotationsByCheck: ReadonlyMap<string, readonly CheckRunAnnotation[]> = isGitHub
+      ? await fetchAnnotationsForChecks(
+          pending.pendingChecks,
+          installationId,
+          repository.owner,
+          repository.name
+        )
+      : new Map();
 
     // Step 3: Map each pending check to its analysis
     const failures: readonly AnalyzedFailure[] = pending.pendingChecks.map((check) => {
@@ -1173,13 +1265,14 @@ export const processCombinedAnalysis = async (
       },
       firstFailureAt: pending.firstFailureAt,
       lastFailureAt: pending.lastFailureAt,
-      provider: CI_PROVIDERS.GITHUB_ACTIONS,
+      provider,
     };
 
     logger.info("Per-job analysis complete, posting results", {
       repository: repository.fullName,
       commitSha: commitSha.substring(0, 7),
       failureCount: failures.length,
+      provider,
     });
 
     // Step 5: Post using existing consolidated poster
@@ -1189,6 +1282,7 @@ export const processCombinedAnalysis = async (
       error: getErrorMessage(error),
       repository: repository.fullName,
       commitSha: commitSha.substring(0, 7),
+      provider,
     });
 
     return {

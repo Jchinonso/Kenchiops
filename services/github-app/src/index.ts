@@ -131,8 +131,10 @@ const createApp = (): express.Express => {
         "/live",
         "/ready",
         "/api/github/webhook",
+        "/api/github/installations",
         "/github/setup",
         "/api/feedback",
+        "/webhooks/gitlab",
       ],
     })
   );

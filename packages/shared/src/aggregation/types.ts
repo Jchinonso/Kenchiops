@@ -128,6 +128,8 @@ export interface PendingAggregation {
   readonly pendingChecks: readonly PendingCheckRun[];
   readonly firstFailureAt: Date;
   readonly lastFailureAt: Date;
+  /** CI provider identifier. Optional for backward compat (defaults to github_actions). */
+  readonly provider?: CIProvider;
 }
 
 /**

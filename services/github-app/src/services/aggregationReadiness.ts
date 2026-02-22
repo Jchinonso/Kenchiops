@@ -16,6 +16,7 @@ import {
   withTimeout,
   REDIS_TIMEOUTS,
   AGGREGATION_KEYS,
+  CI_PROVIDERS,
   type AggregationKey,
 } from "@kenchi/shared";
 import { getOctokit } from "./githubService.js";
@@ -62,6 +63,11 @@ const getInstallationIdFromRedis = async (key: AggregationKey): Promise<number |
  * @returns true if all checks completed (or on error), false to defer
  */
 export const checkAllRunsCompleted = async (key: AggregationKey): Promise<boolean> => {
+  // Non-GitHub providers don't use GitHub check runs API -- always ready
+  if (key.provider && key.provider !== CI_PROVIDERS.GITHUB_ACTIONS) {
+    return true;
+  }
+
   // Worker context: called from aggregator polling loop, no HTTP request context available
   const [owner, repo] = key.repositoryFullName.split("/");
 
