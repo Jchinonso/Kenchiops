@@ -237,3 +237,14 @@ export type {
   PipelineErrorCode,
   PipelineError,
 } from "./pipeline/index.js";
+
+// ==================== ANSI Stripper / GitLab Log Cleaner ====================
+
+export {
+  stripAnsiEscapes,
+  stripOscSequences,
+  stripCharsetSelection,
+  stripCarriageReturns,
+  stripGitLabSections,
+  cleanGitLabLog,
+} from "./ansiStripper.js";

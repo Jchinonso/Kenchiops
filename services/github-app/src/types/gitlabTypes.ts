@@ -1,7 +1,7 @@
 /**
- * GitLab Webhook Type Definitions
+ * GitLab Type Definitions
  *
- * Types for GitLab CI job webhook payloads.
+ * Types for GitLab CI job webhook payloads and API responses.
  * GitLab sends "Job Hook" events with object_kind: "build"
  * when a CI/CD job completes.
  *
@@ -69,4 +69,43 @@ export interface GitLabJobWebhook {
   readonly merge_request?: GitLabWebhookMergeRequest;
   readonly user: GitLabWebhookUser;
   readonly environment?: string | null;
+}
+
+// ==================== GitLab Log Fetcher Types ====================
+
+/**
+ * Resolved GitLab connection credentials for API access.
+ */
+export interface ResolvedGitLabConnection {
+  readonly accessToken: string;
+  readonly baseUrl: string;
+}
+
+// ==================== GitLab API Response Types ====================
+
+/**
+ * GitLab pipeline summary returned by the Pipelines API.
+ * Only the fields we need for log fetching.
+ *
+ * @see https://docs.gitlab.com/ee/api/pipelines.html#list-project-pipelines
+ */
+export interface GitLabPipelineSummary {
+  readonly id: number;
+  readonly sha: string;
+  readonly status: string;
+  readonly ref: string;
+}
+
+/**
+ * GitLab job summary returned by the Pipeline Jobs API.
+ * Only the fields we need for log fetching.
+ *
+ * @see https://docs.gitlab.com/ee/api/jobs.html#list-pipeline-jobs
+ */
+export interface GitLabJobSummary {
+  readonly id: number;
+  readonly name: string;
+  readonly status: string;
+  readonly stage: string;
+  readonly duration: number | null;
 }

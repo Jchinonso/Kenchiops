@@ -7,47 +7,15 @@
  * @module adapters/ciProviderRegistry
  */
 
-import {
-  ValidationError,
-  type CIProvider,
-  type CILogFetcherPort,
-  type CIOutputPort,
-  type RequestContext,
-} from "@kenchi/shared";
+import { ValidationError, type CIProvider, type CIOutputPort } from "@kenchi/shared";
 import type { CIProviderAdapters } from "../types/githubTypes.js";
 import { githubWebhookAdapter } from "./githubWebhookAdapter.js";
 import { githubLogFetcherAdapter } from "./githubLogFetcherAdapter.js";
 import { githubOutputAdapter } from "./githubOutputAdapter.js";
 import { gitlabWebhookAdapter } from "./gitlabWebhookAdapter.js";
+import { createGitLabLogFetcherAdapter } from "./gitlabLogFetcherAdapter.js";
 
-// ==================== Stubs for Phases 3 & 4 ====================
-
-const gitlabLogFetcherStub: CILogFetcherPort = {
-  fetchBuildLogs: async (
-    _buildId: string,
-    _owner: string,
-    _repo: string,
-    _installationId: number,
-    _context: RequestContext
-  ) => {
-    throw new ValidationError("GitLab log fetcher not yet implemented (Phase 3)", {
-      operation: "fetchBuildLogs",
-      metadata: { provider: "gitlab_ci" },
-    });
-  },
-  fetchAllFailedLogs: async (
-    _commitSha: string,
-    _owner: string,
-    _repo: string,
-    _installationId: number,
-    _context: RequestContext
-  ) => {
-    throw new ValidationError("GitLab log fetcher not yet implemented (Phase 3)", {
-      operation: "fetchAllFailedLogs",
-      metadata: { provider: "gitlab_ci" },
-    });
-  },
-};
+// ==================== Stubs for Phase 4 ====================
 
 const gitlabOutputStub: CIOutputPort = {
   postAnalysisResults: async (_aggregation, _context) => {
@@ -68,7 +36,7 @@ const ADAPTERS: Readonly<Partial<Record<CIProvider, CIProviderAdapters>>> = {
   },
   gitlab_ci: {
     webhook: gitlabWebhookAdapter,
-    logFetcher: gitlabLogFetcherStub,
+    logFetcher: createGitLabLogFetcherAdapter(),
     output: gitlabOutputStub,
   },
 };

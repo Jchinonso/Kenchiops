@@ -773,6 +773,15 @@ export { parseTestSummary } from "./formatting/index.js";
 export type { ParsedTestSummary } from "./formatting/index.js";
 // Lint output parser (deterministic regex-based, no LLM)
 export { parseLintOutput } from "./formatting/index.js";
+// ANSI stripper / GitLab log cleaner
+export {
+  stripAnsiEscapes,
+  stripOscSequences,
+  stripCharsetSelection,
+  stripCarriageReturns,
+  stripGitLabSections,
+  cleanGitLabLog,
+} from "./formatting/index.js";
 // Simplified pipeline: Output formatting
 export {
   formatGitHubComment,
