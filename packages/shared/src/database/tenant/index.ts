@@ -44,6 +44,7 @@ export {
   findByGitLabGroup,
   findBySlackWorkspace,
   findById,
+  findPendingSlackTenants,
   getActiveTenants,
   getTenantStatistics,
   getSlackCredentials,

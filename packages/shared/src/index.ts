@@ -162,6 +162,7 @@ export {
   findByGitLabGroup,
   findBySlackWorkspace,
   findById,
+  findPendingSlackTenants,
   getActiveTenants,
   createFromGitHubInstall,
   createFromGitLabGroup,

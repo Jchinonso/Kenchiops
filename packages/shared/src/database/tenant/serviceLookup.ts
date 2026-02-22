@@ -138,6 +138,26 @@ export const findById = async (id: string): Promise<Tenant | null> => {
 };
 
 /**
+ * Find tenants that have GitHub installed but no Slack workspace linked.
+ * Used for auto-reconciliation when orphaned tenants exist.
+ *
+ * @returns Array of tenants pending Slack connection
+ */
+export const findPendingSlackTenants = async (): Promise<readonly Tenant[]> => {
+  try {
+    const result = await query<TenantRow>(TENANT_QUERIES.FIND_PENDING_SLACK, [
+      TENANT_STATUS.PENDING_SLACK,
+    ]);
+    return result.rows.map(rowToTenant);
+  } catch (error) {
+    logger.error("Failed to find pending Slack tenants", {
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Get all active tenants.
  *
  * @returns Array of active tenants

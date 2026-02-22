@@ -592,13 +592,14 @@ describe("Slack Bot Service Index", () => {
       const mockEvent = {
         user: "B123",
         channel: "C456",
+        team: "T456",
       };
 
       const { handleBotJoinedChannel } = await import("../handlers/channelHandler.js");
 
       await handler({ event: mockEvent, client: mockClient });
 
-      expect(handleBotJoinedChannel).toHaveBeenCalledWith(mockClient, "C456", "B123");
+      expect(handleBotJoinedChannel).toHaveBeenCalledWith(mockClient, "C456", "T456");
     });
 
     it("should ignore when non-bot user joins", async () => {
@@ -623,6 +624,7 @@ describe("Slack Bot Service Index", () => {
       const mockEvent = {
         user: "U999",
         channel: "C456",
+        team: "T456",
       };
 
       const { handleBotJoinedChannel } = await import("../handlers/channelHandler.js");
@@ -663,6 +665,7 @@ describe("Slack Bot Service Index", () => {
       const mockEvent = {
         user: "B123",
         channel: "C789",
+        team: "T456",
       };
 
       mockFindBySlackWorkspace.mockResolvedValue({
@@ -700,6 +703,7 @@ describe("Slack Bot Service Index", () => {
       const mockEvent = {
         user: "U999",
         channel: "C789",
+        team: "T456",
       };
 
       mockFindBySlackWorkspace.mockClear();

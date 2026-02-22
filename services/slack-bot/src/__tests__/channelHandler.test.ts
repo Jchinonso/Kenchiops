@@ -22,6 +22,9 @@ jest.mock("@kenchi/shared", () => ({
     GITHUB_APP_SLUG: "kenchi-test-app",
   },
   findBySlackWorkspace: jest.fn(),
+  findPendingSlackTenants: jest.fn(() => Promise.resolve([])),
+  linkSlackWorkspace: jest.fn(() => Promise.resolve({})),
+  deleteTenant: jest.fn(() => Promise.resolve()),
   findMappingsForChannel: jest.fn(() => Promise.resolve([])),
   deleteMappingsForChannel: jest.fn(() => Promise.resolve()),
   getMappedRepositories: jest.fn(() => Promise.resolve(new Set())),
@@ -188,7 +191,7 @@ describe("Channel Handler", () => {
       const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
       findBySlackWorkspace.mockResolvedValue(null);
 
-      await handleBotJoinedChannel(mockClient, "C123456", "U123456");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
       expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -206,7 +209,7 @@ describe("Channel Handler", () => {
         githubInstallationId: null,
       });
 
-      await handleBotJoinedChannel(mockClient, "C123456", "U123456");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
       expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -228,7 +231,7 @@ describe("Channel Handler", () => {
 
       findMappingsForChannel.mockResolvedValue([{ repository: "owner/repo" }]);
 
-      await handleBotJoinedChannel(mockClient, "C123456", "U123456");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
       expect(deleteMappingsForChannel).toHaveBeenCalledWith("tenant-123", "C123456");
     });
@@ -247,7 +250,7 @@ describe("Channel Handler", () => {
 
       fetchInstallationRepositories.mockResolvedValue([{ fullName: "owner/repo1", name: "repo1" }]);
 
-      await handleBotJoinedChannel(mockClient, "C123456", "U123456");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
       expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -269,7 +272,7 @@ describe("Channel Handler", () => {
         githubInstallationId: 12345,
       });
 
-      await handleBotJoinedChannel(mockClient, "C123456", "U123456");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
       expect(mockClient.chat.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -292,7 +295,7 @@ describe("Channel Handler", () => {
 
       fetchInstallationRepositories.mockResolvedValue([{ fullName: "owner/repo1", name: "repo1" }]);
 
-      await handleBotJoinedChannel(mockClient, "C123456", "U123456", "trigger-123");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456", "trigger-123");
 
       expect(mockClient.views.open).toHaveBeenCalled();
     });
@@ -313,27 +316,140 @@ describe("Channel Handler", () => {
       fetchInstallationRepositories.mockResolvedValue([]);
       getMappedRepositories.mockResolvedValue(new Set());
 
-      await handleBotJoinedChannel(mockClient, "C123456", "U123456", "trigger-123");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456", "trigger-123");
 
       expect(buildNoReposModal).toHaveBeenCalled();
     });
 
     it("should handle errors gracefully", async () => {
-      mockClient.auth.test.mockRejectedValue(new Error("Auth failed"));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findBySlackWorkspace.mockRejectedValue(new Error("DB error"));
 
-      await expect(handleBotJoinedChannel(mockClient, "C123456", "U123456")).resolves.not.toThrow();
+      await expect(handleBotJoinedChannel(mockClient, "C123456", "T123456")).resolves.not.toThrow();
     });
 
     it("should log error when handler fails", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { logger } = jest.requireMock("@kenchi/shared") as any;
-      mockClient.auth.test.mockRejectedValue(new Error("Auth failed"));
+      const { findBySlackWorkspace, logger } = jest.requireMock("@kenchi/shared") as any;
+      findBySlackWorkspace.mockRejectedValue(new Error("DB error"));
 
-      await handleBotJoinedChannel(mockClient, "C123456", "U123456");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
       expect(logger.error).toHaveBeenCalledWith(
         "Failed to handle member_joined_channel event",
         expect.any(Object)
+      );
+    });
+
+    it("should use workspaceId parameter instead of client.auth.test", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findBySlackWorkspace.mockResolvedValue(null);
+
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
+
+      // Should use the passed workspaceId, not call client.auth.test()
+      expect(findBySlackWorkspace).toHaveBeenCalledWith("T123456");
+      expect(mockClient.auth.test).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("tenant reconciliation", () => {
+    it("should auto-reconcile when Slack tenant has no GitHub and one unlinked GitHub tenant exists", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { findBySlackWorkspace, findPendingSlackTenants, linkSlackWorkspace, deleteTenant } =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        jest.requireMock("@kenchi/shared") as any;
+
+      // First call: returns Slack-only tenant (no GitHub)
+      // Second call (after reconciliation): returns the merged tenant
+      findBySlackWorkspace
+        .mockResolvedValueOnce({
+          id: "slack-tenant",
+          githubInstallationId: null,
+          slackTeamName: "My Team",
+          slackBotToken: "xoxb-test",
+          slackBotUserId: "U123",
+        })
+        .mockResolvedValueOnce({
+          id: "github-tenant",
+          githubInstallationId: 99999,
+        });
+
+      findPendingSlackTenants.mockResolvedValue([
+        {
+          id: "github-tenant",
+          githubInstallationId: 99999,
+          slackWorkspaceId: null,
+        },
+      ]);
+
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
+
+      expect(linkSlackWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "github-tenant",
+          slackWorkspaceId: "T123456",
+        })
+      );
+      expect(deleteTenant).toHaveBeenCalledWith("slack-tenant");
+      // Should show welcome (not "connect GitHub") since reconciliation succeeded
+      expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("Welcome"),
+        })
+      );
+    });
+
+    it("should skip reconciliation when multiple unlinked GitHub tenants exist", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { findBySlackWorkspace, findPendingSlackTenants, linkSlackWorkspace } =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        jest.requireMock("@kenchi/shared") as any;
+
+      findBySlackWorkspace.mockResolvedValue({
+        id: "slack-tenant",
+        githubInstallationId: null,
+      });
+
+      findPendingSlackTenants.mockResolvedValue([
+        { id: "github-tenant-1", githubInstallationId: 111 },
+        { id: "github-tenant-2", githubInstallationId: 222 },
+      ]);
+
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
+
+      expect(linkSlackWorkspace).not.toHaveBeenCalled();
+      // Should show "connect GitHub" since reconciliation was skipped
+      expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("connect GitHub"),
+        })
+      );
+    });
+
+    it("should skip reconciliation when no unlinked GitHub tenants exist", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { findBySlackWorkspace, findPendingSlackTenants, linkSlackWorkspace } =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        jest.requireMock("@kenchi/shared") as any;
+
+      findBySlackWorkspace.mockResolvedValue({
+        id: "slack-tenant",
+        githubInstallationId: null,
+      });
+
+      findPendingSlackTenants.mockResolvedValue([]);
+
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
+
+      expect(linkSlackWorkspace).not.toHaveBeenCalled();
+      // Should show "connect GitHub" since no reconciliation target
+      expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("connect GitHub"),
+        })
       );
     });
   });

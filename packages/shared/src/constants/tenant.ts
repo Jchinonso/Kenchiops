@@ -76,6 +76,7 @@ export const TENANT_QUERIES = {
   FIND_BY_SLACK_WORKSPACE: `SELECT * FROM tenants WHERE slack_workspace_id = $1 AND status != $2 ORDER BY CASE WHEN github_installation_id IS NOT NULL THEN 0 ELSE 1 END, updated_at DESC`,
   FIND_BY_ID: `SELECT * FROM tenants WHERE id = $1`,
   FIND_ACTIVE: `SELECT * FROM tenants WHERE status = $1 ORDER BY created_at DESC`,
+  FIND_PENDING_SLACK: `SELECT * FROM tenants WHERE github_installation_id IS NOT NULL AND slack_workspace_id IS NULL AND status = $1 ORDER BY updated_at DESC`,
 
   // Insert queries
   INSERT_FROM_GITHUB: `INSERT INTO tenants (github_org, github_installation_id, github_app_installed_at, status)

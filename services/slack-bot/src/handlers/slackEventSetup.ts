@@ -137,7 +137,7 @@ export const setupSlackHandlers = (app: SlackApp): void => {
       return;
     }
 
-    await handleBotJoinedChannel(client, event.channel, botId);
+    await handleBotJoinedChannel(client, event.channel, event.team);
   });
 
   // Handle bot leaving a channel - clean up repository mappings
@@ -151,8 +151,7 @@ export const setupSlackHandlers = (app: SlackApp): void => {
       return;
     }
 
-    const workspaceId = authResult.team_id || "";
-    await handleBotLeftChannel(workspaceId, event.channel);
+    await handleBotLeftChannel(event.team, event.channel);
   });
 
   // Register action button handlers
@@ -292,8 +291,7 @@ const setupAppHomeHandlers = (app: SlackApp): void => {
         return;
       }
 
-      const authResult = await client.auth.test();
-      const workspaceId = authResult.team_id || "";
+      const workspaceId = "team" in body && body.team ? (body.team as { id: string }).id : "";
 
       const tenant = await findBySlackWorkspace(workspaceId);
 
