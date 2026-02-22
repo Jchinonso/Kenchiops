@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { usePlans, useSubscription, useChangePlan, type PlanDTO } from "@/hooks/useSubscription";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
 
 // ==================== Constants ====================
 
@@ -177,7 +178,13 @@ const PlanCard = ({ plan, isCurrent, isChanging, onSelect }: PlanCardProps) => {
 export const PlanSelection = () => {
   const { data: plans, isLoading: plansLoading } = usePlans();
   const { data: subscription, isLoading: subLoading, refetch } = useSubscription();
-  const { changePlan, isLoading: isChanging } = useChangePlan();
+  const {
+    changePlan,
+    isLoading: isChanging,
+    planLimitError,
+    isLimitDialogOpen,
+    dismissLimitDialog,
+  } = useChangePlan();
 
   const currentPlanId = useMemo(() => subscription?.plan.id ?? "free", [subscription]);
 
@@ -250,6 +257,17 @@ export const PlanSelection = () => {
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Unable to load plans. Please try again later.
         </p>
+      )}
+
+      {planLimitError && (
+        <UpgradePrompt
+          open={isLimitDialogOpen}
+          onOpenChange={() => dismissLimitDialog()}
+          limitKey={planLimitError.limitKey}
+          currentUsage={planLimitError.currentUsage}
+          limit={planLimitError.limit}
+          currentPlan={planLimitError.currentPlan}
+        />
       )}
     </div>
   );

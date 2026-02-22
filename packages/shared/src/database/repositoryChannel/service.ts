@@ -18,6 +18,7 @@ import {
   parseDbCount,
   REPOSITORY_CHANNEL_QUERIES,
 } from "../common.js";
+import { enforcePlanLimit } from "../subscription/repository.js";
 import type {
   RepositoryChannelMapping,
   CreateRepositoryChannelMapping,
@@ -173,6 +174,9 @@ export const createMapping = async (
   data: CreateRepositoryChannelMapping
 ): Promise<RepositoryChannelMapping> => {
   validateCreateMappingInput(data);
+
+  // Enforce repository limit before creating the mapping
+  await enforcePlanLimit(data.tenantId, "max_repositories");
 
   try {
     const result = await query<MappingRow>(REPOSITORY_CHANNEL_QUERIES.INSERT_OR_UPDATE, [

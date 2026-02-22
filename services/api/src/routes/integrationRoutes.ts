@@ -13,6 +13,7 @@ import {
   createLogger,
   ValidationError,
   AuthenticationError,
+  AuthorizationError,
   config,
   VALID_INTEGRATION_PROVIDERS,
   INTEGRATION_OAUTH_AUTHORIZE_URLS,
@@ -250,6 +251,23 @@ const handleIntegrationCallback = async (req: Request, res: Response): Promise<v
       durationMs,
       ...context,
     });
+
+    // Preserve plan limit metadata in redirect so frontend can show UpgradePrompt
+    if (
+      connectError instanceof AuthorizationError &&
+      connectError.metadata?.code === "PLAN_LIMIT_EXCEEDED"
+    ) {
+      const limitParams = new URLSearchParams({
+        integration: provider,
+        status: "limit_exceeded",
+        limitKey: String(connectError.metadata.limitKey),
+        currentUsage: String(connectError.metadata.currentUsage),
+        limit: String(connectError.metadata.limit),
+        currentPlan: String(connectError.metadata.currentPlan),
+      });
+      res.redirect(`${frontendUrl}/dashboard/integrations?${limitParams.toString()}`);
+      return;
+    }
 
     res.redirect(`${frontendUrl}/dashboard/integrations?integration=${provider}&status=error`);
   }

@@ -16,6 +16,7 @@ import {
   USER_QUERIES,
   OAUTH_IDENTITY_QUERIES,
 } from "../common.js";
+import { enforcePlanLimit } from "../subscription/repository.js";
 import { AUTH_DEFAULTS } from "../../constants/index.js";
 import type {
   UserRow,
@@ -101,6 +102,9 @@ export const updateLastLogin = async (userId: string): Promise<User> => {
 export const updateUserTenant = async (userId: string, tenantId: string): Promise<User | null> => {
   validateId(userId, "userId");
   validateId(tenantId, "tenantId");
+
+  // Enforce team member limit before linking user to tenant
+  await enforcePlanLimit(tenantId, "max_team_members");
 
   try {
     const { rows } = await query<UserRow>(USER_QUERIES.UPDATE_TENANT, [tenantId, userId]);

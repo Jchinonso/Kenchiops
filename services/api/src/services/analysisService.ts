@@ -33,6 +33,7 @@ import {
   type ModelSelectionResult,
   type RequestContext,
   findEventIdByRepoAndCommit,
+  enforcePlanLimit,
 } from "@kenchi/shared";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
@@ -198,6 +199,12 @@ export const performAnalysis = async (
   context: RequestContext
 ): Promise<AnalyzeResponse> => {
   const logContext = { ...context };
+
+  // Enforce monthly analysis limit before doing any work
+  if (request.tenant_id) {
+    await enforcePlanLimit(request.tenant_id, "max_analyses_monthly");
+  }
+
   const { event, evidence: baseEvidence } = createAnalysisContext(request);
 
   // Select model version for this analysis (Phase 3 fine-tuning integration)

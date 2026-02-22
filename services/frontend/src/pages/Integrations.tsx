@@ -10,8 +10,10 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useTenantInfo } from "@/hooks/useDashboardData";
 import { useIntegrationHealth } from "@/hooks/useIncidentData";
+import { usePlanLimitError } from "@/hooks/usePlanLimitError";
 import { titleCase } from "@/lib/formatters";
 import { MonitoringIntegrations } from "@/components/MonitoringIntegrations";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Github,
@@ -99,6 +101,12 @@ export const Integrations = () => {
   const tenantId = tenant?.id ?? "";
   const { data: healthData } = useIntegrationHealth(tenantId);
   const [searchParams, setSearchParams] = useSearchParams();
+  const {
+    planLimitError,
+    isOpen: isLimitDialogOpen,
+    checkUrlParams,
+    dismiss: dismissLimitDialog,
+  } = usePlanLimitError();
 
   const integrationHealthMap = useMemo(() => {
     if (!healthData) {
@@ -111,13 +119,16 @@ export const Integrations = () => {
     return Object.fromEntries(entries);
   }, [healthData]);
 
-  // Show toast for integration connect results from URL params
+  // Show toast or UpgradePrompt for integration connect results from URL params
   useEffect(() => {
     const integration = searchParams.get("integration");
     const status = searchParams.get("status");
     const integrationError = searchParams.get("integration_error");
 
-    if (integration && status === "connected") {
+    if (status === "limit_exceeded") {
+      checkUrlParams(searchParams);
+      setSearchParams({}, { replace: true });
+    } else if (integration && status === "connected") {
       toast.success(`${titleCase(integration)} connected successfully`);
       setSearchParams({}, { replace: true });
     } else if (integration && status === "error") {
@@ -127,7 +138,7 @@ export const Integrations = () => {
       toast.error(ERROR_MESSAGES[integrationError] ?? "Integration connection failed");
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, checkUrlParams]);
 
   return (
     <div className="space-y-6">
@@ -170,6 +181,17 @@ export const Integrations = () => {
 
       {/* Monitoring Integrations */}
       <MonitoringIntegrations integrationHealth={integrationHealthMap} tenantId={tenantId} />
+
+      {planLimitError && (
+        <UpgradePrompt
+          open={isLimitDialogOpen}
+          onOpenChange={() => dismissLimitDialog()}
+          limitKey={planLimitError.limitKey}
+          currentUsage={planLimitError.currentUsage}
+          limit={planLimitError.limit}
+          currentPlan={planLimitError.currentPlan}
+        />
+      )}
     </div>
   );
 };

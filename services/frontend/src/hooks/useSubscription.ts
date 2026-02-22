@@ -13,6 +13,7 @@ import {
   type UseFetchResult,
   type MutationState,
 } from "@/hooks/useFetch";
+import { usePlanLimitError } from "@/hooks/usePlanLimitError";
 
 // ==================== DTO Types ====================
 
@@ -93,35 +94,60 @@ export const usePlans = (refreshKey: number = 0): UseFetchResult<readonly PlanDT
 
 // ==================== Mutation Hook ====================
 
+interface PlanLimitInfo {
+  readonly limitKey: string;
+  readonly currentUsage: number;
+  readonly limit: number;
+  readonly currentPlan: string;
+}
+
 export const useChangePlan = (): MutationState & {
   readonly changePlan: (planId: string) => Promise<ChangePlanResultDTO | null>;
+  readonly planLimitError: PlanLimitInfo | null;
+  readonly isLimitDialogOpen: boolean;
+  readonly dismissLimitDialog: () => void;
 } => {
   const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
+  const {
+    planLimitError,
+    isOpen: isLimitDialogOpen,
+    checkResponse,
+    dismiss: dismissLimitDialog,
+  } = usePlanLimitError();
 
-  const changePlan = useCallback(async (planId: string): Promise<ChangePlanResultDTO | null> => {
-    setState({ isLoading: true, error: null });
-    try {
-      const response = await apiClient("/api/v1/subscription/plan", {
-        method: "PUT",
-        body: { planId },
-      });
-      if (!response.ok) {
-        const message = await parseErrorBody(
-          response,
-          `Failed to change plan (${response.status})`
-        );
+  const changePlan = useCallback(
+    async (planId: string): Promise<ChangePlanResultDTO | null> => {
+      setState({ isLoading: true, error: null });
+      try {
+        const response = await apiClient("/api/v1/subscription/plan", {
+          method: "PUT",
+          body: { planId },
+        });
+        if (!response.ok) {
+          // Detect plan limit error before parsing generic message
+          const isLimitError = await checkResponse(response);
+          if (isLimitError) {
+            setState({ isLoading: false, error: null });
+            return null;
+          }
+          const message = await parseErrorBody(
+            response,
+            `Failed to change plan (${response.status})`
+          );
+          setState({ isLoading: false, error: message });
+          return null;
+        }
+        const json: { readonly data: ChangePlanResultDTO } = await response.json();
+        setState({ isLoading: false, error: null });
+        return json.data;
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : "Unknown error";
         setState({ isLoading: false, error: message });
         return null;
       }
-      const json: { readonly data: ChangePlanResultDTO } = await response.json();
-      setState({ isLoading: false, error: null });
-      return json.data;
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Unknown error";
-      setState({ isLoading: false, error: message });
-      return null;
-    }
-  }, []);
+    },
+    [checkResponse]
+  );
 
-  return { ...state, changePlan };
+  return { ...state, changePlan, planLimitError, isLimitDialogOpen, dismissLimitDialog };
 };
