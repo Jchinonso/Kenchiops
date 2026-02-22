@@ -24,6 +24,7 @@ import {
 } from "@kenchi/shared";
 
 import { createIntegrationService } from "../services/integrationService.js";
+import { createGitLabConnectionService } from "../services/gitlabConnectionService.js";
 import { getIntegrationAdapter } from "../adapters/integrationAdapterRegistry.js";
 
 // ==================== Setup ====================
@@ -32,6 +33,7 @@ const router = Router();
 const logger = createLogger("integration-routes");
 
 const integrationService = createIntegrationService(getIntegrationAdapter);
+const gitlabConnectionService = createGitLabConnectionService();
 
 // ==================== Helpers ====================
 
@@ -308,8 +310,85 @@ const handleIntegrationDisconnect = async (req: Request, res: Response): Promise
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
+// ==================== GitLab CI Connection Handlers ====================
+
+/**
+ * POST /integrations/gitlab/connect
+ * Connect GitLab CI using the user's existing GitLab OAuth identity.
+ */
+const handleGitLabConnect = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleGitLabConnect",
+    });
+  }
+
+  const { userId, tenantId } = req.user;
+
+  if (!tenantId) {
+    throw new AuthorizationError("User must belong to a tenant to connect GitLab CI", {
+      operation: "handleGitLabConnect",
+    });
+  }
+
+  const result = await gitlabConnectionService.connectGitLab(userId, tenantId, req.context);
+  res.status(HTTP_STATUS.CREATED).json({ data: result });
+};
+
+/**
+ * GET /integrations/gitlab/connection
+ * Check the current GitLab CI connection status for the tenant.
+ */
+const handleGitLabConnectionStatus = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleGitLabConnectionStatus",
+    });
+  }
+
+  const { tenantId } = req.user;
+
+  if (!tenantId) {
+    throw new AuthorizationError("User must belong to a tenant to view GitLab CI status", {
+      operation: "handleGitLabConnectionStatus",
+    });
+  }
+
+  const status = await gitlabConnectionService.getGitLabConnectionStatus(tenantId, req.context);
+  res.status(HTTP_STATUS.OK).json({ data: status });
+};
+
+/**
+ * DELETE /integrations/gitlab/connection
+ * Disconnect GitLab CI for the tenant.
+ */
+const handleGitLabDisconnect = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleGitLabDisconnect",
+    });
+  }
+
+  const { tenantId } = req.user;
+
+  if (!tenantId) {
+    throw new AuthorizationError("User must belong to a tenant to disconnect GitLab CI", {
+      operation: "handleGitLabDisconnect",
+    });
+  }
+
+  await gitlabConnectionService.disconnectGitLab(tenantId, req.context);
+  res.status(HTTP_STATUS.OK).json({ data: { status: "disconnected" } });
+};
+
 // ==================== Route Definitions ====================
 
+// GitLab CI connection routes (registered before :provider/:connectionId to avoid conflicts)
+router.post("/integrations/gitlab/connect", asyncHandler(handleGitLabConnect));
+router.get("/integrations/gitlab/connection", asyncHandler(handleGitLabConnectionStatus));
+router.delete("/integrations/gitlab/connection", asyncHandler(handleGitLabDisconnect));
+
+// OAuth integration routes
 router.get("/integrations", asyncHandler(handleListIntegrations));
 router.get("/integrations/:provider/connect", asyncHandler(handleIntegrationConnect));
 router.get("/integrations/:provider/callback", asyncHandler(handleIntegrationCallback));
