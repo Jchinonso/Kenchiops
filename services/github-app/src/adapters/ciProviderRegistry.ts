@@ -7,24 +7,14 @@
  * @module adapters/ciProviderRegistry
  */
 
-import { ValidationError, type CIProvider, type CIOutputPort } from "@kenchi/shared";
+import { ValidationError, type CIProvider } from "@kenchi/shared";
 import type { CIProviderAdapters } from "../types/githubTypes.js";
 import { githubWebhookAdapter } from "./githubWebhookAdapter.js";
 import { githubLogFetcherAdapter } from "./githubLogFetcherAdapter.js";
 import { githubOutputAdapter } from "./githubOutputAdapter.js";
 import { gitlabWebhookAdapter } from "./gitlabWebhookAdapter.js";
 import { createGitLabLogFetcherAdapter } from "./gitlabLogFetcherAdapter.js";
-
-// ==================== Stubs for Phase 4 ====================
-
-const gitlabOutputStub: CIOutputPort = {
-  postAnalysisResults: async (_aggregation, _context) => {
-    throw new ValidationError("GitLab output not yet implemented (Phase 4)", {
-      operation: "postAnalysisResults",
-      metadata: { provider: "gitlab_ci" },
-    });
-  },
-};
+import { createGitLabOutputAdapter } from "./gitlabOutputAdapter.js";
 
 // ==================== Registry ====================
 
@@ -37,7 +27,7 @@ const ADAPTERS: Readonly<Partial<Record<CIProvider, CIProviderAdapters>>> = {
   gitlab_ci: {
     webhook: gitlabWebhookAdapter,
     logFetcher: createGitLabLogFetcherAdapter(),
-    output: gitlabOutputStub,
+    output: createGitLabOutputAdapter(),
   },
 };
 

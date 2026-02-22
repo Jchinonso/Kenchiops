@@ -50,3 +50,6 @@ export {
   buildConsolidatedCheckAnnotations,
   buildConsolidatedCheckSummary,
 } from "./checkAnnotationHelpers.js";
+
+// GitLab MR comment formatter
+export { buildGitLabMRComment } from "./gitlabFormatter.js";
