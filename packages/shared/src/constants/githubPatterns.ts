@@ -198,15 +198,13 @@ export const FILE_REFERENCE_PATTERNS = [
  * Matches patterns like `path/to/file.ts:123` or `(path/file.ts:45:12)`.
  * Used to infer missing file paths from LLM-extracted test failures.
  *
+ * Language-agnostic: requires a `/` (real path structure) and `.ext` (any file extension).
+ * No hardcoded extension list — works for any language.
+ *
  * Groups: [filePath, lineNumber?]
  */
 export const TEST_FAILURE_FILE_INFERENCE_PATTERN =
   /(?:^|\s|[(])([a-zA-Z][^\s()]*\/[^\s():]+\.\w{1,4})(?::(\d+))?/;
-
-/**
- * Common source file extensions used to validate inferred file paths.
- */
-export const INFERABLE_SOURCE_EXTENSIONS = /\.(ts|js|py|go|rs|rb|java|tsx|jsx|kt|cs|cpp|c|swift)$/;
 
 /**
  * NOTE: Dependency change detection is now handled by AI.

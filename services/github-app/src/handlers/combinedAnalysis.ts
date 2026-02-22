@@ -32,7 +32,6 @@ import {
   parseLintOutput,
   // Test failure file inference
   TEST_FAILURE_FILE_INFERENCE_PATTERN,
-  INFERABLE_SOURCE_EXTENSIONS,
   // Tenant lookup
   findByGitHubInstallation,
   // PR context caching
@@ -499,13 +498,13 @@ const inferFileFromError = (testFailure: TestFailureInfo): TestFailureInfo => {
 
   const textToSearch = [testFailure.error, testFailure.testName].filter(Boolean).join(" ");
 
+  // Pattern already requires `/` (real path structure) and `.ext` (file extension).
+  // Language-agnostic — works for any language's file paths.
   const match = TEST_FAILURE_FILE_INFERENCE_PATTERN.exec(textToSearch);
   if (match) {
     const inferredFile = match[1];
-    if (INFERABLE_SOURCE_EXTENSIONS.test(inferredFile)) {
-      const inferredLine = match[2] ? Number(match[2]) : testFailure.line;
-      return { ...testFailure, file: inferredFile, line: inferredLine };
-    }
+    const inferredLine = match[2] ? Number(match[2]) : testFailure.line;
+    return { ...testFailure, file: inferredFile, line: inferredLine };
   }
 
   return testFailure;

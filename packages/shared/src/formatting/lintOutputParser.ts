@@ -55,6 +55,33 @@ const stripCIPathPrefix = (filePath: string): string => {
   return result;
 };
 
+// ==================== Path Validation ====================
+
+/**
+ * Check if a parsed path is a plausible source file (not a CI artifact or hidden dir).
+ *
+ * Rejects:
+ * - Hidden directories used as bare paths (`.github`, `.eslintrc`) — dot at start with no `/`
+ * - Paths where the "extension" is actually a directory name (e.g., `.github` has "extension" `github`)
+ *
+ * Language-agnostic: accepts any path with a real structure (contains `/`) or
+ * has a dot-extension that's NOT at the start of the name.
+ */
+const isPlausibleSourceFile = (filePath: string): boolean => {
+  // Paths with directory separators are almost always real file references
+  if (filePath.includes("/")) {
+    return true;
+  }
+
+  // Bare names starting with `.` (like `.github`, `.eslintrc`) are hidden dirs/dotfiles,
+  // not lint error source files. Real source files start with alphanumeric characters.
+  if (filePath.startsWith(".")) {
+    return false;
+  }
+
+  return true;
+};
+
 // ==================== Colon-Delimited Format Parser ====================
 
 /**
@@ -168,29 +195,35 @@ export const parseLintOutput = (log: string): readonly LLMLintError[] => {
     const tscMatch = TSC_ERROR_PATTERN.exec(trimmed);
     if (tscMatch) {
       const [, filePath, lineNum, col, code, message] = tscMatch;
-      errors.push({
-        file: stripCIPathPrefix(filePath),
-        line: Number(lineNum),
-        column: Number(col),
-        message,
-        code,
-      });
-      continue;
+      const cleanedPath = stripCIPathPrefix(filePath);
+      if (isPlausibleSourceFile(cleanedPath)) {
+        errors.push({
+          file: cleanedPath,
+          line: Number(lineNum),
+          column: Number(col),
+          message,
+          code,
+        });
+        continue;
+      }
     }
 
     // Check for colon-delimited format (file.py:12:5: E302 message)
     const colonMatch = COLON_DELIMITED_PATTERN.exec(trimmed);
     if (colonMatch) {
       const [, filePath, lineNum, col, tail] = colonMatch;
-      const { code, message } = parseCodeAndMessage(tail);
-      errors.push({
-        file: stripCIPathPrefix(filePath),
-        line: Number(lineNum),
-        column: Number(col),
-        message,
-        code,
-      });
-      continue;
+      const cleanedPath = stripCIPathPrefix(filePath);
+      if (isPlausibleSourceFile(cleanedPath)) {
+        const { code, message } = parseCodeAndMessage(tail);
+        errors.push({
+          file: cleanedPath,
+          line: Number(lineNum),
+          column: Number(col),
+          message,
+          code,
+        });
+        continue;
+      }
     }
 
     // Check if this line is a file path (stylish format prints paths flush-left)

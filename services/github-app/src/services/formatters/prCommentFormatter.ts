@@ -33,6 +33,31 @@ import {
 } from "./enrichedSectionBuilders.js";
 
 /**
+ * Compute display names for file paths, disambiguating when multiple files share the same basename.
+ * For unique basenames: `repository.ts`
+ * For collisions: `analysis/repository.ts`, `incidentAlert/repository.ts`
+ */
+const computeDisplayNames = (filePaths: readonly string[]): ReadonlyMap<string, string> => {
+  const basenameCounts = new Map<string, number>();
+  filePaths.forEach((filePath) => {
+    const basename = filePath.split("/").pop() ?? filePath;
+    basenameCounts.set(basename, (basenameCounts.get(basename) ?? 0) + 1);
+  });
+
+  return new Map(
+    filePaths.map((filePath) => {
+      const parts = filePath.split("/");
+      const basename = parts.pop() ?? filePath;
+      const hasDuplicate = (basenameCounts.get(basename) ?? 0) > 1;
+      // For duplicates, include the parent directory for disambiguation
+      const displayName =
+        hasDuplicate && parts.length > 0 ? `${parts[parts.length - 1]}/${basename}` : basename;
+      return [filePath, displayName] as const;
+    })
+  );
+};
+
+/**
  * Build the header section of the PR comment.
  * Includes commit info, PR context, and workflow timing when available.
  */
@@ -165,9 +190,10 @@ export const buildAssertionDiffLines = (testFailure: TestFailureInfo): string[] 
 export const buildTestFileGroup = (
   filePath: string,
   fileFailures: readonly TestFailureInfo[],
-  correlations?: readonly LLMChangeCorrelation[]
+  correlations?: readonly LLMChangeCorrelation[],
+  displayName?: string
 ): string[] => {
-  const fileName = filePath.split("/").pop() ?? filePath;
+  const fileName = displayName ?? filePath.split("/").pop() ?? filePath;
   const failureLines = fileFailures.flatMap((testFailure) => {
     const lineRef = testFailure.line ? `:${testFailure.line}` : "";
     const crossRef = correlations
@@ -202,6 +228,10 @@ export const buildTestFailuresSection = (
   }
 
   const headlineCount = parsedTestSummary?.failed ?? testFailures.length;
+  const shownCount = testFailures.length;
+  // When deterministic summary found more failures than the LLM extracted,
+  // clarify the discrepancy so users aren't confused by the numbers
+  const headlineSuffix = headlineCount > shownCount ? ` (${shownCount} shown in detail)` : "";
 
   const failuresByFile = new Map<string, TestFailureInfo[]>();
   testFailures.forEach((testFailure) => {
@@ -210,8 +240,9 @@ export const buildTestFailuresSection = (
     failuresByFile.set(fileKey, [...existing, testFailure]);
   });
 
+  const displayNames = computeDisplayNames([...failuresByFile.keys()]);
   const fileGroupLines = [...failuresByFile.entries()].flatMap(([filePath, fileFailures]) =>
-    buildTestFileGroup(filePath, fileFailures, correlations)
+    buildTestFileGroup(filePath, fileFailures, correlations, displayNames.get(filePath))
   );
 
   const breakdown = categorizeFailures(testFailures);
@@ -232,7 +263,7 @@ export const buildTestFailuresSection = (
   return [
     `${UI_EMOJI.new} **New failures introduced in this PR**`,
     "",
-    `**${UI_EMOJI.warning} ${headlineCount} Test Failure${headlineCount > 1 ? "s" : ""}:**`,
+    `**${UI_EMOJI.warning} ${headlineCount} Test Failure${headlineCount > 1 ? "s" : ""}${headlineSuffix}:**`,
     "",
     ...fileGroupLines,
     ...(breakdownLines.length > 0 ? [...breakdownLines, ""] : []),
@@ -242,9 +273,10 @@ export const buildTestFailuresSection = (
 
 export const buildLintFileGroup = (
   filePath: string,
-  fileErrors: readonly LintErrorForDisplay[]
+  fileErrors: readonly LintErrorForDisplay[],
+  displayName?: string
 ): string[] => {
-  const fileName = filePath.split("/").pop() ?? filePath;
+  const fileName = displayName ?? filePath.split("/").pop() ?? filePath;
   const errorLines = fileErrors.flatMap((lintError) => {
     const location = lintError.column
       ? `${lintError.line}:${lintError.column}`
@@ -283,8 +315,9 @@ export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[])
     errorsByFile.set(fileKey, [...existing, lintError]);
   });
 
+  const displayNames = computeDisplayNames([...errorsByFile.keys()]);
   const fileGroupLines = [...errorsByFile.entries()].flatMap(([filePath, fileErrors]) =>
-    buildLintFileGroup(filePath, fileErrors)
+    buildLintFileGroup(filePath, fileErrors, displayNames.get(filePath))
   );
 
   return [

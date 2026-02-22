@@ -199,7 +199,6 @@ export {
   ABSOLUTE_PATH_PATTERN,
   ACTION_REVIEW_PATTERNS,
   TEST_FAILURE_FILE_INFERENCE_PATTERN,
-  INFERABLE_SOURCE_EXTENSIONS,
 } from "./github.js";
 
 // Evidence parsing constants
