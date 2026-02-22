@@ -8,6 +8,7 @@ import {
   getAvailableRepositories,
   getGitHubInstallUrl,
   buildRepoConfiguredMessage,
+  clearRepoCache,
 } from "../handlers/channelHandler.js";
 
 // Mock dependencies
@@ -86,6 +87,7 @@ describe("Channel Handler", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    clearRepoCache();
     mockClient = createMockClient();
   });
 

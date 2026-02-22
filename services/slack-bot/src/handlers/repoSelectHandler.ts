@@ -19,6 +19,7 @@ import {
   UNCONFIGURE_MODAL_CALLBACK,
   UNCONFIGURE_SELECT_ACTION_ID,
   buildRepoConfiguredMessage,
+  clearRepoCache,
 } from "./channelHandler.js";
 import type {
   ModalMetadata,
@@ -78,6 +79,9 @@ export const handleRepoSelectSubmission = async (args: ViewSubmissionArgs): Prom
       slackChannelName: channelName,
       createdBy: body.user.id,
     });
+
+    // Invalidate cached repo list so next click reflects the change
+    clearRepoCache(tenant.id);
 
     // Update the original welcome message to remove the button
     if (messageTs) {
@@ -178,6 +182,9 @@ export const handleUnconfigureSubmission = async (args: {
 
     // Delete the mapping
     await deleteMapping(tenant.id, repository);
+
+    // Invalidate cached repo list so next click reflects the change
+    clearRepoCache(tenant.id);
 
     // Post confirmation message to the channel
     await client.chat.postMessage({

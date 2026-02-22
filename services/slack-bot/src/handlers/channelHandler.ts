@@ -77,16 +77,57 @@ export const buildRepoConfiguredMessage = (repository: string, channelName: stri
   `• Highlight the specific files and lines causing issues\n\n` +
   `Notifications will be posted here in #${channelName}.`;
 
+// ==================== Repository Cache ====================
+
+const REPO_CACHE_TTL_MS = 60_000; // 60 seconds
+
+interface RepoCacheEntry {
+  readonly repositories: readonly RepositoryOption[];
+  readonly expiresAt: number;
+}
+
+/** In-memory cache keyed by `installationId:tenantId` */
+const repoCache = new Map<string, RepoCacheEntry>();
+
+/**
+ * Invalidate the repository cache for a tenant, or all entries if no tenantId.
+ * Call after creating or deleting a repo-channel mapping.
+ */
+export const clearRepoCache = (tenantId?: string): void => {
+  if (!tenantId) {
+    repoCache.clear();
+    return;
+  }
+  for (const key of repoCache.keys()) {
+    if (key.endsWith(`:${tenantId}`)) {
+      repoCache.delete(key);
+    }
+  }
+};
+
 // ==================== Helper Functions ====================
 
 /**
  * Get available repositories from GitHub for the installation.
  * Filters out already-mapped repositories.
+ * Results are cached for 60s to prevent redundant API calls on rapid clicks.
  */
 export const getAvailableRepositories = async (
   installationId: number,
   tenantId: string
 ): Promise<RepositoryOption[]> => {
+  const cacheKey = `${installationId}:${tenantId}`;
+  const cached = repoCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    logger.info("Returning cached repositories", {
+      installationId,
+      availableRepos: cached.repositories.length,
+      cacheHit: true,
+    });
+    return [...cached.repositories];
+  }
+
   try {
     const [allRepositories, mappedRepos] = await Promise.all([
       fetchInstallationRepositories(installationId),
@@ -97,11 +138,17 @@ export const getAvailableRepositories = async (
       .filter((repo) => !mappedRepos.has(repo.fullName))
       .map((repo) => ({ fullName: repo.fullName, name: repo.name }));
 
+    repoCache.set(cacheKey, {
+      repositories: availableRepositories,
+      expiresAt: Date.now() + REPO_CACHE_TTL_MS,
+    });
+
     logger.info("Fetched available repositories", {
       installationId,
       totalRepos: allRepositories.length,
       mappedRepos: mappedRepos.size,
       availableRepos: availableRepositories.length,
+      cacheHit: false,
     });
 
     return availableRepositories;
