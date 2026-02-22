@@ -97,6 +97,34 @@ export const buildRepoSelectModal = (
 });
 
 /**
+ * Build a loading modal shown while repositories are being fetched.
+ * This is opened immediately on button click to avoid trigger_id expiration.
+ */
+export const buildLoadingReposModal = (channelName: string): SlackModalView => ({
+  type: "modal",
+  callback_id: SLACK_MODAL_CALLBACKS.REPO_SELECT,
+  title: {
+    type: "plain_text",
+    text: "Select Repository",
+    emoji: true,
+  },
+  close: {
+    type: "plain_text",
+    text: "Cancel",
+    emoji: true,
+  },
+  blocks: [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `Loading available repositories for *#${channelName}*...`,
+      },
+    },
+  ],
+});
+
+/**
  * Build modal when no repositories are available.
  * Shows a message explaining why no repos can be selected.
  */

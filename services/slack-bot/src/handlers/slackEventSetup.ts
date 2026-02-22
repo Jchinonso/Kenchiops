@@ -35,6 +35,7 @@ import {
   buildRepoSelectModal,
   buildNoReposModal,
   getAvailableRepositories,
+  buildLoadingReposModal,
 } from "./channelHandler.js";
 import { toSlackSDKView, type SlackApp } from "../types/slackTypes.js";
 import type { View } from "@slack/types";
@@ -291,6 +292,19 @@ const setupAppHomeHandlers = (app: SlackApp): void => {
         return;
       }
 
+      // Open loading modal immediately to avoid trigger_id expiration (~3s TTL)
+      const loadingView = buildLoadingReposModal(channelName);
+      const openResult = await client.views.open({
+        trigger_id: body.trigger_id,
+        view: toSlackSDKView(loadingView) as View,
+      });
+
+      const viewId = (openResult.view as { id?: string })?.id;
+      if (!viewId) {
+        logger.error("Failed to get view ID from loading modal");
+        return;
+      }
+
       const workspaceId = "team" in body && body.team ? (body.team as { id: string }).id : "";
 
       const tenant = await findBySlackWorkspace(workspaceId);
@@ -302,14 +316,14 @@ const setupAppHomeHandlers = (app: SlackApp): void => {
 
       const repositories = await getAvailableRepositories(tenant.githubInstallationId, tenant.id);
 
-      const view =
+      const finalView =
         repositories.length > 0
           ? buildRepoSelectModal(channelId, channelName, repositories, messageTs)
           : buildNoReposModal(channelName);
 
-      await client.views.open({
-        trigger_id: body.trigger_id,
-        view: toSlackSDKView(view) as View,
+      await client.views.update({
+        view_id: viewId,
+        view: toSlackSDKView(finalView) as View,
       });
 
       logger.info("Opened repository selection modal from button", {

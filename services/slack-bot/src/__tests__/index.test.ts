@@ -275,6 +275,13 @@ describe("Slack Bot Service Index", () => {
       handleBotJoinedChannel: jest.fn(),
       buildRepoSelectModal: jest.fn(),
       buildNoReposModal: jest.fn(),
+      buildLoadingReposModal: jest.fn(() => ({
+        type: "modal",
+        callback_id: "repo_select_modal",
+        title: { type: "plain_text", text: "Select Repository" },
+        close: { type: "plain_text", text: "Cancel" },
+        blocks: [],
+      })),
       getAvailableRepositories: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
     }));
 
@@ -818,14 +825,11 @@ describe("Slack Bot Service Index", () => {
       const handler = selectRepoCall[1] as any;
 
       const mockClient = {
-        auth: {
-          test: jest.fn<() => Promise<{ team_id: string }>>().mockResolvedValue({
-            team_id: "T123",
-          }),
-        },
         views: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          open: jest.fn<() => Promise<any>>().mockResolvedValue({}),
+          open: jest.fn<() => Promise<any>>().mockResolvedValue({ view: { id: "V123" } }),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          update: jest.fn<() => Promise<any>>().mockResolvedValue({}),
         },
       };
 
@@ -839,6 +843,7 @@ describe("Slack Bot Service Index", () => {
 
       const mockBody = {
         trigger_id: "trigger-123",
+        team: { id: "T123" },
         user: {
           id: "U123",
         },
@@ -877,10 +882,16 @@ describe("Slack Bot Service Index", () => {
       });
 
       expect(mockAck).toHaveBeenCalled();
-      expect(getAvailableRepositories).toHaveBeenCalledWith("12345", "tenant-123");
-      expect(buildRepoSelectModal).toHaveBeenCalled();
+      // Loading modal opened immediately with trigger_id
       expect(mockClient.views.open).toHaveBeenCalledWith({
         trigger_id: "trigger-123",
+        view: expect.any(Object),
+      });
+      expect(getAvailableRepositories).toHaveBeenCalledWith("12345", "tenant-123");
+      expect(buildRepoSelectModal).toHaveBeenCalled();
+      // Final view updated via views.update
+      expect(mockClient.views.update).toHaveBeenCalledWith({
+        view_id: "V123",
         view: expect.any(Object),
       });
     });
@@ -896,14 +907,11 @@ describe("Slack Bot Service Index", () => {
       const handler = selectRepoCall[1] as any;
 
       const mockClient = {
-        auth: {
-          test: jest.fn<() => Promise<{ team_id: string }>>().mockResolvedValue({
-            team_id: "T123",
-          }),
-        },
         views: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          open: jest.fn<() => Promise<any>>().mockResolvedValue({}),
+          open: jest.fn<() => Promise<any>>().mockResolvedValue({ view: { id: "V123" } }),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          update: jest.fn<() => Promise<any>>().mockResolvedValue({}),
         },
       };
 
@@ -917,6 +925,7 @@ describe("Slack Bot Service Index", () => {
 
       const mockBody = {
         trigger_id: "trigger-123",
+        team: { id: "T123" },
         user: {
           id: "U123",
         },
@@ -941,7 +950,9 @@ describe("Slack Bot Service Index", () => {
         expect.any(Object)
       );
 
-      expect(mockClient.views.open).not.toHaveBeenCalled();
+      // Loading modal still opens (before tenant check), but never updated with repos
+      expect(mockClient.views.open).toHaveBeenCalled();
+      expect(mockClient.views.update).not.toHaveBeenCalled();
     });
   });
 });

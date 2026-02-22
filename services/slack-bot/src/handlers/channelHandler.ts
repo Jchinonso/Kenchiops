@@ -35,6 +35,7 @@ export {
   buildNoReposModal,
   buildUnconfigureModal,
   buildNoConfiguredReposModal,
+  buildLoadingReposModal,
 } from "./modalBuilders.js";
 
 // ==================== GitHub Install URL ====================
