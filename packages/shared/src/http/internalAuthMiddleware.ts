@@ -79,12 +79,15 @@ export const createInternalAuthMiddleware = (
       return;
     }
 
-    // Use raw body if available (Buffer captured by express.json verify), otherwise JSON.stringify
+    // Use raw body if available (Buffer captured by express.json verify), otherwise JSON.stringify.
+    // For GET requests with no body, rawBody and req.body are both undefined — use "" to match signing side.
     const typedReq = req as InternalAuthRequest;
     const rawBody =
       typedReq.rawBody !== undefined && typedReq.rawBody !== null
         ? typedReq.rawBody.toString("utf-8")
-        : JSON.stringify(req.body);
+        : req.body !== undefined
+          ? JSON.stringify(req.body)
+          : "";
 
     if (!verifyInternalSignature(signature, timestamp, rawBody, secret)) {
       logger.warn("Internal auth signature verification failed", {
