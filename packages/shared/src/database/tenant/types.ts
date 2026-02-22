@@ -29,6 +29,7 @@ export interface TenantRow {
   readonly slack_bot_token: string | null;
   readonly slack_bot_user_id: string | null;
   readonly slack_app_installed_at: Date | null;
+  readonly gitlab_group_path: string | null;
   readonly status: TenantStatus;
   readonly created_at: Date;
   readonly updated_at: Date;

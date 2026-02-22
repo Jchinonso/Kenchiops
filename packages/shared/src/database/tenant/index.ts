@@ -41,6 +41,7 @@ export {
 export {
   findByGitHubInstallation,
   findByGitHubOrg,
+  findByGitLabGroup,
   findBySlackWorkspace,
   findById,
   getActiveTenants,
@@ -51,6 +52,7 @@ export {
 // Lifecycle operations
 export {
   createFromGitHubInstall,
+  createFromGitLabGroup,
   linkSlackWorkspace,
   createFromSlackInstall,
   activate,

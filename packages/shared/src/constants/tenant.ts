@@ -26,6 +26,7 @@ export const TENANT_STATUS = {
 export const AUDIT_ACTIONS = {
   GITHUB_INSTALLED: "github_installed",
   GITHUB_UNINSTALLED: "github_uninstalled",
+  GITLAB_LINKED: "gitlab_linked",
   SLACK_INSTALLED: "slack_installed",
   SLACK_UNINSTALLED: "slack_uninstalled",
   ACTIVATED: "activated",
@@ -71,13 +72,17 @@ export const TENANT_QUERIES = {
   FIND_BY_GITHUB_INSTALLATION: `SELECT * FROM tenants WHERE github_installation_id = $1 AND status != $2`,
   FIND_BY_GITHUB_ORG: `SELECT * FROM tenants WHERE LOWER(github_org) = LOWER($1) AND status != $2`,
   FIND_BY_GITHUB_ORG_ANY_STATUS: `SELECT * FROM tenants WHERE LOWER(github_org) = LOWER($1)`,
-  FIND_BY_SLACK_WORKSPACE: `SELECT * FROM tenants WHERE slack_workspace_id = $1 AND status != $2`,
+  FIND_BY_GITLAB_GROUP: `SELECT * FROM tenants WHERE LOWER(gitlab_group_path) = LOWER($1) AND status != $2`,
+  FIND_BY_SLACK_WORKSPACE: `SELECT * FROM tenants WHERE slack_workspace_id = $1 AND status != $2 ORDER BY CASE WHEN github_installation_id IS NOT NULL THEN 0 ELSE 1 END, updated_at DESC`,
   FIND_BY_ID: `SELECT * FROM tenants WHERE id = $1`,
   FIND_ACTIVE: `SELECT * FROM tenants WHERE status = $1 ORDER BY created_at DESC`,
 
   // Insert queries
   INSERT_FROM_GITHUB: `INSERT INTO tenants (github_org, github_installation_id, github_app_installed_at, status)
      VALUES ($1, $2, NOW(), $3)
+     RETURNING *`,
+  INSERT_FROM_GITLAB: `INSERT INTO tenants (github_org, gitlab_group_path, status)
+     VALUES ($1, $2, $3)
      RETURNING *`,
   INSERT_FROM_SLACK: `INSERT INTO tenants (
        github_org,
@@ -155,6 +160,7 @@ export const TENANT_FIELD_MAP = {
   slack_bot_token: "slackBotToken",
   slack_bot_user_id: "slackBotUserId",
   slack_app_installed_at: "slackAppInstalledAt",
+  gitlab_group_path: "gitlabGroupPath",
   status: "status",
   created_at: "createdAt",
   updated_at: "updatedAt",

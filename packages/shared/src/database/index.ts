@@ -27,6 +27,7 @@ export {
   // Lookup operations
   findByGitHubInstallation,
   findByGitHubOrg,
+  findByGitLabGroup,
   findBySlackWorkspace,
   findById,
   getActiveTenants,
@@ -34,6 +35,7 @@ export {
   getSlackCredentials,
   // Lifecycle operations
   createFromGitHubInstall,
+  createFromGitLabGroup,
   linkSlackWorkspace,
   createFromSlackInstall,
   activate,

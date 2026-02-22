@@ -69,6 +69,30 @@ export const findByGitHubOrg = async (org: string): Promise<Tenant | null> => {
 };
 
 /**
+ * Find a tenant by GitLab group path.
+ *
+ * @param groupPath - GitLab group/namespace path
+ * @returns Tenant or null if not found
+ */
+export const findByGitLabGroup = async (groupPath: string): Promise<Tenant | null> => {
+  validateId(groupPath, "groupPath");
+
+  try {
+    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_GITLAB_GROUP, [
+      groupPath,
+      TENANT_STATUS.DELETED,
+    ]);
+    return extractTenant(result.rows);
+  } catch (error) {
+    logger.error("Failed to find tenant by GitLab group", {
+      groupPath,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Find a tenant by Slack workspace ID.
  *
  * @param workspaceId - Slack workspace ID

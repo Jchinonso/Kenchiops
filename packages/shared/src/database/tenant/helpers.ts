@@ -269,6 +269,7 @@ export const rowToTenant = (row: TenantRow): Tenant => ({
   slackBotToken: (decryptValue(row.slack_bot_token) as string | null) ?? null,
   slackBotUserId: row.slack_bot_user_id,
   slackAppInstalledAt: row.slack_app_installed_at,
+  gitlabGroupPath: row.gitlab_group_path,
   status: row.status,
   createdAt: row.created_at,
   updatedAt: row.updated_at,

@@ -44,7 +44,7 @@ const requireTenantId = (req: Request): string => {
 
   if (!tenantId) {
     throw new AuthorizationError(
-      "No organization linked. Install the Kenchi GitHub App to get started.",
+      "No organization linked. Connect a GitHub or GitLab account to get started.",
       { operation: "requireTenantId" }
     );
   }

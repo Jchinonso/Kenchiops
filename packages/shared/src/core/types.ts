@@ -736,6 +736,7 @@ export interface Tenant {
   readonly slackBotToken: string | null;
   readonly slackBotUserId: string | null;
   readonly slackAppInstalledAt: Date | null;
+  readonly gitlabGroupPath: string | null;
   readonly status: TenantStatus;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -755,6 +756,13 @@ export interface CreateTenantFromGitHub {
 }
 
 /**
+ * Data required to create a tenant from GitLab OAuth login.
+ */
+export interface CreateTenantFromGitLab {
+  readonly gitlabGroupPath: string;
+}
+
+/**
  * Data required to link a Slack workspace to an existing tenant.
  */
 export interface LinkSlackWorkspace {
@@ -771,6 +779,7 @@ export interface LinkSlackWorkspace {
 export type TenantAuditAction =
   | "github_installed"
   | "github_uninstalled"
+  | "gitlab_linked"
   | "slack_installed"
   | "slack_uninstalled"
   | "activated"

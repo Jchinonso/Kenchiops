@@ -30,6 +30,9 @@ import {
   rotateRefreshTokenAtomically,
   // Tenant lookup
   findByGitHubOrg,
+  findByGitLabGroup,
+  // Tenant creation
+  createFromGitLabGroup,
   // JWT utilities
   generateAccessToken,
   generateRefreshToken,
@@ -144,6 +147,10 @@ export const createAuthService = () => ({
    *
    * Only runs for providers that expose organization APIs (GitHub, GitLab).
    * Skips silently if the user already has a tenant assignment.
+   *
+   * For GitLab users, if no existing tenant matches, a new tenant is
+   * auto-created from the first GitLab group so the user can access
+   * dashboard endpoints immediately.
    */
   autoLinkTenant: async (
     user: Readonly<{ readonly id: string; readonly tenantId: string | null }>,
@@ -165,7 +172,7 @@ export const createAuthService = () => ({
 
     // for...of: early-exit on first tenant match
     for (const org of orgs) {
-      const tenant = await findByGitHubOrg(org.login);
+      const tenant = await findExistingTenant(provider, org.login);
 
       if (tenant) {
         const linked = await updateUserTenant(user.id, tenant.id);
@@ -183,6 +190,24 @@ export const createAuthService = () => ({
         // Whether we linked or a concurrent request did, tenant is now set
         return;
       }
+    }
+
+    // No existing tenant matched. For GitLab users, auto-create from first group.
+    if (provider === "gitlab" && orgs.length > 0) {
+      const firstOrg = orgs[0];
+      const newTenant = await createFromGitLabGroup({
+        gitlabGroupPath: firstOrg.login,
+      });
+
+      await updateUserTenant(user.id, newTenant.id);
+
+      logger.info("Tenant auto-created for GitLab user", {
+        ...context,
+        userId: user.id,
+        linkedTenantId: newTenant.id,
+        provider,
+        gitlabGroupPath: firstOrg.login,
+      });
     }
   },
 
@@ -342,6 +367,25 @@ const sanitizeRawProfile = (rawProfile: Record<string, unknown>): Record<string,
   return serialized.length <= RAW_PROFILE_MAX_BYTES
     ? rawProfile
     : { _truncated: true, _originalSize: serialized.length };
+};
+
+/**
+ * Find an existing tenant by org login, checking both GitHub org and GitLab group.
+ *
+ * For GitHub providers, only checks the github_org column.
+ * For GitLab providers, checks both github_org (for display-name matches)
+ * and gitlab_group_path.
+ */
+const findExistingTenant = async (
+  provider: OAuthProvider,
+  orgLogin: string
+): Promise<Awaited<ReturnType<typeof findByGitHubOrg>>> => {
+  const byGitHubOrg = await findByGitHubOrg(orgLogin);
+  if (byGitHubOrg) {
+    return byGitHubOrg;
+  }
+
+  return provider === "gitlab" ? findByGitLabGroup(orgLogin) : null;
 };
 
 /** Build the UpsertOAuthIdentityInput from OAuth profile and token data. */

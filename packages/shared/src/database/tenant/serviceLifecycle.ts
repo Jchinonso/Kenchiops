@@ -20,6 +20,7 @@ import {
   type TenantStatus,
   type TenantAuditAction,
   type CreateTenantFromGitHub,
+  type CreateTenantFromGitLab,
   type LinkSlackWorkspace,
 } from "../common.js";
 import { encryptValue } from "../../security/encryption.js";
@@ -206,6 +207,48 @@ export const createFromSlackInstall = async (
   } catch (error) {
     logger.error("Failed to create tenant from Slack installation", {
       workspaceId: slackData.slackWorkspaceId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Create a tenant from GitLab OAuth login.
+ *
+ * Uses the GitLab group path as both the display name (github_org column)
+ * and the gitlab_group_path for lookup. No GitHub installation is associated.
+ *
+ * @param data - GitLab group data
+ * @returns Created tenant
+ */
+export const createFromGitLabGroup = async (data: CreateTenantFromGitLab): Promise<Tenant> => {
+  validateId(data.gitlabGroupPath, "gitlabGroupPath");
+
+  try {
+    const result = await transaction(async (client) => {
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_FROM_GITLAB, [
+        data.gitlabGroupPath,
+        data.gitlabGroupPath,
+        TENANT_STATUS.ACTIVE,
+      ]);
+
+      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.GITLAB_LINKED, {
+        gitlabGroupPath: data.gitlabGroupPath,
+      });
+
+      return created.rows[0];
+    });
+
+    logger.info("Tenant created from GitLab group", {
+      tenantId: result.id,
+      gitlabGroupPath: data.gitlabGroupPath,
+    });
+
+    return rowToTenant(result);
+  } catch (error) {
+    logger.error("Failed to create tenant from GitLab group", {
+      gitlabGroupPath: data.gitlabGroupPath,
       error: getErrorMessage(error),
     });
     throw error;

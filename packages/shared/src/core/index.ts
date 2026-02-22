@@ -128,6 +128,7 @@ export type {
   TenantStatus,
   TenantEmbeddingTier,
   CreateTenantFromGitHub,
+  CreateTenantFromGitLab,
   LinkSlackWorkspace,
   TenantAuditAction,
   TenantAuditEntry,
