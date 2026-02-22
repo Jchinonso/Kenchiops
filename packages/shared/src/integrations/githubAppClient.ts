@@ -52,6 +52,7 @@ export const fetchInstallationRepositories = async (
   try {
     const response = await resilientGet<RepositoriesResponse>(url, {
       headers: { "Content-Type": "application/json" },
+      internalAuth: true,
     });
     const durationMs = Date.now() - startTime;
 
