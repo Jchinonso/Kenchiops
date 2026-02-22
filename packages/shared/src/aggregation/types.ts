@@ -209,7 +209,7 @@ export interface PRContext {
  */
 export interface WorkflowContext {
   readonly name: string;
-  readonly duration: string;
+  readonly duration?: string;
 }
 
 /**

@@ -30,6 +30,9 @@ import {
   // Deterministic parsers (regex-based, no LLM)
   parseTestSummary,
   parseLintOutput,
+  // Test failure file inference
+  TEST_FAILURE_FILE_INFERENCE_PATTERN,
+  INFERABLE_SOURCE_EXTENSIONS,
   // Tenant lookup
   findByGitHubInstallation,
   // PR context caching
@@ -46,7 +49,10 @@ import {
   type SanitizationResultWithMapping,
   CI_PROVIDERS,
 } from "@kenchi/shared";
-import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
+import {
+  fetchAllFailedJobsLogs,
+  fetchWorkflowTiming,
+} from "../services/context/workflowFetcher.js";
 import { fetchCheckRunAnnotations } from "../services/context/annotationFetcher.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
 import { postPRComment } from "../services/githubComments.js";
@@ -274,6 +280,30 @@ const enrichResultWithParsedLintErrors = (
     result.lintErrors
   );
 
+  // If enriched sources found lint errors but LLM found 0, override the
+  // LLM's summary and confidence — the LLM clearly missed the errors.
+  const llmFoundZero = result.lintErrors.length === 0;
+  const enrichedFound = mergedLintErrors.length > 0;
+
+  if (llmFoundZero && enrichedFound) {
+    const uniqueFiles = [...new Set(mergedLintErrors.map((error) => error.file))];
+    const overriddenCause = `Lint check failed with ${mergedLintErrors.length} error${mergedLintErrors.length > 1 ? "s" : ""} across ${uniqueFiles.length} file${uniqueFiles.length > 1 ? "s" : ""}`;
+
+    return {
+      ...result,
+      lintErrors: mergedLintErrors,
+      response: {
+        ...result.response,
+        identified_cause: overriddenCause,
+        analysis: overriddenCause,
+        confidence: Math.max(
+          typeof result.response.confidence === "number" ? result.response.confidence : 0,
+          0.7
+        ),
+      },
+    };
+  }
+
   return { ...result, lintErrors: mergedLintErrors };
 };
 
@@ -405,6 +435,20 @@ const confidenceToScore = (confidence: string | number | undefined): number => {
 };
 
 /**
+ * Format milliseconds into a human-readable duration string (e.g., "2m 34s").
+ * Returns null for non-positive values.
+ */
+const formatDuration = (ms: number | null): string | null => {
+  if (ms === null || ms <= 0) {
+    return null;
+  }
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+};
+
+/**
  * Convert recommended actions from API response.
  */
 const convertRecommendedActions = (
@@ -443,6 +487,36 @@ const extractTestCommand = (response: PerJobAnalysisApiResponse): string | undef
 const extractChangeCorrelations = (
   response: PerJobAnalysisApiResponse
 ): readonly LLMChangeCorrelation[] => response.full_analysis?.changeCorrelations ?? [];
+
+/**
+ * Attempt to infer a file path from a test failure's error text or test name.
+ * Uses shared pattern to find references like `path/to/file.ts:123`.
+ */
+const inferFileFromError = (testFailure: TestFailureInfo): TestFailureInfo => {
+  if (testFailure.file) {
+    return testFailure;
+  }
+
+  const textToSearch = [testFailure.error, testFailure.testName].filter(Boolean).join(" ");
+
+  const match = TEST_FAILURE_FILE_INFERENCE_PATTERN.exec(textToSearch);
+  if (match) {
+    const inferredFile = match[1];
+    if (INFERABLE_SOURCE_EXTENSIONS.test(inferredFile)) {
+      const inferredLine = match[2] ? Number(match[2]) : testFailure.line;
+      return { ...testFailure, file: inferredFile, line: inferredLine };
+    }
+  }
+
+  return testFailure;
+};
+
+/**
+ * Post-process test failures to infer missing file paths from error text.
+ */
+const postProcessTestFailures = (
+  testFailures: readonly TestFailureInfo[]
+): readonly TestFailureInfo[] => testFailures.map(inferFileFromError);
 
 /**
  * Convert per-job analysis result to AnalyzedFailure.
@@ -739,8 +813,9 @@ const analyzeJobLogs = async (
   const apiBaseUrl = apiUrl.replace(/\/api\/analyze$/, "");
   const analysisResponse = await pollForJobCompletion(jobId, apiBaseUrl, jobName);
 
-  // Extract LLM test failures with expected/actual values
-  const testFailures = extractTestFailures(analysisResponse);
+  // Extract LLM test failures with expected/actual values, then infer missing file paths
+  const rawTestFailures = extractTestFailures(analysisResponse);
+  const testFailures = postProcessTestFailures(rawTestFailures);
 
   // Extract LLM lint errors with specific symbols
   const lintErrors = extractLintErrors(analysisResponse);
@@ -901,10 +976,21 @@ export const processCombinedAnalysis = async (
       };
     }
 
+    // Fetch workflow timing in parallel with the rest of setup (non-blocking)
+    const workflowTiming = await fetchWorkflowTiming(
+      installationId,
+      repository.owner,
+      repository.name,
+      commitSha
+    );
+    const formattedDuration = formatDuration(workflowTiming?.durationMs ?? null);
+
     logger.info("Fetched all failed job logs", {
       repository: repository.fullName,
       workflowName: allJobsLogs.workflowName,
       jobCount: allJobsLogs.jobs.length,
+      durationMs: workflowTiming?.durationMs ?? null,
+      formattedDuration,
     });
 
     // Post placeholder comment so users see analysis is in progress
@@ -1084,7 +1170,7 @@ export const processCombinedAnalysis = async (
         : null,
       workflowContext: {
         name: allJobsLogs.workflowName,
-        duration: "unknown",
+        duration: formattedDuration ?? undefined,
       },
       firstFailureAt: pending.firstFailureAt,
       lastFailureAt: pending.lastFailureAt,

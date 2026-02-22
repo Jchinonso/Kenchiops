@@ -194,6 +194,21 @@ export const FILE_REFERENCE_PATTERNS = [
 ] as const;
 
 /**
+ * Pattern to extract a file reference from unstructured error text.
+ * Matches patterns like `path/to/file.ts:123` or `(path/file.ts:45:12)`.
+ * Used to infer missing file paths from LLM-extracted test failures.
+ *
+ * Groups: [filePath, lineNumber?]
+ */
+export const TEST_FAILURE_FILE_INFERENCE_PATTERN =
+  /(?:^|\s|[(])([a-zA-Z][^\s()]*\/[^\s():]+\.\w{1,4})(?::(\d+))?/;
+
+/**
+ * Common source file extensions used to validate inferred file paths.
+ */
+export const INFERABLE_SOURCE_EXTENSIONS = /\.(ts|js|py|go|rs|rb|java|tsx|jsx|kt|cs|cpp|c|swift)$/;
+
+/**
  * NOTE: Dependency change detection is now handled by AI.
  * Previous regex-based patterns were removed as part of language-agnostic migration.
  * AI can parse diffs from any package manager format without maintenance.

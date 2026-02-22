@@ -12,6 +12,8 @@
  */
 
 import type { LLMLintError } from "../core/types.js";
+import { TEXT_SANITIZATION_PATTERNS } from "../constants/githubStatus.js";
+import { stripAnsiEscapes } from "./ansiStripper.js";
 
 // ==================== Stylish Format Parser ====================
 
@@ -130,7 +132,12 @@ export const parseLintOutput = (log: string): readonly LLMLintError[] => {
     return [];
   }
 
-  const lines = log.split("\n");
+  // Strip CI timestamps and ANSI codes that break regex patterns.
+  // GitHub Actions prepends `2024-01-15T10:30:45.1234567Z ` to every line,
+  // which prevents FILE_PATH_PATTERN, TSC_ERROR_PATTERN, etc. from matching.
+  const cleaned = stripAnsiEscapes(log).replace(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_ALL, "");
+
+  const lines = cleaned.split("\n");
   const errors: LLMLintError[] = [];
 
   // let: tracks current file context as we scan stylish output line-by-line

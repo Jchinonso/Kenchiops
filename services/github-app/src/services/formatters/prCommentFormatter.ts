@@ -10,7 +10,6 @@ import {
   GITHUB_COMMENT_DISPLAY,
   UI_EMOJI,
   type AggregatedFailures,
-  type AnalyzedFailure,
   type TestFailureInfo,
   type ParsedTestSummary,
   type LLMChangeCorrelation,
@@ -67,7 +66,7 @@ export const buildHeaderSection = (aggregation: AggregatedFailures): string[] =>
 
     if (workflowContext) {
       contextParts.push(`${UI_EMOJI.workflow} **Workflow:** ${workflowContext.name}`);
-      if (workflowContext.duration) {
+      if (workflowContext.duration && workflowContext.duration !== "unknown") {
         contextParts.push(`${UI_EMOJI.timer} **Duration:** ${workflowContext.duration}`);
       }
     }
@@ -96,8 +95,10 @@ export const buildTestFailureSummary = (
   const uniqueFiles = [
     ...new Set(testFailures.map((testFailure) => testFailure.file).filter(Boolean)),
   ];
+  const unknownFileCount = testFailures.filter((testFailure) => !testFailure.file).length;
   const fileCount = uniqueFiles.length;
   const testCount = parsedTestSummary?.failed ?? testFailures.length;
+  const unknownSuffix = unknownFileCount > 0 ? ` (+${unknownFileCount} in unknown files)` : "";
 
   if (fileCount > 0) {
     const fileList = uniqueFiles
@@ -108,9 +109,9 @@ export const buildTestFailureSummary = (
       fileCount > GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS
         ? ` and ${fileCount - GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS} more`
         : "";
-    return `> ${testCount} test${testCount > 1 ? "s" : ""} failed in ${fileCount} file${fileCount > 1 ? "s" : ""}: ${fileList}${moreFiles}`;
+    return `> ${testCount} test${testCount > 1 ? "s" : ""} failed in ${fileCount} file${fileCount > 1 ? "s" : ""}: ${fileList}${moreFiles}${unknownSuffix}`;
   }
-  return `> ${testCount} test${testCount > 1 ? "s" : ""} failed`;
+  return `> ${testCount} test${testCount > 1 ? "s" : ""} failed${unknownSuffix}`;
 };
 
 /**
@@ -461,132 +462,21 @@ export const buildFailureSection = (failure: AggregatedFailures["failures"][numb
   ];
 };
 
-// ==================== Failure Consolidation ====================
-
-/**
- * Deduplicate items by a key function, keeping the first occurrence.
- */
-const deduplicateBy = <T>(items: readonly T[], keyFn: (item: T) => string): readonly T[] => {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = keyFn(item);
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-};
-
-/**
- * Merge multiple ParsedTestSummary into one by summing counts.
- */
-const mergeTestSummaries = (
-  summaries: ReadonlyArray<ParsedTestSummary | null | undefined>
-): ParsedTestSummary | null => {
-  const valid = summaries.filter(
-    (summary): summary is ParsedTestSummary => summary !== null && summary !== undefined
-  );
-  if (valid.length === 0) {
-    return null;
-  }
-  return {
-    failed: valid.reduce((sum, summary) => sum + summary.failed, 0),
-    passed: valid.reduce((sum, summary) => sum + summary.passed, 0),
-    total: valid.reduce((sum, summary) => sum + summary.total, 0),
-    framework: valid[0].framework,
-  };
-};
-
-/**
- * Consolidate multiple check run failures into a single merged failure.
- * Deduplicates test failures, lint errors, dependency/build changes, actions, and correlations.
- */
-const consolidateFailures = (
-  failures: readonly AnalyzedFailure[]
-): AggregatedFailures["failures"][number] => {
-  if (failures.length === 1) {
-    return failures[0];
-  }
-
-  const checkNames = failures.map((failure) => failure.checkName).join(", ");
-
-  const allTestFailures = deduplicateBy(
-    failures.flatMap((failure) => failure.testFailures ?? []),
-    (tf) => `${tf.testName}::${tf.file ?? ""}`
-  );
-
-  const allLintErrors = deduplicateBy(
-    failures.flatMap((failure) => failure.lintErrors ?? []),
-    (le) => `${le.file}:${le.line}:${le.code}`
-  );
-
-  const allDepChanges = deduplicateBy(
-    failures.flatMap((failure) => failure.detectedDependencyChanges ?? []),
-    (dep) => dep.name
-  );
-
-  const allBuildChanges = deduplicateBy(
-    failures.flatMap((failure) => failure.detectedBuildConfigChanges ?? []),
-    (bc) => bc.file
-  );
-
-  const allActions = deduplicateBy(
-    failures.flatMap((failure) => failure.recommendedActions ?? []),
-    (action) => action.description
-  );
-
-  const allCorrelations = deduplicateBy(
-    failures.flatMap((failure) => failure.changeCorrelations ?? []),
-    (corr) => `${corr.changedFunction}::${corr.changedFile}`
-  );
-
-  const maxConfidence = Math.max(...failures.map((failure) => failure.confidence));
-
-  const uniqueCauses = [
-    ...new Set(failures.map((failure) => failure.identifiedCause).filter(Boolean)),
-  ];
-  const mergedCause = uniqueCauses.join(". ");
-
-  const mergedSummary = mergeTestSummaries(failures.map((failure) => failure.parsedTestSummary));
-
-  const firstTestCommand = failures.find((failure) => failure.testCommand)?.testCommand;
-
-  return {
-    checkRunId: failures[0].checkRunId,
-    checkName: checkNames,
-    conclusion: failures[0].conclusion,
-    confidence: maxConfidence,
-    identifiedCause: mergedCause,
-    analysis: failures
-      .map((failure) => failure.analysis)
-      .filter(Boolean)
-      .join(". "),
-    annotations: failures.flatMap((failure) => failure.annotations),
-    recommendedActions: allActions,
-    testFailures: allTestFailures,
-    lintErrors: allLintErrors.length > 0 ? allLintErrors : undefined,
-    testCommand: firstTestCommand,
-    timestamp: failures[0].timestamp,
-    detectedDependencyChanges: allDepChanges.length > 0 ? allDepChanges : undefined,
-    detectedBuildConfigChanges: allBuildChanges.length > 0 ? allBuildChanges : undefined,
-    parsedTestSummary: mergedSummary,
-    changeCorrelations: allCorrelations.length > 0 ? allCorrelations : undefined,
-  };
-};
+// ==================== Comment Builder ====================
 
 /**
  * Build consolidated PR comment from aggregated failures.
- * Merges all check run failures into a single unified section.
+ * Renders each failure as its own section with per-analysis recommended actions.
  */
 export const buildConsolidatedPRComment = (
   aggregation: AggregatedFailures,
   feedbackLinks?: FeedbackLinks
 ): string => {
-  const consolidated = consolidateFailures(aggregation.failures);
+  const failureSections = aggregation.failures.flatMap((failure) => buildFailureSection(failure));
+
   const sections = [
     ...buildHeaderSection(aggregation),
-    ...buildFailureSection(consolidated),
+    ...failureSections,
     ...buildFooterSection(feedbackLinks),
   ];
 
