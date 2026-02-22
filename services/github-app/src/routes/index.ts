@@ -7,6 +7,7 @@
 import type { Express } from "express";
 import { healthRoutes } from "./healthRoutes.js";
 import { webhookRoutes } from "./webhookRoutes.js";
+import { gitlabWebhookRoutes } from "./gitlabWebhookRoutes.js";
 import { apiRoutes } from "./apiRoutes.js";
 import { setupRoutes } from "./setupRoutes.js";
 import { feedbackRoutes } from "./feedbackRoutes.js";
@@ -24,6 +25,9 @@ export const registerRoutes = (app: Express): void => {
   // GitHub API routes (webhook, comment, annotations, installations, actions)
   app.use(GITHUB_API_BASE, webhookRoutes);
   app.use(GITHUB_API_BASE, apiRoutes);
+
+  // GitLab CI webhook route (no prefix, full path /webhooks/gitlab)
+  app.use(gitlabWebhookRoutes);
 
   // Setup routes (GitHub App post-installation redirect)
   app.use(setupRoutes);

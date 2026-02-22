@@ -618,6 +618,13 @@ export {
   NETLIFY_COMMIT_URL_PATTERN,
 } from "./netlify.js";
 
+// GitLab constants
+export {
+  GITLAB_TOKEN_HEADER,
+  GITLAB_HOMEPAGE_PATH_PATTERN,
+  GITLAB_FAILURE_STATUSES,
+} from "./gitlab.js";
+
 // Datadog constants
 export { DATADOG_ALERT_STATUSES, DATADOG_FAILURE_STATUSES } from "./datadog.js";
 
