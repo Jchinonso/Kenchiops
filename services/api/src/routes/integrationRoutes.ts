@@ -15,8 +15,10 @@ import {
   AuthenticationError,
   AuthorizationError,
   config,
+  findOAuthIdentitiesByUser,
   VALID_INTEGRATION_PROVIDERS,
   INTEGRATION_OAUTH_AUTHORIZE_URLS,
+  GITLAB_SETUP_CONFIG,
   HTTP_STATUS,
   createOAuthState,
   consumeOAuthState,
@@ -25,6 +27,8 @@ import {
 
 import { createIntegrationService } from "../services/integrationService.js";
 import { createGitLabConnectionService } from "../services/gitlabConnectionService.js";
+import { createGitLabSetupService } from "../services/gitlabSetupService.js";
+import { createGitLabProjectsAdapter } from "../adapters/gitlabProjectsAdapter.js";
 import { getIntegrationAdapter } from "../adapters/integrationAdapterRegistry.js";
 
 // ==================== Setup ====================
@@ -34,6 +38,8 @@ const logger = createLogger("integration-routes");
 
 const integrationService = createIntegrationService(getIntegrationAdapter);
 const gitlabConnectionService = createGitLabConnectionService();
+const gitlabProjectsAdapter = createGitLabProjectsAdapter();
+const gitlabSetupService = createGitLabSetupService(gitlabProjectsAdapter);
 
 // ==================== Helpers ====================
 
@@ -381,12 +387,118 @@ const handleGitLabDisconnect = async (req: Request, res: Response): Promise<void
   res.status(HTTP_STATUS.OK).json({ data: { status: "disconnected" } });
 };
 
+// ==================== GitLab Project Setup Handlers ====================
+
+/**
+ * Validates that input is a non-empty array of positive integers,
+ * capped at GITLAB_SETUP_CONFIG.MAX_PROJECT_IDS.
+ */
+const validateProjectIds = (body: unknown): readonly number[] => {
+  if (!body || typeof body !== "object") {
+    throw new ValidationError("Request body is required", {
+      operation: "validateProjectIds",
+    });
+  }
+
+  const { projectIds } = body as Readonly<Record<string, unknown>>;
+
+  if (!Array.isArray(projectIds) || projectIds.length === 0) {
+    throw new ValidationError("projectIds must be a non-empty array of numbers", {
+      operation: "validateProjectIds",
+      metadata: { field: "projectIds" },
+    });
+  }
+
+  if (projectIds.length > GITLAB_SETUP_CONFIG.MAX_PROJECT_IDS) {
+    throw new ValidationError(
+      `Cannot set up more than ${String(GITLAB_SETUP_CONFIG.MAX_PROJECT_IDS)} projects at once`,
+      {
+        operation: "validateProjectIds",
+        metadata: { count: projectIds.length, max: GITLAB_SETUP_CONFIG.MAX_PROJECT_IDS },
+      }
+    );
+  }
+
+  const allValid = projectIds.every(
+    (id: unknown) => typeof id === "number" && Number.isInteger(id) && id > 0
+  );
+
+  if (!allValid) {
+    throw new ValidationError("All projectIds must be positive integers", {
+      operation: "validateProjectIds",
+      metadata: { field: "projectIds" },
+    });
+  }
+
+  return projectIds as readonly number[];
+};
+
+/**
+ * GET /integrations/gitlab/available-projects
+ * List GitLab projects accessible to the authenticated user.
+ */
+const handleGitLabAvailableProjects = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleGitLabAvailableProjects",
+    });
+  }
+
+  const { userId } = req.user;
+
+  // Look up user's GitLab OAuth identity
+  const identities = await findOAuthIdentitiesByUser(userId);
+  const gitlabIdentity = identities.find((identity) => identity.provider === "gitlab");
+
+  if (!gitlabIdentity?.accessToken) {
+    throw new ValidationError("No GitLab OAuth identity found. Please log in with GitLab first.", {
+      operation: "handleGitLabAvailableProjects",
+    });
+  }
+
+  const projects = await gitlabProjectsAdapter.getProjects(
+    gitlabIdentity.accessToken,
+    gitlabIdentity.instanceUrl,
+    req.context
+  );
+
+  res.status(HTTP_STATUS.OK).json({ data: projects });
+};
+
+/**
+ * POST /integrations/gitlab/setup-webhooks
+ * Create webhooks on selected GitLab projects for the authenticated tenant.
+ */
+const handleGitLabSetupWebhooks = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleGitLabSetupWebhooks",
+    });
+  }
+
+  const { userId, tenantId } = req.user;
+
+  if (!tenantId) {
+    throw new AuthorizationError("User must belong to a tenant to set up GitLab webhooks", {
+      operation: "handleGitLabSetupWebhooks",
+    });
+  }
+
+  const projectIds = validateProjectIds(req.body);
+
+  const result = await gitlabSetupService.setupProjects(userId, tenantId, projectIds, req.context);
+
+  res.status(HTTP_STATUS.OK).json({ data: result });
+};
+
 // ==================== Route Definitions ====================
 
 // GitLab CI connection routes (registered before :provider/:connectionId to avoid conflicts)
 router.post("/integrations/gitlab/connect", asyncHandler(handleGitLabConnect));
 router.get("/integrations/gitlab/connection", asyncHandler(handleGitLabConnectionStatus));
 router.delete("/integrations/gitlab/connection", asyncHandler(handleGitLabDisconnect));
+router.get("/integrations/gitlab/available-projects", asyncHandler(handleGitLabAvailableProjects));
+router.post("/integrations/gitlab/setup-webhooks", asyncHandler(handleGitLabSetupWebhooks));
 
 // OAuth integration routes
 router.get("/integrations", asyncHandler(handleListIntegrations));

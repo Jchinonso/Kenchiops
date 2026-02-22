@@ -19,10 +19,33 @@ export interface GitLabProject {
   readonly lastActivity: string;
 }
 
+export interface GitLabWebhookResult {
+  readonly id: number;
+  readonly projectId: number;
+  readonly url: string;
+}
+
 export interface GitLabProjectsPort {
   readonly getProjects: (
     accessToken: string,
     baseUrl: string | null,
     context: RequestContext
   ) => Promise<readonly GitLabProject[]>;
+
+  readonly createProjectWebhook: (
+    accessToken: string,
+    baseUrl: string | null,
+    projectId: number,
+    webhookUrl: string,
+    webhookSecret: string,
+    context: RequestContext
+  ) => Promise<GitLabWebhookResult>;
+
+  readonly deleteProjectWebhook: (
+    accessToken: string,
+    baseUrl: string | null,
+    projectId: number,
+    webhookId: number,
+    context: RequestContext
+  ) => Promise<void>;
 }

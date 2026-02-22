@@ -161,15 +161,19 @@ const fetchFailedJobs = async (
   context: RequestContext
 ): Promise<readonly GitLabJobSummary[]> => {
   const url = `${baseUrl}/api/v4/projects/${encodedPath}/pipelines/${pipelineId}/jobs?scope[]=failed&per_page=100`;
+  const startTime = Date.now();
 
   try {
     const response = await resilientGet<readonly GitLabJobSummary[]>(url, {
       headers: { "PRIVATE-TOKEN": accessToken },
     });
 
+    const durationMs = Date.now() - startTime;
+
     logger.info("GitLab failed jobs fetched", {
       provider: "gitlab",
       operation: "fetchFailedJobs",
+      durationMs,
       statusCode: response.status,
       pipelineId,
       jobCount: response.data.length,
@@ -182,9 +186,12 @@ const fetchFailedJobs = async (
       throw error;
     }
 
+    const durationMs = Date.now() - startTime;
+
     logger.error("GitLab failed jobs fetch failed", {
       provider: "gitlab",
       operation: "fetchFailedJobs",
+      durationMs,
       pipelineId,
       error: getErrorMessage(error),
       ...context,
@@ -210,15 +217,19 @@ const findPipelineForCommit = async (
   context: RequestContext
 ): Promise<GitLabPipelineSummary | null> => {
   const url = `${baseUrl}/api/v4/projects/${encodedPath}/pipelines?sha=${commitSha}&per_page=1&order_by=id&sort=desc`;
+  const startTime = Date.now();
 
   try {
     const response = await resilientGet<readonly GitLabPipelineSummary[]>(url, {
       headers: { "PRIVATE-TOKEN": accessToken },
     });
 
+    const durationMs = Date.now() - startTime;
+
     logger.info("GitLab pipeline lookup completed", {
       provider: "gitlab",
       operation: "findPipelineForCommit",
+      durationMs,
       statusCode: response.status,
       commitSha: commitSha.substring(0, 7),
       found: response.data.length > 0,
@@ -227,9 +238,12 @@ const findPipelineForCommit = async (
 
     return response.data[0] ?? null;
   } catch (error) {
+    const durationMs = Date.now() - startTime;
+
     logger.warn("GitLab pipeline lookup failed, returning null", {
       provider: "gitlab",
       operation: "findPipelineForCommit",
+      durationMs,
       commitSha: commitSha.substring(0, 7),
       error: getErrorMessage(error),
       ...context,
@@ -273,6 +287,7 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
   ): Promise<readonly FetchedBuildLogs[]> => {
     const { accessToken, baseUrl } = await resolveAccessToken(context);
     const encodedPath = encodeProjectPath(owner, repo);
+    const startTime = Date.now();
 
     // Find the pipeline for this commit
     const pipeline = await findPipelineForCommit(
@@ -337,6 +352,7 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
     logger.info("Fetched all failed GitLab job logs", {
       provider: "gitlab",
       operation: "fetchAllFailedLogs",
+      durationMs: Date.now() - startTime,
       pipelineId,
       commitSha: commitSha.substring(0, 7),
       jobCount: results.length,

@@ -300,7 +300,8 @@ const handleSuccess = async <T>(
   attempt: number
 ): Promise<ResilientResponse<T>> => {
   recordSuccess(context.serviceKey);
-  const data = (await response.json()) as T;
+  // 204 No Content has no body — skip JSON parse to avoid SyntaxError
+  const data = (response.status === 204 ? undefined : await response.json()) as T;
   const durationMs = Date.now() - context.startTime;
 
   logger.debug("Request succeeded", {

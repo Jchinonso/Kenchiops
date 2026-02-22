@@ -11,6 +11,7 @@
 import {
   createLogger,
   getErrorMessage,
+  resilientPost,
   isRedisHealthy,
   enqueueConsolidatedNotification,
   findActiveByProvider,
@@ -69,40 +70,23 @@ const postMRNote = async (
   accessToken: string,
   context: RequestContext
 ): Promise<boolean> => {
-  const startTime = Date.now();
   const encodedPath = encodeURIComponent(projectPath);
   const url = `${baseUrl}/api/v4/projects/${encodedPath}/merge_requests/${mrIid}/notes`;
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "PRIVATE-TOKEN": accessToken,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ body }),
-      signal: AbortSignal.timeout(GITLAB_MR_NOTE_TIMEOUT_MS),
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      logger.error("Failed to post MR note", {
-        provider: "gitlab",
-        operation: "postMRNote",
-        durationMs,
-        statusCode: response.status,
-        mrIid,
-        projectPath,
-        ...context,
-      });
-      return false;
-    }
+    const response = await resilientPost<unknown>(
+      url,
+      { body },
+      {
+        headers: { "PRIVATE-TOKEN": accessToken },
+        timeout: GITLAB_MR_NOTE_TIMEOUT_MS,
+      }
+    );
 
     logger.info("Posted MR note", {
       provider: "gitlab",
       operation: "postMRNote",
-      durationMs,
+      durationMs: response.duration,
       statusCode: response.status,
       mrIid,
       projectPath,
@@ -110,11 +94,9 @@ const postMRNote = async (
     });
     return true;
   } catch (error) {
-    const durationMs = Date.now() - startTime;
-    logger.error("MR note post threw exception", {
+    logger.error("Failed to post MR note", {
       provider: "gitlab",
       operation: "postMRNote",
-      durationMs,
       mrIid,
       projectPath,
       error: getErrorMessage(error),

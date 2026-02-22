@@ -54,7 +54,7 @@ export const OAUTH_PROVIDER_URLS = {
     token: "https://gitlab.com/oauth/token",
     userProfile: "https://gitlab.com/api/v4/user",
     userGroups: "https://gitlab.com/api/v4/groups",
-    scopes: ["read_user", "read_api"],
+    scopes: ["read_user", "api"],
   },
   bitbucket: {
     authorize: "https://bitbucket.org/site/oauth2/authorize",
@@ -229,6 +229,13 @@ export const INTEGRATION_API_URLS = {
     sites: "https://api.netlify.com/api/v1/sites",
     hooks: "https://api.netlify.com/api/v1/hooks",
   },
+} as const;
+
+// ==================== GitLab Setup Configuration ====================
+
+export const GITLAB_SETUP_CONFIG = {
+  /** Maximum number of projects that can be set up in a single request. */
+  MAX_PROJECT_IDS: 50,
 } as const;
 
 // ==================== Auth Audit Actions ====================

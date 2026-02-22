@@ -30,6 +30,7 @@ import {
   extractRefreshToken,
   INSTANCE_URL_CONFIG,
   createRateLimitMiddleware,
+  findByTenantAndProvider,
   type OAuthProvider,
 } from "@kenchi/shared";
 
@@ -392,7 +393,18 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   // Redirect with only non-sensitive params (no tokens in URL)
   const callbackUrl = new URL(`${frontendUrl}/oauth/callback`);
 
-  const sanitizedRedirect = sanitizeRedirectUrl(oauthState.redirectAfter, frontendUrl);
+  // For GitLab users, redirect to onboarding setup if no CI provider connection exists
+  const resolveGitLabSetupRedirect = async (): Promise<string | null> => {
+    if (oauthState.provider !== "gitlab" || !freshUser.tenantId) {
+      return null;
+    }
+    const existingConnection = await findByTenantAndProvider(freshUser.tenantId, "gitlab_ci");
+    return existingConnection ? null : "/dashboard/setup/gitlab";
+  };
+
+  const gitlabSetupRedirect = await resolveGitLabSetupRedirect();
+  const sanitizedRedirect =
+    gitlabSetupRedirect ?? sanitizeRedirectUrl(oauthState.redirectAfter, frontendUrl);
   if (sanitizedRedirect) {
     callbackUrl.searchParams.set("redirect_after", sanitizedRedirect);
   }

@@ -194,17 +194,27 @@ export const FILE_REFERENCE_PATTERNS = [
 ] as const;
 
 /**
- * Pattern to extract a file reference from unstructured error text.
+ * Pattern to extract a file reference with directory path from unstructured error text.
  * Matches patterns like `path/to/file.ts:123` or `(path/file.ts:45:12)`.
- * Used to infer missing file paths from LLM-extracted test failures.
- *
- * Language-agnostic: requires a `/` (real path structure) and `.ext` (any file extension).
- * No hardcoded extension list — works for any language.
+ * High confidence — requires a `/` (real path structure) and `.ext` (any file extension).
  *
  * Groups: [filePath, lineNumber?]
  */
 export const TEST_FAILURE_FILE_INFERENCE_PATTERN =
   /(?:^|\s|[(])([a-zA-Z][^\s()]*\/[^\s():]+\.\w{1,4})(?::(\d+))?/;
+
+/**
+ * Fallback pattern for bare filenames without directory path.
+ * Matches patterns like `file.ts:123`, `MyTest.java:45`, `app-config.yml:10`.
+ * Lower confidence — requires `:line` suffix and restricts to realistic file extensions.
+ *
+ * Rejects version numbers (`v1.2.3:45`), Java packages (`java.lang.null:123`),
+ * and error codes (`error.code:404`) by disallowing dots in the filename body
+ * and capping extension length at 4 characters.
+ *
+ * Groups: [filename, lineNumber]
+ */
+export const TEST_FAILURE_BARE_FILE_PATTERN = /(?:^|\s|[(])([\w][\w-]*\.\w{1,4}):(\d+)/;
 
 /**
  * NOTE: Dependency change detection is now handled by AI.
@@ -264,6 +274,16 @@ export const ABSOLUTE_PATH_SKIP_DIRS = new Set([
  */
 export const ABSOLUTE_PATH_PATTERN =
   /(?:\/(?:home|Users|var|tmp|opt|usr)\/[^\s:]+\/|[A-Z]:\\(?:Users|Projects|Dev)\\[^\s:]+\\)/g;
+
+// ==================== CI Job Classification ====================
+
+/**
+ * Pattern to identify lint/format/typecheck CI job names.
+ * Only these jobs should contribute deterministic lint errors — test/build/deploy
+ * jobs produce false positives from CI infrastructure output (e.g., `##[error]`).
+ */
+export const LINT_JOB_KEYWORDS =
+  /\b(?:lint|format|style|check|eslint|biome|tsc|typecheck|type-check|compile|prettier|stylelint|rubocop|clippy|flake8|pylint|golangci)\b/i;
 
 // ==================== Action Review Patterns ====================
 

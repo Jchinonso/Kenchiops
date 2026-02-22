@@ -33,9 +33,10 @@ import {
   // Test failure file inference
   TEST_FAILURE_FILE_INFERENCE_PATTERN,
   TEST_FAILURE_BARE_FILE_PATTERN,
+  // CI job classification
+  LINT_JOB_KEYWORDS,
   // Tenant lookup
   findByGitHubInstallation,
-  findById,
   findActiveByProvider,
   // PR context caching
   getOrFetchPullRequest,
@@ -251,7 +252,7 @@ const mergeLintErrors = (
         continue;
       }
 
-      const dedupeKey = `${error.file}:${error.line}`;
+      const dedupeKey = `${error.file}:${error.line}:${error.code ?? error.message}`;
       if (!seen.has(dedupeKey)) {
         seen.add(dedupeKey);
         merged.push(error);
@@ -493,6 +494,12 @@ const extractTestCommand = (response: PerJobAnalysisApiResponse): string | undef
 const extractChangeCorrelations = (
   response: PerJobAnalysisApiResponse
 ): readonly LLMChangeCorrelation[] => response.full_analysis?.changeCorrelations ?? [];
+
+/**
+ * Check if a CI job name indicates a lint/format/typecheck job.
+ * Only these jobs should contribute deterministic lint errors.
+ */
+const isLintRelatedJob = (jobName: string): boolean => LINT_JOB_KEYWORDS.test(jobName);
 
 /**
  * Attempt to infer a file path from a test failure's error text or test name.
@@ -937,17 +944,13 @@ const convertFetchedLogsToAllJobsLogs = (
 
 /**
  * Resolve tenant ID for a non-GitHub provider by looking up the first active
- * provider connection and finding its tenant.
+ * provider connection. The connection record already contains the tenantId
+ * so no additional lookup is needed.
  */
 const resolveTenantForProvider = async (provider: CIProvider): Promise<string | undefined> => {
   try {
     const connections = await findActiveByProvider(provider);
-    const connection = connections[0];
-    if (!connection) {
-      return undefined;
-    }
-    const tenant = await findById(connection.tenantId);
-    return tenant?.id;
+    return connections[0]?.tenantId;
   } catch (error) {
     logger.warn("Failed to resolve tenant for provider", {
       provider,
@@ -1157,8 +1160,11 @@ export const processCombinedAnalysis = async (
     });
 
     // Step 2.5a: Parse lint errors deterministically from raw CI logs (no LLM)
+    // Only parse lint-related jobs — test/build/deploy jobs produce false positives
+    // from CI infrastructure output (e.g., `##[error]Process completed with exit code 1`)
+    const lintJobs = allJobsLogs.jobs.filter((job) => isLintRelatedJob(job.jobName));
     const parsedLintByJob = new Map(
-      allJobsLogs.jobs.map((job) => [job.jobName.toLowerCase(), parseLintOutput(job.logs)] as const)
+      lintJobs.map((job) => [job.jobName.toLowerCase(), parseLintOutput(job.logs)] as const)
     );
 
     const totalParsedLint = [...parsedLintByJob.values()].reduce(

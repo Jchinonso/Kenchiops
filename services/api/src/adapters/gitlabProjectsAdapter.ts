@@ -11,11 +11,16 @@
 
 import {
   createLogger,
-  ExternalServiceError,
-  redactSecrets,
+  resilientGet,
+  resilientPost,
+  resilientDelete,
   type RequestContext,
 } from "@kenchi/shared";
-import type { GitLabProjectsPort, GitLabProject } from "../ports/gitlabProjectsPort.js";
+import type {
+  GitLabProjectsPort,
+  GitLabProject,
+  GitLabWebhookResult,
+} from "../ports/gitlabProjectsPort.js";
 
 // ==================== Constants ====================
 
@@ -37,14 +42,14 @@ interface GitLabApiProject {
   readonly last_activity_at: string;
 }
 
-// ==================== Internal Helpers ====================
+/** Raw webhook entry from GitLab's /api/v4/projects/:id/hooks endpoint. */
+interface GitLabApiWebhook {
+  readonly id: number;
+  readonly project_id: number;
+  readonly url: string;
+}
 
-/**
- * Classifies whether a fetch error is retryable based on status code.
- * Network errors (no status) are treated as retryable.
- */
-const isRetryableStatus = (status: number | undefined): boolean =>
-  status === undefined || status >= 500 || status === 429;
+// ==================== Internal Helpers ====================
 
 /** Maps a raw GitLab API project to the Kenchi domain type. */
 const mapApiProject = (project: GitLabApiProject): GitLabProject => ({
@@ -69,66 +74,92 @@ const getProjects = async (
 ): Promise<readonly GitLabProject[]> => {
   const resolvedBaseUrl = resolveBaseUrl(baseUrl);
   const url = `${resolvedBaseUrl}/api/v4/projects?membership=true&min_access_level=30&per_page=100&order_by=last_activity_at&sort=desc`;
-  const startTime = Date.now();
 
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
-    });
+  const response = await resilientGet<readonly GitLabApiProject[]>(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: GITLAB_TIMEOUT_MS,
+  });
 
-    const durationMs = Date.now() - startTime;
+  logger.info("GitLab projects fetched", {
+    provider: "gitlab",
+    operation: "getProjects",
+    durationMs: response.duration,
+    statusCode: response.status,
+    projectCount: response.data.length,
+    ...context,
+  });
 
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `GitLab projects fetch failed with status ${String(response.status)}`,
-        {
-          metadata: {
-            operation: "getProjects",
-            statusCode: response.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
+  return response.data.map(mapApiProject);
+};
+
+const createProjectWebhook = async (
+  accessToken: string,
+  baseUrl: string | null,
+  projectId: number,
+  webhookUrl: string,
+  webhookSecret: string,
+  context: RequestContext
+): Promise<GitLabWebhookResult> => {
+  const resolvedBaseUrl = resolveBaseUrl(baseUrl);
+  const url = `${resolvedBaseUrl}/api/v4/projects/${String(projectId)}/hooks`;
+
+  const response = await resilientPost<GitLabApiWebhook>(
+    url,
+    {
+      url: webhookUrl,
+      token: webhookSecret,
+      job_events: true,
+      pipeline_events: true,
+      push_events: false,
+      enable_ssl_verification: true,
+    },
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: GITLAB_TIMEOUT_MS,
     }
+  );
 
-    const data = (await response.json()) as readonly GitLabApiProject[];
+  logger.info("GitLab webhook created", {
+    provider: "gitlab",
+    operation: "createProjectWebhook",
+    durationMs: response.duration,
+    statusCode: response.status,
+    projectId,
+    webhookId: response.data.id,
+    ...context,
+  });
 
-    logger.info("GitLab projects fetched", {
-      provider: "gitlab",
-      operation: "getProjects",
-      durationMs,
-      statusCode: response.status,
-      projectCount: data.length,
-      ...context,
-    });
+  return {
+    id: response.data.id,
+    projectId: response.data.project_id,
+    url: response.data.url,
+  };
+};
 
-    return data.map(mapApiProject);
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
+const deleteProjectWebhook = async (
+  accessToken: string,
+  baseUrl: string | null,
+  projectId: number,
+  webhookId: number,
+  context: RequestContext
+): Promise<void> => {
+  const resolvedBaseUrl = resolveBaseUrl(baseUrl);
+  const url = `${resolvedBaseUrl}/api/v4/projects/${String(projectId)}/hooks/${String(webhookId)}`;
 
-    const durationMs = Date.now() - startTime;
+  const response = await resilientDelete<unknown>(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: GITLAB_TIMEOUT_MS,
+  });
 
-    logger.error("GitLab projects fetch failed", {
-      provider: "gitlab",
-      operation: "getProjects",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("gitlab", "Failed to fetch projects from GitLab", {
-      metadata: { operation: "getProjects", durationMs },
-      retryable: true,
-    });
-  }
+  logger.info("GitLab webhook deleted", {
+    provider: "gitlab",
+    operation: "deleteProjectWebhook",
+    durationMs: response.duration,
+    statusCode: response.status,
+    projectId,
+    webhookId,
+    ...context,
+  });
 };
 
 // ==================== Export ====================
@@ -136,4 +167,6 @@ const getProjects = async (
 /** Creates a GitLab projects adapter implementing the GitLabProjectsPort. */
 export const createGitLabProjectsAdapter = (): GitLabProjectsPort => ({
   getProjects,
+  createProjectWebhook,
+  deleteProjectWebhook,
 });
