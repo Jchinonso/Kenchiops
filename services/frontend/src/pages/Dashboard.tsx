@@ -516,12 +516,11 @@ const Dashboard = () => {
     setNotificationsOpen((prev) => !prev);
   };
 
-  // Detect new users who haven't connected any CI provider yet
+  // Detect new users who haven't connected any CI provider yet.
+  // tenant === null means the user has no tenant at all (strongest onboarding signal).
   const needsOnboarding =
     !tenantLoading &&
-    tenant !== null &&
-    !tenant.githubConnected &&
-    !tenant.gitlabConnected &&
+    (tenant === null || (!tenant.githubConnected && !tenant.gitlabConnected)) &&
     !onboardingSkipped &&
     !localStorage.getItem(onboardingKey);
 
