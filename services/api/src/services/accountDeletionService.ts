@@ -55,6 +55,7 @@ const cleanupGitLabWebhooks = async (
   let deleted = 0; // let: incremented per successful webhook deletion
   let failed = 0; // let: incremented per failed webhook deletion
 
+  // for...of: early-exit with continue on missing accessToken
   for (const conn of gitlabConnections) {
     const { accessToken } = conn;
     if (!accessToken) {

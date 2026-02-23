@@ -169,7 +169,7 @@ export const Settings = () => {
   const isSubLoading = subscriptionLoading || usageLoading;
 
   const browserPermissionDenied = isBrowserNotificationDenied();
-  const { impact, isLoading: impactLoading, fetchImpact } = useDeletionImpact();
+  const { impact, isLoading: impactLoading, error: impactError, fetchImpact } = useDeletionImpact();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -484,6 +484,10 @@ export const Settings = () => {
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       {impactLoading ? (
                         <p>Checking account impact...</p>
+                      ) : impactError ? (
+                        <p className="mb-2 text-amber-600 dark:text-amber-400">
+                          Could not check account impact. You may still proceed with deletion.
+                        </p>
                       ) : impact?.willDeleteTenant ? (
                         <>
                           <p className="mb-2 text-red-600 dark:text-red-400 font-medium">
