@@ -16,6 +16,7 @@ import {
   deleteUser,
   hardDeleteTenant,
   findByTenant,
+  findSlackConnection,
   mapWithConcurrency,
   resilientPost,
   getErrorMessage,
@@ -146,15 +147,15 @@ const cleanupExternalResources = async (
   gitlabPort: GitLabProjectsPort,
   context: RequestContext
 ): Promise<ExternalCleanupResult> => {
-  const [tenant, connections] = await Promise.all([
-    findTenantById(tenantId),
+  const [connections, slackConn] = await Promise.all([
     findByTenant(tenantId),
+    findSlackConnection(tenantId),
   ]);
 
   const gitlabResult = await cleanupGitLabWebhooks(connections, gitlabPort, context);
 
-  const slackTokenRevoked = tenant?.slackBotToken
-    ? await revokeSlackToken(tenant.slackBotToken, context)
+  const slackTokenRevoked = slackConn?.accessToken
+    ? await revokeSlackToken(slackConn.accessToken, context)
     : false;
 
   return {
@@ -217,10 +218,11 @@ export const createAccountDeletionService = (
       return NO_TENANT_IMPACT;
     }
 
-    const [tenant, memberCount, connections] = await Promise.all([
+    const [tenant, memberCount, connections, slackConn] = await Promise.all([
       findTenantById(user.tenantId),
       countTenantMembers(user.tenantId),
       findByTenant(user.tenantId),
+      findSlackConnection(user.tenantId),
     ]);
 
     const isLastMember = memberCount <= 1;
@@ -234,7 +236,7 @@ export const createAccountDeletionService = (
       affectedResources: {
         providerConnections: connections.length,
         gitlabWebhooks: countGitLabWebhooks(connections),
-        hasSlackIntegration: tenant?.slackBotToken !== null && tenant?.slackBotToken !== undefined,
+        hasSlackIntegration: slackConn !== null,
       },
     };
   },

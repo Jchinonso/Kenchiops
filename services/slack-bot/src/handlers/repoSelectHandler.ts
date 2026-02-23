@@ -10,7 +10,7 @@ import {
   logger,
   createMapping,
   deleteMapping,
-  findBySlackWorkspace,
+  findTenantBySlackWorkspace,
   getErrorMessage,
 } from "@kenchi/shared";
 import {
@@ -64,7 +64,7 @@ export const handleRepoSelectSubmission = async (args: ViewSubmissionArgs): Prom
     // Get workspace ID and tenant
     const authResult = await client.auth.test();
     const workspaceId = authResult.team_id || "";
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
 
     if (!tenant) {
       logger.error("Tenant not found for workspace", { workspaceId });
@@ -173,7 +173,7 @@ export const handleUnconfigureSubmission = async (args: {
     // Get workspace ID and tenant
     const authResult = await client.auth.test();
     const workspaceId = authResult.team_id || "";
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
 
     if (!tenant) {
       logger.error("Tenant not found for workspace", { workspaceId });

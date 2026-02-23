@@ -157,12 +157,9 @@ export {
   type QueryResult,
 } from "./database/index.js";
 export {
-  findByGitHubInstallation,
   findByOrgName,
   findByGitLabGroup,
-  findBySlackWorkspace,
   findById,
-  findPendingSlackTenants,
   getActiveTenants,
   createFromGitHubInstall,
   createFromGitHubLogin,
@@ -176,8 +173,6 @@ export {
   handleGitHubUninstall,
   logAuditEvent,
   getAuditLog,
-  updateSlackToken,
-  getSlackCredentials,
   countTenantMembers,
   getTenantStatistics,
   type TenantStatistics,
@@ -416,6 +411,9 @@ export {
 // Provider connection module
 export {
   type CIProviderType,
+  type PlatformProviderType,
+  type NotificationProviderType,
+  type ProviderType,
   type ProviderConnection,
   type CreateProviderConnectionInput,
   type UpdateProviderConnectionInput,
@@ -427,6 +425,14 @@ export {
   createProviderConnection,
   updateProviderConnection,
   deactivateConnection,
+  // Platform-specific lookups
+  deactivateByTenantAndProvider,
+  updateConnectionToken,
+  findGitHubAppConnection,
+  findSlackConnection,
+  findGitLabConnection,
+  findTenantByGitHubInstallation,
+  findTenantBySlackWorkspace,
 } from "./database/index.js";
 
 // Subscription module (Plan tiers and tenant subscriptions)

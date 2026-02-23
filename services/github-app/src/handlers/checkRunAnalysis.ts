@@ -11,7 +11,7 @@ import {
   addPendingCheckToRedis,
   createEvent,
   publish,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
   PUBSUB_CHANNELS,
   DASHBOARD_EVENT_TYPES,
   EVENT_TYPES,
@@ -79,7 +79,7 @@ const persistEventAndNotify = async (webhook: CheckRunWebhook): Promise<void> =>
 
   try {
     // Look up tenant for event scoping
-    const tenant = installationId > 0 ? await findByGitHubInstallation(installationId) : null;
+    const tenant = installationId > 0 ? await findTenantByGitHubInstallation(installationId) : null;
     const tenantId = tenant?.id ?? null;
 
     await createEvent({

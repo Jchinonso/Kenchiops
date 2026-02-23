@@ -10,7 +10,7 @@ import {
   getErrorMessage,
   UI_EMOJI,
   isDocIngestionRequest,
-  findBySlackWorkspace,
+  findTenantBySlackWorkspace,
 } from "@kenchi/shared";
 import { formatAnalysisMessage, formatErrorMessage } from "../formatters.js";
 import { formatQAResponse, formatQAErrorMessage } from "../formatters/qaFormatter.js";
@@ -203,7 +203,7 @@ export const handleAppMention = async (event: AppMentionEvent, say: SayFn): Prom
 
     // Otherwise, perform AI analysis
     logger.info("Routing to analysis handler", { query: query.slice(0, 50) });
-    const tenant = event.team ? await findBySlackWorkspace(event.team) : null;
+    const tenant = event.team ? await findTenantBySlackWorkspace(event.team) : null;
     await handleAnalysisRequest(query, userId, event.channel, threadTs, event.ts, say, tenant?.id);
   } catch (error) {
     logger.error("Error processing app mention", {

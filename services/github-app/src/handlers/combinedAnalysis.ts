@@ -36,7 +36,7 @@ import {
   // CI job classification
   LINT_JOB_KEYWORDS,
   // Tenant lookup
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
   findActiveByProvider,
   // PR context caching
   getOrFetchPullRequest,
@@ -1117,7 +1117,7 @@ export const processCombinedAnalysis = async (
 
     // Look up tenant for analysis context (provider-aware)
     const tenantId = isGitHub
-      ? (await findByGitHubInstallation(installationId))?.id
+      ? (await findTenantByGitHubInstallation(installationId))?.id
       : await resolveTenantForProvider(provider);
     const workflowId = allJobsLogs.workflowName;
 

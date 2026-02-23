@@ -12,6 +12,8 @@ import {
   NotFoundError,
   findById as findTenantById,
   findOAuthIdentitiesByUser,
+  findGitHubAppConnection,
+  findSlackConnection,
   getAnalysisById,
   getAnalysesByTenant,
   countAnalysesByTenant,
@@ -79,8 +81,13 @@ export const createDashboardService = (
         });
       }
 
-      // Check if the user has a linked GitLab OAuth identity
-      const identities = userId ? await findOAuthIdentitiesByUser(userId) : [];
+      // Check provider connections in parallel with OAuth identities
+      const [ghConn, slackConn, identities] = await Promise.all([
+        findGitHubAppConnection(tenantId),
+        findSlackConnection(tenantId),
+        userId ? findOAuthIdentitiesByUser(userId) : Promise.resolve([]),
+      ]);
+
       const gitlabConnected = identities.some(
         (identity) => identity.provider === "gitlab" && identity.accessToken !== null
       );
@@ -90,9 +97,9 @@ export const createDashboardService = (
       return {
         id: tenant.id,
         orgName: tenant.orgName,
-        githubConnected: tenant.githubInstallationId !== null,
+        githubConnected: ghConn !== null,
         gitlabConnected,
-        slackConnected: tenant.slackWorkspaceId !== null,
+        slackConnected: slackConn !== null,
         status: tenant.status,
       };
     },
@@ -130,11 +137,14 @@ export const createDashboardService = (
         );
       };
 
+      const ghConn = await findGitHubAppConnection(tenantId);
+      const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
+
       const [totalAnalyses, totalFailures, repos, gitlabProjects] = await Promise.all([
         countAnalysesByTenant(tenantId),
         countEventsByTenant(tenantId, CICD_FAILURE_TYPE),
-        tenant.githubInstallationId
-          ? githubAdapter.getRepositories(tenant.githubInstallationId, context)
+        installationId
+          ? githubAdapter.getRepositories(installationId, context)
           : Promise.resolve([]),
         resolveGitLabProjects(),
       ]);
@@ -171,11 +181,14 @@ export const createDashboardService = (
         throw new NotFoundError("Tenant not found", { metadata: { tenantId } });
       }
 
-      if (!tenant.githubInstallationId) {
+      const ghConn = await findGitHubAppConnection(tenantId);
+      const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
+
+      if (!installationId) {
         return [];
       }
 
-      return githubAdapter.getRepositories(tenant.githubInstallationId, context);
+      return githubAdapter.getRepositories(installationId, context);
     },
 
     /**

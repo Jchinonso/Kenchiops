@@ -9,7 +9,7 @@ import {
   logger,
   getErrorMessage,
   ValidationError,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
   findChannelForRepository,
 } from "@kenchi/shared";
 import { trackCIFailureThread } from "./resolutionService.js";
@@ -121,7 +121,7 @@ const resolveChannelByRepository = async (
   installationId: number,
   repository: string
 ): Promise<string | null> => {
-  const tenant = await findByGitHubInstallation(installationId);
+  const tenant = await findTenantByGitHubInstallation(installationId);
   if (!tenant) {
     logger.warn("No tenant found for installation", { installationId });
     return null;

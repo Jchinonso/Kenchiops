@@ -7,6 +7,9 @@
 // Types
 export type {
   CIProviderType,
+  PlatformProviderType,
+  NotificationProviderType,
+  ProviderType,
   ProviderConnectionRow,
   ProviderConnection,
   CreateProviderConnectionInput,
@@ -26,4 +29,12 @@ export {
   createProviderConnection,
   updateProviderConnection,
   deactivateConnection,
+  // Platform-specific lookups
+  deactivateByTenantAndProvider,
+  updateConnectionToken,
+  findGitHubAppConnection,
+  findSlackConnection,
+  findGitLabConnection,
+  findTenantByGitHubInstallation,
+  findTenantBySlackWorkspace,
 } from "./repository.js";

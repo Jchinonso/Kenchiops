@@ -9,10 +9,8 @@
 import {
   logger,
   config,
-  findBySlackWorkspace,
-  findPendingSlackTenants,
-  linkSlackWorkspace,
-  deleteTenant,
+  findTenantBySlackWorkspace,
+  findGitHubAppConnection,
   findMappingsForChannel,
   deleteMappingsForChannel,
   getMappedRepositories,
@@ -209,70 +207,6 @@ const buildWelcomeBlocks = (
   },
 ];
 
-// ==================== Reconciliation ====================
-
-/**
- * Try to reconcile orphaned tenants when a Slack-only tenant exists
- * without GitHub and a GitHub-only tenant exists without Slack.
- * Returns the reconciled tenant if successful, null otherwise.
- */
-const tryReconcileOrphanedTenants = async (
-  slackTenant: Tenant,
-  workspaceId: string
-): Promise<Tenant | null> => {
-  try {
-    const unlinkedGithubTenants = await findPendingSlackTenants();
-
-    if (unlinkedGithubTenants.length !== 1) {
-      logger.info("Cannot auto-reconcile: expected exactly 1 unlinked GitHub tenant", {
-        workspaceId,
-        slackTenantId: slackTenant.id,
-        unlinkedCount: unlinkedGithubTenants.length,
-      });
-      return null;
-    }
-
-    const githubTenant = unlinkedGithubTenants[0];
-
-    logger.info("Auto-reconciling orphaned tenants", {
-      slackTenantId: slackTenant.id,
-      githubTenantId: githubTenant.id,
-      workspaceId,
-    });
-
-    await linkSlackWorkspace({
-      tenantId: githubTenant.id,
-      slackWorkspaceId: workspaceId,
-      slackTeamName: slackTenant.slackTeamName ?? "",
-      slackBotToken: slackTenant.slackBotToken ?? "",
-      slackBotUserId: slackTenant.slackBotUserId ?? undefined,
-    });
-
-    await deleteTenant(slackTenant.id);
-
-    const linkedTenant = await findBySlackWorkspace(workspaceId);
-    if (linkedTenant?.githubInstallationId) {
-      logger.info("Tenant reconciliation successful", {
-        reconciledTenantId: linkedTenant.id,
-        workspaceId,
-      });
-      return linkedTenant;
-    }
-
-    logger.warn("Tenant reconciliation completed but linked tenant not found", {
-      workspaceId,
-    });
-    return null;
-  } catch (error) {
-    logger.error("Failed to reconcile orphaned tenants", {
-      workspaceId,
-      slackTenantId: slackTenant.id,
-      error: getErrorMessage(error),
-    });
-    return null;
-  }
-};
-
 // ==================== Welcome Flow ====================
 
 /**
@@ -282,6 +216,7 @@ const showWelcomeWithRepoSelection = async (
   client: SlackClient,
   channelId: string,
   tenant: Tenant,
+  installationId: number,
   triggerId?: string
 ): Promise<void> => {
   // Clean up any existing mappings when bot rejoins
@@ -295,7 +230,6 @@ const showWelcomeWithRepoSelection = async (
     });
   }
 
-  const installationId = tenant.githubInstallationId as number;
   const [repositories, channelName] = await Promise.all([
     getAvailableRepositories(installationId, tenant.id),
     getChannelName(client, channelId),
@@ -368,17 +302,12 @@ export const handleBotJoinedChannel = async (
   try {
     logger.info("Bot joined channel", { channelId, workspaceId });
 
-    const initialTenant = await findBySlackWorkspace(workspaceId);
-
-    // Try to get a tenant with GitHub connected
-    // If initial tenant has no GitHub, attempt auto-reconciliation
-    const needsReconciliation = initialTenant && !initialTenant.githubInstallationId;
-    const effectiveTenant = needsReconciliation
-      ? ((await tryReconcileOrphanedTenants(initialTenant, workspaceId)) ?? initialTenant)
-      : initialTenant;
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
+    const ghConn = tenant ? await findGitHubAppConnection(tenant.id) : null;
+    const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
 
     // GitHub not connected - prompt to install
-    if (!effectiveTenant?.githubInstallationId) {
+    if (!tenant || !installationId) {
       await client.chat.postMessage({
         channel: channelId,
         text: buildConnectGitHubMessage(workspaceId),
@@ -388,12 +317,12 @@ export const handleBotJoinedChannel = async (
       logger.info("Prompted user to connect GitHub", {
         channelId,
         workspaceId,
-        hasTenant: !!effectiveTenant,
+        hasTenant: !!tenant,
       });
       return;
     }
 
-    await showWelcomeWithRepoSelection(client, channelId, effectiveTenant, triggerId);
+    await showWelcomeWithRepoSelection(client, channelId, tenant, installationId, triggerId);
   } catch (error) {
     const errorDetails = error as { data?: { needed?: string; provided?: string } };
     logger.error("Failed to handle member_joined_channel event", {

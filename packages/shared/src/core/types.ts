@@ -709,11 +709,12 @@ export interface GitHubPREvent {
 
 /**
  * Tenant status in the multi-tenant lifecycle.
- * - pending_slack: GitHub installed, awaiting Slack connection
- * - pending_github: Slack installed, awaiting GitHub connection
- * - active: Both installed, ready to use
+ * - active: Ready to use (provider connections are independent)
  * - suspended: Temporarily disabled
  * - deleted: Soft deleted
+ *
+ * Legacy values "pending_slack" and "pending_github" are kept in the type
+ * for backward compatibility during migration but should not be used in new code.
  */
 export type TenantStatus = "pending_slack" | "pending_github" | "active" | "suspended" | "deleted";
 
@@ -724,19 +725,11 @@ export type TenantEmbeddingTier = "LIGHT" | "STANDARD" | "PREMIUM";
 
 /**
  * Tenant entity - represents a customer organization using Kenchi.
- * Links a GitHub organization to a Slack workspace.
+ * Provider-neutral: all provider-specific state lives in provider_connections.
  */
 export interface Tenant {
   readonly id: string;
   readonly orgName: string;
-  readonly githubInstallationId: number | null;
-  readonly githubAppInstalledAt: Date | null;
-  readonly slackWorkspaceId: string | null;
-  readonly slackTeamName: string | null;
-  readonly slackBotToken: string | null;
-  readonly slackBotUserId: string | null;
-  readonly slackAppInstalledAt: Date | null;
-  readonly gitlabGroupPath: string | null;
   readonly status: TenantStatus;
   readonly createdAt: Date;
   readonly updatedAt: Date;

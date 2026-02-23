@@ -9,6 +9,7 @@
 
 // ==================== Enum Types ====================
 
+/** CI/CD source integrations — analyze pipeline failures. */
 export type CIProviderType =
   | "github_actions"
   | "vercel"
@@ -19,12 +20,21 @@ export type CIProviderType =
   | "bitbucket_pipelines"
   | "custom";
 
+/** Platform integrations — source code access + webhook receiver. */
+export type PlatformProviderType = "github_app" | "gitlab";
+
+/** Notification channels — deliver analysis results from ANY CI provider. */
+export type NotificationProviderType = "slack";
+
+/** All provider types stored in provider_connections. */
+export type ProviderType = CIProviderType | PlatformProviderType | NotificationProviderType;
+
 // ==================== Row Types ====================
 
 export interface ProviderConnectionRow {
   readonly id: string;
   readonly tenant_id: string;
-  readonly provider: CIProviderType;
+  readonly provider: ProviderType;
   readonly connection_name: string;
   readonly external_org_id: string | null;
   readonly base_url: string | null;
@@ -42,7 +52,7 @@ export interface ProviderConnectionRow {
 export interface ProviderConnection {
   readonly id: string;
   readonly tenantId: string;
-  readonly provider: CIProviderType;
+  readonly provider: ProviderType;
   readonly connectionName: string;
   readonly externalOrgId: string | null;
   readonly baseUrl: string | null;
@@ -61,7 +71,7 @@ export interface ProviderConnection {
 
 export interface CreateProviderConnectionInput {
   readonly tenantId: string;
-  readonly provider: CIProviderType;
+  readonly provider: ProviderType;
   readonly connectionName: string;
   readonly externalOrgId?: string | null;
   readonly baseUrl?: string | null;

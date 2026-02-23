@@ -13,27 +13,20 @@ export {
   type QueryResult,
 } from "./client/index.js";
 
-// Tenant module
+// Tenant module (provider-neutral — provider-specific lookups in providerConnection)
 // Note: TenantRow and row mappers are internal to tenant module.
 // Domain types (Tenant, TenantStatus, etc.) are in core/types.ts.
 export {
-  // Status helpers (used by services for business logic)
-  getStatusAfterGitHubInstall,
-  getStatusAfterSlackInstall,
   // Domain types
   type TenantStatistics,
   type TenantRAGBudgetConfig,
   type UpdateRAGBudgetInput,
   // Lookup operations
-  findByGitHubInstallation,
   findByOrgName,
   findByGitLabGroup,
-  findBySlackWorkspace,
   findById,
-  findPendingSlackTenants,
   getActiveTenants,
   getTenantStatistics,
-  getSlackCredentials,
   countTenantMembers,
   // Lifecycle operations
   createFromGitHubInstall,
@@ -46,7 +39,6 @@ export {
   deleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
-  updateSlackToken,
   // Audit operations
   logAuditEvent,
   getAuditLog,
@@ -416,9 +408,12 @@ export {
   type PaginatedInvestigations,
 } from "./investigations/index.js";
 
-// Provider connection module (CI provider OAuth connections)
+// Provider connection module (CI/platform/notification provider connections)
 export {
   type CIProviderType,
+  type PlatformProviderType,
+  type NotificationProviderType,
+  type ProviderType,
   type ProviderConnection,
   type CreateProviderConnectionInput,
   type UpdateProviderConnectionInput,
@@ -430,6 +425,14 @@ export {
   createProviderConnection,
   updateProviderConnection,
   deactivateConnection,
+  // Platform-specific lookups
+  deactivateByTenantAndProvider,
+  updateConnectionToken,
+  findGitHubAppConnection,
+  findSlackConnection,
+  findGitLabConnection,
+  findTenantByGitHubInstallation,
+  findTenantBySlackWorkspace,
 } from "./providerConnection/index.js";
 
 // Subscription module (Plan tiers and tenant subscriptions)

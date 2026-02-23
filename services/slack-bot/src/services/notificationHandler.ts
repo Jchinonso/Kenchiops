@@ -11,7 +11,7 @@ import {
   createLogger,
   getErrorMessage,
   findChannelForRepository,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
   UI_EMOJI,
   SLACK_COLORS,
   type SlackNotificationPayload,
@@ -40,7 +40,7 @@ const buildNotificationContext = async (
   const requestId = crypto.randomUUID();
 
   try {
-    const tenant = await findByGitHubInstallation(payload.installationId);
+    const tenant = await findTenantByGitHubInstallation(payload.installationId);
     return {
       requestId,
       tenantId: tenant?.id ?? "system",
@@ -228,7 +228,7 @@ const findAlertChannel = async (
   }
 
   try {
-    const tenant = await findByGitHubInstallation(installationId);
+    const tenant = await findTenantByGitHubInstallation(installationId);
     if (!tenant) {
       return null;
     }

@@ -9,7 +9,8 @@
 
 import {
   logger,
-  findBySlackWorkspace,
+  findTenantBySlackWorkspace,
+  findGitHubAppConnection,
   deleteMappingsForChannel,
   getErrorMessage,
   SLACK_ACTION_IDS,
@@ -59,7 +60,7 @@ export const handleBotLeftChannel = async (
   });
 
   try {
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
 
     if (tenant) {
       const deletedCount = await deleteMappingsForChannel(tenant.id, channelId);
@@ -320,14 +321,16 @@ const setupAppHomeHandlers = (app: SlackApp): void => {
 
       const workspaceId = "team" in body && body.team ? (body.team as { id: string }).id : "";
 
-      const tenant = await findBySlackWorkspace(workspaceId);
+      const tenant = await findTenantBySlackWorkspace(workspaceId);
+      const ghConn = tenant ? await findGitHubAppConnection(tenant.id) : null;
+      const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
 
-      if (!tenant || !tenant.githubInstallationId) {
+      if (!tenant || !installationId) {
         logger.error("No GitHub installation found for workspace", { workspaceId });
         return;
       }
 
-      const repositories = await getAvailableRepositories(tenant.githubInstallationId, tenant.id);
+      const repositories = await getAvailableRepositories(installationId, tenant.id);
 
       const finalView =
         repositories.length > 0

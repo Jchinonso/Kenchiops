@@ -9,7 +9,8 @@ import {
   createLogger,
   createFromGitHubInstall,
   handleGitHubUninstall,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
+  findSlackConnection,
   suspend,
   activate,
   getErrorMessage,
@@ -124,7 +125,7 @@ const lookupTenant = async (
   installationId: number,
   actionName: string
 ): Promise<TenantLookupResult> => {
-  const tenant = await findByGitHubInstallation(installationId);
+  const tenant = await findTenantByGitHubInstallation(installationId);
 
   return tenant
     ? { found: true, tenant }
@@ -218,7 +219,8 @@ const handleInstallationUnsuspend = async (
     }
 
     const { tenant } = lookup;
-    const slackStatus = tenant.slackWorkspaceId ? "connected" : "pending";
+    const slackConn = await findSlackConnection(tenant.id);
+    const slackStatus = slackConn ? "connected" : "pending";
     return await unsuspendActions[slackStatus](tenant, orgName);
   } catch (error) {
     logger.error("Failed to reactivate tenant", {

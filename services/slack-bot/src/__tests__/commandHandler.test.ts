@@ -1,5 +1,9 @@
 /**
  * Unit tests for Command Handler
+ *
+ * Updated for provider-neutral tenant model.
+ * - findBySlackWorkspace -> findTenantBySlackWorkspace
+ * - tenant.githubInstallationId -> findGitHubAppConnection check
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
@@ -18,7 +22,8 @@ jest.mock("@kenchi/shared", () => ({
   config: {
     GITHUB_APP_SLUG: "kenchi-test-app",
   },
-  findBySlackWorkspace: jest.fn(),
+  findTenantBySlackWorkspace: jest.fn(),
+  findGitHubAppConnection: jest.fn(),
   findAllMappingsForTenant: jest.fn(() => Promise.resolve([])),
   fetchInstallationRepositories: jest.fn(() => Promise.resolve([])),
   getMappedRepositories: jest.fn(() => Promise.resolve(new Set())),
@@ -137,6 +142,24 @@ jest.mock("../handlers/channelHandler.js", () => ({
   })),
   getAvailableRepositories: jest.fn(() => Promise.resolve([])),
 }));
+
+// Helper for mock GitHub App connection
+const createMockGitHubAppConnection = (overrides = {}) => ({
+  id: "prc_gh123",
+  tenantId: "tenant-123",
+  provider: "github_app" as const,
+  connectionName: "test-org",
+  externalOrgId: "12345",
+  baseUrl: null,
+  config: { orgLogin: "test-org", installedAt: "2024-01-01T00:00:00Z" },
+  webhookSecret: null,
+  accessToken: null,
+  tokenExpiresAt: null,
+  isActive: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ...overrides,
+});
 
 describe("Command Handler", () => {
   // Create mock Slack command
@@ -349,13 +372,15 @@ describe("Command Handler", () => {
   describe("status subcommand", () => {
     it("should show status for connected workspace", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue({
+      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: 12345,
         orgName: "test-org",
         status: "active",
       });
+      findGitHubAppConnection.mockResolvedValue(createMockGitHubAppConnection());
 
       const command = createMockCommand({ text: "status" });
 
@@ -377,13 +402,15 @@ describe("Command Handler", () => {
 
     it("should show GitHub connected status", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue({
+      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: 12345,
         orgName: "test-org",
         status: "active",
       });
+      findGitHubAppConnection.mockResolvedValue(createMockGitHubAppConnection());
 
       const command = createMockCommand({ text: "status" });
 
@@ -404,12 +431,14 @@ describe("Command Handler", () => {
 
     it("should show pending GitHub status when not connected", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue({
+      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: null,
         status: "pending",
       });
+      findGitHubAppConnection.mockResolvedValue(null);
 
       const command = createMockCommand({ text: "status" });
 
@@ -430,8 +459,8 @@ describe("Command Handler", () => {
 
     it("should handle no tenant found", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue(null);
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       const command = createMockCommand({ text: "status" });
 
@@ -452,8 +481,8 @@ describe("Command Handler", () => {
 
     it("should handle database errors gracefully", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockRejectedValue(new Error("Database error"));
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findTenantBySlackWorkspace.mockRejectedValue(new Error("Database error"));
 
       const command = createMockCommand({ text: "status" });
 
@@ -471,8 +500,8 @@ describe("Command Handler", () => {
   describe("configure subcommand", () => {
     it("should require GitHub connection first", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue(null);
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       const command = createMockCommand({ text: "configure" });
 
@@ -488,11 +517,13 @@ describe("Command Handler", () => {
 
     it("should require GitHub installation", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue({
+      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: null,
       });
+      findGitHubAppConnection.mockResolvedValue(null);
 
       const command = createMockCommand({ text: "configure" });
 
@@ -507,14 +538,16 @@ describe("Command Handler", () => {
 
     it("should open modal with available repositories", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { getAvailableRepositories } = jest.requireMock("../handlers/channelHandler.js") as any;
 
-      findBySlackWorkspace.mockResolvedValue({
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: 12345,
       });
+      findGitHubAppConnection.mockResolvedValue(createMockGitHubAppConnection());
       getAvailableRepositories.mockResolvedValue([
         { fullName: "owner/repo1", name: "repo1" },
         { fullName: "owner/repo2", name: "repo2" },
@@ -536,14 +569,16 @@ describe("Command Handler", () => {
 
     it("should open no-repos modal when no repositories available", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { getAvailableRepositories } = jest.requireMock("../handlers/channelHandler.js") as any;
 
-      findBySlackWorkspace.mockResolvedValue({
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: 12345,
       });
+      findGitHubAppConnection.mockResolvedValue(createMockGitHubAppConnection());
       getAvailableRepositories.mockResolvedValue([]);
 
       const command = createMockCommand({ text: "configure" });
@@ -561,8 +596,8 @@ describe("Command Handler", () => {
 
     it("should handle errors gracefully", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockRejectedValue(new Error("Service error"));
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findTenantBySlackWorkspace.mockRejectedValue(new Error("Service error"));
 
       const command = createMockCommand({ text: "configure" });
 
@@ -580,8 +615,8 @@ describe("Command Handler", () => {
   describe("unconfigure subcommand", () => {
     it("should handle no tenant found", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue(null);
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       const command = createMockCommand({ text: "unconfigure" });
 
@@ -597,13 +632,12 @@ describe("Command Handler", () => {
 
     it("should open modal with configured repositories", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant } = jest.requireMock(
+      const { findTenantBySlackWorkspace, findAllMappingsForTenant } = jest.requireMock(
         "@kenchi/shared"
       ) as any;
 
-      findBySlackWorkspace.mockResolvedValue({
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: 12345,
       });
       findAllMappingsForTenant.mockResolvedValue([
         {
@@ -634,13 +668,12 @@ describe("Command Handler", () => {
 
     it("should open no-configured-repos modal when no mappings exist", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant } = jest.requireMock(
+      const { findTenantBySlackWorkspace, findAllMappingsForTenant } = jest.requireMock(
         "@kenchi/shared"
       ) as any;
 
-      findBySlackWorkspace.mockResolvedValue({
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: 12345,
       });
       findAllMappingsForTenant.mockResolvedValue([]);
 
@@ -659,8 +692,8 @@ describe("Command Handler", () => {
 
     it("should handle errors gracefully", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockRejectedValue(new Error("Database error"));
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findTenantBySlackWorkspace.mockRejectedValue(new Error("Database error"));
 
       const command = createMockCommand({ text: "unconfigure" });
 
@@ -687,7 +720,6 @@ describe("Command Handler", () => {
 
       await handleAnalysis(ctx);
 
-      // handleAnalysis should call respond with ephemeral blocks
       expect(mockRespond).toHaveBeenCalledWith(
         expect.objectContaining({
           blocks: expect.any(Array),
@@ -702,7 +734,6 @@ describe("Command Handler", () => {
 
       await handleAnalysis(ctx);
 
-      // Empty args triggers help display
       expect(mockRespond).toHaveBeenCalledWith(
         expect.objectContaining({
           blocks: expect.arrayContaining([
@@ -722,7 +753,6 @@ describe("Command Handler", () => {
 
       await handleAnalysis(ctx);
 
-      // Should always respond (either success or error)
       expect(mockRespond).toHaveBeenCalledWith(
         expect.objectContaining({
           response_type: "ephemeral",
@@ -768,13 +798,15 @@ describe("Command Handler", () => {
 
     it("should handle subcommand with arguments", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue({
+      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: 12345,
         orgName: "test-org",
         status: "active",
       });
+      findGitHubAppConnection.mockResolvedValue(createMockGitHubAppConnection());
 
       const command = createMockCommand({ text: "status extra args" });
 
@@ -823,7 +855,6 @@ describe("Command Handler", () => {
 
       await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
 
-      // Should treat as analysis since "help me please" is not just "help"
       expect(mockRespond).toHaveBeenCalled();
     });
 
@@ -950,14 +981,16 @@ describe("Command Handler", () => {
 
     it("should use trigger_id for modals", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
+        "@kenchi/shared"
+      ) as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { getAvailableRepositories } = jest.requireMock("../handlers/channelHandler.js") as any;
 
-      findBySlackWorkspace.mockResolvedValue({
+      findTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: 12345,
       });
+      findGitHubAppConnection.mockResolvedValue(createMockGitHubAppConnection());
       getAvailableRepositories.mockResolvedValue([{ fullName: "owner/repo", name: "repo" }]);
 
       const command = createMockCommand({ text: "configure", trigger_id: "trigger_xyz" });

@@ -10,7 +10,7 @@
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage } from "../core/errors.js";
 import { enqueueSystemAlert } from "../queue/slackNotificationProcessor.js";
-import { findById } from "../database/index.js";
+import { findGitHubAppConnection } from "../database/providerConnection/repository.js";
 import type {
   DriftAlert,
   DriftReport,
@@ -67,8 +67,9 @@ const getInstallationIdForTenant = async (tenantId?: string): Promise<number> =>
   }
 
   try {
-    const tenant = await findById(tenantId);
-    return tenant?.githubInstallationId ?? ALERT_CONSTANTS.DEFAULT_INSTALLATION_ID;
+    const ghConn = await findGitHubAppConnection(tenantId);
+    const installId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
+    return installId ?? ALERT_CONSTANTS.DEFAULT_INSTALLATION_ID;
   } catch (error) {
     logger.warn("Failed to lookup tenant for alert", {
       tenantId,

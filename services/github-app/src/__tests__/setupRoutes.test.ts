@@ -1,10 +1,51 @@
 /**
  * Unit tests for Setup Routes
+ *
+ * Updated for provider-neutral tenant model.
+ * - findByGitHubInstallation -> findTenantByGitHubInstallation
+ * - findBySlackWorkspace -> findTenantBySlackWorkspace
+ * - Slack connection check uses findSlackConnection
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import express from "express";
 import request from "supertest";
+
+// Helper to create a provider-neutral mock tenant
+const createMockTenant = (overrides = {}) => ({
+  id: "tenant-123",
+  orgName: "testorg",
+  status: "active" as const,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ragMonthlyBudgetUsd: 0,
+  ragPreferredTier: "STANDARD" as const,
+  ragAllowPremium: false,
+  ragDegradeOnBudgetWarning: true,
+  ...overrides,
+});
+
+// Helper to create a mock Slack ProviderConnection
+const createMockSlackConnection = (overrides = {}) => ({
+  id: "prc_slack123",
+  tenantId: "tenant-123",
+  provider: "slack" as const,
+  connectionName: "Test Team",
+  externalOrgId: "T123456",
+  baseUrl: null,
+  config: {
+    teamName: "Test Team",
+    botUserId: "U123456",
+    installedAt: "2024-01-01T00:00:00Z",
+  },
+  webhookSecret: null,
+  accessToken: "xoxb-token",
+  tokenExpiresAt: null,
+  isActive: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ...overrides,
+});
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -30,26 +71,9 @@ jest.mock("@kenchi/shared", () => ({
     PROCESSING_MESSAGE: "Installation is being processed. This page will refresh automatically.",
     REFRESH_INTERVAL_SECONDS: 3,
   },
-  findBySlackWorkspace: jest.fn(() =>
-    Promise.resolve({
-      id: "slack-tenant-123",
-      slackWorkspaceId: "T123456",
-      slackTeamName: "Test Team",
-      slackBotToken: "xoxb-token",
-      slackBotUserId: "U123456",
-    })
-  ),
-  findByGitHubInstallation: jest.fn(() =>
-    Promise.resolve({
-      id: "tenant-123",
-      orgName: "testorg",
-      githubInstallationId: 12345,
-      slackWorkspaceId: null,
-      slackTeamName: null,
-      slackBotToken: null,
-      slackBotUserId: null,
-    })
-  ),
+  findTenantBySlackWorkspace: jest.fn(() => Promise.resolve(createMockTenant())),
+  findTenantByGitHubInstallation: jest.fn(() => Promise.resolve(createMockTenant())),
+  findSlackConnection: jest.fn(() => Promise.resolve(null)),
   linkSlackWorkspace: jest.fn(() => Promise.resolve()),
   deleteTenant: jest.fn(() => Promise.resolve()),
   getErrorMessage: jest.fn((error: unknown) =>
@@ -59,13 +83,21 @@ jest.mock("@kenchi/shared", () => ({
 
 // Import after mocks
 import { setupRoutes } from "../routes/setupRoutes.js";
-import { findBySlackWorkspace, findByGitHubInstallation, linkSlackWorkspace } from "@kenchi/shared";
+import {
+  findTenantBySlackWorkspace,
+  findTenantByGitHubInstallation,
+  findSlackConnection,
+  linkSlackWorkspace,
+} from "@kenchi/shared";
 
-const mockFindBySlackWorkspace = findBySlackWorkspace as jest.MockedFunction<
-  typeof findBySlackWorkspace
+const mockFindTenantBySlackWorkspace = findTenantBySlackWorkspace as jest.MockedFunction<
+  typeof findTenantBySlackWorkspace
 >;
-const mockFindByGitHubInstallation = findByGitHubInstallation as jest.MockedFunction<
-  typeof findByGitHubInstallation
+const mockFindTenantByGitHubInstallation = findTenantByGitHubInstallation as jest.MockedFunction<
+  typeof findTenantByGitHubInstallation
+>;
+const mockFindSlackConnection = findSlackConnection as jest.MockedFunction<
+  typeof findSlackConnection
 >;
 const mockLinkSlackWorkspace = linkSlackWorkspace as jest.MockedFunction<typeof linkSlackWorkspace>;
 
@@ -81,40 +113,18 @@ describe("Setup Routes", () => {
     app.use(setupRoutes);
 
     // Reset mock implementations
-    mockFindByGitHubInstallation.mockResolvedValue({
-      id: "tenant-123",
-      orgName: "testorg",
-      githubInstallationId: 12345,
-      slackWorkspaceId: null,
-      slackTeamName: null,
-      slackBotToken: null,
-      slackBotUserId: null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockFindTenantByGitHubInstallation.mockResolvedValue(createMockTenant());
 
-    mockFindBySlackWorkspace.mockResolvedValue({
-      id: "slack-tenant-123",
-      slackWorkspaceId: "T123456",
-      slackTeamName: "Test Team",
-      slackBotToken: "xoxb-token",
-      slackBotUserId: "U123456",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockFindTenantBySlackWorkspace.mockResolvedValue(createMockTenant());
 
-    mockLinkSlackWorkspace.mockResolvedValue({
-      id: "tenant-123",
-      orgName: "testorg",
-      githubInstallationId: 12345,
-      githubAppInstalledAt: new Date(),
-      slackWorkspaceId: "T123456",
-      slackTeamName: "Test Team",
-      slackBotToken: "xoxb-token",
-      slackBotUserId: "U123456",
-      slackAppInstalledAt: new Date(),
-      status: "active" as const,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    // Default: no Slack connection (pending state)
+    mockFindSlackConnection.mockResolvedValue(null);
+
+    mockLinkSlackWorkspace.mockResolvedValue(
+      createMockTenant({
+        status: "active" as const,
+      })
+    );
   });
 
   describe("GET /github/setup", () => {
@@ -149,7 +159,7 @@ describe("Setup Routes", () => {
     });
 
     it("should handle tenant not found with processing message", async () => {
-      mockFindByGitHubInstallation.mockResolvedValue(null);
+      mockFindTenantByGitHubInstallation.mockResolvedValue(null);
 
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
@@ -162,20 +172,8 @@ describe("Setup Routes", () => {
     });
 
     it("should show linked status when Slack already connected", async () => {
-      mockFindByGitHubInstallation.mockResolvedValue({
-        id: "tenant-123",
-        orgName: "testorg",
-        githubInstallationId: 12345,
-        slackWorkspaceId: "T123456",
-        slackTeamName: "Test Team",
-        slackBotToken: "xoxb-token",
-        slackBotUserId: "U123456",
-        githubAppInstalledAt: new Date(),
-        slackAppInstalledAt: new Date(),
-        status: "active" as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      // Return a Slack connection for this tenant
+      mockFindSlackConnection.mockResolvedValue(createMockSlackConnection());
 
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
@@ -188,6 +186,7 @@ describe("Setup Routes", () => {
     });
 
     it("should show pending status when Slack not connected", async () => {
+      // No Slack connection (default mock)
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
         setup_action: "install",
@@ -199,13 +198,16 @@ describe("Setup Routes", () => {
     });
 
     it("should link Slack workspace when state provided", async () => {
+      // findSlackConnection returns a connection for the Slack tenant
+      mockFindSlackConnection.mockResolvedValue(createMockSlackConnection());
+
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
         setup_action: "install",
         state: "T123456",
       });
 
-      expect(mockFindBySlackWorkspace).toHaveBeenCalledWith("T123456");
+      expect(mockFindTenantBySlackWorkspace).toHaveBeenCalledWith("T123456");
       expect(mockLinkSlackWorkspace).toHaveBeenCalledWith(
         expect.objectContaining({
           tenantId: "tenant-123",
@@ -217,7 +219,7 @@ describe("Setup Routes", () => {
     });
 
     it("should not link when Slack workspace not found", async () => {
-      mockFindBySlackWorkspace.mockResolvedValue(null);
+      mockFindTenantBySlackWorkspace.mockResolvedValue(null);
 
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
@@ -230,20 +232,18 @@ describe("Setup Routes", () => {
     });
 
     it("should not link when tenant already has Slack connected", async () => {
-      mockFindByGitHubInstallation.mockResolvedValue({
-        id: "tenant-123",
-        orgName: "testorg",
-        githubInstallationId: 12345,
-        slackWorkspaceId: "T999999",
-        slackTeamName: "Existing Team",
-        slackBotToken: "xoxb-existing",
-        slackBotUserId: "U999999",
-        githubAppInstalledAt: new Date(),
-        slackAppInstalledAt: new Date(),
-        status: "active" as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      // Existing Slack connection on the GitHub tenant
+      mockFindSlackConnection.mockResolvedValue(
+        createMockSlackConnection({
+          externalOrgId: "T999999",
+          connectionName: "Existing Team",
+          config: {
+            teamName: "Existing Team",
+            botUserId: "U999999",
+            installedAt: "2024-01-01T00:00:00Z",
+          },
+        })
+      );
 
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
@@ -256,7 +256,7 @@ describe("Setup Routes", () => {
     });
 
     it("should handle errors gracefully", async () => {
-      mockFindByGitHubInstallation.mockRejectedValue(new Error("Database error"));
+      mockFindTenantByGitHubInstallation.mockRejectedValue(new Error("Database error"));
 
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
@@ -268,6 +268,7 @@ describe("Setup Routes", () => {
     });
 
     it("should handle linking errors", async () => {
+      mockFindSlackConnection.mockResolvedValue(createMockSlackConnection());
       mockLinkSlackWorkspace.mockRejectedValue(new Error("Link error"));
 
       const response = await request(app).get("/github/setup").query({
@@ -281,20 +282,8 @@ describe("Setup Routes", () => {
     });
 
     it("should include checkmarks in success page", async () => {
-      mockFindByGitHubInstallation.mockResolvedValue({
-        id: "tenant-123",
-        orgName: "testorg",
-        githubInstallationId: 12345,
-        slackWorkspaceId: "T123456",
-        slackTeamName: "Test Team",
-        slackBotToken: "xoxb-token",
-        slackBotUserId: "U123456",
-        githubAppInstalledAt: new Date(),
-        slackAppInstalledAt: new Date(),
-        status: "active" as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      // Slack connection exists
+      mockFindSlackConnection.mockResolvedValue(createMockSlackConnection());
 
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
@@ -320,24 +309,16 @@ describe("Setup Routes", () => {
       });
 
       expect(response.status).toBe(200);
-      expect(mockFindByGitHubInstallation).toHaveBeenCalledWith(12345);
+      expect(mockFindTenantByGitHubInstallation).toHaveBeenCalledWith(12345);
     });
 
     it("should require Slack bot token for linking", async () => {
-      mockFindBySlackWorkspace.mockResolvedValue({
-        id: "slack-tenant-123",
-        slackWorkspaceId: "T123456",
-        slackTeamName: "Test Team",
-        slackBotToken: null,
-        slackBotUserId: null,
-        orgName: "testorg",
-        githubInstallationId: null,
-        githubAppInstalledAt: null,
-        slackAppInstalledAt: new Date(),
-        status: "pending_github" as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      // Slack connection exists but has no accessToken
+      mockFindSlackConnection.mockResolvedValue(
+        createMockSlackConnection({
+          accessToken: null,
+        })
+      );
 
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
@@ -355,7 +336,7 @@ describe("Setup Routes", () => {
         setup_action: "install",
       });
 
-      expect(mockFindByGitHubInstallation).toHaveBeenCalledWith(999999999);
+      expect(mockFindTenantByGitHubInstallation).toHaveBeenCalledWith(999999999);
     });
   });
 

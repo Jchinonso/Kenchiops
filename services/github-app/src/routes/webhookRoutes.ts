@@ -10,7 +10,7 @@ import {
   createLogger,
   HTTP_STATUS,
   handleDocUpdateEvent,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
   findWebhookActivityByDeliveryId,
   getErrorMessage,
 } from "@kenchi/shared";
@@ -120,7 +120,7 @@ const handlePush = async (webhook: PushWebhook): Promise<WebhookHandlerResult> =
   }
 
   try {
-    const tenant = await findByGitHubInstallation(installationId);
+    const tenant = await findTenantByGitHubInstallation(installationId);
     if (!tenant) {
       return {
         handled: true,
@@ -260,7 +260,7 @@ const resolveTenantId = async (body: unknown): Promise<string | null> => {
   }
 
   try {
-    const tenant = await findByGitHubInstallation(installationId);
+    const tenant = await findTenantByGitHubInstallation(installationId);
     return tenant?.id ?? null;
   } catch (error) {
     logger.warn("Failed to resolve tenant from installation", {

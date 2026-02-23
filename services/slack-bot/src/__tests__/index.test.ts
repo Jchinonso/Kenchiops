@@ -28,7 +28,9 @@ let mockLogger: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockInitDatabase: jest.Mock<any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let mockFindBySlackWorkspace: jest.Mock<any>;
+let mockFindTenantBySlackWorkspace: jest.Mock<any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockFindGitHubAppConnection: jest.Mock<any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockDeleteMappingsForChannel: jest.Mock<any>;
 
@@ -60,7 +62,8 @@ describe("Slack Bot Service Index", () => {
     };
 
     mockInitDatabase = jest.fn();
-    mockFindBySlackWorkspace = jest.fn<() => Promise<null>>().mockResolvedValue(null);
+    mockFindTenantBySlackWorkspace = jest.fn<() => Promise<null>>().mockResolvedValue(null);
+    mockFindGitHubAppConnection = jest.fn<() => Promise<null>>().mockResolvedValue(null);
     mockDeleteMappingsForChannel = jest.fn<() => Promise<number>>().mockResolvedValue(0);
 
     // Mock @slack/bolt
@@ -102,7 +105,8 @@ describe("Slack Bot Service Index", () => {
       closeDatabase: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
       closeRedis: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
       waitForRedisConnection: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      findBySlackWorkspace: mockFindBySlackWorkspace,
+      findTenantBySlackWorkspace: mockFindTenantBySlackWorkspace,
+      findGitHubAppConnection: mockFindGitHubAppConnection,
       deleteMappingsForChannel: mockDeleteMappingsForChannel,
       isSocketModeDisconnectError: jest.fn(() => false),
       createRedisRateLimiter: jest.fn(() => ({
@@ -115,7 +119,8 @@ describe("Slack Bot Service Index", () => {
         .mockResolvedValue(() => {}),
       getErrorMessage: jest.fn((e: unknown) => (e instanceof Error ? e.message : String(e))),
       NotFoundError: jest.fn((msg: unknown) => new Error(String(msg))),
-      getSlackCredentials: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+      findTenantByGitHubInstallation: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+      findSlackConnection: jest.fn<() => Promise<null>>().mockResolvedValue(null),
       shouldSkipSlackBotRateLimit: jest.fn(() => false),
       SLACK_BOT_RATE_LIMITS: {
         ACTIONS_WINDOW_MS: 60000,
@@ -675,7 +680,7 @@ describe("Slack Bot Service Index", () => {
         team: "T456",
       };
 
-      mockFindBySlackWorkspace.mockResolvedValue({
+      mockFindTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
         name: "Test Tenant",
       });
@@ -684,7 +689,7 @@ describe("Slack Bot Service Index", () => {
 
       await handler({ event: mockEvent, client: mockClient });
 
-      expect(mockFindBySlackWorkspace).toHaveBeenCalledWith("T456");
+      expect(mockFindTenantBySlackWorkspace).toHaveBeenCalledWith("T456");
       expect(mockDeleteMappingsForChannel).toHaveBeenCalledWith("tenant-123", "C789");
     });
 
@@ -713,11 +718,11 @@ describe("Slack Bot Service Index", () => {
         team: "T456",
       };
 
-      mockFindBySlackWorkspace.mockClear();
+      mockFindTenantBySlackWorkspace.mockClear();
 
       await handler({ event: mockEvent, client: mockClient });
 
-      expect(mockFindBySlackWorkspace).not.toHaveBeenCalled();
+      expect(mockFindTenantBySlackWorkspace).not.toHaveBeenCalled();
     });
   });
 
@@ -851,9 +856,12 @@ describe("Slack Bot Service Index", () => {
 
       const mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
-      mockFindBySlackWorkspace.mockResolvedValue({
+      mockFindTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: "12345",
+      });
+      mockFindGitHubAppConnection.mockResolvedValue({
+        id: "prc_gh123",
+        externalOrgId: "12345",
       });
 
       const { getAvailableRepositories, buildRepoSelectModal } =
@@ -933,10 +941,10 @@ describe("Slack Bot Service Index", () => {
 
       const mockAck = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
-      mockFindBySlackWorkspace.mockResolvedValue({
+      mockFindTenantBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
-        githubInstallationId: null,
       });
+      mockFindGitHubAppConnection.mockResolvedValue(null);
 
       await handler({
         action: mockAction,

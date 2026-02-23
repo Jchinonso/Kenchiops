@@ -10,13 +10,16 @@
 import { query } from "../client/index.js";
 import { encryptValue } from "../../security/encryption.js";
 import { rowToProviderConnection, validateCreateInput } from "./helpers.js";
+import { rowToTenant } from "../tenant/helpers.js";
 import type {
   ProviderConnectionRow,
   ProviderConnection,
-  CIProviderType,
+  ProviderType,
   CreateProviderConnectionInput,
   UpdateProviderConnectionInput,
 } from "./types.js";
+import type { TenantRow } from "../tenant/types.js";
+import type { Tenant } from "../../core/types.js";
 
 // ==================== SQL Queries ====================
 
@@ -58,6 +61,25 @@ const QUERIES = {
     WHERE id = $1
     RETURNING *
   `,
+  DEACTIVATE_BY_TENANT_AND_PROVIDER: `
+    UPDATE provider_connections
+    SET is_active = false, updated_at = NOW()
+    WHERE tenant_id = $1 AND provider = $2 AND is_active = true
+    RETURNING *
+  `,
+  UPDATE_ACCESS_TOKEN: `
+    UPDATE provider_connections
+    SET access_token_enc = $1, updated_at = NOW()
+    WHERE id = $2
+    RETURNING *
+  `,
+  FIND_TENANT_BY_EXTERNAL_ORG: `
+    SELECT t.* FROM tenants t
+    INNER JOIN provider_connections pc ON pc.tenant_id = t.id
+    WHERE pc.provider = $1 AND pc.external_org_id = $2 AND pc.is_active = true
+    AND t.status != 'deleted'
+    LIMIT 1
+  `,
 } as const;
 
 // ==================== Query Functions ====================
@@ -75,7 +97,7 @@ export const findByTenant = async (tenantId: string): Promise<readonly ProviderC
  */
 export const findByTenantAndProvider = async (
   tenantId: string,
-  provider: CIProviderType
+  provider: ProviderType
 ): Promise<ProviderConnection | null> => {
   const result = await query<ProviderConnectionRow>(QUERIES.FIND_BY_TENANT_AND_PROVIDER, [
     tenantId,
@@ -99,7 +121,7 @@ export const findConnectionById = async (id: string): Promise<ProviderConnection
  * Used for webhook tenant resolution.
  */
 export const findByExternalOrgId = async (
-  provider: CIProviderType,
+  provider: ProviderType,
   externalOrgId: string
 ): Promise<ProviderConnection | null> => {
   const result = await query<ProviderConnectionRow>(QUERIES.FIND_BY_EXTERNAL_ORG, [
@@ -116,7 +138,7 @@ export const findByExternalOrgId = async (
  * to find the matching secret when the static secret fails.
  */
 export const findActiveByProvider = async (
-  provider: CIProviderType
+  provider: ProviderType
 ): Promise<readonly ProviderConnection[]> => {
   const result = await query<ProviderConnectionRow>(QUERIES.FIND_ACTIVE_BY_PROVIDER, [provider]);
   return result.rows.map(rowToProviderConnection);
@@ -201,4 +223,81 @@ export const deactivateConnection = async (id: string): Promise<ProviderConnecti
   const result = await query<ProviderConnectionRow>(QUERIES.DEACTIVATE, [id]);
   const row = result.rows[0];
   return row ? rowToProviderConnection(row) : null;
+};
+
+/**
+ * Deactivate all active connections for a tenant + provider pair.
+ * Used when a platform integration is uninstalled.
+ */
+export const deactivateByTenantAndProvider = async (
+  tenantId: string,
+  provider: ProviderType
+): Promise<readonly ProviderConnection[]> => {
+  const result = await query<ProviderConnectionRow>(QUERIES.DEACTIVATE_BY_TENANT_AND_PROVIDER, [
+    tenantId,
+    provider,
+  ]);
+  return result.rows.map(rowToProviderConnection);
+};
+
+/**
+ * Update the encrypted access token for a connection.
+ */
+export const updateConnectionToken = async (
+  connectionId: string,
+  plainToken: string
+): Promise<ProviderConnection | null> => {
+  const result = await query<ProviderConnectionRow>(QUERIES.UPDATE_ACCESS_TOKEN, [
+    encryptValue(plainToken),
+    connectionId,
+  ]);
+  const row = result.rows[0];
+  return row ? rowToProviderConnection(row) : null;
+};
+
+// ==================== Platform-Specific Lookups ====================
+
+/**
+ * Find the GitHub App connection for a tenant.
+ */
+export const findGitHubAppConnection = async (
+  tenantId: string
+): Promise<ProviderConnection | null> => findByTenantAndProvider(tenantId, "github_app");
+
+/**
+ * Find the Slack connection for a tenant.
+ */
+export const findSlackConnection = async (tenantId: string): Promise<ProviderConnection | null> =>
+  findByTenantAndProvider(tenantId, "slack");
+
+/**
+ * Find the GitLab platform connection for a tenant.
+ */
+export const findGitLabConnection = async (tenantId: string): Promise<ProviderConnection | null> =>
+  findByTenantAndProvider(tenantId, "gitlab");
+
+/**
+ * Find a tenant by GitHub App installation ID.
+ * Joins provider_connections → tenants, returns domain Tenant.
+ */
+export const findTenantByGitHubInstallation = async (
+  installationId: number
+): Promise<Tenant | null> => {
+  const result = await query<TenantRow>(QUERIES.FIND_TENANT_BY_EXTERNAL_ORG, [
+    "github_app",
+    String(installationId),
+  ]);
+  return result.rows[0] ? rowToTenant(result.rows[0]) : null;
+};
+
+/**
+ * Find a tenant by Slack workspace ID.
+ * Joins provider_connections → tenants, returns domain Tenant.
+ */
+export const findTenantBySlackWorkspace = async (workspaceId: string): Promise<Tenant | null> => {
+  const result = await query<TenantRow>(QUERIES.FIND_TENANT_BY_EXTERNAL_ORG, [
+    "slack",
+    workspaceId,
+  ]);
+  return result.rows[0] ? rowToTenant(result.rows[0]) : null;
 };

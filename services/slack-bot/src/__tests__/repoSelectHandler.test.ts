@@ -19,7 +19,9 @@ jest.mock("@kenchi/shared", () => ({
   },
   createMapping: jest.fn(() => Promise.resolve({ id: "mapping-123" })),
   deleteMapping: jest.fn(() => Promise.resolve()),
-  findBySlackWorkspace: jest.fn(() => Promise.resolve({ id: "tenant-123", name: "Test Tenant" })),
+  findTenantBySlackWorkspace: jest.fn(() =>
+    Promise.resolve({ id: "tenant-123", name: "Test Tenant" })
+  ),
   getErrorMessage: jest.fn((error) => (error instanceof Error ? error.message : String(error))),
 }));
 
@@ -188,8 +190,8 @@ describe("Repository Selection Handler", () => {
 
     it("should handle tenant not found", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue(null);
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       const args = createMockArgs();
       await handleRepoSelectSubmission(args);
@@ -286,8 +288,8 @@ describe("Repository Selection Handler", () => {
 
     it("should handle tenant not found", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
-      findBySlackWorkspace.mockResolvedValue(null);
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       const args = createUnconfigureArgs();
       await handleUnconfigureSubmission(args);

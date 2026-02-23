@@ -9,7 +9,8 @@ import {
   createLogger,
   config,
   delay,
-  findBySlackWorkspace,
+  findTenantBySlackWorkspace,
+  findGitHubAppConnection,
   findAllMappingsForTenant,
   getErrorMessage,
   resilientGet,
@@ -105,7 +106,9 @@ export const handleStatus: SubcommandHandler = async ({ command, respond }): Pro
   });
 
   try {
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
+    const ghConn = tenant ? await findGitHubAppConnection(tenant.id) : null;
+    const githubConnected = ghConn !== null;
 
     const statusBlocks: SlackBlock[] = tenant
       ? [
@@ -116,11 +119,11 @@ export const handleStatus: SubcommandHandler = async ({ command, respond }): Pro
               text:
                 `*Kenchi Connection Status*\n\n` +
                 `*Slack:* Connected\n` +
-                `${tenant.githubInstallationId ? "" : ""} *GitHub:* ${tenant.githubInstallationId ? `Connected (${tenant.orgName})` : "Not connected"}\n` +
+                `${githubConnected ? "" : ""} *GitHub:* ${githubConnected ? `Connected (${tenant.orgName})` : "Not connected"}\n` +
                 `*Status:* ${tenant.status}`,
             },
           },
-          ...(tenant.githubInstallationId
+          ...(githubConnected
             ? []
             : [
                 {
@@ -224,9 +227,11 @@ export const handleConfigure: SubcommandHandler = async ({
 
   try {
     // Check if GitHub is connected
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
+    const ghConn = tenant ? await findGitHubAppConnection(tenant.id) : null;
+    const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
 
-    if (!tenant || !tenant.githubInstallationId) {
+    if (!tenant || !installationId) {
       await respond({
         text: "Please connect GitHub first using `/kenchi connect`",
         response_type: "ephemeral",
@@ -235,7 +240,7 @@ export const handleConfigure: SubcommandHandler = async ({
     }
 
     // Fetch available repositories from GitHub App API
-    const repositories = await getAvailableRepositories(tenant.githubInstallationId, tenant.id);
+    const repositories = await getAvailableRepositories(installationId, tenant.id);
 
     // Open the appropriate modal based on available repositories
     const view =
@@ -281,7 +286,7 @@ export const handleUnconfigure: SubcommandHandler = async ({
   });
 
   try {
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
 
     if (!tenant) {
       await respond({
@@ -428,7 +433,7 @@ export const handleInvestigate: SubcommandHandler = async ({
   });
 
   // Resolve tenant
-  const tenant = await findBySlackWorkspace(workspaceId);
+  const tenant = await findTenantBySlackWorkspace(workspaceId);
   if (!tenant) {
     await respond({
       text: "Workspace not configured. Run `/kenchi connect` first.",
@@ -534,7 +539,7 @@ export const handleAnalysis: SubcommandHandler = async (ctx): Promise<void> => {
   }
 
   try {
-    const tenant = await findBySlackWorkspace(command.team_id);
+    const tenant = await findTenantBySlackWorkspace(command.team_id);
     const event = createEventFromCommand(command.user_id, command.channel_id, args);
     const { analysis, confidence } = await performAnalysis(event, tenant?.id);
 
