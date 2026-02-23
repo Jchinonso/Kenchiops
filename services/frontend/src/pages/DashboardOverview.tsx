@@ -71,8 +71,6 @@ import { SeverityDistributionChart } from "@/components/SeverityDistributionChar
 
 // ==================== Constants ====================
 
-const GITHUB_APP_SLUG = import.meta.env.VITE_GITHUB_APP_SLUG ?? "kenchi-devops";
-
 interface OnboardingStep {
   readonly title: string;
   readonly description: string;
@@ -92,15 +90,10 @@ const buildOnboardingSteps = (
 ): readonly OnboardingStep[] => [
   {
     title: "Connect a CI Provider",
-    description:
-      githubConnected || gitlabConnected
-        ? "Add another CI provider to monitor more pipelines."
-        : "Connect GitHub or GitLab to start monitoring your CI/CD pipelines.",
-    completedDescription: `${[githubConnected ? "GitHub" : null, gitlabConnected ? "GitLab" : null]
-      .filter(Boolean)
-      .join(" & ")} connected and receiving webhooks.`,
+    description: "Connect GitHub or GitLab to start monitoring your CI/CD pipelines.",
+    completedDescription: `${githubConnected ? "GitHub" : "GitLab"} connected and receiving webhooks.`,
     ctaLabel: githubConnected || gitlabConnected ? "Manage Integrations" : "Connect Provider",
-    href: githubConnected || gitlabConnected ? "/dashboard/settings" : `/dashboard/settings`,
+    href: "/dashboard/integrations",
     icon: githubConnected ? (
       <Github className="w-5 h-5 text-gray-900 dark:text-gray-100" />
     ) : (
@@ -695,28 +688,14 @@ export const DashboardOverview = ({
               Welcome to Kenchi
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-4">
-              Connect your repositories to start analyzing CI/CD failures automatically. Kenchi
-              supports GitHub and GitLab pipelines.
+              Connect your repositories to start analyzing CI/CD failures automatically.
             </p>
-            <div className="flex items-center justify-center gap-3">
-              <a
-                href={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-lg transition-colors"
-              >
-                <Github className="w-4 h-4" />
-                Connect GitHub
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-              <Link
-                to="/dashboard/settings"
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
-              >
-                <Gitlab className="w-4 h-4" />
-                Connect GitLab
-              </Link>
-            </div>
+            <Link
+              to="/dashboard/integrations"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-lg transition-colors"
+            >
+              Connect a CI Provider
+            </Link>
           </CardContent>
         </Card>
       )}
@@ -746,7 +725,7 @@ export const DashboardOverview = ({
           </CardContent>
         </Card>
       ) : activityLoading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {Array.from({ length: 3 }, (_, cardIndex) => (
             <Card key={`skel-card-${cardIndex}`}>
               <CardHeader className="border-b">
@@ -767,7 +746,7 @@ export const DashboardOverview = ({
           ))}
         </div>
       ) : !hasActivity ? (
-        <Card>
+        <Card className="mb-6 sm:mb-8">
           <CardHeader className="border-b">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
@@ -790,7 +769,7 @@ export const DashboardOverview = ({
           </CardContent>
         </Card>
       ) : (
-        <div className={cn("grid gap-4 sm:gap-6", activityGridCols)}>
+        <div className={cn("grid gap-4 sm:gap-6 mb-6 sm:mb-8", activityGridCols)}>
           {failureItems.length > 0 && (
             <Card>
               <CardHeader className="border-b">
