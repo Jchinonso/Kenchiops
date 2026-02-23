@@ -513,16 +513,19 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
 
   res.status(HTTP_STATUS.OK).json({
     data: {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
-      tenantId: user.tenantId,
-      role: user.role,
-      providers: identities.map((identity) => ({
-        provider: identity.provider,
-        username: identity.providerUsername,
-      })),
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        tenantId: user.tenantId,
+        role: user.role,
+        providers: identities.map((identity) => ({
+          provider: identity.provider,
+          username: identity.providerUsername,
+        })),
+        createdAt: user.createdAt.toISOString(),
+      },
       organizations: organizations.map((org) => ({
         id: org.id,
         tenantId: org.tenantId,
@@ -531,7 +534,6 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
         role: org.role,
         isDefault: org.isDefault,
       })),
-      createdAt: user.createdAt.toISOString(),
     },
   });
 };

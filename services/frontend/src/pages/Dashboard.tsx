@@ -9,11 +9,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate, Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardSSE, type DashboardNotification } from "@/hooks/useDashboardSSE";
+import { useTenantInfo } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { ComingSoon } from "@/components/ComingSoon";
 import { DashboardOverview } from "@/pages/DashboardOverview";
+import { Onboarding } from "@/pages/Onboarding";
 import { CICDAnalyses } from "@/pages/CICDAnalyses";
 import { CICDPipelines } from "@/pages/CICDPipelines";
 import { WebhookActivity } from "@/pages/WebhookActivity";
@@ -365,9 +367,11 @@ const Dashboard = () => {
     dismissNotification,
   } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
+  const { data: tenant, isLoading: tenantLoading } = useTenantInfo(sseRefreshKey);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [onboardingSkipped, setOnboardingSkipped] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -512,7 +516,23 @@ const Dashboard = () => {
     setNotificationsOpen((prev) => !prev);
   };
 
+  // Detect new users who haven't connected any CI provider yet
+  const needsOnboarding =
+    !tenantLoading &&
+    tenant !== null &&
+    !tenant.githubConnected &&
+    !tenant.gitlabConnected &&
+    !onboardingSkipped &&
+    !localStorage.getItem(onboardingKey);
+
+  const handleSkipOnboarding = () => {
+    localStorage.setItem(onboardingKey, "1");
+    setOnboardingSkipped(true);
+    setOnboardingDismissed(true);
+  };
+
   const isOverview = currentPath === "/dashboard";
+  const isOnboarding = currentPath === "/dashboard/onboarding";
   const isSettings = currentPath === "/dashboard/settings";
   const isPlanSelection = currentPath === "/dashboard/settings/plan";
   const isIntegrations = currentPath === "/dashboard/integrations";
@@ -522,6 +542,7 @@ const Dashboard = () => {
   const incidentPage = isIncident ? renderIncidentPage(currentPath, refreshKey) : null;
   const comingSoonConfig =
     isOverview ||
+    isOnboarding ||
     isCICD ||
     isSettings ||
     isPlanSelection ||
@@ -666,6 +687,8 @@ const Dashboard = () => {
             renderCICDPage(currentPath, refreshKey)
           ) : incidentPage ? (
             incidentPage
+          ) : isOnboarding || (isOverview && needsOnboarding) ? (
+            <Onboarding displayName={displayName} onSkip={handleSkipOnboarding} />
           ) : (
             <DashboardOverview
               firstName={firstName}
