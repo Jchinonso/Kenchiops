@@ -4,11 +4,15 @@
 # Routes traffic to Docker services on the internal network.
 
 kenchiops.app {
-	# GitHub webhook delivery → github-app service directly
-	# (GitHub sends webhooks to the configured URL, needs direct routing)
-	reverse_proxy /webhooks/github* github-app:3002
+	# GitHub webhook delivery → github-app service
+	# GitHub App webhook URL is /webhooks/github, but the service route is /api/github/webhook
+	handle /webhooks/github {
+		rewrite * /api/github/webhook
+		reverse_proxy github-app:3002
+	}
 
-	# GitHub App post-install setup redirect
+	# GitHub App post-install setup redirect → github-app service
+	# The service route is /github/setup (mounted at root)
 	reverse_proxy /github/setup* github-app:3002
 
 	# Slack OAuth and event routes → slack-bot service
