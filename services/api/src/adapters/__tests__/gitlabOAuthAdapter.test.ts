@@ -79,6 +79,7 @@ const createGitLabUserProfile = (overrides: Record<string, unknown> = {}) => ({
   avatar_url: "https://gitlab.com/uploads/avatar.png",
   state: "active",
   web_url: "https://gitlab.com/gitlab-user",
+  confirmed_at: "2024-01-01T00:00:00.000Z",
   ...overrides,
 });
 

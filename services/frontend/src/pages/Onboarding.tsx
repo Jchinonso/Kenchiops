@@ -2,8 +2,8 @@
  * Onboarding Page
  *
  * Full-page onboarding experience for new users who haven't connected
- * any CI provider yet. Guides them to install the GitHub App or
- * connect GitLab to start monitoring their pipelines.
+ * any CI provider yet. GitHub users are guided to install the GitHub App
+ * on their org. GitLab users are guided to connect their group.
  */
 
 import {
@@ -14,7 +14,7 @@ import {
   ExternalLink,
   Zap,
   Shield,
-  MessageSquare,
+  BarChart3,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,7 @@ export const Onboarding = ({ displayName, provider, onSkip }: OnboardingProps) =
         </h1>
         <p className="text-base text-gray-500 dark:text-gray-400 max-w-md mx-auto">
           {isGitHub
-            ? "Install the Kenchi GitHub App to start getting AI-powered failure analysis on every GitHub Actions run."
+            ? "Install the Kenchi GitHub App on your organization to start getting AI-powered failure analysis on every GitHub Actions run."
             : "Connect your GitLab group to start getting AI-powered failure analysis on every pipeline run."}
         </p>
       </div>
@@ -152,9 +152,9 @@ export const Onboarding = ({ displayName, provider, onSkip }: OnboardingProps) =
               description="Alert deduplication, severity scoring, and correlation."
             />
             <FeatureCard
-              icon={<MessageSquare className="w-4 h-4 text-purple-500" />}
-              title="Slack Notifications"
-              description="Get analysis results delivered to your team channels."
+              icon={<BarChart3 className="w-4 h-4 text-purple-500" />}
+              title="Failure Dashboard"
+              description="Track failure trends, flaky tests, and team recovery time."
             />
           </div>
         </CardContent>

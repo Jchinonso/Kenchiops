@@ -25,35 +25,47 @@ const createMockTenant = (overrides = {}) => ({
 });
 
 // Mock dependencies
-jest.mock("@kenchi/shared", () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  })),
-  config: {
-    SLACK_CLIENT_ID: "test-client-id",
-    SLACK_CLIENT_SECRET: "test-client-secret",
-    SLACK_REDIRECT_URI: "https://example.com/slack/oauth/callback",
-  },
-  HTTP_STATUS: {
-    OK: 200,
-    BAD_REQUEST: 400,
-    INTERNAL_SERVER_ERROR: 500,
-  },
-  SLACK_OAUTH_TIMING: {
-    STATE_EXPIRY_MS: 600000,
-    CLEANUP_INTERVAL_MS: 60000,
-  },
-  SLACK_OAUTH_SCOPES_STRING: "chat:write,channels:read",
-  findByOrgName: jest.fn(),
-  linkSlackWorkspace: jest.fn(),
-  createFromSlackInstall: jest.fn(),
-  getErrorMessage: jest.fn((error: unknown) =>
-    error instanceof Error ? error.message : String(error)
-  ),
-}));
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
+  return {
+    ...actual,
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
+    config: {
+      SLACK_CLIENT_ID: "test-client-id",
+      SLACK_CLIENT_SECRET: "test-client-secret",
+      SLACK_REDIRECT_URI: "https://example.com/slack/oauth/callback",
+    },
+    findByOrgName: jest.fn(),
+    linkSlackWorkspace: jest.fn(),
+    createFromSlackInstall: jest.fn(),
+    getErrorMessage: jest.fn((error: unknown) =>
+      error instanceof Error ? error.message : String(error)
+    ),
+    createOAuthStateStore: jest.fn(() => {
+      const store = new Map<string, { createdAt: number; tenantId?: string }>();
+      return {
+        set: jest.fn(async (key: string, value: { createdAt: number; tenantId?: string }) => {
+          store.set(key, value);
+        }),
+        get: jest.fn(async (key: string) => store.get(key) ?? null),
+        delete: jest.fn(async (key: string) => {
+          store.delete(key);
+        }),
+      };
+    }),
+    asyncHandler: jest.fn(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (fn: any) => (req: any, res: any, next: any) => {
+        Promise.resolve(fn(req, res, next)).catch(next);
+      }
+    ),
+  };
+});
 
 // Mock crypto module - keep actual crypto for createHash (used by express/etag)
 jest.mock("crypto", () => {

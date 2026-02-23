@@ -63,6 +63,12 @@ jest.mock("@kenchi/shared", () => ({
   getErrorMessage: jest.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error)
   ),
+  createInternalAuthMiddleware: jest.fn(
+    () =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (_req: any, _res: any, next: () => void) =>
+        next()
+  ),
 }));
 
 jest.mock("../services/messageService.js", () => ({

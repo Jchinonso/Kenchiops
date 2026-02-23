@@ -31,6 +31,29 @@ jest.mock("../../core/logger.js", () => ({
   createLogger: jest.fn(() => mockLogger),
 }));
 
+// Mock providerConnection repository — createFromGitHubInstall now calls
+// createProviderConnection outside the transaction, and handleGitHubUninstall
+// calls deactivateByTenantAndProvider. Mock them to avoid hitting the real query.
+const mockCreateProviderConnection = jest.fn<() => Promise<unknown>>().mockResolvedValue({
+  id: "conn-1",
+  tenantId: "tenant-123",
+  provider: "github_app",
+  connectionName: "test-org",
+  isActive: true,
+});
+const mockDeactivateByTenantAndProvider = jest
+  .fn<() => Promise<void>>()
+  .mockResolvedValue(undefined);
+const mockFindTenantByGitHubInstallation = jest.fn<() => Promise<unknown>>();
+
+jest.mock("../../database/providerConnection/repository.js", () => ({
+  createProviderConnection: (...args: unknown[]) => mockCreateProviderConnection(...(args as [])),
+  deactivateByTenantAndProvider: (...args: unknown[]) =>
+    mockDeactivateByTenantAndProvider(...(args as [])),
+  findTenantByGitHubInstallation: (...args: unknown[]) =>
+    mockFindTenantByGitHubInstallation(...(args as [])),
+}));
+
 describe("Tenant Service", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let tenantService: any;
@@ -43,6 +66,7 @@ describe("Tenant Service", () => {
   const mockTenantRow = {
     id: "tenant-123",
     org_name: "test-org",
+    provider: "github",
     status: "active" as const,
     created_at: new Date("2024-01-01"),
     updated_at: new Date("2024-01-02"),
@@ -343,11 +367,8 @@ describe("Tenant Service", () => {
 
   describe("handleGitHubUninstall", () => {
     it("should handle GitHub App uninstallation", async () => {
-      // Mock findTenantByGitHubInstallation (called via the providerConnection lookup)
-      mockQuery.mockResolvedValue({
-        rows: [mockTenantRow],
-        rowCount: 1,
-      });
+      // Mock findTenantByGitHubInstallation to return a tenant row
+      mockFindTenantByGitHubInstallation.mockResolvedValue(mockTenantRow);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockClientQuery = jest
@@ -360,17 +381,14 @@ describe("Tenant Service", () => {
 
       await tenantService.handleGitHubUninstall(12345);
 
-      expect(mockClient.query).toHaveBeenCalledWith(expect.stringContaining("UPDATE tenants"), [
+      expect(mockClientQuery).toHaveBeenCalledWith(expect.stringContaining("UPDATE tenants"), [
         "deleted",
         "tenant-123",
       ]);
     });
 
     it("should log warning when tenant not found", async () => {
-      mockQuery.mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-      });
+      mockFindTenantByGitHubInstallation.mockResolvedValue(null);
 
       await tenantService.handleGitHubUninstall(99999);
 

@@ -13,56 +13,62 @@ const mockSyncDueSources = jest.fn();
 const mockGetKnowledgeDocCountsByType = jest.fn();
 const mockGetTenantRAGStats = jest.fn();
 
-// Mock dependencies
-jest.mock("@kenchi/shared", () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  })),
-  SERVICE_NAMES: { API: "api" },
-  HTTP_STATUS: {
-    OK: 200,
-    CREATED: 201,
-    BAD_REQUEST: 400,
-    INTERNAL_SERVER_ERROR: 500,
-  },
-  API_ROUTES: {
-    RAG_INGEST: "/ingest",
-    RAG_SEARCH: "/search",
-    RAG_STATS: "/stats",
-    RAG_SYNC: "/sync",
-  },
-  KNOWLEDGE_DOC_TYPES: {
-    TROUBLESHOOTING: "troubleshooting",
-    RUNBOOK: "runbook",
-    DOCUMENTATION: "documentation",
-    POSTMORTEM: "postmortem",
-    KNOWN_ISSUES: "known_issues",
-    SOP: "sop",
-    ARCHITECTURE: "architecture",
-  },
-  ingestKnowledgeDoc: mockIngestKnowledgeDoc,
-  searchAll: mockSearchAll,
-  syncDueSources: mockSyncDueSources,
-  getKnowledgeDocCountsByType: mockGetKnowledgeDocCountsByType,
-  getTenantRAGStats: mockGetTenantRAGStats,
-  asyncHandler:
-    (fn: (req: unknown, res: unknown, next: unknown) => Promise<unknown>) =>
-    async (req: unknown, res: unknown, next: unknown) => {
-      try {
-        await fn(req, res, next);
-      } catch (error) {
-        (next as (err: unknown) => void)(error);
-      }
+// Mock dependencies — pull error classes from actual to avoid duplication checker flags
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
+  return {
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
+    SERVICE_NAMES: { API: "api" },
+    HTTP_STATUS: {
+      OK: 200,
+      CREATED: 201,
+      BAD_REQUEST: 400,
+      INTERNAL_SERVER_ERROR: 500,
     },
-  validate: () => (_req: unknown, _res: unknown, next: () => void) => next(),
-  validators: {
-    required: (value: unknown) => value !== undefined && value !== null,
-    string: (value: unknown) => typeof value === "string",
-  },
-}));
+    API_ROUTES: {
+      RAG_INGEST: "/ingest",
+      RAG_SEARCH: "/search",
+      RAG_STATS: "/stats",
+      RAG_SYNC: "/sync",
+    },
+    KNOWLEDGE_DOC_TYPES: {
+      TROUBLESHOOTING: "troubleshooting",
+      RUNBOOK: "runbook",
+      DOCUMENTATION: "documentation",
+      POSTMORTEM: "postmortem",
+      KNOWN_ISSUES: "known_issues",
+      SOP: "sop",
+      ARCHITECTURE: "architecture",
+    },
+    ingestKnowledgeDoc: mockIngestKnowledgeDoc,
+    searchAll: mockSearchAll,
+    syncDueSources: mockSyncDueSources,
+    getKnowledgeDocCountsByType: mockGetKnowledgeDocCountsByType,
+    getTenantRAGStats: mockGetTenantRAGStats,
+    asyncHandler:
+      (fn: (req: unknown, res: unknown, next: unknown) => Promise<unknown>) =>
+      async (req: unknown, res: unknown, next: unknown) => {
+        try {
+          await fn(req, res, next);
+        } catch (error) {
+          (next as (err: unknown) => void)(error);
+        }
+      },
+    validate: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    validators: {
+      required: (value: unknown) => value !== undefined && value !== null,
+      string: (value: unknown) => typeof value === "string",
+    },
+    getEffectiveTenantId: (req: { body?: { tenantId?: string }; query?: { tenantId?: string } }) =>
+      req?.body?.tenantId ?? req?.query?.tenantId ?? "default",
+    ValidationError: actual.ValidationError,
+  };
+});
 
 describe("RAG Core Routes", () => {
   let app: Express;

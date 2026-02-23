@@ -47,6 +47,7 @@ jest.mock("@kenchi/shared", () => {
     logModelSelection: jest.fn(),
     createAnalysis: (...args: unknown[]) => mockCreateAnalysis(...args),
     publish: (...args: unknown[]) => mockPublish(...args),
+    enforcePlanLimit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
   };
 });
 

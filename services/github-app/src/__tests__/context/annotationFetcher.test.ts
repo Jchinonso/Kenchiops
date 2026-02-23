@@ -40,6 +40,12 @@ const mockOctokit = {
       listAnnotations: mockListAnnotations,
     },
   },
+  // paginate calls the method and unwraps .data (like real Octokit paginate)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  paginate: jest.fn(async (method: any, options: any) => {
+    const result = await method(options);
+    return result?.data ?? [];
+  }),
 };
 
 jest.mock("../../services/githubService.js", () => ({
@@ -99,12 +105,16 @@ describe("Annotation Fetcher Service", () => {
         },
       ]);
       expect(mockGetOctokit).toHaveBeenCalledWith(mockInstallationId);
-      expect(mockListAnnotations).toHaveBeenCalledWith({
-        owner: mockOwner,
-        repo: mockRepo,
-        check_run_id: mockCheckRunId,
-        per_page: 20,
-      });
+      // paginate is now called instead of listAnnotations directly
+      expect(mockOctokit.paginate).toHaveBeenCalledWith(
+        mockListAnnotations,
+        expect.objectContaining({
+          owner: mockOwner,
+          repo: mockRepo,
+          check_run_id: mockCheckRunId,
+          per_page: 100,
+        })
+      );
     });
 
     it("should handle multiple annotations with various levels", async () => {
@@ -264,12 +274,16 @@ describe("Annotation Fetcher Service", () => {
     it("should respect GITHUB_CONTEXT_LIMITS.MAX_ANNOTATIONS", async () => {
       await fetchCheckRunAnnotations(mockInstallationId, mockOwner, mockRepo, mockCheckRunId);
 
-      expect(mockListAnnotations).toHaveBeenCalledWith({
-        owner: mockOwner,
-        repo: mockRepo,
-        check_run_id: mockCheckRunId,
-        per_page: 20,
-      });
+      // paginate is called with per_page: 100 for full pagination
+      expect(mockOctokit.paginate).toHaveBeenCalledWith(
+        mockListAnnotations,
+        expect.objectContaining({
+          owner: mockOwner,
+          repo: mockRepo,
+          check_run_id: mockCheckRunId,
+          per_page: 100,
+        })
+      );
     });
 
     it("should handle API errors gracefully and return empty array", async () => {
@@ -296,7 +310,7 @@ describe("Annotation Fetcher Service", () => {
       );
 
       expect(annotations).toEqual([]);
-      expect(mockListAnnotations).not.toHaveBeenCalled();
+      expect(mockOctokit.paginate).not.toHaveBeenCalled();
     });
 
     it("should handle network errors gracefully", async () => {

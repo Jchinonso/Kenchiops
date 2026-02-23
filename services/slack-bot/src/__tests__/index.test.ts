@@ -895,7 +895,7 @@ describe("Slack Bot Service Index", () => {
         trigger_id: "trigger-123",
         view: expect.any(Object),
       });
-      expect(getAvailableRepositories).toHaveBeenCalledWith("12345", "tenant-123");
+      expect(getAvailableRepositories).toHaveBeenCalledWith(12345, "tenant-123");
       expect(buildRepoSelectModal).toHaveBeenCalled();
       // Final view updated via views.update
       expect(mockClient.views.update).toHaveBeenCalledWith({

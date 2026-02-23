@@ -121,6 +121,46 @@
 - `collectFallbackCitations` generates `RB-${idx}` IDs from runbooks array, not from catalog -- test catalog must include them or use empty runbooks
 - Severity thresholds (from constants): critical >= 75, high >= 55, medium >= 35, low >= 20, info >= 0
 
+## API Service Mock Drift Fixes (2026-02-23)
+
+Common missing `@kenchi/shared` mocks in services/api tests:
+
+- **Middleware factories**: `requireTenantMatch`, `requireRole` -- mock as `() => (req, res, next) => next()`
+- **`enforcePlanLimit`** -- mock as `jest.fn().mockResolvedValue(undefined)` (prevents DB access)
+- **`getEffectiveTenantId`** -- mock to return `req.body.tenantId ?? "default"` for route tests
+- **`getLLMSDKClient`** -- mock in `@kenchi/shared` mock to return mock client object (replaces old `jest.mock("openai")` pattern)
+- **`withTimeout`** -- uses real `setTimeout` so works with `jest.useFakeTimers()` + `advanceTimersByTime()`
+- GitLab `emailVerified` uses `confirmed_at` field (not just email presence) -- test fixtures must include `confirmed_at`
+- `analysisServiceAggregation.test.ts` spreads actual `@kenchi/shared` but needs `enforcePlanLimit` override to avoid real DB calls
+
+## Slack Bot Test Coverage (2026-02-23)
+
+- Tests in `services/slack-bot/src/__tests__/` (flat directory)
+- `httpRoutes.test.ts` - 70 tests (message posting, broadcast, health, edge cases)
+- `index.test.ts` - 33 tests (service init, handlers, event registration)
+- `oauthRoutes.test.ts` - 51 tests (OAuth flow, tenant linking, HTML responses)
+- `repoSelectHandler.test.ts` - 30 tests (modal submission, mapping CRUD, edge cases)
+- `commandHandler.test.ts`, `mentionHandler.test.ts` - also in same directory
+
+### Slack Bot Mock Drift Pattern (Critical)
+
+- `@kenchi/shared` exports grow over time but test mocks are manual complete replacements
+- When source adds new `@kenchi/shared` imports, tests break with "X is not a function"
+- Common missing mocks: `createInternalAuthMiddleware`, `createOAuthStateStore`, `createRateLimitMiddleware`, `createSecurityHeaders`
+- Middleware factory mocks pattern: `jest.fn(() => (req, res, next) => next())`
+- `createOAuthStateStore` must return object with `set`, `get`, `delete` async methods
+- `channelHandler.js` mock must include `clearRepoCache` -- without it, the try/catch in repoSelectHandler swallows the error silently and downstream assertions fail
+- `Number()` coercion on `externalOrgId` means test assertions must use number, not string
+
+## Jest/Vitest Separation (Critical - 2026-02-23)
+
+- Root `jest.config.js` has `testPathIgnorePatterns` that excludes `services/frontend/`
+- Frontend tests use Vitest (imported from `"vitest"`), cannot be run with Jest from root
+- Frontend tests MUST be run from `services/frontend/` directory: `cd services/frontend && npx vitest run`
+- The `@/` path alias only resolves when Vitest has the frontend vite.config.ts (which defines the alias)
+- Running `npx vitest` from monorepo root without `--config` will fail to resolve `@/` imports
+- SEVERITY_STYLES in formatters.ts includes "critical" as a valid severity (purple style) -- tests updated
+
 ## Common Gotchas
 
 - `jwt.sign()` with `expiresIn: -10` creates an already-expired token for testing

@@ -31,6 +31,7 @@ jest.mock("../handlers/channelHandler.js", () => ({
   UNCONFIGURE_MODAL_CALLBACK: "unconfigure_modal",
   UNCONFIGURE_SELECT_ACTION_ID: "unconfigure_select_action",
   buildRepoConfiguredMessage: jest.fn(() => "Repository configured successfully!"),
+  clearRepoCache: jest.fn(),
 }));
 
 describe("Repository Selection Handler", () => {

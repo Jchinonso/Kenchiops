@@ -62,6 +62,11 @@ jest.mock("@kenchi/shared", () => ({
   validators: {
     required: (value: unknown) => value !== undefined && value !== null,
   },
+  requireTenantMatch: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  requireRole:
+    (..._roles: string[]) =>
+    (_req: unknown, _res: unknown, next: () => void) =>
+      next(),
 }));
 
 describe("RAG Cost Routes", () => {

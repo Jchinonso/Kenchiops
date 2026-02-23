@@ -136,8 +136,11 @@ describe("getSeverityStyle", () => {
     expect(getSeverityStyle(null)).toBe(SEVERITY_STYLES.default);
   });
 
+  it("should return critical severity style for 'critical'", () => {
+    expect(getSeverityStyle("critical")).toBe(SEVERITY_STYLES.critical);
+  });
+
   it("should return default style for unknown severity strings", () => {
-    expect(getSeverityStyle("critical")).toBe(SEVERITY_STYLES.default);
     expect(getSeverityStyle("")).toBe(SEVERITY_STYLES.default);
     expect(getSeverityStyle("HIGH")).toBe(SEVERITY_STYLES.default); // case-sensitive
     expect(getSeverityStyle("unknown")).toBe(SEVERITY_STYLES.default);

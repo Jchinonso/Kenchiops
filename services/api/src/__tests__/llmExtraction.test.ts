@@ -2,6 +2,8 @@
  * Unit tests for LLM Extraction Adapter
  *
  * Tests the extractor factory, timeout behavior, and provider configuration.
+ * Mocks getLLMSDKClient and withTimeout from @kenchi/shared to isolate
+ * the adapter from real LLM SDK and timer behavior.
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
@@ -10,23 +12,19 @@ import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals
 
 const mockCreate = jest.fn();
 
-jest.mock("openai", () => {
-  return {
-    __esModule: true,
-    default: jest.fn().mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: (...args: unknown[]) => mockCreate(...args),
-        },
-      },
-    })),
-  };
-});
+const mockLLMClient = {
+  chat: {
+    completions: {
+      create: (...args: unknown[]) => mockCreate(...args),
+    },
+  },
+};
 
 jest.mock("@kenchi/shared", () => {
   const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
   return {
     ...actual,
+    getLLMSDKClient: jest.fn(() => mockLLMClient),
     config: {
       OPENAI_API_KEY: "test-api-key",
       LLM_PROVIDER: "openai",
@@ -44,6 +42,7 @@ import type { ExtractionOptions, ExtractorFunction } from "../adapters/llmExtrac
 // ==================== Tests ====================
 
 describe("LLM Extraction Adapter", () => {
+  // let: reassigned in beforeEach for fresh extractor per test
   let extractor: ExtractorFunction;
 
   beforeEach(() => {

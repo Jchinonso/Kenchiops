@@ -129,7 +129,8 @@ describe("Consolidated Poster Service", () => {
         expect.objectContaining({
           repository: "testowner/testrepo",
           consolidated: true,
-        })
+        }),
+        expect.objectContaining({ internalAuth: true })
       );
     });
 
@@ -139,7 +140,8 @@ describe("Consolidated Poster Service", () => {
 
       expect(mockResilientPost).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ consolidated: true })
+        expect.objectContaining({ consolidated: true }),
+        expect.objectContaining({ internalAuth: true })
       );
     });
 
@@ -149,7 +151,8 @@ describe("Consolidated Poster Service", () => {
 
       expect(mockResilientPost).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ repository: "testowner/testrepo" })
+        expect.objectContaining({ repository: "testowner/testrepo" }),
+        expect.objectContaining({ internalAuth: true })
       );
     });
 
@@ -159,7 +162,8 @@ describe("Consolidated Poster Service", () => {
 
       expect(mockResilientPost).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ failure_count: 1 })
+        expect.objectContaining({ failure_count: 1 }),
+        expect.objectContaining({ internalAuth: true })
       );
     });
 
@@ -298,7 +302,8 @@ describe("Consolidated Poster Service", () => {
 
       expect(mockResilientPost).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ commit_sha: "abc123def456789012345678901234567890abcd" })
+        expect.objectContaining({ commit_sha: "abc123def456789012345678901234567890abcd" }),
+        expect.objectContaining({ internalAuth: true })
       );
     });
 
@@ -308,7 +313,8 @@ describe("Consolidated Poster Service", () => {
 
       expect(mockResilientPost).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ installation_id: 12345 })
+        expect.objectContaining({ installation_id: 12345 }),
+        expect.objectContaining({ internalAuth: true })
       );
     });
 

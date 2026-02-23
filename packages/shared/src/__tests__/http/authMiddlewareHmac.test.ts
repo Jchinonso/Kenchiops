@@ -229,6 +229,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const bodyPayload = { repository: "org/repo", commit: "abc123" };
       const req = createMockRequest({
         path: "/api/v1/dashboard/stats",
+        method: "POST",
         headers: {
           "x-kenchi-signature": "sha256=valid-sig",
           "x-kenchi-timestamp": "1234567890",
@@ -608,7 +609,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       expect(enrichedReq.context.requestId).toBe("test-req-id");
     });
 
-    it("should not modify context when req.context does not exist", () => {
+    it("should create context with actor when req.context does not exist and service is known", () => {
       mockVerifyInternalSignature.mockReturnValue(true);
 
       const req = createMockRequest({
@@ -627,8 +628,10 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
 
       // Should not throw and should call next without error
       expect(next).toHaveBeenCalledWith();
-      // Verify context was not created from scratch
-      expect((req as Request & { context?: RequestContext }).context).toBeUndefined();
+      // When service is known, context is created with actor even if req.context was absent
+      expect((req as Request & { context?: RequestContext }).context).toEqual({
+        actor: "service:github-app",
+      });
     });
 
     it("should not set req.user for HMAC-authed requests (only JWT sets user)", () => {
@@ -749,6 +752,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
 
       const req = createMockRequest({
         path: "/api/v1/dashboard/stats",
+        method: "POST",
         headers: {
           "x-kenchi-signature": "sha256=valid",
           "x-kenchi-timestamp": "1234567890",

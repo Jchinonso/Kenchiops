@@ -198,8 +198,11 @@ describe("Setup Routes", () => {
     });
 
     it("should link Slack workspace when state provided", async () => {
-      // findSlackConnection returns a connection for the Slack tenant
-      mockFindSlackConnection.mockResolvedValue(createMockSlackConnection());
+      // First call: existingSlackConn for the GitHub tenant — no Slack yet
+      // Second call: slackTenantConn for the Slack tenant — has bot token
+      mockFindSlackConnection
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(createMockSlackConnection());
 
       const response = await request(app).get("/github/setup").query({
         installation_id: "12345",
@@ -268,7 +271,11 @@ describe("Setup Routes", () => {
     });
 
     it("should handle linking errors", async () => {
-      mockFindSlackConnection.mockResolvedValue(createMockSlackConnection());
+      // First call: existingSlackConn for GitHub tenant — no Slack yet
+      // Second call: slackTenantConn for Slack tenant — has bot token
+      mockFindSlackConnection
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(createMockSlackConnection());
       mockLinkSlackWorkspace.mockRejectedValue(new Error("Link error"));
 
       const response = await request(app).get("/github/setup").query({

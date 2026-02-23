@@ -7,6 +7,7 @@ const config = {
   testEnvironment: 'node',
   roots: ['<rootDir>/packages', '<rootDir>/services'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/', '<rootDir>/services/frontend/'],
   
   // Performance optimizations
   maxWorkers: process.env.CI ? '50%' : '100%', // Use 50% of CPUs in CI to avoid overload
