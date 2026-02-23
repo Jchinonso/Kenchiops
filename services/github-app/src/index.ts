@@ -105,14 +105,21 @@ const createApp = (): express.Express => {
   // Required for rate limiting to work correctly behind reverse proxies
   app.set("trust proxy", 1);
 
-  // Capture raw body for webhook signature verification
-  // This must come before express.json() so we have the original payload
-  // Use configured limit for large CI context payloads
+  // Capture raw body for webhook signature verification (VULN-011).
+  // Only capture rawBody for webhook paths to reduce memory overhead.
+  // Object.assign is required because Express verify callbacks must mutate req by design
+  // (this is a framework-boundary side effect, allowed per CLAUDE.md rule 3).
   app.use(
     express.json({
       limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
       verify: (req: express.Request, _res, buf) => {
-        req.rawBody = buf;
+        const isWebhookPath =
+          req.originalUrl?.startsWith("/api/github/webhook") ??
+          req.originalUrl?.startsWith("/webhooks/") ??
+          false;
+        if (isWebhookPath) {
+          Object.assign(req, { rawBody: buf });
+        }
       },
     })
   );

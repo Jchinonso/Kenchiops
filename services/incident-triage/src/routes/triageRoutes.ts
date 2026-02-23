@@ -16,6 +16,7 @@ import {
   createLogger,
   ValidationError,
   NotFoundError,
+  AuthorizationError,
   getTriageResultById,
   getTriageStats,
   getSeverityDistributionBySource,
@@ -24,6 +25,24 @@ import { mapStatsToMetrics } from "../services/metricsService.js";
 
 const router = Router();
 const logger = createLogger("triage-routes");
+
+// ==================== Helpers ====================
+
+/**
+ * Extract tenantId from authenticated user or throw (VULN-006).
+ */
+const requireTenantId = (req: Request): string => {
+  const tenantId = req.user?.tenantId;
+
+  if (!tenantId) {
+    throw new AuthorizationError(
+      "No organization linked. Connect a GitHub or GitLab account to get started.",
+      { operation: "requireTenantId" }
+    );
+  }
+
+  return tenantId;
+};
 
 // ==================== Handlers ====================
 
@@ -35,10 +54,7 @@ const logger = createLogger("triage-routes");
  * to prevent Express from matching "stats" as an :id parameter.
  */
 const handleTriageStats = async (req: Request, res: Response): Promise<void> => {
-  const tenantId = (req.query.tenantId as string | undefined)?.trim();
-  if (!tenantId) {
-    throw new ValidationError("tenantId query parameter is required");
-  }
+  const tenantId = requireTenantId(req);
 
   const stats = await getTriageStats(tenantId);
   const metrics = mapStatsToMetrics(stats);
@@ -61,8 +77,14 @@ const handleGetTriageResult = async (req: Request, res: Response): Promise<void>
     throw new ValidationError("Triage result ID is required");
   }
 
+  const tenantId = requireTenantId(req);
   const result = await getTriageResultById(id);
   if (!result) {
+    throw new NotFoundError("Triage result not found", { metadata: { id } });
+  }
+
+  // Tenant isolation: verify the record belongs to the authenticated tenant (VULN-006)
+  if (result.tenantId !== tenantId) {
     throw new NotFoundError("Triage result not found", { metadata: { id } });
   }
 
@@ -74,10 +96,7 @@ const handleGetTriageResult = async (req: Request, res: Response): Promise<void>
  * Severity distribution grouped by alert source.
  */
 const handleSeverityBySource = async (req: Request, res: Response): Promise<void> => {
-  const tenantId = (req.query.tenantId as string | undefined)?.trim();
-  if (!tenantId) {
-    throw new ValidationError("tenantId query parameter is required");
-  }
+  const tenantId = requireTenantId(req);
 
   const distribution = await getSeverityDistributionBySource(tenantId);
 

@@ -209,12 +209,13 @@ export const TEST_FAILURE_FILE_INFERENCE_PATTERN =
  * Lower confidence — requires `:line` suffix and restricts to realistic file extensions.
  *
  * Rejects version numbers (`v1.2.3:45`), Java packages (`java.lang.null:123`),
- * and error codes (`error.code:404`) by disallowing dots in the filename body
- * and capping extension length at 4 characters.
+ * error codes (`error.code:404`), and numeric suffixes (`config.123:456`)
+ * by disallowing dots in the filename body and requiring extensions to start
+ * with a letter and be 1-3 characters (e.g., `.ts`, `.py`, `.yml`).
  *
  * Groups: [filename, lineNumber]
  */
-export const TEST_FAILURE_BARE_FILE_PATTERN = /(?:^|\s|[(])([\w][\w-]*\.\w{1,4}):(\d+)/;
+export const TEST_FAILURE_BARE_FILE_PATTERN = /(?:^|\s|[(])([\w][\w-]*\.[a-zA-Z]\w{0,2}):(\d+)/;
 
 /**
  * NOTE: Dependency change detection is now handled by AI.
@@ -283,7 +284,7 @@ export const ABSOLUTE_PATH_PATTERN =
  * jobs produce false positives from CI infrastructure output (e.g., `##[error]`).
  */
 export const LINT_JOB_KEYWORDS =
-  /\b(?:lint|format|style|check|eslint|biome|tsc|typecheck|type-check|compile|prettier|stylelint|rubocop|clippy|flake8|pylint|golangci)\b/i;
+  /\b(?:lint|format|style|eslint|biome|tsc|typecheck|type[\s-]check|check[\s-]types|compile|prettier|stylelint|rubocop|clippy|flake8|pylint|golangci)\b/i;
 
 // ==================== Action Review Patterns ====================
 

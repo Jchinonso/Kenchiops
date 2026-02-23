@@ -101,7 +101,7 @@ const buildAppHomeContext = async (
     repositoryMappings,
     tenant: tenant
       ? {
-          githubOrg: tenant.githubOrg,
+          orgName: tenant.orgName,
           status: tenant.status,
           slackTeamName: tenant.slackTeamName ?? undefined,
         }
@@ -157,7 +157,7 @@ export const handleAppHomeOpened = async (client: SlackClient, userId: string): 
       workspaceId,
       botStatus: context.botStatus,
       repositoryMappingsCount: context.repositoryMappings.length,
-      hasGitHubConnection: !!context.tenant?.githubOrg,
+      hasGitHubConnection: !!context.tenant?.orgName,
     });
   } catch (error) {
     logger.error("Failed to publish App Home view", {

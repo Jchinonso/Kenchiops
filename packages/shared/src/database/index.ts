@@ -26,7 +26,7 @@ export {
   type UpdateRAGBudgetInput,
   // Lookup operations
   findByGitHubInstallation,
-  findByGitHubOrg,
+  findByOrgName,
   findByGitLabGroup,
   findBySlackWorkspace,
   findById,
@@ -37,6 +37,7 @@ export {
   countTenantMembers,
   // Lifecycle operations
   createFromGitHubInstall,
+  createFromGitHubLogin,
   createFromGitLabGroup,
   linkSlackWorkspace,
   createFromSlackInstall,

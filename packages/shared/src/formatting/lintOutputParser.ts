@@ -6,7 +6,8 @@
  *
  * Supports any linter using the stylish output format (ESLint, Biome, stylelint,
  * golangci-lint, etc.), colon-delimited format (Pylint, Flake8, Rubocop, Clippy),
- * and TypeScript compiler (tsc).
+ * TypeScript compiler (tsc), and format checkers (any language — detected via
+ * structural output shapes: diff headers, tagged prefixes, formatting keywords).
  *
  * @module formatting/lintOutputParser
  */
@@ -141,6 +142,142 @@ const parseCodeAndMessage = (tail: string): { readonly code: string; readonly me
  */
 const TSC_ERROR_PATTERN = /^(.+?)\((\d+),(\d+)\):\s+(?:error|warning)\s+(TS\d+):\s+(.+?)\s*$/;
 
+// ==================== Format Checker Parser ====================
+//
+// TWO-TIER STRATEGY for language-agnostic format checker detection:
+//
+// Tier 1: Structural patterns (high confidence, matches output shapes)
+//   Pattern A: "Diff in <file> at line <N>:" — diff with location info
+//   Pattern B: "--- [a/]<file>" — unified diff header
+//   Pattern C: "[tag] <file>" or "TAG: <file>" — tagged prefix
+//   Pattern D: Context-aware extractor — lines with formatting keywords + file path
+//
+// Tier 2: Bare file path fallback (used ONLY when no other parser found anything)
+//   Catches formatters that print file-per-line output (e.g., gofmt -l, shfmt -l).
+//   Safe because parseLintOutput is only called on lint/format CI jobs.
+
+// ---- Pattern A: Diff with location info ----
+
+/**
+ * Diff output with file path and line number:
+ *   Diff in src/main.rs at line 15:
+ *
+ * Checked first because it provides line numbers (highest value).
+ * Groups: [filePath, lineNumber]
+ */
+const DIFF_LOCATION_PATTERN = /^Diff in\s+(\S+\.\w+)\s+at line\s+(\d+):/;
+
+// ---- Pattern B: Unified diff header ----
+
+/**
+ * Unified diff "before" file header. Covers ANY formatter in `--diff` mode:
+ *   --- a/src/file.go
+ *   --- src/file.py
+ *
+ * Only matches `---` (not `+++`) to avoid duplicates for the same file.
+ * Groups: [filePath]
+ */
+const DIFF_HEADER_PATTERN = /^---\s+(?:[ab]\/)?(\S+\.\w+)\s*$/;
+
+// ---- Pattern C: Tagged prefix ----
+
+/**
+ * Matches lines with a bracketed tag or uppercase label prefix followed by a file path:
+ *   [warn] src/file.ts
+ *   [error] src/file.py
+ *   ERROR: src/file.py Imports are incorrectly sorted
+ *   WARNING: src/file.rb
+ *
+ * No `$` anchor — allows trailing text after the file path.
+ * Groups: [filePath]
+ */
+const TAGGED_PREFIX_PATTERN = /^(?:\[[\w-]+\]|[A-Z]{2,}:)\s+(\S+\.\w+)/;
+
+// ---- Pattern D: Context-aware extractor ----
+
+/**
+ * Structural keywords indicating formatting-related output.
+ * Matches verb forms: reformat, reformatted, reformatting, format, formatted, formatting,
+ * changed, fixed, corrected, beautified, not formatted.
+ */
+const FORMAT_CONTEXT_KEYWORDS =
+  /\b(?:(?:re)?format(?:t(?:ed|ing))?|changed|fixed|corrected|beautified|not formatted)\b/i;
+
+/**
+ * Extracts a file path (non-whitespace token with a dot-extension) from a line.
+ * Requires whitespace or start/end boundaries around the path.
+ * Groups: [filePath]
+ */
+const FILE_PATH_IN_LINE = /(?:^|\s)(\S+\.\w+)(?:\s|$)/;
+
+/**
+ * Guard: rejects lines where the first non-whitespace token is a number.
+ * Prevents summary lines like "2 files would be reformatted" from matching.
+ */
+const STARTS_WITH_DIGIT = /^\d/;
+
+/**
+ * Try to extract a file path from a context-aware line.
+ * The line must contain a formatting keyword AND a plausible file path.
+ * Returns the file path or null.
+ */
+const extractContextAwarePath = (line: string): string | null => {
+  if (!FORMAT_CONTEXT_KEYWORDS.test(line)) {
+    return null;
+  }
+
+  // Reject summary lines that start with a digit (e.g., "2 files would be reformatted")
+  if (STARTS_WITH_DIGIT.test(line)) {
+    return null;
+  }
+
+  const pathMatch = FILE_PATH_IN_LINE.exec(line);
+  if (!pathMatch) {
+    return null;
+  }
+
+  const candidate = pathMatch[1];
+  return isPlausibleSourceFile(candidate) ? candidate : null;
+};
+
+/**
+ * Try to match a line against format checker structural patterns (A through D).
+ * Returns the extracted file path, line number, and message if matched, or null.
+ */
+const matchFormatChecker = (
+  line: string
+): { readonly filePath: string; readonly line: number; readonly message: string } | null => {
+  // Pattern A: diff with location (checked first — provides line numbers)
+  const diffLocMatch = DIFF_LOCATION_PATTERN.exec(line);
+  if (diffLocMatch) {
+    return {
+      filePath: diffLocMatch[1],
+      line: Number(diffLocMatch[2]),
+      message: "File requires formatting",
+    };
+  }
+
+  // Pattern B: unified diff header
+  const diffHeaderMatch = DIFF_HEADER_PATTERN.exec(line);
+  if (diffHeaderMatch) {
+    return { filePath: diffHeaderMatch[1], line: 0, message: "File requires formatting" };
+  }
+
+  // Pattern C: tagged prefix — [tag] or TAG: followed by a file path
+  const taggedMatch = TAGGED_PREFIX_PATTERN.exec(line);
+  if (taggedMatch) {
+    return { filePath: taggedMatch[1], line: 0, message: "File requires formatting" };
+  }
+
+  // Pattern D: context-aware extractor — formatting keyword + file path
+  const contextPath = extractContextAwarePath(line);
+  if (contextPath !== null) {
+    return { filePath: contextPath, line: 0, message: "File requires formatting" };
+  }
+
+  return null;
+};
+
 // ==================== Main Parser ====================
 
 /**
@@ -150,6 +287,8 @@ const TSC_ERROR_PATTERN = /^(.+?)\((\d+),(\d+)\):\s+(?:error|warning)\s+(TS\d+):
  * - Stylish format (ESLint, Biome, stylelint) — file path on its own line, errors indented
  * - Colon-delimited format (Pylint, Flake8, Rubocop, Clippy, golangci-lint) — file:line:col: message
  * - TypeScript compiler (tsc) — file(line,col): error TSxxxx: message
+ * - Format checkers (any language) — structural patterns (diff headers, tagged
+ *   prefixes, formatting keywords), and bare file path fallback
  *
  * @param log - Raw CI log output (may include timestamps, ANSI codes, etc.)
  * @returns Array of parsed lint errors
@@ -162,10 +301,13 @@ export const parseLintOutput = (log: string): readonly LLMLintError[] => {
   // Strip CI timestamps and ANSI codes that break regex patterns.
   // GitHub Actions prepends `2024-01-15T10:30:45.1234567Z ` to every line,
   // which prevents FILE_PATH_PATTERN, TSC_ERROR_PATTERN, etc. from matching.
-  const cleaned = stripAnsiEscapes(log).replace(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_ALL, "");
+  const cleaned = stripAnsiEscapes(log)
+    .replace(TEXT_SANITIZATION_PATTERNS.CI_TIMESTAMP_ALL, "")
+    .replace(TEXT_SANITIZATION_PATTERNS.CI_GROUP_ALL, "");
 
   const lines = cleaned.split("\n");
   const errors: LLMLintError[] = [];
+  const formatErrorFiles = new Set<string>();
 
   // let: tracks current file context as we scan stylish output line-by-line
   let currentFile: string | null = null;
@@ -226,11 +368,53 @@ export const parseLintOutput = (log: string): readonly LLMLintError[] => {
       }
     }
 
+    // Check for format checker output (structural pattern matching)
+    const formatMatch = matchFormatChecker(trimmed);
+    if (formatMatch) {
+      const cleanedPath = stripCIPathPrefix(formatMatch.filePath);
+      if (isPlausibleSourceFile(cleanedPath) && !formatErrorFiles.has(cleanedPath)) {
+        formatErrorFiles.add(cleanedPath);
+        errors.push({
+          file: cleanedPath,
+          line: formatMatch.line,
+          code: "format",
+          message: formatMatch.message,
+        });
+      }
+      continue;
+    }
+
     // Check if this line is a file path (stylish format prints paths flush-left)
     const pathMatch = FILE_PATH_PATTERN.exec(trimmed);
     if (pathMatch) {
       currentFile = stripCIPathPrefix(pathMatch[1]);
     }
+  }
+
+  // Tier 3 fallback: if no errors found by ANY parser, treat bare file paths as format errors.
+  // Safe because parseLintOutput is only called on lint/format CI jobs (filtered by LINT_JOB_KEYWORDS).
+  // Catches: gofmt -l, shfmt -l, terraform fmt -check, swift-format, nixfmt, etc.
+  if (errors.length === 0) {
+    const fallbackErrors = lines
+      .map((fileLine) => fileLine.trim())
+      .filter((fileLine) => fileLine.length > 0)
+      .reduce<readonly LLMLintError[]>((acc, fileLine) => {
+        const bareMatch = FILE_PATH_PATTERN.exec(fileLine);
+        if (!bareMatch) {
+          return acc;
+        }
+        const cleanedPath = stripCIPathPrefix(bareMatch[1]);
+        if (!isPlausibleSourceFile(cleanedPath) || formatErrorFiles.has(cleanedPath)) {
+          return acc;
+        }
+        formatErrorFiles.add(cleanedPath);
+        return [
+          ...acc,
+          { file: cleanedPath, line: 0, code: "format", message: "File requires formatting" },
+        ];
+      }, []);
+
+    return [...errors, ...fallbackErrors];
   }
 
   return errors;

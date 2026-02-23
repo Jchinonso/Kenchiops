@@ -10,6 +10,7 @@ import {
   getErrorMessage,
   UI_EMOJI,
   isDocIngestionRequest,
+  findBySlackWorkspace,
 } from "@kenchi/shared";
 import { formatAnalysisMessage, formatErrorMessage } from "../formatters.js";
 import { formatQAResponse, formatQAErrorMessage } from "../formatters/qaFormatter.js";
@@ -110,7 +111,8 @@ const handleAnalysisRequest = async (
   channel: string,
   threadTs: string,
   eventTs: string,
-  say: SayFn
+  say: SayFn,
+  tenantId?: string
 ): Promise<void> => {
   const timestamp = new Date(
     parseFloat(eventTs) * TIME_CONSTANTS.MILLISECONDS_PER_SECOND
@@ -124,7 +126,7 @@ const handleAnalysisRequest = async (
     timestamp,
   };
 
-  const { analysis, confidence } = await performAnalysis(eventWithCorrectTime);
+  const { analysis, confidence } = await performAnalysis(eventWithCorrectTime, tenantId);
 
   logger.info("Mention analysis completed", {
     eventId: analysisEvent.id,
@@ -201,7 +203,8 @@ export const handleAppMention = async (event: AppMentionEvent, say: SayFn): Prom
 
     // Otherwise, perform AI analysis
     logger.info("Routing to analysis handler", { query: query.slice(0, 50) });
-    await handleAnalysisRequest(query, userId, event.channel, threadTs, event.ts, say);
+    const tenant = event.team ? await findBySlackWorkspace(event.team) : null;
+    await handleAnalysisRequest(query, userId, event.channel, threadTs, event.ts, say, tenant?.id);
   } catch (error) {
     logger.error("Error processing app mention", {
       error: getErrorMessage(error),

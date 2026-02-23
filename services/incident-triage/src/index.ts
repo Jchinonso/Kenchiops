@@ -5,7 +5,6 @@
  * normalizes them, and runs a triage pipeline for severity assessment and routing.
  */
 
-import crypto from "node:crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
@@ -14,6 +13,8 @@ import {
   createLogger,
   errorHandler,
   requestLogger,
+  requestContextMiddleware,
+  authMiddleware,
   createRateLimitMiddleware,
   createSecurityHeaders,
   setupGracefulShutdown,
@@ -86,8 +87,8 @@ const createApp = (
   const { NODE_ENV } = config;
   app.use(createSecurityHeaders(NODE_ENV === "production"));
 
-  // CORS
-  app.use(cors());
+  // CORS — restrict origin to configured frontend URL (VULN-001)
+  app.use(cors({ origin: config.FRONTEND_URL, credentials: true }));
 
   // Parse cookies
   app.use(cookieParser());
@@ -112,18 +113,12 @@ const createApp = (
   );
   app.use(requestLogger);
 
-  // Create RequestContext for every request (CLAUDE.md Hard Rule #8).
-  // Object.assign is required because Express middleware must mutate req by design
-  // (framework-boundary side effect, same pattern as rawBody capture above).
-  app.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
-    Object.assign(req, {
-      context: {
-        requestId: crypto.randomUUID(),
-        tenantId: (req.headers["x-tenant-id"] as string) ?? "system",
-      },
-    });
-    next();
-  });
+  // RequestContext + JWT/HMAC auth (VULN-002/012)
+  // requestContextMiddleware creates req.context with requestId + anonymous tenantId.
+  // authMiddleware enriches it with the authenticated user's tenantId from JWT.
+  // Webhook paths are excluded from auth via PUBLIC_ROUTES in @kenchi/shared.
+  app.use(requestContextMiddleware);
+  app.use(authMiddleware);
 
   app.use(triageRateLimiter.middleware());
 

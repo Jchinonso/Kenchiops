@@ -26,6 +26,7 @@ export const TENANT_STATUS = {
 export const AUDIT_ACTIONS = {
   GITHUB_INSTALLED: "github_installed",
   GITHUB_UNINSTALLED: "github_uninstalled",
+  GITHUB_LINKED: "github_linked",
   GITLAB_LINKED: "gitlab_linked",
   SLACK_INSTALLED: "slack_installed",
   SLACK_UNINSTALLED: "slack_uninstalled",
@@ -70,8 +71,8 @@ export const RAG_BUDGET_DEFAULTS = {
 export const TENANT_QUERIES = {
   // Lookup queries
   FIND_BY_GITHUB_INSTALLATION: `SELECT * FROM tenants WHERE github_installation_id = $1 AND status != $2`,
-  FIND_BY_GITHUB_ORG: `SELECT * FROM tenants WHERE LOWER(github_org) = LOWER($1) AND status != $2`,
-  FIND_BY_GITHUB_ORG_ANY_STATUS: `SELECT * FROM tenants WHERE LOWER(github_org) = LOWER($1)`,
+  FIND_BY_ORG_NAME: `SELECT * FROM tenants WHERE LOWER(org_name) = LOWER($1) AND status != $2`,
+  FIND_BY_ORG_NAME_ANY_STATUS: `SELECT * FROM tenants WHERE LOWER(org_name) = LOWER($1)`,
   FIND_BY_GITLAB_GROUP: `SELECT * FROM tenants WHERE LOWER(gitlab_group_path) = LOWER($1) AND status != $2`,
   FIND_BY_SLACK_WORKSPACE: `SELECT * FROM tenants WHERE slack_workspace_id = $1 AND status != $2 ORDER BY CASE WHEN github_installation_id IS NOT NULL THEN 0 ELSE 1 END, updated_at DESC`,
   FIND_BY_ID: `SELECT * FROM tenants WHERE id = $1`,
@@ -79,14 +80,17 @@ export const TENANT_QUERIES = {
   FIND_PENDING_SLACK: `SELECT * FROM tenants WHERE github_installation_id IS NOT NULL AND slack_workspace_id IS NULL AND status = $1 ORDER BY updated_at DESC`,
 
   // Insert queries
-  INSERT_FROM_GITHUB: `INSERT INTO tenants (github_org, github_installation_id, github_app_installed_at, status)
+  INSERT_FROM_GITHUB: `INSERT INTO tenants (org_name, github_installation_id, github_app_installed_at, status)
      VALUES ($1, $2, NOW(), $3)
      RETURNING *`,
-  INSERT_FROM_GITLAB: `INSERT INTO tenants (github_org, gitlab_group_path, status)
+  INSERT_FROM_GITLAB: `INSERT INTO tenants (org_name, gitlab_group_path, status)
      VALUES ($1, $2, $3)
      RETURNING *`,
+  INSERT_FROM_GITHUB_LOGIN: `INSERT INTO tenants (org_name, status)
+     VALUES ($1, $2)
+     RETURNING *`,
   INSERT_FROM_SLACK: `INSERT INTO tenants (
-       github_org,
+       org_name,
        slack_workspace_id,
        slack_team_name,
        slack_bot_token,
@@ -153,7 +157,7 @@ export const AUDIT_QUERIES = {
  */
 export const TENANT_FIELD_MAP = {
   id: "id",
-  github_org: "githubOrg",
+  org_name: "orgName",
   github_installation_id: "githubInstallationId",
   github_app_installed_at: "githubAppInstalledAt",
   slack_workspace_id: "slackWorkspaceId",

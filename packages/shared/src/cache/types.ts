@@ -144,7 +144,7 @@ export interface CachedCheckAnnotation {
 export interface CachedTenant {
   readonly id: string;
   readonly githubInstallationId: number | null;
-  readonly githubOrg: string;
+  readonly orgName: string;
   readonly slackWorkspaceId: string | null;
   readonly slackTeamName: string | null;
   readonly status: string;

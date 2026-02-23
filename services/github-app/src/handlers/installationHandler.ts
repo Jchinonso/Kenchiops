@@ -58,7 +58,7 @@ const handleInstallationCreated = async (
 
   try {
     const tenant = await createFromGitHubInstall({
-      githubOrg: orgName,
+      orgName,
       githubInstallationId: installation.id,
     });
 

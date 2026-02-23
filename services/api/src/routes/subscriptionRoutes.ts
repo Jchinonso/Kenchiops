@@ -13,6 +13,7 @@ import {
   createLogger,
   AuthorizationError,
   ValidationError,
+  requireRole,
   HTTP_STATUS,
   DEFAULT_PLAN_ID,
   type Plan,
@@ -245,7 +246,11 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
 router.get("/api/v1/subscription", asyncHandler(handleGetSubscription));
 router.get("/api/v1/subscription/plans", asyncHandler(handleGetPlans));
 router.get("/api/v1/subscription/usage", asyncHandler(handleGetUsage));
-// Re-add requireRole("admin", "owner") when billing integration is added (KEN-142)
-router.put("/api/v1/subscription/plan", asyncHandler(handleChangePlan));
+// Role enforcement: only admins and owners can change the subscription plan (VULN-009)
+router.put(
+  "/api/v1/subscription/plan",
+  requireRole("admin", "owner"),
+  asyncHandler(handleChangePlan)
+);
 
 export { router as subscriptionRoutes };

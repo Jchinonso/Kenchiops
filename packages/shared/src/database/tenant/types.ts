@@ -21,7 +21,7 @@ import type {
  */
 export interface TenantRow {
   readonly id: string;
-  readonly github_org: string;
+  readonly org_name: string;
   readonly github_installation_id: number | null;
   readonly github_app_installed_at: Date | null;
   readonly slack_workspace_id: string | null;

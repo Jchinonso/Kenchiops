@@ -15,7 +15,7 @@ import type { CachedTenant, CachedMapping } from "./types.js";
 export const toCachedTenant = (tenant: Tenant): CachedTenant => ({
   id: tenant.id,
   githubInstallationId: tenant.githubInstallationId,
-  githubOrg: tenant.githubOrg,
+  orgName: tenant.orgName,
   slackWorkspaceId: tenant.slackWorkspaceId,
   slackTeamName: tenant.slackTeamName,
   status: tenant.status,

@@ -14,6 +14,7 @@ import {
   findBySlackWorkspace,
   findByGitHubInstallation,
   linkSlackWorkspace,
+  deleteTenant,
   getErrorMessage,
 } from "@kenchi/shared";
 
@@ -191,9 +192,19 @@ router.get("/github/setup", async (req: Request, res: Response) => {
 
       logger.info("Successfully linked GitHub and Slack", {
         tenantId: tenant.id,
-        githubOrg: tenant.githubOrg,
+        orgName: tenant.orgName,
         slackWorkspace: slackWorkspaceId,
       });
+
+      // Clean up orphaned Slack-only tenant to prevent duplicate workspace lookups
+      if (slackTenant.id !== tenant.id) {
+        await deleteTenant(slackTenant.id);
+        logger.info("Cleaned up orphaned Slack-only tenant after merge", {
+          orphanedTenantId: slackTenant.id,
+          mergedIntoTenantId: tenant.id,
+          slackWorkspaceId,
+        });
+      }
 
       return { linked: true, teamName: slackTenant.slackTeamName };
     })();
@@ -204,7 +215,7 @@ router.get("/github/setup", async (req: Request, res: Response) => {
       : tenant.slackTeamName;
 
     // Send success page
-    const html = buildSuccessHtml(tenant.githubOrg, slackTeamName || null, isLinked);
+    const html = buildSuccessHtml(tenant.orgName, slackTeamName || null, isLinked);
     res.status(HTTP_STATUS.OK).send(html);
   } catch (error) {
     logger.error("Error processing GitHub setup", {

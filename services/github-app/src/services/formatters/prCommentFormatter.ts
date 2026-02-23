@@ -91,7 +91,7 @@ export const buildHeaderSection = (aggregation: AggregatedFailures): string[] =>
 
     if (workflowContext) {
       contextParts.push(`${UI_EMOJI.workflow} **Workflow:** ${workflowContext.name}`);
-      if (workflowContext.duration && workflowContext.duration !== "unknown") {
+      if (workflowContext.duration) {
         contextParts.push(`${UI_EMOJI.timer} **Duration:** ${workflowContext.duration}`);
       }
     }
@@ -118,7 +118,11 @@ export const buildTestFailureSummary = (
   parsedTestSummary?: ParsedTestSummary | null
 ): string => {
   const uniqueFiles = [
-    ...new Set(testFailures.map((testFailure) => testFailure.file).filter(Boolean)),
+    ...new Set(
+      testFailures
+        .map((testFailure) => testFailure.file)
+        .filter((file): file is string => Boolean(file))
+    ),
   ];
   const unknownFileCount = testFailures.filter((testFailure) => !testFailure.file).length;
   const fileCount = uniqueFiles.length;
@@ -128,7 +132,7 @@ export const buildTestFailureSummary = (
   if (fileCount > 0) {
     const fileList = uniqueFiles
       .slice(0, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS)
-      .map((filePath) => `\`${filePath?.split("/").pop()}\``)
+      .map((filePath) => `\`${filePath.split("/").pop()}\``)
       .join(", ");
     const moreFiles =
       fileCount > GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS
@@ -246,7 +250,12 @@ export const buildTestFailuresSection = (
   );
 
   const breakdown = categorizeFailures(testFailures);
-  const breakdownLines = generateErrorBreakdownVisual(breakdown);
+  const rawBreakdownLines = generateErrorBreakdownVisual(breakdown);
+  // When headline count differs from analyzed count, clarify in the breakdown header
+  const breakdownLines =
+    headlineCount > shownCount && rawBreakdownLines.length > 0
+      ? [`**Error Breakdown** (of ${shownCount} analyzed):`, ...rawBreakdownLines.slice(1)]
+      : rawBreakdownLines;
 
   const testCommandSection = testCommand
     ? [
@@ -278,13 +287,15 @@ export const buildLintFileGroup = (
 ): string[] => {
   const fileName = displayName ?? filePath.split("/").pop() ?? filePath;
   const errorLines = fileErrors.flatMap((lintError) => {
-    const location = lintError.column
-      ? `${lintError.line}:${lintError.column}`
-      : `${lintError.line}`;
+    const location = lintError.line
+      ? lintError.column
+        ? `${lintError.line}:${lintError.column}`
+        : `${lintError.line}`
+      : null;
     const symbol = lintError.symbol ? ` \`${lintError.symbol}\`` : "";
     const lines = [
       `${UI_EMOJI.failure} [${lintError.code}] ${lintError.message}${symbol}`,
-      `   -> ${filePath}:${location}`,
+      `   -> ${filePath}${location ? `:${location}` : ""}`,
     ];
     if (lintError.suggestion) {
       lines.push(`   ${UI_EMOJI.suggestion} ${lintError.suggestion}`);

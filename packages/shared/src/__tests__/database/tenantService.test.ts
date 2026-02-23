@@ -40,7 +40,7 @@ describe("Tenant Service", () => {
 
   const mockTenantRow = {
     id: "tenant-123",
-    github_org: "test-org",
+    org_name: "test-org",
     github_installation_id: 12345,
     github_app_installed_at: new Date("2024-01-01"),
     slack_workspace_id: "T123456",
@@ -67,7 +67,7 @@ describe("Tenant Service", () => {
         [12345, "deleted"]
       );
       expect(result).toMatchObject({
-        githubOrg: "test-org",
+        orgName: "test-org",
         githubInstallationId: 12345,
       });
     });
@@ -95,21 +95,21 @@ describe("Tenant Service", () => {
     });
   });
 
-  describe("findByGitHubOrg", () => {
+  describe("findByOrgName", () => {
     it("should find tenant by organization name", async () => {
       mockQuery.mockResolvedValue({
         rows: [mockTenantRow],
         rowCount: 1,
       });
 
-      const result = await tenantService.findByGitHubOrg("test-org");
+      const result = await tenantService.findByOrgName("test-org");
 
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("LOWER(github_org) = LOWER($1)"),
+        expect.stringContaining("LOWER(org_name) = LOWER($1)"),
         ["test-org", "deleted"]
       );
       expect(result).toMatchObject({
-        githubOrg: "test-org",
+        orgName: "test-org",
       });
     });
 
@@ -119,7 +119,7 @@ describe("Tenant Service", () => {
         rowCount: 1,
       });
 
-      await tenantService.findByGitHubOrg("TEST-ORG");
+      await tenantService.findByOrgName("TEST-ORG");
 
       expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["TEST-ORG", "deleted"]);
     });
@@ -130,7 +130,7 @@ describe("Tenant Service", () => {
         rowCount: 0,
       });
 
-      const result = await tenantService.findByGitHubOrg("non-existent");
+      const result = await tenantService.findByOrgName("non-existent");
 
       expect(result).toBeNull();
     });
@@ -249,7 +249,7 @@ describe("Tenant Service", () => {
   describe("createFromGitHubInstall", () => {
     it("should create new tenant when organization does not exist", async () => {
       const data: CreateTenantFromGitHub = {
-        githubOrg: "new-org",
+        orgName: "new-org",
         githubInstallationId: 54321,
       };
 
@@ -270,13 +270,13 @@ describe("Tenant Service", () => {
         expect.arrayContaining(["new-org", 54321])
       );
       expect(result).toMatchObject({
-        githubOrg: expect.any(String),
+        orgName: expect.any(String),
       });
     });
 
     it("should update existing tenant when organization exists", async () => {
       const data: CreateTenantFromGitHub = {
-        githubOrg: "test-org",
+        orgName: "test-org",
         githubInstallationId: 67890,
       };
 
@@ -303,7 +303,7 @@ describe("Tenant Service", () => {
 
     it("should set status to pending_slack for new tenant", async () => {
       const data: CreateTenantFromGitHub = {
-        githubOrg: "new-org",
+        orgName: "new-org",
         githubInstallationId: 54321,
       };
 
@@ -329,7 +329,7 @@ describe("Tenant Service", () => {
 
     it("should set status to active when updating tenant with Slack", async () => {
       const data: CreateTenantFromGitHub = {
-        githubOrg: "test-org",
+        orgName: "test-org",
         githubInstallationId: 67890,
       };
 
@@ -359,7 +359,7 @@ describe("Tenant Service", () => {
 
     it("should log audit event for GitHub installation", async () => {
       const data: CreateTenantFromGitHub = {
-        githubOrg: "new-org",
+        orgName: "new-org",
         githubInstallationId: 54321,
       };
 
@@ -533,7 +533,7 @@ describe("Tenant Service", () => {
       expect(result).toBeTruthy();
     });
 
-    it("should use githubOrgHint when provided", async () => {
+    it("should use orgName hint when provided", async () => {
       const slackData = {
         slackWorkspaceId: "T123456",
         slackTeamName: "Test Team",

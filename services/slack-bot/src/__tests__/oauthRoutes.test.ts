@@ -30,7 +30,7 @@ jest.mock("@kenchi/shared", () => ({
     CLEANUP_INTERVAL_MS: 60000,
   },
   SLACK_OAUTH_SCOPES_STRING: "chat:write,channels:read",
-  findByGitHubOrg: jest.fn(),
+  findByOrgName: jest.fn(),
   linkSlackWorkspace: jest.fn(),
   createFromSlackInstall: jest.fn(),
   getErrorMessage: jest.fn((error: unknown) =>
@@ -55,9 +55,9 @@ global.fetch = mockFetch;
 
 // Import after mocks
 import { oauthRoutes } from "../routes/oauthRoutes.js";
-import { findByGitHubOrg, linkSlackWorkspace, createFromSlackInstall } from "@kenchi/shared";
+import { findByOrgName, linkSlackWorkspace, createFromSlackInstall } from "@kenchi/shared";
 
-const mockFindByGitHubOrg = findByGitHubOrg as jest.MockedFunction<typeof findByGitHubOrg>;
+const mockFindByGitHubOrg = findByOrgName as jest.MockedFunction<typeof findByOrgName>;
 const mockLinkSlackWorkspace = linkSlackWorkspace as jest.MockedFunction<typeof linkSlackWorkspace>;
 const mockCreateFromSlackInstall = createFromSlackInstall as jest.MockedFunction<
   typeof createFromSlackInstall
@@ -67,7 +67,7 @@ const mockCreateFromSlackInstall = createFromSlackInstall as jest.MockedFunction
 const createMockTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   id: "tenant-123",
   status: "pending_github",
-  githubOrg: "test-org",
+  orgName: "test-org",
   githubInstallationId: null,
   githubAppInstalledAt: null,
   slackWorkspaceId: "T123456",
@@ -119,7 +119,7 @@ describe("OAuth Routes", () => {
     mockCreateFromSlackInstall.mockResolvedValue(
       createMockTenant({
         id: "tenant-new",
-        githubOrg: "",
+        orgName: "",
         slackWorkspaceId: "T789012",
         slackTeamName: "New Team",
         slackBotToken: "xoxb-new-token",
@@ -268,7 +268,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-existing",
           status: "active",
-          githubOrg: "Test Team",
+          orgName: "Test Team",
           githubInstallationId: 12345,
           githubAppInstalledAt: new Date(),
           slackWorkspaceId: null,
@@ -298,7 +298,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-new",
           status: "pending_github",
-          githubOrg: "",
+          orgName: "",
         })
       );
 
@@ -683,7 +683,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-456",
           status: "active",
-          githubOrg: "existing-org",
+          orgName: "existing-org",
           githubInstallationId: 12345,
           githubAppInstalledAt: new Date(),
         })
@@ -706,7 +706,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-github",
           status: "active",
-          githubOrg: "Test Team",
+          orgName: "Test Team",
           githubInstallationId: 12345,
           githubAppInstalledAt: new Date(),
           slackWorkspaceId: null,
@@ -797,7 +797,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-new",
           status: "pending_github",
-          githubOrg: "",
+          orgName: "",
         })
       );
 

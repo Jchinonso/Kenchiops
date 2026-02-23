@@ -11,7 +11,7 @@ import { useFetch, type FetchState, type UseFetchResult } from "@/hooks/useFetch
 
 interface TenantInfo {
   readonly id: string;
-  readonly githubOrg: string;
+  readonly orgName: string;
   readonly githubConnected: boolean;
   readonly gitlabConnected: boolean;
   readonly slackConnected: boolean;

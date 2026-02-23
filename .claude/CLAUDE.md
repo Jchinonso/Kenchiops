@@ -12,7 +12,7 @@ Custom agents live in `.claude/agents/`. You MUST delegate to them by launching 
 
 | Agent                             | Trigger Condition                                                                                | Agent File                                          |
 | --------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| `git-commit-staged`               | **Every commit.** Never commit manually with raw git commands. Always delegate.                  | `.claude/agents/git-commit-staged.md`               |
+| `git-commit-staged`               | **Only when the user explicitly requests a commit.** Never auto-commit.                          | `.claude/agents/git-commit-staged.md`               |
 | `principal-engineer`              | Implementing new features, bug fixes, or non-trivial code changes.                               | `.claude/agents/principal-engineer.md`              |
 | `test-engineer`                   | After writing new modules, services, adapters, or utilities. After bug fixes (regression tests). | `.claude/agents/test-engineer.md`                   |
 | `kenchi-refactor-analyst`         | After significant code changes — audit for CLAUDE.md compliance and code smells.                 | `.claude/agents/kenchi-refactor-analyst.md`         |
@@ -25,7 +25,7 @@ Custom agents live in `.claude/agents/`. You MUST delegate to them by launching 
 1. Implement the change (or delegate to `principal-engineer` for complex tasks)
 2. Delegate to `test-engineer` to write tests (if applicable)
 3. Delegate to `kenchi-refactor-analyst` to audit (if significant change)
-4. **Always** delegate to `git-commit-staged` to commit
+4. Only commit when the user explicitly asks — then delegate to `git-commit-staged`
 
 Users can also invoke agents directly as slash commands: `/git-commit-staged`, `/principal-engineer`, etc.
 

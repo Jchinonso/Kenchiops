@@ -9,7 +9,7 @@ import {
   createLogger,
   config,
   HTTP_STATUS,
-  findByGitHubOrg,
+  findByOrgName,
   linkSlackWorkspace,
   createFromSlackInstall,
   createOAuthStateStore,
@@ -94,13 +94,13 @@ const tenantLinkStrategies: readonly TenantLinkStrategy[] = [
     },
   },
   {
-    name: "matching_github_org",
+    name: "matching_org_name",
     matches: async (_state, teamName) => {
-      const existing = await findByGitHubOrg(teamName);
+      const existing = await findByOrgName(teamName);
       return Boolean(existing);
     },
     execute: async (_state, slackData, teamName) => {
-      const existingTenant = await findByGitHubOrg(teamName);
+      const existingTenant = await findByOrgName(teamName);
       // existingTenant is guaranteed by matches check above
       if (!existingTenant) {
         throw new NotFoundError(`Tenant not found for GitHub org: ${teamName}`, {

@@ -79,7 +79,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: "Test Team",
       };
@@ -128,7 +128,7 @@ describe("App Home Handler", () => {
           },
         ],
         tenant: {
-          githubOrg: "test-org",
+          orgName: "test-org",
           status: "active",
           slackTeamName: "Test Team",
         },
@@ -186,7 +186,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: null,
       };
@@ -201,7 +201,7 @@ describe("App Home Handler", () => {
         botStatus: "active",
         repositoryMappings: [],
         tenant: {
-          githubOrg: "test-org",
+          orgName: "test-org",
           status: "active",
           slackTeamName: undefined,
         },
@@ -223,7 +223,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: "Test Team",
       };
@@ -334,7 +334,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: "Test Team",
       };
@@ -362,7 +362,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: "Test Team",
       };
@@ -413,7 +413,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: "Test Team",
       };
@@ -546,7 +546,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-789",
-        githubOrg: "refresh-org",
+        orgName: "refresh-org",
         status: "active",
         slackTeamName: "Refresh Team",
       };
@@ -575,7 +575,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: "Test Team",
       };
@@ -613,7 +613,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: "Test Team",
       };
@@ -665,7 +665,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: null,
+        orgName: null,
         status: "inactive",
         slackTeamName: null,
       };
@@ -676,12 +676,12 @@ describe("App Home Handler", () => {
 
       await handleAppHomeOpened(mockClient, "U123456");
 
-      // Note: The handler uses optional chaining (tenant?.githubOrg) which preserves null values
+      // Note: The handler uses optional chaining (tenant?.orgName) which preserves null values
       // Only slackTeamName is converted to undefined via ?? operator
       expect(buildAppHomeView).toHaveBeenCalledWith(
         expect.objectContaining({
           tenant: {
-            githubOrg: null,
+            orgName: null,
             status: "inactive",
             slackTeamName: undefined,
           },
@@ -698,7 +698,7 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
         slackTeamName: "Test Team",
       };

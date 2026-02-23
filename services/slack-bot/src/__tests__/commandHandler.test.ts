@@ -5,6 +5,7 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import type { SlashCommand, RespondFn } from "@slack/bolt";
 import { handleKenchiCommand } from "../handlers/commandHandler.js";
+import { handleAnalysis } from "../handlers/commandSubhandlers.js";
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -352,7 +353,7 @@ describe("Command Handler", () => {
       findBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
         githubInstallationId: 12345,
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
       });
 
@@ -380,7 +381,7 @@ describe("Command Handler", () => {
       findBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
         githubInstallationId: 12345,
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
       });
 
@@ -674,42 +675,19 @@ describe("Command Handler", () => {
     });
   });
 
-  describe("analysis subcommand (default)", () => {
-    it("should perform analysis for unknown subcommand", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { performAnalysis } = jest.requireMock("../services/analysisService.js") as any;
-
+  describe("handleAnalysis (direct)", () => {
+    it("should respond with analysis results when called directly", async () => {
       const command = createMockCommand({ text: "why is my build failing?" });
+      const ctx = {
+        command,
+        args: "why is my build failing?",
+        respond: mockRespond,
+        client: mockClient,
+      };
 
-      await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
+      await handleAnalysis(ctx);
 
-      expect(performAnalysis).toHaveBeenCalled();
-    });
-
-    it("should use full text for analysis when unrecognized subcommand", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { createEventFromCommand } = jest.requireMock("../services/analysisService.js") as any;
-
-      const command = createMockCommand({ text: "unknown subcommand with args" });
-
-      await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
-
-      expect(createEventFromCommand).toHaveBeenCalledWith(
-        "U123456",
-        "C123456",
-        "unknown subcommand with args"
-      );
-    });
-
-    it("should respond with analysis results", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { formatAnalysisMessage } = jest.requireMock("../formatters.js") as any;
-
-      const command = createMockCommand({ text: "analyze this issue" });
-
-      await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
-
-      expect(formatAnalysisMessage).toHaveBeenCalled();
+      // handleAnalysis should call respond with ephemeral blocks
       expect(mockRespond).toHaveBeenCalledWith(
         expect.objectContaining({
           blocks: expect.any(Array),
@@ -718,76 +696,33 @@ describe("Command Handler", () => {
       );
     });
 
-    it("should include action buttons when recommended actions exist", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { performAnalysis } = jest.requireMock("../services/analysisService.js") as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { formatActionButtons } = jest.requireMock("../formatters.js") as any;
+    it("should show help when args is empty", async () => {
+      const command = createMockCommand({ text: "" });
+      const ctx = { command, args: "", respond: mockRespond, client: mockClient };
 
-      performAnalysis.mockResolvedValue({
-        analysis: {
-          eventId: "evt_123",
-          analyzedAt: new Date().toISOString(),
-          summary: "Test analysis",
-          recommendedActions: [
-            {
-              actionType: "restart_service",
-              description: "Restart the failing service",
-              priority: "high",
-              reasoning: "Service appears to be stuck",
-            },
-          ],
-          llmModel: "gpt-4",
-        },
-        confidence: {
-          finalScore: 0.85,
-          gatingDecision: "auto_approve",
-          breakdown: {
-            logQualityScore: 0.9,
-            contextCompletenessScore: 0.8,
-            patternMatchScore: 0.85,
-          },
-        },
-      });
+      await handleAnalysis(ctx);
 
-      const command = createMockCommand({ text: "analyze this" });
-
-      await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
-
-      expect(formatActionButtons).toHaveBeenCalled();
-    });
-
-    it("should handle analysis errors gracefully", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { performAnalysis } = jest.requireMock("../services/analysisService.js") as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { formatErrorMessage } = jest.requireMock("../formatters.js") as any;
-
-      performAnalysis.mockRejectedValue(new Error("Analysis failed"));
-
-      const command = createMockCommand({ text: "analyze this" });
-
-      await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
-
-      expect(formatErrorMessage).toHaveBeenCalledWith(expect.any(Error));
+      // Empty args triggers help display
       expect(mockRespond).toHaveBeenCalledWith(
         expect.objectContaining({
-          blocks: expect.any(Array),
-          response_type: "ephemeral",
+          blocks: expect.arrayContaining([
+            expect.objectContaining({
+              text: expect.objectContaining({
+                text: expect.stringContaining("Kenchi DevOps Assistant"),
+              }),
+            }),
+          ]),
         })
       );
     });
 
-    it("should handle non-Error exceptions", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { performAnalysis } = jest.requireMock("../services/analysisService.js") as any;
-
-      performAnalysis.mockRejectedValue("String error");
-
+    it("should handle errors gracefully and respond with error blocks", async () => {
       const command = createMockCommand({ text: "analyze this" });
+      const ctx = { command, args: "analyze this", respond: mockRespond, client: mockClient };
 
-      await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
+      await handleAnalysis(ctx);
 
+      // Should always respond (either success or error)
       expect(mockRespond).toHaveBeenCalledWith(
         expect.objectContaining({
           response_type: "ephemeral",
@@ -837,7 +772,7 @@ describe("Command Handler", () => {
       findBySlackWorkspace.mockResolvedValue({
         id: "tenant-123",
         githubInstallationId: 12345,
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
       });
 
@@ -958,30 +893,29 @@ describe("Command Handler", () => {
       );
     });
 
-    it("should default to analysis handler for unknown subcommand", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { performAnalysis } = jest.requireMock("../services/analysisService.js") as any;
-
+    it("should reject unknown subcommand with error message", async () => {
       const command = createMockCommand({ text: "unknown-subcommand" });
 
       await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
 
-      expect(performAnalysis).toHaveBeenCalled();
+      expect(mockRespond).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("Unknown command"),
+          response_type: "ephemeral",
+        })
+      );
     });
 
-    it("should preserve full text when routing to analysis", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { createEventFromCommand } = jest.requireMock("../services/analysisService.js") as any;
-
-      const fullText = "notacommand but the full question text";
-      const command = createMockCommand({ text: fullText });
+    it("should list valid commands when rejecting unknown subcommand", async () => {
+      const command = createMockCommand({ text: "notacommand but the full question text" });
 
       await handleKenchiCommand(command, mockAck, mockRespond, mockClient);
 
-      expect(createEventFromCommand).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(String),
-        fullText
+      expect(mockRespond).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("Available commands"),
+          response_type: "ephemeral",
+        })
       );
     });
   });

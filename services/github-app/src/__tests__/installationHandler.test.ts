@@ -17,7 +17,7 @@ jest.mock("@kenchi/shared", () => ({
   createFromGitHubInstall: jest.fn(() =>
     Promise.resolve({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       status: "active",
       slackWorkspaceId: null,
@@ -30,7 +30,7 @@ jest.mock("@kenchi/shared", () => ({
   findByGitHubInstallation: jest.fn(() =>
     Promise.resolve({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       status: "active",
       slackWorkspaceId: "T123456",
@@ -111,7 +111,7 @@ describe("Installation Handler", () => {
     // Reset all mock implementations
     mockCreateFromGitHubInstall.mockResolvedValue({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       status: "active" as const,
       slackWorkspaceId: null,
@@ -126,7 +126,7 @@ describe("Installation Handler", () => {
 
     mockFindByGitHubInstallation.mockResolvedValue({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       status: "active" as const,
       slackWorkspaceId: "T123456",
@@ -141,7 +141,7 @@ describe("Installation Handler", () => {
 
     mockActivate.mockResolvedValue({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       githubAppInstalledAt: new Date(),
       slackWorkspaceId: "T123456",
@@ -157,7 +157,7 @@ describe("Installation Handler", () => {
     mockHandleGitHubUninstall.mockResolvedValue(undefined);
     mockSuspend.mockResolvedValue({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       githubAppInstalledAt: new Date(),
       slackWorkspaceId: "T123456",
@@ -179,7 +179,7 @@ describe("Installation Handler", () => {
       expect(result.handled).toBe(true);
       expect(result.tenantId).toBe("tenant-123");
       expect(mockCreateFromGitHubInstall).toHaveBeenCalledWith({
-        githubOrg: "testorg",
+        orgName: "testorg",
         githubInstallationId: 12345,
       });
     });
@@ -219,7 +219,7 @@ describe("Installation Handler", () => {
 
       expect(result.handled).toBe(true);
       expect(mockCreateFromGitHubInstall).toHaveBeenCalledWith({
-        githubOrg: "testuser",
+        orgName: "testuser",
         githubInstallationId: 12345,
       });
     });
@@ -227,7 +227,7 @@ describe("Installation Handler", () => {
     it("should handle tenant in pending status", async () => {
       mockCreateFromGitHubInstall.mockResolvedValue({
         id: "tenant-456",
-        githubOrg: "testorg",
+        orgName: "testorg",
         githubInstallationId: 12345,
         status: "pending_slack" as const,
         slackWorkspaceId: null,
@@ -353,7 +353,7 @@ describe("Installation Handler", () => {
     it("should not activate when Slack not connected", async () => {
       mockFindByGitHubInstallation.mockResolvedValue({
         id: "tenant-123",
-        githubOrg: "testorg",
+        orgName: "testorg",
         githubInstallationId: 12345,
         status: "suspended" as const,
         slackWorkspaceId: null,

@@ -36,9 +36,9 @@ import type {
 
 const GITHUB_INSTALL_VALIDATION_RULES: readonly GitHubInstallValidationRule[] = [
   {
-    isInvalid: (input) => input.githubOrg.trim().length === 0,
-    getMessage: () => "GitHub organization cannot be empty",
-    field: "githubOrg",
+    isInvalid: (input) => input.orgName.trim().length === 0,
+    getMessage: () => "Organization name cannot be empty",
+    field: "orgName",
   },
   {
     isInvalid: (input) =>
@@ -261,7 +261,7 @@ export const buildUpdateQuery = (input: UpdateRAGBudgetInput): UpdateQueryResult
  */
 export const rowToTenant = (row: TenantRow): Tenant => ({
   id: row.id,
-  githubOrg: row.github_org,
+  orgName: row.org_name,
   githubInstallationId: row.github_installation_id,
   githubAppInstalledAt: row.github_app_installed_at,
   slackWorkspaceId: row.slack_workspace_id,

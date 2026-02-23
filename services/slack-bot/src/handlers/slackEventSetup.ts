@@ -271,9 +271,22 @@ const setupAppHomeHandlers = (app: SlackApp): void => {
     await ack();
   });
 
+  // Track in-flight modal opens per user to prevent duplicate clicks
+  const repoModalInFlight = new Set<string>();
+
   // Repository selection button
   app.action(SLACK_ACTION_IDS.SELECT_REPOSITORY, async ({ ack, action, body, client }) => {
     await ack();
+
+    const userId = body.user.id;
+
+    // Skip if this user already has a modal being opened
+    if (repoModalInFlight.has(userId)) {
+      logger.info("Skipping duplicate select_repository click", { userId });
+      return;
+    }
+
+    repoModalInFlight.add(userId);
 
     try {
       if (action.type !== "button" || !("value" in action) || !action.value) {
@@ -329,13 +342,15 @@ const setupAppHomeHandlers = (app: SlackApp): void => {
       logger.info("Opened repository selection modal from button", {
         channelId,
         channelName,
-        userId: body.user.id,
+        userId,
         repositoryCount: repositories.length,
       });
     } catch (error) {
       logger.error("Failed to open repository selection modal", {
         error: getErrorMessage(error),
       });
+    } finally {
+      repoModalInFlight.delete(userId);
     }
   });
 };

@@ -29,9 +29,10 @@ import {
   revokeTokenFamily,
   rotateRefreshTokenAtomically,
   // Tenant lookup
-  findByGitHubOrg,
+  findByOrgName,
   findByGitLabGroup,
   // Tenant creation
+  createFromGitHubLogin,
   createFromGitLabGroup,
   // JWT utilities
   generateAccessToken,
@@ -148,15 +149,17 @@ export const createAuthService = () => ({
    * Only runs for providers that expose organization APIs (GitHub, GitLab).
    * Skips silently if the user already has a tenant assignment.
    *
-   * For GitLab users, if no existing tenant matches, a new tenant is
-   * auto-created from the first GitLab group so the user can access
-   * dashboard endpoints immediately.
+   * If no existing tenant matches the user's organizations, a new tenant is
+   * auto-created so the user can access dashboard endpoints immediately:
+   * - GitHub: from the first org, or the user's username for personal accounts
+   * - GitLab: from the first group
    */
   autoLinkTenant: async (
     user: Readonly<{ readonly id: string; readonly tenantId: string | null }>,
     provider: OAuthProvider,
     accessToken: string,
     instanceUrl: string | null,
+    providerUsername: string,
     context: RequestContext
   ): Promise<void> => {
     if (!ORG_CAPABLE_PROVIDERS.has(provider)) {
@@ -192,8 +195,35 @@ export const createAuthService = () => ({
       }
     }
 
-    // No existing tenant matched. For GitLab users, auto-create from first group.
-    if (provider === "gitlab" && orgs.length > 0) {
+    // No existing tenant matched — auto-create one so the user has a working dashboard.
+    if (provider === "github") {
+      const orgName = orgs.length > 0 ? orgs[0].login : providerUsername;
+
+      // Check if a tenant with this name already exists (e.g. another member created it)
+      const existingTenant = await findExistingTenant(provider, orgName);
+      if (existingTenant) {
+        await updateUserTenant(user.id, existingTenant.id);
+        logger.info("User auto-linked to existing tenant by username", {
+          ...context,
+          userId: user.id,
+          linkedTenantId: existingTenant.id,
+          provider,
+          orgName,
+        });
+        return;
+      }
+
+      const newTenant = await createFromGitHubLogin(orgName);
+      await updateUserTenant(user.id, newTenant.id);
+
+      logger.info("Tenant auto-created for GitHub user", {
+        ...context,
+        userId: user.id,
+        linkedTenantId: newTenant.id,
+        provider,
+        orgName,
+      });
+    } else if (provider === "gitlab" && orgs.length > 0) {
       const firstOrg = orgs[0];
       const newTenant = await createFromGitLabGroup({
         gitlabGroupPath: firstOrg.login,
@@ -370,19 +400,19 @@ const sanitizeRawProfile = (rawProfile: Record<string, unknown>): Record<string,
 };
 
 /**
- * Find an existing tenant by org login, checking both GitHub org and GitLab group.
+ * Find an existing tenant by org login, checking both org_name and GitLab group.
  *
- * For GitHub providers, only checks the github_org column.
- * For GitLab providers, checks both github_org (for display-name matches)
+ * For GitHub providers, only checks the org_name column.
+ * For GitLab providers, checks both org_name (for display-name matches)
  * and gitlab_group_path.
  */
 const findExistingTenant = async (
   provider: OAuthProvider,
   orgLogin: string
-): Promise<Awaited<ReturnType<typeof findByGitHubOrg>>> => {
-  const byGitHubOrg = await findByGitHubOrg(orgLogin);
-  if (byGitHubOrg) {
-    return byGitHubOrg;
+): Promise<Awaited<ReturnType<typeof findByOrgName>>> => {
+  const byOrgName = await findByOrgName(orgLogin);
+  if (byOrgName) {
+    return byOrgName;
   }
 
   return provider === "gitlab" ? findByGitLabGroup(orgLogin) : null;

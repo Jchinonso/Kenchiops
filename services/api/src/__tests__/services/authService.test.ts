@@ -78,7 +78,7 @@ jest.mock("@kenchi/shared", () => {
     revokeTokenFamily: (...args: unknown[]) => mockRevokeTokenFamily(...args),
     replaceRefreshToken: (...args: unknown[]) => mockReplaceRefreshToken(...args),
     rotateRefreshTokenAtomically: (...args: unknown[]) => mockRotateRefreshTokenAtomically(...args),
-    findByGitHubOrg: (...args: unknown[]) => mockFindByGitHubOrg(...args),
+    findByOrgName: (...args: unknown[]) => mockFindByGitHubOrg(...args),
     // JWT utilities
     generateAccessToken: (...args: unknown[]) => mockGenerateAccessToken(...args),
     generateRefreshToken: (...args: unknown[]) => mockGenerateRefreshToken(...args),

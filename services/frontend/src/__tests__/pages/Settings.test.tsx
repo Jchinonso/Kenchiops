@@ -75,7 +75,7 @@ const defaultAuth = {
 const defaultTenant = {
   data: {
     id: "t1",
-    githubOrg: "TestOrg",
+    orgName: "TestOrg",
     status: "active",
     githubConnected: true,
     slackConnected: false,

@@ -40,7 +40,7 @@ export {
 // Lookup operations
 export {
   findByGitHubInstallation,
-  findByGitHubOrg,
+  findByOrgName,
   findByGitLabGroup,
   findBySlackWorkspace,
   findById,
@@ -54,6 +54,7 @@ export {
 // Lifecycle operations
 export {
   createFromGitHubInstall,
+  createFromGitHubLogin,
   createFromGitLabGroup,
   linkSlackWorkspace,
   createFromSlackInstall,

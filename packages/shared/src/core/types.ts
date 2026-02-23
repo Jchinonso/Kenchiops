@@ -728,7 +728,7 @@ export type TenantEmbeddingTier = "LIGHT" | "STANDARD" | "PREMIUM";
  */
 export interface Tenant {
   readonly id: string;
-  readonly githubOrg: string;
+  readonly orgName: string;
   readonly githubInstallationId: number | null;
   readonly githubAppInstalledAt: Date | null;
   readonly slackWorkspaceId: string | null;
@@ -751,7 +751,7 @@ export interface Tenant {
  * Data required to create a tenant from GitHub App installation.
  */
 export interface CreateTenantFromGitHub {
-  readonly githubOrg: string;
+  readonly orgName: string;
   readonly githubInstallationId: number;
 }
 
@@ -779,6 +779,7 @@ export interface LinkSlackWorkspace {
 export type TenantAuditAction =
   | "github_installed"
   | "github_uninstalled"
+  | "github_linked"
   | "gitlab_linked"
   | "slack_installed"
   | "slack_uninstalled"

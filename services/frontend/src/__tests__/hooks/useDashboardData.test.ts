@@ -80,7 +80,7 @@ describe("useTenantInfo", () => {
   it("should fetch tenant info from correct path", async () => {
     const tenantData = {
       id: "t-1",
-      githubOrg: "acme",
+      orgName: "acme",
       githubConnected: true,
       slackConnected: false,
       status: "active",
@@ -154,12 +154,12 @@ describe("useTenantInfo", () => {
   it("should refetch when refreshKey changes", async () => {
     const data1 = {
       id: "t-1",
-      githubOrg: "acme",
+      orgName: "acme",
       githubConnected: true,
       slackConnected: false,
       status: "active",
     };
-    const data2 = { ...data1, githubOrg: "updated" };
+    const data2 = { ...data1, orgName: "updated" };
     mockApiClient
       .mockResolvedValueOnce(createSuccessResponse(data1))
       .mockResolvedValueOnce(createSuccessResponse(data2));
@@ -169,13 +169,13 @@ describe("useTenantInfo", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.data?.githubOrg).toBe("acme");
+      expect(result.current.data?.orgName).toBe("acme");
     });
 
     rerender({ refreshKey: 1 });
 
     await waitFor(() => {
-      expect(result.current.data?.githubOrg).toBe("updated");
+      expect(result.current.data?.orgName).toBe("updated");
     });
   });
 });
@@ -763,7 +763,7 @@ describe("useFetch generic behavior", () => {
   it("should provide a refetch function", async () => {
     const data1 = {
       id: "t-1",
-      githubOrg: "acme",
+      orgName: "acme",
       githubConnected: true,
       slackConnected: false,
       status: "active",
@@ -808,7 +808,7 @@ describe("useFetch generic behavior", () => {
   it("should transition from loading to loaded state", async () => {
     const data = {
       id: "t-1",
-      githubOrg: "acme",
+      orgName: "acme",
       githubConnected: true,
       slackConnected: false,
       status: "active",
@@ -834,7 +834,7 @@ describe("useFetch generic behavior", () => {
   it("should clear error on successful refetch", async () => {
     const data = {
       id: "t-1",
-      githubOrg: "acme",
+      orgName: "acme",
       githubConnected: true,
       slackConnected: false,
       status: "active",

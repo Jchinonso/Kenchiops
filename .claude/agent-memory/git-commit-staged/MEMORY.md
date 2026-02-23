@@ -18,6 +18,18 @@ The pre-commit hook runs in this order:
 
 If prettier's `--check` fails, fix with `npx prettier --write <file>` before re-committing.
 
+## Stash + Commit Gotchas
+
+- The `prettier --check` step runs globally on ALL files, not just staged ones. If unrelated dirty files have Prettier violations, the commit will fail even if your staged files are clean.
+- For Prettier failures: run `npx prettier --write <file>` on offending files in-place (don't stage them).
+- **lint-staged stash contamination**: When commits fail and lint-staged restores its backup stash, the staging area can be corrupted. Unrelated files may appear staged, and target files may become unstaged.
+- **Phantom commits**: lint-staged stash/restore can pop old stashes, introducing changes from previous branches/sessions. These can result in phantom commits containing unrelated code.
+- **After ANY failed commit**: run `git log --oneline -3` and `git diff --cached --stat` to verify no phantom commits were created and the staging area is correct.
+- **Use `git add -v`**: Silent `git add` can fail after lint-staged contamination. Always use `-v` flag to confirm files are actually being added.
+- **Remove dead code before committing**: If you delete callers of a function, also remove the function itself (and its now-unused imports) to avoid lint errors.
+- **Partial staging**: Ensure target files have NO unstaged changes (the staged version = working tree version). If a file shows in both staged and unstaged, lint-staged's stash will corrupt it.
+- After a successful commit, always verify with `git show --stat HEAD` that only the intended files were committed.
+
 ## Conventional Commit Style in This Repo
 
 - Recent commits use: `refactor(scope):`, `feat(scope):`, `chore:`, `docs(scope):`

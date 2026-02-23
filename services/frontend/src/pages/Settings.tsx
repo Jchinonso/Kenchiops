@@ -280,7 +280,7 @@ export const Settings = () => {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                  {tenant.githubOrg}
+                  {tenant.orgName}
                 </p>
                 <Badge
                   variant="outline"

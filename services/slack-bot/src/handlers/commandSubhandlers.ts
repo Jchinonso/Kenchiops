@@ -116,7 +116,7 @@ export const handleStatus: SubcommandHandler = async ({ command, respond }): Pro
               text:
                 `*Kenchi Connection Status*\n\n` +
                 `*Slack:* Connected\n` +
-                `${tenant.githubInstallationId ? "" : ""} *GitHub:* ${tenant.githubInstallationId ? `Connected (${tenant.githubOrg})` : "Not connected"}\n` +
+                `${tenant.githubInstallationId ? "" : ""} *GitHub:* ${tenant.githubInstallationId ? `Connected (${tenant.orgName})` : "Not connected"}\n` +
                 `*Status:* ${tenant.status}`,
             },
           },
@@ -534,8 +534,9 @@ export const handleAnalysis: SubcommandHandler = async (ctx): Promise<void> => {
   }
 
   try {
+    const tenant = await findBySlackWorkspace(command.team_id);
     const event = createEventFromCommand(command.user_id, command.channel_id, args);
-    const { analysis, confidence } = await performAnalysis(event);
+    const { analysis, confidence } = await performAnalysis(event, tenant?.id);
 
     const blocks: SlackBlock[] = [...formatAnalysisMessage(analysis, confidence)];
 

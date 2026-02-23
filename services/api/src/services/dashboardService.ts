@@ -89,7 +89,7 @@ export const createDashboardService = (
 
       return {
         id: tenant.id,
-        githubOrg: tenant.githubOrg,
+        orgName: tenant.orgName,
         githubConnected: tenant.githubInstallationId !== null,
         gitlabConnected,
         slackConnected: tenant.slackWorkspaceId !== null,

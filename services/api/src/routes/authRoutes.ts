@@ -369,6 +369,7 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
       oauthState.provider,
       tokens.accessToken,
       oauthState.instanceUrl,
+      profile.username ?? profile.displayName ?? "unknown",
       context
     );
   } catch (linkError: unknown) {

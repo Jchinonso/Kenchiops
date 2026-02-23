@@ -158,13 +158,14 @@ export {
 } from "./database/index.js";
 export {
   findByGitHubInstallation,
-  findByGitHubOrg,
+  findByOrgName,
   findByGitLabGroup,
   findBySlackWorkspace,
   findById,
   findPendingSlackTenants,
   getActiveTenants,
   createFromGitHubInstall,
+  createFromGitHubLogin,
   createFromGitLabGroup,
   linkSlackWorkspace,
   createFromSlackInstall,

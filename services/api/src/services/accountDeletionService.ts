@@ -228,7 +228,7 @@ export const createAccountDeletionService = (
     return {
       isLastMember,
       tenantId: user.tenantId,
-      tenantName: tenant?.githubOrg ?? null,
+      tenantName: tenant?.orgName ?? null,
       memberCount,
       willDeleteTenant: isLastMember,
       affectedResources: {

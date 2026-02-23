@@ -46,22 +46,22 @@ export const findByGitHubInstallation = async (installationId: number): Promise<
 };
 
 /**
- * Find a tenant by GitHub organization name.
+ * Find a tenant by organization name.
  *
- * @param org - GitHub organization name
+ * @param org - Organization name
  * @returns Tenant or null if not found
  */
-export const findByGitHubOrg = async (org: string): Promise<Tenant | null> => {
+export const findByOrgName = async (org: string): Promise<Tenant | null> => {
   validateId(org, "org");
 
   try {
-    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_GITHUB_ORG, [
+    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME, [
       org,
       TENANT_STATUS.DELETED,
     ]);
     return extractTenant(result.rows);
   } catch (error) {
-    logger.error("Failed to find tenant by GitHub org", {
+    logger.error("Failed to find tenant by org name", {
       org,
       error: getErrorMessage(error),
     });

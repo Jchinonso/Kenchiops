@@ -212,15 +212,38 @@ const fetchAnnotationsForChecks = async (
 };
 
 /**
+ * Check if an annotation path looks like a real source file.
+ * Rejects bare hidden directories (`.github`) and paths without file extensions.
+ * Accepts: `src/file.ts`, `.github/workflows/ci.yml`, `file.py`
+ */
+const isAnnotationSourceFile = (path: string): boolean => {
+  // Last path segment must contain a file extension (dot preceded by a non-dot char)
+  const lastSegment = path.split("/").pop() ?? path;
+  return /[^.]\.\w{1,10}$/.test(lastSegment);
+};
+
+/** CI infrastructure messages that should never become lint errors */
+const CI_INFRASTRUCTURE_MESSAGE = /^Process completed with exit code \d+/;
+
+/**
  * Convert GitHub check run annotations directly to structured lint errors.
  * Bypasses LLM extraction for annotations where we already have structured data
  * (path, line, message) from the GitHub API.
+ *
+ * Filters out:
+ * - Annotations without real source file paths (e.g., `.github` directory)
+ * - CI infrastructure messages (e.g., `Process completed with exit code 101`)
  */
 const convertAnnotationsToLintErrors = (
   annotations: readonly CheckRunAnnotation[]
 ): readonly LLMLintError[] =>
   annotations
-    .filter((annotation) => annotation.level === "warning" || annotation.level === "failure")
+    .filter(
+      (annotation) =>
+        (annotation.level === "warning" || annotation.level === "failure") &&
+        isAnnotationSourceFile(annotation.path) &&
+        !CI_INFRASTRUCTURE_MESSAGE.test(annotation.message)
+    )
     .map((annotation) => ({
       file: annotation.path,
       line: annotation.startLine,

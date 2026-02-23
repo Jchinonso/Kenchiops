@@ -51,8 +51,8 @@ export const createFromGitHubInstall = async (data: CreateTenantFromGitHub): Pro
 
   try {
     const result = await transaction(async (client) => {
-      const existing = await client.query<TenantRow>(TENANT_QUERIES.FIND_BY_GITHUB_ORG_ANY_STATUS, [
-        data.githubOrg,
+      const existing = await client.query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME_ANY_STATUS, [
+        data.orgName,
       ]);
 
       if (existing.rows.length > 0) {
@@ -74,7 +74,7 @@ export const createFromGitHubInstall = async (data: CreateTenantFromGitHub): Pro
       }
 
       const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_FROM_GITHUB, [
-        data.githubOrg,
+        data.orgName,
         data.githubInstallationId,
         TENANT_STATUS.PENDING_SLACK,
       ]);
@@ -88,14 +88,14 @@ export const createFromGitHubInstall = async (data: CreateTenantFromGitHub): Pro
 
     logger.info("Tenant created/updated from GitHub installation", {
       tenantId: result.id,
-      githubOrg: data.githubOrg,
+      orgName: data.orgName,
       installationId: data.githubInstallationId,
     });
 
     return rowToTenant(result);
   } catch (error) {
     logger.error("Failed to create tenant from GitHub installation", {
-      githubOrg: data.githubOrg,
+      orgName: data.orgName,
       installationId: data.githubInstallationId,
       error: getErrorMessage(error),
     });
@@ -168,16 +168,16 @@ export const linkSlackWorkspace = async (data: LinkSlackWorkspace): Promise<Tena
  * Create a tenant from Slack installation (before GitHub App is installed).
  *
  * @param slackData - Slack installation data
- * @param githubOrgHint - Optional GitHub org name hint
+ * @param orgNameHint - Optional org name hint (defaults to Slack team name)
  * @returns Created tenant
  */
 export const createFromSlackInstall = async (
   slackData: Omit<LinkSlackWorkspace, "tenantId">,
-  githubOrgHint?: string
+  orgNameHint?: string
 ): Promise<Tenant> => {
   validateSlackInstallInput(slackData);
 
-  const orgName = githubOrgHint ?? slackData.slackTeamName;
+  const orgName = orgNameHint ?? slackData.slackTeamName;
 
   try {
     const result = await transaction(async (client) => {
@@ -216,7 +216,7 @@ export const createFromSlackInstall = async (
 /**
  * Create a tenant from GitLab OAuth login.
  *
- * Uses the GitLab group path as both the display name (github_org column)
+ * Uses the GitLab group path as both the display name (org_name column)
  * and the gitlab_group_path for lookup. No GitHub installation is associated.
  *
  * @param data - GitLab group data
@@ -249,6 +249,45 @@ export const createFromGitLabGroup = async (data: CreateTenantFromGitLab): Promi
   } catch (error) {
     logger.error("Failed to create tenant from GitLab group", {
       gitlabGroupPath: data.gitlabGroupPath,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Create a new tenant from a GitHub OAuth login.
+ *
+ * Used when a GitHub user logs in but has no matching tenant.
+ * Creates a minimal tenant using the GitHub username or org name —
+ * the GitHub App installation can be linked later.
+ */
+export const createFromGitHubLogin = async (orgName: string): Promise<Tenant> => {
+  validateId(orgName, "orgName");
+
+  try {
+    const result = await transaction(async (client) => {
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_FROM_GITHUB_LOGIN, [
+        orgName,
+        TENANT_STATUS.ACTIVE,
+      ]);
+
+      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.GITHUB_LINKED, {
+        orgName,
+      });
+
+      return created.rows[0];
+    });
+
+    logger.info("Tenant created from GitHub login", {
+      tenantId: result.id,
+      orgName,
+    });
+
+    return rowToTenant(result);
+  } catch (error) {
+    logger.error("Failed to create tenant from GitHub login", {
+      orgName,
       error: getErrorMessage(error),
     });
     throw error;

@@ -19,6 +19,7 @@ import {
   createLogger,
   ValidationError,
   NotFoundError,
+  AuthorizationError,
   createInvestigation,
   getInvestigationById,
   listInvestigations,
@@ -99,6 +100,22 @@ export const createInvestigationRoutes = (deps: InvestigationRouteDependencies):
   const router = Router();
   const { queue } = deps;
 
+  /**
+   * Extract tenantId from authenticated user or throw (VULN-004).
+   */
+  const requireTenantId = (req: Request): string => {
+    const tenantId = req.user?.tenantId;
+
+    if (!tenantId) {
+      throw new AuthorizationError(
+        "No organization linked. Connect a GitHub or GitLab account to get started.",
+        { operation: "requireTenantId" }
+      );
+    }
+
+    return tenantId;
+  };
+
   // ==================== Handlers ====================
 
   /**
@@ -113,7 +130,7 @@ export const createInvestigationRoutes = (deps: InvestigationRouteDependencies):
       throw new ValidationError("description is required and must be a non-empty string");
     }
 
-    const { tenantId } = req.context;
+    const tenantId = requireTenantId(req);
     const initiatedBy = extractStringField(body, "initiatedBy", "api");
     const initiatedFrom = extractStringField(body, "initiatedFrom", "api");
 
@@ -151,10 +168,7 @@ export const createInvestigationRoutes = (deps: InvestigationRouteDependencies):
    * Paginated list of investigations filtered by tenant.
    */
   const handleListInvestigations = async (req: Request, res: Response): Promise<void> => {
-    const tenantId = (req.query.tenantId as string | undefined)?.trim();
-    if (!tenantId) {
-      throw new ValidationError("tenantId query parameter is required");
-    }
+    const tenantId = requireTenantId(req);
 
     const limit = clampLimit(
       parseIntParam(req.query.limit as string | undefined, INVESTIGATION_DEFAULTS.QUERY_LIMIT)
@@ -188,8 +202,14 @@ export const createInvestigationRoutes = (deps: InvestigationRouteDependencies):
       throw new ValidationError("Investigation ID is required");
     }
 
+    const tenantId = requireTenantId(req);
     const investigation = await getInvestigationById(id);
     if (!investigation) {
+      throw new NotFoundError("Investigation not found", { metadata: { id } });
+    }
+
+    // Tenant isolation: verify the record belongs to the authenticated tenant (VULN-006)
+    if (investigation.tenantId !== tenantId) {
       throw new NotFoundError("Investigation not found", { metadata: { id } });
     }
 

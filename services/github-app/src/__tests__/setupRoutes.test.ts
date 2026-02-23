@@ -42,7 +42,7 @@ jest.mock("@kenchi/shared", () => ({
   findByGitHubInstallation: jest.fn(() =>
     Promise.resolve({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       slackWorkspaceId: null,
       slackTeamName: null,
@@ -51,6 +51,7 @@ jest.mock("@kenchi/shared", () => ({
     })
   ),
   linkSlackWorkspace: jest.fn(() => Promise.resolve()),
+  deleteTenant: jest.fn(() => Promise.resolve()),
   getErrorMessage: jest.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error)
   ),
@@ -82,7 +83,7 @@ describe("Setup Routes", () => {
     // Reset mock implementations
     mockFindByGitHubInstallation.mockResolvedValue({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       slackWorkspaceId: null,
       slackTeamName: null,
@@ -102,7 +103,7 @@ describe("Setup Routes", () => {
 
     mockLinkSlackWorkspace.mockResolvedValue({
       id: "tenant-123",
-      githubOrg: "testorg",
+      orgName: "testorg",
       githubInstallationId: 12345,
       githubAppInstalledAt: new Date(),
       slackWorkspaceId: "T123456",
@@ -163,7 +164,7 @@ describe("Setup Routes", () => {
     it("should show linked status when Slack already connected", async () => {
       mockFindByGitHubInstallation.mockResolvedValue({
         id: "tenant-123",
-        githubOrg: "testorg",
+        orgName: "testorg",
         githubInstallationId: 12345,
         slackWorkspaceId: "T123456",
         slackTeamName: "Test Team",
@@ -231,7 +232,7 @@ describe("Setup Routes", () => {
     it("should not link when tenant already has Slack connected", async () => {
       mockFindByGitHubInstallation.mockResolvedValue({
         id: "tenant-123",
-        githubOrg: "testorg",
+        orgName: "testorg",
         githubInstallationId: 12345,
         slackWorkspaceId: "T999999",
         slackTeamName: "Existing Team",
@@ -282,7 +283,7 @@ describe("Setup Routes", () => {
     it("should include checkmarks in success page", async () => {
       mockFindByGitHubInstallation.mockResolvedValue({
         id: "tenant-123",
-        githubOrg: "testorg",
+        orgName: "testorg",
         githubInstallationId: 12345,
         slackWorkspaceId: "T123456",
         slackTeamName: "Test Team",
@@ -329,7 +330,7 @@ describe("Setup Routes", () => {
         slackTeamName: "Test Team",
         slackBotToken: null,
         slackBotUserId: null,
-        githubOrg: "testorg",
+        orgName: "testorg",
         githubInstallationId: null,
         githubAppInstalledAt: null,
         slackAppInstalledAt: new Date(),
