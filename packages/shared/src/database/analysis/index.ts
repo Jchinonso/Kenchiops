@@ -16,6 +16,8 @@ export type {
   ConfidenceDistributionRow,
   ConfidenceTrendPoint,
   AnalysisCountByRepo,
+  AnalysesByTenantFilteredOptions,
+  CountAnalysesByTenantFilteredOptions,
   CreateAnalysisValidationRule,
 } from "./types.js";
 

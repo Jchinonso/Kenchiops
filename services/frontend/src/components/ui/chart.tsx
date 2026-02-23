@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-shadow -- shadcn/ui managed file, do not modify logic */
 "use client";
 
 import * as React from "react";

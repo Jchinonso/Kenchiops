@@ -85,9 +85,9 @@ export const createInternalAuthMiddleware = (
     const rawBody =
       typedReq.rawBody !== undefined && typedReq.rawBody !== null
         ? typedReq.rawBody.toString("utf-8")
-        : req.body !== undefined
-          ? JSON.stringify(req.body)
-          : "";
+        : req.body === undefined
+          ? ""
+          : JSON.stringify(req.body);
 
     if (!verifyInternalSignature(signature, timestamp, rawBody, secret)) {
       logger.warn("Internal auth signature verification failed", {

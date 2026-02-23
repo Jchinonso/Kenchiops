@@ -90,90 +90,117 @@ export const useRepositories = (
 ): UseFetchResult<readonly InstallationRepository[]> =>
   useFetch<readonly InstallationRepository[]>("/api/v1/dashboard/repositories", `${refreshKey}`);
 
-const buildAnalysesUrl = (
-  limit: number,
-  offset: number,
-  repository?: string,
-  minConfidence?: string,
-  maxConfidence?: string,
-  since?: string,
-  source?: string
-): string => {
+interface BuildAnalysesUrlOptions {
+  readonly limit: number;
+  readonly offset: number;
+  readonly repository?: string;
+  readonly minConfidence?: string;
+  readonly maxConfidence?: string;
+  readonly since?: string;
+  readonly source?: string;
+}
+
+const buildAnalysesUrl = (options: BuildAnalysesUrlOptions): string => {
   const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
-  if (repository) {
-    params.set("repository", repository);
+  params.set("limit", String(options.limit));
+  params.set("offset", String(options.offset));
+  if (options.repository) {
+    params.set("repository", options.repository);
   }
-  if (minConfidence) {
-    params.set("minConfidence", minConfidence);
+  if (options.minConfidence) {
+    params.set("minConfidence", options.minConfidence);
   }
-  if (maxConfidence) {
-    params.set("maxConfidence", maxConfidence);
+  if (options.maxConfidence) {
+    params.set("maxConfidence", options.maxConfidence);
   }
-  if (since) {
-    params.set("since", since);
+  if (options.since) {
+    params.set("since", options.since);
   }
-  if (source) {
-    params.set("source", source);
+  if (options.source) {
+    params.set("source", options.source);
   }
   return `/api/v1/dashboard/analyses?${params.toString()}`;
 };
 
-const buildFailuresUrl = (
-  limit: number,
-  offset: number,
-  repository?: string,
-  severity?: string,
-  since?: string,
-  source?: string
-): string => {
+interface BuildFailuresUrlOptions {
+  readonly limit: number;
+  readonly offset: number;
+  readonly repository?: string;
+  readonly severity?: string;
+  readonly since?: string;
+  readonly source?: string;
+}
+
+const buildFailuresUrl = (options: BuildFailuresUrlOptions): string => {
   const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
-  if (repository) {
-    params.set("repository", repository);
+  params.set("limit", String(options.limit));
+  params.set("offset", String(options.offset));
+  if (options.repository) {
+    params.set("repository", options.repository);
   }
-  if (severity) {
-    params.set("severity", severity);
+  if (options.severity) {
+    params.set("severity", options.severity);
   }
-  if (since) {
-    params.set("since", since);
+  if (options.since) {
+    params.set("since", options.since);
   }
-  if (source) {
-    params.set("source", source);
+  if (options.source) {
+    params.set("source", options.source);
   }
   return `/api/v1/dashboard/failures?${params.toString()}`;
 };
 
+interface UseAnalysesOptions {
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly refreshKey?: number;
+  readonly repository?: string;
+  readonly minConfidence?: string;
+  readonly maxConfidence?: string;
+  readonly since?: string;
+  readonly source?: string;
+}
+
 export const useAnalyses = (
-  limit: number = 20,
-  offset: number = 0,
-  refreshKey: number = 0,
-  repository?: string,
-  minConfidence?: string,
-  maxConfidence?: string,
-  since?: string,
-  source?: string
-): UseFetchResult<PaginatedResult<AnalysisRecord>> =>
-  useFetch<PaginatedResult<AnalysisRecord>>(
-    buildAnalysesUrl(limit, offset, repository, minConfidence, maxConfidence, since, source),
+  options: UseAnalysesOptions = {}
+): UseFetchResult<PaginatedResult<AnalysisRecord>> => {
+  const {
+    limit = 20,
+    offset = 0,
+    refreshKey = 0,
+    repository,
+    minConfidence,
+    maxConfidence,
+    since,
+    source,
+  } = options;
+
+  return useFetch<PaginatedResult<AnalysisRecord>>(
+    buildAnalysesUrl({ limit, offset, repository, minConfidence, maxConfidence, since, source }),
     `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}:${maxConfidence ?? ""}:${since ?? ""}:${source ?? ""}`
   );
+};
+
+interface UseFailuresOptions {
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly refreshKey?: number;
+  readonly repository?: string;
+  readonly severity?: string;
+  readonly since?: string;
+  readonly source?: string;
+}
 
 export const useFailures = (
-  limit: number = 20,
-  offset: number = 0,
-  refreshKey: number = 0,
-  repository?: string,
-  severity?: string,
-  since?: string,
-  source?: string
-): UseFetchResult<PaginatedResult<EventRecord>> =>
-  useFetch<PaginatedResult<EventRecord>>(
-    buildFailuresUrl(limit, offset, repository, severity, since, source),
+  options: UseFailuresOptions = {}
+): UseFetchResult<PaginatedResult<EventRecord>> => {
+  const { limit = 20, offset = 0, refreshKey = 0, repository, severity, since, source } = options;
+
+  return useFetch<PaginatedResult<EventRecord>>(
+    buildFailuresUrl({ limit, offset, repository, severity, since, source }),
     `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${severity ?? ""}:${since ?? ""}:${source ?? ""}`
   );
+};
 
 // ==================== Confidence Distribution ====================
 
@@ -416,6 +443,8 @@ export type {
   EventRecord,
   AnalysisRecord,
   PaginatedResult,
+  UseAnalysesOptions,
+  UseFailuresOptions,
   AnalysisStatusEntry,
   AnalysisStatusMap,
   ConfidenceTrendPoint,

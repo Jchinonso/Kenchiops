@@ -38,3 +38,28 @@ export interface CorrelationResult {
   readonly analyses: readonly CorrelationSummary[];
   readonly incidents: readonly CorrelationSummary[];
 }
+
+/** Options for filtered analysis queries (replaces long parameter lists). */
+export interface AnalysesFilterOptions {
+  readonly tenantId: string;
+  readonly repository: string | null;
+  readonly minConfidence: number | null;
+  readonly maxConfidence: number | null;
+  readonly since: string | null;
+  readonly until: string | null;
+  readonly limit: number;
+  readonly offset: number;
+  readonly source: string | null;
+}
+
+/** Options for filtered failure queries (replaces long parameter lists). */
+export interface FailuresFilterOptions {
+  readonly tenantId: string;
+  readonly repository: string | null;
+  readonly severity: string | null;
+  readonly since: string | null;
+  readonly until: string | null;
+  readonly limit: number;
+  readonly offset: number;
+  readonly source: string | null;
+}

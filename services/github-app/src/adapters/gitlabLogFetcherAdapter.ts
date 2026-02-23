@@ -343,7 +343,7 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
           buildName: job.name,
           logs,
           // GitLab job durations are in seconds -- convert to milliseconds
-          durationMs: job.duration !== null ? job.duration * 1000 : undefined,
+          durationMs: job.duration === null ? undefined : job.duration * 1000,
         };
       },
       LOG_FETCH_CONCURRENCY

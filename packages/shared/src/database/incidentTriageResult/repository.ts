@@ -318,7 +318,7 @@ const mapSeverityRow = (row: SeverityDistributionRow): SeverityDistributionEntry
 
 /** Safely parses a nullable numeric string */
 const parseNullableFloat = (value: string | null): number | null =>
-  value !== null ? parseFloat(value) : null;
+  value === null ? null : parseFloat(value);
 
 /**
  * Retrieves triage pipeline statistics for a tenant.

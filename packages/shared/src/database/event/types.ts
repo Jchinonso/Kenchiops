@@ -75,3 +75,16 @@ export interface EventListOptions {
   readonly limit?: number;
   readonly offset?: number;
 }
+
+/**
+ * Options for counting events by tenant with filters.
+ */
+export interface CountEventsByTenantFilteredOptions {
+  readonly tenantId: string;
+  readonly type: string;
+  readonly repository: string | null;
+  readonly severity: string | null;
+  readonly since?: string | null;
+  readonly until?: string | null;
+  readonly source?: string | null;
+}

@@ -33,8 +33,8 @@ import type {
   TriageWorkerState,
   TriageWorkerStats,
   TriageWorkerControl,
+  PolicyDispatchInput,
 } from "../types/severityTypes.js";
-import type { NormalizedAlert } from "../types/incidentTypes.js";
 import type { TriagePolicyContext } from "../types/policyTypes.js";
 import type { IncidentSummaryResponse } from "../types/summaryTypes.js";
 import type { TriageContainer } from "../types/containerTypes.js";
@@ -65,20 +65,7 @@ const logger = createLogger(SERVICE_NAMES.INCIDENT_TRIAGE);
  */
 const runPolicyAndDispatch = async (
   container: TriageContainer,
-  alertId: string,
-  tenantId: string,
-  normalizedAlert: NormalizedAlert,
-  severityScore: {
-    readonly label: string;
-    readonly total: number;
-  },
-  evidenceCatalog: {
-    readonly confidence: { readonly total: number };
-    readonly completeness: { readonly total: number };
-  },
-  summaryResult: IncidentSummaryResponse,
-  triageResultId: string,
-  startTime: number,
+  input: PolicyDispatchInput,
   context: RequestContext
 ): Promise<{
   readonly dispatchResults: {
@@ -88,6 +75,17 @@ const runPolicyAndDispatch = async (
   };
   readonly dispatchDurationMs: number;
 }> => {
+  const {
+    alertId,
+    tenantId,
+    normalizedAlert,
+    severityScore,
+    evidenceCatalog,
+    summaryResult,
+    triageResultId,
+    startTime,
+  } = input;
+
   // Step 12: Policy evaluation
   const triagePolicyContext: TriagePolicyContext = {
     alertId,
@@ -282,14 +280,16 @@ const runTriagePipeline = async (
   const typedSummary = summaryResult as IncidentSummaryResponse;
   const { dispatchResults, dispatchDurationMs } = await runPolicyAndDispatch(
     container,
-    alertId,
-    tenantId,
-    normalizedAlert,
-    severityScore,
-    evidenceCatalog,
-    typedSummary,
-    triageResult.id,
-    startTime,
+    {
+      alertId,
+      tenantId,
+      normalizedAlert,
+      severityScore,
+      evidenceCatalog,
+      summaryResult: typedSummary,
+      triageResultId: triageResult.id,
+      startTime,
+    },
     context
   );
 

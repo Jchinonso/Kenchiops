@@ -146,18 +146,18 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
     setAnalysesOffset(0);
   };
 
-  const { data: failuresData, isLoading: failuresLoading } = useFailures(
-    failuresPageSize,
-    failuresOffset,
+  const { data: failuresData, isLoading: failuresLoading } = useFailures({
+    limit: failuresPageSize,
+    offset: failuresOffset,
     refreshKey,
-    repoFullName
-  );
-  const { data: analysesData, isLoading: analysesLoading } = useAnalyses(
-    analysesPageSize,
-    analysesOffset,
+    repository: repoFullName,
+  });
+  const { data: analysesData, isLoading: analysesLoading } = useAnalyses({
+    limit: analysesPageSize,
+    offset: analysesOffset,
     refreshKey,
-    repoFullName
-  );
+    repository: repoFullName,
+  });
 
   const failureItems = failuresData?.items ?? [];
   const failuresTotal = failuresData?.total ?? 0;

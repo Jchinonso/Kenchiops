@@ -136,15 +136,15 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     });
   };
 
-  const { data, isLoading, error, refetch } = useIncidents(
+  const { data, isLoading, error, refetch } = useIncidents({
     tenantId,
-    pageSize,
+    limit: pageSize,
     offset,
     refreshKey,
-    filters.severity || undefined,
-    filters.status || undefined,
-    filters.source || undefined
-  );
+    severity: filters.severity || undefined,
+    status: filters.status || undefined,
+    source: filters.source || undefined,
+  });
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
   const total = data?.total ?? 0;

@@ -33,36 +33,42 @@ const httpRequest = (url: string, init?: RequestInit): Promise<Response> =>
 /**
  * Prevent concurrent refresh requests. When multiple 401s fire simultaneously,
  * only one refresh request is issued and others await the same promise.
+ *
+ * The refresh variable is read and assigned in the same synchronous tick
+ * (before any await) to avoid race conditions between concurrent callers.
  */
 // let: shared mutable state for single-flight refresh coordination
 let activeRefresh: Promise<boolean> | null = null; // let: single-flight coordination for concurrent 401s
 
-const attemptTokenRefresh = async (): Promise<boolean> => {
+const doRefresh = async (): Promise<boolean> => {
+  try {
+    // No body needed — the refresh token is in the httpOnly cookie
+    const response = await httpRequest(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+const attemptTokenRefresh = (): Promise<boolean> => {
   if (activeRefresh) {
     return activeRefresh;
   }
 
-  const doRefresh = async (): Promise<boolean> => {
-    try {
-      // No body needed — the refresh token is in the httpOnly cookie
-      const response = await httpRequest(`${API_URL}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+  // Assign synchronously (same tick as the check above) to prevent races
+  const refreshPromise = doRefresh();
+  activeRefresh = refreshPromise;
 
-      return response.ok;
-    } catch {
-      return false;
-    }
-  };
-
-  activeRefresh = doRefresh();
-
-  try {
-    return await activeRefresh;
-  } finally {
+  // Clear the single-flight lock after the refresh settles
+  void refreshPromise.finally(() => {
     activeRefresh = null;
-  }
+  });
+
+  return refreshPromise;
 };
 
 // ==================== Request Builder ====================

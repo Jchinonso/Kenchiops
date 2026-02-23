@@ -275,6 +275,8 @@ export {
   type CreateAnalysisInput,
   type AnalysisRecord,
   type AnalysisCountByRepo,
+  type AnalysesByTenantFilteredOptions,
+  type CountAnalysesByTenantFilteredOptions,
   type ConfidenceTrendPoint,
 } from "./database/index.js";
 export {
@@ -287,6 +289,7 @@ export {
   findEventIdByRepoAndCommit,
   type EventRecord,
   type EventListOptions,
+  type CountEventsByTenantFilteredOptions,
   type CreateEventInput,
 } from "./database/index.js";
 export {

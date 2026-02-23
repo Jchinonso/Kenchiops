@@ -106,19 +106,24 @@ const buildIncidentsUrl = (
 
 // ==================== Typed Hooks ====================
 
-export const useIncidents = (
-  tenantId: string,
-  limit: number = 20,
-  offset: number = 0,
-  refreshKey: number = 0,
-  severity?: string,
-  status?: string,
-  source?: string
-): UseFetchResult<PaginatedIncidents> =>
-  useFetch<PaginatedIncidents>(
+export interface UseIncidentsOptions {
+  readonly tenantId: string;
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly refreshKey?: number;
+  readonly severity?: string;
+  readonly status?: string;
+  readonly source?: string;
+}
+
+export const useIncidents = (options: UseIncidentsOptions): UseFetchResult<PaginatedIncidents> => {
+  const { tenantId, limit = 20, offset = 0, refreshKey = 0, severity, status, source } = options;
+
+  return useFetch<PaginatedIncidents>(
     tenantId ? buildIncidentsUrl(tenantId, limit, offset, severity, status, source) : "",
     `${tenantId}:${limit}:${offset}:${refreshKey}:${severity ?? ""}:${status ?? ""}:${source ?? ""}`
   );
+};
 
 export const useIncidentDetail = (
   id: string | null,

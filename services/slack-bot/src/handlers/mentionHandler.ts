@@ -18,6 +18,7 @@ import { createEventFromMention, performAnalysis } from "../services/analysisSer
 import { shouldTriggerQA, performQASearch, generateQueryId } from "../services/qaService.js";
 import type { SlackBlock } from "../types/slackTypes.js";
 import type { SlackBlocks } from "./actionHandlerTypes.js";
+import type { AnalysisRequestOptions } from "./mentionHandlerTypes.js";
 
 const logger = createLogger("slack-bot");
 
@@ -105,15 +106,8 @@ const handleQARequest = async (
 /**
  * Handles analysis requests using AI analysis.
  */
-const handleAnalysisRequest = async (
-  query: string,
-  userId: string,
-  channel: string,
-  threadTs: string,
-  eventTs: string,
-  say: SayFn,
-  tenantId?: string
-): Promise<void> => {
+const handleAnalysisRequest = async (options: AnalysisRequestOptions): Promise<void> => {
+  const { query, userId, channel, threadTs, eventTs, say, tenantId } = options;
   const timestamp = new Date(
     parseFloat(eventTs) * TIME_CONSTANTS.MILLISECONDS_PER_SECOND
   ).toISOString();
@@ -204,7 +198,15 @@ export const handleAppMention = async (event: AppMentionEvent, say: SayFn): Prom
     // Otherwise, perform AI analysis
     logger.info("Routing to analysis handler", { query: query.slice(0, 50) });
     const tenant = event.team ? await findTenantBySlackWorkspace(event.team) : null;
-    await handleAnalysisRequest(query, userId, event.channel, threadTs, event.ts, say, tenant?.id);
+    await handleAnalysisRequest({
+      query,
+      userId,
+      channel: event.channel,
+      threadTs,
+      eventTs: event.ts,
+      say,
+      tenantId: tenant?.id,
+    });
   } catch (error) {
     logger.error("Error processing app mention", {
       error: getErrorMessage(error),

@@ -12,6 +12,7 @@ export type {
   EventRecord,
   EventCountRow,
   EventListOptions,
+  CountEventsByTenantFilteredOptions,
   CreateEventInput,
 } from "./types.js";
 

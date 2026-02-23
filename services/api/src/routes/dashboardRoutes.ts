@@ -139,15 +139,7 @@ const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => 
 
   const result = hasFilters
     ? await dashboardService.getAnalysesFiltered(
-        tenantId,
-        repository,
-        minConfidence,
-        maxConfidence,
-        since,
-        until,
-        limit,
-        offset,
-        source,
+        { tenantId, repository, minConfidence, maxConfidence, since, until, limit, offset, source },
         context
       )
     : await dashboardService.getAnalyses(tenantId, limit, offset, context);
@@ -177,14 +169,7 @@ const handleGetFailures = async (req: Request, res: Response): Promise<void> => 
 
   const result = hasFilters
     ? await dashboardService.getFailuresFiltered(
-        tenantId,
-        repository,
-        severity,
-        since,
-        until,
-        limit,
-        offset,
-        source,
+        { tenantId, repository, severity, since, until, limit, offset, source },
         context
       )
     : await dashboardService.getFailures(tenantId, limit, offset, context);

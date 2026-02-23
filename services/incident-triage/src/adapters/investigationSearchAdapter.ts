@@ -163,16 +163,15 @@ export const createInvestigationSearchAdapter = (): InvestigationSearchPort => (
     try {
       const since = computeCutoffDate(hoursBack).toISOString();
 
-      const analyses = await getAnalysesByTenantFiltered(
+      const analyses = await getAnalysesByTenantFiltered({
         tenantId,
-        null,
-        null,
-        null,
+        repository: null,
+        minConfidence: null,
+        maxConfidence: null,
         since,
-        null,
         limit,
-        0
-      );
+        offset: 0,
+      });
 
       const evidence = analyses.map((analysis) => mapAnalysisToEvidence(analysis, serviceName));
 

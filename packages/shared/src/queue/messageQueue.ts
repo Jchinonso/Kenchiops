@@ -43,6 +43,31 @@ export type {
 
 const logger = createLogger("message-queue");
 
+// ==================== Internal Helper Types ====================
+
+/** Redis client type used by queue operations. */
+type RedisClient = ReturnType<typeof getRedisClient>;
+
+/** Options for retrying a failed queue job. */
+interface RetryJobOptions<T> {
+  readonly client: RedisClient;
+  readonly queueName: string;
+  readonly processingQueue: string;
+  readonly message: QueueMessage<T>;
+  readonly data: string;
+  readonly errorInfo: string;
+}
+
+/** Options for moving a failed queue job to the dead letter queue. */
+interface MoveToDeadLetterOptions<T> extends RetryJobOptions<T> {
+  readonly deadLetterQueue: string;
+}
+
+/** Options for handling a queue job failure (retry or dead-letter). */
+interface HandleJobFailureOptions<T> extends MoveToDeadLetterOptions<T> {
+  readonly maxRetries: number;
+}
+
 // ==================== Helper Functions ====================
 
 /**
@@ -127,14 +152,8 @@ export const subscribe = async <T>(
 /**
  * Retries a failed job by incrementing retry count and re-enqueuing.
  */
-const retryJob = async <T>(
-  client: ReturnType<typeof getRedisClient>,
-  queueName: string,
-  processingQueue: string,
-  message: QueueMessage<T>,
-  data: string,
-  errorInfo: string
-): Promise<void> => {
+const retryJob = async <T>(options: RetryJobOptions<T>): Promise<void> => {
+  const { client, queueName, processingQueue, message, data, errorInfo } = options;
   const updatedMessage: QueueMessage<T> = {
     ...message,
     retryCount: (message.retryCount ?? 0) + 1,
@@ -152,15 +171,8 @@ const retryJob = async <T>(
 /**
  * Moves a failed job to the dead letter queue after exhausting retries.
  */
-const moveToDeadLetter = async <T>(
-  client: ReturnType<typeof getRedisClient>,
-  queueName: string,
-  processingQueue: string,
-  deadLetterQueue: string,
-  message: QueueMessage<T>,
-  data: string,
-  errorInfo: string
-): Promise<void> => {
+const moveToDeadLetter = async <T>(options: MoveToDeadLetterOptions<T>): Promise<void> => {
+  const { client, queueName, processingQueue, deadLetterQueue, message, data, errorInfo } = options;
   await client.lrem(processingQueue, REDIS_LIST_OPS.REMOVE_FIRST_MATCH, data);
   await client.lpush(deadLetterQueue, data);
   logger.error("Job moved to dead letter queue", {
@@ -174,28 +186,12 @@ const moveToDeadLetter = async <T>(
 /**
  * Handles a job failure by retrying or moving to dead letter queue.
  */
-const handleJobFailure = async <T>(
-  client: ReturnType<typeof getRedisClient>,
-  queueName: string,
-  processingQueue: string,
-  deadLetterQueue: string,
-  maxRetries: number,
-  message: QueueMessage<T>,
-  data: string,
-  errorInfo: string
-): Promise<void> => {
+const handleJobFailure = async <T>(options: HandleJobFailureOptions<T>): Promise<void> => {
+  const { maxRetries, message, ...rest } = options;
   if ((message.retryCount ?? 0) < maxRetries) {
-    await retryJob(client, queueName, processingQueue, message, data, errorInfo);
+    await retryJob({ ...rest, message });
   } else {
-    await moveToDeadLetter(
-      client,
-      queueName,
-      processingQueue,
-      deadLetterQueue,
-      message,
-      data,
-      errorInfo
-    );
+    await moveToDeadLetter({ ...rest, message });
   }
 };
 
@@ -267,28 +263,28 @@ export const createQueue = (queueConfig: QueueConfig): QueueManager => {
         });
       } else {
         const shouldRetry = result.shouldRetry !== false;
-        await handleJobFailure(
+        await handleJobFailure({
           client,
-          name,
+          queueName: name,
           processingQueue,
           deadLetterQueue,
-          shouldRetry ? maxRetries : 0,
+          maxRetries: shouldRetry ? maxRetries : 0,
           message,
           data,
-          result.error ?? "Job failed"
-        );
+          errorInfo: result.error ?? "Job failed",
+        });
       }
     } catch (error) {
-      await handleJobFailure(
+      await handleJobFailure({
         client,
-        name,
+        queueName: name,
         processingQueue,
         deadLetterQueue,
         maxRetries,
         message,
         data,
-        getErrorMessage(error)
-      );
+        errorInfo: getErrorMessage(error),
+      });
     }
   };
 

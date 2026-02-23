@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-shadow -- shadcn/ui managed file, do not modify logic */
 import * as React from "react";
 import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";
 import { ArrowLeft, ArrowRight } from "lucide-react";

@@ -136,6 +136,36 @@ export interface AnalysisCountByRepo {
   readonly analysisCount: number;
 }
 
+// ==================== Query Options ====================
+
+/**
+ * Options for querying analyses by tenant with filters.
+ */
+export interface AnalysesByTenantFilteredOptions {
+  readonly tenantId: string;
+  readonly repository: string | null;
+  readonly minConfidence: number | null;
+  readonly maxConfidence: number | null;
+  readonly since?: string | null;
+  readonly until?: string | null;
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly source?: string | null;
+}
+
+/**
+ * Options for counting analyses by tenant with filters.
+ */
+export interface CountAnalysesByTenantFilteredOptions {
+  readonly tenantId: string;
+  readonly repository: string | null;
+  readonly minConfidence: number | null;
+  readonly maxConfidence: number | null;
+  readonly since?: string | null;
+  readonly until?: string | null;
+  readonly source?: string | null;
+}
+
 // ==================== Validation Types ====================
 
 /**

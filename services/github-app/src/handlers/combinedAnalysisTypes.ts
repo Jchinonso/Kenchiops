@@ -124,3 +124,33 @@ export interface PRDiffContext {
   readonly branch: string;
   readonly labels: readonly string[];
 }
+
+// ==================== Options Types ====================
+
+/**
+ * Options for analyzing a single job's logs via LLM API.
+ * Consolidates parameters that were previously passed individually.
+ */
+export interface AnalyzeJobOptions {
+  readonly jobName: string;
+  readonly jobLogs: string;
+  readonly repository: string;
+  readonly apiUrl: string;
+  readonly tenantId?: string;
+  readonly workflowId?: string;
+  readonly prDiffContext?: PRDiffContext | null;
+  readonly ciProvider?: string;
+}
+
+/**
+ * Options for analyzing a job with error handling wrapper.
+ */
+export interface AnalyzeJobWithErrorHandlingOptions {
+  readonly job: { readonly jobName: string; readonly logs: string };
+  readonly repository: string;
+  readonly apiUrl: string;
+  readonly tenantId?: string;
+  readonly workflowId?: string;
+  readonly prDiffContext?: PRDiffContext | null;
+  readonly ciProvider?: string;
+}

@@ -226,7 +226,7 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 20, offset: 0 })
     );
 
-    renderHook(() => useAnalyses(20, 0));
+    renderHook(() => useAnalyses({ limit: 20, offset: 0 }));
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -243,7 +243,7 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useAnalyses(10, 0, 0, "org/repo"));
+    renderHook(() => useAnalyses({ limit: 10, offset: 0, refreshKey: 0, repository: "org/repo" }));
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -258,7 +258,15 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useAnalyses(10, 0, 0, undefined, "0.5", "0.9"));
+    renderHook(() =>
+      useAnalyses({
+        limit: 10,
+        offset: 0,
+        refreshKey: 0,
+        minConfidence: "0.5",
+        maxConfidence: "0.9",
+      })
+    );
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -274,7 +282,7 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useAnalyses(10, 0, 0, undefined, undefined, undefined, "2024-01-01"));
+    renderHook(() => useAnalyses({ limit: 10, offset: 0, refreshKey: 0, since: "2024-01-01" }));
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -341,7 +349,7 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 20, offset: 0 })
     );
 
-    renderHook(() => useFailures(20, 0));
+    renderHook(() => useFailures({ limit: 20, offset: 0 }));
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -358,7 +366,7 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useFailures(10, 0, 0, "org/repo"));
+    renderHook(() => useFailures({ limit: 10, offset: 0, refreshKey: 0, repository: "org/repo" }));
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -373,7 +381,7 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useFailures(10, 0, 0, undefined, "high"));
+    renderHook(() => useFailures({ limit: 10, offset: 0, refreshKey: 0, severity: "high" }));
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -388,7 +396,7 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useFailures(10, 0, 0, undefined, undefined, "2024-01-01"));
+    renderHook(() => useFailures({ limit: 10, offset: 0, refreshKey: 0, since: "2024-01-01" }));
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();

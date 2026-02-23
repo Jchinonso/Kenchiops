@@ -27,6 +27,8 @@ import type {
   ConfidenceTrendPoint,
   AnalysisCountByRepoRow,
   AnalysisCountByRepo,
+  AnalysesByTenantFilteredOptions,
+  CountAnalysesByTenantFilteredOptions,
 } from "./types.js";
 import {
   ANALYSIS_ID_PREFIX,
@@ -270,16 +272,19 @@ export const countAnalysesByTenant = async (tenantId: string): Promise<number> =
  * @throws Error if database operation fails
  */
 export const getAnalysesByTenantFiltered = async (
-  tenantId: string,
-  repository: string | null,
-  minConfidence: number | null,
-  maxConfidence: number | null,
-  since: string | null = null,
-  until: string | null = null,
-  limit: number = ANALYSIS_DEFAULTS.TENANT_QUERY_LIMIT,
-  offset: number = 0,
-  source: string | null = null
+  options: AnalysesByTenantFilteredOptions
 ): Promise<readonly AnalysisRecord[]> => {
+  const {
+    tenantId,
+    repository,
+    minConfidence,
+    maxConfidence,
+    since = null,
+    until = null,
+    limit = ANALYSIS_DEFAULTS.TENANT_QUERY_LIMIT,
+    offset = 0,
+    source = null,
+  } = options;
   validateId(tenantId, "tenantId");
   validateLimit(limit);
 
@@ -321,14 +326,17 @@ export const getAnalysesByTenantFiltered = async (
  * @throws Error if database operation fails
  */
 export const countAnalysesByTenantFiltered = async (
-  tenantId: string,
-  repository: string | null,
-  minConfidence: number | null,
-  maxConfidence: number | null,
-  since: string | null = null,
-  until: string | null = null,
-  source: string | null = null
+  options: CountAnalysesByTenantFilteredOptions
 ): Promise<number> => {
+  const {
+    tenantId,
+    repository,
+    minConfidence,
+    maxConfidence,
+    since = null,
+    until = null,
+    source = null,
+  } = options;
   validateId(tenantId, "tenantId");
 
   try {
@@ -373,13 +381,13 @@ export const getAnalysesByEventIds = async (
     ]);
 
     const mapEventRow = ({
-      event_id,
+      event_id: eventId,
       id,
-      diagnosis_confidence,
+      diagnosis_confidence: diagnosisConfidence,
     }: AnalysisEventRow): readonly [
       string,
       { readonly analysisId: string; readonly confidence: number },
-    ] => [event_id, { analysisId: id, confidence: diagnosis_confidence }];
+    ] => [eventId, { analysisId: id, confidence: diagnosisConfidence }];
 
     return new Map(result.rows.map(mapEventRow));
   } catch (error) {

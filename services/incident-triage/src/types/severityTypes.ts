@@ -5,7 +5,8 @@
  */
 
 import type { RequestContext } from "@kenchi/shared";
-import type { AlertSeverity } from "./incidentTypes.js";
+import type { AlertSeverity, NormalizedAlert } from "./incidentTypes.js";
+import type { IncidentSummaryResponse } from "./summaryTypes.js";
 
 // ==================== Severity Score ====================
 
@@ -93,6 +94,29 @@ export interface TriageWorkerStats {
 export interface TriageWorkerControl {
   readonly stop: () => void;
   readonly getStats: () => TriageWorkerStats;
+}
+
+// ==================== Policy & Dispatch Input ====================
+
+/**
+ * Grouped options for the runPolicyAndDispatch worker helper.
+ * Bundles the pipeline outputs needed for policy evaluation and dispatch.
+ */
+export interface PolicyDispatchInput {
+  readonly alertId: string;
+  readonly tenantId: string;
+  readonly normalizedAlert: NormalizedAlert;
+  readonly severityScore: {
+    readonly label: string;
+    readonly total: number;
+  };
+  readonly evidenceCatalog: {
+    readonly confidence: { readonly total: number };
+    readonly completeness: { readonly total: number };
+  };
+  readonly summaryResult: IncidentSummaryResponse;
+  readonly triageResultId: string;
+  readonly startTime: number;
 }
 
 // ==================== Deduplication Types ====================

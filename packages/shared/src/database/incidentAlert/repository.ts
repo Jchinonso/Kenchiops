@@ -179,9 +179,9 @@ const parseCountRow = (rows: ReadonlyArray<{ readonly count: string }>): number 
 
 /** Extracts triage JSON from the joined row and maps snake_case keys to camelCase */
 const extractTriageJson = ({
-  triage_result,
+  triage_result: triageResult,
 }: AlertWithTriageRow): Readonly<Record<string, unknown>> | null =>
-  triage_result ? mapTriageResultKeys(triage_result) : null;
+  triageResult ? mapTriageResultKeys(triageResult) : null;
 
 /**
  * Lists incident alerts with pagination and optional filters.

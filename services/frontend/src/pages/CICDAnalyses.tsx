@@ -387,15 +387,15 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
 
   const since = useMemo(() => timeRangeToSince(filters.timeRange), [filters.timeRange]);
 
-  const { data, isLoading, error, refetch } = useAnalyses(
-    pageSize,
+  const { data, isLoading, error, refetch } = useAnalyses({
+    limit: pageSize,
     offset,
     refreshKey,
-    filters.repository || undefined,
-    confidenceRange.min !== null ? String(confidenceRange.min) : undefined,
-    confidenceRange.max !== null ? String(confidenceRange.max) : undefined,
-    since
-  );
+    repository: filters.repository || undefined,
+    minConfidence: confidenceRange.min !== null ? String(confidenceRange.min) : undefined,
+    maxConfidence: confidenceRange.max !== null ? String(confidenceRange.max) : undefined,
+    since,
+  });
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;

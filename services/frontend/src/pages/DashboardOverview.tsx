@@ -353,13 +353,13 @@ export const DashboardOverview = ({
     isLoading: analysesLoading,
     error: analysesError,
     refetch: refetchAnalyses,
-  } = useAnalyses(5, 0, refreshKey);
+  } = useAnalyses({ limit: 5, offset: 0, refreshKey });
   const {
     data: recentFailures,
     isLoading: failuresLoading,
     error: failuresError,
     refetch: refetchFailures,
-  } = useFailures(5, 0, refreshKey);
+  } = useFailures({ limit: 5, offset: 0, refreshKey });
   const { data: tenant } = useTenantInfo(refreshKey);
   const { data: gitlabProjects, isLoading: gitlabProjectsLoading } = useGitLabProjects(refreshKey);
   const tenantId = tenant?.id ?? "";

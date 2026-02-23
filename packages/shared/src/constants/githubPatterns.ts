@@ -276,6 +276,14 @@ export const ABSOLUTE_PATH_SKIP_DIRS = new Set([
 export const ABSOLUTE_PATH_PATTERN =
   /(?:\/(?:home|Users|var|tmp|opt|usr)\/[^\s:]+\/|[A-Z]:\\(?:Users|Projects|Dev)\\[^\s:]+\\)/g;
 
+// ==================== CI Infrastructure Filtering ====================
+
+/**
+ * Pattern to identify CI infrastructure messages that should never become lint errors.
+ * These are process exit notifications from CI runners, not actual source code issues.
+ */
+export const CI_INFRASTRUCTURE_MESSAGE = /^Process completed with exit code \d+/;
+
 // ==================== CI Job Classification ====================
 
 /**

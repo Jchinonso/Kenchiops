@@ -22,6 +22,7 @@ import type {
   EventCountRow,
   EventListOptions,
   CreateEventInput,
+  CountEventsByTenantFilteredOptions,
 } from "./types.js";
 import { mapRowToEvent, validateEventListOptions, validateCreateEventInput } from "./helpers.js";
 
@@ -172,14 +173,18 @@ export const getEventsByTenantFiltered = async (
  * @throws Error if database operation fails
  */
 export const countEventsByTenantFiltered = async (
-  tenantId: string,
-  type: string,
-  repository: string | null,
-  severity: string | null,
-  since: string | null = null,
-  until: string | null = null,
-  source: string | null = null
+  options: CountEventsByTenantFilteredOptions
 ): Promise<number> => {
+  const {
+    tenantId,
+    type,
+    repository,
+    severity,
+    since = null,
+    until = null,
+    source = null,
+  } = options;
+
   if (!tenantId?.trim()) {
     throw new ValidationError("tenantId is required", {
       operation: "countEventsByTenantFiltered",

@@ -394,14 +394,14 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
 
   const since = useMemo(() => timeRangeToSince(filters.timeRange), [filters.timeRange]);
 
-  const { data, isLoading, error, refetch } = useFailures(
-    pageSize,
+  const { data, isLoading, error, refetch } = useFailures({
+    limit: pageSize,
     offset,
     refreshKey,
-    filters.repository || undefined,
-    filters.severity || undefined,
-    since
-  );
+    repository: filters.repository || undefined,
+    severity: filters.severity || undefined,
+    since,
+  });
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;

@@ -7,36 +7,13 @@
  * @module services/dashboardService
  */
 
-import {
-  createLogger,
-  NotFoundError,
-  findById as findTenantById,
-  findOAuthIdentitiesByUser,
-  findGitHubAppConnection,
-  findSlackConnection,
-  getAnalysisById,
-  getAnalysesByTenant,
-  countAnalysesByTenant,
-  getAnalysesByTenantFiltered,
-  countAnalysesByTenantFiltered,
-  getAnalysesByEventIds,
-  getConfidenceDistribution,
-  getConfidenceTrend,
-  getEventsByTenant,
-  countEventsByTenant,
-  getEventsByTenantFiltered,
-  countEventsByTenantFiltered,
-  getWebhookActivitiesByTenant,
-  countWebhookActivitiesByTenant,
-  findAnalysesByCommitSha,
-  findIncidentsByCommitSha,
-  getAnalysisCountsByRepo,
-  type RequestContext,
-  type AnalysisRecord,
-  type AnalysisCountByRepo,
-  type EventRecord,
-  type WebhookActivityRecord,
-  type ConfidenceTrendPoint,
+import type {
+  RequestContext,
+  AnalysisRecord,
+  AnalysisCountByRepo,
+  EventRecord,
+  WebhookActivityRecord,
+  ConfidenceTrendPoint,
 } from "@kenchi/shared";
 import type {
   GitHubInstallationPort,
@@ -48,10 +25,109 @@ import type {
   DashboardStats,
   PaginatedResult,
   CorrelationResult,
-  CorrelationSummary,
+  AnalysesFilterOptions,
+  FailuresFilterOptions,
 } from "./dashboardServiceTypes.js";
+import {
+  getTenantInfoFn,
+  getDashboardStatsFn,
+  getRepositoriesFn,
+  getAnalysesFn,
+  getAnalysesFilteredFn,
+  getFailuresFilteredFn,
+  getAnalysisDetailFn,
+  getFailuresFn,
+  getAnalysisStatusByEventsFn,
+  getConfidenceDistributionStatsFn,
+  getWebhookActivityFn,
+  getConfidenceTrendDataFn,
+  getAnalysisCountsByRepoFn,
+  getCorrelationsFn,
+  getGitLabProjectsFn,
+} from "./dashboardServiceHelpers.js";
 
-const CICD_FAILURE_TYPE = "CICD_FAILURE";
+// ==================== Service Interface ====================
+
+interface DashboardService {
+  readonly getTenantInfo: (
+    tenantId: string,
+    userId: string | undefined,
+    context: RequestContext
+  ) => Promise<TenantInfo>;
+  readonly getDashboardStats: (
+    tenantId: string,
+    userId: string | undefined,
+    source: string | null,
+    context: RequestContext
+  ) => Promise<DashboardStats>;
+  readonly getRepositories: (
+    tenantId: string,
+    context: RequestContext
+  ) => Promise<readonly InstallationRepository[]>;
+  readonly getAnalyses: (
+    tenantId: string,
+    limit: number,
+    offset: number,
+    context: RequestContext
+  ) => Promise<PaginatedResult<AnalysisRecord>>;
+  readonly getAnalysesFiltered: (
+    options: AnalysesFilterOptions,
+    context: RequestContext
+  ) => Promise<PaginatedResult<AnalysisRecord>>;
+  readonly getFailuresFiltered: (
+    options: FailuresFilterOptions,
+    context: RequestContext
+  ) => Promise<PaginatedResult<EventRecord>>;
+  readonly getAnalysisDetail: (
+    tenantId: string,
+    analysisId: string,
+    context: RequestContext
+  ) => Promise<AnalysisRecord>;
+  readonly getFailures: (
+    tenantId: string,
+    limit: number,
+    offset: number,
+    context: RequestContext
+  ) => Promise<PaginatedResult<EventRecord>>;
+  readonly getAnalysisStatusByEvents: (
+    tenantId: string,
+    eventIds: readonly string[],
+    context: RequestContext
+  ) => Promise<ReadonlyMap<string, { readonly analysisId: string; readonly confidence: number }>>;
+  readonly getConfidenceDistributionStats: (
+    tenantId: string,
+    context: RequestContext
+  ) => Promise<ReadonlyArray<{ readonly level: string; readonly count: number }>>;
+  readonly getWebhookActivity: (
+    tenantId: string,
+    source: string | null,
+    status: string | null,
+    limit: number,
+    offset: number,
+    context: RequestContext
+  ) => Promise<PaginatedResult<WebhookActivityRecord>>;
+  readonly getConfidenceTrendData: (
+    tenantId: string,
+    bucket: "day" | "week",
+    since: string,
+    context: RequestContext
+  ) => Promise<readonly ConfidenceTrendPoint[]>;
+  readonly getAnalysisCountsByRepo: (
+    tenantId: string,
+    context: RequestContext
+  ) => Promise<readonly AnalysisCountByRepo[]>;
+  readonly getCorrelations: (
+    tenantId: string,
+    commitSha: string,
+    context: RequestContext
+  ) => Promise<CorrelationResult>;
+  readonly getGitLabProjects: (
+    userId: string,
+    context: RequestContext
+  ) => Promise<readonly GitLabProject[]>;
+}
+
+// ==================== Service Factory ====================
 
 /**
  * Creates the dashboard service with injected dependencies.
@@ -59,479 +135,37 @@ const CICD_FAILURE_TYPE = "CICD_FAILURE";
 export const createDashboardService = (
   githubAdapter: GitHubInstallationPort,
   gitlabProjectsPort: GitLabProjectsPort
-) => {
-  const logger = createLogger("dashboard-service");
+): DashboardService => ({
+  getTenantInfo: getTenantInfoFn,
 
-  return {
-    /**
-     * Retrieves tenant info including connection status.
-     *
-     * @throws NotFoundError if tenant does not exist
-     */
-    getTenantInfo: async (
-      tenantId: string,
-      userId: string | undefined,
-      context: RequestContext
-    ): Promise<TenantInfo> => {
-      const tenant = await findTenantById(tenantId);
+  getDashboardStats: (
+    tenantId: string,
+    userId: string | undefined,
+    source: string | null,
+    context: RequestContext
+  ): Promise<DashboardStats> =>
+    getDashboardStatsFn(tenantId, userId, source, githubAdapter, gitlabProjectsPort, context),
 
-      if (!tenant) {
-        throw new NotFoundError("Tenant not found", {
-          metadata: { tenantId },
-        });
-      }
+  getRepositories: (
+    tenantId: string,
+    context: RequestContext
+  ): Promise<readonly InstallationRepository[]> =>
+    getRepositoriesFn(tenantId, githubAdapter, context),
 
-      // Check provider connections in parallel with OAuth identities
-      const [ghConn, slackConn, identities] = await Promise.all([
-        findGitHubAppConnection(tenantId),
-        findSlackConnection(tenantId),
-        userId ? findOAuthIdentitiesByUser(userId) : Promise.resolve([]),
-      ]);
+  getAnalyses: getAnalysesFn,
 
-      const gitlabConnected = identities.some(
-        (identity) => identity.provider === "gitlab" && identity.accessToken !== null
-      );
+  getAnalysesFiltered: getAnalysesFilteredFn,
+  getFailuresFiltered: getFailuresFilteredFn,
 
-      logger.info("Tenant info retrieved", { gitlabConnected, ...context });
+  getAnalysisDetail: getAnalysisDetailFn,
+  getFailures: getFailuresFn,
+  getAnalysisStatusByEvents: getAnalysisStatusByEventsFn,
+  getConfidenceDistributionStats: getConfidenceDistributionStatsFn,
+  getWebhookActivity: getWebhookActivityFn,
+  getConfidenceTrendData: getConfidenceTrendDataFn,
+  getAnalysisCountsByRepo: getAnalysisCountsByRepoFn,
+  getCorrelations: getCorrelationsFn,
 
-      return {
-        id: tenant.id,
-        orgName: tenant.orgName,
-        githubConnected: ghConn !== null,
-        gitlabConnected,
-        slackConnected: slackConn !== null,
-        status: tenant.status,
-      };
-    },
-
-    /**
-     * Retrieves aggregated dashboard statistics for a tenant.
-     *
-     * @throws NotFoundError if tenant does not exist
-     */
-    getDashboardStats: async (
-      tenantId: string,
-      userId: string | undefined,
-      source: string | null,
-      context: RequestContext
-    ): Promise<DashboardStats> => {
-      const tenant = await findTenantById(tenantId);
-
-      if (!tenant) {
-        throw new NotFoundError("Tenant not found", { metadata: { tenantId } });
-      }
-
-      // Resolve GitLab project count from user's OAuth identity
-      const resolveGitLabProjects = async (): Promise<readonly GitLabProject[]> => {
-        if (!userId) {
-          return [];
-        }
-        const identities = await findOAuthIdentitiesByUser(userId);
-        const gitlabIdentity = identities.find((identity) => identity.provider === "gitlab");
-        if (!gitlabIdentity?.accessToken) {
-          return [];
-        }
-        return gitlabProjectsPort.getProjects(
-          gitlabIdentity.accessToken,
-          gitlabIdentity.instanceUrl,
-          context
-        );
-      };
-
-      const ghConn = await findGitHubAppConnection(tenantId);
-      const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
-
-      const [totalAnalyses, totalFailures, repos, gitlabProjects] = await Promise.all([
-        source
-          ? countAnalysesByTenantFiltered(tenantId, null, null, null, null, null, source)
-          : countAnalysesByTenant(tenantId),
-        source
-          ? countEventsByTenantFiltered(tenantId, CICD_FAILURE_TYPE, null, null, null, null, source)
-          : countEventsByTenant(tenantId, CICD_FAILURE_TYPE),
-        installationId
-          ? githubAdapter.getRepositories(installationId, context)
-          : Promise.resolve([]),
-        resolveGitLabProjects(),
-      ]);
-
-      logger.info("Dashboard stats retrieved", {
-        totalAnalyses,
-        totalFailures,
-        connectedRepos: repos.length,
-        gitlabProjectCount: gitlabProjects.length,
-        source,
-        ...context,
-      });
-
-      return {
-        totalAnalyses,
-        totalFailures,
-        connectedRepos: repos.length,
-        gitlabProjectCount: gitlabProjects.length,
-      };
-    },
-
-    /**
-     * Retrieves repositories accessible to the tenant's GitHub installation.
-     * Returns empty array if no GitHub installation is linked.
-     *
-     * @throws NotFoundError if tenant does not exist
-     */
-    getRepositories: async (
-      tenantId: string,
-      context: RequestContext
-    ): Promise<readonly InstallationRepository[]> => {
-      const tenant = await findTenantById(tenantId);
-
-      if (!tenant) {
-        throw new NotFoundError("Tenant not found", { metadata: { tenantId } });
-      }
-
-      const ghConn = await findGitHubAppConnection(tenantId);
-      const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
-
-      if (!installationId) {
-        return [];
-      }
-
-      return githubAdapter.getRepositories(installationId, context);
-    },
-
-    /**
-     * Retrieves paginated analysis records for a tenant.
-     */
-    getAnalyses: async (
-      tenantId: string,
-      limit: number,
-      offset: number,
-      context: RequestContext
-    ): Promise<PaginatedResult<AnalysisRecord>> => {
-      const [items, total] = await Promise.all([
-        getAnalysesByTenant(tenantId, limit, offset),
-        countAnalysesByTenant(tenantId),
-      ]);
-
-      logger.info("Analyses retrieved", {
-        count: items.length,
-        total,
-        ...context,
-      });
-
-      return { items, total, limit, offset };
-    },
-
-    /**
-     * Retrieves paginated analysis records for a tenant with optional filters.
-     */
-    getAnalysesFiltered: async (
-      tenantId: string,
-      repository: string | null,
-      minConfidence: number | null,
-      maxConfidence: number | null,
-      since: string | null,
-      until: string | null,
-      limit: number,
-      offset: number,
-      source: string | null,
-      context: RequestContext
-    ): Promise<PaginatedResult<AnalysisRecord>> => {
-      const [items, total] = await Promise.all([
-        getAnalysesByTenantFiltered(
-          tenantId,
-          repository,
-          minConfidence,
-          maxConfidence,
-          since,
-          until,
-          limit,
-          offset,
-          source
-        ),
-        countAnalysesByTenantFiltered(
-          tenantId,
-          repository,
-          minConfidence,
-          maxConfidence,
-          since,
-          until,
-          source
-        ),
-      ]);
-
-      logger.info("Filtered analyses retrieved", {
-        count: items.length,
-        total,
-        repository,
-        minConfidence,
-        maxConfidence,
-        since,
-        until,
-        source,
-        ...context,
-      });
-
-      return { items, total, limit, offset };
-    },
-
-    /**
-     * Retrieves paginated CI/CD failure events for a tenant with optional filters.
-     */
-    getFailuresFiltered: async (
-      tenantId: string,
-      repository: string | null,
-      severity: string | null,
-      since: string | null,
-      until: string | null,
-      limit: number,
-      offset: number,
-      source: string | null,
-      context: RequestContext
-    ): Promise<PaginatedResult<EventRecord>> => {
-      const [items, total] = await Promise.all([
-        getEventsByTenantFiltered({
-          tenantId,
-          type: CICD_FAILURE_TYPE,
-          repository,
-          severity,
-          since,
-          until,
-          limit,
-          offset,
-          source,
-        }),
-        countEventsByTenantFiltered(
-          tenantId,
-          CICD_FAILURE_TYPE,
-          repository,
-          severity,
-          since,
-          until,
-          source
-        ),
-      ]);
-
-      logger.info("Filtered failures retrieved", {
-        count: items.length,
-        total,
-        repository,
-        severity,
-        since,
-        until,
-        source,
-        ...context,
-      });
-
-      return { items, total, limit, offset };
-    },
-
-    /**
-     * Retrieves a single analysis by ID, scoped to the tenant.
-     *
-     * @throws NotFoundError if analysis does not exist or belongs to another tenant
-     */
-    getAnalysisDetail: async (
-      tenantId: string,
-      analysisId: string,
-      context: RequestContext
-    ): Promise<AnalysisRecord> => {
-      const analysis = await getAnalysisById(analysisId);
-
-      if (!analysis || analysis.tenantId !== tenantId) {
-        throw new NotFoundError("Analysis not found", {
-          metadata: { analysisId },
-        });
-      }
-
-      logger.info("Analysis detail retrieved", { analysisId, ...context });
-      return analysis;
-    },
-
-    /**
-     * Retrieves paginated CI/CD failure events for a tenant.
-     */
-    getFailures: async (
-      tenantId: string,
-      limit: number,
-      offset: number,
-      context: RequestContext
-    ): Promise<PaginatedResult<EventRecord>> => {
-      const [items, total] = await Promise.all([
-        getEventsByTenant({ tenantId, type: CICD_FAILURE_TYPE, limit, offset }),
-        countEventsByTenant(tenantId, CICD_FAILURE_TYPE),
-      ]);
-
-      logger.info("Failures retrieved", {
-        count: items.length,
-        total,
-        ...context,
-      });
-
-      return { items, total, limit, offset };
-    },
-
-    /**
-     * Batch lookup: returns analysis status for multiple event IDs.
-     */
-    getAnalysisStatusByEvents: async (
-      tenantId: string,
-      eventIds: readonly string[],
-      context: RequestContext
-    ): Promise<
-      ReadonlyMap<string, { readonly analysisId: string; readonly confidence: number }>
-    > => {
-      const result = await getAnalysesByEventIds(eventIds, tenantId);
-      logger.info("Analysis status batch lookup", {
-        requestedCount: eventIds.length,
-        foundCount: result.size,
-        ...context,
-      });
-      return result;
-    },
-
-    /**
-     * Returns confidence distribution buckets (high/medium/low) for a tenant.
-     */
-    getConfidenceDistributionStats: async (
-      tenantId: string,
-      context: RequestContext
-    ): Promise<ReadonlyArray<{ readonly level: string; readonly count: number }>> => {
-      const distribution = await getConfidenceDistribution(tenantId);
-      logger.info("Confidence distribution retrieved", {
-        buckets: distribution.length,
-        ...context,
-      });
-      return distribution;
-    },
-
-    /**
-     * Retrieves paginated webhook activity for a tenant with optional filters.
-     */
-    getWebhookActivity: async (
-      tenantId: string,
-      source: string | null,
-      status: string | null,
-      limit: number,
-      offset: number,
-      context: RequestContext
-    ): Promise<PaginatedResult<WebhookActivityRecord>> => {
-      const [items, total] = await Promise.all([
-        getWebhookActivitiesByTenant({
-          tenantId,
-          source,
-          status,
-          limit,
-          offset,
-        }),
-        countWebhookActivitiesByTenant(tenantId, source, status),
-      ]);
-
-      logger.info("Webhook activity retrieved", {
-        count: items.length,
-        total,
-        source,
-        status,
-        ...context,
-      });
-
-      return { items, total, limit, offset };
-    },
-
-    /**
-     * Returns time-series confidence trend data for a tenant.
-     */
-    getConfidenceTrendData: async (
-      tenantId: string,
-      bucket: "day" | "week",
-      since: string,
-      context: RequestContext
-    ): Promise<readonly ConfidenceTrendPoint[]> => {
-      const trend = await getConfidenceTrend(tenantId, bucket, since);
-      logger.info("Confidence trend retrieved", {
-        points: trend.length,
-        bucket,
-        ...context,
-      });
-      return trend;
-    },
-
-    /**
-     * Returns per-repository analysis counts for repo tab filtering.
-     */
-    getAnalysisCountsByRepo: async (
-      tenantId: string,
-      context: RequestContext
-    ): Promise<readonly AnalysisCountByRepo[]> => {
-      const counts = await getAnalysisCountsByRepo(tenantId);
-      logger.info("Analysis counts by repo retrieved", {
-        repoCount: counts.length,
-        ...context,
-      });
-      return counts;
-    },
-
-    /**
-     * Finds cross-pipeline correlations for a given commit SHA.
-     * Looks up CI/CD analyses and incident alerts that reference the same commit.
-     */
-    getCorrelations: async (
-      tenantId: string,
-      commitSha: string,
-      context: RequestContext
-    ): Promise<CorrelationResult> => {
-      const [analyses, incidents] = await Promise.all([
-        findAnalysesByCommitSha(tenantId, commitSha),
-        findIncidentsByCommitSha(tenantId, commitSha),
-      ]);
-
-      const mapAnalysisToSummary = (a: AnalysisRecord): CorrelationSummary => ({
-        id: a.id,
-        title: a.summary,
-        createdAt: a.createdAt.toISOString(),
-      });
-
-      const mapIncidentToSummary = (i: {
-        readonly id: string;
-        readonly title: string;
-        readonly createdAt: Date;
-      }): CorrelationSummary => ({
-        id: i.id,
-        title: i.title,
-        createdAt: i.createdAt.toISOString(),
-      });
-
-      logger.info("Correlations retrieved", {
-        analysisCount: analyses.length,
-        incidentCount: incidents.length,
-        ...context,
-      });
-
-      return {
-        commitSha,
-        analyses: analyses.map(mapAnalysisToSummary),
-        incidents: incidents.map(mapIncidentToSummary),
-      };
-    },
-
-    /**
-     * Retrieves GitLab projects for a user via their stored OAuth identity.
-     * Returns empty array if the user has no linked GitLab identity.
-     */
-    getGitLabProjects: async (
-      userId: string,
-      context: RequestContext
-    ): Promise<readonly GitLabProject[]> => {
-      const identities = await findOAuthIdentitiesByUser(userId);
-      const gitlabIdentity = identities.find((identity) => identity.provider === "gitlab");
-
-      if (!gitlabIdentity?.accessToken) {
-        return [];
-      }
-
-      return gitlabProjectsPort.getProjects(
-        gitlabIdentity.accessToken,
-        gitlabIdentity.instanceUrl,
-        context
-      );
-    },
-  };
-};
+  getGitLabProjects: (userId: string, context: RequestContext): Promise<readonly GitLabProject[]> =>
+    getGitLabProjectsFn(userId, gitlabProjectsPort, context),
+});

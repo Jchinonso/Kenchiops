@@ -79,8 +79,9 @@ const collectAlertEvidence = (alert: NormalizedAlert): readonly EvidenceItem[] =
   ];
 
   const conditionalItems: readonly EvidenceItem[] = [
-    ...(alert.description !== null
-      ? [
+    ...(alert.description === null
+      ? []
+      : [
           createEvidenceItem(
             alertEvidenceId("description"),
             "ALT",
@@ -88,10 +89,10 @@ const collectAlertEvidence = (alert: NormalizedAlert): readonly EvidenceItem[] =
             alert.description,
             "alert"
           ),
-        ]
-      : []),
-    ...(alert.serviceName !== null
-      ? [
+        ]),
+    ...(alert.serviceName === null
+      ? []
+      : [
           createEvidenceItem(
             alertEvidenceId("serviceName"),
             "ALT",
@@ -99,10 +100,10 @@ const collectAlertEvidence = (alert: NormalizedAlert): readonly EvidenceItem[] =
             alert.serviceName,
             "alert"
           ),
-        ]
-      : []),
-    ...(alert.environment !== null
-      ? [
+        ]),
+    ...(alert.environment === null
+      ? []
+      : [
           createEvidenceItem(
             alertEvidenceId("environment"),
             "ALT",
@@ -110,8 +111,7 @@ const collectAlertEvidence = (alert: NormalizedAlert): readonly EvidenceItem[] =
             alert.environment,
             "alert"
           ),
-        ]
-      : []),
+        ]),
   ];
 
   const hasMetricKeys = Object.keys(alert.metrics).length > 0;
@@ -223,6 +223,11 @@ const computeConfidence = (
   runbooks: readonly RunbookMatch[],
   correlations: readonly CorrelatedIncident[]
 ): ConfidenceScore => {
+  const { serviceName, environment, description } = alert;
+  const hasService = serviceName !== null;
+  const hasEnvironment = environment !== null;
+  const hasDescription = description !== null && description.length > 0;
+
   const signalChecks: ReadonlyArray<{
     readonly name: ConfidenceSignalName;
     readonly present: boolean;
@@ -253,27 +258,20 @@ const computeConfidence = (
     },
     {
       name: "service_known",
-      present: alert.serviceName !== null,
-      reason:
-        alert.serviceName !== null
-          ? `Service identified: ${alert.serviceName}`
-          : "Service name not provided",
+      present: hasService,
+      reason: hasService ? `Service identified: ${serviceName}` : "Service name not provided",
     },
     {
       name: "environment_known",
-      present: alert.environment !== null,
-      reason:
-        alert.environment !== null
-          ? `Environment identified: ${alert.environment}`
-          : "Environment not provided",
+      present: hasEnvironment,
+      reason: hasEnvironment
+        ? `Environment identified: ${environment}`
+        : "Environment not provided",
     },
     {
       name: "has_description",
-      present: alert.description !== null && alert.description.length > 0,
-      reason:
-        alert.description !== null && alert.description.length > 0
-          ? "Alert includes description"
-          : "No description provided",
+      present: hasDescription,
+      reason: hasDescription ? "Alert includes description" : "No description provided",
     },
     {
       name: "has_labels",
@@ -321,7 +319,7 @@ const isFieldPresent = (
   };
 
   const checker = fieldChecks[fieldName];
-  return checker !== undefined ? checker() : false;
+  return checker === undefined ? false : checker();
 };
 
 /**

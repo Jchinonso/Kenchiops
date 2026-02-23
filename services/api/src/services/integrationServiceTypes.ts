@@ -7,7 +7,28 @@
  * @module services/integrationServiceTypes
  */
 
-import type { IntegrationProvider } from "@kenchi/shared";
+import type { IntegrationProvider, RequestContext } from "@kenchi/shared";
+
+import type { IntegrationOAuthPort } from "../ports/integrationOAuthPort.js";
+
+// ==================== Internal Types ====================
+
+/** Options for attempting to create a webhook on a provider. */
+export interface TryCreateWebhookOptions {
+  readonly adapter: IntegrationOAuthPort;
+  readonly accessValue: string;
+  readonly webhookUrl: string;
+  readonly webhookCredential: string;
+  readonly teamId: string | null;
+  readonly provider: IntegrationProvider;
+  readonly context: RequestContext;
+}
+
+/** Result of a webhook creation attempt. */
+export interface WebhookCreationResult {
+  readonly webhookCreated: boolean;
+  readonly webhookId: string | null;
+}
 
 // ==================== Result Types ====================
 

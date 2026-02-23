@@ -16,7 +16,7 @@ export const TableSkeleton = ({ rows = 5, columns = 5 }: TableSkeletonProps) => 
     {/* Row skeletons */}
     {Array.from({ length: rows }, (_, idx) => (
       <div key={`row-${idx}`} className="flex items-center gap-4">
-        {Array.from({ length: columns }, (_, col) => (
+        {Array.from({ length: columns }, (_unused, col) => (
           <Skeleton
             key={`cell-${idx}-${col}`}
             className={`h-4 flex-1 ${col === 0 ? "max-w-[80px]" : "max-w-[160px]"}`}
