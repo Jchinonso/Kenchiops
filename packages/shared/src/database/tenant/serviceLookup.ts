@@ -13,6 +13,7 @@ import {
   parseDbCount,
   TENANT_STATUS,
   TENANT_QUERIES,
+  SUBSCRIPTION_QUERIES,
   type Tenant,
 } from "../common.js";
 import { validateId, validateInstallationId, rowToTenant, extractTenant } from "./helpers.js";
@@ -230,6 +231,31 @@ export const getSlackCredentials = async (
   } catch (error) {
     logger.error("Failed to get Slack credentials", {
       installationId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Count active users belonging to a tenant.
+ * Used to determine if a user is the last member before account deletion.
+ *
+ * @param tenantId - Tenant ID
+ * @returns Number of active members
+ */
+export const countTenantMembers = async (tenantId: string): Promise<number> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<{ readonly count: string }>(
+      SUBSCRIPTION_QUERIES.COUNT_TEAM_MEMBERS,
+      [tenantId]
+    );
+    return parseDbCount(result.rows);
+  } catch (error) {
+    logger.error("Failed to count tenant members", {
+      tenantId,
       error: getErrorMessage(error),
     });
     throw error;

@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTenantInfo } from "@/hooks/useDashboardData";
 import { useTheme } from "@/hooks/useTheme";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
+import { useDeletionImpact } from "@/hooks/useDeletionImpact";
 import { useSubscription, useSubscriptionUsage, type UsageLimitDTO } from "@/hooks/useSubscription";
 import { apiClient } from "@/lib/apiClient";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -168,6 +169,7 @@ export const Settings = () => {
   const isSubLoading = subscriptionLoading || usageLoading;
 
   const browserPermissionDenied = isBrowserNotificationDenied();
+  const { impact, isLoading: impactLoading, fetchImpact } = useDeletionImpact();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -459,6 +461,9 @@ export const Settings = () => {
               open={deleteDialogOpen}
               onOpenChange={(open) => {
                 setDeleteDialogOpen(open);
+                if (open) {
+                  void fetchImpact();
+                }
                 if (!open) {
                   setDeleteConfirmation("");
                 }
@@ -475,9 +480,38 @@ export const Settings = () => {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete your account?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. All your data, settings, and linked accounts will
-                    be permanently deleted. Type <strong>DELETE</strong> below to confirm.
+                  <AlertDialogDescription asChild>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {impactLoading ? (
+                        <p>Checking account impact...</p>
+                      ) : impact?.willDeleteTenant ? (
+                        <>
+                          <p className="mb-2 text-red-600 dark:text-red-400 font-medium">
+                            You are the last member of {impact.tenantName ?? "your organization"}.
+                          </p>
+                          <p className="mb-2">
+                            Deleting your account will also permanently delete your organization and
+                            all associated data, including CI provider connections
+                            {impact.affectedResources.gitlabWebhooks > 0
+                              ? `, ${String(impact.affectedResources.gitlabWebhooks)} GitLab webhook${impact.affectedResources.gitlabWebhooks > 1 ? "s" : ""}`
+                              : ""}
+                            {impact.affectedResources.hasSlackIntegration
+                              ? ", Slack integration"
+                              : ""}
+                            , repository mappings, and analysis history. This cannot be undone.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="mb-2">
+                          This action cannot be undone. All your data, settings, and linked accounts
+                          will be permanently deleted.
+                        </p>
+                      )}
+                      <p>
+                        Type <strong className="text-gray-900 dark:text-gray-100">DELETE</strong>{" "}
+                        below to confirm.
+                      </p>
+                    </div>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <Input

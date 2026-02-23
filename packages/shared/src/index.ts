@@ -171,11 +171,13 @@ export {
   activate,
   suspend,
   deleteTenant,
+  hardDeleteTenant,
   handleGitHubUninstall,
   logAuditEvent,
   getAuditLog,
   updateSlackToken,
   getSlackCredentials,
+  countTenantMembers,
   getTenantStatistics,
   type TenantStatistics,
 } from "./database/index.js";

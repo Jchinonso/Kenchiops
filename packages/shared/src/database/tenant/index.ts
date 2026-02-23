@@ -48,6 +48,7 @@ export {
   getActiveTenants,
   getTenantStatistics,
   getSlackCredentials,
+  countTenantMembers,
 } from "./serviceLookup.js";
 
 // Lifecycle operations
@@ -59,6 +60,7 @@ export {
   activate,
   suspend,
   deleteTenant,
+  hardDeleteTenant,
   handleGitHubUninstall,
   updateSlackToken,
 } from "./serviceLifecycle.js";

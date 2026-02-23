@@ -34,6 +34,7 @@ export {
   getActiveTenants,
   getTenantStatistics,
   getSlackCredentials,
+  countTenantMembers,
   // Lifecycle operations
   createFromGitHubInstall,
   createFromGitLabGroup,
@@ -42,6 +43,7 @@ export {
   activate,
   suspend,
   deleteTenant,
+  hardDeleteTenant,
   handleGitHubUninstall,
   updateSlackToken,
   // Audit operations

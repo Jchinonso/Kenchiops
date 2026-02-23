@@ -325,6 +325,46 @@ export const deleteTenant = async (tenantId: string): Promise<void> => {
 };
 
 /**
+ * Hard-delete a tenant and all associated data.
+ *
+ * Deletes tenant_subscriptions first (no FK CASCADE), then deletes the tenant row.
+ * FK CASCADE handles: provider_connections, repository_channel_mappings, tenant_audit_log.
+ * FK SET NULL handles: analyses, events, slack_messages, webhook_activity_log,
+ *   incident_alerts, incident_triage_results.
+ *
+ * Call this only after external resource cleanup is complete (best-effort).
+ */
+export const hardDeleteTenant = async (tenantId: string): Promise<void> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    await transaction(async (client) => {
+      // Delete tenant_subscriptions first (no FK CASCADE to tenants)
+      await client.query("DELETE FROM tenant_subscriptions WHERE tenant_id = $1", [tenantId]);
+
+      // Hard-delete the tenant row — FK cascades handle the rest
+      const { rowCount } = await client.query("DELETE FROM tenants WHERE id = $1", [tenantId]);
+
+      if (rowCount === 0) {
+        throw new NotFoundError(`Tenant not found: ${tenantId}`);
+      }
+    });
+
+    logger.info("Tenant permanently deleted", { tenantId });
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+
+    logger.error("Failed to hard delete tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Handle GitHub App uninstallation.
  *
  * @param installationId - GitHub App installation ID

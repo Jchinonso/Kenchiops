@@ -24,7 +24,6 @@ import {
   getErrorMessage,
   findUserById,
   findOAuthIdentitiesByUser,
-  deleteUser,
   setAuthCookies,
   clearAuthCookies,
   extractRefreshToken,
@@ -35,11 +34,14 @@ import {
 } from "@kenchi/shared";
 
 import { createAuthService } from "../services/authService.js";
+import { createAccountDeletionService } from "../services/accountDeletionService.js";
 import { getOAuthAdapter, hasOAuthAdapter } from "../adapters/oauthAdapterRegistry.js";
+import { createGitLabProjectsAdapter } from "../adapters/gitlabProjectsAdapter.js";
 
 const router = Router();
 const logger = createLogger("auth-routes");
 const authService = createAuthService();
+const accountDeletionService = createAccountDeletionService(createGitLabProjectsAdapter());
 
 // ==================== Helpers ====================
 
@@ -524,8 +526,28 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
 };
 
 /**
+ * GET /auth/me/deletion-impact
+ * Returns the impact of deleting the current user's account.
+ * Tells the frontend whether the user is the last tenant member
+ * and what resources would be affected.
+ */
+const handleGetDeletionImpact = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleGetDeletionImpact",
+    });
+  }
+
+  const impact = await accountDeletionService.getDeletionImpact(req.user.userId, req.context);
+
+  res.status(HTTP_STATUS.OK).json({ data: impact });
+};
+
+/**
  * DELETE /auth/me
  * Permanently delete the authenticated user's account and all associated data.
+ * If the user is the last tenant member, also cleans up external resources
+ * and hard-deletes the tenant.
  * Requires a valid JWT and "DELETE" confirmation in the request body.
  */
 const handleDeleteAccount = async (req: Request, res: Response): Promise<void> => {
@@ -548,7 +570,7 @@ const handleDeleteAccount = async (req: Request, res: Response): Promise<void> =
 
   const { userId } = req.user;
 
-  await deleteUser(userId);
+  await accountDeletionService.deleteAccount(userId, context);
 
   clearAuthCookies(res);
 
@@ -591,6 +613,7 @@ router.post(
   asyncHandler(handleTokenRefresh)
 );
 router.post("/auth/logout", sensitiveEndpointLimiter.middleware(), asyncHandler(handleLogout));
+router.get("/auth/me/deletion-impact", asyncHandler(handleGetDeletionImpact));
 router.get("/auth/me", asyncHandler(handleGetCurrentUser));
 router.delete("/auth/me", sensitiveEndpointLimiter.middleware(), asyncHandler(handleDeleteAccount));
 
