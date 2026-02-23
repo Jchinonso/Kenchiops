@@ -1,0 +1,233 @@
+# Production Docker Compose for Kenchi
+#
+# Differences from docker-compose.yml (development):
+# - No host ports exposed (all traffic through Caddy)
+# - Strong passwords from environment variables
+# - Production URLs for OAuth and frontend
+# - Memory limits to prevent OOM on 4GB VPS
+# - Caddy container for HTTPS termination
+#
+# Usage: docker compose -f docker-compose.prod.yml up --build -d
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: kenchi-postgres
+    environment:
+      - POSTGRES_USER=kenchi
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=kenchi
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kenchi -d kenchi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  redis:
+    image: redis:7-alpine
+    container_name: kenchi-redis
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=api
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=256
+      - PORT=3000
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=https://kenchiops.app
+      - OAUTH_CALLBACK_BASE_URL=https://kenchiops.app
+    env_file:
+      - .env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  slack-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=slack-bot
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=256
+      - PORT=3001
+      - MULTI_TENANT_MODE=true
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  github-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=github-app
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=256
+      - PORT=3002
+      - MULTI_TENANT_MODE=true
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+      - API_URL=http://api:3000
+      - SLACK_BOT_URL=http://slack-bot:3001
+      - GITHUB_APP_URL=https://kenchiops.app
+    env_file:
+      - .env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  incident-triage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=incident-triage
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=256
+      - PORT=3004
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_PUBLIC_URL: https://kenchiops.app
+        VITE_GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-kenchi-devops}
+    container_name: kenchi-frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: kenchi-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - api
+      - github-app
+      - slack-bot
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

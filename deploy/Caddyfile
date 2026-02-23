@@ -1,0 +1,25 @@
+# Kenchi Production Caddyfile
+#
+# Automatic HTTPS via Let's Encrypt for kenchiops.app.
+# Routes traffic to Docker services on the internal network.
+
+kenchiops.app {
+	# GitHub webhook delivery → github-app service directly
+	# (GitHub sends webhooks to the configured URL, needs direct routing)
+	reverse_proxy /webhooks/github* github-app:3002
+
+	# GitHub App post-install setup redirect
+	reverse_proxy /github/setup* github-app:3002
+
+	# Slack OAuth and event routes → slack-bot service
+	reverse_proxy /slack/* slack-bot:3001
+
+	# Everything else → frontend nginx
+	# (frontend nginx already proxies /api, /auth, /webhooks, /health to backend services)
+	reverse_proxy frontend:80
+}
+
+# Redirect www to apex domain
+www.kenchiops.app {
+	redir https://kenchiops.app{uri} permanent
+}
