@@ -75,8 +75,15 @@ interface PaginatedResult<T> {
 export const useTenantInfo = (refreshKey: number = 0): UseFetchResult<TenantInfo> =>
   useFetch<TenantInfo>("/api/v1/dashboard/tenant", `${refreshKey}`);
 
-export const useDashboardStats = (refreshKey: number = 0): UseFetchResult<DashboardStats> =>
-  useFetch<DashboardStats>("/api/v1/dashboard/stats", `${refreshKey}`);
+export const useDashboardStats = (
+  refreshKey: number = 0,
+  source?: string
+): UseFetchResult<DashboardStats> => {
+  const url = source
+    ? `/api/v1/dashboard/stats?source=${encodeURIComponent(source)}`
+    : "/api/v1/dashboard/stats";
+  return useFetch<DashboardStats>(url, `${refreshKey}-${source ?? ""}`);
+};
 
 export const useRepositories = (
   refreshKey: number = 0

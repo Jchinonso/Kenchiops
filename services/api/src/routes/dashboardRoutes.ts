@@ -68,6 +68,19 @@ const parsePaginationParams = (
   return { limit, offset };
 };
 
+// ==================== Query Param Helpers ====================
+
+const parseStringParam = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+const parseNumericParam = (value: unknown): number | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 // ==================== Route Handlers ====================
 
 const handleGetTenantInfo = async (req: Request, res: Response): Promise<void> => {
@@ -80,7 +93,13 @@ const handleGetTenantInfo = async (req: Request, res: Response): Promise<void> =
 const handleGetDashboardStats = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const { context } = req;
-  const result = await dashboardService.getDashboardStats(tenantId, req.user?.userId, context);
+  const source = parseStringParam(req.query.source);
+  const result = await dashboardService.getDashboardStats(
+    tenantId,
+    req.user?.userId,
+    source,
+    context
+  );
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
@@ -89,17 +108,6 @@ const handleGetRepositories = async (req: Request, res: Response): Promise<void>
   const { context } = req;
   const result = await dashboardService.getRepositories(tenantId, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
-};
-
-const parseStringParam = (value: unknown): string | null =>
-  typeof value === "string" ? value : null;
-
-const parseNumericParam = (value: unknown): number | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const parsed = parseFloat(value);
-  return Number.isNaN(parsed) ? null : parsed;
 };
 
 const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => {

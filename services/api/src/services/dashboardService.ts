@@ -112,6 +112,7 @@ export const createDashboardService = (
     getDashboardStats: async (
       tenantId: string,
       userId: string | undefined,
+      source: string | null,
       context: RequestContext
     ): Promise<DashboardStats> => {
       const tenant = await findTenantById(tenantId);
@@ -141,8 +142,12 @@ export const createDashboardService = (
       const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
 
       const [totalAnalyses, totalFailures, repos, gitlabProjects] = await Promise.all([
-        countAnalysesByTenant(tenantId),
-        countEventsByTenant(tenantId, CICD_FAILURE_TYPE),
+        source
+          ? countAnalysesByTenantFiltered(tenantId, null, null, null, null, null, source)
+          : countAnalysesByTenant(tenantId),
+        source
+          ? countEventsByTenantFiltered(tenantId, CICD_FAILURE_TYPE, null, null, null, null, source)
+          : countEventsByTenant(tenantId, CICD_FAILURE_TYPE),
         installationId
           ? githubAdapter.getRepositories(installationId, context)
           : Promise.resolve([]),
@@ -154,6 +159,7 @@ export const createDashboardService = (
         totalFailures,
         connectedRepos: repos.length,
         gitlabProjectCount: gitlabProjects.length,
+        source,
         ...context,
       });
 
