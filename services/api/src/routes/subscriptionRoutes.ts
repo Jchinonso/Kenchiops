@@ -16,10 +16,14 @@ import {
   requireRole,
   HTTP_STATUS,
   DEFAULT_PLAN_ID,
+  getErrorMessage,
+  findGitHubAppConnection,
+  findOAuthIdentitiesByUser,
   type Plan,
   type PlanId,
   type TenantSubscription,
   type UsageLimitDetail,
+  type RequestContext,
   // Repository
   getAllPlans,
   getPlanById,
@@ -29,9 +33,13 @@ import {
   getTenantUsage,
   validatePlanId,
 } from "@kenchi/shared";
+import { createGitHubInstallationAdapter } from "../adapters/githubInstallationAdapter.js";
+import { createGitLabProjectsAdapter } from "../adapters/gitlabProjectsAdapter.js";
 
 const router = Router();
 const logger = createLogger("subscription-routes");
+const githubAdapter = createGitHubInstallationAdapter();
+const gitlabAdapter = createGitLabProjectsAdapter();
 
 // ==================== Helpers ====================
 
@@ -76,6 +84,52 @@ const buildUsageLimitDetail = (current: number, limit: number | null): UsageLimi
   limit,
   limited: limit !== null,
 });
+
+/**
+ * Count connected repositories across all providers (GitHub + GitLab).
+ * Fetches real repo counts from provider APIs rather than relying on DB tables.
+ * Returns 0 on failure to avoid breaking the usage endpoint.
+ */
+const countConnectedRepos = async (
+  tenantId: string,
+  userId: string | undefined,
+  context: RequestContext
+): Promise<number> => {
+  try {
+    const ghConn = await findGitHubAppConnection(tenantId);
+    const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
+
+    const resolveGitLabCount = async (): Promise<number> => {
+      if (!userId) {
+        return 0;
+      }
+      const identities = await findOAuthIdentitiesByUser(userId);
+      const gitlabIdentity = identities.find((identity) => identity.provider === "gitlab");
+      if (!gitlabIdentity?.accessToken) {
+        return 0;
+      }
+      const projects = await gitlabAdapter.getProjects(
+        gitlabIdentity.accessToken,
+        gitlabIdentity.instanceUrl,
+        context
+      );
+      return projects.length;
+    };
+
+    const [githubRepos, gitlabCount] = await Promise.all([
+      installationId ? githubAdapter.getRepositories(installationId, context) : Promise.resolve([]),
+      resolveGitLabCount(),
+    ]);
+
+    return githubRepos.length + gitlabCount;
+  } catch (error) {
+    logger.warn("Failed to count connected repos from providers, falling back to 0", {
+      error: getErrorMessage(error),
+      ...context,
+    });
+    return 0;
+  }
+};
 
 // ==================== Route Handlers ====================
 
@@ -151,13 +205,15 @@ const handleGetPlans = async (req: Request, res: Response): Promise<void> => {
  */
 const handleGetUsage = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
+  const userId = req.user?.userId;
   const { context } = req;
 
-  // Fetch subscription, usage, and free plan in parallel
-  const [subscriptionWithPlan, usage, freePlan] = await Promise.all([
+  // Fetch subscription, DB usage, free plan, and real repo count in parallel
+  const [subscriptionWithPlan, usage, freePlan, repoCount] = await Promise.all([
     getSubscriptionWithPlan(tenantId),
     getTenantUsage(tenantId),
     getPlanById(DEFAULT_PLAN_ID as PlanId),
+    countConnectedRepos(tenantId, userId, context),
   ]);
 
   // Determine plan limits (fall back to free plan from DB)
@@ -170,12 +226,12 @@ const handleGetUsage = async (req: Request, res: Response): Promise<void> => {
       maxTeamMembers: 1,
     };
 
-  logger.info("Usage fetched", { ...context, planId });
+  logger.info("Usage fetched", { ...context, planId, repoCount });
   res.status(HTTP_STATUS.OK).json({
     data: {
       planId,
       usage: {
-        repositories: buildUsageLimitDetail(usage.repositories, limits.maxRepositories),
+        repositories: buildUsageLimitDetail(repoCount, limits.maxRepositories),
         analysesThisMonth: buildUsageLimitDetail(
           usage.analysesThisMonth,
           limits.maxAnalysesMonthly
