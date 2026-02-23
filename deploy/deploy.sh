@@ -23,7 +23,7 @@ echo ""
 
 # ==================== Sync Code ====================
 
-echo "[1/4] Syncing code to VPS..."
+echo "[1/5] Syncing code to VPS..."
 rsync -azP --delete \
   --exclude='node_modules' \
   --exclude='.git' \
@@ -42,7 +42,7 @@ echo "  Code synced."
 
 # ==================== Build & Deploy ====================
 
-echo "[2/4] Building and deploying containers..."
+echo "[2/5] Building and deploying containers..."
 ssh -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_HOST}" << 'DEPLOY_EOF'
   set -euo pipefail
   cd /opt/kenchi
@@ -59,7 +59,7 @@ echo "  Containers deployed."
 
 # ==================== Run Migrations ====================
 
-echo "[3/4] Running database migrations..."
+echo "[3/5] Running database migrations..."
 ssh -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_HOST}" << 'MIGRATE_EOF'
   set -euo pipefail
   cd /opt/kenchi
@@ -75,9 +75,22 @@ MIGRATE_EOF
 
 echo "  Migrations complete."
 
+# ==================== Seed Reference Data ====================
+
+echo "[4/5] Seeding reference data..."
+ssh -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_HOST}" << 'SEED_EOF'
+  set -euo pipefail
+  cd /opt/kenchi
+
+  docker compose -f docker-compose.prod.yml exec -T postgres \
+    psql -U kenchi -d kenchi < database/seed.sql
+SEED_EOF
+
+echo "  Seed data applied."
+
 # ==================== Health Check ====================
 
-echo "[4/4] Verifying deployment..."
+echo "[5/5] Verifying deployment..."
 ssh -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_HOST}" << 'HEALTH_EOF'
   set -euo pipefail
 
