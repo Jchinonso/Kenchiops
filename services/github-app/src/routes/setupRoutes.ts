@@ -9,6 +9,7 @@
 import { Router, type Request, type Response } from "express";
 import {
   createLogger,
+  config,
   HTTP_STATUS,
   GITHUB_SETUP_CONFIG,
   findTenantByGitHubInstallation,
@@ -17,82 +18,85 @@ import {
   linkSlackWorkspace,
   deleteTenant,
   getErrorMessage,
+  type Tenant,
 } from "@kenchi/shared";
 
 const router = Router();
 const logger = createLogger("github-app");
 
 /**
- * Build success HTML page
+ * Attempt to link a Slack workspace to a tenant during GitHub App setup.
+ *
+ * Only runs when the `state` query param (Slack workspace ID) is present
+ * and the tenant doesn't already have a Slack connection. Handles the case
+ * where another tenant already owns the Slack workspace by migrating the
+ * connection and cleaning up the orphaned tenant.
  */
-const buildSuccessHtml = (
-  orgName: string,
-  workspaceName: string | null,
-  isLinked: boolean
-): string => `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Kenchi - GitHub App Installed</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      max-width: 600px;
-      margin: 50px auto;
-      padding: 20px;
-      background: #f5f5f5;
-    }
-    .card {
-      background: white;
-      border-radius: 12px;
-      padding: 32px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .success { color: #22c55e; }
-    .pending { color: #f59e0b; }
-    h1 { margin-top: 0; }
-    .status-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 12px 0;
-    }
-    .btn {
-      display: inline-block;
-      padding: 12px 24px;
-      background: #4A154B;
-      color: white;
-      text-decoration: none;
-      border-radius: 8px;
-      margin-top: 16px;
-    }
-    .btn:hover { background: #611f69; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1 class="success">GitHub App Installed!</h1>
+const attemptSlackLinking = async (
+  tenant: Tenant,
+  state: unknown,
+  existingSlackConn: Awaited<ReturnType<typeof findSlackConnection>>
+): Promise<void> => {
+  if (!state || typeof state !== "string" || existingSlackConn) {
+    return;
+  }
 
-    <div class="status-item">
-      <span>&#x2705;</span>
-      <span><strong>GitHub:</strong> ${orgName}</span>
-    </div>
+  const slackWorkspaceId = state;
+  const slackTenant = await findTenantBySlackWorkspace(slackWorkspaceId);
 
-    <div class="status-item">
-      <span>${isLinked ? "&#x2705;" : "&#x23F3;"}</span>
-      <span><strong>Slack:</strong> ${isLinked ? workspaceName : "Pending connection"}</span>
-    </div>
+  if (!slackTenant) {
+    logger.info("Slack workspace not found, will link when Slack is installed", {
+      tenantId: tenant.id,
+      slackWorkspaceId,
+    });
+    return;
+  }
 
-    ${
-      isLinked
-        ? `<p>Kenchi is now active! CI failure alerts will be sent to your Slack workspace.</p>`
-        : `<p>To complete setup, install the Slack app in your workspace.</p>
-         <a href="/slack/install" class="btn">Install Slack App</a>`
-    }
-  </div>
-</body>
-</html>
-`;
+  // Look up the Slack connection from the slack tenant to get bot token
+  const slackTenantConn = await findSlackConnection(slackTenant.id);
+  if (!slackTenantConn?.accessToken) {
+    logger.info("Slack tenant has no bot token, will link when Slack is installed", {
+      tenantId: tenant.id,
+      slackWorkspaceId,
+    });
+    return;
+  }
+
+  const slackConfig = slackTenantConn.config as {
+    readonly teamName?: string;
+    readonly botUserId?: string;
+  };
+
+  logger.info("Linking GitHub installation to existing Slack workspace", {
+    githubTenantId: tenant.id,
+    slackTenantId: slackTenant.id,
+    slackWorkspaceId,
+  });
+
+  await linkSlackWorkspace({
+    tenantId: tenant.id,
+    slackWorkspaceId: slackTenantConn.externalOrgId ?? slackWorkspaceId,
+    slackTeamName: slackConfig.teamName ?? "",
+    slackBotToken: slackTenantConn.accessToken,
+    slackBotUserId: slackConfig.botUserId ?? undefined,
+  });
+
+  logger.info("Successfully linked GitHub and Slack", {
+    tenantId: tenant.id,
+    orgName: tenant.orgName,
+    slackWorkspace: slackWorkspaceId,
+  });
+
+  // Clean up orphaned Slack-only tenant to prevent duplicate workspace lookups
+  if (slackTenant.id !== tenant.id) {
+    await deleteTenant(slackTenant.id);
+    logger.info("Cleaned up orphaned Slack-only tenant after merge", {
+      orphanedTenantId: slackTenant.id,
+      mergedIntoTenantId: tenant.id,
+      slackWorkspaceId,
+    });
+  }
+};
 
 /**
  * GET /github/setup
@@ -161,81 +165,12 @@ router.get("/github/setup", async (req: Request, res: Response) => {
     const existingSlackConn = await findSlackConnection(tenant.id);
 
     // Attempt Slack workspace linking if state parameter present and not yet linked
-    const linkedSuccessfully = await (async (): Promise<{
-      linked: boolean;
-      teamName: string | null;
-    }> => {
-      if (!state || typeof state !== "string" || existingSlackConn) {
-        return { linked: false, teamName: null };
-      }
+    await attemptSlackLinking(tenant, state, existingSlackConn);
 
-      const slackWorkspaceId = state;
-      const slackTenant = await findTenantBySlackWorkspace(slackWorkspaceId);
-
-      if (!slackTenant) {
-        logger.info("Slack workspace not found, will link when Slack is installed", {
-          tenantId: tenant.id,
-          slackWorkspaceId,
-        });
-        return { linked: false, teamName: null };
-      }
-
-      // Look up the Slack connection from the slack tenant to get bot token
-      const slackTenantConn = await findSlackConnection(slackTenant.id);
-      if (!slackTenantConn?.accessToken) {
-        logger.info("Slack tenant has no bot token, will link when Slack is installed", {
-          tenantId: tenant.id,
-          slackWorkspaceId,
-        });
-        return { linked: false, teamName: null };
-      }
-
-      const slackConfig = slackTenantConn.config as {
-        readonly teamName?: string;
-        readonly botUserId?: string;
-      };
-
-      logger.info("Linking GitHub installation to existing Slack workspace", {
-        githubTenantId: tenant.id,
-        slackTenantId: slackTenant.id,
-        slackWorkspaceId,
-      });
-
-      await linkSlackWorkspace({
-        tenantId: tenant.id,
-        slackWorkspaceId: slackTenantConn.externalOrgId ?? slackWorkspaceId,
-        slackTeamName: slackConfig.teamName ?? "",
-        slackBotToken: slackTenantConn.accessToken,
-        slackBotUserId: slackConfig.botUserId ?? undefined,
-      });
-
-      logger.info("Successfully linked GitHub and Slack", {
-        tenantId: tenant.id,
-        orgName: tenant.orgName,
-        slackWorkspace: slackWorkspaceId,
-      });
-
-      // Clean up orphaned Slack-only tenant to prevent duplicate workspace lookups
-      if (slackTenant.id !== tenant.id) {
-        await deleteTenant(slackTenant.id);
-        logger.info("Cleaned up orphaned Slack-only tenant after merge", {
-          orphanedTenantId: slackTenant.id,
-          mergedIntoTenantId: tenant.id,
-          slackWorkspaceId,
-        });
-      }
-
-      return { linked: true, teamName: slackConfig.teamName ?? null };
-    })();
-
-    const isLinked = existingSlackConn !== null || linkedSuccessfully.linked;
-    const slackTeamName = linkedSuccessfully.linked
-      ? linkedSuccessfully.teamName
-      : ((existingSlackConn?.config as { readonly teamName?: string })?.teamName ?? null);
-
-    // Send success page
-    const html = buildSuccessHtml(tenant.orgName, slackTeamName || null, isLinked);
-    res.status(HTTP_STATUS.OK).send(html);
+    // Redirect to frontend dashboard. The ?setup=complete param tells
+    // the frontend to trigger a re-login so the JWT picks up the new tenant.
+    const frontendUrl = config.FRONTEND_URL;
+    res.redirect(`${frontendUrl}/dashboard?setup=complete`);
   } catch (error) {
     logger.error("Error processing GitHub setup", {
       error: getErrorMessage(error),

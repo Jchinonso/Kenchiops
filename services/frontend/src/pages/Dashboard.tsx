@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate, Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { apiClient } from "@/lib/apiClient";
 import { useDashboardSSE, type DashboardNotification } from "@/hooks/useDashboardSSE";
 import { useTenantInfo } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
@@ -357,8 +358,9 @@ const NotificationDropdown = ({
 // ==================== Dashboard ====================
 
 const Dashboard = () => {
-  const { pathname: currentPath } = useLocation();
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const { user, isAuthenticated, isLoading, logout, refreshUser } = useAuth();
   const {
     refreshKey: sseRefreshKey,
     notifications,
@@ -386,6 +388,27 @@ const Dashboard = () => {
   const pendingGotoRef = useRef(false);
   const gotoTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const navigate = useNavigate();
+
+  // After GitHub App installation, the setup redirect lands here with ?setup=complete.
+  // Force a token refresh so the JWT picks up the newly assigned tenantId, then
+  // strip the query param to avoid re-triggering on subsequent renders.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("setup") === "complete") {
+      const refreshAfterSetup = async () => {
+        // POST /auth/refresh issues a new JWT from the refresh token cookie.
+        // The new JWT reads the latest user.selected_tenant_id from the DB.
+        try {
+          await apiClient("/auth/refresh", { method: "POST" });
+        } catch {
+          // Best-effort — refreshUser below will handle the rest
+        }
+        await refreshUser();
+        navigate("/dashboard", { replace: true });
+      };
+      refreshAfterSetup();
+    }
+  }, [location.search, refreshUser, navigate]);
 
   const toggleTheme = useCallback(
     () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
