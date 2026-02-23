@@ -23,6 +23,7 @@ import type {
 export interface TenantRow {
   readonly id: string;
   readonly org_name: string;
+  readonly provider: string;
   readonly status: TenantStatus;
   readonly created_at: Date;
   readonly updated_at: Date;

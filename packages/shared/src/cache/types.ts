@@ -145,6 +145,7 @@ export interface CachedCheckAnnotation {
 export interface CachedTenant {
   readonly id: string;
   readonly orgName: string;
+  readonly provider: string;
   readonly status: string;
   readonly createdAt: string;
 }

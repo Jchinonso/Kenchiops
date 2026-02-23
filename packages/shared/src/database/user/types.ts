@@ -21,7 +21,7 @@ export type UserStatus = "active" | "suspended" | "deleted";
 
 export interface UserRow {
   readonly id: string;
-  readonly tenant_id: string | null;
+  readonly selected_tenant_id: string | null;
   readonly email: string | null;
   readonly display_name: string;
   readonly avatar_url: string | null;

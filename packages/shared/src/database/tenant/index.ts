@@ -37,6 +37,7 @@ export {
 
 // Lookup operations
 export {
+  findByOrgNameAndProvider,
   findByOrgName,
   findByGitLabGroup,
   findById,

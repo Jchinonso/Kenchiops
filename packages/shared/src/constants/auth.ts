@@ -267,7 +267,7 @@ export const AUTH_DEFAULTS = {
 
 export const USER_QUERIES = {
   INSERT: `
-    INSERT INTO users (email, display_name, avatar_url, tenant_id, role, status)
+    INSERT INTO users (email, display_name, avatar_url, selected_tenant_id, role, status)
     VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *
   `,
@@ -282,8 +282,12 @@ export const USER_QUERIES = {
     WHERE id = $1 RETURNING *
   `,
   UPDATE_TENANT: `
-    UPDATE users SET tenant_id = $1, updated_at = NOW()
-    WHERE id = $2 AND tenant_id IS NULL RETURNING *
+    UPDATE users SET selected_tenant_id = $1, updated_at = NOW()
+    WHERE id = $2 RETURNING *
+  `,
+  SWITCH_ORGANIZATION: `
+    UPDATE users SET selected_tenant_id = $1, updated_at = NOW()
+    WHERE id = $2 RETURNING *
   `,
   UPDATE_STATUS: `
     UPDATE users SET status = $1, updated_at = NOW()

@@ -730,6 +730,7 @@ export type TenantEmbeddingTier = "LIGHT" | "STANDARD" | "PREMIUM";
 export interface Tenant {
   readonly id: string;
   readonly orgName: string;
+  readonly provider: string;
   readonly status: TenantStatus;
   readonly createdAt: Date;
   readonly updatedAt: Date;

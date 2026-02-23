@@ -17,6 +17,7 @@ import { dashboardRoutes } from "./dashboardRoutes.js";
 import { sseRoutes } from "./sseRoutes.js";
 import { integrationRoutes } from "./integrationRoutes.js";
 import { subscriptionRoutes } from "./subscriptionRoutes.js";
+import { organizationRoutes } from "./organizationRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -57,4 +58,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Subscription routes (plan management)
   app.use(subscriptionRoutes);
+
+  // Organization routes (multi-org membership)
+  app.use(organizationRoutes);
 };

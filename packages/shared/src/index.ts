@@ -157,6 +157,7 @@ export {
   type QueryResult,
 } from "./database/index.js";
 export {
+  findByOrgNameAndProvider,
   findByOrgName,
   findByGitLabGroup,
   findById,
@@ -392,6 +393,7 @@ export {
   createUser,
   updateLastLogin,
   updateUserTenant,
+  switchUserOrganization,
   deleteUser,
   upsertOAuthIdentity,
   // OAuth state operations
@@ -406,6 +408,17 @@ export {
   replaceRefreshToken,
   rotateRefreshTokenAtomically,
   cleanupExpiredRefreshTokens,
+} from "./database/index.js";
+
+// User organization module (multi-org membership)
+export {
+  type UserOrganization,
+  type UserOrganizationWithTenant,
+  type AddUserOrganizationInput,
+  findOrganizationsByUser,
+  addUserOrganization,
+  setDefaultOrganization,
+  countMembersByTenant,
 } from "./database/index.js";
 
 // Provider connection module

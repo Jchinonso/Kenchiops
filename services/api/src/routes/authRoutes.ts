@@ -24,6 +24,7 @@ import {
   getErrorMessage,
   findUserById,
   findOAuthIdentitiesByUser,
+  findOrganizationsByUser,
   setAuthCookies,
   clearAuthCookies,
   extractRefreshToken,
@@ -362,9 +363,9 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     context
   );
 
-  // Auto-link tenant — best-effort, don't fail the login
+  // Auto-link organizations — best-effort, don't fail the login
   try {
-    await authService.autoLinkTenant(
+    await authService.autoLinkOrganizations(
       user,
       oauthState.provider,
       tokens.accessToken,
@@ -373,7 +374,7 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
       context
     );
   } catch (linkError: unknown) {
-    logger.warn("Auto-link tenant failed (non-fatal)", {
+    logger.warn("Auto-link organizations failed (non-fatal)", {
       userId: user.id,
       provider: oauthState.provider,
       error: getErrorMessage(linkError),
@@ -488,9 +489,10 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
     });
   }
 
-  const [user, identities] = await Promise.all([
+  const [user, identities, organizations] = await Promise.all([
     findUserById(req.user.userId),
     findOAuthIdentitiesByUser(req.user.userId),
+    findOrganizationsByUser(req.user.userId),
   ]);
 
   if (!user) {
@@ -520,6 +522,14 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
       providers: identities.map((identity) => ({
         provider: identity.provider,
         username: identity.providerUsername,
+      })),
+      organizations: organizations.map((org) => ({
+        id: org.id,
+        tenantId: org.tenantId,
+        orgName: org.orgName,
+        provider: org.provider,
+        role: org.role,
+        isDefault: org.isDefault,
       })),
       createdAt: user.createdAt.toISOString(),
     },

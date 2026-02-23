@@ -45,24 +45,33 @@ const logger = createLogger("tenant-service");
 // ==================== Internal Helpers ====================
 
 /**
- * Create or find a tenant by org name, returning the TenantRow.
+ * Create or find a tenant by org name and provider, returning the TenantRow.
  * Used by all creation functions to ensure a tenant exists before
  * creating the provider connection.
+ *
+ * Provider-scoped: a GitHub "acme" and GitLab "acme" are separate tenants.
  */
 const ensureTenant = async (
   client: Parameters<Parameters<typeof transaction>[0]>[0],
   orgName: string,
+  provider: string,
   status: TenantStatus
 ): Promise<TenantRow> => {
-  const existing = await client.query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME_ANY_STATUS, [
+  const existing = await client.query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME_AND_PROVIDER, [
     orgName,
+    provider,
+    TENANT_STATUS.DELETED,
   ]);
 
   if (existing.rows.length > 0) {
     return existing.rows[0];
   }
 
-  const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT, [orgName, status]);
+  const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
+    orgName,
+    provider,
+    status,
+  ]);
   return created.rows[0];
 };
 
@@ -80,7 +89,7 @@ export const createFromGitHubInstall = async (data: CreateTenantFromGitHub): Pro
 
   try {
     const result = await transaction(async (client) => {
-      const tenantRow = await ensureTenant(client, data.orgName, TENANT_STATUS.ACTIVE);
+      const tenantRow = await ensureTenant(client, data.orgName, "github", TENANT_STATUS.ACTIVE);
 
       // Activate tenant if not already active
       if (tenantRow.status !== TENANT_STATUS.ACTIVE) {
@@ -198,8 +207,9 @@ export const createFromSlackInstall = async (
 
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT, [
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
         orgName,
+        "github",
         TENANT_STATUS.ACTIVE,
       ]);
 
@@ -252,8 +262,9 @@ export const createFromGitLabGroup = async (data: CreateTenantFromGitLab): Promi
 
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT, [
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
         data.gitlabGroupPath,
+        "gitlab",
         TENANT_STATUS.ACTIVE,
       ]);
 
@@ -300,8 +311,9 @@ export const createFromGitHubLogin = async (orgName: string): Promise<Tenant> =>
 
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT, [
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
         orgName,
+        "github",
         TENANT_STATUS.ACTIVE,
       ]);
 

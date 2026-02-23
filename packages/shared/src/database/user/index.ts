@@ -61,6 +61,7 @@ export {
   createUser,
   updateLastLogin,
   updateUserTenant,
+  switchUserOrganization,
   deleteUser,
   upsertOAuthIdentity,
 } from "./serviceLifecycle.js";

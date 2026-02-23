@@ -103,9 +103,8 @@ export const SUBSCRIPTION_QUERIES = {
                          AND is_active = true`,
 
   COUNT_TEAM_MEMBERS: `SELECT COUNT(*) AS count
-                       FROM users
-                       WHERE tenant_id = $1
-                         AND status = 'active'`,
+                       FROM user_organizations
+                       WHERE tenant_id = $1`,
 } as const;
 
 // ==================== Subscription Defaults ====================

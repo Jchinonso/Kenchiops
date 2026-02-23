@@ -33,7 +33,16 @@ interface AuthUserProvider {
   readonly username: string | null;
 }
 
-interface AuthUser {
+export interface AuthOrganization {
+  readonly id: string;
+  readonly orgName: string;
+  readonly provider: string;
+  readonly role: string;
+  readonly isDefault: boolean;
+  readonly isSelected: boolean;
+}
+
+export interface AuthUser {
   readonly id: string;
   readonly email: string | null;
   readonly displayName: string;
@@ -42,15 +51,18 @@ interface AuthUser {
   readonly tenantId: string | null;
   readonly providers?: readonly AuthUserProvider[];
   readonly createdAt?: string;
+  readonly organizations: readonly AuthOrganization[];
 }
 
 interface AuthContextValue {
   readonly user: AuthUser | null;
   readonly isAuthenticated: boolean;
   readonly isLoading: boolean;
+  readonly isSwitchingOrg: boolean;
   readonly login: (provider: string, instanceUrl?: string) => void;
   readonly logout: () => Promise<void>;
   readonly refreshUser: () => Promise<void>;
+  readonly switchOrganization: (orgId: string) => Promise<void>;
 }
 
 interface AuthProviderProps {
@@ -63,9 +75,65 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 // ==================== Provider ====================
 
+/**
+ * Shape returned by the /auth/me endpoint.
+ * The user object and organizations are siblings under `data`.
+ */
+interface AuthMeResponse {
+  readonly data: {
+    readonly user: {
+      readonly id: string;
+      readonly email: string | null;
+      readonly displayName: string;
+      readonly avatarUrl: string | null;
+      readonly role: string;
+      readonly tenantId: string | null;
+      readonly providers?: readonly AuthUserProvider[];
+      readonly createdAt?: string;
+    };
+    readonly organizations?: ReadonlyArray<{
+      readonly id: string;
+      readonly tenantId: string;
+      readonly role: string;
+      readonly isDefault: boolean;
+      readonly orgName: string;
+      readonly provider: string;
+    }>;
+  };
+}
+
+/**
+ * Map the /auth/me response into our AuthUser shape,
+ * computing `isSelected` by comparing each org's tenantId to the user's tenantId.
+ */
+const mapAuthMeToUser = (response: AuthMeResponse): AuthUser => {
+  const { user: rawUser, organizations: rawOrgs } = response.data;
+  const organizations: readonly AuthOrganization[] = (rawOrgs ?? []).map((org) => ({
+    id: org.id,
+    orgName: org.orgName,
+    provider: org.provider,
+    role: org.role,
+    isDefault: org.isDefault,
+    isSelected: org.tenantId === rawUser.tenantId,
+  }));
+
+  return {
+    id: rawUser.id,
+    email: rawUser.email,
+    displayName: rawUser.displayName,
+    avatarUrl: rawUser.avatarUrl,
+    role: rawUser.role,
+    tenantId: rawUser.tenantId,
+    providers: rawUser.providers,
+    createdAt: rawUser.createdAt,
+    organizations,
+  };
+};
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
 
   const refreshUser = useCallback(async (): Promise<void> => {
     // After an explicit logout, skip the API call entirely.
@@ -90,8 +158,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return;
       }
 
-      const data = (await response.json()) as { readonly data: AuthUser };
-      setUser(data.data);
+      const data = (await response.json()) as AuthMeResponse;
+      setUser(mapAuthMeToUser(data));
     } catch {
       setUser(null);
     } finally {
@@ -120,6 +188,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }, []);
 
+  const switchOrganization = useCallback(
+    async (orgId: string): Promise<void> => {
+      setIsSwitchingOrg(true);
+      try {
+        const response = await apiClient("/api/v1/organizations/switch", {
+          method: "POST",
+          body: { organizationId: orgId },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        // The backend sets a new JWT cookie scoped to the switched org.
+        // Reload user data so the UI (and all hooks depending on user/tenantId) refreshes.
+        await refreshUser();
+      } finally {
+        setIsSwitchingOrg(false);
+      }
+    },
+    [refreshUser]
+  );
+
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
@@ -131,11 +222,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       user,
       isAuthenticated,
       isLoading,
+      isSwitchingOrg,
       login,
       logout,
       refreshUser,
+      switchOrganization,
     }),
-    [user, isAuthenticated, isLoading, login, logout, refreshUser]
+    [
+      user,
+      isAuthenticated,
+      isLoading,
+      isSwitchingOrg,
+      login,
+      logout,
+      refreshUser,
+      switchOrganization,
+    ]
   );
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

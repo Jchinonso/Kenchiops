@@ -21,19 +21,20 @@ import {
   // User lifecycle
   createUser,
   updateLastLogin,
-  updateUserTenant,
+  switchUserOrganization,
   upsertOAuthIdentity,
   // Refresh tokens
   createRefreshToken,
   findRefreshTokenByHash,
   revokeTokenFamily,
   rotateRefreshTokenAtomically,
-  // Tenant lookup
-  findByOrgName,
-  findByGitLabGroup,
+  // Tenant lookup (provider-scoped)
+  findByOrgNameAndProvider,
   // Tenant creation
   createFromGitHubLogin,
   createFromGitLabGroup,
+  // User organization
+  addUserOrganization,
   // JWT utilities
   generateAccessToken,
   generateRefreshToken,
@@ -144,17 +145,17 @@ export const createAuthService = () => ({
   },
 
   /**
-   * Auto-link a user to a tenant based on their OAuth provider organizations.
+   * Auto-link a user to organizations based on their OAuth provider memberships.
    *
    * Only runs for providers that expose organization APIs (GitHub, GitLab).
-   * Skips silently if the user already has a tenant assignment.
+   * Always runs (even if user already has a selected org) to discover new orgs.
    *
-   * If no existing tenant matches the user's organizations, a new tenant is
-   * auto-created so the user can access dashboard endpoints immediately:
-   * - GitHub: from the first org, or the user's username for personal accounts
-   * - GitLab: from the first group
+   * For each provider org:
+   * 1. Find or create a provider-scoped tenant
+   * 2. Add user_organizations membership (idempotent)
+   * 3. If user has no selected org, set the first one as selected
    */
-  autoLinkTenant: async (
+  autoLinkOrganizations: async (
     user: Readonly<{ readonly id: string; readonly tenantId: string | null }>,
     provider: OAuthProvider,
     accessToken: string,
@@ -166,77 +167,28 @@ export const createAuthService = () => ({
       return;
     }
 
-    if (user.tenantId !== null) {
-      return;
-    }
-
     const adapter = getOAuthAdapter(provider);
     const orgs = await adapter.getUserOrganizations(accessToken, instanceUrl, context);
 
-    // for...of: early-exit on first tenant match
-    for (const org of orgs) {
-      const tenant = await findExistingTenant(provider, org.login);
+    // For GitHub: if no orgs found, use the username as a personal account fallback
+    const { length: orgCount } = orgs;
+    const effectiveOrgs =
+      orgCount === 0 && provider === "github" ? [{ login: providerUsername }] : orgs;
 
-      if (tenant) {
-        const linked = await updateUserTenant(user.id, tenant.id);
+    const tenantIds = await ensureOrgMemberships(user.id, provider, effectiveOrgs, context);
 
-        if (linked) {
-          logger.info("User auto-linked to tenant", {
-            ...context,
-            userId: user.id,
-            linkedTenantId: tenant.id,
-            provider,
-            orgLogin: org.login,
-          });
-        }
+    // If user has no selected org, set the first discovered one
+    const { tenantId: currentTenantId } = user;
+    const { length: tenantCount } = tenantIds;
+    const firstId = tenantCount > 0 ? tenantIds[0] : null;
+    if (currentTenantId === null && firstId !== null) {
+      await switchUserOrganization(user.id, firstId);
 
-        // Whether we linked or a concurrent request did, tenant is now set
-        return;
-      }
-    }
-
-    // No existing tenant matched — auto-create one so the user has a working dashboard.
-    if (provider === "github") {
-      const orgName = orgs.length > 0 ? orgs[0].login : providerUsername;
-
-      // Check if a tenant with this name already exists (e.g. another member created it)
-      const existingTenant = await findExistingTenant(provider, orgName);
-      if (existingTenant) {
-        await updateUserTenant(user.id, existingTenant.id);
-        logger.info("User auto-linked to existing tenant by username", {
-          ...context,
-          userId: user.id,
-          linkedTenantId: existingTenant.id,
-          provider,
-          orgName,
-        });
-        return;
-      }
-
-      const newTenant = await createFromGitHubLogin(orgName);
-      await updateUserTenant(user.id, newTenant.id);
-
-      logger.info("Tenant auto-created for GitHub user", {
+      logger.info("User selected organization set", {
         ...context,
         userId: user.id,
-        linkedTenantId: newTenant.id,
+        selectedTenantId: firstId,
         provider,
-        orgName,
-      });
-    } else if (provider === "gitlab" && orgs.length > 0) {
-      const firstOrg = orgs[0];
-      const newTenant = await createFromGitLabGroup({
-        gitlabGroupPath: firstOrg.login,
-      });
-
-      await updateUserTenant(user.id, newTenant.id);
-
-      logger.info("Tenant auto-created for GitLab user", {
-        ...context,
-        userId: user.id,
-        linkedTenantId: newTenant.id,
-        provider,
-        gitlabGroupPath: firstOrg.login,
       });
     }
   },
@@ -400,22 +352,49 @@ const sanitizeRawProfile = (rawProfile: Record<string, unknown>): Record<string,
 };
 
 /**
- * Find an existing tenant by org login, checking both org_name and GitLab group.
+ * Ensure user has organization memberships for each provider org.
+ * For each org, finds or creates the tenant (provider-scoped) and
+ * adds the user_organizations record (idempotent).
  *
- * For GitHub providers, only checks the org_name column.
- * For GitLab providers, checks both org_name (for display-name matches)
- * and gitlab_group_path.
+ * Returns the list of tenant IDs in discovery order.
  */
-const findExistingTenant = async (
+const ensureOrgMemberships = async (
+  userId: string,
   provider: OAuthProvider,
-  orgLogin: string
-): Promise<Awaited<ReturnType<typeof findByOrgName>>> => {
-  const byOrgName = await findByOrgName(orgLogin);
-  if (byOrgName) {
-    return byOrgName;
+  orgs: ReadonlyArray<{ readonly login: string }>,
+  context: RequestContext
+): Promise<readonly string[]> => {
+  const resolvedIds: string[] = []; // let: accumulator built sequentially to respect rate limits
+
+  // for...of: sequential to avoid concurrent tenant creation race conditions
+  for (const org of orgs) {
+    const existingTenant = await findByOrgNameAndProvider(org.login, provider);
+
+    const tenant =
+      existingTenant ??
+      (provider === "github"
+        ? await createFromGitHubLogin(org.login)
+        : await createFromGitLabGroup({ gitlabGroupPath: org.login }));
+
+    resolvedIds.push(tenant.id);
+
+    // Add user to org (idempotent -- ON CONFLICT DO NOTHING)
+    await addUserOrganization({
+      userId,
+      tenantId: tenant.id,
+      role: "member",
+    });
+
+    logger.info("User organization membership ensured", {
+      ...context,
+      userId,
+      tenantId: tenant.id,
+      provider,
+      orgLogin: org.login,
+    });
   }
 
-  return provider === "gitlab" ? findByGitLabGroup(orgLogin) : null;
+  return resolvedIds;
 };
 
 /** Build the UpsertOAuthIdentityInput from OAuth profile and token data. */

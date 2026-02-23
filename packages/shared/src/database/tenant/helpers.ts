@@ -260,6 +260,7 @@ export const buildUpdateQuery = (input: UpdateRAGBudgetInput): UpdateQueryResult
 export const rowToTenant = (row: TenantRow): Tenant => ({
   id: row.id,
   orgName: row.org_name,
+  provider: row.provider,
   status: row.status,
   createdAt: row.created_at,
   updatedAt: row.updated_at,

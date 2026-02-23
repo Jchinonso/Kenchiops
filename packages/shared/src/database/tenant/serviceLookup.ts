@@ -24,6 +24,37 @@ import type { TenantRow, TenantStatistics } from "./types.js";
 const logger = createLogger("tenant-service");
 
 /**
+ * Find a tenant by organization name and provider.
+ * Provider-scoped lookup that prevents cross-provider collisions.
+ *
+ * @param orgName - Organization name
+ * @param provider - Git provider (e.g., "github", "gitlab")
+ * @returns Tenant or null if not found
+ */
+export const findByOrgNameAndProvider = async (
+  orgName: string,
+  provider: string
+): Promise<Tenant | null> => {
+  validateId(orgName, "orgName");
+
+  try {
+    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME_AND_PROVIDER, [
+      orgName,
+      provider,
+      TENANT_STATUS.DELETED,
+    ]);
+    return extractTenant(result.rows);
+  } catch (error) {
+    logger.error("Failed to find tenant by org name and provider", {
+      orgName,
+      provider,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Find a tenant by organization name.
  *
  * @param org - Organization name

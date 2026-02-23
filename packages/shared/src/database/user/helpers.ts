@@ -26,7 +26,7 @@ import type {
 
 export const rowToUser = (row: UserRow): User => ({
   id: row.id,
-  tenantId: row.tenant_id,
+  tenantId: row.selected_tenant_id,
   email: row.email,
   displayName: row.display_name,
   avatarUrl: row.avatar_url,

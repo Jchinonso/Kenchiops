@@ -15,6 +15,7 @@ import type { CachedTenant, CachedMapping } from "./types.js";
 export const toCachedTenant = (tenant: Tenant): CachedTenant => ({
   id: tenant.id,
   orgName: tenant.orgName,
+  provider: tenant.provider,
   status: tenant.status,
   createdAt: tenant.createdAt.toISOString(),
 });

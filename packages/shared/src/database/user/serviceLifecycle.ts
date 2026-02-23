@@ -110,8 +110,6 @@ export const updateUserTenant = async (userId: string, tenantId: string): Promis
     const { rows } = await query<UserRow>(USER_QUERIES.UPDATE_TENANT, [tenantId, userId]);
 
     if (rows.length < 1) {
-      // No row returned — user does not exist or a concurrent
-      // request already linked a tenant (WHERE tenant_id IS NULL guard).
       return null;
     }
 
@@ -125,6 +123,46 @@ export const updateUserTenant = async (userId: string, tenantId: string): Promis
     return user;
   } catch (error) {
     logger.error("Failed to update user tenant", {
+      userId,
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Switch a user's selected (active) organization.
+ * Unlike updateUserTenant, this works even if the user already has a selected org.
+ *
+ * @param userId - User ID
+ * @param tenantId - Tenant ID to switch to
+ * @returns Updated user or null if user not found
+ */
+export const switchUserOrganization = async (
+  userId: string,
+  tenantId: string
+): Promise<User | null> => {
+  validateId(userId, "userId");
+  validateId(tenantId, "tenantId");
+
+  try {
+    const { rows } = await query<UserRow>(USER_QUERIES.SWITCH_ORGANIZATION, [tenantId, userId]);
+
+    if (rows.length < 1) {
+      return null;
+    }
+
+    const user = rowToUser(rows[0]);
+
+    logger.info("User organization switched", {
+      userId,
+      tenantId,
+    });
+
+    return user;
+  } catch (error) {
+    logger.error("Failed to switch user organization", {
       userId,
       tenantId,
       error: getErrorMessage(error),

@@ -75,9 +75,16 @@ export const TENANT_QUERIES = {
   FIND_BY_ID: `SELECT * FROM tenants WHERE id = $1`,
   FIND_ACTIVE: `SELECT * FROM tenants WHERE status = $1 ORDER BY created_at DESC`,
 
+  // Provider-scoped lookup
+  FIND_BY_ORG_NAME_AND_PROVIDER: `SELECT * FROM tenants WHERE LOWER(org_name) = LOWER($1) AND provider = $2 AND status != $3`,
+
   // Insert queries (provider-neutral — provider connections created separately)
   INSERT_TENANT: `INSERT INTO tenants (org_name, status)
      VALUES ($1, $2)
+     RETURNING *`,
+
+  INSERT_TENANT_WITH_PROVIDER: `INSERT INTO tenants (org_name, provider, status)
+     VALUES ($1, $2, $3)
      RETURNING *`,
 
   // Update queries

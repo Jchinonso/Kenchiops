@@ -22,6 +22,7 @@ export {
   type TenantRAGBudgetConfig,
   type UpdateRAGBudgetInput,
   // Lookup operations
+  findByOrgNameAndProvider,
   findByOrgName,
   findByGitLabGroup,
   findById,
@@ -311,6 +312,7 @@ export {
   createUser,
   updateLastLogin,
   updateUserTenant,
+  switchUserOrganization,
   deleteUser,
   upsertOAuthIdentity,
   // OAuth state operations
@@ -326,6 +328,21 @@ export {
   rotateRefreshTokenAtomically,
   cleanupExpiredRefreshTokens,
 } from "./user/index.js";
+
+// User organization module (multi-org membership)
+export {
+  type UserOrganizationRow,
+  type UserOrganization,
+  type UserOrganizationWithTenantRow,
+  type UserOrganizationWithTenant,
+  type AddUserOrganizationInput,
+  rowToUserOrganization,
+  rowToUserOrganizationWithTenant,
+  findOrganizationsByUser,
+  addUserOrganization,
+  setDefaultOrganization,
+  countMembersByTenant,
+} from "./userOrganization/index.js";
 
 // Webhook activity module
 export {

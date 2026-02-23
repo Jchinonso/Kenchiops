@@ -11,6 +11,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -405,6 +406,11 @@ export const DashboardSidebar = ({
         >
           <X className="w-5 h-5" />
         </button>
+      </div>
+
+      {/* Organization Switcher */}
+      <div className="border-b border-gray-100 dark:border-gray-800">
+        <OrganizationSwitcher />
       </div>
 
       {/* Navigation */}
