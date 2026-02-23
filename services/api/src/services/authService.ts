@@ -35,6 +35,9 @@ import {
   createFromGitLabGroup,
   // User organization
   addUserOrganization,
+  // Provider connection lookups
+  findGitHubAppConnection,
+  findGitLabConnection,
   // JWT utilities
   generateAccessToken,
   generateRefreshToken,
@@ -158,24 +161,34 @@ const autoLinkOrganizationsImpl = async (
   const adapter = getOAuthAdapter(provider);
   const orgs = await adapter.getUserOrganizations(accessToken, instanceUrl, context);
 
-  // For GitHub: if no orgs found, use the username as a personal account fallback
+  // If no orgs found, skip tenant creation entirely. The user will see the
+  // onboarding page prompting them to install the GitHub App. On the next
+  // login after installation, /user/orgs will return the real org.
   const { length: orgCount } = orgs;
-  const effectiveOrgs =
-    orgCount === 0 && provider === "github" ? [{ login: providerUsername }] : orgs;
+  if (orgCount === 0) {
+    logger.info("No organizations found for user, skipping tenant auto-link", {
+      ...context,
+      userId: user.id,
+      provider,
+    });
+    return;
+  }
 
-  const tenantIds = await ensureOrgMemberships(user.id, provider, effectiveOrgs, context);
+  const tenantIds = await ensureOrgMemberships(user.id, provider, orgs, context);
 
-  // If user has no selected org, set the first discovered one
+  // Pick the best tenant for selected_tenant_id: prefer one with an active
+  // GitHub App installation (provider_connections row) over a bare tenant.
   const { tenantId: currentTenantId } = user;
   const { length: tenantCount } = tenantIds;
-  const firstId = tenantCount > 0 ? tenantIds[0] : null;
-  if (currentTenantId === null && firstId !== null) {
-    await switchUserOrganization(user.id, firstId);
+  if (currentTenantId === null && tenantCount > 0) {
+    const bestTenantId = await pickTenantWithActiveInstallation(tenantIds, provider);
+
+    await switchUserOrganization(user.id, bestTenantId);
 
     logger.info("User selected organization set", {
       ...context,
       userId: user.id,
-      selectedTenantId: firstId,
+      selectedTenantId: bestTenantId,
       provider,
     });
   }
@@ -361,6 +374,33 @@ const sanitizeRawProfile = (rawProfile: Record<string, unknown>): Record<string,
   return serialized.length <= RAW_PROFILE_MAX_BYTES
     ? rawProfile
     : { _truncated: true, _originalSize: serialized.length };
+};
+
+/**
+ * From a list of tenant IDs, return the first one that has an active
+ * provider connection (GitHub App or GitLab) installed. Falls back to
+ * the first tenant if none have an active installation.
+ *
+ * This ensures users land on a tenant that is fully set up rather than
+ * a bare tenant created from OAuth login alone.
+ */
+const pickTenantWithActiveInstallation = async (
+  tenantIds: readonly string[],
+  provider: OAuthProvider
+): Promise<string> => {
+  const connectionFinder = provider === "github" ? findGitHubAppConnection : findGitLabConnection;
+
+  // for...of: sequential because each ID lookup is a DB call, and we
+  // short-circuit on the first match to avoid unnecessary queries
+  for (const tenantId of tenantIds) {
+    const connection = await connectionFinder(tenantId);
+    if (connection !== null) {
+      return tenantId;
+    }
+  }
+
+  // Fallback: no tenant has an active installation yet
+  return tenantIds[0];
 };
 
 /**

@@ -5,6 +5,7 @@
  * Creates/updates tenants when the app is installed or uninstalled.
  */
 
+import crypto from "node:crypto";
 import {
   createLogger,
   createFromGitHubInstall,
@@ -14,9 +15,20 @@ import {
   suspend,
   activate,
   getErrorMessage,
+  findOAuthIdentity,
+  addUserOrganization,
+  switchUserOrganization,
+  findUserById,
+  findGitHubAppConnection,
+  findOrganizationsByUser,
   type Tenant,
+  type RequestContext,
 } from "@kenchi/shared";
-import { GITHUB_INSTALLATION_ACTIONS, type InstallationWebhook } from "../types/githubTypes.js";
+import {
+  GITHUB_INSTALLATION_ACTIONS,
+  type InstallationWebhook,
+  type GitHubAccount,
+} from "../types/githubTypes.js";
 import type { InstallationHandlerResult, TenantLookupResult } from "./installationHandlerTypes.js";
 
 export type { InstallationHandlerResult };
@@ -41,13 +53,111 @@ const failureResult = (message: string): InstallationHandlerResult => ({
 });
 
 /**
+ * Link the GitHub App installer (sender) to the newly created tenant.
+ *
+ * Looks up the sender's Kenchi user account via their GitHub OAuth identity.
+ * If found, adds them to the tenant and switches their selected tenant if
+ * they are either on no tenant or on a tenant without an active GitHub App
+ * installation (i.e., a "bare" tenant created from OAuth login alone).
+ */
+const linkSenderToTenant = async (
+  sender: GitHubAccount,
+  tenantId: string,
+  context: RequestContext
+): Promise<void> => {
+  // GitHub OAuth stores the numeric user ID as a string in providerUserId
+  const identity = await findOAuthIdentity("github", String(sender.id), null);
+
+  if (!identity) {
+    logger.info("Installation sender has no Kenchi OAuth identity, skipping link", {
+      ...context,
+      senderLogin: sender.login,
+      senderId: sender.id,
+    });
+    return;
+  }
+
+  const user = await findUserById(identity.userId);
+  if (!user) {
+    logger.warn("OAuth identity references missing user, skipping link", {
+      ...context,
+      userId: identity.userId,
+      senderId: sender.id,
+    });
+    return;
+  }
+
+  // Add user to the new tenant (idempotent -- ON CONFLICT DO NOTHING)
+  await addUserOrganization({
+    userId: user.id,
+    tenantId,
+    role: "member",
+  });
+
+  logger.info("Sender linked to installed tenant", {
+    ...context,
+    userId: user.id,
+    tenantId,
+    senderLogin: sender.login,
+  });
+
+  // Switch selected tenant if user has none or is on a tenant without
+  // an active GitHub App installation (bare tenant from OAuth login).
+  const shouldSwitch = await shouldSwitchTenant(user.id, user.tenantId);
+  if (shouldSwitch) {
+    await switchUserOrganization(user.id, tenantId);
+
+    logger.info("Sender switched to installed tenant", {
+      ...context,
+      userId: user.id,
+      previousTenantId: user.tenantId,
+      newTenantId: tenantId,
+    });
+  }
+};
+
+/**
+ * Determine whether a user should be switched to the newly installed tenant.
+ *
+ * Returns true if:
+ * - User has no selected tenant (tenantId is null), OR
+ * - User's current tenant has no active GitHub App installation
+ */
+const shouldSwitchTenant = async (
+  userId: string,
+  currentTenantId: string | null
+): Promise<boolean> => {
+  if (currentTenantId === null) {
+    return true;
+  }
+
+  // Check if the current tenant has an active GitHub App connection
+  const currentConnection = await findGitHubAppConnection(currentTenantId);
+  if (currentConnection !== null) {
+    // Current tenant is fully set up -- don't forcibly switch
+    return false;
+  }
+
+  // Current tenant has no GitHub App installation (bare OAuth tenant).
+  // Check if the user is a member of any tenant that does have one.
+  // If not, switching to the newly installed tenant is the right move.
+  const orgs = await findOrganizationsByUser(userId);
+  const hasOtherInstalledTenant = orgs.some(
+    (org) => org.tenantId !== currentTenantId && org.tenantStatus === "active"
+  );
+
+  // Only switch if user doesn't already have another active installed tenant
+  return !hasOtherInstalledTenant;
+};
+
+/**
  * Handle GitHub App installation created event.
  * Creates a new tenant or updates an existing one.
  */
 const handleInstallationCreated = async (
   webhook: InstallationWebhook
 ): Promise<InstallationHandlerResult> => {
-  const { installation, repositories } = webhook;
+  const { installation, repositories, sender } = webhook;
   const orgName = installation.account.login;
 
   logger.info("GitHub App installed", {
@@ -55,6 +165,7 @@ const handleInstallationCreated = async (
     org: orgName,
     targetType: installation.target_type,
     repositoryCount: repositories?.length ?? 0,
+    senderLogin: sender.login,
   });
 
   try {
@@ -69,6 +180,25 @@ const handleInstallationCreated = async (
       installationId: installation.id,
       status: tenant.status,
     });
+
+    // Link the installing user to this tenant (best-effort: log and
+    // continue on failure so the installation webhook still succeeds).
+    const context: RequestContext = {
+      requestId: crypto.randomUUID(),
+      tenantId: tenant.id,
+      actor: "github-app-installation",
+    };
+
+    try {
+      await linkSenderToTenant(sender, tenant.id, context);
+    } catch (linkError) {
+      logger.error("Failed to link sender to tenant (non-fatal)", {
+        ...context,
+        installationId: installation.id,
+        senderLogin: sender.login,
+        error: getErrorMessage(linkError),
+      });
+    }
 
     const statusMessage = tenant.status === "active" ? "activated" : "created";
     return successResult(`Tenant ${statusMessage} for ${orgName}`, tenant.id);
