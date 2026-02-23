@@ -688,7 +688,11 @@ const Dashboard = () => {
           ) : incidentPage ? (
             incidentPage
           ) : isOnboarding || (isOverview && needsOnboarding) ? (
-            <Onboarding displayName={displayName} onSkip={handleSkipOnboarding} />
+            <Onboarding
+              displayName={displayName}
+              provider={user?.providers?.[0]?.provider ?? "github"}
+              onSkip={handleSkipOnboarding}
+            />
           ) : (
             <DashboardOverview
               firstName={firstName}
