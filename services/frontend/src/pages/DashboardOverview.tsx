@@ -239,6 +239,23 @@ const buildQuickStats = (
   },
 ];
 
+// ==================== Provider Display Helpers ====================
+
+const EVENT_SOURCE_LABELS: Readonly<Record<string, string>> = {
+  "github-app": "GitHub",
+  gitlab: "GitLab",
+} as const;
+
+const getEventSourceLabel = (source: string): string | null => EVENT_SOURCE_LABELS[source] ?? null;
+
+const ANALYSIS_PROVIDER_LABELS: Readonly<Record<string, string>> = {
+  github_actions: "GitHub",
+  gitlab_ci: "GitLab",
+} as const;
+
+const getAnalysisProviderLabel = (ciProvider: string | null): string | null =>
+  ciProvider ? (ANALYSIS_PROVIDER_LABELS[ciProvider] ?? null) : null;
+
 // ==================== GitLab Projects Sub-Component ====================
 
 const VISIBILITY_STYLES: Readonly<Record<string, string>> = {
@@ -795,50 +812,54 @@ export const DashboardOverview = ({
           {failureItems.length > 0 && (
             <Card>
               <CardHeader className="border-b">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-red-500" />
-                    <CardTitle>
-                      <h2>Recent Failures</h2>
-                    </CardTitle>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-1">
-                    <Github className="w-3 h-3" />
-                    GitHub CI
-                  </Badge>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  <CardTitle>
+                    <h2>Recent Failures</h2>
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {failureItems.map((event: EventRecord) => (
-                    <Link
-                      key={event.id}
-                      to="/dashboard/cicd/analyses"
-                      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <TimeDisplay
-                          dateTime={event.timestamp}
-                          className="text-xs text-gray-400 dark:text-gray-400"
-                        />
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-[10px] px-1.5 py-0",
-                            getSeverityStyle(event.severity)
-                          )}
-                        >
-                          {titleCase(event.severity ?? "unknown")}
-                        </Badge>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {getPayloadString(event.payload, "repository")}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {getPayloadString(event.payload, "checkName")}
-                      </p>
-                    </Link>
-                  ))}
+                  {failureItems.map((event: EventRecord) => {
+                    const sourceLabel = getEventSourceLabel(event.source);
+                    return (
+                      <Link
+                        key={event.id}
+                        to="/dashboard/cicd/analyses"
+                        className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <TimeDisplay
+                            dateTime={event.timestamp}
+                            className="text-xs text-gray-400 dark:text-gray-400"
+                          />
+                          <div className="flex items-center gap-1.5">
+                            {sourceLabel && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                {sourceLabel}
+                              </Badge>
+                            )}
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] px-1.5 py-0",
+                                getSeverityStyle(event.severity)
+                              )}
+                            >
+                              {titleCase(event.severity ?? "unknown")}
+                            </Badge>
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {getPayloadString(event.payload, "repository")}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {getPayloadString(event.payload, "checkName")}
+                        </p>
+                      </Link>
+                    );
+                  })}
                 </div>
               </CardContent>
               <CardFooter className="border-t">
@@ -855,50 +876,54 @@ export const DashboardOverview = ({
           {analysisItems.length > 0 && (
             <Card>
               <CardHeader className="border-b">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Search className="w-5 h-5 text-indigo-500" />
-                    <CardTitle>
-                      <h2>Recent Analyses</h2>
-                    </CardTitle>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-1">
-                    <Github className="w-3 h-3" />
-                    GitHub CI
-                  </Badge>
+                <div className="flex items-center gap-2">
+                  <Search className="w-5 h-5 text-indigo-500" />
+                  <CardTitle>
+                    <h2>Recent Analyses</h2>
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {analysisItems.map((analysis: AnalysisRecord) => (
-                    <Link
-                      key={analysis.id}
-                      to="/dashboard/cicd/analyses"
-                      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <TimeDisplay
-                          dateTime={analysis.createdAt}
-                          className="text-xs text-gray-400 dark:text-gray-400"
-                        />
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-[10px] px-1.5 py-0",
-                            getConfidenceStyle(analysis.diagnosisConfidence)
-                          )}
-                        >
-                          {getConfidenceLabel(analysis.diagnosisConfidence)}
-                        </Badge>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis)}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {truncateText(analysis.summary, 60)}
-                      </p>
-                    </Link>
-                  ))}
+                  {analysisItems.map((analysis: AnalysisRecord) => {
+                    const providerLabel = getAnalysisProviderLabel(analysis.ciProvider);
+                    return (
+                      <Link
+                        key={analysis.id}
+                        to="/dashboard/cicd/analyses"
+                        className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <TimeDisplay
+                            dateTime={analysis.createdAt}
+                            className="text-xs text-gray-400 dark:text-gray-400"
+                          />
+                          <div className="flex items-center gap-1.5">
+                            {providerLabel && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                {providerLabel}
+                              </Badge>
+                            )}
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] px-1.5 py-0",
+                                getConfidenceStyle(analysis.diagnosisConfidence)
+                              )}
+                            >
+                              {getConfidenceLabel(analysis.diagnosisConfidence)}
+                            </Badge>
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {truncateText(analysis.summary, 60)}
+                        </p>
+                      </Link>
+                    );
+                  })}
                 </div>
               </CardContent>
               <CardFooter className="border-t">

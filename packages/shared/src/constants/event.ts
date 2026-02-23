@@ -54,8 +54,9 @@ export const EVENT_DB_QUERIES = {
       AND ($4::text IS NULL OR severity = $4)
       AND ($5::timestamp IS NULL OR created_at >= $5)
       AND ($6::timestamp IS NULL OR created_at < $6)
+      AND ($7::text IS NULL OR source = $7)
     ORDER BY created_at DESC
-    LIMIT $7 OFFSET $8
+    LIMIT $8 OFFSET $9
   `,
 
   COUNT_BY_TENANT_TYPE_FILTERED: `
@@ -65,6 +66,7 @@ export const EVENT_DB_QUERIES = {
       AND ($4::text IS NULL OR severity = $4)
       AND ($5::timestamp IS NULL OR created_at >= $5)
       AND ($6::timestamp IS NULL OR created_at < $6)
+      AND ($7::text IS NULL OR source = $7)
   `,
 
   FIND_BY_REPO_AND_COMMIT: `

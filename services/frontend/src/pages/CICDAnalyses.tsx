@@ -34,6 +34,8 @@ import {
   ArrowUp,
   ArrowDown,
   RefreshCw,
+  Github,
+  Gitlab,
 } from "lucide-react";
 import {
   useAnalyses,
@@ -113,6 +115,32 @@ const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTable
   );
 };
 
+/** Build a commit URL for the given provider. Returns null when the URL cannot be constructed. */
+const buildCommitUrl = (
+  repo: string,
+  commitSha: string,
+  ciProvider: string | null
+): string | null => {
+  if (ciProvider === null || ciProvider === "github_actions") {
+    return `https://github.com/${repo}/commit/${commitSha}`;
+  }
+  // GitLab and other providers require an instance URL we don't have
+  return null;
+};
+
+const PROVIDER_BADGE_CONFIG: Readonly<
+  Record<string, { readonly label: string; readonly icon: React.ReactNode }>
+> = {
+  github_actions: {
+    label: "GitHub",
+    icon: <Github className="w-3 h-3" />,
+  },
+  gitlab_ci: {
+    label: "GitLab",
+    icon: <Gitlab className="w-3 h-3" />,
+  },
+};
+
 // ==================== Sub-components ====================
 
 interface AnalysisRowProps {
@@ -126,6 +154,11 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
   const confidence = Math.round(analysis.diagnosisConfidence * 100);
   const commitSha = analysis.headSha ?? null;
   const shortSha = commitSha ? commitSha.slice(0, 7) : null;
+  const commitUrl =
+    commitSha && repo !== "--" ? buildCommitUrl(repo, commitSha, analysis.ciProvider) : null;
+  const providerBadge = analysis.ciProvider
+    ? (PROVIDER_BADGE_CONFIG[analysis.ciProvider] ?? null)
+    : null;
 
   return (
     <TableRow
@@ -150,7 +183,17 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
       <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
         <TimeDisplay dateTime={analysis.createdAt} />
       </TableCell>
-      <TableCell className="text-gray-700 dark:text-gray-300 font-medium text-xs">{repo}</TableCell>
+      <TableCell className="text-gray-700 dark:text-gray-300 font-medium text-xs">
+        <div className="flex items-center gap-1.5">
+          <span>{repo}</span>
+          {providerBadge && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 flex-shrink-0">
+              {providerBadge.icon}
+              {providerBadge.label}
+            </Badge>
+          )}
+        </div>
+      </TableCell>
       <TableCell className="max-w-sm">
         <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
           {truncateText(analysis.summary, 100)}
@@ -170,9 +213,9 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
         </Badge>
       </TableCell>
       <TableCell className="text-gray-500 dark:text-gray-400 font-mono text-xs">
-        {shortSha && repo !== "--" ? (
+        {commitUrl ? (
           <a
-            href={`https://github.com/${repo}/commit/${commitSha}`}
+            href={commitUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-indigo-500 underline decoration-dotted underline-offset-2 transition-colors"

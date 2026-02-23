@@ -128,6 +128,7 @@ export const getEventsByTenantFiltered = async (
     readonly severity?: string | null;
     readonly since?: string | null;
     readonly until?: string | null;
+    readonly source?: string | null;
   }
 ): Promise<readonly EventRecord[]> => {
   validateEventListOptions(options);
@@ -143,6 +144,7 @@ export const getEventsByTenantFiltered = async (
       options.severity ?? null,
       options.since ?? null,
       options.until ?? null,
+      options.source ?? null,
       limit,
       offset,
     ]);
@@ -175,7 +177,8 @@ export const countEventsByTenantFiltered = async (
   repository: string | null,
   severity: string | null,
   since: string | null = null,
-  until: string | null = null
+  until: string | null = null,
+  source: string | null = null
 ): Promise<number> => {
   if (!tenantId?.trim()) {
     throw new ValidationError("tenantId is required", {
@@ -192,6 +195,7 @@ export const countEventsByTenantFiltered = async (
       severity,
       since,
       until,
+      source,
     ]);
     return parseInt(result.rows[0].count, PARSE_INT_RADIX);
   } catch (error) {

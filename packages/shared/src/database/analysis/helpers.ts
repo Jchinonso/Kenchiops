@@ -92,6 +92,7 @@ export const mapRowToAnalysis = (row: AnalysisRow): AnalysisRecord => ({
   tenantId: row.tenant_id,
   modelVersionId: row.model_version_id,
   aggregationKey: row.aggregation_key,
+  ciProvider: row.ci_provider ?? null,
   headSha: row.head_sha ?? null,
   createdAt: row.created_at,
 });

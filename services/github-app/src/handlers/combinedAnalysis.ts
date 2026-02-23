@@ -791,7 +791,8 @@ const analyzeJobLogs = async (
   apiUrl: string,
   tenantId?: string,
   workflowId?: string,
-  prDiffContext?: PRDiffContext | null
+  prDiffContext?: PRDiffContext | null,
+  ciProvider?: string
 ): Promise<JobAnalysisResult> => {
   // Parse deterministic test summary from raw logs BEFORE any sanitization
   const parsedTestSummary = parseTestSummary(jobLogs);
@@ -822,6 +823,7 @@ const analyzeJobLogs = async (
     job_name: jobName,
     ...(tenantId && { tenant_id: tenantId }),
     ...(workflowId && { workflow_id: workflowId }),
+    ...(ciProvider && { ci_provider: ciProvider }),
     ...(legacyPreprocessed.testFramework && {
       test_framework: {
         name: legacyPreprocessed.testFramework.name,
@@ -995,7 +997,8 @@ const analyzeJobWithErrorHandling = async (
   apiUrl: string,
   tenantId?: string,
   workflowId?: string,
-  prDiffContext?: PRDiffContext | null
+  prDiffContext?: PRDiffContext | null,
+  ciProvider?: string
 ): Promise<AnalysisResultWithError> => {
   try {
     return await analyzeJobLogs(
@@ -1005,7 +1008,8 @@ const analyzeJobWithErrorHandling = async (
       apiUrl,
       tenantId,
       workflowId,
-      prDiffContext
+      prDiffContext,
+      ciProvider
     );
   } catch (error) {
     logger.error("Failed to analyze job", {
@@ -1165,7 +1169,8 @@ export const processCombinedAnalysis = async (
           apiUrl,
           tenantId,
           workflowId,
-          prDiffContext
+          prDiffContext,
+          provider
         ),
       maxConcurrent,
       config.LLM_QUEUE_TIMEOUT_MS

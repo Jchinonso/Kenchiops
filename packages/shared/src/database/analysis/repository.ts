@@ -68,6 +68,7 @@ export const createAnalysis = async (input: CreateAnalysisInput): Promise<Analys
       input.tenantId ?? null,
       input.modelVersionId ?? null,
       input.aggregationKey ?? null,
+      input.ciProvider ?? null,
     ]);
 
     const record = mapRowToAnalysis(result.rows[0]);
@@ -276,7 +277,8 @@ export const getAnalysesByTenantFiltered = async (
   since: string | null = null,
   until: string | null = null,
   limit: number = ANALYSIS_DEFAULTS.TENANT_QUERY_LIMIT,
-  offset: number = 0
+  offset: number = 0,
+  source: string | null = null
 ): Promise<readonly AnalysisRecord[]> => {
   validateId(tenantId, "tenantId");
   validateLimit(limit);
@@ -289,6 +291,7 @@ export const getAnalysesByTenantFiltered = async (
       maxConfidence,
       since,
       until,
+      source,
       limit,
       offset,
     ]);
@@ -323,7 +326,8 @@ export const countAnalysesByTenantFiltered = async (
   minConfidence: number | null,
   maxConfidence: number | null,
   since: string | null = null,
-  until: string | null = null
+  until: string | null = null,
+  source: string | null = null
 ): Promise<number> => {
   validateId(tenantId, "tenantId");
 
@@ -335,6 +339,7 @@ export const countAnalysesByTenantFiltered = async (
       maxConfidence,
       since,
       until,
+      source,
     ]);
     return parseInt(result.rows[0].count, PARSE_INT_RADIX);
   } catch (error) {

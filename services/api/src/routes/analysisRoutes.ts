@@ -95,6 +95,7 @@ const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
       pr_diff: body.pr_diff,
       pr_changed_files: body.pr_changed_files,
       pr_title: body.pr_title,
+      ci_provider: body.ci_provider,
     }),
     body.repository,
     body.commit ?? "unknown",

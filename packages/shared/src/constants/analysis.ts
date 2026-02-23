@@ -34,9 +34,9 @@ export const ANALYSIS_QUERIES = {
     INSERT INTO analyses (
       id, event_id, summary, identified_cause, diagnosis_confidence,
       action_confidence, confidence_signals, recommended_actions,
-      full_analysis, tenant_id, model_version_id, aggregation_key
+      full_analysis, tenant_id, model_version_id, aggregation_key, ci_provider
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING *
   `,
 
@@ -101,8 +101,9 @@ export const ANALYSIS_QUERIES = {
       AND ($4::numeric IS NULL OR a.diagnosis_confidence < $4)
       AND ($5::timestamp IS NULL OR a.created_at >= $5)
       AND ($6::timestamp IS NULL OR a.created_at < $6)
+      AND ($7::text IS NULL OR a.ci_provider = $7)
     ORDER BY a.created_at DESC
-    LIMIT $7 OFFSET $8
+    LIMIT $8 OFFSET $9
   `,
 
   COUNT_BY_TENANT_FILTERED: `
@@ -113,6 +114,7 @@ export const ANALYSIS_QUERIES = {
       AND ($4::numeric IS NULL OR diagnosis_confidence < $4)
       AND ($5::timestamp IS NULL OR created_at >= $5)
       AND ($6::timestamp IS NULL OR created_at < $6)
+      AND ($7::text IS NULL OR ci_provider = $7)
   `,
 
   CONFIDENCE_DISTRIBUTION: `

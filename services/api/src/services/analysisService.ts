@@ -348,6 +348,7 @@ export const performAnalysis = async (
     tenantId: request.tenant_id,
     modelVersionId: modelSelection.versionId,
     aggregationKey,
+    ciProvider: request.ci_provider,
   });
 
   logger.info("Analysis completed and saved", {

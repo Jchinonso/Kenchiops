@@ -13,7 +13,7 @@ import {
   type ProcessResult as QueueProcessResult,
 } from "../queue/messageQueue.js";
 import { createLogger, delay, getErrorMessage } from "../core/index.js";
-import { QUEUE_WORKER_DEFAULTS } from "../constants/index.js";
+import { QUEUE_WORKER_DEFAULTS, type CIProvider } from "../constants/index.js";
 import type {
   AggregatedFailures,
   ConsolidatedPostResult,
@@ -59,6 +59,7 @@ export const deserializeQueuePayload = (
   })),
   firstFailureAt: new Date(payload.aggregation.firstFailureAt),
   lastFailureAt: new Date(payload.aggregation.lastFailureAt),
+  provider: payload.aggregation.provider as CIProvider | undefined,
 });
 
 // ==================== Type Guards ====================

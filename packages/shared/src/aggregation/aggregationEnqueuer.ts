@@ -66,6 +66,7 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
         })),
         firstFailureAt: aggregation.firstFailureAt.toISOString(),
         lastFailureAt: aggregation.lastFailureAt.toISOString(),
+        provider: aggregation.provider ?? key.provider,
       },
     });
 

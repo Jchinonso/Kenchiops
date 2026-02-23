@@ -112,6 +112,7 @@ const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => 
     maxConfidence: maxConfParam,
     since: sinceParam,
     until: untilParam,
+    source: sourceParam,
   } = req.query;
 
   const repository = parseStringParam(repoParam);
@@ -119,12 +120,14 @@ const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => 
   const maxConfidence = parseNumericParam(maxConfParam);
   const since = parseStringParam(sinceParam);
   const until = parseStringParam(untilParam);
+  const source = parseStringParam(sourceParam);
   const hasFilters =
     repository !== null ||
     minConfidence !== null ||
     maxConfidence !== null ||
     since !== null ||
-    until !== null;
+    until !== null ||
+    source !== null;
 
   const result = hasFilters
     ? await dashboardService.getAnalysesFiltered(
@@ -136,6 +139,7 @@ const handleGetAnalyses = async (req: Request, res: Response): Promise<void> => 
         until,
         limit,
         offset,
+        source,
         context
       )
     : await dashboardService.getAnalyses(tenantId, limit, offset, context);
@@ -152,13 +156,16 @@ const handleGetFailures = async (req: Request, res: Response): Promise<void> => 
     severity: sevParam,
     since: sinceParam,
     until: untilParam,
+    source: sourceParam,
   } = req.query;
 
   const repository = parseStringParam(repoParam);
   const severity = parseStringParam(sevParam);
   const since = parseStringParam(sinceParam);
   const until = parseStringParam(untilParam);
-  const hasFilters = repository !== null || severity !== null || since !== null || until !== null;
+  const source = parseStringParam(sourceParam);
+  const hasFilters =
+    repository !== null || severity !== null || since !== null || until !== null || source !== null;
 
   const result = hasFilters
     ? await dashboardService.getFailuresFiltered(
@@ -169,6 +176,7 @@ const handleGetFailures = async (req: Request, res: Response): Promise<void> => 
         until,
         limit,
         offset,
+        source,
         context
       )
     : await dashboardService.getFailures(tenantId, limit, offset, context);

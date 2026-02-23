@@ -480,6 +480,8 @@ export interface ConsolidatedAnalysisPayload {
     readonly workflowContext: WorkflowContext | null;
     readonly firstFailureAt: string;
     readonly lastFailureAt: string;
+    /** CI provider identifier. Uses string (not CIProvider) for forward compat with unknown providers in queue. */
+    readonly provider?: string;
   };
 }
 

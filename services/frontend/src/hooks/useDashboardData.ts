@@ -58,6 +58,7 @@ interface AnalysisRecord {
   readonly tenantId: string | null;
   readonly modelVersionId: string | null;
   readonly aggregationKey: string | null;
+  readonly ciProvider: string | null;
   readonly headSha: string | null;
   readonly createdAt: string;
 }
@@ -88,7 +89,8 @@ const buildAnalysesUrl = (
   repository?: string,
   minConfidence?: string,
   maxConfidence?: string,
-  since?: string
+  since?: string,
+  source?: string
 ): string => {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
@@ -105,6 +107,9 @@ const buildAnalysesUrl = (
   if (since) {
     params.set("since", since);
   }
+  if (source) {
+    params.set("source", source);
+  }
   return `/api/v1/dashboard/analyses?${params.toString()}`;
 };
 
@@ -113,7 +118,8 @@ const buildFailuresUrl = (
   offset: number,
   repository?: string,
   severity?: string,
-  since?: string
+  since?: string,
+  source?: string
 ): string => {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
@@ -127,6 +133,9 @@ const buildFailuresUrl = (
   if (since) {
     params.set("since", since);
   }
+  if (source) {
+    params.set("source", source);
+  }
   return `/api/v1/dashboard/failures?${params.toString()}`;
 };
 
@@ -137,11 +146,12 @@ export const useAnalyses = (
   repository?: string,
   minConfidence?: string,
   maxConfidence?: string,
-  since?: string
+  since?: string,
+  source?: string
 ): UseFetchResult<PaginatedResult<AnalysisRecord>> =>
   useFetch<PaginatedResult<AnalysisRecord>>(
-    buildAnalysesUrl(limit, offset, repository, minConfidence, maxConfidence, since),
-    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}:${maxConfidence ?? ""}:${since ?? ""}`
+    buildAnalysesUrl(limit, offset, repository, minConfidence, maxConfidence, since, source),
+    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}:${maxConfidence ?? ""}:${since ?? ""}:${source ?? ""}`
   );
 
 export const useFailures = (
@@ -150,11 +160,12 @@ export const useFailures = (
   refreshKey: number = 0,
   repository?: string,
   severity?: string,
-  since?: string
+  since?: string,
+  source?: string
 ): UseFetchResult<PaginatedResult<EventRecord>> =>
   useFetch<PaginatedResult<EventRecord>>(
-    buildFailuresUrl(limit, offset, repository, severity, since),
-    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${severity ?? ""}:${since ?? ""}`
+    buildFailuresUrl(limit, offset, repository, severity, since, source),
+    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${severity ?? ""}:${since ?? ""}:${source ?? ""}`
   );
 
 // ==================== Confidence Distribution ====================

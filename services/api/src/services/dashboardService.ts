@@ -226,6 +226,7 @@ export const createDashboardService = (
       until: string | null,
       limit: number,
       offset: number,
+      source: string | null,
       context: RequestContext
     ): Promise<PaginatedResult<AnalysisRecord>> => {
       const [items, total] = await Promise.all([
@@ -237,7 +238,8 @@ export const createDashboardService = (
           since,
           until,
           limit,
-          offset
+          offset,
+          source
         ),
         countAnalysesByTenantFiltered(
           tenantId,
@@ -245,7 +247,8 @@ export const createDashboardService = (
           minConfidence,
           maxConfidence,
           since,
-          until
+          until,
+          source
         ),
       ]);
 
@@ -257,6 +260,7 @@ export const createDashboardService = (
         maxConfidence,
         since,
         until,
+        source,
         ...context,
       });
 
@@ -274,6 +278,7 @@ export const createDashboardService = (
       until: string | null,
       limit: number,
       offset: number,
+      source: string | null,
       context: RequestContext
     ): Promise<PaginatedResult<EventRecord>> => {
       const [items, total] = await Promise.all([
@@ -286,6 +291,7 @@ export const createDashboardService = (
           until,
           limit,
           offset,
+          source,
         }),
         countEventsByTenantFiltered(
           tenantId,
@@ -293,7 +299,8 @@ export const createDashboardService = (
           repository,
           severity,
           since,
-          until
+          until,
+          source
         ),
       ]);
 
@@ -304,6 +311,7 @@ export const createDashboardService = (
         severity,
         since,
         until,
+        source,
         ...context,
       });
 
