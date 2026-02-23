@@ -20,6 +20,7 @@ import {
   createLogger,
   ValidationError,
   NotFoundError,
+  AuthorizationError,
   listIncidents,
   getAlertWithTriageResult,
   updateAlertStatus,
@@ -31,6 +32,27 @@ import {
 
 const router = Router();
 const logger = createLogger("incident-routes");
+
+// ==================== Helpers ====================
+
+/**
+ * Extract tenantId from authenticated user or throw.
+ * Uses JWT-derived identity instead of untrusted query params (VULN-005).
+ *
+ * @throws AuthorizationError if no tenant is linked
+ */
+const requireTenantId = (req: Request): string => {
+  const tenantId = req.user?.tenantId;
+
+  if (!tenantId) {
+    throw new AuthorizationError(
+      "No organization linked. Connect a GitHub or GitLab account to get started.",
+      { operation: "requireTenantId" }
+    );
+  }
+
+  return tenantId;
+};
 
 /** Clamps a value between min and max */
 const clampLimit = (value: number): number =>
@@ -58,10 +80,7 @@ const toFilterOrNull = (value: string | undefined): string | null => value?.trim
  * Paginated list of incidents filtered by tenant.
  */
 const handleListIncidents = async (req: Request, res: Response): Promise<void> => {
-  const tenantId = (req.query.tenantId as string | undefined)?.trim();
-  if (!tenantId) {
-    throw new ValidationError("tenantId query parameter is required");
-  }
+  const tenantId = requireTenantId(req);
 
   const limit = clampLimit(
     parseIntParam(req.query.limit as string | undefined, INCIDENT_ALERT_DEFAULTS.QUERY_LIMIT)
@@ -96,8 +115,14 @@ const handleGetIncident = async (req: Request, res: Response): Promise<void> => 
     throw new ValidationError("Incident ID is required");
   }
 
+  const tenantId = requireTenantId(req);
   const result = await getAlertWithTriageResult(id);
   if (!result) {
+    throw new NotFoundError("Incident not found", { metadata: { id } });
+  }
+
+  // Tenant isolation: verify the record belongs to the authenticated tenant (VULN-006)
+  if (result.alert.tenantId !== tenantId) {
     throw new NotFoundError("Incident not found", { metadata: { id } });
   }
 
@@ -114,12 +139,20 @@ const handleAcknowledgeIncident = async (req: Request, res: Response): Promise<v
     throw new ValidationError("Incident ID is required");
   }
 
+  const tenantId = requireTenantId(req);
+
+  // Verify ownership before state mutation (VULN-007)
+  const existing = await getAlertWithTriageResult(id);
+  if (!existing || existing.alert.tenantId !== tenantId) {
+    throw new NotFoundError("Incident not found", { metadata: { id } });
+  }
+
   const updated = await updateAlertStatus(id, "acknowledged");
   if (!updated) {
     throw new NotFoundError("Incident not found", { metadata: { id } });
   }
 
-  logger.info("Incident acknowledged", { alertId: id });
+  logger.info("Incident acknowledged", { alertId: id, tenantId });
 
   res.status(HTTP_STATUS.OK).json({ data: updated });
 };
@@ -134,12 +167,20 @@ const handleResolveIncident = async (req: Request, res: Response): Promise<void>
     throw new ValidationError("Incident ID is required");
   }
 
+  const tenantId = requireTenantId(req);
+
+  // Verify ownership before state mutation (VULN-007)
+  const existing = await getAlertWithTriageResult(id);
+  if (!existing || existing.alert.tenantId !== tenantId) {
+    throw new NotFoundError("Incident not found", { metadata: { id } });
+  }
+
   const updated = await updateAlertStatus(id, "resolved");
   if (!updated) {
     throw new NotFoundError("Incident not found", { metadata: { id } });
   }
 
-  logger.info("Incident resolved", { alertId: id });
+  logger.info("Incident resolved", { alertId: id, tenantId });
 
   res.status(HTTP_STATUS.OK).json({ data: updated });
 };
@@ -149,10 +190,7 @@ const handleResolveIncident = async (req: Request, res: Response): Promise<void>
  * Per-source aggregation stats for integration health indicators.
  */
 const handleStatsBySource = async (req: Request, res: Response): Promise<void> => {
-  const tenantId = (req.query.tenantId as string | undefined)?.trim();
-  if (!tenantId) {
-    throw new ValidationError("tenantId query parameter is required");
-  }
+  const tenantId = requireTenantId(req);
 
   const stats = await getStatsBySource(tenantId);
 
@@ -169,10 +207,7 @@ const handleStatsBySource = async (req: Request, res: Response): Promise<void> =
  * Active (non-resolved/closed/deduped) alert counts grouped by source.
  */
 const handleActiveCountsBySource = async (req: Request, res: Response): Promise<void> => {
-  const tenantId = (req.query.tenantId as string | undefined)?.trim();
-  if (!tenantId) {
-    throw new ValidationError("tenantId query parameter is required");
-  }
+  const tenantId = requireTenantId(req);
 
   const counts = await getActiveCountsBySource(tenantId);
 
@@ -194,10 +229,7 @@ const DEFAULT_MAX_TOTAL = 6;
  * Returns top N incidents per source for a balanced dashboard feed.
  */
 const handleBalancedRecent = async (req: Request, res: Response): Promise<void> => {
-  const tenantId = (req.query.tenantId as string | undefined)?.trim();
-  if (!tenantId) {
-    throw new ValidationError("tenantId query parameter is required");
-  }
+  const tenantId = requireTenantId(req);
 
   const perSource = parseIntParam(req.query.perSource as string | undefined, DEFAULT_PER_SOURCE);
   const maxTotal = parseIntParam(req.query.maxTotal as string | undefined, DEFAULT_MAX_TOTAL);
