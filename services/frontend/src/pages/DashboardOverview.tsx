@@ -385,6 +385,16 @@ export const DashboardOverview = ({
   const hasActivity =
     failureItems.length > 0 || analysisItems.length > 0 || incidentItems.length > 0;
   const activityLoading = analysesLoading || failuresLoading || incidentsLoading;
+  const activityCardCount =
+    (failureItems.length > 0 ? 1 : 0) +
+    (analysisItems.length > 0 ? 1 : 0) +
+    (incidentItems.length > 0 ? 1 : 0);
+  const activityGridCols =
+    activityCardCount === 1
+      ? "grid-cols-1"
+      : activityCardCount === 2
+        ? "grid-cols-1 lg:grid-cols-2"
+        : "grid-cols-1 lg:grid-cols-3";
 
   const onboardingSteps = buildOnboardingSteps(
     tenant?.githubConnected ?? false,
@@ -537,35 +547,7 @@ export const DashboardOverview = ({
         </>
       )}
 
-      {/* GitLab connect prompt when user has no GitLab but has GitHub */}
-      {!gitlabProjectsLoading &&
-        (gitlabProjects === null || gitlabProjects.length === 0) &&
-        tenant?.gitlabConnected === false &&
-        tenant?.githubConnected === true && (
-          <Card className="mb-6 sm:mb-8">
-            <CardContent className="py-6">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Gitlab className="w-5 h-5 text-orange-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                    Also use GitLab?
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                    Connect your GitLab account to monitor GitLab CI/CD pipelines alongside GitHub.
-                  </p>
-                  <Link
-                    to="/dashboard/settings"
-                    className="inline-flex items-center gap-1.5 text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors"
-                  >
-                    Connect GitLab &rarr;
-                  </Link>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+      {/* GitLab connect prompt — only show on integrations page, not on dashboard overview */}
 
       {/* Onboarding — placed before charts so it's visible above the fold */}
       {showOnboarding && completedCount >= 2 && !allStepsComplete ? (
@@ -808,7 +790,7 @@ export const DashboardOverview = ({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className={cn("grid gap-4 sm:gap-6", activityGridCols)}>
           {failureItems.length > 0 && (
             <Card>
               <CardHeader className="border-b">
