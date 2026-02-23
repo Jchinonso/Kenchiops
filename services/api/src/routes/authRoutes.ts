@@ -382,7 +382,7 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     });
   }
 
-  // Re-fetch user to pick up tenant linking (autoLinkTenant may have updated tenant_id)
+  // Re-fetch user to pick up org linking (autoLinkOrganizations may have updated selected_tenant_id)
   const freshUser = (await findUserById(user.id)) ?? user;
 
   const tokenPair = await authService.generateTokenPair(freshUser, extractTokenMeta(req), context);

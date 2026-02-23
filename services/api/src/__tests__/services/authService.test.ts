@@ -3,7 +3,7 @@
  *
  * Tests the auth service factory and all its methods:
  * - findOrCreateUser: OAuth identity lookup, email linking, user creation
- * - autoLinkTenant: org-based tenant auto-linking
+ * - autoLinkOrganizations: multi-org tenant auto-linking with provider scoping
  * - generateTokenPair: access + refresh token generation with DB storage
  * - refreshTokens: token rotation with reuse detection
  * - revokeUserTokens: family-based revocation
@@ -19,6 +19,7 @@ import type {
   OAuthTokenResponse,
   RefreshToken,
   RequestContext,
+  Tenant,
 } from "@kenchi/shared";
 import type { TokenMeta } from "../../services/authServiceTypes.js";
 
@@ -30,14 +31,19 @@ const mockFindUserById = jest.fn<(...args: unknown[]) => Promise<User | null>>()
 const mockFindUserByEmail = jest.fn<(...args: unknown[]) => Promise<User | null>>();
 const mockCreateUser = jest.fn<(...args: unknown[]) => Promise<User>>();
 const mockUpdateLastLogin = jest.fn<(...args: unknown[]) => Promise<User>>();
-const mockUpdateUserTenant = jest.fn<(...args: unknown[]) => Promise<void>>();
+const mockSwitchUserOrganization = jest.fn<(...args: unknown[]) => Promise<User | null>>();
 const mockUpsertOAuthIdentity = jest.fn<(...args: unknown[]) => Promise<OAuthIdentity>>();
 const mockCreateRefreshToken = jest.fn<(...args: unknown[]) => Promise<RefreshToken>>();
 const mockFindRefreshTokenByHash = jest.fn<(...args: unknown[]) => Promise<RefreshToken | null>>();
 const mockRevokeTokenFamily = jest.fn<(...args: unknown[]) => Promise<void>>();
 const mockReplaceRefreshToken = jest.fn<(...args: unknown[]) => Promise<void>>();
 const mockRotateRefreshTokenAtomically = jest.fn<(...args: unknown[]) => Promise<unknown>>();
-const mockFindByGitHubOrg = jest.fn<(...args: unknown[]) => Promise<{ id: string } | null>>();
+
+// Multi-org mocks
+const mockFindByOrgNameAndProvider = jest.fn<(...args: unknown[]) => Promise<Tenant | null>>();
+const mockAddUserOrganization = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockCreateFromGitHubLogin = jest.fn<(...args: unknown[]) => Promise<Tenant>>();
+const mockCreateFromGitLabGroup = jest.fn<(...args: unknown[]) => Promise<Tenant>>();
 
 // JWT mocks
 const mockGenerateAccessToken = jest.fn<(...args: unknown[]) => string>();
@@ -71,14 +77,18 @@ jest.mock("@kenchi/shared", () => {
     findUserByEmail: (...args: unknown[]) => mockFindUserByEmail(...args),
     createUser: (...args: unknown[]) => mockCreateUser(...args),
     updateLastLogin: (...args: unknown[]) => mockUpdateLastLogin(...args),
-    updateUserTenant: (...args: unknown[]) => mockUpdateUserTenant(...args),
+    switchUserOrganization: (...args: unknown[]) => mockSwitchUserOrganization(...args),
     upsertOAuthIdentity: (...args: unknown[]) => mockUpsertOAuthIdentity(...args),
     createRefreshToken: (...args: unknown[]) => mockCreateRefreshToken(...args),
     findRefreshTokenByHash: (...args: unknown[]) => mockFindRefreshTokenByHash(...args),
     revokeTokenFamily: (...args: unknown[]) => mockRevokeTokenFamily(...args),
     replaceRefreshToken: (...args: unknown[]) => mockReplaceRefreshToken(...args),
     rotateRefreshTokenAtomically: (...args: unknown[]) => mockRotateRefreshTokenAtomically(...args),
-    findByOrgName: (...args: unknown[]) => mockFindByGitHubOrg(...args),
+    // Multi-org functions
+    findByOrgNameAndProvider: (...args: unknown[]) => mockFindByOrgNameAndProvider(...args),
+    addUserOrganization: (...args: unknown[]) => mockAddUserOrganization(...args),
+    createFromGitHubLogin: (...args: unknown[]) => mockCreateFromGitHubLogin(...args),
+    createFromGitLabGroup: (...args: unknown[]) => mockCreateFromGitLabGroup(...args),
     // JWT utilities
     generateAccessToken: (...args: unknown[]) => mockGenerateAccessToken(...args),
     generateRefreshToken: (...args: unknown[]) => mockGenerateRefreshToken(...args),
@@ -110,6 +120,16 @@ const createTestUser = (overrides: Partial<User> = {}): User => ({
   role: "member",
   status: "active",
   lastLoginAt: null,
+  createdAt: new Date("2025-01-01T00:00:00Z"),
+  updatedAt: new Date("2025-01-01T00:00:00Z"),
+  ...overrides,
+});
+
+const createTestTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
+  id: "tnt_test-tenant",
+  orgName: "test-org",
+  provider: "github",
+  status: "active",
   createdAt: new Date("2025-01-01T00:00:00Z"),
   updatedAt: new Date("2025-01-01T00:00:00Z"),
   ...overrides,
@@ -352,134 +372,200 @@ describe("authService", () => {
   });
 
   // ==================================================================
-  // autoLinkTenant
+  // autoLinkOrganizations
   // ==================================================================
 
-  describe("autoLinkTenant", () => {
+  describe("autoLinkOrganizations", () => {
     it("should skip silently for non-org-capable providers (bitbucket)", async () => {
-      await service.autoLinkTenant(
+      await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "bitbucket",
         "access-token",
         null,
+        "testuser",
         testContext
       );
 
       expect(mockGetOAuthAdapter).not.toHaveBeenCalled();
-      expect(mockFindByGitHubOrg).not.toHaveBeenCalled();
+      expect(mockFindByOrgNameAndProvider).not.toHaveBeenCalled();
     });
 
     it("should skip silently for non-org-capable providers (azure_devops)", async () => {
-      await service.autoLinkTenant(
+      await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "azure_devops",
         "access-token",
         null,
+        "testuser",
         testContext
       );
 
       expect(mockGetOAuthAdapter).not.toHaveBeenCalled();
     });
 
-    it("should skip silently when user already has a tenantId", async () => {
-      await service.autoLinkTenant(
+    it("should still run when user already has a tenantId (discovers new orgs)", async () => {
+      const existingTenant = createTestTenant({ id: "tenant-acme", orgName: "acme-corp" });
+      mockGetUserOrganizations.mockResolvedValue([{ login: "acme-corp" }]);
+      mockFindByOrgNameAndProvider.mockResolvedValue(existingTenant);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+
+      await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: "existing-tenant" },
         "github",
         "access-token",
         null,
+        "testuser",
         testContext
       );
 
-      expect(mockGetOAuthAdapter).not.toHaveBeenCalled();
+      // Should still discover orgs even though user has a tenant
+      expect(mockGetOAuthAdapter).toHaveBeenCalledWith("github");
+      expect(mockFindByOrgNameAndProvider).toHaveBeenCalledWith("acme-corp", "github");
+      expect(mockAddUserOrganization).toHaveBeenCalled();
+      // Should NOT switch org since user already has one
+      expect(mockSwitchUserOrganization).not.toHaveBeenCalled();
     });
 
-    it("should link user to tenant when matching org is found", async () => {
+    it("should create provider-scoped tenant and add membership for each org", async () => {
+      const tenant1 = createTestTenant({ id: "tenant-acme", orgName: "acme-corp" });
+      const tenant2 = createTestTenant({ id: "tenant-other", orgName: "other-org" });
+
       mockGetUserOrganizations.mockResolvedValue([{ login: "acme-corp" }, { login: "other-org" }]);
-      mockFindByGitHubOrg.mockResolvedValueOnce({ id: "tenant-acme" });
+      mockFindByOrgNameAndProvider.mockResolvedValueOnce(tenant1).mockResolvedValueOnce(null);
+      mockCreateFromGitHubLogin.mockResolvedValue(tenant2);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
 
-      await service.autoLinkTenant(
+      await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "github",
         "access-token",
         null,
+        "testuser",
         testContext
       );
 
-      expect(mockUpdateUserTenant).toHaveBeenCalledWith("usr_1", "tenant-acme");
+      // First org found existing tenant
+      expect(mockFindByOrgNameAndProvider).toHaveBeenCalledWith("acme-corp", "github");
+      // Second org not found, created new
+      expect(mockCreateFromGitHubLogin).toHaveBeenCalledWith("other-org");
+      // Both orgs got membership added
+      expect(mockAddUserOrganization).toHaveBeenCalledTimes(2);
+      expect(mockAddUserOrganization).toHaveBeenCalledWith({
+        userId: "usr_1",
+        tenantId: "tenant-acme",
+        role: "member",
+      });
+      expect(mockAddUserOrganization).toHaveBeenCalledWith({
+        userId: "usr_1",
+        tenantId: "tenant-other",
+        role: "member",
+      });
     });
 
-    it("should stop at first matching org (early exit)", async () => {
-      mockGetUserOrganizations.mockResolvedValue([{ login: "first-org" }, { login: "second-org" }]);
-      mockFindByGitHubOrg.mockResolvedValueOnce({ id: "tenant-first" });
+    it("should set first org as selected when user has no tenantId", async () => {
+      const tenant = createTestTenant({ id: "tenant-first", orgName: "first-org" });
+      mockGetUserOrganizations.mockResolvedValue([{ login: "first-org" }]);
+      mockFindByOrgNameAndProvider.mockResolvedValue(tenant);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
 
-      await service.autoLinkTenant(
+      await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "github",
         "access-token",
         null,
+        "testuser",
         testContext
       );
 
-      // Should only look up the first org since it matched
-      expect(mockFindByGitHubOrg).toHaveBeenCalledTimes(1);
-      expect(mockFindByGitHubOrg).toHaveBeenCalledWith("first-org");
-      expect(mockUpdateUserTenant).toHaveBeenCalledTimes(1);
+      expect(mockSwitchUserOrganization).toHaveBeenCalledWith("usr_1", "tenant-first");
     });
 
-    it("should not link tenant when no matching org is found", async () => {
-      mockGetUserOrganizations.mockResolvedValue([{ login: "unknown-org" }]);
-      mockFindByGitHubOrg.mockResolvedValue(null);
+    it("should use personal account fallback when GitHub user has zero orgs", async () => {
+      const personalTenant = createTestTenant({ id: "tenant-personal", orgName: "myuser" });
+      mockGetUserOrganizations.mockResolvedValue([]);
+      mockFindByOrgNameAndProvider.mockResolvedValue(null);
+      mockCreateFromGitHubLogin.mockResolvedValue(personalTenant);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
 
-      await service.autoLinkTenant(
+      await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "github",
         "access-token",
         null,
+        "myuser",
         testContext
       );
 
-      expect(mockUpdateUserTenant).not.toHaveBeenCalled();
+      // Should use providerUsername as fallback org
+      expect(mockFindByOrgNameAndProvider).toHaveBeenCalledWith("myuser", "github");
+      expect(mockCreateFromGitHubLogin).toHaveBeenCalledWith("myuser");
+      expect(mockAddUserOrganization).toHaveBeenCalledWith({
+        userId: "usr_1",
+        tenantId: "tenant-personal",
+        role: "member",
+      });
     });
 
-    it("should not link tenant when user has zero organizations", async () => {
+    it("should NOT use personal account fallback for GitLab (only GitHub)", async () => {
       mockGetUserOrganizations.mockResolvedValue([]);
 
-      await service.autoLinkTenant(
-        { id: "usr_1", tenantId: null },
-        "github",
-        "access-token",
-        null,
-        testContext
-      );
-
-      expect(mockFindByGitHubOrg).not.toHaveBeenCalled();
-      expect(mockUpdateUserTenant).not.toHaveBeenCalled();
-    });
-
-    it("should work for gitlab provider (org-capable)", async () => {
-      mockGetUserOrganizations.mockResolvedValue([{ login: "gitlab-org" }]);
-      mockFindByGitHubOrg.mockResolvedValue({ id: "tenant-gitlab" });
-
-      await service.autoLinkTenant(
+      await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "gitlab",
         "access-token",
         null,
+        "myuser",
+        testContext
+      );
+
+      // No fallback for GitLab — zero orgs means nothing to link
+      expect(mockFindByOrgNameAndProvider).not.toHaveBeenCalled();
+      expect(mockSwitchUserOrganization).not.toHaveBeenCalled();
+    });
+
+    it("should work for gitlab provider using createFromGitLabGroup", async () => {
+      const gitlabTenant = createTestTenant({
+        id: "tenant-gitlab",
+        orgName: "gitlab-org",
+        provider: "gitlab",
+      });
+      mockGetUserOrganizations.mockResolvedValue([{ login: "gitlab-org" }]);
+      mockFindByOrgNameAndProvider.mockResolvedValue(null);
+      mockCreateFromGitLabGroup.mockResolvedValue(gitlabTenant);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
+
+      await service.autoLinkOrganizations(
+        { id: "usr_1", tenantId: null },
+        "gitlab",
+        "access-token",
+        null,
+        "myuser",
         testContext
       );
 
       expect(mockGetOAuthAdapter).toHaveBeenCalledWith("gitlab");
-      expect(mockUpdateUserTenant).toHaveBeenCalledWith("usr_1", "tenant-gitlab");
+      expect(mockFindByOrgNameAndProvider).toHaveBeenCalledWith("gitlab-org", "gitlab");
+      expect(mockCreateFromGitLabGroup).toHaveBeenCalledWith({ gitlabGroupPath: "gitlab-org" });
+      expect(mockAddUserOrganization).toHaveBeenCalledWith({
+        userId: "usr_1",
+        tenantId: "tenant-gitlab",
+        role: "member",
+      });
     });
 
     it("should pass instanceUrl and context to getUserOrganizations", async () => {
       mockGetUserOrganizations.mockResolvedValue([]);
 
-      await service.autoLinkTenant(
+      await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "github",
         "my-access-token",
         "https://github.example.com",
+        "testuser",
         testContext
       );
 
@@ -794,7 +880,7 @@ describe("authService", () => {
       const authService = createAuthService();
 
       expect(typeof authService.findOrCreateUser).toBe("function");
-      expect(typeof authService.autoLinkTenant).toBe("function");
+      expect(typeof authService.autoLinkOrganizations).toBe("function");
       expect(typeof authService.generateTokenPair).toBe("function");
       expect(typeof authService.refreshTokens).toBe("function");
       expect(typeof authService.revokeUserTokens).toBe("function");

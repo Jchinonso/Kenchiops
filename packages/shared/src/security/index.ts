@@ -39,6 +39,7 @@ export { encryptValue, decryptValue } from "./encryption.js";
 // Cookie utilities (httpOnly auth cookies)
 export {
   setAuthCookies,
+  setAccessTokenCookie,
   clearAuthCookies,
   extractAccessToken,
   extractRefreshToken,

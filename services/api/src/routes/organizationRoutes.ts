@@ -19,7 +19,7 @@ import {
   setDefaultOrganization,
   findUserById,
   generateAccessToken,
-  setAuthCookies,
+  setAccessTokenCookie,
 } from "@kenchi/shared";
 
 const router = Router();
@@ -115,12 +115,8 @@ const handleSwitchOrganization = async (req: Request, res: Response): Promise<vo
   // Generate new access token with the updated tenantId
   const newAccessToken = generateAccessToken(updatedUser);
 
-  // Set new cookie so subsequent requests use the new tenant context
-  setAuthCookies(res, {
-    accessToken: newAccessToken,
-    // Refresh token unchanged -- only access token carries tenantId
-    refreshToken: "",
-  });
+  // Set only the access token cookie — refresh token must stay untouched
+  setAccessTokenCookie(res, newAccessToken);
 
   logger.info("Organization switched", {
     userId,

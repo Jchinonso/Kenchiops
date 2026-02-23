@@ -100,6 +100,22 @@ export const setAuthCookies = (res: Response, tokens: AuthCookieTokens): void =>
 };
 
 /**
+ * Set only the access token cookie on the response.
+ *
+ * Used during org switching where only the JWT (with updated tenantId)
+ * changes — the refresh token must remain untouched.
+ */
+export const setAccessTokenCookie = (res: Response, accessToken: string): void => {
+  const options = buildCookieOptions();
+  const accessName = resolveAccessTokenName();
+
+  res.cookie(accessName, accessToken, {
+    ...options,
+    maxAge: COOKIE_CONFIG.ACCESS_TOKEN_MAX_AGE_SECONDS * 1000,
+  });
+};
+
+/**
  * Clear auth cookies from the response.
  *
  * Used during logout. Sets maxAge=0 with the same path/domain

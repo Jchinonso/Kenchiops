@@ -2,8 +2,9 @@
  * Account Deletion Service
  *
  * Orchestrates proper account deletion with tenant cleanup.
- * When the user is the last tenant member, performs best-effort
- * external resource cleanup and hard-deletes the tenant.
+ * Checks ALL user organizations (not just selected) and performs
+ * best-effort external resource cleanup for any org where the
+ * user is the last member, then hard-deletes those tenants.
  *
  * @module services/accountDeletionService
  */
@@ -13,6 +14,7 @@ import {
   findUserById,
   findById as findTenantById,
   countTenantMembers,
+  findOrganizationsByUser,
   deleteUser,
   hardDeleteTenant,
   findByTenant,
@@ -27,6 +29,7 @@ import {
 
 import type { GitLabProjectsPort } from "../ports/gitlabProjectsPort.js";
 import type {
+  AffectedOrganization,
   DeletionImpact,
   ExternalCleanupResult,
   GitLabWebhookConfig,
@@ -178,6 +181,7 @@ const NO_TENANT_IMPACT: DeletionImpact = {
     gitlabWebhooks: 0,
     hasSlackIntegration: false,
   },
+  affectedOrganizations: [],
 };
 
 const countGitLabWebhooks = (connections: readonly ProviderConnection[]): number =>
@@ -188,6 +192,34 @@ const countGitLabWebhooks = (connections: readonly ProviderConnection[]): number
         (conn.config as { readonly projectWebhooks?: readonly unknown[] })?.projectWebhooks ?? [];
       return sum + webhooks.length;
     }, 0);
+
+/**
+ * Assess impact for a single tenant: check member count and resources.
+ * Returns null if the user is NOT the last member.
+ */
+const assessTenantImpact = async (tenantId: string): Promise<AffectedOrganization | null> => {
+  const [tenant, memberCount, connections, slackConn] = await Promise.all([
+    findTenantById(tenantId),
+    countTenantMembers(tenantId),
+    findByTenant(tenantId),
+    findSlackConnection(tenantId),
+  ]);
+
+  if (memberCount > 1) {
+    return null;
+  }
+
+  return {
+    tenantId,
+    tenantName: tenant?.orgName ?? null,
+    memberCount,
+    affectedResources: {
+      providerConnections: connections.length,
+      gitlabWebhooks: countGitLabWebhooks(connections),
+      hasSlackIntegration: slackConn !== null,
+    },
+  };
+};
 
 // ==================== Service Factory ====================
 
@@ -214,30 +246,45 @@ export const createAccountDeletionService = (
       });
     }
 
-    if (!user.tenantId) {
+    // Fetch ALL organizations the user belongs to (not just selected)
+    const userOrgs = await findOrganizationsByUser(userId);
+
+    if (userOrgs.length === 0) {
       return NO_TENANT_IMPACT;
     }
 
-    const [tenant, memberCount, connections, slackConn] = await Promise.all([
-      findTenantById(user.tenantId),
-      countTenantMembers(user.tenantId),
-      findByTenant(user.tenantId),
-      findSlackConnection(user.tenantId),
-    ]);
+    // Assess impact for each org in parallel
+    const impacts = await Promise.all(userOrgs.map((org) => assessTenantImpact(org.tenantId)));
 
-    const isLastMember = memberCount <= 1;
+    const affectedOrganizations = impacts.filter(
+      (impact): impact is AffectedOrganization => impact !== null
+    );
+
+    const hasAffectedOrgs = affectedOrganizations.length > 0;
+
+    // Aggregate resources across all affected orgs for backward compat
+    const aggregatedResources = affectedOrganizations.reduce(
+      (acc, org) => ({
+        providerConnections: acc.providerConnections + org.affectedResources.providerConnections,
+        gitlabWebhooks: acc.gitlabWebhooks + org.affectedResources.gitlabWebhooks,
+        hasSlackIntegration: acc.hasSlackIntegration || org.affectedResources.hasSlackIntegration,
+      }),
+      { providerConnections: 0, gitlabWebhooks: 0, hasSlackIntegration: false }
+    );
+
+    // Use selected org for backward-compat top-level fields, fallback to first affected
+    const selectedOrg = userOrgs.find((org) => org.tenantId === user.tenantId);
+    const selectedMemberCount = user.tenantId ? await countTenantMembers(user.tenantId) : 0;
+    const primaryAffected = affectedOrganizations[0];
 
     return {
-      isLastMember,
+      isLastMember: hasAffectedOrgs,
       tenantId: user.tenantId,
-      tenantName: tenant?.orgName ?? null,
-      memberCount,
-      willDeleteTenant: isLastMember,
-      affectedResources: {
-        providerConnections: connections.length,
-        gitlabWebhooks: countGitLabWebhooks(connections),
-        hasSlackIntegration: slackConn !== null,
-      },
+      tenantName: primaryAffected?.tenantName ?? selectedOrg?.orgName ?? null,
+      memberCount: selectedMemberCount,
+      willDeleteTenant: hasAffectedOrgs,
+      affectedResources: aggregatedResources,
+      affectedOrganizations,
     };
   },
 
@@ -251,46 +298,60 @@ export const createAccountDeletionService = (
       });
     }
 
-    const { tenantId } = user;
+    // Check ALL organizations, not just selected
+    const userOrgs = await findOrganizationsByUser(userId);
+    const tenantIds = userOrgs.map((org) => org.tenantId);
 
-    if (tenantId) {
-      const memberCount = await countTenantMembers(tenantId);
-      const isLastMember = memberCount <= 1;
+    // Find all orgs where user is the last member
+    const memberCounts = await Promise.all(
+      tenantIds.map(async (tenantId) => ({
+        tenantId,
+        count: await countTenantMembers(tenantId),
+      }))
+    );
+    const lastMemberTenants = memberCounts
+      .filter(({ count }) => count <= 1)
+      .map(({ tenantId }) => tenantId);
 
-      if (isLastMember) {
-        const cleanupResult = await cleanupExternalResources(tenantId, gitlabProjectsPort, context);
+    // Clean up and delete each last-member org BEFORE deleting user
+    // (user deletion cascades user_organizations, which would change member counts)
+    // for...of: sequential to avoid concurrent cleanup race conditions
+    for (const tenantId of lastMemberTenants) {
+      const cleanupResult = await cleanupExternalResources(tenantId, gitlabProjectsPort, context);
 
-        logger.info("External resource cleanup completed", {
-          ...context,
-          tenantId,
-          durationMs: Date.now() - startTime,
-          ...cleanupResult,
-        });
-
-        // Delete user first (users.tenant_id ON DELETE SET NULL won't interfere)
-        await deleteUser(userId);
-
-        // Hard-delete tenant (cascades provider_connections, repo_mappings, audit_log)
-        await hardDeleteTenant(tenantId);
-
-        logger.info("Account and tenant deleted (last member)", {
-          ...context,
-          userId,
-          tenantId,
-          durationMs: Date.now() - startTime,
-        });
-
-        return;
-      }
+      logger.info("External resource cleanup completed", {
+        ...context,
+        tenantId,
+        durationMs: Date.now() - startTime,
+        ...cleanupResult,
+      });
     }
 
-    // Non-last-member or no tenant: just delete the user
+    // Delete user (cascades user_organizations, ON DELETE SET NULL for selected_tenant_id)
     await deleteUser(userId);
 
-    logger.info("Account deleted (tenant preserved)", {
+    // Hard-delete all last-member tenants (cascades provider_connections, repo_mappings)
+    // for...of: sequential to avoid concurrent tenant deletion issues
+    for (const tenantId of lastMemberTenants) {
+      await hardDeleteTenant(tenantId);
+
+      logger.info("Tenant deleted (last member removed)", {
+        ...context,
+        userId,
+        tenantId,
+        durationMs: Date.now() - startTime,
+      });
+    }
+
+    const logMessage =
+      lastMemberTenants.length > 0
+        ? "Account and tenant(s) deleted (last member)"
+        : "Account deleted (tenants preserved)";
+
+    logger.info(logMessage, {
       ...context,
       userId,
-      tenantId: tenantId ?? "none",
+      deletedTenantCount: lastMemberTenants.length,
       durationMs: Date.now() - startTime,
     });
   },

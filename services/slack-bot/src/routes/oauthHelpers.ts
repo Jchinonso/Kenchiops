@@ -94,6 +94,10 @@ const tenantLinkStrategies: readonly TenantLinkStrategy[] = [
     },
   },
   {
+    // Intentionally uses provider-unscoped findByOrgName: Slack workspaces
+    // aren't tied to a specific Git provider, so we do a fuzzy best-guess
+    // match by org name. The existing_tenant_id strategy (above) is preferred
+    // when the user links from the dashboard with an explicit tenantId.
     name: "matching_org_name",
     matches: async (_state, teamName) => {
       const existing = await findByOrgName(teamName);

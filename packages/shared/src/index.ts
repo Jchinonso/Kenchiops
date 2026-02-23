@@ -1050,6 +1050,7 @@ export {
   decryptValue,
   // Cookie utilities (httpOnly auth cookies)
   setAuthCookies,
+  setAccessTokenCookie,
   clearAuthCookies,
   extractAccessToken,
   extractRefreshToken,
