@@ -12,6 +12,7 @@ import {
   createLogger,
   generateEventId,
   createAnalysis,
+  publish,
   LLMError,
   getErrorMessage,
   wrapError,
@@ -20,6 +21,8 @@ import {
   EVENT_SEVERITY,
   EVENT_DEFAULTS,
   SERVICE_NAMES,
+  PUBSUB_CHANNELS,
+  DASHBOARD_EVENT_TYPES,
   selectModel,
   logModelSelection,
   // Chunking pipeline imports
@@ -29,6 +32,8 @@ import {
   type LLMAnalysisResult,
   type ModelSelectionResult,
   type RequestContext,
+  findEventIdByRepoAndCommit,
+  enforcePlanLimit,
 } from "@kenchi/shared";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisContext } from "../types/apiTypes.js";
 
@@ -194,6 +199,12 @@ export const performAnalysis = async (
   context: RequestContext
 ): Promise<AnalyzeResponse> => {
   const logContext = { ...context };
+
+  // Enforce monthly analysis limit before doing any work
+  if (request.tenant_id) {
+    await enforcePlanLimit(request.tenant_id, "max_analyses_monthly");
+  }
+
   const { event, evidence: baseEvidence } = createAnalysisContext(request);
 
   // Select model version for this analysis (Phase 3 fine-tuning integration)
@@ -305,25 +316,39 @@ export const performAnalysis = async (
     ...logContext,
   });
 
-  const analysisResult = await analyzeFailure(event, enrichedEvidence, context);
+  // Strip raw log from event payload — evidence already contains processed log data.
+  // The failureLog can be 500K+ chars, which overwhelms the LLM prompt token budget.
+  const { failureLog: _rawLog, ...llmPayload } = event.payload as Record<string, unknown>;
+  const llmEvent: Event = { ...event, payload: llmPayload };
+  const analysisResult = await analyzeFailure(llmEvent, enrichedEvidence, context);
   const confidenceResult = calculateConfidenceScore(analysisResult, enrichedEvidence);
 
   // Persist analysis to database for evaluation and fine-tuning
-  // Note: eventId is null because we don't persist events to the events table
-  // aggregationKey links to feedback via repo:commit format
-  const aggregationKey = request.commit ? `${request.repository}:${request.commit}` : undefined;
+  const aggregationKey = request.commit
+    ? `${request.repository}:${request.commit}`
+    : request.repository;
+
+  // Link analysis to the corresponding failure event in the events table
+  const linkedEventId =
+    request.tenant_id && request.commit
+      ? await findEventIdByRepoAndCommit(request.tenant_id, request.repository, request.commit)
+      : null;
 
   const savedAnalysis = await createAnalysis({
-    eventId: null,
+    eventId: linkedEventId,
     summary: analysisResult.summary,
     identifiedCause: analysisResult.identifiedCause,
     diagnosisConfidence: confidenceResult.finalScore,
     confidenceSignals: confidenceResult.breakdown as unknown as Record<string, unknown>,
     recommendedActions: analysisResult.recommendedActions?.map((action) => action.description),
-    fullAnalysis: analysisResult as unknown as Record<string, unknown>,
+    fullAnalysis: {
+      ...(analysisResult as unknown as Record<string, unknown>),
+      repository: request.repository,
+    },
     tenantId: request.tenant_id,
     modelVersionId: modelSelection.versionId,
     aggregationKey,
+    ciProvider: request.ci_provider,
   });
 
   logger.info("Analysis completed and saved", {
@@ -335,6 +360,23 @@ export const performAnalysis = async (
     ragDocsUsed: relatedDocs.length,
     ...logContext,
   });
+
+  // Publish dashboard SSE notification (fire-and-forget)
+  void (async () => {
+    try {
+      await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.ANALYSIS_COMPLETE, {
+        tenantId: request.tenant_id,
+        analysisId: savedAnalysis.id,
+        repository: request.repository,
+        confidence: confidenceResult.finalScore,
+      });
+    } catch (publishError) {
+      logger.warn("Failed to publish dashboard notification", {
+        error: getErrorMessage(publishError),
+        analysisId: savedAnalysis.id,
+      });
+    }
+  })();
 
   return formatAnalysisResponse(analysisResult, enrichedEvidence, request.repository);
 };

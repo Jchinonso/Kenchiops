@@ -7,6 +7,7 @@
  * @module finetuning/fineTuningClient
  */
 
+// eslint-disable-next-line no-restricted-imports -- This IS the adapter layer for OpenAI fine-tuning SDK
 import OpenAI from "openai";
 import { config } from "../core/config.js";
 import { createLogger } from "../core/logger.js";

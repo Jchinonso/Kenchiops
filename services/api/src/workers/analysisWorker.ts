@@ -11,6 +11,7 @@
 import crypto from "node:crypto";
 import {
   createLogger,
+  delay,
   SERVICE_NAMES,
   getErrorMessage,
   query,
@@ -85,11 +86,6 @@ const WORKER_CONFIG = {
 } as const;
 
 // ==================== Helper Functions ====================
-
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /**
  * Fetch pending jobs from database.

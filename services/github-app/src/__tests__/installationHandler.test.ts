@@ -1,10 +1,29 @@
 /**
  * Unit tests for Installation Handler
+ *
+ * Updated for provider-neutral tenant model.
+ * - findByGitHubInstallation -> findTenantByGitHubInstallation
+ * - Tenant no longer has provider-specific fields
+ * - Slack connection check uses findSlackConnection
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import type { InstallationWebhook } from "../types/githubTypes.js";
 import { GITHUB_INSTALLATION_ACTIONS } from "../types/githubTypes.js";
+
+// Helper to create a provider-neutral mock tenant
+const createMockTenant = (overrides = {}) => ({
+  id: "tenant-123",
+  orgName: "testorg",
+  status: "active" as const,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ragMonthlyBudgetUsd: 0,
+  ragPreferredTier: "STANDARD" as const,
+  ragAllowPremium: false,
+  ragDegradeOnBudgetWarning: true,
+  ...overrides,
+});
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -14,29 +33,24 @@ jest.mock("@kenchi/shared", () => ({
     error: jest.fn(),
     debug: jest.fn(),
   })),
-  createFromGitHubInstall: jest.fn(() =>
-    Promise.resolve({
-      id: "tenant-123",
-      githubOrg: "testorg",
-      githubInstallationId: 12345,
-      status: "active",
-      slackWorkspaceId: null,
-      slackTeamName: null,
-      slackBotToken: null,
-      slackBotUserId: null,
-    })
-  ),
+  createFromGitHubInstall: jest.fn(() => Promise.resolve(createMockTenant())),
   handleGitHubUninstall: jest.fn(() => Promise.resolve()),
-  findByGitHubInstallation: jest.fn(() =>
+  findTenantByGitHubInstallation: jest.fn(() => Promise.resolve(createMockTenant())),
+  findSlackConnection: jest.fn(() =>
     Promise.resolve({
-      id: "tenant-123",
-      githubOrg: "testorg",
-      githubInstallationId: 12345,
-      status: "active",
-      slackWorkspaceId: "T123456",
-      slackTeamName: "Test Team",
-      slackBotToken: "xoxb-token",
-      slackBotUserId: "U123456",
+      id: "prc_slack123",
+      tenantId: "tenant-123",
+      provider: "slack",
+      connectionName: "Test Team",
+      externalOrgId: "T123456",
+      baseUrl: null,
+      config: { teamName: "Test Team", botUserId: "U123456", installedAt: "2024-01-01T00:00:00Z" },
+      webhookSecret: null,
+      accessToken: "xoxb-token",
+      tokenExpiresAt: null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
   ),
   suspend: jest.fn(() => Promise.resolve()),
@@ -51,7 +65,8 @@ import { handleInstallation } from "../handlers/installationHandler.js";
 import {
   createFromGitHubInstall,
   handleGitHubUninstall,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
+  findSlackConnection,
   suspend,
   activate,
 } from "@kenchi/shared";
@@ -62,8 +77,11 @@ const mockCreateFromGitHubInstall = createFromGitHubInstall as jest.MockedFuncti
 const mockHandleGitHubUninstall = handleGitHubUninstall as jest.MockedFunction<
   typeof handleGitHubUninstall
 >;
-const mockFindByGitHubInstallation = findByGitHubInstallation as jest.MockedFunction<
-  typeof findByGitHubInstallation
+const mockFindTenantByGitHubInstallation = findTenantByGitHubInstallation as jest.MockedFunction<
+  typeof findTenantByGitHubInstallation
+>;
+const mockFindSlackConnection = findSlackConnection as jest.MockedFunction<
+  typeof findSlackConnection
 >;
 const mockSuspend = suspend as jest.MockedFunction<typeof suspend>;
 const mockActivate = activate as jest.MockedFunction<typeof activate>;
@@ -109,66 +127,35 @@ describe("Installation Handler", () => {
     jest.clearAllMocks();
 
     // Reset all mock implementations
-    mockCreateFromGitHubInstall.mockResolvedValue({
-      id: "tenant-123",
-      githubOrg: "testorg",
-      githubInstallationId: 12345,
-      status: "active" as const,
-      slackWorkspaceId: null,
-      slackTeamName: null,
-      slackBotToken: null,
-      slackBotUserId: null,
-      githubAppInstalledAt: new Date(),
-      slackAppInstalledAt: null,
+    mockCreateFromGitHubInstall.mockResolvedValue(createMockTenant());
+
+    mockFindTenantByGitHubInstallation.mockResolvedValue(createMockTenant());
+
+    // Default: Slack connection exists (tenant is fully connected)
+    mockFindSlackConnection.mockResolvedValue({
+      id: "prc_slack123",
+      tenantId: "tenant-123",
+      provider: "slack" as const,
+      connectionName: "Test Team",
+      externalOrgId: "T123456",
+      baseUrl: null,
+      config: {
+        teamName: "Test Team",
+        botUserId: "U123456",
+        installedAt: "2024-01-01T00:00:00Z",
+      },
+      webhookSecret: null,
+      accessToken: "xoxb-token",
+      tokenExpiresAt: null,
+      isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
-    mockFindByGitHubInstallation.mockResolvedValue({
-      id: "tenant-123",
-      githubOrg: "testorg",
-      githubInstallationId: 12345,
-      status: "active" as const,
-      slackWorkspaceId: "T123456",
-      slackTeamName: "Test Team",
-      slackBotToken: "xoxb-token",
-      slackBotUserId: "U123456",
-      githubAppInstalledAt: new Date(),
-      slackAppInstalledAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    mockActivate.mockResolvedValue({
-      id: "tenant-123",
-      githubOrg: "testorg",
-      githubInstallationId: 12345,
-      githubAppInstalledAt: new Date(),
-      slackWorkspaceId: "T123456",
-      slackTeamName: "Test Team",
-      slackBotToken: "xoxb-token",
-      slackBotUserId: "U123456",
-      slackAppInstalledAt: new Date(),
-      status: "active" as const,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    mockActivate.mockResolvedValue(createMockTenant());
 
     mockHandleGitHubUninstall.mockResolvedValue(undefined);
-    mockSuspend.mockResolvedValue({
-      id: "tenant-123",
-      githubOrg: "testorg",
-      githubInstallationId: 12345,
-      githubAppInstalledAt: new Date(),
-      slackWorkspaceId: "T123456",
-      slackTeamName: "Test Team",
-      slackBotToken: "xoxb-token",
-      slackBotUserId: "U123456",
-      slackAppInstalledAt: new Date(),
-      status: "suspended" as const,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    mockSuspend.mockResolvedValue(createMockTenant({ status: "suspended" as const }));
   });
 
   describe("handleInstallation - created action", () => {
@@ -179,7 +166,7 @@ describe("Installation Handler", () => {
       expect(result.handled).toBe(true);
       expect(result.tenantId).toBe("tenant-123");
       expect(mockCreateFromGitHubInstall).toHaveBeenCalledWith({
-        githubOrg: "testorg",
+        orgName: "testorg",
         githubInstallationId: 12345,
       });
     });
@@ -219,26 +206,18 @@ describe("Installation Handler", () => {
 
       expect(result.handled).toBe(true);
       expect(mockCreateFromGitHubInstall).toHaveBeenCalledWith({
-        githubOrg: "testuser",
+        orgName: "testuser",
         githubInstallationId: 12345,
       });
     });
 
     it("should handle tenant in pending status", async () => {
-      mockCreateFromGitHubInstall.mockResolvedValue({
-        id: "tenant-456",
-        githubOrg: "testorg",
-        githubInstallationId: 12345,
-        status: "pending_slack" as const,
-        slackWorkspaceId: null,
-        slackTeamName: null,
-        slackBotToken: null,
-        slackBotUserId: null,
-        githubAppInstalledAt: new Date(),
-        slackAppInstalledAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      mockCreateFromGitHubInstall.mockResolvedValue(
+        createMockTenant({
+          id: "tenant-456",
+          status: "pending_slack" as const,
+        })
+      );
 
       const webhook = createMockWebhook();
       const result = await handleInstallation(webhook);
@@ -297,7 +276,7 @@ describe("Installation Handler", () => {
     });
 
     it("should handle suspend when tenant not found", async () => {
-      mockFindByGitHubInstallation.mockResolvedValue(null);
+      mockFindTenantByGitHubInstallation.mockResolvedValue(null);
 
       const webhook = createMockWebhook({
         action: GITHUB_INSTALLATION_ACTIONS.SUSPEND,
@@ -351,20 +330,13 @@ describe("Installation Handler", () => {
     });
 
     it("should not activate when Slack not connected", async () => {
-      mockFindByGitHubInstallation.mockResolvedValue({
-        id: "tenant-123",
-        githubOrg: "testorg",
-        githubInstallationId: 12345,
-        status: "suspended" as const,
-        slackWorkspaceId: null,
-        slackTeamName: null,
-        slackBotToken: null,
-        slackBotUserId: null,
-        githubAppInstalledAt: new Date(),
-        slackAppInstalledAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      mockFindSlackConnection.mockResolvedValue(null);
+
+      mockFindTenantByGitHubInstallation.mockResolvedValue(
+        createMockTenant({
+          status: "suspended" as const,
+        })
+      );
 
       const webhook = createMockWebhook({
         action: GITHUB_INSTALLATION_ACTIONS.UNSUSPEND,
@@ -378,7 +350,7 @@ describe("Installation Handler", () => {
     });
 
     it("should handle unsuspend when tenant not found", async () => {
-      mockFindByGitHubInstallation.mockResolvedValue(null);
+      mockFindTenantByGitHubInstallation.mockResolvedValue(null);
 
       const webhook = createMockWebhook({
         action: GITHUB_INSTALLATION_ACTIONS.UNSUSPEND,

@@ -8,14 +8,12 @@
 
 import {
   ValidationError,
-  TENANT_STATUS,
   RAG_BUDGET_DEFAULTS,
   validateId,
   sharedValidateLimit,
   type CreateTenantFromGitHub,
   type LinkSlackWorkspace,
   type Tenant,
-  type TenantStatus,
   type TenantEmbeddingTier,
   type TenantAuditEntry,
 } from "../common.js";
@@ -35,9 +33,9 @@ import type {
 
 const GITHUB_INSTALL_VALIDATION_RULES: readonly GitHubInstallValidationRule[] = [
   {
-    isInvalid: (input) => input.githubOrg.trim().length === 0,
-    getMessage: () => "GitHub organization cannot be empty",
-    field: "githubOrg",
+    isInvalid: (input) => input.orgName.trim().length === 0,
+    getMessage: () => "Organization name cannot be empty",
+    field: "orgName",
   },
   {
     isInvalid: (input) =>
@@ -256,18 +254,13 @@ export const buildUpdateQuery = (input: UpdateRAGBudgetInput): UpdateQueryResult
 // ==================== Row Mappers ====================
 
 /**
- * Convert database row to Tenant entity
+ * Convert database row to Tenant entity.
+ * Provider-specific fields have moved to provider_connections.
  */
 export const rowToTenant = (row: TenantRow): Tenant => ({
   id: row.id,
-  githubOrg: row.github_org,
-  githubInstallationId: row.github_installation_id,
-  githubAppInstalledAt: row.github_app_installed_at,
-  slackWorkspaceId: row.slack_workspace_id,
-  slackTeamName: row.slack_team_name,
-  slackBotToken: row.slack_bot_token,
-  slackBotUserId: row.slack_bot_user_id,
-  slackAppInstalledAt: row.slack_app_installed_at,
+  orgName: row.org_name,
+  provider: row.provider,
   status: row.status,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -286,18 +279,6 @@ export const rowToTenant = (row: TenantRow): Tenant => ({
  */
 export const extractTenant = (rows: readonly TenantRow[]): Tenant | null =>
   rows.length > 0 ? rowToTenant(rows[0]) : null;
-
-/**
- * Determine new status after GitHub installation
- */
-export const getStatusAfterGitHubInstall = (hasSlack: boolean): TenantStatus =>
-  hasSlack ? TENANT_STATUS.ACTIVE : TENANT_STATUS.PENDING_SLACK;
-
-/**
- * Determine new status after Slack installation
- */
-export const getStatusAfterSlackInstall = (hasGitHub: boolean): TenantStatus =>
-  hasGitHub ? TENANT_STATUS.ACTIVE : TENANT_STATUS.PENDING_GITHUB;
 
 /**
  * Maps database row to TenantAuditEntry domain object.

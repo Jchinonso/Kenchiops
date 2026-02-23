@@ -55,7 +55,7 @@ export const buildHeaderSection = (): KnownBlock[] => [
  */
 export const buildConnectionStatusSection = (context: AppHomeContext): KnownBlock[] => {
   const botStatusEmoji = context.botStatus === "active" ? STATUS_EMOJI.success : STATUS_EMOJI.error;
-  const githubConnected = context.tenant?.githubOrg && context.tenant?.status === "active";
+  const githubConnected = context.tenant?.orgName && context.tenant?.status === "active";
   const githubStatusEmoji = githubConnected ? STATUS_EMOJI.success : STATUS_EMOJI.pending;
 
   return [
@@ -75,7 +75,7 @@ export const buildConnectionStatusSection = (context: AppHomeContext): KnownBloc
         },
         {
           type: "mrkdwn",
-          text: `*GitHub App*\n${githubStatusEmoji} ${githubConnected ? `Connected to *${context.tenant?.githubOrg}*` : "Not connected"}`,
+          text: `*GitHub App*\n${githubStatusEmoji} ${githubConnected ? `Connected to *${context.tenant?.orgName}*` : "Not connected"}`,
         },
       ],
     },
@@ -223,7 +223,7 @@ export const buildFeaturesSection = (): KnownBlock[] => [
  * Build quick actions section with action buttons.
  */
 export const buildQuickActionsSection = (context: AppHomeContext): KnownBlock[] => {
-  const githubConnected = context.tenant?.githubOrg && context.tenant?.status === "active";
+  const githubConnected = context.tenant?.orgName && context.tenant?.status === "active";
 
   const actionButtons: Array<{
     type: "button";

@@ -26,10 +26,14 @@ export const OPENROUTER_DEFAULTS = {
  * LLM API configuration constants.
  */
 export const LLM_CONSTANTS = {
-  MAX_PROMPT_TOKENS: 128000, // Conservative limit; Gemini 2.5 Flash supports 1M context
+  MAX_PROMPT_TOKENS: 40000,
+  /** Max evidence log entries sent to final LLM analysis.
+   * Each test failure produces ~500 chars of JSON output. At 16K max completion tokens
+   * (~64K chars), 50 entries keeps output well under the limit. */
+  MAX_EVIDENCE_LOGS: 50,
   MAX_RETRIES: 3,
   DEFAULT_TIMEOUT_MS: 90000,
-  TOKEN_BUFFER: 1000,
+  TOKEN_BUFFER: 10000,
   EXPONENTIAL_BACKOFF_BASE: 2,
   CHARS_PER_TOKEN_ESTIMATE: 4,
   RATE_LIMIT_STATUS_CODE: 429,

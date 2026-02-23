@@ -8,7 +8,8 @@
 import { WebClient, LogLevel } from "@slack/web-api";
 import {
   createLogger,
-  getSlackCredentials,
+  findTenantByGitHubInstallation,
+  findSlackConnection,
   config,
   NotFoundError,
   SLACK_CLIENT_CACHE,
@@ -87,29 +88,36 @@ export const getSlackClientForTenant = async (installationId: number): Promise<W
     return cached.client;
   }
 
-  // Lookup tenant credentials
-  const credentials = await getSlackCredentials(installationId);
+  // Lookup tenant via GitHub installation, then find Slack connection
+  const tenant = await findTenantByGitHubInstallation(installationId);
+  if (!tenant) {
+    throw new NotFoundError(
+      `No tenant found for installation ${installationId}. Ensure the GitHub App is installed.`
+    );
+  }
 
-  // Credentials are required for multi-tenant operation
-  if (!credentials) {
+  const slackConn = await findSlackConnection(tenant.id);
+  if (!slackConn?.accessToken) {
     throw new NotFoundError(
       `No Slack credentials found for installation ${installationId}. ` +
         "Ensure the tenant has completed Slack OAuth."
     );
   }
 
+  const workspaceId = slackConn.externalOrgId ?? "";
+
   // Create and cache new client
-  const client = createSlackClient(credentials.token);
+  const client = createSlackClient(slackConn.accessToken);
 
   clientCache.set(installationId, {
     client,
     createdAt: now,
-    workspaceId: credentials.workspaceId,
+    workspaceId,
   });
 
   logger.info("Created new Slack client for tenant", {
     installationId,
-    workspaceId: credentials.workspaceId,
+    workspaceId,
   });
 
   return client;

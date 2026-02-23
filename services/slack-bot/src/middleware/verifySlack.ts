@@ -120,9 +120,21 @@ export const verifySlackSignature = (req: Request, res: Response, next: NextFunc
     return;
   }
 
-  // Reconstruct the request body as a string
-  // Note: We need the raw body for signature verification
-  const requestBody = JSON.stringify(req.body);
+  // Use raw body for signature verification when available (VULN-008).
+  // JSON.stringify(req.body) can produce a different byte sequence than the original
+  // payload Slack signed, causing false rejections or security gaps.
+  const { rawBody } = req as Request & { readonly rawBody?: Buffer };
+  const requestBody = rawBody ? rawBody.toString("utf8") : JSON.stringify(req.body);
+  if (!rawBody) {
+    logger.warn(
+      "Raw body not available for Slack signature verification — falling back to JSON.stringify",
+      {
+        provider: "slack",
+        operation: "verifySignature",
+        path: req.path,
+      }
+    );
+  }
 
   // Verify signature
   const result = verifySignature(slackSignature, slackRequestTimestamp, requestBody, signingSecret);
@@ -162,7 +174,9 @@ export const createSlackVerifier =
       return;
     }
 
-    const requestBody = JSON.stringify(req.body);
+    // Use raw body when available (VULN-008)
+    const { rawBody } = req as Request & { readonly rawBody?: Buffer };
+    const requestBody = rawBody ? rawBody.toString("utf8") : JSON.stringify(req.body);
     const result = verifySignature(slackSignature, slackRequestTimestamp, requestBody, secret);
 
     if (!result.valid) {

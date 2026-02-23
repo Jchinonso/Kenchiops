@@ -142,6 +142,14 @@ export const config: Config = {
   GITHUB_WEBHOOK_SECRET: requireEnv("GITHUB_WEBHOOK_SECRET"),
   GITHUB_APP_SLUG: optionalString("GITHUB_APP_SLUG", CONFIG_DEFAULTS.GITHUB_APP_SLUG),
 
+  // Vercel CI Provider
+  VERCEL_WEBHOOK_SECRET: optionalString("VERCEL_WEBHOOK_SECRET", ""),
+  VERCEL_API_TOKEN: optionalString("VERCEL_API_TOKEN", ""),
+
+  // Netlify CI Provider
+  NETLIFY_WEBHOOK_SECRET: optionalString("NETLIFY_WEBHOOK_SECRET", ""),
+  NETLIFY_API_TOKEN: optionalString("NETLIFY_API_TOKEN", ""),
+
   // Database
   DATABASE_URL: requireEnv("DATABASE_URL"),
   VECTOR_DB_URL: requireEnv("VECTOR_DB_URL"),
@@ -160,6 +168,7 @@ export const config: Config = {
   API_URL: optionalString("API_URL", CONFIG_DEFAULTS.API_URL),
   SLACK_BOT_URL: optionalString("SLACK_BOT_URL", CONFIG_DEFAULTS.SLACK_BOT_URL),
   GITHUB_APP_URL: optionalString("GITHUB_APP_URL", CONFIG_DEFAULTS.GITHUB_APP_URL),
+  INCIDENT_TRIAGE_URL: optionalString("INCIDENT_TRIAGE_URL", CONFIG_DEFAULTS.INCIDENT_TRIAGE_URL),
 
   // Redis
   REDIS_URL: optionalString("REDIS_URL", CONFIG_DEFAULTS.REDIS_URL),
@@ -173,4 +182,44 @@ export const config: Config = {
     "LLM_QUEUE_TIMEOUT_MS",
     LLM_CONCURRENCY_DEFAULTS.QUEUE_TIMEOUT_MS
   ),
+
+  // Auth / JWT
+  JWT_SECRET: process.env.JWT_SECRET,
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+
+  // GitHub OAuth App (separate from GitHub App)
+  GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID,
+  GITHUB_OAUTH_CLIENT_SECRET: process.env.GITHUB_OAUTH_CLIENT_SECRET,
+
+  // GitLab OAuth
+  GITLAB_OAUTH_CLIENT_ID: process.env.GITLAB_OAUTH_CLIENT_ID,
+  GITLAB_OAUTH_CLIENT_SECRET: process.env.GITLAB_OAUTH_CLIENT_SECRET,
+
+  // Bitbucket OAuth
+  BITBUCKET_OAUTH_CLIENT_ID: process.env.BITBUCKET_OAUTH_CLIENT_ID,
+  BITBUCKET_OAUTH_CLIENT_SECRET: process.env.BITBUCKET_OAUTH_CLIENT_SECRET,
+
+  // Azure DevOps OAuth
+  AZURE_DEVOPS_OAUTH_CLIENT_ID: process.env.AZURE_DEVOPS_OAUTH_CLIENT_ID,
+  AZURE_DEVOPS_OAUTH_CLIENT_SECRET: process.env.AZURE_DEVOPS_OAUTH_CLIENT_SECRET,
+
+  // Vercel Integration OAuth
+  VERCEL_OAUTH_CLIENT_ID: process.env.VERCEL_OAUTH_CLIENT_ID,
+  VERCEL_OAUTH_CLIENT_SECRET: process.env.VERCEL_OAUTH_CLIENT_SECRET,
+
+  // Netlify Integration OAuth
+  NETLIFY_OAUTH_CLIENT_ID: process.env.NETLIFY_OAUTH_CLIENT_ID,
+  NETLIFY_OAUTH_CLIENT_SECRET: process.env.NETLIFY_OAUTH_CLIENT_SECRET,
+
+  // Frontend URL (for OAuth redirects)
+  // Defaults match Vite dev server; Docker overrides via docker-compose env vars
+  FRONTEND_URL: optionalString("FRONTEND_URL", "http://localhost:5173"),
+  OAUTH_CALLBACK_BASE_URL: optionalString("OAUTH_CALLBACK_BASE_URL", "http://localhost:5173"),
+
+  // Internal service-to-service authentication
+  INTERNAL_SERVICE_SECRET: process.env.INTERNAL_SERVICE_SECRET,
+
+  // Aggregation timing overrides (optional)
+  AGGREGATION_DEBOUNCE_MS: optionalInt("AGGREGATION_DEBOUNCE_MS"),
+  AGGREGATION_MAX_WAIT_MS: optionalInt("AGGREGATION_MAX_WAIT_MS"),
 } as const;

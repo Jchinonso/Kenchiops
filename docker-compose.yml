@@ -45,6 +45,8 @@ services:
       - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
       - REDIS_URL=redis://redis:6379
       - LOGSAGE_ROLLOUT_PERCENTAGE=100
+      - FRONTEND_URL=http://localhost:3003
+      - OAUTH_CALLBACK_BASE_URL=http://localhost:3003
     env_file:
       - .env
     ports:
@@ -131,6 +133,51 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  incident-triage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=incident-triage
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=256
+      - PORT=3004
+      - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
+    ports:
+      - "3004:3004"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_PUBLIC_URL: ${VITE_PUBLIC_URL:-}
+    container_name: kenchi-frontend
+    ports:
+      - "3003:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:

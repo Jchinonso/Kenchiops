@@ -9,7 +9,7 @@ import {
   handlePRMergeEvent,
   ingestLinkedCommitKnowledge,
   getErrorMessage,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
   getOrFetchPullRequestDiff,
   getOrFetchPullRequestCommits,
 } from "@kenchi/shared";
@@ -145,7 +145,7 @@ export const handlePullRequestMerged = async (
       };
     }
 
-    const tenant = await findByGitHubInstallation(installationId);
+    const tenant = await findTenantByGitHubInstallation(installationId);
     if (!tenant) {
       logger.warn("No tenant for installation, skipping RAG ingestion", {
         installationId,

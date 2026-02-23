@@ -161,10 +161,14 @@ export const processSimplifiedAnalysis = async (
       logSize: preprocessed.processedSize,
     });
 
-    const response = await resilientPost<AnalysisApiResponse>(apiUrl, {
-      failure_log: preprocessed.logs,
-      repository: context.repository,
-    });
+    const response = await resilientPost<AnalysisApiResponse>(
+      apiUrl,
+      {
+        failure_log: preprocessed.logs,
+        repository: context.repository,
+      },
+      { internalAuth: true }
+    );
 
     const apiResponse = response.data;
 

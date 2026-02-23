@@ -11,6 +11,7 @@ import {
   AGGREGATION_KEY_PATTERN,
   DISPLAY_DEFAULTS,
   TIME_CONSTANTS,
+  type CIProvider,
 } from "../constants/index.js";
 import {
   AGGREGATION_KEYS,
@@ -87,6 +88,7 @@ export const buildMetadata = (
   workflowContext: stringifyOptional(context.workflowContext),
   firstFailureAt: firstFailureAt.toISOString(),
   lastFailureAt: lastFailureAt.toISOString(),
+  ...(context.provider ? { provider: context.provider } : {}),
 });
 
 /** Reconstructs AggregatedFailures from Redis metadata and failure list. */
@@ -107,6 +109,7 @@ export const reconstructAggregation = (
   workflowContext: parseOptional<WorkflowContext>(metadata.workflowContext),
   firstFailureAt: new Date(metadata.firstFailureAt),
   lastFailureAt: new Date(metadata.lastFailureAt),
+  ...(metadata.provider ? { provider: metadata.provider as CIProvider } : {}),
 });
 
 // ==================== Key Parsing ====================
@@ -118,8 +121,8 @@ export const parseAggregationKey = (metaKey: string): AggregationKey | null => {
     return null;
   }
 
-  const [, repoFullName, commitSha] = match;
-  return { repositoryFullName: repoFullName, commitSha };
+  const [, provider, repoFullName, commitSha] = match;
+  return { provider: provider as CIProvider, repositoryFullName: repoFullName, commitSha };
 };
 
 /** Builds all Redis keys for an aggregation. */

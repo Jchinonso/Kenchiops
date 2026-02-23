@@ -20,9 +20,10 @@ import {
   HTTP_STATUS,
   SLACK_OAUTH_SCOPES_STRING,
   getErrorMessage,
+  asyncHandler,
 } from "@kenchi/shared";
 import {
-  oauthStates,
+  oauthStateStore,
   errorResponseHandlers,
   validateOAuthCallback,
   linkTenantWithStrategy,
@@ -51,39 +52,42 @@ const router = express.Router();
  * GET /slack/install
  * Initiates the Slack OAuth flow by redirecting to Slack's authorization page.
  */
-router.get("/slack/install", (req: Request, res: Response) => {
-  const { tenant_id: tenantId } = req.query;
+router.get(
+  "/slack/install",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tenant_id: tenantId } = req.query;
 
-  const clientId = config.SLACK_CLIENT_ID;
-  if (!clientId) {
-    logger.error("SLACK_CLIENT_ID not configured");
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      error: "Slack OAuth not configured. Set SLACK_CLIENT_ID.",
+    const clientId = config.SLACK_CLIENT_ID;
+    if (!clientId) {
+      logger.error("SLACK_CLIENT_ID not configured");
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        error: "Slack OAuth not configured. Set SLACK_CLIENT_ID.",
+      });
+      return;
+    }
+
+    const state = crypto.randomBytes(32).toString("hex");
+    await oauthStateStore.set(state, {
+      createdAt: Date.now(),
+      tenantId: typeof tenantId === "string" ? tenantId : undefined,
     });
-    return;
-  }
 
-  const state = crypto.randomBytes(32).toString("hex");
-  oauthStates.set(state, {
-    createdAt: Date.now(),
-    tenantId: typeof tenantId === "string" ? tenantId : undefined,
-  });
+    const redirectUri =
+      config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
+    const authUrl = new URL("https://slack.com/oauth/v2/authorize");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("scope", SLACK_OAUTH_SCOPES_STRING);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("state", state);
 
-  const redirectUri =
-    config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
-  const authUrl = new URL("https://slack.com/oauth/v2/authorize");
-  authUrl.searchParams.set("client_id", clientId);
-  authUrl.searchParams.set("scope", SLACK_OAUTH_SCOPES_STRING);
-  authUrl.searchParams.set("redirect_uri", redirectUri);
-  authUrl.searchParams.set("state", state);
+    logger.info("Initiating Slack OAuth flow", {
+      tenantId: tenantId ?? "(new installation)",
+      redirectUri,
+    });
 
-  logger.info("Initiating Slack OAuth flow", {
-    tenantId: tenantId ?? "(new installation)",
-    redirectUri,
-  });
-
-  res.redirect(authUrl.toString());
-});
+    res.redirect(authUrl.toString());
+  })
+);
 
 /**
  * GET /slack/oauth/callback
@@ -92,7 +96,7 @@ router.get("/slack/install", (req: Request, res: Response) => {
 router.get("/slack/oauth/callback", async (req: Request, res: Response) => {
   const { code, state, error } = req.query;
 
-  const validation = validateOAuthCallback(code, state, error);
+  const validation = await validateOAuthCallback(code, state, error);
   if (!validation.valid) {
     logger.warn(`OAuth validation failed: ${validation.error.type}`);
     errorResponseHandlers[validation.error.type](res, validation.error);

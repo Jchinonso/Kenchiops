@@ -21,6 +21,14 @@ import type {
   AnalysisRecord,
   AnalysisRow,
   AnalysisCountRow,
+  AnalysisEventRow,
+  ConfidenceDistributionRow,
+  ConfidenceTrendRow,
+  ConfidenceTrendPoint,
+  AnalysisCountByRepoRow,
+  AnalysisCountByRepo,
+  AnalysesByTenantFilteredOptions,
+  CountAnalysesByTenantFilteredOptions,
 } from "./types.js";
 import {
   ANALYSIS_ID_PREFIX,
@@ -62,6 +70,7 @@ export const createAnalysis = async (input: CreateAnalysisInput): Promise<Analys
       input.tenantId ?? null,
       input.modelVersionId ?? null,
       input.aggregationKey ?? null,
+      input.ciProvider ?? null,
     ]);
 
     const record = mapRowToAnalysis(result.rows[0]);
@@ -183,6 +192,337 @@ export const countAnalysesByModelVersion = async (modelVersionId: string): Promi
   } catch (error) {
     logger.error("Failed to count analyses by model version", {
       modelVersionId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Retrieves analyses by tenant ID.
+ *
+ * @param tenantId - The tenant ID
+ * @param limit - Maximum number of records to return (default: 50)
+ * @param offset - Number of records to skip (default: 0)
+ * @returns Array of analysis records
+ * @throws ValidationError if tenantId is empty or limit is invalid
+ * @throws Error if database operation fails
+ */
+export const getAnalysesByTenant = async (
+  tenantId: string,
+  limit: number = ANALYSIS_DEFAULTS.TENANT_QUERY_LIMIT,
+  offset: number = 0
+): Promise<readonly AnalysisRecord[]> => {
+  validateId(tenantId, "tenantId");
+  validateLimit(limit);
+
+  try {
+    const result = await query<AnalysisRow>(ANALYSIS_QUERIES.GET_BY_TENANT, [
+      tenantId,
+      limit,
+      offset,
+    ]);
+
+    return Object.freeze(result.rows.map(mapRowToAnalysis));
+  } catch (error) {
+    logger.error("Failed to get analyses by tenant", {
+      tenantId,
+      limit,
+      offset,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Counts analyses by tenant ID.
+ *
+ * @param tenantId - The tenant ID
+ * @returns The count of analyses
+ * @throws ValidationError if tenantId is empty
+ * @throws Error if database operation fails
+ */
+export const countAnalysesByTenant = async (tenantId: string): Promise<number> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<AnalysisCountRow>(ANALYSIS_QUERIES.COUNT_BY_TENANT, [tenantId]);
+
+    return parseInt(result.rows[0].count, PARSE_INT_RADIX);
+  } catch (error) {
+    logger.error("Failed to count analyses by tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Retrieves analyses by tenant ID with optional filters.
+ *
+ * @param tenantId - The tenant ID
+ * @param repository - Optional repository name filter (ILIKE match on aggregation_key)
+ * @param minConfidence - Optional minimum diagnosis confidence threshold
+ * @param limit - Maximum number of records to return (default: 50)
+ * @param offset - Number of records to skip (default: 0)
+ * @returns Array of analysis records matching the filters
+ * @throws ValidationError if tenantId is empty or limit is invalid
+ * @throws Error if database operation fails
+ */
+export const getAnalysesByTenantFiltered = async (
+  options: AnalysesByTenantFilteredOptions
+): Promise<readonly AnalysisRecord[]> => {
+  const {
+    tenantId,
+    repository,
+    minConfidence,
+    maxConfidence,
+    since = null,
+    until = null,
+    limit = ANALYSIS_DEFAULTS.TENANT_QUERY_LIMIT,
+    offset = 0,
+    source = null,
+  } = options;
+  validateId(tenantId, "tenantId");
+  validateLimit(limit);
+
+  try {
+    const result = await query<AnalysisRow>(ANALYSIS_QUERIES.GET_BY_TENANT_FILTERED, [
+      tenantId,
+      repository,
+      minConfidence,
+      maxConfidence,
+      since,
+      until,
+      source,
+      limit,
+      offset,
+    ]);
+    return Object.freeze(result.rows.map(mapRowToAnalysis));
+  } catch (error) {
+    logger.error("Failed to get filtered analyses by tenant", {
+      tenantId,
+      repository,
+      minConfidence,
+      maxConfidence,
+      since,
+      until,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Counts analyses by tenant ID with optional filters.
+ *
+ * @param tenantId - The tenant ID
+ * @param repository - Optional repository name filter (ILIKE match on aggregation_key)
+ * @param minConfidence - Optional minimum diagnosis confidence threshold
+ * @returns The count of matching analyses
+ * @throws ValidationError if tenantId is empty
+ * @throws Error if database operation fails
+ */
+export const countAnalysesByTenantFiltered = async (
+  options: CountAnalysesByTenantFilteredOptions
+): Promise<number> => {
+  const {
+    tenantId,
+    repository,
+    minConfidence,
+    maxConfidence,
+    since = null,
+    until = null,
+    source = null,
+  } = options;
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<AnalysisCountRow>(ANALYSIS_QUERIES.COUNT_BY_TENANT_FILTERED, [
+      tenantId,
+      repository,
+      minConfidence,
+      maxConfidence,
+      since,
+      until,
+      source,
+    ]);
+    return parseInt(result.rows[0].count, PARSE_INT_RADIX);
+  } catch (error) {
+    logger.error("Failed to count filtered analyses by tenant", {
+      tenantId,
+      since,
+      until,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Retrieves analysis summaries for multiple event IDs (batch lookup).
+ * Returns a map of eventId to analysisId and confidence.
+ */
+export const getAnalysesByEventIds = async (
+  eventIds: readonly string[],
+  tenantId: string
+): Promise<ReadonlyMap<string, { readonly analysisId: string; readonly confidence: number }>> => {
+  const { length: count } = eventIds;
+  if (count === 0) {
+    return new Map();
+  }
+
+  try {
+    const result = await query<AnalysisEventRow>(ANALYSIS_QUERIES.GET_BY_EVENT_IDS, [
+      eventIds,
+      tenantId,
+    ]);
+
+    const mapEventRow = ({
+      event_id: eventId,
+      id,
+      diagnosis_confidence: diagnosisConfidence,
+    }: AnalysisEventRow): readonly [
+      string,
+      { readonly analysisId: string; readonly confidence: number },
+    ] => [eventId, { analysisId: id, confidence: diagnosisConfidence }];
+
+    return new Map(result.rows.map(mapEventRow));
+  } catch (error) {
+    logger.error("Failed to get analyses by event IDs", {
+      eventIdCount: count,
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Returns the confidence distribution for a tenant's analyses,
+ * bucketed into high (>=0.8), medium (>=0.5), and low (<0.5).
+ */
+export const getConfidenceDistribution = async (
+  tenantId: string
+): Promise<readonly ConfidenceDistributionRow[]> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<ConfidenceDistributionRow>(
+      ANALYSIS_QUERIES.CONFIDENCE_DISTRIBUTION,
+      [tenantId]
+    );
+    return Object.freeze(result.rows);
+  } catch (error) {
+    logger.error("Failed to get confidence distribution", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Finds analyses matching a commit SHA via aggregation_key suffix.
+ * Used for cross-pipeline correlation (linking incidents to CI/CD analyses).
+ *
+ * @param tenantId - The tenant ID
+ * @param commitSha - The commit SHA to search for
+ * @returns Array of analysis records matching the commit
+ */
+export const findAnalysesByCommitSha = async (
+  tenantId: string,
+  commitSha: string
+): Promise<readonly AnalysisRecord[]> => {
+  validateId(tenantId, "tenantId");
+  validateId(commitSha, "commitSha");
+
+  try {
+    const result = await query<AnalysisRow>(ANALYSIS_QUERIES.FIND_BY_COMMIT_SHA, [
+      tenantId,
+      commitSha,
+    ]);
+
+    return Object.freeze(result.rows.map(mapRowToAnalysis));
+  } catch (error) {
+    logger.error("Failed to find analyses by commit SHA", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Returns per-repository analysis counts for a tenant.
+ * Used for rendering repo filter tabs on the CI/CD Analyses page.
+ *
+ * @param tenantId - The tenant ID
+ * @returns Array of per-repository analysis counts ordered by count desc
+ */
+export const getAnalysisCountsByRepo = async (
+  tenantId: string
+): Promise<readonly AnalysisCountByRepo[]> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<AnalysisCountByRepoRow>(ANALYSIS_QUERIES.COUNT_BY_REPO, [tenantId]);
+
+    const counts = result.rows.map((row) => ({
+      repository: row.repository,
+      analysisCount: parseInt(row.analysis_count, PARSE_INT_RADIX),
+    }));
+
+    logger.info("Retrieved analysis counts by repo", {
+      tenantId,
+      repoCount: counts.length,
+    });
+
+    return Object.freeze(counts);
+  } catch (error) {
+    logger.error("Failed to get analysis counts by repo", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Returns a time-series of average confidence, bucketed by day or week.
+ *
+ * @param tenantId - The tenant ID
+ * @param bucket - Time bucket: "day" or "week"
+ * @param since - ISO timestamp for the start of the window
+ * @returns Array of trend data points ordered by date
+ */
+export const getConfidenceTrend = async (
+  tenantId: string,
+  bucket: "day" | "week" = "day",
+  since: string = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+): Promise<readonly ConfidenceTrendPoint[]> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<ConfidenceTrendRow>(ANALYSIS_QUERIES.CONFIDENCE_TREND, [
+      tenantId,
+      bucket,
+      since,
+    ]);
+
+    return Object.freeze(
+      result.rows.map((row) => ({
+        date: row.bucket,
+        avgConfidence: parseFloat(row.avg_confidence),
+        count: row.count,
+      }))
+    );
+  } catch (error) {
+    logger.error("Failed to get confidence trend", {
+      tenantId,
+      bucket,
       error: getErrorMessage(error),
     });
     throw error;

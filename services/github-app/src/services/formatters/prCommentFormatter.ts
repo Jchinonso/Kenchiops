@@ -18,7 +18,6 @@ import {
   type FeedbackLinks,
   type LintErrorForDisplay,
   type LintErrorWithFile,
-  type RecommendedActionInput,
 } from "./prCommentTypes.js";
 import {
   extractAssertionDiff,
@@ -26,18 +25,89 @@ import {
   generateErrorBreakdownVisual,
   generateConsolidatedActions,
 } from "./testFailureHelpers.js";
+import {
+  getConfidenceBadge,
+  buildDependencyChangesSection,
+  buildBuildConfigChangesSection,
+  buildPrioritizedActions,
+} from "./enrichedSectionBuilders.js";
+
+/**
+ * Compute display names for file paths, disambiguating when multiple files share the same basename.
+ * For unique basenames: `repository.ts`
+ * For collisions: `analysis/repository.ts`, `incidentAlert/repository.ts`
+ */
+const computeDisplayNames = (filePaths: readonly string[]): ReadonlyMap<string, string> => {
+  const basenameCounts = new Map<string, number>();
+  filePaths.forEach((filePath) => {
+    const basename = filePath.split("/").pop() ?? filePath;
+    basenameCounts.set(basename, (basenameCounts.get(basename) ?? 0) + 1);
+  });
+
+  return new Map(
+    filePaths.map((filePath) => {
+      const parts = filePath.split("/");
+      const basename = parts.pop() ?? filePath;
+      const hasDuplicate = (basenameCounts.get(basename) ?? 0) > 1;
+      // For duplicates, include the parent directory for disambiguation
+      const displayName =
+        hasDuplicate && parts.length > 0 ? `${parts[parts.length - 1]}/${basename}` : basename;
+      return [filePath, displayName] as const;
+    })
+  );
+};
 
 /**
  * Build the header section of the PR comment.
+ * Includes commit info, PR context, and workflow timing when available.
  */
-export const buildHeaderSection = (shortSha: string, failureCount: number): string[] => [
-  `## ${UI_EMOJI.failure} CI Failure Analysis`,
-  "",
-  `| ${UI_EMOJI.info} **Commit** | ${UI_EMOJI.warning} **Failed Checks** |`,
-  "| :--- | :--- |",
-  `| \`${shortSha}\` | ${failureCount} |`,
-  "",
-];
+export const buildHeaderSection = (aggregation: AggregatedFailures): string[] => {
+  const shortSha = aggregation.commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH);
+  const lines: string[] = [
+    `## ${UI_EMOJI.failure} CI Failure Analysis`,
+    "",
+    `| ${UI_EMOJI.info} **Commit** | ${UI_EMOJI.warning} **Failed Checks** |`,
+    "| :--- | :--- |",
+    `| \`${shortSha}\` | ${aggregation.failures.length} |`,
+    "",
+  ];
+
+  const { prContext } = aggregation;
+  const { workflowContext } = aggregation;
+
+  if (prContext ?? workflowContext) {
+    const contextParts: string[] = [];
+
+    if (prContext) {
+      contextParts.push(
+        `${UI_EMOJI.branch} **Branch:** \`${prContext.branch}\` → \`${prContext.baseBranch}\``
+      );
+      contextParts.push(`${UI_EMOJI.user} **Author:** ${prContext.author}`);
+      if (prContext.labels.length > 0) {
+        const labelBadges = prContext.labels.map((label) => `\`${label}\``).join(" ");
+        contextParts.push(`${UI_EMOJI.target} **Labels:** ${labelBadges}`);
+      }
+    }
+
+    if (workflowContext) {
+      contextParts.push(`${UI_EMOJI.workflow} **Workflow:** ${workflowContext.name}`);
+      if (workflowContext.duration) {
+        contextParts.push(`${UI_EMOJI.timer} **Duration:** ${workflowContext.duration}`);
+      }
+    }
+
+    lines.push(
+      `<details open><summary>${UI_EMOJI.details} <strong>Context</strong></summary>`,
+      "",
+      ...contextParts,
+      "",
+      "</details>",
+      ""
+    );
+  }
+
+  return lines;
+};
 
 /**
  * Build summary line for test failures.
@@ -48,24 +118,29 @@ export const buildTestFailureSummary = (
   parsedTestSummary?: ParsedTestSummary | null
 ): string => {
   const uniqueFiles = [
-    ...new Set(testFailures.map((testFailure) => testFailure.file).filter(Boolean)),
+    ...new Set(
+      testFailures
+        .map((testFailure) => testFailure.file)
+        .filter((file): file is string => Boolean(file))
+    ),
   ];
+  const unknownFileCount = testFailures.filter((testFailure) => !testFailure.file).length;
   const fileCount = uniqueFiles.length;
-  // Prefer deterministic regex-parsed count over LLM-generated array length
   const testCount = parsedTestSummary?.failed ?? testFailures.length;
+  const unknownSuffix = unknownFileCount > 0 ? ` (+${unknownFileCount} in unknown files)` : "";
 
   if (fileCount > 0) {
     const fileList = uniqueFiles
       .slice(0, GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS)
-      .map((filePath) => `\`${filePath?.split("/").pop()}\``)
+      .map((filePath) => `\`${filePath.split("/").pop()}\``)
       .join(", ");
     const moreFiles =
       fileCount > GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS
         ? ` and ${fileCount - GITHUB_COMMENT_DISPLAY.MAX_LIST_ITEMS} more`
         : "";
-    return `> ${testCount} test${testCount > 1 ? "s" : ""} failed in ${fileCount} file${fileCount > 1 ? "s" : ""}: ${fileList}${moreFiles}`;
+    return `> ${testCount} test${testCount > 1 ? "s" : ""} failed in ${fileCount} file${fileCount > 1 ? "s" : ""}: ${fileList}${moreFiles}${unknownSuffix}`;
   }
-  return `> ${testCount} test${testCount > 1 ? "s" : ""} failed`;
+  return `> ${testCount} test${testCount > 1 ? "s" : ""} failed${unknownSuffix}`;
 };
 
 /**
@@ -73,7 +148,6 @@ export const buildTestFailureSummary = (
  * Prioritizes LLM-extracted expected/actual values, then falls back to regex extraction.
  */
 export const buildAssertionDiffLines = (testFailure: TestFailureInfo): string[] => {
-  // Check if LLM provided actual values (not just null placeholders)
   const hasLLMExpected = testFailure.expected !== undefined && testFailure.expected !== null;
   const hasLLMActual = testFailure.actual !== undefined && testFailure.actual !== null;
 
@@ -96,7 +170,6 @@ export const buildAssertionDiffLines = (testFailure: TestFailureInfo): string[] 
     return lines;
   }
 
-  // Fallback: Try to extract from error message
   if (testFailure.error && testFailure.error !== "Test failed (see logs for details)") {
     const diff = extractAssertionDiff(testFailure.error);
     if (diff) {
@@ -118,16 +191,13 @@ export const buildAssertionDiffLines = (testFailure: TestFailureInfo): string[] 
   return [];
 };
 
-/**
- * Build a file group section for test failures.
- * Includes cross-reference lines when change correlations are available.
- */
 export const buildTestFileGroup = (
   filePath: string,
   fileFailures: readonly TestFailureInfo[],
-  correlations?: readonly LLMChangeCorrelation[]
+  correlations?: readonly LLMChangeCorrelation[],
+  displayName?: string
 ): string[] => {
-  const fileName = filePath.split("/").pop() ?? filePath;
+  const fileName = displayName ?? filePath.split("/").pop() ?? filePath;
   const failureLines = fileFailures.flatMap((testFailure) => {
     const lineRef = testFailure.line ? `:${testFailure.line}` : "";
     const crossRef = correlations
@@ -151,16 +221,6 @@ export const buildTestFileGroup = (
   ];
 };
 
-/**
- * Build the test failures section.
- * Works with any test framework - LLM already filters real failures.
- * Uses deterministic parsedTestSummary count when available for the headline.
- *
- * @param testFailures - Array of test failures to display
- * @param testCommand - LLM-generated command to run failing tests locally
- * @param parsedTestSummary - Deterministic test summary from regex parsing (optional)
- * @param correlations - Change correlations for cross-referencing (optional)
- */
 export const buildTestFailuresSection = (
   testFailures: readonly TestFailureInfo[],
   testCommand?: string,
@@ -171,10 +231,12 @@ export const buildTestFailuresSection = (
     return [];
   }
 
-  // Prefer deterministic regex-parsed count over LLM-generated array length
   const headlineCount = parsedTestSummary?.failed ?? testFailures.length;
+  const shownCount = testFailures.length;
+  // When deterministic summary found more failures than the LLM extracted,
+  // clarify the discrepancy so users aren't confused by the numbers
+  const headlineSuffix = headlineCount > shownCount ? ` (${shownCount} shown in detail)` : "";
 
-  // Group failures by file
   const failuresByFile = new Map<string, TestFailureInfo[]>();
   testFailures.forEach((testFailure) => {
     const fileKey = testFailure.file ?? "Unknown file";
@@ -182,16 +244,19 @@ export const buildTestFailuresSection = (
     failuresByFile.set(fileKey, [...existing, testFailure]);
   });
 
-  // Build file group sections
+  const displayNames = computeDisplayNames([...failuresByFile.keys()]);
   const fileGroupLines = [...failuresByFile.entries()].flatMap(([filePath, fileFailures]) =>
-    buildTestFileGroup(filePath, fileFailures, correlations)
+    buildTestFileGroup(filePath, fileFailures, correlations, displayNames.get(filePath))
   );
 
-  // Build breakdown visual
   const breakdown = categorizeFailures(testFailures);
-  const breakdownLines = generateErrorBreakdownVisual(breakdown);
+  const rawBreakdownLines = generateErrorBreakdownVisual(breakdown);
+  // When headline count differs from analyzed count, clarify in the breakdown header
+  const breakdownLines =
+    headlineCount > shownCount && rawBreakdownLines.length > 0
+      ? [`**Error Breakdown** (of ${shownCount} analyzed):`, ...rawBreakdownLines.slice(1)]
+      : rawBreakdownLines;
 
-  // Build quick copy test command section using LLM-provided command
   const testCommandSection = testCommand
     ? [
         `<details><summary>${UI_EMOJI.info} <strong>Run failing tests locally</strong></summary>`,
@@ -207,7 +272,7 @@ export const buildTestFailuresSection = (
   return [
     `${UI_EMOJI.new} **New failures introduced in this PR**`,
     "",
-    `**${UI_EMOJI.warning} ${headlineCount} Test Failure${headlineCount > 1 ? "s" : ""}:**`,
+    `**${UI_EMOJI.warning} ${headlineCount} Test Failure${headlineCount > 1 ? "s" : ""}${headlineSuffix}:**`,
     "",
     ...fileGroupLines,
     ...(breakdownLines.length > 0 ? [...breakdownLines, ""] : []),
@@ -215,22 +280,22 @@ export const buildTestFailuresSection = (
   ];
 };
 
-/**
- * Build a file group section for lint errors.
- */
 export const buildLintFileGroup = (
   filePath: string,
-  fileErrors: readonly LintErrorForDisplay[]
+  fileErrors: readonly LintErrorForDisplay[],
+  displayName?: string
 ): string[] => {
-  const fileName = filePath.split("/").pop() ?? filePath;
+  const fileName = displayName ?? filePath.split("/").pop() ?? filePath;
   const errorLines = fileErrors.flatMap((lintError) => {
-    const location = lintError.column
-      ? `${lintError.line}:${lintError.column}`
-      : `${lintError.line}`;
+    const location = lintError.line
+      ? lintError.column
+        ? `${lintError.line}:${lintError.column}`
+        : `${lintError.line}`
+      : null;
     const symbol = lintError.symbol ? ` \`${lintError.symbol}\`` : "";
     const lines = [
       `${UI_EMOJI.failure} [${lintError.code}] ${lintError.message}${symbol}`,
-      `   -> ${filePath}:${location}`,
+      `   -> ${filePath}${location ? `:${location}` : ""}`,
     ];
     if (lintError.suggestion) {
       lines.push(`   ${UI_EMOJI.suggestion} ${lintError.suggestion}`);
@@ -249,15 +314,11 @@ export const buildLintFileGroup = (
   ];
 };
 
-/**
- * Build the lint errors section.
- */
 export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[]): string[] => {
   if (lintErrors.length === 0) {
     return [];
   }
 
-  // Group errors by file
   const errorsByFile = new Map<string, LintErrorForDisplay[]>();
   lintErrors.forEach((lintError) => {
     const fileKey = lintError.file ?? "Unknown file";
@@ -265,8 +326,9 @@ export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[])
     errorsByFile.set(fileKey, [...existing, lintError]);
   });
 
+  const displayNames = computeDisplayNames([...errorsByFile.keys()]);
   const fileGroupLines = [...errorsByFile.entries()].flatMap(([filePath, fileErrors]) =>
-    buildLintFileGroup(filePath, fileErrors)
+    buildLintFileGroup(filePath, fileErrors, displayNames.get(filePath))
   );
 
   return [
@@ -278,15 +340,9 @@ export const buildLintErrorsSection = (lintErrors: readonly LintErrorWithFile[])
 
 // ==================== Change Correlation Display ====================
 
-/**
- * Capitalize the first letter of a correlation level.
- */
 const capitalizeCorrelation = (level: LLMChangeCorrelation["correlation"]): string =>
   level === "none" ? "—" : `${level.charAt(0).toUpperCase()}${level.slice(1)}`;
 
-/**
- * Format failing test names for a correlation row.
- */
 const formatCorrelationTests = (failingTests: readonly string[]): string =>
   failingTests.length > 0
     ? failingTests
@@ -298,19 +354,12 @@ const formatCorrelationTests = (failingTests: readonly string[]): string =>
         : "")
     : "*(none)*";
 
-/**
- * Build a single correlation table row.
- */
 const buildCorrelationRow = (correlation: LLMChangeCorrelation): string => {
   const fileName = correlation.changedFile.split("/").pop() ?? correlation.changedFile;
   const lineRef = correlation.changedLine ? `:${correlation.changedLine}` : "";
   return `| \`${correlation.changedFunction}()\` | \`${fileName}${lineRef}\` | ${formatCorrelationTests(correlation.failingTests)} | ${capitalizeCorrelation(correlation.correlation)} |`;
 };
 
-/**
- * Build the change correlation section as a collapsible table.
- * Shows which changed functions correlate with failing tests.
- */
 export const buildChangeCorrelationSection = (
   correlations: readonly LLMChangeCorrelation[]
 ): string[] => {
@@ -338,9 +387,6 @@ export const buildChangeCorrelationSection = (
   ];
 };
 
-/**
- * Find the correlation entry for a given test name.
- */
 const findCorrelationForTest = (
   testName: string,
   correlations: readonly LLMChangeCorrelation[]
@@ -353,9 +399,6 @@ const findCorrelationForTest = (
       )
   );
 
-/**
- * Build cross-reference line for a test failure if a correlation exists.
- */
 const buildCrossReferenceLine = (
   testName: string,
   correlations: readonly LLMChangeCorrelation[]
@@ -370,15 +413,21 @@ const buildCrossReferenceLine = (
   ];
 };
 
-/**
- * Build the recommended actions section.
- */
+// ==================== Recommended Actions ====================
+
 export const buildActionsSection = (
   testFailures: readonly TestFailureInfo[],
-  recommendedActions: readonly RecommendedActionInput[]
+  recommendedActions: ReadonlyArray<{
+    readonly description: string;
+    readonly priority: string | number;
+  }>
 ): string[] => {
-  const consolidatedActions = generateConsolidatedActions(testFailures, recommendedActions);
+  const prioritizedActions = buildPrioritizedActions(recommendedActions);
+  if (prioritizedActions.length > 0) {
+    return [`**${UI_EMOJI.tools} Recommended Actions:**`, "", ...prioritizedActions, ""];
+  }
 
+  const consolidatedActions = generateConsolidatedActions(testFailures, recommendedActions);
   if (consolidatedActions.length === 0) {
     return [];
   }
@@ -391,9 +440,6 @@ export const buildActionsSection = (
   ];
 };
 
-/**
- * Build the footer section with feedback links.
- */
 export const buildFooterSection = (feedbackLinks?: FeedbackLinks): string[] => {
   const feedbackSection = feedbackLinks
     ? [
@@ -408,10 +454,11 @@ export const buildFooterSection = (feedbackLinks?: FeedbackLinks): string[] => {
 
 /**
  * Build a single failure section.
- * Threads parsedTestSummary for deterministic test count display.
+ * Includes confidence badge, dependency changes, and build config changes.
  */
 export const buildFailureSection = (failure: AggregatedFailures["failures"][number]): string[] => {
   const correlations = failure.changeCorrelations ?? [];
+  const confidenceBadge = getConfidenceBadge(failure.confidence);
 
   const summaryLine = failure.testFailures?.length
     ? buildTestFailureSummary(failure.testFailures, failure.parsedTestSummary)
@@ -432,35 +479,48 @@ export const buildFailureSection = (failure: AggregatedFailures["failures"][numb
 
   const correlationSection = buildChangeCorrelationSection(correlations);
 
+  const dependencySection = failure.detectedDependencyChanges?.length
+    ? buildDependencyChangesSection(failure.detectedDependencyChanges)
+    : [];
+
+  const buildConfigSection = failure.detectedBuildConfigChanges?.length
+    ? buildBuildConfigChangesSection(failure.detectedBuildConfigChanges)
+    : [];
+
   const actionsSection = buildActionsSection(
     failure.testFailures ?? [],
     failure.recommendedActions ?? []
   );
 
   return [
-    `### ${UI_EMOJI.failure} ${failure.checkName}`,
+    `### ${UI_EMOJI.failure} ${failure.checkName} (${confidenceBadge})`,
     "",
     summaryLine,
     "",
     ...testFailuresSection,
     ...lintErrorsSection,
     ...correlationSection,
+    ...dependencySection,
+    ...buildConfigSection,
     ...actionsSection,
   ];
 };
 
+// ==================== Comment Builder ====================
+
 /**
  * Build consolidated PR comment from aggregated failures.
+ * Renders each failure as its own section with per-analysis recommended actions.
  */
 export const buildConsolidatedPRComment = (
   aggregation: AggregatedFailures,
   feedbackLinks?: FeedbackLinks
 ): string => {
-  const shortSha = aggregation.commitSha.substring(0, SHORT_COMMIT_SHA_LENGTH);
+  const failureSections = aggregation.failures.flatMap((failure) => buildFailureSection(failure));
 
   const sections = [
-    ...buildHeaderSection(shortSha, aggregation.failures.length),
-    ...aggregation.failures.flatMap(buildFailureSection),
+    ...buildHeaderSection(aggregation),
+    ...failureSections,
     ...buildFooterSection(feedbackLinks),
   ];
 

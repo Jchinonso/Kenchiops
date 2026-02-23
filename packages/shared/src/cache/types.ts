@@ -140,13 +140,12 @@ export interface CachedCheckAnnotation {
 
 /**
  * Cached tenant (subset of full tenant for cache efficiency).
+ * Provider-specific fields are no longer on the tenant — query provider_connections instead.
  */
 export interface CachedTenant {
   readonly id: string;
-  readonly githubInstallationId: number | null;
-  readonly githubOrg: string;
-  readonly slackWorkspaceId: string | null;
-  readonly slackTeamName: string | null;
+  readonly orgName: string;
+  readonly provider: string;
   readonly status: string;
   readonly createdAt: string;
 }

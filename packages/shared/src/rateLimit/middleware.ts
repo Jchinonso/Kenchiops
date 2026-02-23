@@ -218,6 +218,53 @@ const checkEarlyRejections = (context: SecurityContext, path: string): void => {
   }
 };
 
+/** Key prefix for per-tenant rate limiting */
+const TENANT_RL_PREFIX = "tenant-rl:" as const;
+
+/**
+ * Creates a tenant rate limiter when tenantRateLimit config is provided.
+ * Returns null if not configured or not enabled.
+ */
+const createTenantLimiter = (
+  config: RateLimitMiddlewareConfig
+): ReturnType<typeof createRedisRateLimiter> | null => {
+  const tenantConfig = config.tenantRateLimit;
+  if (!tenantConfig?.enabled) {
+    return null;
+  }
+
+  return createRedisRateLimiter({
+    windowMs: tenantConfig.windowMs ?? config.rateLimit.windowMs,
+    max: tenantConfig.max ?? config.rateLimit.max,
+    message: "Tenant rate limit exceeded",
+    keyPrefix: TENANT_RL_PREFIX,
+    keyGenerator: (req: Request) => {
+      const tenantId = req.user?.tenantId;
+      return tenantId ?? "anonymous";
+    },
+    distributedFallback: config.distributedFallback,
+  });
+};
+
+/**
+ * Runs the per-tenant rate limiter if the request is from an authenticated tenant.
+ * Wraps the limiter middleware call in a Promise for clean async flow.
+ */
+const runTenantRateLimit = (
+  tenantLimiter: ReturnType<typeof createRedisRateLimiter>,
+  req: Request,
+  res: Response
+): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    tenantLimiter.middleware()(req, res, (error?: unknown) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
+
 /**
  * Creates a comprehensive rate limiting middleware with all security layers.
  */
@@ -236,6 +283,8 @@ export const createRateLimitMiddleware = (
       return ctx?.effectiveMax ?? config.rateLimit.max;
     },
   });
+
+  const tenantLimiter = createTenantLimiter(config);
 
   const middleware =
     () =>
@@ -261,6 +310,12 @@ export const createRateLimitMiddleware = (
 
         checkEarlyRejections(context, req.path);
         res.setHeader("X-RateLimit-Effective-Limit", context.effectiveMax);
+
+        // Per-tenant rate limit check (before the main IP-based limiter)
+        if (tenantLimiter && req.user?.tenantId) {
+          await runTenantRateLimit(tenantLimiter, req, res);
+        }
+
         await rateLimiter.middleware()(req, res, next);
       } catch (error) {
         if (error instanceof RateLimitError || error instanceof AuthorizationError) {

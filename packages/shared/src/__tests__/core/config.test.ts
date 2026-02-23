@@ -4,6 +4,9 @@
  * Note: Config tests are challenging because config loads at import time.
  * We test the helper functions directly and use dynamic imports for config validation.
  */
+
+/* eslint-disable no-restricted-syntax -- This file tests the config module and must use process.env directly */
+
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 
 // Store original env

@@ -100,12 +100,15 @@ export const buildSimilaritySearchQuery = (
       ? `${config.baseQuery} AND ${conditions.join(" AND ")}`
       : config.baseQuery;
 
+  const similarityParamIndex = params.length + 2; // $1 is embedding vector, filters start at $2
+  const limitParamIndex = similarityParamIndex + 1;
+
   const fullQuery = `
     ${whereClause}
-    AND 1 - (embedding <=> $1::vector) >= ${minSimilarity}
+    AND 1 - (embedding <=> $1::vector) >= $${similarityParamIndex}
     ORDER BY similarity DESC
-    LIMIT ${limit}
+    LIMIT $${limitParamIndex}
   `;
 
-  return { query: fullQuery, params };
+  return { query: fullQuery, params: [...params, minSimilarity, limit] };
 };

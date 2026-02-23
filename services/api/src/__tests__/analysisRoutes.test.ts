@@ -105,6 +105,7 @@ jest.mock("@kenchi/shared", () => ({
   query: mockQuery,
   NotFoundError: MockNotFoundError,
   generateEventId: mockGenerateEventId,
+  enforcePlanLimit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
 }));
 
 // Import the router after mocks are registered

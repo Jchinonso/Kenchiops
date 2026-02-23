@@ -9,7 +9,7 @@
  * @module llm/providers/llmProvider/embedding
  */
 
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import { config } from "../../../core/config.js";
 import { createLogger } from "../../../core/logger.js";
 import { ExternalServiceError, getErrorMessage } from "../../../core/errors.js";
@@ -17,7 +17,7 @@ import {
   EMBEDDING_CONFIG,
   LLM_CONSTANTS,
   EMBEDDING_TIERS,
-  OPENROUTER_DEFAULTS,
+  EXTERNAL_SERVICE_NAMES,
   type EmbeddingTierName,
 } from "../../../constants/index.js";
 import {
@@ -25,6 +25,7 @@ import {
   getCircuitStatus,
   SERVICE_KEYS,
 } from "../../../http/circuitBreaker.js";
+import { isOpenRouterProvider, getEffectiveBaseUrl, createLLMSDKClient } from "./clientFactory.js";
 import type {
   EmbeddingResult,
   BatchEmbeddingResult,
@@ -36,40 +37,6 @@ import type {
 export type { EmbeddingResult, BatchEmbeddingResult, EmbeddingProvider };
 
 const logger = createLogger("embedding-client");
-
-/**
- * Checks if we're using OpenRouter provider.
- */
-const isOpenRouterProvider = (): boolean => config.LLM_PROVIDER === "openrouter";
-
-/**
- * Gets the effective base URL for the LLM provider.
- */
-const getEffectiveBaseUrl = (): string | undefined => {
-  if (config.LLM_BASE_URL) {
-    return config.LLM_BASE_URL;
-  }
-  if (isOpenRouterProvider()) {
-    return OPENROUTER_DEFAULTS.BASE_URL;
-  }
-  return undefined;
-};
-
-/**
- * Creates the OpenAI client instance for embeddings.
- * Supports OpenRouter and other OpenAI-compatible providers.
- *
- * Note: Embedding models may vary by provider. OpenRouter may not support
- * all OpenAI embedding models (text-embedding-3-small/large).
- */
-const createLLMClient = (): OpenAI => {
-  const baseURL = getEffectiveBaseUrl();
-  return new OpenAI({
-    apiKey: config.OPENAI_API_KEY,
-    timeout: EMBEDDING_CONFIG.TIMEOUT_MS,
-    ...(baseURL && { baseURL }),
-  });
-};
 
 /**
  * Creates embedding client configuration from tier.
@@ -143,7 +110,7 @@ export class EmbeddingClient {
   private readonly clientConfig: EmbeddingClientConfig;
 
   constructor(tier: EmbeddingTierName = "STANDARD") {
-    this.client = createLLMClient();
+    this.client = createLLMSDKClient(EMBEDDING_CONFIG.TIMEOUT_MS);
     this.clientConfig = createClientConfig(tier);
 
     logger.info("Embedding client initialized", {
@@ -186,6 +153,14 @@ export class EmbeddingClient {
   }
 
   /**
+   * Gets the provider name for error messages and logging.
+   *
+   * @returns Provider name ("OpenRouter" or "OpenAI")
+   */
+  private getProviderName = (): string =>
+    isOpenRouterProvider() ? EXTERNAL_SERVICE_NAMES.OPENROUTER : EXTERNAL_SERVICE_NAMES.OPENAI;
+
+  /**
    * Generates a vector embedding for a single text.
    *
    * @param text - The text to embed
@@ -195,7 +170,10 @@ export class EmbeddingClient {
   readonly generateEmbedding = async (text: string): Promise<EmbeddingResult> => {
     const validationError = validateEmbeddingInput(text);
     if (validationError) {
-      throw new ExternalServiceError("openai", `Embedding validation failed: ${validationError}`);
+      throw new ExternalServiceError(
+        this.getProviderName(),
+        `Embedding validation failed: ${validationError}`
+      );
     }
 
     const startTime = Date.now();
@@ -205,7 +183,10 @@ export class EmbeddingClient {
       const embedding = response.data[0]?.embedding;
 
       if (!embedding) {
-        throw new ExternalServiceError("openai", "No embedding returned from OpenAI");
+        throw new ExternalServiceError(
+          this.getProviderName(),
+          "No embedding returned from embedding API"
+        );
       }
 
       const result: EmbeddingResult = {
@@ -237,7 +218,7 @@ export class EmbeddingClient {
     const validationError = validateBatchInput(texts, this.clientConfig.maxBatchSize);
     if (validationError) {
       throw new ExternalServiceError(
-        "openai",
+        this.getProviderName(),
         `Batch embedding validation failed: ${validationError}`
       );
     }
@@ -300,7 +281,7 @@ export class EmbeddingClient {
     durationMs: number
   ): void => {
     logger.info("Embedding API call completed", {
-      provider: "openai",
+      provider: this.getProviderName(),
       operation: "generateEmbedding",
       durationMs,
       textCount,
@@ -326,7 +307,7 @@ export class EmbeddingClient {
     const message = getErrorMessage(error);
 
     logger.error("Embedding API call failed", {
-      provider: "openai",
+      provider: this.getProviderName(),
       operation: "generateEmbedding",
       durationMs,
       error: message,
@@ -334,7 +315,10 @@ export class EmbeddingClient {
       tier: this.clientConfig.tier,
     });
 
-    return new ExternalServiceError("openai", `Embedding generation failed: ${message}`);
+    return new ExternalServiceError(
+      this.getProviderName(),
+      `Embedding generation failed: ${message}`
+    );
   };
 }
 

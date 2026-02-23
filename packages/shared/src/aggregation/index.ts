@@ -19,6 +19,7 @@ export type {
   DetectedBuildConfigChange,
   SuggestedFix,
   LintErrorInfo,
+  NormalizedBuildEvent,
   PendingCheckRun,
   SerializedPendingCheckRun,
   PendingAggregation,

@@ -6,23 +6,54 @@
  */
 
 import type { WebClient } from "@slack/web-api";
+import crypto from "crypto";
 import {
-  logger,
+  createLogger,
   getErrorMessage,
   findChannelForRepository,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
   UI_EMOJI,
   SLACK_COLORS,
   type SlackNotificationPayload,
   type ConsolidatedCIFailurePayload,
   type ActionResultPayload,
   type SystemAlertPayload,
+  type RequestContext,
 } from "@kenchi/shared";
 import { postConsolidatedMessage } from "./messageService.js";
 import type { ConsolidatedMessageRequest } from "../types/slackTypes.js";
 import { getSlackClientForTenant, isMultiTenantEnabled } from "./tenantSlackClient.js";
 import { storeAnalysisContext } from "./analysisContextStore.js";
 import type { HandlerResult } from "./notificationHandlerTypes.js";
+
+const logger = createLogger("notification-handler");
+
+// ==================== Context Builder ====================
+
+/**
+ * Build RequestContext for a notification payload.
+ * Resolves tenantId from the GitHub installation ID.
+ */
+const buildNotificationContext = async (
+  payload: SlackNotificationPayload
+): Promise<RequestContext> => {
+  const requestId = crypto.randomUUID();
+
+  try {
+    const tenant = await findTenantByGitHubInstallation(payload.installationId);
+    return {
+      requestId,
+      tenantId: tenant?.id ?? "system",
+      actor: "notification-worker",
+    };
+  } catch {
+    return {
+      requestId,
+      tenantId: "system",
+      actor: "notification-worker",
+    };
+  }
+};
 
 // ==================== Handler Functions ====================
 
@@ -31,11 +62,12 @@ import type { HandlerResult } from "./notificationHandlerTypes.js";
  */
 const handleConsolidatedCIFailure = async (
   client: WebClient,
-  payload: ConsolidatedCIFailurePayload
+  payload: ConsolidatedCIFailurePayload,
+  context: RequestContext
 ): Promise<HandlerResult> => {
   const { aggregation, slackPayload } = payload;
-
   logger.info("Processing consolidated CI failure notification", {
+    ...context,
     repository: aggregation.repository.fullName,
     commitSha: aggregation.commitSha.substring(0, 7),
     failureCount: aggregation.failures.length,
@@ -87,11 +119,13 @@ const handleConsolidatedCIFailure = async (
  */
 const handleActionResult = async (
   client: WebClient,
-  payload: ActionResultPayload
+  payload: ActionResultPayload,
+  context: RequestContext
 ): Promise<HandlerResult> => {
   const { actionId, actionType, success, message, channelId, threadTs } = payload;
 
   logger.info("Processing action result notification", {
+    ...context,
     actionId,
     actionType,
     success,
@@ -99,6 +133,7 @@ const handleActionResult = async (
 
   // If we have a specific channel and thread, post there
   if (channelId) {
+    const startTime = Date.now();
     try {
       const emoji = success ? "✅" : "❌";
       const statusText = success ? "completed" : "failed";
@@ -109,14 +144,33 @@ const handleActionResult = async (
         ...(threadTs && { thread_ts: threadTs }),
       });
 
+      const durationMs = Date.now() - startTime;
+      logger.info("Action result posted to Slack", {
+        ...context,
+        provider: "slack",
+        operation: "postMessage",
+        durationMs,
+        channelId,
+      });
+
       return { success: true };
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      logger.error("Failed to post action result to Slack", {
+        ...context,
+        provider: "slack",
+        operation: "postMessage",
+        durationMs,
+        channelId,
+        error: getErrorMessage(error),
+      });
       return { success: false, error: getErrorMessage(error) };
     }
   }
 
   // No specific channel - just log it
   logger.info("Action result processed (no channel specified)", {
+    ...context,
     actionId,
     actionType,
     success,
@@ -165,7 +219,8 @@ const formatAlertDetails = (details?: Record<string, unknown>): string => {
  */
 const findAlertChannel = async (
   installationId: number,
-  repository: string
+  repository: string,
+  context: RequestContext
 ): Promise<string | null> => {
   // Skip lookup for system-level alerts
   if (repository === "system" || installationId === 0) {
@@ -173,7 +228,7 @@ const findAlertChannel = async (
   }
 
   try {
-    const tenant = await findByGitHubInstallation(installationId);
+    const tenant = await findTenantByGitHubInstallation(installationId);
     if (!tenant) {
       return null;
     }
@@ -182,6 +237,7 @@ const findAlertChannel = async (
     return mapping?.slackChannelId ?? null;
   } catch (error) {
     logger.warn("Failed to lookup alert channel", {
+      ...context,
       installationId,
       repository,
       error: getErrorMessage(error),
@@ -195,22 +251,25 @@ const findAlertChannel = async (
  */
 const handleSystemAlert = async (
   client: WebClient,
-  payload: SystemAlertPayload
+  payload: SystemAlertPayload,
+  context: RequestContext
 ): Promise<HandlerResult> => {
   const { severity, title, message, details, repository, installationId } = payload;
 
   logger.info("Processing system alert notification", {
+    ...context,
     severity,
     title,
     repository,
   });
 
   // Try to find a channel for this alert
-  const channelId = await findAlertChannel(installationId, repository);
+  const channelId = await findAlertChannel(installationId, repository, context);
 
   if (!channelId) {
     // No channel configured - log and succeed (alerts still go to monitoring)
     logger.info("System alert logged (no channel configured)", {
+      ...context,
       severity,
       title,
       message,
@@ -230,6 +289,7 @@ const handleSystemAlert = async (
   const detailsText = formattedDetails ? `*Details:*\n${formattedDetails}` : null;
   const contextText = `Severity: *${severity.toUpperCase()}* | Repository: \`${repository}\``;
 
+  const startTime = Date.now();
   try {
     await client.chat.postMessage({
       channel: channelId,
@@ -271,7 +331,12 @@ const handleSystemAlert = async (
       ],
     });
 
+    const durationMs = Date.now() - startTime;
     logger.info("System alert posted to Slack", {
+      ...context,
+      provider: "slack",
+      operation: "postMessage",
+      durationMs,
       severity,
       title,
       channelId,
@@ -279,6 +344,15 @@ const handleSystemAlert = async (
 
     return { success: true };
   } catch (error) {
+    const durationMs = Date.now() - startTime;
+    logger.error("Failed to post system alert to Slack", {
+      ...context,
+      provider: "slack",
+      operation: "postMessage",
+      durationMs,
+      channelId,
+      error: getErrorMessage(error),
+    });
     return { success: false, error: getErrorMessage(error) };
   }
 };
@@ -290,7 +364,8 @@ const handleSystemAlert = async (
  */
 const getClientForNotification = async (
   defaultClient: WebClient,
-  installationId: number
+  installationId: number,
+  context: RequestContext
 ): Promise<WebClient> => {
   if (!isMultiTenantEnabled()) {
     return defaultClient;
@@ -300,6 +375,7 @@ const getClientForNotification = async (
     return await getSlackClientForTenant(installationId);
   } catch (error) {
     logger.warn("Failed to get tenant-specific client, using default", {
+      ...context,
       installationId,
       error: getErrorMessage(error),
     });
@@ -314,22 +390,31 @@ export const createNotificationHandler =
   (defaultClient: WebClient): ((payload: SlackNotificationPayload) => Promise<HandlerResult>) =>
   async (payload: SlackNotificationPayload): Promise<HandlerResult> => {
     const startTime = Date.now();
+    const context = await buildNotificationContext(payload);
 
     try {
       // Get appropriate client
-      const client = await getClientForNotification(defaultClient, payload.installationId);
+      const client = await getClientForNotification(defaultClient, payload.installationId, context);
 
       // Route to appropriate handler based on type
       const handlers: Record<
         SlackNotificationPayload["type"],
-        (slackClient: WebClient, notification: SlackNotificationPayload) => Promise<HandlerResult>
+        (
+          slackClient: WebClient,
+          notification: SlackNotificationPayload,
+          ctx: RequestContext
+        ) => Promise<HandlerResult>
       > = {
-        consolidated_ci_failure: (slackClient, notification) =>
-          handleConsolidatedCIFailure(slackClient, notification as ConsolidatedCIFailurePayload),
-        action_result: (slackClient, notification) =>
-          handleActionResult(slackClient, notification as ActionResultPayload),
-        system_alert: (slackClient, notification) =>
-          handleSystemAlert(slackClient, notification as SystemAlertPayload),
+        consolidated_ci_failure: (slackClient, notification, ctx) =>
+          handleConsolidatedCIFailure(
+            slackClient,
+            notification as ConsolidatedCIFailurePayload,
+            ctx
+          ),
+        action_result: (slackClient, notification, ctx) =>
+          handleActionResult(slackClient, notification as ActionResultPayload, ctx),
+        system_alert: (slackClient, notification, ctx) =>
+          handleSystemAlert(slackClient, notification as SystemAlertPayload, ctx),
       };
 
       const handler = handlers[payload.type];
@@ -337,26 +422,28 @@ export const createNotificationHandler =
         return { success: false, error: `Unknown notification type: ${payload.type}` };
       }
 
-      const result = await handler(client, payload);
-      const duration = Date.now() - startTime;
+      const result = await handler(client, payload, context);
+      const durationMs = Date.now() - startTime;
 
       logger.info("Notification processed", {
+        ...context,
         type: payload.type,
         repository: payload.repository,
         success: result.success,
-        duration,
+        durationMs,
       });
 
       return result;
     } catch (error) {
       const errorMsg = getErrorMessage(error);
-      const duration = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
 
       logger.error("Notification handler error", {
+        ...context,
         type: payload.type,
         repository: payload.repository,
         error: errorMsg,
-        duration,
+        durationMs,
       });
 
       return { success: false, error: errorMsg };

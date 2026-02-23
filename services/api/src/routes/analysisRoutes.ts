@@ -19,6 +19,7 @@ import {
   query,
   NotFoundError,
   generateEventId,
+  enforcePlanLimit,
 } from "@kenchi/shared";
 import type {
   AnalyzeRequest,
@@ -70,12 +71,19 @@ const validateRequiredString = (fieldValue: unknown): boolean | string => {
  */
 const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
   const body = req.body as AnalyzeRequest;
+  const tenantId = body.tenant_id ?? "default";
+
+  // Enforce monthly analysis limit before creating job
+  if (tenantId !== "default") {
+    await enforcePlanLimit(tenantId, "max_analyses_monthly");
+  }
+
   const idempotencyKey = generateEventId("job");
 
   // Create job in database
   const result = await query<{ id: string; status: string }>(QUERIES.INSERT_JOB, [
     idempotencyKey,
-    body.tenant_id ?? "default",
+    tenantId,
     JSON.stringify({
       failure_log: body.failure_log,
       repository: body.repository,
@@ -87,6 +95,7 @@ const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
       pr_diff: body.pr_diff,
       pr_changed_files: body.pr_changed_files,
       pr_title: body.pr_title,
+      ci_provider: body.ci_provider,
     }),
     body.repository,
     body.commit ?? "unknown",

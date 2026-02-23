@@ -23,6 +23,8 @@ import {
   SERVER_TIMEOUTS,
   startActionQueueWorker,
   createRateLimitMiddleware,
+  createInternalAuthMiddleware,
+  createSecurityHeaders,
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   getErrorMessage,
@@ -48,6 +50,7 @@ import { registerRoutes } from "./routes/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { postConsolidatedAnalysis } from "./services/aggregation/consolidatedPoster.js";
 import { processCombinedAnalysis } from "./handlers/combinedAnalysis.js";
+import { checkAllRunsCompleted } from "./services/aggregationReadiness.js";
 
 const logger = createLogger("github-app");
 
@@ -89,6 +92,9 @@ const githubRateLimiter = createRateLimitMiddleware({
   distributedFallback: "fail", // Fail-safe when Redis unavailable
 });
 
+const { NODE_ENV } = config;
+const isProduction = NODE_ENV === "production";
+
 /**
  * Create and configure Express application
  */
@@ -99,19 +105,46 @@ const createApp = (): express.Express => {
   // Required for rate limiting to work correctly behind reverse proxies
   app.set("trust proxy", 1);
 
-  // Capture raw body for webhook signature verification
-  // This must come before express.json() so we have the original payload
-  // Use configured limit for large CI context payloads
+  // Capture raw body for webhook signature verification (VULN-011).
+  // Only capture rawBody for webhook paths to reduce memory overhead.
+  // Object.assign is required because Express verify callbacks must mutate req by design
+  // (this is a framework-boundary side effect, allowed per CLAUDE.md rule 3).
   app.use(
     express.json({
       limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
       verify: (req: express.Request, _res, buf) => {
-        req.rawBody = buf;
+        const isWebhookPath =
+          req.originalUrl?.startsWith("/api/github/webhook") ??
+          req.originalUrl?.startsWith("/webhooks/") ??
+          false;
+        if (isWebhookPath) {
+          Object.assign(req, { rawBody: buf });
+        }
       },
     })
   );
   app.use(requestLogger);
   app.use(githubRateLimiter.middleware());
+
+  // Security headers -- applied early before any response is sent
+  app.use(createSecurityHeaders(isProduction));
+
+  // Internal auth for service-to-service calls.
+  // Public paths skip HMAC verification (health probes, webhook with its own signature, etc.)
+  app.use(
+    createInternalAuthMiddleware({
+      publicPaths: [
+        "/health",
+        "/live",
+        "/ready",
+        "/api/github/webhook",
+        "/api/github/installations",
+        "/github/setup",
+        "/api/feedback",
+        "/webhooks/gitlab",
+      ],
+    })
+  );
 
   // Register all routes
   registerRoutes(app);
@@ -157,15 +190,9 @@ const initializeFailureAggregator = (): void => {
     return;
   }
 
-  // Configure aggregation timing (can be overridden via env)
-  const debounceMs = parseInt(
-    process.env.AGGREGATION_DEBOUNCE_MS || String(AGGREGATION_DEFAULTS.DEBOUNCE_MS),
-    10
-  );
-  const maxWaitMs = parseInt(
-    process.env.AGGREGATION_MAX_WAIT_MS || String(AGGREGATION_DEFAULTS.MAX_WAIT_MS),
-    10
-  );
+  // Configure aggregation timing (can be overridden via config)
+  const debounceMs = config.AGGREGATION_DEBOUNCE_MS ?? AGGREGATION_DEFAULTS.DEBOUNCE_MS;
+  const maxWaitMs = config.AGGREGATION_MAX_WAIT_MS ?? AGGREGATION_DEFAULTS.MAX_WAIT_MS;
   const { maxFailuresPerCommit } = DEFAULT_AGGREGATION_CONFIG;
 
   const aggregationConfig = {
@@ -175,9 +202,12 @@ const initializeFailureAggregator = (): void => {
   };
 
   // Start the aggregator worker (checks for ready aggregations and enqueues them)
+  // beforeEnqueue: checks GitHub for in-progress check runs before dequeuing.
+  // This allows short debounce (30s) while ensuring staggered checks are consolidated.
   aggregatorWorkerControl = startAggregatorWorker({
     config: aggregationConfig,
     pollIntervalMs: QUEUE_WORKER_DEFAULTS.AGGREGATOR_POLL_INTERVAL_MS,
+    beforeEnqueue: checkAllRunsCompleted,
   });
 
   // Start the analysis queue processor (processes enqueued aggregations)

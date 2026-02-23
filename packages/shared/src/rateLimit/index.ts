@@ -63,6 +63,7 @@ export type {
   RateLimitInfo,
   FallbackBehavior,
   TrustedProxyConfig,
+  TenantRateLimitConfig,
   BurstDetectionConfig,
   BurstDetectionResult,
   BotDetectionConfig,

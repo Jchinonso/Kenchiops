@@ -28,7 +28,7 @@ jest.mock("@kenchi/shared", () => {
       debug: jest.fn(),
     },
     getErrorMessage: jest.fn((error) => (error instanceof Error ? error.message : String(error))),
-    findByGitHubInstallation: jest.fn(() =>
+    findTenantByGitHubInstallation: jest.fn(() =>
       Promise.resolve({ id: "tenant-123", name: "Test Tenant" })
     ),
     findChannelForRepository: jest.fn(() =>
@@ -321,8 +321,8 @@ describe("Message Service", () => {
 
     it("should return error when tenant not found", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findByGitHubInstallation } = jest.requireMock("@kenchi/shared") as any;
-      findByGitHubInstallation.mockResolvedValue(null);
+      const { findTenantByGitHubInstallation } = jest.requireMock("@kenchi/shared") as any;
+      findTenantByGitHubInstallation.mockResolvedValue(null);
 
       const request = createConsolidatedRequest();
 

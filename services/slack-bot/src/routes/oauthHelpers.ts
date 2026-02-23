@@ -9,10 +9,10 @@ import {
   createLogger,
   config,
   HTTP_STATUS,
-  findByGitHubOrg,
+  findByOrgName,
   linkSlackWorkspace,
   createFromSlackInstall,
-  SLACK_OAUTH_TIMING,
+  createOAuthStateStore,
   ValidationError,
   NotFoundError,
 } from "@kenchi/shared";
@@ -39,23 +39,10 @@ const logger = createLogger("slack-oauth");
 // ==================== State Management ====================
 
 /**
- * OAuth state storage (in-memory for development, use Redis in production)
+ * OAuth state store backed by Redis with automatic in-memory fallback.
+ * Redis handles TTL-based cleanup; in-memory store checks expiry on read.
  */
-export const oauthStates = new Map<string, StoredState>();
-
-/**
- * Clean up expired OAuth states.
- * Uses functional approach: filter expired keys, then delete them.
- */
-export const cleanupExpiredStates = (): void => {
-  const expiryTime = Date.now() - SLACK_OAUTH_TIMING.STATE_EXPIRY_MS;
-  Array.from(oauthStates.entries())
-    .filter(([, value]) => value.createdAt < expiryTime)
-    .forEach(([key]) => oauthStates.delete(key));
-};
-
-// Clean up expired states periodically
-setInterval(cleanupExpiredStates, SLACK_OAUTH_TIMING.CLEANUP_INTERVAL_MS);
+export const oauthStateStore = createOAuthStateStore();
 
 // ==================== Error Response Handlers ====================
 
@@ -107,13 +94,17 @@ const tenantLinkStrategies: readonly TenantLinkStrategy[] = [
     },
   },
   {
-    name: "matching_github_org",
+    // Intentionally uses provider-unscoped findByOrgName: Slack workspaces
+    // aren't tied to a specific Git provider, so we do a fuzzy best-guess
+    // match by org name. The existing_tenant_id strategy (above) is preferred
+    // when the user links from the dashboard with an explicit tenantId.
+    name: "matching_org_name",
     matches: async (_state, teamName) => {
-      const existing = await findByGitHubOrg(teamName);
+      const existing = await findByOrgName(teamName);
       return Boolean(existing);
     },
     execute: async (_state, slackData, teamName) => {
-      const existingTenant = await findByGitHubOrg(teamName);
+      const existingTenant = await findByOrgName(teamName);
       // existingTenant is guaranteed by matches check above
       if (!existingTenant) {
         throw new NotFoundError(`Tenant not found for GitHub org: ${teamName}`, {
@@ -202,14 +193,21 @@ export const getStatusMessage = (isNewTenant: boolean, status: string): string =
 
 /**
  * Validate OAuth callback request.
+ * Async because state lookup uses the Redis-backed store.
  */
-export const validateOAuthCallback = (
+export const validateOAuthCallback = async (
   code: unknown,
   state: unknown,
   error: unknown
-):
-  | { valid: true; code: string; state: string; storedState: StoredState }
-  | { valid: false; error: OAuthValidationError } => {
+): Promise<
+  | {
+      readonly valid: true;
+      readonly code: string;
+      readonly state: string;
+      readonly storedState: StoredState;
+    }
+  | { readonly valid: false; readonly error: OAuthValidationError }
+> => {
   // Check for OAuth denial
   if (error) {
     return {
@@ -239,8 +237,8 @@ export const validateOAuthCallback = (
     };
   }
 
-  // Validate state
-  const storedState = oauthStates.get(state);
+  // Validate state against Redis-backed store
+  const storedState = await oauthStateStore.get(state);
   if (!storedState) {
     return {
       valid: false,
@@ -248,7 +246,7 @@ export const validateOAuthCallback = (
     };
   }
 
-  oauthStates.delete(state);
+  await oauthStateStore.delete(state);
 
   // Validate config
   if (!config.SLACK_CLIENT_ID || !config.SLACK_CLIENT_SECRET) {

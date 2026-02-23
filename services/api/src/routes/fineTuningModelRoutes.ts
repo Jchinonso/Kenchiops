@@ -14,6 +14,7 @@ import {
   HTTP_STATUS,
   createLogger,
   SERVICE_NAMES,
+  requireRole,
 } from "@kenchi/shared";
 import {
   activateModel,
@@ -257,14 +258,23 @@ router.get("/api/fine-tuning/models", asyncHandler(handleGetModelVersions));
 router.get("/api/fine-tuning/models/active", asyncHandler(handleGetActiveModel));
 
 /** POST /api/fine-tuning/models/:versionId/activate - Activate a model version */
-router.post("/api/fine-tuning/models/:versionId/activate", asyncHandler(handleActivateModel));
+router.post(
+  "/api/fine-tuning/models/:versionId/activate",
+  requireRole("admin", "owner"),
+  asyncHandler(handleActivateModel)
+);
 
 /** POST /api/fine-tuning/models/rollback - Rollback to baseline model */
-router.post("/api/fine-tuning/models/rollback", asyncHandler(handleRollbackToBaseline));
+router.post(
+  "/api/fine-tuning/models/rollback",
+  requireRole("admin", "owner"),
+  asyncHandler(handleRollbackToBaseline)
+);
 
 /** POST /api/fine-tuning/models/ab-test - Configure A/B test */
 router.post(
   "/api/fine-tuning/models/ab-test",
+  requireRole("admin", "owner"),
   validate({
     body: {
       controlVersion: validateRequiredString,

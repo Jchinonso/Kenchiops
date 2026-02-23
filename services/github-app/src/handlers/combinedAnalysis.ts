@@ -9,692 +9,359 @@
  *
  * Each job gets its own LLM analysis call to ensure specific,
  * accurate analysis for each failure type (tests, linting, formatting, etc.).
+ *
+ * Helper modules:
+ * - combinedAnalysisHelpers.ts: Pure helpers, converters, payload deserialization
+ * - combinedAnalysisAnnotations.ts: Annotation enrichment and lint error processing
+ * - combinedAnalysisJobRunner.ts: Job submission, polling, and error handling
  */
 
 import {
   createLogger,
   config,
-  resilientPost,
-  resilientGet,
   getErrorMessage,
-  preprocessLogsWithMetadata,
   mapWithConcurrency,
   LLM_CONCURRENCY_DEFAULTS,
-  ExternalServiceError,
-  GITHUB_COMMENT_TEMPLATES,
-  GITHUB_CONTEXT_LIMITS,
-  // V1.1: Chunking pipeline for improved preprocessing and line mapping
-  sanitizeForChunkingWithMapping,
-  getOriginalLineNumber,
-  // Deterministic test summary parser (regex-based, no LLM)
-  parseTestSummary,
-  // Tenant lookup
-  findByGitHubInstallation,
-  // PR context caching
-  getOrFetchPullRequest,
-  getOrFetchPullRequestDiff,
-  getOrFetchPullRequestFiles,
+  findTenantByGitHubInstallation,
+  CI_PROVIDERS,
   type PendingAggregationPayload,
   type AggregatedFailures,
   type AnalyzedFailure,
   type ConsolidatedPostResult,
-  type TestFailureInfo,
+  type RequestContext,
+  type CIProvider,
   type LLMLintError,
-  type LLMChangeCorrelation,
-  type SanitizationResultWithMapping,
 } from "@kenchi/shared";
-import { fetchAllFailedJobsLogs } from "../services/context/workflowFetcher.js";
+import {
+  fetchAllFailedJobsLogs,
+  fetchWorkflowTiming,
+} from "../services/context/workflowFetcher.js";
+import { getCIProviderAdapters } from "../adapters/ciProviderRegistry.js";
 import { postConsolidatedAnalysis } from "../services/aggregation/consolidatedPoster.js";
-import { postPRComment } from "../services/githubComments.js";
-import { getOctokit } from "../services/githubService.js";
-import type {
-  JobSubmissionResponse,
-  JobStatusResponse,
-  PerJobAnalysisApiResponse,
-  JobAnalysisResult,
-  RecommendedActionResponse,
-  PRDiffContext,
-  AnalysisResultWithError,
-} from "./combinedAnalysisTypes.js";
+import type { CheckRunAnnotation, AllFailedJobsLogs } from "../services/context/types.js";
+import type { AnalysisResultWithError, PRDiffContext } from "./combinedAnalysisTypes.js";
+import {
+  deserializePendingPayload,
+  formatDuration,
+  convertFetchedLogsToAllJobsLogs,
+  resolveTenantForProvider,
+  convertJobResultToFailure,
+  createFallbackFailure,
+  summarizeTestFailures,
+  parseLintErrorsByJob,
+} from "./combinedAnalysisHelpers.js";
+import {
+  enrichJobLogsWithAnnotations,
+  fetchAnnotationsForChecks,
+  enrichResultWithParsedLintErrors,
+} from "./combinedAnalysisAnnotations.js";
+import {
+  fetchPRDiffContext,
+  postAnalyzingPlaceholder,
+  analyzeJobWithErrorHandling,
+} from "./combinedAnalysisJobRunner.js";
 
 const logger = createLogger("github-app");
 
-// ==================== Async Job Polling Configuration ====================
+// ==================== Pipeline Step Interfaces ====================
+
+interface FetchFailedLogsOptions {
+  readonly isGitHub: boolean;
+  readonly installationId: number;
+  readonly owner: string;
+  readonly repoName: string;
+  readonly repositoryFullName: string;
+  readonly commitSha: string;
+  readonly provider: CIProvider;
+}
+
+interface AnalysisCollectionOptions {
+  readonly enrichedJobs: ReadonlyArray<{
+    readonly jobName: string;
+    readonly jobId: number;
+    readonly logs: string;
+  }>;
+  readonly allJobsLogs: AllFailedJobsLogs;
+  readonly repositoryFullName: string;
+  readonly apiUrl: string;
+  readonly tenantId: string | undefined;
+  readonly workflowId: string;
+  readonly prDiffContext: PRDiffContext | null;
+  readonly provider: CIProvider;
+  readonly isGitHub: boolean;
+  readonly pendingChecks: ReadonlyArray<{
+    readonly checkRunId: number;
+    readonly checkName: string;
+    readonly timestamp: Date;
+  }>;
+  readonly installationId: number;
+  readonly owner: string;
+  readonly repoName: string;
+}
+
+interface BuildAggregationOptions {
+  readonly commitSha: string;
+  readonly repository: { readonly fullName: string; readonly owner: string; readonly name: string };
+  readonly installationId: number;
+  readonly pullRequestNumbers: readonly number[];
+  readonly failures: readonly AnalyzedFailure[];
+  readonly prDiffContext: PRDiffContext | null;
+  readonly workflowName: string;
+  readonly formattedDuration: string | null;
+  readonly firstFailureAt: Date;
+  readonly lastFailureAt: Date;
+  readonly provider: CIProvider;
+}
+
+// ==================== Pipeline Steps ====================
 
 /**
- * Configuration for polling async analysis jobs.
- * The API now returns 202 immediately with a job_id, and we poll for completion.
+ * Fetch logs for all failed jobs, using the appropriate CI provider adapter.
  */
-const POLLING_CONFIG = {
-  /** Maximum time to wait for job completion (20 minutes for large logs with many chunks) */
-  MAX_WAIT_MS: 1_200_000,
-  /** Interval between status polls */
-  INTERVAL_MS: 5_000,
-  /** Timeout for individual HTTP requests */
-  REQUEST_TIMEOUT_MS: 30_000,
-} as const;
+const fetchFailedLogs = async (
+  options: FetchFailedLogsOptions
+): Promise<AllFailedJobsLogs | null> => {
+  const { isGitHub, installationId, owner, repoName, repositoryFullName, commitSha, provider } =
+    options;
 
-/**
- * Fetch PR diff context for the first associated PR.
- * Uses cached GitHub API utilities for efficient retrieval.
- * Returns null if no PRs exist or fetch fails (graceful degradation).
- *
- * @param installationId - GitHub App installation ID
- * @param owner - Repository owner
- * @param repo - Repository name
- * @param pullRequestNumbers - PR numbers associated with this commit
- * @returns PR diff context or null
- */
-const fetchPRDiffContext = async (
-  installationId: number,
-  owner: string,
-  repo: string,
-  pullRequestNumbers: readonly number[]
-): Promise<PRDiffContext | null> => {
-  if (pullRequestNumbers.length === 0) {
-    return null;
+  if (isGitHub) {
+    return fetchAllFailedJobsLogs(installationId, owner, repoName, commitSha);
   }
 
-  const prNumber = pullRequestNumbers[0];
-  const startTime = Date.now();
-
-  try {
-    const [prData, diff, changedFiles] = await Promise.all([
-      getOrFetchPullRequest(owner, repo, prNumber, async () => {
-        const octokit = await getOctokit(installationId);
-        const response = await octokit.rest.pulls.get({
-          owner,
-          repo,
-          pull_number: prNumber,
-        });
-        return {
-          number: response.data.number,
-          title: response.data.title,
-          body: response.data.body,
-          author: response.data.user?.login ?? "unknown",
-          headBranch: response.data.head.ref,
-          baseBranch: response.data.base.ref,
-          headSha: response.data.head.sha,
-          labels: response.data.labels.map((label) => label.name),
-          state: response.data.state,
-          draft: response.data.draft ?? false,
-        };
-      }),
-      getOrFetchPullRequestDiff(owner, repo, prNumber, async () => {
-        const octokit = await getOctokit(installationId);
-        const response = await octokit.rest.pulls.get({
-          owner,
-          repo,
-          pull_number: prNumber,
-          mediaType: { format: "diff" },
-        });
-        return response.data as unknown as string;
-      }),
-      getOrFetchPullRequestFiles(owner, repo, prNumber, async () => {
-        const octokit = await getOctokit(installationId);
-        const response = await octokit.rest.pulls.listFiles({
-          owner,
-          repo,
-          pull_number: prNumber,
-          per_page: 100,
-        });
-        return response.data.map((file) => file.filename);
-      }),
-    ]);
-
-    const truncatedDiff =
-      diff.length > GITHUB_CONTEXT_LIMITS.MAX_DIFF_SIZE
-        ? diff.substring(0, GITHUB_CONTEXT_LIMITS.MAX_DIFF_SIZE)
-        : diff;
-
-    logger.info("Fetched PR diff context", {
-      provider: "github",
-      operation: "fetchPRDiffContext",
-      durationMs: Date.now() - startTime,
-      owner,
-      repo,
-      prNumber,
-      changedFileCount: changedFiles.length,
-      diffSize: diff.length,
-      truncated: diff.length > GITHUB_CONTEXT_LIMITS.MAX_DIFF_SIZE,
-    });
-
-    return {
-      prNumber,
-      diff: truncatedDiff,
-      changedFiles,
-      title: prData.title,
-      author: prData.author,
-      baseBranch: prData.baseBranch,
-      branch: prData.headBranch,
-      labels: [...prData.labels],
-    };
-  } catch (error) {
-    logger.warn("Failed to fetch PR diff context, continuing without it", {
-      provider: "github",
-      operation: "fetchPRDiffContext",
-      durationMs: Date.now() - startTime,
-      owner,
-      repo,
-      prNumber,
-      error: getErrorMessage(error),
-    });
-    return null;
-  }
-};
-
-// ==================== Helpers ====================
-
-/**
- * Map confidence to numeric score (handles both string and number).
- */
-const confidenceToScore = (confidence: string | number | undefined): number => {
-  if (typeof confidence === "number") {
-    return confidence;
-  }
-  const confidenceScores: Record<string, number> = {
-    high: 0.9,
-    medium: 0.6,
-    low: 0.3,
-    unknown: 0.1,
+  const context: RequestContext = {
+    requestId: crypto.randomUUID(),
+    tenantId: "system",
   };
-  return confidenceScores[confidence ?? "unknown"] ?? 0.1;
+  const adapters = getCIProviderAdapters(provider);
+  const fetchedLogs = await adapters.logFetcher.fetchAllFailedLogs(
+    commitSha,
+    owner,
+    repoName,
+    installationId,
+    context
+  );
+  return convertFetchedLogsToAllJobsLogs(fetchedLogs, repositoryFullName);
 };
 
 /**
- * Convert recommended actions from API response.
+ * Map each pending check to its analysis result, producing AnalyzedFailure entries.
  */
-const convertRecommendedActions = (
-  actions: readonly RecommendedActionResponse[] | undefined
-): ReadonlyArray<{ description: string; priority: string }> =>
-  actions?.map((action) => ({
-    description: action.description ?? "",
-    priority: action.priority ?? "medium",
-  })) ?? [];
+const mapChecksToFailures = (
+  pendingChecks: ReadonlyArray<{
+    readonly checkRunId: number;
+    readonly checkName: string;
+    readonly timestamp: Date;
+  }>,
+  analysisMap: ReadonlyMap<string, AnalysisResultWithError>,
+  annotationsByCheck: ReadonlyMap<string, readonly CheckRunAnnotation[]>,
+  parsedLintByJob: ReadonlyMap<string, readonly LLMLintError[]>
+): readonly AnalyzedFailure[] =>
+  pendingChecks.map((check) => {
+    const checkAnnotations = annotationsByCheck.get(check.checkName.toLowerCase()) ?? [];
+    const parsedLintErrors = parsedLintByJob.get(check.checkName.toLowerCase()) ?? [];
 
-/**
- * Extract LLM test failures from API response.
- * The API already returns testFailures in the correct format (camelCase).
- */
-const extractTestFailures = (response: PerJobAnalysisApiResponse): readonly TestFailureInfo[] =>
-  response.full_analysis?.testFailures ?? [];
+    // Try to find matching analysis by check name
+    const analysisResult = analysisMap.get(check.checkName.toLowerCase());
 
-/**
- * Extract LLM lint errors from API response.
- * The API returns lintErrors in the correct format (camelCase).
- */
-const extractLintErrors = (response: PerJobAnalysisApiResponse): readonly LLMLintError[] =>
-  response.full_analysis?.lintErrors ?? [];
+    if (analysisResult && !analysisResult.failed) {
+      const enrichedResult = enrichResultWithParsedLintErrors(
+        analysisResult,
+        parsedLintErrors,
+        checkAnnotations
+      );
+      return convertJobResultToFailure(
+        enrichedResult,
+        check.checkRunId,
+        check.checkName,
+        check.timestamp
+      );
+    }
 
-/**
- * Extract test command from API response.
- * The LLM generates this based on detected framework.
- */
-const extractTestCommand = (response: PerJobAnalysisApiResponse): string | undefined =>
-  response.full_analysis?.testCommand;
+    // If no analysis found, try to find by partial match
+    const partialMatch = [...analysisMap.entries()].find(
+      ([jobName]) =>
+        check.checkName.toLowerCase().includes(jobName) ||
+        jobName.includes(check.checkName.toLowerCase())
+    );
 
-/**
- * Extract change correlations from API response.
- * Maps changed functions to failing tests from LLM PR diff analysis.
- */
-const extractChangeCorrelations = (
-  response: PerJobAnalysisApiResponse
-): readonly LLMChangeCorrelation[] => response.full_analysis?.changeCorrelations ?? [];
+    if (partialMatch && !partialMatch[1].failed) {
+      const enrichedResult = enrichResultWithParsedLintErrors(
+        partialMatch[1],
+        parsedLintErrors,
+        checkAnnotations
+      );
+      return convertJobResultToFailure(
+        enrichedResult,
+        check.checkRunId,
+        check.checkName,
+        check.timestamp
+      );
+    }
 
-/**
- * Convert per-job analysis result to AnalyzedFailure.
- * Uses LLM-extracted test failures with expected/actual values.
- *
- * V1.1: Uses line mappings to recover original line numbers for annotations.
- */
-const convertJobResultToFailure = (
-  result: JobAnalysisResult,
-  checkRunId: number,
-  checkName: string,
-  timestamp: Date
-): AnalyzedFailure => {
-  const { response, lineMappings } = result;
-  const identifiedCause = response.identified_cause ?? response.analysis ?? "Unknown failure";
+    // Fallback: create failure with error or generic message
+    const llmTestFailures = analysisResult?.testFailures ?? [];
+    const errorMsg = analysisResult?.error
+      ? `Analysis failed: ${analysisResult.error}`
+      : (summarizeTestFailures(llmTestFailures) ?? "CI check failed - see logs for details");
 
-  return {
-    checkRunId,
-    checkName,
-    conclusion: "failure",
-    confidence: confidenceToScore(response.confidence),
-    identifiedCause,
-    analysis: identifiedCause,
-    annotations:
-      response.annotations?.map((annotation) => {
-        const sanitizedLine = annotation.line ?? 0;
-        // V1.1: Recover original line number using line mappings
-        const originalLineNumber =
-          sanitizedLine > 0 ? getOriginalLineNumber(lineMappings, sanitizedLine) : null;
-
-        return {
-          path: annotation.path ?? "",
-          line: sanitizedLine,
-          level: (annotation.level as "failure" | "warning" | "notice") ?? "failure",
-          message: annotation.message ?? "",
-          title: annotation.title,
-          original_line_number: originalLineNumber,
-        };
-      }) ?? [],
-    recommendedActions: convertRecommendedActions(response.recommended_actions),
-    testFailures: result.testFailures,
-    lintErrors: result.lintErrors,
-    testCommand: result.testCommand,
-    changeCorrelations:
-      result.changeCorrelations.length > 0 ? result.changeCorrelations : undefined,
-    parsedTestSummary: result.parsedTestSummary,
-    timestamp,
-  };
-};
-
-/**
- * Generate a summary from extracted test failures.
- * Only used when we have structured test data to summarize.
- */
-const summarizeTestFailures = (testFailures: readonly TestFailureInfo[]): string | null => {
-  if (testFailures.length === 0) {
-    return null;
-  }
-
-  const uniqueFiles = [...new Set(testFailures.map((failure) => failure.file).filter(Boolean))];
-  const fileInfo =
-    uniqueFiles.length > 0
-      ? ` in ${uniqueFiles
-          .slice(0, 2)
-          .map((filePath) => `\`${filePath?.split("/").pop()}\``)
-          .join(", ")}${uniqueFiles.length > 2 ? " and more" : ""}`
-      : "";
-
-  return `${testFailures.length} test${testFailures.length > 1 ? "s" : ""} failed${fileInfo}`;
-};
-
-/**
- * Create a fallback failure when LLM analysis fails.
- * Returns empty test failures - LLM is the source of truth.
- */
-const createFallbackFailure = (
-  checkName: string,
-  checkRunId: number,
-  timestamp: Date,
-  errorMessage: string
-): AnalyzedFailure => ({
-  checkRunId,
-  checkName,
-  conclusion: "failure",
-  confidence: 0.3,
-  identifiedCause: errorMessage,
-  analysis: errorMessage,
-  annotations: [],
-  recommendedActions: [],
-  testFailures: [],
-  lintErrors: [],
-  timestamp,
-});
-
-/**
- * Helper to delay execution.
- */
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    return createFallbackFailure(check.checkName, check.checkRunId, check.timestamp, errorMsg);
   });
 
 /**
- * Post a placeholder comment on a single PR.
- * Returns silently on failure — placeholder is best-effort.
+ * Run LLM analysis on all enriched jobs with concurrency limiting,
+ * then collect lint errors and annotations for post-processing.
  */
-const postPlaceholderToPR = async (
-  installationId: number,
-  owner: string,
-  repo: string,
-  prNumber: number,
-  placeholderBody: string
-): Promise<void> => {
-  try {
-    await postPRComment(installationId, owner, repo, prNumber, placeholderBody, true);
-  } catch (error) {
-    logger.warn("Failed to post analyzing placeholder", {
-      prNumber,
-      error: getErrorMessage(error),
-    });
-  }
-};
+const runAnalysisAndCollectResults = async (
+  options: AnalysisCollectionOptions
+): Promise<readonly AnalyzedFailure[]> => {
+  const {
+    enrichedJobs,
+    allJobsLogs,
+    repositoryFullName,
+    apiUrl,
+    tenantId,
+    workflowId,
+    prDiffContext,
+    provider,
+    isGitHub,
+    pendingChecks,
+    installationId,
+    owner,
+    repoName,
+  } = options;
 
-/**
- * Post a placeholder comment on PRs to indicate analysis is in progress.
- * Best-effort: failures are logged but do not block the analysis pipeline.
- */
-const postAnalyzingPlaceholder = async (
-  installationId: number,
-  owner: string,
-  repo: string,
-  pullRequestNumbers: readonly number[],
-  checkNames: readonly string[]
-): Promise<void> => {
-  if (pullRequestNumbers.length === 0) {
-    return;
-  }
+  const maxConcurrent =
+    config.LLM_MAX_CONCURRENT_ANALYSIS ?? LLM_CONCURRENCY_DEFAULTS.MAX_CONCURRENT_ANALYSIS;
 
-  const placeholderBody = GITHUB_COMMENT_TEMPLATES.ANALYZING_PLACEHOLDER(checkNames);
+  logger.info("Analyzing jobs with concurrency limit", {
+    repository: repositoryFullName,
+    jobCount: enrichedJobs.length,
+    maxConcurrent,
+    jobNames: enrichedJobs.map((job) => job.jobName),
+  });
 
-  await Promise.all(
-    pullRequestNumbers.map((prNumber) =>
-      postPlaceholderToPR(installationId, owner, repo, prNumber, placeholderBody)
-    )
+  const analysisResults = await mapWithConcurrency(
+    enrichedJobs,
+    (job) =>
+      analyzeJobWithErrorHandling({
+        job,
+        repository: repositoryFullName,
+        apiUrl,
+        tenantId,
+        workflowId,
+        prDiffContext,
+        ciProvider: provider,
+      }),
+    maxConcurrent,
+    config.LLM_QUEUE_TIMEOUT_MS
   );
 
-  logger.info("Posted analyzing placeholder", {
-    owner,
-    repo,
-    prCount: pullRequestNumbers.length,
-    checkNames,
+  const analysisMap = new Map(
+    analysisResults.map((result) => [result.jobName.toLowerCase(), result] as const)
+  );
+
+  logger.info("All job analyses complete", {
+    repository: repositoryFullName,
+    successCount: analysisResults.filter((result) => !result.failed).length,
+    failedCount: analysisResults.filter((result) => result.failed).length,
   });
-};
 
-/**
- * Poll for job completion from the API.
- * The API processes analysis jobs asynchronously to avoid HTTP timeouts.
- *
- * @param jobId - The job ID returned from job submission
- * @param apiBaseUrl - Base URL for the API (e.g., http://localhost:3000)
- * @param jobName - Job name for logging context
- * @returns The analysis result when job completes
- * @throws ExternalServiceError if job fails or times out
- */
-const pollForJobCompletion = async (
-  jobId: string,
-  apiBaseUrl: string,
-  jobName: string
-): Promise<PerJobAnalysisApiResponse> => {
-  const startTime = Date.now();
-  const statusUrl = `${apiBaseUrl}/api/jobs/${jobId}`;
+  // Parse lint errors deterministically from raw CI logs (no LLM)
+  const parsedLintByJob = parseLintErrorsByJob(allJobsLogs.jobs);
+  const totalParsedLint = [...parsedLintByJob.values()].reduce(
+    (sum, errors) => sum + errors.length,
+    0
+  );
 
-  logger.info("Polling for job completion", { jobId, jobName });
-
-  while (Date.now() - startTime < POLLING_CONFIG.MAX_WAIT_MS) {
-    const response = await resilientGet<JobStatusResponse>(statusUrl, {
-      timeout: POLLING_CONFIG.REQUEST_TIMEOUT_MS,
+  if (totalParsedLint > 0) {
+    logger.info("Deterministic lint parser extracted errors from raw logs", {
+      repository: repositoryFullName,
+      totalParsedLint,
+      byJob: Object.fromEntries(
+        [...parsedLintByJob.entries()]
+          .filter(([, errors]) => errors.length > 0)
+          .map(([jobName, errors]) => [jobName, errors.length])
+      ),
     });
-
-    const { status, result, error } = response.data;
-
-    if (status === "completed" && result) {
-      logger.info("Job completed successfully", {
-        jobId,
-        jobName,
-        durationMs: Date.now() - startTime,
-      });
-      return result;
-    }
-
-    if (status === "failed") {
-      logger.error("Job failed", {
-        jobId,
-        jobName,
-        error,
-        durationMs: Date.now() - startTime,
-      });
-      throw new ExternalServiceError("api", error ?? "Job failed without error message", {
-        metadata: { jobId, jobName, status },
-        retryable: false,
-      });
-    }
-
-    // Still pending or processing, wait before polling again
-    await delay(POLLING_CONFIG.INTERVAL_MS);
   }
 
-  // Timeout reached
-  const durationMs = Date.now() - startTime;
-  logger.error("Job polling timed out", {
-    jobId,
-    jobName,
-    durationMs,
-    maxWaitMs: POLLING_CONFIG.MAX_WAIT_MS,
-  });
-  throw new ExternalServiceError("api", `Job ${jobId} timed out after ${durationMs}ms`, {
-    metadata: { jobId, jobName, durationMs },
-    retryable: false,
-  });
+  // Fetch annotations for direct lint error conversion (GitHub-only)
+  const annotationsByCheck = isGitHub
+    ? await fetchAnnotationsForChecks(pendingChecks, installationId, owner, repoName)
+    : new Map<string, readonly CheckRunAnnotation[]>();
+
+  return mapChecksToFailures(pendingChecks, analysisMap, annotationsByCheck, parsedLintByJob);
 };
 
 /**
- * Analyze a single job's logs via LLM API.
- * LLM extracts test failures with expected/actual values.
- *
- * V1.1: Uses chunking pipeline preprocessing with line mapping for
- * original line number recovery in annotations.
- *
- * V2: Uses async job pattern to avoid HTTP timeouts for large logs.
- * Submits job, receives 202 with job_id, then polls for completion.
+ * Build the AggregatedFailures object from pipeline results.
  */
-const analyzeJobLogs = async (
-  jobName: string,
-  jobLogs: string,
-  repository: string,
-  apiUrl: string,
-  tenantId?: string,
-  workflowId?: string,
-  prDiffContext?: PRDiffContext | null
-): Promise<JobAnalysisResult> => {
-  // Parse deterministic test summary from raw logs BEFORE any sanitization
-  const parsedTestSummary = parseTestSummary(jobLogs);
-
-  // V1.1: Use chunking pipeline preprocessing for better size reduction and line mapping
-  const sanitized: SanitizationResultWithMapping = sanitizeForChunkingWithMapping(jobLogs);
-
-  // Also get test framework detection from legacy preprocessor
-  const legacyPreprocessed = preprocessLogsWithMetadata(jobLogs);
-
-  logger.info("Submitting job for async analysis", {
-    jobName,
-    repository,
-    originalSize: sanitized.originalSize,
-    processedSize: sanitized.finalSize,
-    reductionPercent: sanitized.reductionPercent,
-    secretsRedacted: sanitized.secretsRedacted,
-    linesCollapsed: sanitized.linesCollapsed,
-    progressLinesRemoved: sanitized.progressLinesRemoved,
-    lineMappingsCount: sanitized.lineMappings.length,
-    detectedFramework: legacyPreprocessed.testFramework?.name,
-  });
-
-  // Build request payload with optional context via spread (immutable)
-  const requestPayload: Readonly<Record<string, unknown>> = {
-    failure_log: sanitized.text,
-    repository,
-    job_name: jobName,
-    ...(tenantId && { tenant_id: tenantId }),
-    ...(workflowId && { workflow_id: workflowId }),
-    ...(legacyPreprocessed.testFramework && {
-      test_framework: {
-        name: legacyPreprocessed.testFramework.name,
-        language: legacyPreprocessed.testFramework.language,
-        assertion_hint: legacyPreprocessed.testFramework.assertionHint,
-      },
-    }),
-    ...(prDiffContext && {
-      pr_number: prDiffContext.prNumber,
-      pr_diff: prDiffContext.diff,
-      pr_changed_files: prDiffContext.changedFiles,
-      pr_title: prDiffContext.title,
-    }),
-  };
-
-  // Step 1: Submit job for async processing (returns 202 with job_id)
-  const submitResponse = await resilientPost<JobSubmissionResponse>(apiUrl, requestPayload, {
-    timeout: POLLING_CONFIG.REQUEST_TIMEOUT_MS,
-  });
-
-  const { job_id: jobId } = submitResponse.data;
-
-  logger.info("Job submitted for async analysis", {
-    jobId,
-    jobName,
-    repository,
-  });
-
-  // Step 2: Poll for job completion
-  // Extract base URL from apiUrl (e.g., "http://localhost:3000/api/analyze" -> "http://localhost:3000")
-  const apiBaseUrl = apiUrl.replace(/\/api\/analyze$/, "");
-  const analysisResponse = await pollForJobCompletion(jobId, apiBaseUrl, jobName);
-
-  // Extract LLM test failures with expected/actual values
-  const testFailures = extractTestFailures(analysisResponse);
-
-  // Extract LLM lint errors with specific symbols
-  const lintErrors = extractLintErrors(analysisResponse);
-
-  // Extract LLM-generated test command
-  const testCommand = extractTestCommand(analysisResponse);
-
-  // Extract change correlations from LLM PR diff analysis
-  const changeCorrelations = extractChangeCorrelations(analysisResponse);
-
-  logger.info("Async analysis complete", {
-    jobId,
-    jobName,
-    repository,
-    testFailureCount: testFailures.length,
-    parsedTestSummary: parsedTestSummary
-      ? { failed: parsedTestSummary.failed, framework: parsedTestSummary.framework }
-      : null,
-    lintErrorCount: lintErrors.length,
-    testCommand,
-  });
-
-  return {
-    jobName,
-    jobLogs,
-    response: analysisResponse,
-    testFailures,
-    lintErrors,
-    testCommand,
-    changeCorrelations,
-    lineMappings: sanitized.lineMappings,
-    parsedTestSummary,
-  };
-};
-
-/**
- * Deserialize pending aggregation payload from queue.
- */
-const deserializePendingPayload = (
-  payload: PendingAggregationPayload
-): {
-  commitSha: string;
-  repository: { fullName: string; owner: string; name: string };
-  installationId: number;
-  pullRequestNumbers: readonly number[];
-  pendingChecks: ReadonlyArray<{
-    checkRunId: number;
-    checkName: string;
-    conclusion: string;
-    timestamp: Date;
-  }>;
-  firstFailureAt: Date;
-  lastFailureAt: Date;
-} => {
-  const pending = payload.pendingAggregation;
-  return {
-    commitSha: pending.commitSha,
-    repository: pending.repository,
-    installationId: pending.installationId,
-    pullRequestNumbers: pending.pullRequestNumbers,
-    pendingChecks: pending.pendingChecks.map((check) => ({
-      checkRunId: check.checkRunId,
-      checkName: check.checkName,
-      conclusion: check.conclusion,
-      timestamp: new Date(check.timestamp),
-    })),
-    firstFailureAt: new Date(pending.firstFailureAt),
-    lastFailureAt: new Date(pending.lastFailureAt),
-  };
-};
+const buildAggregation = (options: BuildAggregationOptions): AggregatedFailures => ({
+  commitSha: options.commitSha,
+  repository: options.repository,
+  installationId: options.installationId,
+  pullRequestNumbers: [...options.pullRequestNumbers],
+  failures: options.failures,
+  prContext: options.prDiffContext
+    ? {
+        number: options.prDiffContext.prNumber,
+        title: options.prDiffContext.title,
+        author: options.prDiffContext.author,
+        branch: options.prDiffContext.branch,
+        baseBranch: options.prDiffContext.baseBranch,
+        labels: [...options.prDiffContext.labels],
+        changedFiles: [...options.prDiffContext.changedFiles],
+      }
+    : null,
+  workflowContext: {
+    name: options.workflowName,
+    duration: options.formattedDuration ?? undefined,
+  },
+  firstFailureAt: options.firstFailureAt,
+  lastFailureAt: options.lastFailureAt,
+  provider: options.provider,
+});
 
 // ==================== Main Handler ====================
-
-/**
- * Analyze a single job with error handling.
- * Returns a result object with failed flag if analysis fails.
- */
-const analyzeJobWithErrorHandling = async (
-  job: { jobName: string; logs: string },
-  repository: string,
-  apiUrl: string,
-  tenantId?: string,
-  workflowId?: string,
-  prDiffContext?: PRDiffContext | null
-): Promise<AnalysisResultWithError> => {
-  try {
-    return await analyzeJobLogs(
-      job.jobName,
-      job.logs,
-      repository,
-      apiUrl,
-      tenantId,
-      workflowId,
-      prDiffContext
-    );
-  } catch (error) {
-    logger.error("Failed to analyze job", {
-      jobName: job.jobName,
-      error: getErrorMessage(error),
-    });
-    return {
-      jobName: job.jobName,
-      jobLogs: job.logs,
-      response: {} as PerJobAnalysisApiResponse,
-      testFailures: [],
-      lintErrors: [],
-      changeCorrelations: [],
-      lineMappings: [],
-      failed: true,
-      error: getErrorMessage(error),
-    };
-  }
-};
 
 /**
  * Process pending aggregation with per-job analysis.
  *
  * Each job's logs are analyzed separately via LLM to ensure
  * specific, accurate analysis for each failure type.
- *
- * @param payload - The pending aggregation payload from queue
- * @returns Consolidated post result
  */
 export const processCombinedAnalysis = async (
   payload: PendingAggregationPayload
 ): Promise<ConsolidatedPostResult> => {
   const pending = deserializePendingPayload(payload);
-  const { repository, installationId, commitSha } = pending;
+  const { repository, installationId, commitSha, provider } = pending;
+  const isGitHub = provider === CI_PROVIDERS.GITHUB_ACTIONS;
 
   logger.info("Starting per-job analysis for pending aggregation", {
     repository: repository.fullName,
     commitSha: commitSha.substring(0, 7),
     pendingCheckCount: pending.pendingChecks.length,
     checkNames: pending.pendingChecks.map((check) => check.checkName),
+    provider,
   });
 
   try {
-    // Step 1: Fetch logs for ALL failed jobs
-    const allJobsLogs = await fetchAllFailedJobsLogs(
+    const allJobsLogs = await fetchFailedLogs({
+      isGitHub,
       installationId,
-      repository.owner,
-      repository.name,
-      commitSha
-    );
+      owner: repository.owner,
+      repoName: repository.name,
+      repositoryFullName: repository.fullName,
+      commitSha,
+      provider,
+    });
 
     if (!allJobsLogs) {
       logger.warn("No workflow logs available for analysis", {
         repository: repository.fullName,
         commitSha: commitSha.substring(0, 7),
+        provider,
       });
-
       return {
         success: false,
         prCommentsPosted: 0,
@@ -704,154 +371,97 @@ export const processCombinedAnalysis = async (
       };
     }
 
+    const workflowTiming = isGitHub
+      ? await fetchWorkflowTiming(installationId, repository.owner, repository.name, commitSha)
+      : null;
+    const formattedDuration = formatDuration(workflowTiming?.durationMs ?? null);
+
     logger.info("Fetched all failed job logs", {
       repository: repository.fullName,
       workflowName: allJobsLogs.workflowName,
       jobCount: allJobsLogs.jobs.length,
+      durationMs: workflowTiming?.durationMs ?? null,
+      formattedDuration,
+      provider,
     });
 
-    // Post placeholder comment so users see analysis is in progress
-    const checkNames = pending.pendingChecks.map((check) => check.checkName);
-    await postAnalyzingPlaceholder(
-      installationId,
-      repository.owner,
-      repository.name,
-      pending.pullRequestNumbers,
-      checkNames
-    );
+    if (isGitHub) {
+      const checkNames = pending.pendingChecks.map((check) => check.checkName);
+      await postAnalyzingPlaceholder(
+        installationId,
+        repository.owner,
+        repository.name,
+        pending.pullRequestNumbers,
+        checkNames
+      );
+    }
 
     const apiUrl = `${config.API_URL}/api/analyze`;
+    const tenantId = isGitHub
+      ? (await findTenantByGitHubInstallation(installationId))?.id
+      : await resolveTenantForProvider(provider);
+    const prDiffContext = isGitHub
+      ? await fetchPRDiffContext(
+          installationId,
+          repository.owner,
+          repository.name,
+          pending.pullRequestNumbers
+        )
+      : null;
+    const enrichedJobs = isGitHub
+      ? await enrichJobLogsWithAnnotations(
+          allJobsLogs.jobs,
+          pending.pendingChecks,
+          installationId,
+          repository.owner,
+          repository.name
+        )
+      : allJobsLogs.jobs;
 
-    // Look up tenant for analysis context
-    const tenant = await findByGitHubInstallation(installationId);
-    const tenantId = tenant?.id;
-    const workflowId = allJobsLogs.workflowName;
-
-    // Fetch PR diff context for LLM correlation (cached, graceful degradation)
-    const prDiffContext = await fetchPRDiffContext(
+    const failures = await runAnalysisAndCollectResults({
+      enrichedJobs,
+      allJobsLogs,
+      repositoryFullName: repository.fullName,
+      apiUrl,
+      tenantId,
+      workflowId: allJobsLogs.workflowName,
+      prDiffContext,
+      provider,
+      isGitHub,
+      pendingChecks: pending.pendingChecks,
       installationId,
-      repository.owner,
-      repository.name,
-      pending.pullRequestNumbers
-    );
-
-    // Step 2: Analyze each job separately (with concurrency limit)
-    const maxConcurrent =
-      config.LLM_MAX_CONCURRENT_ANALYSIS ?? LLM_CONCURRENCY_DEFAULTS.MAX_CONCURRENT_ANALYSIS;
-
-    logger.info("Analyzing jobs with concurrency limit", {
-      repository: repository.fullName,
-      jobCount: allJobsLogs.jobs.length,
-      maxConcurrent,
-      jobNames: allJobsLogs.jobs.map((job) => job.jobName),
+      owner: repository.owner,
+      repoName: repository.name,
     });
 
-    // Analyze all jobs with concurrency limiting to avoid rate limits
-    const analysisResults = await mapWithConcurrency(
-      allJobsLogs.jobs,
-      (job) =>
-        analyzeJobWithErrorHandling(
-          job,
-          repository.fullName,
-          apiUrl,
-          tenantId,
-          workflowId,
-          prDiffContext
-        ),
-      maxConcurrent,
-      config.LLM_QUEUE_TIMEOUT_MS
-    );
-
-    // Create a map of job name to analysis result (functional construction)
-    const analysisMap = new Map(
-      analysisResults.map((result) => [result.jobName.toLowerCase(), result] as const)
-    );
-
-    logger.info("All job analyses complete", {
-      repository: repository.fullName,
-      successCount: analysisResults.filter((result) => !result.failed).length,
-      failedCount: analysisResults.filter((result) => result.failed).length,
-    });
-
-    // Step 3: Map each pending check to its analysis
-    const failures: readonly AnalyzedFailure[] = pending.pendingChecks.map((check) => {
-      // Try to find matching analysis by check name
-      const analysisResult = analysisMap.get(check.checkName.toLowerCase());
-
-      if (analysisResult && !analysisResult.failed) {
-        return convertJobResultToFailure(
-          analysisResult,
-          check.checkRunId,
-          check.checkName,
-          check.timestamp
-        );
-      }
-
-      // If no analysis found, try to find by partial match
-      const partialMatch = [...analysisMap.entries()].find(
-        ([jobName]) =>
-          check.checkName.toLowerCase().includes(jobName) ||
-          jobName.includes(check.checkName.toLowerCase())
-      );
-
-      if (partialMatch && !partialMatch[1].failed) {
-        return convertJobResultToFailure(
-          partialMatch[1],
-          check.checkRunId,
-          check.checkName,
-          check.timestamp
-        );
-      }
-
-      // Fallback: create failure with error or generic message
-      // LLM is the source of truth - if it returned test failures, use them
-      const llmTestFailures = analysisResult?.testFailures ?? [];
-      const errorMsg = analysisResult?.error
-        ? `Analysis failed: ${analysisResult.error}`
-        : (summarizeTestFailures(llmTestFailures) ?? "CI check failed - see logs for details");
-
-      return createFallbackFailure(check.checkName, check.checkRunId, check.timestamp, errorMsg);
-    });
-
-    // Step 4: Build the aggregated failures object
-    const aggregation: AggregatedFailures = {
+    const aggregation = buildAggregation({
       commitSha,
       repository,
       installationId,
-      pullRequestNumbers: [...pending.pullRequestNumbers],
+      pullRequestNumbers: pending.pullRequestNumbers,
       failures,
-      prContext: prDiffContext
-        ? {
-            number: prDiffContext.prNumber,
-            title: prDiffContext.title,
-            author: prDiffContext.author,
-            branch: prDiffContext.branch,
-            baseBranch: prDiffContext.baseBranch,
-            labels: [...prDiffContext.labels],
-            changedFiles: [...prDiffContext.changedFiles],
-          }
-        : null,
-      workflowContext: {
-        name: allJobsLogs.workflowName,
-        duration: "unknown",
-      },
+      prDiffContext,
+      workflowName: allJobsLogs.workflowName,
+      formattedDuration,
       firstFailureAt: pending.firstFailureAt,
       lastFailureAt: pending.lastFailureAt,
-    };
+      provider,
+    });
 
     logger.info("Per-job analysis complete, posting results", {
       repository: repository.fullName,
       commitSha: commitSha.substring(0, 7),
       failureCount: failures.length,
+      provider,
     });
 
-    // Step 5: Post using existing consolidated poster
     return await postConsolidatedAnalysis(aggregation);
-  } catch (error) {
+  } catch (pipelineError) {
     logger.error("Per-job analysis failed", {
-      error: getErrorMessage(error),
+      error: getErrorMessage(pipelineError),
       repository: repository.fullName,
       commitSha: commitSha.substring(0, 7),
+      provider,
     });
 
     return {
@@ -859,7 +469,7 @@ export const processCombinedAnalysis = async (
       prCommentsPosted: 0,
       slackMessageSent: false,
       checkAnnotationsCreated: false,
-      errors: [getErrorMessage(error)],
+      errors: [getErrorMessage(pipelineError)],
     };
   }
 };

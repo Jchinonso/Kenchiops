@@ -68,6 +68,7 @@ jest.mock("@kenchi/shared", () => ({
     required: (value: unknown) => value !== undefined && value !== null,
     string: (value: unknown) => typeof value === "string",
   },
+  requireTenantMatch: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 describe("RAG Drift Routes", () => {

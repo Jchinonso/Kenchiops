@@ -11,6 +11,7 @@
  */
 
 import { createLogger } from "../core/logger.js";
+import { config } from "../core/config.js";
 import { ExternalServiceError } from "../core/errors.js";
 import {
   HTTP_RESILIENCE_DEFAULTS,
@@ -24,6 +25,7 @@ import type {
   ResilientResponse,
   RetryContext,
 } from "./types.js";
+import { signInternalRequest } from "./internalAuth.js";
 
 const logger = createLogger("resilient-http");
 
@@ -184,6 +186,39 @@ const safeGetResponseText = async (response: Response): Promise<string> => {
 };
 
 /**
+ * Builds HMAC authentication headers for internal service requests.
+ * Returns empty object when internalAuth is not enabled or secret is missing.
+ */
+const buildInternalAuthHeaders = (
+  context: RetryContext,
+  serializedBody: string | undefined
+): Readonly<Record<string, string>> => {
+  if (!context.internalAuth) {
+    return {};
+  }
+
+  const secret = config.INTERNAL_SERVICE_SECRET;
+  if (!secret) {
+    logger.warn("internalAuth requested but INTERNAL_SERVICE_SECRET is not configured");
+    return {};
+  }
+
+  const bodyToSign = serializedBody ?? "";
+  const { signature, timestamp } = signInternalRequest(bodyToSign, secret);
+
+  return {
+    "x-kenchi-signature": signature,
+    "x-kenchi-timestamp": timestamp,
+    "x-kenchi-service": "kenchi",
+  };
+};
+
+/**
+ * Checks if an error represents an abort/timeout.
+ */
+const isAbortError = ({ name }: Error): boolean => name === "AbortError";
+
+/**
  * Executes a single HTTP request attempt.
  */
 const executeAttempt = async (
@@ -195,10 +230,13 @@ const executeAttempt = async (
   const timeoutId = setTimeout(() => controller.abort(), context.timeout);
 
   try {
+    const serializedBody = context.body ? JSON.stringify(context.body) : undefined;
+    const authHeaders = buildInternalAuthHeaders(context, serializedBody);
+
     const response = await fetch(context.url, {
       method: context.method,
-      headers: { "Content-Type": "application/json", ...context.headers },
-      body: context.body ? JSON.stringify(context.body) : undefined,
+      headers: { "Content-Type": "application/json", ...context.headers, ...authHeaders },
+      body: serializedBody,
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -206,10 +244,9 @@ const executeAttempt = async (
   } catch (error) {
     clearTimeout(timeoutId);
     const normalizedError = error instanceof Error ? error : new Error(String(error));
-    const finalError =
-      normalizedError.name === "AbortError"
-        ? new Error(`Request timeout after ${context.timeout}ms`)
-        : normalizedError;
+    const finalError = isAbortError(normalizedError)
+      ? new Error(`Request timeout after ${String(context.timeout)}ms`)
+      : normalizedError;
     return { success: false, error: finalError, status: 0 };
   }
 };
@@ -263,7 +300,8 @@ const handleSuccess = async <T>(
   attempt: number
 ): Promise<ResilientResponse<T>> => {
   recordSuccess(context.serviceKey);
-  const data = (await response.json()) as T;
+  // 204 No Content has no body — skip JSON parse to avoid SyntaxError
+  const data = (response.status === 204 ? undefined : await response.json()) as T;
   const durationMs = Date.now() - context.startTime;
 
   logger.debug("Request succeeded", {
@@ -351,6 +389,7 @@ export const resilientFetch = async <T>(
     maxRetryDelay = HTTP_RESILIENCE_DEFAULTS.MAX_RETRY_DELAY_MS,
     headers = {},
     skipCircuitBreaker = false,
+    internalAuth = false,
   } = options;
 
   const serviceKey = getServiceKey(url);
@@ -374,6 +413,7 @@ export const resilientFetch = async <T>(
     headers,
     serviceKey,
     startTime: Date.now(),
+    internalAuth,
   };
 
   return attemptWithRetry<T>(context, 1, undefined, 0);

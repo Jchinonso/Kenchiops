@@ -11,6 +11,8 @@ import {
   createLogger,
   SERVICE_NAMES,
   API_ROUTES,
+  requireTenantMatch,
+  requireRole,
   purgeTenantRAGData,
   purgePRDiffChunks,
   purgeKnowledgeDocChunks,
@@ -159,12 +161,21 @@ const handlePurgeDoc = async (req: Request, res: Response): Promise<void> => {
 // ==================== Route Definitions ====================
 
 /** DELETE /api/rag/tenant/:tenantId - Purge all tenant RAG data */
-router.delete(API_ROUTES.RAG_PURGE_TENANT, asyncHandler(handlePurgeTenant));
+router.delete(
+  API_ROUTES.RAG_PURGE_TENANT,
+  requireRole("admin", "owner"),
+  requireTenantMatch(),
+  asyncHandler(handlePurgeTenant)
+);
 
 /** DELETE /api/rag/pr/:repository/:prNumber - Purge PR diff chunks */
-router.delete(API_ROUTES.RAG_PURGE_PR, asyncHandler(handlePurgePR));
+router.delete(API_ROUTES.RAG_PURGE_PR, requireRole("admin", "owner"), asyncHandler(handlePurgePR));
 
 /** DELETE /api/rag/doc/:parentId - Purge a knowledge document */
-router.delete(API_ROUTES.RAG_PURGE_DOC, asyncHandler(handlePurgeDoc));
+router.delete(
+  API_ROUTES.RAG_PURGE_DOC,
+  requireRole("admin", "owner"),
+  asyncHandler(handlePurgeDoc)
+);
 
 export { router as ragPurgeRoutes };

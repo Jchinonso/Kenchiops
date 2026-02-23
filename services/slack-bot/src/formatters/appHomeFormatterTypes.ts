@@ -20,7 +20,7 @@ export interface AppHomeContext {
   readonly botStatus: "active" | "inactive";
   readonly repositoryMappings: readonly RepositoryMappingDisplay[];
   readonly tenant?: {
-    readonly githubOrg?: string;
+    readonly orgName?: string;
     readonly status: string;
     readonly slackTeamName?: string;
   };

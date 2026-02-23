@@ -11,7 +11,13 @@ export type {
   CreateAnalysisInput,
   AnalysisRecord,
   AnalysisRow,
+  AnalysisEventRow,
   AnalysisCountRow,
+  ConfidenceDistributionRow,
+  ConfidenceTrendPoint,
+  AnalysisCountByRepo,
+  AnalysesByTenantFilteredOptions,
+  CountAnalysesByTenantFilteredOptions,
   CreateAnalysisValidationRule,
 } from "./types.js";
 
@@ -32,4 +38,13 @@ export {
   getAnalysisByEventId,
   getAnalysesByModelVersion,
   countAnalysesByModelVersion,
+  getAnalysesByTenant,
+  countAnalysesByTenant,
+  getAnalysesByTenantFiltered,
+  countAnalysesByTenantFiltered,
+  getAnalysesByEventIds,
+  getConfidenceDistribution,
+  getConfidenceTrend,
+  findAnalysesByCommitSha,
+  getAnalysisCountsByRepo,
 } from "./repository.js";

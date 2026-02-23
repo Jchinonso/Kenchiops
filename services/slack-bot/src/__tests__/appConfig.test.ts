@@ -2,6 +2,8 @@
  * Unit tests for Application Configuration
  */
 
+/* eslint-disable no-restricted-syntax -- This test file legitimately tests process.env configuration loading */
+
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { loadAppConfig } from "../config/appConfig.js";
 import type { AppConfig } from "../config/appConfig.js";

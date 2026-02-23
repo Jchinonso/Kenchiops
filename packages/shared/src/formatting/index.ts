@@ -225,6 +225,10 @@ export {
 export { parseTestSummary } from "./testSummaryParser.js";
 export type { ParsedTestSummary } from "./extraction/types.js";
 
+// ==================== Lint Output Parser ====================
+
+export { parseLintOutput } from "./lintOutputParser.js";
+
 // ==================== Pipeline Module ====================
 
 export type {
@@ -233,3 +237,14 @@ export type {
   PipelineErrorCode,
   PipelineError,
 } from "./pipeline/index.js";
+
+// ==================== ANSI Stripper / GitLab Log Cleaner ====================
+
+export {
+  stripAnsiEscapes,
+  stripOscSequences,
+  stripCharsetSelection,
+  stripCarriageReturns,
+  stripGitLabSections,
+  cleanGitLabLog,
+} from "./ansiStripper.js";

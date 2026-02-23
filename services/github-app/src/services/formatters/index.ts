@@ -32,6 +32,15 @@ export {
   buildConsolidatedPRComment,
 } from "./prCommentFormatter.js";
 
+// Enriched section builders (dependency changes, build config, confidence, priority)
+export {
+  getConfidenceBadge,
+  buildDependencyChangesSection,
+  buildBuildConfigChangesSection,
+  formatPrioritizedAction,
+  buildPrioritizedActions,
+} from "./enrichedSectionBuilders.js";
+
 // Slack payload formatters
 export type { SlackBlock, SlackBlockElement, SlackPayload } from "./slackPayloadFormatter.js";
 export { buildConsolidatedSlackPayload } from "./slackPayloadFormatter.js";
@@ -41,3 +50,6 @@ export {
   buildConsolidatedCheckAnnotations,
   buildConsolidatedCheckSummary,
 } from "./checkAnnotationHelpers.js";
+
+// GitLab MR comment formatter
+export { buildGitLabMRComment } from "./gitlabFormatter.js";

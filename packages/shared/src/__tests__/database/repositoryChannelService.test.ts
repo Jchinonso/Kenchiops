@@ -27,6 +27,11 @@ jest.mock("../../core/logger.js", () => ({
   createLogger: jest.fn(() => mockLogger),
 }));
 
+// Mock enforcePlanLimit — createMapping now calls this before inserting
+jest.mock("../../database/subscription/repository.js", () => ({
+  enforcePlanLimit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+}));
+
 describe("Repository Channel Service", () => {
   let repoChannelService: typeof import("../../database/repositoryChannel/service.js");
 

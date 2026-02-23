@@ -3,6 +3,12 @@
  */
 
 /**
+ * UUID v4 format validation regex.
+ * Used to validate IDs before interpolating into URL paths (prevents path traversal).
+ */
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * Email validation regex pattern.
  */
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

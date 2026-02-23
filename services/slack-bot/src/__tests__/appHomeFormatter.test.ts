@@ -72,7 +72,7 @@ describe("App Home Formatter", () => {
     it("should show GitHub connection when tenant exists", () => {
       const context = createMockContext({
         tenant: {
-          githubOrg: "myorg",
+          orgName: "myorg",
           status: "active",
         },
       });
@@ -96,7 +96,7 @@ describe("App Home Formatter", () => {
     it("should show not connected when tenant is inactive", () => {
       const context = createMockContext({
         tenant: {
-          githubOrg: "myorg",
+          orgName: "myorg",
           status: "inactive",
         },
       });
@@ -251,7 +251,7 @@ describe("App Home Formatter", () => {
     it("should not include GitHub connect button when already connected", () => {
       const context = createMockContext({
         tenant: {
-          githubOrg: "myorg",
+          orgName: "myorg",
           status: "active",
         },
       });

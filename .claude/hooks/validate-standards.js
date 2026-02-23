@@ -466,15 +466,16 @@ const VALIDATION_RULES = [
 
   // ==================== Immutability ====================
 
-  // Direct object mutation
+  // Direct object mutation (only matches assignment at statement start, not property access on RHS)
   {
     id: "object-mutation",
-    pattern: /\w+\.\w+\s*=\s*(?!>)/g,
+    pattern: /^\s*\w+\.\w+\s*=\s*(?!>)/gm,
     message: "Avoid object mutation - derive new objects with spread",
     extract: () => "Found potential object mutation - use spread to derive new objects",
     skipInTests: true,
     skipInAdapters: true,
     skipInConstructors: true,
+    stripTemplateLiterals: true,
   },
 ];
 

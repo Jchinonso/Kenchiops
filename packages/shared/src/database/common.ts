@@ -18,6 +18,7 @@ export type {
   TenantStatus,
   TenantEmbeddingTier,
   CreateTenantFromGitHub,
+  CreateTenantFromGitLab,
   LinkSlackWorkspace,
   TenantAuditAction,
   TenantAuditEntry,
@@ -71,6 +72,21 @@ export {
   // Analysis
   ANALYSIS_DEFAULTS,
   ANALYSIS_QUERIES,
+  // Event
+  EVENT_DB_DEFAULTS,
+  EVENT_DB_QUERIES,
+  // Webhook activity
+  WEBHOOK_ACTIVITY_DEFAULTS,
+  WEBHOOK_ACTIVITY_QUERIES,
+  // Incident alert
+  INCIDENT_ALERT_DEFAULTS,
+  INCIDENT_ALERT_QUERIES,
+  INCIDENT_TRIAGE_RESULT_QUERIES,
+  INCIDENT_DEDUP_QUERIES,
+  // Investigation
+  INVESTIGATION_STATUS,
+  INVESTIGATION_DEFAULTS,
+  INVESTIGATION_QUERIES,
   // Metrics history
   METRICS_HISTORY_DEFAULTS,
   METRICS_HISTORY_QUERIES,
@@ -94,6 +110,23 @@ export {
   type RelationshipType,
   type ExternalSourceType,
   type TechStackTag,
+  // Subscription
+  PLAN_QUERIES,
+  SUBSCRIPTION_QUERIES,
+  SUBSCRIPTION_DEFAULTS,
+  DEFAULT_PLAN_ID,
+  VALID_PLAN_TIERS,
+  PLAN_LIMIT_KEYS,
+  LIMIT_KEY_TO_PLAN_FIELD,
+  LIMIT_KEY_TO_USAGE_FIELD,
+  // Auth
+  USER_QUERIES,
+  OAUTH_IDENTITY_QUERIES,
+  OAUTH_STATE_QUERIES,
+  REFRESH_TOKEN_QUERIES,
+  VALID_OAUTH_PROVIDERS,
+  AUTH_DEFAULTS,
+  JWT_CONFIG,
 } from "../constants/index.js";
 
 // Vector utilities

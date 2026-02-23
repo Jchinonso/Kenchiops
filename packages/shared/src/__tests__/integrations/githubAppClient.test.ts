@@ -98,7 +98,7 @@ describe("githubAppClient", () => {
         expect(mockResilientGet).toHaveBeenCalledTimes(1);
         expect(mockResilientGet).toHaveBeenCalledWith(
           `${mockGitHubAppUrl}/api/github/installations/${mockInstallationId}/repositories`,
-          { headers: { "Content-Type": "application/json" } }
+          { headers: { "Content-Type": "application/json" }, internalAuth: true }
         );
 
         expect(result).toHaveLength(3);

@@ -9,43 +9,23 @@ import {
   createLogger,
   getErrorMessage,
   addPendingCheckToRedis,
+  createEvent,
+  publish,
+  findTenantByGitHubInstallation,
+  PUBSUB_CHANNELS,
+  DASHBOARD_EVENT_TYPES,
+  EVENT_TYPES,
+  EVENT_SOURCES,
+  EVENT_SEVERITY,
+  CI_PROVIDERS,
   type PendingCheckRun,
   type PendingCheckContext,
   type AggregationKey,
 } from "@kenchi/shared";
-import { GITHUB_CHECK_CONCLUSIONS, type CheckRunWebhook } from "../types/githubTypes.js";
+import type { CheckRunWebhook } from "../types/githubTypes.js";
+import { isStatusCheck } from "../helpers/githubCheckFilters.js";
 
 const logger = createLogger("github-app");
-
-// ==================== Constants ====================
-
-/**
- * Conclusions that should be skipped (not actual failures)
- */
-export const SKIP_CONCLUSIONS: ReadonlySet<string> = new Set([
-  GITHUB_CHECK_CONCLUSIONS.CANCELLED,
-  GITHUB_CHECK_CONCLUSIONS.SKIPPED,
-  GITHUB_CHECK_CONCLUSIONS.STALE,
-]);
-
-/**
- * Check names that are status/summary checks and should be skipped.
- * These checks aggregate other check results and have no actual failure logs.
- */
-const STATUS_CHECK_PATTERNS: readonly RegExp[] = [
-  /^ci[\s-_]?success$/i,
-  /^ci[\s-_]?status$/i,
-  /^all[\s-_]?checks/i,
-  /^status[\s-_]?check/i,
-  /^branch[\s-_]?protection/i,
-  /^required[\s-_]?checks/i,
-];
-
-/**
- * Check if a check name is a status/summary check that should be skipped.
- */
-const isStatusCheck = (checkName: string): boolean =>
-  STATUS_CHECK_PATTERNS.some((pattern) => pattern.test(checkName));
 
 // ==================== Helpers ====================
 
@@ -55,6 +35,7 @@ const isStatusCheck = (checkName: string): boolean =>
 const buildAggregationKey = (webhook: CheckRunWebhook): AggregationKey => ({
   repositoryFullName: webhook.repository.full_name,
   commitSha: webhook.check_run.head_sha,
+  provider: CI_PROVIDERS.GITHUB_ACTIONS,
 });
 
 /**
@@ -81,7 +62,63 @@ const buildPendingCheckContext = (webhook: CheckRunWebhook): PendingCheckContext
     },
     installationId: installation?.id ?? 0,
     pullRequestNumbers: check_run.pull_requests.map((pr) => pr.number),
+    provider: CI_PROVIDERS.GITHUB_ACTIONS,
   };
+};
+
+// ==================== Event Persistence & Notification ====================
+
+/**
+ * Persist a CI failure event to the database and publish a dashboard
+ * notification via Redis pub/sub. Both operations are best-effort and
+ * must not block the aggregation pipeline.
+ */
+const persistEventAndNotify = async (webhook: CheckRunWebhook): Promise<void> => {
+  const { check_run, repository, installation } = webhook;
+  const installationId = installation?.id ?? 0;
+
+  try {
+    // Look up tenant for event scoping
+    const tenant = installationId > 0 ? await findTenantByGitHubInstallation(installationId) : null;
+    const tenantId = tenant?.id ?? null;
+
+    await createEvent({
+      type: EVENT_TYPES.CICD_FAILURE,
+      source: EVENT_SOURCES.GITHUB_APP,
+      severity: EVENT_SEVERITY.HIGH,
+      timestamp: new Date().toISOString(),
+      payload: {
+        repository: repository.full_name,
+        checkName: check_run.name,
+        conclusion: check_run.conclusion,
+        headSha: check_run.head_sha,
+        checkRunId: check_run.id,
+        pullRequestCount: check_run.pull_requests.length,
+        provider: CI_PROVIDERS.GITHUB_ACTIONS,
+      },
+      metadata: {
+        owner: repository.owner.login,
+        repo: repository.name,
+        installationId,
+      },
+      tenantId,
+    });
+
+    // Publish to dashboard SSE channel
+    await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.NEW_FAILURE, {
+      tenantId,
+      repository: repository.full_name,
+      checkName: check_run.name,
+      commitSha: check_run.head_sha,
+      provider: CI_PROVIDERS.GITHUB_ACTIONS,
+    });
+  } catch (error) {
+    logger.warn("Failed to persist event or publish dashboard notification", {
+      error: getErrorMessage(error),
+      repository: repository.full_name,
+      checkName: check_run.name,
+    });
+  }
 };
 
 // ==================== Main Handler ====================
@@ -123,6 +160,9 @@ export const processCIFailure = async (webhook: CheckRunWebhook): Promise<boolea
       checkName: check_run.name,
       checkRunId: check_run.id,
     });
+
+    // Persist event to DB and publish to dashboard SSE (fire-and-forget)
+    void persistEventAndNotify(webhook);
 
     return true;
   } catch (error) {

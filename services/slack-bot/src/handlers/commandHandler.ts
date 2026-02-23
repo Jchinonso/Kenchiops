@@ -9,9 +9,10 @@
  * - /kenchi status - Check connection status
  * - /kenchi configure - Select repository for channel
  * - /kenchi unconfigure - Remove repository from channel
+ * - /kenchi investigate <description> - Investigate a production issue
  * - /kenchi add-doc - Add document to knowledge base
  * - /kenchi help - Show available commands
- * - /kenchi <text> - AI analysis (default)
+ * - /kenchi <unknown> - Shows error with valid commands
  *
  * This is the public API that re-exports from focused modules:
  * - commandSubhandlers.ts: Individual subcommand handlers
@@ -30,7 +31,7 @@ import {
   handleConfigure,
   handleUnconfigure,
   handleAddDoc,
-  handleAnalysis,
+  handleInvestigate,
 } from "./commandSubhandlers.js";
 
 // Re-export types for consumers
@@ -48,6 +49,7 @@ const subcommandHandlers: ReadonlyMap<string, SubcommandHandler> = new Map([
   ["unconfigure", handleUnconfigure],
   ["connect", handleConnect],
   ["status", handleStatus],
+  ["investigate", handleInvestigate],
   ["add-doc", handleAddDoc],
   ["help", handleHelp],
 ]);
@@ -98,13 +100,26 @@ export const handleKenchiCommand = async (
 
   const ctx: CommandContext = { command, args, respond, client };
 
-  // Look up subcommand handler, fall back to analysis
-  const handler = subcommandHandlers.get(subcommand) ?? handleAnalysis;
+  const handler = subcommandHandlers.get(subcommand);
 
-  // For analysis, pass the full text (including what looked like a subcommand)
-  if (handler === handleAnalysis && subcommand) {
-    await handler({ ...ctx, args: command.text });
-  } else {
+  if (handler) {
     await handler(ctx);
+    return;
   }
+
+  // No subcommand or empty text → show help
+  if (!subcommand) {
+    await handleHelp(ctx);
+    return;
+  }
+
+  // Unrecognized single-word subcommand → show error with valid commands
+  const validCommands = Array.from(subcommandHandlers.keys())
+    .map((cmd) => `\`/kenchi ${cmd}\``)
+    .join(", ");
+
+  await respond({
+    text: `Unknown command \`/kenchi ${subcommand}\`. Available commands: ${validCommands}`,
+    response_type: "ephemeral",
+  });
 };

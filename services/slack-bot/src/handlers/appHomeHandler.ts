@@ -7,7 +7,8 @@
 
 import {
   createLogger,
-  findBySlackWorkspace,
+  findTenantBySlackWorkspace,
+  findSlackConnection,
   findAllMappingsForTenant,
   getTenantStatistics,
   formatRelativeTime,
@@ -31,7 +32,7 @@ const logger = createLogger("app-home");
  */
 const getTenantInfo = async (workspaceId: string): Promise<Tenant | undefined> => {
   try {
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
     return tenant ?? undefined;
   } catch (error) {
     logger.warn("Failed to get tenant info", {
@@ -89,10 +90,16 @@ const buildAppHomeContext = async (
   // Fetch tenant first (needed for mappings and stats lookup)
   const tenant = await getTenantInfo(workspaceId);
 
-  // Fetch repository mappings and statistics in parallel if tenant exists
-  const [repositoryMappings, statistics] = tenant
-    ? await Promise.all([getRepositoryMappings(tenant.id), getStatistics(tenant.id)])
-    : [[], null];
+  // Fetch repository mappings, statistics, and Slack connection in parallel if tenant exists
+  const [repositoryMappings, statistics, slackConn] = tenant
+    ? await Promise.all([
+        getRepositoryMappings(tenant.id),
+        getStatistics(tenant.id),
+        findSlackConnection(tenant.id),
+      ])
+    : [[], null, null];
+
+  const slackTeamName = (slackConn?.config as { readonly teamName?: string })?.teamName;
 
   // Bot is active if we successfully reached this point (Slack connection works)
   // The tenant/GitHub status is shown separately
@@ -101,9 +108,9 @@ const buildAppHomeContext = async (
     repositoryMappings,
     tenant: tenant
       ? {
-          githubOrg: tenant.githubOrg,
+          orgName: tenant.orgName,
           status: tenant.status,
-          slackTeamName: tenant.slackTeamName ?? undefined,
+          slackTeamName,
         }
       : undefined,
     recentActivity: {
@@ -157,7 +164,7 @@ export const handleAppHomeOpened = async (client: SlackClient, userId: string): 
       workspaceId,
       botStatus: context.botStatus,
       repositoryMappingsCount: context.repositoryMappings.length,
-      hasGitHubConnection: !!context.tenant?.githubOrg,
+      hasGitHubConnection: !!context.tenant?.orgName,
     });
   } catch (error) {
     logger.error("Failed to publish App Home view", {

@@ -9,11 +9,17 @@
  */
 
 import express from "express";
+import cookieParser from "cookie-parser";
+import cors from "cors";
 import {
+  config,
   createLogger,
   errorHandler,
   requestLogger,
+  requestContextMiddleware,
+  authMiddleware,
   createRateLimitMiddleware,
+  createSecurityHeaders,
   setupGracefulShutdown,
   registerCleanupHandler,
   initDatabase,
@@ -23,6 +29,7 @@ import {
   triggerReembedding,
   syncDueSources,
   getErrorMessage,
+  ValidationError,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
   RAG_JOB_INTERVALS,
@@ -34,8 +41,17 @@ import {
 } from "@kenchi/shared";
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
+import { SSE_STREAM_PATH } from "./routes/sseRoutes.js";
+import { setupSwagger } from "./swagger/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
+
+// Augment Express Request with rawBody for HMAC signature verification
+declare module "express-serve-static-core" {
+  interface Request {
+    rawBody?: Buffer;
+  }
+}
 
 // let: module-level lifecycle state — assigned during init, read during shutdown
 let analysisWorker: AnalysisWorkerControl | null = null;
@@ -252,7 +268,10 @@ const apiRateLimiter = createRateLimitMiddleware({
     message: API_MESSAGES.RATE_LIMIT_EXCEEDED,
     keyPrefix: API_REDIS_PREFIXES.RATE_LIMIT,
   },
-  skip: (req) => shouldSkipRateLimit(req.path),
+  skip: (req) => {
+    const { path } = req;
+    return shouldSkipRateLimit(path) || path === SSE_STREAM_PATH;
+  },
   botDetection: {
     blockMalicious: false, // Signal-based, not blocking
     botRateMultiplier: 0.5, // Bots get half the rate limit
@@ -261,6 +280,11 @@ const apiRateLimiter = createRateLimitMiddleware({
     maxBurst: 10,
     rateMultiplier: 0.5, // Burst users get rate limit halved
     blockOnBurst: false, // Penalty-based, not blocking
+  },
+  tenantRateLimit: {
+    enabled: true,
+    max: 500, // 500 requests per minute per tenant (5x per-IP limit)
+    windowMs: RATE_LIMIT_CONSTANTS.DEFAULT_WINDOW_MS,
   },
   distributedFallback: "fail", // Fail-safe when Redis unavailable
 });
@@ -275,10 +299,45 @@ const createApp = (): express.Express => {
   // Required for rate limiting to work correctly behind reverse proxies
   app.set("trust proxy", 1);
 
+  // Security headers — applied early before any response is sent
+  const { NODE_ENV } = config;
+  app.use(createSecurityHeaders(NODE_ENV === "production"));
+
+  // CORS — required for cross-origin cookie-based auth (frontend dev server on different port)
+  app.use(
+    cors({
+      origin: config.FRONTEND_URL,
+      credentials: true,
+    })
+  );
+
+  // Parse cookies for auth token extraction
+  app.use(cookieParser());
+
+  // Swagger UI — mounted before auth so docs are publicly accessible
+  setupSwagger(app);
+
   // Middleware - use configured limit for large CI context payloads
-  app.use(express.json({ limit: EXPRESS_CONFIG.JSON_BODY_LIMIT }));
+  // Capture raw body ONLY when internal HMAC auth headers are present,
+  // to avoid retaining a duplicate buffer in memory for regular browser requests.
+  // Object.assign is required because Express verify callbacks must mutate req by design
+  // (this is a framework-boundary side effect, allowed per CLAUDE.md rule 3).
+  app.use(
+    express.json({
+      limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
+      verify: (req: express.Request, _res, buf) => {
+        // Only capture rawBody when HMAC signature header is present
+        // to avoid doubling memory usage on every request
+        if (req.headers["x-kenchi-signature"]) {
+          Object.assign(req, { rawBody: buf });
+        }
+      },
+    })
+  );
   app.use(requestLogger);
   app.use(apiRateLimiter.middleware());
+  app.use(requestContextMiddleware);
+  app.use(authMiddleware);
 
   // Register all routes
   registerRoutes(app);
@@ -292,10 +351,31 @@ const createApp = (): express.Express => {
 /** Database connection pool size for API service */
 const API_DB_MAX_CONNECTIONS = 10;
 
+/** Minimum acceptable length for JWT_SECRET (256 bits of entropy). */
+const JWT_SECRET_MIN_LENGTH = 32;
+
+/**
+ * Validate that auth-critical configuration is present at startup.
+ * Fails fast instead of waiting for the first JWT operation to discover
+ * a missing or weak JWT_SECRET.
+ */
+const validateAuthConfig = (): void => {
+  const jwtSecret = config.JWT_SECRET;
+  if (!jwtSecret || jwtSecret.trim().length < JWT_SECRET_MIN_LENGTH) {
+    throw new ValidationError(
+      `JWT_SECRET must be at least ${String(JWT_SECRET_MIN_LENGTH)} characters`,
+      { operation: "validateAuthConfig" }
+    );
+  }
+};
+
 /**
  * Start the API service
  */
 const startServer = async (): Promise<void> => {
+  // Fail fast on missing auth configuration
+  validateAuthConfig();
+
   // Initialize database for RAG operations
   initDatabase({
     connectionString: appConfig.databaseUrl,
@@ -338,7 +418,7 @@ const startServer = async (): Promise<void> => {
 
   // Start fine-tuning job scheduler only when a real OpenAI key is configured.
   // OpenRouter keys (sk-or-*) are not valid for the OpenAI fine-tuning API.
-  const apiKey = process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY ?? "";
+  const apiKey = config.LLM_API_KEY ?? config.OPENAI_API_KEY ?? "";
   if (apiKey.startsWith("sk-or-")) {
     logger.warn(
       "Fine-tuning scheduler disabled: OpenRouter key cannot be used for OpenAI fine-tuning API"

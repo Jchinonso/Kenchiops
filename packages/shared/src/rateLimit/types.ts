@@ -7,6 +7,7 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
+import type { RequestContext } from "../core/types.js";
 
 // ==================== Security Constants ====================
 
@@ -699,13 +700,14 @@ export const GEO_RESTRICTION_DEFAULTS = {
 } as const;
 
 /**
- * Express Request with optional trusted proxy context.
+ * Express Request with trusted proxy context enrichment.
  * Used by geo restriction to verify header trustworthiness.
+ * Extends the global RequestContext (set by requestContextMiddleware)
+ * with an optional isTrustedProxy flag.
  */
 export interface RequestWithProxyContext extends Request {
-  context?: {
-    isTrustedProxy?: boolean;
-    [key: string]: unknown;
+  readonly context: RequestContext & {
+    readonly isTrustedProxy?: boolean;
   };
 }
 
@@ -1081,14 +1083,15 @@ export interface ClientIPOptions {
 export interface SecureKeyOptions extends ClientIPOptions {}
 
 /**
- * Express Request extended with optional context from auth middleware.
+ * Express Request extended with identity context from auth middleware.
  * This is the preferred source for identity over headers.
+ * Extends the global RequestContext (set by requestContextMiddleware)
+ * with optional userId and installationId for rate limit keying.
  */
 export interface RequestWithContext extends Request {
-  context?: {
-    tenantId?: string;
-    userId?: string;
-    installationId?: string;
+  readonly context: RequestContext & {
+    readonly userId?: string;
+    readonly installationId?: string;
   };
 }
 
@@ -1180,6 +1183,27 @@ export const HEADER_IDENTITY_SOURCES: readonly HeaderIdentitySource[] = [
   { header: IDENTITY_HEADERS.CLIENT_ID, prefix: "client" },
 ];
 
+// ==================== Per-Tenant Rate Limit Types ====================
+
+/**
+ * Per-tenant rate limiting configuration.
+ *
+ * When enabled, applies an additional rate limit keyed on the authenticated
+ * user's tenantId (from req.user.tenantId). This prevents a single tenant
+ * from exhausting the shared rate limit quota.
+ *
+ * Unauthenticated requests or users without a tenantId are not subject
+ * to tenant rate limiting (they still go through the standard IP-based limiter).
+ */
+export interface TenantRateLimitConfig {
+  /** Whether per-tenant rate limiting is active */
+  readonly enabled: boolean;
+  /** Maximum requests per tenant in the window (defaults to the base rateLimit.max) */
+  readonly max?: number;
+  /** Time window in milliseconds (defaults to the base rateLimit.windowMs) */
+  readonly windowMs?: number;
+}
+
 // ==================== Middleware Types ====================
 
 /**
@@ -1206,6 +1230,13 @@ export interface RateLimitMiddlewareConfig {
 
   /** Per-endpoint limits (optional) */
   readonly endpointLimits?: EndpointLimitsConfig;
+
+  /**
+   * Per-tenant rate limiting (optional).
+   * Adds a separate rate limit keyed on req.user.tenantId
+   * to prevent a single tenant from exhausting shared quota.
+   */
+  readonly tenantRateLimit?: TenantRateLimitConfig;
 
   /** Fallback behavior when Redis unavailable */
   readonly distributedFallback?: FallbackBehavior;

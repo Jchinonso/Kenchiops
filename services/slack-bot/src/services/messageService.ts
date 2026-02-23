@@ -9,7 +9,7 @@ import {
   logger,
   getErrorMessage,
   ValidationError,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
   findChannelForRepository,
 } from "@kenchi/shared";
 import { trackCIFailureThread } from "./resolutionService.js";
@@ -121,7 +121,7 @@ const resolveChannelByRepository = async (
   installationId: number,
   repository: string
 ): Promise<string | null> => {
-  const tenant = await findByGitHubInstallation(installationId);
+  const tenant = await findTenantByGitHubInstallation(installationId);
   if (!tenant) {
     logger.warn("No tenant found for installation", { installationId });
     return null;
@@ -150,11 +150,23 @@ const deleteSlackMessage = async (
   channelId: string,
   timestamp: string
 ): Promise<boolean> => {
+  const startTime = Date.now();
   try {
     await client.chat.delete({ channel: channelId, ts: timestamp });
+    const durationMs = Date.now() - startTime;
+    logger.info("Deleted Slack message", {
+      provider: "slack",
+      operation: "deleteMessage",
+      durationMs,
+      channelId,
+    });
     return true;
   } catch (error) {
+    const durationMs = Date.now() - startTime;
     logger.warn("Failed to delete old Slack message", {
+      provider: "slack",
+      operation: "deleteMessage",
+      durationMs,
       channelId,
       timestamp,
       error: getErrorMessage(error),
@@ -187,6 +199,7 @@ export const postMessage = async (
     const channelId = await resolveTargetChannel(client, channel);
     const payload = buildMessagePayload(message, analysis, blocks, attachments);
 
+    const startTime = Date.now();
     const result = await client.chat.postMessage({
       channel: channelId,
       text: payload.fallbackText,
@@ -194,9 +207,12 @@ export const postMessage = async (
       ...(payload.attachments && { attachments: payload.attachments }),
       ...(thread_ts && { thread_ts }),
     });
+    const durationMs = Date.now() - startTime;
 
     logger.info("Message posted to Slack", {
-      channel,
+      provider: "slack",
+      operation: "postMessage",
+      durationMs,
       channelId,
       timestamp: result.ts,
       thread: thread_ts,
@@ -211,6 +227,8 @@ export const postMessage = async (
     };
   } catch (error) {
     logger.error("Failed to post message to Slack", {
+      provider: "slack",
+      operation: "postMessage",
       channel,
       error: getErrorMessage(error),
     });
@@ -273,11 +291,13 @@ export const postConsolidatedMessage = async (
     }
 
     // Post new message
+    const postStartTime = Date.now();
     const result = await client.chat.postMessage({
       channel: channelId,
       text: payload.text,
       blocks: [...payload.blocks] as SlackBlock[],
     });
+    const postDurationMs = Date.now() - postStartTime;
 
     // Store message info for future updates
     if (result.ts) {
@@ -298,6 +318,9 @@ export const postConsolidatedMessage = async (
     }
 
     logger.info("Consolidated message posted to Slack", {
+      provider: "slack",
+      operation: "postMessage",
+      durationMs: postDurationMs,
       repository,
       channelId,
       timestamp: result.ts,
@@ -313,6 +336,8 @@ export const postConsolidatedMessage = async (
     };
   } catch (error) {
     logger.error("Failed to post consolidated message to Slack", {
+      provider: "slack",
+      operation: "postMessage",
       repository,
       failureCount: failure_count,
       error: getErrorMessage(error),
@@ -343,13 +368,18 @@ export const broadcastMessage = async (
           throw new ValidationError("Invalid channel data");
         }
 
+        const startTime = Date.now();
         try {
           const postResult = await client.chat.postMessage({
             channel: channel.id,
             text: message,
           });
+          const durationMs = Date.now() - startTime;
 
           logger.info("Message posted to channel", {
+            provider: "slack",
+            operation: "postMessage",
+            durationMs,
             channelName: channel.name,
             channelId: channel.id,
             timestamp: postResult.ts,
@@ -357,7 +387,11 @@ export const broadcastMessage = async (
 
           return { name: channel.name, id: channel.id, status: "sent" };
         } catch (error) {
+          const durationMs = Date.now() - startTime;
           logger.error("Failed to post to channel", {
+            provider: "slack",
+            operation: "postMessage",
+            durationMs,
             channelName: channel.name,
             channelId: channel.id,
             error: getErrorMessage(error),

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Barrel re-export file; line count is inherently proportional to module count */
 /**
  * Centralized constants barrel file.
  * Re-exports all constants from their respective modules.
@@ -117,6 +118,7 @@ export {
 
 // Validation constants
 export {
+  UUID_REGEX,
   EMAIL_REGEX,
   SLACK_CHANNEL_ID_PATTERN,
   DEFAULT_VALIDATION_ERROR_MESSAGE,
@@ -196,6 +198,10 @@ export {
   ABSOLUTE_PATH_SKIP_DIRS,
   ABSOLUTE_PATH_PATTERN,
   ACTION_REVIEW_PATTERNS,
+  TEST_FAILURE_FILE_INFERENCE_PATTERN,
+  TEST_FAILURE_BARE_FILE_PATTERN,
+  LINT_JOB_KEYWORDS,
+  CI_INFRASTRUCTURE_MESSAGE,
 } from "./github.js";
 
 // Evidence parsing constants
@@ -315,6 +321,32 @@ export {
 // Analysis constants
 export { ANALYSIS_DEFAULTS, ANALYSIS_QUERIES } from "./analysis.js";
 
+// Event database constants
+export { EVENT_DB_DEFAULTS, EVENT_DB_QUERIES } from "./event.js";
+
+// Webhook activity constants
+export { WEBHOOK_ACTIVITY_DEFAULTS, WEBHOOK_ACTIVITY_QUERIES } from "./webhookActivity.js";
+
+// Incident alert constants
+export {
+  INCIDENT_ALERT_DEFAULTS,
+  INCIDENT_ALERT_QUERIES,
+  INCIDENT_TRIAGE_RESULT_QUERIES,
+  INCIDENT_DEDUP_QUERIES,
+} from "./incidentAlert.js";
+
+// Investigation constants
+export {
+  INVESTIGATION_STATUS,
+  INVESTIGATION_INITIATED_FROM,
+  INVESTIGATION_DEFAULTS,
+  INVESTIGATION_POLLING,
+  INVESTIGATION_QUERIES,
+} from "./investigations.js";
+
+// Dashboard constants
+export { SSE_CONFIG, DASHBOARD_EVENT_TYPES } from "./dashboard.js";
+
 // Cost tracking constants
 export { COST_TRACKING_DEFAULTS, COST_TRACKING_QUERIES } from "./costTracking.js";
 
@@ -390,6 +422,7 @@ export {
   API_REQUEST_FIELDS,
   shouldSkipRateLimit,
   API_PAGINATION_DEFAULTS,
+  DASHBOARD_PAGINATION,
   GITHUB_API_CONFIG,
 } from "./api.js";
 
@@ -562,3 +595,87 @@ export {
   CHARS_PER_TOKEN,
   PERCENTAGE_MULTIPLIER,
 } from "./formatting.js";
+
+// CI provider constants
+export { CI_PROVIDERS, type CIProvider } from "./ciProviders.js";
+
+// Vercel constants
+export {
+  VERCEL_SIGNATURE,
+  VERCEL_DEPLOYMENT_EVENTS,
+  type VercelDeploymentEventType,
+  VERCEL_FAILURE_EVENTS,
+  VERCEL_API_BASE_URL,
+  VERCEL_TARGETS,
+} from "./vercel.js";
+
+// Netlify constants
+export {
+  NETLIFY_SIGNATURE,
+  NETLIFY_DEPLOY_EVENTS,
+  type NetlifyDeployEventType,
+  NETLIFY_FAILURE_EVENTS,
+  NETLIFY_FAILURE_STATES,
+  NETLIFY_EVENT_HEADER,
+  NETLIFY_API_BASE_URL,
+  NETLIFY_CONTEXTS,
+  NETLIFY_COMMIT_URL_PATTERN,
+} from "./netlify.js";
+
+// GitLab constants
+export {
+  GITLAB_TOKEN_HEADER,
+  GITLAB_HOMEPAGE_PATH_PATTERN,
+  GITLAB_FAILURE_STATUSES,
+} from "./gitlab.js";
+
+// Datadog constants
+export { DATADOG_ALERT_STATUSES, DATADOG_FAILURE_STATUSES } from "./datadog.js";
+
+// Grafana constants
+export { GRAFANA_SIGNATURE, GRAFANA_ALERT_STATUSES } from "./grafana.js";
+
+// Prometheus constants
+export { PROMETHEUS_ALERT_STATUSES, PROMETHEUS_WEBHOOK_VERSION } from "./prometheus.js";
+
+// Subscription constants
+export {
+  PLAN_TIERS,
+  VALID_PLAN_TIERS,
+  DEFAULT_PLAN_ID,
+  SUBSCRIPTION_STATUS,
+  PLAN_LIMIT_KEYS,
+  LIMIT_KEY_TO_PLAN_FIELD,
+  LIMIT_KEY_TO_USAGE_FIELD,
+  PLAN_QUERIES,
+  SUBSCRIPTION_QUERIES,
+  SUBSCRIPTION_DEFAULTS,
+} from "./subscription.js";
+
+// Auth constants
+export {
+  USER_STATUS,
+  USER_ROLES,
+  OAUTH_PROVIDERS,
+  VALID_OAUTH_PROVIDERS,
+  OAUTH_PROVIDER_URLS,
+  SELF_HOSTED_URL_PATTERNS,
+  JWT_CONFIG,
+  COOKIE_CONFIG,
+  OAUTH_STATE_CONFIG,
+  AUTH_ROUTES,
+  PUBLIC_ROUTES,
+  AUTH_AUDIT_ACTIONS,
+  AUTH_DEFAULTS,
+  USER_QUERIES,
+  OAUTH_IDENTITY_QUERIES,
+  OAUTH_STATE_QUERIES,
+  REFRESH_TOKEN_QUERIES,
+  INSTANCE_URL_CONFIG,
+  VALID_INTEGRATION_PROVIDERS,
+  INTEGRATION_OAUTH_AUTHORIZE_URLS,
+  INTEGRATION_OAUTH_TOKEN_URLS,
+  INTEGRATION_API_URLS,
+  GITLAB_SETUP_CONFIG,
+  type IntegrationProvider,
+} from "./auth.js";

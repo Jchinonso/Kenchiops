@@ -257,7 +257,8 @@ describe("Mention Handler", () => {
       expect(performAnalysis).toHaveBeenCalledWith(
         expect.objectContaining({
           timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/),
-        })
+        }),
+        undefined
       );
     });
 
@@ -290,7 +291,8 @@ describe("Mention Handler", () => {
           id: expect.stringContaining("evt_test_"),
           type: "MANUAL_TRIGGER",
           source: "slack",
-        })
+        }),
+        undefined
       );
     });
 

@@ -49,6 +49,8 @@ export interface AnalyzeRequest {
   readonly pr_changed_files?: readonly string[];
   /** PR title for LLM context */
   readonly pr_title?: string;
+  /** CI provider that triggered this analysis (e.g., "github_actions", "gitlab_ci") */
+  readonly ci_provider?: string;
   /** Workflow SHA for fingerprinting */
   readonly workflow_sha?: string;
   /** Exit code from CI job */

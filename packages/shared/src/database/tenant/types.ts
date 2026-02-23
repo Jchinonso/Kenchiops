@@ -17,18 +17,13 @@ import type {
 // ==================== Tenant Row Types ====================
 
 /**
- * Database row type for tenants table
+ * Database row type for tenants table.
+ * Provider-specific columns have been moved to provider_connections.
  */
 export interface TenantRow {
   readonly id: string;
-  readonly github_org: string;
-  readonly github_installation_id: number | null;
-  readonly github_app_installed_at: Date | null;
-  readonly slack_workspace_id: string | null;
-  readonly slack_team_name: string | null;
-  readonly slack_bot_token: string | null;
-  readonly slack_bot_user_id: string | null;
-  readonly slack_app_installed_at: Date | null;
+  readonly org_name: string;
+  readonly provider: string;
   readonly status: TenantStatus;
   readonly created_at: Date;
   readonly updated_at: Date;

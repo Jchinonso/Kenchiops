@@ -1,0 +1,90 @@
+/**
+ * Vercel Webhook Signature Verification Middleware
+ *
+ * Verifies that incoming webhooks are from Vercel using HMAC-SHA1 signature.
+ * The `x-vercel-signature` header contains a raw hex digest (no prefix).
+ */
+
+import crypto from "crypto";
+import type { Request, Response, NextFunction } from "express";
+import { createLogger, VERCEL_SIGNATURE } from "@kenchi/shared";
+import { appConfig } from "../config/appConfig.js";
+
+const logger = createLogger("vercel-verify");
+
+/**
+ * Verifies a Vercel HMAC-SHA1 signature.
+ */
+const verifySignature = (rawBody: Buffer, signature: string, secret: string): boolean => {
+  const computedSignature = crypto
+    .createHmac(VERCEL_SIGNATURE.ALGORITHM, secret)
+    .update(rawBody)
+    .digest("hex");
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature, "hex"),
+      Buffer.from(computedSignature, "hex")
+    );
+  } catch {
+    // timingSafeEqual throws if buffer lengths differ — treat as invalid
+    return false;
+  }
+};
+
+/**
+ * Express middleware to verify Vercel webhook signatures.
+ *
+ * Requires raw body to be captured via express.json({ verify: ... }) in index.ts.
+ */
+export const verifyVercelWebhook = (req: Request, res: Response, next: NextFunction): void => {
+  const secret = appConfig.vercelWebhookSecret;
+
+  // Skip verification if no secret configured (development mode)
+  if (!secret) {
+    logger.warn("Vercel webhook secret not configured - skipping verification");
+    next();
+    return;
+  }
+
+  const signature = req.headers[VERCEL_SIGNATURE.HEADER];
+
+  if (!signature || typeof signature !== "string") {
+    logger.warn("Missing Vercel webhook signature", {
+      provider: "vercel",
+      operation: "verifySignature",
+      path: req.path,
+    });
+    res.status(401).json({ error: "Missing webhook signature" });
+    return;
+  }
+
+  const { rawBody } = req;
+
+  if (!rawBody) {
+    logger.error("Raw body not available for Vercel signature verification", {
+      provider: "vercel",
+      operation: "verifySignature",
+      path: req.path,
+    });
+    res.status(500).json({ error: "Raw body not available for verification" });
+    return;
+  }
+
+  if (!verifySignature(rawBody, signature, secret)) {
+    logger.error("Invalid Vercel webhook signature", {
+      provider: "vercel",
+      operation: "verifySignature",
+      path: req.path,
+    });
+    res.status(401).json({ error: "Invalid webhook signature" });
+    return;
+  }
+
+  logger.info("Vercel webhook signature verified", {
+    provider: "vercel",
+    operation: "verifySignature",
+    path: req.path,
+  });
+  next();
+};

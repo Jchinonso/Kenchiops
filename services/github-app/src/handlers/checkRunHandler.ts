@@ -21,7 +21,8 @@ import type { CheckRunHandlerResult } from "./checkRunHandlerTypes.js";
 export type { CheckRunHandlerResult };
 
 // Re-export analysis functions for consumers
-export { processCIFailure, SKIP_CONCLUSIONS } from "./checkRunAnalysis.js";
+export { processCIFailure } from "./checkRunAnalysis.js";
+export { SKIP_CONCLUSIONS } from "../helpers/githubCheckFilters.js";
 
 const logger = createLogger("github-app");
 

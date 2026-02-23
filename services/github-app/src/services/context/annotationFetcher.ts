@@ -4,12 +4,7 @@
  * Fetches annotations from GitHub check runs.
  */
 
-import {
-  createLogger,
-  GITHUB_CONTEXT_LIMITS,
-  getErrorMessage,
-  getOrFetchCheckAnnotations,
-} from "@kenchi/shared";
+import { createLogger, getErrorMessage, getOrFetchCheckAnnotations } from "@kenchi/shared";
 import { getOctokit } from "../githubService.js";
 import type { CheckRunAnnotation } from "./types.js";
 
@@ -41,12 +36,12 @@ export const fetchCheckRunAnnotations = async (
       async () => {
         const octokit = await getOctokit(installationId);
 
-        // Use listAnnotations API to get annotations for a check run
-        const { data: annotations } = await octokit.rest.checks.listAnnotations({
+        // Paginate to fetch ALL annotations (GitHub returns max 100 per page)
+        const annotations = await octokit.paginate(octokit.rest.checks.listAnnotations, {
           owner,
           repo,
           check_run_id: checkRunId,
-          per_page: GITHUB_CONTEXT_LIMITS.MAX_ANNOTATIONS,
+          per_page: 100,
         });
 
         return annotations

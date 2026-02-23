@@ -13,34 +13,33 @@ export {
   type QueryResult,
 } from "./client/index.js";
 
-// Tenant module
+// Tenant module (provider-neutral — provider-specific lookups in providerConnection)
 // Note: TenantRow and row mappers are internal to tenant module.
 // Domain types (Tenant, TenantStatus, etc.) are in core/types.ts.
 export {
-  // Status helpers (used by services for business logic)
-  getStatusAfterGitHubInstall,
-  getStatusAfterSlackInstall,
   // Domain types
   type TenantStatistics,
   type TenantRAGBudgetConfig,
   type UpdateRAGBudgetInput,
   // Lookup operations
-  findByGitHubInstallation,
-  findByGitHubOrg,
-  findBySlackWorkspace,
+  findByOrgNameAndProvider,
+  findByOrgName,
+  findByGitLabGroup,
   findById,
   getActiveTenants,
   getTenantStatistics,
-  getSlackCredentials,
+  countTenantMembers,
   // Lifecycle operations
   createFromGitHubInstall,
+  createFromGitHubLogin,
+  createFromGitLabGroup,
   linkSlackWorkspace,
   createFromSlackInstall,
   activate,
   suspend,
   deleteTenant,
+  hardDeleteTenant,
   handleGitHubUninstall,
-  updateSlackToken,
   // Audit operations
   logAuditEvent,
   getAuditLog,
@@ -126,9 +125,36 @@ export {
   getAnalysisByEventId,
   getAnalysesByModelVersion,
   countAnalysesByModelVersion,
+  getAnalysesByTenant,
+  countAnalysesByTenant,
+  getAnalysesByTenantFiltered,
+  countAnalysesByTenantFiltered,
+  getAnalysesByEventIds,
+  getConfidenceDistribution,
+  getConfidenceTrend,
+  findAnalysesByCommitSha,
+  getAnalysisCountsByRepo,
   type CreateAnalysisInput,
   type AnalysisRecord,
+  type AnalysisCountByRepo,
+  type AnalysesByTenantFilteredOptions,
+  type CountAnalysesByTenantFilteredOptions,
+  type ConfidenceTrendPoint,
 } from "./analysis/index.js";
+
+// Event module
+export {
+  createEvent,
+  getEventsByTenant,
+  countEventsByTenant,
+  getEventsByTenantFiltered,
+  countEventsByTenantFiltered,
+  findEventIdByRepoAndCommit,
+  type EventRecord,
+  type EventListOptions,
+  type CountEventsByTenantFilteredOptions,
+  type CreateEventInput,
+} from "./event/index.js";
 
 // Action proposal module
 export {
@@ -241,6 +267,230 @@ export {
   type CostSummary,
   type BudgetStatus,
 } from "./costTracking/index.js";
+
+// User module (Authentication)
+export {
+  // Types
+  type UserRow,
+  type OAuthIdentityRow,
+  type RefreshTokenRow,
+  type OAuthStateRow,
+  type User,
+  type OAuthIdentity,
+  type RefreshToken,
+  type OAuthState,
+  type OAuthProvider,
+  type UserRole,
+  type UserStatus,
+  type CreateUserInput,
+  type UpsertOAuthIdentityInput,
+  type OAuthStateInput,
+  type CreateRefreshTokenInput,
+  type RotateRefreshTokenInput,
+  type RotateRefreshTokenResult,
+  type OAuthProviderProfile,
+  type OAuthTokenResponse,
+  type JWTPayload,
+  type TokenPair,
+  type AuthenticatedUser,
+  type UserValidationRule,
+  type OAuthIdentityValidationRule,
+  // Helpers
+  rowToUser,
+  extractUser,
+  rowToOAuthIdentity,
+  extractOAuthIdentity,
+  rowToRefreshToken,
+  extractRefreshToken,
+  rowToOAuthState,
+  extractOAuthState,
+  validateCreateUserInput,
+  validateUpsertOAuthIdentityInput,
+  // Lookup operations
+  findUserById,
+  findUserByEmail,
+  findOAuthIdentity,
+  findOAuthIdentitiesByUser,
+  // Lifecycle operations
+  createUser,
+  updateLastLogin,
+  updateUserTenant,
+  switchUserOrganization,
+  deleteUser,
+  upsertOAuthIdentity,
+  // OAuth state operations
+  createOAuthState,
+  consumeOAuthState,
+  cleanupExpiredStates,
+  // Refresh token operations
+  createRefreshToken,
+  findRefreshTokenByHash,
+  revokeRefreshToken,
+  revokeTokenFamily,
+  replaceRefreshToken,
+  rotateRefreshTokenAtomically,
+  cleanupExpiredRefreshTokens,
+} from "./user/index.js";
+
+// User organization module (multi-org membership)
+export {
+  type UserOrganizationRow,
+  type UserOrganization,
+  type UserOrganizationWithTenantRow,
+  type UserOrganizationWithTenant,
+  type AddUserOrganizationInput,
+  rowToUserOrganization,
+  rowToUserOrganizationWithTenant,
+  findOrganizationsByUser,
+  addUserOrganization,
+  setDefaultOrganization,
+  countMembersByTenant,
+} from "./userOrganization/index.js";
+
+// Webhook activity module
+export {
+  createWebhookActivity,
+  findWebhookActivityByDeliveryId,
+  getWebhookActivitiesByTenant,
+  countWebhookActivitiesByTenant,
+  type WebhookActivityRecord,
+  type WebhookActivityListOptions,
+  type CreateWebhookActivityInput,
+} from "./webhookActivity/index.js";
+
+// Incident alert module
+export {
+  createIncidentAlert,
+  getAlertById,
+  findAlertByDeliveryId,
+  updateAlertStatus,
+  listIncidents,
+  countIncidents,
+  getAlertWithTriageResult,
+  getStatsBySource,
+  getActiveCountsBySource,
+  getBalancedRecentIncidents,
+  findIncidentsByCommitSha,
+  type IncidentAlertRecord,
+  type CreateIncidentAlertInput,
+  type ListIncidentFilters,
+  type PaginatedIncidentAlerts,
+  type AlertWithTriageResult,
+  type SourceStats,
+  type ActiveCountBySource,
+} from "./incidentAlert/index.js";
+
+// Incident dedup module
+export {
+  findByFingerprint,
+  upsertDedupEntry,
+  cleanupExpiredEntries,
+  type IncidentDedupRecord,
+} from "./incidentDedup/index.js";
+
+// Incident triage result module
+export {
+  createTriageResult,
+  getTriageResultById,
+  getTriageResultByAlertId,
+  updateTriageEnrichment,
+  updateTriageAiSummary,
+  updateTriageDispatchResults,
+  searchSimilarTriageResults,
+  getTriageStats,
+  getSeverityDistributionBySource,
+  type IncidentTriageResultRecord,
+  type CreateTriageResultInput,
+  type UpdateTriageEnrichmentInput,
+  type UpdateTriageAiSummaryInput,
+  type UpdateTriageDispatchInput,
+  type TriageSimilarityResult,
+  type SeverityDistributionEntry,
+  type SeverityBySourceEntry,
+  type TriageStats,
+} from "./incidentTriageResult/index.js";
+
+// Investigation module
+export {
+  createInvestigation,
+  getInvestigationById,
+  listInvestigations,
+  updateInvestigationStatus,
+  updateInvestigationIntent,
+  updateInvestigationEvidence,
+  updateInvestigationCorrelation,
+  updateInvestigationDiagnosis,
+  updateInvestigationError,
+  type InvestigationRecord,
+  type CreateInvestigationInput,
+  type UpdateInvestigationIntentInput,
+  type ListInvestigationFilters,
+  type PaginatedInvestigations,
+} from "./investigations/index.js";
+
+// Provider connection module (CI/platform/notification provider connections)
+export {
+  type CIProviderType,
+  type PlatformProviderType,
+  type NotificationProviderType,
+  type ProviderType,
+  type ProviderConnection,
+  type CreateProviderConnectionInput,
+  type UpdateProviderConnectionInput,
+  findByTenant,
+  findByTenantAndProvider,
+  findConnectionById,
+  findByExternalOrgId,
+  findActiveByProvider,
+  createProviderConnection,
+  updateProviderConnection,
+  deactivateConnection,
+  // Platform-specific lookups
+  deactivateByTenantAndProvider,
+  updateConnectionToken,
+  findGitHubAppConnection,
+  findSlackConnection,
+  findGitLabConnection,
+  findTenantByGitHubInstallation,
+  findTenantBySlackWorkspace,
+} from "./providerConnection/index.js";
+
+// Subscription module (Plan tiers and tenant subscriptions)
+// Note: PlanRow, TenantSubscriptionRow, rowToPlan, rowToSubscription are internal.
+export {
+  // Types
+  type PlanId,
+  type SubscriptionStatus,
+  type PlanLimitKey,
+  type PlanFeatureKey,
+  type PlanLimits,
+  type PlanFeatures,
+  type Plan,
+  type TenantSubscription,
+  type ChangePlanInput,
+  type PlanUsage,
+  type PlanLimitCheckResult,
+  type SubscriptionWithPlan,
+  type UsageLimitDetail,
+  type SubscriptionUsageResponse,
+  // Helpers
+  validatePlanId,
+  validateChangePlanInput,
+  isWithinLimit,
+  getPlanLimit,
+  hasPlanFeature,
+  getUsageForLimitKey,
+  // Repository
+  getAllPlans,
+  getPlanById,
+  getSubscriptionByTenant,
+  getSubscriptionWithPlan,
+  ensureSubscription,
+  changePlan,
+  getTenantUsage,
+  checkPlanLimit,
+  enforcePlanLimit,
+} from "./subscription/index.js";
 
 // Risk rules module (Context-Aware Risk Scoring)
 // Note: CustomRiskRuleRow, RiskAssessmentRow, and row mappers are internal.

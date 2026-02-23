@@ -2,6 +2,8 @@
  * Tenant Lookup Service
  *
  * Read operations for tenant lookup and retrieval.
+ * Provider-specific lookups (by GitHub installation, Slack workspace)
+ * have moved to providerConnection/repository.
  *
  * @module database/tenant/serviceLookup
  */
@@ -13,31 +15,39 @@ import {
   parseDbCount,
   TENANT_STATUS,
   TENANT_QUERIES,
+  SUBSCRIPTION_QUERIES,
   type Tenant,
 } from "../common.js";
-import { validateId, validateInstallationId, rowToTenant, extractTenant } from "./helpers.js";
+import { validateId, rowToTenant, extractTenant } from "./helpers.js";
 import type { TenantRow, TenantStatistics } from "./types.js";
 
 const logger = createLogger("tenant-service");
 
 /**
- * Find a tenant by GitHub installation ID.
+ * Find a tenant by organization name and provider.
+ * Provider-scoped lookup that prevents cross-provider collisions.
  *
- * @param installationId - GitHub App installation ID
+ * @param orgName - Organization name
+ * @param provider - Git provider (e.g., "github", "gitlab")
  * @returns Tenant or null if not found
  */
-export const findByGitHubInstallation = async (installationId: number): Promise<Tenant | null> => {
-  validateInstallationId(installationId);
+export const findByOrgNameAndProvider = async (
+  orgName: string,
+  provider: string
+): Promise<Tenant | null> => {
+  validateId(orgName, "orgName");
 
   try {
-    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_GITHUB_INSTALLATION, [
-      installationId,
+    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME_AND_PROVIDER, [
+      orgName,
+      provider,
       TENANT_STATUS.DELETED,
     ]);
     return extractTenant(result.rows);
   } catch (error) {
-    logger.error("Failed to find tenant by GitHub installation", {
-      installationId,
+    logger.error("Failed to find tenant by org name and provider", {
+      orgName,
+      provider,
       error: getErrorMessage(error),
     });
     throw error;
@@ -45,22 +55,22 @@ export const findByGitHubInstallation = async (installationId: number): Promise<
 };
 
 /**
- * Find a tenant by GitHub organization name.
+ * Find a tenant by organization name.
  *
- * @param org - GitHub organization name
+ * @param org - Organization name
  * @returns Tenant or null if not found
  */
-export const findByGitHubOrg = async (org: string): Promise<Tenant | null> => {
+export const findByOrgName = async (org: string): Promise<Tenant | null> => {
   validateId(org, "org");
 
   try {
-    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_GITHUB_ORG, [
+    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME, [
       org,
       TENANT_STATUS.DELETED,
     ]);
     return extractTenant(result.rows);
   } catch (error) {
-    logger.error("Failed to find tenant by GitHub org", {
+    logger.error("Failed to find tenant by org name", {
       org,
       error: getErrorMessage(error),
     });
@@ -69,23 +79,25 @@ export const findByGitHubOrg = async (org: string): Promise<Tenant | null> => {
 };
 
 /**
- * Find a tenant by Slack workspace ID.
+ * Find a tenant by GitLab group path.
+ * Searches by org_name since GitLab tenants use group path as org name.
  *
- * @param workspaceId - Slack workspace ID
+ * @param groupPath - GitLab group/namespace path
  * @returns Tenant or null if not found
  */
-export const findBySlackWorkspace = async (workspaceId: string): Promise<Tenant | null> => {
-  validateId(workspaceId, "workspaceId");
+export const findByGitLabGroup = async (groupPath: string): Promise<Tenant | null> => {
+  validateId(groupPath, "groupPath");
 
   try {
-    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_SLACK_WORKSPACE, [
-      workspaceId,
+    // GitLab tenants use the group path as org_name
+    const result = await query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME, [
+      groupPath,
       TENANT_STATUS.DELETED,
     ]);
     return extractTenant(result.rows);
   } catch (error) {
-    logger.error("Failed to find tenant by Slack workspace", {
-      workspaceId,
+    logger.error("Failed to find tenant by GitLab group", {
+      groupPath,
       error: getErrorMessage(error),
     });
     throw error;
@@ -161,31 +173,24 @@ export const getTenantStatistics = async (tenantId: string): Promise<TenantStati
 };
 
 /**
- * Get Slack credentials for a tenant by GitHub installation ID.
+ * Count active users belonging to a tenant.
+ * Used to determine if a user is the last member before account deletion.
  *
- * @param installationId - GitHub App installation ID
- * @returns Slack credentials or null if not found
+ * @param tenantId - Tenant ID
+ * @returns Number of active members
  */
-export const getSlackCredentials = async (
-  installationId: number
-): Promise<{ token: string; workspaceId: string; botUserId: string | null } | null> => {
-  validateInstallationId(installationId);
+export const countTenantMembers = async (tenantId: string): Promise<number> => {
+  validateId(tenantId, "tenantId");
 
   try {
-    const tenant = await findByGitHubInstallation(installationId);
-
-    if (tenant === null || tenant.slackBotToken === null || tenant.slackWorkspaceId === null) {
-      return null;
-    }
-
-    return {
-      token: tenant.slackBotToken,
-      workspaceId: tenant.slackWorkspaceId,
-      botUserId: tenant.slackBotUserId,
-    };
+    const result = await query<{ readonly count: string }>(
+      SUBSCRIPTION_QUERIES.COUNT_TEAM_MEMBERS,
+      [tenantId]
+    );
+    return parseDbCount(result.rows);
   } catch (error) {
-    logger.error("Failed to get Slack credentials", {
-      installationId,
+    logger.error("Failed to count tenant members", {
+      tenantId,
       error: getErrorMessage(error),
     });
     throw error;

@@ -2,12 +2,13 @@
  * Tenant Lifecycle Service
  *
  * Creation, update, and status management for tenants.
+ * Provider-specific state is stored in provider_connections,
+ * not on the tenants row.
  *
  * @module database/tenant/serviceLifecycle
  */
 
 import {
-  query,
   transaction,
   createLogger,
   getErrorMessage,
@@ -20,8 +21,14 @@ import {
   type TenantStatus,
   type TenantAuditAction,
   type CreateTenantFromGitHub,
+  type CreateTenantFromGitLab,
   type LinkSlackWorkspace,
 } from "../common.js";
+import {
+  createProviderConnection,
+  deactivateByTenantAndProvider,
+  findTenantByGitHubInstallation,
+} from "../providerConnection/repository.js";
 import { insertAuditLog } from "./audit.js";
 import {
   validateId,
@@ -30,16 +37,49 @@ import {
   validateSlackLinkInput,
   validateSlackInstallInput,
   rowToTenant,
-  getStatusAfterGitHubInstall,
-  getStatusAfterSlackInstall,
 } from "./helpers.js";
 import type { TenantRow } from "./types.js";
-import { findByGitHubInstallation } from "./serviceLookup.js";
 
 const logger = createLogger("tenant-service");
 
+// ==================== Internal Helpers ====================
+
+/**
+ * Create or find a tenant by org name and provider, returning the TenantRow.
+ * Used by all creation functions to ensure a tenant exists before
+ * creating the provider connection.
+ *
+ * Provider-scoped: a GitHub "acme" and GitLab "acme" are separate tenants.
+ */
+const ensureTenant = async (
+  client: Parameters<Parameters<typeof transaction>[0]>[0],
+  orgName: string,
+  provider: string,
+  status: TenantStatus
+): Promise<TenantRow> => {
+  const existing = await client.query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME_AND_PROVIDER, [
+    orgName,
+    provider,
+    TENANT_STATUS.DELETED,
+  ]);
+
+  if (existing.rows.length > 0) {
+    return existing.rows[0];
+  }
+
+  const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
+    orgName,
+    provider,
+    status,
+  ]);
+  return created.rows[0];
+};
+
+// ==================== Creation Functions ====================
+
 /**
  * Create a new tenant from GitHub App installation.
+ * Creates the tenant row + a github_app provider connection.
  *
  * @param data - GitHub installation data
  * @returns Created or updated tenant
@@ -49,51 +89,39 @@ export const createFromGitHubInstall = async (data: CreateTenantFromGitHub): Pro
 
   try {
     const result = await transaction(async (client) => {
-      const existing = await client.query<TenantRow>(TENANT_QUERIES.FIND_BY_GITHUB_ORG_ANY_STATUS, [
-        data.githubOrg,
-      ]);
+      const tenantRow = await ensureTenant(client, data.orgName, "github", TENANT_STATUS.ACTIVE);
 
-      if (existing.rows.length > 0) {
-        const existingRow = existing.rows[0];
-        const newStatus = getStatusAfterGitHubInstall(existingRow.slack_workspace_id !== null);
-
-        const updated = await client.query<TenantRow>(TENANT_QUERIES.UPDATE_GITHUB_INSTALL, [
-          data.githubInstallationId,
-          newStatus,
-          existingRow.id,
-        ]);
-
-        await insertAuditLog(client, updated.rows[0].id, AUDIT_ACTIONS.GITHUB_INSTALLED, {
-          installationId: data.githubInstallationId,
-          reinstall: true,
-        });
-
-        return updated.rows[0];
+      // Activate tenant if not already active
+      if (tenantRow.status !== TENANT_STATUS.ACTIVE) {
+        await client.query(TENANT_QUERIES.UPDATE_STATUS, [TENANT_STATUS.ACTIVE, tenantRow.id]);
       }
 
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_FROM_GITHUB, [
-        data.githubOrg,
-        data.githubInstallationId,
-        TENANT_STATUS.PENDING_SLACK,
-      ]);
-
-      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.GITHUB_INSTALLED, {
+      await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.GITHUB_INSTALLED, {
         installationId: data.githubInstallationId,
       });
 
-      return created.rows[0];
+      return tenantRow;
+    });
+
+    // Create the github_app provider connection (outside transaction for idempotency)
+    await createProviderConnection({
+      tenantId: result.id,
+      provider: "github_app",
+      connectionName: data.orgName,
+      externalOrgId: String(data.githubInstallationId),
+      config: { orgLogin: data.orgName, installedAt: new Date().toISOString() },
     });
 
     logger.info("Tenant created/updated from GitHub installation", {
       tenantId: result.id,
-      githubOrg: data.githubOrg,
+      orgName: data.orgName,
       installationId: data.githubInstallationId,
     });
 
     return rowToTenant(result);
   } catch (error) {
     logger.error("Failed to create tenant from GitHub installation", {
-      githubOrg: data.githubOrg,
+      orgName: data.orgName,
       installationId: data.githubInstallationId,
       error: getErrorMessage(error),
     });
@@ -103,6 +131,7 @@ export const createFromGitHubInstall = async (data: CreateTenantFromGitHub): Pro
 
 /**
  * Link a Slack workspace to an existing tenant.
+ * Creates a slack provider connection.
  *
  * @param data - Slack workspace data to link
  * @returns Updated tenant
@@ -118,33 +147,31 @@ export const linkSlackWorkspace = async (data: LinkSlackWorkspace): Promise<Tena
         throw new NotFoundError(`Tenant not found: ${data.tenantId}`);
       }
 
-      const newStatus = getStatusAfterSlackInstall(current.rows[0].github_installation_id !== null);
-
-      const updated = await client.query<TenantRow>(TENANT_QUERIES.UPDATE_SLACK_LINK, [
-        data.slackWorkspaceId,
-        data.slackTeamName,
-        data.slackBotToken,
-        data.slackBotUserId ?? null,
-        newStatus,
-        data.tenantId,
-      ]);
-
       await insertAuditLog(client, data.tenantId, AUDIT_ACTIONS.SLACK_INSTALLED, {
         workspaceId: data.slackWorkspaceId,
         teamName: data.slackTeamName,
       });
 
-      if (newStatus === TENANT_STATUS.ACTIVE) {
-        await insertAuditLog(client, data.tenantId, AUDIT_ACTIONS.ACTIVATED, {});
-      }
+      return current.rows[0];
+    });
 
-      return updated.rows[0];
+    // Create the slack provider connection
+    await createProviderConnection({
+      tenantId: data.tenantId,
+      provider: "slack",
+      connectionName: data.slackTeamName,
+      externalOrgId: data.slackWorkspaceId,
+      accessToken: data.slackBotToken,
+      config: {
+        teamName: data.slackTeamName,
+        botUserId: data.slackBotUserId ?? null,
+        installedAt: new Date().toISOString(),
+      },
     });
 
     logger.info("Slack workspace linked to tenant", {
       tenantId: data.tenantId,
       workspaceId: data.slackWorkspaceId,
-      status: result.status,
     });
 
     return rowToTenant(result);
@@ -163,29 +190,27 @@ export const linkSlackWorkspace = async (data: LinkSlackWorkspace): Promise<Tena
 };
 
 /**
- * Create a tenant from Slack installation (before GitHub App is installed).
+ * Create a tenant from Slack installation (before any CI provider is installed).
+ * Creates a tenant + slack provider connection.
  *
  * @param slackData - Slack installation data
- * @param githubOrgHint - Optional GitHub org name hint
+ * @param orgNameHint - Optional org name hint (defaults to Slack team name)
  * @returns Created tenant
  */
 export const createFromSlackInstall = async (
   slackData: Omit<LinkSlackWorkspace, "tenantId">,
-  githubOrgHint?: string
+  orgNameHint?: string
 ): Promise<Tenant> => {
   validateSlackInstallInput(slackData);
 
-  const orgName = githubOrgHint ?? slackData.slackTeamName;
+  const orgName = orgNameHint ?? slackData.slackTeamName;
 
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_FROM_SLACK, [
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
         orgName,
-        slackData.slackWorkspaceId,
-        slackData.slackTeamName,
-        slackData.slackBotToken,
-        slackData.slackBotUserId ?? null,
-        TENANT_STATUS.PENDING_GITHUB,
+        "github",
+        TENANT_STATUS.ACTIVE,
       ]);
 
       await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.SLACK_INSTALLED, {
@@ -194,6 +219,20 @@ export const createFromSlackInstall = async (
       });
 
       return created.rows[0];
+    });
+
+    // Create the slack provider connection
+    await createProviderConnection({
+      tenantId: result.id,
+      provider: "slack",
+      connectionName: slackData.slackTeamName,
+      externalOrgId: slackData.slackWorkspaceId,
+      accessToken: slackData.slackBotToken,
+      config: {
+        teamName: slackData.slackTeamName,
+        botUserId: slackData.slackBotUserId ?? null,
+        installedAt: new Date().toISOString(),
+      },
     });
 
     logger.info("Tenant created from Slack installation", {
@@ -210,6 +249,97 @@ export const createFromSlackInstall = async (
     throw error;
   }
 };
+
+/**
+ * Create a tenant from GitLab OAuth login.
+ * Creates a tenant + gitlab provider connection.
+ *
+ * @param data - GitLab group data
+ * @returns Created tenant
+ */
+export const createFromGitLabGroup = async (data: CreateTenantFromGitLab): Promise<Tenant> => {
+  validateId(data.gitlabGroupPath, "gitlabGroupPath");
+
+  try {
+    const result = await transaction(async (client) => {
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
+        data.gitlabGroupPath,
+        "gitlab",
+        TENANT_STATUS.ACTIVE,
+      ]);
+
+      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.GITLAB_LINKED, {
+        gitlabGroupPath: data.gitlabGroupPath,
+      });
+
+      return created.rows[0];
+    });
+
+    // Create the gitlab provider connection
+    await createProviderConnection({
+      tenantId: result.id,
+      provider: "gitlab",
+      connectionName: data.gitlabGroupPath,
+      externalOrgId: data.gitlabGroupPath,
+      config: { groupPath: data.gitlabGroupPath },
+    });
+
+    logger.info("Tenant created from GitLab group", {
+      tenantId: result.id,
+      gitlabGroupPath: data.gitlabGroupPath,
+    });
+
+    return rowToTenant(result);
+  } catch (error) {
+    logger.error("Failed to create tenant from GitLab group", {
+      gitlabGroupPath: data.gitlabGroupPath,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Create a new tenant from a GitHub OAuth login.
+ *
+ * Used when a GitHub user logs in but has no matching tenant.
+ * Creates a minimal tenant using the GitHub username or org name —
+ * the GitHub App installation can be linked later.
+ */
+export const createFromGitHubLogin = async (orgName: string): Promise<Tenant> => {
+  validateId(orgName, "orgName");
+
+  try {
+    const result = await transaction(async (client) => {
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
+        orgName,
+        "github",
+        TENANT_STATUS.ACTIVE,
+      ]);
+
+      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.GITHUB_LINKED, {
+        orgName,
+      });
+
+      return created.rows[0];
+    });
+
+    logger.info("Tenant created from GitHub login", {
+      tenantId: result.id,
+      orgName,
+    });
+
+    return rowToTenant(result);
+  } catch (error) {
+    logger.error("Failed to create tenant from GitHub login", {
+      orgName,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+// ==================== Status Management ====================
 
 /**
  * Update tenant status with audit logging.
@@ -281,37 +411,39 @@ export const deleteTenant = async (tenantId: string): Promise<void> => {
 };
 
 /**
- * Handle GitHub App uninstallation.
+ * Hard-delete a tenant and all associated data.
  *
- * @param installationId - GitHub App installation ID
+ * Deletes tenant_subscriptions first (no FK CASCADE), then deletes the tenant row.
+ * FK CASCADE handles: provider_connections, repository_channel_mappings, tenant_audit_log.
+ * FK SET NULL handles: analyses, events, slack_messages, webhook_activity_log,
+ *   incident_alerts, incident_triage_results.
+ *
+ * Call this only after external resource cleanup is complete (best-effort).
  */
-export const handleGitHubUninstall = async (installationId: number): Promise<void> => {
-  validateInstallationId(installationId);
+export const hardDeleteTenant = async (tenantId: string): Promise<void> => {
+  validateId(tenantId, "tenantId");
 
   try {
-    const tenant = await findByGitHubInstallation(installationId);
+    await transaction(async (client) => {
+      // Delete tenant_subscriptions first (no FK CASCADE to tenants)
+      await client.query("DELETE FROM tenant_subscriptions WHERE tenant_id = $1", [tenantId]);
 
-    if (tenant === null) {
-      logger.warn("GitHub uninstall for unknown installation", { installationId });
-      return;
+      // Hard-delete the tenant row — FK cascades handle the rest
+      const { rowCount } = await client.query("DELETE FROM tenants WHERE id = $1", [tenantId]);
+
+      if (rowCount === 0) {
+        throw new NotFoundError(`Tenant not found: ${tenantId}`);
+      }
+    });
+
+    logger.info("Tenant permanently deleted", { tenantId });
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      throw error;
     }
 
-    await transaction(async (client) => {
-      await client.query(TENANT_QUERIES.UPDATE_GITHUB_UNINSTALL, [
-        TENANT_STATUS.DELETED,
-        tenant.id,
-      ]);
-
-      await insertAuditLog(client, tenant.id, AUDIT_ACTIONS.GITHUB_UNINSTALLED, { installationId });
-    });
-
-    logger.info("Handled GitHub App uninstallation", {
-      tenantId: tenant.id,
-      installationId,
-    });
-  } catch (error) {
-    logger.error("Failed to handle GitHub uninstall", {
-      installationId,
+    logger.error("Failed to hard delete tenant", {
+      tenantId,
       error: getErrorMessage(error),
     });
     throw error;
@@ -319,21 +451,39 @@ export const handleGitHubUninstall = async (installationId: number): Promise<voi
 };
 
 /**
- * Update Slack bot token for a tenant.
+ * Handle GitHub App uninstallation.
+ * Deactivates the github_app provider connection and soft-deletes the tenant.
  *
- * @param tenantId - Tenant ID
- * @param newToken - New Slack bot token
+ * @param installationId - GitHub App installation ID
  */
-export const updateSlackToken = async (tenantId: string, newToken: string): Promise<void> => {
-  validateId(tenantId, "tenantId");
-  validateId(newToken, "newToken");
+export const handleGitHubUninstall = async (installationId: number): Promise<void> => {
+  validateInstallationId(installationId);
 
   try {
-    await query(TENANT_QUERIES.UPDATE_SLACK_TOKEN, [newToken, tenantId]);
-    logger.info("Slack token updated", { tenantId });
+    const tenantRow = await findTenantByGitHubInstallation(installationId);
+
+    if (tenantRow === null) {
+      logger.warn("GitHub uninstall for unknown installation", { installationId });
+      return;
+    }
+
+    await transaction(async (client) => {
+      await client.query(TENANT_QUERIES.UPDATE_STATUS, [TENANT_STATUS.DELETED, tenantRow.id]);
+      await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.GITHUB_UNINSTALLED, {
+        installationId,
+      });
+    });
+
+    // Deactivate the github_app connection
+    await deactivateByTenantAndProvider(tenantRow.id, "github_app");
+
+    logger.info("Handled GitHub App uninstallation", {
+      tenantId: tenantRow.id,
+      installationId,
+    });
   } catch (error) {
-    logger.error("Failed to update Slack token", {
-      tenantId,
+    logger.error("Failed to handle GitHub uninstall", {
+      installationId,
       error: getErrorMessage(error),
     });
     throw error;

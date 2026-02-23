@@ -709,11 +709,12 @@ export interface GitHubPREvent {
 
 /**
  * Tenant status in the multi-tenant lifecycle.
- * - pending_slack: GitHub installed, awaiting Slack connection
- * - pending_github: Slack installed, awaiting GitHub connection
- * - active: Both installed, ready to use
+ * - active: Ready to use (provider connections are independent)
  * - suspended: Temporarily disabled
  * - deleted: Soft deleted
+ *
+ * Legacy values "pending_slack" and "pending_github" are kept in the type
+ * for backward compatibility during migration but should not be used in new code.
  */
 export type TenantStatus = "pending_slack" | "pending_github" | "active" | "suspended" | "deleted";
 
@@ -724,18 +725,12 @@ export type TenantEmbeddingTier = "LIGHT" | "STANDARD" | "PREMIUM";
 
 /**
  * Tenant entity - represents a customer organization using Kenchi.
- * Links a GitHub organization to a Slack workspace.
+ * Provider-neutral: all provider-specific state lives in provider_connections.
  */
 export interface Tenant {
   readonly id: string;
-  readonly githubOrg: string;
-  readonly githubInstallationId: number | null;
-  readonly githubAppInstalledAt: Date | null;
-  readonly slackWorkspaceId: string | null;
-  readonly slackTeamName: string | null;
-  readonly slackBotToken: string | null;
-  readonly slackBotUserId: string | null;
-  readonly slackAppInstalledAt: Date | null;
+  readonly orgName: string;
+  readonly provider: string;
   readonly status: TenantStatus;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -750,8 +745,15 @@ export interface Tenant {
  * Data required to create a tenant from GitHub App installation.
  */
 export interface CreateTenantFromGitHub {
-  readonly githubOrg: string;
+  readonly orgName: string;
   readonly githubInstallationId: number;
+}
+
+/**
+ * Data required to create a tenant from GitLab OAuth login.
+ */
+export interface CreateTenantFromGitLab {
+  readonly gitlabGroupPath: string;
 }
 
 /**
@@ -771,6 +773,8 @@ export interface LinkSlackWorkspace {
 export type TenantAuditAction =
   | "github_installed"
   | "github_uninstalled"
+  | "github_linked"
+  | "gitlab_linked"
   | "slack_installed"
   | "slack_uninstalled"
   | "activated"
@@ -778,7 +782,8 @@ export type TenantAuditAction =
   | "deleted"
   | "ci_failure_processed"
   | "slack_message_sent"
-  | "github_comment_posted";
+  | "github_comment_posted"
+  | "plan_changed";
 
 /**
  * Tenant audit log entry.
@@ -880,6 +885,14 @@ export interface Config {
   readonly GITHUB_WEBHOOK_SECRET: string;
   readonly GITHUB_APP_SLUG?: string;
 
+  // Vercel CI Provider Configuration
+  readonly VERCEL_WEBHOOK_SECRET?: string;
+  readonly VERCEL_API_TOKEN?: string;
+
+  // Netlify CI Provider Configuration
+  readonly NETLIFY_WEBHOOK_SECRET?: string;
+  readonly NETLIFY_API_TOKEN?: string;
+
   // Database Configuration
   readonly DATABASE_URL: string;
   readonly VECTOR_DB_URL: string;
@@ -899,6 +912,7 @@ export interface Config {
   readonly API_URL: string;
   readonly SLACK_BOT_URL: string;
   readonly GITHUB_APP_URL: string;
+  readonly INCIDENT_TRIAGE_URL: string;
 
   // Redis Configuration
   readonly REDIS_URL: string;
@@ -908,6 +922,48 @@ export interface Config {
   readonly LLM_MAX_CONCURRENT_ANALYSIS?: number;
   /** Maximum time to wait in queue before timeout (ms) */
   readonly LLM_QUEUE_TIMEOUT_MS?: number;
+
+  // Auth / JWT
+  /** Secret for signing JWT access tokens */
+  readonly JWT_SECRET?: string;
+  /** 32-byte hex key for AES-256-GCM encryption of OAuth tokens at rest */
+  readonly ENCRYPTION_KEY?: string;
+
+  // GitHub OAuth App (separate from GitHub App)
+  readonly GITHUB_OAUTH_CLIENT_ID?: string;
+  readonly GITHUB_OAUTH_CLIENT_SECRET?: string;
+
+  // GitLab OAuth
+  readonly GITLAB_OAUTH_CLIENT_ID?: string;
+  readonly GITLAB_OAUTH_CLIENT_SECRET?: string;
+
+  // Bitbucket OAuth
+  readonly BITBUCKET_OAUTH_CLIENT_ID?: string;
+  readonly BITBUCKET_OAUTH_CLIENT_SECRET?: string;
+
+  // Azure DevOps OAuth
+  readonly AZURE_DEVOPS_OAUTH_CLIENT_ID?: string;
+  readonly AZURE_DEVOPS_OAUTH_CLIENT_SECRET?: string;
+
+  // Vercel Integration OAuth
+  readonly VERCEL_OAUTH_CLIENT_ID?: string;
+  readonly VERCEL_OAUTH_CLIENT_SECRET?: string;
+
+  // Netlify Integration OAuth
+  readonly NETLIFY_OAUTH_CLIENT_ID?: string;
+  readonly NETLIFY_OAUTH_CLIENT_SECRET?: string;
+
+  // Frontend URL (for OAuth redirects)
+  readonly FRONTEND_URL: string;
+  readonly OAUTH_CALLBACK_BASE_URL: string;
+
+  // Internal service-to-service authentication
+  /** Shared secret for HMAC-SHA256 signing of inter-service requests */
+  readonly INTERNAL_SERVICE_SECRET?: string;
+
+  // Aggregation timing overrides
+  readonly AGGREGATION_DEBOUNCE_MS?: number;
+  readonly AGGREGATION_MAX_WAIT_MS?: number;
 }
 
 // ==================== Signed URL Types ====================
@@ -965,6 +1021,8 @@ export interface ErrorContext {
   readonly suggestion?: string;
   /** Additional metadata for logging. */
   readonly metadata?: Record<string, unknown>;
+  /** External service name override (e.g., "OpenRouter" vs "OpenAI"). */
+  readonly service?: string;
 }
 
 /**

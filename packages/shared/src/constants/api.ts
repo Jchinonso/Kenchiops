@@ -195,6 +195,20 @@ export const API_PAGINATION_DEFAULTS = {
   DEFAULT_OFFSET: 0,
 } as const;
 
+/**
+ * Dashboard-specific pagination defaults.
+ */
+export const DASHBOARD_PAGINATION = {
+  /** Default items per page for dashboard list endpoints */
+  DEFAULT_LIMIT: 20,
+  /** Maximum items per page */
+  MAX_LIMIT: 200,
+  /** Maximum event IDs in a single batch lookup */
+  MAX_BATCH_SIZE: 100,
+  /** Minimum length for a valid commit SHA prefix in correlation lookups */
+  MIN_COMMIT_SHA_LENGTH: 7,
+} as const;
+
 // ==================== GitHub API Constants ====================
 
 /**

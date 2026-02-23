@@ -9,6 +9,7 @@ COPY packages/shared/package.json ./packages/shared/
 COPY services/api/package.json ./services/api/
 COPY services/slack-bot/package.json ./services/slack-bot/
 COPY services/github-app/package.json ./services/github-app/
+COPY services/incident-triage/package.json ./services/incident-triage/
 
 # Install dependencies (use npm install for workspaces compatibility)
 # Skip prepare scripts (husky) in Docker builds
@@ -31,6 +32,7 @@ COPY packages/shared/package.json ./packages/shared/
 COPY services/api/package.json ./services/api/
 COPY services/slack-bot/package.json ./services/slack-bot/
 COPY services/github-app/package.json ./services/github-app/
+COPY services/incident-triage/package.json ./services/incident-triage/
 
 # Install production dependencies only (use npm install for workspaces)
 # Skip prepare scripts (husky) in Docker builds
@@ -41,12 +43,14 @@ COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/services/api/dist ./services/api/dist
 COPY --from=builder /app/services/slack-bot/dist ./services/slack-bot/dist
 COPY --from=builder /app/services/github-app/dist ./services/github-app/dist
+COPY --from=builder /app/services/incident-triage/dist ./services/incident-triage/dist
 
 # Copy necessary files
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/services/api/package.json ./services/api/
 COPY --from=builder /app/services/slack-bot/package.json ./services/slack-bot/
 COPY --from=builder /app/services/github-app/package.json ./services/github-app/
+COPY --from=builder /app/services/incident-triage/package.json ./services/incident-triage/
 
 # Default to API service, can be overridden
 ENV SERVICE=api

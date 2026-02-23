@@ -32,35 +32,54 @@ const validateTokenBudget = (maxTokens: number): void => {
 };
 
 /**
- * Calculates the evidence token budget after reserving space for prompt structure.
- *
- * @param maxTokens - Maximum token budget
- * @returns Available tokens for evidence
+ * Measures the actual template overhead by building a prompt with empty evidence.
+ * This gives an accurate token budget for evidence instead of relying on a static constant.
  */
-const calculateEvidenceBudget = (maxTokens: number): number =>
-  maxTokens - LLM_CONSTANTS.TOKEN_BUFFER;
+const measureTemplateOverhead = (event: Event): number => {
+  const emptyEvidence: Evidence = { eventId: event.id, logs: [], collectedAt: "" };
+  const templatePrompt = buildAnalysisPrompt(event, emptyEvidence);
+  return estimateTokens(templatePrompt);
+};
+
+/**
+ * Safety factor applied to log reduction during the enforcement loop.
+ * Each iteration keeps 75% of remaining logs.
+ */
+const LOG_REDUCTION_FACTOR = 0.75;
+
+/**
+ * Enforces the token budget by progressively removing logs until the full prompt fits.
+ * This is the safety net that guarantees the prompt never exceeds maxTokens,
+ * regardless of estimation accuracy.
+ */
+const enforceTokenBudget = (event: Event, evidence: Evidence, maxTokens: number): Evidence => {
+  // let: result is iteratively reduced each loop pass
+  let result = evidence;
+  // let: promptTokens is recalculated each loop pass
+  let promptTokens = estimateTokens(buildAnalysisPrompt(event, result));
+
+  while (promptTokens > maxTokens && result.logs && result.logs.length > 1) {
+    const keepCount = Math.max(1, Math.floor(result.logs.length * LOG_REDUCTION_FACTOR));
+    result = { ...result, logs: result.logs.slice(0, keepCount) };
+    promptTokens = estimateTokens(buildAnalysisPrompt(event, result));
+  }
+
+  return result;
+};
 
 /**
  * Manages token budget by truncating evidence if necessary.
  *
- * Optimization strategy:
+ * Strategy:
  * 1. Quick estimate to avoid unnecessary prompt building
  * 2. Only build full prompt if estimate suggests it might fit
  * 3. Truncate evidence if actual tokens exceed budget
+ * 4. Safety net: verify final prompt fits and progressively reduce if not
  *
  * @param event - The incident event to analyze
  * @param evidence - Collected evidence about the incident
  * @param maxTokens - Maximum token budget for the prompt
  * @returns Evidence, truncated if necessary to fit within budget
- *
- * @example
- * ```typescript
- * const truncatedEvidence = manageTokenBudget(
- *   event,
- *   evidence,
- *   LLM_CONSTANTS.MAX_PROMPT_TOKENS
- * );
- * ```
  */
 export const manageTokenBudget = (
   event: Event,
@@ -69,55 +88,77 @@ export const manageTokenBudget = (
 ): Evidence => {
   validateTokenBudget(maxTokens);
 
+  // Cap log entries to prevent output JSON from exceeding max completion tokens.
+  // Each log entry produces ~500 chars in the LLM's JSON response; 50 entries keeps
+  // the output well under the 16K completion token limit.
+  const cappedEvidence =
+    evidence.logs && evidence.logs.length > LLM_CONSTANTS.MAX_EVIDENCE_LOGS
+      ? { ...evidence, logs: evidence.logs.slice(0, LLM_CONSTANTS.MAX_EVIDENCE_LOGS) }
+      : evidence;
+
   const originalLogCount = evidence.logs?.length ?? 0;
-  const estimate = estimateTokenBudget(evidence, maxTokens);
-  const evidenceTokenBudget = calculateEvidenceBudget(maxTokens);
+  const cappedLogCount = cappedEvidence.logs?.length ?? 0;
+  const templateOverhead = measureTemplateOverhead(event);
+  const evidenceTokenBudget = Math.max(1, maxTokens - templateOverhead);
+  const estimate = estimateTokenBudget(cappedEvidence, maxTokens);
+
+  if (cappedLogCount < originalLogCount) {
+    logger.info("Evidence logs capped for output size", {
+      originalLogCount,
+      cappedLogCount,
+      maxEvidenceLogs: LLM_CONSTANTS.MAX_EVIDENCE_LOGS,
+    });
+  }
 
   // Early return: estimate clearly exceeds budget - truncate immediately
   if (estimate.requiresTruncation) {
-    const truncated = truncateEvidence(evidence, evidenceTokenBudget);
-    const truncatedLogCount = truncated.logs?.length ?? 0;
+    const truncated = truncateEvidence(cappedEvidence, evidenceTokenBudget);
+    const verified = enforceTokenBudget(event, truncated, maxTokens);
+    const verifiedLogCount = verified.logs?.length ?? 0;
 
     logger.warn("Evidence truncated due to token budget (estimate)", {
       originalLogCount,
-      truncatedLogCount,
-      logsRemoved: originalLogCount - truncatedLogCount,
+      truncatedLogCount: verifiedLogCount,
+      logsRemoved: originalLogCount - verifiedLogCount,
       estimatedTokens: estimate.totalEstimatedTokens,
+      templateOverhead,
       maxTokens,
       evidenceTokenBudget,
     });
 
-    return truncated;
+    return verified;
   }
 
   // Estimate suggests it might fit - verify with actual prompt
-  const prompt = buildAnalysisPrompt(event, evidence);
+  const prompt = buildAnalysisPrompt(event, cappedEvidence);
   const actualTokens = estimateTokens(prompt);
 
-  // Early return: actual tokens fit - return original evidence
+  // Early return: actual tokens fit - return capped evidence
   if (actualTokens <= maxTokens) {
     logger.debug("Evidence fits within token budget", {
-      logCount: originalLogCount,
+      logCount: cappedLogCount,
       actualTokens,
       maxTokens,
     });
-    return evidence;
+    return cappedEvidence;
   }
 
-  // Actual tokens exceed budget - truncate evidence
-  const truncated = truncateEvidence(evidence, evidenceTokenBudget);
-  const truncatedLogCount = truncated.logs?.length ?? 0;
+  // Actual tokens exceed budget - truncate evidence with safety enforcement
+  const truncated = truncateEvidence(cappedEvidence, evidenceTokenBudget);
+  const verified = enforceTokenBudget(event, truncated, maxTokens);
+  const verifiedLogCount = verified.logs?.length ?? 0;
 
   logger.warn("Evidence truncated due to token budget (actual)", {
     originalLogCount,
-    truncatedLogCount,
-    logsRemoved: originalLogCount - truncatedLogCount,
+    truncatedLogCount: verifiedLogCount,
+    logsRemoved: originalLogCount - verifiedLogCount,
     actualTokens,
+    templateOverhead,
     maxTokens,
     evidenceTokenBudget,
   });
 
-  return truncated;
+  return verified;
 };
 
 /**

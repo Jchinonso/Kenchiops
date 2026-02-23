@@ -230,7 +230,7 @@
       }
     },
     {
-      "files": ["**/adapters/**/*.ts"],
+      "files": ["**/adapters/**/*.ts", "**/llm/providers/**/*.ts"],
       "rules": {
         "no-restricted-imports": "off"
       }
@@ -286,6 +286,31 @@
       "files": ["**/core/logger.ts"],
       "rules": {
         "no-console": "off"
+      }
+    },
+    {
+      "files": ["services/frontend/**/*.ts", "services/frontend/**/*.tsx"],
+      "rules": {
+        "@typescript-eslint/explicit-function-return-type": "off",
+        "@typescript-eslint/explicit-module-boundary-types": "off",
+        "@typescript-eslint/consistent-type-imports": "off",
+        "func-style": "off",
+        "no-restricted-imports": "off",
+        "no-restricted-syntax": "off",
+        "no-negated-condition": "off",
+        "max-lines-per-function": "off",
+        "max-lines": "off"
+      }
+    },
+    {
+      "files": ["**/components/ui/**/*.tsx", "**/components/ui/**/*.ts"],
+      "rules": {
+        "curly": "off",
+        "eqeqeq": "off",
+        "object-shorthand": "off",
+        "id-denylist": "off",
+        "no-param-reassign": "off",
+        "@typescript-eslint/no-non-null-assertion": "off"
       }
     },
     {

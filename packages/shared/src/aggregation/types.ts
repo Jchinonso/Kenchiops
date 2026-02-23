@@ -7,7 +7,7 @@
  * @module aggregation/types
  */
 
-import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS } from "../constants/index.js";
+import { REDIS_KEY_PREFIXES, AGGREGATION_DEFAULTS, type CIProvider } from "../constants/index.js";
 import type { getRedisClient } from "../queue/redisClient.js";
 import type { ProcessResult } from "../queue/types.js";
 import type {
@@ -112,6 +112,8 @@ export interface PendingAggregationPayload {
     readonly pendingChecks: readonly SerializedPendingCheckRun[];
     readonly firstFailureAt: string;
     readonly lastFailureAt: string;
+    /** CI provider identifier. Uses string (not CIProvider) for forward compat with unknown providers in queue. */
+    readonly provider?: string;
   };
 }
 
@@ -126,6 +128,8 @@ export interface PendingAggregation {
   readonly pendingChecks: readonly PendingCheckRun[];
   readonly firstFailureAt: Date;
   readonly lastFailureAt: Date;
+  /** CI provider identifier. Optional for backward compat (defaults to github_actions). */
+  readonly provider?: CIProvider;
 }
 
 /**
@@ -207,7 +211,7 @@ export interface PRContext {
  */
 export interface WorkflowContext {
   readonly name: string;
-  readonly duration: string;
+  readonly duration?: string;
 }
 
 /**
@@ -217,6 +221,27 @@ export interface RepositoryInfo {
   readonly fullName: string;
   readonly owner: string;
   readonly name: string;
+}
+
+/**
+ * Provider-agnostic build failure event.
+ *
+ * All CI providers normalize their webhook payloads to this shape
+ * before entering the aggregation pipeline. This is the single
+ * type that webhook adapters produce.
+ */
+export interface NormalizedBuildEvent {
+  readonly provider: CIProvider;
+  readonly buildId: string;
+  readonly buildName: string;
+  readonly conclusion: string;
+  readonly commitSha: string;
+  readonly branch?: string;
+  readonly repository: RepositoryInfo;
+  readonly pullRequestNumbers: readonly number[];
+  readonly installationId: number;
+  readonly timestamp: Date;
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -232,6 +257,8 @@ export interface AggregatedFailures {
   readonly workflowContext: WorkflowContext | null;
   readonly firstFailureAt: Date;
   readonly lastFailureAt: Date;
+  /** CI provider identifier. Optional for backward compat. */
+  readonly provider?: CIProvider;
 }
 
 /**
@@ -240,23 +267,34 @@ export interface AggregatedFailures {
 export interface AggregationKey {
   readonly repositoryFullName: string;
   readonly commitSha: string;
+  /** CI provider identifier. Optional for backward compat (defaults to github_actions). */
+  readonly provider?: CIProvider;
 }
 
 /**
- * Serializes aggregation key to string for Redis storage
+ * Serializes aggregation key to string for Redis storage.
+ *
+ * Format: {provider}:{repositoryFullName}:{commitSha}
+ * Provider defaults to "github_actions" for backward compatibility.
  */
 export const serializeAggregationKey = (key: AggregationKey): string =>
-  `${key.repositoryFullName}:${key.commitSha}`;
+  `${key.provider ?? "github_actions"}:${key.repositoryFullName}:${key.commitSha}`;
 
 /**
- * Deserializes aggregation key from string
+ * Deserializes aggregation key from string.
+ *
+ * Expected format: {provider}:{owner}/{repo}:{commitSha}
+ * The provider is the first segment (no "/" character).
+ * The repo name always contains "/" (owner/repo format).
  */
 export const deserializeAggregationKey = (serialized: string): AggregationKey => {
+  const firstColonIndex = serialized.indexOf(":");
   const lastColonIndex = serialized.lastIndexOf(":");
-  return {
-    repositoryFullName: serialized.substring(0, lastColonIndex),
-    commitSha: serialized.substring(lastColonIndex + 1),
-  };
+  const provider = serialized.substring(0, firstColonIndex) as CIProvider;
+  const repositoryFullName = serialized.substring(firstColonIndex + 1, lastColonIndex);
+  const commitSha = serialized.substring(lastColonIndex + 1);
+
+  return { repositoryFullName, commitSha, provider };
 };
 
 /**
@@ -295,15 +333,15 @@ export interface ConsolidatedPostResult {
  * Redis key prefixes for aggregation
  */
 export const AGGREGATION_KEYS = {
-  /** Hash storing failure data: kenchi:agg:{repo}:{sha}:failures */
+  /** Hash storing failure data: kenchi:agg:{provider}:{repo}:{sha}:failures */
   failures: (key: AggregationKey) =>
-    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:failures`,
-  /** Hash storing metadata: kenchi:agg:{repo}:{sha}:meta */
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.provider ?? "github_actions"}:${key.repositoryFullName}:${key.commitSha}:failures`,
+  /** Hash storing metadata: kenchi:agg:{provider}:{repo}:{sha}:meta */
   metadata: (key: AggregationKey) =>
-    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:meta`,
-  /** Debounce lock key: kenchi:agg:{repo}:{sha}:debounce */
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.provider ?? "github_actions"}:${key.repositoryFullName}:${key.commitSha}:meta`,
+  /** Debounce lock key: kenchi:agg:{provider}:{repo}:{sha}:debounce */
   debounce: (key: AggregationKey) =>
-    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.repositoryFullName}:${key.commitSha}:debounce`,
+    `${REDIS_KEY_PREFIXES.AGGREGATION}:${key.provider ?? "github_actions"}:${key.repositoryFullName}:${key.commitSha}:debounce`,
   /** Pattern to find all aggregation keys */
   pattern: `${REDIS_KEY_PREFIXES.AGGREGATION}:*:meta`,
 } as const;
@@ -317,6 +355,8 @@ export interface FailureContext {
   readonly pullRequestNumbers: readonly number[];
   readonly prContext: PRContext | null;
   readonly workflowContext: WorkflowContext | null;
+  /** CI provider identifier. Optional for backward compat. */
+  readonly provider?: CIProvider;
 }
 
 /**
@@ -333,6 +373,8 @@ export interface AggregationMetadata {
   readonly workflowContext: string | null;
   readonly firstFailureAt: string;
   readonly lastFailureAt: string;
+  /** CI provider identifier. Optional for backward compat. */
+  readonly provider?: string;
 }
 
 /**
@@ -359,6 +401,8 @@ export interface PendingCheckContext {
   readonly repositoryInfo: RepositoryInfo;
   readonly installationId: number;
   readonly pullRequestNumbers: readonly number[];
+  /** CI provider identifier. Optional for backward compat. */
+  readonly provider?: CIProvider;
 }
 
 /**
@@ -436,6 +480,8 @@ export interface ConsolidatedAnalysisPayload {
     readonly workflowContext: WorkflowContext | null;
     readonly firstFailureAt: string;
     readonly lastFailureAt: string;
+    /** CI provider identifier. Uses string (not CIProvider) for forward compat with unknown providers in queue. */
+    readonly provider?: string;
   };
 }
 
@@ -487,6 +533,14 @@ export interface AggregatorWorkerOptions {
   readonly pollIntervalMs?: number;
   /** Optional callback for worker errors (for health monitoring). */
   readonly onError?: WorkerErrorCallback;
+  /**
+   * Optional pre-enqueue readiness check. Called for each aggregation
+   * before it is dequeued from Redis. Return false to defer the aggregation
+   * (it stays in Redis and will be checked again on the next poll).
+   *
+   * Use case: check GitHub for in-progress check runs before processing.
+   */
+  readonly beforeEnqueue?: (key: AggregationKey) => Promise<boolean>;
 }
 
 // ==================== Internal Aggregator Types ====================

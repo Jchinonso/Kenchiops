@@ -24,6 +24,8 @@ export type { EventType } from "./types.js";
 export const EVENT_SOURCES = {
   /** GitHub App integration */
   GITHUB_APP: "github-app",
+  /** GitLab CI integration */
+  GITLAB: "gitlab",
   /** Slack Bot integration */
   SLACK_BOT: "slack-bot",
   /** API service */

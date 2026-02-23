@@ -1,42 +1,71 @@
 /**
  * Unit tests for OAuth Routes
+ *
+ * Updated for provider-neutral tenant model.
+ * - Tenant no longer has provider-specific fields
+ * - linkSlackWorkspace and createFromSlackInstall still exist
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import request from "supertest";
 import express, { type Express } from "express";
-import type { Tenant } from "@kenchi/shared";
+
+// Helper to create a provider-neutral mock tenant
+const createMockTenant = (overrides = {}) => ({
+  id: "tenant-123",
+  status: "pending_github" as const,
+  orgName: "test-org",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ragMonthlyBudgetUsd: 0,
+  ragPreferredTier: "STANDARD" as const,
+  ragAllowPremium: false,
+  ragDegradeOnBudgetWarning: true,
+  ...overrides,
+});
 
 // Mock dependencies
-jest.mock("@kenchi/shared", () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  })),
-  config: {
-    SLACK_CLIENT_ID: "test-client-id",
-    SLACK_CLIENT_SECRET: "test-client-secret",
-    SLACK_REDIRECT_URI: "https://example.com/slack/oauth/callback",
-  },
-  HTTP_STATUS: {
-    OK: 200,
-    BAD_REQUEST: 400,
-    INTERNAL_SERVER_ERROR: 500,
-  },
-  SLACK_OAUTH_TIMING: {
-    STATE_EXPIRY_MS: 600000,
-    CLEANUP_INTERVAL_MS: 60000,
-  },
-  SLACK_OAUTH_SCOPES_STRING: "chat:write,channels:read",
-  findByGitHubOrg: jest.fn(),
-  linkSlackWorkspace: jest.fn(),
-  createFromSlackInstall: jest.fn(),
-  getErrorMessage: jest.fn((error: unknown) =>
-    error instanceof Error ? error.message : String(error)
-  ),
-}));
+jest.mock("@kenchi/shared", () => {
+  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
+  return {
+    ...actual,
+    createLogger: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
+    config: {
+      SLACK_CLIENT_ID: "test-client-id",
+      SLACK_CLIENT_SECRET: "test-client-secret",
+      SLACK_REDIRECT_URI: "https://example.com/slack/oauth/callback",
+    },
+    findByOrgName: jest.fn(),
+    linkSlackWorkspace: jest.fn(),
+    createFromSlackInstall: jest.fn(),
+    getErrorMessage: jest.fn((error: unknown) =>
+      error instanceof Error ? error.message : String(error)
+    ),
+    createOAuthStateStore: jest.fn(() => {
+      const store = new Map<string, { createdAt: number; tenantId?: string }>();
+      return {
+        set: jest.fn(async (key: string, value: { createdAt: number; tenantId?: string }) => {
+          store.set(key, value);
+        }),
+        get: jest.fn(async (key: string) => store.get(key) ?? null),
+        delete: jest.fn(async (key: string) => {
+          store.delete(key);
+        }),
+      };
+    }),
+    asyncHandler: jest.fn(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (fn: any) => (req: any, res: any, next: any) => {
+        Promise.resolve(fn(req, res, next)).catch(next);
+      }
+    ),
+  };
+});
 
 // Mock crypto module - keep actual crypto for createHash (used by express/etag)
 jest.mock("crypto", () => {
@@ -55,30 +84,13 @@ global.fetch = mockFetch;
 
 // Import after mocks
 import { oauthRoutes } from "../routes/oauthRoutes.js";
-import { findByGitHubOrg, linkSlackWorkspace, createFromSlackInstall } from "@kenchi/shared";
+import { findByOrgName, linkSlackWorkspace, createFromSlackInstall } from "@kenchi/shared";
 
-const mockFindByGitHubOrg = findByGitHubOrg as jest.MockedFunction<typeof findByGitHubOrg>;
+const mockFindByGitHubOrg = findByOrgName as jest.MockedFunction<typeof findByOrgName>;
 const mockLinkSlackWorkspace = linkSlackWorkspace as jest.MockedFunction<typeof linkSlackWorkspace>;
 const mockCreateFromSlackInstall = createFromSlackInstall as jest.MockedFunction<
   typeof createFromSlackInstall
 >;
-
-// Helper function to create mock Tenant objects
-const createMockTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
-  id: "tenant-123",
-  status: "pending_github",
-  githubOrg: "test-org",
-  githubInstallationId: null,
-  githubAppInstalledAt: null,
-  slackWorkspaceId: "T123456",
-  slackTeamName: "Test Team",
-  slackBotToken: "xoxb-test-token",
-  slackBotUserId: "U123456",
-  slackAppInstalledAt: new Date(),
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
 
 // Helper to create mock Slack OAuth response
 const createMockSlackResponse = (overrides = {}) => ({
@@ -119,11 +131,7 @@ describe("OAuth Routes", () => {
     mockCreateFromSlackInstall.mockResolvedValue(
       createMockTenant({
         id: "tenant-new",
-        githubOrg: "",
-        slackWorkspaceId: "T789012",
-        slackTeamName: "New Team",
-        slackBotToken: "xoxb-new-token",
-        slackBotUserId: "U789012",
+        orgName: "",
       })
     );
   });
@@ -268,14 +276,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-existing",
           status: "active",
-          githubOrg: "Test Team",
-          githubInstallationId: 12345,
-          githubAppInstalledAt: new Date(),
-          slackWorkspaceId: null,
-          slackTeamName: null,
-          slackBotToken: null,
-          slackBotUserId: null,
-          slackAppInstalledAt: null,
+          orgName: "Test Team",
         })
       );
 
@@ -298,7 +299,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-new",
           status: "pending_github",
-          githubOrg: "",
+          orgName: "",
         })
       );
 
@@ -312,7 +313,6 @@ describe("OAuth Routes", () => {
     });
 
     it("should show success message for active tenant", async () => {
-      // Setup mock for active tenant with GitHub already installed
       mockFetch.mockResolvedValue({
         json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
       } as unknown as Response);
@@ -320,16 +320,12 @@ describe("OAuth Routes", () => {
       mockFindByGitHubOrg.mockResolvedValue(
         createMockTenant({
           status: "active",
-          githubInstallationId: 12345,
-          githubAppInstalledAt: new Date(),
         })
       );
 
       mockLinkSlackWorkspace.mockResolvedValue(
         createMockTenant({
           status: "active",
-          githubInstallationId: 12345,
-          githubAppInstalledAt: new Date(),
         })
       );
 
@@ -338,7 +334,6 @@ describe("OAuth Routes", () => {
       );
 
       expect(response.status).toBe(200);
-      // Verify it's a successful response with HTML content
       expect(response.text).toContain("<html>");
     });
 
@@ -494,7 +489,6 @@ describe("OAuth Routes", () => {
       );
 
       expect(response.status).toBe(200);
-      // Successfully processed, HTML response returned
       expect(response.text).toContain("<html>");
     });
 
@@ -521,8 +515,6 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-existing",
           status: "active",
-          githubInstallationId: 12345,
-          githubAppInstalledAt: new Date(),
         })
       );
 
@@ -683,9 +675,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-456",
           status: "active",
-          githubOrg: "existing-org",
-          githubInstallationId: 12345,
-          githubAppInstalledAt: new Date(),
+          orgName: "existing-org",
         })
       );
 
@@ -706,14 +696,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-github",
           status: "active",
-          githubOrg: "Test Team",
-          githubInstallationId: 12345,
-          githubAppInstalledAt: new Date(),
-          slackWorkspaceId: null,
-          slackTeamName: null,
-          slackBotToken: null,
-          slackBotUserId: null,
-          slackAppInstalledAt: null,
+          orgName: "Test Team",
         })
       );
 
@@ -787,7 +770,6 @@ describe("OAuth Routes", () => {
         `/slack/oauth/callback?code=test-code&state=${state}`
       );
 
-      // Response is successfully processed
       expect(response.status).toBe(200);
       expect(response.text).toContain("<html>");
     });
@@ -797,7 +779,7 @@ describe("OAuth Routes", () => {
         createMockTenant({
           id: "tenant-new",
           status: "pending_github",
-          githubOrg: "",
+          orgName: "",
         })
       );
 
@@ -809,7 +791,6 @@ describe("OAuth Routes", () => {
     });
 
     it("should not include GitHub App link for existing tenants", async () => {
-      // Setup mock for existing tenant with GitHub already installed
       mockFetch.mockResolvedValue({
         json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
       } as unknown as Response);
@@ -817,16 +798,12 @@ describe("OAuth Routes", () => {
       mockFindByGitHubOrg.mockResolvedValue(
         createMockTenant({
           status: "active",
-          githubInstallationId: 12345,
-          githubAppInstalledAt: new Date(),
         })
       );
 
       mockLinkSlackWorkspace.mockResolvedValue(
         createMockTenant({
           status: "active",
-          githubInstallationId: 12345,
-          githubAppInstalledAt: new Date(),
         })
       );
 
@@ -834,7 +811,6 @@ describe("OAuth Routes", () => {
         `/slack/oauth/callback?code=test-code&state=${state}`
       );
 
-      // When GitHub is already installed, no install link is needed
       expect(response.status).toBe(200);
     });
 
@@ -855,7 +831,6 @@ describe("OAuth Routes", () => {
       const state = "random-state-token";
       const longCode = "a".repeat(1000);
 
-      // Mock fetch to return a successful response - long code is just passed to Slack API
       mockFetch.mockResolvedValue({
         json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
       } as unknown as Response);
@@ -865,7 +840,6 @@ describe("OAuth Routes", () => {
         `/slack/oauth/callback?code=${longCode}&state=${state}`
       );
 
-      // Long code is accepted - validation happens at Slack API level
       expect(response.status).toBe(200);
     });
 
@@ -914,14 +888,12 @@ describe("OAuth Routes", () => {
         }),
       } as unknown as Response);
 
-      // Mock tenant service to handle the minimal data
       mockFindByGitHubOrg.mockResolvedValue(createMockTenant());
 
       const response = await request(app).get(
         `/slack/oauth/callback?code=test-code&state=${state}`
       );
 
-      // Missing team info is handled gracefully - OAuth flow completes
       expect(response.status).toBe(200);
     });
   });

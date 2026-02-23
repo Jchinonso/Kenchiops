@@ -164,7 +164,7 @@ After your implementation is verified:
 
 2. **If the change is significant** — Launch the `kenchi-refactor-analyst` agent to audit your code for CLAUDE.md compliance, code smells, and performance issues.
 
-3. **When ready to commit** — Launch the `git-commit-staged` agent to stage and commit with a proper conventional commit message. Never commit manually.
+3. **Do NOT auto-commit** — Only commit when the user explicitly asks. If they do, delegate to `git-commit-staged`.
 
 ## Anti-Patterns to Avoid
 
@@ -218,7 +218,7 @@ Before considering your work done:
 - [ ] Parameterized queries only (no SQL string interpolation)
 - [ ] Tests delegated to test-engineer (if applicable)
 - [ ] Code review delegated to kenchi-refactor-analyst (if significant change)
-- [ ] Commit delegated to git-commit-staged
+- [ ] Changes ready for commit (only when user requests)
 
 # Persistent Agent Memory
 

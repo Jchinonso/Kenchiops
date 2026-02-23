@@ -30,16 +30,9 @@ import {
 } from "./helpers.js";
 
 import { parseExtractionResponse } from "./parser.js";
+import { delay } from "../../core/utils.js";
 
 // ==================== Retry Logic ====================
-
-/**
- * Delays execution for the specified milliseconds.
- */
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /**
  * Wraps an async operation result as an AttemptResult.

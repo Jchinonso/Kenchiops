@@ -9,7 +9,8 @@
 
 import {
   logger,
-  findBySlackWorkspace,
+  findTenantBySlackWorkspace,
+  findGitHubAppConnection,
   deleteMappingsForChannel,
   getErrorMessage,
   SLACK_ACTION_IDS,
@@ -35,6 +36,7 @@ import {
   buildRepoSelectModal,
   buildNoReposModal,
   getAvailableRepositories,
+  buildLoadingReposModal,
 } from "./channelHandler.js";
 import { toSlackSDKView, type SlackApp } from "../types/slackTypes.js";
 import type { View } from "@slack/types";
@@ -58,7 +60,7 @@ export const handleBotLeftChannel = async (
   });
 
   try {
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
 
     if (tenant) {
       const deletedCount = await deleteMappingsForChannel(tenant.id, channelId);
@@ -137,7 +139,7 @@ export const setupSlackHandlers = (app: SlackApp): void => {
       return;
     }
 
-    await handleBotJoinedChannel(client, event.channel, botId);
+    await handleBotJoinedChannel(client, event.channel, event.team);
   });
 
   // Handle bot leaving a channel - clean up repository mappings
@@ -151,8 +153,7 @@ export const setupSlackHandlers = (app: SlackApp): void => {
       return;
     }
 
-    const workspaceId = authResult.team_id || "";
-    await handleBotLeftChannel(workspaceId, event.channel);
+    await handleBotLeftChannel(event.team, event.channel);
   });
 
   // Register action button handlers
@@ -271,9 +272,22 @@ const setupAppHomeHandlers = (app: SlackApp): void => {
     await ack();
   });
 
+  // Track in-flight modal opens per user to prevent duplicate clicks
+  const repoModalInFlight = new Set<string>();
+
   // Repository selection button
   app.action(SLACK_ACTION_IDS.SELECT_REPOSITORY, async ({ ack, action, body, client }) => {
     await ack();
+
+    const userId = body.user.id;
+
+    // Skip if this user already has a modal being opened
+    if (repoModalInFlight.has(userId)) {
+      logger.info("Skipping duplicate select_repository click", { userId });
+      return;
+    }
+
+    repoModalInFlight.add(userId);
 
     try {
       if (action.type !== "button" || !("value" in action) || !action.value) {
@@ -292,38 +306,54 @@ const setupAppHomeHandlers = (app: SlackApp): void => {
         return;
       }
 
-      const authResult = await client.auth.test();
-      const workspaceId = authResult.team_id || "";
+      // Open loading modal immediately to avoid trigger_id expiration (~3s TTL)
+      const loadingView = buildLoadingReposModal(channelName);
+      const openResult = await client.views.open({
+        trigger_id: body.trigger_id,
+        view: toSlackSDKView(loadingView) as View,
+      });
 
-      const tenant = await findBySlackWorkspace(workspaceId);
+      const viewId = (openResult.view as { id?: string })?.id;
+      if (!viewId) {
+        logger.error("Failed to get view ID from loading modal");
+        return;
+      }
 
-      if (!tenant || !tenant.githubInstallationId) {
+      const workspaceId = "team" in body && body.team ? (body.team as { id: string }).id : "";
+
+      const tenant = await findTenantBySlackWorkspace(workspaceId);
+      const ghConn = tenant ? await findGitHubAppConnection(tenant.id) : null;
+      const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
+
+      if (!tenant || !installationId) {
         logger.error("No GitHub installation found for workspace", { workspaceId });
         return;
       }
 
-      const repositories = await getAvailableRepositories(tenant.githubInstallationId, tenant.id);
+      const repositories = await getAvailableRepositories(installationId, tenant.id);
 
-      const view =
+      const finalView =
         repositories.length > 0
           ? buildRepoSelectModal(channelId, channelName, repositories, messageTs)
           : buildNoReposModal(channelName);
 
-      await client.views.open({
-        trigger_id: body.trigger_id,
-        view: toSlackSDKView(view) as View,
+      await client.views.update({
+        view_id: viewId,
+        view: toSlackSDKView(finalView) as View,
       });
 
       logger.info("Opened repository selection modal from button", {
         channelId,
         channelName,
-        userId: body.user.id,
+        userId,
         repositoryCount: repositories.length,
       });
     } catch (error) {
       logger.error("Failed to open repository selection modal", {
         error: getErrorMessage(error),
       });
+    } finally {
+      repoModalInFlight.delete(userId);
     }
   });
 };

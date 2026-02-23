@@ -5,26 +5,28 @@
  * Example: npx ts-node scripts/fetch-ci-logs.ts kenchiops Kenchiops 20922586134
  */
 
+// eslint-disable-next-line no-restricted-imports -- standalone CLI script, not a service
 import { Octokit } from "@octokit/rest";
+// eslint-disable-next-line no-restricted-imports -- standalone CLI script, not a service
 import { createAppAuth } from "@octokit/auth-app";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import "dotenv/config";
-import { createLogger } from "@kenchi/shared";
+import { createLogger, ValidationError, config } from "@kenchi/shared";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const logger = createLogger("fetch-ci-logs");
 
-const { GITHUB_APP_ID } = process.env;
-const GITHUB_APP_PRIVATE_KEY = process.env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, "\n");
-const { GITHUB_INSTALLATION_ID } = process.env;
+const { GITHUB_APP_ID } = config;
+const GITHUB_APP_PRIVATE_KEY = config.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, "\n");
+const { GITHUB_INSTALLATION_ID } = config;
 
 const fetchLogs = async (owner: string, repo: string, runId: number): Promise<void> => {
   if (!GITHUB_APP_ID || !GITHUB_APP_PRIVATE_KEY || !GITHUB_INSTALLATION_ID) {
-    throw new Error("Missing GitHub App credentials in .env");
+    throw new ValidationError("Missing GitHub App credentials in .env");
   }
 
   const octokit = new Octokit({

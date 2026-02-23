@@ -17,7 +17,8 @@ jest.mock("@kenchi/shared", () => ({
     error: jest.fn(),
     debug: jest.fn(),
   })),
-  findBySlackWorkspace: jest.fn(),
+  findTenantBySlackWorkspace: jest.fn(),
+  findSlackConnection: jest.fn(),
   findAllMappingsForTenant: jest.fn(),
   getTenantStatistics: jest.fn(),
   formatRelativeTime: jest.fn((_date: Date) => "2 hours ago"),
@@ -69,7 +70,8 @@ describe("App Home Handler", () => {
     it("should publish App Home view with active tenant and mappings", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const {
-        findBySlackWorkspace,
+        findTenantBySlackWorkspace,
+        findSlackConnection,
         findAllMappingsForTenant,
         getTenantStatistics,
         formatRelativeTime,
@@ -79,9 +81,23 @@ describe("App Home Handler", () => {
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: "Test Team",
+      };
+
+      const mockSlackConn = {
+        id: "prc_slack123",
+        tenantId: "tenant-123",
+        provider: "slack",
+        connectionName: "Test Team",
+        externalOrgId: "T123456",
+        config: {
+          teamName: "Test Team",
+          botUserId: "U123456",
+          installedAt: "2024-01-01T00:00:00Z",
+        },
+        accessToken: "xoxb-token",
+        isActive: true,
       };
 
       const mockMappings = [
@@ -103,7 +119,8 @@ describe("App Home Handler", () => {
         lastAlertTime: new Date("2025-12-25T10:00:00Z"),
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue(mockSlackConn);
       findAllMappingsForTenant.mockResolvedValue(mockMappings);
       getTenantStatistics.mockResolvedValue(mockStats);
 
@@ -128,7 +145,7 @@ describe("App Home Handler", () => {
           },
         ],
         tenant: {
-          githubOrg: "test-org",
+          orgName: "test-org",
           status: "active",
           slackTeamName: "Test Team",
         },
@@ -152,11 +169,11 @@ describe("App Home Handler", () => {
 
     it("should handle case with no tenant found", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
-      findBySlackWorkspace.mockResolvedValue(null);
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       await handleAppHomeOpened(mockClient, "U123456");
 
@@ -179,19 +196,23 @@ describe("App Home Handler", () => {
 
     it("should handle case with tenant but no mappings", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: null,
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue(null);
       findAllMappingsForTenant.mockResolvedValue([]);
       getTenantStatistics.mockResolvedValue(null);
 
@@ -201,7 +222,7 @@ describe("App Home Handler", () => {
         botStatus: "active",
         repositoryMappings: [],
         tenant: {
-          githubOrg: "test-org",
+          orgName: "test-org",
           status: "active",
           slackTeamName: undefined,
         },
@@ -216,16 +237,19 @@ describe("App Home Handler", () => {
 
     it("should handle case with statistics but no lastAlertTime", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: "Test Team",
       };
 
       const mockStats = {
@@ -234,7 +258,11 @@ describe("App Home Handler", () => {
         lastAlertTime: null,
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue({
+        id: "prc_slack123",
+        config: { teamName: "Test Team" },
+      });
       findAllMappingsForTenant.mockResolvedValue([]);
       getTenantStatistics.mockResolvedValue(mockStats);
 
@@ -262,13 +290,13 @@ describe("App Home Handler", () => {
 
     it("should publish error view when buildAppHomeView fails", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView, buildErrorView } = jest.requireMock(
         "../formatters/appHomeFormatter.js"
       ) as any;
 
-      findBySlackWorkspace.mockResolvedValue(null);
+      findTenantBySlackWorkspace.mockResolvedValue(null);
       buildAppHomeView.mockImplementation(() => {
         throw new Error("View builder crashed");
       });
@@ -287,11 +315,11 @@ describe("App Home Handler", () => {
 
     it("should log error when error view publication fails", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
-      findBySlackWorkspace.mockResolvedValue(null);
+      findTenantBySlackWorkspace.mockResolvedValue(null);
       buildAppHomeView.mockImplementation(() => {
         throw new Error("View builder crashed");
       });
@@ -307,11 +335,11 @@ describe("App Home Handler", () => {
 
     it("should handle error when getTenantInfo fails", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
-      findBySlackWorkspace.mockRejectedValue(new Error("Tenant lookup failed"));
+      findTenantBySlackWorkspace.mockRejectedValue(new Error("Tenant lookup failed"));
 
       await handleAppHomeOpened(mockClient, "U123456");
 
@@ -327,19 +355,26 @@ describe("App Home Handler", () => {
 
     it("should handle error when getRepositoryMappings fails", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: "Test Team",
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue({
+        id: "prc_slack123",
+        config: { teamName: "Test Team" },
+      });
       findAllMappingsForTenant.mockRejectedValue(new Error("Mappings lookup failed"));
       getTenantStatistics.mockResolvedValue(null);
 
@@ -355,19 +390,26 @@ describe("App Home Handler", () => {
 
     it("should handle error when getStatistics fails", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: "Test Team",
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue({
+        id: "prc_slack123",
+        config: { teamName: "Test Team" },
+      });
       findAllMappingsForTenant.mockResolvedValue([]);
       getTenantStatistics.mockRejectedValue(new Error("Statistics lookup failed"));
 
@@ -394,34 +436,43 @@ describe("App Home Handler", () => {
       expect(mockClient.views.publish).toHaveBeenCalledTimes(1); // Error view
     });
 
-    it("should execute findBySlackWorkspace with correct workspace ID", async () => {
+    it("should execute findTenantBySlackWorkspace with correct workspace ID", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
 
       mockClient.auth.test.mockResolvedValue({ team_id: "T999999" });
-      findBySlackWorkspace.mockResolvedValue(null);
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       await handleAppHomeOpened(mockClient, "U123456");
 
-      expect(findBySlackWorkspace).toHaveBeenCalledWith("T999999");
+      expect(findTenantBySlackWorkspace).toHaveBeenCalledWith("T999999");
     });
 
     it("should execute findAllMappingsForTenant and getTenantStatistics in parallel", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: "Test Team",
       };
 
+      // let: needed for tracking call timing in async mocks
       let mappingsCallTime = 0;
+      // let: needed for tracking call timing in async mocks
       let statisticsCallTime = 0;
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue({
+        id: "prc_slack123",
+        config: { teamName: "Test Team" },
+      });
       findAllMappingsForTenant.mockImplementation(async () => {
         mappingsCallTime = Date.now();
         return [];
@@ -514,9 +565,9 @@ describe("App Home Handler", () => {
   describe("handleRefreshHome", () => {
     it("should delegate to handleAppHomeOpened", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
 
-      findBySlackWorkspace.mockResolvedValue(null);
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       await handleRefreshHome(mockClient, "U123456");
 
@@ -541,17 +592,24 @@ describe("App Home Handler", () => {
 
     it("should pass the same client and userId to handleAppHomeOpened", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
 
       const mockTenant = {
         id: "tenant-789",
-        githubOrg: "refresh-org",
+        orgName: "refresh-org",
         status: "active",
-        slackTeamName: "Refresh Team",
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue({
+        id: "prc_slack789",
+        config: { teamName: "Refresh Team" },
+      });
       findAllMappingsForTenant.mockResolvedValue([]);
       getTenantStatistics.mockResolvedValue(null);
 
@@ -568,16 +626,19 @@ describe("App Home Handler", () => {
   describe("edge cases", () => {
     it("should handle very large number of repository mappings", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: "Test Team",
       };
 
       const largeMappings = Array.from({ length: 100 }, (_, i) => ({
@@ -586,7 +647,11 @@ describe("App Home Handler", () => {
         slackChannelName: `channel-${i}`,
       }));
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue({
+        id: "prc_slack123",
+        config: { teamName: "Test Team" },
+      });
       findAllMappingsForTenant.mockResolvedValue(largeMappings);
       getTenantStatistics.mockResolvedValue(null);
 
@@ -606,16 +671,19 @@ describe("App Home Handler", () => {
 
     it("should handle very large statistics numbers", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: "Test Team",
       };
 
       const mockStats = {
@@ -624,7 +692,11 @@ describe("App Home Handler", () => {
         lastAlertTime: new Date("2025-12-25T10:00:00Z"),
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue({
+        id: "prc_slack123",
+        config: { teamName: "Test Team" },
+      });
       findAllMappingsForTenant.mockResolvedValue([]);
       getTenantStatistics.mockResolvedValue(mockStats);
 
@@ -643,10 +715,10 @@ describe("App Home Handler", () => {
 
     it("should handle special characters in workspace and user IDs", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
+      const { findTenantBySlackWorkspace } = jest.requireMock("@kenchi/shared") as any;
 
       mockClient.auth.test.mockResolvedValue({ team_id: "T<123>456" });
-      findBySlackWorkspace.mockResolvedValue(null);
+      findTenantBySlackWorkspace.mockResolvedValue(null);
 
       await handleAppHomeOpened(mockClient, "U<789>012");
 
@@ -658,30 +730,34 @@ describe("App Home Handler", () => {
 
     it("should handle null values in tenant object gracefully", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: null,
+        orgName: null,
         status: "inactive",
-        slackTeamName: null,
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue(null);
       findAllMappingsForTenant.mockResolvedValue([]);
       getTenantStatistics.mockResolvedValue(null);
 
       await handleAppHomeOpened(mockClient, "U123456");
 
-      // Note: The handler uses optional chaining (tenant?.githubOrg) which preserves null values
-      // Only slackTeamName is converted to undefined via ?? operator
+      // Note: The handler uses optional chaining (tenant?.orgName) which preserves null values
+      // slackTeamName is derived from findSlackConnection which returned null, so it's undefined
       expect(buildAppHomeView).toHaveBeenCalledWith(
         expect.objectContaining({
           tenant: {
-            githubOrg: null,
+            orgName: null,
             status: "inactive",
             slackTeamName: undefined,
           },
@@ -691,16 +767,19 @@ describe("App Home Handler", () => {
 
     it("should handle incomplete statistics object", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findBySlackWorkspace, findAllMappingsForTenant, getTenantStatistics } =
-        jest.requireMock("@kenchi/shared") as any;
+      const {
+        findTenantBySlackWorkspace,
+        findSlackConnection,
+        findAllMappingsForTenant,
+        getTenantStatistics,
+      } = jest.requireMock("@kenchi/shared") as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { buildAppHomeView } = jest.requireMock("../formatters/appHomeFormatter.js") as any;
 
       const mockTenant = {
         id: "tenant-123",
-        githubOrg: "test-org",
+        orgName: "test-org",
         status: "active",
-        slackTeamName: "Test Team",
       };
 
       const incompleteStats = {
@@ -708,7 +787,11 @@ describe("App Home Handler", () => {
         // Missing totalAlertsSent and lastAlertTime
       };
 
-      findBySlackWorkspace.mockResolvedValue(mockTenant);
+      findTenantBySlackWorkspace.mockResolvedValue(mockTenant);
+      findSlackConnection.mockResolvedValue({
+        id: "prc_slack123",
+        config: { teamName: "Test Team" },
+      });
       findAllMappingsForTenant.mockResolvedValue([]);
       getTenantStatistics.mockResolvedValue(incompleteStats);
 

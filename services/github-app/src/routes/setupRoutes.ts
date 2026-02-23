@@ -11,9 +11,11 @@ import {
   createLogger,
   HTTP_STATUS,
   GITHUB_SETUP_CONFIG,
-  findBySlackWorkspace,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
+  findTenantBySlackWorkspace,
+  findSlackConnection,
   linkSlackWorkspace,
+  deleteTenant,
   getErrorMessage,
 } from "@kenchi/shared";
 
@@ -138,7 +140,7 @@ router.get("/github/setup", async (req: Request, res: Response) => {
 
   try {
     // Find the tenant that was just created by the installation webhook
-    const tenant = await findByGitHubInstallation(installationIdNum);
+    const tenant = await findTenantByGitHubInstallation(installationIdNum);
 
     if (!tenant) {
       // Webhook hasn't been processed yet, or installation failed
@@ -155,25 +157,43 @@ router.get("/github/setup", async (req: Request, res: Response) => {
       return;
     }
 
+    // Check if tenant already has a Slack connection
+    const existingSlackConn = await findSlackConnection(tenant.id);
+
     // Attempt Slack workspace linking if state parameter present and not yet linked
     const linkedSuccessfully = await (async (): Promise<{
       linked: boolean;
       teamName: string | null;
     }> => {
-      if (!state || typeof state !== "string" || tenant.slackWorkspaceId) {
+      if (!state || typeof state !== "string" || existingSlackConn) {
         return { linked: false, teamName: null };
       }
 
       const slackWorkspaceId = state;
-      const slackTenant = await findBySlackWorkspace(slackWorkspaceId);
+      const slackTenant = await findTenantBySlackWorkspace(slackWorkspaceId);
 
-      if (!slackTenant || !slackTenant.slackBotToken) {
+      if (!slackTenant) {
         logger.info("Slack workspace not found, will link when Slack is installed", {
           tenantId: tenant.id,
           slackWorkspaceId,
         });
         return { linked: false, teamName: null };
       }
+
+      // Look up the Slack connection from the slack tenant to get bot token
+      const slackTenantConn = await findSlackConnection(slackTenant.id);
+      if (!slackTenantConn?.accessToken) {
+        logger.info("Slack tenant has no bot token, will link when Slack is installed", {
+          tenantId: tenant.id,
+          slackWorkspaceId,
+        });
+        return { linked: false, teamName: null };
+      }
+
+      const slackConfig = slackTenantConn.config as {
+        readonly teamName?: string;
+        readonly botUserId?: string;
+      };
 
       logger.info("Linking GitHub installation to existing Slack workspace", {
         githubTenantId: tenant.id,
@@ -183,28 +203,38 @@ router.get("/github/setup", async (req: Request, res: Response) => {
 
       await linkSlackWorkspace({
         tenantId: tenant.id,
-        slackWorkspaceId: slackTenant.slackWorkspaceId ?? slackWorkspaceId,
-        slackTeamName: slackTenant.slackTeamName ?? "",
-        slackBotToken: slackTenant.slackBotToken,
-        slackBotUserId: slackTenant.slackBotUserId || undefined,
+        slackWorkspaceId: slackTenantConn.externalOrgId ?? slackWorkspaceId,
+        slackTeamName: slackConfig.teamName ?? "",
+        slackBotToken: slackTenantConn.accessToken,
+        slackBotUserId: slackConfig.botUserId ?? undefined,
       });
 
       logger.info("Successfully linked GitHub and Slack", {
         tenantId: tenant.id,
-        githubOrg: tenant.githubOrg,
+        orgName: tenant.orgName,
         slackWorkspace: slackWorkspaceId,
       });
 
-      return { linked: true, teamName: slackTenant.slackTeamName };
+      // Clean up orphaned Slack-only tenant to prevent duplicate workspace lookups
+      if (slackTenant.id !== tenant.id) {
+        await deleteTenant(slackTenant.id);
+        logger.info("Cleaned up orphaned Slack-only tenant after merge", {
+          orphanedTenantId: slackTenant.id,
+          mergedIntoTenantId: tenant.id,
+          slackWorkspaceId,
+        });
+      }
+
+      return { linked: true, teamName: slackConfig.teamName ?? null };
     })();
 
-    const isLinked = !!tenant.slackWorkspaceId || linkedSuccessfully.linked;
+    const isLinked = existingSlackConn !== null || linkedSuccessfully.linked;
     const slackTeamName = linkedSuccessfully.linked
       ? linkedSuccessfully.teamName
-      : tenant.slackTeamName;
+      : ((existingSlackConn?.config as { readonly teamName?: string })?.teamName ?? null);
 
     // Send success page
-    const html = buildSuccessHtml(tenant.githubOrg, slackTeamName || null, isLinked);
+    const html = buildSuccessHtml(tenant.orgName, slackTeamName || null, isLinked);
     res.status(HTTP_STATUS.OK).send(html);
   } catch (error) {
     logger.error("Error processing GitHub setup", {

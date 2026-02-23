@@ -69,6 +69,7 @@ export const RATE_LIMIT_MESSAGES = {
  */
 export const EXTERNAL_SERVICE_NAMES = {
   OPENAI: "OpenAI",
+  OPENROUTER: "OpenRouter",
 } as const;
 
 /**
@@ -78,6 +79,7 @@ export const SERVICE_NAMES = {
   API: "api",
   SLACK_BOT: "slack-bot",
   GITHUB_APP: "github-app",
+  INCIDENT_TRIAGE: "incident-triage",
 } as const;
 
 /**
@@ -87,6 +89,7 @@ export const SERVICE_VERSIONS = {
   API: "1.0.0",
   SLACK_BOT: "1.0.0",
   GITHUB_APP: "1.0.0",
+  INCIDENT_TRIAGE: "1.0.0",
 } as const;
 
 /**

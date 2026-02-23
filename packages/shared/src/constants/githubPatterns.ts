@@ -194,6 +194,30 @@ export const FILE_REFERENCE_PATTERNS = [
 ] as const;
 
 /**
+ * Pattern to extract a file reference with directory path from unstructured error text.
+ * Matches patterns like `path/to/file.ts:123` or `(path/file.ts:45:12)`.
+ * High confidence — requires a `/` (real path structure) and `.ext` (any file extension).
+ *
+ * Groups: [filePath, lineNumber?]
+ */
+export const TEST_FAILURE_FILE_INFERENCE_PATTERN =
+  /(?:^|\s|[(])([a-zA-Z][^\s()]*\/[^\s():]+\.\w{1,4})(?::(\d+))?/;
+
+/**
+ * Fallback pattern for bare filenames without directory path.
+ * Matches patterns like `file.ts:123`, `MyTest.java:45`, `app-config.yml:10`.
+ * Lower confidence — requires `:line` suffix and restricts to realistic file extensions.
+ *
+ * Rejects version numbers (`v1.2.3:45`), Java packages (`java.lang.null:123`),
+ * error codes (`error.code:404`), and numeric suffixes (`config.123:456`)
+ * by disallowing dots in the filename body and requiring extensions to start
+ * with a letter and be 1-3 characters (e.g., `.ts`, `.py`, `.yml`).
+ *
+ * Groups: [filename, lineNumber]
+ */
+export const TEST_FAILURE_BARE_FILE_PATTERN = /(?:^|\s|[(])([\w][\w-]*\.[a-zA-Z]\w{0,2}):(\d+)/;
+
+/**
  * NOTE: Dependency change detection is now handled by AI.
  * Previous regex-based patterns were removed as part of language-agnostic migration.
  * AI can parse diffs from any package manager format without maintenance.
@@ -251,6 +275,24 @@ export const ABSOLUTE_PATH_SKIP_DIRS = new Set([
  */
 export const ABSOLUTE_PATH_PATTERN =
   /(?:\/(?:home|Users|var|tmp|opt|usr)\/[^\s:]+\/|[A-Z]:\\(?:Users|Projects|Dev)\\[^\s:]+\\)/g;
+
+// ==================== CI Infrastructure Filtering ====================
+
+/**
+ * Pattern to identify CI infrastructure messages that should never become lint errors.
+ * These are process exit notifications from CI runners, not actual source code issues.
+ */
+export const CI_INFRASTRUCTURE_MESSAGE = /^Process completed with exit code \d+/;
+
+// ==================== CI Job Classification ====================
+
+/**
+ * Pattern to identify lint/format/typecheck CI job names.
+ * Only these jobs should contribute deterministic lint errors — test/build/deploy
+ * jobs produce false positives from CI infrastructure output (e.g., `##[error]`).
+ */
+export const LINT_JOB_KEYWORDS =
+  /\b(?:lint|format|style|eslint|biome|tsc|typecheck|type[\s-]check|check[\s-]types|compile|prettier|stylelint|rubocop|clippy|flake8|pylint|golangci)\b/i;
 
 // ==================== Action Review Patterns ====================
 

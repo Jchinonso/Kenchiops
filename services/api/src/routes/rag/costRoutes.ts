@@ -15,6 +15,8 @@ import {
   API_ROUTES,
   COST_CONTROL_CONFIG,
   VALID_EMBEDDING_TIERS,
+  requireTenantMatch,
+  requireRole,
   type EmbeddingTierName,
   getTenantTierConfig,
   setTenantTierConfig,
@@ -295,11 +297,12 @@ const handleGetCostStats = async (req: Request, res: Response): Promise<void> =>
 // ==================== Route Definitions ====================
 
 /** GET /api/rag/tenant/:tenantId/tier - Get tenant tier config */
-router.get(API_ROUTES.RAG_TENANT_TIER, asyncHandler(handleGetTierConfig));
+router.get(API_ROUTES.RAG_TENANT_TIER, requireTenantMatch(), asyncHandler(handleGetTierConfig));
 
 /** PUT /api/rag/tenant/:tenantId/tier - Update tenant tier config */
 router.put(
   API_ROUTES.RAG_TENANT_TIER,
+  requireTenantMatch(),
   validate({
     body: {
       preferredTier: validateOptionalTier,
@@ -314,8 +317,12 @@ router.put(
 /** GET /api/rag/cache/stats - Get cache statistics */
 router.get(API_ROUTES.RAG_CACHE_STATS, asyncHandler(handleGetCacheStats));
 
-/** POST /api/rag/cache/clear - Clear cache */
-router.post(API_ROUTES.RAG_CACHE_CLEAR, asyncHandler(handleClearCache));
+/** POST /api/rag/cache/clear - Clear cache (admin/owner only) */
+router.post(
+  API_ROUTES.RAG_CACHE_CLEAR,
+  requireRole("admin", "owner"),
+  asyncHandler(handleClearCache)
+);
 
 /** POST /api/rag/cost/estimate - Estimate embedding costs */
 router.post(
@@ -330,6 +337,6 @@ router.post(
 );
 
 /** GET /api/rag/cost-stats - Get cost tracking stats */
-router.get(API_ROUTES.RAG_COST_STATS, asyncHandler(handleGetCostStats));
+router.get(API_ROUTES.RAG_COST_STATS, requireTenantMatch(), asyncHandler(handleGetCostStats));
 
 export { router as ragCostRoutes };

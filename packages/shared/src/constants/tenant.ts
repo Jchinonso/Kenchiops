@@ -26,11 +26,14 @@ export const TENANT_STATUS = {
 export const AUDIT_ACTIONS = {
   GITHUB_INSTALLED: "github_installed",
   GITHUB_UNINSTALLED: "github_uninstalled",
+  GITHUB_LINKED: "github_linked",
+  GITLAB_LINKED: "gitlab_linked",
   SLACK_INSTALLED: "slack_installed",
   SLACK_UNINSTALLED: "slack_uninstalled",
   ACTIVATED: "activated",
   SUSPENDED: "suspended",
   DELETED: "deleted",
+  PLAN_CHANGED: "plan_changed",
 } as const;
 
 /**
@@ -66,55 +69,26 @@ export const RAG_BUDGET_DEFAULTS = {
  * All queries use parameterized statements to prevent SQL injection.
  */
 export const TENANT_QUERIES = {
-  // Lookup queries
-  FIND_BY_GITHUB_INSTALLATION: `SELECT * FROM tenants WHERE github_installation_id = $1 AND status != $2`,
-  FIND_BY_GITHUB_ORG: `SELECT * FROM tenants WHERE LOWER(github_org) = LOWER($1) AND status != $2`,
-  FIND_BY_GITHUB_ORG_ANY_STATUS: `SELECT * FROM tenants WHERE LOWER(github_org) = LOWER($1)`,
-  FIND_BY_SLACK_WORKSPACE: `SELECT * FROM tenants WHERE slack_workspace_id = $1 AND status != $2`,
+  // Lookup queries (provider-neutral — provider-specific lookups are in providerConnection/repository)
+  FIND_BY_ORG_NAME: `SELECT * FROM tenants WHERE LOWER(org_name) = LOWER($1) AND status != $2`,
+  FIND_BY_ORG_NAME_ANY_STATUS: `SELECT * FROM tenants WHERE LOWER(org_name) = LOWER($1)`,
   FIND_BY_ID: `SELECT * FROM tenants WHERE id = $1`,
   FIND_ACTIVE: `SELECT * FROM tenants WHERE status = $1 ORDER BY created_at DESC`,
 
-  // Insert queries
-  INSERT_FROM_GITHUB: `INSERT INTO tenants (github_org, github_installation_id, github_app_installed_at, status)
-     VALUES ($1, $2, NOW(), $3)
+  // Provider-scoped lookup
+  FIND_BY_ORG_NAME_AND_PROVIDER: `SELECT * FROM tenants WHERE LOWER(org_name) = LOWER($1) AND provider = $2 AND status != $3`,
+
+  // Insert queries (provider-neutral — provider connections created separately)
+  INSERT_TENANT: `INSERT INTO tenants (org_name, status)
+     VALUES ($1, $2)
      RETURNING *`,
-  INSERT_FROM_SLACK: `INSERT INTO tenants (
-       github_org,
-       slack_workspace_id,
-       slack_team_name,
-       slack_bot_token,
-       slack_bot_user_id,
-       slack_app_installed_at,
-       status
-     )
-     VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+
+  INSERT_TENANT_WITH_PROVIDER: `INSERT INTO tenants (org_name, provider, status)
+     VALUES ($1, $2, $3)
      RETURNING *`,
 
   // Update queries
-  UPDATE_GITHUB_INSTALL: `UPDATE tenants
-     SET github_installation_id = $1,
-         github_app_installed_at = NOW(),
-         status = $2,
-         updated_at = NOW()
-     WHERE id = $3
-     RETURNING *`,
-  UPDATE_SLACK_LINK: `UPDATE tenants
-     SET slack_workspace_id = $1,
-         slack_team_name = $2,
-         slack_bot_token = $3,
-         slack_bot_user_id = $4,
-         slack_app_installed_at = NOW(),
-         status = $5,
-         updated_at = NOW()
-     WHERE id = $6
-     RETURNING *`,
   UPDATE_STATUS: `UPDATE tenants SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-  UPDATE_SLACK_TOKEN: `UPDATE tenants SET slack_bot_token = $1, updated_at = NOW() WHERE id = $2`,
-  UPDATE_GITHUB_UNINSTALL: `UPDATE tenants
-     SET github_installation_id = NULL,
-         status = $1,
-         updated_at = NOW()
-     WHERE id = $2`,
 
   // Statistics queries
   STATS_ANALYSES_TODAY: `SELECT COUNT(*) as count FROM analyses
@@ -146,14 +120,7 @@ export const AUDIT_QUERIES = {
  */
 export const TENANT_FIELD_MAP = {
   id: "id",
-  github_org: "githubOrg",
-  github_installation_id: "githubInstallationId",
-  github_app_installed_at: "githubAppInstalledAt",
-  slack_workspace_id: "slackWorkspaceId",
-  slack_team_name: "slackTeamName",
-  slack_bot_token: "slackBotToken",
-  slack_bot_user_id: "slackBotUserId",
-  slack_app_installed_at: "slackAppInstalledAt",
+  org_name: "orgName",
   status: "status",
   created_at: "createdAt",
   updated_at: "updatedAt",

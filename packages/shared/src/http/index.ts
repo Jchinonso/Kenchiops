@@ -17,6 +17,15 @@ export type {
 // Middleware
 export { errorHandler, asyncHandler, requestLogger } from "./middleware.js";
 
+// Request context middleware (must be registered before auth)
+export { requestContextMiddleware } from "./requestContextMiddleware.js";
+
+// Auth middleware
+export { authMiddleware } from "./authMiddleware.js";
+
+// Authorization middleware (RBAC)
+export { requireRole } from "./authorizationMiddleware.js";
+
 // Validation
 export { validate, validators } from "./validation.js";
 
@@ -55,3 +64,18 @@ export {
   resetCircuitBreaker,
   getCircuitBreakerStatus,
 } from "./resilientClient.js";
+
+// Internal service-to-service authentication
+export {
+  signInternalRequest,
+  verifyInternalSignature,
+  INTERNAL_AUTH_HEADERS,
+} from "./internalAuth.js";
+
+export { createInternalAuthMiddleware } from "./internalAuthMiddleware.js";
+
+// Security headers
+export { createSecurityHeaders } from "./securityHeaders.js";
+
+// Tenant isolation guard
+export { getEffectiveTenantId, requireTenantMatch } from "./tenantGuard.js";

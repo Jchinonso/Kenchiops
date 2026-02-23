@@ -258,10 +258,14 @@ export const QUEUE_WORKER_DEFAULTS = {
  * Aggregation configuration defaults
  */
 export const AGGREGATION_DEFAULTS = {
-  /** Time to wait after last failure before consolidating (ms) */
+  /** Time to wait after last failure before consolidating (ms).
+   * CI checks finish at different times (lint ~1min, tests ~3-4min).
+   * This is the minimum quiet period — if new failures arrive, the timer resets.
+   * The aggregation worker also checks GitHub for in-progress checks before processing. */
   DEBOUNCE_MS: 30_000,
-  /** Maximum time to wait for aggregation (ms) */
-  MAX_WAIT_MS: 120_000,
+  /** Maximum time to wait for aggregation (ms).
+   * Hard ceiling regardless of in-progress checks. */
+  MAX_WAIT_MS: 300_000,
   /** Maximum failures to aggregate per commit */
   MAX_FAILURES_PER_COMMIT: 20,
   /** TTL buffer added to max wait for cleanup safety (seconds) */
@@ -274,10 +278,12 @@ export const AGGREGATION_DEFAULTS = {
 
 /**
  * Regex pattern for parsing aggregation metadata keys.
- * Matches format: kenchi:agg:{repo}:{sha}:meta
+ * Matches format: kenchi:agg:{provider}:{repo}:{sha}:meta
+ * Provider is a lowercase identifier (e.g., "github_actions", "vercel").
+ * Repo is in "owner/repo" format (contains "/").
  */
 export const AGGREGATION_KEY_PATTERN = new RegExp(
-  `^${REDIS_KEY_PREFIXES.AGGREGATION.replace(":", "\\:")}:(.+):([a-f0-9]+):meta$`
+  `^${REDIS_KEY_PREFIXES.AGGREGATION.replace(":", "\\:")}:([a-z_]+):(.+):([a-f0-9]+):meta$`
 );
 
 /**
@@ -342,6 +348,10 @@ export const QUEUE_RETRY_CONFIG = {
   SLACK_NOTIFICATION: 5,
   /** GitHub action queue max retries */
   GITHUB_ACTION: 3,
+  /** Incident triage queue max retries */
+  INCIDENT_TRIAGE: 3,
+  /** Investigation queue max retries */
+  INVESTIGATION: 3,
 } as const;
 
 /**
@@ -354,6 +364,10 @@ export const QUEUE_VISIBILITY_TIMEOUT = {
   SLACK_NOTIFICATION: 30,
   /** GitHub action visibility timeout */
   GITHUB_ACTION: 120,
+  /** Incident triage visibility timeout (2 minutes for enrichment pipeline) */
+  INCIDENT_TRIAGE: 120,
+  /** Investigation visibility timeout (3 minutes for full diagnostic pipeline) */
+  INVESTIGATION: 180,
 } as const;
 
 /**
@@ -366,6 +380,10 @@ export const QUEUE_NAMES = {
   SLACK_NOTIFICATIONS: "kenchi:slack-notifications",
   /** GitHub action jobs queue */
   GITHUB_ACTIONS: "kenchi:github-actions",
+  /** Incident triage jobs queue */
+  INCIDENT_TRIAGE: "kenchi:incident-triage",
+  /** Investigation jobs queue */
+  INVESTIGATION: "kenchi:investigation",
 } as const;
 
 /**
@@ -378,4 +396,10 @@ export const PUBSUB_CHANNELS = {
   ACTION_EVENTS: "kenchi:events:actions",
   /** System health events */
   HEALTH_EVENTS: "kenchi:events:health",
+  /** Dashboard real-time events (SSE) */
+  DASHBOARD: "kenchi:events:dashboard",
+  /** Incident triage events */
+  INCIDENT_TRIAGE: "kenchi:events:incident-triage",
+  /** Investigation events */
+  INVESTIGATION: "kenchi:events:investigation",
 } as const;

@@ -10,13 +10,15 @@ import {
   createLogger,
   HTTP_STATUS,
   handleDocUpdateEvent,
-  findByGitHubInstallation,
+  findTenantByGitHubInstallation,
+  findWebhookActivityByDeliveryId,
   getErrorMessage,
 } from "@kenchi/shared";
 import { handlePullRequest } from "../handlers/pullRequestHandler.js";
 import { handleCheckRun } from "../handlers/checkRunHandler.js";
 import { handleInstallation } from "../handlers/installationHandler.js";
 import { verifyGitHubWebhook } from "../middleware/verifyGithub.js";
+import { logWebhookActivity } from "../helpers/webhookActivityLogger.js";
 import type {
   PullRequestWebhook,
   CheckRunWebhook,
@@ -118,7 +120,7 @@ const handlePush = async (webhook: PushWebhook): Promise<WebhookHandlerResult> =
   }
 
   try {
-    const tenant = await findByGitHubInstallation(installationId);
+    const tenant = await findTenantByGitHubInstallation(installationId);
     if (!tenant) {
       return {
         handled: true,
@@ -209,8 +211,15 @@ const eventHandlers: Record<string, GitHubEventHandler> = {
 /**
  * Handle ping event
  */
-const handlePing = (deliveryId: string, res: Response): void => {
+const handlePing = (deliveryId: string, startTime: number, res: Response): void => {
   logger.info("GitHub webhook ping received", { deliveryId });
+  void logWebhookActivity({
+    deliveryId,
+    eventType: "ping",
+    source: "github",
+    status: "processed",
+    startTime,
+  });
   res.status(HTTP_STATUS.OK).json({
     status: "ok",
     message: "Webhook configured successfully",
@@ -220,12 +229,46 @@ const handlePing = (deliveryId: string, res: Response): void => {
 /**
  * Handle unknown event type
  */
-const handleUnknownEvent = (eventType: string, deliveryId: string, res: Response): void => {
+const handleUnknownEvent = (
+  eventType: string,
+  deliveryId: string,
+  startTime: number,
+  res: Response
+): void => {
   logger.info("Unhandled GitHub event type", { eventType, deliveryId });
+  void logWebhookActivity({
+    deliveryId,
+    eventType,
+    source: "github",
+    status: "ignored",
+    startTime,
+  });
   res.status(HTTP_STATUS.OK).json({
     status: "ignored",
     message: `Event type '${eventType}' not handled`,
   });
+};
+
+/**
+ * Resolve tenant ID from the GitHub installation ID in the webhook payload.
+ * Returns null if the installation is missing or no tenant is found.
+ */
+const resolveTenantId = async (body: unknown): Promise<string | null> => {
+  const installationId = (body as { installation?: { id?: number } })?.installation?.id;
+  if (!installationId) {
+    return null;
+  }
+
+  try {
+    const tenant = await findTenantByGitHubInstallation(installationId);
+    return tenant?.id ?? null;
+  } catch (error) {
+    logger.warn("Failed to resolve tenant from installation", {
+      installationId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
 };
 
 /**
@@ -236,6 +279,7 @@ const handleUnknownEvent = (eventType: string, deliveryId: string, res: Response
 const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => {
   const eventType = req.headers["x-github-event"] as string;
   const deliveryId = req.headers["x-github-delivery"] as string;
+  const startTime = Date.now();
 
   logger.info("Received GitHub webhook", {
     eventType,
@@ -244,20 +288,69 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
 
   // Handle ping separately (no async processing needed)
   if (eventType === "ping") {
-    handlePing(deliveryId, res);
+    handlePing(deliveryId, startTime, res);
     return;
   }
 
   // Look up handler in table
   const handler = eventHandlers[eventType];
   if (!handler) {
-    handleUnknownEvent(eventType, deliveryId, res);
+    handleUnknownEvent(eventType, deliveryId, startTime, res);
     return;
   }
 
+  // Replay protection: skip if already processed
+  try {
+    const existing = await findWebhookActivityByDeliveryId(deliveryId);
+    if (existing) {
+      logger.info("Duplicate GitHub webhook, skipping", {
+        provider: "github",
+        operation: "receiveWebhook",
+        deliveryId,
+        existingId: existing.id,
+      });
+      res.status(HTTP_STATUS.OK).json({
+        status: "duplicate",
+        message: "Webhook already processed",
+      });
+      return;
+    }
+  } catch (error) {
+    // Replay check is best-effort — proceed with processing if it fails
+    logger.warn("Replay protection check failed, proceeding with processing", {
+      deliveryId,
+      error: getErrorMessage(error),
+    });
+  }
+
+  // Resolve tenant from installation ID for webhook activity logging
+  const tenantId = await resolveTenantId(req.body);
+
   // Execute handler and format response
-  const result = await handler.handle(req.body);
-  res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
+  try {
+    const result = await handler.handle(req.body);
+    const status = result.handled ? "processed" : "skipped";
+    void logWebhookActivity({
+      deliveryId,
+      eventType,
+      source: "github",
+      status,
+      startTime,
+      tenantId: tenantId ?? result.tenantId,
+    });
+    res.status(HTTP_STATUS.OK).json(handler.formatResponse(result));
+  } catch (error) {
+    void logWebhookActivity({
+      deliveryId,
+      eventType,
+      source: "github",
+      status: "failed",
+      startTime,
+      tenantId,
+      errorMessage: getErrorMessage(error),
+    });
+    throw error;
+  }
 });
 
 // Main webhook endpoint (full path: /api/github/webhook)
@@ -271,14 +364,39 @@ router.post(
   "/webhook/pull_request",
   verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    const deliveryId = (req.headers["x-github-delivery"] as string) ?? "unknown";
     const webhook = req.body as PullRequestWebhook;
-    const result = await handlePullRequest(webhook);
+    const tenantId = await resolveTenantId(req.body);
 
-    res.status(HTTP_STATUS.OK).json({
-      status: result.handled ? "processed" : "skipped",
-      message: result.message,
-      eventId: result.eventId,
-    });
+    try {
+      const result = await handlePullRequest(webhook);
+      const status = result.handled ? "processed" : "skipped";
+      void logWebhookActivity({
+        deliveryId,
+        eventType: "pull_request",
+        source: "github",
+        status,
+        startTime,
+        tenantId,
+      });
+      res.status(HTTP_STATUS.OK).json({
+        status: result.handled ? "processed" : "skipped",
+        message: result.message,
+        eventId: result.eventId,
+      });
+    } catch (error) {
+      void logWebhookActivity({
+        deliveryId,
+        eventType: "pull_request",
+        source: "github",
+        status: "failed",
+        startTime,
+        tenantId,
+        errorMessage: getErrorMessage(error),
+      });
+      throw error;
+    }
   })
 );
 
@@ -290,14 +408,39 @@ router.post(
   "/webhook/check_run",
   verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    const deliveryId = (req.headers["x-github-delivery"] as string) ?? "unknown";
     const webhook = req.body as CheckRunWebhook;
-    const result = await handleCheckRun(webhook);
+    const tenantId = await resolveTenantId(req.body);
 
-    res.status(HTTP_STATUS.OK).json({
-      status: result.handled ? "processed" : "skipped",
-      message: result.message,
-      eventId: result.eventId,
-    });
+    try {
+      const result = await handleCheckRun(webhook);
+      const status = result.handled ? "processed" : "skipped";
+      void logWebhookActivity({
+        deliveryId,
+        eventType: "check_run",
+        source: "github",
+        status,
+        startTime,
+        tenantId,
+      });
+      res.status(HTTP_STATUS.OK).json({
+        status: result.handled ? "processed" : "skipped",
+        message: result.message,
+        eventId: result.eventId,
+      });
+    } catch (error) {
+      void logWebhookActivity({
+        deliveryId,
+        eventType: "check_run",
+        source: "github",
+        status: "failed",
+        startTime,
+        tenantId,
+        errorMessage: getErrorMessage(error),
+      });
+      throw error;
+    }
   })
 );
 

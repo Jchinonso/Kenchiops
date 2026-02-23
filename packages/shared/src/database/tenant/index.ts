@@ -22,8 +22,6 @@ export {
   // Row mappers
   rowToTenant,
   extractTenant,
-  getStatusAfterGitHubInstall,
-  getStatusAfterSlackInstall,
   mapRowToAuditEntry,
   mapTenantToRAGBudgetConfig,
   // Validation
@@ -39,25 +37,27 @@ export {
 
 // Lookup operations
 export {
-  findByGitHubInstallation,
-  findByGitHubOrg,
-  findBySlackWorkspace,
+  findByOrgNameAndProvider,
+  findByOrgName,
+  findByGitLabGroup,
   findById,
   getActiveTenants,
   getTenantStatistics,
-  getSlackCredentials,
+  countTenantMembers,
 } from "./serviceLookup.js";
 
 // Lifecycle operations
 export {
   createFromGitHubInstall,
+  createFromGitHubLogin,
+  createFromGitLabGroup,
   linkSlackWorkspace,
   createFromSlackInstall,
   activate,
   suspend,
   deleteTenant,
+  hardDeleteTenant,
   handleGitHubUninstall,
-  updateSlackToken,
 } from "./serviceLifecycle.js";
 
 // Audit operations

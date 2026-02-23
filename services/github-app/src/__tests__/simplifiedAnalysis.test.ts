@@ -187,7 +187,8 @@ describe("Simplified Analysis Handler", () => {
         expect.objectContaining({
           failure_log: expect.any(String),
           repository: "owner/test-repo",
-        })
+        }),
+        expect.objectContaining({ internalAuth: true })
       );
 
       // Verify logs are preprocessed (no ANSI codes or timestamps)

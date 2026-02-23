@@ -9,12 +9,14 @@
 import {
   logger,
   config,
-  findBySlackWorkspace,
+  findTenantBySlackWorkspace,
+  findGitHubAppConnection,
   findMappingsForChannel,
   deleteMappingsForChannel,
   getMappedRepositories,
   fetchInstallationRepositories,
   getErrorMessage,
+  type Tenant,
 } from "@kenchi/shared";
 import { type SlackClient } from "../services/channelService.js";
 import { toSlackSDKView, type SlackBlock } from "../types/slackTypes.js";
@@ -31,6 +33,7 @@ export {
   buildNoReposModal,
   buildUnconfigureModal,
   buildNoConfiguredReposModal,
+  buildLoadingReposModal,
 } from "./modalBuilders.js";
 
 // ==================== GitHub Install URL ====================
@@ -72,16 +75,57 @@ export const buildRepoConfiguredMessage = (repository: string, channelName: stri
   `• Highlight the specific files and lines causing issues\n\n` +
   `Notifications will be posted here in #${channelName}.`;
 
+// ==================== Repository Cache ====================
+
+const REPO_CACHE_TTL_MS = 60_000; // 60 seconds
+
+interface RepoCacheEntry {
+  readonly repositories: readonly RepositoryOption[];
+  readonly expiresAt: number;
+}
+
+/** In-memory cache keyed by `installationId:tenantId` */
+const repoCache = new Map<string, RepoCacheEntry>();
+
+/**
+ * Invalidate the repository cache for a tenant, or all entries if no tenantId.
+ * Call after creating or deleting a repo-channel mapping.
+ */
+export const clearRepoCache = (tenantId?: string): void => {
+  if (!tenantId) {
+    repoCache.clear();
+    return;
+  }
+  for (const key of repoCache.keys()) {
+    if (key.endsWith(`:${tenantId}`)) {
+      repoCache.delete(key);
+    }
+  }
+};
+
 // ==================== Helper Functions ====================
 
 /**
  * Get available repositories from GitHub for the installation.
  * Filters out already-mapped repositories.
+ * Results are cached for 60s to prevent redundant API calls on rapid clicks.
  */
 export const getAvailableRepositories = async (
   installationId: number,
   tenantId: string
 ): Promise<RepositoryOption[]> => {
+  const cacheKey = `${installationId}:${tenantId}`;
+  const cached = repoCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    logger.info("Returning cached repositories", {
+      installationId,
+      availableRepos: cached.repositories.length,
+      cacheHit: true,
+    });
+    return [...cached.repositories];
+  }
+
   try {
     const [allRepositories, mappedRepos] = await Promise.all([
       fetchInstallationRepositories(installationId),
@@ -92,11 +136,17 @@ export const getAvailableRepositories = async (
       .filter((repo) => !mappedRepos.has(repo.fullName))
       .map((repo) => ({ fullName: repo.fullName, name: repo.name }));
 
+    repoCache.set(cacheKey, {
+      repositories: availableRepositories,
+      expiresAt: Date.now() + REPO_CACHE_TTL_MS,
+    });
+
     logger.info("Fetched available repositories", {
       installationId,
       totalRepos: allRepositories.length,
       mappedRepos: mappedRepos.size,
       availableRepos: availableRepositories.length,
+      cacheHit: false,
     });
 
     return availableRepositories;
@@ -157,6 +207,80 @@ const buildWelcomeBlocks = (
   },
 ];
 
+// ==================== Welcome Flow ====================
+
+/**
+ * Show the welcome message with repository selection for a connected tenant.
+ */
+const showWelcomeWithRepoSelection = async (
+  client: SlackClient,
+  channelId: string,
+  tenant: Tenant,
+  installationId: number,
+  triggerId?: string
+): Promise<void> => {
+  // Clean up any existing mappings when bot rejoins
+  const existingMappings = await findMappingsForChannel(tenant.id, channelId);
+  const hasExistingMappings = existingMappings.length > 0;
+  if (hasExistingMappings) {
+    await deleteMappingsForChannel(tenant.id, channelId);
+    logger.info("Cleaned up existing mappings on bot rejoin", {
+      channelId,
+      deletedCount: existingMappings.length,
+    });
+  }
+
+  const [repositories, channelName] = await Promise.all([
+    getAvailableRepositories(installationId, tenant.id),
+    getChannelName(client, channelId),
+  ]);
+
+  // Post welcome message with button
+  const welcomeMessage = await client.chat.postMessage({
+    channel: channelId,
+    text: "Welcome! Click the button to select a repository for this channel.",
+    blocks: buildWelcomeBlocks(channelId, channelName, ""),
+  });
+
+  // Update the button value with the message timestamp for later updates
+  const messageTs = welcomeMessage.ts;
+  if (messageTs) {
+    await client.chat.update({
+      channel: channelId,
+      ts: messageTs,
+      text: "Welcome! Click the button to select a repository for this channel.",
+      blocks: buildWelcomeBlocks(channelId, channelName, messageTs),
+    });
+  }
+
+  logger.info("Posted welcome message with repository selection button", {
+    channelId,
+    channelName,
+    repositoryCount: repositories.length,
+  });
+
+  // Handle trigger_id case for direct modal opening
+  if (!triggerId) {
+    return;
+  }
+
+  // Open modal for repository selection
+  const noRepos = repositories.length < 1;
+  const modalView = noRepos
+    ? buildNoReposModal(channelName)
+    : buildRepoSelectModal(channelId, channelName, repositories);
+
+  await client.views.open({
+    trigger_id: triggerId,
+    view: toSlackSDKView(modalView) as View,
+  });
+
+  logger.info("Opened repository selection modal", {
+    channelId,
+    repositoryCount: repositories.length,
+  });
+};
+
 // ==================== Main Handler ====================
 
 /**
@@ -164,26 +288,26 @@ const buildWelcomeBlocks = (
  *
  * Flow:
  * 1. Check if GitHub is connected (tenant exists with installation)
- * 2. If not connected, prompt to install GitHub App
- * 3. If connected, clean up any stale mappings and post welcome message
- * 4. User can click button to open repository selection modal
+ * 2. If not connected, try auto-reconciliation with orphaned GitHub tenant
+ * 3. If still not connected, prompt to install GitHub App
+ * 4. If connected, clean up any stale mappings and post welcome message
+ * 5. User can click button to open repository selection modal
  */
 export const handleBotJoinedChannel = async (
   client: SlackClient,
   channelId: string,
-  _botId: string,
+  workspaceId: string,
   triggerId?: string
 ): Promise<void> => {
   try {
-    const authResult = await client.auth.test();
-    const workspaceId = authResult.team_id ?? "";
-
     logger.info("Bot joined channel", { channelId, workspaceId });
 
-    const tenant = await findBySlackWorkspace(workspaceId);
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
+    const ghConn = tenant ? await findGitHubAppConnection(tenant.id) : null;
+    const installationId = ghConn?.externalOrgId ? Number(ghConn.externalOrgId) : null;
 
     // GitHub not connected - prompt to install
-    if (!tenant?.githubInstallationId) {
+    if (!tenant || !installationId) {
       await client.chat.postMessage({
         channel: channelId,
         text: buildConnectGitHubMessage(workspaceId),
@@ -198,65 +322,7 @@ export const handleBotJoinedChannel = async (
       return;
     }
 
-    // Clean up any existing mappings when bot rejoins
-    const existingMappings = await findMappingsForChannel(tenant.id, channelId);
-    if (existingMappings.length > 0) {
-      await deleteMappingsForChannel(tenant.id, channelId);
-      logger.info("Cleaned up existing mappings on bot rejoin", {
-        channelId,
-        deletedCount: existingMappings.length,
-      });
-    }
-
-    const [repositories, channelName] = await Promise.all([
-      getAvailableRepositories(tenant.githubInstallationId, tenant.id),
-      getChannelName(client, channelId),
-    ]);
-
-    // Post welcome message with button
-    const welcomeMessage = await client.chat.postMessage({
-      channel: channelId,
-      text: "Welcome! Click the button to select a repository for this channel.",
-      blocks: buildWelcomeBlocks(channelId, channelName, ""),
-    });
-
-    // Update the button value with the message timestamp for later updates
-    const messageTs = welcomeMessage.ts;
-    if (messageTs) {
-      await client.chat.update({
-        channel: channelId,
-        ts: messageTs,
-        text: "Welcome! Click the button to select a repository for this channel.",
-        blocks: buildWelcomeBlocks(channelId, channelName, messageTs),
-      });
-    }
-
-    logger.info("Posted welcome message with repository selection button", {
-      channelId,
-      channelName,
-      repositoryCount: repositories.length,
-    });
-
-    // Handle trigger_id case for direct modal opening
-    if (!triggerId) {
-      return;
-    }
-
-    // Open modal for repository selection
-    const modalView =
-      repositories.length === 0
-        ? buildNoReposModal(channelName)
-        : buildRepoSelectModal(channelId, channelName, repositories);
-
-    await client.views.open({
-      trigger_id: triggerId,
-      view: toSlackSDKView(modalView) as View,
-    });
-
-    logger.info("Opened repository selection modal", {
-      channelId,
-      repositoryCount: repositories.length,
-    });
+    await showWelcomeWithRepoSelection(client, channelId, tenant, installationId, triggerId);
   } catch (error) {
     const errorDetails = error as { data?: { needed?: string; provided?: string } };
     logger.error("Failed to handle member_joined_channel event", {

@@ -28,6 +28,7 @@ export const CONFIG_DEFAULTS = {
   API_URL: "http://api:3000",
   SLACK_BOT_URL: "http://slack-bot:3001",
   GITHUB_APP_URL: "http://github-app:3002",
+  INCIDENT_TRIAGE_URL: "http://incident-triage:3004",
   // Redis URL
   REDIS_URL: "redis://redis:6379",
 } as const;

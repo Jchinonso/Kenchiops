@@ -102,11 +102,11 @@ export const createMinimalEvidence = (eventId: string): Evidence => ({
  * Performs analysis using the LLM client and returns results with confidence scoring.
  * Includes hallucination detection for safety.
  */
-export const performAnalysis = async (event: Event): Promise<AnalysisResult> => {
+export const performAnalysis = async (event: Event, tenantId?: string): Promise<AnalysisResult> => {
   // Build safety context for audit logging early
   const safetyContext: SafetyRequestContext = {
     requestId: event.id,
-    tenantId: "slack",
+    tenantId: tenantId ?? "system",
     actor: "system",
   };
   const evidence = createMinimalEvidence(event.id);

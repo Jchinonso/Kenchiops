@@ -25,6 +25,7 @@ export const SERVICE_PORTS = {
   SLACK_BOT_HTTP: 3001,
   SLACK_BOT_WEBHOOK: 3002,
   GITHUB_APP: 3003,
+  INCIDENT_TRIAGE: 3004,
 } as const;
 
 /**

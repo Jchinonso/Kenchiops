@@ -21,3 +21,6 @@ QUICKSTART.md
 scripts
 n8n
 
+# Frontend has its own Dockerfile; exclude from backend Docker builds
+services/frontend
+
