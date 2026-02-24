@@ -13,10 +13,16 @@ export type {
   UserOrganizationWithTenantRow,
   UserOrganizationWithTenant,
   AddUserOrganizationInput,
+  TeamMemberRow,
+  TeamMember,
 } from "./types.js";
 
 // Helpers
-export { rowToUserOrganization, rowToUserOrganizationWithTenant } from "./helpers.js";
+export {
+  rowToUserOrganization,
+  rowToUserOrganizationWithTenant,
+  rowToTeamMember,
+} from "./helpers.js";
 
 // Repository
 export {
@@ -24,4 +30,8 @@ export {
   addUserOrganization,
   setDefaultOrganization,
   countMembersByTenant,
+  findMembersByTenant,
+  updateMemberRole,
+  removeMemberFromTenant,
+  countOwnersByTenant,
 } from "./repository.js";

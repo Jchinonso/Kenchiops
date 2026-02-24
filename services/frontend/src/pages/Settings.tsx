@@ -41,6 +41,7 @@ import {
   Bell,
   AlertTriangle,
   CreditCard,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
@@ -306,6 +307,31 @@ export const Settings = () => {
           ) : (
             <p className="text-sm text-gray-500 dark:text-gray-400">No organization found.</p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Team Management */}
+      <Card>
+        <CardHeader className="border-b">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-500" />
+            <CardTitle>Team Management</CardTitle>
+          </div>
+          <CardDescription>View and manage organization members and roles.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Members join automatically via GitHub OAuth when they belong to your GitHub
+              organization.
+            </p>
+            <Link
+              to="/dashboard/settings/team"
+              className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors whitespace-nowrap ml-4"
+            >
+              Manage Team
+            </Link>
+          </div>
         </CardContent>
       </Card>
 

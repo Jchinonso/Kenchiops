@@ -15,13 +15,19 @@ import {
   validateId,
   parseDbCount,
 } from "../common.js";
-import { rowToUserOrganization, rowToUserOrganizationWithTenant } from "./helpers.js";
+import {
+  rowToUserOrganization,
+  rowToUserOrganizationWithTenant,
+  rowToTeamMember,
+} from "./helpers.js";
 import type {
   UserOrganizationRow,
   UserOrganization,
   UserOrganizationWithTenantRow,
   UserOrganizationWithTenant,
   AddUserOrganizationInput,
+  TeamMemberRow,
+  TeamMember,
 } from "./types.js";
 
 const logger = createLogger("user-organization");
@@ -53,6 +59,47 @@ const QUERIES = {
   `,
   COUNT_MEMBERS: `
     SELECT COUNT(*) AS count FROM user_organizations WHERE tenant_id = $1
+  `,
+  FIND_MEMBERS_BY_TENANT: `
+    SELECT
+      u.id AS user_id,
+      u.display_name,
+      u.email,
+      u.avatar_url,
+      uo.role,
+      uo.joined_at,
+      COALESCE(
+        json_agg(
+          json_build_object('provider', oi.provider, 'username', oi.provider_username)
+        ) FILTER (WHERE oi.id IS NOT NULL),
+        '[]'::json
+      ) AS providers
+    FROM user_organizations uo
+    JOIN users u ON u.id = uo.user_id
+    LEFT JOIN oauth_identities oi ON oi.user_id = u.id
+    WHERE uo.tenant_id = $1
+    GROUP BY u.id, u.display_name, u.email, u.avatar_url, uo.role, uo.joined_at
+    ORDER BY
+      CASE uo.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,
+      uo.joined_at ASC
+  `,
+  UPDATE_MEMBER_ROLE: `
+    UPDATE user_organizations SET role = $1, updated_at = NOW()
+    WHERE tenant_id = $2 AND user_id = $3
+    RETURNING *
+  `,
+  REMOVE_MEMBER: `
+    DELETE FROM user_organizations
+    WHERE tenant_id = $1 AND user_id = $2
+    RETURNING *
+  `,
+  COUNT_OWNERS: `
+    SELECT COUNT(*) AS count FROM user_organizations
+    WHERE tenant_id = $1 AND role = 'owner'
+  `,
+  CLEAR_USER_TENANT: `
+    UPDATE users SET selected_tenant_id = NULL, updated_at = NOW()
+    WHERE id = $1 AND selected_tenant_id = $2
   `,
 } as const;
 
@@ -190,6 +237,145 @@ export const countMembersByTenant = async (tenantId: string): Promise<number> =>
     return parseDbCount(result.rows);
   } catch (error) {
     logger.error("Failed to count members by tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Find all members of a tenant organization with their linked OAuth identities.
+ *
+ * @param tenantId - Tenant ID
+ * @returns Array of team members sorted by role weight then join date
+ */
+export const findMembersByTenant = async (tenantId: string): Promise<readonly TeamMember[]> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<TeamMemberRow>(QUERIES.FIND_MEMBERS_BY_TENANT, [tenantId]);
+    return result.rows.map(rowToTeamMember);
+  } catch (error) {
+    logger.error("Failed to find members by tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Update a member's role within a tenant organization.
+ *
+ * @param tenantId - Tenant ID
+ * @param userId - Target user ID
+ * @param role - New role to assign
+ * @returns Updated membership or null if not found
+ */
+export const updateMemberRole = async (
+  tenantId: string,
+  userId: string,
+  role: string
+): Promise<UserOrganization | null> => {
+  validateId(tenantId, "tenantId");
+  validateId(userId, "userId");
+
+  try {
+    const result = await query<UserOrganizationRow>(QUERIES.UPDATE_MEMBER_ROLE, [
+      role,
+      tenantId,
+      userId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const membership = rowToUserOrganization(result.rows[0]);
+
+    logger.info("Member role updated", {
+      tenantId,
+      userId,
+      role,
+    });
+
+    return membership;
+  } catch (error) {
+    logger.error("Failed to update member role", {
+      tenantId,
+      userId,
+      role,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Remove a member from a tenant organization.
+ * Also clears the user's selected_tenant_id if it matches the removed tenant.
+ *
+ * @param tenantId - Tenant ID
+ * @param userId - User ID to remove
+ * @returns true if the member was removed, false if not found
+ */
+export const removeMemberFromTenant = async (
+  tenantId: string,
+  userId: string
+): Promise<boolean> => {
+  validateId(tenantId, "tenantId");
+  validateId(userId, "userId");
+
+  try {
+    const removed = await transaction(async (client) => {
+      const result = await client.query<UserOrganizationRow>(QUERIES.REMOVE_MEMBER, [
+        tenantId,
+        userId,
+      ]);
+
+      if (result.rows.length === 0) {
+        return false;
+      }
+
+      // Clear user's selected tenant if it was the removed org
+      await client.query(QUERIES.CLEAR_USER_TENANT, [userId, tenantId]);
+
+      return true;
+    });
+
+    if (removed) {
+      logger.info("Member removed from organization", {
+        tenantId,
+        userId,
+      });
+    }
+
+    return removed;
+  } catch (error) {
+    logger.error("Failed to remove member from tenant", {
+      tenantId,
+      userId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Count the number of owners in a tenant organization.
+ *
+ * @param tenantId - Tenant ID
+ * @returns Number of owners
+ */
+export const countOwnersByTenant = async (tenantId: string): Promise<number> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<{ readonly count: string }>(QUERIES.COUNT_OWNERS, [tenantId]);
+    return parseDbCount(result.rows);
+  } catch (error) {
+    logger.error("Failed to count owners by tenant", {
       tenantId,
       error: getErrorMessage(error),
     });

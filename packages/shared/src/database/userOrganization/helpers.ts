@@ -11,6 +11,8 @@ import type {
   UserOrganization,
   UserOrganizationWithTenantRow,
   UserOrganizationWithTenant,
+  TeamMemberRow,
+  TeamMember,
 } from "./types.js";
 
 export const rowToUserOrganization = (row: UserOrganizationRow): UserOrganization => ({
@@ -36,4 +38,14 @@ export const rowToUserOrganizationWithTenant = (
   orgName: row.org_name,
   provider: row.provider,
   tenantStatus: row.tenant_status,
+});
+
+export const rowToTeamMember = (row: TeamMemberRow): TeamMember => ({
+  userId: row.user_id,
+  displayName: row.display_name,
+  email: row.email,
+  avatarUrl: row.avatar_url,
+  role: row.role,
+  joinedAt: row.joined_at,
+  providers: row.providers,
 });

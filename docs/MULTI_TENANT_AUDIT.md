@@ -9,18 +9,18 @@
 
 ## Executive Summary
 
-Kenchi implements a shared-database multi-tenant architecture where `tenant_id` scopes all data. The system has **strong fundamentals** — JWT-based auth with tenant claims, parameterized queries, middleware-enforced isolation, and encrypted token storage. However, the audit identified **4 critical vulnerabilities**, **10 high-priority gaps**, and **18 medium-priority improvements** needed to reach world-class production SaaS standards.
+Kenchi implements a shared-database multi-tenant architecture where `tenant_id` scopes all data. The system has **strong fundamentals** — JWT-based auth with tenant claims, parameterized queries, middleware-enforced isolation, and encrypted token storage. However, the audit identified **4 critical vulnerabilities**, **13 high-priority gaps**, and **24 medium-priority improvements** needed to reach world-class production SaaS standards. This includes findings across the full stack — backend services, database layer, and frontend application.
 
 **The core principle from Stripe, GitHub, and Datadog**: tenant isolation must be an **architectural invariant enforced at every layer**, so that the inevitable application-level bugs never result in cross-tenant data exposure. A single bug in any one layer cannot cause cross-tenant data leakage.
 
 ### Risk Matrix
 
-| Severity     | Count | Summary                                                                                       |
-| ------------ | ----- | --------------------------------------------------------------------------------------------- |
-| **Critical** | 4     | Cross-tenant data access via unvalidated tenant IDs, wrong provider in tenant creation        |
-| **High**     | 10    | Suspended tenants not blocked, no per-tenant RBAC, noisy neighbor risk, token refresh missing |
-| **Medium**   | 18    | Missing data export, webhook replay gaps, audit log incompleteness, provider parity gaps      |
-| **Low**      | 6     | PKCE, per-tenant encryption keys, scope validation                                            |
+| Severity     | Count | Summary                                                                                                                                                     |
+| ------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Critical** | 4     | Cross-tenant data access via unvalidated tenant IDs, wrong provider in tenant creation                                                                      |
+| **High**     | 13    | Suspended tenants not blocked, no per-tenant RBAC, noisy neighbor risk, token refresh missing, no frontend feature gates, explicit tenantId in query params |
+| **Medium**   | 24    | Missing data export, webhook replay gaps, audit log incompleteness, provider parity gaps, no tenant suspension UI, no usage warnings, no PKCE client-side   |
+| **Low**      | 7     | Per-tenant encryption keys, scope validation, no 403 error logging                                                                                          |
 
 ---
 
@@ -36,8 +36,10 @@ Kenchi implements a shared-database multi-tenant architecture where `tenant_id` 
 8. [Compliance & Data Governance](#8-compliance--data-governance)
 9. [Observability](#9-observability)
 10. [Multi-Provider OAuth & Tenant Creation](#10-multi-provider-oauth--tenant-creation)
-11. [Prioritized Remediation Plan](#11-prioritized-remediation-plan)
-12. [What World-Class Looks Like](#12-what-world-class-looks-like)
+11. [Frontend Multi-Tenancy](#11-frontend-multi-tenancy)
+12. [Webhook Security](#12-webhook-security)
+13. [Prioritized Remediation Plan](#13-prioritized-remediation-plan)
+14. [What World-Class Looks Like](#14-what-world-class-looks-like)
 
 ---
 
@@ -944,7 +946,141 @@ Only GitHub and GitLab auto-linking paths are tested in `authService.test.ts`. B
 
 ---
 
-## 11. Webhook Security
+## 11. Frontend Multi-Tenancy
+
+### What's Working Well
+
+- **httpOnly cookie storage**: JWTs stored in `httpOnly`, `Secure`, `SameSite=Lax` cookies with `__Host-` prefix — prevents XSS token theft (`apiClient.ts`)
+- **Single-flight token refresh**: On 401, `attemptTokenRefresh()` coordinates concurrent requests through a shared Promise — prevents thundering herd (`apiClient.ts:31-72`)
+- **Organization switcher**: Full multi-org support with fuzzy search Command palette, proper data refresh on switch via `refreshUser()` (`OrganizationSwitcher.tsx`, `useAuth.tsx:195-206`)
+- **Plan limit enforcement**: `usePlanLimitError` hook detects 403 `PLAN_LIMIT_EXCEEDED` responses and shows `UpgradePrompt` dialog with usage bars and upgrade path (`usePlanLimitError.ts`, `UpgradePrompt.tsx`)
+- **Open redirect protection**: OAuth callback validates `redirect_after` — only allows paths starting with `/` that don't contain `://` (`AuthCallback.tsx:20-21`)
+- **No shared global state**: Each hook fetches independently via TanStack Query; no cross-tenant cache leakage risk
+- **SessionStorage isolation**: Only stores notifications (per-session, cleared on logout) — no tenant data persisted client-side
+
+### Gaps
+
+| Gap                               | Severity | Details                                                                                                                                          |
+| --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Explicit tenantId in query params | **High** | `useIncidentData.ts` passes `?tenantId=${tenantId}` — if backend doesn't validate JWT tenantId against query param, cross-tenant access possible |
+| No FeatureGate component          | High     | UI doesn't defensively hide features by plan or role — trusts backend to reject                                                                  |
+| No permission-based UI checks     | High     | `TeamManagement.tsx` checks roles directly (`currentUserRole === "admin"`) instead of permissions                                                |
+| No tenant suspension UI           | Medium   | When tenant is suspended, no route guard or banner — users see generic errors                                                                    |
+| No proactive usage warnings       | Medium   | `useSubscription.ts` fetches usage but no alerts at 75%/90%/95% — only at 100%                                                                   |
+| No PKCE client-side               | Medium   | `Login.tsx` doesn't generate `code_verifier`/`code_challenge` — PKCE handled entirely server-side (if at all)                                    |
+| No API client timeout             | Medium   | `apiClient.ts` has no explicit timeout — uses browser default (~90s), should enforce 30s                                                         |
+| Inconsistent tenant scoping       | Medium   | Some APIs use JWT (`/api/v1/dashboard/*`), others use explicit query params (`/api/v1/incidents?tenantId=`)                                      |
+| No 403 error logging              | Low      | Plan limit errors not logged client-side — missed product insights                                                                               |
+
+### Critical Issue: Explicit tenantId in Query Params
+
+**Files**: `services/frontend/src/hooks/useIncidentData.ts`
+
+```typescript
+// These pass tenantId as a query param instead of relying on JWT
+`/api/v1/incidents?tenantId=${tenantId}``/api/v1/triage/stats?tenantId=${tenantId}`;
+```
+
+**Risk**: This mirrors CRIT-1/CRIT-2 on the backend — if the API routes trust the query param over the JWT, a user could request another tenant's incident data by manipulating the URL.
+
+**Fix**: Remove `tenantId` from all frontend query params. Backend should extract tenant exclusively from the JWT.
+
+### Reference: Frontend Multi-Tenancy Patterns (Stripe, GitHub, Datadog)
+
+**Stripe Dashboard** implements a strict separation: the dashboard API never accepts `account_id` from query params for the user's own data. Cross-account access (Connect) uses separate OAuth-scoped tokens, not user-supplied IDs. The frontend stores no tenant data in localStorage — everything is fetched fresh per session.
+
+**GitHub** uses a URL-based tenant context (`github.com/{org}/...`) with server-side authorization on every route. The frontend never passes `org_id` as a query param — the URL path IS the tenant scope, and the backend validates the authenticated user has access to that org.
+
+**Datadog** implements **Restricted Datasets** on the frontend: dashboards and monitors query the API, and the API returns only data the user's role permits. The frontend renders blank graphs for restricted data — it never receives unauthorized data in the first place.
+
+### Reference: FeatureGate Pattern
+
+World-class SaaS uses a centralized entitlements provider with declarative gating:
+
+```tsx
+// EntitlementProvider wraps the app, fetches entitlements once
+<EntitlementProvider>
+  <App />
+</EntitlementProvider>
+
+// FeatureGate hides UI for disabled features
+<FeatureGate feature="fine_tuning" fallback={<UpgradePrompt feature="fine_tuning" />}>
+  <FineTuningPanel />
+</FeatureGate>
+
+// usePermissions hook for imperative checks
+const { hasPermission, hasFeature } = usePermissions();
+if (hasPermission("team.manage")) {
+  // show management UI
+}
+```
+
+The entitlements response should include:
+
+- **Features**: boolean flags (`fine_tuning: true`, `custom_roles: false`)
+- **Limits**: current usage vs max (`{ analyses: { current: 45, max: 100 } }`)
+- **Permissions**: derived from the user's per-tenant role (`["analyses.read", "analyses.write", "team.manage"]`)
+
+Cache entitlements for 5 minutes with automatic invalidation on org switch or plan change.
+
+### Reference: Tenant Suspension UI
+
+When a tenant is suspended, the frontend should:
+
+1. **Route guard middleware**: Check tenant status on every navigation — redirect to `/suspended` page
+2. **Suspension banner**: Persistent banner showing reason and resolution steps
+3. **Read-only mode**: Disable all write actions (buttons grayed, forms disabled) while allowing data viewing
+4. **Billing redirect**: "Update payment method" CTA linking directly to billing page
+
+```tsx
+// Route guard in App.tsx or router config
+const TenantGuard = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  const { subscription } = useSubscription();
+
+  if (subscription?.status === "suspended") {
+    return <SuspendedPage reason={subscription.suspendedReason} />;
+  }
+  if (subscription?.status === "past_due") {
+    return (
+      <>
+        <PastDueBanner dueDate={subscription.dueDate} />
+        {children}
+      </>
+    );
+  }
+  return children;
+};
+```
+
+### Reference: Proactive Usage Warnings
+
+Implement multi-level alerts that appear before the user hits a hard limit:
+
+| Threshold | UI Treatment                                   |
+| --------- | ---------------------------------------------- |
+| **75%**   | Subtle badge on sidebar usage indicator        |
+| **90%**   | Yellow warning banner on relevant pages        |
+| **95%**   | Persistent toast notification with upgrade CTA |
+| **100%**  | Modal blocking the action with `UpgradePrompt` |
+
+Use `useSubscription()` usage data to compute thresholds and display contextual warnings before the 403 hits.
+
+### Recommendations
+
+1. **Remove explicit tenantId from all API query params** — rely on JWT exclusively for tenant scoping
+2. **Build `<FeatureGate>` component** — declarative feature/plan/permission gating with `<UpgradePrompt>` fallback
+3. **Build `usePermissions()` hook** — check permissions from entitlements API, never roles directly
+4. **Build `<EntitlementProvider>`** — fetch entitlements once, cache 5 min, invalidate on org switch
+5. **Add `<TenantGuard>` route guard** — suspension page, past-due banner, read-only mode
+6. **Add `<UsageWarning>` component** — proactive alerts at 75%/90%/95% thresholds
+7. **Implement PKCE client-side** — generate `code_verifier` in `Login.tsx`, pass `code_challenge` to auth URL
+8. **Add 30s timeout to apiClient** — use `AbortController` with `setTimeout`
+9. **Standardize tenant scoping** — all API calls use JWT, no explicit `tenantId` params
+
+---
+
+## 12. Webhook Security
 
 ### What's Working Well
 
@@ -981,7 +1117,7 @@ Layer deduplication: **Redis SETNX** for fast first-pass dedup (TTL = 1-24 hours
 
 ---
 
-## 12. Prioritized Remediation Plan
+## 13. Prioritized Remediation Plan
 
 ### Phase 1: Critical Security Fixes (Week 1)
 
@@ -1043,25 +1179,40 @@ Layer deduplication: **Redis SETNX** for fast first-pass dedup (TTL = 1-24 hours
 | 34  | Implement PKCE for all OAuth flows (RFC 9700)              | 4 hours | Defense-in-depth for OAuth                  |
 | 35  | Build centralized EntitlementService                       | 1 day   | Single enforcement point for all plan logic |
 
+### Phase 6: Frontend Multi-Tenancy (Weeks 9-10)
+
+| #   | Item                                                                   | Effort  | Impact                                            |
+| --- | ---------------------------------------------------------------------- | ------- | ------------------------------------------------- |
+| 36  | Remove explicit tenantId from all frontend API query params            | 2 hours | Closes frontend-side cross-tenant vector          |
+| 37  | Build `<FeatureGate>` component with plan/permission gating            | 1 day   | Defensive UI isolation for features               |
+| 38  | Build `usePermissions()` hook — check permissions, not roles           | 4 hours | Decouples UI from role definitions                |
+| 39  | Build `<EntitlementProvider>` — fetch + cache entitlements per session | 1 day   | Single source of truth for plan/feature state     |
+| 40  | Add `<TenantGuard>` route guard — suspension page + read-only mode     | 1 day   | Users see clear suspension state, not generic 403 |
+| 41  | Add `<UsageWarning>` — proactive alerts at 75%/90%/95% thresholds      | 4 hours | Users self-manage usage before hitting hard limit |
+| 42  | Implement PKCE client-side in OAuth flow                               | 4 hours | Frontend generates code_verifier per RFC 9700     |
+| 43  | Add 30s AbortController timeout to apiClient                           | 2 hours | Prevents hung requests consuming resources        |
+| 44  | Standardize all API calls to use JWT-only tenant scoping               | 4 hours | Consistent, secure tenant isolation               |
+
 ---
 
-## 13. What World-Class Looks Like
+## 14. What World-Class Looks Like
 
 ### Current vs World-Class Comparison
 
-| Capability           | World-Class Standard                                                                | Kenchi Current                                    | Gap                                             |
-| -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------- |
-| **Data isolation**   | 5-layer defense (app + RLS + infra + cache + monitoring)                            | Application-level + query-level (most queries)    | Add RLS, cache prefixing, static analysis       |
-| **Auth**             | Short-lived tokens, per-tenant roles, per-tenant signing keys, PKCE                 | Short-lived tokens, global roles, no PKCE         | Per-tenant RBAC, PKCE, per-tenant JWT keys      |
-| **Authorization**    | Permission-based RBAC, custom roles per tenant, API key scoping, Zanzibar ReBAC     | Role-based only, global roles, no API keys        | Permission layer, scoped API keys               |
-| **Rate limiting**    | 4-layer (token bucket + concurrent + fleet + worker), per-tenant, fail-open         | Per-IP + per-tenant flat rate                     | Token Bucket, concurrent limiter, load shedding |
-| **Noisy neighbor**   | Per-tenant quotas, fair scheduling, circuit breakers, connection throttling         | None                                              | Full implementation needed                      |
-| **Billing**          | Usage metering (Stripe Meters), EntitlementService at all layers, downgrade guards  | Plan enforcement at route level only              | Worker enforcement, metering, entitlements      |
-| **Compliance**       | GDPR export/delete/consent, SOC 2 immutable audit, crypto-shredding, per-tenant KMS | Partial audit trail, no export/delete             | GDPR endpoints, SOC 2 logging, KMS              |
-| **Observability**    | Per-tenant health scoring, Cortex/Thanos, cardinality-managed metrics               | Structured logs with tenantId                     | Metrics, health scoring, dashboards             |
-| **Lifecycle**        | 8-state machine, event-sourced transitions, reactivation validation                 | Multiple creation paths, suspension doesn't block | Status middleware, lifecycle states             |
-| **Encryption**       | Per-tenant KMS keys, three-level hierarchy, BYOK, key rotation                      | Single global key, AES-256-GCM                    | Key hierarchy, rotation, BYOK                   |
-| **Webhook security** | Signature + timestamp + replay protection + per-source rate limiting + queue-first  | Signature verification, partial replay protection | Timestamp validation, queue-first pattern       |
+| Capability           | World-Class Standard                                                                | Kenchi Current                                     | Gap                                               |
+| -------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
+| **Data isolation**   | 5-layer defense (app + RLS + infra + cache + monitoring)                            | Application-level + query-level (most queries)     | Add RLS, cache prefixing, static analysis         |
+| **Auth**             | Short-lived tokens, per-tenant roles, per-tenant signing keys, PKCE                 | Short-lived tokens, global roles, no PKCE          | Per-tenant RBAC, PKCE, per-tenant JWT keys        |
+| **Authorization**    | Permission-based RBAC, custom roles per tenant, API key scoping, Zanzibar ReBAC     | Role-based only, global roles, no API keys         | Permission layer, scoped API keys                 |
+| **Rate limiting**    | 4-layer (token bucket + concurrent + fleet + worker), per-tenant, fail-open         | Per-IP + per-tenant flat rate                      | Token Bucket, concurrent limiter, load shedding   |
+| **Noisy neighbor**   | Per-tenant quotas, fair scheduling, circuit breakers, connection throttling         | None                                               | Full implementation needed                        |
+| **Billing**          | Usage metering (Stripe Meters), EntitlementService at all layers, downgrade guards  | Plan enforcement at route level only               | Worker enforcement, metering, entitlements        |
+| **Compliance**       | GDPR export/delete/consent, SOC 2 immutable audit, crypto-shredding, per-tenant KMS | Partial audit trail, no export/delete              | GDPR endpoints, SOC 2 logging, KMS                |
+| **Observability**    | Per-tenant health scoring, Cortex/Thanos, cardinality-managed metrics               | Structured logs with tenantId                      | Metrics, health scoring, dashboards               |
+| **Lifecycle**        | 8-state machine, event-sourced transitions, reactivation validation                 | Multiple creation paths, suspension doesn't block  | Status middleware, lifecycle states               |
+| **Encryption**       | Per-tenant KMS keys, three-level hierarchy, BYOK, key rotation                      | Single global key, AES-256-GCM                     | Key hierarchy, rotation, BYOK                     |
+| **Webhook security** | Signature + timestamp + replay protection + per-source rate limiting + queue-first  | Signature verification, partial replay protection  | Timestamp validation, queue-first pattern         |
+| **Frontend**         | FeatureGate, permission hooks, EntitlementProvider, tenant guards, PKCE client-side | httpOnly cookies, org switcher, plan limit dialogs | FeatureGate, permissions hook, tenant guard, PKCE |
 
 ### The 7 Architectural Pillars
 

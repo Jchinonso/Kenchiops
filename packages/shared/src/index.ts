@@ -418,10 +418,15 @@ export {
   type UserOrganization,
   type UserOrganizationWithTenant,
   type AddUserOrganizationInput,
+  type TeamMember,
   findOrganizationsByUser,
   addUserOrganization,
   setDefaultOrganization,
   countMembersByTenant,
+  findMembersByTenant,
+  updateMemberRole,
+  removeMemberFromTenant,
+  countOwnersByTenant,
 } from "./database/index.js";
 
 // Provider connection module
