@@ -84,11 +84,15 @@ export const createTestCase = async (input: CreateTestCaseInput): Promise<RAGTes
  * @throws ValidationError if testCaseId is empty
  * @throws Error if database operation fails
  */
-export const getTestCaseById = async (testCaseId: string): Promise<RAGTestCase | null> => {
+export const getTestCaseById = async (
+  testCaseId: string,
+  tenantId: string
+): Promise<RAGTestCase | null> => {
   validateId(testCaseId, "testCaseId");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<TestCaseRow>(TEST_CASE_QUERIES.GET_BY_ID, [testCaseId]);
+    const result = await query<TestCaseRow>(TEST_CASE_QUERIES.GET_BY_ID, [testCaseId, tenantId]);
     return result.rows.length === 0 ? null : mapRowToTestCase(result.rows[0]);
   } catch (error) {
     logger.error("Failed to get test case by ID", {

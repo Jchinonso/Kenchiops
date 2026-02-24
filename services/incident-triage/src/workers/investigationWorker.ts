@@ -243,7 +243,7 @@ const handleQueueMessage = async (
     return { success: false, error: "Missing investigationId in queue message payload" };
   }
 
-  const investigation = await getInvestigationById(investigationId);
+  const investigation = await getInvestigationById(investigationId, tenantId);
 
   if (!investigation) {
     logger.error("Investigation not found", { investigationId });

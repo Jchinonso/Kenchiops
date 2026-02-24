@@ -91,11 +91,14 @@ export const createInvestigation = async (
  * @returns The investigation record, or null if not found
  * @throws ValidationError if ID is empty
  */
-export const getInvestigationById = async (id: string): Promise<InvestigationRecord | null> => {
+export const getInvestigationById = async (
+  id: string,
+  tenantId: string
+): Promise<InvestigationRecord | null> => {
   validateInvestigationId(id);
 
   try {
-    const result = await query<InvestigationRow>(INVESTIGATION_QUERIES.GET_BY_ID, [id]);
+    const result = await query<InvestigationRow>(INVESTIGATION_QUERIES.GET_BY_ID, [id, tenantId]);
     return result.rows.length > 0 ? mapRowToInvestigation(result.rows[0]) : null;
   } catch (error) {
     logger.error("Failed to get investigation by id", {

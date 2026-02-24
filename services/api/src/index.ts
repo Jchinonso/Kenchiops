@@ -39,6 +39,7 @@ import {
   SERVER_TIMEOUTS,
   SERVICE_NAMES,
 } from "@kenchi/shared";
+import { tenantStatusMiddleware } from "./middleware/tenantStatusMiddleware.js";
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
 import { SSE_STREAM_PATH } from "./routes/sseRoutes.js";
@@ -338,6 +339,7 @@ const createApp = (): express.Express => {
   app.use(apiRateLimiter.middleware());
   app.use(requestContextMiddleware);
   app.use(authMiddleware);
+  app.use(tenantStatusMiddleware);
 
   // Register all routes
   registerRoutes(app);

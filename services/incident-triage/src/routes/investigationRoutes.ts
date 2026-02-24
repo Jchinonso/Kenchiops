@@ -203,13 +203,8 @@ export const createInvestigationRoutes = (deps: InvestigationRouteDependencies):
     }
 
     const tenantId = requireTenantId(req);
-    const investigation = await getInvestigationById(id);
+    const investigation = await getInvestigationById(id, tenantId);
     if (!investigation) {
-      throw new NotFoundError("Investigation not found", { metadata: { id } });
-    }
-
-    // Tenant isolation: verify the record belongs to the authenticated tenant (VULN-006)
-    if (investigation.tenantId !== tenantId) {
       throw new NotFoundError("Investigation not found", { metadata: { id } });
     }
 

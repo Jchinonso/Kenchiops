@@ -116,13 +116,8 @@ const handleGetIncident = async (req: Request, res: Response): Promise<void> => 
   }
 
   const tenantId = requireTenantId(req);
-  const result = await getAlertWithTriageResult(id);
+  const result = await getAlertWithTriageResult(id, tenantId);
   if (!result) {
-    throw new NotFoundError("Incident not found", { metadata: { id } });
-  }
-
-  // Tenant isolation: verify the record belongs to the authenticated tenant (VULN-006)
-  if (result.alert.tenantId !== tenantId) {
     throw new NotFoundError("Incident not found", { metadata: { id } });
   }
 
@@ -141,9 +136,8 @@ const handleAcknowledgeIncident = async (req: Request, res: Response): Promise<v
 
   const tenantId = requireTenantId(req);
 
-  // Verify ownership before state mutation (VULN-007)
-  const existing = await getAlertWithTriageResult(id);
-  if (!existing || existing.alert.tenantId !== tenantId) {
+  const existing = await getAlertWithTriageResult(id, tenantId);
+  if (!existing) {
     throw new NotFoundError("Incident not found", { metadata: { id } });
   }
 
@@ -169,9 +163,8 @@ const handleResolveIncident = async (req: Request, res: Response): Promise<void>
 
   const tenantId = requireTenantId(req);
 
-  // Verify ownership before state mutation (VULN-007)
-  const existing = await getAlertWithTriageResult(id);
-  if (!existing || existing.alert.tenantId !== tenantId) {
+  const existing = await getAlertWithTriageResult(id, tenantId);
+  if (!existing) {
     throw new NotFoundError("Incident not found", { metadata: { id } });
   }
 

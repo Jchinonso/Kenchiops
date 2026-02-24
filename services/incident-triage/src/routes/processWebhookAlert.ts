@@ -115,6 +115,7 @@ export const processWebhookAlert = async (
   // Enqueue for triage processing
   await queue.enqueue(TRIAGE_JOB_TYPE, {
     alertId: alertRecord.id,
+    tenantId: alertRecord.tenantId,
     source: alertRecord.source,
     severity: alertRecord.severity,
   });

@@ -78,13 +78,8 @@ const handleGetTriageResult = async (req: Request, res: Response): Promise<void>
   }
 
   const tenantId = requireTenantId(req);
-  const result = await getTriageResultById(id);
+  const result = await getTriageResultById(id, tenantId);
   if (!result) {
-    throw new NotFoundError("Triage result not found", { metadata: { id } });
-  }
-
-  // Tenant isolation: verify the record belongs to the authenticated tenant (VULN-006)
-  if (result.tenantId !== tenantId) {
     throw new NotFoundError("Triage result not found", { metadata: { id } });
   }
 

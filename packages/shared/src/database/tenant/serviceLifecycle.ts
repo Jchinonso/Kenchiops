@@ -339,6 +339,104 @@ export const createFromGitHubLogin = async (orgName: string): Promise<Tenant> =>
   }
 };
 
+/**
+ * Create a tenant from Bitbucket OAuth login.
+ * Creates a tenant + bitbucket provider connection.
+ *
+ * @param workspace - Bitbucket workspace slug
+ * @returns Created tenant
+ */
+export const createFromBitbucketWorkspace = async (workspace: string): Promise<Tenant> => {
+  validateId(workspace, "workspace");
+
+  try {
+    const result = await transaction(async (client) => {
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
+        workspace,
+        "bitbucket",
+        TENANT_STATUS.ACTIVE,
+      ]);
+
+      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.BITBUCKET_LINKED, {
+        workspace,
+      });
+
+      return created.rows[0];
+    });
+
+    // Create the bitbucket provider connection
+    await createProviderConnection({
+      tenantId: result.id,
+      provider: "bitbucket",
+      connectionName: workspace,
+      externalOrgId: workspace,
+      config: { workspace },
+    });
+
+    logger.info("Tenant created from Bitbucket workspace", {
+      tenantId: result.id,
+      workspace,
+    });
+
+    return rowToTenant(result);
+  } catch (error) {
+    logger.error("Failed to create tenant from Bitbucket workspace", {
+      workspace,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Create a tenant from Azure DevOps OAuth login.
+ * Creates a tenant + azure_devops provider connection.
+ *
+ * @param org - Azure DevOps organization name
+ * @returns Created tenant
+ */
+export const createFromAzureDevOpsAccount = async (org: string): Promise<Tenant> => {
+  validateId(org, "org");
+
+  try {
+    const result = await transaction(async (client) => {
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
+        org,
+        "azure_devops",
+        TENANT_STATUS.ACTIVE,
+      ]);
+
+      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.AZURE_DEVOPS_LINKED, {
+        org,
+      });
+
+      return created.rows[0];
+    });
+
+    // Create the azure_devops provider connection
+    await createProviderConnection({
+      tenantId: result.id,
+      provider: "azure_devops",
+      connectionName: org,
+      externalOrgId: org,
+      config: { org },
+    });
+
+    logger.info("Tenant created from Azure DevOps account", {
+      tenantId: result.id,
+      org,
+    });
+
+    return rowToTenant(result);
+  } catch (error) {
+    logger.error("Failed to create tenant from Azure DevOps account", {
+      org,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
 // ==================== Status Management ====================
 
 /**

@@ -33,6 +33,10 @@ import {
   // Tenant creation
   createFromGitHubLogin,
   createFromGitLabGroup,
+  createFromBitbucketWorkspace,
+  createFromAzureDevOpsAccount,
+  // Type guards
+  assertUnreachable,
   // User organization
   addUserOrganization,
   // JWT utilities
@@ -59,6 +63,8 @@ const logger = createLogger("auth-service");
 const ORG_CAPABLE_PROVIDERS: ReadonlySet<OAuthProvider> = new Set<OAuthProvider>([
   "github",
   "gitlab",
+  "bitbucket",
+  "azure_devops",
 ]);
 
 // ==================== Extracted Service Methods ====================
@@ -384,9 +390,20 @@ const ensureOrgMemberships = async (
 
     const tenant =
       existingTenant ??
-      (provider === "github"
-        ? await createFromGitHubLogin(org.login)
-        : await createFromGitLabGroup({ gitlabGroupPath: org.login }));
+      (await (async () => {
+        switch (provider) {
+          case "github":
+            return createFromGitHubLogin(org.login);
+          case "gitlab":
+            return createFromGitLabGroup({ gitlabGroupPath: org.login });
+          case "bitbucket":
+            return createFromBitbucketWorkspace(org.login);
+          case "azure_devops":
+            return createFromAzureDevOpsAccount(org.login);
+          default:
+            return assertUnreachable(provider);
+        }
+      })());
 
     resolvedIds.push(tenant.id);
 

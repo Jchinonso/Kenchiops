@@ -33,6 +33,8 @@ export {
   createFromGitHubInstall,
   createFromGitHubLogin,
   createFromGitLabGroup,
+  createFromBitbucketWorkspace,
+  createFromAzureDevOpsAccount,
   linkSlackWorkspace,
   createFromSlackInstall,
   activate,

@@ -216,7 +216,7 @@ export const createInvestigationSearchAdapter = (): InvestigationSearchPort => (
       // Look up triage results for each recent alert
       const triageLookups = await Promise.all(
         recentAlerts.map(async (alert) => {
-          const triageResult = await getTriageResultByAlertId(alert.id);
+          const triageResult = await getTriageResultByAlertId(alert.id, tenantId);
           return triageResult === null ? null : { alert, triageResult };
         })
       );

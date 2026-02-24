@@ -41,7 +41,7 @@ export const ANALYSIS_QUERIES = {
   `,
 
   GET_BY_ID: `
-    SELECT * FROM analyses WHERE id = $1
+    SELECT * FROM analyses WHERE id = $1 AND tenant_id = $2
   `,
 
   GET_BY_EVENT_ID: `

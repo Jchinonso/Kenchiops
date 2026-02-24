@@ -39,7 +39,7 @@ export const EXTERNAL_SOURCE_QUERIES = {
     RETURNING *
   `,
 
-  GET_BY_ID: `SELECT * FROM external_sources WHERE id = $1`,
+  GET_BY_ID: `SELECT * FROM external_sources WHERE id = $1 AND tenant_id = $2`,
 
   GET_BY_TENANT: `
     SELECT * FROM external_sources

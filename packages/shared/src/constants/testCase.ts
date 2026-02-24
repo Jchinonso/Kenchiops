@@ -34,7 +34,7 @@ export const TEST_CASE_QUERIES = {
     RETURNING *
   `,
 
-  GET_BY_ID: `SELECT * FROM rag_test_cases WHERE id = $1`,
+  GET_BY_ID: `SELECT * FROM rag_test_cases WHERE id = $1 AND tenant_id = $2`,
 
   GET_ACTIVE: `
     SELECT * FROM rag_test_cases

@@ -91,11 +91,18 @@ export const createExternalSource = async (
  * @throws ValidationError if sourceId is empty
  * @throws Error if database operation fails
  */
-export const getExternalSourceById = async (sourceId: string): Promise<ExternalSource | null> => {
+export const getExternalSourceById = async (
+  sourceId: string,
+  tenantId: string
+): Promise<ExternalSource | null> => {
   validateNonEmptyString(sourceId, "sourceId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
-    const result = await query<ExternalSourceRow>(EXTERNAL_SOURCE_QUERIES.GET_BY_ID, [sourceId]);
+    const result = await query<ExternalSourceRow>(EXTERNAL_SOURCE_QUERIES.GET_BY_ID, [
+      sourceId,
+      tenantId,
+    ]);
     return result.rows.length === 0 ? null : mapRowToExternalSource(result.rows[0]);
   } catch (error) {
     logger.error("Failed to get external source by ID", {

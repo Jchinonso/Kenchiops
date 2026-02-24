@@ -757,6 +757,20 @@ export interface CreateTenantFromGitLab {
 }
 
 /**
+ * Data required to create a tenant from Bitbucket OAuth login.
+ */
+export interface CreateTenantFromBitbucket {
+  readonly bitbucketWorkspace: string;
+}
+
+/**
+ * Data required to create a tenant from Azure DevOps OAuth login.
+ */
+export interface CreateTenantFromAzureDevOps {
+  readonly azureDevOpsOrg: string;
+}
+
+/**
  * Data required to link a Slack workspace to an existing tenant.
  */
 export interface LinkSlackWorkspace {
@@ -775,6 +789,8 @@ export type TenantAuditAction =
   | "github_uninstalled"
   | "github_linked"
   | "gitlab_linked"
+  | "bitbucket_linked"
+  | "azure_devops_linked"
   | "slack_installed"
   | "slack_uninstalled"
   | "activated"

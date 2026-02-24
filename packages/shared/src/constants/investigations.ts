@@ -159,7 +159,7 @@ export const INVESTIGATION_QUERIES = {
     RETURNING *
   `,
   GET_BY_ID: `
-    SELECT * FROM investigations WHERE id = $1
+    SELECT * FROM investigations WHERE id = $1 AND tenant_id = $2
   `,
   LIST_BY_TENANT: buildListByTenantQuery(),
   COUNT_BY_TENANT: buildCountByTenantQuery(),

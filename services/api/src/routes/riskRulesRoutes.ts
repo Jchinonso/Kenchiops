@@ -57,24 +57,6 @@ const validateRequiredArray = (fieldValue: unknown): boolean | string => {
 // ==================== Utility Functions ====================
 
 /**
- * Extracts tenant ID from request.
- * In production, this would come from authenticated user context.
- */
-const extractTenantId = (req: {
-  body?: { tenantId?: string };
-  query?: { tenantId?: string };
-}): string => {
-  const tenantId = req.body?.tenantId ?? req.query?.tenantId;
-  if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
-    throw new ValidationError("Tenant ID is required", {
-      operation: "extractTenantId",
-      metadata: { field: "tenantId" },
-    });
-  }
-  return tenantId.trim();
-};
-
-/**
  * Parses optional boolean query parameter.
  */
 const parseOptionalBoolean = (value: unknown): boolean | undefined => {
@@ -119,7 +101,7 @@ const parseOptionalDate = (value: unknown): Date | undefined => {
  */
 const handleListRiskRules = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
 
   const options: RiskRulesQueryOptions = {
     tenantId,
@@ -152,7 +134,7 @@ const handleListRiskRules = async (req: Request, res: Response): Promise<void> =
  */
 const handleGetRiskRuleById = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
   const { ruleId } = req.params;
 
   if (!ruleId || typeof ruleId !== "string") {
@@ -187,7 +169,7 @@ const handleCreateRiskRule = async (req: Request, res: Response): Promise<void> 
   const body = req.body as CreateRiskRuleRequestBody;
 
   const input: CreateCustomRiskRuleInput = {
-    tenantId: body.tenantId,
+    tenantId: req.context.tenantId,
     name: body.name,
     description: body.description,
     actionTypes: body.actionTypes,
@@ -224,7 +206,7 @@ const handleCreateRiskRule = async (req: Request, res: Response): Promise<void> 
  */
 const handleUpdateRiskRule = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
   const { ruleId } = req.params;
   const body = req.body as UpdateRiskRuleRequestBody;
 
@@ -269,7 +251,7 @@ const handleUpdateRiskRule = async (req: Request, res: Response): Promise<void> 
  */
 const handleDeleteRiskRule = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
   const { ruleId } = req.params;
 
   if (!ruleId || typeof ruleId !== "string") {
@@ -301,7 +283,7 @@ const handleDeleteRiskRule = async (req: Request, res: Response): Promise<void> 
  */
 const handleQueryRiskAssessments = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
 
   const options: RiskAssessmentsQueryOptions = {
     tenantId,
@@ -344,7 +326,6 @@ router.post(
   "/api/risk-rules",
   validate({
     body: {
-      tenantId: validateRequiredString,
       name: validateRequiredString,
       actionTypes: validateRequiredArray,
     },

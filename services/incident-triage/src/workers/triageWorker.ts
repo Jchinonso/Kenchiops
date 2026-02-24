@@ -339,9 +339,10 @@ const runTriagePipeline = async (
 const processAlert = async (
   container: TriageContainer,
   alertId: string,
+  tenantId: string,
   state: TriageWorkerState
 ): Promise<void> => {
-  const alert = await getAlertById(alertId);
+  const alert = await getAlertById(alertId, tenantId);
 
   if (!alert) {
     logger.warn("Alert not found for triage", { alertId });
@@ -375,17 +376,21 @@ const processAlert = async (
  */
 const handleQueueMessage = async (
   container: TriageContainer,
-  message: QueueMessage<{ readonly alertId: string }>,
+  message: QueueMessage<{ readonly alertId: string; readonly tenantId: string | null }>,
   state: TriageWorkerState
 ): Promise<{ readonly success: boolean; readonly error?: string }> => {
-  const { alertId } = message.payload;
+  const { alertId, tenantId } = message.payload;
 
   if (!alertId) {
     return { success: false, error: "Missing alertId in queue message payload" };
   }
 
+  if (!tenantId) {
+    return { success: false, error: "Missing tenantId in queue message payload" };
+  }
+
   try {
-    await processAlert(container, alertId, state);
+    await processAlert(container, alertId, tenantId, state);
     incrementCounter(state, "totalProcessed");
     return { success: true };
   } catch (error) {
@@ -425,9 +430,10 @@ export const startTriageWorker = (container: TriageContainer): TriageWorkerContr
   const pollLoop = async (): Promise<void> => {
     while (state.running) {
       try {
-        await container.queue.process<{ readonly alertId: string }>(async (message) =>
-          handleQueueMessage(container, message, state)
-        );
+        await container.queue.process<{
+          readonly alertId: string;
+          readonly tenantId: string | null;
+        }>(async (message) => handleQueueMessage(container, message, state));
       } catch (error) {
         logger.error("Triage worker poll error", {
           error: getErrorMessage(error),

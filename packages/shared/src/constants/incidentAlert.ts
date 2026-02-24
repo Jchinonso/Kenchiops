@@ -60,7 +60,8 @@ const buildAlertWithTriageQuery = (): string =>
     "LEFT JOIN incident_triage_results t ON t.alert_id",
     "= a.id",
     "WHERE a.id",
-    "= $1",
+    "= $1 AND a.tenant_id",
+    "= $2",
   ].join(" ");
 
 // Helper: builds per-source stats aggregation query
@@ -129,7 +130,7 @@ export const INCIDENT_ALERT_QUERIES = {
     RETURNING *
   `,
   GET_BY_ID: `
-    SELECT * FROM incident_alerts WHERE id = $1
+    SELECT * FROM incident_alerts WHERE id = $1 AND tenant_id = $2
   `,
   FIND_BY_DELIVERY_ID: `
     SELECT * FROM incident_alerts WHERE delivery_id = $1
@@ -266,10 +267,10 @@ export const INCIDENT_TRIAGE_RESULT_QUERIES = {
     RETURNING *
   `,
   GET_BY_ID: `
-    SELECT * FROM incident_triage_results WHERE id = $1
+    SELECT * FROM incident_triage_results WHERE id = $1 AND tenant_id = $2
   `,
   GET_BY_ALERT_ID: `
-    SELECT * FROM incident_triage_results WHERE alert_id = $1
+    SELECT * FROM incident_triage_results WHERE alert_id = $1 AND tenant_id = $2
   `,
   UPDATE_ENRICHMENT: buildEnrichmentQuery(),
   UPDATE_AI_SUMMARY: buildAiSummaryQuery(),

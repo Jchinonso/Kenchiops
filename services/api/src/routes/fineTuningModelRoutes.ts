@@ -50,10 +50,6 @@ const validateRequiredNumber = (fieldValue: unknown): boolean | string => {
   return validators.number(fieldValue);
 };
 
-/** Validation rule: optional string */
-const validateOptionalString = (fieldValue: unknown): boolean | string =>
-  fieldValue === undefined || validators.string(fieldValue);
-
 // ==================== Route Handlers ====================
 
 /**
@@ -80,7 +76,7 @@ const handleGetModelVersions = async (_req: Request, res: Response): Promise<voi
  */
 const handleGetActiveModel = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = req.query.tenantId as string | undefined;
+  const { tenantId } = req.context;
 
   const result = await getActiveModel(tenantId);
 
@@ -204,7 +200,7 @@ const handleConfigureABTest = async (req: Request, res: Response): Promise<void>
 const handleEvaluateModel = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   const { versionId } = req.params;
-  const tenantId = req.query.tenantId as string | undefined;
+  const { tenantId } = req.context;
 
   const metrics = await evaluateModel({
     modelVersionId: versionId,
@@ -230,16 +226,14 @@ const handleCompareModels = async (req: Request, res: Response): Promise<void> =
   const startTime = Date.now();
   const body = req.body as CompareModelsRequestBody;
 
-  const comparison = await compareModels(
-    body.controlVersionId,
-    body.treatmentVersionId,
-    body.tenantId
-  );
+  const { tenantId } = req.context;
+
+  const comparison = await compareModels(body.controlVersionId, body.treatmentVersionId, tenantId);
 
   logger.info("Models compared", {
     controlVersionId: body.controlVersionId,
     treatmentVersionId: body.treatmentVersionId,
-    tenantId: body.tenantId,
+    tenantId,
     durationMs: Date.now() - startTime,
   });
 
@@ -295,7 +289,6 @@ router.post(
     body: {
       controlVersionId: validateRequiredString,
       treatmentVersionId: validateRequiredString,
-      tenantId: validateOptionalString,
     },
   }),
   asyncHandler(handleCompareModels)

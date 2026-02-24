@@ -228,11 +228,12 @@ const fetchAndIngestDocs = async (
  */
 export const syncExternalSource = async (
   sourceId: string,
+  tenantId: string,
   options: SyncOptions = {}
 ): Promise<SyncSourceResult | null> => {
   const startTime = Date.now();
 
-  const source = await getExternalSourceById(sourceId);
+  const source = await getExternalSourceById(sourceId, tenantId);
   if (!source) {
     logger.warn("Not found for ingestion", { sourceId });
     return null;
@@ -291,7 +292,7 @@ export const syncDueSources = async (
     }
 
     const source = sourcesDue[index];
-    const result = await syncExternalSource(source.id, options);
+    const result = await syncExternalSource(source.id, source.tenantId, options);
 
     const newResults = result ? [...results, result] : results;
     return processSource(index + 1, newResults);

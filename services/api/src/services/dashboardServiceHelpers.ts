@@ -285,8 +285,8 @@ const getAnalysisDetailFn = async (
   analysisId: string,
   context: RequestContext
 ): Promise<AnalysisRecord> => {
-  const analysis = await getAnalysisById(analysisId);
-  if (!analysis || analysis.tenantId !== tenantId) {
+  const analysis = await getAnalysisById(analysisId, tenantId);
+  if (!analysis) {
     throw new NotFoundError("Analysis not found", { metadata: { analysisId } });
   }
   logger.info("Analysis detail retrieved", { analysisId, ...context });

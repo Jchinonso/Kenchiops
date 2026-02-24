@@ -101,11 +101,14 @@ export const createIncidentAlert = async (
  * @returns The incident alert record, or null if not found
  * @throws ValidationError if ID is empty
  */
-export const getAlertById = async (id: string): Promise<IncidentAlertRecord | null> => {
+export const getAlertById = async (
+  id: string,
+  tenantId: string
+): Promise<IncidentAlertRecord | null> => {
   validateIncidentAlertId(id);
 
   try {
-    const result = await query<IncidentAlertRow>(INCIDENT_ALERT_QUERIES.GET_BY_ID, [id]);
+    const result = await query<IncidentAlertRow>(INCIDENT_ALERT_QUERIES.GET_BY_ID, [id, tenantId]);
     return result.rows.length > 0 ? mapRowToIncidentAlert(result.rows[0]) : null;
   } catch (error) {
     logger.error("Failed to get incident alert by id", {
@@ -261,13 +264,15 @@ export const countIncidents = async (
  * @returns The alert with triage result, or null if alert not found
  */
 export const getAlertWithTriageResult = async (
-  alertId: string
+  alertId: string,
+  tenantId: string
 ): Promise<AlertWithTriageResult | null> => {
   validateIncidentAlertId(alertId);
 
   try {
     const { rows } = await query<AlertWithTriageRow>(INCIDENT_ALERT_QUERIES.GET_ALERT_WITH_TRIAGE, [
       alertId,
+      tenantId,
     ]);
 
     const { length: rowCount } = rows;

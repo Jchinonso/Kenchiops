@@ -28,6 +28,8 @@ export const AUDIT_ACTIONS = {
   GITHUB_UNINSTALLED: "github_uninstalled",
   GITHUB_LINKED: "github_linked",
   GITLAB_LINKED: "gitlab_linked",
+  BITBUCKET_LINKED: "bitbucket_linked",
+  AZURE_DEVOPS_LINKED: "azure_devops_linked",
   SLACK_INSTALLED: "slack_installed",
   SLACK_UNINSTALLED: "slack_uninstalled",
   ACTIVATED: "activated",
