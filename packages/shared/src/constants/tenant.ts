@@ -36,6 +36,11 @@ export const AUDIT_ACTIONS = {
   SUSPENDED: "suspended",
   DELETED: "deleted",
   PLAN_CHANGED: "plan_changed",
+  MEMBER_ROLE_CHANGED: "member_role_changed",
+  MEMBER_REMOVED: "member_removed",
+  MEMBER_ADDED: "member_added",
+  ORG_SWITCHED: "org_switched",
+  MEMBERSHIP_RECONCILED: "membership_reconciled",
 } as const;
 
 /**

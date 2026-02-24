@@ -14,12 +14,17 @@ import {
   AuthorizationError,
   ValidationError,
   HTTP_STATUS,
+  getErrorMessage,
   findOrganizationsByUser,
   switchUserOrganization,
   setDefaultOrganization,
   findUserById,
+  findUserOrgRole,
   generateAccessToken,
   setAccessTokenCookie,
+  logAuditEvent,
+  AUDIT_ACTIONS,
+  TENANT_STATUS,
 } from "@kenchi/shared";
 
 const router = Router();
@@ -99,6 +104,20 @@ const handleSwitchOrganization = async (req: Request, res: Response): Promise<vo
     });
   }
 
+  // Reject switching to suspended or deleted tenants
+  if (targetOrg.tenantStatus === TENANT_STATUS.SUSPENDED) {
+    throw new AuthorizationError(
+      "Cannot switch to a suspended organization. Please contact support.",
+      { operation: "switchOrganization", metadata: { organizationId } }
+    );
+  }
+  if (targetOrg.tenantStatus === TENANT_STATUS.DELETED) {
+    throw new AuthorizationError("Cannot switch to a deactivated organization.", {
+      operation: "switchOrganization",
+      metadata: { organizationId },
+    });
+  }
+
   // Switch the user's selected organization
   await switchUserOrganization(userId, organizationId);
   await setDefaultOrganization(userId, organizationId);
@@ -112,8 +131,9 @@ const handleSwitchOrganization = async (req: Request, res: Response): Promise<vo
     });
   }
 
-  // Generate new access token with the updated tenantId
-  const newAccessToken = generateAccessToken(updatedUser);
+  // Generate new access token with per-org role
+  const orgRole = await findUserOrgRole(userId, organizationId);
+  const newAccessToken = generateAccessToken(updatedUser, orgRole ?? undefined);
 
   // Set only the access token cookie — refresh token must stay untouched
   setAccessTokenCookie(res, newAccessToken);
@@ -125,12 +145,27 @@ const handleSwitchOrganization = async (req: Request, res: Response): Promise<vo
     ...context,
   });
 
+  // Best-effort audit log
+  try {
+    await logAuditEvent(
+      organizationId,
+      AUDIT_ACTIONS.ORG_SWITCHED,
+      { userId, previousTenantId: req.user?.tenantId },
+      userId
+    );
+  } catch (auditError: unknown) {
+    logger.warn("Failed to log org switch audit event", {
+      ...context,
+      error: getErrorMessage(auditError),
+    });
+  }
+
   res.status(HTTP_STATUS.OK).json({
     data: {
       tenantId: targetOrg.tenantId,
       orgName: targetOrg.orgName,
       provider: targetOrg.provider,
-      role: targetOrg.role,
+      role: orgRole ?? targetOrg.role,
     },
   });
 };

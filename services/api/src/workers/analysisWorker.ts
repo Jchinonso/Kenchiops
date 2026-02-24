@@ -15,6 +15,8 @@ import {
   SERVICE_NAMES,
   getErrorMessage,
   query,
+  getSubscriptionByTenant,
+  SUBSCRIPTION_STATUS,
   type RequestContext,
 } from "@kenchi/shared";
 import { performAnalysis } from "../services/analysisService.js";
@@ -34,7 +36,7 @@ const logger = createLogger(SERVICE_NAMES.API);
 
 const QUERIES = {
   SELECT_PENDING: `
-    SELECT id, status, repository_full_name as repository, log_ref as request_payload
+    SELECT id, status, repository_full_name as repository, log_ref as request_payload, workspace_id
     FROM analysis_jobs
     WHERE status = 'pending'
       AND analysis_enqueued_at IS NULL
@@ -92,10 +94,11 @@ const WORKER_CONFIG = {
  */
 const fetchPendingJobs = async (limit: number): Promise<readonly AnalysisJob[]> => {
   const result = await query<{
-    id: string;
-    status: string;
-    repository: string;
-    request_payload: Record<string, unknown>;
+    readonly id: string;
+    readonly status: string;
+    readonly repository: string;
+    readonly request_payload: Record<string, unknown>;
+    readonly workspace_id: string | null;
   }>(QUERIES.SELECT_PENDING, [limit]);
 
   return result.rows.map((row) => ({
@@ -103,6 +106,7 @@ const fetchPendingJobs = async (limit: number): Promise<readonly AnalysisJob[]> 
     status: row.status as JobStatus,
     repository: row.repository,
     requestPayload: row.request_payload,
+    workspaceId: row.workspace_id,
   }));
 };
 
@@ -117,6 +121,36 @@ const processJob = async (job: AnalysisJob): Promise<void> => {
     tenantId: request.tenant_id ?? "system",
     actor: "analysis-worker",
   };
+
+  // Check subscription status before processing (fail-open)
+  const tenantId = job.workspaceId ?? (request.tenant_id as string | undefined) ?? null;
+  if (tenantId && tenantId !== "default" && tenantId !== "system") {
+    try {
+      const subscription = await getSubscriptionByTenant(tenantId);
+      const blockedStatuses: ReadonlySet<string> = new Set([
+        SUBSCRIPTION_STATUS.CANCELED,
+        SUBSCRIPTION_STATUS.PAST_DUE,
+      ]);
+      if (subscription && blockedStatuses.has(subscription.status)) {
+        logger.info("Skipping job for inactive subscription", {
+          ...context,
+          jobId: job.id,
+          subscriptionTenantId: tenantId,
+          subscriptionStatus: subscription.status,
+        });
+        await query(QUERIES.UPDATE_FAILED, [job.id, `Subscription ${subscription.status}`]);
+        return;
+      }
+    } catch (subError: unknown) {
+      // Fail-open: proceed if subscription check fails
+      logger.warn("Subscription check failed, proceeding", {
+        ...context,
+        jobId: job.id,
+        subscriptionTenantId: tenantId,
+        error: getErrorMessage(subError),
+      });
+    }
+  }
 
   logger.info("Processing analysis job", {
     jobId: job.id,

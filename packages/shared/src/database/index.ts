@@ -354,6 +354,7 @@ export {
   updateMemberRole,
   removeMemberFromTenant,
   countOwnersByTenant,
+  findUserOrgRole,
 } from "./userOrganization/index.js";
 
 // Webhook activity module

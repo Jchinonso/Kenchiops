@@ -14,7 +14,14 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
-import { createLogger, findById, TENANT_STATUS, getErrorMessage } from "@kenchi/shared";
+import {
+  createLogger,
+  findById,
+  findUserById,
+  TENANT_STATUS,
+  USER_STATUS,
+  getErrorMessage,
+} from "@kenchi/shared";
 
 const logger = createLogger("tenant-status-middleware");
 
@@ -61,6 +68,60 @@ const setCachedStatus = (tenantId: string, status: string): void => {
 
 const shouldSkipCheck = (path: string): boolean =>
   SKIP_PREFIXES.some((prefix) => path.startsWith(prefix));
+
+// ==================== User Status Cache ====================
+
+/** In-memory user status cache (same TTL as tenant cache) */
+const userStatusCache: Map<string, CachedStatus> = new Map();
+
+const getCachedUserStatus = (userId: string): string | null => {
+  const cached = userStatusCache.get(userId);
+  if (!cached) {
+    return null;
+  }
+  if (Date.now() > cached.expiresAt) {
+    userStatusCache.delete(userId);
+    return null;
+  }
+  return cached.status;
+};
+
+const setCachedUserStatus = (userId: string, status: string): void => {
+  userStatusCache.set(userId, {
+    status,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+};
+
+/**
+ * Look up user status from the database.
+ * Returns null on any failure (fail-open).
+ */
+const lookupUserStatus = async (userId: string): Promise<string | null> => {
+  const startTime = Date.now();
+  try {
+    const user = await findUserById(userId);
+    const durationMs = Date.now() - startTime;
+    logger.debug("User status lookup completed", {
+      provider: "postgres",
+      operation: "findUserById",
+      userId,
+      durationMs,
+      status: user?.status ?? "not_found",
+    });
+    return user?.status ?? null;
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+    logger.warn("Failed to look up user status, allowing request through", {
+      provider: "postgres",
+      operation: "findUserById",
+      userId,
+      durationMs,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
 
 // ==================== Middleware ====================
 
@@ -123,6 +184,39 @@ export const tenantStatusMiddleware = async (
       },
     });
     return;
+  }
+
+  // Check user status (fail-open: if lookup fails, allow through)
+  const userId = req.user?.userId;
+  if (userId) {
+    const cachedUserStatus = getCachedUserStatus(userId);
+    const userStatus = cachedUserStatus ?? (await lookupUserStatus(userId));
+
+    if (userStatus !== null && !cachedUserStatus) {
+      setCachedUserStatus(userId, userStatus);
+    }
+
+    if (userStatus === USER_STATUS.SUSPENDED) {
+      res.status(403).json({
+        error: {
+          code: "USER_SUSPENDED",
+          message: "Your account has been suspended.",
+          requestId: req.context?.requestId,
+        },
+      });
+      return;
+    }
+
+    if (userStatus === USER_STATUS.DELETED) {
+      res.status(403).json({
+        error: {
+          code: "USER_DEACTIVATED",
+          message: "Your account has been deactivated.",
+          requestId: req.context?.requestId,
+        },
+      });
+      return;
+    }
   }
 
   next();

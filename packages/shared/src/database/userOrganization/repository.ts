@@ -15,6 +15,7 @@ import {
   validateId,
   parseDbCount,
 } from "../common.js";
+import type { UserRole } from "../user/types.js";
 import {
   rowToUserOrganization,
   rowToUserOrganizationWithTenant,
@@ -96,6 +97,9 @@ const QUERIES = {
   COUNT_OWNERS: `
     SELECT COUNT(*) AS count FROM user_organizations
     WHERE tenant_id = $1 AND role = 'owner'
+  `,
+  FIND_ROLE_BY_USER_AND_TENANT: `
+    SELECT role FROM user_organizations WHERE user_id = $1 AND tenant_id = $2
   `,
   CLEAR_USER_TENANT: `
     UPDATE users SET selected_tenant_id = NULL, updated_at = NOW()
@@ -376,6 +380,36 @@ export const countOwnersByTenant = async (tenantId: string): Promise<number> => 
     return parseDbCount(result.rows);
   } catch (error) {
     logger.error("Failed to count owners by tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Find the per-organization role for a user in a specific tenant.
+ *
+ * @param userId - User ID
+ * @param tenantId - Tenant ID
+ * @returns The user's role in the organization, or null if no membership exists
+ */
+export const findUserOrgRole = async (
+  userId: string,
+  tenantId: string
+): Promise<UserRole | null> => {
+  validateId(userId, "userId");
+  validateId(tenantId, "tenantId");
+
+  try {
+    const result = await query<{ readonly role: string }>(QUERIES.FIND_ROLE_BY_USER_AND_TENANT, [
+      userId,
+      tenantId,
+    ]);
+    return result.rows.length > 0 ? (result.rows[0].role as UserRole) : null;
+  } catch (error) {
+    logger.error("Failed to find user org role", {
+      userId,
       tenantId,
       error: getErrorMessage(error),
     });

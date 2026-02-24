@@ -19,6 +19,7 @@ export interface AnalysisJob {
   readonly status: JobStatus;
   readonly repository: string;
   readonly requestPayload: Record<string, unknown>;
+  readonly workspaceId: string | null;
 }
 
 /**

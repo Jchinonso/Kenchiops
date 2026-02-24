@@ -431,6 +431,7 @@ export {
   updateMemberRole,
   removeMemberFromTenant,
   countOwnersByTenant,
+  findUserOrgRole,
 } from "./database/index.js";
 
 // Provider connection module

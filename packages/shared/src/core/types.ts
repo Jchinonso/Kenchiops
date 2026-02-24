@@ -799,7 +799,12 @@ export type TenantAuditAction =
   | "ci_failure_processed"
   | "slack_message_sent"
   | "github_comment_posted"
-  | "plan_changed";
+  | "plan_changed"
+  | "member_role_changed"
+  | "member_removed"
+  | "member_added"
+  | "org_switched"
+  | "membership_reconciled";
 
 /**
  * Tenant audit log entry.

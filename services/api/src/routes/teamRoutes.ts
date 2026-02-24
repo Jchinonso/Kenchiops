@@ -17,11 +17,14 @@ import {
   NotFoundError,
   requireRole,
   HTTP_STATUS,
+  getErrorMessage,
   // Repository functions
   findMembersByTenant,
   updateMemberRole,
   removeMemberFromTenant,
   countOwnersByTenant,
+  logAuditEvent,
+  AUDIT_ACTIONS,
   type TeamMember,
   type UserRole,
 } from "@kenchi/shared";
@@ -182,6 +185,21 @@ const handleChangeRole = async (req: Request, res: Response): Promise<void> => {
     newRole,
   });
 
+  // Best-effort audit log
+  try {
+    await logAuditEvent(
+      tenantId,
+      AUDIT_ACTIONS.MEMBER_ROLE_CHANGED,
+      { targetUserId, previousRole: targetMember.role, newRole },
+      actorUserId
+    );
+  } catch (auditError: unknown) {
+    logger.warn("Failed to log role change audit event", {
+      ...context,
+      error: getErrorMessage(auditError),
+    });
+  }
+
   // Re-fetch to get the full team member shape with providers
   const updatedMembers = await findMembersByTenant(tenantId);
   const updatedMember = updatedMembers.find((member) => member.userId === targetUserId);
@@ -260,6 +278,21 @@ const handleRemoveMember = async (req: Request, res: Response): Promise<void> =>
     targetUserId,
     removedRole: targetMember.role,
   });
+
+  // Best-effort audit log
+  try {
+    await logAuditEvent(
+      tenantId,
+      AUDIT_ACTIONS.MEMBER_REMOVED,
+      { targetUserId, removedRole: targetMember.role },
+      actorUserId
+    );
+  } catch (auditError: unknown) {
+    logger.warn("Failed to log member removal audit event", {
+      ...context,
+      error: getErrorMessage(auditError),
+    });
+  }
 
   res.status(HTTP_STATUS.NO_CONTENT).send();
 };
