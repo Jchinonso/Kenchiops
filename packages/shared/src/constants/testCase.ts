@@ -71,7 +71,7 @@ export const TEST_CASE_QUERIES = {
     RETURNING *
   `,
 
-  DELETE: `DELETE FROM rag_test_cases WHERE id = $1`,
+  DELETE: `DELETE FROM rag_test_cases WHERE id = $1 AND tenant_id = $2`,
 
   COUNT_BY_TENANT: `
     SELECT COUNT(*) as count FROM rag_test_cases

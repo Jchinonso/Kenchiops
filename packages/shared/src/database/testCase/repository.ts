@@ -243,18 +243,20 @@ export const setTestCaseActive = async (
 };
 
 /**
- * Deletes a test case.
+ * Deletes a test case (tenant-scoped).
  *
  * @param testCaseId - Test case ID to delete
+ * @param tenantId - Tenant ID for isolation
  * @returns True if deleted, false if not found
  * @throws ValidationError if testCaseId is empty
  * @throws Error if database operation fails
  */
-export const deleteTestCase = async (testCaseId: string): Promise<boolean> => {
+export const deleteTestCase = async (testCaseId: string, tenantId: string): Promise<boolean> => {
   validateId(testCaseId, "testCaseId");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query(TEST_CASE_QUERIES.DELETE, [testCaseId]);
+    const result = await query(TEST_CASE_QUERIES.DELETE, [testCaseId, tenantId]);
     if (result.rowCount === 0) {
       return false;
     }

@@ -312,18 +312,23 @@ export const updateSyncStatus = async (
 };
 
 /**
- * Deletes an external source.
+ * Deletes an external source (tenant-scoped).
  *
  * @param sourceId - External source ID
+ * @param tenantId - Tenant ID for isolation
  * @returns True if deleted, false if not found
- * @throws ValidationError if sourceId is empty
+ * @throws ValidationError if sourceId or tenantId is empty
  * @throws Error if database operation fails
  */
-export const deleteExternalSource = async (sourceId: string): Promise<boolean> => {
+export const deleteExternalSource = async (
+  sourceId: string,
+  tenantId: string
+): Promise<boolean> => {
   validateNonEmptyString(sourceId, "sourceId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
-    const result = await query(EXTERNAL_SOURCE_QUERIES.DELETE, [sourceId]);
+    const result = await query(EXTERNAL_SOURCE_QUERIES.DELETE, [sourceId, tenantId]);
 
     if (result.rowCount === 0) {
       return false;

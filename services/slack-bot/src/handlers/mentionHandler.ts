@@ -11,6 +11,8 @@ import {
   UI_EMOJI,
   isDocIngestionRequest,
   findTenantBySlackWorkspace,
+  getSubscriptionByTenant,
+  SUBSCRIPTION_STATUS,
 } from "@kenchi/shared";
 import { formatAnalysisMessage, formatErrorMessage } from "../formatters.js";
 import { formatQAResponse, formatQAErrorMessage } from "../formatters/qaFormatter.js";
@@ -198,6 +200,27 @@ export const handleAppMention = async (event: AppMentionEvent, say: SayFn): Prom
     // Otherwise, perform AI analysis
     logger.info("Routing to analysis handler", { query: query.slice(0, 50) });
     const tenant = event.team ? await findTenantBySlackWorkspace(event.team) : null;
+
+    // Check subscription status before running analysis (fail-open)
+    if (tenant?.id) {
+      try {
+        const subscription = await getSubscriptionByTenant(tenant.id);
+        const blockedStatuses: ReadonlySet<string> = new Set([
+          SUBSCRIPTION_STATUS.CANCELED,
+          SUBSCRIPTION_STATUS.PAST_DUE,
+        ]);
+        if (subscription && blockedStatuses.has(subscription.status)) {
+          await say({
+            text: `:warning: Your organization's subscription is ${subscription.status.replace("_", " ")}. Please update your subscription to use analysis.`,
+            thread_ts: event.ts,
+          });
+          return;
+        }
+      } catch {
+        // Fail-open: proceed if subscription check fails
+      }
+    }
+
     await handleAnalysisRequest({
       query,
       userId,

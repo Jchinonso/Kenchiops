@@ -92,7 +92,7 @@ export const EXTERNAL_SOURCE_QUERIES = {
     RETURNING *
   `,
 
-  DELETE: `DELETE FROM external_sources WHERE id = $1`,
+  DELETE: `DELETE FROM external_sources WHERE id = $1 AND tenant_id = $2`,
 
   DELETE_BY_TENANT: `DELETE FROM external_sources WHERE tenant_id = $1`,
 

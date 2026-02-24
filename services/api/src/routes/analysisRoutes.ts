@@ -71,7 +71,7 @@ const validateRequiredString = (fieldValue: unknown): boolean | string => {
  */
 const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
   const body = req.body as AnalyzeRequest;
-  const tenantId = body.tenant_id ?? "default";
+  const tenantId = req.context?.tenantId ?? req.user?.tenantId ?? "default";
 
   // Enforce monthly analysis limit before creating job
   if (tenantId !== "default") {
@@ -88,7 +88,7 @@ const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
       failure_log: body.failure_log,
       repository: body.repository,
       commit: body.commit,
-      tenant_id: body.tenant_id,
+      tenant_id: tenantId,
       workflow_id: body.workflow_id,
       test_framework: body.test_framework,
       pr_number: body.pr_number,
