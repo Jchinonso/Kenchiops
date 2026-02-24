@@ -391,10 +391,11 @@ const ensureOrgMemberships = async (
     resolvedIds.push(tenant.id);
 
     // Add user to org (idempotent -- ON CONFLICT DO NOTHING)
+    // First user to trigger tenant creation becomes the owner
     await addUserOrganization({
       userId,
       tenantId: tenant.id,
-      role: "member",
+      role: existingTenant ? "member" : "owner",
     });
 
     logger.info("User organization membership ensured", {
