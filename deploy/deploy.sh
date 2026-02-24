@@ -35,6 +35,10 @@ rsync -azP --delete \
   --exclude='dist' \
   --exclude='coverage' \
   --exclude='.next' \
+  --exclude='.jest-cache' \
+  --exclude='--version' \
+  --exclude='.husky' \
+  --exclude='.vscode' \
   -e "ssh -o StrictHostKeyChecking=no" \
   . "${VPS_USER}@${VPS_HOST}:${APP_DIR}/"
 
