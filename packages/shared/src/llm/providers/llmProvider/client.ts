@@ -153,9 +153,9 @@ export class LLMClient implements LLMAnalysisProvider {
         maxTokens: LLM_CONSTANTS.MAX_PROMPT_TOKENS,
       });
 
-      const response = await this.callWithRetry(prompt);
+      // Retry on both API errors and parse failures (truncated/malformed responses)
+      const analysis = await this.callAndParseWithRetry(prompt, event.id);
       const durationMs = Date.now() - startTime;
-      const analysis = this.parseResponse(response, event.id);
       const validation = validateResponse(analysis, { event, evidence });
 
       this.logValidationResults(validation, event.id);
@@ -455,6 +455,60 @@ export class LLMClient implements LLMAnalysisProvider {
     prompt: string,
     maxRetries: number = LLM_CONSTANTS.MAX_RETRIES
   ): Promise<string> => this.attemptWithRetry(prompt, 1, maxRetries);
+
+  /**
+   * Calls LLM and parses the response, retrying on parse failures.
+   *
+   * LLM providers sometimes return truncated or malformed JSON (e.g., network
+   * interruptions, safety filters, mid-stream timeouts). This method retries
+   * the entire call+parse cycle on parse failures.
+   *
+   * @param prompt - The prompt to send
+   * @param eventId - Event ID for logging context
+   * @param maxParseRetries - Maximum parse-failure retries (default: 2)
+   * @returns Parsed analysis result
+   * @throws {LLMError} If all attempts fail
+   */
+  private callAndParseWithRetry = async (
+    prompt: string,
+    eventId: string,
+    maxParseRetries: number = 2
+  ): Promise<LLMAnalysisResult> => {
+    let lastError: unknown = null; // let: accumulator for last error across retry attempts
+    const retryStartTime = Date.now();
+
+    for (let attempt = 0; attempt <= maxParseRetries; attempt++) {
+      // let: loop counter with early exit
+      if (attempt > 0) {
+        const backoffDelayMs = this.calculateBackoffDelay(attempt);
+        logger.warn("Retrying LLM call after parse failure", {
+          eventId,
+          attempt,
+          maxParseRetries,
+          durationMs: Date.now() - retryStartTime,
+          backoffDelayMs,
+        });
+        await delay(backoffDelayMs);
+      }
+
+      const response = await this.callWithRetry(prompt);
+
+      try {
+        return this.parseResponse(response, eventId);
+      } catch (error) {
+        lastError = error;
+        logger.warn("LLM response parse failed", {
+          eventId,
+          attempt: attempt + 1,
+          maxParseRetries,
+          responseLength: response.length,
+          durationMs: Date.now() - retryStartTime,
+        });
+      }
+    }
+
+    throw lastError;
+  };
 
   /**
    * Parses LLM response and validates JSON structure.

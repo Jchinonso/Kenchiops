@@ -169,7 +169,8 @@ describe("LLMClient", () => {
         ],
       };
 
-      setMockOpenAIResponse(mockResponse);
+      // Use persistent mock — retries will also get the malformed response
+      (mockCreate as jest.Mock).mockResolvedValue(mockResponse);
 
       await expect(client.analyzeIncident(mockEvent, mockEvidence)).rejects.toThrow(
         "Failed to parse LLM response"
