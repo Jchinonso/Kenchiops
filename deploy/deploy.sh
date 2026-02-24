@@ -39,6 +39,7 @@ rsync -azP --delete \
   --exclude='--version' \
   --exclude='.husky' \
   --exclude='.vscode' \
+  --exclude='*.tsbuildinfo' \
   -e "ssh -o StrictHostKeyChecking=no" \
   . "${VPS_USER}@${VPS_HOST}:${APP_DIR}/"
 

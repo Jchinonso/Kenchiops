@@ -18,8 +18,9 @@ RUN npm install --ignore-scripts
 # Copy source files
 COPY . .
 
-# Build all packages
-RUN npm run build
+# Build all packages using TypeScript project references (guarantees correct order)
+# --force ensures full rebuild even if tsbuildinfo files are stale
+RUN npx tsc --build --force
 
 # Production stage
 FROM node:20-alpine AS production
