@@ -459,7 +459,7 @@ describe("authService", () => {
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-other",
-        role: "member",
+        role: "owner",
       });
     });
 
@@ -505,7 +505,7 @@ describe("authService", () => {
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-personal",
-        role: "member",
+        role: "owner",
       });
     });
 
@@ -553,7 +553,7 @@ describe("authService", () => {
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-gitlab",
-        role: "member",
+        role: "owner",
       });
     });
 
