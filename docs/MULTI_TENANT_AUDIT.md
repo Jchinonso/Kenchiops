@@ -9,18 +9,18 @@
 
 ## Executive Summary
 
-Kenchi implements a shared-database multi-tenant architecture where `tenant_id` scopes all data. The system has **strong fundamentals** — JWT-based auth with tenant claims, parameterized queries, middleware-enforced isolation, and encrypted token storage. However, the audit identified **4 critical vulnerabilities**, **13 high-priority gaps**, and **24 medium-priority improvements** needed to reach world-class production SaaS standards. This includes findings across the full stack — backend services, database layer, and frontend application.
+Kenchi implements a shared-database multi-tenant architecture where `tenant_id` scopes all data. The system has **strong fundamentals** — JWT-based auth with tenant claims, parameterized queries, middleware-enforced isolation, and encrypted token storage. However, the audit identified **4 critical vulnerabilities**, **16 high-priority gaps**, and **26 medium-priority improvements** needed to reach world-class production SaaS standards. This includes findings across the full stack — backend services, database layer, and frontend application.
 
 **The core principle from Stripe, GitHub, and Datadog**: tenant isolation must be an **architectural invariant enforced at every layer**, so that the inevitable application-level bugs never result in cross-tenant data exposure. A single bug in any one layer cannot cause cross-tenant data leakage.
 
 ### Risk Matrix
 
-| Severity     | Count | Summary                                                                                                                                                     |
-| ------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Critical** | 4     | Cross-tenant data access via unvalidated tenant IDs, wrong provider in tenant creation                                                                      |
-| **High**     | 13    | Suspended tenants not blocked, no per-tenant RBAC, noisy neighbor risk, token refresh missing, no frontend feature gates, explicit tenantId in query params |
-| **Medium**   | 24    | Missing data export, webhook replay gaps, audit log incompleteness, provider parity gaps, no tenant suspension UI, no usage warnings, no PKCE client-side   |
-| **Low**      | 7     | Per-tenant encryption keys, scope validation, no 403 error logging                                                                                          |
+| Severity     | Count | Summary                                                                                                                                                                                                   |
+| ------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Critical** | 4     | Cross-tenant data access via unvalidated tenant IDs, wrong provider in tenant creation                                                                                                                    |
+| **High**     | 16    | JWT role vs per-tenant role mismatch, no provider membership revocation, no plan limit on team size, suspended tenants not blocked, noisy neighbor risk, token refresh missing, no frontend feature gates |
+| **Medium**   | 26    | Missing data export, no invitation system, team audit log gaps, webhook replay gaps, provider parity gaps, no tenant suspension UI, no usage warnings, no PKCE client-side                                |
+| **Low**      | 8     | Per-tenant encryption keys, scope validation, admin override undocumented, no 403 error logging                                                                                                           |
 
 ---
 
@@ -36,10 +36,11 @@ Kenchi implements a shared-database multi-tenant architecture where `tenant_id` 
 8. [Compliance & Data Governance](#8-compliance--data-governance)
 9. [Observability](#9-observability)
 10. [Multi-Provider OAuth & Tenant Creation](#10-multi-provider-oauth--tenant-creation)
-11. [Frontend Multi-Tenancy](#11-frontend-multi-tenancy)
-12. [Webhook Security](#12-webhook-security)
-13. [Prioritized Remediation Plan](#13-prioritized-remediation-plan)
-14. [What World-Class Looks Like](#14-what-world-class-looks-like)
+11. [Team Management & Member Lifecycle](#11-team-management--member-lifecycle)
+12. [Frontend Multi-Tenancy](#12-frontend-multi-tenancy)
+13. [Webhook Security](#13-webhook-security)
+14. [Prioritized Remediation Plan](#14-prioritized-remediation-plan)
+15. [What World-Class Looks Like](#15-what-world-class-looks-like)
 
 ---
 
@@ -946,7 +947,194 @@ Only GitHub and GitLab auto-linking paths are tested in `authService.test.ts`. B
 
 ---
 
-## 11. Frontend Multi-Tenancy
+## 11. Team Management & Member Lifecycle
+
+### How It Works Today
+
+Members join Kenchi **automatically via OAuth** — there is no manual invite flow. When a user logs in via GitHub/GitLab and belongs to an organization, `ensureOrgMemberships()` in `authService.ts:373-411` auto-links them to the corresponding Kenchi tenant:
+
+```typescript
+// authService.ts:393-399
+await addUserOrganization({
+  userId,
+  tenantId: tenant.id,
+  role: existingTenant ? "member" : "owner", // First user = owner, rest = member
+});
+```
+
+**Available operations** (`services/api/src/routes/teamRoutes.ts`):
+
+- `GET /api/v1/team/members` — list all members of the current tenant
+- `PATCH /api/v1/team/members/:userId/role` — change a member's role (requires `admin`/`owner`)
+- `DELETE /api/v1/team/members/:userId` — remove a member (requires `admin`/`owner`)
+
+**Database schema** (`database/init/023_multi_org_membership.sql`):
+
+```sql
+user_organizations (
+  user_id     VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
+  tenant_id   VARCHAR(50) REFERENCES tenants(id) ON DELETE CASCADE,
+  role        VARCHAR(50) DEFAULT 'member',
+  is_default  BOOLEAN DEFAULT false,
+  UNIQUE(user_id, tenant_id)
+)
+```
+
+### What's Working Well
+
+- **Tenant-scoped queries**: All repository functions (`findMembersByTenant`, `updateMemberRole`, `removeMemberFromTenant`) properly filter by `tenant_id` (`userOrganization/repository.ts:287, 332`)
+- **Role hierarchy enforcement**: Cannot manage users with equal/higher role — `ROLE_WEIGHT` comparison in both backend (`teamRoutes.ts:63-65`) and frontend (`TeamManagement.tsx:77-82`)
+- **Last-owner protection**: Cannot demote or remove the last owner in a tenant (`teamRoutes.ts:160-167, 240-247`)
+- **Self-action prevention**: Cannot change own role or remove self (`teamRoutes.ts:136, 216`)
+- **Idempotent membership**: `ON CONFLICT DO NOTHING` prevents duplicate user-org records (`addUserOrganization`)
+- **Email linking security**: Only verified emails used for account linking (`authService.ts:113`) — prevents account takeover via unverified email spoofing
+- **Organization switch validation**: User must be a member of target org before switching (`organizationRoutes.ts:92-100`)
+
+### Gaps
+
+| Gap                                                | Severity | Details                                                                                                                                                         |
+| -------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JWT role vs per-tenant role mismatch               | **High** | `requireRole()` checks global `req.user.role` from JWT, not per-tenant `user_organizations.role`. User with "admin" in Tenant A retains admin power in Tenant B |
+| No provider membership revocation                  | **High** | User removed from GitHub/GitLab org retains Kenchi access indefinitely — no webhook or periodic check to detect provider-side removal                           |
+| No plan limit enforcement on team size             | **High** | `teamRoutes.ts` never calls `enforcePlanLimit()` — free plan (1 member) tenant can have unlimited members via auto-linking                                      |
+| No invitation system                               | Medium   | Users can only join via OAuth auto-linking — no email invite for users who haven't logged in yet                                                                |
+| Team changes not in audit log                      | Medium   | Role changes and removals are logged to structured logger but not written to `tenant_audit_log` table (which exists but is unused for team events)              |
+| No org switch tenant status check                  | Medium   | `handleSwitchOrganization()` validates membership but not whether target tenant is suspended (`organizationRoutes.ts:92-100`)                                   |
+| No frontend plan limit display                     | Medium   | `TeamManagement.tsx` doesn't show "X/Y members" gauge or disable actions when at plan limit                                                                     |
+| `getEffectiveTenantId` admin override undocumented | Low      | Admins/owners can override tenant context (`tenantGuard.ts:53-63`) — this bypass should be audit-logged                                                         |
+
+### HIGH-11: JWT Role vs Per-Tenant Role Mismatch
+
+**File**: `packages/shared/src/http/authorizationMiddleware.ts:41`
+
+```typescript
+// Current: checks GLOBAL role from JWT
+if (!allowedRoles.includes(user.role)) {
+  throw new AuthorizationError("Insufficient permissions");
+}
+```
+
+**Impact**: The JWT `role` claim comes from `users.role` (global), not `user_organizations.role` (per-tenant). A user who is `admin` in Tenant A and `member` in Tenant B can perform admin actions in Tenant B because the JWT still contains `role: "admin"`.
+
+**Affected endpoints**: All routes using `requireRole()` — team management, subscription changes, fine-tuning, RAG operations.
+
+**Fix**: `generateAccessToken()` must embed the per-tenant role from `user_organizations.role` for the selected tenant. `requireRole()` must check this tenant-scoped role.
+
+### HIGH-12: No Provider Membership Revocation Detection
+
+**File**: `services/api/src/services/authService.ts:373-411`
+
+When a user is removed from a GitHub organization, Kenchi has **no mechanism to detect this**:
+
+1. **No webhook listener**: GitHub sends `organization.member_removed` events, but Kenchi doesn't subscribe to them
+2. **No periodic check**: No cron job re-validates provider org membership
+3. **No login-time revocation**: `ensureOrgMemberships()` adds new memberships but **never removes stale ones**
+
+**Impact**: A user removed from a GitHub org retains full Kenchi access to that tenant's data until manually removed by an admin.
+
+**Fix options**:
+
+1. **Webhook-driven** (recommended): Listen for `organization.member_removed` GitHub webhook → auto-remove from Kenchi tenant
+2. **Login-time reconciliation**: On each login, compare current provider orgs against Kenchi memberships — remove stale ones
+3. **Periodic sync**: Cron job that re-fetches org membership for all users and reconciles
+
+### HIGH-13: No Plan Limit Enforcement on Team Size
+
+**File**: `services/api/src/routes/teamRoutes.ts`
+
+Plan defines `max_team_members` per tier (Free: 1, Pro: 10, Team: 50, Enterprise: unlimited), but team routes **never check this limit**. Members are auto-added during OAuth without any plan validation.
+
+**Impact**: A free-tier tenant can accumulate unlimited team members through OAuth auto-linking.
+
+**Fix**: Add `enforcePlanLimit(tenantId, "max_team_members")` check in `ensureOrgMemberships()` before `addUserOrganization()`. Return appropriate error if limit exceeded (but don't block login itself — just skip the auto-linking and notify the user).
+
+### Reference: How Stripe, GitHub, and Datadog Handle Team Management
+
+**Stripe** implements organization membership with explicit roles at both org and account levels. Roles cascade from org to accounts, but can be restricted per account. Team members are **explicitly invited** — no auto-linking. Stripe enforces **seat-based pricing** where adding a team member requires an active subscription with available seats.
+
+**GitHub** has four membership states: **active**, **pending** (invited but not accepted), **suspended** (Enterprise only), and **removed**. Organization owners can configure whether members must have 2FA enabled. GitHub fires `organization.member_added`, `organization.member_removed`, and `organization.member_invited` webhooks. **SAML-linked members** are automatically deprovisioned when removed from the IdP.
+
+**Datadog** uses a **Team** abstraction within organizations. Users belong to one or more Teams, each with its own role. Team membership can be managed via SCIM provisioning (automated from IdP) or manual invite. Datadog enforces **license counts** — adding a user beyond the license cap requires purchasing additional licenses.
+
+### Reference: Invitation System Design
+
+World-class SaaS supports both auto-linking AND explicit invitations:
+
+```sql
+CREATE TABLE team_invitations (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  email VARCHAR(255) NOT NULL,
+  role VARCHAR(50) NOT NULL DEFAULT 'member',
+  invited_by UUID NOT NULL REFERENCES users(id),
+  token VARCHAR(255) NOT NULL UNIQUE,  -- Cryptographically random
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',  -- pending, accepted, expired, revoked
+  expires_at TIMESTAMPTZ NOT NULL,  -- 7-day default
+  accepted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(tenant_id, email)  -- One active invite per email per tenant
+);
+```
+
+Flow:
+
+1. Admin invites `user@example.com` with role `member` → generates signed invite link
+2. User clicks link → redirected to OAuth login
+3. After OAuth, system checks for pending invitation matching their verified email
+4. If found: auto-link to tenant with invited role, mark invitation as accepted
+5. If not found: normal auto-linking flow via provider org membership
+
+### Reference: Provider Membership Reconciliation
+
+The recommended pattern combines webhook-driven removal with periodic validation:
+
+```typescript
+// Webhook handler for organization.member_removed
+const handleOrgMemberRemoved = async (payload: WebhookPayload, context: RequestContext) => {
+  const { membership, organization } = payload;
+  const tenant = await findByOrgNameAndProvider(organization.login, "github");
+  if (!tenant) return;
+
+  const user = await findByProviderUserId("github", membership.user.id);
+  if (!user) return;
+
+  await removeMemberFromTenant(tenant.id, user.id);
+  logger.info("Auto-removed user from tenant (provider org removal)", {
+    userId: user.id,
+    tenantId: tenant.id,
+    provider: "github",
+    ...context,
+  });
+};
+
+// Periodic reconciliation cron (weekly)
+const reconcileProviderMemberships = async () => {
+  const tenants = await findAllActiveTenantsWithProvider("github");
+  for (const tenant of tenants) {
+    const providerMembers = await fetchOrgMembers(tenant.providerOrgId);
+    const kenchiMembers = await findMembersByTenant(tenant.id);
+    const staleMembers = kenchiMembers.filter(
+      (m) => !providerMembers.some((pm) => pm.id === m.providerUserId)
+    );
+    // Flag stale members for admin review (don't auto-remove on cron — too risky)
+  }
+};
+```
+
+### Recommendations
+
+1. **Fix JWT role to use per-tenant role** from `user_organizations.role` — this is the single most impactful fix for team management security
+2. **Add provider membership revocation webhook** — listen for `organization.member_removed` events from GitHub/GitLab
+3. **Enforce plan limits on team size** — check `max_team_members` in `ensureOrgMemberships()` before auto-linking
+4. **Add team changes to tenant audit log** — write role changes and removals to `tenant_audit_log` table
+5. **Check tenant suspension on org switch** — reject switch to suspended tenant with clear error
+6. **Add invitation system** — email-based invites with cryptographic tokens, 7-day expiry, role pre-assignment
+7. **Add login-time reconciliation** — compare provider org membership against Kenchi membership, flag stale entries
+8. **Show team member usage on frontend** — "X/Y members" gauge on TeamManagement page with plan upgrade CTA
+
+---
+
+## 12. Frontend Multi-Tenancy
 
 ### What's Working Well
 
@@ -1080,7 +1268,7 @@ Use `useSubscription()` usage data to compute thresholds and display contextual 
 
 ---
 
-## 12. Webhook Security
+## 13. Webhook Security
 
 ### What's Working Well
 
@@ -1117,7 +1305,7 @@ Layer deduplication: **Redis SETNX** for fast first-pass dedup (TTL = 1-24 hours
 
 ---
 
-## 13. Prioritized Remediation Plan
+## 14. Prioritized Remediation Plan
 
 ### Phase 1: Critical Security Fixes (Week 1)
 
@@ -1138,6 +1326,17 @@ Layer deduplication: **Redis SETNX** for fast first-pass dedup (TTL = 1-24 hours
 | 8   | Add global session revocation endpoint (Redis `jti` blacklist)    | 4 hours | Admin can force-logout compromised users |
 | 9   | Add plan limit enforcement in analysis worker                     | 2 hours | Closes off-by-one limit bypass           |
 | 10  | Implement OAuth token refresh for GitLab/Bitbucket/Azure          | 1 day   | Prevents token expiration failures       |
+
+### Phase 2b: Team Management Hardening (Week 2-3)
+
+| #   | Item                                                                           | Effort  | Impact                                                   |
+| --- | ------------------------------------------------------------------------------ | ------- | -------------------------------------------------------- |
+| 10a | Enforce plan limits on team size in `ensureOrgMemberships()`                   | 4 hours | Prevents free-tier tenants from having unlimited members |
+| 10b | Add provider membership revocation webhook (`organization.member_removed`)     | 1 day   | Auto-removes users when removed from GitHub/GitLab org   |
+| 10c | Add login-time membership reconciliation — remove stale org links              | 4 hours | Catches membership changes between logins                |
+| 10d | Write team changes (role change, removal) to `tenant_audit_log` table          | 4 hours | Compliance audit trail for team operations               |
+| 10e | Check tenant suspension status on org switch                                   | 2 hours | Prevents switching into a suspended tenant               |
+| 10f | Show team member usage gauge on frontend (`X/Y members`) with plan upgrade CTA | 4 hours | Users self-manage team size before hitting limit         |
 
 ### Phase 3: Operational Hardening (Weeks 3-4)
 
@@ -1195,24 +1394,25 @@ Layer deduplication: **Redis SETNX** for fast first-pass dedup (TTL = 1-24 hours
 
 ---
 
-## 14. What World-Class Looks Like
+## 15. What World-Class Looks Like
 
 ### Current vs World-Class Comparison
 
-| Capability           | World-Class Standard                                                                | Kenchi Current                                     | Gap                                               |
-| -------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
-| **Data isolation**   | 5-layer defense (app + RLS + infra + cache + monitoring)                            | Application-level + query-level (most queries)     | Add RLS, cache prefixing, static analysis         |
-| **Auth**             | Short-lived tokens, per-tenant roles, per-tenant signing keys, PKCE                 | Short-lived tokens, global roles, no PKCE          | Per-tenant RBAC, PKCE, per-tenant JWT keys        |
-| **Authorization**    | Permission-based RBAC, custom roles per tenant, API key scoping, Zanzibar ReBAC     | Role-based only, global roles, no API keys         | Permission layer, scoped API keys                 |
-| **Rate limiting**    | 4-layer (token bucket + concurrent + fleet + worker), per-tenant, fail-open         | Per-IP + per-tenant flat rate                      | Token Bucket, concurrent limiter, load shedding   |
-| **Noisy neighbor**   | Per-tenant quotas, fair scheduling, circuit breakers, connection throttling         | None                                               | Full implementation needed                        |
-| **Billing**          | Usage metering (Stripe Meters), EntitlementService at all layers, downgrade guards  | Plan enforcement at route level only               | Worker enforcement, metering, entitlements        |
-| **Compliance**       | GDPR export/delete/consent, SOC 2 immutable audit, crypto-shredding, per-tenant KMS | Partial audit trail, no export/delete              | GDPR endpoints, SOC 2 logging, KMS                |
-| **Observability**    | Per-tenant health scoring, Cortex/Thanos, cardinality-managed metrics               | Structured logs with tenantId                      | Metrics, health scoring, dashboards               |
-| **Lifecycle**        | 8-state machine, event-sourced transitions, reactivation validation                 | Multiple creation paths, suspension doesn't block  | Status middleware, lifecycle states               |
-| **Encryption**       | Per-tenant KMS keys, three-level hierarchy, BYOK, key rotation                      | Single global key, AES-256-GCM                     | Key hierarchy, rotation, BYOK                     |
-| **Webhook security** | Signature + timestamp + replay protection + per-source rate limiting + queue-first  | Signature verification, partial replay protection  | Timestamp validation, queue-first pattern         |
-| **Frontend**         | FeatureGate, permission hooks, EntitlementProvider, tenant guards, PKCE client-side | httpOnly cookies, org switcher, plan limit dialogs | FeatureGate, permissions hook, tenant guard, PKCE |
+| Capability           | World-Class Standard                                                                 | Kenchi Current                                              | Gap                                                 |
+| -------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------- | --------------------------------------------------- |
+| **Data isolation**   | 5-layer defense (app + RLS + infra + cache + monitoring)                             | Application-level + query-level (most queries)              | Add RLS, cache prefixing, static analysis           |
+| **Auth**             | Short-lived tokens, per-tenant roles, per-tenant signing keys, PKCE                  | Short-lived tokens, global roles, no PKCE                   | Per-tenant RBAC, PKCE, per-tenant JWT keys          |
+| **Authorization**    | Permission-based RBAC, custom roles per tenant, API key scoping, Zanzibar ReBAC      | Role-based only, global roles, no API keys                  | Permission layer, scoped API keys                   |
+| **Rate limiting**    | 4-layer (token bucket + concurrent + fleet + worker), per-tenant, fail-open          | Per-IP + per-tenant flat rate                               | Token Bucket, concurrent limiter, load shedding     |
+| **Noisy neighbor**   | Per-tenant quotas, fair scheduling, circuit breakers, connection throttling          | None                                                        | Full implementation needed                          |
+| **Billing**          | Usage metering (Stripe Meters), EntitlementService at all layers, downgrade guards   | Plan enforcement at route level only                        | Worker enforcement, metering, entitlements          |
+| **Compliance**       | GDPR export/delete/consent, SOC 2 immutable audit, crypto-shredding, per-tenant KMS  | Partial audit trail, no export/delete                       | GDPR endpoints, SOC 2 logging, KMS                  |
+| **Observability**    | Per-tenant health scoring, Cortex/Thanos, cardinality-managed metrics                | Structured logs with tenantId                               | Metrics, health scoring, dashboards                 |
+| **Lifecycle**        | 8-state machine, event-sourced transitions, reactivation validation                  | Multiple creation paths, suspension doesn't block           | Status middleware, lifecycle states                 |
+| **Encryption**       | Per-tenant KMS keys, three-level hierarchy, BYOK, key rotation                       | Single global key, AES-256-GCM                              | Key hierarchy, rotation, BYOK                       |
+| **Webhook security** | Signature + timestamp + replay protection + per-source rate limiting + queue-first   | Signature verification, partial replay protection           | Timestamp validation, queue-first pattern           |
+| **Team management**  | Invite + auto-link, per-tenant roles, provider revocation webhooks, seat enforcement | OAuth auto-link only, role hierarchy, last-owner protection | Invitation system, provider revocation, seat limits |
+| **Frontend**         | FeatureGate, permission hooks, EntitlementProvider, tenant guards, PKCE client-side  | httpOnly cookies, org switcher, plan limit dialogs          | FeatureGate, permissions hook, tenant guard, PKCE   |
 
 ### The 7 Architectural Pillars
 
