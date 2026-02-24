@@ -68,3 +68,32 @@ export interface AddUserOrganizationInput {
   readonly role?: string;
   readonly isDefault?: boolean;
 }
+
+// ==================== Team Member Types ====================
+
+/** Row shape returned by the FIND_MEMBERS_BY_TENANT query (joins users + oauth_identities). */
+export interface TeamMemberRow {
+  readonly user_id: string;
+  readonly display_name: string;
+  readonly email: string | null;
+  readonly avatar_url: string | null;
+  readonly role: string;
+  readonly joined_at: Date;
+  readonly providers: ReadonlyArray<{
+    readonly provider: string;
+    readonly username: string | null;
+  }>;
+}
+
+export interface TeamMember {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly email: string | null;
+  readonly avatarUrl: string | null;
+  readonly role: string;
+  readonly joinedAt: Date;
+  readonly providers: ReadonlyArray<{
+    readonly provider: string;
+    readonly username: string | null;
+  }>;
+}

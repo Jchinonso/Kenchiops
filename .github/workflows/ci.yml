@@ -232,3 +232,58 @@ jobs:
             exit 1
           fi
           echo "All CI checks passed!"
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [ci-success]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            APP_DIR="/opt/kenchi"
+            cd "$APP_DIR"
+
+            echo "==> Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "==> Building and deploying containers..."
+            docker compose -f docker-compose.prod.yml up --build -d
+
+            echo "==> Running database migrations..."
+            docker compose -f docker-compose.prod.yml exec -T api \
+              node -e "require('./dist/database/migrate.js').runMigrations()"
+
+            echo "==> Waiting for services to start..."
+            sleep 10
+
+            echo "==> Health check..."
+            for i in 1 2 3 4 5; do
+              STATUS=$(docker compose -f docker-compose.prod.yml exec -T api \
+                node -e "require('http').get('http://localhost:3000/health', (r) => { process.stdout.write(String(r.statusCode)); process.exit(r.statusCode === 200 ? 0 : 1) })" 2>/dev/null) || true
+              if [ "$STATUS" = "200" ]; then
+                echo "Health check passed!"
+                docker compose -f docker-compose.prod.yml ps
+                exit 0
+              fi
+              echo "Attempt $i/5 - waiting..."
+              sleep 5
+            done
+
+            echo "Health check failed after 5 attempts"
+            docker compose -f docker-compose.prod.yml logs --tail=50
+            exit 1

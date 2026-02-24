@@ -29,6 +29,7 @@ import { Settings } from "@/pages/Settings";
 import { PlanSelection } from "@/pages/PlanSelection";
 import { Integrations } from "@/pages/Integrations";
 import { GitLabSetup } from "@/pages/GitLabSetup";
+import { TeamManagement } from "@/pages/TeamManagement";
 import {
   Bell,
   Menu,
@@ -537,6 +538,7 @@ const Dashboard = () => {
   const isPlanSelection = currentPath === "/dashboard/settings/plan";
   const isIntegrations = currentPath === "/dashboard/integrations";
   const isGitLabSetup = currentPath === "/dashboard/setup/gitlab";
+  const isTeam = currentPath === "/dashboard/settings/team";
   const isCICD = isCICDRoute(currentPath);
   const isIncident = isIncidentRoute(currentPath);
   const incidentPage = isIncident ? renderIncidentPage(currentPath, refreshKey) : null;
@@ -548,6 +550,7 @@ const Dashboard = () => {
     isPlanSelection ||
     isIntegrations ||
     isGitLabSetup ||
+    isTeam ||
     incidentPage
       ? undefined
       : findComingSoonConfig(currentPath);
@@ -675,6 +678,8 @@ const Dashboard = () => {
         <div id="main-content" className="p-4 sm:p-6 lg:p-8">
           {comingSoonConfig ? (
             <ComingSoon {...comingSoonConfig} />
+          ) : isTeam ? (
+            <TeamManagement />
           ) : isGitLabSetup ? (
             <GitLabSetup />
           ) : isIntegrations ? (

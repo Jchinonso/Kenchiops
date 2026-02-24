@@ -339,12 +339,19 @@ export {
   type UserOrganizationWithTenantRow,
   type UserOrganizationWithTenant,
   type AddUserOrganizationInput,
+  type TeamMemberRow,
+  type TeamMember,
   rowToUserOrganization,
   rowToUserOrganizationWithTenant,
+  rowToTeamMember,
   findOrganizationsByUser,
   addUserOrganization,
   setDefaultOrganization,
   countMembersByTenant,
+  findMembersByTenant,
+  updateMemberRole,
+  removeMemberFromTenant,
+  countOwnersByTenant,
 } from "./userOrganization/index.js";
 
 // Webhook activity module

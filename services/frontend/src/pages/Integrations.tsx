@@ -257,9 +257,10 @@ const GitLabSecretDialog = ({
 
 interface GitLabCardProps {
   readonly tenantId: string;
+  readonly otherProviderConnected: boolean;
 }
 
-const GitLabCICard = ({ tenantId }: GitLabCardProps) => {
+const GitLabCICard = ({ tenantId, otherProviderConnected }: GitLabCardProps) => {
   const {
     data: connectionStatus,
     isLoading: isLoadingStatus,
@@ -362,6 +363,8 @@ const GitLabCICard = ({ tenantId }: GitLabCardProps) => {
                 {isDisconnecting && <Loader2 className="w-3 h-3 animate-spin" />}
                 Disconnect
               </Button>
+            ) : otherProviderConnected ? (
+              <span className="text-xs text-gray-400 dark:text-gray-500">GitHub is active</span>
             ) : (
               <Button variant="outline" size="sm" onClick={handleConnect} disabled={isConnecting}>
                 {isConnecting && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -489,7 +492,7 @@ export const Integrations = () => {
             actionHref={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
             external
           />
-          <GitLabCICard tenantId={tenantId} />
+          <GitLabCICard tenantId={tenantId} otherProviderConnected={githubConnected} />
           <ConnectionCard
             name="Slack"
             icon={<MessageSquare className="w-8 h-8 text-purple-600" />}

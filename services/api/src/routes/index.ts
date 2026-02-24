@@ -18,6 +18,7 @@ import { sseRoutes } from "./sseRoutes.js";
 import { integrationRoutes } from "./integrationRoutes.js";
 import { subscriptionRoutes } from "./subscriptionRoutes.js";
 import { organizationRoutes } from "./organizationRoutes.js";
+import { teamRoutes } from "./teamRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -61,4 +62,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Organization routes (multi-org membership)
   app.use(organizationRoutes);
+
+  // Team management routes (member listing, role changes, removal)
+  app.use(teamRoutes);
 };

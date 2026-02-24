@@ -114,8 +114,8 @@ const createApp = (): express.Express => {
       limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
       verify: (req: express.Request, _res, buf) => {
         const isWebhookPath =
-          req.originalUrl?.startsWith("/api/github/webhook") ??
-          req.originalUrl?.startsWith("/webhooks/") ??
+          req.originalUrl?.startsWith("/api/github/webhook") ||
+          req.originalUrl?.startsWith("/webhooks/") ||
           false;
         if (isWebhookPath) {
           Object.assign(req, { rawBody: buf });
@@ -141,6 +141,7 @@ const createApp = (): express.Express => {
         "/api/github/installations",
         "/github/setup",
         "/api/feedback",
+        "/webhooks/github",
         "/webhooks/gitlab",
       ],
     })
