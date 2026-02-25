@@ -31,7 +31,6 @@ import { Integrations } from "@/pages/Integrations";
 import { GitLabSetup } from "@/pages/GitLabSetup";
 import { TeamManagement } from "@/pages/TeamManagement";
 import { TenantGuard } from "@/components/TenantGuard";
-import { FeatureGate } from "@/components/FeatureGate";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import {
   Bell,
@@ -196,11 +195,7 @@ const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode =
     return <CICDPipelines />;
   }
   if (pathname.startsWith("/dashboard/cicd/webhooks")) {
-    return (
-      <FeatureGate feature="auditLog">
-        <WebhookActivity refreshKey={refreshKey} />
-      </FeatureGate>
-    );
+    return <WebhookActivity refreshKey={refreshKey} />;
   }
   return <CICDAnalyses refreshKey={refreshKey} />;
 };

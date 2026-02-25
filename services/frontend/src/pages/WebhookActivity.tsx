@@ -40,6 +40,7 @@ import { titleCase, formatTimestamp } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
+import { FeatureGate } from "@/components/FeatureGate";
 
 // ==================== Constants ====================
 
@@ -318,137 +319,139 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Webhook Activity
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Incoming webhook deliveries from connected services.
-        </p>
-      </div>
+    <FeatureGate feature="auditLog">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Webhook Activity
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Incoming webhook deliveries from connected services.
+          </p>
+        </div>
 
-      {/* Status filter */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-500 dark:text-gray-400">Status:</span>
-        {["", "processed", "skipped", "failed", "ignored"].map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => {
-              setStatusFilter(value);
-              setOffset(0);
-              setExpandedId(null);
-            }}
-            className={cn(
-              "px-3 py-1 text-xs font-medium rounded-full border transition-colors",
-              statusFilter === value
-                ? "bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800"
-                : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-            )}
-          >
-            {value === "" ? "All" : titleCase(value)}
-          </button>
-        ))}
-      </div>
+        {/* Status filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 dark:text-gray-400">Status:</span>
+          {["", "processed", "skipped", "failed", "ignored"].map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => {
+                setStatusFilter(value);
+                setOffset(0);
+                setExpandedId(null);
+              }}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-full border transition-colors",
+                statusFilter === value
+                  ? "bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+              )}
+            >
+              {value === "" ? "All" : titleCase(value)}
+            </button>
+          ))}
+        </div>
 
-      <Card>
-        <CardHeader className="border-b">
-          <div className="flex items-center gap-2">
-            <Webhook className="w-5 h-5 text-indigo-500" />
-            <CardTitle>Deliveries</CardTitle>
-          </div>
-          <CardDescription>
-            {total > 0
-              ? `${total} total deliver${total > 1 ? "ies" : "y"}`
-              : "No webhook activity recorded yet"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <TableSkeleton />
-          ) : error ? (
-            <div className="p-8 text-center space-y-3">
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              <button
-                type="button"
-                onClick={refetch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Retry
-              </button>
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-2">
+              <Webhook className="w-5 h-5 text-indigo-500" />
+              <CardTitle>Deliveries</CardTitle>
             </div>
-          ) : !hasItems ? (
-            <Empty className="py-12 border-0">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Webhook className="w-6 h-6" />
-                </EmptyMedia>
-                <EmptyTitle>No webhook activity yet</EmptyTitle>
-                <EmptyDescription>
-                  When GitHub sends webhook events to Kenchi, delivery records will appear here for
-                  debugging and visibility.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
-                    <TableRow>
-                      <TableHead scope="col" className="w-8" />
-                      <SortableTableHead
-                        label="Time"
-                        column="createdAt"
-                        currentSort={sort}
-                        onSort={handleSort}
-                      />
-                      <TableHead scope="col">Delivery ID</TableHead>
-                      <TableHead scope="col">Event Type</TableHead>
-                      <TableHead scope="col">Source</TableHead>
-                      <TableHead scope="col">Status</TableHead>
-                      <SortableTableHead
-                        label="Duration"
-                        column="duration"
-                        currentSort={sort}
-                        onSort={handleSort}
-                      />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedItems.map((activity) => (
-                      <Fragment key={activity.id}>
-                        <WebhookRow
-                          activity={activity}
-                          isExpanded={expandedId === activity.id}
-                          onClick={() =>
-                            setExpandedId((prev) => (prev === activity.id ? null : activity.id))
-                          }
-                        />
-                        {expandedId === activity.id && <ExpandedWebhookRow activity={activity} />}
-                      </Fragment>
-                    ))}
-                  </TableBody>
-                </Table>
+            <CardDescription>
+              {total > 0
+                ? `${total} total deliver${total > 1 ? "ies" : "y"}`
+                : "No webhook activity recorded yet"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <TableSkeleton />
+            ) : error ? (
+              <div className="p-8 text-center space-y-3">
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                <button
+                  type="button"
+                  onClick={refetch}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Retry
+                </button>
               </div>
+            ) : !hasItems ? (
+              <Empty className="py-12 border-0">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Webhook className="w-6 h-6" />
+                  </EmptyMedia>
+                  <EmptyTitle>No webhook activity yet</EmptyTitle>
+                  <EmptyDescription>
+                    When GitHub sends webhook events to Kenchi, delivery records will appear here
+                    for debugging and visibility.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
+                      <TableRow>
+                        <TableHead scope="col" className="w-8" />
+                        <SortableTableHead
+                          label="Time"
+                          column="createdAt"
+                          currentSort={sort}
+                          onSort={handleSort}
+                        />
+                        <TableHead scope="col">Delivery ID</TableHead>
+                        <TableHead scope="col">Event Type</TableHead>
+                        <TableHead scope="col">Source</TableHead>
+                        <TableHead scope="col">Status</TableHead>
+                        <SortableTableHead
+                          label="Duration"
+                          column="duration"
+                          currentSort={sort}
+                          onSort={handleSort}
+                        />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sortedItems.map((activity) => (
+                        <Fragment key={activity.id}>
+                          <WebhookRow
+                            activity={activity}
+                            isExpanded={expandedId === activity.id}
+                            onClick={() =>
+                              setExpandedId((prev) => (prev === activity.id ? null : activity.id))
+                            }
+                          />
+                          {expandedId === activity.id && <ExpandedWebhookRow activity={activity} />}
+                        </Fragment>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
 
-              <PaginationControls
-                currentPage={currentPage}
-                totalPages={totalPages}
-                hasPrev={hasPrev}
-                hasNext={hasNext}
-                onPrev={goPrev}
-                onNext={goNext}
-                totalItems={total}
-                pageSize={pageSize}
-                onPageSizeChange={handlePageSizeChange}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  onPrev={goPrev}
+                  onNext={goNext}
+                  totalItems={total}
+                  pageSize={pageSize}
+                  onPageSizeChange={handlePageSizeChange}
+                />
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </FeatureGate>
   );
 };
