@@ -75,6 +75,8 @@ export {
   findRefreshTokenByHash,
   revokeRefreshToken,
   revokeTokenFamily,
+  revokeAllTokensByUser,
+  revokeAllTenantTokens,
   replaceRefreshToken,
   rotateRefreshTokenAtomically,
   cleanupExpiredRefreshTokens,

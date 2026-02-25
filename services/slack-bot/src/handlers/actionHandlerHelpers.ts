@@ -181,6 +181,7 @@ export const canUseAsyncExecution = async (): Promise<boolean> => {
 export const persistActionStatus = async (
   actionId: string,
   status: "approved" | "rejected" | "executed" | "failed",
+  tenantId: string,
   approvedBy?: string,
   executionResult?: Record<string, unknown>
 ): Promise<void> => {
@@ -188,6 +189,7 @@ export const persistActionStatus = async (
     await updateActionProposalStatus({
       actionId,
       status,
+      tenantId,
       approvedBy,
       executionResult,
     });

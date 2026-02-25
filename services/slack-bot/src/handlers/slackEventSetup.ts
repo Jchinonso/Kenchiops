@@ -182,7 +182,8 @@ const setupActionHandlers = (app: SlackApp): void => {
         ? (body.message.ts as string)
         : undefined;
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleActionApproval(action, ack, say, messageTs);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleActionApproval(action, ack, say, messageTs, workspaceId);
     }
   });
 
@@ -192,7 +193,8 @@ const setupActionHandlers = (app: SlackApp): void => {
         ? (body.message.ts as string)
         : undefined;
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleActionRejection(action, ack, say, messageTs);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleActionRejection(action, ack, say, messageTs, workspaceId);
     }
   });
 };
@@ -200,16 +202,25 @@ const setupActionHandlers = (app: SlackApp): void => {
 /**
  * Sets up feedback button handlers (helpful/not helpful).
  */
+const extractWorkspaceId = (body: { team?: { id: string } | string }): string | undefined => {
+  if (!body.team) {
+    return undefined;
+  }
+  return typeof body.team === "string" ? body.team : body.team.id;
+};
+
 const setupFeedbackHandlers = (app: SlackApp): void => {
   app.action(SLACK_ACTION_IDS.FEEDBACK_HELPFUL, async ({ action, ack, body, respond }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handlePositiveFeedback(action as ButtonAction, ack, body.user.id, respond);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handlePositiveFeedback(action as ButtonAction, ack, body.user.id, respond, workspaceId);
     }
   });
 
   app.action(SLACK_ACTION_IDS.FEEDBACK_NOT_HELPFUL, async ({ action, ack, body, respond }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleNegativeFeedback(action as ButtonAction, ack, body.user.id, respond);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleNegativeFeedback(action as ButtonAction, ack, body.user.id, respond, workspaceId);
     }
   });
 
@@ -229,13 +240,27 @@ const setupFeedbackHandlers = (app: SlackApp): void => {
   // Q&A feedback buttons
   app.action(QA_ACTION_IDS.QA_HELPFUL, async ({ action, ack, body, respond }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleQAFeedbackHelpful(action as ButtonAction, ack, body.user.id, respond);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleQAFeedbackHelpful(
+        action as ButtonAction,
+        ack,
+        body.user.id,
+        respond,
+        workspaceId
+      );
     }
   });
 
   app.action(QA_ACTION_IDS.QA_NOT_HELPFUL, async ({ action, ack, body, respond }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleQAFeedbackNotHelpful(action as ButtonAction, ack, body.user.id, respond);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleQAFeedbackNotHelpful(
+        action as ButtonAction,
+        ack,
+        body.user.id,
+        respond,
+        workspaceId
+      );
     }
   });
 };

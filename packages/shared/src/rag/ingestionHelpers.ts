@@ -165,7 +165,7 @@ export const embedPendingDiffChunks = async (
       chunks.map(async (chunk, index) => {
         const embedding = batchResult.embeddings[index];
         try {
-          await updateDiffChunkEmbedding(chunk.id, embedding, model, tier);
+          await updateDiffChunkEmbedding(chunk.id, embedding, model, tier, tenantId ?? "system");
           embedded += 1;
         } catch (updateError) {
           errors.push(
@@ -231,7 +231,7 @@ export const embedPendingKnowledgeDocs = async (
       docs.map(async (doc, index) => {
         const embedding = batchResult.embeddings[index];
         try {
-          await updateKnowledgeDocEmbedding(doc.id, embedding, model, tier);
+          await updateKnowledgeDocEmbedding(doc.id, embedding, model, tier, tenantId ?? "system");
           embedded += 1;
         } catch (updateError) {
           errors.push(

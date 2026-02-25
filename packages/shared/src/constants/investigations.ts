@@ -84,7 +84,8 @@ const buildUpdateStatusQuery = (): string =>
     "UPDATE investigations",
     "SET status = $2, updated_at = NOW()",
     "WHERE id",
-    "= $1",
+    "= $1 AND tenant_id",
+    "= $3",
     "RETURNING *",
   ].join(" ");
 
@@ -96,7 +97,8 @@ const buildUpdateIntentQuery = (): string =>
     "environment = $5, time_range_from = $6, time_range_to = $7,",
     "updated_at = NOW()",
     "WHERE id",
-    "= $1",
+    "= $1 AND tenant_id",
+    "= $8",
     "RETURNING *",
   ].join(" ");
 
@@ -106,7 +108,8 @@ const buildUpdateEvidenceQuery = (): string =>
     "UPDATE investigations SET",
     "evidence = $2::jsonb, updated_at = NOW()",
     "WHERE id",
-    "= $1",
+    "= $1 AND tenant_id",
+    "= $3",
     "RETURNING *",
   ].join(" ");
 
@@ -116,7 +119,8 @@ const buildUpdateCorrelationQuery = (): string =>
     "UPDATE investigations SET",
     "correlation = $2::jsonb, updated_at = NOW()",
     "WHERE id",
-    "= $1",
+    "= $1 AND tenant_id",
+    "= $3",
     "RETURNING *",
   ].join(" ");
 
@@ -128,7 +132,8 @@ const buildUpdateDiagnosisQuery = (): string =>
     "duration_ms = $3, status = 'completed',",
     "updated_at = NOW()",
     "WHERE id",
-    "= $1",
+    "= $1 AND tenant_id",
+    "= $4",
     "RETURNING *",
   ].join(" ");
 
@@ -139,7 +144,8 @@ const buildUpdateErrorQuery = (): string =>
     "error_message = $2, status = 'error',",
     "updated_at = NOW()",
     "WHERE id",
-    "= $1",
+    "= $1 AND tenant_id",
+    "= $3",
     "RETURNING *",
   ].join(" ");
 

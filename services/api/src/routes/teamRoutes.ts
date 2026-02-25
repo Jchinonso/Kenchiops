@@ -12,19 +12,32 @@ import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   createLogger,
+  requireTenantId,
   AuthorizationError,
   ValidationError,
   NotFoundError,
   requireRole,
   HTTP_STATUS,
   getErrorMessage,
+  rateLimitByCategory,
   // Repository functions
   findMembersByTenant,
   updateMemberRole,
   removeMemberFromTenant,
   countOwnersByTenant,
+  revokeAllTokensByUser,
+  revokeAllTenantTokens,
   logAuditEvent,
   AUDIT_ACTIONS,
+  setUserStatusFlag,
+  setTenantStatusFlag,
+  softDeleteTenant,
+  activate,
+  findById,
+  findByTenant,
+  clearTenantStatusFlag,
+  getSubscriptionWithPlan,
+  TENANT_STATUS,
   type TeamMember,
   type UserRole,
 } from "@kenchi/shared";
@@ -44,24 +57,6 @@ const ROLE_WEIGHT: Readonly<Record<string, number>> = {
 };
 
 // ==================== Helpers ====================
-
-/**
- * Extract tenantId from authenticated user or throw.
- *
- * @throws AuthorizationError if no tenant is linked
- */
-const requireTenantId = (req: Request): string => {
-  const tenantId = req.user?.tenantId;
-
-  if (!tenantId) {
-    throw new AuthorizationError(
-      "No organization linked. Connect a GitHub or GitLab account to get started.",
-      { operation: "requireTenantId" }
-    );
-  }
-
-  return tenantId;
-};
 
 /** Check whether the actor's role outranks or equals the target's role. */
 const canModifyTarget = (actorRole: string, targetRole: string): boolean =>
@@ -297,20 +292,328 @@ const handleRemoveMember = async (req: Request, res: Response): Promise<void> =>
   res.status(HTTP_STATUS.NO_CONTENT).send();
 };
 
+/**
+ * POST /api/v1/team/members/:userId/revoke-sessions
+ * Revoke all sessions for a team member (force-logout).
+ * Revokes all refresh tokens in the database and sets a Redis status
+ * flag to block JWT-based access for the remainder of the token lifetime.
+ * Requires admin or owner role. Enforces role hierarchy.
+ */
+const handleRevokeUserSessions = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const { context } = req;
+  const actorUserId = req.user?.userId;
+  const actorRole = req.user?.role ?? "member";
+  const targetUserId = req.params.userId;
+
+  if (!targetUserId) {
+    throw new ValidationError("userId parameter is required", {
+      operation: "handleRevokeUserSessions",
+      metadata: { field: "userId" },
+    });
+  }
+
+  // Cannot revoke own sessions via this admin endpoint
+  if (actorUserId === targetUserId) {
+    throw new ValidationError("Cannot revoke your own sessions. Use the logout endpoint instead.", {
+      operation: "handleRevokeUserSessions",
+    });
+  }
+
+  // Verify target is a member of this organization
+  const members = await findMembersByTenant(tenantId);
+  const targetMember = members.find((member) => member.userId === targetUserId);
+
+  if (!targetMember) {
+    throw new NotFoundError("Member not found in this organization", {
+      metadata: { userId: targetUserId },
+    });
+  }
+
+  // Role hierarchy: actor must outrank or equal target's role
+  if (!canModifyTarget(actorRole, targetMember.role)) {
+    throw new AuthorizationError(
+      "Cannot revoke sessions for a member with a higher or equal role",
+      {
+        operation: "handleRevokeUserSessions",
+      }
+    );
+  }
+
+  // 1. Revoke all refresh tokens in the database
+  const revokedCount = await revokeAllTokensByUser(targetUserId);
+
+  // 2. Set Redis status flag to block JWT-based access
+  await setUserStatusFlag(targetUserId, "revoked");
+
+  logger.info("User sessions revoked", {
+    ...context,
+    targetUserId,
+    targetRole: targetMember.role,
+    revokedTokenCount: revokedCount,
+  });
+
+  // Best-effort audit log
+  try {
+    await logAuditEvent(
+      tenantId,
+      AUDIT_ACTIONS.MEMBER_SESSIONS_REVOKED,
+      { targetUserId, targetRole: targetMember.role, revokedTokenCount: revokedCount },
+      actorUserId
+    );
+  } catch (auditError: unknown) {
+    logger.warn("Failed to log session revocation audit event", {
+      ...context,
+      error: getErrorMessage(auditError),
+    });
+  }
+
+  res.status(HTTP_STATUS.OK).json({
+    data: {
+      userId: targetUserId,
+      revokedTokenCount: revokedCount,
+      status: "revoked",
+    },
+  });
+};
+
+/**
+ * POST /api/v1/team/revoke-all-sessions
+ * Revoke all sessions for every member of the organization (tenant-wide force-logout).
+ * Revokes all refresh tokens for all users in the org and sets a Redis tenant
+ * status flag to block JWT-based access for the remainder of the token lifetime.
+ * Requires owner role.
+ */
+const handleRevokeTenantSessions = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const { context } = req;
+  const actorUserId = req.user?.userId;
+
+  // 1. Revoke all refresh tokens for all users in the tenant
+  const revokedCount = await revokeAllTenantTokens(tenantId);
+
+  // 2. Set Redis tenant status flag to block JWT-based access
+  await setTenantStatusFlag(tenantId, "revoked");
+
+  logger.info("All tenant sessions revoked", {
+    ...context,
+    revokedTokenCount: revokedCount,
+  });
+
+  // Best-effort audit log
+  try {
+    await logAuditEvent(
+      tenantId,
+      AUDIT_ACTIONS.TENANT_SESSIONS_REVOKED,
+      { revokedTokenCount: revokedCount },
+      actorUserId
+    );
+  } catch (auditError: unknown) {
+    logger.warn("Failed to log tenant session revocation audit event", {
+      ...context,
+      error: getErrorMessage(auditError),
+    });
+  }
+
+  res.status(HTTP_STATUS.OK).json({
+    data: {
+      tenantId,
+      revokedTokenCount: revokedCount,
+      status: "revoked",
+    },
+  });
+};
+
+/** Grace period in days before hard deletion */
+const DELETION_GRACE_PERIOD_DAYS = 30;
+
+/**
+ * DELETE /api/v1/tenant
+ * Soft-delete the tenant (marks as deleted, revokes sessions).
+ * A 30-day grace period applies before hard deletion.
+ * Requires owner role.
+ */
+const handleDeleteTenant = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const { context } = req;
+  const actorUserId = req.user?.userId;
+  const { reason } = req.body as { readonly reason?: string };
+
+  const { tokensRevoked } = await softDeleteTenant(tenantId, reason);
+
+  logger.info("Tenant soft-deleted", {
+    tenantId: context.tenantId,
+    tokensRevoked,
+  });
+
+  // Best-effort audit log
+  try {
+    await logAuditEvent(
+      tenantId,
+      AUDIT_ACTIONS.DELETED,
+      { reason: reason ?? "Owner-initiated deletion", tokensRevoked },
+      actorUserId
+    );
+  } catch (auditError: unknown) {
+    logger.warn("Failed to log tenant deletion audit event", {
+      error: getErrorMessage(auditError),
+    });
+  }
+
+  res.status(HTTP_STATUS.OK).json({
+    data: {
+      tenantId,
+      status: "deleted",
+      gracePeriodDays: DELETION_GRACE_PERIOD_DAYS,
+      tokensRevoked,
+    },
+  });
+};
+
+/**
+ * POST /api/v1/tenant/reactivate
+ * Reactivate a suspended tenant after validating prerequisites.
+ * Checks that:
+ *  1. The tenant is currently suspended (not deleted)
+ *  2. At least one provider connection is still active
+ *  3. The subscription is not past_due or canceled
+ * On success, sets status to active and clears Redis blocking flags.
+ * Requires owner role.
+ */
+const handleReactivateTenant = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const { context } = req;
+  const actorUserId = req.user?.userId;
+
+  // 1. Verify tenant is currently suspended
+  const tenant = await findById(tenantId);
+
+  if (!tenant) {
+    throw new NotFoundError("Tenant not found", {
+      metadata: { tenantId },
+    });
+  }
+
+  if (tenant.status === TENANT_STATUS.DELETED) {
+    throw new ValidationError("Cannot reactivate a deleted tenant. Contact support.", {
+      operation: "handleReactivateTenant",
+      metadata: { currentStatus: tenant.status },
+    });
+  }
+
+  if (tenant.status === TENANT_STATUS.ACTIVE) {
+    throw new ValidationError("Tenant is already active", {
+      operation: "handleReactivateTenant",
+      metadata: { currentStatus: tenant.status },
+    });
+  }
+
+  // 2. Validate at least one provider connection exists
+  const connections = await findByTenant(tenantId);
+  if (connections.length === 0) {
+    throw new ValidationError(
+      "Cannot reactivate: no provider connections found. Re-install the GitHub App or OAuth integration first.",
+      { operation: "handleReactivateTenant" }
+    );
+  }
+
+  // 3. Validate subscription is not past_due or canceled
+  const subscriptionWithPlan = await getSubscriptionWithPlan(tenantId);
+  if (subscriptionWithPlan) {
+    const { subscription } = subscriptionWithPlan;
+    if (subscription.status === "past_due" || subscription.status === "canceled") {
+      throw new ValidationError(
+        `Cannot reactivate: subscription status is "${subscription.status}". Please resolve billing first.`,
+        {
+          operation: "handleReactivateTenant",
+          metadata: { subscriptionStatus: subscription.status },
+        }
+      );
+    }
+  }
+
+  // 4. Reactivate: update DB status and clear Redis flag
+  await activate(tenantId);
+  await clearTenantStatusFlag(tenantId);
+
+  logger.info("Tenant reactivated", {
+    ...context,
+    previousStatus: tenant.status,
+  });
+
+  // Best-effort audit log
+  try {
+    await logAuditEvent(
+      tenantId,
+      AUDIT_ACTIONS.ACTIVATED,
+      { previousStatus: tenant.status, reactivatedBy: actorUserId },
+      actorUserId
+    );
+  } catch (auditError: unknown) {
+    logger.warn("Failed to log reactivation audit event", {
+      ...context,
+      error: getErrorMessage(auditError),
+    });
+  }
+
+  res.status(HTTP_STATUS.OK).json({
+    data: {
+      tenantId,
+      status: "active",
+      previousStatus: tenant.status,
+      connectionsCount: connections.length,
+    },
+  });
+};
+
 // ==================== Route Definitions ====================
 
-router.get("/api/v1/team/members", asyncHandler(handleListMembers));
+router.get(
+  "/api/v1/team/members",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleListMembers)
+);
 
 router.patch(
   "/api/v1/team/members/:userId/role",
+  rateLimitByCategory("standard"),
   requireRole("admin", "owner"),
   asyncHandler(handleChangeRole)
 );
 
 router.delete(
   "/api/v1/team/members/:userId",
+  rateLimitByCategory("standard"),
   requireRole("admin", "owner"),
   asyncHandler(handleRemoveMember)
+);
+
+router.post(
+  "/api/v1/team/members/:userId/revoke-sessions",
+  rateLimitByCategory("standard"),
+  requireRole("admin", "owner"),
+  asyncHandler(handleRevokeUserSessions)
+);
+
+router.post(
+  "/api/v1/team/revoke-all-sessions",
+  rateLimitByCategory("standard"),
+  requireRole("owner"),
+  asyncHandler(handleRevokeTenantSessions)
+);
+
+router.delete(
+  "/api/v1/tenant",
+  rateLimitByCategory("standard"),
+  requireRole("owner"),
+  asyncHandler(handleDeleteTenant)
+);
+
+router.post(
+  "/api/v1/tenant/reactivate",
+  rateLimitByCategory("standard"),
+  requireRole("owner"),
+  asyncHandler(handleReactivateTenant)
 );
 
 export { router as teamRoutes };

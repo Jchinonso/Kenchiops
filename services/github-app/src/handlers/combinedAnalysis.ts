@@ -24,6 +24,8 @@ import {
   LLM_CONCURRENCY_DEFAULTS,
   findTenantByGitHubInstallation,
   CI_PROVIDERS,
+  acquireAnalysisSlot,
+  releaseAnalysisSlot,
   type PendingAggregationPayload,
   type AggregatedFailures,
   type AnalyzedFailure,
@@ -400,62 +402,90 @@ export const processCombinedAnalysis = async (
     const tenantId = isGitHub
       ? (await findTenantByGitHubInstallation(installationId))?.id
       : await resolveTenantForProvider(provider);
-    const prDiffContext = isGitHub
-      ? await fetchPRDiffContext(
-          installationId,
-          repository.owner,
-          repository.name,
-          pending.pullRequestNumbers
-        )
-      : null;
-    const enrichedJobs = isGitHub
-      ? await enrichJobLogsWithAnnotations(
-          allJobsLogs.jobs,
-          pending.pendingChecks,
-          installationId,
-          repository.owner,
-          repository.name
-        )
-      : allJobsLogs.jobs;
 
-    const failures = await runAnalysisAndCollectResults({
-      enrichedJobs,
-      allJobsLogs,
-      repositoryFullName: repository.fullName,
-      apiUrl,
-      tenantId,
-      workflowId: allJobsLogs.workflowName,
-      prDiffContext,
-      provider,
-      isGitHub,
-      pendingChecks: pending.pendingChecks,
-      installationId,
-      owner: repository.owner,
-      repoName: repository.name,
-    });
+    // Enforce per-tenant concurrency limit on analysis jobs
+    const slotResult = tenantId ? acquireAnalysisSlot(tenantId) : null;
+    if (slotResult && !slotResult.acquired) {
+      logger.warn("Tenant concurrency limit reached, rejecting analysis", {
+        tenantId,
+        activeCount: slotResult.activeCount,
+        limit: slotResult.limit,
+        repository: repository.fullName,
+        commitSha: commitSha.substring(0, 7),
+        provider,
+      });
 
-    const aggregation = buildAggregation({
-      commitSha,
-      repository,
-      installationId,
-      pullRequestNumbers: pending.pullRequestNumbers,
-      failures,
-      prDiffContext,
-      workflowName: allJobsLogs.workflowName,
-      formattedDuration,
-      firstFailureAt: pending.firstFailureAt,
-      lastFailureAt: pending.lastFailureAt,
-      provider,
-    });
+      return {
+        success: false,
+        prCommentsPosted: 0,
+        slackMessageSent: false,
+        checkAnnotationsCreated: false,
+        errors: ["Tenant concurrency limit reached"],
+      };
+    }
 
-    logger.info("Per-job analysis complete, posting results", {
-      repository: repository.fullName,
-      commitSha: commitSha.substring(0, 7),
-      failureCount: failures.length,
-      provider,
-    });
+    try {
+      const prDiffContext = isGitHub
+        ? await fetchPRDiffContext(
+            installationId,
+            repository.owner,
+            repository.name,
+            pending.pullRequestNumbers
+          )
+        : null;
+      const enrichedJobs = isGitHub
+        ? await enrichJobLogsWithAnnotations(
+            allJobsLogs.jobs,
+            pending.pendingChecks,
+            installationId,
+            repository.owner,
+            repository.name
+          )
+        : allJobsLogs.jobs;
 
-    return await postConsolidatedAnalysis(aggregation);
+      const failures = await runAnalysisAndCollectResults({
+        enrichedJobs,
+        allJobsLogs,
+        repositoryFullName: repository.fullName,
+        apiUrl,
+        tenantId,
+        workflowId: allJobsLogs.workflowName,
+        prDiffContext,
+        provider,
+        isGitHub,
+        pendingChecks: pending.pendingChecks,
+        installationId,
+        owner: repository.owner,
+        repoName: repository.name,
+      });
+
+      const aggregation = buildAggregation({
+        commitSha,
+        repository,
+        installationId,
+        pullRequestNumbers: pending.pullRequestNumbers,
+        failures,
+        prDiffContext,
+        workflowName: allJobsLogs.workflowName,
+        formattedDuration,
+        firstFailureAt: pending.firstFailureAt,
+        lastFailureAt: pending.lastFailureAt,
+        provider,
+      });
+
+      logger.info("Per-job analysis complete, posting results", {
+        repository: repository.fullName,
+        commitSha: commitSha.substring(0, 7),
+        failureCount: failures.length,
+        provider,
+      });
+
+      return await postConsolidatedAnalysis(aggregation);
+    } finally {
+      if (tenantId && slotResult?.acquired) {
+        releaseAnalysisSlot(tenantId);
+      }
+    }
   } catch (pipelineError) {
     logger.error("Per-job analysis failed", {
       error: getErrorMessage(pipelineError),

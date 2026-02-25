@@ -58,6 +58,7 @@ export {
   activate,
   suspend,
   deleteTenant,
+  softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
 } from "./serviceLifecycle.js";

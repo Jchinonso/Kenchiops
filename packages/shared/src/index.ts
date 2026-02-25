@@ -154,6 +154,7 @@ export {
   getPool,
   query,
   transaction,
+  withTenantContext,
   closeDatabase,
   isDatabaseHealthy,
   type QueryResult,
@@ -174,6 +175,7 @@ export {
   activate,
   suspend,
   deleteTenant,
+  softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
   logAuditEvent,
@@ -412,6 +414,8 @@ export {
   findRefreshTokenByHash,
   revokeRefreshToken,
   revokeTokenFamily,
+  revokeAllTokensByUser,
+  revokeAllTenantTokens,
   replaceRefreshToken,
   rotateRefreshTokenAtomically,
   cleanupExpiredRefreshTokens,
@@ -495,6 +499,7 @@ export {
   getTenantUsage,
   checkPlanLimit,
   enforcePlanLimit,
+  expireTrials,
 } from "./database/index.js";
 
 // Risk rules repository operations
@@ -509,6 +514,77 @@ export {
   // The store pattern (via assessActionRiskWithContext) handles risk assessment recording
 } from "./database/index.js";
 
+// Data export module (GDPR Article 20)
+export {
+  type DataExport,
+  type DataExportStatus,
+  type UpdateExportStatusInput,
+  createExportJob,
+  getExportJob,
+  updateExportStatus,
+  listExportJobs,
+} from "./database/index.js";
+
+// Data retention module (GDPR Article 5(1)(e))
+export {
+  type RetentionPolicy,
+  type UpsertRetentionPolicyInput,
+  type RetentionEnforcementResult,
+  getRetentionPolicy,
+  upsertRetentionPolicy,
+  enforceRetentionForTenant,
+} from "./database/index.js";
+
+// Consent tracking module (GDPR Articles 6-7)
+export {
+  type ConsentRecord,
+  type ConsentPurpose,
+  type ConsentAction,
+  type CurrentConsentStatus,
+  type GrantConsentInput,
+  type WithdrawConsentInput,
+  grantConsent,
+  withdrawConsent,
+  getCurrentConsent,
+  getConsentHistory,
+} from "./database/index.js";
+
+// User PII module (GDPR Articles 15, 17)
+export {
+  type UserPii,
+  type OAuthIdentitySummary,
+  type PiiErasureResult,
+  getUserPii,
+  erasePii,
+  // Team invitation module
+  type Invitation,
+  type InvitationStatus,
+  type InvitationRole,
+  type CreateInvitationInput,
+  createInvitation,
+  findInvitationByToken,
+  findPendingInvitationsByTenant,
+  findPendingInvitationsByEmail,
+  acceptInvitation,
+  declineInvitation,
+  revokeInvitation,
+  expireStaleInvitations,
+} from "./database/index.js";
+
+// API key module
+export {
+  type ApiKeyStatus,
+  type ApiKeyScope,
+  type ApiKey,
+  type ApiKeyWithSecret,
+  type CreateApiKeyInput,
+  createApiKey,
+  authenticateApiKey,
+  findApiKeysByTenant,
+  revokeApiKey,
+  hashApiKey,
+} from "./database/index.js";
+
 // HTTP utilities
 export {
   errorHandler,
@@ -518,7 +594,7 @@ export {
   authMiddleware,
   requireRole,
 } from "./http/index.js";
-export { getEffectiveTenantId, requireTenantMatch } from "./http/index.js";
+export { requireTenantId, getEffectiveTenantId, requireTenantMatch } from "./http/index.js";
 export { validate, validators, type ValidationSchema } from "./http/index.js";
 export {
   createRateLimiter,
@@ -530,6 +606,15 @@ export {
   type RateLimitOptions,
   type RateLimitInfo,
   type RateLimitMiddlewareConfig,
+} from "./http/index.js";
+
+// Category-based and plan-based rate limiting
+export {
+  rateLimitByCategory,
+  rateLimitByPlan,
+  checkWebhookSourceRateLimit,
+  type RateLimitCategory,
+  type RateLimitPlanId,
 } from "./http/index.js";
 
 // Rate limiting - full module exports
@@ -654,6 +739,11 @@ export {
   resetCircuit,
   resetAllCircuits,
   getAllCircuitStatus,
+  getCircuitCount,
+  buildTenantCircuitKey,
+  evictIdleCircuits,
+  startIdleCleanup,
+  stopIdleCleanup,
   SERVICE_KEYS,
   type CircuitBreakerConfig,
   type CircuitBreakerStatus,
@@ -1072,6 +1162,9 @@ export {
   createOAuthStateStore,
   type OAuthStoredState,
   type OAuthStateStore,
+  // PKCE (Proof Key for Code Exchange) utilities
+  generateCodeVerifier,
+  generateCodeChallenge,
 } from "./security/index.js";
 
 // Action execution
@@ -1100,6 +1193,45 @@ export {
   type ActionStoreStats,
   type QueueStatsResult,
 } from "./actions/index.js";
+
+// Tenant concurrency control
+export {
+  acquireAnalysisSlot,
+  releaseAnalysisSlot,
+  getActiveAnalysisCount,
+  getAllActiveAnalysisCounts,
+  resetAllSlots,
+  type ActiveAnalysisCounts,
+  type SlotAcquisitionResult,
+} from "./concurrency/index.js";
+
+// Observability (Prometheus metrics)
+export {
+  apiRequestsTotal,
+  apiRequestDuration,
+  analysesTotal,
+  analysisDuration,
+  externalCallsTotal,
+  externalCallDuration,
+  activeAnalysisJobs,
+  activeConnections,
+  getMetrics,
+  getMetricsContentType,
+  metricsMiddleware,
+  type ApiRequestLabels,
+  type AnalysisLabels,
+  type ExternalCallLabels,
+} from "./observability/index.js";
+
+// Usage threshold alerting
+export {
+  checkUsageThresholds,
+  resetUsageAlertDedup,
+  type UsageAlertLevel,
+  type UsageResource,
+  type UsageAlert,
+  type TenantUsageAlertResult,
+} from "./observability/index.js";
 
 // Constants (re-export all)
 export * from "./constants/index.js";
@@ -1206,6 +1338,19 @@ export {
   tenantCacheKeys,
   mappingCacheKeys,
   analysisCacheKeys,
+  // User status cache (real-time auth checks)
+  setUserStatusFlag,
+  clearUserStatusFlag,
+  getUserStatusFlag,
+  isUserBlocked,
+  // Tenant status cache (real-time org-level auth checks)
+  setTenantStatusFlag,
+  clearTenantStatusFlag,
+  getTenantStatusFlag,
+  isTenantBlocked,
+  // Webhook deduplication cache (fast-path replay protection)
+  isWebhookDuplicate,
+  markWebhookProcessed,
   // Types
   type CacheEntry,
   type CacheResult,

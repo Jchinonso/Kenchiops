@@ -21,6 +21,7 @@ export type ActionProposalStatus = "proposed" | "approved" | "rejected" | "execu
 export interface UpdateActionStatusInput {
   readonly actionId: string;
   readonly status: ActionProposalStatus;
+  readonly tenantId: string;
   readonly approvedBy?: string;
   readonly executionResult?: Record<string, unknown>;
 }

@@ -19,6 +19,8 @@ export interface CircuitStateRecord {
   lastFailure: number;
   successes: number;
   lastErrorMessage?: string;
+  /** Timestamp of last successful or failed operation (for idle eviction). */
+  lastActivity: number;
 }
 
 /** Circuit breaker configuration options. */

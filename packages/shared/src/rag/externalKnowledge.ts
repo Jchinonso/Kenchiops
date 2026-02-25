@@ -196,7 +196,8 @@ const fetchAndIngestDocs = async (
   await updateSyncStatus(
     source.id,
     source.docCount + ingestResult.ingested,
-    fetchResult.errorCount + ingestResult.errors
+    fetchResult.errorCount + ingestResult.errors,
+    source.tenantId
   );
 
   logger.info("Knowledge ingestion from connector finished", {
@@ -262,7 +263,7 @@ export const syncExternalSource = async (
       sourceId,
       error: getErrorMessage(error),
     });
-    await updateSyncStatus(sourceId, source.docCount, source.errorCount + 1);
+    await updateSyncStatus(sourceId, source.docCount, source.errorCount + 1, tenantId);
     return buildEmptySyncResult(sourceId, source.name, startTime, 1);
   }
 };

@@ -8,6 +8,7 @@ export {
   getPool,
   query,
   transaction,
+  withTenantContext,
   closeDatabase,
   isDatabaseHealthy,
   type QueryResult,
@@ -40,6 +41,7 @@ export {
   activate,
   suspend,
   deleteTenant,
+  softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
   // Audit operations
@@ -329,6 +331,8 @@ export {
   findRefreshTokenByHash,
   revokeRefreshToken,
   revokeTokenFamily,
+  revokeAllTokensByUser,
+  revokeAllTenantTokens,
   replaceRefreshToken,
   rotateRefreshTokenAtomically,
   cleanupExpiredRefreshTokens,
@@ -500,6 +504,7 @@ export {
   getTenantUsage,
   checkPlanLimit,
   enforcePlanLimit,
+  expireTrials,
 } from "./subscription/index.js";
 
 // Risk rules module (Context-Aware Risk Scoring)
@@ -547,3 +552,77 @@ export {
   recordRiskAssessment,
   queryRiskAssessments,
 } from "./riskRules/index.js";
+
+// Data export module (GDPR Article 20)
+export {
+  type DataExport,
+  type DataExportStatus,
+  type UpdateExportStatusInput,
+  createExportJob,
+  getExportJob,
+  updateExportStatus,
+  listExportJobs,
+} from "./dataExport/index.js";
+
+// Data retention module (GDPR Article 5(1)(e))
+export {
+  type RetentionPolicy,
+  type UpsertRetentionPolicyInput,
+  type RetentionEnforcementResult,
+  getRetentionPolicy,
+  upsertRetentionPolicy,
+  enforceRetentionForTenant,
+} from "./retention/index.js";
+
+// Consent tracking module (GDPR Articles 6-7)
+export {
+  type ConsentRecord,
+  type ConsentPurpose,
+  type ConsentAction,
+  type CurrentConsentStatus,
+  type GrantConsentInput,
+  type WithdrawConsentInput,
+  grantConsent,
+  withdrawConsent,
+  getCurrentConsent,
+  getConsentHistory,
+} from "./consent/index.js";
+
+// User PII module (GDPR Articles 15, 17)
+export {
+  type UserPii,
+  type OAuthIdentitySummary,
+  type PiiErasureResult,
+  getUserPii,
+  erasePii,
+} from "./userPii/index.js";
+
+// Team invitation module
+export {
+  type Invitation,
+  type InvitationStatus,
+  type InvitationRole,
+  type CreateInvitationInput,
+  createInvitation,
+  findInvitationByToken,
+  findPendingInvitationsByTenant,
+  findPendingInvitationsByEmail,
+  acceptInvitation,
+  declineInvitation,
+  revokeInvitation,
+  expireStaleInvitations,
+} from "./invitation/index.js";
+
+// API key module
+export {
+  type ApiKeyStatus,
+  type ApiKeyScope,
+  type ApiKey,
+  type ApiKeyWithSecret,
+  type CreateApiKeyInput,
+  createApiKey,
+  authenticateApiKey,
+  findApiKeysByTenant,
+  revokeApiKey,
+  hashApiKey,
+} from "./apiKey/index.js";

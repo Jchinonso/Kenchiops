@@ -19,6 +19,7 @@ import {
   createSecurityHeaders,
   setupGracefulShutdown,
   registerCleanupHandler,
+  rateLimitByPlan,
   initDatabase,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
@@ -119,6 +120,9 @@ const createApp = (
   // Webhook paths are excluded from auth via PUBLIC_ROUTES in @kenchi/shared.
   app.use(requestContextMiddleware);
   app.use(authMiddleware);
+
+  // Per-tenant plan-based rate limiting (after auth so tenantId is available)
+  app.use(rateLimitByPlan());
 
   app.use(triageRateLimiter.middleware());
 

@@ -9,7 +9,12 @@
  * Fetch API (not @kenchi/shared httpClient, which is a Node.js utility).
  */
 
+import { toast } from "sonner";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "";
+
+/** Default request timeout in milliseconds (30 seconds). */
+const REQUEST_TIMEOUT_MS = 30_000;
 
 // Browser Fetch API reference — frontend uses native browser fetch,
 // not @kenchi/shared httpClient (which is Node.js server-only)
@@ -18,15 +23,21 @@ const browserRequest = globalThis.fetch.bind(globalThis);
 // ==================== Browser HTTP ====================
 
 /**
- * Browser-native HTTP request with credentials included.
+ * Browser-native HTTP request with credentials and timeout.
  * The `credentials: "include"` flag ensures httpOnly cookies are sent
  * on every request, including cross-origin requests during development.
+ * AbortController enforces a 30s timeout to prevent hanging requests.
  */
-const httpRequest = (url: string, init?: RequestInit): Promise<Response> =>
-  browserRequest(url, {
+const httpRequest = (url: string, init?: RequestInit): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  return browserRequest(url, {
     ...init,
     credentials: "include",
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeoutId));
+};
 
 // ==================== Token Refresh ====================
 
@@ -114,6 +125,23 @@ export const apiClient = async (
   const init = buildInit(method, requestHeaders, body);
 
   const response = await httpRequest(`${API_URL}${path}`, init);
+
+  // Surface plan-limit 403 and downgrade-blocked 409 errors to the user via toast
+  if (response.status === 403 || response.status === 409) {
+    try {
+      const cloned = response.clone();
+      const body = (await cloned.json()) as {
+        readonly error?: { readonly code?: string; readonly message?: string };
+      };
+      if (body.error?.code === "PLAN_LIMIT_EXCEEDED") {
+        toast.error(body.error.message ?? "You've reached your plan limit. Upgrade to continue.");
+      } else if (body.error?.code === "DOWNGRADE_BLOCKED") {
+        toast.error(body.error.message ?? "Current usage exceeds the target plan's limits.");
+      }
+    } catch {
+      // Ignore parsing errors — non-JSON responses are handled elsewhere
+    }
+  }
 
   if (response.status !== 401) {
     return response;

@@ -59,7 +59,7 @@ export const TEST_CASE_QUERIES = {
       last_run_at = NOW(),
       last_result = $2,
       updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $3
     RETURNING *
   `,
 
@@ -67,7 +67,7 @@ export const TEST_CASE_QUERIES = {
     UPDATE rag_test_cases SET
       is_active = $2,
       updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $3
     RETURNING *
   `,
 

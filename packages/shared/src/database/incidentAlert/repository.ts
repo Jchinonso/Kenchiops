@@ -156,7 +156,8 @@ export const findAlertByDeliveryId = async (
  */
 export const updateAlertStatus = async (
   id: string,
-  status: string
+  status: string,
+  tenantId: string
 ): Promise<IncidentAlertRecord | null> => {
   validateIncidentAlertId(id);
 
@@ -164,6 +165,7 @@ export const updateAlertStatus = async (
     const result = await query<IncidentAlertRow>(INCIDENT_ALERT_QUERIES.UPDATE_STATUS, [
       id,
       status,
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToIncidentAlert(result.rows[0]) : null;
   } catch (error) {

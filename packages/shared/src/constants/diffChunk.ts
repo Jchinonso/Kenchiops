@@ -64,13 +64,13 @@ export const DIFF_CHUNK_QUERIES = {
   UPDATE_EMBEDDING: `
     UPDATE diff_chunks
     SET embedding = $2::vector, embedding_model = $3, embedding_version = $4, updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $5
     RETURNING *
   `,
 
   DELETE_BY_PR: `
     DELETE FROM diff_chunks
-    WHERE pr_number = $1 AND repository = $2
+    WHERE pr_number = $1 AND repository = $2 AND tenant_id = $3
   `,
 
   DELETE_BY_TENANT: `

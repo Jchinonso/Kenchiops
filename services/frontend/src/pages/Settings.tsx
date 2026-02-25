@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
 import { Switch } from "@/components/ui/switch";
+import { UsageWarning } from "@/components/UsageWarning";
 
 // ==================== Constants ====================
 
@@ -377,6 +378,23 @@ export const Settings = () => {
                   <UsageBar label="Analyses This Month" usage={usageData.usage.analysesThisMonth} />
                   <UsageBar label="Integrations" usage={usageData.usage.integrations} />
                   <UsageBar label="Team Members" usage={usageData.usage.teamMembers} />
+                  <div className="pt-2 space-y-2">
+                    <UsageWarning
+                      label="Repositories"
+                      current={usageData.usage.repositories.current}
+                      limit={usageData.usage.repositories.limit}
+                    />
+                    <UsageWarning
+                      label="Analyses"
+                      current={usageData.usage.analysesThisMonth.current}
+                      limit={usageData.usage.analysesThisMonth.limit}
+                    />
+                    <UsageWarning
+                      label="Team Members"
+                      current={usageData.usage.teamMembers.current}
+                      limit={usageData.usage.teamMembers.limit}
+                    />
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">

@@ -8,8 +8,8 @@
  * Default database pool configuration values
  */
 export const DATABASE_POOL_DEFAULTS = {
-  /** Maximum number of clients in the pool */
-  MAX_CONNECTIONS: 10,
+  /** Maximum number of clients in the pool (configurable via DB_POOL_SIZE env var) */
+  MAX_CONNECTIONS: 25,
   /** How long a client can sit idle before being closed (ms) */
   IDLE_TIMEOUT_MS: 30_000,
   /** How long to wait for a connection before timing out (ms) */

@@ -59,12 +59,14 @@ export const FEEDBACK_QUERIES = {
     SELECT * FROM analysis_feedback
     WHERE analysis_id = $1 AND user_id = $2
       AND feedback_type IN ('qa_helpful', 'qa_not_helpful')
+      AND analysis_id IN (SELECT id FROM analyses WHERE tenant_id = $3)
     LIMIT 1
   `,
 
   GET_FEEDBACK_BY_ANALYSIS: `
     SELECT * FROM analysis_feedback
     WHERE analysis_id = $1
+      AND analysis_id IN (SELECT id FROM analyses WHERE tenant_id = $2)
     ORDER BY created_at DESC
   `,
 
@@ -91,13 +93,14 @@ export const FEEDBACK_QUERIES = {
   GET_FEEDBACK_BY_USER_AND_ANALYSIS: `
     SELECT * FROM analysis_feedback
     WHERE analysis_id = $1 AND user_id = $2
+      AND analysis_id IN (SELECT id FROM analyses WHERE tenant_id = $3)
     LIMIT 1
   `,
 
   UPDATE_FEEDBACK_TYPE: `
     UPDATE analysis_feedback
     SET feedback_type = $1, updated_at = NOW()
-    WHERE id = $2
+    WHERE id = $2 AND analysis_id IN (SELECT id FROM analyses WHERE tenant_id = $3)
     RETURNING *
   `,
 } as const;

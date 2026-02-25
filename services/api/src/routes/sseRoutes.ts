@@ -19,10 +19,12 @@ import {
   createLogger,
   subscribe,
   getErrorMessage,
+  requireTenantId,
   AuthorizationError,
   SSE_CONFIG,
   PUBSUB_CHANNELS,
   SERVICE_NAMES,
+  rateLimitByCategory,
   type QueueMessage,
 } from "@kenchi/shared";
 
@@ -83,22 +85,6 @@ const releaseConnection = (tenantId: string): void => {
 };
 
 // ==================== Helpers ====================
-
-/**
- * Extract tenantId from authenticated user or throw.
- */
-const requireTenantId = (req: Request): string => {
-  const tenantId = req.user?.tenantId;
-
-  if (!tenantId) {
-    throw new AuthorizationError(
-      "No organization linked. Connect a GitHub or GitLab account to get started.",
-      { operation: "sseRequireTenantId" }
-    );
-  }
-
-  return tenantId;
-};
 
 /**
  * Sanitize an SSE event type name to prevent frame injection.
@@ -302,6 +288,6 @@ const handleSSEStream = (req: Request, res: Response): void => {
 
 // ==================== Route Definitions ====================
 
-router.get(SSE_STREAM_PATH, handleSSEStream);
+router.get(SSE_STREAM_PATH, rateLimitByCategory("standard"), handleSSEStream);
 
 export { router as sseRoutes };

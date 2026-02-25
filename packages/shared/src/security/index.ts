@@ -51,6 +51,9 @@ export { createOAuthStateStore } from "./oauthStateStore.js";
 
 export type { OAuthStoredState, OAuthStateStore } from "./oauthStateStoreTypes.js";
 
+// PKCE (Proof Key for Code Exchange) utilities
+export { generateCodeVerifier, generateCodeChallenge } from "./pkce.js";
+
 // Re-export constants for convenience
 export {
   SECRET_PATTERNS,

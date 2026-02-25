@@ -242,7 +242,8 @@ export const updateKnowledgeDocEmbedding = async (
   id: string,
   embedding: readonly number[],
   model: string = EMBEDDING_CONFIG.MODEL,
-  version: string = KNOWLEDGE_DOC_DEFAULTS.DEFAULT_EMBEDDING_VERSION
+  version: string = KNOWLEDGE_DOC_DEFAULTS.DEFAULT_EMBEDDING_VERSION,
+  tenantId: string = "system"
 ): Promise<KnowledgeDocRecord | null> => {
   validateNonEmptyString(id, "id");
   validateEmbedding(embedding);
@@ -255,6 +256,7 @@ export const updateKnowledgeDocEmbedding = async (
       embeddingVector,
       model,
       version,
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {
@@ -282,11 +284,15 @@ export const updateKnowledgeDocEmbedding = async (
  * @throws ValidationError if parentId is empty
  * @throws Error if database operation fails
  */
-export const deleteKnowledgeDocsByParent = async (parentId: string): Promise<number> => {
+export const deleteKnowledgeDocsByParent = async (
+  parentId: string,
+  tenantId: string
+): Promise<number> => {
   validateNonEmptyString(parentId, "parentId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
-    const result = await query(KNOWLEDGE_DOC_QUERIES.DELETE_BY_PARENT, [parentId]);
+    const result = await query(KNOWLEDGE_DOC_QUERIES.DELETE_BY_PARENT, [parentId, tenantId]);
 
     logger.info("Deleted knowledge document chunks", {
       parentId,

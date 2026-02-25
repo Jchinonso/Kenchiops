@@ -13,6 +13,17 @@ import {
   findTenantByGitHubInstallation,
   findWebhookActivityByDeliveryId,
   getErrorMessage,
+  findOAuthIdentity,
+  findUserOrgRole,
+  countOwnersByTenant,
+  removeMemberFromTenant,
+  logAuditEvent,
+  AUDIT_ACTIONS,
+  rateLimitByCategory,
+  isWebhookDuplicate,
+  markWebhookProcessed,
+  checkWebhookSourceRateLimit,
+  RateLimitError,
 } from "@kenchi/shared";
 import { handlePullRequest } from "../handlers/pullRequestHandler.js";
 import { handleCheckRun } from "../handlers/checkRunHandler.js";
@@ -24,6 +35,7 @@ import type {
   CheckRunWebhook,
   InstallationWebhook,
   PushWebhook,
+  OrganizationMemberWebhook,
 } from "../types/githubTypes.js";
 import type { WebhookHandlerResult, GitHubEventHandler } from "./webhookRoutesTypes.js";
 
@@ -187,6 +199,120 @@ const handlePush = async (webhook: PushWebhook): Promise<WebhookHandlerResult> =
 };
 
 /**
+ * Handle organization member events (member_removed, member_added, member_invited).
+ * When a member is removed from a GitHub organization, remove their Kenchi tenant membership.
+ */
+const handleOrganizationEvent = async (
+  webhook: OrganizationMemberWebhook
+): Promise<WebhookHandlerResult> => {
+  const { action, membership, organization, installation } = webhook;
+  const memberLogin = membership.user.login;
+  const orgLogin = organization.login;
+
+  if (action !== "member_removed") {
+    return { handled: false, message: `Organization action '${action}' ignored` };
+  }
+
+  if (!installation?.id) {
+    logger.warn("No installation ID for organization member_removed event", {
+      provider: "github",
+      operation: "handleOrganizationMemberRemoved",
+      orgLogin,
+      memberLogin,
+    });
+    return { handled: true, message: "Organization event logged (no installation ID)" };
+  }
+
+  const tenant = await findTenantByGitHubInstallation(installation.id);
+  if (!tenant) {
+    logger.info("No Kenchi tenant for GitHub installation", {
+      provider: "github",
+      operation: "handleOrganizationMemberRemoved",
+      installationId: installation.id,
+      orgLogin,
+    });
+    return { handled: true, message: "Organization event logged (no tenant found)" };
+  }
+
+  const identity = await findOAuthIdentity("github", String(membership.user.id), null);
+  if (!identity) {
+    logger.info("No Kenchi user found for removed GitHub member", {
+      provider: "github",
+      operation: "handleOrganizationMemberRemoved",
+      githubUserId: membership.user.id,
+      memberLogin,
+      tenantId: tenant.id,
+    });
+    return { handled: true, message: `No Kenchi user found for GitHub user ${memberLogin}` };
+  }
+
+  const { userId } = identity;
+
+  // Last-owner protection: do not remove the last owner of a tenant
+  const role = await findUserOrgRole(userId, tenant.id);
+  if (role === "owner") {
+    const ownerCount = await countOwnersByTenant(tenant.id);
+    if (ownerCount <= 1) {
+      logger.warn("Blocked removal of last owner via provider webhook", {
+        provider: "github",
+        operation: "handleOrganizationMemberRemoved",
+        userId,
+        tenantId: tenant.id,
+        orgLogin,
+        memberLogin,
+      });
+      return {
+        handled: true,
+        message: `Cannot remove ${memberLogin} — last owner of tenant`,
+      };
+    }
+  }
+
+  const removed = await removeMemberFromTenant(tenant.id, userId);
+
+  if (!removed) {
+    logger.info("Member was not in Kenchi tenant (already removed or never joined)", {
+      provider: "github",
+      operation: "handleOrganizationMemberRemoved",
+      userId,
+      tenantId: tenant.id,
+      memberLogin,
+    });
+    return { handled: true, message: `Member ${memberLogin} was not in tenant` };
+  }
+
+  // Best-effort audit log
+  try {
+    await logAuditEvent(tenant.id, AUDIT_ACTIONS.MEMBER_REMOVED, {
+      userId,
+      memberLogin,
+      orgLogin,
+      removedBy: "provider_webhook",
+      githubUserId: membership.user.id,
+    });
+  } catch (auditError) {
+    logger.warn("Failed to write audit log for member removal", {
+      provider: "github",
+      operation: "handleOrganizationMemberRemoved",
+      tenantId: tenant.id,
+      userId,
+      error: getErrorMessage(auditError),
+    });
+  }
+
+  logger.info("Member removed from tenant via GitHub organization webhook", {
+    provider: "github",
+    operation: "handleOrganizationMemberRemoved",
+    userId,
+    tenantId: tenant.id,
+    memberLogin,
+    orgLogin,
+  });
+
+  return { handled: true, message: `Member ${memberLogin} removed from tenant` };
+};
+
+/**
  * Event handler lookup table
  */
 const eventHandlers: Record<string, GitHubEventHandler> = {
@@ -204,6 +330,10 @@ const eventHandlers: Record<string, GitHubEventHandler> = {
   },
   push: {
     handle: (body) => handlePush(body as PushWebhook),
+    formatResponse: formatStandardResponse,
+  },
+  organization: {
+    handle: (body) => handleOrganizationEvent(body as OrganizationMemberWebhook),
     formatResponse: formatStandardResponse,
   },
 };
@@ -299,11 +429,28 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
     return;
   }
 
-  // Replay protection: skip if already processed
+  // Replay protection: Redis fast-path check before DB lookup
+  const redisDuplicate = await isWebhookDuplicate("github", deliveryId);
+  if (redisDuplicate) {
+    logger.info("Duplicate GitHub webhook (Redis fast-path), skipping", {
+      provider: "github",
+      operation: "receiveWebhook",
+      deliveryId,
+    });
+    res.status(HTTP_STATUS.OK).json({
+      status: "duplicate",
+      message: "Webhook already processed",
+    });
+    return;
+  }
+
+  // Replay protection: DB-based fallback check
   try {
     const existing = await findWebhookActivityByDeliveryId(deliveryId);
     if (existing) {
-      logger.info("Duplicate GitHub webhook, skipping", {
+      // Backfill Redis for future fast-path hits
+      void markWebhookProcessed("github", deliveryId);
+      logger.info("Duplicate GitHub webhook (DB lookup), skipping", {
         provider: "github",
         operation: "receiveWebhook",
         deliveryId,
@@ -323,6 +470,24 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
     });
   }
 
+  // Per-source rate limiting: prevent one noisy installation from monopolizing processing
+  const installationId = String(
+    (req.body as { readonly installation?: { readonly id?: number } }).installation?.id ?? "unknown"
+  );
+  const sourceRateResult = checkWebhookSourceRateLimit(installationId, "github");
+  if (!sourceRateResult.allowed) {
+    logger.warn("Webhook source rate limit exceeded", {
+      provider: "github",
+      operation: "receiveWebhook",
+      deliveryId,
+      installationId,
+    });
+    throw new RateLimitError(
+      "Webhook rate limit exceeded for this installation. Please retry later.",
+      60_000
+    );
+  }
+
   // Resolve tenant from installation ID for webhook activity logging
   const tenantId = await resolveTenantId(req.body);
 
@@ -330,6 +495,8 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
   try {
     const result = await handler.handle(req.body);
     const status = result.handled ? "processed" : "skipped";
+    // Mark in Redis for future fast-path dedup
+    void markWebhookProcessed("github", deliveryId);
     void logWebhookActivity({
       deliveryId,
       eventType,
@@ -354,7 +521,7 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
 });
 
 // Main webhook endpoint (full path: /api/github/webhook)
-router.post("/webhook", verifyGitHubWebhook, handleGitHubWebhook);
+router.post("/webhook", rateLimitByCategory("standard"), verifyGitHubWebhook, handleGitHubWebhook);
 
 /**
  * Handle pull request webhook (legacy endpoint)
@@ -362,6 +529,7 @@ router.post("/webhook", verifyGitHubWebhook, handleGitHubWebhook);
  */
 router.post(
   "/webhook/pull_request",
+  rateLimitByCategory("standard"),
   verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
     const startTime = Date.now();
@@ -406,6 +574,7 @@ router.post(
  */
 router.post(
   "/webhook/check_run",
+  rateLimitByCategory("standard"),
   verifyGitHubWebhook,
   asyncHandler(async (req: Request, res: Response) => {
     const startTime = Date.now();

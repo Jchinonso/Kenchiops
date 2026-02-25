@@ -23,6 +23,7 @@ import {
 import {
   withCircuitBreaker,
   getCircuitStatus,
+  buildTenantCircuitKey,
   SERVICE_KEYS,
 } from "../../../http/circuitBreaker.js";
 import { isOpenRouterProvider, getEffectiveBaseUrl, createLLMSDKClient } from "./clientFactory.js";
@@ -134,22 +135,23 @@ export class EmbeddingClient {
 
   /**
    * Gets the circuit breaker status for the embedding service.
-   * Shares circuit with main OpenAI client for unified rate limiting.
+   * When tenantId is provided, checks the per-tenant circuit.
    */
-  static getCircuitBreakerStatus(): {
+  static getCircuitBreakerStatus(tenantId?: string): {
     state: string;
     failures: number;
     isOpen: boolean;
     lastFailure: number | null;
   } {
-    return getCircuitStatus(SERVICE_KEYS.OPENAI);
+    return getCircuitStatus(buildTenantCircuitKey(SERVICE_KEYS.OPENAI, tenantId));
   }
 
   /**
    * Checks if the embedding service is available (circuit not open).
+   * When tenantId is provided, checks the per-tenant circuit.
    */
-  static isAvailable(): boolean {
-    return !getCircuitStatus(SERVICE_KEYS.OPENAI).isOpen;
+  static isAvailable(tenantId?: string): boolean {
+    return !getCircuitStatus(buildTenantCircuitKey(SERVICE_KEYS.OPENAI, tenantId)).isOpen;
   }
 
   /**
@@ -167,7 +169,10 @@ export class EmbeddingClient {
    * @returns Promise resolving to the embedding result
    * @throws {ExternalServiceError} If the API call fails or circuit is open
    */
-  readonly generateEmbedding = async (text: string): Promise<EmbeddingResult> => {
+  readonly generateEmbedding = async (
+    text: string,
+    tenantId?: string
+  ): Promise<EmbeddingResult> => {
     const validationError = validateEmbeddingInput(text);
     if (validationError) {
       throw new ExternalServiceError(
@@ -179,7 +184,7 @@ export class EmbeddingClient {
     const startTime = Date.now();
 
     try {
-      const response = await this.callEmbeddingAPI([text.trim()]);
+      const response = await this.callEmbeddingAPI([text.trim()], tenantId);
       const embedding = response.data[0]?.embedding;
 
       if (!embedding) {
@@ -213,7 +218,8 @@ export class EmbeddingClient {
    * @throws {ExternalServiceError} If the API call fails or input is invalid
    */
   readonly generateBatchEmbeddings = async (
-    texts: readonly string[]
+    texts: readonly string[],
+    tenantId?: string
   ): Promise<BatchEmbeddingResult> => {
     const validationError = validateBatchInput(texts, this.clientConfig.maxBatchSize);
     if (validationError) {
@@ -227,7 +233,7 @@ export class EmbeddingClient {
     const trimmedTexts = texts.map((text) => text.trim());
 
     try {
-      const response = await this.callEmbeddingAPI(trimmedTexts);
+      const response = await this.callEmbeddingAPI(trimmedTexts, tenantId);
 
       // Sort by index to maintain input order
       const sortedData = [...response.data].sort(
@@ -254,12 +260,14 @@ export class EmbeddingClient {
   /**
    * Calls the OpenAI embedding API with circuit breaker protection.
    * Passes dimensions parameter for text-embedding-3 models.
+   * Uses per-tenant circuit breaker key when tenantId is provided.
    */
   private readonly callEmbeddingAPI = async (
-    texts: readonly string[]
+    texts: readonly string[],
+    tenantId?: string
   ): Promise<OpenAI.Embeddings.CreateEmbeddingResponse> =>
     withCircuitBreaker(
-      SERVICE_KEYS.OPENAI,
+      buildTenantCircuitKey(SERVICE_KEYS.OPENAI, tenantId),
       async () =>
         this.client.embeddings.create({
           model: this.clientConfig.model,

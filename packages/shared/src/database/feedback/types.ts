@@ -45,6 +45,7 @@ export interface CreateAnalysisFeedbackInput {
   readonly analysisId: string;
   readonly feedbackType: FeedbackType;
   readonly userId: string;
+  readonly tenantId: string;
   readonly correction?: string;
   readonly slackChannel?: string;
   readonly slackMessageTs?: string;
@@ -58,6 +59,7 @@ export interface CreateQAFeedbackInput {
   readonly query: string;
   readonly feedbackType: "qa_helpful" | "qa_not_helpful";
   readonly userId: string;
+  readonly tenantId: string;
   readonly slackChannel?: string;
   readonly slackMessageTs?: string;
   readonly resultCount?: number;

@@ -26,7 +26,7 @@ import type {
   BitbucketTokenResponse,
   BitbucketUserProfile,
   BitbucketEmailsResponse,
-  BitbucketWorkspacesResponse,
+  BitbucketWorkspacePermissionsResponse,
 } from "./oauthAdapterTypes.js";
 
 // ==================== Constants ====================
@@ -110,12 +110,21 @@ const buildBasicAuthHeader = (clientId: string, clientSecret: string): string =>
 const exchangeCode = async (
   code: string,
   _instanceUrl: string | null,
-  context: RequestContext
+  context: RequestContext,
+  codeVerifier?: string
 ): Promise<OAuthTokenResponse> => {
   const { clientId, clientSecret } = ensureClientCredentials();
   const startTime = Date.now();
 
   try {
+    const formParams: Record<string, string> = {
+      grant_type: "authorization_code",
+      code,
+    };
+    if (codeVerifier) {
+      formParams.code_verifier = codeVerifier;
+    }
+
     const response = await fetch(OAUTH_PROVIDER_URLS.bitbucket.token, {
       method: "POST",
       headers: {
@@ -123,10 +132,7 @@ const exchangeCode = async (
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: buildBasicAuthHeader(clientId, clientSecret),
       },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-      }).toString(),
+      body: new URLSearchParams(formParams).toString(),
       signal: AbortSignal.timeout(BITBUCKET_TIMEOUT_MS),
     });
 
@@ -329,7 +335,9 @@ const getUserOrganizations = async (
   const startTime = Date.now();
 
   try {
-    const response = await fetch(OAUTH_PROVIDER_URLS.bitbucket.userWorkspaces, {
+    // Use permissions/workspaces endpoint to get both workspace and role in one call
+    const permissionsUrl = "https://api.bitbucket.org/2.0/user/permissions/workspaces";
+    const response = await fetch(permissionsUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
@@ -342,7 +350,7 @@ const getUserOrganizations = async (
     if (!response.ok) {
       throw new ExternalServiceError(
         "bitbucket",
-        `User workspaces fetch failed with status ${String(response.status)}`,
+        `User workspace permissions fetch failed with status ${String(response.status)}`,
         {
           metadata: {
             operation: "getUserOrganizations",
@@ -354,18 +362,21 @@ const getUserOrganizations = async (
       );
     }
 
-    const workspaces = (await response.json()) as BitbucketWorkspacesResponse;
+    const permissions = (await response.json()) as BitbucketWorkspacePermissionsResponse;
 
-    logger.info("Bitbucket user workspaces fetched", {
+    logger.info("Bitbucket user workspace permissions fetched", {
       provider: "bitbucket",
       operation: "getUserOrganizations",
       durationMs,
       statusCode: response.status,
-      orgCount: workspaces.values.length,
+      orgCount: permissions.values.length,
       ...context,
     });
 
-    return workspaces.values.map((workspace) => ({ login: workspace.slug }));
+    return permissions.values.map((entry) => ({
+      login: entry.workspace.slug,
+      role: entry.permission,
+    }));
   } catch (error) {
     if (error instanceof ExternalServiceError) {
       throw error;

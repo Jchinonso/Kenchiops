@@ -50,6 +50,8 @@ import {
   findUserOrgRole,
   // Plan limits
   checkPlanLimit,
+  // Provider role mapping
+  resolveAutoLinkRole,
   // JWT utilities
   generateAccessToken,
   generateRefreshToken,
@@ -407,7 +409,7 @@ const sanitizeRawProfile = (rawProfile: Record<string, unknown>): Record<string,
 const ensureOrgMemberships = async (
   userId: string,
   provider: OAuthProvider,
-  orgs: ReadonlyArray<{ readonly login: string }>,
+  orgs: ReadonlyArray<{ readonly login: string; readonly role?: string }>,
   context: RequestContext
 ): Promise<readonly string[]> => {
   const resolvedIds: string[] = []; // let: accumulator built sequentially to respect rate limits
@@ -465,11 +467,13 @@ const ensureOrgMemberships = async (
     resolvedIds.push(tenant.id);
 
     // Add user to org (idempotent -- ON CONFLICT DO NOTHING)
-    // First user to trigger tenant creation becomes the owner
+    // First user to trigger tenant creation becomes the owner.
+    // For existing tenants, map the provider-reported role to a Kenchi role.
+    const memberRole = existingTenant ? resolveAutoLinkRole(provider, org.role) : "owner";
     await addUserOrganization({
       userId,
       tenantId: tenant.id,
-      role: existingTenant ? "member" : "owner",
+      role: memberRole,
     });
 
     logger.info("User organization membership ensured", {

@@ -16,6 +16,7 @@ import { apiClient } from "@/lib/apiClient";
 import { titleCase } from "@/lib/formatters";
 import { MonitoringIntegrations } from "@/components/MonitoringIntegrations";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { FeatureGate } from "@/components/FeatureGate";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
@@ -493,13 +494,15 @@ export const Integrations = () => {
             external
           />
           <GitLabCICard tenantId={tenantId} otherProviderConnected={githubConnected} />
-          <ConnectionCard
-            name="Slack"
-            icon={<MessageSquare className="w-8 h-8 text-purple-600" />}
-            connected={false}
-            actionLabel="Connect"
-            actionHref="/dashboard/integrations"
-          />
+          <FeatureGate feature="slackIntegration">
+            <ConnectionCard
+              name="Slack"
+              icon={<MessageSquare className="w-8 h-8 text-purple-600" />}
+              connected={false}
+              actionLabel="Connect"
+              actionHref="/dashboard/integrations"
+            />
+          </FeatureGate>
         </CardContent>
       </Card>
 

@@ -804,7 +804,9 @@ export type TenantAuditAction =
   | "member_removed"
   | "member_added"
   | "org_switched"
-  | "membership_reconciled";
+  | "membership_reconciled"
+  | "member.sessions_revoked"
+  | "tenant.sessions_revoked";
 
 /**
  * Tenant audit log entry.
@@ -979,8 +981,15 @@ export interface Config {
   readonly OAUTH_CALLBACK_BASE_URL: string;
 
   // Internal service-to-service authentication
-  /** Shared secret for HMAC-SHA256 signing of inter-service requests */
+  /** Shared secret for HMAC-SHA256 signing of inter-service requests (fallback) */
   readonly INTERNAL_SERVICE_SECRET?: string;
+  /** Per-service HMAC secrets — used when configured, falls back to INTERNAL_SERVICE_SECRET */
+  readonly SERVICE_HMAC_SECRET_API?: string;
+  readonly SERVICE_HMAC_SECRET_GITHUB_APP?: string;
+  readonly SERVICE_HMAC_SECRET_SLACK_BOT?: string;
+  readonly SERVICE_HMAC_SECRET_INCIDENT_TRIAGE?: string;
+  /** Identifies the calling service for HMAC key resolution (e.g., "api", "github-app") */
+  readonly SERVICE_NAME?: string;
 
   // Aggregation timing overrides
   readonly AGGREGATION_DEBOUNCE_MS?: number;

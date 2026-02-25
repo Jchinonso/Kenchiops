@@ -180,14 +180,17 @@ export const getTestCasesByCategory = async (category: string): Promise<readonly
  */
 export const updateTestCaseResult = async (
   testCaseId: string,
-  testResult: TestResultInput
+  testResult: TestResultInput,
+  tenantId: string
 ): Promise<RAGTestCase | null> => {
   validateId(testCaseId, "testCaseId");
+  validateId(tenantId, "tenantId");
 
   try {
     const result = await query<TestCaseRow>(TEST_CASE_QUERIES.UPDATE_RESULT, [
       testCaseId,
       JSON.stringify(testResult),
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {
@@ -221,12 +224,18 @@ export const updateTestCaseResult = async (
  */
 export const setTestCaseActive = async (
   testCaseId: string,
-  isActive: boolean
+  isActive: boolean,
+  tenantId: string
 ): Promise<RAGTestCase | null> => {
   validateId(testCaseId, "testCaseId");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<TestCaseRow>(TEST_CASE_QUERIES.SET_ACTIVE, [testCaseId, isActive]);
+    const result = await query<TestCaseRow>(TEST_CASE_QUERIES.SET_ACTIVE, [
+      testCaseId,
+      isActive,
+      tenantId,
+    ]);
     if (result.rows.length === 0) {
       return null;
     }

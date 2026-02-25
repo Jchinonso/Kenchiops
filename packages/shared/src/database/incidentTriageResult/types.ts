@@ -79,6 +79,7 @@ export interface CreateTriageResultInput {
  */
 export interface UpdateTriageEnrichmentInput {
   readonly triageResultId: string;
+  readonly tenantId: string;
   readonly confidence: number;
   readonly completeness: number;
   readonly missingFields: readonly string[];
@@ -94,6 +95,7 @@ export interface UpdateTriageEnrichmentInput {
  */
 export interface UpdateTriageAiSummaryInput {
   readonly triageResultId: string;
+  readonly tenantId: string;
   readonly aiSummary: Readonly<Record<string, unknown>>;
   readonly summarySource: string;
   readonly pipelineDurationMs: number;
@@ -104,6 +106,7 @@ export interface UpdateTriageAiSummaryInput {
  */
 export interface UpdateTriageDispatchInput {
   readonly triageResultId: string;
+  readonly tenantId: string;
   readonly routingDecision: Readonly<Record<string, unknown>>;
   readonly dispatchedTo: readonly Record<string, unknown>[];
   readonly pipelineDurationMs: number;

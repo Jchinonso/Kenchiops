@@ -17,6 +17,7 @@ import {
   enqueueAction,
   getErrorMessage,
   deleteActionPayload,
+  findTenantBySlackWorkspace,
   type ActionType,
   // Safety features
   checkRestrictions,
@@ -54,14 +55,19 @@ const executeStoredAction = async (
   payload: Awaited<ReturnType<typeof getActionPayload>>,
   opaqueId: string | null,
   say: SayFn,
-  messageTs?: string
+  messageTs?: string,
+  workspaceId?: string
 ): Promise<void> => {
   const actionId = opaqueId ?? `legacy_${payload.commitSha.substring(0, 8)}`;
+
+  // Resolve Kenchi tenant ID from Slack workspace ID
+  const tenant = workspaceId ? await findTenantBySlackWorkspace(workspaceId) : null;
+  const resolvedTenantId = tenant?.id ?? "unknown";
 
   // Build safety request context for audit logging
   const safetyContext: SafetyRequestContext = {
     requestId: actionId,
-    tenantId: payload.repository.split("/")[0] ?? "unknown",
+    tenantId: resolvedTenantId,
     actor: "slack-user",
   };
 
@@ -157,7 +163,12 @@ const executeStoredAction = async (
     });
 
     await enqueueAction(finalActionProposal, context);
-    await persistActionStatus(finalActionProposal.id, "approved", "slack-user");
+    await persistActionStatus(
+      finalActionProposal.id,
+      "approved",
+      safetyContext.tenantId,
+      "slack-user"
+    );
 
     logger.info("Action enqueued for async execution", {
       actionId: finalActionProposal.id,
@@ -189,11 +200,17 @@ const executeStoredAction = async (
 
     const result = await executeAction(finalActionProposal, context);
     const executionStatus = result.success ? "executed" : "failed";
-    await persistActionStatus(finalActionProposal.id, executionStatus, "slack-user", {
-      success: result.success,
-      message: result.message,
-      durationMs: result.durationMs,
-    });
+    await persistActionStatus(
+      finalActionProposal.id,
+      executionStatus,
+      safetyContext.tenantId,
+      "slack-user",
+      {
+        success: result.success,
+        message: result.message,
+        durationMs: result.durationMs,
+      }
+    );
 
     const { status, text } = formatResultMessage(
       result.success,
@@ -231,7 +248,8 @@ export const handleActionApproval = async (
   action: ButtonAction,
   ack: AckFn,
   say: SayFn | undefined,
-  messageTs?: string
+  messageTs?: string,
+  workspaceId?: string
 ): Promise<void> => {
   await ack();
 
@@ -255,7 +273,7 @@ export const handleActionApproval = async (
     });
 
     // Execute the action
-    await executeStoredAction(payload, opaqueId, say, messageTs);
+    await executeStoredAction(payload, opaqueId, say, messageTs, workspaceId);
   } catch (error) {
     const errorMessage = getErrorMessage(error);
 
@@ -380,7 +398,8 @@ export const handleActionRejection = async (
   action: ButtonAction,
   ack: AckFn,
   say: SayFn | undefined,
-  messageTs?: string
+  messageTs?: string,
+  workspaceId?: string
 ): Promise<void> => {
   await ack();
 
@@ -400,10 +419,14 @@ export const handleActionRejection = async (
     const displayId = opaqueId ?? `legacy_${payload.commitSha.substring(0, 8)}`;
     const { actionType } = payload;
 
+    // Resolve Kenchi tenant ID from Slack workspace ID
+    const tenant = workspaceId ? await findTenantBySlackWorkspace(workspaceId) : null;
+    const resolvedTenantId = tenant?.id ?? "unknown";
+
     // Build safety request context for audit logging
     const safetyContext: SafetyRequestContext = {
       requestId: displayId,
-      tenantId: payload.repository.split("/")[0] ?? "unknown",
+      tenantId: resolvedTenantId,
       actor: "slack-user",
     };
 
@@ -422,7 +445,7 @@ export const handleActionRejection = async (
     });
 
     // Persist rejection status to database
-    await persistActionStatus(displayId, "rejected", "slack-user");
+    await persistActionStatus(displayId, "rejected", safetyContext.tenantId, "slack-user");
 
     logger.info("Action rejection handled", {
       actionId: displayId,

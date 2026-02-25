@@ -17,6 +17,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { apiClient, getLoginUrl } from "@/lib/apiClient";
 
 /**
@@ -25,6 +26,18 @@ import { apiClient, getLoginUrl } from "@/lib/apiClient";
  * refreshUser call after the flag is detected.
  */
 const LOGGED_OUT_KEY = "kenchi_logged_out";
+
+/** Idle session timeout in milliseconds (30 minutes — SOC 2 compliance). */
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** Events that indicate user activity and reset the idle timer. */
+const ACTIVITY_EVENTS: readonly string[] = [
+  "mousemove",
+  "keydown",
+  "click",
+  "scroll",
+  "touchstart",
+];
 
 // ==================== Types ====================
 
@@ -198,8 +211,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         });
 
         if (!response.ok) {
+          toast.error("Failed to switch organization. Please try again.");
           return;
         }
+
+        // Clear tenant-scoped localStorage to prevent cross-tenant data leaks.
+        // Filter state (kenchi_filters_*) is the primary concern.
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("kenchi_filters_"))
+          .forEach((key) => localStorage.removeItem(key));
 
         // The backend sets a new JWT cookie scoped to the switched org.
         // Reload user data so the UI (and all hooks depending on user/tenantId) refreshes.
@@ -214,6 +234,36 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
+
+  // Idle session timeout — auto-logout after 30 minutes of inactivity.
+  useEffect(() => {
+    if (user === null) {
+      return;
+    }
+
+    const scheduleTimeout = (): ReturnType<typeof setTimeout> =>
+      setTimeout(() => {
+        toast.info("Session expired due to inactivity.");
+        void logout();
+      }, IDLE_TIMEOUT_MS);
+
+    // let: timer ID reassigned on each user activity event to reset the countdown
+    let timerId = scheduleTimeout();
+
+    const resetTimer = () => {
+      clearTimeout(timerId);
+      timerId = scheduleTimeout();
+    };
+
+    ACTIVITY_EVENTS.forEach((event) =>
+      document.addEventListener(event, resetTimer, { passive: true })
+    );
+
+    return () => {
+      clearTimeout(timerId);
+      ACTIVITY_EVENTS.forEach((event) => document.removeEventListener(event, resetTimer));
+    };
+  }, [user, logout]);
 
   const isAuthenticated = user !== null;
 

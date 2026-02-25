@@ -32,6 +32,7 @@ import { delay } from "../../../core/utils.js";
 import {
   withCircuitBreaker,
   getCircuitStatus,
+  buildTenantCircuitKey,
   SERVICE_KEYS,
 } from "../../../http/circuitBreaker.js";
 import type { LLMAnalysisProvider, LLMConfig } from "../../types.js";
@@ -88,34 +89,40 @@ export class LLMClient implements LLMAnalysisProvider {
   /**
    * Gets the circuit breaker status for the LLM service.
    * Useful for health checks and monitoring.
+   * When tenantId is provided, checks the per-tenant circuit.
    *
+   * @param tenantId - Optional tenant ID for per-tenant status
    * @returns Current circuit breaker status
    */
-  static getCircuitBreakerStatus(): {
+  static getCircuitBreakerStatus(tenantId?: string): {
     state: string;
     failures: number;
     isOpen: boolean;
     lastFailure: number | null;
   } {
-    return getCircuitStatus(SERVICE_KEYS.OPENAI);
+    return getCircuitStatus(buildTenantCircuitKey(SERVICE_KEYS.OPENAI, tenantId));
   }
 
   /**
    * Checks if the LLM service is available (circuit not open).
    * Static version for convenience.
+   * When tenantId is provided, checks the per-tenant circuit.
    *
+   * @param tenantId - Optional tenant ID for per-tenant check
    * @returns True if service is available
    */
-  static isAvailable(): boolean {
-    return !getCircuitStatus(SERVICE_KEYS.OPENAI).isOpen;
+  static isAvailable(tenantId?: string): boolean {
+    return !getCircuitStatus(buildTenantCircuitKey(SERVICE_KEYS.OPENAI, tenantId)).isOpen;
   }
 
   /**
    * Instance method to check availability (implements LLMAnalysisProvider).
+   * When tenantId is provided, checks the per-tenant circuit.
    *
+   * @param tenantId - Optional tenant ID for per-tenant check
    * @returns True if service is available
    */
-  readonly isAvailable = (): boolean => LLMClient.isAvailable();
+  readonly isAvailable = (tenantId?: string): boolean => LLMClient.isAvailable(tenantId);
 
   /**
    * Gets the provider name for error messages and logging.
@@ -133,7 +140,11 @@ export class LLMClient implements LLMAnalysisProvider {
    * @param evidence - Collected evidence about the incident
    * @returns Structured analysis result with confidence score
    */
-  async analyzeIncident(event: Event, evidence: Evidence): Promise<LLMAnalysisResult> {
+  async analyzeIncident(
+    event: Event,
+    evidence: Evidence,
+    tenantId?: string
+  ): Promise<LLMAnalysisResult> {
     const startTime = Date.now();
 
     try {
@@ -154,7 +165,7 @@ export class LLMClient implements LLMAnalysisProvider {
       });
 
       // Retry on both API errors and parse failures (truncated/malformed responses)
-      const analysis = await this.callAndParseWithRetry(prompt, event.id);
+      const analysis = await this.callAndParseWithRetry(prompt, event.id, 2, tenantId);
       const durationMs = Date.now() - startTime;
       const validation = validateResponse(analysis, { event, evidence });
 
@@ -370,17 +381,20 @@ export class LLMClient implements LLMAnalysisProvider {
 
   /**
    * Attempts a single LLM API call with circuit breaker protection.
+   * Uses per-tenant circuit breaker key when tenantId is provided.
    *
    * @param prompt - The prompt to send
+   * @param tenantId - Optional tenant ID for per-tenant circuit isolation
    * @returns Response content
    * @throws {ExternalServiceError} If circuit breaker is open
    * @throws {LLMError} If the API call fails
    */
-  private attemptApiCall = async (prompt: string): Promise<string> => {
+  private attemptApiCall = async (prompt: string, tenantId?: string): Promise<string> => {
     const requestConfig = this.createRequestConfig(prompt);
+    const circuitKey = buildTenantCircuitKey(SERVICE_KEYS.OPENAI, tenantId);
 
     return withCircuitBreaker(
-      SERVICE_KEYS.OPENAI,
+      circuitKey,
       async () => {
         const completion = await this.client.chat.completions.create(requestConfig);
         return this.extractResponseContent(completion);
@@ -417,16 +431,18 @@ export class LLMClient implements LLMAnalysisProvider {
    * @param prompt - The prompt to send
    * @param attempt - Current attempt number
    * @param maxRetries - Maximum number of retries
+   * @param tenantId - Optional tenant ID for per-tenant circuit isolation
    * @returns Response content
    * @throws {LLMError} If all retry attempts fail
    */
   private attemptWithRetry = async (
     prompt: string,
     attempt: number,
-    maxRetries: number
+    maxRetries: number,
+    tenantId?: string
   ): Promise<string> => {
     try {
-      return await this.attemptApiCall(prompt);
+      return await this.attemptApiCall(prompt, tenantId);
     } catch (error: unknown) {
       const shouldContinue = this.shouldContinueRetry(error, attempt, maxRetries);
 
@@ -437,7 +453,7 @@ export class LLMClient implements LLMAnalysisProvider {
 
       // Handle retry with backoff and recursively try next attempt
       await this.handleRetryAttempt(attempt, maxRetries);
-      return this.attemptWithRetry(prompt, attempt + 1, maxRetries);
+      return this.attemptWithRetry(prompt, attempt + 1, maxRetries, tenantId);
     }
   };
 
@@ -448,13 +464,15 @@ export class LLMClient implements LLMAnalysisProvider {
    *
    * @param prompt - The prompt to send
    * @param maxRetries - Maximum number of retry attempts
+   * @param tenantId - Optional tenant ID for per-tenant circuit isolation
    * @returns Response content from LLM
    * @throws {LLMError} If all retry attempts fail
    */
   private callWithRetry = async (
     prompt: string,
-    maxRetries: number = LLM_CONSTANTS.MAX_RETRIES
-  ): Promise<string> => this.attemptWithRetry(prompt, 1, maxRetries);
+    maxRetries: number = LLM_CONSTANTS.MAX_RETRIES,
+    tenantId?: string
+  ): Promise<string> => this.attemptWithRetry(prompt, 1, maxRetries, tenantId);
 
   /**
    * Calls LLM and parses the response, retrying on parse failures.
@@ -466,13 +484,15 @@ export class LLMClient implements LLMAnalysisProvider {
    * @param prompt - The prompt to send
    * @param eventId - Event ID for logging context
    * @param maxParseRetries - Maximum parse-failure retries (default: 2)
+   * @param tenantId - Optional tenant ID for per-tenant circuit isolation
    * @returns Parsed analysis result
    * @throws {LLMError} If all attempts fail
    */
   private callAndParseWithRetry = async (
     prompt: string,
     eventId: string,
-    maxParseRetries: number = 2
+    maxParseRetries: number = 2,
+    tenantId?: string
   ): Promise<LLMAnalysisResult> => {
     let lastError: unknown = null; // let: accumulator for last error across retry attempts
     const retryStartTime = Date.now();
@@ -491,7 +511,7 @@ export class LLMClient implements LLMAnalysisProvider {
         await delay(backoffDelayMs);
       }
 
-      const response = await this.callWithRetry(prompt);
+      const response = await this.callWithRetry(prompt, LLM_CONSTANTS.MAX_RETRIES, tenantId);
 
       try {
         return this.parseResponse(response, eventId);

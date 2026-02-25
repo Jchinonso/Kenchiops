@@ -23,11 +23,15 @@ const logger = createLogger("knowledge-doc-hit-tracking");
  * @throws ValidationError if ID is empty
  * @throws Error if database operation fails
  */
-export const getKnowledgeDocById = async (id: string): Promise<KnowledgeDocRecord | null> => {
+export const getKnowledgeDocById = async (
+  id: string,
+  tenantId: string
+): Promise<KnowledgeDocRecord | null> => {
   validateId(id, "id");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<KnowledgeDocRow>(HIT_TRACKING_QUERIES.GET_BY_ID, [id]);
+    const result = await query<KnowledgeDocRow>(HIT_TRACKING_QUERIES.GET_BY_ID, [id, tenantId]);
 
     if (result.rows.length === 0) {
       return null;
@@ -53,12 +57,17 @@ export const getKnowledgeDocById = async (id: string): Promise<KnowledgeDocRecor
  * @throws Error if database operation fails
  */
 export const incrementKnowledgeDocHitCount = async (
-  id: string
+  id: string,
+  tenantId: string
 ): Promise<KnowledgeDocRecord | null> => {
   validateId(id, "id");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<KnowledgeDocRow>(HIT_TRACKING_QUERIES.INCREMENT_HIT_COUNT, [id]);
+    const result = await query<KnowledgeDocRow>(HIT_TRACKING_QUERIES.INCREMENT_HIT_COUNT, [
+      id,
+      tenantId,
+    ]);
 
     if (result.rows.length === 0) {
       logger.warn("Failed to increment hit count - document not found", { id });
@@ -86,17 +95,20 @@ export const incrementKnowledgeDocHitCount = async (
  * @throws Error if database operation fails
  */
 export const batchIncrementKnowledgeDocHitCounts = async (
-  ids: readonly string[]
+  ids: readonly string[],
+  tenantId: string
 ): Promise<number> => {
   if (ids.length === 0) {
     return 0;
   }
 
   validateIds(ids, "ids");
+  validateId(tenantId, "tenantId");
 
   try {
     const result = await query<{ id: string }>(HIT_TRACKING_QUERIES.BATCH_INCREMENT_HIT_COUNT, [
       ids,
+      tenantId,
     ]);
 
     logger.debug("Batch incremented hit counts", {
@@ -124,13 +136,16 @@ export const batchIncrementKnowledgeDocHitCounts = async (
  * @throws Error if database operation fails
  */
 export const recordKnowledgeDocNegativeFeedback = async (
-  id: string
+  id: string,
+  tenantId: string
 ): Promise<KnowledgeDocRecord | null> => {
   validateId(id, "id");
+  validateId(tenantId, "tenantId");
 
   try {
     const result = await query<KnowledgeDocRow>(HIT_TRACKING_QUERIES.RECORD_NEGATIVE_FEEDBACK, [
       id,
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {

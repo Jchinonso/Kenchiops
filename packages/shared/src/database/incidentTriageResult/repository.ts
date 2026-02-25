@@ -167,6 +167,7 @@ export const updateTriageEnrichment = async (
         JSON.stringify(input.evidenceCatalog),
         embeddingVector,
         input.pipelineDurationMs,
+        input.tenantId,
       ]
     );
 
@@ -208,6 +209,7 @@ export const updateTriageAiSummary = async (
         JSON.stringify(input.aiSummary),
         input.summarySource,
         input.pipelineDurationMs,
+        input.tenantId,
       ]
     );
 
@@ -293,6 +295,7 @@ export const updateTriageDispatchResults = async (
         JSON.stringify(input.routingDecision),
         JSON.stringify(input.dispatchedTo),
         input.pipelineDurationMs,
+        input.tenantId,
       ]
     );
 

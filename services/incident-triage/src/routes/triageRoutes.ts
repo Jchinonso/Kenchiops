@@ -16,7 +16,8 @@ import {
   createLogger,
   ValidationError,
   NotFoundError,
-  AuthorizationError,
+  requireTenantId,
+  rateLimitByCategory,
   getTriageResultById,
   getTriageStats,
   getSeverityDistributionBySource,
@@ -25,24 +26,6 @@ import { mapStatsToMetrics } from "../services/metricsService.js";
 
 const router = Router();
 const logger = createLogger("triage-routes");
-
-// ==================== Helpers ====================
-
-/**
- * Extract tenantId from authenticated user or throw (VULN-006).
- */
-const requireTenantId = (req: Request): string => {
-  const tenantId = req.user?.tenantId;
-
-  if (!tenantId) {
-    throw new AuthorizationError(
-      "No organization linked. Connect a GitHub or GitLab account to get started.",
-      { operation: "requireTenantId" }
-    );
-  }
-
-  return tenantId;
-};
 
 // ==================== Handlers ====================
 
@@ -106,8 +89,20 @@ const handleSeverityBySource = async (req: Request, res: Response): Promise<void
 // ==================== Route Registration ====================
 // Static paths registered before /:id to avoid matching "stats" as an ID
 
-router.get("/api/v1/triage/stats", asyncHandler(handleTriageStats));
-router.get("/api/v1/triage/stats/severity-by-source", asyncHandler(handleSeverityBySource));
-router.get("/api/v1/triage/:id", asyncHandler(handleGetTriageResult));
+router.get(
+  "/api/v1/triage/stats",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleTriageStats)
+);
+router.get(
+  "/api/v1/triage/stats/severity-by-source",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleSeverityBySource)
+);
+router.get(
+  "/api/v1/triage/:id",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetTriageResult)
+);
 
 export { router as triageRoutes };

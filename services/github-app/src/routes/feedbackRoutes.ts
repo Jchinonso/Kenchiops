@@ -16,6 +16,7 @@ import {
   config,
   UI_EMOJI,
   AppError,
+  rateLimitByCategory,
   type FeedbackType,
 } from "@kenchi/shared";
 
@@ -126,6 +127,7 @@ const generateFeedbackHtml = (
  */
 router.get(
   "/api/feedback",
+  rateLimitByCategory("standard"),
   asyncHandler(async (req: Request, res: Response) => {
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
@@ -155,10 +157,12 @@ router.get(
       }
 
       // Record feedback with deduplication
+      const tenantId = req.context?.tenantId ?? "unknown";
       const result = await createOrUpdateAnalysisFeedback({
         analysisId: params.analysisId,
         feedbackType,
         userId,
+        tenantId,
       });
 
       feedbackLogger.info("Feedback recorded via URL", {

@@ -14,6 +14,7 @@ import {
   Lock,
 } from "lucide-react";
 import { getLoginUrl } from "@/lib/apiClient";
+import { initPkceFlow } from "@/lib/pkce";
 import { useAuth } from "@/hooks/useAuth";
 
 interface GitProvider {
@@ -98,24 +99,31 @@ const Login = () => {
     }
   };
 
-  const handleProviderClick = (providerId: string): void => {
+  const handleProviderClick = async (providerId: string): Promise<void> => {
     if (!validateInstanceUrl()) {
       return;
     }
 
     setLoadingProvider(providerId);
-    const url =
+
+    // Generate PKCE challenge and include in the login URL.
+    // The verifier is stored in sessionStorage for the callback exchange.
+    const { codeChallenge, codeChallengeMethod } = await initPkceFlow();
+    const baseUrl =
       activeTab === "selfhosted" && instanceUrl
         ? getLoginUrl(providerId, instanceUrl)
         : getLoginUrl(providerId);
-    window.location.assign(url);
+    const url = new URL(baseUrl);
+    url.searchParams.set("code_challenge", codeChallenge);
+    url.searchParams.set("code_challenge_method", codeChallengeMethod);
+    window.location.assign(url.toString());
   };
 
   const handleSelfHostedSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     const primaryProvider = selfHostedProviders.find((p) => p.primary);
     if (primaryProvider) {
-      handleProviderClick(primaryProvider.id);
+      void handleProviderClick(primaryProvider.id);
     }
   };
 
@@ -393,7 +401,9 @@ const Login = () => {
                       <button
                         key={provider.name}
                         type="button"
-                        onClick={() => handleProviderClick(provider.id)}
+                        onClick={() => {
+                          void handleProviderClick(provider.id);
+                        }}
                         disabled={loadingProvider !== null}
                         className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-gray-900 font-medium transition-all duration-200 shadow-lg shadow-gray-900/10 dark:shadow-gray-100/10 hover:shadow-xl hover:shadow-gray-900/15 group disabled:opacity-70 disabled:cursor-not-allowed"
                       >
@@ -440,7 +450,7 @@ const Login = () => {
                         key={provider.name}
                         type="button"
                         onClick={() => {
-                          handleProviderClick(provider.id);
+                          void handleProviderClick(provider.id);
                         }}
                         disabled={loadingProvider !== null}
                         aria-label={provider.name}

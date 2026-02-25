@@ -57,6 +57,7 @@ export const updateActionProposalStatus = async (
       input.status,
       input.approvedBy ?? null,
       executionResultJson,
+      input.tenantId,
     ]);
 
     const record = extractFirstRow(result.rows, mapRowToActionProposal);
@@ -92,12 +93,17 @@ export const updateActionProposalStatus = async (
  * @throws Error if database operation fails
  */
 export const getActionProposalById = async (
-  actionId: string
+  actionId: string,
+  tenantId: string
 ): Promise<ActionProposalRecord | null> => {
   validateId(actionId, "actionId");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<ActionProposalRow>(ACTION_PROPOSAL_QUERIES.GET_BY_ID, [actionId]);
+    const result = await query<ActionProposalRow>(ACTION_PROPOSAL_QUERIES.GET_BY_ID, [
+      actionId,
+      tenantId,
+    ]);
     return extractFirstRow(result.rows, mapRowToActionProposal);
   } catch (error) {
     logger.error("Failed to get action proposal by ID", {
@@ -117,13 +123,16 @@ export const getActionProposalById = async (
  * @throws Error if database operation fails
  */
 export const getActionProposalsByAnalysis = async (
-  analysisId: string
+  analysisId: string,
+  tenantId: string
 ): Promise<readonly ActionProposalRecord[]> => {
   validateId(analysisId, "analysisId");
+  validateId(tenantId, "tenantId");
 
   try {
     const result = await query<ActionProposalRow>(ACTION_PROPOSAL_QUERIES.GET_BY_ANALYSIS, [
       analysisId,
+      tenantId,
     ]);
     return Object.freeze(result.rows.map(mapRowToActionProposal));
   } catch (error) {

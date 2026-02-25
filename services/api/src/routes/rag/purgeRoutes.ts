@@ -11,8 +11,10 @@ import {
   createLogger,
   SERVICE_NAMES,
   API_ROUTES,
+  requireTenantId,
   requireTenantMatch,
   requireRole,
+  rateLimitByCategory,
   purgeTenantRAGData,
   purgePRDiffChunks,
   purgeKnowledgeDocChunks,
@@ -94,6 +96,7 @@ const handlePurgeTenant = async (req: Request, res: Response): Promise<void> => 
 const handlePurgePR = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   const { repository, prNumber } = req.params;
+  const tenantId = requireTenantId(req);
 
   if (!repository || !prNumber) {
     res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -112,7 +115,7 @@ const handlePurgePR = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const result = await purgePRDiffChunks(repository, prNumberInt);
+  const result = await purgePRDiffChunks(repository, prNumberInt, tenantId);
 
   logger.info("PR diff chunks purged", {
     repository,
@@ -134,6 +137,7 @@ const handlePurgePR = async (req: Request, res: Response): Promise<void> => {
 const handlePurgeDoc = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   const { parentId } = req.params;
+  const tenantId = requireTenantId(req);
 
   if (!parentId) {
     res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -143,7 +147,7 @@ const handlePurgeDoc = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const result = await purgeKnowledgeDocChunks(parentId);
+  const result = await purgeKnowledgeDocChunks(parentId, tenantId);
 
   logger.info("Knowledge document purged", {
     parentId,
@@ -160,21 +164,30 @@ const handlePurgeDoc = async (req: Request, res: Response): Promise<void> => {
 
 // ==================== Route Definitions ====================
 
-/** DELETE /api/rag/tenant/:tenantId - Purge all tenant RAG data */
+/** DELETE /api/rag/tenant/:tenantId - Purge all tenant RAG data (expensive) */
 router.delete(
   API_ROUTES.RAG_PURGE_TENANT,
+  rateLimitByCategory("expensive"),
   requireRole("admin", "owner"),
   requireTenantMatch(),
   asyncHandler(handlePurgeTenant)
 );
 
-/** DELETE /api/rag/pr/:repository/:prNumber - Purge PR diff chunks */
-router.delete(API_ROUTES.RAG_PURGE_PR, requireRole("admin", "owner"), asyncHandler(handlePurgePR));
+/** DELETE /api/rag/pr/:repository/:prNumber - Purge PR diff chunks (expensive) */
+router.delete(
+  API_ROUTES.RAG_PURGE_PR,
+  rateLimitByCategory("expensive"),
+  requireRole("admin", "owner"),
+  requireTenantMatch(),
+  asyncHandler(handlePurgePR)
+);
 
-/** DELETE /api/rag/doc/:parentId - Purge a knowledge document */
+/** DELETE /api/rag/doc/:parentId - Purge a knowledge document (expensive) */
 router.delete(
   API_ROUTES.RAG_PURGE_DOC,
+  rateLimitByCategory("expensive"),
   requireRole("admin", "owner"),
+  requireTenantMatch(),
   asyncHandler(handlePurgeDoc)
 );
 

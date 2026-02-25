@@ -17,6 +17,7 @@ import {
   query,
   getSubscriptionByTenant,
   SUBSCRIPTION_STATUS,
+  FAIR_QUEUE_DEFAULTS,
   type RequestContext,
 } from "@kenchi/shared";
 import { performAnalysis } from "../services/analysisService.js";
@@ -35,15 +36,30 @@ const logger = createLogger(SERVICE_NAMES.API);
 // ==================== Database Queries ====================
 
 const QUERIES = {
+  /**
+   * Fair-scheduled job selection.
+   *
+   * Uses ROW_NUMBER() partitioned by workspace_id to limit how many jobs
+   * any single tenant can contribute per batch. This prevents a high-volume
+   * tenant from monopolizing all worker slots while others wait.
+   *
+   * $1 = total batch limit, $2 = max jobs per tenant per batch
+   */
   SELECT_PENDING: `
-    SELECT id, status, repository_full_name as repository, log_ref as request_payload, workspace_id
-    FROM analysis_jobs
-    WHERE status = 'pending'
-      AND analysis_enqueued_at IS NULL
-      AND cancelled_at IS NULL
-    ORDER BY created_at ASC
+    WITH ranked AS (
+      SELECT id, status, repository_full_name as repository, log_ref as request_payload, workspace_id,
+             ROW_NUMBER() OVER (PARTITION BY COALESCE(workspace_id, id) ORDER BY created_at ASC) AS tenant_rank
+      FROM analysis_jobs
+      WHERE status = 'pending'
+        AND analysis_enqueued_at IS NULL
+        AND cancelled_at IS NULL
+      FOR UPDATE SKIP LOCKED
+    )
+    SELECT id, status, repository, request_payload, workspace_id
+    FROM ranked
+    WHERE tenant_rank <= $2
+    ORDER BY tenant_rank ASC, id ASC
     LIMIT $1
-    FOR UPDATE SKIP LOCKED
   `,
 
   MARK_PROCESSING: `
@@ -99,7 +115,7 @@ const fetchPendingJobs = async (limit: number): Promise<readonly AnalysisJob[]> 
     readonly repository: string;
     readonly request_payload: Record<string, unknown>;
     readonly workspace_id: string | null;
-  }>(QUERIES.SELECT_PENDING, [limit]);
+  }>(QUERIES.SELECT_PENDING, [limit, FAIR_QUEUE_DEFAULTS.MAX_JOBS_PER_TENANT_PER_BATCH]);
 
   return result.rows.map((row) => ({
     id: row.id,

@@ -169,12 +169,17 @@ export const listInvestigations = async (
  */
 export const updateInvestigationStatus = async (
   id: string,
-  status: string
+  status: string,
+  tenantId: string
 ): Promise<InvestigationRecord | null> => {
   validateInvestigationId(id);
 
   try {
-    const result = await query<InvestigationRow>(INVESTIGATION_QUERIES.UPDATE_STATUS, [id, status]);
+    const result = await query<InvestigationRow>(INVESTIGATION_QUERIES.UPDATE_STATUS, [
+      id,
+      status,
+      tenantId,
+    ]);
     return result.rows.length > 0 ? mapRowToInvestigation(result.rows[0]) : null;
   } catch (error) {
     logger.error("Failed to update investigation status", {
@@ -196,7 +201,8 @@ export const updateInvestigationStatus = async (
  */
 export const updateInvestigationIntent = async (
   id: string,
-  intent: UpdateInvestigationIntentInput
+  intent: UpdateInvestigationIntentInput,
+  tenantId: string
 ): Promise<InvestigationRecord | null> => {
   validateInvestigationId(id);
 
@@ -209,6 +215,7 @@ export const updateInvestigationIntent = async (
       intent.environment ?? null,
       intent.timeRangeFrom ?? null,
       intent.timeRangeTo ?? null,
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToInvestigation(result.rows[0]) : null;
   } catch (error) {
@@ -230,7 +237,8 @@ export const updateInvestigationIntent = async (
  */
 export const updateInvestigationEvidence = async (
   id: string,
-  evidence: readonly unknown[]
+  evidence: readonly unknown[],
+  tenantId: string
 ): Promise<InvestigationRecord | null> => {
   validateInvestigationId(id);
 
@@ -238,6 +246,7 @@ export const updateInvestigationEvidence = async (
     const result = await query<InvestigationRow>(INVESTIGATION_QUERIES.UPDATE_EVIDENCE, [
       id,
       JSON.stringify(evidence),
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToInvestigation(result.rows[0]) : null;
   } catch (error) {
@@ -259,7 +268,8 @@ export const updateInvestigationEvidence = async (
  */
 export const updateInvestigationCorrelation = async (
   id: string,
-  correlation: Readonly<Record<string, unknown>>
+  correlation: Readonly<Record<string, unknown>>,
+  tenantId: string
 ): Promise<InvestigationRecord | null> => {
   validateInvestigationId(id);
 
@@ -267,6 +277,7 @@ export const updateInvestigationCorrelation = async (
     const result = await query<InvestigationRow>(INVESTIGATION_QUERIES.UPDATE_CORRELATION, [
       id,
       JSON.stringify(correlation),
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToInvestigation(result.rows[0]) : null;
   } catch (error) {
@@ -291,7 +302,8 @@ export const updateInvestigationCorrelation = async (
 export const updateInvestigationDiagnosis = async (
   id: string,
   diagnosis: Readonly<Record<string, unknown>>,
-  durationMs: number
+  durationMs: number,
+  tenantId: string
 ): Promise<InvestigationRecord | null> => {
   validateInvestigationId(id);
 
@@ -300,6 +312,7 @@ export const updateInvestigationDiagnosis = async (
       id,
       JSON.stringify(diagnosis),
       durationMs,
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToInvestigation(result.rows[0]) : null;
   } catch (error) {
@@ -321,7 +334,8 @@ export const updateInvestigationDiagnosis = async (
  */
 export const updateInvestigationError = async (
   id: string,
-  errorMessage: string
+  errorMessage: string,
+  tenantId: string
 ): Promise<InvestigationRecord | null> => {
   validateInvestigationId(id);
 
@@ -329,6 +343,7 @@ export const updateInvestigationError = async (
     const result = await query<InvestigationRow>(INVESTIGATION_QUERIES.UPDATE_ERROR, [
       id,
       errorMessage,
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToInvestigation(result.rows[0]) : null;
   } catch (error) {

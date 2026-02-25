@@ -163,6 +163,12 @@ export const REDIS_KEY_PREFIXES = {
   RATE_LIMIT: "kenchi:ratelimit",
   /** PR failure tracking prefix (for linked commit ingestion) */
   PR_FAILURES: "kenchi:pr-failures",
+  /** User status flags for real-time auth checks (suspended/revoked/deleted) */
+  USER_STATUS: "kenchi:user-status",
+  /** Tenant status flags for blocking suspended/deleted organizations */
+  TENANT_STATUS: "kenchi:tenant-status",
+  /** Webhook dedup fast-path for replay protection */
+  WEBHOOK_DEDUP: "kenchi:webhook-dedup",
 } as const;
 
 /**

@@ -128,11 +128,15 @@ export const getAnalysisById = async (
  * @throws ValidationError if eventId is empty
  * @throws Error if database operation fails
  */
-export const getAnalysisByEventId = async (eventId: string): Promise<AnalysisRecord | null> => {
+export const getAnalysisByEventId = async (
+  eventId: string,
+  tenantId: string
+): Promise<AnalysisRecord | null> => {
   validateId(eventId, "eventId");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<AnalysisRow>(ANALYSIS_QUERIES.GET_BY_EVENT_ID, [eventId]);
+    const result = await query<AnalysisRow>(ANALYSIS_QUERIES.GET_BY_EVENT_ID, [eventId, tenantId]);
     return extractFirstAnalysisRow(result.rows);
   } catch (error) {
     logger.error("Failed to get analysis by event ID", {

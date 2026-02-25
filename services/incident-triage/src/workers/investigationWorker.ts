@@ -56,6 +56,7 @@ const runParseIntent = async (
   container: TriageContainer,
   investigationId: string,
   description: string,
+  tenantId: string,
   context: RequestContext
 ): Promise<InvestigationIntent> => {
   logger.info("Investigation phase started", {
@@ -64,18 +65,22 @@ const runParseIntent = async (
     ...context,
   });
 
-  await updateInvestigationStatus(investigationId, "parsing");
+  await updateInvestigationStatus(investigationId, "parsing", tenantId);
 
   const intent = await container.investigationService.parseIntent(description, context);
 
-  await updateInvestigationIntent(investigationId, {
-    serviceName: intent.serviceName,
-    endpoint: intent.endpoint,
-    symptom: intent.symptom,
-    environment: intent.environment,
-    timeRangeFrom: intent.timeRangeFrom ? new Date(intent.timeRangeFrom) : null,
-    timeRangeTo: intent.timeRangeTo ? new Date(intent.timeRangeTo) : null,
-  });
+  await updateInvestigationIntent(
+    investigationId,
+    {
+      serviceName: intent.serviceName,
+      endpoint: intent.endpoint,
+      symptom: intent.symptom,
+      environment: intent.environment,
+      timeRangeFrom: intent.timeRangeFrom ? new Date(intent.timeRangeFrom) : null,
+      timeRangeTo: intent.timeRangeTo ? new Date(intent.timeRangeTo) : null,
+    },
+    tenantId
+  );
 
   return intent;
 };
@@ -96,11 +101,11 @@ const runGatherEvidence = async (
     ...context,
   });
 
-  await updateInvestigationStatus(investigationId, "gathering");
+  await updateInvestigationStatus(investigationId, "gathering", tenantId);
 
   const evidence = await container.investigationService.gatherEvidence(intent, tenantId, context);
 
-  await updateInvestigationEvidence(investigationId, evidence);
+  await updateInvestigationEvidence(investigationId, evidence, tenantId);
 
   return evidence;
 };
@@ -113,6 +118,7 @@ const runCorrelateEvidence = async (
   investigationId: string,
   evidence: readonly unknown[],
   intent: InvestigationIntent,
+  tenantId: string,
   context: RequestContext
 ): Promise<InvestigationCorrelation> => {
   logger.info("Investigation phase started", {
@@ -121,7 +127,7 @@ const runCorrelateEvidence = async (
     ...context,
   });
 
-  await updateInvestigationStatus(investigationId, "correlating");
+  await updateInvestigationStatus(investigationId, "correlating", tenantId);
 
   const typedEvidence = evidence as readonly InvestigationEvidenceItem[];
 
@@ -133,7 +139,8 @@ const runCorrelateEvidence = async (
 
   await updateInvestigationCorrelation(
     investigationId,
-    correlation as unknown as Readonly<Record<string, unknown>>
+    correlation as unknown as Readonly<Record<string, unknown>>,
+    tenantId
   );
 
   return correlation;
@@ -151,6 +158,7 @@ const runDiagnose = async (
     readonly correlation: InvestigationCorrelation;
     readonly durationMs: number;
   },
+  tenantId: string,
   context: RequestContext
 ): Promise<{ readonly diagnosisSource: string; readonly confidence: number }> => {
   const { intent, evidence, correlation, durationMs } = pipelineData;
@@ -161,7 +169,7 @@ const runDiagnose = async (
     ...context,
   });
 
-  await updateInvestigationStatus(investigationId, "diagnosing");
+  await updateInvestigationStatus(investigationId, "diagnosing", tenantId);
 
   const typedEvidence = evidence as readonly InvestigationEvidenceItem[];
 
@@ -175,7 +183,8 @@ const runDiagnose = async (
   await updateInvestigationDiagnosis(
     investigationId,
     diagnosis as unknown as Readonly<Record<string, unknown>>,
-    durationMs
+    durationMs,
+    tenantId
   );
 
   return {
@@ -199,7 +208,7 @@ const runInvestigationPipeline = async (
   context: RequestContext
 ): Promise<{ readonly diagnosisSource: string; readonly confidence: number }> => {
   // Phase 1: Parse Intent
-  const intent = await runParseIntent(container, investigationId, description, context);
+  const intent = await runParseIntent(container, investigationId, description, tenantId, context);
 
   // Phase 2: Gather Evidence
   const evidence = await runGatherEvidence(container, investigationId, intent, tenantId, context);
@@ -210,6 +219,7 @@ const runInvestigationPipeline = async (
     investigationId,
     evidence,
     intent,
+    tenantId,
     context
   );
 
@@ -220,6 +230,7 @@ const runInvestigationPipeline = async (
     container,
     investigationId,
     { intent, evidence, correlation, durationMs },
+    tenantId,
     context
   );
 };
@@ -294,7 +305,7 @@ const handleQueueMessage = async (
   } catch (error) {
     const errorMessage = getErrorMessage(error);
 
-    await updateInvestigationError(investigationId, errorMessage);
+    await updateInvestigationError(investigationId, errorMessage, tenantId);
     incrementInvestigationCounter(state, "totalErrors");
 
     logger.error("Investigation failed", {

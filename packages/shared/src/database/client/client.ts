@@ -228,6 +228,60 @@ export const closeDatabase = async (): Promise<void> => {
 };
 
 /**
+ * Execute a callback within a transaction that sets the RLS tenant context.
+ *
+ * Issues `SET LOCAL app.tenant_id = $1` so that row-level security policies
+ * can filter rows to the given tenant. The setting is scoped to the
+ * transaction and automatically cleared on COMMIT or ROLLBACK.
+ *
+ * @param tenantId - Tenant ID to bind to the connection for RLS
+ * @param fn - Callback receiving the transactional PoolClient
+ * @returns Result of the callback
+ */
+export const withTenantContext = async <T>(
+  tenantId: string,
+  fn: (client: pg.PoolClient) => Promise<T>
+): Promise<T> => {
+  const db = ensurePoolInitialized();
+  const startTime = Date.now();
+
+  // let: assigned once, read in finally block
+  let client: pg.PoolClient | null = null;
+
+  try {
+    client = await db.connect();
+    await client.query(TRANSACTION_COMMANDS.BEGIN);
+    await client.query("SET LOCAL app.tenant_id = $1", [tenantId]);
+
+    const result = await fn(client);
+
+    await client.query(TRANSACTION_COMMANDS.COMMIT);
+
+    const duration = calculateDuration(startTime);
+    logger.debug("Tenant context transaction committed", { tenantId, duration });
+
+    return result;
+  } catch (error) {
+    if (client !== null) {
+      await safeRollback(client);
+    }
+
+    const duration = calculateDuration(startTime);
+    logger.error("Tenant context transaction failed", {
+      tenantId,
+      duration,
+      error: getErrorMessage(error),
+    });
+
+    throw error;
+  } finally {
+    if (client !== null) {
+      client.release();
+    }
+  }
+};
+
+/**
  * Check if the database is healthy by running a simple query.
  *
  * @returns true if database is responsive, false otherwise

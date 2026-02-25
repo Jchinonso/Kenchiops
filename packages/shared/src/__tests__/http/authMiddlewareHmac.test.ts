@@ -43,6 +43,11 @@ jest.mock("../../security/cookies.js", () => ({
   },
 }));
 
+jest.mock("../../cache/userStatusCache.js", () => ({
+  isUserBlocked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+  isTenantBlocked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+}));
+
 jest.mock("../../core/index.js", () => ({
   createLogger: jest.fn(() => ({
     info: (...args: unknown[]) => mockLoggerInfo(...args),
@@ -66,6 +71,10 @@ jest.mock("../../http/internalAuth.js", () => ({
       args[2] as string,
       args[3] as string
     ),
+  resolveServiceSecret: (
+    _serviceName: unknown,
+    cfg: { readonly INTERNAL_SERVICE_SECRET?: string }
+  ) => cfg.INTERNAL_SERVICE_SECRET,
 }));
 
 // Mutable config reference so tests can toggle INTERNAL_SERVICE_SECRET
@@ -401,7 +410,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
     // test verifies the one-time warning. Subsequent tests will NOT see the warning
     // because the flag is already set.
 
-    it("should log a one-time warning and fall through to JWT on first call with missing secret", () => {
+    it("should log a one-time warning and fall through to JWT on first call with missing secret", async () => {
       mockConfig.INTERNAL_SERVICE_SECRET = undefined;
 
       const authenticatedUser = createTestAuthenticatedUser();
@@ -418,11 +427,11 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       // Verify one-time warning was logged
       expect(mockLoggerWarn).toHaveBeenCalledWith(
-        expect.stringContaining("INTERNAL_SERVICE_SECRET not configured")
+        expect.stringContaining("no service HMAC secret configured")
       );
       // Verify it fell through to JWT
       expect(mockVerifyInternalSignature).not.toHaveBeenCalled();
@@ -430,7 +439,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should NOT log the warning again on subsequent calls (one-time flag)", () => {
+    it("should NOT log the warning again on subsequent calls (one-time flag)", async () => {
       mockConfig.INTERNAL_SERVICE_SECRET = undefined;
 
       const authenticatedUser = createTestAuthenticatedUser();
@@ -447,12 +456,12 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       // The warnedMissingInternalSecret flag was already set by the previous test,
       // so no warning should be logged this time
       expect(mockLoggerWarn).not.toHaveBeenCalledWith(
-        expect.stringContaining("INTERNAL_SERVICE_SECRET not configured")
+        expect.stringContaining("no service HMAC secret configured")
       );
       // Still falls through to JWT
       expect(mockVerifyAccessToken).toHaveBeenCalled();
@@ -483,7 +492,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
   });
 
   describe("no HMAC headers fall through to JWT flow", () => {
-    it("should proceed to JWT when no HMAC headers are present", () => {
+    it("should proceed to JWT when no HMAC headers are present", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -496,7 +505,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(mockVerifyInternalSignature).not.toHaveBeenCalled();
       expect(mockVerifyAccessToken).toHaveBeenCalledWith("valid-jwt-token");
@@ -504,7 +513,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should fall through to JWT when only signature header is present (missing timestamp)", () => {
+    it("should fall through to JWT when only signature header is present (missing timestamp)", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -518,7 +527,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(mockVerifyInternalSignature).not.toHaveBeenCalled();
       expect(mockVerifyAccessToken).toHaveBeenCalled();

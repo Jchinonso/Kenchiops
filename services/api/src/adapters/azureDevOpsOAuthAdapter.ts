@@ -146,7 +146,8 @@ const fetchProfile = async (
 const exchangeCode = async (
   code: string,
   instanceUrl: string | null,
-  context: RequestContext
+  context: RequestContext,
+  _codeVerifier?: string
 ): Promise<OAuthTokenResponse> => {
   rejectSelfHosted(instanceUrl);
   const { clientId: _clientId, clientSecret } = ensureClientCredentials();

@@ -9,6 +9,7 @@ import {
   createLogger,
   createOrUpdateAnalysisFeedback,
   createOrUpdateQAFeedback,
+  findTenantBySlackWorkspace,
   getErrorMessage,
   ingestAnalysisLesson,
   extractAnalysisContext,
@@ -29,6 +30,23 @@ const logger = createLogger("slack-bot");
 // ==================== Helper Functions ====================
 
 /**
+ * Resolves tenantId from a Slack workspace ID.
+ * Returns "unknown" if resolution fails (fail-open for feedback).
+ */
+const resolveTenantId = async (workspaceId: string): Promise<string> => {
+  try {
+    const tenant = await findTenantBySlackWorkspace(workspaceId);
+    return tenant?.id ?? "unknown";
+  } catch (error) {
+    logger.warn("Failed to resolve tenant for feedback", {
+      workspaceId,
+      error: getErrorMessage(error),
+    });
+    return "unknown";
+  }
+};
+
+/**
  * Persists analysis feedback to the database with deduplication.
  * If user already voted, updates their vote instead of creating duplicate.
  *
@@ -37,13 +55,15 @@ const logger = createLogger("slack-bot");
 const persistAnalysisFeedback = async (
   analysisId: string,
   feedbackType: FeedbackType,
-  userId: string
+  userId: string,
+  tenantId: string
 ): Promise<boolean> => {
   try {
     const result = await createOrUpdateAnalysisFeedback({
       analysisId,
       feedbackType,
       userId,
+      tenantId,
     });
     logger.debug("Analysis feedback persisted", {
       analysisId,
@@ -158,14 +178,16 @@ export const handlePositiveFeedback = async (
   action: ButtonAction,
   ack: AckFunction,
   userId: string,
-  respond?: RespondFunction
+  respond?: RespondFunction,
+  workspaceId?: string
 ): Promise<void> => {
   await ack();
 
   const analysisId = action.value ?? "";
   logger.info("Positive feedback received", { analysisId, userId });
 
-  const wasUpdated = await persistAnalysisFeedback(analysisId, "correct", userId);
+  const tenantId = workspaceId ? await resolveTenantId(workspaceId) : "unknown";
+  const wasUpdated = await persistAnalysisFeedback(analysisId, "correct", userId, tenantId);
 
   // Send ephemeral confirmation to user
   if (respond) {
@@ -191,14 +213,16 @@ export const handleNegativeFeedback = async (
   action: ButtonAction,
   ack: AckFunction,
   userId: string,
-  respond?: RespondFunction
+  respond?: RespondFunction,
+  workspaceId?: string
 ): Promise<void> => {
   await ack();
 
   const analysisId = action.value ?? "";
   logger.info("Negative feedback received", { analysisId, userId });
 
-  await persistAnalysisFeedback(analysisId, "incorrect", userId);
+  const tenantId = workspaceId ? await resolveTenantId(workspaceId) : "unknown";
+  await persistAnalysisFeedback(analysisId, "incorrect", userId, tenantId);
 
   // Send ephemeral confirmation to user
   if (respond) {
@@ -273,7 +297,8 @@ export const handleRAGFeedbackNotHelpful = async (
 const persistQAFeedback = async (
   queryId: string,
   feedbackType: "qa_helpful" | "qa_not_helpful",
-  userId: string
+  userId: string,
+  tenantId: string
 ): Promise<boolean> => {
   try {
     const result = await createOrUpdateQAFeedback({
@@ -281,6 +306,7 @@ const persistQAFeedback = async (
       query: "", // Query text is not available from button value
       feedbackType,
       userId,
+      tenantId,
     });
     logger.debug("Q&A feedback persisted", {
       queryId,
@@ -306,14 +332,16 @@ export const handleQAFeedbackHelpful = async (
   action: ButtonAction,
   ack: AckFunction,
   userId: string,
-  respond?: RespondFunction
+  respond?: RespondFunction,
+  workspaceId?: string
 ): Promise<void> => {
   await ack();
 
   const queryId = action.value ?? "";
   logger.info("Q&A helpful feedback received", { queryId, userId });
 
-  await persistQAFeedback(queryId, "qa_helpful", userId);
+  const tenantId = workspaceId ? await resolveTenantId(workspaceId) : "unknown";
+  await persistQAFeedback(queryId, "qa_helpful", userId, tenantId);
 
   // Send ephemeral confirmation to user
   if (respond) {
@@ -333,14 +361,16 @@ export const handleQAFeedbackNotHelpful = async (
   action: ButtonAction,
   ack: AckFunction,
   userId: string,
-  respond?: RespondFunction
+  respond?: RespondFunction,
+  workspaceId?: string
 ): Promise<void> => {
   await ack();
 
   const queryId = action.value ?? "";
   logger.info("Q&A not helpful feedback received", { queryId, userId });
 
-  await persistQAFeedback(queryId, "qa_not_helpful", userId);
+  const tenantId = workspaceId ? await resolveTenantId(workspaceId) : "unknown";
+  await persistQAFeedback(queryId, "qa_not_helpful", userId, tenantId);
 
   // Send ephemeral confirmation to user
   if (respond) {

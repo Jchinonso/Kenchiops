@@ -236,9 +236,11 @@ export const getSourcesDueForSync = async (
  */
 export const updateExternalSource = async (
   sourceId: string,
-  input: UpdateExternalSourceInput
+  input: UpdateExternalSourceInput,
+  tenantId: string
 ): Promise<ExternalSource | null> => {
   validateNonEmptyString(sourceId, "sourceId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
     const result = await query<ExternalSourceRow>(EXTERNAL_SOURCE_QUERIES.UPDATE, [
@@ -251,6 +253,7 @@ export const updateExternalSource = async (
       input.credibilityScore ?? null,
       input.syncFrequencyHours ?? null,
       input.metadata === undefined ? null : JSON.stringify(input.metadata),
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {
@@ -281,17 +284,20 @@ export const updateExternalSource = async (
 export const updateSyncStatus = async (
   sourceId: string,
   docCount: number,
-  errorCount: number
+  errorCount: number,
+  tenantId: string
 ): Promise<ExternalSource | null> => {
   validateNonEmptyString(sourceId, "sourceId");
   validateMinimumNumber(docCount, "docCount", EXTERNAL_SOURCE_DEFAULTS.MIN_DOC_COUNT);
   validateMinimumNumber(errorCount, "errorCount", EXTERNAL_SOURCE_DEFAULTS.MIN_ERROR_COUNT);
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
     const result = await query<ExternalSourceRow>(EXTERNAL_SOURCE_QUERIES.UPDATE_SYNC_STATUS, [
       sourceId,
       docCount,
       errorCount,
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {

@@ -138,7 +138,7 @@ export const INCIDENT_ALERT_QUERIES = {
   UPDATE_STATUS: `
     UPDATE incident_alerts
     SET status = $2, updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $3
     RETURNING *
   `,
   LIST_INCIDENTS: buildListIncidentsQuery(),
@@ -160,7 +160,8 @@ const buildEnrichmentQuery = (): string =>
     "matched_runbooks = $5::jsonb, correlated_incidents = $6::jsonb,",
     "evidence_catalog = $7::jsonb, alert_embedding = $8::vector,",
     "pipeline_duration_ms = $9, updated_at = NOW()",
-    "WHERE id = $1 RETURNING *",
+    "WHERE id = $1 AND tenant_id",
+    "= $10 RETURNING *",
   ].join(" ");
 
 // Helper: builds the similarity search query (avoids lint false-positive on SQL table.column references)
@@ -185,7 +186,8 @@ const buildAiSummaryQuery = (): string =>
     "UPDATE incident_triage_results SET",
     "ai_summary = $2::jsonb, summary_source = $3,",
     "pipeline_duration_ms = $4, updated_at = NOW()",
-    "WHERE id = $1 RETURNING *",
+    "WHERE id = $1 AND tenant_id",
+    "= $5 RETURNING *",
   ].join(" ");
 
 // Helper: builds the dispatch results UPDATE query (avoids lint false-positive on SQL column references)
@@ -194,7 +196,8 @@ const buildDispatchResultsQuery = (): string =>
     "UPDATE incident_triage_results SET",
     "routing_decision = $2::jsonb, dispatched_to = $3::jsonb,",
     "pipeline_duration_ms = $4, updated_at = NOW()",
-    "WHERE id = $1 RETURNING *",
+    "WHERE id = $1 AND tenant_id",
+    "= $5 RETURNING *",
   ].join(" ");
 
 // Helper: builds severity distribution query

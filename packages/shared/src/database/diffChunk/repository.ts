@@ -223,7 +223,8 @@ export const updateDiffChunkEmbedding = async (
   id: string,
   embedding: readonly number[],
   model: string = EMBEDDING_CONFIG.MODEL,
-  version: string = DIFF_CHUNK_DEFAULTS.DEFAULT_EMBEDDING_VERSION
+  version: string = DIFF_CHUNK_DEFAULTS.DEFAULT_EMBEDDING_VERSION,
+  tenantId: string = "system"
 ): Promise<DiffChunk | null> => {
   validateNonEmptyString(id, "id");
 
@@ -242,6 +243,7 @@ export const updateDiffChunkEmbedding = async (
       embeddingVector,
       model,
       version,
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {
@@ -272,13 +274,15 @@ export const updateDiffChunkEmbedding = async (
  */
 export const deleteDiffChunksByPR = async (
   prNumber: number,
-  repository: string
+  repository: string,
+  tenantId: string
 ): Promise<number> => {
   validatePositiveNumber(prNumber, "prNumber", DIFF_CHUNK_DEFAULTS.MIN_PR_NUMBER);
   validateNonEmptyString(repository, "repository");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
-    const result = await query(DIFF_CHUNK_QUERIES.DELETE_BY_PR, [prNumber, repository]);
+    const result = await query(DIFF_CHUNK_QUERIES.DELETE_BY_PR, [prNumber, repository, tenantId]);
 
     logger.info("Deleted diff chunks for PR", {
       prNumber,

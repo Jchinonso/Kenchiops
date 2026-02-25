@@ -19,6 +19,9 @@ import { integrationRoutes } from "./integrationRoutes.js";
 import { subscriptionRoutes } from "./subscriptionRoutes.js";
 import { organizationRoutes } from "./organizationRoutes.js";
 import { teamRoutes } from "./teamRoutes.js";
+import { dataExportRoutes } from "./dataExportRoutes.js";
+import { invitationRoutes } from "./invitationRoutes.js";
+import { apiKeyRoutes } from "./apiKeyRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -65,4 +68,13 @@ export const registerRoutes = (app: Express): void => {
 
   // Team management routes (member listing, role changes, removal)
   app.use(teamRoutes);
+
+  // Data export routes (GDPR Article 20 data portability)
+  app.use(dataExportRoutes);
+
+  // Team invitation routes (invite, accept, decline, revoke)
+  app.use(invitationRoutes);
+
+  // API key management routes (create, list, revoke)
+  app.use(apiKeyRoutes);
 };

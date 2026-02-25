@@ -130,6 +130,7 @@ const runPolicyAndDispatch = async (
 
   await updateTriageDispatchResults({
     triageResultId,
+    tenantId,
     // Cast for JSONB column storage — typed object is structurally compatible
     routingDecision: routingDecision as unknown as Record<string, unknown>,
     dispatchedTo: results.results.map((dr) => ({
@@ -167,7 +168,7 @@ const runTriagePipeline = async (
   const dedupResult = await container.dedupService.checkDuplicate(fingerprint, tenantId, context);
 
   if (dedupResult.isDuplicate) {
-    await updateAlertStatus(alertId, "deduped");
+    await updateAlertStatus(alertId, "deduped", tenantId);
     incrementCounter(state, "totalDeduped");
     const durationMs = Date.now() - startTime;
 
@@ -231,6 +232,7 @@ const runTriagePipeline = async (
 
   await updateTriageEnrichment({
     triageResultId: triageResult.id,
+    tenantId,
     confidence: evidenceCatalog.confidence.total,
     completeness: evidenceCatalog.completeness.total,
     missingFields: evidenceCatalog.completeness.missingFields,
@@ -270,6 +272,7 @@ const runTriagePipeline = async (
 
   await updateTriageAiSummary({
     triageResultId: triageResult.id,
+    tenantId,
     // Cast for JSONB column storage — typed object is structurally compatible
     aiSummary: summaryResult as unknown as Record<string, unknown>,
     summarySource: summaryResult.summarySource,
@@ -294,7 +297,7 @@ const runTriagePipeline = async (
   );
 
   // Step 15: Mark alert as triaged
-  await updateAlertStatus(alertId, "triaged");
+  await updateAlertStatus(alertId, "triaged", tenantId);
 
   // Step 16: Publish dashboard SSE notification (fire-and-forget)
   void (async () => {
@@ -360,13 +363,13 @@ const processAlert = async (
   });
 
   // Step 1: Mark as processing
-  await updateAlertStatus(alertId, "processing");
+  await updateAlertStatus(alertId, "processing", tenantId);
 
   // Wrap pipeline in try/catch to reset status on failure (C1: prevent stuck "processing")
   try {
     await runTriagePipeline(container, alert, alertId, state, startTime, context);
   } catch (error) {
-    await updateAlertStatus(alertId, "error");
+    await updateAlertStatus(alertId, "error", tenantId);
     throw error;
   }
 };

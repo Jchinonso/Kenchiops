@@ -50,6 +50,11 @@ export {
   resetCircuit,
   resetAllCircuits,
   getAllCircuitStatus,
+  getCircuitCount,
+  buildTenantCircuitKey,
+  evictIdleCircuits,
+  startIdleCleanup,
+  stopIdleCleanup,
   SERVICE_KEYS,
 } from "./circuitBreaker.js";
 
@@ -69,6 +74,8 @@ export {
 export {
   signInternalRequest,
   verifyInternalSignature,
+  resolveServiceSecret,
+  resolveSigningSecret,
   INTERNAL_AUTH_HEADERS,
 } from "./internalAuth.js";
 
@@ -78,4 +85,13 @@ export { createInternalAuthMiddleware } from "./internalAuthMiddleware.js";
 export { createSecurityHeaders } from "./securityHeaders.js";
 
 // Tenant isolation guard
-export { getEffectiveTenantId, requireTenantMatch } from "./tenantGuard.js";
+export { requireTenantId, getEffectiveTenantId, requireTenantMatch } from "./tenantGuard.js";
+
+// Category-based and plan-based rate limiting
+export {
+  rateLimitByCategory,
+  rateLimitByPlan,
+  checkWebhookSourceRateLimit,
+} from "./rateLimitByCategory.js";
+
+export type { RateLimitCategory, RateLimitPlanId } from "./rateLimitByCategoryTypes.js";

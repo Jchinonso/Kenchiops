@@ -509,12 +509,57 @@ export const deleteTenant = async (tenantId: string): Promise<void> => {
 };
 
 /**
+ * Soft delete a tenant with full session revocation.
+ *
+ * Sets status to 'deleted', logs an audit event, and revokes all
+ * active refresh tokens to immediately invalidate sessions.
+ *
+ * @param tenantId - Tenant to soft delete
+ * @param reason - Optional reason for the deletion
+ * @returns Number of tokens revoked
+ */
+export const softDeleteTenant = async (
+  tenantId: string,
+  reason?: string
+): Promise<{ readonly tokensRevoked: number }> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    // Set status to deleted with audit trail
+    await updateStatus(tenantId, TENANT_STATUS.DELETED, AUDIT_ACTIONS.DELETED, {
+      reason: reason ?? "Tenant soft deleted",
+    });
+
+    // Revoke all active sessions (dynamic import avoids circular dependency)
+    const { revokeAllTenantTokens } = await import("../user/refreshToken.js");
+    const tokensRevoked = await revokeAllTenantTokens(tenantId);
+
+    logger.info("Tenant soft deleted with session revocation", {
+      tenantId,
+      tokensRevoked,
+    });
+
+    return { tokensRevoked };
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+
+    logger.error("Failed to soft delete tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Hard-delete a tenant and all associated data.
  *
  * Deletes tenant_subscriptions first (no FK CASCADE), then deletes the tenant row.
- * FK CASCADE handles: provider_connections, repository_channel_mappings, tenant_audit_log.
- * FK SET NULL handles: analyses, events, slack_messages, webhook_activity_log,
- *   incident_alerts, incident_triage_results.
+ * FK CASCADE handles: provider_connections, repository_channel_mappings, tenant_audit_log,
+ *   events, analyses, incident_alerts, incident_triage_results, webhook_activity.
+ * FK SET NULL handles: users.selected_tenant_id (user preference, not ownership).
  *
  * Call this only after external resource cleanup is complete (best-effort).
  */

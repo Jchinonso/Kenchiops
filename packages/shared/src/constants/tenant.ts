@@ -41,6 +41,8 @@ export const AUDIT_ACTIONS = {
   MEMBER_ADDED: "member_added",
   ORG_SWITCHED: "org_switched",
   MEMBERSHIP_RECONCILED: "membership_reconciled",
+  MEMBER_SESSIONS_REVOKED: "member.sessions_revoked",
+  TENANT_SESSIONS_REVOKED: "tenant.sessions_revoked",
 } as const;
 
 /**
@@ -111,8 +113,36 @@ export const TENANT_QUERIES = {
  * Audit log query templates
  */
 export const AUDIT_QUERIES = {
-  INSERT: `INSERT INTO tenant_audit_log (tenant_id, action, actor, metadata)
-           VALUES ($1, $2, $3, $4)`,
+  /**
+   * Insert with hash chain for tamper evidence (SOC 2 Type II).
+   *
+   * Computes entry_hash = SHA-256(previous_hash + tenant_id + action + metadata + created_at).
+   * The previous_hash is fetched from the most recent entry for this tenant.
+   * If no previous entry exists, previous_hash defaults to '0' (genesis entry).
+   *
+   * Falls back gracefully if hash columns don't exist yet (migration pending).
+   */
+  INSERT: `
+    WITH prev AS (
+      SELECT COALESCE(entry_hash, '0') AS prev_hash
+      FROM tenant_audit_log
+      WHERE tenant_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+    ),
+    genesis AS (
+      SELECT '0' AS prev_hash
+    ),
+    chain AS (
+      SELECT COALESCE((SELECT prev_hash FROM prev), (SELECT prev_hash FROM genesis)) AS prev_hash
+    )
+    INSERT INTO tenant_audit_log (tenant_id, action, actor, metadata, previous_hash, entry_hash)
+    SELECT
+      $1, $2, $3, $4,
+      chain.prev_hash,
+      encode(sha256(convert_to(chain.prev_hash || $1 || $2 || $4 || NOW()::text, 'UTF8')), 'hex')
+    FROM chain
+  `,
   SELECT_BY_TENANT: `SELECT * FROM tenant_audit_log
                      WHERE tenant_id = $1
                      ORDER BY created_at DESC

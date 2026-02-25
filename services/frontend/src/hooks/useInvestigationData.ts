@@ -125,14 +125,8 @@ const isActiveStatus = (status: string): boolean =>
 
 // ==================== URL Builders ====================
 
-const buildInvestigationsUrl = (
-  tenantId: string,
-  limit: number,
-  offset: number,
-  status?: string
-): string => {
+const buildInvestigationsUrl = (limit: number, offset: number, status?: string): string => {
   const params = new URLSearchParams();
-  params.set("tenantId", tenantId);
   params.set("limit", String(limit));
   params.set("offset", String(offset));
   if (status) {
@@ -151,7 +145,7 @@ export const useInvestigations = (
   status?: string
 ): UseFetchResult<PaginatedInvestigations> =>
   useFetch<PaginatedInvestigations>(
-    tenantId ? buildInvestigationsUrl(tenantId, limit, offset, status) : "",
+    tenantId ? buildInvestigationsUrl(limit, offset, status) : "",
     `${tenantId}:${limit}:${offset}:${refreshKey}:${status ?? ""}`
   );
 
