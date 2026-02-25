@@ -8,6 +8,7 @@
 
 import { Fragment, useState, useMemo, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -341,13 +342,15 @@ interface CICDFailuresProps {
 }
 
 export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? undefined;
   const [searchParams, setSearchParams] = useSearchParams();
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
   const [filters, setFilters] = useState<FilterValues>(() => {
-    const saved = loadSavedFilters("failures");
+    const saved = loadSavedFilters("failures", tenantId);
     return {
       repository: searchParams.get("repository") ?? saved?.repository ?? "",
       severity: searchParams.get("severity") ?? saved?.severity ?? "",
@@ -361,7 +364,7 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
       setFilters(next);
       setOffset(0);
       setExpandedId(null);
-      saveFilters("failures", next);
+      saveFilters("failures", next, tenantId);
       const params = new URLSearchParams();
       if (next.repository) {
         params.set("repository", next.repository);

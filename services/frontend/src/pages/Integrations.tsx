@@ -506,8 +506,10 @@ export const Integrations = () => {
         </CardContent>
       </Card>
 
-      {/* Monitoring Integrations */}
-      <MonitoringIntegrations integrationHealth={integrationHealthMap} tenantId={tenantId} />
+      {/* Monitoring Integrations (paid feature) */}
+      <FeatureGate feature="apiAccess">
+        <MonitoringIntegrations integrationHealth={integrationHealthMap} tenantId={tenantId} />
+      </FeatureGate>
 
       {planLimitError && (
         <UpgradePrompt

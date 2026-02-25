@@ -143,12 +143,24 @@ const setRef = <T,>(ref: React.MutableRefObject<T>, value: T): void => {
 // ==================== Persistence Helpers ====================
 
 /**
+ * Build a tenant-scoped localStorage key for filter persistence.
+ * When tenantId is provided, keys are isolated per tenant to prevent cross-tenant leaks.
+ */
+const buildFilterStorageKey = (pageKey: string, tenantId?: string): string =>
+  tenantId
+    ? `${FILTER_STORAGE_PREFIX}${tenantId}_${pageKey}`
+    : `${FILTER_STORAGE_PREFIX}${pageKey}`;
+
+/**
  * Loads saved filter state from localStorage for a given page key.
  * Returns null if no saved state exists or parsing fails.
  */
-export const loadSavedFilters = (pageKey: string): Partial<FilterValues> | null => {
+export const loadSavedFilters = (
+  pageKey: string,
+  tenantId?: string
+): Partial<FilterValues> | null => {
   try {
-    const stored = localStorage.getItem(`${FILTER_STORAGE_PREFIX}${pageKey}`);
+    const stored = localStorage.getItem(buildFilterStorageKey(pageKey, tenantId));
     return stored ? (JSON.parse(stored) as Partial<FilterValues>) : null;
   } catch {
     return null;
@@ -159,9 +171,9 @@ export const loadSavedFilters = (pageKey: string): Partial<FilterValues> | null 
  * Saves filter state to localStorage for a given page key.
  * Silently fails if localStorage is unavailable or full.
  */
-export const saveFilters = (pageKey: string, filters: FilterValues): void => {
+export const saveFilters = (pageKey: string, filters: FilterValues, tenantId?: string): void => {
   try {
-    localStorage.setItem(`${FILTER_STORAGE_PREFIX}${pageKey}`, JSON.stringify(filters));
+    localStorage.setItem(buildFilterStorageKey(pageKey, tenantId), JSON.stringify(filters));
   } catch {
     // localStorage quota exceeded or unavailable — non-fatal
   }

@@ -9,10 +9,10 @@
 
 | Category             | Items  | Fixed | Built (Not Wired) | Open  |
 | -------------------- | ------ | ----- | ----------------- | ----- |
-| Security / Isolation | 5      | 2     | 0                 | 3     |
+| Security / Isolation | 5      | 3     | 0                 | 2     |
 | Components           | 4      | 0     | 4                 | 0     |
 | Hooks / Patterns     | 2      | 0     | 1                 | 1     |
-| **Total**            | **11** | **2** | **5**             | **4** |
+| **Total**            | **11** | **3** | **5**             | **3** |
 
 The frontend has solid implementations for tenant isolation components, but most are **dead code** — implemented and never integrated. The highest-value work is wiring, not building.
 
@@ -180,34 +180,12 @@ Object.keys(localStorage)
 
 ---
 
-### 3.2 PKCE Not Implemented
+### ~~3.2 PKCE~~ — ✅ DONE
 
-**Severity**: High (required per RFC 9700, January 2025)
+Fully implemented since last audit:
 
-No `code_verifier` or `code_challenge` anywhere in the frontend. [Login.tsx](file:///home/chinonso/Documents/kenchi/services/frontend/src/pages/Login.tsx) navigates to the API's OAuth endpoint without generating a PKCE challenge.
-
-**Implementation**:
-
-```typescript
-// In Login.tsx, before OAuth redirect:
-const generatePKCE = async (): Promise<string> => {
-  const verifier = crypto.randomUUID() + crypto.randomUUID();
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-  const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  sessionStorage.setItem("pkce_verifier", verifier);
-  return challenge;
-};
-
-// Add to OAuth URL:
-const challenge = await generatePKCE();
-url.searchParams.set("code_challenge", challenge);
-url.searchParams.set("code_challenge_method", "S256");
-```
-
-Backend callback handler must accept `code_verifier` from the frontend and include it in the token exchange request.
+- **Frontend**: [pkce.ts](file:///home/chinonso/Documents/kenchi/services/frontend/src/lib/pkce.ts) with `initPkceFlow()` — generates `code_verifier` (43 base64url chars), computes SHA-256 `code_challenge`, stores verifier in `sessionStorage`. [Login.tsx](file:///home/chinonso/Documents/kenchi/services/frontend/src/pages/Login.tsx) calls `initPkceFlow()` and sets `code_challenge` + `code_challenge_method` on the OAuth URL.
+- **Backend**: `authRoutes.ts:294-296` — `generateCodeVerifier()` for server-initiated flows. All 3 OAuth adapters (GitHub, GitLab, Bitbucket) send `code_verifier` in the token exchange body. Azure DevOps is exempt (uses JWT bearer grant).
 
 ---
 
@@ -308,12 +286,13 @@ These need no changes:
 | --- | ------------------------------------------ | ---------- | ------ | -------------------------------------------------- |
 | 1   | Wire `TenantGuard` into Dashboard.tsx      | **High**   | 30 min | Blocks suspended tenants from using dashboard      |
 | 2   | Wire `FeatureGate` into gated pages        | **High**   | 2 hrs  | Prevents free-tier users from seeing paid features |
-| 3   | Implement PKCE in Login.tsx                | **High**   | 4 hrs  | RFC 9700 compliance                                |
-| 4   | Tenant-scope localStorage keys             | **Medium** | 2 hrs  | Prevents cross-tenant filter state leakage         |
-| 5   | Wire `UsageWarning` into overview/settings | **Medium** | 1 hr   | Proactive limit awareness                          |
-| 6   | Adopt `usePermissions` in TeamManagement   | **Medium** | 1 hr   | Centralized permission model                       |
-| 7   | Idle session timeout                       | **Low**    | 1 hr   | SOC 2 compliance                                   |
-| 8   | Per-route error boundaries                 | **Low**    | 2 hrs  | Fault isolation                                    |
-| 9   | Org switch error feedback                  | **Low**    | 30 min | UX polish                                          |
+| 3   | Tenant-scope localStorage keys             | **Medium** | 2 hrs  | Prevents cross-tenant filter state leakage         |
+| 4   | Wire `UsageWarning` into overview/settings | **Medium** | 1 hr   | Proactive limit awareness                          |
+| 5   | Adopt `usePermissions` in TeamManagement   | **Medium** | 1 hr   | Centralized permission model                       |
+| 6   | Idle session timeout                       | **Low**    | 1 hr   | SOC 2 compliance                                   |
+| 7   | Per-route error boundaries                 | **Low**    | 2 hrs  | Fault isolation                                    |
+| 8   | Org switch error feedback                  | **Low**    | 30 min | UX polish                                          |
 
-**Total effort**: ~14 hours (items 1-6 are ~8 hours for the highest impact)
+**Total effort**: ~10 hours (items 1-5 are ~6.5 hours for the highest impact)
+
+> **Note**: PKCE (previously #3 High) has been fully implemented and is no longer in this list.

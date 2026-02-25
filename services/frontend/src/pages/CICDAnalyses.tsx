@@ -8,6 +8,7 @@
 
 import { Fragment, useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -301,6 +302,8 @@ interface CICDAnalysesProps {
 }
 
 export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? undefined;
   const [searchParams, setSearchParams] = useSearchParams();
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
@@ -308,7 +311,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
   const [filters, setFilters] = useState<FilterValues>(() => {
-    const saved = loadSavedFilters("analyses");
+    const saved = loadSavedFilters("analyses", tenantId);
     return {
       repository: searchParams.get("repository") ?? saved?.repository ?? "",
       severity: "",
@@ -339,7 +342,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
         params.set("timeRange", filters.timeRange);
       }
       setSearchParams(params, { replace: true });
-      saveFilters("analyses", { ...filters, repository: nextRepo });
+      saveFilters("analyses", { ...filters, repository: nextRepo }, tenantId);
     },
     [filters, setSearchParams]
   );
@@ -349,7 +352,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
       setFilters(next);
       setOffset(0);
       setExpandedId(null);
-      saveFilters("analyses", next);
+      saveFilters("analyses", next, tenantId);
       const params = new URLSearchParams();
       if (next.repository) {
         params.set("repository", next.repository);
