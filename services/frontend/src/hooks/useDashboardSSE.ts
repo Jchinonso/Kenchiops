@@ -19,6 +19,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
+import { useAuth } from "@/hooks/useAuth";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const SSE_ENDPOINT = `${API_URL}/api/v1/dashboard/events/stream`;
@@ -41,8 +42,14 @@ export interface DashboardNotification {
 /** Configuration for notification storage */
 const NOTIFICATION_CONFIG = {
   maxItems: 50,
-  sessionStorageKey: "kenchi_notifications",
+  sessionStorageKeyPrefix: "kenchi_notifications",
 } as const;
+
+/** Build a tenant-scoped sessionStorage key */
+const buildNotificationStorageKey = (tenantId?: string | null): string =>
+  tenantId
+    ? `${NOTIFICATION_CONFIG.sessionStorageKeyPrefix}_${tenantId}`
+    : NOTIFICATION_CONFIG.sessionStorageKeyPrefix;
 
 // ==================== SSE Payload Types ====================
 
@@ -78,18 +85,21 @@ interface IncidentTriagedPayload {
 
 // ==================== Session Storage Helpers ====================
 
-const loadNotifications = (): readonly DashboardNotification[] => {
+const loadNotifications = (storageKey: string): readonly DashboardNotification[] => {
   try {
-    const stored = sessionStorage.getItem(NOTIFICATION_CONFIG.sessionStorageKey);
+    const stored = sessionStorage.getItem(storageKey);
     return stored ? (JSON.parse(stored) as readonly DashboardNotification[]) : [];
   } catch {
     return [];
   }
 };
 
-const saveNotifications = (notifications: readonly DashboardNotification[]): void => {
+const saveNotifications = (
+  storageKey: string,
+  notifications: readonly DashboardNotification[]
+): void => {
   try {
-    sessionStorage.setItem(NOTIFICATION_CONFIG.sessionStorageKey, JSON.stringify(notifications));
+    sessionStorage.setItem(storageKey, JSON.stringify(notifications));
   } catch {
     // sessionStorage quota exceeded or unavailable — non-fatal
   }
@@ -138,12 +148,22 @@ interface UseDashboardSSEResult {
  * @returns markAllRead — marks all notifications as read
  */
 export const useDashboardSSE = (): UseDashboardSSEResult => {
+  const { user } = useAuth();
+  const storageKey = buildNotificationStorageKey(user?.tenantId);
+
   const [refreshKey, setRefreshKey] = useState(0);
-  const [notifications, setNotifications] =
-    useState<readonly DashboardNotification[]>(loadNotifications);
+  const [notifications, setNotifications] = useState<readonly DashboardNotification[]>(() =>
+    loadNotifications(storageKey)
+  );
   const { toastEnabled, browserEnabled } = useNotificationPreferences();
   const toastEnabledRef = useRef(toastEnabled);
   const browserEnabledRef = useRef(browserEnabled);
+
+  // Reload notifications when tenant changes (org switch)
+  useEffect(() => {
+    setNotifications(loadNotifications(storageKey));
+  }, [storageKey]);
+
   useEffect(() => {
     Object.assign(toastEnabledRef, { current: toastEnabled });
   }, [toastEnabled]);
@@ -154,32 +174,38 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   const markAllRead = useCallback(() => {
     setNotifications((prev) => {
       const next = prev.map((item) => (item.read ? item : { ...item, read: true }));
-      saveNotifications(next);
+      saveNotifications(storageKey, next);
       return next;
     });
-  }, []);
+  }, [storageKey]);
 
-  const markAsRead = useCallback((targetId: string) => {
-    setNotifications((prev) => {
-      const next = prev.map((item) => {
-        const { id } = item;
-        return id === targetId ? { ...item, read: true } : item;
+  const markAsRead = useCallback(
+    (targetId: string) => {
+      setNotifications((prev) => {
+        const next = prev.map((item) => {
+          const { id } = item;
+          return id === targetId ? { ...item, read: true } : item;
+        });
+        saveNotifications(storageKey, next);
+        return next;
       });
-      saveNotifications(next);
-      return next;
-    });
-  }, []);
+    },
+    [storageKey]
+  );
 
-  const dismissNotification = useCallback((targetId: string) => {
-    setNotifications((prev) => {
-      const next = prev.filter((item) => {
-        const { id } = item;
-        return id !== targetId;
+  const dismissNotification = useCallback(
+    (targetId: string) => {
+      setNotifications((prev) => {
+        const next = prev.filter((item) => {
+          const { id } = item;
+          return id !== targetId;
+        });
+        saveNotifications(storageKey, next);
+        return next;
       });
-      saveNotifications(next);
-      return next;
-    });
-  }, []);
+    },
+    [storageKey]
+  );
 
   useEffect(() => {
     const eventSource = new EventSource(SSE_ENDPOINT, {
@@ -194,7 +220,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     const addNotification = (notification: DashboardNotification): void => {
       setNotifications((prev) => {
         const next = [notification, ...prev].slice(0, NOTIFICATION_CONFIG.maxItems);
-        saveNotifications(next);
+        saveNotifications(storageKey, next);
         return next;
       });
     };
@@ -328,7 +354,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       eventSource.removeEventListener("incident_triaged", handleIncidentTriaged);
       eventSource.close();
     };
-  }, []);
+  }, [storageKey]);
 
   return { refreshKey, notifications, markAllRead, markAsRead, dismissNotification };
 };
