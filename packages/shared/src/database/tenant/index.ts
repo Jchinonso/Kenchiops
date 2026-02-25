@@ -66,5 +66,14 @@ export {
 // Audit operations
 export { insertAuditLog, logAuditEvent, getAuditLog } from "./audit.js";
 
+// Reactivation validation
+export type {
+  ReactivationWarningType,
+  ReactivationWarning,
+  ReactivationReport,
+} from "./reactivationValidatorTypes.js";
+
+export { validateReactivation } from "./reactivationValidator.js";
+
 // RAG budget configuration
 export { getRAGBudgetConfig, updateRAGBudgetConfig } from "./ragConfig.js";

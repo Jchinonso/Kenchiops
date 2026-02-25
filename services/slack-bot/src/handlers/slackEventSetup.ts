@@ -13,6 +13,7 @@ import {
   findGitHubAppConnection,
   deleteMappingsForChannel,
   getErrorMessage,
+  checkWebhookSourceRateLimit,
   SLACK_ACTION_IDS,
   SLACK_ACTION_PATTERNS,
   SLACK_MODAL_CALLBACKS,
@@ -84,7 +85,7 @@ export const handleBotLeftChannel = async (
  * @param app - Slack Bolt app instance
  */
 export const setupSlackHandlers = (app: SlackApp): void => {
-  // Debug: Log all incoming events
+  // Global middleware: log + per-workspace rate limiting
   app.use(async (args) => {
     const { payload } = args;
     if (payload && "type" in payload) {
@@ -92,6 +93,26 @@ export const setupSlackHandlers = (app: SlackApp): void => {
         type: payload.type,
       });
     }
+
+    // Extract workspace ID from Bolt context or payload
+    const boltContext = (args as { context?: { readonly teamId?: string } }).context;
+    const payloadTeam =
+      args.payload && "team" in args.payload
+        ? (args.payload as { readonly team?: string }).team
+        : undefined;
+    const teamId = boltContext?.teamId ?? payloadTeam ?? "unknown";
+
+    const sourceRateResult = checkWebhookSourceRateLimit(String(teamId), "slack");
+    if (!sourceRateResult.allowed) {
+      logger.warn("Slack event source rate limit exceeded", {
+        provider: "slack",
+        operation: "receiveEvent",
+        workspaceId: teamId,
+        remaining: sourceRateResult.remaining,
+      });
+      return;
+    }
+
     await args.next();
   });
 

@@ -16,7 +16,6 @@ import {
   AuthorizationError,
   ValidationError,
   NotFoundError,
-  requireRole,
   requirePermission,
   HTTP_STATUS,
   getErrorMessage,
@@ -38,9 +37,11 @@ import {
   findByTenant,
   clearTenantStatusFlag,
   getSubscriptionWithPlan,
+  validateReactivation,
   TENANT_STATUS,
   type TeamMember,
   type UserRole,
+  type ReactivationWarning,
 } from "@kenchi/shared";
 
 const router = Router();
@@ -537,9 +538,13 @@ const handleReactivateTenant = async (req: Request, res: Response): Promise<void
   await activate(tenantId);
   await clearTenantStatusFlag(tenantId);
 
+  // 5. Run reactivation validation to surface warnings (non-blocking)
+  const reactivationReport = await validateReactivation(tenantId);
+
   logger.info("Tenant reactivated", {
     ...context,
     previousStatus: tenant.status,
+    warningCount: reactivationReport.warnings.length,
   });
 
   // Best-effort audit log
@@ -557,12 +562,21 @@ const handleReactivateTenant = async (req: Request, res: Response): Promise<void
     });
   }
 
+  const warningDtos: ReadonlyArray<Record<string, unknown>> = reactivationReport.warnings.map(
+    (warning: ReactivationWarning): Record<string, unknown> => ({
+      type: warning.type,
+      ...(warning.provider !== undefined ? { provider: warning.provider } : {}),
+      message: warning.message,
+    })
+  );
+
   res.status(HTTP_STATUS.OK).json({
     data: {
       tenantId,
       status: "active",
       previousStatus: tenant.status,
       connectionsCount: connections.length,
+      warnings: warningDtos,
     },
   });
 };
@@ -599,21 +613,21 @@ router.post(
 router.post(
   "/api/v1/team/revoke-all-sessions",
   rateLimitByCategory("standard"),
-  requireRole("owner"),
+  requirePermission("team.manage"),
   asyncHandler(handleRevokeTenantSessions)
 );
 
 router.delete(
   "/api/v1/tenant",
   rateLimitByCategory("standard"),
-  requireRole("owner"),
+  requirePermission("tenant.manage"),
   asyncHandler(handleDeleteTenant)
 );
 
 router.post(
   "/api/v1/tenant/reactivate",
   rateLimitByCategory("standard"),
-  requireRole("owner"),
+  requirePermission("tenant.manage"),
   asyncHandler(handleReactivateTenant)
 );
 

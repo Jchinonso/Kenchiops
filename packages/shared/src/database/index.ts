@@ -44,6 +44,11 @@ export {
   softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
+  // Reactivation validation
+  type ReactivationWarningType,
+  type ReactivationWarning,
+  type ReactivationReport,
+  validateReactivation,
   // Audit operations
   logAuditEvent,
   getAuditLog,

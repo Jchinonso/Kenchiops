@@ -12,6 +12,8 @@ import {
   createLogger,
   ExternalServiceError,
   getErrorMessage,
+  withCircuitBreaker,
+  buildTenantCircuitKey,
   type RequestContext,
   type ResilientResponse,
 } from "@kenchi/shared";
@@ -57,12 +59,16 @@ export const createPagerDutyDispatchAdapter = (): PagerDutyDispatchPort => {
       };
 
       try {
-        const response: ResilientResponse<PagerDutyEventResponse> =
-          await resilientPost<PagerDutyEventResponse>(PAGERDUTY_EVENTS_API_URL, payload, {
-            timeout: DISPATCH_TIMEOUTS.PAGERDUTY_EVENT_MS,
-            maxRetries: 2,
-            headers: { "Content-Type": "application/json" },
-          });
+        const circuitKey = buildTenantCircuitKey("pagerduty", context.tenantId);
+        const response: ResilientResponse<PagerDutyEventResponse> = await withCircuitBreaker(
+          circuitKey,
+          async () =>
+            resilientPost<PagerDutyEventResponse>(PAGERDUTY_EVENTS_API_URL, payload, {
+              timeout: DISPATCH_TIMEOUTS.PAGERDUTY_EVENT_MS,
+              maxRetries: 2,
+              headers: { "Content-Type": "application/json" },
+            })
+        );
 
         const durationMs = Date.now() - startTime;
         const { status: statusCode } = response;

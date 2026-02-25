@@ -32,6 +32,7 @@ const logger = createLogger("authorization");
 
 export type Permission =
   | "team.manage"
+  | "tenant.manage"
   | "billing"
   | "settings"
   | "analyses.read"
@@ -49,6 +50,7 @@ export type Permission =
 const ROLE_PERMISSIONS: Readonly<Record<UserRole, ReadonlySet<Permission>>> = {
   owner: new Set<Permission>([
     "team.manage",
+    "tenant.manage",
     "billing",
     "settings",
     "analyses.read",

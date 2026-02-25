@@ -43,6 +43,8 @@ export const AUDIT_ACTIONS = {
   MEMBERSHIP_RECONCILED: "membership_reconciled",
   MEMBER_SESSIONS_REVOKED: "member.sessions_revoked",
   TENANT_SESSIONS_REVOKED: "tenant.sessions_revoked",
+  CHECKOUT_STARTED: "checkout_started",
+  PAYMENT_FAILED: "payment_failed",
 } as const;
 
 /**

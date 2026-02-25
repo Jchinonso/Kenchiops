@@ -15,6 +15,7 @@ type Role = "owner" | "admin" | "member" | "viewer";
 
 type Permission =
   | "team.manage"
+  | "tenant.manage"
   | "billing"
   | "settings"
   | "analyses.read"
@@ -34,6 +35,7 @@ interface UsePermissionsResult {
 const ROLE_PERMISSIONS: Readonly<Record<Role, ReadonlySet<Permission>>> = {
   owner: new Set<Permission>([
     "team.manage",
+    "tenant.manage",
     "billing",
     "settings",
     "analyses.read",

@@ -16,6 +16,8 @@ import {
   cleanGitLabLog,
   resilientGet,
   findActiveByProvider,
+  withCircuitBreaker,
+  buildTenantCircuitKey,
   type CILogFetcherPort,
   type FetchedBuildLogs,
   type RequestContext,
@@ -269,10 +271,13 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
     _installationId: number,
     context: RequestContext
   ): Promise<FetchedBuildLogs> => {
+    const circuitKey = buildTenantCircuitKey("gitlab", context.tenantId);
     const { accessToken, baseUrl } = await resolveAccessToken(context);
     const encodedPath = encodeProjectPath(owner, repo);
     const startTime = Date.now();
-    const logs = await fetchJobTrace(baseUrl, encodedPath, buildId, accessToken, context);
+    const logs = await withCircuitBreaker(circuitKey, async () =>
+      fetchJobTrace(baseUrl, encodedPath, buildId, accessToken, context)
+    );
     const durationMs = Date.now() - startTime;
 
     return { buildId, buildName: `job-${buildId}`, logs, durationMs };
@@ -285,17 +290,14 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
     _installationId: number,
     context: RequestContext
   ): Promise<readonly FetchedBuildLogs[]> => {
+    const circuitKey = buildTenantCircuitKey("gitlab", context.tenantId);
     const { accessToken, baseUrl } = await resolveAccessToken(context);
     const encodedPath = encodeProjectPath(owner, repo);
     const startTime = Date.now();
 
     // Find the pipeline for this commit
-    const pipeline = await findPipelineForCommit(
-      baseUrl,
-      encodedPath,
-      commitSha,
-      accessToken,
-      context
+    const pipeline = await withCircuitBreaker(circuitKey, async () =>
+      findPipelineForCommit(baseUrl, encodedPath, commitSha, accessToken, context)
     );
 
     if (!pipeline) {
@@ -309,12 +311,8 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
     }
 
     const pipelineId = String(pipeline.id);
-    const failedJobs = await fetchFailedJobs(
-      baseUrl,
-      encodedPath,
-      pipelineId,
-      accessToken,
-      context
+    const failedJobs = await withCircuitBreaker(circuitKey, async () =>
+      fetchFailedJobs(baseUrl, encodedPath, pipelineId, accessToken, context)
     );
 
     if (failedJobs.length === 0) {
@@ -331,12 +329,8 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
     const results = await mapWithConcurrency(
       failedJobs,
       async (job): Promise<FetchedBuildLogs> => {
-        const logs = await fetchJobTrace(
-          baseUrl,
-          encodedPath,
-          String(job.id),
-          accessToken,
-          context
+        const logs = await withCircuitBreaker(circuitKey, async () =>
+          fetchJobTrace(baseUrl, encodedPath, String(job.id), accessToken, context)
         );
         return {
           buildId: String(job.id),

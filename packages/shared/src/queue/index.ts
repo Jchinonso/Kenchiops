@@ -50,3 +50,20 @@ export {
   startSlackNotificationWorker,
   getSlackNotificationQueueStats,
 } from "./slackNotificationProcessor.js";
+
+// Fair scheduler (weighted round-robin per-tenant queuing)
+export { createFairQueue } from "./fairScheduler.js";
+
+export type { FairQueueConfig, FairQueueManager } from "./fairSchedulerTypes.js";
+
+// Per-tenant resource quotas
+export {
+  getQuotaForPlan,
+  checkQueueDepthQuota,
+  incrementQueueDepth,
+  decrementQueueDepth,
+  recordProcessingTime,
+  checkProcessingTimeQuota,
+} from "./tenantQuota.js";
+
+export type { TenantQuotaConfig, QuotaCheckResult } from "./tenantQuotaTypes.js";

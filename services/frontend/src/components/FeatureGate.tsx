@@ -39,7 +39,7 @@ const getFeatureLabel = (feature: string): string =>
   FEATURE_LABELS[feature] ?? feature.replace(/([A-Z])/g, " $1").trim();
 
 const isFeatureEnabled = (plan: PlanDTO, feature: string): boolean => {
-  const features = plan.features as Readonly<Record<string, unknown>>;
+  const features = plan.features as unknown as Readonly<Record<string, unknown>>;
   return features[feature] === true;
 };
 

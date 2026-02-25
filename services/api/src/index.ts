@@ -533,9 +533,9 @@ const createApp = (): express.Express => {
     express.json({
       limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
       verify: (req: express.Request, _res, buf) => {
-        // Only capture rawBody when HMAC signature header is present
+        // Only capture rawBody when signature verification headers are present
         // to avoid doubling memory usage on every request
-        if (req.headers["x-kenchi-signature"]) {
+        if (req.headers["x-kenchi-signature"] || req.headers["stripe-signature"]) {
           Object.assign(req, { rawBody: buf });
         }
       },

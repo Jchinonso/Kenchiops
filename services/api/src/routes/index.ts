@@ -22,6 +22,7 @@ import { teamRoutes } from "./teamRoutes.js";
 import { dataExportRoutes } from "./dataExportRoutes.js";
 import { invitationRoutes } from "./invitationRoutes.js";
 import { apiKeyRoutes } from "./apiKeyRoutes.js";
+import { billingRoutes } from "./billingRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -77,4 +78,7 @@ export const registerRoutes = (app: Express): void => {
 
   // API key management routes (create, list, revoke)
   app.use(apiKeyRoutes);
+
+  // Billing routes (Stripe checkout, portal, webhooks, status)
+  app.use(billingRoutes);
 };

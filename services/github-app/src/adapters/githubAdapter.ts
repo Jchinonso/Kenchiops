@@ -17,6 +17,8 @@ import {
   ExternalServiceError,
   getErrorMessage,
   wrapError,
+  withCircuitBreaker,
+  buildTenantCircuitKey,
   GITHUB_PAGINATION,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
@@ -115,16 +117,15 @@ const fetchRepositoriesPage = async (
 export const getInstallationRepositories = async (
   installationId: number
 ): Promise<RepositoryInfo[]> => {
-  try {
-    const octokit = await getOctokit(installationId);
+  const circuitKey = buildTenantCircuitKey("github", String(installationId));
 
-    // Use recursive pagination with default page size
-    const repositories = await fetchRepositoriesPage(
-      octokit,
-      1,
-      GITHUB_PAGINATION.DEFAULT_PER_PAGE,
-      []
-    );
+  try {
+    const repositories = await withCircuitBreaker(circuitKey, async () => {
+      const octokit = await getOctokit(installationId);
+
+      // Use recursive pagination with default page size
+      return fetchRepositoriesPage(octokit, 1, GITHUB_PAGINATION.DEFAULT_PER_PAGE, []);
+    });
 
     logger.info("Fetched installation repositories", {
       installationId,
@@ -156,55 +157,59 @@ export const createCheckRunWithAnnotations = async (
 ): Promise<void> => {
   const { installationId, owner, repo, headSha, name, summary, annotations } = options;
 
+  const circuitKey = buildTenantCircuitKey("github", String(installationId));
+
   try {
-    const octokit = await getOctokit(installationId);
+    await withCircuitBreaker(circuitKey, async () => {
+      const octokit = await getOctokit(installationId);
 
-    // Split annotations into batches (GitHub limits to 50 per API call)
-    const annotationBatches = batchArray(
-      [...annotations],
-      GITHUB_PAGINATION.MAX_ANNOTATIONS_PER_CALL
-    );
+      // Split annotations into batches (GitHub limits to 50 per API call)
+      const annotationBatches = batchArray(
+        [...annotations],
+        GITHUB_PAGINATION.MAX_ANNOTATIONS_PER_CALL
+      );
 
-    // Create the check run with first batch
-    const { data: checkRun } = await octokit.rest.checks.create({
-      owner,
-      repo,
-      name,
-      head_sha: headSha,
-      status: "completed",
-      conclusion: annotations.some((annotation) => annotation.annotation_level === "failure")
-        ? "failure"
-        : "neutral",
-      output: {
-        title: "KenchiOps CI Analysis",
-        summary,
-        annotations: annotationBatches[0] || [],
-      },
-    });
+      // Create the check run with first batch
+      const { data: checkRun } = await octokit.rest.checks.create({
+        owner,
+        repo,
+        name,
+        head_sha: headSha,
+        status: "completed",
+        conclusion: annotations.some((annotation) => annotation.annotation_level === "failure")
+          ? "failure"
+          : "neutral",
+        output: {
+          title: "KenchiOps CI Analysis",
+          summary,
+          annotations: annotationBatches[0] || [],
+        },
+      });
 
-    // Update with remaining batches (if any)
-    const remainingBatches = annotationBatches.slice(1);
-    await Promise.all(
-      remainingBatches.map((batch) =>
-        octokit.rest.checks.update({
-          owner,
-          repo,
-          check_run_id: checkRun.id,
-          output: {
-            title: "KenchiOps CI Analysis",
-            summary,
-            annotations: batch,
-          },
-        })
-      )
-    );
+      // Update with remaining batches (if any)
+      const remainingBatches = annotationBatches.slice(1);
+      await Promise.all(
+        remainingBatches.map((batch) =>
+          octokit.rest.checks.update({
+            owner,
+            repo,
+            check_run_id: checkRun.id,
+            output: {
+              title: "KenchiOps CI Analysis",
+              summary,
+              annotations: batch,
+            },
+          })
+        )
+      );
 
-    logger.info("Created check run with annotations", {
-      owner,
-      repo,
-      headSha,
-      checkRunId: checkRun.id,
-      annotationCount: annotations.length,
+      logger.info("Created check run with annotations", {
+        owner,
+        repo,
+        headSha,
+        checkRunId: checkRun.id,
+        annotationCount: annotations.length,
+      });
     });
   } catch (error) {
     logger.error("Failed to create check run with annotations", {

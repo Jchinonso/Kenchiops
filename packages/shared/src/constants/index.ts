@@ -370,7 +370,13 @@ export {
 export { LLM_CONCURRENCY_DEFAULTS } from "./llmConcurrency.js";
 
 // Tenant concurrency constants
-export { TENANT_CONCURRENCY_DEFAULTS, FAIR_QUEUE_DEFAULTS } from "./concurrency.js";
+export {
+  TENANT_CONCURRENCY_DEFAULTS,
+  FAIR_QUEUE_DEFAULTS,
+  TENANT_QUOTA_BY_PLAN,
+  TENANT_QUOTA_DEFAULT_PLAN,
+  TENANT_QUOTA_REDIS,
+} from "./concurrency.js";
 
 // Redis constants
 export {
@@ -683,6 +689,9 @@ export {
   USAGE_ALERT_DEDUP,
   USAGE_ALERT_SCHEDULER,
 } from "./usageAlerts.js";
+
+// Alerting threshold constants
+export { ALERT_THRESHOLDS_WARNING, ALERT_THRESHOLDS_CRITICAL } from "./alerting.js";
 
 // Auth constants
 export {

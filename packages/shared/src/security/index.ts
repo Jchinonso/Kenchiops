@@ -36,6 +36,16 @@ export {
 // Encryption utilities (AES-256-GCM for data at rest)
 export { encryptValue, decryptValue } from "./encryption.js";
 
+// Per-tenant encryption (HKDF envelope encryption)
+export {
+  deriveTenantKey,
+  encryptForTenant,
+  decryptForTenant,
+  decryptAuto,
+} from "./tenantEncryption.js";
+
+export type { TenantEncryptionConfig, EncryptedPayload } from "./tenantEncryptionTypes.js";
+
 // Cookie utilities (httpOnly auth cookies)
 export {
   setAuthCookies,

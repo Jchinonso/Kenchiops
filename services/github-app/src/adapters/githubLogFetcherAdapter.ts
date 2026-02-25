@@ -11,6 +11,8 @@ import {
   createLogger,
   getErrorMessage,
   ExternalServiceError,
+  withCircuitBreaker,
+  buildTenantCircuitKey,
   type CILogFetcherPort,
   type FetchedBuildLogs,
   type RequestContext,
@@ -30,11 +32,14 @@ export const githubLogFetcherAdapter: CILogFetcherPort = {
     context: RequestContext
   ): Promise<FetchedBuildLogs> => {
     const startTime = Date.now();
+    const circuitKey = buildTenantCircuitKey("github", context.tenantId);
 
     try {
       // For GitHub Actions, we fetch all failed logs and filter by buildId.
       // Individual job log fetching is not exposed separately in workflowFetcher.
-      const result = await fetchAllFailedJobsLogs(installationId, owner, repo, buildId);
+      const result = await withCircuitBreaker(circuitKey, async () =>
+        fetchAllFailedJobsLogs(installationId, owner, repo, buildId)
+      );
       const durationMs = Date.now() - startTime;
 
       if (!result) {
@@ -92,9 +97,12 @@ export const githubLogFetcherAdapter: CILogFetcherPort = {
     context: RequestContext
   ): Promise<readonly FetchedBuildLogs[]> => {
     const startTime = Date.now();
+    const circuitKey = buildTenantCircuitKey("github", context.tenantId);
 
     try {
-      const result = await fetchAllFailedJobsLogs(installationId, owner, repo, commitSha);
+      const result = await withCircuitBreaker(circuitKey, async () =>
+        fetchAllFailedJobsLogs(installationId, owner, repo, commitSha)
+      );
       const durationMs = Date.now() - startTime;
 
       if (!result) {

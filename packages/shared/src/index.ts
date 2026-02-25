@@ -178,6 +178,11 @@ export {
   softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
+  // Reactivation validation
+  validateReactivation,
+  type ReactivationWarningType,
+  type ReactivationWarning,
+  type ReactivationReport,
   logAuditEvent,
   getAuditLog,
   countTenantMembers,
@@ -501,6 +506,28 @@ export {
   enforcePlanLimit,
   expireTrials,
 } from "./database/index.js";
+
+// Billing module (Stripe integration)
+export {
+  createStripeAdapter,
+  createBillingService,
+  processStripeWebhook,
+  BILLING_CONSTANTS,
+  BILLING_QUERIES,
+  type BillingInterval,
+  type CheckoutStatus,
+  type StripeWebhookEventType,
+  type CreateCheckoutInput,
+  type CreatePortalInput,
+  type CheckoutResult,
+  type PortalResult,
+  type BillingStatus,
+  type StripeWebhookEvent,
+  type WebhookProcessResult,
+  type BillingPort,
+  type BillingEventRow,
+  type BillingService,
+} from "./billing/index.js";
 
 // Risk rules repository operations
 export {
@@ -1157,6 +1184,13 @@ export {
   // Encryption utilities (AES-256-GCM for data at rest)
   encryptValue,
   decryptValue,
+  // Per-tenant encryption (HKDF envelope encryption)
+  deriveTenantKey,
+  encryptForTenant,
+  decryptForTenant,
+  decryptAuto,
+  type TenantEncryptionConfig,
+  type EncryptedPayload,
   // Cookie utilities (httpOnly auth cookies)
   setAuthCookies,
   setAccessTokenCookie,
@@ -1239,6 +1273,19 @@ export {
   type TenantUsageAlertResult,
 } from "./observability/index.js";
 
+// Tenant metric alerting (pure evaluation)
+export {
+  evaluateTenantAlerts,
+  formatAlertMessage,
+  DEFAULT_WARNING_THRESHOLDS,
+  DEFAULT_CRITICAL_THRESHOLDS,
+  type AlertSeverity,
+  type AlertStatus,
+  type AlertThresholds,
+  type TenantAlert,
+  type TenantMetricSnapshot,
+} from "./observability/index.js";
+
 // Constants (re-export all)
 export * from "./constants/index.js";
 
@@ -1277,6 +1324,19 @@ export {
   type SlackNotificationPayload,
   type NotificationHandler,
   type WorkerOptions,
+  // Fair scheduler (weighted round-robin per-tenant queuing)
+  createFairQueue,
+  type FairQueueConfig,
+  type FairQueueManager,
+  // Per-tenant resource quotas
+  getQuotaForPlan,
+  checkQueueDepthQuota,
+  incrementQueueDepth,
+  decrementQueueDepth,
+  recordProcessingTime,
+  checkProcessingTimeQuota,
+  type TenantQuotaConfig,
+  type QuotaCheckResult,
 } from "./queue/index.js";
 
 // Redis caching

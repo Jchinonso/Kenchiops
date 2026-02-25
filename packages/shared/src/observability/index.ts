@@ -32,3 +32,19 @@ export type {
   UsageAlert,
   TenantUsageAlertResult,
 } from "./usageAlertTypes.js";
+
+// Tenant metric alerting (pure evaluation)
+export {
+  evaluateTenantAlerts,
+  formatAlertMessage,
+  DEFAULT_WARNING_THRESHOLDS,
+  DEFAULT_CRITICAL_THRESHOLDS,
+} from "./alerting.js";
+
+export type {
+  AlertSeverity,
+  AlertStatus,
+  AlertThresholds,
+  TenantAlert,
+  TenantMetricSnapshot,
+} from "./alertingTypes.js";

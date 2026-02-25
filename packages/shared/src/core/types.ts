@@ -806,7 +806,9 @@ export type TenantAuditAction =
   | "org_switched"
   | "membership_reconciled"
   | "member.sessions_revoked"
-  | "tenant.sessions_revoked";
+  | "tenant.sessions_revoked"
+  | "checkout_started"
+  | "payment_failed";
 
 /**
  * Tenant audit log entry.
@@ -994,6 +996,14 @@ export interface Config {
   // Aggregation timing overrides
   readonly AGGREGATION_DEBOUNCE_MS?: number;
   readonly AGGREGATION_MAX_WAIT_MS?: number;
+
+  // Stripe Billing
+  /** Stripe secret key (sk_xxx) */
+  readonly STRIPE_SECRET_KEY?: string;
+  /** Stripe webhook signing secret (whsec_xxx) */
+  readonly STRIPE_WEBHOOK_SECRET?: string;
+  /** Stripe publishable key for frontend (pk_xxx) */
+  readonly STRIPE_PUBLISHABLE_KEY?: string;
 }
 
 // ==================== Signed URL Types ====================

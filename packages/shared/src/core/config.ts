@@ -227,4 +227,9 @@ export const config: Config = {
   // Aggregation timing overrides (optional)
   AGGREGATION_DEBOUNCE_MS: optionalInt("AGGREGATION_DEBOUNCE_MS"),
   AGGREGATION_MAX_WAIT_MS: optionalInt("AGGREGATION_MAX_WAIT_MS"),
+
+  // Stripe Billing
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+  STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+  STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
 } as const;
