@@ -12,7 +12,8 @@ import {
   asyncHandler,
   createLogger,
   requireTenantId,
-  requireRole,
+  requirePermission,
+  requireFeature,
   NotFoundError,
   HTTP_STATUS,
   AUDIT_ACTIONS,
@@ -119,19 +120,22 @@ const handleListExports = async (req: Request, res: Response): Promise<void> => 
 
 router.post(
   "/api/v1/tenant/export",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
+  requireFeature("apiAccess"),
   asyncHandler(handleCreateExport)
 );
 
 router.get(
   "/api/v1/tenant/export/:exportId",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
+  requireFeature("apiAccess"),
   asyncHandler(handleGetExport)
 );
 
 router.get(
   "/api/v1/tenant/exports",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
+  requireFeature("apiAccess"),
   asyncHandler(handleListExports)
 );
 

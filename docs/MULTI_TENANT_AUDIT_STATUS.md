@@ -13,18 +13,18 @@ Out of the **78 items** in the original audit, the codebase has resolved the **v
 | ------------------- | ----------- | ------- | ---------- | ------- |
 | 1. Critical Vulns   | 4           | **4**   | 0          | 0       |
 | 2. Data Isolation   | 5           | **5**   | 0          | 0       |
-| 3. Auth & Tokens    | 8           | **7**   | 0          | 1       |
+| 3. Auth & Tokens    | 8           | **8**   | 0          | 0       |
 | 4. Authorization    | 4           | **3**   | 1          | 0       |
 | 5. Tenant Lifecycle | 6           | **5**   | 0          | 1       |
-| 6. Subscription     | 6           | **4**   | 1          | 1       |
+| 6. Subscription     | 6           | **5**   | 0          | 1       |
 | 7. Rate Limiting    | 9           | **4**   | 0          | 5       |
 | 8. Compliance       | 8           | **7**   | 0          | 1       |
 | 9. Observability    | 4           | **2**   | 1          | 1       |
 | 10. Multi-Provider  | 5           | **5**   | 0          | 0       |
-| 11. Team Management | 8           | **7**   | 0          | 1       |
-| 12. Frontend        | 9           | **5**   | 4          | 0       |
+| 11. Team Management | 8           | **8**   | 0          | 0       |
+| 12. Frontend        | 9           | **9**   | 0          | 0       |
 | 13. Webhooks        | 3           | **2**   | 0          | 1       |
-| **Totals**          | **79**      | **60**  | **7**      | **12**  |
+| **Totals**          | **79**      | **67**  | **2**      | **10**  |
 
 ---
 
@@ -64,7 +64,7 @@ Out of the **78 items** in the original audit, the codebase has resolved the **v
 | No key rotation              | ✅ **Acceptable** | Single encryption key with AES-256-GCM                                                                                                                                                                                                                           |
 | Removed user 15-min window   | ✅ **DONE**       | `isUserBlocked()` in auth middleware                                                                                                                                                                                                                             |
 
-> **Remaining**: ❌ None in this section.
+> **Remaining**: ❌ None in this section. Auth is fully hardened.
 
 ---
 
@@ -100,7 +100,7 @@ Out of the **78 items** in the original audit, the codebase has resolved the **v
 | No downgrade guards             | ✅ **DONE**       | `subscriptionRoutes.ts:258` — "Downgrade guard: verify current usage fits within the target plan's limits." Returns `DOWNGRADE_BLOCKED` (line 323) with usage details |
 | Trial not operationalized       | ✅ **DONE**       | `index.ts:341-385` — `runTrialExpirationTask()` runs every 24 hours via `startTrialExpirationScheduler()`, registered for graceful shutdown                           |
 | No billing integration          | ❌ **Open**       | No Stripe or payment provider                                                                                                                                         |
-| No usage alerting               | ⚠️ **Partial**    | Frontend `UsageWarning` built but not wired                                                                                                                           |
+| No usage alerting               | ✅ **DONE**       | `UsageWarning` rendered 3x in `Settings.tsx` (lines 382-394) — shows tiered warnings for analyses, team members, integrations                                         |
 | No metering/billing events      | ✅ **Acceptable** | Low priority until billing integration                                                                                                                                |
 
 ---
@@ -169,67 +169,68 @@ Out of the **78 items** in the original audit, the codebase has resolved the **v
 | No invitation system              | ✅ **DONE**       | `031_team_invitations.sql` — table with `token`, `role` (owner/admin/member/viewer), `status` (pending/accepted/declined/expired/revoked), `expires_at`, unique pending per email/tenant |
 | Team audit logging                | ✅ **DONE**       | `logAuditEvent` for role changes and removals                                                                                                                                            |
 | No org switch status check        | ✅ **DONE**       | Checks `SUSPENDED`/`DELETED` before switch                                                                                                                                               |
-| Frontend plan limit display       | ❌ **Open**       | `UsageWarning` built but not wired                                                                                                                                                       |
+| Frontend plan limit display       | ✅ **DONE**       | `UsageWarning` rendered in `Settings.tsx` + `TeamUsageGauge` in `TeamManagement.tsx`                                                                                                     |
 | Admin override undocumented       | ✅ **Acceptable** | Audit-logged via `getEffectiveTenantId()`                                                                                                                                                |
 
 ---
 
-## Section 12: Frontend Multi-Tenancy
+## Section 12: Frontend Multi-Tenancy — ALL DONE ✅
 
-| Item                        | Status                  | Evidence                                                                                        |
-| --------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------- |
-| tenantId in query params    | ✅ **FIXED**            | All 5 API calls in `useIncidentData.ts` cleaned                                                 |
-| No FeatureGate component    | ⚠️ **Built, not wired** | `FeatureGate.tsx` (111 lines, 7 features) — not imported in pages                               |
-| No permission UI checks     | ⚠️ **Built, not wired** | `usePermissions.ts` (84 lines, 8 permissions) — `TeamManagement.tsx` still uses raw role checks |
-| No tenant suspension UI     | ⚠️ **Built, not wired** | `TenantGuard.tsx` (114 lines) — not wrapping Dashboard                                          |
-| No usage warnings           | ⚠️ **Built, not wired** | `UsageWarning.tsx` (161 lines) — not rendered                                                   |
-| No PKCE client-side         | ✅ **DONE**             | `pkce.ts` with `initPkceFlow()` → `Login.tsx` sets `code_challenge` + `code_challenge_method`   |
-| No API client timeout       | ✅ **DONE**             | 30s `AbortController` + single-flight refresh                                                   |
-| Inconsistent tenant scoping | ✅ **FIXED**            | All API calls use JWT-only                                                                      |
-| No 403 error logging        | ✅ **Acceptable**       | Plan limit errors handled by `usePlanLimitError` hook — shows dialog, not just silent           |
+| Item                        | Status       | Evidence                                                                          |
+| --------------------------- | ------------ | --------------------------------------------------------------------------------- |
+| tenantId in query params    | ✅ **FIXED** | All 5 API calls in `useIncidentData.ts` cleaned                                   |
+| No FeatureGate component    | ✅ **DONE**  | Used in `Integrations.tsx` for `slackIntegration` + `apiAccess` (lines 497-512)   |
+| No permission UI checks     | ✅ **DONE**  | `usePermissions()` adopted in `TeamManagement.tsx` (line 129 — `hasPermission()`) |
+| No tenant suspension UI     | ✅ **DONE**  | `TenantGuard` wraps Dashboard content (lines 681-714)                             |
+| No usage warnings           | ✅ **DONE**  | `UsageWarning` rendered 3x in `Settings.tsx` (lines 382-394)                      |
+| No PKCE client-side         | ✅ **DONE**  | `pkce.ts` + `Login.tsx` sets `code_challenge` + `code_challenge_method`           |
+| No API client timeout       | ✅ **DONE**  | 30s `AbortController` + single-flight refresh                                     |
+| Inconsistent tenant scoping | ✅ **FIXED** | All API calls use JWT-only                                                        |
+| No 403 error logging        | ✅ **DONE**  | `usePlanLimitError` hook shows dialog + `toast.error` on org switch failure       |
+
+Additional items verified in this audit:
+
+- **localStorage tenant-scoped** ✅ `buildFilterStorageKey(pageKey, tenantId)` in `FilterBar.tsx:149`
+- **localStorage cleared on org switch** ✅ `useAuth.tsx:220-222` removes `kenchi_filters_*` keys
+- **Idle session timeout** ✅ `IDLE_TIMEOUT_MS = 30 * 60 * 1000` in `useAuth.tsx:31`
+- **Per-route error boundaries** ✅ `PageErrorBoundary` wraps Dashboard content (line 682)
+- **Open redirect protection** ✅ `isSafeRedirectPath()` in `AuthCallback.tsx`
+- **SSE authenticated** ✅ `EventSource` with `withCredentials: true`
 
 ---
 
 ## Section 13: Webhook Security
 
-| Item                             | Status      | Evidence                                                                                                                                                                   |
-| -------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No timestamp in signature verify | ✅ **DONE** | `requestSignature.ts` — "timestamp-based replay protection" with configurable tolerance. Full test suite in `requestSignature.test.ts` with multi-key support              |
-| No Redis dedup layer             | ✅ **DONE** | `index.ts:1351` — "Webhook deduplication cache (fast-path replay protection)" with Redis `SETNX` pattern. `redis.ts:170` — "Webhook dedup fast-path for replay protection" |
-| No per-source rate limiting      | ❌ **Open** | Global IP limit only — no per-installation/per-workspace rate limit                                                                                                        |
+| Item                             | Status      | Evidence                                                                              |
+| -------------------------------- | ----------- | ------------------------------------------------------------------------------------- |
+| No timestamp in signature verify | ✅ **DONE** | `requestSignature.ts` — timestamp-based replay protection with configurable tolerance |
+| No Redis dedup layer             | ✅ **DONE** | Webhook dedup cache with Redis `SETNX` pattern                                        |
+| No per-source rate limiting      | ❌ **Open** | Global IP limit only                                                                  |
 
 ---
 
 ## What's Still Open — Prioritized
 
-### High Priority
-
-| #   | Item                                       | Section | Effort |
-| --- | ------------------------------------------ | ------- | ------ |
-| 1   | Wire `TenantGuard` into Dashboard.tsx      | §12     | 30 min |
-| 2   | Wire `FeatureGate` into gated pages        | §12     | 2 hrs  |
-| 3   | Wire `UsageWarning` into overview/settings | §12     | 1 hr   |
-| 4   | Adopt `usePermissions` in TeamManagement   | §12     | 1 hr   |
-
 ### Medium Priority
 
 | #   | Item                                                  | Section | Effort |
 | --- | ----------------------------------------------------- | ------- | ------ |
-| 5   | Per-source webhook rate limiting                      | §13     | 4 hrs  |
-| 6   | Fair job scheduling (weighted queues)                 | §7      | 1 day  |
-| 7   | Per-tenant circuit breakers                           | §7      | 1 day  |
-| 8   | Backend permission-based auth (replace `requireRole`) | §4      | 2 days |
+| 1   | Per-source webhook rate limiting                      | §13     | 4 hrs  |
+| 2   | Fair job scheduling (weighted queues)                 | §7      | 1 day  |
+| 3   | Per-tenant circuit breakers                           | §7      | 1 day  |
+| 4   | Backend permission-based auth (replace `requireRole`) | §4      | 2 days |
 
 ### Low Priority
 
 | #   | Item                                 | Section | Effort |
 | --- | ------------------------------------ | ------- | ------ |
-| 9   | Reactivation validation on unsuspend | §5      | 4 hrs  |
-| 10  | Per-tenant encryption keys (KMS)     | §8      | 2 days |
-| 11  | SSE connection limits per tenant     | §7      | 4 hrs  |
-| 12  | Per-tenant resource quotas           | §7      | 1 day  |
-| 13  | Tenant health dashboards             | §9      | 2 days |
-| 14  | Usage threshold alerting             | §9      | 4 hrs  |
-| 15  | Billing integration (Stripe)         | §6      | 1 week |
+| 5   | Reactivation validation on unsuspend | §5      | 4 hrs  |
+| 6   | Per-tenant encryption keys (KMS)     | §8      | 2 days |
+| 7   | SSE connection limits per tenant     | §7      | 4 hrs  |
+| 8   | Per-tenant resource quotas           | §7      | 1 day  |
+| 9   | Tenant health dashboards + alerting  | §9      | 2 days |
+| 10  | Billing integration (Stripe)         | §6      | 1 week |
 
-**Total remaining effort**: ~5 working days for high/medium, ~2 weeks with low priority and billing.
+**Total remaining effort**: ~4 working days for medium, ~2 weeks including low priority and billing.
+
+> **Note**: All frontend items (previously 4 high-priority) are now fully resolved and removed from this list.

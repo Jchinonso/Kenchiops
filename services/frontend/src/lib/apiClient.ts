@@ -126,17 +126,33 @@ export const apiClient = async (
 
   const response = await httpRequest(`${API_URL}${path}`, init);
 
-  // Surface plan-limit 403 and downgrade-blocked 409 errors to the user via toast
+  // Surface plan-limit, feature-gate, and downgrade-blocked errors to the user via toast
   if (response.status === 403 || response.status === 409) {
     try {
       const cloned = response.clone();
-      const body = (await cloned.json()) as {
-        readonly error?: { readonly code?: string; readonly message?: string };
+      const errorBody = (await cloned.json()) as {
+        readonly error?: {
+          readonly code?: string;
+          readonly message?: string;
+          readonly metadata?: { readonly code?: string };
+        };
       };
-      if (body.error?.code === "PLAN_LIMIT_EXCEEDED") {
-        toast.error(body.error.message ?? "You've reached your plan limit. Upgrade to continue.");
-      } else if (body.error?.code === "DOWNGRADE_BLOCKED") {
-        toast.error(body.error.message ?? "Current usage exceeds the target plan's limits.");
+      const errorCode = errorBody.error?.code;
+      const metadataCode = errorBody.error?.metadata?.code;
+
+      if (errorCode === "PLAN_LIMIT_EXCEEDED" || metadataCode === "PLAN_LIMIT_EXCEEDED") {
+        toast.error(
+          errorBody.error?.message ?? "You've reached your plan limit. Upgrade to continue."
+        );
+      } else if (
+        errorCode === "FEATURE_NOT_AVAILABLE" ||
+        metadataCode === "FEATURE_NOT_AVAILABLE"
+      ) {
+        toast.error(
+          errorBody.error?.message ?? "This feature is not available on your current plan."
+        );
+      } else if (errorCode === "DOWNGRADE_BLOCKED" || metadataCode === "DOWNGRADE_BLOCKED") {
+        toast.error(errorBody.error?.message ?? "Current usage exceeds the target plan's limits.");
       }
     } catch {
       // Ignore parsing errors — non-JSON responses are handled elsewhere

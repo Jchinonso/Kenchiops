@@ -13,7 +13,7 @@ import {
   API_ROUTES,
   requireTenantId,
   requireTenantMatch,
-  requireRole,
+  requirePermission,
   rateLimitByCategory,
   purgeTenantRAGData,
   purgePRDiffChunks,
@@ -168,7 +168,7 @@ const handlePurgeDoc = async (req: Request, res: Response): Promise<void> => {
 router.delete(
   API_ROUTES.RAG_PURGE_TENANT,
   rateLimitByCategory("expensive"),
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   requireTenantMatch(),
   asyncHandler(handlePurgeTenant)
 );
@@ -177,7 +177,7 @@ router.delete(
 router.delete(
   API_ROUTES.RAG_PURGE_PR,
   rateLimitByCategory("expensive"),
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   requireTenantMatch(),
   asyncHandler(handlePurgePR)
 );
@@ -186,7 +186,7 @@ router.delete(
 router.delete(
   API_ROUTES.RAG_PURGE_DOC,
   rateLimitByCategory("expensive"),
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   requireTenantMatch(),
   asyncHandler(handlePurgeDoc)
 );

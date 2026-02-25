@@ -593,6 +593,12 @@ export {
   requestContextMiddleware,
   authMiddleware,
   requireRole,
+  requirePermission,
+  requireAnyPermission,
+  requireFeature,
+  roleHasPermission,
+  roleHasAnyPermission,
+  type Permission,
 } from "./http/index.js";
 export { requireTenantId, getEffectiveTenantId, requireTenantMatch } from "./http/index.js";
 export { validate, validators, type ValidationSchema } from "./http/index.js";

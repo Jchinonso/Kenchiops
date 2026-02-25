@@ -28,6 +28,7 @@ import {
   updateCustomRiskRule,
   deleteCustomRiskRule,
   queryRiskAssessments,
+  requireFeature,
 } from "@kenchi/shared";
 import type { CreateRiskRuleRequestBody, UpdateRiskRuleRequestBody } from "../types/apiTypes.js";
 
@@ -316,14 +317,19 @@ const handleQueryRiskAssessments = async (req: Request, res: Response): Promise<
 // ==================== Route Definitions ====================
 
 /** GET /api/risk-rules - List custom risk rules for a tenant */
-router.get("/api/risk-rules", asyncHandler(handleListRiskRules));
+router.get("/api/risk-rules", requireFeature("customRules"), asyncHandler(handleListRiskRules));
 
 /** GET /api/risk-rules/:ruleId - Get a specific risk rule by ID */
-router.get("/api/risk-rules/:ruleId", asyncHandler(handleGetRiskRuleById));
+router.get(
+  "/api/risk-rules/:ruleId",
+  requireFeature("customRules"),
+  asyncHandler(handleGetRiskRuleById)
+);
 
 /** POST /api/risk-rules - Create a new custom risk rule */
 router.post(
   "/api/risk-rules",
+  requireFeature("customRules"),
   validate({
     body: {
       name: validateRequiredString,
@@ -334,12 +340,24 @@ router.post(
 );
 
 /** PATCH /api/risk-rules/:ruleId - Update an existing risk rule */
-router.patch("/api/risk-rules/:ruleId", asyncHandler(handleUpdateRiskRule));
+router.patch(
+  "/api/risk-rules/:ruleId",
+  requireFeature("customRules"),
+  asyncHandler(handleUpdateRiskRule)
+);
 
 /** DELETE /api/risk-rules/:ruleId - Delete a risk rule */
-router.delete("/api/risk-rules/:ruleId", asyncHandler(handleDeleteRiskRule));
+router.delete(
+  "/api/risk-rules/:ruleId",
+  requireFeature("customRules"),
+  asyncHandler(handleDeleteRiskRule)
+);
 
 /** GET /api/risk-assessments - Query risk assessment audit trail */
-router.get("/api/risk-assessments", asyncHandler(handleQueryRiskAssessments));
+router.get(
+  "/api/risk-assessments",
+  requireFeature("customRules"),
+  asyncHandler(handleQueryRiskAssessments)
+);
 
 export { router as riskRulesRoutes };

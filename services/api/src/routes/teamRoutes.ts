@@ -17,6 +17,7 @@ import {
   ValidationError,
   NotFoundError,
   requireRole,
+  requirePermission,
   HTTP_STATUS,
   getErrorMessage,
   rateLimitByCategory,
@@ -577,21 +578,21 @@ router.get(
 router.patch(
   "/api/v1/team/members/:userId/role",
   rateLimitByCategory("standard"),
-  requireRole("admin", "owner"),
+  requirePermission("team.manage"),
   asyncHandler(handleChangeRole)
 );
 
 router.delete(
   "/api/v1/team/members/:userId",
   rateLimitByCategory("standard"),
-  requireRole("admin", "owner"),
+  requirePermission("members.remove"),
   asyncHandler(handleRemoveMember)
 );
 
 router.post(
   "/api/v1/team/members/:userId/revoke-sessions",
   rateLimitByCategory("standard"),
-  requireRole("admin", "owner"),
+  requirePermission("team.manage"),
   asyncHandler(handleRevokeUserSessions)
 );
 

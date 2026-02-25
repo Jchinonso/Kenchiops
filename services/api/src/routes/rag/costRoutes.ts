@@ -16,7 +16,7 @@ import {
   COST_CONTROL_CONFIG,
   VALID_EMBEDDING_TIERS,
   requireTenantMatch,
-  requireRole,
+  requirePermission,
   type EmbeddingTierName,
   getTenantTierConfig,
   setTenantTierConfig,
@@ -312,7 +312,7 @@ router.get(API_ROUTES.RAG_CACHE_STATS, asyncHandler(handleGetCacheStats));
 /** POST /api/rag/cache/clear - Clear cache (admin/owner only) */
 router.post(
   API_ROUTES.RAG_CACHE_CLEAR,
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   asyncHandler(handleClearCache)
 );
 

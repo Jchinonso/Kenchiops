@@ -12,7 +12,7 @@ import {
   asyncHandler,
   createLogger,
   requireTenantId,
-  requireRole,
+  requirePermission,
   ValidationError,
   NotFoundError,
   AuthorizationError,
@@ -311,25 +311,25 @@ const handleMyPendingInvitations = async (req: Request, res: Response): Promise<
 
 // ==================== Route Definitions ====================
 
-// Admin/owner routes
+// Permission-gated routes
 router.post(
   "/api/v1/invitations",
   rateLimitByCategory("standard"),
-  requireRole("admin", "owner"),
+  requirePermission("members.invite"),
   asyncHandler(handleCreateInvitation)
 );
 
 router.get(
   "/api/v1/invitations",
   rateLimitByCategory("readonly"),
-  requireRole("admin", "owner"),
+  requirePermission("members.invite"),
   asyncHandler(handleListInvitations)
 );
 
 router.delete(
   "/api/v1/invitations/:invitationId",
   rateLimitByCategory("standard"),
-  requireRole("admin", "owner"),
+  requirePermission("members.remove"),
   asyncHandler(handleRevokeInvitation)
 );
 

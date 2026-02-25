@@ -15,7 +15,7 @@ import {
   createLogger,
   SERVICE_NAMES,
   FINE_TUNING_CONFIG,
-  requireRole,
+  requirePermission,
 } from "@kenchi/shared";
 import {
   startFineTuningJob,
@@ -270,14 +270,14 @@ router.get("/api/fine-tuning/scheduler/status", asyncHandler(handleGetSchedulerS
 /** POST /api/fine-tuning/scheduler/start - Start the scheduler */
 router.post(
   "/api/fine-tuning/scheduler/start",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   asyncHandler(handleStartScheduler)
 );
 
 /** POST /api/fine-tuning/scheduler/stop - Stop the scheduler */
 router.post(
   "/api/fine-tuning/scheduler/stop",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   asyncHandler(handleStopScheduler)
 );
 

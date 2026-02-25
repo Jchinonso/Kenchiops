@@ -23,8 +23,16 @@ export { requestContextMiddleware } from "./requestContextMiddleware.js";
 // Auth middleware
 export { authMiddleware } from "./authMiddleware.js";
 
-// Authorization middleware (RBAC)
-export { requireRole } from "./authorizationMiddleware.js";
+// Authorization middleware (RBAC + permissions + feature gates)
+export {
+  requireRole,
+  requirePermission,
+  requireAnyPermission,
+  requireFeature,
+  roleHasPermission,
+  roleHasAnyPermission,
+} from "./authorizationMiddleware.js";
+export type { Permission } from "./authorizationMiddleware.js";
 
 // Validation
 export { validate, validators } from "./validation.js";

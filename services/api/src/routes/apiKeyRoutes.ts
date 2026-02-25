@@ -12,7 +12,8 @@ import {
   asyncHandler,
   createLogger,
   requireTenantId,
-  requireRole,
+  requirePermission,
+  requireFeature,
   ValidationError,
   NotFoundError,
   HTTP_STATUS,
@@ -175,21 +176,24 @@ const handleRevokeApiKey = async (req: Request, res: Response): Promise<void> =>
 router.post(
   "/api/v1/api-keys",
   rateLimitByCategory("standard"),
-  requireRole("admin", "owner"),
+  requirePermission("integrations.manage"),
+  requireFeature("apiAccess"),
   asyncHandler(handleCreateApiKey)
 );
 
 router.get(
   "/api/v1/api-keys",
   rateLimitByCategory("readonly"),
-  requireRole("admin", "owner"),
+  requirePermission("integrations.manage"),
+  requireFeature("apiAccess"),
   asyncHandler(handleListApiKeys)
 );
 
 router.delete(
   "/api/v1/api-keys/:apiKeyId",
   rateLimitByCategory("standard"),
-  requireRole("admin", "owner"),
+  requirePermission("integrations.manage"),
+  requireFeature("apiAccess"),
   asyncHandler(handleRevokeApiKey)
 );
 

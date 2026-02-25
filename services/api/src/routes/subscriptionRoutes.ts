@@ -14,7 +14,7 @@ import {
   requireTenantId,
   AuthorizationError,
   ValidationError,
-  requireRole,
+  requirePermission,
   HTTP_STATUS,
   DEFAULT_PLAN_ID,
   getErrorMessage,
@@ -373,11 +373,11 @@ router.get(
   rateLimitByCategory("readonly"),
   asyncHandler(handleGetUsage)
 );
-// Role enforcement: only admins and owners can change the subscription plan (VULN-009)
+// Permission enforcement: billing permission required to change the subscription plan (VULN-009)
 router.put(
   "/api/v1/subscription/plan",
   rateLimitByCategory("standard"),
-  requireRole("admin", "owner"),
+  requirePermission("billing"),
   asyncHandler(handleChangePlan)
 );
 

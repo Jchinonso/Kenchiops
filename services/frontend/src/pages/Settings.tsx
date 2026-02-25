@@ -42,12 +42,16 @@ import {
   AlertTriangle,
   CreditCard,
   Users,
+  Shield,
+  Scale,
+  Headphones,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
 import { Switch } from "@/components/ui/switch";
 import { UsageWarning } from "@/components/UsageWarning";
+import { FeatureGate } from "@/components/FeatureGate";
 
 // ==================== Constants ====================
 
@@ -483,6 +487,78 @@ export const Settings = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* SSO / SAML */}
+      <FeatureGate feature="ssoSaml">
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-indigo-500" />
+              <CardTitle>SSO / SAML</CardTitle>
+            </div>
+            <CardDescription>Configure single sign-on with your identity provider.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              SSO/SAML configuration will be available here. Connect your identity provider to
+              enable single sign-on for your organization.
+            </p>
+          </CardContent>
+        </Card>
+      </FeatureGate>
+
+      {/* Custom Rules */}
+      <FeatureGate feature="customRules">
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-2">
+              <Scale className="w-5 h-5 text-indigo-500" />
+              <CardTitle>Custom Rules</CardTitle>
+            </div>
+            <CardDescription>
+              Configure custom risk assessment rules for your CI pipelines.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Create and manage custom risk rules to tailor analysis to your workflows.
+              </p>
+              <Link
+                to="/dashboard/risk-rules"
+                className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors whitespace-nowrap ml-4"
+              >
+                Manage Rules
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </FeatureGate>
+
+      {/* Priority Support */}
+      <FeatureGate feature="prioritySupport">
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-2">
+              <Headphones className="w-5 h-5 text-indigo-500" />
+              <CardTitle>Priority Support</CardTitle>
+            </div>
+            <CardDescription>Get priority support with faster response times.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Your plan includes priority support. Contact us at{" "}
+              <a
+                href="mailto:support@kenchi.dev"
+                className="text-indigo-500 hover:text-indigo-600 transition-colors"
+              >
+                support@kenchi.dev
+              </a>{" "}
+              for expedited assistance.
+            </p>
+          </CardContent>
+        </Card>
+      </FeatureGate>
 
       {/* Danger Zone */}
       <Card className="border-red-200 dark:border-red-900">
