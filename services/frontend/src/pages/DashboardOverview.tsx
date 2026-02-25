@@ -66,6 +66,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { UsageWarning } from "@/components/UsageWarning";
+import { FeatureGate } from "@/components/FeatureGate";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { ConfidenceChart } from "@/components/ConfidenceChart";
 import { ConfidenceTrendChart } from "@/components/ConfidenceTrendChart";
@@ -978,14 +979,16 @@ export const DashboardOverview = ({
         </div>
       )}
 
-      {/* Charts */}
-      <ConfidenceTrendChart refreshKey={refreshKey} />
-      <ConfidenceChart refreshKey={refreshKey} />
-      <SeverityDistributionChart
-        distribution={triageStats?.severityDistribution ?? null}
-        distributionBySource={severityBySource ?? null}
-        isLoading={!triageStats && !!tenantId}
-      />
+      {/* Charts — gated to Team+ plans */}
+      <FeatureGate feature="teamAnalytics">
+        <ConfidenceTrendChart refreshKey={refreshKey} />
+        <ConfidenceChart refreshKey={refreshKey} />
+        <SeverityDistributionChart
+          distribution={triageStats?.severityDistribution ?? null}
+          distributionBySource={severityBySource ?? null}
+          isLoading={!triageStats && !!tenantId}
+        />
+      </FeatureGate>
     </>
   );
 };
