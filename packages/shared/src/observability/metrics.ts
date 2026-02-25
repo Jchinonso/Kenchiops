@@ -55,8 +55,8 @@ export const analysisDuration = new Histogram({
 
 export const externalCallsTotal = new Counter({
   name: "kenchi_external_calls_total",
-  help: "Total external API calls by tenant, provider, and operation",
-  labelNames: ["tenant_id", "provider", "operation"] as const,
+  help: "Total external API calls by tenant, provider, operation, and status code",
+  labelNames: ["tenant_id", "provider", "operation", "status_code"] as const,
 });
 
 export const externalCallDuration = new Histogram({
@@ -64,6 +64,27 @@ export const externalCallDuration = new Histogram({
   help: "External API call duration by provider",
   labelNames: ["tenant_id", "provider", "operation"] as const,
   buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30],
+});
+
+// ==================== Encryption Metrics ====================
+
+export const encryptionOpsTotal = new Counter({
+  name: "kenchi_encryption_ops_total",
+  help: "Total encryption operations by tenant, operation type, and key version",
+  labelNames: ["tenant_id", "operation", "key_version"] as const,
+});
+
+export const encryptionOpDuration = new Histogram({
+  name: "kenchi_encryption_op_duration_seconds",
+  help: "Encryption operation duration by operation type",
+  labelNames: ["tenant_id", "operation"] as const,
+  buckets: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1],
+});
+
+export const encryptionErrorsTotal = new Counter({
+  name: "kenchi_encryption_errors_total",
+  help: "Total encryption errors by tenant and operation",
+  labelNames: ["tenant_id", "operation", "error_type"] as const,
 });
 
 // ==================== Concurrency Gauges ====================

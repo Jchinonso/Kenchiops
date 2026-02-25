@@ -554,9 +554,10 @@ const createApp = (): express.Express => {
   app.use(metricsMiddleware);
 
   // Prometheus metrics endpoint (no auth required — internal/monitoring use)
-  app.get("/metrics", (_req, res) => {
+  app.get("/metrics", async (_req, res) => {
+    const metrics = await getMetrics();
     res.set("Content-Type", getMetricsContentType());
-    res.end(getMetrics());
+    res.end(metrics);
   });
 
   // Register all routes

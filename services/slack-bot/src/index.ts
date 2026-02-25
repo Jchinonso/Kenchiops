@@ -23,6 +23,7 @@ import {
   isSocketModeDisconnectError,
   createRateLimitMiddleware,
   createSecurityHeaders,
+  metricsMiddleware,
   startSlackNotificationWorker,
   getErrorMessage,
   SLACK_BOT_RATE_LIMITS,
@@ -193,6 +194,9 @@ const startService = async (): Promise<void> => {
       distributedFallback: "fail", // Fail-safe when Redis unavailable
     });
     expressApp.use(httpRateLimiter.middleware());
+
+    // Per-tenant Prometheus metrics
+    expressApp.use(metricsMiddleware);
 
     // Add OAuth routes for multi-tenant Slack installation
     expressApp.use(oauthRoutes);

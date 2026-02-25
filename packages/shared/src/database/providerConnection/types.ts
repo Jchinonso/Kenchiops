@@ -85,6 +85,8 @@ export interface CreateProviderConnectionInput {
 
 export interface UpdateProviderConnectionInput {
   readonly id: string;
+  /** Required for per-tenant encryption of token/secret fields. */
+  readonly tenantId: string;
   readonly connectionName?: string;
   readonly externalOrgId?: string | null;
   readonly config?: Readonly<Record<string, unknown>>;

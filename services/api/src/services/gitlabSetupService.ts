@@ -186,6 +186,7 @@ export const createGitLabSetupService = (
         // in case they re-authenticated with GitLab since the connection was created
         await updateProviderConnection({
           id: existingConnection.id,
+          tenantId,
           accessToken: gitlabIdentity.accessToken,
           tokenExpiresAt: gitlabIdentity.tokenExpiresAt,
           config: {

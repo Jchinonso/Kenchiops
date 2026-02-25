@@ -82,6 +82,17 @@ groups:
           summary: "Tenant {{ $labels.tenant_id }} seeing {{ $labels.provider }} failures"
           description: "{{ $value | humanize }} failures/s from {{ $labels.provider }} over the last 10 minutes."
 
+      # Encryption errors (any sustained errors is concerning)
+      - alert: TenantEncryptionErrors
+        expr: >
+          sum by (tenant_id) (rate(kenchi_encryption_errors_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} experiencing encryption errors"
+          description: "Encryption error rate is {{ $value | humanize }}/s. Data at rest may not be protected."
+
       # Slow analysis pipeline
       - alert: TenantSlowAnalysis
         expr: >

@@ -14,8 +14,8 @@ import {
   NotFoundError,
   ValidationError,
   config,
-  encryptValue,
-  decryptValue,
+  encryptForTenant,
+  decryptAuto,
   enforcePlanLimit,
   findByTenantAndProvider,
   findConnectionById,
@@ -201,6 +201,13 @@ const connectImpl = async (
 
   const expiresAt = tokens.expiresIn ? new Date(Date.now() + tokens.expiresIn * 1000) : null;
 
+  const encryptedConfig = {
+    ...(tokens.refreshToken
+      ? { refreshToken: await encryptForTenant(tenantId, tokens.refreshToken) }
+      : {}),
+    ...(webhookId ? { webhookId } : {}),
+  };
+
   const connection = await createProviderConnection({
     tenantId,
     provider,
@@ -209,10 +216,7 @@ const connectImpl = async (
     accessToken: tokens.accessToken,
     webhookSecret: credential,
     tokenExpiresAt: expiresAt,
-    config: {
-      ...(tokens.refreshToken ? { refreshToken: encryptValue(tokens.refreshToken) } : {}),
-      ...(webhookId ? { webhookId } : {}),
-    },
+    config: encryptedConfig,
   });
 
   connectLogger.info("Integration connection created", {
@@ -276,7 +280,7 @@ const refreshIfNeededImpl = async (
     return;
   }
 
-  const stored = decryptValue(encryptedRefresh);
+  const stored = await decryptAuto(connection.tenantId, encryptedRefresh);
 
   if (!stored) {
     refreshLogger.warn("Refresh token decryption returned empty", {
@@ -293,14 +297,19 @@ const refreshIfNeededImpl = async (
     ? new Date(Date.now() + newTokens.expiresIn * 1000)
     : null;
 
+  const updatedConfig = {
+    ...connectionConfig,
+    ...(newTokens.refreshToken
+      ? { refreshToken: await encryptForTenant(connection.tenantId, newTokens.refreshToken) }
+      : {}),
+  };
+
   await updateProviderConnection({
     id: connectionId,
+    tenantId: connection.tenantId,
     accessToken: newTokens.accessToken,
     tokenExpiresAt: newExpiresAt,
-    config: {
-      ...connectionConfig,
-      ...(newTokens.refreshToken ? { refreshToken: encryptValue(newTokens.refreshToken) } : {}),
-    },
+    config: updatedConfig,
   });
 
   refreshLogger.info("Integration credentials refreshed", {

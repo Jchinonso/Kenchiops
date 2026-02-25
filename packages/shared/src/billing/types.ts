@@ -155,4 +155,7 @@ export const BILLING_QUERIES = {
   FIND_BY_STRIPE_SUBSCRIPTION: `SELECT * FROM tenant_subscriptions WHERE stripe_subscription_id = $1`,
 
   GET_STRIPE_PRICE_ID: `SELECT stripe_price_id_monthly, stripe_price_id_yearly FROM plans WHERE id = $1`,
+
+  /** Delete billing events older than a specified interval. Parameterized: $1 = interval (e.g. '90 days'). */
+  CLEANUP_OLD_BILLING_EVENTS: `DELETE FROM billing_events WHERE created_at < NOW() - $1::interval RETURNING id`,
 } as const;

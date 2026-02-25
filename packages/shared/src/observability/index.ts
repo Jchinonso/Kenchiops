@@ -15,6 +15,9 @@ export {
   externalCallDuration,
   activeAnalysisJobs,
   activeConnections,
+  encryptionOpsTotal,
+  encryptionOpDuration,
+  encryptionErrorsTotal,
   getMetrics,
   getMetricsContentType,
 } from "./metrics.js";

@@ -46,6 +46,18 @@ export {
 
 export type { TenantEncryptionConfig, EncryptedPayload } from "./tenantEncryptionTypes.js";
 
+// KMS port interface (for future cloud KMS integration)
+export type { KmsPort, KmsKeyMetadata, WrapKeyResult, UnwrapKeyResult } from "./kmsPort.js";
+
+// Key rotation utilities
+export {
+  reEncryptValue,
+  createKeyRotationRunner,
+  type RotationResult,
+  type RotationSummary,
+  type UpdateKeyVersionFn,
+} from "./keyRotation.js";
+
 // Cookie utilities (httpOnly auth cookies)
 export {
   setAuthCookies,

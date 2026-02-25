@@ -20,6 +20,7 @@ import {
   setupGracefulShutdown,
   registerCleanupHandler,
   rateLimitByPlan,
+  metricsMiddleware,
   initDatabase,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
@@ -123,6 +124,9 @@ const createApp = (
 
   // Per-tenant plan-based rate limiting (after auth so tenantId is available)
   app.use(rateLimitByPlan());
+
+  // Per-tenant Prometheus metrics (after auth so tenantId is available)
+  app.use(metricsMiddleware);
 
   app.use(triageRateLimiter.middleware());
 

@@ -18,6 +18,11 @@ import { config } from "../core/config.js";
 import { createLogger } from "../core/logger.js";
 import { invariant } from "../core/errors.js";
 import { decryptValue } from "./encryption.js";
+import {
+  encryptionOpsTotal,
+  encryptionOpDuration,
+  encryptionErrorsTotal,
+} from "../observability/metrics.js";
 import type { EncryptedPayload } from "./tenantEncryptionTypes.js";
 
 const ALGORITHM = "aes-256-gcm";
@@ -104,24 +109,37 @@ export const encryptForTenant = async (tenantId: string, plaintext: string): Pro
     return plaintext;
   }
 
-  const tenantKey = await deriveTenantKey(masterKey, tenantId);
+  const end = encryptionOpDuration.startTimer({ tenant_id: tenantId, operation: "encrypt" });
+  try {
+    const tenantKey = await deriveTenantKey(masterKey, tenantId);
 
-  const iv = crypto.randomBytes(IV_BYTE_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, tenantKey, iv, {
-    authTagLength: AUTH_TAG_BYTE_LENGTH,
-  });
+    const iv = crypto.randomBytes(IV_BYTE_LENGTH);
+    const cipher = crypto.createCipheriv(ALGORITHM, tenantKey, iv, {
+      authTagLength: AUTH_TAG_BYTE_LENGTH,
+    });
 
-  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  const authTag = cipher.getAuthTag();
+    const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+    const authTag = cipher.getAuthTag();
 
-  const payload: EncryptedPayload = {
-    version: V2_PREFIX,
-    iv: iv.toString("hex"),
-    ciphertext: encrypted.toString("hex"),
-    authTag: authTag.toString("hex"),
-  };
+    const payload: EncryptedPayload = {
+      version: V2_PREFIX,
+      iv: iv.toString("hex"),
+      ciphertext: encrypted.toString("hex"),
+      authTag: authTag.toString("hex"),
+    };
 
-  return [payload.version, payload.iv, payload.ciphertext, payload.authTag].join(":");
+    encryptionOpsTotal.inc({ tenant_id: tenantId, operation: "encrypt", key_version: "2" });
+    return [payload.version, payload.iv, payload.ciphertext, payload.authTag].join(":");
+  } catch (error) {
+    encryptionErrorsTotal.inc({
+      tenant_id: tenantId,
+      operation: "encrypt",
+      error_type: "encrypt_failure",
+    });
+    throw error;
+  } finally {
+    end();
+  }
 };
 
 /**
@@ -145,18 +163,32 @@ export const decryptForTenant = async (tenantId: string, ciphertext: string): Pr
     return ciphertext;
   }
 
-  const tenantKey = await deriveTenantKey(masterKey, tenantId);
+  const end = encryptionOpDuration.startTimer({ tenant_id: tenantId, operation: "decrypt" });
+  try {
+    const tenantKey = await deriveTenantKey(masterKey, tenantId);
 
-  const iv = Buffer.from(parts[1], "hex");
-  const encrypted = Buffer.from(parts[2], "hex");
-  const authTag = Buffer.from(parts[3], "hex");
+    const iv = Buffer.from(parts[1], "hex");
+    const encrypted = Buffer.from(parts[2], "hex");
+    const authTag = Buffer.from(parts[3], "hex");
 
-  const decipher = crypto.createDecipheriv(ALGORITHM, tenantKey, iv, {
-    authTagLength: AUTH_TAG_BYTE_LENGTH,
-  });
-  decipher.setAuthTag(authTag);
+    const decipher = crypto.createDecipheriv(ALGORITHM, tenantKey, iv, {
+      authTagLength: AUTH_TAG_BYTE_LENGTH,
+    });
+    decipher.setAuthTag(authTag);
 
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+    const result = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+    encryptionOpsTotal.inc({ tenant_id: tenantId, operation: "decrypt", key_version: "2" });
+    return result;
+  } catch (error) {
+    encryptionErrorsTotal.inc({
+      tenant_id: tenantId,
+      operation: "decrypt",
+      error_type: "decrypt_failure",
+    });
+    throw error;
+  } finally {
+    end();
+  }
 };
 
 /**

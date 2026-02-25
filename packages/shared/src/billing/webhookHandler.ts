@@ -8,6 +8,7 @@
  */
 
 import { createLogger, getErrorMessage } from "../core/index.js";
+import type { RequestContext } from "../core/types.js";
 import { query } from "../database/common.js";
 import { logAuditEvent } from "../database/tenant/audit.js";
 import { AUDIT_ACTIONS } from "../constants/tenant.js";
@@ -346,7 +347,8 @@ const EVENT_HANDLERS: Readonly<
  * @returns Processing result
  */
 export const processStripeWebhook = async (
-  event: StripeWebhookEvent
+  event: StripeWebhookEvent,
+  context: RequestContext
 ): Promise<WebhookProcessResult> => {
   // Idempotency check
   const alreadyProcessed = await isEventProcessed(event.id);
@@ -356,6 +358,7 @@ export const processStripeWebhook = async (
       operation: "processStripeWebhook",
       eventId: event.id,
       eventType: event.type,
+      ...context,
     });
     return { processed: false, eventType: event.type, action: "duplicate" };
   }
@@ -366,6 +369,7 @@ export const processStripeWebhook = async (
       provider: "stripe",
       operation: "processStripeWebhook",
       eventType: event.type,
+      ...context,
     });
     return { processed: false, eventType: event.type, action: "unhandled_event_type" };
   }
@@ -379,6 +383,7 @@ export const processStripeWebhook = async (
       eventId: event.id,
       eventType: event.type,
       error: getErrorMessage(error),
+      ...context,
     });
 
     // Record failure for debugging
@@ -392,4 +397,36 @@ export const processStripeWebhook = async (
 
     throw error;
   }
+};
+
+// ==================== Cleanup ====================
+
+/** Default retention period for billing events. */
+const DEFAULT_RETENTION_DAYS = 90;
+
+/**
+ * Delete billing events older than the specified retention period.
+ * Should be called periodically (e.g., daily cron job) to prevent unbounded table growth.
+ *
+ * @param retentionDays - Number of days to retain events (default: 90)
+ * @returns Number of deleted rows
+ */
+export const cleanupOldBillingEvents = async (
+  retentionDays: number = DEFAULT_RETENTION_DAYS
+): Promise<number> => {
+  const result = await query<{ readonly id: string }>(BILLING_QUERIES.CLEANUP_OLD_BILLING_EVENTS, [
+    `${String(retentionDays)} days`,
+  ]);
+
+  const deletedCount = result.rows.length;
+  if (deletedCount > 0) {
+    logger.info("Cleaned up old billing events", {
+      provider: "stripe",
+      operation: "cleanupOldBillingEvents",
+      deletedCount,
+      retentionDays,
+    });
+  }
+
+  return deletedCount;
 };

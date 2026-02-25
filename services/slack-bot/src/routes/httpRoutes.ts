@@ -19,6 +19,8 @@ import {
   readinessCheck,
   getErrorMessage,
   createInternalAuthMiddleware,
+  getMetrics,
+  getMetricsContentType,
 } from "@kenchi/shared";
 import type { WebClient } from "@slack/web-api";
 import type { AppConfig } from "../config/appConfig.js";
@@ -249,6 +251,17 @@ export const createHttpRoutes = (app: SlackApp, appConfig?: AppConfig): express.
       res.status(statusCode).json(result);
     })
   );
+
+  /**
+   * Prometheus metrics endpoint
+   * GET /metrics
+   * Returns Prometheus-format metrics for scraping
+   */
+  router.get("/metrics", async (_req: Request, res: Response) => {
+    const metrics = await getMetrics();
+    res.set("Content-Type", getMetricsContentType());
+    res.end(metrics);
+  });
 
   return router;
 };

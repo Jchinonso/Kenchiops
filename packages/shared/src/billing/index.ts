@@ -27,4 +27,4 @@ export { createStripeAdapter } from "./stripeAdapter.js";
 
 export { createBillingService, type BillingService } from "./billingService.js";
 
-export { processStripeWebhook } from "./webhookHandler.js";
+export { processStripeWebhook, cleanupOldBillingEvents } from "./webhookHandler.js";

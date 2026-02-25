@@ -25,6 +25,7 @@ import {
   createRateLimitMiddleware,
   createInternalAuthMiddleware,
   createSecurityHeaders,
+  metricsMiddleware,
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   getErrorMessage,
@@ -137,6 +138,7 @@ const createApp = (): express.Express => {
         "/health",
         "/live",
         "/ready",
+        "/metrics",
         "/api/github/webhook",
         "/api/github/installations",
         "/github/setup",
@@ -146,6 +148,9 @@ const createApp = (): express.Express => {
       ],
     })
   );
+
+  // Per-tenant Prometheus metrics
+  app.use(metricsMiddleware);
 
   // Register all routes
   registerRoutes(app);

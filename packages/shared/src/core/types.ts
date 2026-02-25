@@ -739,6 +739,8 @@ export interface Tenant {
   readonly ragPreferredTier: TenantEmbeddingTier;
   readonly ragAllowPremium: boolean;
   readonly ragDegradeOnBudgetWarning: boolean;
+  /** Encryption key version: 1 = legacy global key, 2+ = per-tenant HKDF. */
+  readonly encryptionKeyVersion: number;
 }
 
 /**

@@ -154,7 +154,7 @@ const handleStripeWebhook = async (req: Request, res: Response): Promise<void> =
   try {
     const event = stripeAdapter.constructWebhookEvent(payload, signature);
 
-    const result = await processStripeWebhook(event);
+    const result = await processStripeWebhook(event, req.context);
 
     logger.info("Stripe webhook processed", {
       provider: "stripe",
