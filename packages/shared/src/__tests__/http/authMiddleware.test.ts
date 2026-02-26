@@ -22,6 +22,26 @@ jest.mock("../../security/jwt.js", () => ({
   verifyAccessToken: (...args: unknown[]) => mockVerifyAccessToken(args[0] as string),
 }));
 
+jest.mock("../../security/cookies.js", () => ({
+  extractAccessToken: (req: { headers: Record<string, string | undefined> }) => {
+    const auth = req.headers.authorization;
+    if (auth?.startsWith("Bearer ")) {
+      const token = auth.slice(7);
+      return token.length > 0 ? token : null;
+    }
+    return null;
+  },
+}));
+
+jest.mock("../../cache/userStatusCache.js", () => ({
+  isUserBlocked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+  isTenantBlocked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+}));
+
+jest.mock("../../database/apiKey/repository.js", () => ({
+  authenticateApiKey: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+}));
+
 jest.mock("../../core/index.js", () => ({
   createLogger: jest.fn(() => ({
     info: jest.fn(),
@@ -30,7 +50,33 @@ jest.mock("../../core/index.js", () => ({
     debug: jest.fn(),
   })),
   AuthenticationError,
+  AuthorizationError: class AuthorizationError extends Error {
+    constructor(message: string, options?: { operation?: string }) {
+      super(message);
+      this.name = "AuthorizationError";
+      Object.assign(this, options);
+    }
+  },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
+
+jest.mock("../../http/internalAuth.js", () => ({
+  INTERNAL_AUTH_HEADERS: {
+    SIGNATURE: "x-kenchi-signature",
+    TIMESTAMP: "x-kenchi-timestamp",
+    SERVICE: "x-kenchi-service",
+  },
+  verifyInternalSignature: jest.fn(() => false),
+  resolveServiceSecret: jest.fn(() => undefined),
+}));
+
+jest.mock("../../core/config.js", () => ({
+  config: {},
+}));
+
+// constants/auth.js and constants/http.js use real implementations (pure constants, no side effects)
 
 // Import after mock setup
 import { authMiddleware } from "../../http/authMiddleware.js";
@@ -220,7 +266,7 @@ describe("http/authMiddleware", () => {
   });
 
   describe("invalid/expired token handling", () => {
-    it("should pass AuthenticationError to next() when verifyAccessToken throws AuthenticationError", () => {
+    it("should pass AuthenticationError to next() when verifyAccessToken throws AuthenticationError", async () => {
       const req = createMockRequest({
         path: "/api/v1/analyses",
         headers: { authorization: "Bearer invalid-token" },
@@ -234,7 +280,7 @@ describe("http/authMiddleware", () => {
         });
       });
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(next).toHaveBeenCalledTimes(1);
       const passedError = next.mock.calls[0]![0];
@@ -242,7 +288,7 @@ describe("http/authMiddleware", () => {
       expect((passedError as AuthenticationError).message).toBe("Access token expired");
     });
 
-    it("should wrap non-AuthenticationError exceptions as AuthenticationError", () => {
+    it("should wrap non-AuthenticationError exceptions as AuthenticationError", async () => {
       const req = createMockRequest({
         path: "/api/v1/analyses",
         headers: { authorization: "Bearer some-token" },
@@ -254,7 +300,7 @@ describe("http/authMiddleware", () => {
         throw new Error("Unexpected internal error");
       });
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(next).toHaveBeenCalledTimes(1);
       const passedError = next.mock.calls[0]![0];
@@ -264,7 +310,7 @@ describe("http/authMiddleware", () => {
   });
 
   describe("successful authentication", () => {
-    it("should set req.user with AuthenticatedUser when token is valid", () => {
+    it("should set req.user with AuthenticatedUser when token is valid", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -275,13 +321,13 @@ describe("http/authMiddleware", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(req.user).toEqual(authenticatedUser);
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should call next() without error argument on success", () => {
+    it("should call next() without error argument on success", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -292,13 +338,13 @@ describe("http/authMiddleware", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(next).toHaveBeenCalledTimes(1);
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should update req.context.actor and req.context.tenantId from JWT claims", () => {
+    it("should update req.context.actor and req.context.tenantId from JWT claims", async () => {
       const authenticatedUser = createTestAuthenticatedUser({
         userId: "usr_jwt-user",
         tenantId: "tenant-from-jwt",
@@ -318,7 +364,7 @@ describe("http/authMiddleware", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       const enrichedReq = req as Request & { context: RequestContext };
       expect(enrichedReq.context.actor).toBe("usr_jwt-user");
@@ -327,7 +373,7 @@ describe("http/authMiddleware", () => {
       expect(enrichedReq.context.requestId).toBe("req-123");
     });
 
-    it("should preserve req.context.requestId when enriching with auth info", () => {
+    it("should preserve req.context.requestId when enriching with auth info", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -344,13 +390,13 @@ describe("http/authMiddleware", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       const enrichedReq = req as Request & { context: RequestContext };
       expect(enrichedReq.context.requestId).toBe("preserved-request-id");
     });
 
-    it("should not update tenantId when user tenantId is null", () => {
+    it("should not update tenantId when user tenantId is null", async () => {
       const authenticatedUser = createTestAuthenticatedUser({ tenantId: null });
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -367,7 +413,7 @@ describe("http/authMiddleware", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       const enrichedReq = req as Request & { context: RequestContext };
       // tenantId should remain the original since user.tenantId is null
@@ -375,7 +421,7 @@ describe("http/authMiddleware", () => {
       expect(enrichedReq.context.actor).toBe(authenticatedUser.userId);
     });
 
-    it("should still set req.user even when req.context is not set", () => {
+    it("should still set req.user even when req.context is not set", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -386,13 +432,13 @@ describe("http/authMiddleware", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(req.user).toEqual(authenticatedUser);
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should pass the token string (not the header) to verifyAccessToken", () => {
+    it("should pass the token string (not the header) to verifyAccessToken", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -403,7 +449,7 @@ describe("http/authMiddleware", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(mockVerifyAccessToken).toHaveBeenCalledWith("the-actual-jwt-token-value");
     });
@@ -431,7 +477,7 @@ describe("http/authMiddleware", () => {
       });
     });
 
-    it("should handle Authorization header with extra spaces after Bearer", () => {
+    it("should handle Authorization header with extra spaces after Bearer", async () => {
       // "Bearer  token" -- note the double space; slice(7) gives " token"
       // extractBearerToken checks startsWith("Bearer ") which is true
       // then slices from index 7, giving " token" which has length > 0
@@ -445,7 +491,7 @@ describe("http/authMiddleware", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       // The token passed to verify will include the leading space
       expect(mockVerifyAccessToken).toHaveBeenCalled();

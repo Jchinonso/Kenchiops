@@ -4,7 +4,7 @@
  * Tests the Bitbucket OAuth adapter implementing OAuthPort:
  * - exchangeCode: authorization code to token exchange (Basic auth, URL-encoded)
  * - getUserProfile: parallel profile + emails fetch, email resolution priority
- * - getUserOrganizations: workspace memberships, self-hosted returns empty
+ * - getUserOrganizations: workspace permissions, self-hosted returns empty
  *
  * Covers success paths, error classification (retryable vs non-retryable),
  * Basic auth header encoding, UUID brace stripping, email resolution priority
@@ -91,17 +91,27 @@ const createBitbucketEmailsResponse = (
   values: emails,
 });
 
-const createBitbucketWorkspacesResponse = (
-  workspaces: ReadonlyArray<{
-    readonly uuid: string;
-    readonly slug: string;
-    readonly name: string;
+/**
+ * Creates a workspace permissions response matching the
+ * /2.0/user/permissions/workspaces endpoint format.
+ */
+const createBitbucketWorkspacePermissionsResponse = (
+  entries: ReadonlyArray<{
+    readonly permission: string;
+    readonly workspace: {
+      readonly uuid: string;
+      readonly slug: string;
+      readonly name: string;
+    };
   }> = [
-    { uuid: "{ws-1}", slug: "acme-corp", name: "Acme Corp" },
-    { uuid: "{ws-2}", slug: "dev-team", name: "Dev Team" },
+    { permission: "owner", workspace: { uuid: "{ws-1}", slug: "acme-corp", name: "Acme Corp" } },
+    {
+      permission: "collaborator",
+      workspace: { uuid: "{ws-2}", slug: "dev-team", name: "Dev Team" },
+    },
   ]
 ) => ({
-  values: workspaces,
+  values: entries,
 });
 
 const createFetchResponse = (data: unknown, status = 200, ok = true): Response =>
@@ -446,9 +456,9 @@ describe("bitbucketOAuthAdapter", () => {
   });
 
   describe("getUserOrganizations", () => {
-    it("should fetch and map workspaces to organizations", async () => {
-      const workspacesData = createBitbucketWorkspacesResponse();
-      mockFetch.mockResolvedValueOnce(createFetchResponse(workspacesData));
+    it("should fetch and map workspace permissions to organizations with roles", async () => {
+      const permissionsData = createBitbucketWorkspacePermissionsResponse();
+      mockFetch.mockResolvedValueOnce(createFetchResponse(permissionsData));
 
       const result = await bitbucketOAuthAdapter.getUserOrganizations(
         "test-token",
@@ -456,27 +466,40 @@ describe("bitbucketOAuthAdapter", () => {
         testContext
       );
 
-      expect(result).toEqual([{ login: "acme-corp" }, { login: "dev-team" }]);
+      expect(result).toEqual([
+        { login: "acme-corp", role: "owner" },
+        { login: "dev-team", role: "collaborator" },
+      ]);
     });
 
     it("should map workspace.slug to login (not workspace.name)", async () => {
-      const workspaces = createBitbucketWorkspacesResponse([
-        { uuid: "{ws-1}", slug: "my-workspace-slug", name: "My Workspace Display Name" },
+      const permissions = createBitbucketWorkspacePermissionsResponse([
+        {
+          permission: "member",
+          workspace: {
+            uuid: "{ws-1}",
+            slug: "my-workspace-slug",
+            name: "My Workspace Display Name",
+          },
+        },
       ]);
-      mockFetch.mockResolvedValueOnce(createFetchResponse(workspaces));
+      mockFetch.mockResolvedValueOnce(createFetchResponse(permissions));
 
       const result = await bitbucketOAuthAdapter.getUserOrganizations("token", null, testContext);
 
-      expect(result).toEqual([{ login: "my-workspace-slug" }]);
+      expect(result).toEqual([{ login: "my-workspace-slug", role: "member" }]);
     });
 
-    it("should call correct workspace URL with Bearer auth", async () => {
-      mockFetch.mockResolvedValueOnce(createFetchResponse(createBitbucketWorkspacesResponse([])));
+    it("should call correct workspace permissions URL with Bearer auth", async () => {
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse(createBitbucketWorkspacePermissionsResponse([]))
+      );
 
       await bitbucketOAuthAdapter.getUserOrganizations("my-token", null, testContext);
 
+      // The adapter uses a hardcoded permissions URL, not the old OAUTH_PROVIDER_URLS.bitbucket.userWorkspaces
       expect(mockFetch).toHaveBeenCalledWith(
-        OAUTH_PROVIDER_URLS.bitbucket.userWorkspaces,
+        "https://api.bitbucket.org/2.0/user/permissions/workspaces",
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: "Bearer my-token",
@@ -486,7 +509,9 @@ describe("bitbucketOAuthAdapter", () => {
     });
 
     it("should return empty array when user has no workspaces", async () => {
-      mockFetch.mockResolvedValueOnce(createFetchResponse(createBitbucketWorkspacesResponse([])));
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse(createBitbucketWorkspacePermissionsResponse([]))
+      );
 
       const result = await bitbucketOAuthAdapter.getUserOrganizations("token", null, testContext);
 

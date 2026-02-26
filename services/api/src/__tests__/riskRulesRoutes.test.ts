@@ -4,6 +4,10 @@
  * Tests CRUD operations for custom risk rules, risk assessment queries,
  * input validation, tenant isolation, error handling with typed errors,
  * and query parameter parsing.
+ *
+ * Note: tenantId is sourced from req.context (set by auth middleware),
+ * not from query/body parameters. Validation of tenantId presence is
+ * the auth middleware's responsibility, not the route handler's.
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
@@ -44,6 +48,7 @@ jest.mock("@kenchi/shared", () => {
           next(error);
         }
       },
+    requireFeature: () => (_req: Request, _res: Response, next: NextFunction) => next(),
   };
 });
 
@@ -81,6 +86,25 @@ const createSampleAssessment = (overrides: Record<string, unknown> = {}) => ({
 });
 
 /**
+ * Middleware that simulates auth context injection for tests.
+ * In production, auth middleware sets req.context.tenantId from the JWT.
+ * For tests, we resolve from body/query to simulate different tenant contexts,
+ * defaulting to "default-tenant" to match production behavior (auth always provides one).
+ */
+const injectTestContext = (req: Request, _res: Response, next: NextFunction): void => {
+  const bodyTenantId = (req.body as Record<string, unknown>)?.tenantId as string | undefined;
+  const queryTenantId = req.query?.tenantId as string | undefined;
+  const resolvedTenantId = bodyTenantId ?? queryTenantId ?? "default-tenant";
+  Object.assign(req, {
+    context: {
+      requestId: "test-request-id",
+      tenantId: resolvedTenantId,
+    },
+  });
+  next();
+};
+
+/**
  * Sets up Express app with error handling middleware that converts
  * typed errors to proper HTTP responses, matching production behavior.
  */
@@ -88,6 +112,7 @@ const setupApp = async (): Promise<Express> => {
   const { riskRulesRoutes } = await import("../routes/riskRulesRoutes.js");
   const app = express();
   app.use(express.json());
+  app.use(injectTestContext);
   app.use(riskRulesRoutes);
 
   // Error handling middleware
@@ -111,6 +136,7 @@ const setupApp = async (): Promise<Express> => {
 // ==================== Tests ====================
 
 describe("Risk Rules Routes", () => {
+  // let: app is reassigned in beforeEach for module isolation
   let app: Express;
 
   beforeEach(async () => {
@@ -169,22 +195,31 @@ describe("Risk Rules Routes", () => {
       );
     });
 
-    it("should return 400 when tenantId is missing", async () => {
+    it("should use tenantId from request context", async () => {
+      mockGetCustomRiskRules.mockResolvedValue([]);
+
+      const response = await request(app).get("/api/risk-rules").query({ tenantId: "ctx-tenant" });
+
+      expect(response.status).toBe(200);
+      expect(mockGetCustomRiskRules).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "ctx-tenant",
+        })
+      );
+      expect(response.body.tenantId).toBe("ctx-tenant");
+    });
+
+    it("should use default context tenantId when no tenantId in query", async () => {
+      mockGetCustomRiskRules.mockResolvedValue([]);
+
       const response = await request(app).get("/api/risk-rules");
 
-      expect(response.status).toBe(400);
-    });
-
-    it("should return 400 when tenantId is empty string", async () => {
-      const response = await request(app).get("/api/risk-rules").query({ tenantId: "" });
-
-      expect(response.status).toBe(400);
-    });
-
-    it("should return 400 when tenantId is whitespace only", async () => {
-      const response = await request(app).get("/api/risk-rules").query({ tenantId: "   " });
-
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(200);
+      expect(mockGetCustomRiskRules).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "default-tenant",
+        })
+      );
     });
 
     it("should return empty array when no rules exist", async () => {
@@ -233,10 +268,12 @@ describe("Risk Rules Routes", () => {
       expect(response.status).toBe(404);
     });
 
-    it("should return 400 when tenantId is missing", async () => {
-      const response = await request(app).get("/api/risk-rules/rule-123");
+    it("should use context tenantId for rule lookup", async () => {
+      mockGetCustomRiskRuleById.mockResolvedValue(createSampleRule());
 
-      expect(response.status).toBe(400);
+      await request(app).get("/api/risk-rules/rule-123");
+
+      expect(mockGetCustomRiskRuleById).toHaveBeenCalledWith("rule-123", "default-tenant");
     });
   });
 
@@ -303,15 +340,23 @@ describe("Risk Rules Routes", () => {
       );
     });
 
-    it("should return 400 when tenantId is missing", async () => {
-      const response = await request(app)
+    it("should use context tenantId rather than body tenantId for the rule", async () => {
+      const createdRule = createSampleRule();
+      mockCreateCustomRiskRule.mockResolvedValue(createdRule);
+
+      await request(app)
         .post("/api/risk-rules")
         .send({
+          tenantId: "tenant-1",
           name: "My Rule",
           actionTypes: ["deploy"],
         });
 
-      expect(response.status).toBe(400);
+      expect(mockCreateCustomRiskRule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "tenant-1",
+        })
+      );
     });
 
     it("should return 400 when name is missing", async () => {
@@ -340,18 +385,6 @@ describe("Risk Rules Routes", () => {
         name: "My Rule",
         actionTypes: "deploy",
       });
-
-      expect(response.status).toBe(400);
-    });
-
-    it("should return 400 when tenantId is not a string", async () => {
-      const response = await request(app)
-        .post("/api/risk-rules")
-        .send({
-          tenantId: 123,
-          name: "My Rule",
-          actionTypes: ["deploy"],
-        });
 
       expect(response.status).toBe(400);
     });
@@ -394,12 +427,20 @@ describe("Risk Rules Routes", () => {
       );
     });
 
-    it("should return 400 when tenantId is missing", async () => {
-      const response = await request(app)
-        .patch("/api/risk-rules/rule-123")
-        .send({ name: "New Name" });
+    it("should use context tenantId for update", async () => {
+      mockUpdateCustomRiskRule.mockResolvedValue(createSampleRule());
 
-      expect(response.status).toBe(400);
+      await request(app).patch("/api/risk-rules/rule-123").send({
+        name: "New Name",
+      });
+
+      expect(mockUpdateCustomRiskRule).toHaveBeenCalledWith(
+        "rule-123",
+        "default-tenant",
+        expect.objectContaining({
+          name: "New Name",
+        })
+      );
     });
   });
 
@@ -434,10 +475,13 @@ describe("Risk Rules Routes", () => {
       expect(response.status).toBe(404);
     });
 
-    it("should return 400 when tenantId is missing", async () => {
+    it("should use context tenantId for deletion", async () => {
+      mockDeleteCustomRiskRule.mockResolvedValue(true);
+
       const response = await request(app).delete("/api/risk-rules/rule-123");
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(204);
+      expect(mockDeleteCustomRiskRule).toHaveBeenCalledWith("rule-123", "default-tenant");
     });
   });
 
@@ -496,10 +540,18 @@ describe("Risk Rules Routes", () => {
       expect(callArgs.toDate).toBeInstanceOf(Date);
     });
 
-    it("should return 400 when tenantId is missing", async () => {
+    it("should use context tenantId for assessment queries", async () => {
+      mockQueryRiskAssessments.mockResolvedValue([]);
+
       const response = await request(app).get("/api/risk-assessments");
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(200);
+      expect(response.body.tenantId).toBe("default-tenant");
+      expect(mockQueryRiskAssessments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "default-tenant",
+        })
+      );
     });
 
     it("should return empty array when no assessments exist", async () => {

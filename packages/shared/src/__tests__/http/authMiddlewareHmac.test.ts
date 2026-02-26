@@ -56,6 +56,16 @@ jest.mock("../../core/index.js", () => ({
     debug: (...args: unknown[]) => mockLoggerDebug(...args),
   })),
   AuthenticationError,
+  AuthorizationError: class AuthorizationError extends Error {
+    constructor(message: string, options?: { operation?: string }) {
+      super(message);
+      this.name = "AuthorizationError";
+      Object.assign(this, options);
+    }
+  },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 jest.mock("../../http/internalAuth.js", () => ({
@@ -87,6 +97,12 @@ jest.mock("../../core/config.js", () => ({
     return mockConfig;
   },
 }));
+
+jest.mock("../../database/apiKey/repository.js", () => ({
+  authenticateApiKey: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+}));
+
+// constants/auth.js and constants/http.js use real implementations (pure constants, no side effects)
 
 // Import after mock setup — must come after all jest.mock calls
 import { authMiddleware } from "../../http/authMiddleware.js";
@@ -534,7 +550,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should fall through to JWT when only timestamp header is present (missing signature)", () => {
+    it("should fall through to JWT when only timestamp header is present (missing signature)", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -548,7 +564,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(mockVerifyInternalSignature).not.toHaveBeenCalled();
       expect(mockVerifyAccessToken).toHaveBeenCalled();
@@ -664,7 +680,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
   });
 
   describe("JWT flow preserved when HMAC is not used", () => {
-    it("should set req.user and enrich context via JWT when no HMAC headers", () => {
+    it("should set req.user and enrich context via JWT when no HMAC headers", async () => {
       const authenticatedUser = createTestAuthenticatedUser({
         userId: "usr_jwt-user",
         tenantId: "tenant-from-jwt",
@@ -679,7 +695,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(req.user).toEqual(authenticatedUser);
       const enrichedReq = req as Request & { context: RequestContext };
@@ -688,7 +704,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       expect(enrichedReq.context.requestId).toBe("test-req-id");
     });
 
-    it("should pass AuthenticationError when JWT is invalid", () => {
+    it("should pass AuthenticationError when JWT is invalid", async () => {
       mockVerifyAccessToken.mockImplementation(() => {
         throw new AuthenticationError("Access token expired", {
           operation: "verifyAccessToken",
@@ -702,14 +718,14 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       const passedError = next.mock.calls[0]![0];
       expect(passedError).toBeInstanceOf(AuthenticationError);
       expect((passedError as AuthenticationError).message).toBe("Access token expired");
     });
 
-    it("should wrap unexpected JWT errors as AuthenticationError", () => {
+    it("should wrap unexpected JWT errors as AuthenticationError", async () => {
       mockVerifyAccessToken.mockImplementation(() => {
         throw new Error("Unexpected internal error");
       });
@@ -721,7 +737,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       const passedError = next.mock.calls[0]![0];
       expect(passedError).toBeInstanceOf(AuthenticationError);

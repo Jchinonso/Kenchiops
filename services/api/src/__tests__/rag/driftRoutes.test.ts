@@ -4,7 +4,7 @@
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import request from "supertest";
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 
 // Mock functions
 const mockRunTestSuite = jest.fn();
@@ -71,7 +71,25 @@ jest.mock("@kenchi/shared", () => ({
   requireTenantMatch: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
+/**
+ * Middleware that simulates auth context injection for tests.
+ * Routes use req.context.tenantId so we must provide it.
+ */
+const injectTestContext = (req: Request, _res: Response, next: NextFunction): void => {
+  const bodyTenantId = (req.body as Record<string, unknown>)?.tenantId as string | undefined;
+  const queryTenantId = req.query?.tenantId as string | undefined;
+  const resolvedTenantId = bodyTenantId ?? queryTenantId ?? "default-tenant";
+  Object.assign(req, {
+    context: {
+      requestId: "test-request-id",
+      tenantId: resolvedTenantId,
+    },
+  });
+  next();
+};
+
 describe("RAG Drift Routes", () => {
+  // let: app is reassigned in beforeEach for module isolation
   let app: Express;
 
   beforeEach(async () => {
@@ -147,6 +165,7 @@ describe("RAG Drift Routes", () => {
     const { ragDriftRoutes } = await import("../../routes/rag/driftRoutes.js");
     app = express();
     app.use(express.json());
+    app.use(injectTestContext);
     app.use(ragDriftRoutes);
   });
 
@@ -210,7 +229,8 @@ describe("RAG Drift Routes", () => {
     it("should skip alert dispatch when requested", async () => {
       await request(app).post("/drift-report").send({ skipAlertDispatch: true });
 
-      expect(mockRunDriftDetectionWithAlerts).toHaveBeenCalledWith(undefined, {
+      // The handler now reads tenantId from req.context, so it passes "default-tenant"
+      expect(mockRunDriftDetectionWithAlerts).toHaveBeenCalledWith("default-tenant", {
         skipAlertDispatch: true,
       });
     });
@@ -309,7 +329,7 @@ describe("RAG Drift Routes", () => {
       expect(response.body.data.processedCount).toBe(15);
     });
 
-    it("should pass tenant and batch size", async () => {
+    it("should pass tenant from context and batch size", async () => {
       await request(app).post("/reembed").send({
         tenantId: "tenant-1",
         batchSize: 50,

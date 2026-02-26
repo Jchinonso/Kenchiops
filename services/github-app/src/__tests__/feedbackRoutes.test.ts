@@ -49,6 +49,9 @@ jest.mock("@kenchi/shared", () => ({
     error.name = "AppError";
     return error;
   }),
+  rateLimitByCategory: jest.fn(
+    () => (_req: unknown, _res: unknown, next: unknown) => (next as () => void)()
+  ),
 }));
 
 // Import after mocks

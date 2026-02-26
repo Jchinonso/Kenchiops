@@ -4,7 +4,7 @@
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import request from "supertest";
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 
 // Mock functions
 const mockGetTenantTierConfig = jest.fn();
@@ -63,13 +63,31 @@ jest.mock("@kenchi/shared", () => ({
     required: (value: unknown) => value !== undefined && value !== null,
   },
   requireTenantMatch: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  requirePermission: () => (_req: unknown, _res: unknown, next: () => void) => next(),
   requireRole:
     (..._roles: string[]) =>
     (_req: unknown, _res: unknown, next: () => void) =>
       next(),
 }));
 
+/**
+ * Middleware that simulates auth context injection for tests.
+ * Routes use req.context.tenantId so we must provide it.
+ */
+const injectTestContext = (req: Request, _res: Response, next: NextFunction): void => {
+  const queryTenantId = req.query?.tenantId as string | undefined;
+  const resolvedTenantId = queryTenantId ?? "default-tenant";
+  Object.assign(req, {
+    context: {
+      requestId: "test-request-id",
+      tenantId: resolvedTenantId,
+    },
+  });
+  next();
+};
+
 describe("RAG Cost Routes", () => {
+  // let: app is reassigned in beforeEach for module isolation
   let app: Express;
 
   beforeEach(async () => {
@@ -107,6 +125,7 @@ describe("RAG Cost Routes", () => {
     const { ragCostRoutes } = await import("../../routes/rag/costRoutes.js");
     app = express();
     app.use(express.json());
+    app.use(injectTestContext);
     app.use(ragCostRoutes);
   });
 
@@ -294,12 +313,12 @@ describe("RAG Cost Routes", () => {
       expect(response.body.data.cacheStats).toBeDefined();
     });
 
-    it("should require tenantId", async () => {
+    it("should use tenantId from context when not in query", async () => {
       const response = await request(app).get("/cost-stats");
 
-      expect(response.status).toBe(400);
-      expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain("tenantId");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tenantId).toBe("default-tenant");
     });
 
     it("should include cache and tier stats together", async () => {

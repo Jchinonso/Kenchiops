@@ -106,6 +106,12 @@ jest.mock("@kenchi/shared", () => ({
   NotFoundError: MockNotFoundError,
   generateEventId: mockGenerateEventId,
   enforcePlanLimit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  requireTenantId: jest.fn((req: Request) =>
+    (req as Record<string, unknown>).user
+      ? (((req as Record<string, unknown>).user as { tenantId?: string }).tenantId ?? "default")
+      : ((req.body as Record<string, unknown>)?.tenant_id ?? "default")
+  ),
+  rateLimitByCategory: jest.fn(() => (_req: Request, _res: Response, next: NextFunction) => next()),
 }));
 
 // Import the router after mocks are registered
@@ -503,7 +509,6 @@ describe("Analysis Routes", () => {
       expect(logRef).toHaveProperty("failure_log", "Error occurred");
       expect(logRef).toHaveProperty("repository", "owner/repo");
       expect(logRef).not.toHaveProperty("commit");
-      expect(logRef).not.toHaveProperty("tenant_id");
       expect(logRef).not.toHaveProperty("workflow_id");
       expect(logRef).not.toHaveProperty("test_framework");
     });

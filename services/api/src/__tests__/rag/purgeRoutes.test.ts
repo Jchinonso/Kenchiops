@@ -4,7 +4,7 @@
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import request from "supertest";
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 
 // Mock functions
 const mockPurgeTenantRAGData = jest.fn();
@@ -43,13 +43,37 @@ jest.mock("@kenchi/shared", () => ({
       }
     },
   requireTenantMatch: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  requirePermission: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  rateLimitByCategory: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  requireTenantId: (req: Request) => {
+    const tenantId = (req as unknown as { context?: { tenantId?: string } }).context?.tenantId;
+    if (!tenantId) {
+      throw new Error("tenantId is required");
+    }
+    return tenantId;
+  },
   requireRole:
     (..._roles: string[]) =>
     (_req: unknown, _res: unknown, next: () => void) =>
       next(),
 }));
 
+/**
+ * Middleware that simulates auth context injection for tests.
+ * Routes use req.context.tenantId via requireTenantId() so we must provide it.
+ */
+const injectTestContext = (req: Request, _res: Response, next: NextFunction): void => {
+  Object.assign(req, {
+    context: {
+      requestId: "test-request-id",
+      tenantId: "default-tenant",
+    },
+  });
+  next();
+};
+
 describe("RAG Purge Routes", () => {
+  // let: app is reassigned in beforeEach for module isolation
   let app: Express;
 
   beforeEach(async () => {
@@ -77,6 +101,7 @@ describe("RAG Purge Routes", () => {
     const { ragPurgeRoutes } = await import("../../routes/rag/purgeRoutes.js");
     app = express();
     app.use(express.json());
+    app.use(injectTestContext);
     app.use(ragPurgeRoutes);
   });
 
@@ -135,16 +160,16 @@ describe("RAG Purge Routes", () => {
       expect(response.body.data.deletedCount).toBe(25);
     });
 
-    it("should call purge function with correct parameters", async () => {
+    it("should call purge function with correct parameters including tenantId", async () => {
       await request(app).delete("/pr/org%2Fproject/456");
 
-      expect(mockPurgePRDiffChunks).toHaveBeenCalledWith("org/project", 456);
+      expect(mockPurgePRDiffChunks).toHaveBeenCalledWith("org/project", 456, "default-tenant");
     });
 
     it("should handle URL-encoded repository names", async () => {
       await request(app).delete("/pr/my-org%2Fmy-repo/789");
 
-      expect(mockPurgePRDiffChunks).toHaveBeenCalledWith("my-org/my-repo", 789);
+      expect(mockPurgePRDiffChunks).toHaveBeenCalledWith("my-org/my-repo", 789, "default-tenant");
     });
 
     it("should return error for invalid PR number", async () => {
@@ -192,17 +217,17 @@ describe("RAG Purge Routes", () => {
       expect(response.body.data.deletedCount).toBe(5);
     });
 
-    it("should call purge function with parent ID", async () => {
+    it("should call purge function with parent ID and tenantId", async () => {
       await request(app).delete("/doc/doc-456");
 
-      expect(mockPurgeKnowledgeDocChunks).toHaveBeenCalledWith("doc-456");
+      expect(mockPurgeKnowledgeDocChunks).toHaveBeenCalledWith("doc-456", "default-tenant");
     });
 
     it("should handle UUID-style parent IDs", async () => {
       const uuid = "550e8400-e29b-41d4-a716-446655440000";
       await request(app).delete(`/doc/${uuid}`);
 
-      expect(mockPurgeKnowledgeDocChunks).toHaveBeenCalledWith(uuid);
+      expect(mockPurgeKnowledgeDocChunks).toHaveBeenCalledWith(uuid, "default-tenant");
     });
 
     it("should handle non-existent document", async () => {
@@ -299,19 +324,22 @@ describe("RAG Purge Routes", () => {
     it("should handle repository with dots", async () => {
       await request(app).delete("/pr/owner%2Frepo.name/123");
 
-      expect(mockPurgePRDiffChunks).toHaveBeenCalledWith("owner/repo.name", 123);
+      expect(mockPurgePRDiffChunks).toHaveBeenCalledWith("owner/repo.name", 123, "default-tenant");
     });
 
     it("should handle very large PR numbers", async () => {
       await request(app).delete("/pr/owner%2Frepo/999999999");
 
-      expect(mockPurgePRDiffChunks).toHaveBeenCalledWith("owner/repo", 999999999);
+      expect(mockPurgePRDiffChunks).toHaveBeenCalledWith("owner/repo", 999999999, "default-tenant");
     });
 
     it("should handle parent ID with underscores", async () => {
       await request(app).delete("/doc/doc_parent_123_abc");
 
-      expect(mockPurgeKnowledgeDocChunks).toHaveBeenCalledWith("doc_parent_123_abc");
+      expect(mockPurgeKnowledgeDocChunks).toHaveBeenCalledWith(
+        "doc_parent_123_abc",
+        "default-tenant"
+      );
     });
   });
 });

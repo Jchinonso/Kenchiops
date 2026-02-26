@@ -99,6 +99,7 @@ describe("Feedback Handler", () => {
         query: "",
         feedbackType: "qa_helpful",
         userId: "U789012",
+        tenantId: "unknown",
       });
     });
 
@@ -213,6 +214,7 @@ describe("Feedback Handler", () => {
         query: "",
         feedbackType: "qa_not_helpful",
         userId: "U789012",
+        tenantId: "unknown",
       });
     });
 
@@ -311,6 +313,7 @@ describe("Feedback Handler", () => {
         analysisId: "analysis_test_123",
         feedbackType: "correct",
         userId: "U789012",
+        tenantId: "unknown",
       });
     });
 
@@ -351,6 +354,7 @@ describe("Feedback Handler", () => {
         analysisId: "analysis_test_456",
         feedbackType: "incorrect",
         userId: "U789012",
+        tenantId: "unknown",
       });
     });
 

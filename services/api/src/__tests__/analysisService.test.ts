@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type { LLMAnalysisResult, Evidence, Event } from "@kenchi/shared";
+import type { LLMAnalysisResult, Evidence, Event, RequestContext } from "@kenchi/shared";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockAnalyzeIncident = jest.fn<(...args: any[]) => Promise<any>>();
@@ -48,6 +48,13 @@ import {
   analyzeFailure,
   performAnalysis,
 } from "../services/analysisService.js";
+
+// ==================== Test Fixtures ====================
+
+const testContext: RequestContext = {
+  requestId: "test-request-id",
+  tenantId: "test-tenant",
+};
 
 describe("API Analysis Service", () => {
   beforeEach(() => {
@@ -341,23 +348,27 @@ describe("API Analysis Service", () => {
 
       mockAnalyzeIncident.mockResolvedValue(mockAnalysisResult);
 
-      const result = await analyzeFailure(mockEvent, mockEvidence);
+      const result = await analyzeFailure(mockEvent, mockEvidence, testContext);
 
       expect(result).toEqual(mockAnalysisResult);
-      expect(mockAnalyzeIncident).toHaveBeenCalledWith(mockEvent, mockEvidence);
+      expect(mockAnalyzeIncident).toHaveBeenCalledWith(
+        mockEvent,
+        mockEvidence,
+        testContext.tenantId
+      );
     });
 
     it("should throw LLMError when OpenAI fails", async () => {
       mockAnalyzeIncident.mockRejectedValue(new Error("API Error"));
 
-      await expect(analyzeFailure(mockEvent, mockEvidence)).rejects.toThrow();
+      await expect(analyzeFailure(mockEvent, mockEvidence, testContext)).rejects.toThrow();
     });
 
     it("should handle network errors", async () => {
       const networkError = new Error("Network error");
       mockAnalyzeIncident.mockRejectedValue(networkError);
 
-      await expect(analyzeFailure(mockEvent, mockEvidence)).rejects.toThrow();
+      await expect(analyzeFailure(mockEvent, mockEvidence, testContext)).rejects.toThrow();
     });
   });
 
@@ -380,7 +391,7 @@ describe("API Analysis Service", () => {
         commit: "abc123",
       };
 
-      const result = await performAnalysis(request);
+      const result = await performAnalysis(request, testContext);
 
       expect(result.analysis).toBe("Complete analysis");
       expect(result.identified_cause).toBe("Root cause found");
@@ -404,7 +415,7 @@ describe("API Analysis Service", () => {
         repository: "test-repo",
       };
 
-      const result = await performAnalysis(request);
+      const result = await performAnalysis(request, testContext);
 
       expect(result.repository).toBe("test-repo");
     });
@@ -417,7 +428,7 @@ describe("API Analysis Service", () => {
         repository: "test-repo",
       };
 
-      await expect(performAnalysis(request)).rejects.toThrow();
+      await expect(performAnalysis(request, testContext)).rejects.toThrow();
     });
   });
 

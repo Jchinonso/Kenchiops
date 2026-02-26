@@ -393,7 +393,8 @@ describe("Analysis Service", () => {
         expect.objectContaining({
           eventId: event.id,
           logs: [],
-        })
+        }),
+        undefined
       );
     });
 
