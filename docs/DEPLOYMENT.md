@@ -190,6 +190,28 @@ Update these in GitHub → Developer Settings → GitHub Apps → kenchi-devops:
 
 ---
 
+## Post-Deployment: GitLab OAuth Settings
+
+Update these in GitLab → User Settings → Applications (or Group → Settings → Applications):
+
+| Setting           | Value                                                |
+| ----------------- | ---------------------------------------------------- |
+| **Name**          | Kenchi DevOps                                        |
+| **Redirect URIs** | `https://kenchiops.app/auth/gitlab/callback`         |
+| **Confidential**  | Yes                                                  |
+| **Scopes**        | `read_user`, `read_api`, `read_repository`, `openid` |
+
+For local development, add these additional redirect URIs (one per line):
+
+```
+http://localhost:5173/auth/gitlab/callback
+http://localhost:3003/auth/gitlab/callback
+```
+
+> **Tip:** GitLab allows multiple redirect URIs in a single application — add all environments so you don't need separate apps for dev vs production.
+
+---
+
 ## Useful Commands
 
 ```bash

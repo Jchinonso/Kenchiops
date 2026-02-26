@@ -48,7 +48,7 @@ const QUERIES = {
   SELECT_PENDING: `
     WITH ranked AS (
       SELECT id, status, repository_full_name as repository, log_ref as request_payload, workspace_id,
-             ROW_NUMBER() OVER (PARTITION BY COALESCE(workspace_id, id) ORDER BY created_at ASC) AS tenant_rank
+             ROW_NUMBER() OVER (PARTITION BY COALESCE(workspace_id, id::text) ORDER BY created_at ASC) AS tenant_rank
       FROM analysis_jobs
       WHERE status = 'pending'
         AND analysis_enqueued_at IS NULL

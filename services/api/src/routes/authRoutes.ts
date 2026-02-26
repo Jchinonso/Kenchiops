@@ -313,7 +313,12 @@ const handleOAuthLogin = async (req: Request, res: Response): Promise<void> => {
     codeChallenge
   );
 
-  logger.info("OAuth login initiated", { provider, pkce: usePkce, ...context });
+  logger.info("OAuth login initiated", {
+    provider,
+    pkce: usePkce,
+    redirectUri,
+    ...context,
+  });
 
   res.redirect(authorizeUrl);
 };
