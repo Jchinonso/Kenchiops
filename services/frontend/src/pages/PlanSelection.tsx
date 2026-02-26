@@ -11,6 +11,7 @@ import { Link } from "react-router-dom";
 import { Check, ArrowLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePlans, useSubscription, useChangePlan, type PlanDTO } from "@/hooks/useSubscription";
+import { useCreateCheckout, useBillingStatus } from "@/hooks/useBilling";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
@@ -178,6 +179,7 @@ const PlanCard = ({ plan, isCurrent, isChanging, onSelect }: PlanCardProps) => {
 export const PlanSelection = () => {
   const { data: plans, isLoading: plansLoading } = usePlans();
   const { data: subscription, isLoading: subLoading, refetch } = useSubscription();
+  const { data: billingStatus } = useBillingStatus();
   const {
     changePlan,
     isLoading: isChanging,
@@ -185,11 +187,29 @@ export const PlanSelection = () => {
     isLimitDialogOpen,
     dismissLimitDialog,
   } = useChangePlan();
+  const { createCheckout, isLoading: isCheckoutLoading } = useCreateCheckout();
 
   const currentPlanId = useMemo(() => subscription?.plan.id ?? "free", [subscription]);
+  const hasBilling = billingStatus?.hasStripeCustomer ?? false;
 
   const handleSelectPlan = useCallback(
     async (planId: string) => {
+      const targetPlan = plans?.find((plan) => plan.id === planId);
+      const isPaidUpgrade =
+        targetPlan?.priceMonthlyCents && targetPlan.priceMonthlyCents > 0 && !hasBilling;
+
+      // For paid plan upgrades without existing Stripe customer, redirect to checkout
+      if (isPaidUpgrade) {
+        const checkout = await createCheckout(planId, "month");
+        if (checkout?.url) {
+          window.location.assign(checkout.url);
+          return;
+        }
+        toast.error("Failed to start checkout. Please try again.");
+        return;
+      }
+
+      // For downgrades or plan changes with existing billing, use internal change
       const result = await changePlan(planId);
       if (result) {
         toast.success(`Plan changed to ${result.subscription.planId}`);
@@ -198,10 +218,11 @@ export const PlanSelection = () => {
         toast.error("Failed to change plan. Please try again.");
       }
     },
-    [changePlan, refetch]
+    [changePlan, createCheckout, plans, hasBilling, refetch]
   );
 
   const isLoading = plansLoading || subLoading;
+  const isBusy = isChanging || isCheckoutLoading;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -248,7 +269,7 @@ export const PlanSelection = () => {
               key={plan.id}
               plan={plan}
               isCurrent={plan.id === currentPlanId}
-              isChanging={isChanging}
+              isChanging={isBusy}
               onSelect={handleSelectPlan}
             />
           ))}

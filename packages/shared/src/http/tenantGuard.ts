@@ -11,6 +11,23 @@
 import type { Request, Response, NextFunction } from "express";
 import { AuthorizationError, createLogger } from "../core/index.js";
 
+/**
+ * Extract tenantId from authenticated user or throw.
+ * Used by route handlers that require a linked tenant.
+ *
+ * @throws AuthorizationError if no tenant is linked
+ */
+export const requireTenantId = (req: Request): string => {
+  const tenantId = req.user?.tenantId;
+  if (!tenantId) {
+    throw new AuthorizationError(
+      "No organization linked. Connect a GitHub or GitLab account to get started.",
+      { operation: "requireTenantId" }
+    );
+  }
+  return tenantId;
+};
+
 const logger = createLogger("tenant-guard");
 
 /** Admin/owner roles that can bypass tenant checks */

@@ -739,6 +739,8 @@ export interface Tenant {
   readonly ragPreferredTier: TenantEmbeddingTier;
   readonly ragAllowPremium: boolean;
   readonly ragDegradeOnBudgetWarning: boolean;
+  /** Encryption key version: 1 = legacy global key, 2+ = per-tenant HKDF. */
+  readonly encryptionKeyVersion: number;
 }
 
 /**
@@ -754,6 +756,20 @@ export interface CreateTenantFromGitHub {
  */
 export interface CreateTenantFromGitLab {
   readonly gitlabGroupPath: string;
+}
+
+/**
+ * Data required to create a tenant from Bitbucket OAuth login.
+ */
+export interface CreateTenantFromBitbucket {
+  readonly bitbucketWorkspace: string;
+}
+
+/**
+ * Data required to create a tenant from Azure DevOps OAuth login.
+ */
+export interface CreateTenantFromAzureDevOps {
+  readonly azureDevOpsOrg: string;
 }
 
 /**
@@ -775,6 +791,8 @@ export type TenantAuditAction =
   | "github_uninstalled"
   | "github_linked"
   | "gitlab_linked"
+  | "bitbucket_linked"
+  | "azure_devops_linked"
   | "slack_installed"
   | "slack_uninstalled"
   | "activated"
@@ -783,7 +801,16 @@ export type TenantAuditAction =
   | "ci_failure_processed"
   | "slack_message_sent"
   | "github_comment_posted"
-  | "plan_changed";
+  | "plan_changed"
+  | "member_role_changed"
+  | "member_removed"
+  | "member_added"
+  | "org_switched"
+  | "membership_reconciled"
+  | "member.sessions_revoked"
+  | "tenant.sessions_revoked"
+  | "checkout_started"
+  | "payment_failed";
 
 /**
  * Tenant audit log entry.
@@ -958,12 +985,27 @@ export interface Config {
   readonly OAUTH_CALLBACK_BASE_URL: string;
 
   // Internal service-to-service authentication
-  /** Shared secret for HMAC-SHA256 signing of inter-service requests */
+  /** Shared secret for HMAC-SHA256 signing of inter-service requests (fallback) */
   readonly INTERNAL_SERVICE_SECRET?: string;
+  /** Per-service HMAC secrets — used when configured, falls back to INTERNAL_SERVICE_SECRET */
+  readonly SERVICE_HMAC_SECRET_API?: string;
+  readonly SERVICE_HMAC_SECRET_GITHUB_APP?: string;
+  readonly SERVICE_HMAC_SECRET_SLACK_BOT?: string;
+  readonly SERVICE_HMAC_SECRET_INCIDENT_TRIAGE?: string;
+  /** Identifies the calling service for HMAC key resolution (e.g., "api", "github-app") */
+  readonly SERVICE_NAME?: string;
 
   // Aggregation timing overrides
   readonly AGGREGATION_DEBOUNCE_MS?: number;
   readonly AGGREGATION_MAX_WAIT_MS?: number;
+
+  // Stripe Billing
+  /** Stripe secret key (sk_xxx) */
+  readonly STRIPE_SECRET_KEY?: string;
+  /** Stripe webhook signing secret (whsec_xxx) */
+  readonly STRIPE_WEBHOOK_SECRET?: string;
+  /** Stripe publishable key for frontend (pk_xxx) */
+  readonly STRIPE_PUBLISHABLE_KEY?: string;
 }
 
 // ==================== Signed URL Types ====================

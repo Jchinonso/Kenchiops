@@ -21,6 +21,30 @@ jest.mock("@kenchi/shared", () => ({
   getErrorMessage: jest.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error)
   ),
+  rateLimitByCategory: jest.fn(
+    () => (_req: unknown, _res: unknown, next: unknown) => (next as () => void)()
+  ),
+  checkWebhookSourceRateLimit: jest.fn(() => ({ allowed: true, remaining: 59 })),
+  isWebhookDuplicate: jest.fn(() => Promise.resolve(false)),
+  markWebhookProcessed: jest.fn(() => Promise.resolve()),
+  RateLimitError: class RateLimitError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "RateLimitError";
+    }
+  },
+  findTenantByGitHubInstallation: jest.fn(() => Promise.resolve({ id: "tenant_123" })),
+  findWebhookActivityByDeliveryId: jest.fn(() => Promise.resolve(null)),
+  findOAuthIdentity: jest.fn(() => Promise.resolve(null)),
+  findUserOrgRole: jest.fn(() => Promise.resolve(null)),
+  countOwnersByTenant: jest.fn(() => Promise.resolve(2)),
+  removeMemberFromTenant: jest.fn(() => Promise.resolve()),
+  logAuditEvent: jest.fn(() => Promise.resolve()),
+  handleDocUpdateEvent: jest.fn(() => Promise.resolve()),
+  AUDIT_ACTIONS: {
+    MEMBER_REMOVED: "member_removed",
+    MEMBER_REMOVED_PROVIDER: "member_removed_provider",
+  },
 }));
 
 jest.mock("../handlers/pullRequestHandler.js", () => ({

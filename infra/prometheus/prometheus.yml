@@ -1,0 +1,48 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+rule_files:
+  - "alerts/*.yml"
+  - "recording-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+
+scrape_configs:
+  # Kenchi API service (main metrics endpoint)
+  - job_name: "kenchi-api"
+    static_configs:
+      - targets: ["api:3000"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  # Kenchi GitHub App service
+  - job_name: "kenchi-github-app"
+    static_configs:
+      - targets: ["github-app:3002"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # Kenchi Slack Bot service
+  - job_name: "kenchi-slack-bot"
+    static_configs:
+      - targets: ["slack-bot:3001"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # Kenchi Incident Triage service
+  - job_name: "kenchi-incident-triage"
+    static_configs:
+      - targets: ["incident-triage:3004"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

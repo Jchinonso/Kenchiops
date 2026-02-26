@@ -28,6 +28,7 @@ import {
   updateCustomRiskRule,
   deleteCustomRiskRule,
   queryRiskAssessments,
+  requireFeature,
 } from "@kenchi/shared";
 import type { CreateRiskRuleRequestBody, UpdateRiskRuleRequestBody } from "../types/apiTypes.js";
 
@@ -55,24 +56,6 @@ const validateRequiredArray = (fieldValue: unknown): boolean | string => {
 };
 
 // ==================== Utility Functions ====================
-
-/**
- * Extracts tenant ID from request.
- * In production, this would come from authenticated user context.
- */
-const extractTenantId = (req: {
-  body?: { tenantId?: string };
-  query?: { tenantId?: string };
-}): string => {
-  const tenantId = req.body?.tenantId ?? req.query?.tenantId;
-  if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
-    throw new ValidationError("Tenant ID is required", {
-      operation: "extractTenantId",
-      metadata: { field: "tenantId" },
-    });
-  }
-  return tenantId.trim();
-};
 
 /**
  * Parses optional boolean query parameter.
@@ -119,7 +102,7 @@ const parseOptionalDate = (value: unknown): Date | undefined => {
  */
 const handleListRiskRules = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
 
   const options: RiskRulesQueryOptions = {
     tenantId,
@@ -152,7 +135,7 @@ const handleListRiskRules = async (req: Request, res: Response): Promise<void> =
  */
 const handleGetRiskRuleById = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
   const { ruleId } = req.params;
 
   if (!ruleId || typeof ruleId !== "string") {
@@ -187,7 +170,7 @@ const handleCreateRiskRule = async (req: Request, res: Response): Promise<void> 
   const body = req.body as CreateRiskRuleRequestBody;
 
   const input: CreateCustomRiskRuleInput = {
-    tenantId: body.tenantId,
+    tenantId: req.context.tenantId,
     name: body.name,
     description: body.description,
     actionTypes: body.actionTypes,
@@ -224,7 +207,7 @@ const handleCreateRiskRule = async (req: Request, res: Response): Promise<void> 
  */
 const handleUpdateRiskRule = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
   const { ruleId } = req.params;
   const body = req.body as UpdateRiskRuleRequestBody;
 
@@ -269,7 +252,7 @@ const handleUpdateRiskRule = async (req: Request, res: Response): Promise<void> 
  */
 const handleDeleteRiskRule = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
   const { ruleId } = req.params;
 
   if (!ruleId || typeof ruleId !== "string") {
@@ -301,7 +284,7 @@ const handleDeleteRiskRule = async (req: Request, res: Response): Promise<void> 
  */
 const handleQueryRiskAssessments = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = extractTenantId(req);
+  const { tenantId } = req.context;
 
   const options: RiskAssessmentsQueryOptions = {
     tenantId,
@@ -334,17 +317,21 @@ const handleQueryRiskAssessments = async (req: Request, res: Response): Promise<
 // ==================== Route Definitions ====================
 
 /** GET /api/risk-rules - List custom risk rules for a tenant */
-router.get("/api/risk-rules", asyncHandler(handleListRiskRules));
+router.get("/api/risk-rules", requireFeature("customRules"), asyncHandler(handleListRiskRules));
 
 /** GET /api/risk-rules/:ruleId - Get a specific risk rule by ID */
-router.get("/api/risk-rules/:ruleId", asyncHandler(handleGetRiskRuleById));
+router.get(
+  "/api/risk-rules/:ruleId",
+  requireFeature("customRules"),
+  asyncHandler(handleGetRiskRuleById)
+);
 
 /** POST /api/risk-rules - Create a new custom risk rule */
 router.post(
   "/api/risk-rules",
+  requireFeature("customRules"),
   validate({
     body: {
-      tenantId: validateRequiredString,
       name: validateRequiredString,
       actionTypes: validateRequiredArray,
     },
@@ -353,12 +340,24 @@ router.post(
 );
 
 /** PATCH /api/risk-rules/:ruleId - Update an existing risk rule */
-router.patch("/api/risk-rules/:ruleId", asyncHandler(handleUpdateRiskRule));
+router.patch(
+  "/api/risk-rules/:ruleId",
+  requireFeature("customRules"),
+  asyncHandler(handleUpdateRiskRule)
+);
 
 /** DELETE /api/risk-rules/:ruleId - Delete a risk rule */
-router.delete("/api/risk-rules/:ruleId", asyncHandler(handleDeleteRiskRule));
+router.delete(
+  "/api/risk-rules/:ruleId",
+  requireFeature("customRules"),
+  asyncHandler(handleDeleteRiskRule)
+);
 
 /** GET /api/risk-assessments - Query risk assessment audit trail */
-router.get("/api/risk-assessments", asyncHandler(handleQueryRiskAssessments));
+router.get(
+  "/api/risk-assessments",
+  requireFeature("customRules"),
+  asyncHandler(handleQueryRiskAssessments)
+);
 
 export { router as riskRulesRoutes };

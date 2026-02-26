@@ -10,12 +10,15 @@
 import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
+  requireTenantId,
   AuthorizationError,
   ValidationError,
   HTTP_STATUS,
   PARSE_INT_RADIX,
   DASHBOARD_PAGINATION,
   ANALYSIS_DEFAULTS,
+  rateLimitByCategory,
+  requireFeature,
 } from "@kenchi/shared";
 import { createGitHubInstallationAdapter } from "../adapters/githubInstallationAdapter.js";
 import { createGitLabProjectsAdapter } from "../adapters/gitlabProjectsAdapter.js";
@@ -30,24 +33,6 @@ const gitlabProjectsAdapter = createGitLabProjectsAdapter();
 const dashboardService = createDashboardService(githubAdapter, gitlabProjectsAdapter);
 
 // ==================== Helpers ====================
-
-/**
- * Extract tenantId from authenticated user or throw.
- *
- * @throws AuthorizationError if no tenant is linked
- */
-const requireTenantId = (req: Request): string => {
-  const tenantId = req.user?.tenantId;
-
-  if (!tenantId) {
-    throw new AuthorizationError(
-      "No organization linked. Connect a GitHub or GitLab account to get started.",
-      { operation: "requireTenantId" }
-    );
-  }
-
-  return tenantId;
-};
 
 /**
  * Parse and clamp pagination parameters from query string.
@@ -300,21 +285,71 @@ const handleGetCorrelations = async (req: Request, res: Response): Promise<void>
 
 // ==================== Route Definitions ====================
 
-router.get("/api/v1/dashboard/tenant", asyncHandler(handleGetTenantInfo));
-router.get("/api/v1/dashboard/stats", asyncHandler(handleGetDashboardStats));
+router.get(
+  "/api/v1/dashboard/tenant",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetTenantInfo)
+);
+router.get(
+  "/api/v1/dashboard/stats",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetDashboardStats)
+);
 router.get(
   "/api/v1/dashboard/stats/confidence-distribution",
+  rateLimitByCategory("readonly"),
   asyncHandler(handleGetConfidenceDistribution)
 );
-router.get("/api/v1/dashboard/stats/confidence-trend", asyncHandler(handleGetConfidenceTrend));
-router.get("/api/v1/dashboard/stats/analyses-by-repo", asyncHandler(handleGetAnalysisCountsByRepo));
-router.get("/api/v1/dashboard/repositories", asyncHandler(handleGetRepositories));
-router.get("/api/v1/dashboard/gitlab/projects", asyncHandler(handleGetGitLabProjects));
-router.post("/api/v1/dashboard/analyses/by-events", asyncHandler(handleGetAnalysisStatusByEvents));
-router.get("/api/v1/dashboard/correlations/:commitSha", asyncHandler(handleGetCorrelations));
-router.get("/api/v1/dashboard/analyses/:id", asyncHandler(handleGetAnalysisDetail));
-router.get("/api/v1/dashboard/analyses", asyncHandler(handleGetAnalyses));
-router.get("/api/v1/dashboard/failures", asyncHandler(handleGetFailures));
-router.get("/api/v1/dashboard/webhook-activity", asyncHandler(handleGetWebhookActivity));
+router.get(
+  "/api/v1/dashboard/stats/confidence-trend",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetConfidenceTrend)
+);
+router.get(
+  "/api/v1/dashboard/stats/analyses-by-repo",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetAnalysisCountsByRepo)
+);
+router.get(
+  "/api/v1/dashboard/repositories",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetRepositories)
+);
+router.get(
+  "/api/v1/dashboard/gitlab/projects",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetGitLabProjects)
+);
+router.post(
+  "/api/v1/dashboard/analyses/by-events",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleGetAnalysisStatusByEvents)
+);
+router.get(
+  "/api/v1/dashboard/correlations/:commitSha",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetCorrelations)
+);
+router.get(
+  "/api/v1/dashboard/analyses/:id",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetAnalysisDetail)
+);
+router.get(
+  "/api/v1/dashboard/analyses",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetAnalyses)
+);
+router.get(
+  "/api/v1/dashboard/failures",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetFailures)
+);
+router.get(
+  "/api/v1/dashboard/webhook-activity",
+  rateLimitByCategory("readonly"),
+  requireFeature("auditLog"),
+  asyncHandler(handleGetWebhookActivity)
+);
 
 export { router as dashboardRoutes };

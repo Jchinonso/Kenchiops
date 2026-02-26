@@ -96,7 +96,8 @@ const isRetryableStatus = (status: number | undefined): boolean =>
 const exchangeCode = async (
   code: string,
   instanceUrl: string | null,
-  context: RequestContext
+  context: RequestContext,
+  codeVerifier?: string
 ): Promise<OAuthTokenResponse> => {
   const { clientId, clientSecret } = ensureClientCredentials();
   const urls = getUrls(instanceUrl);
@@ -104,19 +105,24 @@ const exchangeCode = async (
   const startTime = Date.now();
 
   try {
+    const tokenBody: Record<string, string> = {
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: callbackUrl,
+    };
+    if (codeVerifier) {
+      tokenBody.code_verifier = codeVerifier;
+    }
+
     const response = await fetch(urls.tokenEndpoint, {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-        grant_type: "authorization_code",
-        redirect_uri: callbackUrl,
-      }),
+      body: JSON.stringify(tokenBody),
       signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
     });
 
@@ -322,7 +328,35 @@ const getUserOrganizations = async (
       ...context,
     });
 
-    return groups.map((group) => ({ login: group.path }));
+    // Determine which groups the user has Maintainer+ access to (access_level >= 40).
+    // The groups list endpoint does not include per-user access_level, so we make a
+    // parallel call with min_access_level=40 and use set membership for role assignment.
+    const adminGroupPaths = new Set<string>();
+    try {
+      const adminResponse = await fetch(`${urls.userGroups}?min_access_level=40`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
+      });
+      if (adminResponse.ok) {
+        const adminGroups = (await adminResponse.json()) as readonly GitLabGroup[];
+        adminGroups.forEach((group) => adminGroupPaths.add(group.path));
+      }
+    } catch {
+      // Best-effort: if the admin-level call fails, all groups default to no role
+      logger.warn("GitLab admin groups fetch failed (non-fatal), defaulting roles", {
+        provider: "gitlab",
+        operation: "getUserOrganizations",
+        ...context,
+      });
+    }
+
+    return groups.map((group) => ({
+      login: group.path,
+      role: adminGroupPaths.has(group.path) ? "maintainer" : "developer",
+    }));
   } catch (error) {
     if (error instanceof ExternalServiceError) {
       throw error;

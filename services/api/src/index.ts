@@ -22,6 +22,10 @@ import {
   createSecurityHeaders,
   setupGracefulShutdown,
   registerCleanupHandler,
+  metricsMiddleware,
+  getMetrics,
+  getMetricsContentType,
+  rateLimitByPlan,
   initDatabase,
   initGitHubIssuesConnector,
   cleanupExpired,
@@ -29,6 +33,14 @@ import {
   triggerReembedding,
   syncDueSources,
   getErrorMessage,
+  getActiveTenants,
+  enforceRetentionForTenant,
+  expireTrials,
+  setTenantStatusFlag,
+  checkUsageThresholds,
+  getSubscriptionWithPlan,
+  getTenantUsage,
+  USAGE_ALERT_SCHEDULER,
   ValidationError,
   EXPRESS_CONFIG,
   RATE_LIMIT_CONSTANTS,
@@ -39,6 +51,7 @@ import {
   SERVER_TIMEOUTS,
   SERVICE_NAMES,
 } from "@kenchi/shared";
+import { tenantStatusMiddleware } from "./middleware/tenantStatusMiddleware.js";
 import { startScheduler, stopScheduler } from "./services/finetuning/index.js";
 import { registerRoutes } from "./routes/index.js";
 import { SSE_STREAM_PATH } from "./routes/sseRoutes.js";
@@ -252,6 +265,200 @@ const stopExternalSyncScheduler = (): void => {
   }
 };
 
+// let: module-level lifecycle state — assigned during init, cleared during shutdown
+let retentionIntervalId: NodeJS.Timeout | null = null;
+
+/** Retention enforcement runs every 24 hours */
+const RETENTION_INTERVAL_MS = 86_400_000;
+
+/**
+ * Run retention enforcement across all active tenants.
+ * Deletes data older than each tenant's configured TTLs.
+ */
+const runRetentionTask = async (): Promise<void> => {
+  try {
+    logger.info("Running scheduled retention enforcement");
+    const tenants = await getActiveTenants();
+
+    const results = await Promise.all(
+      tenants.map(async (tenant) => {
+        try {
+          return await enforceRetentionForTenant(tenant.id);
+        } catch (error) {
+          logger.warn("Retention enforcement failed for tenant", {
+            tenantId: tenant.id,
+            error: getErrorMessage(error),
+          });
+          return null;
+        }
+      })
+    );
+
+    const successful = results.filter((result) => result !== null);
+    logger.info("Scheduled retention enforcement complete", {
+      tenantsProcessed: successful.length,
+      tenantsTotal: tenants.length,
+    });
+  } catch (error) {
+    logger.error("Scheduled retention enforcement failed", {
+      error: getErrorMessage(error),
+    });
+  }
+};
+
+/**
+ * Start the periodic retention enforcement scheduler.
+ * Runs every 24 hours to enforce data retention policies.
+ */
+const startRetentionScheduler = (): void => {
+  void runRetentionTask();
+  retentionIntervalId = setInterval(() => {
+    void runRetentionTask();
+  }, RETENTION_INTERVAL_MS);
+  logger.info("Retention enforcement scheduler started", {
+    intervalMs: RETENTION_INTERVAL_MS,
+  });
+};
+
+/**
+ * Stop the retention enforcement scheduler.
+ */
+const stopRetentionScheduler = (): void => {
+  if (retentionIntervalId) {
+    clearInterval(retentionIntervalId);
+    retentionIntervalId = null;
+    logger.info("Retention enforcement scheduler stopped");
+  }
+};
+
+// let: module-level lifecycle state — assigned during init, cleared during shutdown
+let trialExpirationIntervalId: NodeJS.Timeout | null = null;
+
+/** Trial expiration check runs every 24 hours */
+const TRIAL_EXPIRATION_INTERVAL_MS = 86_400_000;
+
+/**
+ * Expire trials whose trial_ends_at has passed.
+ * Sets subscription status to 'past_due' and blocks tenant access via Redis.
+ */
+const runTrialExpirationTask = async (): Promise<void> => {
+  try {
+    logger.info("Running scheduled trial expiration check");
+    const expiredTenantIds = await expireTrials();
+
+    // Set Redis status flags to block immediate access for expired tenants
+    await Promise.all(
+      expiredTenantIds.map((tenantId) => setTenantStatusFlag(tenantId, "suspended"))
+    );
+
+    logger.info("Scheduled trial expiration check complete", {
+      expiredCount: expiredTenantIds.length,
+    });
+  } catch (error) {
+    logger.error("Scheduled trial expiration check failed", {
+      error: getErrorMessage(error),
+    });
+  }
+};
+
+/**
+ * Start the periodic trial expiration scheduler.
+ * Runs every 24 hours to expire trials that have ended.
+ */
+const startTrialExpirationScheduler = (): void => {
+  void runTrialExpirationTask();
+  trialExpirationIntervalId = setInterval(() => {
+    void runTrialExpirationTask();
+  }, TRIAL_EXPIRATION_INTERVAL_MS);
+  logger.info("Trial expiration scheduler started", {
+    intervalMs: TRIAL_EXPIRATION_INTERVAL_MS,
+  });
+};
+
+/**
+ * Stop the trial expiration scheduler.
+ */
+const stopTrialExpirationScheduler = (): void => {
+  if (trialExpirationIntervalId) {
+    clearInterval(trialExpirationIntervalId);
+    trialExpirationIntervalId = null;
+    logger.info("Trial expiration scheduler stopped");
+  }
+};
+
+// let: module-level lifecycle state — assigned during init, cleared during shutdown
+let usageAlertIntervalId: NodeJS.Timeout | null = null;
+
+/**
+ * Check usage thresholds across all active tenants.
+ * Compares each tenant's current usage against their plan limits
+ * and logs warnings for tenants approaching or exceeding limits.
+ */
+const runUsageAlertTask = async (): Promise<void> => {
+  try {
+    logger.info("Running scheduled usage threshold check");
+    const tenants = await getActiveTenants();
+
+    // let: accumulator for total alert count across all tenants
+    let totalAlerts = 0;
+
+    await Promise.all(
+      tenants.map(async (tenant) => {
+        try {
+          const subscriptionWithPlan = await getSubscriptionWithPlan(tenant.id);
+          if (!subscriptionWithPlan) {
+            return;
+          }
+
+          const usage = await getTenantUsage(tenant.id);
+          const result = checkUsageThresholds(tenant.id, usage, subscriptionWithPlan.plan.limits);
+
+          totalAlerts += result.alerts.length;
+        } catch (error) {
+          logger.warn("Usage threshold check failed for tenant", {
+            tenantId: tenant.id,
+            error: getErrorMessage(error),
+          });
+        }
+      })
+    );
+
+    logger.info("Scheduled usage threshold check complete", {
+      tenantsChecked: tenants.length,
+      totalAlerts,
+    });
+  } catch (error) {
+    logger.error("Scheduled usage threshold check failed", {
+      error: getErrorMessage(error),
+    });
+  }
+};
+
+/**
+ * Start the periodic usage threshold alert scheduler.
+ * Runs every 15 minutes to check tenant usage against plan limits.
+ */
+const startUsageAlertScheduler = (): void => {
+  void runUsageAlertTask();
+  usageAlertIntervalId = setInterval(() => {
+    void runUsageAlertTask();
+  }, USAGE_ALERT_SCHEDULER.CHECK_INTERVAL_MS);
+  logger.info("Usage alert scheduler started", {
+    intervalMs: USAGE_ALERT_SCHEDULER.CHECK_INTERVAL_MS,
+  });
+};
+
+/**
+ * Stop the usage alert scheduler.
+ */
+const stopUsageAlertScheduler = (): void => {
+  if (usageAlertIntervalId) {
+    clearInterval(usageAlertIntervalId);
+    usageAlertIntervalId = null;
+    logger.info("Usage alert scheduler stopped");
+  }
+};
+
 /**
  * Redis-backed rate limiter with security features: 100 requests per minute per IP.
  * Falls back to in-memory if Redis is unavailable.
@@ -326,9 +533,9 @@ const createApp = (): express.Express => {
     express.json({
       limit: EXPRESS_CONFIG.JSON_BODY_LIMIT,
       verify: (req: express.Request, _res, buf) => {
-        // Only capture rawBody when HMAC signature header is present
+        // Only capture rawBody when signature verification headers are present
         // to avoid doubling memory usage on every request
-        if (req.headers["x-kenchi-signature"]) {
+        if (req.headers["x-kenchi-signature"] || req.headers["stripe-signature"]) {
           Object.assign(req, { rawBody: buf });
         }
       },
@@ -338,6 +545,20 @@ const createApp = (): express.Express => {
   app.use(apiRateLimiter.middleware());
   app.use(requestContextMiddleware);
   app.use(authMiddleware);
+  app.use(tenantStatusMiddleware);
+
+  // Per-tenant plan-based rate limiting (after auth so tenantId/planId is available)
+  app.use(rateLimitByPlan());
+
+  // Per-tenant Prometheus metrics (after auth so tenantId is available)
+  app.use(metricsMiddleware);
+
+  // Prometheus metrics endpoint (no auth required — internal/monitoring use)
+  app.get("/metrics", async (_req, res) => {
+    const metrics = await getMetrics();
+    res.set("Content-Type", getMetricsContentType());
+    res.end(metrics);
+  });
 
   // Register all routes
   registerRoutes(app);
@@ -415,6 +636,18 @@ const startServer = async (): Promise<void> => {
   // Start external source sync scheduler and register for graceful shutdown
   startExternalSyncScheduler();
   registerCleanupHandler(stopExternalSyncScheduler);
+
+  // Start retention enforcement scheduler and register for graceful shutdown
+  startRetentionScheduler();
+  registerCleanupHandler(stopRetentionScheduler);
+
+  // Start trial expiration scheduler and register for graceful shutdown
+  startTrialExpirationScheduler();
+  registerCleanupHandler(stopTrialExpirationScheduler);
+
+  // Start usage alert scheduler and register for graceful shutdown
+  startUsageAlertScheduler();
+  registerCleanupHandler(stopUsageAlertScheduler);
 
   // Start fine-tuning job scheduler only when a real OpenAI key is configured.
   // OpenRouter keys (sk-or-*) are not valid for the OpenAI fine-tuning API.

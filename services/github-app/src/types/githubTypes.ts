@@ -197,6 +197,38 @@ export interface InstallationWebhook {
 }
 
 /**
+ * Organization member webhook payload (member_added, member_removed, member_invited)
+ *
+ * Fired when a member is added to, removed from, or invited to a GitHub organization.
+ * See: https://docs.github.com/en/webhooks/webhook-events-and-payloads#organization
+ */
+export interface OrganizationMemberWebhook {
+  readonly action: "member_added" | "member_removed" | "member_invited";
+  readonly membership: {
+    readonly user: {
+      readonly id: number;
+      readonly login: string;
+    };
+    readonly role: string;
+    readonly organization: {
+      readonly login: string;
+      readonly id: number;
+    };
+  };
+  readonly organization: {
+    readonly login: string;
+    readonly id: number;
+  };
+  readonly sender: {
+    readonly login: string;
+    readonly id: number;
+  };
+  readonly installation?: {
+    readonly id: number;
+  };
+}
+
+/**
  * Health check response
  */
 export interface HealthResponse {

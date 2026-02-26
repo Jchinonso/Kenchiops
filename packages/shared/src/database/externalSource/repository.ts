@@ -91,11 +91,18 @@ export const createExternalSource = async (
  * @throws ValidationError if sourceId is empty
  * @throws Error if database operation fails
  */
-export const getExternalSourceById = async (sourceId: string): Promise<ExternalSource | null> => {
+export const getExternalSourceById = async (
+  sourceId: string,
+  tenantId: string
+): Promise<ExternalSource | null> => {
   validateNonEmptyString(sourceId, "sourceId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
-    const result = await query<ExternalSourceRow>(EXTERNAL_SOURCE_QUERIES.GET_BY_ID, [sourceId]);
+    const result = await query<ExternalSourceRow>(EXTERNAL_SOURCE_QUERIES.GET_BY_ID, [
+      sourceId,
+      tenantId,
+    ]);
     return result.rows.length === 0 ? null : mapRowToExternalSource(result.rows[0]);
   } catch (error) {
     logger.error("Failed to get external source by ID", {
@@ -229,9 +236,11 @@ export const getSourcesDueForSync = async (
  */
 export const updateExternalSource = async (
   sourceId: string,
-  input: UpdateExternalSourceInput
+  input: UpdateExternalSourceInput,
+  tenantId: string
 ): Promise<ExternalSource | null> => {
   validateNonEmptyString(sourceId, "sourceId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
     const result = await query<ExternalSourceRow>(EXTERNAL_SOURCE_QUERIES.UPDATE, [
@@ -244,6 +253,7 @@ export const updateExternalSource = async (
       input.credibilityScore ?? null,
       input.syncFrequencyHours ?? null,
       input.metadata === undefined ? null : JSON.stringify(input.metadata),
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {
@@ -274,17 +284,20 @@ export const updateExternalSource = async (
 export const updateSyncStatus = async (
   sourceId: string,
   docCount: number,
-  errorCount: number
+  errorCount: number,
+  tenantId: string
 ): Promise<ExternalSource | null> => {
   validateNonEmptyString(sourceId, "sourceId");
   validateMinimumNumber(docCount, "docCount", EXTERNAL_SOURCE_DEFAULTS.MIN_DOC_COUNT);
   validateMinimumNumber(errorCount, "errorCount", EXTERNAL_SOURCE_DEFAULTS.MIN_ERROR_COUNT);
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
     const result = await query<ExternalSourceRow>(EXTERNAL_SOURCE_QUERIES.UPDATE_SYNC_STATUS, [
       sourceId,
       docCount,
       errorCount,
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {
@@ -305,18 +318,23 @@ export const updateSyncStatus = async (
 };
 
 /**
- * Deletes an external source.
+ * Deletes an external source (tenant-scoped).
  *
  * @param sourceId - External source ID
+ * @param tenantId - Tenant ID for isolation
  * @returns True if deleted, false if not found
- * @throws ValidationError if sourceId is empty
+ * @throws ValidationError if sourceId or tenantId is empty
  * @throws Error if database operation fails
  */
-export const deleteExternalSource = async (sourceId: string): Promise<boolean> => {
+export const deleteExternalSource = async (
+  sourceId: string,
+  tenantId: string
+): Promise<boolean> => {
   validateNonEmptyString(sourceId, "sourceId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
-    const result = await query(EXTERNAL_SOURCE_QUERIES.DELETE, [sourceId]);
+    const result = await query(EXTERNAL_SOURCE_QUERIES.DELETE, [sourceId, tenantId]);
 
     if (result.rowCount === 0) {
       return false;

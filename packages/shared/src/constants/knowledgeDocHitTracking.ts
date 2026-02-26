@@ -32,7 +32,7 @@ export const HIT_TRACKING_QUERIES = {
       (COALESCE((metadata->>'hitCount')::int, 0) + 1)::text::jsonb
     ),
     updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $2
     RETURNING *
   `,
 
@@ -44,7 +44,7 @@ export const HIT_TRACKING_QUERIES = {
       (COALESCE((metadata->>'hitCount')::int, 0) + 1)::text::jsonb
     ),
     updated_at = NOW()
-    WHERE id = ANY($1)
+    WHERE id = ANY($1) AND tenant_id = $2
     RETURNING id
   `,
 
@@ -56,11 +56,11 @@ export const HIT_TRACKING_QUERIES = {
       (COALESCE((metadata->>'negativeFeedbackCount')::int, 0) + 1)::text::jsonb
     ),
     updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $2
     RETURNING *
   `,
 
   GET_BY_ID: `
-    SELECT * FROM knowledge_documents WHERE id = $1
+    SELECT * FROM knowledge_documents WHERE id = $1 AND tenant_id = $2
   `,
 } as const;

@@ -13,9 +13,12 @@ import type { OAuthTokenResponse, OAuthProviderProfile, RequestContext } from "@
 
 /**
  * Organization identity returned by an OAuth provider.
+ * The optional `role` field carries the provider-specific role name
+ * (e.g., GitHub "admin", GitLab "developer") for Kenchi role mapping.
  */
 export interface OAuthOrganization {
   readonly login: string;
+  readonly role?: string;
 }
 
 /**
@@ -30,7 +33,8 @@ export interface OAuthPort {
   readonly exchangeCode: (
     code: string,
     instanceUrl: string | null,
-    context: RequestContext
+    context: RequestContext,
+    codeVerifier?: string
   ) => Promise<OAuthTokenResponse>;
 
   /** Fetch the authenticated user's profile from the provider. */

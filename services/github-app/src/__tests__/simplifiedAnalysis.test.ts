@@ -85,6 +85,7 @@ jest.mock("@kenchi/shared", () => {
       secretsRedacted: 0,
       secretTypes: [],
     })),
+    findTenantByGitHubInstallation: jest.fn(() => Promise.resolve({ id: "test-tenant-id" })),
     formatGitHubComment: actual.formatGitHubComment,
     formatSlackMessage: actual.formatSlackMessage,
   };

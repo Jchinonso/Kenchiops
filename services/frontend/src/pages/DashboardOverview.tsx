@@ -65,6 +65,9 @@ import {
   Siren,
   ShieldCheck,
 } from "lucide-react";
+import { UsageWarning } from "@/components/UsageWarning";
+import { FeatureGate } from "@/components/FeatureGate";
+import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { ConfidenceChart } from "@/components/ConfidenceChart";
 import { ConfidenceTrendChart } from "@/components/ConfidenceTrendChart";
 import { SeverityDistributionChart } from "@/components/SeverityDistributionChart";
@@ -359,6 +362,7 @@ export const DashboardOverview = ({
   const { data: triageStats } = useTriageStats(tenantId, refreshKey);
   const { data: activeCountsBySource } = useActiveCountsBySource(tenantId, refreshKey);
   const { data: severityBySource } = useSeverityDistributionBySource(tenantId, refreshKey);
+  const { data: usageData } = useSubscriptionUsage(refreshKey);
   const { data: balancedIncidents, isLoading: incidentsLoading } = useBalancedRecentIncidents(
     tenantId,
     2,
@@ -439,6 +443,27 @@ export const DashboardOverview = ({
           </button>
         )}
       </div>
+
+      {/* Usage Warnings — shown when approaching plan limits */}
+      {usageData && (
+        <div className="space-y-3 mb-6">
+          <UsageWarning
+            label="Analyses This Month"
+            current={usageData.usage.analysesThisMonth.current}
+            limit={usageData.usage.analysesThisMonth.limit}
+          />
+          <UsageWarning
+            label="Repositories"
+            current={usageData.usage.repositories.current}
+            limit={usageData.usage.repositories.limit}
+          />
+          <UsageWarning
+            label="Team Members"
+            current={usageData.usage.teamMembers.current}
+            limit={usageData.usage.teamMembers.limit}
+          />
+        </div>
+      )}
 
       {/* Quick Stats Grid */}
       {statsError ? (
@@ -954,14 +979,16 @@ export const DashboardOverview = ({
         </div>
       )}
 
-      {/* Charts */}
-      <ConfidenceTrendChart refreshKey={refreshKey} />
-      <ConfidenceChart refreshKey={refreshKey} />
-      <SeverityDistributionChart
-        distribution={triageStats?.severityDistribution ?? null}
-        distributionBySource={severityBySource ?? null}
-        isLoading={!triageStats && !!tenantId}
-      />
+      {/* Charts — gated to Team+ plans */}
+      <FeatureGate feature="teamAnalytics">
+        <ConfidenceTrendChart refreshKey={refreshKey} />
+        <ConfidenceChart refreshKey={refreshKey} />
+        <SeverityDistributionChart
+          distribution={triageStats?.severityDistribution ?? null}
+          distributionBySource={severityBySource ?? null}
+          isLoading={!triageStats && !!tenantId}
+        />
+      </FeatureGate>
     </>
   );
 };

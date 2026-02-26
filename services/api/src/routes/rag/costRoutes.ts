@@ -16,7 +16,7 @@ import {
   COST_CONTROL_CONFIG,
   VALID_EMBEDDING_TIERS,
   requireTenantMatch,
-  requireRole,
+  requirePermission,
   type EmbeddingTierName,
   getTenantTierConfig,
   setTenantTierConfig,
@@ -268,15 +268,7 @@ const handleCostEstimate = async (req: Request, res: Response): Promise<void> =>
  */
 const handleGetCostStats = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = req.query.tenantId as string | undefined;
-
-  if (!tenantId) {
-    res.status(HTTP_STATUS.BAD_REQUEST).json({
-      success: false,
-      error: "tenantId query parameter is required",
-    });
-    return;
-  }
+  const { tenantId } = req.context;
 
   const [tierConfig, cacheStats] = await Promise.all([
     getTenantTierConfig(tenantId),
@@ -320,7 +312,7 @@ router.get(API_ROUTES.RAG_CACHE_STATS, asyncHandler(handleGetCacheStats));
 /** POST /api/rag/cache/clear - Clear cache (admin/owner only) */
 router.post(
   API_ROUTES.RAG_CACHE_CLEAR,
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   asyncHandler(handleClearCache)
 );
 

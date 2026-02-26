@@ -19,6 +19,7 @@ import {
   preprocessLogsWithMetadata,
   formatGitHubComment,
   formatSlackMessage,
+  findTenantByGitHubInstallation,
   type LLMAnalysisResult,
   type OutputContext,
 } from "@kenchi/shared";
@@ -152,13 +153,27 @@ export const processSimplifiedAnalysis = async (
       secretsRedacted: preprocessed.secretsRedacted,
     });
 
-    // Step 3: Send to LLM
+    // Step 3: Resolve tenant for multi-tenant auth
+    const tenant = await findTenantByGitHubInstallation(installation.id);
+    if (!tenant) {
+      logger.warn("Simplified analysis: no tenant for installation", {
+        installationId: installation.id,
+        repository: context.repository,
+      });
+      return {
+        success: false,
+        error: "No tenant found for GitHub installation",
+      };
+    }
+
+    // Step 4: Send to LLM
     const apiUrl = `${config.API_URL}/api/analyze`;
 
     logger.info("Simplified analysis: sending to LLM", {
       repository: context.repository,
       apiUrl,
       logSize: preprocessed.processedSize,
+      tenantId: tenant.id,
     });
 
     const response = await resilientPost<AnalysisApiResponse>(
@@ -166,6 +181,7 @@ export const processSimplifiedAnalysis = async (
       {
         failure_log: preprocessed.logs,
         repository: context.repository,
+        tenant_id: tenant.id,
       },
       { internalAuth: true }
     );

@@ -31,6 +31,8 @@ export interface TenantRow {
   readonly rag_preferred_tier: string | null;
   readonly rag_allow_premium: boolean | null;
   readonly rag_degrade_on_budget_warning: boolean | null;
+  /** Encryption key version: 1 = legacy global key, 2+ = per-tenant HKDF. */
+  readonly encryption_key_version: number;
 }
 
 /**

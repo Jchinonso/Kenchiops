@@ -60,6 +60,10 @@ export interface TenantSubscriptionRow {
   readonly changed_at: Date | null;
   readonly created_at: Date;
   readonly updated_at: Date;
+  // Stripe billing fields (migration 034)
+  readonly stripe_customer_id: string | null;
+  readonly stripe_subscription_id: string | null;
+  readonly current_period_end: Date | null;
 }
 
 // ==================== Domain Types (camelCase) ====================
@@ -101,6 +105,10 @@ export interface TenantSubscription {
   readonly changedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  // Stripe billing fields (migration 034)
+  readonly stripeCustomerId?: string | null;
+  readonly stripeSubscriptionId?: string | null;
+  readonly currentPeriodEnd?: Date | null;
 }
 
 // ==================== Input Types ====================

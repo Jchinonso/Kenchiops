@@ -135,7 +135,7 @@ export const executeTestCase = async (testCase: RAGTestCase): Promise<TestCaseRe
       timestamp: new Date().toISOString(),
     };
 
-    await updateTestCaseResult(testCase.id, testResult);
+    await updateTestCaseResult(testCase.id, testResult, testCase.tenantId ?? "system");
 
     return {
       testCaseId: testCase.id,

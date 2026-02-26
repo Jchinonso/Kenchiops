@@ -44,6 +44,20 @@ const mockFindByOrgNameAndProvider = jest.fn<(...args: unknown[]) => Promise<Ten
 const mockAddUserOrganization = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockCreateFromGitHubLogin = jest.fn<(...args: unknown[]) => Promise<Tenant>>();
 const mockCreateFromGitLabGroup = jest.fn<(...args: unknown[]) => Promise<Tenant>>();
+const mockCreateFromBitbucketWorkspace = jest.fn<(...args: unknown[]) => Promise<Tenant>>();
+const mockCreateFromAzureDevOpsAccount = jest.fn<(...args: unknown[]) => Promise<Tenant>>();
+
+// Organization membership mocks
+const mockFindOrganizationsByUser = jest.fn<(...args: unknown[]) => Promise<unknown[]>>();
+const mockCountOwnersByTenant = jest.fn<(...args: unknown[]) => Promise<number>>();
+const mockRemoveMemberFromTenant = jest.fn<(...args: unknown[]) => Promise<void>>();
+const mockFindUserOrgRole = jest.fn<(...args: unknown[]) => Promise<string | null>>();
+const mockLogAuditEvent = jest.fn<(...args: unknown[]) => Promise<void>>();
+const mockCheckPlanLimit =
+  jest.fn<
+    (...args: unknown[]) => Promise<{ allowed: boolean; currentUsage: number; limit: number }>
+  >();
+const mockResolveAutoLinkRole = jest.fn<(...args: unknown[]) => string>();
 
 // JWT mocks
 const mockGenerateAccessToken = jest.fn<(...args: unknown[]) => string>();
@@ -52,7 +66,7 @@ const mockHashRefreshToken = jest.fn<(...args: unknown[]) => string>();
 
 // Adapter mock
 const mockGetUserOrganizations =
-  jest.fn<(...args: unknown[]) => Promise<ReadonlyArray<{ login: string }>>>();
+  jest.fn<(...args: unknown[]) => Promise<ReadonlyArray<{ login: string; role?: string }>>>();
 const mockGetOAuthAdapter = jest.fn(() => ({
   exchangeCode: jest.fn(),
   getUserProfile: jest.fn(),
@@ -89,6 +103,16 @@ jest.mock("@kenchi/shared", () => {
     addUserOrganization: (...args: unknown[]) => mockAddUserOrganization(...args),
     createFromGitHubLogin: (...args: unknown[]) => mockCreateFromGitHubLogin(...args),
     createFromGitLabGroup: (...args: unknown[]) => mockCreateFromGitLabGroup(...args),
+    createFromBitbucketWorkspace: (...args: unknown[]) => mockCreateFromBitbucketWorkspace(...args),
+    createFromAzureDevOpsAccount: (...args: unknown[]) => mockCreateFromAzureDevOpsAccount(...args),
+    // Organization membership
+    findOrganizationsByUser: (...args: unknown[]) => mockFindOrganizationsByUser(...args),
+    countOwnersByTenant: (...args: unknown[]) => mockCountOwnersByTenant(...args),
+    removeMemberFromTenant: (...args: unknown[]) => mockRemoveMemberFromTenant(...args),
+    findUserOrgRole: (...args: unknown[]) => mockFindUserOrgRole(...args),
+    logAuditEvent: (...args: unknown[]) => mockLogAuditEvent(...args),
+    checkPlanLimit: (...args: unknown[]) => mockCheckPlanLimit(...args),
+    resolveAutoLinkRole: (...args: unknown[]) => mockResolveAutoLinkRole(...args),
     // JWT utilities
     generateAccessToken: (...args: unknown[]) => mockGenerateAccessToken(...args),
     generateRefreshToken: (...args: unknown[]) => mockGenerateRefreshToken(...args),
@@ -209,6 +233,10 @@ describe("authService", () => {
     mockGenerateAccessToken.mockReturnValue("mock-access-token");
     mockGenerateRefreshToken.mockReturnValue("mock-raw-refresh-token");
     mockHashRefreshToken.mockReturnValue("mock-hashed-refresh-token");
+    mockFindUserOrgRole.mockResolvedValue(null);
+    mockFindOrganizationsByUser.mockResolvedValue([]);
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, currentUsage: 0, limit: 10 });
+    mockResolveAutoLinkRole.mockReturnValue("member");
   });
 
   // ==================================================================
@@ -376,7 +404,18 @@ describe("authService", () => {
   // ==================================================================
 
   describe("autoLinkOrganizations", () => {
-    it("should skip silently for non-org-capable providers (bitbucket)", async () => {
+    it("should discover orgs for bitbucket (org-capable provider)", async () => {
+      const bbTenant = createTestTenant({
+        id: "tenant-bb",
+        orgName: "bb-workspace",
+        provider: "bitbucket",
+      });
+      mockGetUserOrganizations.mockResolvedValue([{ login: "bb-workspace", role: "owner" }]);
+      mockFindByOrgNameAndProvider.mockResolvedValue(null);
+      mockCreateFromBitbucketWorkspace.mockResolvedValue(bbTenant);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
+
       await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "bitbucket",
@@ -386,11 +425,23 @@ describe("authService", () => {
         testContext
       );
 
-      expect(mockGetOAuthAdapter).not.toHaveBeenCalled();
-      expect(mockFindByOrgNameAndProvider).not.toHaveBeenCalled();
+      expect(mockGetOAuthAdapter).toHaveBeenCalledWith("bitbucket");
+      expect(mockCreateFromBitbucketWorkspace).toHaveBeenCalledWith("bb-workspace");
+      expect(mockAddUserOrganization).toHaveBeenCalled();
     });
 
-    it("should skip silently for non-org-capable providers (azure_devops)", async () => {
+    it("should discover orgs for azure_devops (org-capable provider)", async () => {
+      const azTenant = createTestTenant({
+        id: "tenant-az",
+        orgName: "az-org",
+        provider: "azure_devops",
+      });
+      mockGetUserOrganizations.mockResolvedValue([{ login: "az-org" }]);
+      mockFindByOrgNameAndProvider.mockResolvedValue(null);
+      mockCreateFromAzureDevOpsAccount.mockResolvedValue(azTenant);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
+
       await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
         "azure_devops",
@@ -400,7 +451,8 @@ describe("authService", () => {
         testContext
       );
 
-      expect(mockGetOAuthAdapter).not.toHaveBeenCalled();
+      expect(mockGetOAuthAdapter).toHaveBeenCalledWith("azure_devops");
+      expect(mockCreateFromAzureDevOpsAccount).toHaveBeenCalledWith("az-org");
     });
 
     it("should still run when user already has a tenantId (discovers new orgs)", async () => {
@@ -408,6 +460,7 @@ describe("authService", () => {
       mockGetUserOrganizations.mockResolvedValue([{ login: "acme-corp" }]);
       mockFindByOrgNameAndProvider.mockResolvedValue(existingTenant);
       mockAddUserOrganization.mockResolvedValue(undefined);
+      mockFindUserOrgRole.mockResolvedValue("member");
 
       await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: "existing-tenant" },
@@ -435,6 +488,7 @@ describe("authService", () => {
       mockCreateFromGitHubLogin.mockResolvedValue(tenant2);
       mockAddUserOrganization.mockResolvedValue(undefined);
       mockSwitchUserOrganization.mockResolvedValue(null);
+      mockFindUserOrgRole.mockResolvedValue(null);
 
       await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
@@ -451,11 +505,13 @@ describe("authService", () => {
       expect(mockCreateFromGitHubLogin).toHaveBeenCalledWith("other-org");
       // Both orgs got membership added
       expect(mockAddUserOrganization).toHaveBeenCalledTimes(2);
+      // Existing tenant: resolveAutoLinkRole called for role assignment
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-acme",
         role: "member",
       });
+      // New tenant: first user is owner
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-other",
@@ -469,6 +525,7 @@ describe("authService", () => {
       mockFindByOrgNameAndProvider.mockResolvedValue(tenant);
       mockAddUserOrganization.mockResolvedValue(undefined);
       mockSwitchUserOrganization.mockResolvedValue(null);
+      mockFindUserOrgRole.mockResolvedValue("member");
 
       await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },

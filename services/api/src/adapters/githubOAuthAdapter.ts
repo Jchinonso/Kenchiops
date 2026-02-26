@@ -131,7 +131,8 @@ const isRetryableStatus = (status: number | undefined): boolean =>
 const exchangeCode = async (
   code: string,
   instanceUrl: string | null,
-  context: RequestContext
+  context: RequestContext,
+  codeVerifier?: string
 ): Promise<OAuthTokenResponse> => {
   const { clientId, clientSecret } = ensureClientCredentials();
   const urls = getUrls(instanceUrl);
@@ -139,18 +140,23 @@ const exchangeCode = async (
   const startTime = Date.now();
 
   try {
+    const tokenBody: Record<string, string> = {
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: callbackUrl,
+    };
+    if (codeVerifier) {
+      tokenBody.code_verifier = codeVerifier;
+    }
+
     const response = await fetch(urls.token, {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-        redirect_uri: callbackUrl,
-      }),
+      body: JSON.stringify(tokenBody),
       signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
     });
 
@@ -377,7 +383,7 @@ const getUserOrganizations = async (
       ...context,
     });
 
-    return orgs.map((org) => ({ login: org.login }));
+    return orgs.map((org) => ({ login: org.login, role: org.role }));
   } catch (error) {
     if (error instanceof ExternalServiceError) {
       throw error;

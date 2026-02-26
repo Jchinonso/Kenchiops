@@ -2,13 +2,14 @@
  * Provider Connection Repository
  *
  * CRUD operations for the provider_connections table.
- * All token fields are encrypted before storage and decrypted on read.
+ * All token fields are encrypted with per-tenant HKDF keys before storage
+ * and decrypted on read (with automatic legacy format fallback).
  *
  * @module database/providerConnection/repository
  */
 
 import { query } from "../client/index.js";
-import { encryptValue } from "../../security/encryption.js";
+import { encryptForTenant } from "../../security/tenantEncryption.js";
 import { rowToProviderConnection, validateCreateInput } from "./helpers.js";
 import { rowToTenant } from "../tenant/helpers.js";
 import type {
@@ -35,7 +36,7 @@ const QUERIES = {
     LIMIT 1
   `,
   FIND_BY_ID: `
-    SELECT * FROM provider_connections WHERE id = $1
+    SELECT * FROM provider_connections WHERE id = $1 AND tenant_id = $2
   `,
   FIND_BY_EXTERNAL_ORG: `
     SELECT * FROM provider_connections
@@ -82,6 +83,17 @@ const QUERIES = {
   `,
 } as const;
 
+// ==================== Helpers ====================
+
+/**
+ * Encrypt a nullable string value for a tenant.
+ * Returns null if the value is null/undefined.
+ */
+const encryptNullable = async (
+  tenantId: string,
+  value: string | null | undefined
+): Promise<string | null> => (value ? encryptForTenant(tenantId, value) : null);
+
 // ==================== Query Functions ====================
 
 /**
@@ -89,7 +101,7 @@ const QUERIES = {
  */
 export const findByTenant = async (tenantId: string): Promise<readonly ProviderConnection[]> => {
   const result = await query<ProviderConnectionRow>(QUERIES.FIND_BY_TENANT, [tenantId]);
-  return result.rows.map(rowToProviderConnection);
+  return Promise.all(result.rows.map(rowToProviderConnection));
 };
 
 /**
@@ -108,10 +120,14 @@ export const findByTenantAndProvider = async (
 };
 
 /**
- * Find a connection by ID (active or inactive).
+ * Find a connection by ID (active or inactive), scoped to a tenant.
+ * SECURITY: Always requires tenantId to prevent cross-tenant data access.
  */
-export const findConnectionById = async (id: string): Promise<ProviderConnection | null> => {
-  const result = await query<ProviderConnectionRow>(QUERIES.FIND_BY_ID, [id]);
+export const findConnectionById = async (
+  id: string,
+  tenantId: string
+): Promise<ProviderConnection | null> => {
+  const result = await query<ProviderConnectionRow>(QUERIES.FIND_BY_ID, [id, tenantId]);
   const row = result.rows[0];
   return row ? rowToProviderConnection(row) : null;
 };
@@ -141,17 +157,22 @@ export const findActiveByProvider = async (
   provider: ProviderType
 ): Promise<readonly ProviderConnection[]> => {
   const result = await query<ProviderConnectionRow>(QUERIES.FIND_ACTIVE_BY_PROVIDER, [provider]);
-  return result.rows.map(rowToProviderConnection);
+  return Promise.all(result.rows.map(rowToProviderConnection));
 };
 
 /**
  * Create a new provider connection.
- * Token values are encrypted before storage.
+ * Token values are encrypted with per-tenant HKDF keys before storage.
  */
 export const createProviderConnection = async (
   input: CreateProviderConnectionInput
 ): Promise<ProviderConnection> => {
   validateCreateInput(input);
+
+  const [webhookSecretEnc, accessTokenEnc] = await Promise.all([
+    encryptNullable(input.tenantId, input.webhookSecret),
+    encryptNullable(input.tenantId, input.accessToken),
+  ]);
 
   const result = await query<ProviderConnectionRow>(QUERIES.INSERT, [
     input.tenantId,
@@ -160,8 +181,8 @@ export const createProviderConnection = async (
     input.externalOrgId ?? null,
     input.baseUrl ?? null,
     JSON.stringify(input.config ?? {}),
-    encryptValue(input.webhookSecret ?? null),
-    encryptValue(input.accessToken ?? null),
+    webhookSecretEnc,
+    accessTokenEnc,
     input.tokenExpiresAt ?? null,
   ]);
 
@@ -171,7 +192,7 @@ export const createProviderConnection = async (
 /**
  * Update a provider connection's mutable fields.
  * Only the fields present in the input are updated.
- * Token values are encrypted before storage.
+ * Token values are encrypted with per-tenant HKDF keys before storage.
  */
 export const updateProviderConnection = async (
   input: UpdateProviderConnectionInput
@@ -202,13 +223,18 @@ export const updateProviderConnection = async (
     "WHERE id = $1 RETURNING *",
   ].join(" ");
 
+  const [webhookSecretEnc, accessTokenEnc] = await Promise.all([
+    updateFields.whEnc ? encryptNullable(input.tenantId, input.webhookSecret) : null,
+    updateFields.atEnc ? encryptNullable(input.tenantId, input.accessToken) : null,
+  ]);
+
   const result = await query<ProviderConnectionRow>(updateQuery, [
     input.id,
     input.connectionName ?? null,
     input.externalOrgId ?? null,
     input.config ? JSON.stringify(input.config) : null,
-    updateFields.whEnc ? encryptValue(input.webhookSecret ?? null) : null,
-    updateFields.atEnc ? encryptValue(input.accessToken ?? null) : null,
+    webhookSecretEnc,
+    accessTokenEnc,
     input.tokenExpiresAt ?? null,
   ]);
 
@@ -237,7 +263,7 @@ export const deactivateByTenantAndProvider = async (
     tenantId,
     provider,
   ]);
-  return result.rows.map(rowToProviderConnection);
+  return Promise.all(result.rows.map(rowToProviderConnection));
 };
 
 /**
@@ -245,10 +271,12 @@ export const deactivateByTenantAndProvider = async (
  */
 export const updateConnectionToken = async (
   connectionId: string,
+  tenantId: string,
   plainToken: string
 ): Promise<ProviderConnection | null> => {
+  const encrypted = await encryptForTenant(tenantId, plainToken);
   const result = await query<ProviderConnectionRow>(QUERIES.UPDATE_ACCESS_TOKEN, [
-    encryptValue(plainToken),
+    encrypted,
     connectionId,
   ]);
   const row = result.rows[0];

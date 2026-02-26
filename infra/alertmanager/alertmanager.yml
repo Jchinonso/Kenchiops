@@ -1,0 +1,64 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "tenant_id"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "default"
+
+  routes:
+    # Critical alerts: shorter repeat interval, high-priority channel
+    - match:
+        severity: critical
+      receiver: "critical"
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # Warning alerts: standard ops channel
+    - match:
+        severity: warning
+      receiver: "warning"
+      repeat_interval: 4h
+
+receivers:
+  - name: "default"
+    # Configure webhook to incident-triage service for automated triage
+    webhook_configs:
+      - url: "http://incident-triage:3004/webhooks/prometheus"
+        send_resolved: true
+
+  - name: "critical"
+    webhook_configs:
+      - url: "http://incident-triage:3004/webhooks/prometheus"
+        send_resolved: true
+    # Uncomment and configure for production:
+    # slack_configs:
+    #   - api_url: "${SLACK_OPS_WEBHOOK_URL}"
+    #     channel: "#ops-critical"
+    #     title: '{{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+    # pagerduty_configs:
+    #   - service_key: "${PAGERDUTY_SERVICE_KEY}"
+
+  - name: "warning"
+    webhook_configs:
+      - url: "http://incident-triage:3004/webhooks/prometheus"
+        send_resolved: true
+    # Uncomment and configure for production:
+    # slack_configs:
+    #   - api_url: "${SLACK_OPS_WEBHOOK_URL}"
+    #     channel: "#ops-alerts"
+    #     title: '{{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+
+inhibit_rules:
+  # If critical is firing, suppress warning for the same alert+tenant
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname", "tenant_id"]

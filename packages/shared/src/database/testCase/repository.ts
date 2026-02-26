@@ -84,11 +84,15 @@ export const createTestCase = async (input: CreateTestCaseInput): Promise<RAGTes
  * @throws ValidationError if testCaseId is empty
  * @throws Error if database operation fails
  */
-export const getTestCaseById = async (testCaseId: string): Promise<RAGTestCase | null> => {
+export const getTestCaseById = async (
+  testCaseId: string,
+  tenantId: string
+): Promise<RAGTestCase | null> => {
   validateId(testCaseId, "testCaseId");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<TestCaseRow>(TEST_CASE_QUERIES.GET_BY_ID, [testCaseId]);
+    const result = await query<TestCaseRow>(TEST_CASE_QUERIES.GET_BY_ID, [testCaseId, tenantId]);
     return result.rows.length === 0 ? null : mapRowToTestCase(result.rows[0]);
   } catch (error) {
     logger.error("Failed to get test case by ID", {
@@ -176,14 +180,17 @@ export const getTestCasesByCategory = async (category: string): Promise<readonly
  */
 export const updateTestCaseResult = async (
   testCaseId: string,
-  testResult: TestResultInput
+  testResult: TestResultInput,
+  tenantId: string
 ): Promise<RAGTestCase | null> => {
   validateId(testCaseId, "testCaseId");
+  validateId(tenantId, "tenantId");
 
   try {
     const result = await query<TestCaseRow>(TEST_CASE_QUERIES.UPDATE_RESULT, [
       testCaseId,
       JSON.stringify(testResult),
+      tenantId,
     ]);
 
     if (result.rows.length === 0) {
@@ -217,12 +224,18 @@ export const updateTestCaseResult = async (
  */
 export const setTestCaseActive = async (
   testCaseId: string,
-  isActive: boolean
+  isActive: boolean,
+  tenantId: string
 ): Promise<RAGTestCase | null> => {
   validateId(testCaseId, "testCaseId");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query<TestCaseRow>(TEST_CASE_QUERIES.SET_ACTIVE, [testCaseId, isActive]);
+    const result = await query<TestCaseRow>(TEST_CASE_QUERIES.SET_ACTIVE, [
+      testCaseId,
+      isActive,
+      tenantId,
+    ]);
     if (result.rows.length === 0) {
       return null;
     }
@@ -239,18 +252,20 @@ export const setTestCaseActive = async (
 };
 
 /**
- * Deletes a test case.
+ * Deletes a test case (tenant-scoped).
  *
  * @param testCaseId - Test case ID to delete
+ * @param tenantId - Tenant ID for isolation
  * @returns True if deleted, false if not found
  * @throws ValidationError if testCaseId is empty
  * @throws Error if database operation fails
  */
-export const deleteTestCase = async (testCaseId: string): Promise<boolean> => {
+export const deleteTestCase = async (testCaseId: string, tenantId: string): Promise<boolean> => {
   validateId(testCaseId, "testCaseId");
+  validateId(tenantId, "tenantId");
 
   try {
-    const result = await query(TEST_CASE_QUERIES.DELETE, [testCaseId]);
+    const result = await query(TEST_CASE_QUERIES.DELETE, [testCaseId, tenantId]);
     if (result.rowCount === 0) {
       return false;
     }

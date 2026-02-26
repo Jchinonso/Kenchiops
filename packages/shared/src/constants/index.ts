@@ -216,6 +216,7 @@ export {
 export {
   LLM_DEFAULTS,
   OPENROUTER_DEFAULTS,
+  GOOGLE_AI_STUDIO_DEFAULTS,
   LLM_CONSTANTS,
   EVIDENCE_TRUNCATION,
   MATCHING_CONFIG,
@@ -360,6 +361,7 @@ export {
   HEX_BYTE_WIDTH,
   HTTP_RESILIENCE_DEFAULTS,
   CIRCUIT_BREAKER_SERVICE_KEYS,
+  CIRCUIT_BREAKER_CLEANUP,
   RETRYABLE_HTTP_STATUS_CODES,
   RETRYABLE_NETWORK_ERRORS,
   ID_GENERATION,
@@ -367,6 +369,15 @@ export {
 
 // LLM concurrency constants
 export { LLM_CONCURRENCY_DEFAULTS } from "./llmConcurrency.js";
+
+// Tenant concurrency constants
+export {
+  TENANT_CONCURRENCY_DEFAULTS,
+  FAIR_QUEUE_DEFAULTS,
+  TENANT_QUOTA_BY_PLAN,
+  TENANT_QUOTA_DEFAULT_PLAN,
+  TENANT_QUOTA_REDIS,
+} from "./concurrency.js";
 
 // Redis constants
 export {
@@ -652,6 +663,37 @@ export {
   SUBSCRIPTION_DEFAULTS,
 } from "./subscription.js";
 
+// Rate limit category constants
+export {
+  RATE_LIMIT_CATEGORIES,
+  PLAN_RATE_LIMITS,
+  CATEGORY_RATE_LIMIT_PREFIX,
+  PLAN_RATE_LIMIT_PREFIX,
+} from "./rateLimitCategory.js";
+
+// Data export constants
+export { DATA_EXPORT_DEFAULTS, DATA_EXPORT_STATUS, DATA_EXPORT_QUERIES } from "./dataExport.js";
+
+// Data retention constants
+export { RETENTION_DEFAULTS, RETENTION_QUERIES } from "./retention.js";
+
+// Consent tracking constants
+export { CONSENT_PURPOSES, CONSENT_ACTIONS, CONSENT_QUERIES } from "./consent.js";
+
+// User PII constants
+export { PII_REDACTED, USER_PII_QUERIES } from "./userPii.js";
+
+// Usage alert constants
+export {
+  USAGE_ALERT_THRESHOLDS,
+  USAGE_ALERT_LEVELS,
+  USAGE_ALERT_DEDUP,
+  USAGE_ALERT_SCHEDULER,
+} from "./usageAlerts.js";
+
+// Alerting threshold constants
+export { ALERT_THRESHOLDS_WARNING, ALERT_THRESHOLDS_CRITICAL } from "./alerting.js";
+
 // Auth constants
 export {
   USER_STATUS,
@@ -667,6 +709,9 @@ export {
   PUBLIC_ROUTES,
   AUTH_AUDIT_ACTIONS,
   AUTH_DEFAULTS,
+  PROVIDER_ROLE_MAP,
+  DEFAULT_AUTO_LINK_ROLE,
+  resolveAutoLinkRole,
   USER_QUERIES,
   OAUTH_IDENTITY_QUERIES,
   OAUTH_STATE_QUERIES,

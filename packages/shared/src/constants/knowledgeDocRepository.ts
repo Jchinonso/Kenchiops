@@ -59,13 +59,13 @@ export const KNOWLEDGE_DOC_QUERIES = {
   UPDATE_EMBEDDING: `
     UPDATE knowledge_documents
     SET embedding = $2::vector, embedding_model = $3, embedding_version = $4, updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $5
     RETURNING *
   `,
 
   DELETE_BY_PARENT: `
     DELETE FROM knowledge_documents
-    WHERE parent_id = $1
+    WHERE parent_id = $1 AND tenant_id = $2
   `,
 
   DELETE_BY_TENANT: `

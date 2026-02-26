@@ -15,7 +15,7 @@ import {
   createLogger,
   SERVICE_NAMES,
   FINE_TUNING_CONFIG,
-  requireRole,
+  requirePermission,
 } from "@kenchi/shared";
 import {
   startFineTuningJob,
@@ -54,8 +54,10 @@ const handleStartJob = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   const body = req.body as StartJobRequestBody;
 
+  const { tenantId } = req.context;
+
   const result = await startFineTuningJob({
-    tenantId: body.tenantId,
+    tenantId,
     epochs: body.epochs,
     suffix: body.suffix,
     dryRun: body.dryRun ?? false,
@@ -63,7 +65,7 @@ const handleStartJob = async (req: Request, res: Response): Promise<void> => {
 
   if (!result.success) {
     logger.info("Fine-tuning job start failed", {
-      tenantId: body.tenantId,
+      tenantId,
       error: result.error,
       durationMs: Date.now() - startTime,
     });
@@ -77,7 +79,7 @@ const handleStartJob = async (req: Request, res: Response): Promise<void> => {
   }
 
   logger.info("Fine-tuning job started", {
-    tenantId: body.tenantId,
+    tenantId,
     jobId: result.jobId,
     durationMs: Date.now() - startTime,
   });
@@ -268,14 +270,14 @@ router.get("/api/fine-tuning/scheduler/status", asyncHandler(handleGetSchedulerS
 /** POST /api/fine-tuning/scheduler/start - Start the scheduler */
 router.post(
   "/api/fine-tuning/scheduler/start",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   asyncHandler(handleStartScheduler)
 );
 
 /** POST /api/fine-tuning/scheduler/stop - Stop the scheduler */
 router.post(
   "/api/fine-tuning/scheduler/stop",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   asyncHandler(handleStopScheduler)
 );
 

@@ -130,6 +130,7 @@ const runPolicyAndDispatch = async (
 
   await updateTriageDispatchResults({
     triageResultId,
+    tenantId,
     // Cast for JSONB column storage — typed object is structurally compatible
     routingDecision: routingDecision as unknown as Record<string, unknown>,
     dispatchedTo: results.results.map((dr) => ({
@@ -167,7 +168,7 @@ const runTriagePipeline = async (
   const dedupResult = await container.dedupService.checkDuplicate(fingerprint, tenantId, context);
 
   if (dedupResult.isDuplicate) {
-    await updateAlertStatus(alertId, "deduped");
+    await updateAlertStatus(alertId, "deduped", tenantId);
     incrementCounter(state, "totalDeduped");
     const durationMs = Date.now() - startTime;
 
@@ -231,6 +232,7 @@ const runTriagePipeline = async (
 
   await updateTriageEnrichment({
     triageResultId: triageResult.id,
+    tenantId,
     confidence: evidenceCatalog.confidence.total,
     completeness: evidenceCatalog.completeness.total,
     missingFields: evidenceCatalog.completeness.missingFields,
@@ -270,6 +272,7 @@ const runTriagePipeline = async (
 
   await updateTriageAiSummary({
     triageResultId: triageResult.id,
+    tenantId,
     // Cast for JSONB column storage — typed object is structurally compatible
     aiSummary: summaryResult as unknown as Record<string, unknown>,
     summarySource: summaryResult.summarySource,
@@ -294,7 +297,7 @@ const runTriagePipeline = async (
   );
 
   // Step 15: Mark alert as triaged
-  await updateAlertStatus(alertId, "triaged");
+  await updateAlertStatus(alertId, "triaged", tenantId);
 
   // Step 16: Publish dashboard SSE notification (fire-and-forget)
   void (async () => {
@@ -339,9 +342,10 @@ const runTriagePipeline = async (
 const processAlert = async (
   container: TriageContainer,
   alertId: string,
+  tenantId: string,
   state: TriageWorkerState
 ): Promise<void> => {
-  const alert = await getAlertById(alertId);
+  const alert = await getAlertById(alertId, tenantId);
 
   if (!alert) {
     logger.warn("Alert not found for triage", { alertId });
@@ -359,13 +363,13 @@ const processAlert = async (
   });
 
   // Step 1: Mark as processing
-  await updateAlertStatus(alertId, "processing");
+  await updateAlertStatus(alertId, "processing", tenantId);
 
   // Wrap pipeline in try/catch to reset status on failure (C1: prevent stuck "processing")
   try {
     await runTriagePipeline(container, alert, alertId, state, startTime, context);
   } catch (error) {
-    await updateAlertStatus(alertId, "error");
+    await updateAlertStatus(alertId, "error", tenantId);
     throw error;
   }
 };
@@ -375,17 +379,21 @@ const processAlert = async (
  */
 const handleQueueMessage = async (
   container: TriageContainer,
-  message: QueueMessage<{ readonly alertId: string }>,
+  message: QueueMessage<{ readonly alertId: string; readonly tenantId: string | null }>,
   state: TriageWorkerState
 ): Promise<{ readonly success: boolean; readonly error?: string }> => {
-  const { alertId } = message.payload;
+  const { alertId, tenantId } = message.payload;
 
   if (!alertId) {
     return { success: false, error: "Missing alertId in queue message payload" };
   }
 
+  if (!tenantId) {
+    return { success: false, error: "Missing tenantId in queue message payload" };
+  }
+
   try {
-    await processAlert(container, alertId, state);
+    await processAlert(container, alertId, tenantId, state);
     incrementCounter(state, "totalProcessed");
     return { success: true };
   } catch (error) {
@@ -425,9 +433,10 @@ export const startTriageWorker = (container: TriageContainer): TriageWorkerContr
   const pollLoop = async (): Promise<void> => {
     while (state.running) {
       try {
-        await container.queue.process<{ readonly alertId: string }>(async (message) =>
-          handleQueueMessage(container, message, state)
-        );
+        await container.queue.process<{
+          readonly alertId: string;
+          readonly tenantId: string | null;
+        }>(async (message) => handleQueueMessage(container, message, state));
       } catch (error) {
         logger.error("Triage worker poll error", {
           error: getErrorMessage(error),

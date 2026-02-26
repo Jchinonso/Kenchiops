@@ -138,13 +138,16 @@ export const createAnalysisFeedback = async (
  * @throws Error if database operation fails
  */
 export const getFeedbackByAnalysis = async (
-  analysisId: string
+  analysisId: string,
+  tenantId: string
 ): Promise<readonly FeedbackRecord[]> => {
   validateNonEmptyString(analysisId, "analysisId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
     const result = await query<FeedbackRow>(FEEDBACK_QUERIES.GET_FEEDBACK_BY_ANALYSIS, [
       analysisId,
+      tenantId,
     ]);
     return Object.freeze(result.rows.map(mapRowToFeedback));
   } catch (error) {
@@ -245,15 +248,18 @@ export const getRAGFeedbackByDoc = async (
  */
 export const getFeedbackByUserAndAnalysis = async (
   analysisId: string,
-  userId: string
+  userId: string,
+  tenantId: string
 ): Promise<FeedbackRecord | null> => {
   validateNonEmptyString(analysisId, "analysisId");
   validateNonEmptyString(userId, "userId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
     const result = await query<FeedbackRow>(FEEDBACK_QUERIES.GET_FEEDBACK_BY_USER_AND_ANALYSIS, [
       analysisId,
       userId,
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToFeedback(result.rows[0]) : null;
   } catch (error) {
@@ -278,14 +284,17 @@ export const getFeedbackByUserAndAnalysis = async (
  */
 export const updateFeedbackType = async (
   feedbackId: string,
-  feedbackType: FeedbackType
+  feedbackType: FeedbackType,
+  tenantId: string
 ): Promise<FeedbackRecord> => {
   validateNonEmptyString(feedbackId, "feedbackId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
     const result = await query<FeedbackRow>(FEEDBACK_QUERIES.UPDATE_FEEDBACK_TYPE, [
       feedbackType,
       feedbackId,
+      tenantId,
     ]);
 
     logger.info("Updated feedback type", { feedbackId, feedbackType });
@@ -315,10 +324,18 @@ export const createOrUpdateAnalysisFeedback = async (
   validateAnalysisFeedbackInput(input);
 
   try {
-    const existingFeedback = await getFeedbackByUserAndAnalysis(input.analysisId, input.userId);
+    const existingFeedback = await getFeedbackByUserAndAnalysis(
+      input.analysisId,
+      input.userId,
+      input.tenantId
+    );
 
     if (existingFeedback !== null) {
-      const updatedFeedback = await updateFeedbackType(existingFeedback.id, input.feedbackType);
+      const updatedFeedback = await updateFeedbackType(
+        existingFeedback.id,
+        input.feedbackType,
+        input.tenantId
+      );
       logger.info("Updated existing feedback", {
         feedbackId: existingFeedback.id,
         analysisId: input.analysisId,
@@ -352,15 +369,18 @@ export const createOrUpdateAnalysisFeedback = async (
  */
 export const getQAFeedbackByQueryAndUser = async (
   queryId: string,
-  userId: string
+  userId: string,
+  tenantId: string
 ): Promise<FeedbackRecord | null> => {
   validateNonEmptyString(queryId, "queryId");
   validateNonEmptyString(userId, "userId");
+  validateNonEmptyString(tenantId, "tenantId");
 
   try {
     const result = await query<FeedbackRow>(FEEDBACK_QUERIES.GET_QA_FEEDBACK_BY_QUERY, [
       queryId,
       userId,
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToFeedback(result.rows[0]) : null;
   } catch (error) {
@@ -430,10 +450,18 @@ export const createOrUpdateQAFeedback = async (
   validateQAFeedbackInput(input);
 
   try {
-    const existingFeedback = await getQAFeedbackByQueryAndUser(input.queryId, input.userId);
+    const existingFeedback = await getQAFeedbackByQueryAndUser(
+      input.queryId,
+      input.userId,
+      input.tenantId
+    );
 
     if (existingFeedback !== null) {
-      const updatedFeedback = await updateFeedbackType(existingFeedback.id, input.feedbackType);
+      const updatedFeedback = await updateFeedbackType(
+        existingFeedback.id,
+        input.feedbackType,
+        input.tenantId
+      );
       logger.info("Updated existing Q&A feedback", {
         feedbackId: existingFeedback.id,
         queryId: input.queryId,

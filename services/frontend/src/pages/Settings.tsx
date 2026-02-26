@@ -5,8 +5,8 @@
  * notification preferences, and account management (danger zone).
  */
 
-import { useState, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenantInfo } from "@/hooks/useDashboardData";
@@ -14,6 +14,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
 import { useDeletionImpact } from "@/hooks/useDeletionImpact";
 import { useSubscription, useSubscriptionUsage, type UsageLimitDTO } from "@/hooks/useSubscription";
+import { useBillingStatus, useBillingPortal } from "@/hooks/useBilling";
 import { apiClient } from "@/lib/apiClient";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,11 +43,19 @@ import {
   AlertTriangle,
   CreditCard,
   Users,
+  Shield,
+  Scale,
+  Headphones,
+  ExternalLink,
+  Loader2,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
 import { Switch } from "@/components/ui/switch";
+import { UsageWarning } from "@/components/UsageWarning";
+import { FeatureGate } from "@/components/FeatureGate";
 
 // ==================== Constants ====================
 
@@ -152,6 +161,98 @@ const UsageBar = ({ label, usage }: UsageBarProps) => {
   );
 };
 
+// ==================== Billing Card ====================
+
+const BILLING_STATUS_LABELS: Readonly<Record<string, string>> = {
+  active: "Your subscription is active",
+  past_due: "Payment is past due — please update your payment method",
+  trialing: "You are on a free trial",
+};
+
+const BILLING_BADGE_STYLES: Readonly<Record<string, string>> = {
+  active:
+    "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800",
+  past_due:
+    "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800",
+};
+
+const DEFAULT_BADGE_STYLE =
+  "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700";
+
+interface BillingCardProps {
+  readonly billingStatus: { readonly status: string; readonly currentPeriodEnd: string | null };
+  readonly isLoading: boolean;
+  readonly portalLoading: boolean;
+  readonly onOpenPortal: () => Promise<void>;
+}
+
+const BillingCard = ({
+  billingStatus,
+  isLoading,
+  portalLoading,
+  onOpenPortal,
+}: BillingCardProps) => {
+  const { status } = billingStatus;
+  const statusLabel = BILLING_STATUS_LABELS[status] ?? `Status: ${titleCase(status)}`;
+  const badgeStyle = BILLING_BADGE_STYLES[status] ?? DEFAULT_BADGE_STYLE;
+
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <div className="flex items-center gap-2">
+          <Receipt className="w-5 h-5 text-indigo-500" />
+          <CardTitle>Billing & Payment</CardTitle>
+        </div>
+        <CardDescription>
+          Manage your payment method, invoices, and billing details.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-6">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Payment Status
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{statusLabel}</p>
+                {billingStatus.currentPeriodEnd && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    Current period ends: <TimeDisplay dateTime={billingStatus.currentPeriodEnd} />
+                  </p>
+                )}
+              </div>
+              <Badge variant="outline" className={cn("text-xs", badgeStyle)}>
+                {titleCase(status)}
+              </Badge>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void onOpenPortal();
+              }}
+              disabled={portalLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors disabled:opacity-50"
+            >
+              {portalLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ExternalLink className="w-4 h-4" />
+              )}
+              Manage Billing
+            </button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 // ==================== Main Component ====================
 
 const DELETE_CONFIRMATION = "DELETE";
@@ -165,9 +266,25 @@ export const Settings = () => {
   const { toastEnabled, browserEnabled, setToastEnabled, setBrowserEnabled } =
     useNotificationPreferences();
 
+  const { data: billingStatus, isLoading: billingLoading } = useBillingStatus();
+  const { openPortal, isLoading: portalLoading } = useBillingPortal();
+
   const planId = useMemo(() => subscription?.plan.id ?? "free", [subscription]);
   const planDisplayName = useMemo(() => subscription?.plan.displayName ?? "Free", [subscription]);
   const isSubLoading = subscriptionLoading || usageLoading;
+
+  // Handle Stripe Checkout redirect URL params
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const billingParam = searchParams.get("billing");
+    if (billingParam === "success") {
+      toast.success("Billing setup complete! Your subscription is now active.");
+      setSearchParams({}, { replace: true });
+    } else if (billingParam === "canceled") {
+      toast.info("Checkout was canceled. No changes were made.");
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const browserPermissionDenied = isBrowserNotificationDenied();
   const { impact, isLoading: impactLoading, error: impactError, fetchImpact } = useDeletionImpact();
@@ -377,6 +494,23 @@ export const Settings = () => {
                   <UsageBar label="Analyses This Month" usage={usageData.usage.analysesThisMonth} />
                   <UsageBar label="Integrations" usage={usageData.usage.integrations} />
                   <UsageBar label="Team Members" usage={usageData.usage.teamMembers} />
+                  <div className="pt-2 space-y-2">
+                    <UsageWarning
+                      label="Repositories"
+                      current={usageData.usage.repositories.current}
+                      limit={usageData.usage.repositories.limit}
+                    />
+                    <UsageWarning
+                      label="Analyses"
+                      current={usageData.usage.analysesThisMonth.current}
+                      limit={usageData.usage.analysesThisMonth.limit}
+                    />
+                    <UsageWarning
+                      label="Team Members"
+                      current={usageData.usage.teamMembers.current}
+                      limit={usageData.usage.teamMembers.limit}
+                    />
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -387,6 +521,16 @@ export const Settings = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Billing & Payment */}
+      {billingStatus?.hasStripeCustomer && (
+        <BillingCard
+          billingStatus={billingStatus}
+          isLoading={billingLoading}
+          portalLoading={portalLoading}
+          onOpenPortal={openPortal}
+        />
+      )}
 
       {/* Appearance */}
       <Card>
@@ -465,6 +609,78 @@ export const Settings = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* SSO / SAML */}
+      <FeatureGate feature="ssoSaml">
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-indigo-500" />
+              <CardTitle>SSO / SAML</CardTitle>
+            </div>
+            <CardDescription>Configure single sign-on with your identity provider.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              SSO/SAML configuration will be available here. Connect your identity provider to
+              enable single sign-on for your organization.
+            </p>
+          </CardContent>
+        </Card>
+      </FeatureGate>
+
+      {/* Custom Rules */}
+      <FeatureGate feature="customRules">
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-2">
+              <Scale className="w-5 h-5 text-indigo-500" />
+              <CardTitle>Custom Rules</CardTitle>
+            </div>
+            <CardDescription>
+              Configure custom risk assessment rules for your CI pipelines.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Create and manage custom risk rules to tailor analysis to your workflows.
+              </p>
+              <Link
+                to="/dashboard/risk-rules"
+                className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors whitespace-nowrap ml-4"
+              >
+                Manage Rules
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </FeatureGate>
+
+      {/* Priority Support */}
+      <FeatureGate feature="prioritySupport">
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-2">
+              <Headphones className="w-5 h-5 text-indigo-500" />
+              <CardTitle>Priority Support</CardTitle>
+            </div>
+            <CardDescription>Get priority support with faster response times.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Your plan includes priority support. Contact us at{" "}
+              <a
+                href="mailto:support@kenchi.dev"
+                className="text-indigo-500 hover:text-indigo-600 transition-colors"
+              >
+                support@kenchi.dev
+              </a>{" "}
+              for expedited assistance.
+            </p>
+          </CardContent>
+        </Card>
+      </FeatureGate>
 
       {/* Danger Zone */}
       <Card className="border-red-200 dark:border-red-900">

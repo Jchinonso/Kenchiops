@@ -122,7 +122,7 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [filters, setFilters] = useState<FilterValues>(() => {
-    const saved = loadSavedFilters("investigations");
+    const saved = loadSavedFilters("investigations", tenantId || undefined);
     return {
       repository: "",
       minConfidence: "",
@@ -135,7 +135,7 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
   const handleFilterChange = useCallback((next: FilterValues) => {
     setFilters(next);
     setOffset(0);
-    saveFilters("investigations", next);
+    saveFilters("investigations", next, tenantId || undefined);
   }, []);
 
   const handlePageSizeChange = (size: number) => {

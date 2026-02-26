@@ -13,11 +13,22 @@ export const LLM_DEFAULTS = {
 
 /**
  * OpenRouter API configuration defaults.
- * Uses DeepSeek Chat (V3) - 128K context, best cost/quality ratio.
+ * Kept for backward compatibility if users switch back to OpenRouter.
  */
 export const OPENROUTER_DEFAULTS = {
   BASE_URL: "https://openrouter.ai/api/v1",
-  MODEL: "google/gemini-2.5-flash", // Gemini 2.5 Flash, 1M context
+  MODEL: "google/gemini-2.5-flash", // OpenRouter format (prefixed)
+  TEMPERATURE: 0.6,
+  MAX_TOKENS: 16384,
+} as const;
+
+/**
+ * Google AI Studio configuration defaults.
+ * Free tier: 250 req/day, 10 RPM, 250K TPM. OpenAI-compatible API.
+ */
+export const GOOGLE_AI_STUDIO_DEFAULTS = {
+  BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+  MODEL: "gemini-2.5-flash", // Gemini 2.5 Flash, 1M context
   TEMPERATURE: 0.6,
   MAX_TOKENS: 16384,
 } as const;

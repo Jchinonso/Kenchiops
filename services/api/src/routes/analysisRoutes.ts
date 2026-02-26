@@ -20,6 +20,8 @@ import {
   NotFoundError,
   generateEventId,
   enforcePlanLimit,
+  requireTenantId,
+  rateLimitByCategory,
 } from "@kenchi/shared";
 import type {
   AnalyzeRequest,
@@ -47,7 +49,7 @@ const QUERIES = {
 
   SELECT_JOB: `
     SELECT id, status, result, error
-    FROM analysis_jobs WHERE id = $1::uuid
+    FROM analysis_jobs WHERE id = $1::uuid AND workspace_id = $2
   `,
 } as const;
 
@@ -71,12 +73,10 @@ const validateRequiredString = (fieldValue: unknown): boolean | string => {
  */
 const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
   const body = req.body as AnalyzeRequest;
-  const tenantId = body.tenant_id ?? "default";
+  const tenantId = requireTenantId(req);
 
   // Enforce monthly analysis limit before creating job
-  if (tenantId !== "default") {
-    await enforcePlanLimit(tenantId, "max_analyses_monthly");
-  }
+  await enforcePlanLimit(tenantId, "max_analyses_monthly");
 
   const idempotencyKey = generateEventId("job");
 
@@ -88,7 +88,7 @@ const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
       failure_log: body.failure_log,
       repository: body.repository,
       commit: body.commit,
-      tenant_id: body.tenant_id,
+      tenant_id: tenantId,
       workflow_id: body.workflow_id,
       test_framework: body.test_framework,
       pr_number: body.pr_number,
@@ -124,8 +124,9 @@ const handleAnalyze = async (req: Request, res: Response): Promise<void> => {
  */
 const handleGetJobStatus = async (req: Request, res: Response): Promise<void> => {
   const jobId = req.params.id;
+  const tenantId = requireTenantId(req);
 
-  const result = await query<JobRow>(QUERIES.SELECT_JOB, [jobId]);
+  const result = await query<JobRow>(QUERIES.SELECT_JOB, [jobId, tenantId]);
   const job = result.rows[0];
 
   if (!job) {
@@ -144,9 +145,10 @@ const handleGetJobStatus = async (req: Request, res: Response): Promise<void> =>
 
 // ==================== Route Definitions ====================
 
-/** POST /api/analyze - CI failure analysis endpoint (async) */
+/** POST /api/analyze - CI failure analysis endpoint (async, expensive) */
 router.post(
   API_ROUTES.ANALYZE,
+  rateLimitByCategory("expensive"),
   validate({
     body: {
       failure_log: validateRequiredString,
@@ -156,7 +158,7 @@ router.post(
   asyncHandler(handleAnalyze)
 );
 
-/** GET /api/jobs/:id - Job status polling endpoint */
-router.get("/api/jobs/:id", asyncHandler(handleGetJobStatus));
+/** GET /api/jobs/:id - Job status polling endpoint (readonly) */
+router.get("/api/jobs/:id", rateLimitByCategory("readonly"), asyncHandler(handleGetJobStatus));
 
 export { router as analysisRoutes };

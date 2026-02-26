@@ -21,6 +21,7 @@ export {
   getPool,
   query,
   transaction,
+  withTenantContext,
   closeDatabase,
   isDatabaseHealthy,
 } from "./client.js";

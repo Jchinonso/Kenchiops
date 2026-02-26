@@ -112,3 +112,59 @@ export const verifyInternalSignature = (
     return false;
   }
 };
+
+/** Config shape needed for HMAC key resolution. */
+interface ServiceSecretConfig {
+  readonly INTERNAL_SERVICE_SECRET?: string;
+  readonly SERVICE_HMAC_SECRET_API?: string;
+  readonly SERVICE_HMAC_SECRET_GITHUB_APP?: string;
+  readonly SERVICE_HMAC_SECRET_SLACK_BOT?: string;
+  readonly SERVICE_HMAC_SECRET_INCIDENT_TRIAGE?: string;
+  readonly SERVICE_NAME?: string;
+}
+
+/**
+ * Maps service name header values to per-service config property names.
+ * Service names are normalized to lowercase for comparison.
+ */
+const SERVICE_SECRET_KEYS: Readonly<Record<string, keyof ServiceSecretConfig>> = {
+  api: "SERVICE_HMAC_SECRET_API",
+  "github-app": "SERVICE_HMAC_SECRET_GITHUB_APP",
+  "slack-bot": "SERVICE_HMAC_SECRET_SLACK_BOT",
+  "incident-triage": "SERVICE_HMAC_SECRET_INCIDENT_TRIAGE",
+};
+
+/**
+ * Resolve the HMAC secret for a calling service.
+ * Tries per-service secret first, then falls back to INTERNAL_SERVICE_SECRET.
+ *
+ * @param serviceName - The calling service name (from x-kenchi-service header)
+ * @param serviceConfig - The application config object
+ * @returns The resolved secret, or undefined if none configured
+ */
+export const resolveServiceSecret = (
+  serviceName: string | undefined,
+  serviceConfig: ServiceSecretConfig
+): string | undefined => {
+  if (serviceName) {
+    const configKey = SERVICE_SECRET_KEYS[serviceName.toLowerCase()];
+    if (configKey) {
+      const perServiceSecret = serviceConfig[configKey];
+      if (perServiceSecret) {
+        return perServiceSecret;
+      }
+    }
+  }
+  return serviceConfig.INTERNAL_SERVICE_SECRET;
+};
+
+/**
+ * Resolve the HMAC secret for the current service (signing side).
+ * Uses SERVICE_NAME env var to look up the per-service secret,
+ * falling back to INTERNAL_SERVICE_SECRET.
+ *
+ * @param serviceConfig - The application config object
+ * @returns The resolved secret, or undefined if none configured
+ */
+export const resolveSigningSecret = (serviceConfig: ServiceSecretConfig): string | undefined =>
+  resolveServiceSecret(serviceConfig.SERVICE_NAME, serviceConfig);

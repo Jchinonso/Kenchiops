@@ -19,7 +19,8 @@ import {
   createLogger,
   ValidationError,
   NotFoundError,
-  AuthorizationError,
+  requireTenantId,
+  rateLimitByCategory,
   createInvestigation,
   getInvestigationById,
   listInvestigations,
@@ -99,22 +100,6 @@ const extractOptionalDate = (body: Readonly<Record<string, unknown>>, key: strin
 export const createInvestigationRoutes = (deps: InvestigationRouteDependencies): Router => {
   const router = Router();
   const { queue } = deps;
-
-  /**
-   * Extract tenantId from authenticated user or throw (VULN-004).
-   */
-  const requireTenantId = (req: Request): string => {
-    const tenantId = req.user?.tenantId;
-
-    if (!tenantId) {
-      throw new AuthorizationError(
-        "No organization linked. Connect a GitHub or GitLab account to get started.",
-        { operation: "requireTenantId" }
-      );
-    }
-
-    return tenantId;
-  };
 
   // ==================== Handlers ====================
 
@@ -203,13 +188,8 @@ export const createInvestigationRoutes = (deps: InvestigationRouteDependencies):
     }
 
     const tenantId = requireTenantId(req);
-    const investigation = await getInvestigationById(id);
+    const investigation = await getInvestigationById(id, tenantId);
     if (!investigation) {
-      throw new NotFoundError("Investigation not found", { metadata: { id } });
-    }
-
-    // Tenant isolation: verify the record belongs to the authenticated tenant (VULN-006)
-    if (investigation.tenantId !== tenantId) {
       throw new NotFoundError("Investigation not found", { metadata: { id } });
     }
 
@@ -218,9 +198,21 @@ export const createInvestigationRoutes = (deps: InvestigationRouteDependencies):
 
   // ==================== Route Registration ====================
 
-  router.post("/api/v1/investigations", asyncHandler(handleStartInvestigation));
-  router.get("/api/v1/investigations", asyncHandler(handleListInvestigations));
-  router.get("/api/v1/investigations/:id", asyncHandler(handleGetInvestigation));
+  router.post(
+    "/api/v1/investigations",
+    rateLimitByCategory("expensive"),
+    asyncHandler(handleStartInvestigation)
+  );
+  router.get(
+    "/api/v1/investigations",
+    rateLimitByCategory("readonly"),
+    asyncHandler(handleListInvestigations)
+  );
+  router.get(
+    "/api/v1/investigations/:id",
+    rateLimitByCategory("readonly"),
+    asyncHandler(handleGetInvestigation)
+  );
 
   return router;
 };

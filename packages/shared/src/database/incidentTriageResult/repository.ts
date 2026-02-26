@@ -92,13 +92,15 @@ export const createTriageResult = async (
  * @returns The triage result record, or null if not found
  */
 export const getTriageResultById = async (
-  id: string
+  id: string,
+  tenantId: string
 ): Promise<IncidentTriageResultRecord | null> => {
   validateTriageResultId(id);
 
   try {
     const result = await query<IncidentTriageResultRow>(INCIDENT_TRIAGE_RESULT_QUERIES.GET_BY_ID, [
       id,
+      tenantId,
     ]);
     return result.rows.length > 0 ? mapRowToTriageResult(result.rows[0]) : null;
   } catch (error) {
@@ -117,7 +119,8 @@ export const getTriageResultById = async (
  * @returns The triage result record, or null if not found
  */
 export const getTriageResultByAlertId = async (
-  alertId: string
+  alertId: string,
+  tenantId: string
 ): Promise<IncidentTriageResultRecord | null> => {
   if (!alertId?.trim()) {
     return null;
@@ -126,7 +129,7 @@ export const getTriageResultByAlertId = async (
   try {
     const result = await query<IncidentTriageResultRow>(
       INCIDENT_TRIAGE_RESULT_QUERIES.GET_BY_ALERT_ID,
-      [alertId]
+      [alertId, tenantId]
     );
     return result.rows.length > 0 ? mapRowToTriageResult(result.rows[0]) : null;
   } catch (error) {
@@ -164,6 +167,7 @@ export const updateTriageEnrichment = async (
         JSON.stringify(input.evidenceCatalog),
         embeddingVector,
         input.pipelineDurationMs,
+        input.tenantId,
       ]
     );
 
@@ -205,6 +209,7 @@ export const updateTriageAiSummary = async (
         JSON.stringify(input.aiSummary),
         input.summarySource,
         input.pipelineDurationMs,
+        input.tenantId,
       ]
     );
 
@@ -290,6 +295,7 @@ export const updateTriageDispatchResults = async (
         JSON.stringify(input.routingDecision),
         JSON.stringify(input.dispatchedTo),
         input.pipelineDurationMs,
+        input.tenantId,
       ]
     );
 

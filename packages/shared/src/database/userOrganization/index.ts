@@ -34,4 +34,5 @@ export {
   updateMemberRole,
   removeMemberFromTenant,
   countOwnersByTenant,
+  findUserOrgRole,
 } from "./repository.js";

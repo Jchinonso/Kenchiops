@@ -132,7 +132,7 @@ export const analyzeFailure = async (
   const llmClient = getLLMClient();
 
   try {
-    const result = await llmClient.analyzeIncident(event, evidence);
+    const result = await llmClient.analyzeIncident(event, evidence, context.tenantId);
     return result;
   } catch (error) {
     logger.error("LLM analysis failed", {

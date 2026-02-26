@@ -251,6 +251,55 @@ export const AUTH_AUDIT_ACTIONS = {
   TENANT_LINKED: "user_tenant_linked",
 } as const;
 
+// ==================== Provider Role Mapping ====================
+
+/**
+ * Maps provider-specific org roles to Kenchi roles.
+ * Used during auto-link to assign appropriate permissions.
+ */
+export const PROVIDER_ROLE_MAP: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  github: {
+    admin: "admin",
+    member: "member",
+    billing_manager: "viewer",
+  },
+  gitlab: {
+    owner: "owner",
+    maintainer: "admin",
+    developer: "member",
+    reporter: "viewer",
+    guest: "viewer",
+  },
+  bitbucket: {
+    owner: "owner",
+    collaborator: "member",
+    member: "member",
+  },
+  azure_devops: {
+    projectadministrator: "admin",
+    contributor: "member",
+    reader: "viewer",
+  },
+} as const;
+
+/** Default role when provider role is unknown or unmapped. */
+export const DEFAULT_AUTO_LINK_ROLE = "member" as const;
+
+/**
+ * Resolve the Kenchi role for an auto-linked user based on provider role.
+ * Falls back to DEFAULT_AUTO_LINK_ROLE if unmapped.
+ */
+export const resolveAutoLinkRole = (provider: string, providerRole?: string): string => {
+  if (!providerRole) {
+    return DEFAULT_AUTO_LINK_ROLE;
+  }
+  const providerMap = PROVIDER_ROLE_MAP[provider];
+  if (!providerMap) {
+    return DEFAULT_AUTO_LINK_ROLE;
+  }
+  return providerMap[providerRole.toLowerCase()] ?? DEFAULT_AUTO_LINK_ROLE;
+};
+
 // ==================== Auth Defaults ====================
 
 export const AUTH_DEFAULTS = {
@@ -380,5 +429,15 @@ export const REFRESH_TOKEN_QUERIES = {
   `,
   CLEANUP_EXPIRED: `
     DELETE FROM refresh_tokens WHERE expires_at < NOW()
+  `,
+  REVOKE_ALL_BY_USER: `
+    UPDATE refresh_tokens SET revoked_at = NOW()
+    WHERE user_id = $1 AND revoked_at IS NULL
+  `,
+  REVOKE_ALL_BY_TENANT: `
+    UPDATE refresh_tokens SET revoked_at = NOW()
+    WHERE user_id IN (
+      SELECT user_id FROM user_organizations WHERE tenant_id = $1
+    ) AND revoked_at IS NULL
   `,
 } as const;

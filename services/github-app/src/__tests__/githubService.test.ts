@@ -437,7 +437,7 @@ describe("GitHub Service", () => {
 
       await performAnalysis(event);
 
-      expect(client.analyzeIncident).toHaveBeenCalledWith(event, expect.any(Object));
+      expect(client.analyzeIncident).toHaveBeenCalledWith(event, expect.any(Object), undefined);
     });
 
     it("should calculate confidence score", async () => {

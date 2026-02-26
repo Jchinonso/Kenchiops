@@ -21,7 +21,7 @@ export type CIProviderType =
   | "custom";
 
 /** Platform integrations — source code access + webhook receiver. */
-export type PlatformProviderType = "github_app" | "gitlab";
+export type PlatformProviderType = "github_app" | "gitlab" | "bitbucket" | "azure_devops";
 
 /** Notification channels — deliver analysis results from ANY CI provider. */
 export type NotificationProviderType = "slack";
@@ -85,6 +85,8 @@ export interface CreateProviderConnectionInput {
 
 export interface UpdateProviderConnectionInput {
   readonly id: string;
+  /** Required for per-tenant encryption of token/secret fields. */
+  readonly tenantId: string;
   readonly connectionName?: string;
   readonly externalOrgId?: string | null;
   readonly config?: Readonly<Record<string, unknown>>;

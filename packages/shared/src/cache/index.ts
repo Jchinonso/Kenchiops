@@ -150,3 +150,20 @@ export {
   hasAnalysisInCache,
   hasLogHashInCache,
 } from "./analysisCache.js";
+
+// ==================== User Status Cache ====================
+
+export {
+  setUserStatusFlag,
+  clearUserStatusFlag,
+  getUserStatusFlag,
+  isUserBlocked,
+  setTenantStatusFlag,
+  clearTenantStatusFlag,
+  getTenantStatusFlag,
+  isTenantBlocked,
+} from "./userStatusCache.js";
+
+// ==================== Webhook Deduplication Cache ====================
+
+export { isWebhookDuplicate, markWebhookProcessed } from "./webhookDedup.js";

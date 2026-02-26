@@ -17,7 +17,6 @@ import {
   SERVICE_NAMES,
   ARTIFACT_TYPES,
   config,
-  LLM_DEFAULTS,
   // Chunking pipeline imports - Stage 1
   chunkLog,
   // Chunking pipeline imports - Stage 2
@@ -39,14 +38,11 @@ const logger = createLogger(SERVICE_NAMES.API);
 
 /**
  * Gets the extraction model for chunk processing.
- * Uses EXTRACTION_MODEL env var if set, otherwise falls back to Gemini 2.0 Flash
- * on OpenRouter (fastest, cheapest) or the configured LLM_MODEL.
+ * Uses EXTRACTION_MODEL env var if set, otherwise falls back to Gemini 2.5 Flash
+ * or the configured LLM_MODEL.
  */
 const getExtractionModel = (): string =>
-  config.EXTRACTION_MODEL ||
-  (config.LLM_PROVIDER === "openrouter"
-    ? "google/gemini-2.5-flash"
-    : config.LLM_MODEL || LLM_DEFAULTS.MODEL);
+  config.EXTRACTION_MODEL || config.LLM_MODEL || "gemini-2.5-flash";
 
 /**
  * Configuration for chunking pipeline.

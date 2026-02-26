@@ -43,6 +43,11 @@ jest.mock("../../security/cookies.js", () => ({
   },
 }));
 
+jest.mock("../../cache/userStatusCache.js", () => ({
+  isUserBlocked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+  isTenantBlocked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+}));
+
 jest.mock("../../core/index.js", () => ({
   createLogger: jest.fn(() => ({
     info: (...args: unknown[]) => mockLoggerInfo(...args),
@@ -51,6 +56,16 @@ jest.mock("../../core/index.js", () => ({
     debug: (...args: unknown[]) => mockLoggerDebug(...args),
   })),
   AuthenticationError,
+  AuthorizationError: class AuthorizationError extends Error {
+    constructor(message: string, options?: { operation?: string }) {
+      super(message);
+      this.name = "AuthorizationError";
+      Object.assign(this, options);
+    }
+  },
+  getErrorMessage: jest.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
 }));
 
 jest.mock("../../http/internalAuth.js", () => ({
@@ -66,6 +81,10 @@ jest.mock("../../http/internalAuth.js", () => ({
       args[2] as string,
       args[3] as string
     ),
+  resolveServiceSecret: (
+    _serviceName: unknown,
+    cfg: { readonly INTERNAL_SERVICE_SECRET?: string }
+  ) => cfg.INTERNAL_SERVICE_SECRET,
 }));
 
 // Mutable config reference so tests can toggle INTERNAL_SERVICE_SECRET
@@ -78,6 +97,12 @@ jest.mock("../../core/config.js", () => ({
     return mockConfig;
   },
 }));
+
+jest.mock("../../database/apiKey/repository.js", () => ({
+  authenticateApiKey: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+}));
+
+// constants/auth.js and constants/http.js use real implementations (pure constants, no side effects)
 
 // Import after mock setup — must come after all jest.mock calls
 import { authMiddleware } from "../../http/authMiddleware.js";
@@ -401,7 +426,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
     // test verifies the one-time warning. Subsequent tests will NOT see the warning
     // because the flag is already set.
 
-    it("should log a one-time warning and fall through to JWT on first call with missing secret", () => {
+    it("should log a one-time warning and fall through to JWT on first call with missing secret", async () => {
       mockConfig.INTERNAL_SERVICE_SECRET = undefined;
 
       const authenticatedUser = createTestAuthenticatedUser();
@@ -418,11 +443,11 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       // Verify one-time warning was logged
       expect(mockLoggerWarn).toHaveBeenCalledWith(
-        expect.stringContaining("INTERNAL_SERVICE_SECRET not configured")
+        expect.stringContaining("no service HMAC secret configured")
       );
       // Verify it fell through to JWT
       expect(mockVerifyInternalSignature).not.toHaveBeenCalled();
@@ -430,7 +455,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should NOT log the warning again on subsequent calls (one-time flag)", () => {
+    it("should NOT log the warning again on subsequent calls (one-time flag)", async () => {
       mockConfig.INTERNAL_SERVICE_SECRET = undefined;
 
       const authenticatedUser = createTestAuthenticatedUser();
@@ -447,12 +472,12 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       // The warnedMissingInternalSecret flag was already set by the previous test,
       // so no warning should be logged this time
       expect(mockLoggerWarn).not.toHaveBeenCalledWith(
-        expect.stringContaining("INTERNAL_SERVICE_SECRET not configured")
+        expect.stringContaining("no service HMAC secret configured")
       );
       // Still falls through to JWT
       expect(mockVerifyAccessToken).toHaveBeenCalled();
@@ -483,7 +508,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
   });
 
   describe("no HMAC headers fall through to JWT flow", () => {
-    it("should proceed to JWT when no HMAC headers are present", () => {
+    it("should proceed to JWT when no HMAC headers are present", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -496,7 +521,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(mockVerifyInternalSignature).not.toHaveBeenCalled();
       expect(mockVerifyAccessToken).toHaveBeenCalledWith("valid-jwt-token");
@@ -504,7 +529,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should fall through to JWT when only signature header is present (missing timestamp)", () => {
+    it("should fall through to JWT when only signature header is present (missing timestamp)", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -518,14 +543,14 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(mockVerifyInternalSignature).not.toHaveBeenCalled();
       expect(mockVerifyAccessToken).toHaveBeenCalled();
       expect(next).toHaveBeenCalledWith();
     });
 
-    it("should fall through to JWT when only timestamp header is present (missing signature)", () => {
+    it("should fall through to JWT when only timestamp header is present (missing signature)", async () => {
       const authenticatedUser = createTestAuthenticatedUser();
       mockVerifyAccessToken.mockReturnValue(authenticatedUser);
 
@@ -539,7 +564,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(mockVerifyInternalSignature).not.toHaveBeenCalled();
       expect(mockVerifyAccessToken).toHaveBeenCalled();
@@ -655,7 +680,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
   });
 
   describe("JWT flow preserved when HMAC is not used", () => {
-    it("should set req.user and enrich context via JWT when no HMAC headers", () => {
+    it("should set req.user and enrich context via JWT when no HMAC headers", async () => {
       const authenticatedUser = createTestAuthenticatedUser({
         userId: "usr_jwt-user",
         tenantId: "tenant-from-jwt",
@@ -670,7 +695,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       expect(req.user).toEqual(authenticatedUser);
       const enrichedReq = req as Request & { context: RequestContext };
@@ -679,7 +704,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       expect(enrichedReq.context.requestId).toBe("test-req-id");
     });
 
-    it("should pass AuthenticationError when JWT is invalid", () => {
+    it("should pass AuthenticationError when JWT is invalid", async () => {
       mockVerifyAccessToken.mockImplementation(() => {
         throw new AuthenticationError("Access token expired", {
           operation: "verifyAccessToken",
@@ -693,14 +718,14 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       const passedError = next.mock.calls[0]![0];
       expect(passedError).toBeInstanceOf(AuthenticationError);
       expect((passedError as AuthenticationError).message).toBe("Access token expired");
     });
 
-    it("should wrap unexpected JWT errors as AuthenticationError", () => {
+    it("should wrap unexpected JWT errors as AuthenticationError", async () => {
       mockVerifyAccessToken.mockImplementation(() => {
         throw new Error("Unexpected internal error");
       });
@@ -712,7 +737,7 @@ describe("http/authMiddleware — HMAC internal service auth", () => {
       const res = createMockResponse();
       const next = createMockNext();
 
-      authMiddleware(req, res, next);
+      await authMiddleware(req, res, next);
 
       const passedError = next.mock.calls[0]![0];
       expect(passedError).toBeInstanceOf(AuthenticationError);

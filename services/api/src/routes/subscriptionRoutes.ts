@@ -11,14 +11,17 @@ import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   createLogger,
+  requireTenantId,
   AuthorizationError,
   ValidationError,
-  requireRole,
+  requirePermission,
   HTTP_STATUS,
   DEFAULT_PLAN_ID,
   getErrorMessage,
   findGitHubAppConnection,
   findOAuthIdentitiesByUser,
+  rateLimitByCategory,
+  isWithinLimit,
   type Plan,
   type PlanId,
   type TenantSubscription,
@@ -40,26 +43,6 @@ const router = Router();
 const logger = createLogger("subscription-routes");
 const githubAdapter = createGitHubInstallationAdapter();
 const gitlabAdapter = createGitLabProjectsAdapter();
-
-// ==================== Helpers ====================
-
-/**
- * Extract tenantId from authenticated user or throw.
- *
- * @throws AuthorizationError if no tenant is linked
- */
-const requireTenantId = (req: Request): string => {
-  const tenantId = req.user?.tenantId;
-
-  if (!tenantId) {
-    throw new AuthorizationError(
-      "No organization linked. Connect a GitHub or GitLab account to get started.",
-      { operation: "requireTenantId" }
-    );
-  }
-
-  return tenantId;
-};
 
 // ==================== DTO Mappers ====================
 
@@ -272,6 +255,82 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
   // Validate planId value
   const validatedPlanId = validatePlanId(planId);
 
+  // Downgrade guard: verify current usage fits within the target plan's limits.
+  // Prevents users from downgrading to a plan that cannot accommodate their
+  // existing resources (repositories, analyses, team members, integrations).
+  const [targetPlan, currentUsage] = await Promise.all([
+    getPlanById(validatedPlanId),
+    getTenantUsage(tenantId),
+  ]);
+
+  if (targetPlan) {
+    const { limits } = targetPlan;
+    const exceeding: ReadonlyArray<{
+      readonly metric: string;
+      readonly current: number;
+      readonly limit: number;
+    }> = [
+      ...(limits.maxRepositories !== null &&
+      !isWithinLimit(currentUsage.repositories, limits.maxRepositories)
+        ? [
+            {
+              metric: "repositories",
+              current: currentUsage.repositories,
+              limit: limits.maxRepositories,
+            },
+          ]
+        : []),
+      ...(limits.maxAnalysesMonthly !== null &&
+      !isWithinLimit(currentUsage.analysesThisMonth, limits.maxAnalysesMonthly)
+        ? [
+            {
+              metric: "analysesThisMonth",
+              current: currentUsage.analysesThisMonth,
+              limit: limits.maxAnalysesMonthly,
+            },
+          ]
+        : []),
+      ...(limits.maxIntegrations !== null &&
+      !isWithinLimit(currentUsage.integrations, limits.maxIntegrations)
+        ? [
+            {
+              metric: "integrations",
+              current: currentUsage.integrations,
+              limit: limits.maxIntegrations,
+            },
+          ]
+        : []),
+      ...(limits.maxTeamMembers !== null &&
+      !isWithinLimit(currentUsage.teamMembers, limits.maxTeamMembers)
+        ? [
+            {
+              metric: "teamMembers",
+              current: currentUsage.teamMembers,
+              limit: limits.maxTeamMembers,
+            },
+          ]
+        : []),
+    ];
+
+    if (exceeding.length > 0) {
+      logger.warn("Plan downgrade blocked — usage exceeds target plan limits", {
+        ...context,
+        targetPlanId: validatedPlanId,
+        exceeding,
+      });
+      res.status(409).json({
+        error: {
+          code: "DOWNGRADE_BLOCKED",
+          message:
+            "Current usage exceeds the target plan's limits. Reduce usage before downgrading.",
+          details: exceeding,
+          requestId: context.requestId,
+        },
+      });
+      return;
+    }
+  }
+
   // Get previous plan for the response
   const previousSubscription = await getSubscriptionByTenant(tenantId);
   const previousPlanId = previousSubscription?.planId ?? DEFAULT_PLAN_ID;
@@ -299,13 +358,26 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
 
 // ==================== Route Definitions ====================
 
-router.get("/api/v1/subscription", asyncHandler(handleGetSubscription));
-router.get("/api/v1/subscription/plans", asyncHandler(handleGetPlans));
-router.get("/api/v1/subscription/usage", asyncHandler(handleGetUsage));
-// Role enforcement: only admins and owners can change the subscription plan (VULN-009)
+router.get(
+  "/api/v1/subscription",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetSubscription)
+);
+router.get(
+  "/api/v1/subscription/plans",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetPlans)
+);
+router.get(
+  "/api/v1/subscription/usage",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetUsage)
+);
+// Permission enforcement: billing permission required to change the subscription plan (VULN-009)
 router.put(
   "/api/v1/subscription/plan",
-  requireRole("admin", "owner"),
+  rateLimitByCategory("standard"),
+  requirePermission("billing"),
   asyncHandler(handleChangePlan)
 );
 

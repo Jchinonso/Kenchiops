@@ -118,7 +118,7 @@ export const performAnalysis = async (event: Event, tenantId?: string): Promise<
   });
 
   try {
-    const analysis = await llmClient.analyzeIncident(event, evidence);
+    const analysis = await llmClient.analyzeIncident(event, evidence, tenantId);
     const confidence = calculateConfidenceScore(analysis, evidence);
 
     // Check for hallucinations in the analysis using summary and reasoning

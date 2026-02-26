@@ -181,6 +181,44 @@ export const rotateRefreshTokenAtomically = async (
   });
 };
 
+export const revokeAllTokensByUser = async (userId: string): Promise<number> => {
+  validateId(userId, "userId");
+
+  try {
+    const result = await query(REFRESH_TOKEN_QUERIES.REVOKE_ALL_BY_USER, [userId]);
+    const count = result.rowCount ?? 0;
+
+    logger.info("All tokens revoked for user", { userId, count });
+
+    return count;
+  } catch (error) {
+    logger.error("Failed to revoke all tokens for user", {
+      userId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+export const revokeAllTenantTokens = async (tenantId: string): Promise<number> => {
+  validateNonEmptyString(tenantId, "tenantId");
+
+  try {
+    const result = await query(REFRESH_TOKEN_QUERIES.REVOKE_ALL_BY_TENANT, [tenantId]);
+    const count = result.rowCount ?? 0;
+
+    logger.info("All tokens revoked for tenant", { tenantId, count });
+
+    return count;
+  } catch (error) {
+    logger.error("Failed to revoke all tokens for tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
 export const cleanupExpiredRefreshTokens = async (): Promise<number> => {
   try {
     const result = await query(REFRESH_TOKEN_QUERIES.CLEANUP_EXPIRED, []);

@@ -22,14 +22,20 @@ export interface LLMAnalysisProvider {
    *
    * @param event - The incident event to analyze
    * @param evidence - Collected evidence about the incident
+   * @param tenantId - Optional tenant ID for per-tenant circuit breaker isolation
    * @returns Structured analysis result
    */
-  readonly analyzeIncident: (event: Event, evidence: Evidence) => Promise<LLMAnalysisResult>;
+  readonly analyzeIncident: (
+    event: Event,
+    evidence: Evidence,
+    tenantId?: string
+  ) => Promise<LLMAnalysisResult>;
 
   /**
    * Checks if the provider is available (e.g., circuit breaker not open).
+   * When tenantId is provided, checks the per-tenant circuit.
    */
-  readonly isAvailable: () => boolean;
+  readonly isAvailable: (tenantId?: string) => boolean;
 }
 
 // ==================== Embedding Provider ====================
@@ -75,17 +81,22 @@ export interface EmbeddingProvider {
    * Generates a vector embedding for a single text.
    *
    * @param text - The text to embed
+   * @param tenantId - Optional tenant ID for per-tenant circuit breaker isolation
    * @returns Promise resolving to the embedding result
    */
-  readonly generateEmbedding: (text: string) => Promise<EmbeddingResult>;
+  readonly generateEmbedding: (text: string, tenantId?: string) => Promise<EmbeddingResult>;
 
   /**
    * Generates vector embeddings for multiple texts in a single operation.
    *
    * @param texts - Array of texts to embed
+   * @param tenantId - Optional tenant ID for per-tenant circuit breaker isolation
    * @returns Promise resolving to batch embedding result
    */
-  readonly generateBatchEmbeddings: (texts: readonly string[]) => Promise<BatchEmbeddingResult>;
+  readonly generateBatchEmbeddings: (
+    texts: readonly string[],
+    tenantId?: string
+  ) => Promise<BatchEmbeddingResult>;
 
   /**
    * Gets the tier/quality level for this provider.
@@ -99,8 +110,9 @@ export interface EmbeddingProvider {
 
   /**
    * Checks if the provider is available.
+   * When tenantId is provided, checks the per-tenant circuit.
    */
-  readonly isAvailable?: () => boolean;
+  readonly isAvailable?: (tenantId?: string) => boolean;
 }
 
 // ==================== Provider Configuration ====================

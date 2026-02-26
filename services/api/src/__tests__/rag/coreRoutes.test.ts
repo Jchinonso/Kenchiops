@@ -4,7 +4,7 @@
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import request from "supertest";
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 
 // Mock functions
 const mockIngestKnowledgeDoc = jest.fn();
@@ -70,7 +70,25 @@ jest.mock("@kenchi/shared", () => {
   };
 });
 
+/**
+ * Middleware that simulates auth context injection for tests.
+ * Routes use req.context.tenantId so we must provide it.
+ */
+const injectTestContext = (req: Request, _res: Response, next: NextFunction): void => {
+  const bodyTenantId = (req.body as Record<string, unknown>)?.tenantId as string | undefined;
+  const queryTenantId = req.query?.tenantId as string | undefined;
+  const resolvedTenantId = bodyTenantId ?? queryTenantId ?? "default-tenant";
+  Object.assign(req, {
+    context: {
+      requestId: "test-request-id",
+      tenantId: resolvedTenantId,
+    },
+  });
+  next();
+};
+
 describe("RAG Core Routes", () => {
+  // let: app is reassigned in beforeEach for module isolation
   let app: Express;
 
   beforeEach(async () => {
@@ -135,6 +153,7 @@ describe("RAG Core Routes", () => {
     const { ragCoreRoutes } = await import("../../routes/rag/coreRoutes.js");
     app = express();
     app.use(express.json());
+    app.use(injectTestContext);
     app.use(ragCoreRoutes);
   });
 
@@ -277,11 +296,12 @@ describe("RAG Core Routes", () => {
       expect(response.body.data.tenantStats.diffChunkCount).toBe(100);
     });
 
-    it("should return null tenant stats when no tenantId", async () => {
+    it("should return tenant stats from context when no explicit tenantId", async () => {
       const response = await request(app).get("/stats");
 
       expect(response.status).toBe(200);
-      expect(response.body.data.tenantStats).toBeNull();
+      expect(response.body.data.tenantStats).toBeDefined();
+      expect(response.body.data.tenantStats.tenantId).toBe("tenant-1");
     });
 
     it("should calculate total documents correctly", async () => {

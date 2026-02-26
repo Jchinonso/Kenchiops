@@ -104,12 +104,12 @@ const mapTenantStatsToResponse = (stats: RAGTenantStats): TenantStatsResponse =>
 
 // ==================== Input Builders ====================
 
-/** Builds IngestKnowledgeDocInput from request body */
-const buildIngestInput = (body: IngestRequestBody): IngestKnowledgeDocInput => ({
+/** Builds IngestKnowledgeDocInput from request body, using authenticated tenantId */
+const buildIngestInput = (body: IngestRequestBody, tenantId: string): IngestKnowledgeDocInput => ({
   docType: body.docType,
   title: body.title,
   content: body.content,
-  tenantId: body.tenantId,
+  tenantId,
   repository: body.repository,
   sourceUrl: body.sourceUrl,
   filePath: body.filePath,
@@ -174,7 +174,7 @@ const handleIngest = async (req: Request, res: Response): Promise<void> => {
   const body = req.body as IngestRequestBody;
   const startTime = Date.now();
 
-  const input = buildIngestInput(body);
+  const input = buildIngestInput(body, req.context.tenantId);
   const result = await ingestKnowledgeDoc(input);
 
   logger.info("Document ingested", {
@@ -232,11 +232,11 @@ const handleSearch = async (req: Request, res: Response): Promise<void> => {
  * Handles RAG statistics requests.
  */
 const handleStats = async (req: Request, res: Response): Promise<void> => {
-  const tenantId = req.query.tenantId as string | undefined;
+  const { tenantId } = req.context;
 
   const [docCounts, tenantStats] = await Promise.all([
     getKnowledgeDocCountsByType(),
-    tenantId ? getTenantRAGStats(tenantId) : Promise.resolve(null),
+    getTenantRAGStats(tenantId),
   ]);
 
   res.status(HTTP_STATUS.OK).json({

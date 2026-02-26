@@ -36,6 +36,15 @@ vi.mock("@/hooks/useNotificationPreferences", () => ({
   }),
 }));
 
+// Mock useAuth — return a user with a stable tenantId
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { tenantId: "test-tenant" },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
 // ==================== EventSource Mock ====================
 
 type EventHandler = (event: MessageEvent) => void;
@@ -117,7 +126,7 @@ describe("useDashboardSSE", () => {
         read: false,
       },
     ];
-    sessionStorage.setItem("kenchi_notifications", JSON.stringify(stored));
+    sessionStorage.setItem("kenchi_notifications_test-tenant", JSON.stringify(stored));
 
     const { useDashboardSSE } = await importHook();
     const { result } = renderHook(() => useDashboardSSE());
@@ -239,7 +248,7 @@ describe("useDashboardSSE", () => {
         read: false,
       },
     ];
-    sessionStorage.setItem("kenchi_notifications", JSON.stringify(stored));
+    sessionStorage.setItem("kenchi_notifications_test-tenant", JSON.stringify(stored));
 
     const { useDashboardSSE } = await importHook();
     const { result } = renderHook(() => useDashboardSSE());
@@ -271,7 +280,7 @@ describe("useDashboardSSE", () => {
         read: false,
       },
     ];
-    sessionStorage.setItem("kenchi_notifications", JSON.stringify(stored));
+    sessionStorage.setItem("kenchi_notifications_test-tenant", JSON.stringify(stored));
 
     const { useDashboardSSE } = await importHook();
     const { result } = renderHook(() => useDashboardSSE());

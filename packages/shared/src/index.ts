@@ -130,6 +130,8 @@ export type {
   TenantEmbeddingTier,
   CreateTenantFromGitHub,
   CreateTenantFromGitLab,
+  CreateTenantFromBitbucket,
+  CreateTenantFromAzureDevOps,
   LinkSlackWorkspace,
   TenantAuditAction,
   TenantAuditEntry,
@@ -152,6 +154,7 @@ export {
   getPool,
   query,
   transaction,
+  withTenantContext,
   closeDatabase,
   isDatabaseHealthy,
   type QueryResult,
@@ -165,13 +168,21 @@ export {
   createFromGitHubInstall,
   createFromGitHubLogin,
   createFromGitLabGroup,
+  createFromBitbucketWorkspace,
+  createFromAzureDevOpsAccount,
   linkSlackWorkspace,
   createFromSlackInstall,
   activate,
   suspend,
   deleteTenant,
+  softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
+  // Reactivation validation
+  validateReactivation,
+  type ReactivationWarningType,
+  type ReactivationWarning,
+  type ReactivationReport,
   logAuditEvent,
   getAuditLog,
   countTenantMembers,
@@ -408,6 +419,8 @@ export {
   findRefreshTokenByHash,
   revokeRefreshToken,
   revokeTokenFamily,
+  revokeAllTokensByUser,
+  revokeAllTenantTokens,
   replaceRefreshToken,
   rotateRefreshTokenAtomically,
   cleanupExpiredRefreshTokens,
@@ -427,6 +440,7 @@ export {
   updateMemberRole,
   removeMemberFromTenant,
   countOwnersByTenant,
+  findUserOrgRole,
 } from "./database/index.js";
 
 // Provider connection module
@@ -490,7 +504,31 @@ export {
   getTenantUsage,
   checkPlanLimit,
   enforcePlanLimit,
+  expireTrials,
 } from "./database/index.js";
+
+// Billing module (Stripe integration)
+export {
+  createStripeAdapter,
+  createBillingService,
+  processStripeWebhook,
+  cleanupOldBillingEvents,
+  BILLING_CONSTANTS,
+  BILLING_QUERIES,
+  type BillingInterval,
+  type CheckoutStatus,
+  type StripeWebhookEventType,
+  type CreateCheckoutInput,
+  type CreatePortalInput,
+  type CheckoutResult,
+  type PortalResult,
+  type BillingStatus,
+  type StripeWebhookEvent,
+  type WebhookProcessResult,
+  type BillingPort,
+  type BillingEventRow,
+  type BillingService,
+} from "./billing/index.js";
 
 // Risk rules repository operations
 export {
@@ -504,6 +542,77 @@ export {
   // The store pattern (via assessActionRiskWithContext) handles risk assessment recording
 } from "./database/index.js";
 
+// Data export module (GDPR Article 20)
+export {
+  type DataExport,
+  type DataExportStatus,
+  type UpdateExportStatusInput,
+  createExportJob,
+  getExportJob,
+  updateExportStatus,
+  listExportJobs,
+} from "./database/index.js";
+
+// Data retention module (GDPR Article 5(1)(e))
+export {
+  type RetentionPolicy,
+  type UpsertRetentionPolicyInput,
+  type RetentionEnforcementResult,
+  getRetentionPolicy,
+  upsertRetentionPolicy,
+  enforceRetentionForTenant,
+} from "./database/index.js";
+
+// Consent tracking module (GDPR Articles 6-7)
+export {
+  type ConsentRecord,
+  type ConsentPurpose,
+  type ConsentAction,
+  type CurrentConsentStatus,
+  type GrantConsentInput,
+  type WithdrawConsentInput,
+  grantConsent,
+  withdrawConsent,
+  getCurrentConsent,
+  getConsentHistory,
+} from "./database/index.js";
+
+// User PII module (GDPR Articles 15, 17)
+export {
+  type UserPii,
+  type OAuthIdentitySummary,
+  type PiiErasureResult,
+  getUserPii,
+  erasePii,
+  // Team invitation module
+  type Invitation,
+  type InvitationStatus,
+  type InvitationRole,
+  type CreateInvitationInput,
+  createInvitation,
+  findInvitationByToken,
+  findPendingInvitationsByTenant,
+  findPendingInvitationsByEmail,
+  acceptInvitation,
+  declineInvitation,
+  revokeInvitation,
+  expireStaleInvitations,
+} from "./database/index.js";
+
+// API key module
+export {
+  type ApiKeyStatus,
+  type ApiKeyScope,
+  type ApiKey,
+  type ApiKeyWithSecret,
+  type CreateApiKeyInput,
+  createApiKey,
+  authenticateApiKey,
+  findApiKeysByTenant,
+  revokeApiKey,
+  hashApiKey,
+} from "./database/index.js";
+
 // HTTP utilities
 export {
   errorHandler,
@@ -512,8 +621,14 @@ export {
   requestContextMiddleware,
   authMiddleware,
   requireRole,
+  requirePermission,
+  requireAnyPermission,
+  requireFeature,
+  roleHasPermission,
+  roleHasAnyPermission,
+  type Permission,
 } from "./http/index.js";
-export { getEffectiveTenantId, requireTenantMatch } from "./http/index.js";
+export { requireTenantId, getEffectiveTenantId, requireTenantMatch } from "./http/index.js";
 export { validate, validators, type ValidationSchema } from "./http/index.js";
 export {
   createRateLimiter,
@@ -525,6 +640,15 @@ export {
   type RateLimitOptions,
   type RateLimitInfo,
   type RateLimitMiddlewareConfig,
+} from "./http/index.js";
+
+// Category-based and plan-based rate limiting
+export {
+  rateLimitByCategory,
+  rateLimitByPlan,
+  checkWebhookSourceRateLimit,
+  type RateLimitCategory,
+  type RateLimitPlanId,
 } from "./http/index.js";
 
 // Rate limiting - full module exports
@@ -649,6 +773,11 @@ export {
   resetCircuit,
   resetAllCircuits,
   getAllCircuitStatus,
+  getCircuitCount,
+  buildTenantCircuitKey,
+  evictIdleCircuits,
+  startIdleCleanup,
+  stopIdleCleanup,
   SERVICE_KEYS,
   type CircuitBreakerConfig,
   type CircuitBreakerStatus,
@@ -1056,6 +1185,24 @@ export {
   // Encryption utilities (AES-256-GCM for data at rest)
   encryptValue,
   decryptValue,
+  // Per-tenant encryption (HKDF envelope encryption)
+  deriveTenantKey,
+  encryptForTenant,
+  decryptForTenant,
+  decryptAuto,
+  type TenantEncryptionConfig,
+  type EncryptedPayload,
+  TENANT_CRYPTO,
+  // KMS port interface (for future cloud KMS integration)
+  type KmsPort,
+  type KmsKeyMetadata,
+  type WrapKeyResult,
+  type UnwrapKeyResult,
+  // Key rotation utilities
+  reEncryptValue,
+  createKeyRotationRunner,
+  type RotationResult,
+  type RotationSummary,
   // Cookie utilities (httpOnly auth cookies)
   setAuthCookies,
   setAccessTokenCookie,
@@ -1067,6 +1214,9 @@ export {
   createOAuthStateStore,
   type OAuthStoredState,
   type OAuthStateStore,
+  // PKCE (Proof Key for Code Exchange) utilities
+  generateCodeVerifier,
+  generateCodeChallenge,
 } from "./security/index.js";
 
 // Action execution
@@ -1095,6 +1245,61 @@ export {
   type ActionStoreStats,
   type QueueStatsResult,
 } from "./actions/index.js";
+
+// Tenant concurrency control
+export {
+  acquireAnalysisSlot,
+  releaseAnalysisSlot,
+  getActiveAnalysisCount,
+  getAllActiveAnalysisCounts,
+  resetAllSlots,
+  type ActiveAnalysisCounts,
+  type SlotAcquisitionResult,
+} from "./concurrency/index.js";
+
+// Observability (Prometheus metrics)
+export {
+  apiRequestsTotal,
+  apiRequestDuration,
+  analysesTotal,
+  analysisDuration,
+  externalCallsTotal,
+  externalCallDuration,
+  activeAnalysisJobs,
+  activeConnections,
+  encryptionOpsTotal,
+  encryptionOpDuration,
+  encryptionErrorsTotal,
+  getMetrics,
+  getMetricsContentType,
+  metricsMiddleware,
+  type ApiRequestLabels,
+  type AnalysisLabels,
+  type ExternalCallLabels,
+} from "./observability/index.js";
+
+// Usage threshold alerting
+export {
+  checkUsageThresholds,
+  resetUsageAlertDedup,
+  type UsageAlertLevel,
+  type UsageResource,
+  type UsageAlert,
+  type TenantUsageAlertResult,
+} from "./observability/index.js";
+
+// Tenant metric alerting (pure evaluation)
+export {
+  evaluateTenantAlerts,
+  formatAlertMessage,
+  DEFAULT_WARNING_THRESHOLDS,
+  DEFAULT_CRITICAL_THRESHOLDS,
+  type AlertSeverity,
+  type AlertStatus,
+  type AlertThresholds,
+  type TenantAlert,
+  type TenantMetricSnapshot,
+} from "./observability/index.js";
 
 // Constants (re-export all)
 export * from "./constants/index.js";
@@ -1134,6 +1339,19 @@ export {
   type SlackNotificationPayload,
   type NotificationHandler,
   type WorkerOptions,
+  // Fair scheduler (weighted round-robin per-tenant queuing)
+  createFairQueue,
+  type FairQueueConfig,
+  type FairQueueManager,
+  // Per-tenant resource quotas
+  getQuotaForPlan,
+  checkQueueDepthQuota,
+  incrementQueueDepth,
+  decrementQueueDepth,
+  recordProcessingTime,
+  checkProcessingTimeQuota,
+  type TenantQuotaConfig,
+  type QuotaCheckResult,
 } from "./queue/index.js";
 
 // Redis caching
@@ -1201,6 +1419,19 @@ export {
   tenantCacheKeys,
   mappingCacheKeys,
   analysisCacheKeys,
+  // User status cache (real-time auth checks)
+  setUserStatusFlag,
+  clearUserStatusFlag,
+  getUserStatusFlag,
+  isUserBlocked,
+  // Tenant status cache (real-time org-level auth checks)
+  setTenantStatusFlag,
+  clearTenantStatusFlag,
+  getTenantStatusFlag,
+  isTenantBlocked,
+  // Webhook deduplication cache (fast-path replay protection)
+  isWebhookDuplicate,
+  markWebhookProcessed,
   // Types
   type CacheEntry,
   type CacheResult,

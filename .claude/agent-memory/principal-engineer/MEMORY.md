@@ -162,6 +162,17 @@ The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 - Express route ordering matters: `/api/v1/triage/stats` registered BEFORE `/api/v1/triage/:id`
 - Dedup cleanup job uses setInterval with stop/isRunning interface, registered in graceful shutdown
 
+## Multi-Tenant Security Patterns
+
+- `req.context.tenantId` is the ONLY trusted source -- never use `req.body.tenantId` or `req.query.tenantId`
+- All ID-based SQL lookups MUST include `AND tenant_id = $N` for tenant isolation
+- Repository functions for ID lookups need `tenantId` parameter alongside the entity ID
+- When adding `tenantId` to queue payloads, also update the queue message type generic in the worker
+- `PlatformProviderType` in `providerConnection/types.ts` governs valid provider strings for `createProviderConnection()`
+- Barrel export chain for new types: `core/types.ts` -> `core/index.ts` -> `database/common.ts` -> `database/index.ts` -> `index.ts`
+- `OAuthProvider` type already includes `"bitbucket" | "azure_devops"` (in `database/user/types.ts`)
+- `assertUnreachable(provider)` in switch/case ensures exhaustive handling when new providers are added
+
 ## createLogger Signature
 
 - `createLogger(scope: string, logLevel?: LogLevel)` -- does NOT accept RequestContext

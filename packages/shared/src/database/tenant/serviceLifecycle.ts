@@ -339,6 +339,104 @@ export const createFromGitHubLogin = async (orgName: string): Promise<Tenant> =>
   }
 };
 
+/**
+ * Create a tenant from Bitbucket OAuth login.
+ * Creates a tenant + bitbucket provider connection.
+ *
+ * @param workspace - Bitbucket workspace slug
+ * @returns Created tenant
+ */
+export const createFromBitbucketWorkspace = async (workspace: string): Promise<Tenant> => {
+  validateId(workspace, "workspace");
+
+  try {
+    const result = await transaction(async (client) => {
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
+        workspace,
+        "bitbucket",
+        TENANT_STATUS.ACTIVE,
+      ]);
+
+      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.BITBUCKET_LINKED, {
+        workspace,
+      });
+
+      return created.rows[0];
+    });
+
+    // Create the bitbucket provider connection
+    await createProviderConnection({
+      tenantId: result.id,
+      provider: "bitbucket",
+      connectionName: workspace,
+      externalOrgId: workspace,
+      config: { workspace },
+    });
+
+    logger.info("Tenant created from Bitbucket workspace", {
+      tenantId: result.id,
+      workspace,
+    });
+
+    return rowToTenant(result);
+  } catch (error) {
+    logger.error("Failed to create tenant from Bitbucket workspace", {
+      workspace,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Create a tenant from Azure DevOps OAuth login.
+ * Creates a tenant + azure_devops provider connection.
+ *
+ * @param org - Azure DevOps organization name
+ * @returns Created tenant
+ */
+export const createFromAzureDevOpsAccount = async (org: string): Promise<Tenant> => {
+  validateId(org, "org");
+
+  try {
+    const result = await transaction(async (client) => {
+      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
+        org,
+        "azure_devops",
+        TENANT_STATUS.ACTIVE,
+      ]);
+
+      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.AZURE_DEVOPS_LINKED, {
+        org,
+      });
+
+      return created.rows[0];
+    });
+
+    // Create the azure_devops provider connection
+    await createProviderConnection({
+      tenantId: result.id,
+      provider: "azure_devops",
+      connectionName: org,
+      externalOrgId: org,
+      config: { org },
+    });
+
+    logger.info("Tenant created from Azure DevOps account", {
+      tenantId: result.id,
+      org,
+    });
+
+    return rowToTenant(result);
+  } catch (error) {
+    logger.error("Failed to create tenant from Azure DevOps account", {
+      org,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
 // ==================== Status Management ====================
 
 /**
@@ -411,12 +509,57 @@ export const deleteTenant = async (tenantId: string): Promise<void> => {
 };
 
 /**
+ * Soft delete a tenant with full session revocation.
+ *
+ * Sets status to 'deleted', logs an audit event, and revokes all
+ * active refresh tokens to immediately invalidate sessions.
+ *
+ * @param tenantId - Tenant to soft delete
+ * @param reason - Optional reason for the deletion
+ * @returns Number of tokens revoked
+ */
+export const softDeleteTenant = async (
+  tenantId: string,
+  reason?: string
+): Promise<{ readonly tokensRevoked: number }> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    // Set status to deleted with audit trail
+    await updateStatus(tenantId, TENANT_STATUS.DELETED, AUDIT_ACTIONS.DELETED, {
+      reason: reason ?? "Tenant soft deleted",
+    });
+
+    // Revoke all active sessions (dynamic import avoids circular dependency)
+    const { revokeAllTenantTokens } = await import("../user/refreshToken.js");
+    const tokensRevoked = await revokeAllTenantTokens(tenantId);
+
+    logger.info("Tenant soft deleted with session revocation", {
+      tenantId,
+      tokensRevoked,
+    });
+
+    return { tokensRevoked };
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+
+    logger.error("Failed to soft delete tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Hard-delete a tenant and all associated data.
  *
  * Deletes tenant_subscriptions first (no FK CASCADE), then deletes the tenant row.
- * FK CASCADE handles: provider_connections, repository_channel_mappings, tenant_audit_log.
- * FK SET NULL handles: analyses, events, slack_messages, webhook_activity_log,
- *   incident_alerts, incident_triage_results.
+ * FK CASCADE handles: provider_connections, repository_channel_mappings, tenant_audit_log,
+ *   events, analyses, incident_alerts, incident_triage_results, webhook_activity.
+ * FK SET NULL handles: users.selected_tenant_id (user preference, not ownership).
  *
  * Call this only after external resource cleanup is complete (best-effort).
  */

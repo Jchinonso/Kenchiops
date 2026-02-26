@@ -116,11 +116,11 @@ export const createMinimalEvidence = (eventId: string): Evidence => ({
  * Perform LLM analysis on an event.
  * Includes hallucination detection for safety.
  */
-export const performAnalysis = async (event: Event): Promise<AnalysisResult> => {
+export const performAnalysis = async (event: Event, tenantId?: string): Promise<AnalysisResult> => {
   // Build safety context for audit logging early
   const safetyContext: SafetyRequestContext = {
     requestId: event.id,
-    tenantId: "github",
+    tenantId: tenantId ?? "github",
     actor: "system",
   };
   const evidence = createMinimalEvidence(event.id);
@@ -132,7 +132,7 @@ export const performAnalysis = async (event: Event): Promise<AnalysisResult> => 
   });
 
   try {
-    const analysis = await llmClient.analyzeIncident(event, evidence);
+    const analysis = await llmClient.analyzeIncident(event, evidence, tenantId);
     const confidence = calculateConfidenceScore(analysis, evidence);
 
     // Check for hallucinations in the analysis using summary and reasoning

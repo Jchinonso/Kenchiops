@@ -63,8 +63,10 @@ const handleExtractDataset = async (req: Request, res: Response): Promise<void> 
   const startTime = Date.now();
   const body = req.body as ExtractDatasetRequestBody;
 
+  const { tenantId } = req.context;
+
   const result = await extractDataset({
-    tenantId: body.tenantId,
+    tenantId,
     startDate: body.startDate ? new Date(body.startDate) : undefined,
     endDate: body.endDate ? new Date(body.endDate) : undefined,
     minFeedbackCount: body.minFeedbackCount,
@@ -72,7 +74,7 @@ const handleExtractDataset = async (req: Request, res: Response): Promise<void> 
   });
 
   logger.info("Dataset extracted", {
-    tenantId: body.tenantId,
+    tenantId,
     exampleCount: result.stats.totalExamples,
     durationMs: Date.now() - startTime,
   });
@@ -88,7 +90,7 @@ const handleExtractDataset = async (req: Request, res: Response): Promise<void> 
  */
 const handleGetStats = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = req.query.tenantId as string | undefined;
+  const { tenantId } = req.context;
 
   const stats = await getFineTuningStats(tenantId);
 
@@ -110,7 +112,6 @@ router.post(
   "/api/fine-tuning/dataset/extract",
   validate({
     body: {
-      tenantId: validateOptionalString,
       startDate: validateOptionalString,
       endDate: validateOptionalString,
       minFeedbackCount: validateOptionalNumber,

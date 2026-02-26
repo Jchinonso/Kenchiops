@@ -15,6 +15,8 @@ import {
   livenessCheck,
   readinessCheck,
   asyncHandler,
+  getMetrics,
+  getMetricsContentType,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 
@@ -76,5 +78,16 @@ router.get(
     res.status(statusCode).json(result);
   })
 );
+
+/**
+ * Prometheus metrics endpoint
+ * GET /metrics
+ * Returns Prometheus-format metrics for scraping
+ */
+router.get("/metrics", async (_req: Request, res: Response) => {
+  const metrics = await getMetrics();
+  res.set("Content-Type", getMetricsContentType());
+  res.end(metrics);
+});
 
 export { router as healthRoutes };

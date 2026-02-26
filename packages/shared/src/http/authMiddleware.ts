@@ -15,11 +15,22 @@ import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../security/jwt.js";
 import { extractAccessToken } from "../security/cookies.js";
 import { PUBLIC_ROUTES } from "../constants/auth.js";
-import { AuthenticationError, createLogger } from "../core/index.js";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  createLogger,
+  getErrorMessage,
+} from "../core/index.js";
 import { config } from "../core/config.js";
-import { INTERNAL_AUTH_HEADERS, verifyInternalSignature } from "./internalAuth.js";
+import {
+  INTERNAL_AUTH_HEADERS,
+  verifyInternalSignature,
+  resolveServiceSecret,
+} from "./internalAuth.js";
 import { SERVICE_NAMES } from "../constants/http.js";
+import { isUserBlocked, isTenantBlocked } from "../cache/userStatusCache.js";
 import type { AuthenticatedUser } from "../database/user/types.js";
+import { authenticateApiKey } from "../database/apiKey/repository.js";
 
 /**
  * Set of known internal service names for HMAC actor validation.
@@ -63,6 +74,11 @@ declare global {
   }
 }
 
+// ==================== Constants ====================
+
+/** Prefix that identifies API key tokens vs JWT tokens. */
+const API_KEY_PREFIX = "kak_";
+
 // ==================== Helpers ====================
 
 const logger = createLogger("auth-middleware");
@@ -91,11 +107,15 @@ const tryInternalAuth = (req: Request): boolean => {
     return false;
   }
 
-  const secret = config.INTERNAL_SERVICE_SECRET;
+  const rawServiceName = req.headers[INTERNAL_AUTH_HEADERS.SERVICE] as string | undefined;
+  const serviceName = validateServiceName(rawServiceName);
+
+  // Resolve per-service secret first, then fall back to INTERNAL_SERVICE_SECRET
+  const secret = resolveServiceSecret(rawServiceName, config);
   if (!secret) {
     if (!warnedMissingInternalSecret) {
       logger.warn(
-        "HMAC headers present but INTERNAL_SERVICE_SECRET not configured — skipping internal auth"
+        "HMAC headers present but no service HMAC secret configured — skipping internal auth"
       );
       warnedMissingInternalSecret = true;
     }
@@ -116,9 +136,6 @@ const tryInternalAuth = (req: Request): boolean => {
       : hasRequestBody
         ? JSON.stringify(req.body)
         : "";
-
-  const rawServiceName = req.headers[INTERNAL_AUTH_HEADERS.SERVICE] as string | undefined;
-  const serviceName = validateServiceName(rawServiceName);
 
   if (!verifyInternalSignature(signature, timestamp, rawBody, secret)) {
     logger.warn("Internal auth signature verification failed", {
@@ -158,6 +175,38 @@ const isPublicRoute = (path: string): boolean =>
 // which checks Authorization Bearer header first, then falls back to cookie.
 
 /**
+ * Attempt API key authentication when Bearer token starts with "kak_".
+ *
+ * @returns AuthenticatedUser if API key is valid, null if token is not an API key,
+ *          throws AuthenticationError if API key is invalid/expired.
+ */
+const tryApiKeyAuth = async (token: string): Promise<AuthenticatedUser | null> => {
+  if (!token.startsWith(API_KEY_PREFIX)) {
+    return null;
+  }
+
+  const startTime = Date.now();
+  const apiKey = await authenticateApiKey(token);
+
+  if (!apiKey) {
+    logger.warn("API key authentication failed", {
+      operation: "apiKeyAuth",
+      durationMs: Date.now() - startTime,
+    });
+    throw new AuthenticationError("Invalid or expired API key", {
+      operation: "apiKeyAuth",
+    });
+  }
+
+  return {
+    userId: apiKey.userId,
+    tenantId: apiKey.tenantId,
+    role: apiKey.role as AuthenticatedUser["role"],
+    tokenId: `apikey:${apiKey.id}`,
+  };
+};
+
+/**
  * Apply authenticated user info to the Express request.
  * Uses Object.assign because Express middleware must mutate req by design
  * (this is a handler-boundary side effect, allowed per CLAUDE.md rule 3).
@@ -179,65 +228,153 @@ const applyAuthToRequest = (req: Request, user: AuthenticatedUser): void => {
 // ==================== Middleware ====================
 
 /**
- * Express middleware that authenticates requests via HMAC or JWT.
+ * Express middleware that authenticates via HMAC or JWT.
  *
  * - Skips authentication for PUBLIC_ROUTES (health, auth, webhooks)
  * - Checks HMAC internal auth headers first (service-to-service calls)
  * - Falls through to JWT verification for browser clients
  * - Sets req.user (JWT) or enriches req.context.actor (HMAC)
+ * - After JWT auth, checks Redis for real-time user status (fail-open)
  * - Calls next(AuthenticationError) for missing/invalid credentials
  */
-export const authMiddleware = (req: Request, _res: Response, next: NextFunction): void => {
-  if (isPublicRoute(req.path)) {
-    next();
-    return;
-  }
-
-  // Check HMAC-based internal service auth before JWT.
-  // If valid HMAC headers are present, bypass JWT entirely.
+export const authMiddleware = async (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    if (tryInternalAuth(req)) {
+    if (isPublicRoute(req.path)) {
       next();
       return;
     }
-  } catch (error: unknown) {
-    next(error);
-    return;
-  }
 
-  // Fall through to JWT authentication
-  const token = extractAccessToken(req);
-
-  if (!token) {
-    next(
-      new AuthenticationError("Missing or malformed Authorization header", {
-        operation: "authMiddleware",
-      })
-    );
-    return;
-  }
-
-  try {
-    const user = verifyAccessToken(token);
-
-    applyAuthToRequest(req, user);
-
-    next();
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      logger.warn("Authentication failed", {
-        operation: "authMiddleware",
-        path: req.path,
-        message: error.message,
-      });
+    // Check HMAC-based internal service auth before JWT.
+    // If valid HMAC headers are present, bypass JWT entirely.
+    // Internal HMAC auth skips user status check (service-to-service).
+    try {
+      if (tryInternalAuth(req)) {
+        next();
+        return;
+      }
+    } catch (error: unknown) {
       next(error);
       return;
     }
 
-    next(
-      new AuthenticationError("Token verification failed", {
+    // Fall through to token-based authentication (API key or JWT)
+    const token = extractAccessToken(req);
+
+    if (!token) {
+      next(
+        new AuthenticationError("Missing or malformed Authorization header", {
+          operation: "authMiddleware",
+        })
+      );
+      return;
+    }
+
+    // Check API key auth first (tokens starting with "kak_").
+    // If valid, apply auth and proceed. If not an API key, fall through to JWT.
+    try {
+      const apiKeyUser = await tryApiKeyAuth(token);
+      if (apiKeyUser) {
+        applyAuthToRequest(req, apiKeyUser);
+
+        // API key auth still checks tenant status (org-level block)
+        if (apiKeyUser.tenantId) {
+          const tenantBlocked = await isTenantBlocked(apiKeyUser.tenantId);
+          if (tenantBlocked) {
+            next(
+              new AuthorizationError("Organization is suspended or deactivated", {
+                operation: "authMiddleware",
+              })
+            );
+            return;
+          }
+        }
+
+        next();
+        return;
+      }
+    } catch (error: unknown) {
+      next(error);
+      return;
+    }
+
+    // Fall through to JWT verification
+    // let: user is assigned in try/catch for JWT verification and used after
+    let user: AuthenticatedUser; // let: assigned in try block, read after
+    try {
+      user = verifyAccessToken(token);
+    } catch (error: unknown) {
+      if (error instanceof AuthenticationError) {
+        logger.warn("Authentication token rejected", {
+          operation: "authMiddleware",
+          path: req.path,
+          message: error.message,
+        });
+        next(error);
+        return;
+      }
+
+      next(
+        new AuthenticationError("Token verification failed", {
+          operation: "authMiddleware",
+        })
+      );
+      return;
+    }
+
+    applyAuthToRequest(req, user);
+
+    // Check real-time user status in Redis (fail-open on Redis errors).
+    // This prevents suspended/deleted users from using the API during
+    // the remainder of their JWT lifetime (~15 minutes).
+    const userBlocked = await isUserBlocked(user.userId);
+    if (userBlocked) {
+      logger.warn("Blocked suspended or revoked user", {
         operation: "authMiddleware",
-      })
-    );
+        path: req.path,
+        userId: user.userId,
+      });
+      next(
+        new AuthenticationError("User account is suspended or revoked", {
+          operation: "authMiddleware",
+        })
+      );
+      return;
+    }
+
+    // Check real-time tenant status in Redis (fail-open on Redis errors).
+    // This prevents all users of suspended/deleted organizations from
+    // accessing the API during the remainder of their JWT lifetime.
+    if (user.tenantId) {
+      const tenantBlocked = await isTenantBlocked(user.tenantId);
+      if (tenantBlocked) {
+        logger.warn("Blocked suspended or deactivated organization", {
+          operation: "authMiddleware",
+          path: req.path,
+          userId: user.userId,
+          tenantId: user.tenantId,
+        });
+        next(
+          new AuthorizationError("Organization is suspended or deactivated", {
+            operation: "authMiddleware",
+          })
+        );
+        return;
+      }
+    }
+
+    next();
+  } catch (error: unknown) {
+    // Catch-all for unexpected errors (e.g., unhandled Redis edge cases).
+    // Must not swallow — forward to Express error handler.
+    logger.error("Unexpected auth middleware issue", {
+      operation: "authMiddleware",
+      path: req.path,
+      error: getErrorMessage(error),
+    });
+    next(error);
   }
 };

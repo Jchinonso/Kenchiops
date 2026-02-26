@@ -13,6 +13,7 @@ import {
   findGitHubAppConnection,
   deleteMappingsForChannel,
   getErrorMessage,
+  checkWebhookSourceRateLimit,
   SLACK_ACTION_IDS,
   SLACK_ACTION_PATTERNS,
   SLACK_MODAL_CALLBACKS,
@@ -84,7 +85,7 @@ export const handleBotLeftChannel = async (
  * @param app - Slack Bolt app instance
  */
 export const setupSlackHandlers = (app: SlackApp): void => {
-  // Debug: Log all incoming events
+  // Global middleware: log + per-workspace rate limiting
   app.use(async (args) => {
     const { payload } = args;
     if (payload && "type" in payload) {
@@ -92,6 +93,26 @@ export const setupSlackHandlers = (app: SlackApp): void => {
         type: payload.type,
       });
     }
+
+    // Extract workspace ID from Bolt context or payload
+    const boltContext = (args as { context?: { readonly teamId?: string } }).context;
+    const payloadTeam =
+      args.payload && "team" in args.payload
+        ? (args.payload as { readonly team?: string }).team
+        : undefined;
+    const teamId = boltContext?.teamId ?? payloadTeam ?? "unknown";
+
+    const sourceRateResult = checkWebhookSourceRateLimit(String(teamId), "slack");
+    if (!sourceRateResult.allowed) {
+      logger.warn("Slack event source rate limit exceeded", {
+        provider: "slack",
+        operation: "receiveEvent",
+        workspaceId: teamId,
+        remaining: sourceRateResult.remaining,
+      });
+      return;
+    }
+
     await args.next();
   });
 
@@ -182,7 +203,8 @@ const setupActionHandlers = (app: SlackApp): void => {
         ? (body.message.ts as string)
         : undefined;
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleActionApproval(action, ack, say, messageTs);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleActionApproval(action, ack, say, messageTs, workspaceId);
     }
   });
 
@@ -192,7 +214,8 @@ const setupActionHandlers = (app: SlackApp): void => {
         ? (body.message.ts as string)
         : undefined;
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleActionRejection(action, ack, say, messageTs);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleActionRejection(action, ack, say, messageTs, workspaceId);
     }
   });
 };
@@ -200,16 +223,25 @@ const setupActionHandlers = (app: SlackApp): void => {
 /**
  * Sets up feedback button handlers (helpful/not helpful).
  */
+const extractWorkspaceId = (body: { team?: { id: string } | string }): string | undefined => {
+  if (!body.team) {
+    return undefined;
+  }
+  return typeof body.team === "string" ? body.team : body.team.id;
+};
+
 const setupFeedbackHandlers = (app: SlackApp): void => {
   app.action(SLACK_ACTION_IDS.FEEDBACK_HELPFUL, async ({ action, ack, body, respond }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handlePositiveFeedback(action as ButtonAction, ack, body.user.id, respond);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handlePositiveFeedback(action as ButtonAction, ack, body.user.id, respond, workspaceId);
     }
   });
 
   app.action(SLACK_ACTION_IDS.FEEDBACK_NOT_HELPFUL, async ({ action, ack, body, respond }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleNegativeFeedback(action as ButtonAction, ack, body.user.id, respond);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleNegativeFeedback(action as ButtonAction, ack, body.user.id, respond, workspaceId);
     }
   });
 
@@ -229,13 +261,27 @@ const setupFeedbackHandlers = (app: SlackApp): void => {
   // Q&A feedback buttons
   app.action(QA_ACTION_IDS.QA_HELPFUL, async ({ action, ack, body, respond }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleQAFeedbackHelpful(action as ButtonAction, ack, body.user.id, respond);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleQAFeedbackHelpful(
+        action as ButtonAction,
+        ack,
+        body.user.id,
+        respond,
+        workspaceId
+      );
     }
   });
 
   app.action(QA_ACTION_IDS.QA_NOT_HELPFUL, async ({ action, ack, body, respond }) => {
     if (action.type === "button" && "action_id" in action && "value" in action) {
-      await handleQAFeedbackNotHelpful(action as ButtonAction, ack, body.user.id, respond);
+      const workspaceId = extractWorkspaceId(body as { team?: { id: string } | string });
+      await handleQAFeedbackNotHelpful(
+        action as ButtonAction,
+        ack,
+        body.user.id,
+        respond,
+        workspaceId
+      );
     }
   });
 };

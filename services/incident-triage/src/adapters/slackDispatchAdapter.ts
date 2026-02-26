@@ -12,6 +12,8 @@ import {
   createLogger,
   ExternalServiceError,
   getErrorMessage,
+  withCircuitBreaker,
+  buildTenantCircuitKey,
   type RequestContext,
   type ResilientResponse,
 } from "@kenchi/shared";
@@ -60,12 +62,16 @@ export const createSlackDispatchAdapter = (webhookUrl: string): SlackDispatchPor
       };
 
       try {
-        const response: ResilientResponse<SlackWebhookResponse> =
-          await resilientPost<SlackWebhookResponse>(webhookUrl, body, {
-            timeout: DISPATCH_TIMEOUTS.SLACK_POST_MS,
-            maxRetries: 2,
-            headers: { "Content-Type": "application/json" },
-          });
+        const circuitKey = buildTenantCircuitKey("slack", context.tenantId);
+        const response: ResilientResponse<SlackWebhookResponse> = await withCircuitBreaker(
+          circuitKey,
+          async () =>
+            resilientPost<SlackWebhookResponse>(webhookUrl, body, {
+              timeout: DISPATCH_TIMEOUTS.SLACK_POST_MS,
+              maxRetries: 2,
+              headers: { "Content-Type": "application/json" },
+            })
+        );
 
         const durationMs = Date.now() - startTime;
         const { status: statusCode } = response;

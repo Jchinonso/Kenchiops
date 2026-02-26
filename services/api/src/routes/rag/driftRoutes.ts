@@ -29,11 +29,9 @@ import {
   type DocumentContext,
 } from "@kenchi/shared";
 import type {
-  TestSuiteRequestBody,
   DriftDetectionRequestBody,
   CheckMetricRequestBody,
   ReembedRequestBody,
-  SeedTestCasesRequestBody,
   DetectRelationshipsRequestBody,
   DriftDetectionResponse,
   StaleDocumentsResponse,
@@ -126,15 +124,18 @@ const buildDetectRelationshipsResponse = (result: {
   errors: result.errors,
 });
 
-/** Builds document context from request body */
-const buildDocumentContext = (body: DetectRelationshipsRequestBody): DocumentContext => ({
+/** Builds document context from request body, using authenticated tenantId */
+const buildDocumentContext = (
+  body: DetectRelationshipsRequestBody,
+  tenantId: string
+): DocumentContext => ({
   docId: body.docId,
   docType: body.docType,
   title: body.title,
   content: body.content,
   repository: body.repository,
   filePath: body.filePath,
-  tenantId: body.tenantId,
+  tenantId,
 });
 
 // ==================== Route Handlers ====================
@@ -144,12 +145,12 @@ const buildDocumentContext = (body: DetectRelationshipsRequestBody): DocumentCon
  */
 const handleTestSuite = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const body = req.body as TestSuiteRequestBody;
+  const { tenantId } = req.context;
 
-  const result = await runTestSuite(body.tenantId);
+  const result = await runTestSuite(tenantId);
 
   logger.info("RAG test suite completed", {
-    tenantId: body.tenantId,
+    tenantId,
     durationMs: Date.now() - startTime,
   });
 
@@ -164,7 +165,7 @@ const handleTestSuite = async (req: Request, res: Response): Promise<void> => {
  */
 const handleGetDriftReport = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = req.query.tenantId as string | undefined;
+  const { tenantId } = req.context;
 
   const report = await generateDriftReport(tenantId);
 
@@ -185,13 +186,14 @@ const handleGetDriftReport = async (req: Request, res: Response): Promise<void> 
 const handleDriftDetection = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   const body = req.body as DriftDetectionRequestBody;
+  const { tenantId } = req.context;
 
-  const result = await runDriftDetectionWithAlerts(body.tenantId, {
+  const result = await runDriftDetectionWithAlerts(tenantId, {
     skipAlertDispatch: body.skipAlertDispatch ?? false,
   });
 
   logger.info("Drift detection completed", {
-    tenantId: body.tenantId,
+    tenantId,
     alertsDispatched: result.alertsDispatched,
     durationMs: Date.now() - startTime,
   });
@@ -212,7 +214,7 @@ const handleCheckMetric = async (req: Request, res: Response): Promise<void> => 
   const result = await checkMetricBounds(
     body.metricType as RAGMetricType,
     body.currentValue,
-    body.tenantId
+    req.context.tenantId
   );
 
   logger.info("Metric bounds checked", {
@@ -274,14 +276,15 @@ const handleStaleDocuments = async (req: Request, res: Response): Promise<void> 
 const handleReembed = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   const body = req.body as ReembedRequestBody;
+  const { tenantId } = req.context;
 
   const result = await triggerReembedding({
-    tenantId: body.tenantId,
+    tenantId,
     batchSize: body.batchSize,
   });
 
   logger.info("Re-embedding completed", {
-    tenantId: body.tenantId,
+    tenantId,
     processedCount: result.processedCount,
     errorCount: result.errors.length,
     durationMs: Date.now() - startTime,
@@ -298,12 +301,12 @@ const handleReembed = async (req: Request, res: Response): Promise<void> => {
  */
 const handleSeedTestCases = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const body = req.body as SeedTestCasesRequestBody;
+  const { tenantId } = req.context;
 
-  const result = await seedTestCases(body.tenantId);
+  const result = await seedTestCases(tenantId);
 
   logger.info("Test cases seeded", {
-    tenantId: body.tenantId,
+    tenantId,
     created: result.created,
     skipped: result.skipped,
     durationMs: Date.now() - startTime,
@@ -322,7 +325,7 @@ const handleDetectRelationships = async (req: Request, res: Response): Promise<v
   const startTime = Date.now();
   const body = req.body as DetectRelationshipsRequestBody;
 
-  const context = buildDocumentContext(body);
+  const context = buildDocumentContext(body, req.context.tenantId);
   const result = await detectAndCreateRelationships(context);
 
   logger.info("Relationships detected", {

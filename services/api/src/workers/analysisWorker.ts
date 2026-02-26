@@ -15,6 +15,9 @@ import {
   SERVICE_NAMES,
   getErrorMessage,
   query,
+  getSubscriptionByTenant,
+  SUBSCRIPTION_STATUS,
+  FAIR_QUEUE_DEFAULTS,
   type RequestContext,
 } from "@kenchi/shared";
 import { performAnalysis } from "../services/analysisService.js";
@@ -33,15 +36,30 @@ const logger = createLogger(SERVICE_NAMES.API);
 // ==================== Database Queries ====================
 
 const QUERIES = {
+  /**
+   * Fair-scheduled job selection.
+   *
+   * Uses ROW_NUMBER() partitioned by workspace_id to limit how many jobs
+   * any single tenant can contribute per batch. This prevents a high-volume
+   * tenant from monopolizing all worker slots while others wait.
+   *
+   * $1 = total batch limit, $2 = max jobs per tenant per batch
+   */
   SELECT_PENDING: `
-    SELECT id, status, repository_full_name as repository, log_ref as request_payload
-    FROM analysis_jobs
-    WHERE status = 'pending'
-      AND analysis_enqueued_at IS NULL
-      AND cancelled_at IS NULL
-    ORDER BY created_at ASC
+    WITH ranked AS (
+      SELECT id, status, repository_full_name as repository, log_ref as request_payload, workspace_id,
+             ROW_NUMBER() OVER (PARTITION BY COALESCE(workspace_id, id) ORDER BY created_at ASC) AS tenant_rank
+      FROM analysis_jobs
+      WHERE status = 'pending'
+        AND analysis_enqueued_at IS NULL
+        AND cancelled_at IS NULL
+      FOR UPDATE SKIP LOCKED
+    )
+    SELECT id, status, repository, request_payload, workspace_id
+    FROM ranked
+    WHERE tenant_rank <= $2
+    ORDER BY tenant_rank ASC, id ASC
     LIMIT $1
-    FOR UPDATE SKIP LOCKED
   `,
 
   MARK_PROCESSING: `
@@ -92,17 +110,19 @@ const WORKER_CONFIG = {
  */
 const fetchPendingJobs = async (limit: number): Promise<readonly AnalysisJob[]> => {
   const result = await query<{
-    id: string;
-    status: string;
-    repository: string;
-    request_payload: Record<string, unknown>;
-  }>(QUERIES.SELECT_PENDING, [limit]);
+    readonly id: string;
+    readonly status: string;
+    readonly repository: string;
+    readonly request_payload: Record<string, unknown>;
+    readonly workspace_id: string | null;
+  }>(QUERIES.SELECT_PENDING, [limit, FAIR_QUEUE_DEFAULTS.MAX_JOBS_PER_TENANT_PER_BATCH]);
 
   return result.rows.map((row) => ({
     id: row.id,
     status: row.status as JobStatus,
     repository: row.repository,
     requestPayload: row.request_payload,
+    workspaceId: row.workspace_id,
   }));
 };
 
@@ -117,6 +137,36 @@ const processJob = async (job: AnalysisJob): Promise<void> => {
     tenantId: request.tenant_id ?? "system",
     actor: "analysis-worker",
   };
+
+  // Check subscription status before processing (fail-open)
+  const tenantId = job.workspaceId ?? (request.tenant_id as string | undefined) ?? null;
+  if (tenantId && tenantId !== "default" && tenantId !== "system") {
+    try {
+      const subscription = await getSubscriptionByTenant(tenantId);
+      const blockedStatuses: ReadonlySet<string> = new Set([
+        SUBSCRIPTION_STATUS.CANCELED,
+        SUBSCRIPTION_STATUS.PAST_DUE,
+      ]);
+      if (subscription && blockedStatuses.has(subscription.status)) {
+        logger.info("Skipping job for inactive subscription", {
+          ...context,
+          jobId: job.id,
+          subscriptionTenantId: tenantId,
+          subscriptionStatus: subscription.status,
+        });
+        await query(QUERIES.UPDATE_FAILED, [job.id, `Subscription ${subscription.status}`]);
+        return;
+      }
+    } catch (subError: unknown) {
+      // Fail-open: proceed if subscription check fails
+      logger.warn("Subscription check failed, proceeding", {
+        ...context,
+        jobId: job.id,
+        subscriptionTenantId: tenantId,
+        error: getErrorMessage(subError),
+      });
+    }
+  }
 
   logger.info("Processing analysis job", {
     jobId: job.id,

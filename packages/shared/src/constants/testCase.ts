@@ -34,7 +34,7 @@ export const TEST_CASE_QUERIES = {
     RETURNING *
   `,
 
-  GET_BY_ID: `SELECT * FROM rag_test_cases WHERE id = $1`,
+  GET_BY_ID: `SELECT * FROM rag_test_cases WHERE id = $1 AND tenant_id = $2`,
 
   GET_ACTIVE: `
     SELECT * FROM rag_test_cases
@@ -59,7 +59,7 @@ export const TEST_CASE_QUERIES = {
       last_run_at = NOW(),
       last_result = $2,
       updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $3
     RETURNING *
   `,
 
@@ -67,11 +67,11 @@ export const TEST_CASE_QUERIES = {
     UPDATE rag_test_cases SET
       is_active = $2,
       updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $3
     RETURNING *
   `,
 
-  DELETE: `DELETE FROM rag_test_cases WHERE id = $1`,
+  DELETE: `DELETE FROM rag_test_cases WHERE id = $1 AND tenant_id = $2`,
 
   COUNT_BY_TENANT: `
     SELECT COUNT(*) as count FROM rag_test_cases

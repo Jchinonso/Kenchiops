@@ -256,19 +256,11 @@ describe("Health Routes", () => {
       expect(response.body.privateKeyValid).toBe(true);
     });
 
-    it("should include private key length", async () => {
+    it("should NOT expose private key length or preview (security)", async () => {
       const response = await request(app).get("/health/github");
 
-      expect(response.body.privateKeyLength).toBeGreaterThan(0);
-      expect(typeof response.body.privateKeyLength).toBe("number");
-    });
-
-    it("should include private key preview", async () => {
-      const response = await request(app).get("/health/github");
-
-      expect(response.body.privateKeyPreview).toBeDefined();
-      expect(response.body.privateKeyPreview).toContain("BEGIN RSA PRIVATE KEY");
-      expect(response.body.privateKeyPreview).toContain("...");
+      expect(response.body.privateKeyLength).toBeUndefined();
+      expect(response.body.privateKeyPreview).toBeUndefined();
     });
 
     it("should show installation ID as string when configured", async () => {

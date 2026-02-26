@@ -66,6 +66,9 @@ export const rowToSubscription = (row: TenantSubscriptionRow): TenantSubscriptio
   changedAt: row.changed_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  stripeCustomerId: row.stripe_customer_id ?? null,
+  stripeSubscriptionId: row.stripe_subscription_id ?? null,
+  currentPeriodEnd: row.current_period_end ?? null,
 });
 
 // ==================== Validation ====================

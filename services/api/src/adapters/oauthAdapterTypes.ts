@@ -43,6 +43,8 @@ export interface GitHubUserEmail {
 /** Single organization entry from GitHub's /user/orgs endpoint. */
 export interface GitHubOrg {
   readonly login: string;
+  /** Provider-reported org role (e.g., "admin", "member", "billing_manager"). */
+  readonly role?: string;
 }
 
 // ==================== GitLab Token Exchange ====================
@@ -135,6 +137,17 @@ export interface BitbucketWorkspace {
 /** Paginated response from Bitbucket's /2.0/workspaces endpoint. */
 export interface BitbucketWorkspacesResponse {
   readonly values: readonly BitbucketWorkspace[];
+}
+
+/** Single entry from Bitbucket's /2.0/user/permissions/workspaces endpoint. */
+export interface BitbucketWorkspacePermission {
+  readonly permission: string;
+  readonly workspace: BitbucketWorkspace;
+}
+
+/** Paginated response from Bitbucket's /2.0/user/permissions/workspaces endpoint. */
+export interface BitbucketWorkspacePermissionsResponse {
+  readonly values: readonly BitbucketWorkspacePermission[];
 }
 
 // ==================== Azure DevOps Token Exchange ====================

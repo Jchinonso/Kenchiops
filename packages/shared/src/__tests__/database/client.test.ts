@@ -140,7 +140,7 @@ describe("Database Client", () => {
 
       expect(mockedPg.default.Pool).toHaveBeenCalledWith(
         expect.objectContaining({
-          max: 10,
+          max: 25,
           idleTimeoutMillis: 30_000,
           connectionTimeoutMillis: 5_000,
         })

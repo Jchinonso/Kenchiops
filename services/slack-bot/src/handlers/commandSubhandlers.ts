@@ -13,6 +13,8 @@ import {
   findGitHubAppConnection,
   findAllMappingsForTenant,
   getErrorMessage,
+  getSubscriptionByTenant,
+  SUBSCRIPTION_STATUS,
   resilientGet,
   resilientPost,
   SLACK_UI_ERROR_MESSAGES,
@@ -442,6 +444,24 @@ export const handleInvestigate: SubcommandHandler = async ({
     return;
   }
 
+  // Check subscription status before running investigation (fail-open)
+  try {
+    const subscription = await getSubscriptionByTenant(tenant.id);
+    const blockedStatuses: ReadonlySet<string> = new Set([
+      SUBSCRIPTION_STATUS.CANCELED,
+      SUBSCRIPTION_STATUS.PAST_DUE,
+    ]);
+    if (subscription && blockedStatuses.has(subscription.status)) {
+      await respond({
+        text: `:warning: Your organization's subscription is ${subscription.status.replace("_", " ")}. Please update your subscription to use investigations.`,
+        response_type: "ephemeral",
+      });
+      return;
+    }
+  } catch {
+    // Fail-open: proceed if subscription check fails
+  }
+
   try {
     // Start the investigation via incident-triage service
     const createResponse = await resilientPost<InvestigationCreateResponse>(
@@ -540,6 +560,26 @@ export const handleAnalysis: SubcommandHandler = async (ctx): Promise<void> => {
 
   try {
     const tenant = await findTenantBySlackWorkspace(command.team_id);
+
+    // Check subscription status before running analysis (fail-open)
+    if (tenant?.id) {
+      try {
+        const subscription = await getSubscriptionByTenant(tenant.id);
+        const blockedStatuses: ReadonlySet<string> = new Set([
+          SUBSCRIPTION_STATUS.CANCELED,
+          SUBSCRIPTION_STATUS.PAST_DUE,
+        ]);
+        if (subscription && blockedStatuses.has(subscription.status)) {
+          await respond({
+            text: `:warning: Your organization's subscription is ${subscription.status.replace("_", " ")}. Please update your subscription to use analysis.`,
+          });
+          return;
+        }
+      } catch {
+        // Fail-open: proceed if subscription check fails
+      }
+    }
+
     const event = createEventFromCommand(command.user_id, command.channel_id, args);
     const { analysis, confidence } = await performAnalysis(event, tenant?.id);
 

@@ -14,7 +14,7 @@ import {
   HTTP_STATUS,
   createLogger,
   SERVICE_NAMES,
-  requireRole,
+  requirePermission,
 } from "@kenchi/shared";
 import {
   activateModel,
@@ -50,10 +50,6 @@ const validateRequiredNumber = (fieldValue: unknown): boolean | string => {
   return validators.number(fieldValue);
 };
 
-/** Validation rule: optional string */
-const validateOptionalString = (fieldValue: unknown): boolean | string =>
-  fieldValue === undefined || validators.string(fieldValue);
-
 // ==================== Route Handlers ====================
 
 /**
@@ -80,7 +76,7 @@ const handleGetModelVersions = async (_req: Request, res: Response): Promise<voi
  */
 const handleGetActiveModel = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
-  const tenantId = req.query.tenantId as string | undefined;
+  const { tenantId } = req.context;
 
   const result = await getActiveModel(tenantId);
 
@@ -204,7 +200,7 @@ const handleConfigureABTest = async (req: Request, res: Response): Promise<void>
 const handleEvaluateModel = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   const { versionId } = req.params;
-  const tenantId = req.query.tenantId as string | undefined;
+  const { tenantId } = req.context;
 
   const metrics = await evaluateModel({
     modelVersionId: versionId,
@@ -230,16 +226,14 @@ const handleCompareModels = async (req: Request, res: Response): Promise<void> =
   const startTime = Date.now();
   const body = req.body as CompareModelsRequestBody;
 
-  const comparison = await compareModels(
-    body.controlVersionId,
-    body.treatmentVersionId,
-    body.tenantId
-  );
+  const { tenantId } = req.context;
+
+  const comparison = await compareModels(body.controlVersionId, body.treatmentVersionId, tenantId);
 
   logger.info("Models compared", {
     controlVersionId: body.controlVersionId,
     treatmentVersionId: body.treatmentVersionId,
-    tenantId: body.tenantId,
+    tenantId,
     durationMs: Date.now() - startTime,
   });
 
@@ -260,21 +254,21 @@ router.get("/api/fine-tuning/models/active", asyncHandler(handleGetActiveModel))
 /** POST /api/fine-tuning/models/:versionId/activate - Activate a model version */
 router.post(
   "/api/fine-tuning/models/:versionId/activate",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   asyncHandler(handleActivateModel)
 );
 
 /** POST /api/fine-tuning/models/rollback - Rollback to baseline model */
 router.post(
   "/api/fine-tuning/models/rollback",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   asyncHandler(handleRollbackToBaseline)
 );
 
 /** POST /api/fine-tuning/models/ab-test - Configure A/B test */
 router.post(
   "/api/fine-tuning/models/ab-test",
-  requireRole("admin", "owner"),
+  requirePermission("settings"),
   validate({
     body: {
       controlVersion: validateRequiredString,
@@ -295,7 +289,6 @@ router.post(
     body: {
       controlVersionId: validateRequiredString,
       treatmentVersionId: validateRequiredString,
-      tenantId: validateOptionalString,
     },
   }),
   asyncHandler(handleCompareModels)

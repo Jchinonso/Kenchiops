@@ -157,13 +157,16 @@ export const recordQueryCostSafely = async (
  * Tracks hit counts for retrieved knowledge documents safely (fire-and-forget).
  * Increments hit count in metadata for analytics and reranking.
  */
-export const trackKnowledgeDocHitsSafely = async (docIds: readonly string[]): Promise<void> => {
-  if (docIds.length === 0) {
+export const trackKnowledgeDocHitsSafely = async (
+  docIds: readonly string[],
+  tenantId: string | undefined
+): Promise<void> => {
+  if (docIds.length === 0 || !tenantId) {
     return;
   }
 
   try {
-    const updatedCount = await batchIncrementKnowledgeDocHitCounts(docIds);
+    const updatedCount = await batchIncrementKnowledgeDocHitCounts(docIds, tenantId);
     logger.debug("Tracked knowledge doc hits", {
       requestedCount: docIds.length,
       updatedCount,
@@ -353,10 +356,11 @@ export const recordSearchCostIfNeeded = (
  * Extracts document IDs from knowledge results and tracks hits (fire-and-forget).
  */
 export const trackKnowledgeResultHits = (
-  results: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>
+  results: ReadonlyArray<VectorSearchResult<KnowledgeDocRecord>>,
+  tenantId: string | undefined
 ): void => {
   const docIds = results.map((result) => result.item.id);
-  void trackKnowledgeDocHitsSafely(docIds);
+  void trackKnowledgeDocHitsSafely(docIds, tenantId);
 };
 
 // ==================== Reranking Conversions ====================

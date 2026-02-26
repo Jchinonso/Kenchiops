@@ -65,6 +65,18 @@ export const CIRCUIT_BREAKER_SERVICE_KEYS = {
 } as const;
 
 /**
+ * Circuit breaker idle eviction configuration.
+ * Entries with no activity for longer than this TTL are evicted
+ * to prevent unbounded memory growth from per-tenant keys.
+ */
+export const CIRCUIT_BREAKER_CLEANUP = {
+  /** Idle TTL before eviction (1 hour). */
+  IDLE_TTL_MS: 60 * 60 * 1000,
+  /** How often to run the cleanup sweep (5 minutes). */
+  CLEANUP_INTERVAL_MS: 5 * 60 * 1000,
+} as const;
+
+/**
  * Retryable HTTP status codes
  */
 export const RETRYABLE_HTTP_STATUS_CODES = [408, 429, 500, 502, 503, 504] as const;

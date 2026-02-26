@@ -62,7 +62,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortConfig>({ column: "", direction: null });
   const [filters, setFilters] = useState<FilterValues>(() => {
-    const saved = loadSavedFilters("incidents");
+    const saved = loadSavedFilters("incidents", tenantId || undefined);
     return {
       repository: "",
       minConfidence: "",
@@ -95,7 +95,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
         params.set("source", nextSource);
       }
       setSearchParams(params, { replace: true });
-      saveFilters("incidents", { ...filters, source: nextSource });
+      saveFilters("incidents", { ...filters, source: nextSource }, tenantId || undefined);
     },
     [filters, setSearchParams]
   );
@@ -105,7 +105,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
       setFilters(next);
       setOffset(0);
       setExpandedId(null);
-      saveFilters("incidents", next);
+      saveFilters("incidents", next, tenantId || undefined);
       const params = new URLSearchParams();
       if (next.severity) {
         params.set("severity", next.severity);

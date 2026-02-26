@@ -30,6 +30,8 @@ import { PlanSelection } from "@/pages/PlanSelection";
 import { Integrations } from "@/pages/Integrations";
 import { GitLabSetup } from "@/pages/GitLabSetup";
 import { TeamManagement } from "@/pages/TeamManagement";
+import { TenantGuard } from "@/components/TenantGuard";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import {
   Bell,
   Menu,
@@ -676,36 +678,40 @@ const Dashboard = () => {
 
         {/* Page Content */}
         <div id="main-content" className="p-4 sm:p-6 lg:p-8">
-          {comingSoonConfig ? (
-            <ComingSoon {...comingSoonConfig} />
-          ) : isTeam ? (
-            <TeamManagement />
-          ) : isGitLabSetup ? (
-            <GitLabSetup />
-          ) : isIntegrations ? (
-            <Integrations />
-          ) : isPlanSelection ? (
-            <PlanSelection />
-          ) : isSettings ? (
-            <Settings />
-          ) : isCICD ? (
-            renderCICDPage(currentPath, refreshKey)
-          ) : incidentPage ? (
-            incidentPage
-          ) : isOnboarding || (isOverview && needsOnboarding) ? (
-            <Onboarding
-              displayName={displayName}
-              provider={user?.providers?.[0]?.provider ?? "github"}
-              onSkip={handleSkipOnboarding}
-            />
-          ) : (
-            <DashboardOverview
-              firstName={firstName}
-              showOnboarding={showOnboarding}
-              dismissOnboarding={dismissOnboarding}
-              refreshKey={refreshKey}
-            />
-          )}
+          <TenantGuard>
+            <PageErrorBoundary key={currentPath}>
+              {comingSoonConfig ? (
+                <ComingSoon {...comingSoonConfig} />
+              ) : isTeam ? (
+                <TeamManagement />
+              ) : isGitLabSetup ? (
+                <GitLabSetup />
+              ) : isIntegrations ? (
+                <Integrations />
+              ) : isPlanSelection ? (
+                <PlanSelection />
+              ) : isSettings ? (
+                <Settings />
+              ) : isCICD ? (
+                renderCICDPage(currentPath, refreshKey)
+              ) : incidentPage ? (
+                incidentPage
+              ) : isOnboarding || (isOverview && needsOnboarding) ? (
+                <Onboarding
+                  displayName={displayName}
+                  provider={user?.providers?.[0]?.provider ?? "github"}
+                  onSkip={handleSkipOnboarding}
+                />
+              ) : (
+                <DashboardOverview
+                  firstName={firstName}
+                  showOnboarding={showOnboarding}
+                  dismissOnboarding={dismissOnboarding}
+                  refreshKey={refreshKey}
+                />
+              )}
+            </PageErrorBoundary>
+          </TenantGuard>
         </div>
 
         <DashboardFooter />

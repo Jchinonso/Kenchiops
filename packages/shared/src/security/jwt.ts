@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 import { AuthenticationError } from "../core/errors.js";
 import { config } from "../core/config.js";
 import { JWT_CONFIG, AUTH_DEFAULTS } from "../constants/index.js";
-import type { User, AuthenticatedUser, JWTPayload } from "../database/user/types.js";
+import type { User, AuthenticatedUser, JWTPayload, UserRole } from "../database/user/types.js";
 
 // ==================== Secret Management ====================
 
@@ -38,12 +38,12 @@ const getSecret = (): string => {
 
 // ==================== Access Token (JWT) ====================
 
-export const generateAccessToken = (user: User): string =>
+export const generateAccessToken = (user: User, roleOverride?: UserRole): string =>
   jwt.sign(
     {
       sub: user.id,
       tid: user.tenantId,
-      role: user.role,
+      role: roleOverride ?? user.role,
       jti: crypto.randomUUID(),
     },
     getSecret(),

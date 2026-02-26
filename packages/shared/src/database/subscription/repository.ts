@@ -240,6 +240,47 @@ export const getTenantUsage = async (tenantId: string): Promise<PlanUsage> => {
   }
 };
 
+// ==================== Trial Expiration ====================
+
+/**
+ * Find and expire all trialing subscriptions whose trial has ended.
+ *
+ * Sets the subscription status to 'past_due' for any tenant_subscription
+ * row with `status = 'trialing'` and `trial_ends_at < NOW()`.
+ *
+ * Returns the list of tenant IDs that were expired so the caller can
+ * set Redis status flags to block immediate access.
+ */
+export const expireTrials = async (): Promise<readonly string[]> => {
+  try {
+    const result = await query<{ readonly tenant_id: string }>(
+      `UPDATE tenant_subscriptions
+       SET status = 'past_due', updated_at = NOW()
+       WHERE status = 'trialing'
+         AND trial_ends_at IS NOT NULL
+         AND trial_ends_at < NOW()
+       RETURNING tenant_id`,
+      []
+    );
+
+    const expiredTenantIds = result.rows.map((row) => row.tenant_id);
+
+    if (expiredTenantIds.length > 0) {
+      logger.info("Expired trial subscriptions", {
+        count: expiredTenantIds.length,
+        tenantIds: expiredTenantIds,
+      });
+    }
+
+    return expiredTenantIds;
+  } catch (error) {
+    logger.error("Failed to expire trial subscriptions", {
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
 // ==================== Limit Enforcement ====================
 
 /**

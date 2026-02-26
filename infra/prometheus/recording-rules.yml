@@ -1,0 +1,83 @@
+groups:
+  - name: kenchi_tenant_aggregations
+    interval: 1m
+    rules:
+      # Pre-aggregated request rate per tenant (reduces cardinality for dashboards)
+      - record: kenchi:api_request_rate:by_tenant
+        expr: sum by (tenant_id) (rate(kenchi_api_requests_total[5m]))
+
+      # Pre-aggregated error rate per tenant
+      - record: kenchi:api_error_rate:by_tenant
+        expr: >
+          sum by (tenant_id) (rate(kenchi_api_requests_total{status_code=~"5.."}[5m]))
+          /
+          sum by (tenant_id) (rate(kenchi_api_requests_total[5m]))
+
+      # P95 latency per tenant
+      - record: kenchi:api_latency_p95:by_tenant
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, tenant_id) (rate(kenchi_api_request_duration_seconds_bucket[5m]))
+          )
+
+      # P99 latency per tenant
+      - record: kenchi:api_latency_p99:by_tenant
+        expr: >
+          histogram_quantile(
+            0.99,
+            sum by (le, tenant_id) (rate(kenchi_api_request_duration_seconds_bucket[5m]))
+          )
+
+      # Analysis duration P95 per tenant
+      - record: kenchi:analysis_duration_p95:by_tenant
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, tenant_id) (rate(kenchi_analysis_duration_seconds_bucket[5m]))
+          )
+
+      # Analysis duration P99 per tenant
+      - record: kenchi:analysis_duration_p99:by_tenant
+        expr: >
+          histogram_quantile(
+            0.99,
+            sum by (le, tenant_id) (rate(kenchi_analysis_duration_seconds_bucket[5m]))
+          )
+
+  - name: kenchi_global_aggregations
+    interval: 1m
+    rules:
+      # Global request rate (all tenants)
+      - record: kenchi:api_request_rate:total
+        expr: sum(rate(kenchi_api_requests_total[5m]))
+
+      # Global error rate
+      - record: kenchi:api_error_rate:total
+        expr: >
+          sum(rate(kenchi_api_requests_total{status_code=~"5.."}[5m]))
+          /
+          sum(rate(kenchi_api_requests_total[5m]))
+
+      # Global P95 latency
+      - record: kenchi:api_latency_p95:total
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(kenchi_api_request_duration_seconds_bucket[5m]))
+          )
+
+      # Total active analysis jobs
+      - record: kenchi:active_analysis_jobs:total
+        expr: sum(kenchi_active_analysis_jobs)
+
+      # External call error rate by provider
+      - record: kenchi:external_error_rate:by_provider
+        expr: >
+          sum by (provider) (rate(kenchi_external_calls_total{status_code=~"5.."}[5m]))
+          /
+          sum by (provider) (rate(kenchi_external_calls_total[5m]))
+
+      # Top tenants by request volume (for ranking)
+      - record: kenchi:api_request_rate:top_tenants
+        expr: topk(10, sum by (tenant_id) (rate(kenchi_api_requests_total[5m])))

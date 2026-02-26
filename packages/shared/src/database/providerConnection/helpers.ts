@@ -6,7 +6,7 @@
  * @module database/providerConnection/helpers
  */
 
-import { decryptValue } from "../../security/encryption.js";
+import { decryptAuto } from "../../security/tenantEncryption.js";
 import { ValidationError } from "../../core/errors.js";
 import type {
   ProviderConnectionRow,
@@ -17,23 +17,36 @@ import type {
 // ==================== Row Mapper ====================
 
 /**
- * Map a database row to a domain ProviderConnection, decrypting sensitive fields.
+ * Map a database row to a domain ProviderConnection, decrypting sensitive fields
+ * using per-tenant key derivation (v2) with automatic legacy fallback.
+ *
+ * @param row - The raw database row
+ * @returns Domain ProviderConnection with decrypted secrets
  */
-export const rowToProviderConnection = (row: ProviderConnectionRow): ProviderConnection => ({
-  id: row.id,
-  tenantId: row.tenant_id,
-  provider: row.provider,
-  connectionName: row.connection_name,
-  externalOrgId: row.external_org_id,
-  baseUrl: row.base_url,
-  config: row.config,
-  webhookSecret: (decryptValue(row.webhook_secret_enc) as string | null) ?? null,
-  accessToken: (decryptValue(row.access_token_enc) as string | null) ?? null,
-  tokenExpiresAt: row.token_expires_at,
-  isActive: row.is_active,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+export const rowToProviderConnection = async (
+  row: ProviderConnectionRow
+): Promise<ProviderConnection> => {
+  const [webhookSecret, accessToken] = await Promise.all([
+    row.webhook_secret_enc ? decryptAuto(row.tenant_id, row.webhook_secret_enc) : null,
+    row.access_token_enc ? decryptAuto(row.tenant_id, row.access_token_enc) : null,
+  ]);
+
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    provider: row.provider,
+    connectionName: row.connection_name,
+    externalOrgId: row.external_org_id,
+    baseUrl: row.base_url,
+    config: row.config,
+    webhookSecret,
+    accessToken,
+    tokenExpiresAt: row.token_expires_at,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 // ==================== Validation ====================
 

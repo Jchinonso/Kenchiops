@@ -153,14 +153,15 @@ export const purgeTenantRAGData = async (tenantId: string): Promise<PurgeResult>
  */
 export const purgePRDiffChunks = async (
   repository: string,
-  prNumber: number
+  prNumber: number,
+  tenantId: string
 ): Promise<PurgeResult> => {
   const errors: string[] = [];
 
-  logger.info("Purging diff chunks for PR", { repository, prNumber });
+  logger.info("Purging diff chunks for PR", { repository, prNumber, tenantId });
 
   try {
-    const deletedCount = await deleteDiffChunksByPR(prNumber, repository);
+    const deletedCount = await deleteDiffChunksByPR(prNumber, repository, tenantId);
 
     logger.info("PR diff chunks purged", {
       repository,
@@ -197,13 +198,16 @@ export const purgePRDiffChunks = async (
  * @param parentId - Parent document ID
  * @returns Purge result
  */
-export const purgeKnowledgeDocChunks = async (parentId: string): Promise<PurgeResult> => {
+export const purgeKnowledgeDocChunks = async (
+  parentId: string,
+  tenantId: string
+): Promise<PurgeResult> => {
   const errors: string[] = [];
 
-  logger.info("Purging knowledge doc chunks", { parentId });
+  logger.info("Purging knowledge doc chunks", { parentId, tenantId });
 
   try {
-    const deletedCount = await deleteKnowledgeDocsByParent(parentId);
+    const deletedCount = await deleteKnowledgeDocsByParent(parentId, tenantId);
 
     logger.info("Knowledge doc chunks purged", {
       parentId,

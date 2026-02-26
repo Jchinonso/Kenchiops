@@ -1,0 +1,108 @@
+groups:
+  - name: tenant_health
+    rules:
+      # High error rate: >10% of requests returning 5xx for 5 minutes
+      - alert: TenantHighErrorRate
+        expr: >
+          (
+            sum by (tenant_id) (rate(kenchi_api_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum by (tenant_id) (rate(kenchi_api_requests_total[5m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} error rate above 10%"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      # Critical error rate: >25% for 3 minutes
+      - alert: TenantCriticalErrorRate
+        expr: >
+          (
+            sum by (tenant_id) (rate(kenchi_api_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum by (tenant_id) (rate(kenchi_api_requests_total[5m]))
+          ) > 0.25
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} error rate above 25%"
+          description: "Critical error rate {{ $value | humanizePercentage }}. Immediate investigation required."
+
+      # P95 latency above 5 seconds
+      - alert: TenantHighLatency
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, tenant_id) (rate(kenchi_api_request_duration_seconds_bucket[5m]))
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} P95 latency above 5s"
+          description: "P95 latency is {{ $value | humanizeDuration }}."
+
+      # P95 latency above 15 seconds (critical)
+      - alert: TenantCriticalLatency
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, tenant_id) (rate(kenchi_api_request_duration_seconds_bucket[5m]))
+          ) > 15
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} P95 latency above 15s"
+          description: "Critical latency {{ $value | humanizeDuration }}. Pipeline may be stalled."
+
+      # Analysis job backlog
+      - alert: TenantAnalysisBacklog
+        expr: kenchi_active_analysis_jobs > 10
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} has {{ $value }} active analysis jobs"
+          description: "Analysis backlog for tenant {{ $labels.tenant_id }}. Check for stuck jobs or resource exhaustion."
+
+      # External API call failures (per provider)
+      - alert: TenantExternalCallFailures
+        expr: >
+          sum by (tenant_id, provider) (
+            rate(kenchi_external_calls_total{status_code=~"5.."}[10m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} seeing {{ $labels.provider }} failures"
+          description: "{{ $value | humanize }} failures/s from {{ $labels.provider }} over the last 10 minutes."
+
+      # Encryption errors (any sustained errors is concerning)
+      - alert: TenantEncryptionErrors
+        expr: >
+          sum by (tenant_id) (rate(kenchi_encryption_errors_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} experiencing encryption errors"
+          description: "Encryption error rate is {{ $value | humanize }}/s. Data at rest may not be protected."
+
+      # Slow analysis pipeline
+      - alert: TenantSlowAnalysis
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, tenant_id) (rate(kenchi_analysis_duration_seconds_bucket[15m]))
+          ) > 120
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }} P95 analysis duration above 2 minutes"
+          description: "Analysis pipeline is slow (P95: {{ $value | humanizeDuration }}). Check LLM provider or log size."

@@ -11,7 +11,11 @@ import type { Request, Response, NextFunction } from "express";
 import { config } from "../core/config.js";
 import { AuthenticationError, invariant } from "../core/errors.js";
 import { createLogger } from "../core/logger.js";
-import { INTERNAL_AUTH_HEADERS, verifyInternalSignature } from "./internalAuth.js";
+import {
+  INTERNAL_AUTH_HEADERS,
+  verifyInternalSignature,
+  resolveServiceSecret,
+} from "./internalAuth.js";
 
 const logger = createLogger("internal-auth-middleware");
 
@@ -51,7 +55,12 @@ export const createInternalAuthMiddleware = (
       return;
     }
 
-    const secret = config.INTERNAL_SERVICE_SECRET;
+    const signature = req.headers[INTERNAL_AUTH_HEADERS.SIGNATURE] as string | undefined;
+    const timestamp = req.headers[INTERNAL_AUTH_HEADERS.TIMESTAMP] as string | undefined;
+    const serviceName = req.headers[INTERNAL_AUTH_HEADERS.SERVICE] as string | undefined;
+
+    // Resolve per-service secret first, then fall back to INTERNAL_SERVICE_SECRET
+    const secret = resolveServiceSecret(serviceName, config);
     if (!secret) {
       // Fail fast in production — unauthenticated internal requests are not acceptable
       invariant(
@@ -59,16 +68,12 @@ export const createInternalAuthMiddleware = (
         "INTERNAL_SERVICE_SECRET must be configured in production"
       );
       if (!warnedMissingSecret) {
-        logger.warn("INTERNAL_SERVICE_SECRET not configured — internal auth disabled (dev only)");
+        logger.warn("No service HMAC secret configured — internal auth disabled (dev only)");
         warnedMissingSecret = true;
       }
       next();
       return;
     }
-
-    const signature = req.headers[INTERNAL_AUTH_HEADERS.SIGNATURE] as string | undefined;
-    const timestamp = req.headers[INTERNAL_AUTH_HEADERS.TIMESTAMP] as string | undefined;
-    const serviceName = req.headers[INTERNAL_AUTH_HEADERS.SERVICE] as string | undefined;
 
     if (!signature || !timestamp) {
       next(
@@ -106,6 +111,15 @@ export const createInternalAuthMiddleware = (
     if (serviceName) {
       Object.assign(req, {
         context: { ...req.context, actor: `service:${serviceName}` },
+      });
+    }
+
+    // For internal service calls, propagate tenant_id from request body to req.user
+    // so that requireTenantId() can authorize the request
+    const bodyTenantId = (req.body as Record<string, unknown> | undefined)?.tenant_id;
+    if (typeof bodyTenantId === "string" && bodyTenantId) {
+      Object.assign(req, {
+        user: { ...req.user, tenantId: bodyTenantId, role: "service" },
       });
     }
 

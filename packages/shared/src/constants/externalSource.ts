@@ -39,7 +39,7 @@ export const EXTERNAL_SOURCE_QUERIES = {
     RETURNING *
   `,
 
-  GET_BY_ID: `SELECT * FROM external_sources WHERE id = $1`,
+  GET_BY_ID: `SELECT * FROM external_sources WHERE id = $1 AND tenant_id = $2`,
 
   GET_BY_TENANT: `
     SELECT * FROM external_sources
@@ -78,7 +78,7 @@ export const EXTERNAL_SOURCE_QUERIES = {
       sync_frequency_hours = COALESCE($8, sync_frequency_hours),
       metadata = COALESCE($9, metadata),
       updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $10
     RETURNING *
   `,
 
@@ -88,11 +88,11 @@ export const EXTERNAL_SOURCE_QUERIES = {
       doc_count = $2,
       error_count = $3,
       updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $4
     RETURNING *
   `,
 
-  DELETE: `DELETE FROM external_sources WHERE id = $1`,
+  DELETE: `DELETE FROM external_sources WHERE id = $1 AND tenant_id = $2`,
 
   DELETE_BY_TENANT: `DELETE FROM external_sources WHERE tenant_id = $1`,
 

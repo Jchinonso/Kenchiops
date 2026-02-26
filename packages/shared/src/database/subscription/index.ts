@@ -45,4 +45,5 @@ export {
   getTenantUsage,
   checkPlanLimit,
   enforcePlanLimit,
+  expireTrials,
 } from "./repository.js";

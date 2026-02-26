@@ -272,6 +272,7 @@ export const rowToTenant = (row: TenantRow): Tenant => ({
   ragAllowPremium: row.rag_allow_premium ?? RAG_BUDGET_DEFAULTS.ALLOW_PREMIUM,
   ragDegradeOnBudgetWarning:
     row.rag_degrade_on_budget_warning ?? RAG_BUDGET_DEFAULTS.DEGRADE_ON_BUDGET_WARNING,
+  encryptionKeyVersion: row.encryption_key_version,
 });
 
 /**

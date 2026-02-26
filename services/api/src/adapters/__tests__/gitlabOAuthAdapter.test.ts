@@ -4,7 +4,7 @@
  * Tests the GitLab OAuth adapter implementing OAuthPort:
  * - exchangeCode: authorization code to token exchange
  * - getUserProfile: GitLab user profile fetch
- * - getUserOrganizations: GitLab group memberships
+ * - getUserOrganizations: GitLab group memberships with role detection
  *
  * Covers success paths, error classification (retryable vs non-retryable),
  * self-hosted URL resolution, missing credentials, and network errors.
@@ -389,16 +389,24 @@ describe("gitlabOAuthAdapter", () => {
   });
 
   describe("getUserOrganizations", () => {
-    it("should fetch and map groups to organizations", async () => {
+    it("should fetch and map groups to organizations with roles", async () => {
       const groups = createGitLabGroups();
+      // First call: groups list (min_access_level=10)
       mockFetch.mockResolvedValueOnce(createFetchResponse(groups));
+      // Second call: admin groups (min_access_level=40) — returns empty (no admins)
+      mockFetch.mockResolvedValueOnce(createFetchResponse([]));
 
       const result = await gitlabOAuthAdapter.getUserOrganizations("test-token", null, testContext);
 
-      expect(result).toEqual([{ login: "engineering" }, { login: "platform" }]);
+      expect(result).toEqual([
+        { login: "engineering", role: "developer" },
+        { login: "platform", role: "developer" },
+      ]);
     });
 
     it("should request groups with min_access_level=10 query parameter", async () => {
+      mockFetch.mockResolvedValueOnce(createFetchResponse([]));
+      // Admin groups call also returns empty
       mockFetch.mockResolvedValueOnce(createFetchResponse([]));
 
       await gitlabOAuthAdapter.getUserOrganizations("token", null, testContext);
@@ -416,6 +424,7 @@ describe("gitlabOAuthAdapter", () => {
     it("should use self-hosted URL with min_access_level param", async () => {
       const instanceUrl = "https://gitlab.internal.com";
       mockFetch.mockResolvedValueOnce(createFetchResponse([]));
+      mockFetch.mockResolvedValueOnce(createFetchResponse([]));
 
       await gitlabOAuthAdapter.getUserOrganizations("token", instanceUrl, testContext);
 
@@ -425,13 +434,14 @@ describe("gitlabOAuthAdapter", () => {
 
     it("should return empty array when user has no groups", async () => {
       mockFetch.mockResolvedValueOnce(createFetchResponse([]));
+      mockFetch.mockResolvedValueOnce(createFetchResponse([]));
 
       const result = await gitlabOAuthAdapter.getUserOrganizations("token", null, testContext);
 
       expect(result).toEqual([]);
     });
 
-    it("should map group.path to login (not group.name)", async () => {
+    it("should map group.path to login with role (not group.name)", async () => {
       const groups = [
         {
           id: 1,
@@ -442,10 +452,35 @@ describe("gitlabOAuthAdapter", () => {
         },
       ];
       mockFetch.mockResolvedValueOnce(createFetchResponse(groups));
+      // Admin groups returns empty — no maintainer role
+      mockFetch.mockResolvedValueOnce(createFetchResponse([]));
 
       const result = await gitlabOAuthAdapter.getUserOrganizations("token", null, testContext);
 
-      expect(result).toEqual([{ login: "my-group-path" }]);
+      expect(result).toEqual([{ login: "my-group-path", role: "developer" }]);
+    });
+
+    it("should assign maintainer role to admin groups", async () => {
+      const groups = createGitLabGroups();
+      // Admin groups call returns "engineering" group only
+      const adminGroups = [
+        {
+          id: 1,
+          name: "Engineering",
+          path: "engineering",
+          full_path: "acme/engineering",
+          web_url: "",
+        },
+      ];
+      mockFetch.mockResolvedValueOnce(createFetchResponse(groups));
+      mockFetch.mockResolvedValueOnce(createFetchResponse(adminGroups));
+
+      const result = await gitlabOAuthAdapter.getUserOrganizations("test-token", null, testContext);
+
+      expect(result).toEqual([
+        { login: "engineering", role: "maintainer" },
+        { login: "platform", role: "developer" },
+      ]);
     });
 
     it("should throw retryable ExternalServiceError on 500 status", async () => {

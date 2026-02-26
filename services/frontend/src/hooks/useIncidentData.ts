@@ -81,7 +81,6 @@ export interface PipelineMetricsResponse {
 // ==================== URL Builders ====================
 
 const buildIncidentsUrl = (
-  tenantId: string,
   limit: number,
   offset: number,
   severity?: string,
@@ -89,7 +88,6 @@ const buildIncidentsUrl = (
   source?: string
 ): string => {
   const params = new URLSearchParams();
-  params.set("tenantId", tenantId);
   params.set("limit", String(limit));
   params.set("offset", String(offset));
   if (severity) {
@@ -120,7 +118,7 @@ export const useIncidents = (options: UseIncidentsOptions): UseFetchResult<Pagin
   const { tenantId, limit = 20, offset = 0, refreshKey = 0, severity, status, source } = options;
 
   return useFetch<PaginatedIncidents>(
-    tenantId ? buildIncidentsUrl(tenantId, limit, offset, severity, status, source) : "",
+    tenantId ? buildIncidentsUrl(limit, offset, severity, status, source) : "",
     `${tenantId}:${limit}:${offset}:${refreshKey}:${severity ?? ""}:${status ?? ""}:${source ?? ""}`
   );
 };
@@ -136,7 +134,7 @@ export const useTriageStats = (
   refreshKey: number = 0
 ): UseFetchResult<PipelineMetricsResponse> =>
   useFetch<PipelineMetricsResponse>(
-    tenantId ? `/api/v1/triage/stats?tenantId=${tenantId}` : "",
+    tenantId ? `/api/v1/triage/stats` : "",
     `${tenantId}:${refreshKey}`
   );
 
@@ -151,7 +149,7 @@ export const useIntegrationHealth = (
   refreshKey: number = 0
 ): UseFetchResult<readonly SourceStatsEntry[]> =>
   useFetch<readonly SourceStatsEntry[]>(
-    tenantId ? `/api/v1/incidents/stats/by-source?tenantId=${tenantId}` : "",
+    tenantId ? `/api/v1/incidents/stats/by-source` : "",
     `${tenantId}:${refreshKey}`
   );
 
@@ -178,7 +176,7 @@ export const useActiveCountsBySource = (
   refreshKey: number = 0
 ): UseFetchResult<readonly ActiveCountBySource[]> =>
   useFetch<readonly ActiveCountBySource[]>(
-    tenantId ? `/api/v1/incidents/stats/active-by-source?tenantId=${tenantId}` : "",
+    tenantId ? `/api/v1/incidents/stats/active-by-source` : "",
     `${tenantId}:${refreshKey}`
   );
 
@@ -192,9 +190,7 @@ export const useBalancedRecentIncidents = (
   refreshKey: number = 0
 ): UseFetchResult<readonly IncidentAlertRecord[]> =>
   useFetch<readonly IncidentAlertRecord[]>(
-    tenantId
-      ? `/api/v1/incidents/recent/balanced?tenantId=${tenantId}&perSource=${perSource}&maxTotal=${maxTotal}`
-      : "",
+    tenantId ? `/api/v1/incidents/recent/balanced?perSource=${perSource}&maxTotal=${maxTotal}` : "",
     `${tenantId}:${perSource}:${maxTotal}:${refreshKey}`
   );
 
@@ -206,7 +202,7 @@ export const useSeverityDistributionBySource = (
   refreshKey: number = 0
 ): UseFetchResult<readonly SeverityBySourceEntry[]> =>
   useFetch<readonly SeverityBySourceEntry[]>(
-    tenantId ? `/api/v1/triage/stats/severity-by-source?tenantId=${tenantId}` : "",
+    tenantId ? `/api/v1/triage/stats/severity-by-source` : "",
     `${tenantId}:${refreshKey}`
   );
 

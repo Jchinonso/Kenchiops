@@ -16,6 +16,8 @@ import {
   readinessCheck,
   asyncHandler,
   getErrorMessage,
+  getMetrics,
+  getMetricsContentType,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 
@@ -87,14 +89,15 @@ router.get("/health/github", (_req: Request, res: Response) => {
     privateKey.startsWith("-----BEGIN RSA PRIVATE KEY-----") &&
     privateKey.endsWith("-----END RSA PRIVATE KEY-----");
 
+  // SECURITY: Only expose boolean configuration status.
+  // Never leak key material, length, or previews — even partial PEM data
+  // reveals key format and confirms presence to attackers.
   res.status(HTTP_STATUS.OK).json({
     appId: appConfig.github.appId,
     installationId: appConfig.github.installationId || "not configured",
     webhookSecretConfigured: !!appConfig.github.webhookSecret,
     privateKeyConfigured: !!privateKey,
     privateKeyValid: hasValidKey,
-    privateKeyLength: privateKey.length,
-    privateKeyPreview: `${privateKey.substring(0, 40)}...`,
   });
 });
 
@@ -129,6 +132,17 @@ router.get("/health/github/repos", async (_req: Request, res: Response) => {
       error: getErrorMessage(error),
     });
   }
+});
+
+/**
+ * Prometheus metrics endpoint
+ * GET /metrics
+ * Returns Prometheus-format metrics for scraping
+ */
+router.get("/metrics", async (_req: Request, res: Response) => {
+  const metrics = await getMetrics();
+  res.set("Content-Type", getMetricsContentType());
+  res.end(metrics);
 });
 
 export { router as healthRoutes };

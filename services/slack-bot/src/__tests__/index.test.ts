@@ -231,6 +231,7 @@ describe("Slack Bot Service Index", () => {
         TOO_LARGE: "File too large",
         INGESTION_FAILED: "Failed to process file",
       },
+      checkWebhookSourceRateLimit: jest.fn(() => ({ allowed: true, remaining: 59 })),
     }));
 
     // Mock config/appConfig
@@ -767,7 +768,8 @@ describe("Slack Bot Service Index", () => {
         mockAction,
         mockAck,
         mockSay,
-        "1234567890.123456"
+        "1234567890.123456",
+        undefined
       );
     });
 
@@ -811,7 +813,8 @@ describe("Slack Bot Service Index", () => {
         mockAction,
         mockAck,
         mockSay,
-        "1234567890.123456"
+        "1234567890.123456",
+        undefined
       );
     });
   });

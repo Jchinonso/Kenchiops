@@ -25,7 +25,7 @@ import type {
   ResilientResponse,
   RetryContext,
 } from "./types.js";
-import { signInternalRequest } from "./internalAuth.js";
+import { signInternalRequest, resolveSigningSecret } from "./internalAuth.js";
 
 const logger = createLogger("resilient-http");
 
@@ -197,9 +197,9 @@ const buildInternalAuthHeaders = (
     return {};
   }
 
-  const secret = config.INTERNAL_SERVICE_SECRET;
+  const secret = resolveSigningSecret(config);
   if (!secret) {
-    logger.warn("internalAuth requested but INTERNAL_SERVICE_SECRET is not configured");
+    logger.warn("internalAuth requested but no HMAC secret is configured");
     return {};
   }
 
@@ -209,7 +209,7 @@ const buildInternalAuthHeaders = (
   return {
     "x-kenchi-signature": signature,
     "x-kenchi-timestamp": timestamp,
-    "x-kenchi-service": "kenchi",
+    "x-kenchi-service": config.SERVICE_NAME ?? "kenchi",
   };
 };
 

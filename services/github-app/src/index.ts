@@ -25,6 +25,7 @@ import {
   createRateLimitMiddleware,
   createInternalAuthMiddleware,
   createSecurityHeaders,
+  metricsMiddleware,
   startAggregatorWorker,
   startAnalysisQueueProcessor,
   getErrorMessage,
@@ -131,6 +132,8 @@ const createApp = (): express.Express => {
 
   // Internal auth for service-to-service calls.
   // Public paths skip HMAC verification (health probes, webhook with its own signature, etc.)
+  // SECURITY: /metrics is NOT public — it exposes tenant_id labels.
+  // Prometheus scrapers must use internal HMAC auth to access metrics.
   app.use(
     createInternalAuthMiddleware({
       publicPaths: [
@@ -146,6 +149,9 @@ const createApp = (): express.Express => {
       ],
     })
   );
+
+  // Per-tenant Prometheus metrics
+  app.use(metricsMiddleware);
 
   // Register all routes
   registerRoutes(app);

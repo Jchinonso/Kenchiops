@@ -30,11 +30,28 @@ import {
   rotateRefreshTokenAtomically,
   // Tenant lookup (provider-scoped)
   findByOrgNameAndProvider,
+  // Audit logging
+  logAuditEvent,
+  AUDIT_ACTIONS,
+  // Organization membership
+  findOrganizationsByUser,
+  countOwnersByTenant,
+  removeMemberFromTenant,
   // Tenant creation
   createFromGitHubLogin,
   createFromGitLabGroup,
+  createFromBitbucketWorkspace,
+  createFromAzureDevOpsAccount,
+  // Type guards
+  assertUnreachable,
+  getErrorMessage,
   // User organization
   addUserOrganization,
+  findUserOrgRole,
+  // Plan limits
+  checkPlanLimit,
+  // Provider role mapping
+  resolveAutoLinkRole,
   // JWT utilities
   generateAccessToken,
   generateRefreshToken,
@@ -59,6 +76,8 @@ const logger = createLogger("auth-service");
 const ORG_CAPABLE_PROVIDERS: ReadonlySet<OAuthProvider> = new Set<OAuthProvider>([
   "github",
   "gitlab",
+  "bitbucket",
+  "azure_devops",
 ]);
 
 // ==================== Extracted Service Methods ====================
@@ -165,6 +184,18 @@ const autoLinkOrganizationsImpl = async (
 
   const tenantIds = await ensureOrgMemberships(user.id, provider, effectiveOrgs, context);
 
+  // Reconcile stale memberships (non-fatal)
+  try {
+    await reconcileStaleMemberships(user.id, provider, tenantIds, context);
+  } catch (reconcileError: unknown) {
+    logger.warn("Stale membership reconciliation failed (non-fatal)", {
+      userId: user.id,
+      provider,
+      error: getErrorMessage(reconcileError),
+      ...context,
+    });
+  }
+
   // If user has no selected org, set the first discovered one
   const { tenantId: currentTenantId } = user;
   const { length: tenantCount } = tenantIds;
@@ -196,7 +227,11 @@ const generateTokenPairImpl = async (
   meta: TokenMeta,
   context: RequestContext
 ): Promise<TokenPair> => {
-  const accessToken = generateAccessToken(user as Parameters<typeof generateAccessToken>[0]);
+  const orgRole = user.tenantId ? await findUserOrgRole(user.id, user.tenantId) : null;
+  const accessToken = generateAccessToken(
+    user as Parameters<typeof generateAccessToken>[0],
+    orgRole ?? undefined
+  );
   const rawRefreshToken = generateRefreshToken();
   const tokenHash = hashRefreshToken(rawRefreshToken);
   const familyId = crypto.randomUUID();
@@ -281,7 +316,8 @@ const refreshTokensImpl = async (
     });
   }
 
-  const accessToken = generateAccessToken(user);
+  const orgRole = user.tenantId ? await findUserOrgRole(user.id, user.tenantId) : null;
+  const accessToken = generateAccessToken(user, orgRole ?? undefined);
 
   logger.info("Refresh token rotated", {
     userId: user.id,
@@ -373,7 +409,7 @@ const sanitizeRawProfile = (rawProfile: Record<string, unknown>): Record<string,
 const ensureOrgMemberships = async (
   userId: string,
   provider: OAuthProvider,
-  orgs: ReadonlyArray<{ readonly login: string }>,
+  orgs: ReadonlyArray<{ readonly login: string; readonly role?: string }>,
   context: RequestContext
 ): Promise<readonly string[]> => {
   const resolvedIds: string[] = []; // let: accumulator built sequentially to respect rate limits
@@ -384,18 +420,60 @@ const ensureOrgMemberships = async (
 
     const tenant =
       existingTenant ??
-      (provider === "github"
-        ? await createFromGitHubLogin(org.login)
-        : await createFromGitLabGroup({ gitlabGroupPath: org.login }));
+      (await (async () => {
+        switch (provider) {
+          case "github":
+            return createFromGitHubLogin(org.login);
+          case "gitlab":
+            return createFromGitLabGroup({ gitlabGroupPath: org.login });
+          case "bitbucket":
+            return createFromBitbucketWorkspace(org.login);
+          case "azure_devops":
+            return createFromAzureDevOpsAccount(org.login);
+          default:
+            return assertUnreachable(provider);
+        }
+      })());
+
+    // For existing tenants with new memberships, check team size limit
+    if (existingTenant) {
+      const existingMembership = await findUserOrgRole(userId, tenant.id);
+      if (!existingMembership) {
+        try {
+          const limitCheck = await checkPlanLimit(tenant.id, "max_team_members");
+          if (!limitCheck.allowed) {
+            logger.warn("Team size limit reached, skipping membership", {
+              ...context,
+              userId,
+              tenantId: tenant.id,
+              currentUsage: limitCheck.currentUsage,
+              limit: limitCheck.limit,
+            });
+            resolvedIds.push(tenant.id);
+            continue;
+          }
+        } catch (limitError: unknown) {
+          // Fail-open: don't block login for plan check failures
+          logger.warn("Plan limit check failed, proceeding", {
+            ...context,
+            userId,
+            tenantId: tenant.id,
+            error: getErrorMessage(limitError),
+          });
+        }
+      }
+    }
 
     resolvedIds.push(tenant.id);
 
     // Add user to org (idempotent -- ON CONFLICT DO NOTHING)
-    // First user to trigger tenant creation becomes the owner
+    // First user to trigger tenant creation becomes the owner.
+    // For existing tenants, map the provider-reported role to a Kenchi role.
+    const memberRole = existingTenant ? resolveAutoLinkRole(provider, org.role) : "owner";
     await addUserOrganization({
       userId,
       tenantId: tenant.id,
-      role: existingTenant ? "member" : "owner",
+      role: memberRole,
     });
 
     logger.info("User organization membership ensured", {
@@ -408,6 +486,77 @@ const ensureOrgMemberships = async (
   }
 
   return resolvedIds;
+};
+
+/**
+ * Remove stale organization memberships that no longer match the provider's current orgs.
+ *
+ * For each DB membership under the same provider that is NOT in `currentTenantIds`,
+ * removes the membership (unless the user is the last owner).
+ * Non-fatal: errors are logged but do not block the login flow.
+ */
+const reconcileStaleMemberships = async (
+  userId: string,
+  provider: OAuthProvider,
+  currentTenantIds: readonly string[],
+  context: RequestContext
+): Promise<void> => {
+  const dbMemberships = await findOrganizationsByUser(userId);
+  const providerMemberships = dbMemberships.filter(
+    (membership) => membership.provider === provider
+  );
+  const activeTenantIdSet: ReadonlySet<string> = new Set(currentTenantIds);
+
+  // for...of: sequential to respect rate limits and maintain ordering of removals
+  for (const membership of providerMemberships) {
+    if (activeTenantIdSet.has(membership.tenantId)) {
+      continue;
+    }
+
+    // Last-owner protection: do not remove the last owner of a tenant
+    if (membership.role === "owner") {
+      const ownerCount = await countOwnersByTenant(membership.tenantId);
+      if (ownerCount <= 1) {
+        logger.info("Skipping stale membership removal — last owner", {
+          ...context,
+          userId,
+          tenantId: membership.tenantId,
+        });
+        continue;
+      }
+    }
+
+    try {
+      await removeMemberFromTenant(membership.tenantId, userId);
+
+      // Best-effort audit log
+      try {
+        await logAuditEvent(
+          membership.tenantId,
+          AUDIT_ACTIONS.MEMBERSHIP_RECONCILED,
+          { userId, provider, reason: "no_longer_in_provider_org" },
+          "system"
+        );
+      } catch {
+        // Non-fatal audit log failure — already logged by logAuditEvent
+      }
+
+      logger.info("Stale membership removed", {
+        ...context,
+        userId,
+        tenantId: membership.tenantId,
+        provider,
+      });
+    } catch (removeError: unknown) {
+      logger.warn("Failed to remove stale membership, continuing", {
+        ...context,
+        userId,
+        tenantId: membership.tenantId,
+        provider,
+        error: getErrorMessage(removeError),
+      });
+    }
+  }
 };
 
 /** Build the UpsertOAuthIdentityInput from OAuth profile and token data. */

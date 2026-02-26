@@ -31,7 +31,11 @@ import {
   INSTANCE_URL_CONFIG,
   createRateLimitMiddleware,
   findByTenantAndProvider,
+  generateCodeVerifier,
+  generateCodeChallenge,
   type OAuthProvider,
+  type ProviderType,
+  rateLimitByCategory,
 } from "@kenchi/shared";
 
 import { createAuthService } from "../services/authService.js";
@@ -97,7 +101,8 @@ const buildAuthorizeUrl = (
   clientId: string,
   redirectUri: string,
   scopes: readonly string[],
-  state: string
+  state: string,
+  codeChallenge: string | null
 ): string => {
   const selfHostedPatterns =
     provider in SELF_HOSTED_URL_PATTERNS
@@ -120,6 +125,11 @@ const buildAuthorizeUrl = (
   url.searchParams.set("scope", scopes.join(" "));
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
+
+  if (codeChallenge) {
+    url.searchParams.set("code_challenge", codeChallenge);
+    url.searchParams.set("code_challenge_method", "S256");
+  }
 
   return url.toString();
 };
@@ -281,10 +291,16 @@ const handleOAuthLogin = async (req: Request, res: Response): Promise<void> => {
   const providerConfig = OAUTH_PROVIDER_URLS[provider];
   const scopes = "scopes" in providerConfig ? providerConfig.scopes : [];
 
+  // Generate PKCE pair for standard OAuth providers (Azure DevOps uses JWT bearer grant, exempt)
+  const usePkce = provider !== "azure_devops";
+  const codeVerifier = usePkce ? generateCodeVerifier() : null;
+  const codeChallenge = codeVerifier ? generateCodeChallenge(codeVerifier) : null;
+
   const stateToken = await createOAuthState({
     provider,
     instanceUrl,
     redirectAfter,
+    metadata: codeVerifier ? { codeVerifier } : undefined,
   });
 
   const authorizeUrl = buildAuthorizeUrl(
@@ -293,10 +309,11 @@ const handleOAuthLogin = async (req: Request, res: Response): Promise<void> => {
     clientId,
     redirectUri,
     scopes,
-    stateToken
+    stateToken,
+    codeChallenge
   );
 
-  logger.info("OAuth login initiated", { provider, ...context });
+  logger.info("OAuth login initiated", { provider, pkce: usePkce, ...context });
 
   res.redirect(authorizeUrl);
 };
@@ -352,8 +369,32 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
 
   const startTime = Date.now();
   const adapter = getOAuthAdapter(oauthState.provider);
-  const tokens = await adapter.exchangeCode(codeStr, oauthState.instanceUrl, context);
+  const codeVerifier =
+    typeof oauthState.metadata.codeVerifier === "string"
+      ? oauthState.metadata.codeVerifier
+      : undefined;
+  const tokens = await adapter.exchangeCode(codeStr, oauthState.instanceUrl, context, codeVerifier);
   const profile = await adapter.getUserProfile(tokens.accessToken, oauthState.instanceUrl, context);
+
+  // Validate returned scopes against requested scopes (non-blocking — log only)
+  const providerScopes = OAUTH_PROVIDER_URLS[oauthState.provider];
+  const requestedScopes: readonly string[] =
+    "scopes" in providerScopes ? providerScopes.scopes : [];
+  if (tokens.scope && requestedScopes.length > 0) {
+    // Providers use space or comma as scope separator
+    const grantedScopes = new Set(tokens.scope.split(/[\s,]+/).filter(Boolean));
+    const missingScopes = requestedScopes.filter((scope) => !grantedScopes.has(scope));
+    if (missingScopes.length > 0) {
+      logger.warn("OAuth token exchange returned fewer scopes than requested", {
+        provider: oauthState.provider,
+        requestedScopes,
+        grantedScopes: [...grantedScopes],
+        missingScopes,
+        durationMs: Date.now() - startTime,
+        ...context,
+      });
+    }
+  }
 
   const { user } = await authService.findOrCreateUser(
     oauthState.provider,
@@ -397,18 +438,31 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   // Redirect with only non-sensitive params (no tokens in URL)
   const callbackUrl = new URL(`${frontendUrl}/oauth/callback`);
 
-  // For GitLab users, redirect to onboarding setup if no CI provider connection exists
-  const resolveGitLabSetupRedirect = async (): Promise<string | null> => {
-    if (oauthState.provider !== "gitlab" || !freshUser.tenantId) {
-      return null;
-    }
-    const existingConnection = await findByTenantAndProvider(freshUser.tenantId, "gitlab_ci");
-    return existingConnection ? null : "/dashboard/setup/gitlab";
+  // Redirect to onboarding setup if no platform connection exists for the user's provider
+  const PROVIDER_PLATFORM_TYPE: Readonly<Record<string, ProviderType>> = {
+    github: "github_app",
+    gitlab: "gitlab",
+    bitbucket: "bitbucket",
+    azure_devops: "azure_devops",
   };
 
-  const gitlabSetupRedirect = await resolveGitLabSetupRedirect();
+  const resolveProviderSetupRedirect = async (): Promise<string | null> => {
+    if (!freshUser.tenantId) {
+      return null;
+    }
+
+    const platformType = PROVIDER_PLATFORM_TYPE[oauthState.provider];
+    if (!platformType) {
+      return null;
+    }
+
+    const existingConnection = await findByTenantAndProvider(freshUser.tenantId, platformType);
+    return existingConnection ? null : `/dashboard/setup/${oauthState.provider}`;
+  };
+
+  const providerSetupRedirect = await resolveProviderSetupRedirect();
   const sanitizedRedirect =
-    gitlabSetupRedirect ?? sanitizeRedirectUrl(oauthState.redirectAfter, frontendUrl);
+    providerSetupRedirect ?? sanitizeRedirectUrl(oauthState.redirectAfter, frontendUrl);
   if (sanitizedRedirect) {
     callbackUrl.searchParams.set("redirect_after", sanitizedRedirect);
   }
@@ -618,16 +672,39 @@ const sensitiveEndpointLimiter = createRateLimitMiddleware({
 
 // ==================== Route Definitions ====================
 
-router.get("/auth/:provider/login", asyncHandler(handleOAuthLogin));
-router.get("/auth/:provider/callback", asyncHandler(handleOAuthCallback));
+router.get(
+  "/auth/:provider/login",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleOAuthLogin)
+);
+router.get(
+  "/auth/:provider/callback",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleOAuthCallback)
+);
 router.post(
   "/auth/refresh",
+  rateLimitByCategory("expensive"),
   sensitiveEndpointLimiter.middleware(),
   asyncHandler(handleTokenRefresh)
 );
-router.post("/auth/logout", sensitiveEndpointLimiter.middleware(), asyncHandler(handleLogout));
-router.get("/auth/me/deletion-impact", asyncHandler(handleGetDeletionImpact));
-router.get("/auth/me", asyncHandler(handleGetCurrentUser));
-router.delete("/auth/me", sensitiveEndpointLimiter.middleware(), asyncHandler(handleDeleteAccount));
+router.post(
+  "/auth/logout",
+  rateLimitByCategory("standard"),
+  sensitiveEndpointLimiter.middleware(),
+  asyncHandler(handleLogout)
+);
+router.get(
+  "/auth/me/deletion-impact",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetDeletionImpact)
+);
+router.get("/auth/me", rateLimitByCategory("readonly"), asyncHandler(handleGetCurrentUser));
+router.delete(
+  "/auth/me",
+  rateLimitByCategory("standard"),
+  sensitiveEndpointLimiter.middleware(),
+  asyncHandler(handleDeleteAccount)
+);
 
 export { router as authRoutes };

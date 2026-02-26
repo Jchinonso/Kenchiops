@@ -36,6 +36,29 @@ export {
 // Encryption utilities (AES-256-GCM for data at rest)
 export { encryptValue, decryptValue } from "./encryption.js";
 
+// Per-tenant encryption (HKDF envelope encryption)
+export {
+  deriveTenantKey,
+  encryptForTenant,
+  decryptForTenant,
+  decryptAuto,
+} from "./tenantEncryption.js";
+
+export {
+  TENANT_CRYPTO,
+  type TenantEncryptionConfig,
+  type EncryptedPayload,
+  type RotationResult,
+  type RotationSummary,
+  type UpdateKeyVersionFn,
+} from "./tenantEncryptionTypes.js";
+
+// KMS port interface (for future cloud KMS integration)
+export type { KmsPort, KmsKeyMetadata, WrapKeyResult, UnwrapKeyResult } from "./kmsPort.js";
+
+// Key rotation utilities
+export { reEncryptValue, createKeyRotationRunner } from "./keyRotation.js";
+
 // Cookie utilities (httpOnly auth cookies)
 export {
   setAuthCookies,
@@ -50,6 +73,9 @@ export {
 export { createOAuthStateStore } from "./oauthStateStore.js";
 
 export type { OAuthStoredState, OAuthStateStore } from "./oauthStateStoreTypes.js";
+
+// PKCE (Proof Key for Code Exchange) utilities
+export { generateCodeVerifier, generateCodeChallenge } from "./pkce.js";
 
 // Re-export constants for convenience
 export {

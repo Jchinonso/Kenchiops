@@ -163,7 +163,7 @@ export const searchKnowledgeDocs = async (
     });
 
     recordSearchCostIfNeeded(normalizedQuery, query.tenantId, cacheHit);
-    trackKnowledgeResultHits(finalResults);
+    trackKnowledgeResultHits(finalResults, query.tenantId);
 
     logger.info("Knowledge doc search complete", {
       resultCount: finalResults.length,
@@ -236,7 +236,7 @@ export const searchAll = async (query: SearchQuery): Promise<RAGSearchResult> =>
       },
     });
 
-    trackKnowledgeResultHits(knowledgeResults);
+    trackKnowledgeResultHits(knowledgeResults, query.tenantId);
 
     logger.info("Combined RAG search complete", {
       diffChunkCount: diffResults.length,

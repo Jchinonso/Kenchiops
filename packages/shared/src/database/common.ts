@@ -19,6 +19,8 @@ export type {
   TenantEmbeddingTier,
   CreateTenantFromGitHub,
   CreateTenantFromGitLab,
+  CreateTenantFromBitbucket,
+  CreateTenantFromAzureDevOps,
   LinkSlackWorkspace,
   TenantAuditAction,
   TenantAuditEntry,
