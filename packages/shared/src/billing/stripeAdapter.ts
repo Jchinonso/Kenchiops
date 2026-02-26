@@ -171,19 +171,12 @@ export const createStripeAdapter = (
 
       try {
         // Look up Stripe customer ID for this tenant
-        const subResult = await query<{ readonly stripe_customer_id: string | null }>(
-          BILLING_QUERIES.FIND_BY_STRIPE_CUSTOMER,
-          [input.tenantId]
-        );
-
-        // Try finding by tenant_id directly since FIND_BY_STRIPE_CUSTOMER searches by customer ID
         const tenantSub = await query<{ readonly stripe_customer_id: string | null }>(
-          `SELECT stripe_customer_id FROM tenant_subscriptions WHERE tenant_id = $1`,
+          BILLING_QUERIES.FIND_SUBSCRIPTION_BY_TENANT,
           [input.tenantId]
         );
 
-        const customerId =
-          tenantSub.rows[0]?.stripe_customer_id ?? subResult.rows[0]?.stripe_customer_id;
+        const customerId = tenantSub.rows[0]?.stripe_customer_id;
         if (!customerId) {
           throw new ExternalServiceError("stripe", "No Stripe customer found for this tenant", {
             retryable: false,

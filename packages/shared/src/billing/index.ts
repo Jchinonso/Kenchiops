@@ -15,6 +15,7 @@ export type {
   CheckoutResult,
   PortalResult,
   BillingStatus,
+  BillingService,
   StripeWebhookEvent,
   WebhookProcessResult,
   BillingPort,
@@ -25,6 +26,6 @@ export { BILLING_CONSTANTS, BILLING_QUERIES } from "./types.js";
 
 export { createStripeAdapter } from "./stripeAdapter.js";
 
-export { createBillingService, type BillingService } from "./billingService.js";
+export { createBillingService } from "./billingService.js";
 
 export { processStripeWebhook, cleanupOldBillingEvents } from "./webhookHandler.js";

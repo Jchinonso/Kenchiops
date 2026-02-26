@@ -18,6 +18,7 @@ import {
   createStripeAdapter,
   createBillingService,
   processStripeWebhook,
+  config,
   type BillingInterval,
   type BillingStatus,
 } from "@kenchi/shared";
@@ -76,8 +77,10 @@ const handleCreateCheckout = async (req: Request, res: Response): Promise<void> 
       planId: planId as "free" | "pro" | "team" | "enterprise",
       interval: billingInterval,
       userId,
-      successUrl: `${req.headers.origin ?? ""}/settings/billing?success=true`,
-      cancelUrl: `${req.headers.origin ?? ""}/settings/billing?canceled=true`,
+      // SECURITY: Use server-configured FRONTEND_URL, never attacker-controlled Origin header.
+      // Origin header is trivially spoofable and would allow redirect-through-Stripe attacks.
+      successUrl: `${config.FRONTEND_URL}/settings/billing?success=true`,
+      cancelUrl: `${config.FRONTEND_URL}/settings/billing?canceled=true`,
     },
     context
   );
@@ -103,7 +106,8 @@ const handleCreatePortal = async (req: Request, res: Response): Promise<void> =>
   const result = await billingService.createPortal(
     {
       tenantId,
-      returnUrl: `${req.headers.origin ?? ""}/settings/billing`,
+      // SECURITY: Use server-configured FRONTEND_URL, not attacker-controlled Origin header
+      returnUrl: `${config.FRONTEND_URL}/settings/billing`,
     },
     context
   );
@@ -151,9 +155,24 @@ const handleStripeWebhook = async (req: Request, res: Response): Promise<void> =
   const { rawBody } = req as Request & { readonly rawBody?: Buffer };
   const payload = rawBody ?? JSON.stringify(req.body);
 
+  // SECURITY: Verify signature FIRST in its own try/catch.
+  // If verification fails, return 401 immediately — never fall through to processing.
+  // This avoids fragile string matching on error messages.
+  // let: event is assigned in the verification block and used in the processing block
+  let event; // let: set once by constructWebhookEvent, read by processStripeWebhook
   try {
-    const event = stripeAdapter.constructWebhookEvent(payload, signature);
+    event = stripeAdapter.constructWebhookEvent(payload, signature);
+  } catch (verifyError) {
+    logger.warn("Stripe webhook signature verification failed", {
+      provider: "stripe",
+      operation: "handleStripeWebhook",
+    });
+    res.status(HTTP_STATUS.UNAUTHORIZED).json({ error: "Invalid signature" });
+    return;
+  }
 
+  // Signature verified — process the event
+  try {
     const result = await processStripeWebhook(event, req.context);
 
     logger.info("Stripe webhook processed", {
@@ -167,16 +186,12 @@ const handleStripeWebhook = async (req: Request, res: Response): Promise<void> =
 
     res.status(HTTP_STATUS.OK).json({ received: true, ...result });
   } catch (error) {
-    // Signature verification failure returns 401
-    if (error instanceof Error && error.message.includes("Invalid webhook signature")) {
-      res.status(HTTP_STATUS.UNAUTHORIZED).json({ error: "Invalid signature" });
-      return;
-    }
-
     // Processing errors still return 200 to prevent Stripe retries on app errors
     logger.error("Stripe webhook processing error", {
       provider: "stripe",
       operation: "handleStripeWebhook",
+      eventId: event.id,
+      eventType: event.type,
       error: error instanceof Error ? error.message : "Unknown error",
     });
 

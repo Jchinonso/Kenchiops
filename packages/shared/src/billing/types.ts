@@ -7,6 +7,7 @@
  */
 
 import type { PlanId, SubscriptionStatus } from "../database/subscription/types.js";
+import type { RequestContext } from "../core/types.js";
 
 // ==================== Stripe Domain Types ====================
 
@@ -72,6 +73,21 @@ export interface WebhookProcessResult {
   readonly eventType: string;
   readonly tenantId?: string;
   readonly action?: string;
+}
+
+// ==================== Service Interface ====================
+
+export interface BillingService {
+  readonly createCheckout: (
+    input: CreateCheckoutInput,
+    context: RequestContext
+  ) => Promise<CheckoutResult>;
+  readonly createPortal: (
+    input: CreatePortalInput,
+    context: RequestContext
+  ) => Promise<PortalResult>;
+  readonly getStatus: (tenantId: string, context: RequestContext) => Promise<BillingStatus>;
+  readonly cancelSubscription: (tenantId: string, context: RequestContext) => Promise<void>;
 }
 
 // ==================== Adapter Port ====================
@@ -155,6 +171,12 @@ export const BILLING_QUERIES = {
   FIND_BY_STRIPE_SUBSCRIPTION: `SELECT * FROM tenant_subscriptions WHERE stripe_subscription_id = $1`,
 
   GET_STRIPE_PRICE_ID: `SELECT stripe_price_id_monthly, stripe_price_id_yearly FROM plans WHERE id = $1`,
+
+  /** Find a tenant subscription by tenant_id (for portal session lookup). */
+  FIND_SUBSCRIPTION_BY_TENANT: `SELECT stripe_customer_id FROM tenant_subscriptions WHERE tenant_id = $1`,
+
+  /** Downgrade a tenant to the free plan after subscription deletion. Params: $1 = planId, $2 = tenantId. */
+  DOWNGRADE_TO_FREE: `UPDATE tenant_subscriptions SET plan_id = $1, updated_at = NOW() WHERE tenant_id = $2`,
 
   /** Delete billing events older than a specified interval. Parameterized: $1 = interval (e.g. '90 days'). */
   CLEANUP_OLD_BILLING_EVENTS: `DELETE FROM billing_events WHERE created_at < NOW() - $1::interval RETURNING id`,

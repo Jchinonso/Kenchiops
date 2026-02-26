@@ -1192,6 +1192,7 @@ export {
   decryptAuto,
   type TenantEncryptionConfig,
   type EncryptedPayload,
+  TENANT_CRYPTO,
   // KMS port interface (for future cloud KMS integration)
   type KmsPort,
   type KmsKeyMetadata,

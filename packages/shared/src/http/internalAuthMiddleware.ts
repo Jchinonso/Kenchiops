@@ -114,6 +114,15 @@ export const createInternalAuthMiddleware = (
       });
     }
 
+    // For internal service calls, propagate tenant_id from request body to req.user
+    // so that requireTenantId() can authorize the request
+    const bodyTenantId = (req.body as Record<string, unknown> | undefined)?.tenant_id;
+    if (typeof bodyTenantId === "string" && bodyTenantId) {
+      Object.assign(req, {
+        user: { ...req.user, tenantId: bodyTenantId, role: "service" },
+      });
+    }
+
     next();
   };
 };

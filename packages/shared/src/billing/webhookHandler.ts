@@ -78,20 +78,25 @@ const extractMetadata = (
   return {};
 };
 
+// ==================== Event Handler Type ====================
+
+type WebhookEventHandler = (
+  event: StripeWebhookEvent,
+  context: RequestContext
+) => Promise<WebhookProcessResult>;
+
 // ==================== Event Handlers ====================
 
 /**
  * Handle checkout.session.completed: Link Stripe customer to tenant and activate subscription.
  */
-const handleCheckoutCompleted = async (
-  event: StripeWebhookEvent
-): Promise<WebhookProcessResult> => {
+const handleCheckoutCompleted: WebhookEventHandler = async (event, context) => {
   const session = event.data.object;
   const metadata = extractMetadata(session);
   const tenantId = metadata.tenantId ?? extractString(session, "client_reference_id");
 
   if (!tenantId) {
-    logger.warn("Checkout completed without tenantId", { eventId: event.id });
+    logger.warn("Checkout completed without tenantId", { ...context, eventId: event.id });
     return { processed: false, eventType: event.type, action: "skipped_no_tenant" };
   }
 
@@ -127,6 +132,7 @@ const handleCheckoutCompleted = async (
   });
 
   logger.info("Checkout completed", {
+    ...context,
     provider: "stripe",
     operation: "handleCheckoutCompleted",
     tenantId,
@@ -139,7 +145,7 @@ const handleCheckoutCompleted = async (
 /**
  * Handle invoice.paid: Update billing period end date.
  */
-const handleInvoicePaid = async (event: StripeWebhookEvent): Promise<WebhookProcessResult> => {
+const handleInvoicePaid: WebhookEventHandler = async (event, context) => {
   const invoice = event.data.object;
   const subscriptionId = extractString(invoice, "subscription");
   const periodEnd = extractNumber(invoice, "period_end");
@@ -157,6 +163,7 @@ const handleInvoicePaid = async (event: StripeWebhookEvent): Promise<WebhookProc
 
   if (!tenantId) {
     logger.warn("Invoice paid for unknown subscription", {
+      ...context,
       provider: "stripe",
       operation: "handleInvoicePaid",
       subscriptionId,
@@ -175,6 +182,7 @@ const handleInvoicePaid = async (event: StripeWebhookEvent): Promise<WebhookProc
   });
 
   logger.info("Invoice paid", {
+    ...context,
     provider: "stripe",
     operation: "handleInvoicePaid",
     tenantId,
@@ -187,7 +195,7 @@ const handleInvoicePaid = async (event: StripeWebhookEvent): Promise<WebhookProc
 /**
  * Handle invoice.payment_failed: Set subscription to past_due.
  */
-const handlePaymentFailed = async (event: StripeWebhookEvent): Promise<WebhookProcessResult> => {
+const handlePaymentFailed: WebhookEventHandler = async (event, context) => {
   const invoice = event.data.object;
   const subscriptionId = extractString(invoice, "subscription");
 
@@ -215,6 +223,7 @@ const handlePaymentFailed = async (event: StripeWebhookEvent): Promise<WebhookPr
   await recordBillingEvent(tenantId, event.id, event.type, "processed", { subscriptionId });
 
   logger.warn("Payment failed", {
+    ...context,
     provider: "stripe",
     operation: "handlePaymentFailed",
     tenantId,
@@ -227,9 +236,7 @@ const handlePaymentFailed = async (event: StripeWebhookEvent): Promise<WebhookPr
 /**
  * Handle customer.subscription.updated: Sync plan changes from Stripe.
  */
-const handleSubscriptionUpdated = async (
-  event: StripeWebhookEvent
-): Promise<WebhookProcessResult> => {
+const handleSubscriptionUpdated: WebhookEventHandler = async (event, context) => {
   const subscription = event.data.object;
   const subscriptionId = extractString(subscription, "id");
 
@@ -270,15 +277,21 @@ const handleSubscriptionUpdated = async (
     newPlanId,
   });
 
+  logger.info("Subscription updated", {
+    ...context,
+    provider: "stripe",
+    operation: "handleSubscriptionUpdated",
+    tenantId,
+    subscriptionId,
+  });
+
   return { processed: true, eventType: event.type, tenantId, action: "subscription_synced" };
 };
 
 /**
  * Handle customer.subscription.deleted: Cancel and downgrade to free.
  */
-const handleSubscriptionDeleted = async (
-  event: StripeWebhookEvent
-): Promise<WebhookProcessResult> => {
+const handleSubscriptionDeleted: WebhookEventHandler = async (event, context) => {
   const subscription = event.data.object;
   const subscriptionId = extractString(subscription, "id");
 
@@ -300,10 +313,7 @@ const handleSubscriptionDeleted = async (
   const previousPlanId = cancelResult.rows[0]?.plan_id ?? "unknown";
 
   // Downgrade to free plan
-  await query(
-    `UPDATE tenant_subscriptions SET plan_id = $1, updated_at = NOW() WHERE tenant_id = $2`,
-    [DEFAULT_PLAN_ID, tenantId]
-  );
+  await query(BILLING_QUERIES.DOWNGRADE_TO_FREE, [DEFAULT_PLAN_ID, tenantId]);
 
   await logAuditEvent(tenantId, AUDIT_ACTIONS.PLAN_CHANGED, {
     previousPlanId,
@@ -317,6 +327,7 @@ const handleSubscriptionDeleted = async (
   });
 
   logger.info("Subscription deleted, downgraded to free", {
+    ...context,
     provider: "stripe",
     operation: "handleSubscriptionDeleted",
     tenantId,
@@ -329,9 +340,7 @@ const handleSubscriptionDeleted = async (
 // ==================== Event Router ====================
 
 /** Map of event types to handlers. */
-const EVENT_HANDLERS: Readonly<
-  Record<StripeWebhookEventType, (event: StripeWebhookEvent) => Promise<WebhookProcessResult>>
-> = {
+const EVENT_HANDLERS: Readonly<Record<StripeWebhookEventType, WebhookEventHandler>> = {
   "checkout.session.completed": handleCheckoutCompleted,
   "invoice.paid": handleInvoicePaid,
   "invoice.payment_failed": handlePaymentFailed,
@@ -344,6 +353,7 @@ const EVENT_HANDLERS: Readonly<
  * Idempotent: checks billing_events table before processing.
  *
  * @param event - Verified Stripe webhook event
+ * @param context - Request context for tracing
  * @returns Processing result
  */
 export const processStripeWebhook = async (
@@ -375,7 +385,7 @@ export const processStripeWebhook = async (
   }
 
   try {
-    return await handler(event);
+    return await handler(event, context);
   } catch (error) {
     logger.error("Failed to process Stripe webhook", {
       provider: "stripe",
@@ -391,8 +401,14 @@ export const processStripeWebhook = async (
       await recordBillingEvent("system", event.id, event.type, "failed", {
         error: getErrorMessage(error),
       });
-    } catch {
-      // Best-effort recording
+    } catch (recordError) {
+      logger.warn("Failed to record billing event failure", {
+        provider: "stripe",
+        operation: "recordBillingEvent",
+        eventId: event.id,
+        error: getErrorMessage(recordError),
+        ...context,
+      });
     }
 
     throw error;
@@ -404,16 +420,39 @@ export const processStripeWebhook = async (
 /** Default retention period for billing events. */
 const DEFAULT_RETENTION_DAYS = 90;
 
+/** Minimum allowed retention period to prevent accidental mass deletion. */
+const MIN_RETENTION_DAYS = 1;
+
+/** Maximum allowed retention period to prevent integer overflow in interval. */
+const MAX_RETENTION_DAYS = 3650;
+
 /**
  * Delete billing events older than the specified retention period.
  * Should be called periodically (e.g., daily cron job) to prevent unbounded table growth.
  *
- * @param retentionDays - Number of days to retain events (default: 90)
+ * @param retentionDays - Number of days to retain events (default: 90, range: 1-3650)
  * @returns Number of deleted rows
+ * @throws ValidationError if retentionDays is not a positive finite integer in range
  */
 export const cleanupOldBillingEvents = async (
   retentionDays: number = DEFAULT_RETENTION_DAYS
 ): Promise<number> => {
+  // SECURITY: Validate the interval parameter to prevent SQL interval injection.
+  // Negative values would delete future events; NaN/Infinity would cause query errors.
+  if (
+    !Number.isFinite(retentionDays) ||
+    !Number.isInteger(retentionDays) ||
+    retentionDays < MIN_RETENTION_DAYS ||
+    retentionDays > MAX_RETENTION_DAYS
+  ) {
+    logger.warn("Invalid retentionDays for billing cleanup", {
+      provider: "stripe",
+      operation: "cleanupOldBillingEvents",
+      retentionDays,
+    });
+    return 0;
+  }
+
   const result = await query<{ readonly id: string }>(BILLING_QUERIES.CLEANUP_OLD_BILLING_EVENTS, [
     `${String(retentionDays)} days`,
   ]);

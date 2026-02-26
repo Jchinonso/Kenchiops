@@ -44,19 +44,20 @@ export {
   decryptAuto,
 } from "./tenantEncryption.js";
 
-export type { TenantEncryptionConfig, EncryptedPayload } from "./tenantEncryptionTypes.js";
+export {
+  TENANT_CRYPTO,
+  type TenantEncryptionConfig,
+  type EncryptedPayload,
+  type RotationResult,
+  type RotationSummary,
+  type UpdateKeyVersionFn,
+} from "./tenantEncryptionTypes.js";
 
 // KMS port interface (for future cloud KMS integration)
 export type { KmsPort, KmsKeyMetadata, WrapKeyResult, UnwrapKeyResult } from "./kmsPort.js";
 
 // Key rotation utilities
-export {
-  reEncryptValue,
-  createKeyRotationRunner,
-  type RotationResult,
-  type RotationSummary,
-  type UpdateKeyVersionFn,
-} from "./keyRotation.js";
+export { reEncryptValue, createKeyRotationRunner } from "./keyRotation.js";
 
 // Cookie utilities (httpOnly auth cookies)
 export {

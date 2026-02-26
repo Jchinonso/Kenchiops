@@ -89,14 +89,15 @@ router.get("/health/github", (_req: Request, res: Response) => {
     privateKey.startsWith("-----BEGIN RSA PRIVATE KEY-----") &&
     privateKey.endsWith("-----END RSA PRIVATE KEY-----");
 
+  // SECURITY: Only expose boolean configuration status.
+  // Never leak key material, length, or previews — even partial PEM data
+  // reveals key format and confirms presence to attackers.
   res.status(HTTP_STATUS.OK).json({
     appId: appConfig.github.appId,
     installationId: appConfig.github.installationId || "not configured",
     webhookSecretConfigured: !!appConfig.github.webhookSecret,
     privateKeyConfigured: !!privateKey,
     privateKeyValid: hasValidKey,
-    privateKeyLength: privateKey.length,
-    privateKeyPreview: `${privateKey.substring(0, 40)}...`,
   });
 });
 

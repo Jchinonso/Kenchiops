@@ -47,17 +47,6 @@ jest.unstable_mockModule("../../queue/redisClient.js", () => ({
   getRedisClient: () => mockRedisClient,
 }));
 
-// ==================== Import after mocks ====================
-
-const {
-  getQuotaForPlan,
-  checkQueueDepthQuota,
-  incrementQueueDepth,
-  decrementQueueDepth,
-  recordProcessingTime,
-  checkProcessingTimeQuota,
-} = await import("../../queue/tenantQuota.js");
-
 // ==================== Helpers ====================
 
 const clearMockRedis = (): void => {
@@ -66,9 +55,39 @@ const clearMockRedis = (): void => {
   mockRedisClient.status = "ready";
 };
 
+// ==================== Import after mocks (loaded in beforeAll) ====================
+
+// let: assigned once in beforeAll, read throughout tests
+let getQuotaForPlan: Awaited<typeof import("../../queue/tenantQuota.js")>["getQuotaForPlan"]; // let: deferred async import
+let checkQueueDepthQuota: Awaited<
+  typeof import("../../queue/tenantQuota.js")
+>["checkQueueDepthQuota"]; // let: deferred async import
+let incrementQueueDepth: Awaited<
+  typeof import("../../queue/tenantQuota.js")
+>["incrementQueueDepth"]; // let: deferred async import
+let decrementQueueDepth: Awaited<
+  typeof import("../../queue/tenantQuota.js")
+>["decrementQueueDepth"]; // let: deferred async import
+let recordProcessingTime: Awaited<
+  typeof import("../../queue/tenantQuota.js")
+>["recordProcessingTime"]; // let: deferred async import
+let checkProcessingTimeQuota: Awaited<
+  typeof import("../../queue/tenantQuota.js")
+>["checkProcessingTimeQuota"]; // let: deferred async import
+
 // ==================== Tests ====================
 
 describe("Tenant Quota", () => {
+  beforeAll(async () => {
+    const mod = await import("../../queue/tenantQuota.js");
+    getQuotaForPlan = mod.getQuotaForPlan;
+    checkQueueDepthQuota = mod.checkQueueDepthQuota;
+    incrementQueueDepth = mod.incrementQueueDepth;
+    decrementQueueDepth = mod.decrementQueueDepth;
+    recordProcessingTime = mod.recordProcessingTime;
+    checkProcessingTimeQuota = mod.checkProcessingTimeQuota;
+  });
+
   beforeEach(() => {
     clearMockRedis();
   });

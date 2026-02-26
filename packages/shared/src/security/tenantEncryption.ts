@@ -23,17 +23,19 @@ import {
   encryptionOpDuration,
   encryptionErrorsTotal,
 } from "../observability/metrics.js";
-import type { EncryptedPayload } from "./tenantEncryptionTypes.js";
+import { TENANT_CRYPTO, type EncryptedPayload } from "./tenantEncryptionTypes.js";
 
-const ALGORITHM = "aes-256-gcm";
-const IV_BYTE_LENGTH = 12;
-const AUTH_TAG_BYTE_LENGTH = 16;
-const DERIVED_KEY_LENGTH = 32;
+const {
+  ALGORITHM,
+  IV_BYTE_LENGTH,
+  AUTH_TAG_BYTE_LENGTH,
+  DERIVED_KEY_LENGTH,
+  HKDF_DIGEST,
+  HKDF_INFO,
+  V2_PREFIX,
+  V2_PART_COUNT,
+} = TENANT_CRYPTO;
 const KEY_HEX_LENGTH = 64;
-const HKDF_DIGEST = "sha256";
-const HKDF_INFO = "kenchi-tenant-encryption";
-const V2_PREFIX = "v2";
-const V2_PART_COUNT = 4;
 
 const hkdf = promisify(crypto.hkdf);
 
@@ -203,16 +205,14 @@ export const decryptForTenant = async (tenantId: string, ciphertext: string): Pr
  * @returns Decrypted plaintext
  */
 export const decryptAuto = async (tenantId: string, value: string): Promise<string> => {
-  // Try v2 (per-tenant) format first
+  // SECURITY: v2-prefixed values MUST decrypt with the tenant key or fail loudly.
+  // A v2 value cannot be valid legacy ciphertext — silent fallback would mask
+  // cross-tenant decryption attempts and return raw ciphertext as if it were plaintext.
   if (value.startsWith(`${V2_PREFIX}:`)) {
-    try {
-      return await decryptForTenant(tenantId, value);
-    } catch {
-      logger.warn("Failed to decrypt v2 value — attempting legacy fallback");
-    }
+    return decryptForTenant(tenantId, value);
   }
 
-  // Fall back to legacy global-key decryption
+  // Fall back to legacy global-key decryption for non-v2 values
   const legacyResult = decryptValue(value);
   return legacyResult ?? value;
 };

@@ -36,7 +36,7 @@ const QUERIES = {
     LIMIT 1
   `,
   FIND_BY_ID: `
-    SELECT * FROM provider_connections WHERE id = $1
+    SELECT * FROM provider_connections WHERE id = $1 AND tenant_id = $2
   `,
   FIND_BY_EXTERNAL_ORG: `
     SELECT * FROM provider_connections
@@ -120,10 +120,14 @@ export const findByTenantAndProvider = async (
 };
 
 /**
- * Find a connection by ID (active or inactive).
+ * Find a connection by ID (active or inactive), scoped to a tenant.
+ * SECURITY: Always requires tenantId to prevent cross-tenant data access.
  */
-export const findConnectionById = async (id: string): Promise<ProviderConnection | null> => {
-  const result = await query<ProviderConnectionRow>(QUERIES.FIND_BY_ID, [id]);
+export const findConnectionById = async (
+  id: string,
+  tenantId: string
+): Promise<ProviderConnection | null> => {
+  const result = await query<ProviderConnectionRow>(QUERIES.FIND_BY_ID, [id, tenantId]);
   const row = result.rows[0];
   return row ? rowToProviderConnection(row) : null;
 };

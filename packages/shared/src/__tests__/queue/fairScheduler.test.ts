@@ -81,10 +81,6 @@ jest.unstable_mockModule("../../queue/redisClient.js", () => ({
   getSubscriberClient: () => mockRedisClient,
 }));
 
-// ==================== Import after mocks ====================
-
-const { createFairQueue } = await import("../../queue/fairScheduler.js");
-
 // ==================== Helpers ====================
 
 const clearMockRedis = (): void => {
@@ -93,9 +89,19 @@ const clearMockRedis = (): void => {
   jest.clearAllMocks();
 };
 
+// ==================== Import after mocks (loaded in beforeAll) ====================
+
+// let: assigned once in beforeAll, read throughout tests
+let createFairQueue: Awaited<typeof import("../../queue/fairScheduler.js")>["createFairQueue"]; // let: deferred async import
+
 // ==================== Tests ====================
 
 describe("Fair Queue Scheduler", () => {
+  beforeAll(async () => {
+    const mod = await import("../../queue/fairScheduler.js");
+    createFairQueue = mod.createFairQueue;
+  });
+
   beforeEach(() => {
     clearMockRedis();
   });

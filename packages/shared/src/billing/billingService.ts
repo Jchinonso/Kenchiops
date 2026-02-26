@@ -21,6 +21,7 @@ import type { PlanId } from "../database/subscription/types.js";
 import type { RequestContext } from "../core/types.js";
 import type {
   BillingPort,
+  BillingService,
   CreateCheckoutInput,
   CreatePortalInput,
   CheckoutResult,
@@ -29,21 +30,6 @@ import type {
 } from "./types.js";
 
 const logger = createLogger("billing-service");
-
-// ==================== Types ====================
-
-export interface BillingService {
-  readonly createCheckout: (
-    input: CreateCheckoutInput,
-    context: RequestContext
-  ) => Promise<CheckoutResult>;
-  readonly createPortal: (
-    input: CreatePortalInput,
-    context: RequestContext
-  ) => Promise<PortalResult>;
-  readonly getStatus: (tenantId: string, context: RequestContext) => Promise<BillingStatus>;
-  readonly cancelSubscription: (tenantId: string, context: RequestContext) => Promise<void>;
-}
 
 // ==================== Factory ====================
 

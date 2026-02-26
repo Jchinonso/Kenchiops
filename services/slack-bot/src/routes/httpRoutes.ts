@@ -255,9 +255,10 @@ export const createHttpRoutes = (app: SlackApp, appConfig?: AppConfig): express.
   /**
    * Prometheus metrics endpoint
    * GET /metrics
-   * Returns Prometheus-format metrics for scraping
+   * Returns Prometheus-format metrics for scraping.
+   * SECURITY: Requires internal HMAC auth because metrics expose tenant_id labels.
    */
-  router.get("/metrics", async (_req: Request, res: Response) => {
+  router.get("/metrics", internalAuth, async (_req: Request, res: Response) => {
     const metrics = await getMetrics();
     res.set("Content-Type", getMetricsContentType());
     res.end(metrics);

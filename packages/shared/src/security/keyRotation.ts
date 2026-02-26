@@ -11,46 +11,16 @@
  */
 
 import crypto from "node:crypto";
-import { promisify } from "node:util";
 import { createLogger } from "../core/logger.js";
 import type { RequestContext } from "../core/types.js";
+import { deriveTenantKey } from "./tenantEncryption.js";
+import {
+  TENANT_CRYPTO,
+  type RotationResult,
+  type UpdateKeyVersionFn,
+} from "./tenantEncryptionTypes.js";
 
-const ALGORITHM = "aes-256-gcm";
-const IV_BYTE_LENGTH = 12;
-const AUTH_TAG_BYTE_LENGTH = 16;
-const DERIVED_KEY_LENGTH = 32;
-const HKDF_DIGEST = "sha256";
-const HKDF_INFO = "kenchi-tenant-encryption";
-const V2_PREFIX = "v2";
-const V2_PART_COUNT = 4;
-
-const hkdf = promisify(crypto.hkdf);
-
-// ==================== Types ====================
-
-export interface RotationResult {
-  readonly tenantId: string;
-  readonly valuesRotated: number;
-  readonly rotatedValues: readonly string[];
-  readonly errors: number;
-}
-
-export interface RotationSummary {
-  readonly tenantsProcessed: number;
-  readonly totalValuesRotated: number;
-  readonly totalErrors: number;
-  readonly results: readonly RotationResult[];
-}
-
-/**
- * Callback to update the encryption_key_version column for a tenant
- * after all values have been successfully re-encrypted.
- */
-export type UpdateKeyVersionFn = (
-  tenantId: string,
-  newVersion: number,
-  context: RequestContext
-) => Promise<void>;
+const { ALGORITHM, IV_BYTE_LENGTH, AUTH_TAG_BYTE_LENGTH, V2_PREFIX, V2_PART_COUNT } = TENANT_CRYPTO;
 
 // ==================== Key Rotation ====================
 
@@ -71,9 +41,7 @@ export const reEncryptValue = async (
   }
 
   // Decrypt with old key
-  const oldDerivedKey = Buffer.from(
-    await hkdf(HKDF_DIGEST, oldMasterKey, tenantId, HKDF_INFO, DERIVED_KEY_LENGTH)
-  );
+  const oldDerivedKey = await deriveTenantKey(oldMasterKey, tenantId);
 
   const iv = Buffer.from(parts[1], "hex");
   const encrypted = Buffer.from(parts[2], "hex");
@@ -86,9 +54,7 @@ export const reEncryptValue = async (
   const plaintext = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 
   // Re-encrypt with new key
-  const newDerivedKey = Buffer.from(
-    await hkdf(HKDF_DIGEST, newMasterKey, tenantId, HKDF_INFO, DERIVED_KEY_LENGTH)
-  );
+  const newDerivedKey = await deriveTenantKey(newMasterKey, tenantId);
 
   const newIv = crypto.randomBytes(IV_BYTE_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, newDerivedKey, newIv, {
@@ -142,21 +108,22 @@ export const createKeyRotationRunner = (
     newKeyVersion: number,
     context: RequestContext
   ): Promise<RotationResult> => {
-    // let: accumulator for rotation stats during iteration
-    let valuesRotated = 0; // let: incremented per successful re-encryption
-    // let: accumulator for error count during iteration
-    let errors = 0; // let: incremented per failed re-encryption
-    const rotatedValues: string[] = [];
+    // Sequential crypto operations — for...of required for await + error accumulation
+    // Accumulate results immutably via spread
+    // let: accumulator state for sequential async iteration with error counting
+    let acc: { readonly rotated: readonly string[]; readonly errors: number } = {
+      rotated: [],
+      errors: 0,
+    };
 
     for (const value of encryptedValues) {
       try {
-        const rotated = await reEncryptValue(value, tenantId, oldKey, newKey);
-        if (rotated) {
-          valuesRotated += 1;
-          rotatedValues.push(rotated);
+        const result = await reEncryptValue(value, tenantId, oldKey, newKey);
+        if (result) {
+          acc = { ...acc, rotated: [...acc.rotated, result] };
         }
       } catch (error) {
-        errors += 1;
+        acc = { ...acc, errors: acc.errors + 1 };
         logger.error("Failed to rotate value for tenant", {
           ...context,
           targetTenantId: tenantId,
@@ -164,6 +131,9 @@ export const createKeyRotationRunner = (
         });
       }
     }
+
+    const { rotated: rotatedValues, errors } = acc;
+    const valuesRotated = rotatedValues.length;
 
     // Update key version if all values rotated successfully and callback provided
     if (errors === 0 && updateKeyVersion) {

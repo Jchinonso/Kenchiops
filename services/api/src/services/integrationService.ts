@@ -242,7 +242,8 @@ const refreshIfNeededImpl = async (
 ): Promise<void> => {
   const refreshLogger = createLogger("integration-service");
 
-  const connection = await findConnectionById(connectionId);
+  // SECURITY: Scope lookup by tenantId from context to enforce tenant isolation
+  const connection = await findConnectionById(connectionId, context.tenantId);
   if (!connection || !connection.isActive) {
     return;
   }
@@ -367,9 +368,10 @@ export const createIntegrationService = (
   ): Promise<DisconnectIntegrationResult> => {
     const disconnectLogger = createLogger("integration-service");
 
-    const connection = await findConnectionById(connectionId);
+    // SECURITY: Scope lookup by tenantId to enforce tenant isolation at the data layer
+    const connection = await findConnectionById(connectionId, tenantId);
 
-    if (!connection || connection.tenantId !== tenantId) {
+    if (!connection) {
       throw new NotFoundError("Integration connection not found", {
         operation: "disconnectIntegration",
         metadata: { connectionId },

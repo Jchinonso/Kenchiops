@@ -161,6 +161,39 @@ Common missing `@kenchi/shared` mocks in services/api tests:
 - Running `npx vitest` from monorepo root without `--config` will fail to resolve `@/` imports
 - SEVERITY_STYLES in formatters.ts includes "critical" as a valid severity (purple style) -- tests updated
 
+## Multi-Tenant Infrastructure Test Coverage (2026-02-25)
+
+- Co-located tests (same directory as source, not **tests**/)
+- `packages/shared/src/database/providerConnection/helpers.test.ts` - 13 tests (async row mapper with decryptAuto)
+- `packages/shared/src/database/providerConnection/repository.test.ts` - 27 tests (CRUD with encryptForTenant/encryptNullable)
+- `packages/shared/src/billing/webhookHandler.test.ts` - 28 tests (processStripeWebhook + all 5 event handlers + cleanup)
+- `packages/shared/src/security/tenantEncryption.test.ts` - 20 tests (metrics instrumentation: ops, duration, errors)
+- `packages/shared/src/security/keyRotation.test.ts` - 21 tests (reEncryptValue, rotateTenantValues, updateKeyVersion callback)
+- Pre-existing: `packages/shared/src/__tests__/security/tenantEncryption.test.ts` - 9 tests (integration with real crypto)
+
+### Co-located Repository Test Pattern
+
+- Mock `../client/index.js` for `query()`, `../../security/tenantEncryption.js` for encrypt/decrypt
+- `encryptNullable` is internal helper -- test indirectly via create/update with null values
+- Use `mockQuery.mock.calls[N][1]` to inspect SQL parameter arrays
+- Dynamic UPDATE queries: verify SQL string contains expected SET clauses
+- `findConnectionById` now requires `(id, tenantId)` -- tenant-scoped for security
+
+### Encryption Metrics Test Pattern
+
+- Separate `mockOpsInc` and `mockErrorsInc` (not shared mockInc) for precise assertions
+- Cannot monkey-patch `crypto.randomBytes` in ESM (getter-only) -- test encrypt errors indirectly
+- Force decrypt errors by using wrong tenant (wrong derived key)
+- Corrupt ciphertext by flipping a hex char in the encrypted portion
+- `decryptAuto` v2 values now fail loudly (no silent fallback) -- security invariant since 2026-02-25 refactor
+
+### Key Rotation Test Pattern
+
+- Use real crypto in test helpers (`encryptTestValue`/`decryptTestValue`) to generate valid v2 data
+- Verify round-trip: encrypt(old) -> reEncrypt(old->new) -> decrypt(new) = original
+- `updateKeyVersion` callback only called when `errors === 0`
+- Test partial failures: mix of good and bad encrypted values in same batch
+
 ## Common Gotchas
 
 - `jwt.sign()` with `expiresIn: -10` creates an already-expired token for testing

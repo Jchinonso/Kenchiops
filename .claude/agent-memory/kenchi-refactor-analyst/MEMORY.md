@@ -125,9 +125,25 @@
 
 - Custom `useFetch` used instead of TanStack Query (deliberate -- TQ may not be in deps).
 
+## Multi-Tenant Hardening Audit (2026-02-25)
+
+### Commit 10e078f -- 42 files: monitoring, billing, encryption
+
+**Critical (4):** Empty catch in webhookHandler.ts:394, `.push()` in keyRotation.ts:149, inline types in keyRotation.ts (RotationResult/Summary/UpdateKeyVersionFn), inline BillingService interface in billingService.ts:35.
+
+**High (4):** RequestContext NOT propagated to individual webhook event handlers (handleCheckoutCompleted etc. don't receive context -- all their logs miss requestId/tenantId). Crypto constants duplicated between tenantEncryption.ts and keyRotation.ts (8 identical consts). Inline SQL in stripeAdapter.ts:181. Inline SQL in webhookHandler.ts:303.
+
+**Medium (6):** Mutable metadata types (BillingEventRow, AuditRow). billingService directly imports repo functions. Type assertion without validation in billingRoutes.ts:76. Settings.tsx useEffect dep array may double-fire. Magic string "gemini-2.5-flash" in analysisChunkingPipeline.
+
+**Quality Positives:** All new types properly readonly. Stripe adapter has proper error classification + durationMs logging. BillingPort interface clean (no vendor types). Per-tenant HKDF encryption is well-implemented. /metrics endpoints consistently added to all 4 services. billingRoutes follows validate->service->respond pattern. `let` justified with comments everywhere.
+
 ## Codebase Architecture Notes
 
 - No `container.ts` exists in `services/api/src/` -- all service wiring is in route files.
-- `@kenchi/shared` barrel (`index.ts`) is ~1540 lines. Exports from: core, database, http, formatting, integrations, llm, safety, security, actions, constants, queue, cache, aggregation, ports, health, shutdown, rag, finetuning, rateLimit.
+- `@kenchi/shared` barrel (`index.ts`) is ~1600 lines. Exports from: core, database, http, formatting, integrations, llm, safety, security, actions, constants, queue, cache, aggregation, ports, health, shutdown, rag, finetuning, rateLimit, billing, observability.
 - `services/api/src/types/apiTypes.ts` contains all API-specific types (correct pattern).
 - RAG routes have their own `rag/types.ts` (correct module organization).
+- Billing module in `@kenchi/shared/src/billing/` follows port/adapter pattern correctly.
+- Per-tenant encryption in `@kenchi/shared/src/security/tenantEncryption.ts` uses HKDF-SHA256.
+- Key rotation utilities in `keyRotation.ts` -- shares crypto constants with tenantEncryption (needs dedup).
+- KmsPort interface in `kmsPort.ts` -- future cloud KMS integration point.
