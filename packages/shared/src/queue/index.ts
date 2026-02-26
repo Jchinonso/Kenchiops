@@ -31,16 +31,11 @@ export {
   closeRedis,
 } from "./redisClient.js";
 
-// Message queue
-export {
-  publish,
-  subscribe,
-  createQueue,
-  ciAnalysisQueue,
-  slackNotificationQueue,
-  githubActionQueue,
-  CHANNELS,
-} from "./messageQueue.js";
+// Message queue (factories and pub/sub)
+export { publish, subscribe, createQueue, CHANNELS } from "./messageQueue.js";
+
+// Pre-defined queue instances
+export { ciAnalysisQueue, slackNotificationQueue, githubActionQueue } from "./queueInstances.js";
 
 // Slack notification processor
 export {

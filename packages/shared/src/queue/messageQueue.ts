@@ -13,15 +13,7 @@
 import { getRedisClient, getSubscriberClient } from "./redisClient.js";
 import { createLogger } from "../core/logger.js";
 import { generateEventId, getErrorMessage } from "../core/index.js";
-import {
-  QUEUE_CONFIG,
-  QUEUE_NAMES,
-  QUEUE_RETRY_CONFIG,
-  QUEUE_VISIBILITY_TIMEOUT,
-  PUBSUB_CHANNELS,
-  REDIS_LIST_OPS,
-  REDIS_STATUS,
-} from "../constants/index.js";
+import { QUEUE_CONFIG, PUBSUB_CHANNELS, REDIS_LIST_OPS, REDIS_STATUS } from "../constants/index.js";
 import type {
   QueueMessage,
   MessageHandler,
@@ -312,35 +304,6 @@ export const createQueue = (queueConfig: QueueConfig): QueueManager => {
 
   return { enqueue, process, getStats, clear, name };
 };
-
-// ==================== Pre-defined Queues ====================
-
-/**
- * Queue for CI analysis jobs (async processing)
- */
-export const ciAnalysisQueue = createQueue({
-  name: QUEUE_NAMES.CI_ANALYSIS,
-  maxRetries: QUEUE_RETRY_CONFIG.CI_ANALYSIS,
-  visibilityTimeout: QUEUE_VISIBILITY_TIMEOUT.CI_ANALYSIS,
-});
-
-/**
- * Queue for Slack notification jobs
- */
-export const slackNotificationQueue = createQueue({
-  name: QUEUE_NAMES.SLACK_NOTIFICATIONS,
-  maxRetries: QUEUE_RETRY_CONFIG.SLACK_NOTIFICATION,
-  visibilityTimeout: QUEUE_VISIBILITY_TIMEOUT.SLACK_NOTIFICATION,
-});
-
-/**
- * Queue for GitHub action jobs (rerun pipeline, post comment, etc.)
- */
-export const githubActionQueue = createQueue({
-  name: QUEUE_NAMES.GITHUB_ACTIONS,
-  maxRetries: QUEUE_RETRY_CONFIG.GITHUB_ACTION,
-  visibilityTimeout: QUEUE_VISIBILITY_TIMEOUT.GITHUB_ACTION,
-});
 
 // ==================== Event Channels ====================
 

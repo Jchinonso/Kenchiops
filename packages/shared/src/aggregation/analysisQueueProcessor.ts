@@ -8,10 +8,8 @@
  * @module aggregation/analysisQueueProcessor
  */
 
-import {
-  ciAnalysisQueue,
-  type ProcessResult as QueueProcessResult,
-} from "../queue/messageQueue.js";
+import { ciAnalysisQueue } from "../queue/queueInstances.js";
+import type { ProcessResult as QueueProcessResult } from "../queue/messageQueue.js";
 import { createLogger, delay, getErrorMessage } from "../core/index.js";
 import { QUEUE_WORKER_DEFAULTS, type CIProvider } from "../constants/index.js";
 import type {
@@ -244,7 +242,7 @@ const createWorkerLoop = (
 
     try {
       state.activeJobs++;
-      await ciAnalysisQueue.process(processMessage);
+      await ciAnalysisQueue.processFair(processMessage);
     } catch (caughtError) {
       const errorMessage = getErrorMessage(caughtError);
       state.totalErrors++;

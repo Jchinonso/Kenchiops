@@ -22,6 +22,8 @@ export const INTERNAL_AUTH_HEADERS = {
   SIGNATURE: "x-kenchi-signature",
   TIMESTAMP: "x-kenchi-timestamp",
   SERVICE: "x-kenchi-service",
+  /** Carries tenant context for bodyless methods (GET/HEAD/DELETE). */
+  TENANT_ID: "x-kenchi-tenant-id",
 } as const;
 
 /** Maximum allowed clock skew in seconds (5 minutes). */

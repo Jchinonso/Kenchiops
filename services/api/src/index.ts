@@ -610,6 +610,10 @@ const startServer = async (): Promise<void> => {
 
   const app = createApp();
 
+  logger.info("OAuth redirect URI base", {
+    oauthCallbackBaseUrl: config.OAUTH_CALLBACK_BASE_URL,
+  });
+
   const server = app.listen(appConfig.port, () => {
     logger.info("API service started", {
       port: appConfig.port,

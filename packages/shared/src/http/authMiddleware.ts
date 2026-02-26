@@ -156,12 +156,24 @@ const tryInternalAuth = (req: Request): boolean => {
     });
   }
 
-  // For internal service calls, propagate tenant_id from request body to req.user
-  // so that requireTenantId() can authorize the request
-  const bodyTenantId = (req.body as Record<string, unknown> | undefined)?.tenant_id;
+  // For internal service calls, propagate tenant_id from request body (POST),
+  // x-kenchi-tenant-id header, or query parameter (belt-and-suspenders for GET)
+  // to req.user so that requireTenantId() can authorize the request.
+  const bodyTenantId =
+    (req.body as Record<string, unknown> | undefined)?.tenant_id ??
+    (req.headers[INTERNAL_AUTH_HEADERS.TENANT_ID] as string | undefined) ??
+    (typeof req.query?.tenant_id === "string" ? req.query.tenant_id : undefined);
   if (typeof bodyTenantId === "string" && bodyTenantId) {
     Object.assign(req, {
       user: { ...req.user, tenantId: bodyTenantId, role: "service" },
+    });
+  } else {
+    logger.debug("Internal auth passed but no tenant_id extracted", {
+      path: req.path,
+      method: req.method,
+      service: serviceName,
+      hasBody: req.body !== undefined && req.body !== null,
+      hasTenantHeader: !!req.headers[INTERNAL_AUTH_HEADERS.TENANT_ID],
     });
   }
 

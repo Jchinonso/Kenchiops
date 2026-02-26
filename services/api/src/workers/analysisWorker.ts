@@ -46,14 +46,20 @@ const QUERIES = {
    * $1 = total batch limit, $2 = max jobs per tenant per batch
    */
   SELECT_PENDING: `
-    WITH ranked AS (
-      SELECT id, status, repository_full_name as repository, log_ref as request_payload, workspace_id,
-             ROW_NUMBER() OVER (PARTITION BY COALESCE(workspace_id, id) ORDER BY created_at ASC) AS tenant_rank
+    WITH candidates AS (
+      SELECT id, status, repository_full_name AS repository, log_ref AS request_payload,
+             workspace_id, created_at
       FROM analysis_jobs
       WHERE status = 'pending'
         AND analysis_enqueued_at IS NULL
         AND cancelled_at IS NULL
+      ORDER BY created_at ASC
       FOR UPDATE SKIP LOCKED
+    ),
+    ranked AS (
+      SELECT id, status, repository, request_payload, workspace_id,
+             ROW_NUMBER() OVER (PARTITION BY COALESCE(workspace_id, id::text) ORDER BY created_at ASC) AS tenant_rank
+      FROM candidates
     )
     SELECT id, status, repository, request_payload, workspace_id
     FROM ranked

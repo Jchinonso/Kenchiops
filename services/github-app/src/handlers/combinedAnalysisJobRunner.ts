@@ -262,10 +262,15 @@ export const postAnalyzingPlaceholder = async (
 const pollForJobCompletion = async (
   jobId: string,
   apiBaseUrl: string,
-  jobName: string
+  jobName: string,
+  tenantId?: string
 ): Promise<PerJobAnalysisApiResponse> => {
   const startTime = Date.now();
-  const statusUrl = `${apiBaseUrl}/api/jobs/${jobId}`;
+  // Include tenant_id as query parameter (belt-and-suspenders alongside header)
+  // to ensure tenant context is available for GET requests where body is absent
+  const statusUrl = tenantId
+    ? `${apiBaseUrl}/api/jobs/${jobId}?tenant_id=${encodeURIComponent(tenantId)}`
+    : `${apiBaseUrl}/api/jobs/${jobId}`;
 
   logger.info("Polling for job completion", { jobId, jobName });
 
@@ -273,6 +278,7 @@ const pollForJobCompletion = async (
     const response = await resilientGet<JobStatusResponse>(statusUrl, {
       timeout: POLLING_CONFIG.REQUEST_TIMEOUT_MS,
       internalAuth: true,
+      ...(tenantId && { headers: { "x-kenchi-tenant-id": tenantId } }),
     });
 
     const { status, result, error: jobError } = response.data;
@@ -395,7 +401,7 @@ export const analyzeJobLogs = async (options: AnalyzeJobOptions): Promise<JobAna
   // Step 2: Poll for job completion
   // Extract base URL from apiUrl (e.g., "http://localhost:3000/api/analyze" -> "http://localhost:3000")
   const apiBaseUrl = apiUrl.replace(/\/api\/analyze$/, "");
-  const analysisResponse = await pollForJobCompletion(jobId, apiBaseUrl, jobName);
+  const analysisResponse = await pollForJobCompletion(jobId, apiBaseUrl, jobName, tenantId);
 
   // Extract LLM test failures with expected/actual values, then infer missing file paths
   const rawTestFailures = extractTestFailures(analysisResponse);
