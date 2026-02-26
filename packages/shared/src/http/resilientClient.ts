@@ -206,10 +206,19 @@ const buildInternalAuthHeaders = (
   const bodyToSign = serializedBody ?? "";
   const { signature, timestamp } = signInternalRequest(bodyToSign, secret);
 
+  // Auto-extract tenant_id from body for inclusion as a header.
+  // This ensures tenant context is available to the receiving authMiddleware
+  // regardless of HTTP method (GET requests have no body).
+  const bodyTenantId =
+    context.body && typeof context.body === "object"
+      ? ((context.body as Readonly<Record<string, unknown>>).tenant_id as string | undefined)
+      : undefined;
+
   return {
     "x-kenchi-signature": signature,
     "x-kenchi-timestamp": timestamp,
     "x-kenchi-service": config.SERVICE_NAME ?? "kenchi",
+    ...(bodyTenantId && { "x-kenchi-tenant-id": bodyTenantId }),
   };
 };
 
@@ -235,8 +244,12 @@ const executeAttempt = async (
 
     const response = await fetch(context.url, {
       method: context.method,
-      headers: { "Content-Type": "application/json", ...context.headers, ...authHeaders },
-      body: serializedBody,
+      headers: {
+        ...(serializedBody !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...context.headers,
+        ...authHeaders,
+      },
+      body: serializedBody ?? null,
       signal: controller.signal,
     });
     clearTimeout(timeoutId);

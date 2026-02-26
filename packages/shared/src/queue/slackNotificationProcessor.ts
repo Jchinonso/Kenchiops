@@ -7,7 +7,7 @@
  * @module queue/slackNotificationProcessor
  */
 
-import { slackNotificationQueue } from "./messageQueue.js";
+import { slackNotificationQueue } from "./queueInstances.js";
 import { createLogger } from "../core/logger.js";
 import { QUEUE_WORKER_DEFAULTS, SLACK_RETRYABLE_ERROR_PATTERNS } from "../constants/index.js";
 import { delay } from "../core/utils.js";

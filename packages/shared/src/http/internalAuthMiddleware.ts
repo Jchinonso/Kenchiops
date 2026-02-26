@@ -114,9 +114,12 @@ export const createInternalAuthMiddleware = (
       });
     }
 
-    // For internal service calls, propagate tenant_id from request body to req.user
-    // so that requireTenantId() can authorize the request
-    const bodyTenantId = (req.body as Record<string, unknown> | undefined)?.tenant_id;
+    // For internal service calls, propagate tenant_id from request body (POST) or
+    // x-kenchi-tenant-id header (GET/bodyless methods) to req.user
+    // so that requireTenantId() can authorize the request.
+    const bodyTenantId =
+      (req.body as Record<string, unknown> | undefined)?.tenant_id ??
+      (req.headers[INTERNAL_AUTH_HEADERS.TENANT_ID] as string | undefined);
     if (typeof bodyTenantId === "string" && bodyTenantId) {
       Object.assign(req, {
         user: { ...req.user, tenantId: bodyTenantId, role: "service" },

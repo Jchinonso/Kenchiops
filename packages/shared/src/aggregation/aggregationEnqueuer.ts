@@ -8,8 +8,9 @@
  * @module aggregation/aggregationEnqueuer
  */
 
-import { ciAnalysisQueue } from "../queue/messageQueue.js";
+import { ciAnalysisQueue } from "../queue/queueInstances.js";
 import { createLogger, getErrorMessage } from "../core/index.js";
+import { findTenantByGitHubInstallation } from "../database/providerConnection/repository.js";
 import type {
   AggregationKey,
   PendingCheckRun,
@@ -29,6 +30,51 @@ const buildLogContext = (key: AggregationKey): { repository: string; commitSha: 
   repository: key.repositoryFullName,
   commitSha: formatShaForDisplay(key.commitSha),
 });
+
+/**
+ * Resolves an installationId to a tenantId for fair scheduling.
+ * Returns null if the tenant cannot be resolved (job will fall back to FIFO).
+ */
+const resolveTenantId = async (installationId: number): Promise<string | null> => {
+  try {
+    const tenant = await findTenantByGitHubInstallation(installationId);
+    return tenant?.id ?? null;
+  } catch (error) {
+    logger.warn("Failed to resolve tenant for fair scheduling, falling back to FIFO", {
+      installationId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+};
+
+/**
+ * Enqueues a job using fair scheduling if a tenantId can be resolved,
+ * otherwise falls back to base FIFO queue.
+ */
+const enqueueWithFairScheduling = async (
+  type: string,
+  payload: unknown,
+  installationId: number,
+  logContext: { readonly repository: string; readonly commitSha: string }
+): Promise<string> => {
+  const tenantId = await resolveTenantId(installationId);
+
+  if (tenantId) {
+    logger.debug("Using fair scheduling for enqueue", {
+      ...logContext,
+      tenantId,
+      installationId,
+    });
+    return ciAnalysisQueue.enqueueFair(type, payload, tenantId);
+  }
+
+  logger.debug("No tenant resolved, using FIFO enqueue", {
+    ...logContext,
+    installationId,
+  });
+  return ciAnalysisQueue.enqueue(type, payload);
+};
 
 // ==================== Serialization ====================
 
@@ -57,7 +103,7 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
       return null;
     }
 
-    const messageId = await ciAnalysisQueue.enqueue("consolidated_analysis", {
+    const payload = {
       aggregation: {
         ...aggregation,
         failures: aggregation.failures.map((failure) => ({
@@ -68,7 +114,14 @@ export const enqueueAggregation = async (key: AggregationKey): Promise<string | 
         lastFailureAt: aggregation.lastFailureAt.toISOString(),
         provider: aggregation.provider ?? key.provider,
       },
-    });
+    };
+
+    const messageId = await enqueueWithFairScheduling(
+      "consolidated_analysis",
+      payload,
+      aggregation.installationId,
+      logContext
+    );
 
     await deleteAggregationFromRedis(key);
 
@@ -114,7 +167,12 @@ export const enqueuePendingAggregation = async (key: AggregationKey): Promise<st
       },
     };
 
-    const messageId = await ciAnalysisQueue.enqueue("pending_analysis", payload);
+    const messageId = await enqueueWithFairScheduling(
+      "pending_analysis",
+      payload,
+      pendingAgg.installationId,
+      logContext
+    );
 
     await deleteAggregationFromRedis(key);
 
