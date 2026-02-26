@@ -439,8 +439,8 @@ export const Settings = () => {
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Members join automatically via GitHub OAuth when they belong to your GitHub
-              organization.
+              Members join automatically when they sign in via GitHub, GitLab, Bitbucket, or Azure
+              DevOps and belong to your organization.
             </p>
             <Link
               to="/dashboard/settings/team"

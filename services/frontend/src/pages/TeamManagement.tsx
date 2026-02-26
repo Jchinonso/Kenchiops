@@ -393,7 +393,8 @@ export const TeamManagement = () => {
             <CardTitle>Members</CardTitle>
           </div>
           <CardDescription>
-            People in your organization. Members join automatically via GitHub OAuth.
+            People in your organization. Members join automatically when they sign in via GitHub,
+            GitLab, Bitbucket, or Azure DevOps.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
