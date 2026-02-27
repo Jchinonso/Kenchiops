@@ -46,6 +46,7 @@ jest.mock("../../security/cookies.js", () => ({
 jest.mock("../../cache/userStatusCache.js", () => ({
   isUserBlocked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
   isTenantBlocked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+  isMembershipRevoked: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
 }));
 
 jest.mock("../../core/index.js", () => ({
