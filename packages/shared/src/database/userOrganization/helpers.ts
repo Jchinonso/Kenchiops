@@ -38,6 +38,7 @@ export const rowToUserOrganizationWithTenant = (
   orgName: row.org_name,
   provider: row.provider,
   tenantStatus: row.tenant_status,
+  tenantType: row.tenant_type ?? "organization",
 });
 
 export const rowToTeamMember = (row: TeamMemberRow): TeamMember => ({

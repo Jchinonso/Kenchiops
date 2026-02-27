@@ -6,7 +6,7 @@
  * Designed to be fail-open: if Redis is unavailable, requests pass through.
  *
  * Key format: kenchi:user-status:{userId}
- * TTL: 900 seconds (15 minutes, matching JWT lifetime)
+ * TTL: CACHE_TTL_SECONDS.JWT_LIFETIME (matching JWT access token expiry)
  *
  * @module cache/userStatusCache
  */
@@ -56,7 +56,7 @@ export const setUserStatusFlag = async (userId: string, status: string): Promise
     const startTime = Date.now();
 
     await withTimeout(
-      client.setex(key, CACHE_TTL_SECONDS.STANDARD, status),
+      client.setex(key, CACHE_TTL_SECONDS.JWT_LIFETIME, status),
       REDIS_TIMEOUTS.CACHE_OPERATION_MS
     );
 
@@ -187,7 +187,7 @@ export const setTenantStatusFlag = async (tenantId: string, status: string): Pro
     const startTime = Date.now();
 
     await withTimeout(
-      client.setex(key, CACHE_TTL_SECONDS.STANDARD, status),
+      client.setex(key, CACHE_TTL_SECONDS.JWT_LIFETIME, status),
       REDIS_TIMEOUTS.CACHE_OPERATION_MS
     );
 
@@ -289,4 +289,133 @@ export const getTenantStatusFlag = async (tenantId: string): Promise<string | nu
 export const isTenantBlocked = async (tenantId: string): Promise<boolean> => {
   const flag = await getTenantStatusFlag(tenantId);
   return flag !== null;
+};
+
+// ==================== Membership Revocation Functions ====================
+
+/** Builds the Redis key for a membership revocation flag. */
+const buildMembershipRevokedKey = (userId: string, tenantId: string): string =>
+  `${REDIS_KEY_PREFIXES.MEMBERSHIP_REVOKED}:${userId}:${tenantId}`;
+
+/**
+ * Sets a membership revocation flag for a user+tenant pair in Redis.
+ * Called when a member is removed from a tenant to immediately block
+ * their JWT (which still carries the old tenantId) for the remainder
+ * of the token lifetime.
+ *
+ * @param userId - The removed user's ID
+ * @param tenantId - The tenant the user was removed from
+ * @returns true if the flag was set, false on failure
+ */
+export const setMembershipRevokedFlag = async (
+  userId: string,
+  tenantId: string
+): Promise<boolean> => {
+  if (!isClientReady()) {
+    logger.debug("Redis not ready, skipping membership revoked flag set", { userId, tenantId });
+    return false;
+  }
+
+  try {
+    const client = getRedisClient();
+    const key = buildMembershipRevokedKey(userId, tenantId);
+    const startTime = Date.now();
+
+    await withTimeout(
+      client.setex(key, CACHE_TTL_SECONDS.JWT_LIFETIME, "revoked"),
+      REDIS_TIMEOUTS.CACHE_OPERATION_MS
+    );
+
+    const durationMs = Date.now() - startTime;
+    logger.debug("Membership revoked flag set", { userId, tenantId, durationMs });
+    return true;
+  } catch (error: unknown) {
+    logger.warn("Membership revoked flag set did not complete", {
+      userId,
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
+};
+
+/**
+ * Checks whether a user's membership in a specific tenant has been revoked.
+ * Used by auth middleware to immediately block removed members even
+ * while their JWT is still valid.
+ * Fail-open: returns false if Redis is unavailable.
+ *
+ * @param userId - The user ID to check
+ * @param tenantId - The tenant ID to check against
+ * @returns true if the membership was revoked, false otherwise
+ */
+export const isMembershipRevoked = async (userId: string, tenantId: string): Promise<boolean> => {
+  if (!isClientReady()) {
+    logger.debug("Redis not ready, assuming membership valid (fail-open)", { userId, tenantId });
+    return false;
+  }
+
+  const startTime = Date.now();
+
+  try {
+    const client = getRedisClient();
+    const key = buildMembershipRevokedKey(userId, tenantId);
+
+    const flag = await withTimeout(client.get(key), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
+
+    const durationMs = Date.now() - startTime;
+
+    if (flag !== null) {
+      logger.debug("Membership revoked flag found", { userId, tenantId, durationMs });
+    }
+
+    return flag !== null;
+  } catch (error: unknown) {
+    const durationMs = Date.now() - startTime;
+    logger.warn("Membership revoked check did not complete, allowing request (fail-open)", {
+      userId,
+      tenantId,
+      durationMs,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
+};
+
+/**
+ * Clears a membership revocation flag from Redis.
+ * Called when a previously removed member is re-added to a tenant,
+ * so they are not blocked for the remainder of the old TTL.
+ *
+ * @param userId - The user ID to unblock
+ * @param tenantId - The tenant ID to unblock for
+ * @returns true if the flag was cleared, false on failure
+ */
+export const clearMembershipRevokedFlag = async (
+  userId: string,
+  tenantId: string
+): Promise<boolean> => {
+  if (!isClientReady()) {
+    logger.debug("Redis not ready, skipping membership revoked flag clear", { userId, tenantId });
+    return false;
+  }
+
+  try {
+    const client = getRedisClient();
+    const key = buildMembershipRevokedKey(userId, tenantId);
+    const startTime = Date.now();
+
+    await withTimeout(client.del(key), REDIS_TIMEOUTS.CACHE_OPERATION_MS);
+
+    const durationMs = Date.now() - startTime;
+    logger.debug("Membership revoked flag cleared", { userId, tenantId, durationMs });
+    return true;
+  } catch (error: unknown) {
+    logger.warn("Membership revoked flag clear did not complete", {
+      userId,
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
 };

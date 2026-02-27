@@ -336,7 +336,86 @@ const getUserProfile = async (
 };
 
 /**
+ * Build the membership API URL for a specific org.
+ * GitHub API: GET /user/memberships/orgs/{org}
+ */
+const getMembershipUrl = (instanceUrl: string | null, orgLogin: string): string =>
+  instanceUrl
+    ? `${instanceUrl}/api/v3/user/memberships/orgs/${encodeURIComponent(orgLogin)}`
+    : `https://api.github.com/user/memberships/orgs/${encodeURIComponent(orgLogin)}`;
+
+/**
+ * Fetch the authenticated user's role in a specific org via the membership endpoint.
+ * Best-effort fallback: returns undefined on any error (caller defaults to "member").
+ */
+const fetchOrgMembershipRole = async (
+  accessToken: string,
+  instanceUrl: string | null,
+  orgLogin: string,
+  context: RequestContext
+): Promise<string | undefined> => {
+  const url = getMembershipUrl(instanceUrl, orgLogin);
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `token ${accessToken}`,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    });
+
+    const durationMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      logger.warn("GitHub org membership fetch returned non-OK status", {
+        provider: "github",
+        operation: "getOrgMembership",
+        orgLogin,
+        statusCode: response.status,
+        durationMs,
+        ...context,
+      });
+      return undefined;
+    }
+
+    const membership = (await response.json()) as {
+      readonly role?: string;
+      readonly state?: string;
+    };
+
+    logger.debug("GitHub org membership fetched", {
+      provider: "github",
+      operation: "getOrgMembership",
+      orgLogin,
+      role: membership.role,
+      state: membership.state,
+      durationMs,
+      ...context,
+    });
+
+    return membership.role;
+  } catch (error) {
+    logger.warn("GitHub org membership fetch failed (best-effort)", {
+      provider: "github",
+      operation: "getOrgMembership",
+      orgLogin,
+      durationMs: Date.now() - startTime,
+      error: redactSecrets(error instanceof Error ? error.message : String(error)),
+      ...context,
+    });
+    return undefined;
+  }
+};
+
+/**
  * Fetch the authenticated GitHub user's organization memberships.
+ *
+ * When /user/orgs omits the `role` field for any org, falls back to
+ * the per-org membership endpoint (GET /user/memberships/orgs/{org})
+ * to retrieve the accurate role. This avoids defaulting all users
+ * to "member" when the bulk endpoint doesn't surface roles.
  */
 const getUserOrganizations = async (
   accessToken: string,
@@ -382,6 +461,32 @@ const getUserOrganizations = async (
       orgCount: orgs.length,
       ...context,
     });
+
+    // Enrich orgs with missing roles via per-org membership endpoint
+    const orgsWithMissingRoles = orgs.filter((org) => !org.role);
+    if (orgsWithMissingRoles.length > 0) {
+      logger.info("Fetching per-org membership roles for orgs missing role field", {
+        provider: "github",
+        operation: "getUserOrganizations",
+        missingRoleCount: orgsWithMissingRoles.length,
+        totalOrgCount: orgs.length,
+        ...context,
+      });
+
+      const enrichedRoles = await Promise.all(
+        orgsWithMissingRoles.map(async (org) => ({
+          login: org.login,
+          role: await fetchOrgMembershipRole(accessToken, instanceUrl, org.login, context),
+        }))
+      );
+
+      const roleMap = new Map(enrichedRoles.map((entry) => [entry.login, entry.role]));
+
+      return orgs.map((org) => ({
+        login: org.login,
+        role: org.role ?? roleMap.get(org.login),
+      }));
+    }
 
     return orgs.map((org) => ({ login: org.login, role: org.role }));
   } catch (error) {

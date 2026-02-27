@@ -46,6 +46,7 @@ export interface UserOrganizationWithTenantRow {
   readonly org_name: string;
   readonly provider: string;
   readonly tenant_status: string;
+  readonly tenant_type: string | null;
 }
 
 export interface UserOrganizationWithTenant {
@@ -58,6 +59,7 @@ export interface UserOrganizationWithTenant {
   readonly orgName: string;
   readonly provider: string;
   readonly tenantStatus: string;
+  readonly tenantType: string;
 }
 
 // ==================== Input Types ====================

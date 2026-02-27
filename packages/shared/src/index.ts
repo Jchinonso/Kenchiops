@@ -178,6 +178,8 @@ export {
   softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
+  updateTenantOrgName,
+  markTenantAsPersonal,
   // Reactivation validation
   validateReactivation,
   type ReactivationWarningType,
@@ -1429,6 +1431,10 @@ export {
   clearTenantStatusFlag,
   getTenantStatusFlag,
   isTenantBlocked,
+  // Membership revocation cache (immediate access revocation on member removal)
+  setMembershipRevokedFlag,
+  isMembershipRevoked,
+  clearMembershipRevokedFlag,
   // Webhook deduplication cache (fast-path replay protection)
   isWebhookDuplicate,
   markWebhookProcessed,

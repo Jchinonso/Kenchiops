@@ -33,6 +33,8 @@ export interface TenantRow {
   readonly rag_degrade_on_budget_warning: boolean | null;
   /** Encryption key version: 1 = legacy global key, 2+ = per-tenant HKDF. */
   readonly encryption_key_version: number;
+  /** Tenant type: 'organization' or 'personal' (personal = GitHub username fallback). */
+  readonly tenant_type: string;
 }
 
 /**

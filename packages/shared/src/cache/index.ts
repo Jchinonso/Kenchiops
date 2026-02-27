@@ -162,6 +162,9 @@ export {
   clearTenantStatusFlag,
   getTenantStatusFlag,
   isTenantBlocked,
+  setMembershipRevokedFlag,
+  isMembershipRevoked,
+  clearMembershipRevokedFlag,
 } from "./userStatusCache.js";
 
 // ==================== Webhook Deduplication Cache ====================

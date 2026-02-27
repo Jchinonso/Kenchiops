@@ -37,8 +37,10 @@ import {
   findOrganizationsByUser,
   countOwnersByTenant,
   removeMemberFromTenant,
-  // Tenant creation
+  // Tenant creation / update
   createFromGitHubLogin,
+  updateTenantOrgName,
+  markTenantAsPersonal,
   createFromGitLabGroup,
   createFromBitbucketWorkspace,
   createFromAzureDevOpsAccount,
@@ -79,6 +81,23 @@ const ORG_CAPABLE_PROVIDERS: ReadonlySet<OAuthProvider> = new Set<OAuthProvider>
   "bitbucket",
   "azure_devops",
 ]);
+
+/** Numeric hierarchy for Kenchi roles (higher = more privileged). */
+const ROLE_HIERARCHY: Readonly<Record<string, number>> = {
+  viewer: 0,
+  member: 1,
+  admin: 2,
+  owner: 3,
+};
+
+/**
+ * Ensure the first user of a new tenant gets at least "admin" level access.
+ * If the provider-mapped role is already admin or owner, it passes through.
+ * This prevents privilege escalation (no unconditional "owner") while ensuring
+ * the tenant creator has enough access to manage the organization.
+ */
+const elevateToMinimumAdmin = (role: string): string =>
+  (ROLE_HIERARCHY[role] ?? 0) >= (ROLE_HIERARCHY.admin ?? 2) ? role : "admin";
 
 // ==================== Extracted Service Methods ====================
 
@@ -177,21 +196,84 @@ const autoLinkOrganizationsImpl = async (
   const adapter = getOAuthAdapter(provider);
   const orgs = await adapter.getUserOrganizations(accessToken, instanceUrl, context);
 
-  // For GitHub: if no orgs found, use the username as a personal account fallback
+  // For GitHub: if no orgs found, use the username as a personal account fallback.
   const { length: orgCount } = orgs;
-  const effectiveOrgs =
-    orgCount === 0 && provider === "github" ? [{ login: providerUsername }] : orgs;
+  const isPersonalFallback = orgCount === 0 && provider === "github";
+  const effectiveOrgs = isPersonalFallback ? [{ login: providerUsername }] : orgs;
+
+  // FLAW-13: If the user already has a personal tenant with a stale name,
+  // update it to the current username instead of creating a new one.
+  // Fetch existing memberships once — reused for reconciliation threshold below.
+  const existingMemberships = await findOrganizationsByUser(user.id);
+
+  if (isPersonalFallback) {
+    const existingPersonal = existingMemberships.find(
+      (membership) => membership.provider === "github" && membership.tenantType === "personal"
+    );
+
+    if (existingPersonal && existingPersonal.orgName !== providerUsername.toLowerCase()) {
+      try {
+        await updateTenantOrgName(existingPersonal.tenantId, providerUsername);
+        logger.info("Personal tenant org name updated for username change", {
+          userId: user.id,
+          personalTenantId: existingPersonal.tenantId,
+          oldName: existingPersonal.orgName,
+          newName: providerUsername.toLowerCase(),
+          ...context,
+        });
+      } catch (renameError: unknown) {
+        logger.warn("Failed to rename personal tenant (non-fatal)", {
+          userId: user.id,
+          error: getErrorMessage(renameError),
+          ...context,
+        });
+      }
+    }
+  }
 
   const tenantIds = await ensureOrgMemberships(user.id, provider, effectiveOrgs, context);
 
-  // Reconcile stale memberships (non-fatal)
-  try {
-    await reconcileStaleMemberships(user.id, provider, tenantIds, context);
-  } catch (reconcileError: unknown) {
-    logger.warn("Stale membership reconciliation failed (non-fatal)", {
-      userId: user.id,
+  // After creating the personal fallback tenant, mark it as 'personal' type.
+  // This must happen after ensureOrgMemberships which creates the tenant.
+  if (isPersonalFallback && tenantIds.length > 0) {
+    try {
+      await markTenantAsPersonal(tenantIds[0]);
+    } catch (markError: unknown) {
+      logger.warn("Failed to mark personal tenant type (non-fatal)", {
+        userId: user.id,
+        error: getErrorMessage(markError),
+        ...context,
+      });
+    }
+  }
+
+  // Reconcile stale memberships (non-fatal) with safety check.
+  // If the provider returned suspiciously few orgs compared to existing memberships,
+  // skip reconciliation to avoid mass-removing legitimate memberships (FLAW-07).
+  const existingProviderMemberships = existingMemberships.filter(
+    (membership) => membership.provider === provider
+  );
+  const existingCount = existingProviderMemberships.length;
+  const shouldReconcile =
+    tenantIds.length > 0 && (existingCount <= 2 || tenantIds.length >= existingCount * 0.8);
+
+  if (shouldReconcile) {
+    try {
+      await reconcileStaleMemberships(user.id, provider, tenantIds, existingMemberships, context);
+    } catch (reconcileError: unknown) {
+      logger.warn("Stale membership reconciliation failed (non-fatal)", {
+        userId: user.id,
+        provider,
+        error: getErrorMessage(reconcileError),
+        ...context,
+      });
+    }
+  } else {
+    logger.warn("Skipping reconciliation: provider returned too few orgs", {
+      existingCount,
+      received: tenantIds.length,
       provider,
-      error: getErrorMessage(reconcileError),
+      userId: user.id,
       ...context,
     });
   }
@@ -400,6 +482,101 @@ const sanitizeRawProfile = (rawProfile: Record<string, unknown>): Record<string,
 };
 
 /**
+ * Find or create a tenant for the given provider and org login.
+ * Provider-scoped: a GitHub "acme" and GitLab "acme" are separate tenants.
+ */
+const findOrCreateTenant = async (
+  provider: OAuthProvider,
+  orgLogin: string
+): Promise<{ readonly tenant: Readonly<{ readonly id: string }>; readonly isNew: boolean }> => {
+  const existingTenant = await findByOrgNameAndProvider(orgLogin, provider);
+  if (existingTenant) {
+    return { tenant: existingTenant, isNew: false };
+  }
+
+  const created = await ((): Promise<Readonly<{ readonly id: string }>> => {
+    switch (provider) {
+      case "github":
+        return createFromGitHubLogin(orgLogin);
+      case "gitlab":
+        return createFromGitLabGroup({ gitlabGroupPath: orgLogin });
+      case "bitbucket":
+        return createFromBitbucketWorkspace(orgLogin);
+      case "azure_devops":
+        return createFromAzureDevOpsAccount(orgLogin);
+      default:
+        return assertUnreachable(provider);
+    }
+  })();
+
+  return { tenant: created, isNew: true };
+};
+
+/**
+ * Process a single org membership: find/create tenant, check limits, assign role.
+ * Returns the tenant ID (always resolves — limit violations skip membership but track the tenant).
+ */
+const processOrgMembership = async (
+  userId: string,
+  provider: OAuthProvider,
+  org: Readonly<{ readonly login: string; readonly role?: string }>,
+  context: RequestContext
+): Promise<string> => {
+  const { tenant, isNew } = await findOrCreateTenant(provider, org.login);
+
+  // For existing tenants with new memberships, check team size limit
+  if (!isNew) {
+    const existingMembership = await findUserOrgRole(userId, tenant.id);
+    if (!existingMembership) {
+      try {
+        const limitCheck = await checkPlanLimit(tenant.id, "max_team_members");
+        if (!limitCheck.allowed) {
+          logger.warn("Team size limit reached, skipping membership", {
+            ...context,
+            userId,
+            tenantId: tenant.id,
+            currentUsage: limitCheck.currentUsage,
+            limit: limitCheck.limit,
+          });
+          return tenant.id;
+        }
+      } catch (limitError: unknown) {
+        // Fail-open: don't block login for plan check failures
+        logger.warn("Plan limit check failed, proceeding", {
+          ...context,
+          userId,
+          tenantId: tenant.id,
+          error: getErrorMessage(limitError),
+        });
+      }
+    }
+  }
+
+  // Map provider role to Kenchi role. For new tenants (first user), ensure
+  // at least "admin" so the creator can manage the tenant. The "owner" role
+  // is only assigned if the provider explicitly reports an owner-level role
+  // (e.g., GitLab "owner"). This prevents privilege escalation where a
+  // regular member who signs up first gets unconditional owner access.
+  const mappedRole = resolveAutoLinkRole(provider, org.role);
+  const memberRole = isNew ? elevateToMinimumAdmin(mappedRole) : mappedRole;
+  await addUserOrganization({
+    userId,
+    tenantId: tenant.id,
+    role: memberRole,
+  });
+
+  logger.info("User organization membership ensured", {
+    ...context,
+    userId,
+    tenantId: tenant.id,
+    provider,
+    orgLogin: org.login,
+  });
+
+  return tenant.id;
+};
+
+/**
  * Ensure user has organization memberships for each provider org.
  * For each org, finds or creates the tenant (provider-scoped) and
  * adds the user_organizations record (idempotent).
@@ -412,77 +589,14 @@ const ensureOrgMemberships = async (
   orgs: ReadonlyArray<{ readonly login: string; readonly role?: string }>,
   context: RequestContext
 ): Promise<readonly string[]> => {
-  const resolvedIds: string[] = []; // let: accumulator built sequentially to respect rate limits
+  // Local mutable accumulator: built sequentially then returned as readonly.
+  // push() is used instead of spread to avoid O(n²) array copying per iteration.
+  const resolvedIds: string[] = [];
 
   // for...of: sequential to avoid concurrent tenant creation race conditions
   for (const org of orgs) {
-    const existingTenant = await findByOrgNameAndProvider(org.login, provider);
-
-    const tenant =
-      existingTenant ??
-      (await (async () => {
-        switch (provider) {
-          case "github":
-            return createFromGitHubLogin(org.login);
-          case "gitlab":
-            return createFromGitLabGroup({ gitlabGroupPath: org.login });
-          case "bitbucket":
-            return createFromBitbucketWorkspace(org.login);
-          case "azure_devops":
-            return createFromAzureDevOpsAccount(org.login);
-          default:
-            return assertUnreachable(provider);
-        }
-      })());
-
-    // For existing tenants with new memberships, check team size limit
-    if (existingTenant) {
-      const existingMembership = await findUserOrgRole(userId, tenant.id);
-      if (!existingMembership) {
-        try {
-          const limitCheck = await checkPlanLimit(tenant.id, "max_team_members");
-          if (!limitCheck.allowed) {
-            logger.warn("Team size limit reached, skipping membership", {
-              ...context,
-              userId,
-              tenantId: tenant.id,
-              currentUsage: limitCheck.currentUsage,
-              limit: limitCheck.limit,
-            });
-            resolvedIds.push(tenant.id);
-            continue;
-          }
-        } catch (limitError: unknown) {
-          // Fail-open: don't block login for plan check failures
-          logger.warn("Plan limit check failed, proceeding", {
-            ...context,
-            userId,
-            tenantId: tenant.id,
-            error: getErrorMessage(limitError),
-          });
-        }
-      }
-    }
-
-    resolvedIds.push(tenant.id);
-
-    // Add user to org (idempotent -- ON CONFLICT DO NOTHING)
-    // First user to trigger tenant creation becomes the owner.
-    // For existing tenants, map the provider-reported role to a Kenchi role.
-    const memberRole = existingTenant ? resolveAutoLinkRole(provider, org.role) : "owner";
-    await addUserOrganization({
-      userId,
-      tenantId: tenant.id,
-      role: memberRole,
-    });
-
-    logger.info("User organization membership ensured", {
-      ...context,
-      userId,
-      tenantId: tenant.id,
-      provider,
-      orgLogin: org.login,
-    });
+    const tenantId = await processOrgMembership(userId, provider, org, context);
+    resolvedIds.push(tenantId);
   }
 
   return resolvedIds;
@@ -499,10 +613,12 @@ const reconcileStaleMemberships = async (
   userId: string,
   provider: OAuthProvider,
   currentTenantIds: readonly string[],
+  existingMemberships: ReadonlyArray<
+    Readonly<{ readonly provider: string; readonly tenantId: string; readonly role: string }>
+  >,
   context: RequestContext
 ): Promise<void> => {
-  const dbMemberships = await findOrganizationsByUser(userId);
-  const providerMemberships = dbMemberships.filter(
+  const providerMemberships = existingMemberships.filter(
     (membership) => membership.provider === provider
   );
   const activeTenantIdSet: ReadonlySet<string> = new Set(currentTenantIds);

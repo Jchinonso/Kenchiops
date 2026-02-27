@@ -99,8 +99,15 @@ export const SELF_HOSTED_URL_PATTERNS = {
 // ==================== JWT Configuration ====================
 
 export const JWT_CONFIG = {
-  ACCESS_TOKEN_EXPIRY: "15m",
-  ACCESS_TOKEN_EXPIRY_SECONDS: 900,
+  /**
+   * Access token lifetime reduced from 15m to 5m (FLAW-06) to minimize
+   * the window where a stale JWT (wrong tenantId after org switch,
+   * revoked membership) remains valid. Trade-off: ~3x more refresh
+   * token rotations, but membership revocation flags in Redis cover
+   * the security gap during the remaining 5-minute window.
+   */
+  ACCESS_TOKEN_EXPIRY: "5m",
+  ACCESS_TOKEN_EXPIRY_SECONDS: 300,
   REFRESH_TOKEN_EXPIRY: "7d",
   REFRESH_TOKEN_EXPIRY_SECONDS: 604_800,
   ISSUER: "kenchi",
@@ -122,8 +129,8 @@ export const COOKIE_CONFIG = {
   /** Cookie name for the refresh token (see ACCESS_TOKEN_NAME comment for prefix rationale). */
   REFRESH_TOKEN_NAME: "kenchi_refresh",
   REFRESH_TOKEN_NAME_PRODUCTION: "__Host-kenchi_refresh",
-  /** Access token cookie maxAge in seconds (15 minutes) */
-  ACCESS_TOKEN_MAX_AGE_SECONDS: 900,
+  /** Access token cookie maxAge in seconds (5 minutes, matching JWT_CONFIG) */
+  ACCESS_TOKEN_MAX_AGE_SECONDS: 300,
   /** Refresh token cookie maxAge in seconds (7 days) */
   REFRESH_TOKEN_MAX_AGE_SECONDS: 604_800,
   /**

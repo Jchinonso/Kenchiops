@@ -16,6 +16,7 @@ import {
   AuthorizationError,
   config,
   findOAuthIdentitiesByUser,
+  findById as findTenantById,
   VALID_INTEGRATION_PROVIDERS,
   INTEGRATION_OAUTH_AUTHORIZE_URLS,
   GITLAB_SETUP_CONFIG,
@@ -23,6 +24,7 @@ import {
   createOAuthState,
   consumeOAuthState,
   type IntegrationProvider,
+  rateLimitByCategory,
 } from "@kenchi/shared";
 
 import { createIntegrationService } from "../services/integrationService.js";
@@ -74,6 +76,48 @@ const getClientId = (provider: IntegrationProvider): string => {
 /** Build the OAuth redirect URI for an integration provider callback. */
 const getRedirectUri = (provider: IntegrationProvider): string =>
   `${config.OAUTH_CALLBACK_BASE_URL}/integrations/${provider}/callback`;
+
+/**
+ * Integration providers that are tied to a specific source-code provider.
+ * Deployment platforms (Vercel, Netlify) work with any git provider and
+ * are NOT listed here. If a source-code-specific integration is added
+ * (e.g., "github_actions"), add it with its required provider.
+ */
+const SOURCE_PROVIDER_REQUIREMENTS: Readonly<Record<string, string>> = {
+  // Example: github_actions: "github", gitlab_ci is handled by gitlabSetupService
+};
+
+/**
+ * Log a warning if the integration provider is source-code-specific and
+ * the tenant's primary provider differs. Does NOT block the connection —
+ * deployment platforms are always allowed regardless of tenant provider.
+ */
+const logProviderCompatibility = async (
+  provider: IntegrationProvider,
+  tenantId: string,
+  context: { readonly requestId?: string; readonly tenantId?: string }
+): Promise<void> => {
+  const requiredProvider = SOURCE_PROVIDER_REQUIREMENTS[provider];
+  if (!requiredProvider) {
+    // Deployment platforms (Vercel, Netlify) — compatible with any source provider
+    return;
+  }
+
+  try {
+    const tenant = await findTenantById(tenantId);
+    if (tenant && tenant.provider !== requiredProvider) {
+      logger.warn("Integration provider may be incompatible with tenant source provider", {
+        integrationProvider: provider,
+        requiredSourceProvider: requiredProvider,
+        tenantProvider: tenant.provider,
+        tenantId,
+        ...context,
+      });
+    }
+  } catch {
+    // Best-effort — don't block the OAuth flow on a lookup failure
+  }
+};
 
 /** Build the OAuth provider authorization URL. */
 const buildIntegrationAuthorizeUrl = (
@@ -139,6 +183,10 @@ const handleIntegrationConnect = async (req: Request, res: Response): Promise<vo
   }
 
   const provider = validateIntegrationProvider(req.params.provider);
+
+  // FLAW-04: Log if the integration provider is incompatible with the tenant's source provider
+  await logProviderCompatibility(provider, tenantId, context);
+
   const clientId = getClientId(provider);
   const redirectUri = getRedirectUri(provider);
 
@@ -494,16 +542,48 @@ const handleGitLabSetupWebhooks = async (req: Request, res: Response): Promise<v
 // ==================== Route Definitions ====================
 
 // GitLab CI connection routes (registered before :provider/:connectionId to avoid conflicts)
-router.post("/integrations/gitlab/connect", asyncHandler(handleGitLabConnect));
-router.get("/integrations/gitlab/connection", asyncHandler(handleGitLabConnectionStatus));
-router.delete("/integrations/gitlab/connection", asyncHandler(handleGitLabDisconnect));
-router.get("/integrations/gitlab/available-projects", asyncHandler(handleGitLabAvailableProjects));
-router.post("/integrations/gitlab/setup-webhooks", asyncHandler(handleGitLabSetupWebhooks));
+router.post(
+  "/integrations/gitlab/connect",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleGitLabConnect)
+);
+router.get(
+  "/integrations/gitlab/connection",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGitLabConnectionStatus)
+);
+router.delete(
+  "/integrations/gitlab/connection",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleGitLabDisconnect)
+);
+router.get(
+  "/integrations/gitlab/available-projects",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGitLabAvailableProjects)
+);
+router.post(
+  "/integrations/gitlab/setup-webhooks",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleGitLabSetupWebhooks)
+);
 
 // OAuth integration routes
-router.get("/integrations", asyncHandler(handleListIntegrations));
-router.get("/integrations/:provider/connect", asyncHandler(handleIntegrationConnect));
-router.get("/integrations/:provider/callback", asyncHandler(handleIntegrationCallback));
-router.delete("/integrations/:connectionId", asyncHandler(handleIntegrationDisconnect));
+router.get("/integrations", rateLimitByCategory("readonly"), asyncHandler(handleListIntegrations));
+router.get(
+  "/integrations/:provider/connect",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleIntegrationConnect)
+);
+router.get(
+  "/integrations/:provider/callback",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleIntegrationCallback)
+);
+router.delete(
+  "/integrations/:connectionId",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleIntegrationDisconnect)
+);
 
 export { router as integrationRoutes };

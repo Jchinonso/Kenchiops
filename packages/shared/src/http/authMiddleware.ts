@@ -28,7 +28,7 @@ import {
   resolveServiceSecret,
 } from "./internalAuth.js";
 import { SERVICE_NAMES } from "../constants/http.js";
-import { isUserBlocked, isTenantBlocked } from "../cache/userStatusCache.js";
+import { isUserBlocked, isTenantBlocked, isMembershipRevoked } from "../cache/userStatusCache.js";
 import type { AuthenticatedUser } from "../database/user/types.js";
 import { authenticateApiKey } from "../database/apiKey/repository.js";
 
@@ -350,7 +350,7 @@ export const authMiddleware = async (
 
     // Check real-time user status in Redis (fail-open on Redis errors).
     // This prevents suspended/deleted users from using the API during
-    // the remainder of their JWT lifetime (~15 minutes).
+    // the remainder of their JWT lifetime (~5 minutes).
     const userBlocked = await isUserBlocked(user.userId);
     if (userBlocked) {
       logger.warn("Blocked suspended or revoked user", {
@@ -380,6 +380,25 @@ export const authMiddleware = async (
         });
         next(
           new AuthorizationError("Organization is suspended or deactivated", {
+            operation: "authMiddleware",
+          })
+        );
+        return;
+      }
+
+      // Check real-time membership revocation in Redis (fail-open).
+      // This prevents removed members from accessing the tenant's data
+      // during the remainder of their JWT lifetime (~5 minutes).
+      const membershipRevoked = await isMembershipRevoked(user.userId, user.tenantId);
+      if (membershipRevoked) {
+        logger.warn("Blocked removed member", {
+          operation: "authMiddleware",
+          path: req.path,
+          userId: user.userId,
+          tenantId: user.tenantId,
+        });
+        next(
+          new AuthorizationError("Your membership in this organization has been revoked", {
             operation: "authMiddleware",
           })
         );

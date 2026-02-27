@@ -741,6 +741,8 @@ export interface Tenant {
   readonly ragDegradeOnBudgetWarning: boolean;
   /** Encryption key version: 1 = legacy global key, 2+ = per-tenant HKDF. */
   readonly encryptionKeyVersion: number;
+  /** Tenant type: 'organization' or 'personal' (personal = GitHub username fallback). */
+  readonly tenantType: string;
 }
 
 /**
@@ -803,6 +805,7 @@ export type TenantAuditAction =
   | "github_comment_posted"
   | "plan_changed"
   | "member_role_changed"
+  | "role_auto_synced"
   | "member_removed"
   | "member_added"
   | "org_switched"
