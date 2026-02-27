@@ -6,13 +6,13 @@ const teams = [
   {
     title: "Platform Engineering",
     description:
-      "Keep your CI/CD infrastructure reliable. Kenchi surfaces recurring failure patterns so you can fix the platform, not just the symptoms.",
+      "Keep your CI/CD infrastructure reliable with role-based access control. Kenchi surfaces recurring failure patterns so you can fix the platform, not just the symptoms.",
     icon: <Server className="w-6 h-6" />,
   },
   {
     title: "SRE",
     description:
-      "Reduce MTTR with instant root cause analysis. Kenchi turns hours of log diving into a 2-minute diagnosis.",
+      "Reduce MTTR with instant root cause analysis and a real-time dashboard. Kenchi turns hours of log diving into a 2-minute diagnosis.",
     icon: <Activity className="w-6 h-6" />,
   },
   {

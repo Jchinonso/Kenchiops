@@ -1,5 +1,15 @@
 import type { ReactNode } from "react";
-import { Check, AlertTriangle, Search, Shield, Brain } from "lucide-react";
+import {
+  Check,
+  AlertTriangle,
+  Search,
+  Shield,
+  Brain,
+  BarChart3,
+  Sparkles,
+  TrendingUp,
+  ArrowUpRight,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { CIAnalysisMockup } from "@/components/CIAnalysisMockup";
 import { sectionContainerVariants, itemVariants, microSpring } from "@/lib/animations";
@@ -243,6 +253,118 @@ const KnowledgeMockup = () => {
   );
 };
 
+const AnalyticsMockup = () => (
+  <motion.div
+    className="w-full max-w-md bg-zinc-900/80 rounded-xl shadow-2xl overflow-hidden border border-zinc-800/60"
+    initial="hidden"
+    whileInView="visible"
+    viewport={{ once: true, amount: 0.3 }}
+    variants={sectionContainerVariants}
+  >
+    <motion.div variants={itemVariants} className="p-4 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-zinc-200 text-sm">Analytics Overview</span>
+        <span className="text-xs text-zinc-600 font-mono">Last 7 days</span>
+      </div>
+    </motion.div>
+    <div className="p-4 space-y-3">
+      <motion.div
+        variants={itemVariants}
+        className="p-3 bg-cyan-500/5 border border-cyan-500/10 rounded-lg"
+      >
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-cyan-400" />
+            <span className="text-sm font-medium text-zinc-300">Confidence Trend</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <ArrowUpRight className="w-3 h-3 text-emerald-400" />
+            <span className="text-sm font-mono font-medium text-emerald-400">94%</span>
+          </div>
+        </div>
+        <div className="flex items-end gap-1 h-8">
+          {[40, 55, 45, 60, 70, 65, 80, 75, 85, 90, 88, 94].map((height, barIndex) => (
+            <div
+              key={barIndex}
+              className="flex-1 bg-cyan-500/30 rounded-sm"
+              style={{ height: `${height}%` }}
+            />
+          ))}
+        </div>
+      </motion.div>
+      {[
+        { label: "Analyses This Week", value: "247", color: "text-zinc-300" },
+        { label: "Avg Confidence", value: "91%", color: "text-amber-400" },
+        { label: "Top Repo", value: "kenchi/api (32)", color: "text-cyan-400" },
+      ].map((stat) => (
+        <motion.div
+          key={stat.label}
+          variants={itemVariants}
+          className="flex justify-between text-sm px-1"
+        >
+          <span className="text-zinc-500">{stat.label}</span>
+          <span className={`font-mono font-medium ${stat.color}`}>{stat.value}</span>
+        </motion.div>
+      ))}
+    </div>
+  </motion.div>
+);
+
+const FineTuningMockup = () => (
+  <motion.div
+    className="w-full max-w-md bg-zinc-900/80 rounded-xl shadow-2xl overflow-hidden border border-zinc-800/60"
+    initial="hidden"
+    whileInView="visible"
+    viewport={{ once: true, amount: 0.3 }}
+    variants={sectionContainerVariants}
+  >
+    <motion.div variants={itemVariants} className="p-4 border-b border-zinc-800/60">
+      <span className="font-semibold text-zinc-200 text-sm">Model Performance</span>
+    </motion.div>
+    <div className="p-4 space-y-2.5">
+      <motion.div
+        variants={itemVariants}
+        className="p-3 bg-zinc-800/30 border border-zinc-800/40 rounded-lg"
+      >
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-medium text-zinc-400">Baseline v1.0</span>
+          <span className="text-xs font-mono text-zinc-500 px-2 py-0.5 bg-zinc-800/60 rounded-full">
+            87%
+          </span>
+        </div>
+        <div className="w-full h-1.5 bg-zinc-800 rounded-full">
+          <div className="h-full bg-zinc-600 rounded-full" style={{ width: "87%" }} />
+        </div>
+      </motion.div>
+      <motion.div
+        variants={itemVariants}
+        className="p-3 bg-rose-500/5 border border-rose-500/15 rounded-lg"
+      >
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-zinc-200">Fine-tuned v1.3</span>
+            <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+              ACTIVE
+            </span>
+          </div>
+          <span className="text-xs font-mono text-rose-400 px-2 py-0.5 bg-rose-500/10 rounded-full border border-rose-500/20">
+            94%
+          </span>
+        </div>
+        <div className="w-full h-1.5 bg-zinc-800 rounded-full">
+          <div
+            className="h-full bg-gradient-to-r from-rose-500 to-amber-500 rounded-full"
+            style={{ width: "94%" }}
+          />
+        </div>
+      </motion.div>
+      <motion.div variants={itemVariants} className="pt-2 text-center">
+        <span className="text-xs text-zinc-600 font-mono">Trained on 847 team analyses</span>
+      </motion.div>
+    </div>
+  </motion.div>
+);
+
 const featureCards: readonly FeatureCardProps[] = [
   {
     title: "CI/CD Analysis",
@@ -292,6 +414,35 @@ const featureCards: readonly FeatureCardProps[] = [
     icon: <Brain className="w-5 h-5 text-zinc-950" />,
     color: "bg-amber-400",
     mockup: <KnowledgeMockup />,
+    reversed: true,
+  },
+  {
+    title: "Team Analytics",
+    description:
+      "Track your team's CI health with real-time analytics. Spot trends, identify flaky repos, and measure improvement over time.",
+    features: [
+      "Real-time dashboard with live updates",
+      "Confidence trends & distribution",
+      "Per-repository failure breakdown",
+      "CSV export for reporting",
+    ],
+    icon: <BarChart3 className="w-5 h-5 text-zinc-950" />,
+    color: "bg-cyan-500",
+    mockup: <AnalyticsMockup />,
+  },
+  {
+    title: "Model Fine-Tuning",
+    description:
+      "Kenchi's AI gets smarter with every analysis. Your team's feedback trains a custom model that understands your specific codebase.",
+    features: [
+      "Automatic fine-tuning from feedback",
+      "A/B testing between model versions",
+      "One-click rollback to baseline",
+      "Model performance tracking",
+    ],
+    icon: <Sparkles className="w-5 h-5 text-zinc-950" />,
+    color: "bg-rose-500",
+    mockup: <FineTuningMockup />,
     reversed: true,
   },
 ];

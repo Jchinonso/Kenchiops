@@ -1,18 +1,26 @@
-import { Github, MessageSquare, Brain, Clock } from "lucide-react";
+import { Github, Gitlab, MessageSquare, Brain, Clock } from "lucide-react";
 import { motion } from "motion/react";
 import { sectionContainerVariants, itemVariants, microSpring } from "@/lib/animations";
 
 const activeIntegrations = [
   {
     name: "GitHub",
-    description: "PR comments, check runs, CI failure detection",
+    description: "PR comments, check runs, and GitHub Enterprise support",
     icon: <Github className="w-7 h-7" />,
     color: "bg-zinc-100",
     iconColor: "text-zinc-900",
   },
   {
+    name: "GitLab",
+    description: "CI pipeline monitoring and merge request analysis",
+    icon: <Gitlab className="w-7 h-7" />,
+    color: "bg-orange-500",
+    iconColor: "text-white",
+    badge: "Beta",
+  },
+  {
     name: "Slack",
-    description: "Real-time alerts and failure notifications",
+    description: "Alerts, slash commands, and incident investigation",
     icon: <MessageSquare className="w-7 h-7" />,
     color: "bg-violet-500",
     iconColor: "text-white",
@@ -27,7 +35,6 @@ const activeIntegrations = [
 ] as const;
 
 const comingSoon = [
-  { name: "GitLab" },
   { name: "Bitbucket" },
   { name: "Teams" },
   { name: "Discord" },
@@ -64,7 +71,7 @@ const Integrations = () => (
 
       {/* Active Integrations */}
       <motion.div
-        className="grid sm:grid-cols-3 gap-6 mb-14"
+        className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-14"
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.2 }}
@@ -75,8 +82,13 @@ const Integrations = () => (
             key={integration.name}
             variants={itemVariants}
             whileHover={{ y: -4, scale: 1.02, transition: microSpring }}
-            className="flex flex-col items-center gap-4 p-8 bg-zinc-900/60 border border-zinc-800/60 rounded-2xl hover:border-amber-500/20 transition-all duration-300 group"
+            className="relative flex flex-col items-center gap-4 p-8 bg-zinc-900/60 border border-zinc-800/60 rounded-2xl hover:border-amber-500/20 transition-all duration-300 group"
           >
+            {"badge" in integration && (
+              <span className="absolute -top-2.5 right-4 text-[10px] font-mono font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                {integration.badge}
+              </span>
+            )}
             <div
               className={`w-14 h-14 ${integration.color} rounded-xl flex items-center justify-center ${integration.iconColor} group-hover:scale-110 transition-transform`}
             >
