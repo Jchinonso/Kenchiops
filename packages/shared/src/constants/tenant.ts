@@ -106,7 +106,7 @@ export const TENANT_QUERIES = {
    * Requires migration 036 (partial unique index on LOWER(org_name), provider).
    */
   UPSERT_TENANT: `INSERT INTO tenants (org_name, provider, status, tenant_type)
-     VALUES (LOWER($1), $2, $3, $4)
+     VALUES (LOWER($1::text), $2::text, $3::text, $4::text)
      ON CONFLICT (LOWER(org_name), provider) WHERE status != 'deleted'
      DO UPDATE SET
        tenant_type = EXCLUDED.tenant_type,
@@ -115,7 +115,7 @@ export const TENANT_QUERIES = {
 
   /** Find a deleted tenant by org name and provider for reactivation. */
   FIND_DELETED_TENANT: `SELECT * FROM tenants
-     WHERE LOWER(org_name) = LOWER($1) AND provider = $2 AND status = 'deleted'
+     WHERE LOWER(org_name) = LOWER($1::text) AND provider = $2::text AND status = 'deleted'
      LIMIT 1`,
 
   /** Reactivate a deleted tenant with new status and type. */

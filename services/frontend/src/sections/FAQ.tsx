@@ -38,6 +38,21 @@ const faqs = [
     answer:
       "After your trial ends, you can continue using Kenchi on the Free plan (3 repos, 50 analyses/month) at no cost. Upgrade to Pro anytime for unlimited repositories and analyses.",
   },
+  {
+    question: "Does Kenchi have an API?",
+    answer:
+      "Yes. Kenchi provides a REST API with scoped API keys for programmatic access. You can trigger analyses, query results, manage team members, and export data. API access is available on Pro plans and above.",
+  },
+  {
+    question: "Can I export my data?",
+    answer:
+      "Yes. Kenchi supports full data export for GDPR compliance. Organization admins can request an async export of all analyses, feedback, and configurations. Exports are delivered as encrypted JSON files.",
+  },
+  {
+    question: "Does the AI model improve over time?",
+    answer:
+      "Yes. Kenchi uses your team's feedback to fine-tune a custom model specific to your codebase. You can A/B test model versions and roll back if needed. The more your team uses Kenchi, the more accurate it becomes.",
+  },
 ] as const;
 
 const faqSchema = JSON.stringify({

@@ -66,7 +66,11 @@ const toRole = (raw: string): Role => (VALID_ROLES.has(raw) ? (raw as Role) : "v
 
 export const usePermissions = (): UsePermissionsResult => {
   const { user } = useAuth();
-  const role = toRole(user?.role ?? "viewer");
+  // Use the role from the selected organization (matches the JWT's orgRole),
+  // not the global user role. This ensures per-org permission scoping:
+  // e.g., admin in org A but member in org B → see member UI in org B.
+  const selectedOrg = user?.organizations?.find((org) => org.isSelected);
+  const role = toRole(selectedOrg?.role ?? user?.role ?? "viewer");
   const permissions = ROLE_PERMISSIONS[role];
 
   const hasPermission = useMemo(

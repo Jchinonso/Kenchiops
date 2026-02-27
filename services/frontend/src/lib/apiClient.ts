@@ -153,6 +153,15 @@ export const apiClient = async (
         );
       } else if (errorCode === "DOWNGRADE_BLOCKED" || metadataCode === "DOWNGRADE_BLOCKED") {
         toast.error(errorBody.error?.message ?? "Current usage exceeds the target plan's limits.");
+      } else if (errorCode === "AUTHORIZATION_ERROR") {
+        // Membership revoked or tenant blocked — force re-authentication.
+        // The backend sets this when isMembershipRevoked() or isTenantBlocked() is true.
+        toast.error(
+          errorBody.error?.message ??
+            "Access denied. You may have been removed from this organization."
+        );
+        window.location.assign("/login?error=access_revoked");
+        return response;
       }
     } catch {
       // Ignore parsing errors — non-JSON responses are handled elsewhere
@@ -166,6 +175,9 @@ export const apiClient = async (
   const refreshed = await attemptTokenRefresh();
 
   if (!refreshed) {
+    // Force redirect to login on cascading auth failure.
+    // Without this, the user sees a silent error with no guidance.
+    window.location.assign("/login?error=session_expired");
     return response;
   }
 
