@@ -56,6 +56,40 @@ const SuspendedPage = () => (
   </div>
 );
 
+const DeletedPage = () => (
+  <div className="min-h-[60vh] flex items-center justify-center p-4">
+    <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-800 p-8 text-center">
+      <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+        <ShieldX className="w-7 h-7 text-gray-500 dark:text-gray-400" />
+      </div>
+
+      <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        Organization Deleted
+      </h1>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+        This organization has been deleted. If you belong to other organizations, you can switch to
+        one from your account settings.
+      </p>
+
+      <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
+        <Link
+          to="/dashboard/settings"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
+        >
+          Switch Organization
+        </Link>
+        <a
+          href="mailto:support@kenchi.dev"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+        >
+          Contact Support
+        </a>
+      </div>
+    </div>
+  </div>
+);
+
 const PastDueBanner = () => (
   <Alert
     className={cn(
@@ -91,6 +125,10 @@ export const TenantGuard = ({ children }: TenantGuardProps) => {
   }
 
   const { status } = subscription.subscription;
+
+  if (status === "deleted") {
+    return <DeletedPage />;
+  }
 
   if (status === "suspended") {
     return <SuspendedPage />;

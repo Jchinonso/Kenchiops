@@ -216,9 +216,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
 
         // Clear tenant-scoped localStorage to prevent cross-tenant data leaks.
-        // Filter state (kenchi_filters_*) is the primary concern.
+        // All kenchi_ prefixed keys are cleared (filters, cached selections, etc.).
         Object.keys(localStorage)
-          .filter((key) => key.startsWith("kenchi_filters_"))
+          .filter((key) => key.startsWith("kenchi_"))
           .forEach((key) => localStorage.removeItem(key));
 
         // The backend sets a new JWT cookie scoped to the switched org.
