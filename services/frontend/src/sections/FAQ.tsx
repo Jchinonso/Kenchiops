@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { motion } from "motion/react";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
-import { useScrollFadeIn } from "@/hooks/useScrollFadeIn";
+import { sectionContainerVariants, itemVariants } from "@/lib/animations";
 
 const faqs = [
   {
@@ -40,61 +40,70 @@ const faqs = [
   },
 ] as const;
 
-const FAQ = () => {
-  const { ref, fadeClass } = useScrollFadeIn();
+const faqSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: faq.answer,
+    },
+  })),
+});
 
-  const faqSchema = useMemo(
-    () =>
-      JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        mainEntity: faqs.map((faq) => ({
-          "@type": "Question",
-          name: faq.question,
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: faq.answer,
-          },
-        })),
-      }),
-    []
-  );
-
-  return (
-    <section
-      id="faq"
-      aria-label="Frequently asked questions"
-      className="py-20 bg-white dark:bg-gray-950"
-    >
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqSchema }} />
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div
-          ref={ref as React.RefObject<HTMLDivElement>}
-          className={`text-center mb-16 ${fadeClass}`}
+const FAQ = () => (
+  <section id="faq" aria-label="Frequently asked questions" className="py-24 bg-zinc-900/50">
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqSchema }} />
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <motion.div
+        className="text-center mb-16"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={sectionContainerVariants}
+      >
+        <motion.span
+          variants={itemVariants}
+          className="text-amber-500 text-sm font-mono font-medium uppercase tracking-widest mb-4 block"
         >
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            Frequently Asked Questions
-          </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Everything you need to know about Kenchi.
-          </p>
-        </div>
+          FAQ
+        </motion.span>
+        <motion.h2
+          variants={itemVariants}
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+        >
+          Frequently Asked Questions
+        </motion.h2>
+        <motion.p variants={itemVariants} className="text-lg text-zinc-500">
+          Everything you need to know about Kenchi.
+        </motion.p>
+      </motion.div>
 
-        <Accordion type="single" collapsible className="w-full">
-          {faqs.map((faq) => (
-            <AccordionItem key={faq.question} value={faq.question}>
-              <AccordionTrigger className="text-left text-gray-900 dark:text-gray-100">
-                {faq.question}
-              </AccordionTrigger>
-              <AccordionContent className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                {faq.answer}
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </div>
-    </section>
-  );
-};
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.2 }}
+        variants={sectionContainerVariants}
+      >
+        <motion.div variants={itemVariants}>
+          <Accordion type="single" collapsible className="w-full">
+            {faqs.map((faq) => (
+              <AccordionItem key={faq.question} value={faq.question} className="border-zinc-800/60">
+                <AccordionTrigger className="text-left text-zinc-200 hover:text-amber-400 transition-colors font-display">
+                  {faq.question}
+                </AccordionTrigger>
+                <AccordionContent className="text-zinc-500 leading-relaxed">
+                  {faq.answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </motion.div>
+      </motion.div>
+    </div>
+  </section>
+);
 
 export default FAQ;

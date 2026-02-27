@@ -18,6 +18,7 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Dashboard from "./pages/Dashboard";
 import AuthCallback from "./pages/AuthCallback";
+import { MotionConfig } from "motion/react";
 import { AuthProvider } from "./hooks/useAuth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import ThemeInitializer from "./components/ThemeInitializer";
@@ -26,10 +27,10 @@ import { BackToTop } from "./components/BackToTop";
 import { SocialProofToast } from "./components/SocialProofToast";
 
 const HomePage = () => (
-  <>
+  <div className="dark bg-zinc-950 min-h-screen">
     <a
       href="#main-content"
-      className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:bg-indigo-500 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg"
+      className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:bg-amber-500 focus:text-zinc-950 focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:font-semibold"
     >
       Skip to main content
     </a>
@@ -52,42 +53,44 @@ const HomePage = () => (
     <Footer />
     <BackToTop />
     <SocialProofToast />
-  </>
+  </div>
 );
 
 const App = () => (
   <ErrorBoundary>
-    <Router>
-      <AuthProvider>
-        <ThemeInitializer />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/oauth/callback" element={<AuthCallback />} />
-          {/* Backward-compatible redirects for old URLs */}
-          <Route
-            path="/dashboard/failures"
-            element={<Navigate to="/dashboard/cicd/analyses" replace />}
-          />
-          <Route
-            path="/dashboard/analyses"
-            element={<Navigate to="/dashboard/cicd/analyses" replace />}
-          />
-          <Route
-            path="/dashboard/repos"
-            element={<Navigate to="/dashboard/cicd/pipelines" replace />}
-          />
-          <Route
-            path="/dashboard/patterns"
-            element={<Navigate to="/dashboard/analytics" replace />}
-          />
-          {/* Dashboard shell handles all sub-routes */}
-          <Route path="/dashboard/*" element={<Dashboard />} />
-        </Routes>
-      </AuthProvider>
-    </Router>
+    <MotionConfig reducedMotion="user">
+      <Router>
+        <AuthProvider>
+          <ThemeInitializer />
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/oauth/callback" element={<AuthCallback />} />
+            {/* Backward-compatible redirects for old URLs */}
+            <Route
+              path="/dashboard/failures"
+              element={<Navigate to="/dashboard/cicd/analyses" replace />}
+            />
+            <Route
+              path="/dashboard/analyses"
+              element={<Navigate to="/dashboard/cicd/analyses" replace />}
+            />
+            <Route
+              path="/dashboard/repos"
+              element={<Navigate to="/dashboard/cicd/pipelines" replace />}
+            />
+            <Route
+              path="/dashboard/patterns"
+              element={<Navigate to="/dashboard/analytics" replace />}
+            />
+            {/* Dashboard shell handles all sub-routes */}
+            <Route path="/dashboard/*" element={<Dashboard />} />
+          </Routes>
+        </AuthProvider>
+      </Router>
+    </MotionConfig>
   </ErrorBoundary>
 );
 

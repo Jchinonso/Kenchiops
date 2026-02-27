@@ -9,13 +9,10 @@ export const useActiveSection = (sectionIds: readonly string[]): string => {
   const [active, setActive] = useState(sectionIds[0] ?? "");
 
   useEffect(() => {
-    const observers: Array<{ readonly observer: IntersectionObserver; readonly element: Element }> =
-      [];
-
-    sectionIds.forEach((id) => {
+    const observers = sectionIds.flatMap((id) => {
       const element = document.getElementById(id);
       if (!element) {
-        return;
+        return [];
       }
 
       const observer = new IntersectionObserver(
@@ -28,7 +25,7 @@ export const useActiveSection = (sectionIds: readonly string[]): string => {
       );
 
       observer.observe(element);
-      observers.push({ observer, element });
+      return [{ observer, element }];
     });
 
     return () => {

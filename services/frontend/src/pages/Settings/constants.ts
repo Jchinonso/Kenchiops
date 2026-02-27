@@ -14,7 +14,7 @@ export const NAV_ITEMS = [
   { id: "danger", label: "Danger Zone", icon: AlertTriangle },
 ] as const;
 
-export const SECTION_IDS = NAV_ITEMS.map((item) => item.id);
+export const SECTION_IDS: readonly string[] = NAV_ITEMS.map((item) => item.id);
 
 // ==================== Badge Styles ====================
 
@@ -27,7 +27,7 @@ export const PLAN_BADGE_STYLES: Readonly<Record<string, string>> = {
 };
 
 export const getPlanBadgeStyle = (planId: string): string =>
-  PLAN_BADGE_STYLES[planId] ?? PLAN_BADGE_STYLES.free;
+  PLAN_BADGE_STYLES[planId] ?? DEFAULT_BADGE_STYLE;
 
 export const BILLING_STATUS_LABELS: Readonly<Record<string, string>> = {
   active: "Your subscription is active",

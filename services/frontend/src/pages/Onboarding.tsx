@@ -1,23 +1,25 @@
 /**
- * Onboarding Page
+ * Onboarding Wizard
  *
- * Full-page onboarding experience for new users who haven't connected
- * any CI provider yet. GitHub users are guided to install the GitHub App
- * on their org. GitLab users are guided to connect their group.
+ * Multi-step onboarding experience for new users. Four steps:
+ * 0. Welcome — animated greeting
+ * 1. Connect Providers — GitHub, GitLab, Slack
+ * 2. What You'll Get — animated feature showcase
+ * 3. Ready — celebration + go to dashboard
+ *
+ * Props unchanged from original: displayName, provider, onSkip.
  */
 
-import {
-  Github,
-  Gitlab,
-  Rocket,
-  ArrowRight,
-  ExternalLink,
-  Zap,
-  Shield,
-  BarChart3,
-} from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { useRef, useEffect } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useOnboardingWizard } from "@/hooks/useOnboardingWizard";
+import { pageVariants, pageTransition } from "@/lib/animations";
+import { OnboardingBackground } from "@/components/onboarding/OnboardingBackground";
+import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
+import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
+import { ConnectProviderStep } from "@/components/onboarding/ConnectProviderStep";
+import { FeaturesStep } from "@/components/onboarding/FeaturesStep";
+import { ReadyStep } from "@/components/onboarding/ReadyStep";
 
 const GITHUB_APP_SLUG = import.meta.env.VITE_GITHUB_APP_SLUG ?? "kenchi-devops";
 
@@ -27,149 +29,75 @@ interface OnboardingProps {
   readonly onSkip: () => void;
 }
 
-interface FeatureCardProps {
-  readonly icon: React.ReactNode;
-  readonly title: string;
-  readonly description: string;
-}
-
-const FeatureCard = ({ icon, title, description }: FeatureCardProps) => (
-  <div className="flex items-start gap-3 p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-    <div className="flex-shrink-0 mt-0.5">{icon}</div>
-    <div>
-      <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">{title}</h4>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
-    </div>
-  </div>
-);
-
 export const Onboarding = ({ displayName, provider, onSkip }: OnboardingProps) => {
+  const wizard = useOnboardingWizard();
+  const shouldReduceMotion = useReducedMotion();
+  const stepRef = useRef<HTMLDivElement>(null);
   const firstName = displayName.split(" ")[0] ?? "there";
   const isGitHub = provider === "github";
 
+  // Focus the step container on step change for keyboard accessibility
+  useEffect(() => {
+    stepRef.current?.focus();
+  }, [wizard.currentStep]);
+
+  const renderStep = () => {
+    switch (wizard.currentStep) {
+      case 0:
+        return <WelcomeStep firstName={firstName} onNext={wizard.goNext} />;
+      case 1:
+        return (
+          <ConnectProviderStep
+            isGitHub={isGitHub}
+            githubAppSlug={GITHUB_APP_SLUG}
+            onNext={wizard.goNext}
+            onBack={wizard.goBack}
+          />
+        );
+      case 2:
+        return <FeaturesStep onNext={wizard.goNext} onBack={wizard.goBack} />;
+      case 3:
+        return <ReadyStep firstName={firstName} onComplete={onSkip} onBack={wizard.goBack} />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="max-w-lg mx-auto py-8 sm:py-16">
-      {/* Welcome Header */}
-      <div className="text-center mb-8 sm:mb-12">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 dark:bg-indigo-950 rounded-2xl mb-5">
-          <Rocket className="w-8 h-8 text-indigo-500" />
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          Welcome, {firstName}!
-        </h1>
-        <p className="text-base text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-          {isGitHub
-            ? "Install the Kenchi GitHub App on your organization to start getting AI-powered failure analysis on every GitHub Actions run."
-            : "Connect your GitLab group to start getting AI-powered failure analysis on every pipeline run."}
-        </p>
-      </div>
+    <OnboardingBackground>
+      {/* Progress indicator */}
+      <OnboardingProgress currentStep={wizard.currentStep} totalSteps={wizard.totalSteps} />
 
-      {/* Provider Card — contextual to login provider */}
-      <div className="mb-8">
-        {isGitHub ? (
-          <a
-            href={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block group"
-          >
-            <Card
-              className={cn(
-                "transition-all",
-                "hover:border-gray-300 dark:hover:border-gray-600",
-                "hover:shadow-lg hover:-translate-y-1",
-                "group-active:scale-[0.98]"
-              )}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-gray-900 dark:bg-white rounded-xl flex items-center justify-center">
-                    <Github className="w-5 h-5 text-white dark:text-gray-900" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                      Install GitHub App
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">GitHub Actions</p>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Select the organization and repositories you want Kenchi to monitor. Kenchi
-                  automatically analyzes every failed GitHub Actions workflow run.
-                </p>
-              </CardContent>
-            </Card>
-          </a>
-        ) : (
-          <a href="/auth/gitlab/login" className="block group">
-            <Card
-              className={cn(
-                "transition-all",
-                "hover:border-orange-300 dark:hover:border-orange-700",
-                "hover:shadow-lg hover:-translate-y-1",
-                "group-active:scale-[0.98]"
-              )}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
-                    <Gitlab className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                      Connect GitLab
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">GitLab CI/CD</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Connect your GitLab group and set up webhooks to start analyzing GitLab CI/CD
-                  pipeline failures automatically.
-                </p>
-              </CardContent>
-            </Card>
-          </a>
-        )}
-      </div>
-
-      {/* What Kenchi Does */}
-      <Card className="mb-8">
-        <CardContent className="p-6">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            What you get with Kenchi
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <FeatureCard
-              icon={<Zap className="w-4 h-4 text-amber-500" />}
-              title="AI Failure Analysis"
-              description="Automatic root cause diagnosis for every CI/CD failure."
-            />
-            <FeatureCard
-              icon={<Shield className="w-4 h-4 text-indigo-500" />}
-              title="Incident Triage"
-              description="Alert deduplication, severity scoring, and correlation."
-            />
-            <FeatureCard
-              icon={<BarChart3 className="w-4 h-4 text-purple-500" />}
-              title="Failure Dashboard"
-              description="Track failure trends, flaky tests, and team recovery time."
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Skip */}
-      <div className="text-center">
-        <button
-          type="button"
-          onClick={onSkip}
-          className="text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+      {/* Animated step transitions */}
+      <AnimatePresence mode="wait" custom={wizard.direction}>
+        <motion.div
+          ref={stepRef}
+          tabIndex={-1}
+          key={wizard.currentStep}
+          custom={wizard.direction}
+          variants={pageVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={shouldReduceMotion ? { duration: 0 } : pageTransition}
+          className="outline-none"
         >
-          Skip for now &rarr;
-        </button>
-      </div>
-    </div>
+          {renderStep()}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Skip link — always visible except on last step */}
+      {!wizard.isLastStep && (
+        <div className="text-center mt-8">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          >
+            Skip for now &rarr;
+          </button>
+        </div>
+      )}
+    </OnboardingBackground>
   );
 };
