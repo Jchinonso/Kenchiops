@@ -1,108 +1,148 @@
+import type { ReactNode } from "react";
 import { Check, AlertTriangle, Search, Shield, Brain } from "lucide-react";
+import { motion } from "motion/react";
 import { CIAnalysisMockup } from "@/components/CIAnalysisMockup";
-import { useScrollFadeIn } from "@/hooks/useScrollFadeIn";
+import { sectionContainerVariants, itemVariants, microSpring } from "@/lib/animations";
 
 interface FeatureCardProps {
   readonly title: string;
   readonly description: string;
   readonly features: readonly string[];
-  readonly icon: React.ReactNode;
+  readonly icon: ReactNode;
   readonly color: string;
-  readonly mockup: React.ReactNode;
+  readonly mockup: ReactNode;
+  readonly reversed?: boolean;
 }
 
-const FeatureCard = ({ title, description, features, icon, color, mockup }: FeatureCardProps) => (
-  <div className="feature-card">
-    <div className="grid lg:grid-cols-2 gap-0">
+const FeatureCard = ({
+  title,
+  description,
+  features,
+  icon,
+  color,
+  mockup,
+  reversed,
+}: FeatureCardProps) => (
+  <motion.div
+    variants={itemVariants}
+    whileHover={{ y: -4, transition: microSpring }}
+    className="feature-card"
+  >
+    <div className={`grid lg:grid-cols-2 gap-0 ${reversed ? "direction-rtl" : ""}`}>
       {/* Left Content */}
-      <div className="p-8 lg:p-10 min-w-0">
-        <div className="flex items-center gap-3 mb-4">
+      <div
+        className={`p-8 lg:p-10 min-w-0 ${reversed ? "lg:order-2" : ""}`}
+        style={{ direction: "ltr" }}
+      >
+        <div className="flex items-center gap-3 mb-5">
           <div className={`w-10 h-10 ${color} rounded-lg flex items-center justify-center`}>
             {icon}
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{title}</h3>
+          <h3 className="text-xl font-display font-bold text-zinc-100">{title}</h3>
         </div>
 
-        <p className="text-gray-600 dark:text-gray-400 mb-6">{description}</p>
+        <p className="text-zinc-400 mb-6 leading-relaxed">{description}</p>
 
         <ul className="space-y-3">
           {features.map((feature) => (
             <li key={feature} className="flex items-center gap-3">
-              <Check className="w-5 h-5 text-indigo-500 flex-shrink-0" />
-              <span className="text-gray-700 dark:text-gray-300">{feature}</span>
+              <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                <Check className="w-3 h-3 text-amber-500" />
+              </div>
+              <span className="text-zinc-300 text-sm">{feature}</span>
             </li>
           ))}
         </ul>
       </div>
 
       {/* Right Mockup */}
-      <div className="bg-gray-50 dark:bg-gray-800 p-8 lg:p-10 flex items-center justify-center min-w-0 overflow-hidden">
+      <div
+        className={`bg-zinc-900/50 p-8 lg:p-10 flex items-center justify-center min-w-0 overflow-hidden border-t lg:border-t-0 ${reversed ? "lg:order-1 lg:border-r border-zinc-800/40" : "lg:border-l border-zinc-800/40"}`}
+        style={{ direction: "ltr" }}
+      >
         {mockup}
       </div>
     </div>
-  </div>
+  </motion.div>
 );
 
 const RootCauseMockup = () => (
-  <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-    <div className="p-4 border-b border-gray-100 dark:border-gray-800">
+  <motion.div
+    className="w-full max-w-md bg-zinc-900/80 rounded-xl shadow-2xl overflow-hidden border border-zinc-800/60"
+    initial="hidden"
+    whileInView="visible"
+    viewport={{ once: true, amount: 0.3 }}
+    variants={sectionContainerVariants}
+  >
+    <motion.div variants={itemVariants} className="p-4 border-b border-zinc-800/60">
       <div className="flex items-center justify-between mb-2">
-        <span className="font-semibold text-gray-900 dark:text-gray-100">Root Cause Analysis</span>
-        <span className="px-2 py-1 bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 text-xs rounded-full font-medium">
+        <span className="font-semibold text-zinc-200 text-sm">Root Cause Analysis</span>
+        <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 text-xs rounded-full font-mono font-medium border border-emerald-500/20">
           92% Confidence
         </span>
       </div>
+    </motion.div>
+    <div className="p-4 space-y-2.5">
+      <motion.div
+        variants={itemVariants}
+        className="flex items-center justify-between p-3 bg-amber-500/5 border border-amber-500/10 rounded-lg"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-amber-500/15 rounded-lg flex items-center justify-center">
+            <Search className="w-4 h-4 text-amber-400" />
+          </div>
+          <div>
+            <div className="font-medium text-zinc-200 text-sm">Pattern Match</div>
+            <div className="text-xs text-zinc-500">Dependency conflict detected</div>
+          </div>
+        </div>
+        <span className="text-sm font-mono font-medium text-amber-400">0.95</span>
+      </motion.div>
+      <motion.div
+        variants={itemVariants}
+        className="flex items-center justify-between p-3 bg-violet-500/5 border border-violet-500/10 rounded-lg"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-violet-500/15 rounded-lg flex items-center justify-center">
+            <Brain className="w-4 h-4 text-violet-400" />
+          </div>
+          <div>
+            <div className="font-medium text-zinc-200 text-sm">Historical Match</div>
+            <div className="text-xs text-zinc-500">Similar to fix in PR #312</div>
+          </div>
+        </div>
+        <span className="text-sm font-mono font-medium text-violet-400">0.88</span>
+      </motion.div>
+      <motion.div
+        variants={itemVariants}
+        className="flex items-center justify-between p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-emerald-500/15 rounded-lg flex items-center justify-center">
+            <AlertTriangle className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div>
+            <div className="font-medium text-zinc-200 text-sm">Log Signal</div>
+            <div className="text-xs text-zinc-500">Stack trace analysis</div>
+          </div>
+        </div>
+        <span className="text-sm font-mono font-medium text-emerald-400">0.91</span>
+      </motion.div>
     </div>
-    <div className="p-4 space-y-3">
-      <div className="flex items-center justify-between p-3 bg-indigo-50 dark:bg-indigo-950 rounded-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
-            <Search className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <div className="font-medium text-gray-900 dark:text-gray-100">Pattern Match</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              Dependency conflict detected
-            </div>
-          </div>
-        </div>
-        <span className="text-sm font-medium text-indigo-600">0.95</span>
-      </div>
-      <div className="flex items-center justify-between p-3 bg-cyan-50 dark:bg-cyan-950 rounded-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
-            <Brain className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <div className="font-medium text-gray-900 dark:text-gray-100">Historical Match</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              Similar to fix in PR #312
-            </div>
-          </div>
-        </div>
-        <span className="text-sm font-medium text-cyan-600">0.88</span>
-      </div>
-      <div className="flex items-center justify-between p-3 bg-violet-50 dark:bg-violet-950 rounded-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-violet-500 rounded-lg flex items-center justify-center">
-            <AlertTriangle className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <div className="font-medium text-gray-900 dark:text-gray-100">Log Signal</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">Stack trace analysis</div>
-          </div>
-        </div>
-        <span className="text-sm font-medium text-violet-600">0.91</span>
-      </div>
-    </div>
-  </div>
+  </motion.div>
 );
 
 const RiskMockup = () => (
-  <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-    <div className="p-4 border-b border-gray-100 dark:border-gray-800">
-      <div className="font-semibold text-gray-900 dark:text-gray-100">PR Risk Assessment</div>
-    </div>
+  <motion.div
+    className="w-full max-w-md bg-zinc-900/80 rounded-xl shadow-2xl overflow-hidden border border-zinc-800/60"
+    initial="hidden"
+    whileInView="visible"
+    viewport={{ once: true, amount: 0.3 }}
+    variants={sectionContainerVariants}
+  >
+    <motion.div variants={itemVariants} className="p-4 border-b border-zinc-800/60">
+      <div className="font-semibold text-zinc-200 text-sm">PR Risk Assessment</div>
+    </motion.div>
     <div className="p-4">
       <div className="flex items-center justify-center mb-6">
         <div className="relative w-32 h-32">
@@ -112,106 +152,98 @@ const RiskMockup = () => (
               cy="50"
               r="40"
               fill="none"
-              className="stroke-gray-200 dark:stroke-gray-700"
+              className="stroke-zinc-800"
               strokeWidth="12"
             />
-            <circle
+            <motion.circle
               cx="50"
               cy="50"
               r="40"
               fill="none"
               stroke="#f59e0b"
               strokeWidth="12"
-              strokeDasharray="150 251"
+              initial={{ strokeDasharray: "0 251" }}
+              whileInView={{ strokeDasharray: "150 251" }}
+              viewport={{ once: true, amount: 0.5 }}
+              transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">Medium</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Risk Level</span>
+            <span className="text-2xl font-display font-bold text-zinc-100">Medium</span>
+            <span className="text-xs text-zinc-500">Risk Level</span>
           </div>
         </div>
       </div>
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-600 dark:text-gray-400">Files Changed</span>
-          <span className="font-medium text-gray-900 dark:text-gray-100">12 files</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-600 dark:text-gray-400">Lines Modified</span>
-          <span className="font-medium text-orange-600 dark:text-orange-400">+847 / -203</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-600 dark:text-gray-400">Past Failures</span>
-          <span className="font-medium text-amber-600 dark:text-amber-400">3 similar</span>
-        </div>
+      <div className="space-y-2.5">
+        <motion.div variants={itemVariants} className="flex justify-between text-sm">
+          <span className="text-zinc-500">Files Changed</span>
+          <span className="font-mono font-medium text-zinc-300">12 files</span>
+        </motion.div>
+        <motion.div variants={itemVariants} className="flex justify-between text-sm">
+          <span className="text-zinc-500">Lines Modified</span>
+          <span className="font-mono font-medium text-amber-400">+847 / -203</span>
+        </motion.div>
+        <motion.div variants={itemVariants} className="flex justify-between text-sm">
+          <span className="text-zinc-500">Past Failures</span>
+          <span className="font-mono font-medium text-amber-500">3 similar</span>
+        </motion.div>
       </div>
     </div>
-  </div>
+  </motion.div>
 );
 
-const KnowledgeMockup = () => (
-  <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-    <div className="p-4 border-b border-gray-100 dark:border-gray-800">
-      <div className="font-semibold text-gray-900 dark:text-gray-100">Knowledge Base</div>
-    </div>
-    <div className="p-4 space-y-3">
-      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-            TypeScript Build Errors
-          </div>
-          <span className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
-            94% resolved
-          </span>
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          127 patterns learned from 89 PRs
-        </div>
-      </div>
-      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-            Docker Build Failures
-          </div>
-          <span className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
-            91% resolved
-          </span>
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          43 patterns learned from 31 PRs
-        </div>
-      </div>
-      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-            Test Suite Timeouts
-          </div>
-          <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950 px-2 py-0.5 rounded-full">
-            78% resolved
-          </span>
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          56 patterns learned from 42 PRs
-        </div>
-      </div>
-      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-            Dependency Conflicts
-          </div>
-          <span className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
-            96% resolved
-          </span>
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          82 patterns learned from 67 PRs
-        </div>
-      </div>
-    </div>
-  </div>
-);
+const KnowledgeMockup = () => {
+  const items: ReadonlyArray<{
+    readonly title: string;
+    readonly pct: string;
+    readonly patterns: string;
+    readonly warn?: boolean;
+  }> = [
+    { title: "TypeScript Build Errors", pct: "94%", patterns: "127 patterns from 89 PRs" },
+    { title: "Docker Build Failures", pct: "91%", patterns: "43 patterns from 31 PRs" },
+    { title: "Test Suite Timeouts", pct: "78%", patterns: "56 patterns from 42 PRs", warn: true },
+    { title: "Dependency Conflicts", pct: "96%", patterns: "82 patterns from 67 PRs" },
+  ];
 
-const featureCards = [
+  return (
+    <motion.div
+      className="w-full max-w-md bg-zinc-900/80 rounded-xl shadow-2xl overflow-hidden border border-zinc-800/60"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.3 }}
+      variants={sectionContainerVariants}
+    >
+      <motion.div variants={itemVariants} className="p-4 border-b border-zinc-800/60">
+        <div className="font-semibold text-zinc-200 text-sm">Knowledge Base</div>
+      </motion.div>
+      <div className="p-4 space-y-2.5">
+        {items.map((item) => (
+          <motion.div
+            key={item.title}
+            variants={itemVariants}
+            className="p-3 bg-zinc-800/30 border border-zinc-800/40 rounded-lg"
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-sm font-medium text-zinc-300">{item.title}</div>
+              <span
+                className={`text-xs font-mono px-2 py-0.5 rounded-full border ${
+                  item.warn
+                    ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                    : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                }`}
+              >
+                {item.pct}
+              </span>
+            </div>
+            <div className="text-xs text-zinc-600">{item.patterns}</div>
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+const featureCards: readonly FeatureCardProps[] = [
   {
     title: "CI/CD Analysis",
     description:
@@ -221,8 +253,8 @@ const featureCards = [
       "Multi-model analysis for accuracy",
       "Automatic pattern recognition",
     ],
-    icon: <AlertTriangle className="w-5 h-5 text-white" />,
-    color: "bg-indigo-500",
+    icon: <AlertTriangle className="w-5 h-5 text-zinc-950" />,
+    color: "bg-amber-500",
     mockup: <CIAnalysisMockup />,
   },
   {
@@ -234,17 +266,18 @@ const featureCards = [
       "Factor breakdown per diagnosis",
       "Historical pattern matching",
     ],
-    icon: <Search className="w-5 h-5 text-white" />,
-    color: "bg-cyan-500",
+    icon: <Search className="w-5 h-5 text-zinc-950" />,
+    color: "bg-violet-500",
     mockup: <RootCauseMockup />,
+    reversed: true,
   },
   {
     title: "Risk Assessment",
     description:
       "Catch risky changes before they break production. Know which PRs need extra attention.",
     features: ["Custom rule engine", "PR risk scoring", "Automated GitHub check runs"],
-    icon: <Shield className="w-5 h-5 text-white" />,
-    color: "bg-amber-500",
+    icon: <Shield className="w-5 h-5 text-zinc-950" />,
+    color: "bg-emerald-500",
     mockup: <RiskMockup />,
   },
   {
@@ -256,45 +289,62 @@ const featureCards = [
       "Historical analysis patterns",
       "Continuous improvement loop",
     ],
-    icon: <Brain className="w-5 h-5 text-white" />,
-    color: "bg-violet-500",
+    icon: <Brain className="w-5 h-5 text-zinc-950" />,
+    color: "bg-amber-400",
     mockup: <KnowledgeMockup />,
+    reversed: true,
   },
-] as const;
+];
 
-const Features = () => {
-  const { ref, fadeClass } = useScrollFadeIn();
+const Features = () => (
+  <section id="features" aria-label="Product features" className="py-24 bg-zinc-950 relative">
+    {/* Subtle grid */}
+    <div className="absolute inset-0 dot-grid opacity-20" />
 
-  return (
-    <section
-      id="features"
-      aria-label="Product features"
-      className="py-20 bg-white dark:bg-gray-950"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <div
-          ref={ref as React.RefObject<HTMLDivElement>}
-          className={`text-center mb-16 ${fadeClass}`}
+    <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Section Header */}
+      <motion.div
+        className="text-center mb-20"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={sectionContainerVariants}
+      >
+        <motion.span
+          variants={itemVariants}
+          className="text-amber-500 text-sm font-mono font-medium uppercase tracking-widest mb-4 block"
         >
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            AI-Powered CI/CD Intelligence
-          </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            From failure detection to root cause analysis — Kenchi automates the debugging workflow
-            so your team ships faster.
-          </p>
-        </div>
+          Features
+        </motion.span>
+        <motion.h2
+          variants={itemVariants}
+          className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold text-zinc-100 mb-5"
+        >
+          AI-Powered CI/CD Intelligence
+        </motion.h2>
+        <motion.p
+          variants={itemVariants}
+          className="text-lg text-zinc-500 max-w-2xl mx-auto leading-relaxed"
+        >
+          From failure detection to root cause analysis — Kenchi automates the debugging workflow so
+          your team ships faster.
+        </motion.p>
+      </motion.div>
 
-        {/* Feature Cards */}
-        <div className="space-y-8">
-          {featureCards.map((feature) => (
-            <FeatureCard key={feature.title} {...feature} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-};
+      {/* Feature Cards */}
+      <motion.div
+        className="space-y-8"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.1 }}
+        variants={sectionContainerVariants}
+      >
+        {featureCards.map((feature) => (
+          <FeatureCard key={feature.title} {...feature} />
+        ))}
+      </motion.div>
+    </div>
+  </section>
+);
 
 export default Features;

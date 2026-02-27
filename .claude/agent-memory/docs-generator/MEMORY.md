@@ -70,10 +70,27 @@
 - Dashboard sidebar has sections for Incidents, Infrastructure, Deployments, Analytics, Integrations, Settings
 - All render `ComingSoon` placeholder component at `services/frontend/src/components/ComingSoon.tsx`
 
+### Multi-Tenant Auth Design (Analyzed 2026-02-26)
+
+- Auth flow: OAuth login -> findOrCreateUser -> autoLinkOrganizations -> JWT issuance
+- Account linking: verified email match merges identities across providers
+- Tenant scoping: `tenants` table has `(org_name, provider)` -- GitHub "acme" and GitLab "acme" are separate
+- Role mapping: `PROVIDER_ROLE_MAP` in `constants/auth.ts` maps provider roles to Kenchi roles
+- Key flaw: first user to trigger tenant creation gets `"owner"` regardless of provider role (line 472 in authService.ts)
+- Key flaw: `addUserOrganization` uses ON CONFLICT DO NOTHING -- roles never sync from provider changes
+- Key flaw: `requireTenantMatch` in `tenantGuard.ts` skips check entirely for admin/owner roles (cross-tenant bypass)
+- Key flaw: GitHub `/user/orgs` API does not return per-org role, so all GitHub users get default `"member"`
+- Personal account fallback: GitHub users with no orgs get username as tenant (creates clutter)
+- Reconciliation risk: empty provider API response causes all existing memberships to be removed as "stale"
+- JWT carries `tid` (tenantId) baked in for 15-min lifetime; stale after org switch
+- Comprehensive design review: `docs/MULTI_TENANT_AUTH_DESIGN_REVIEW.md`
+- Related docs: `MULTI_TENANT_AUDIT.md`, `MULTI_TENANT_REMEDIATION.md`, `MULTI_TENANT_ARCHITECTURE.md`
+
 ## Documentation Inventory
 
 - `docs/PRICING_TIERS.md` -- older pricing doc (Free/Starter/Team/Enterprise with different names/prices)
 - `docs/SUBSCRIPTION_PLANS.md` -- new subscription plan enforcement doc (Free/Pro/Team/Enterprise)
 - `docs/DATA_MODELS.md` -- Event, Evidence, LLMAnalysisResult, ActionProposal schemas
+- `docs/MULTI_TENANT_AUTH_DESIGN_REVIEW.md` -- auth/org design flaws, edge cases, migration paths (created 2026-02-26)
 - 40+ docs in `docs/` directory covering features, plans, implementation guides
 - PRICING_TIERS.md is superseded by SUBSCRIPTION_PLANS.md for enforcement details

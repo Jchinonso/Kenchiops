@@ -1,4 +1,11 @@
 import { ArrowRight, Zap, Clock, TrendingDown } from "lucide-react";
+import { motion } from "motion/react";
+import {
+  sectionContainerVariants,
+  itemVariants,
+  scaleInVariants,
+  microSpring,
+} from "@/lib/animations";
 
 interface CaseStudyAvatar {
   readonly initials: string;
@@ -9,102 +16,119 @@ const caseStudies = [
   {
     company: "FastShip",
     logo: (
-      <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
-        <Zap className="w-5 h-5 text-white" />
+      <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
+        <Zap className="w-5 h-5 text-zinc-950" />
       </div>
     ),
     badge: "120-person eng team",
     metric: "73%",
     metricLabel: "faster CI failure resolution",
-    image:
-      "bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30",
+    gradient: "from-amber-500/5 to-violet-500/5",
     avatars: [
-      { initials: "SC", color: "bg-indigo-500" },
+      { initials: "SC", color: "bg-amber-500" },
       { initials: "JL", color: "bg-violet-500" },
-      { initials: "AR", color: "bg-cyan-500" },
+      { initials: "AR", color: "bg-emerald-500" },
     ] as readonly CaseStudyAvatar[],
   },
   {
     company: "ScaleOps",
     logo: (
-      <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
+      <div className="w-8 h-8 bg-violet-500 rounded-lg flex items-center justify-center">
         <Clock className="w-5 h-5 text-white" />
       </div>
     ),
     badge: "Series B startup",
     metric: "6hrs",
     metricLabel: "saved per developer per week",
-    image: "bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-cyan-900/30 dark:to-blue-900/30",
+    gradient: "from-violet-500/5 to-emerald-500/5",
     avatars: [
-      { initials: "MK", color: "bg-cyan-500" },
+      { initials: "MK", color: "bg-violet-500" },
       { initials: "DP", color: "bg-blue-500" },
-      { initials: "TN", color: "bg-teal-500" },
+      { initials: "TN", color: "bg-emerald-500" },
     ] as readonly CaseStudyAvatar[],
   },
   {
     company: "DeployHQ",
     logo: (
-      <div className="w-8 h-8 bg-violet-500 rounded-lg flex items-center justify-center">
+      <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
         <TrendingDown className="w-5 h-5 text-white" />
       </div>
     ),
     badge: "Enterprise, 500+ devs",
     metric: "62%",
     metricLabel: "reduction in mean time to recovery",
-    image:
-      "bg-gradient-to-br from-violet-100 to-pink-100 dark:from-violet-900/30 dark:to-pink-900/30",
+    gradient: "from-emerald-500/5 to-amber-500/5",
     avatars: [
-      { initials: "RW", color: "bg-violet-500" },
+      { initials: "RW", color: "bg-emerald-500" },
       { initials: "EH", color: "bg-pink-500" },
-      { initials: "KS", color: "bg-purple-500" },
+      { initials: "KS", color: "bg-amber-500" },
     ] as readonly CaseStudyAvatar[],
   },
-];
+] as const;
 
 const CaseStudies = () => (
-  <section
-    id="case-studies"
-    aria-label="Customer case studies"
-    className="py-20 bg-white dark:bg-gray-950"
-  >
+  <section id="case-studies" aria-label="Customer case studies" className="py-24 bg-zinc-950">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="text-center mb-16">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+      <motion.div
+        className="text-center mb-16"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={sectionContainerVariants}
+      >
+        <motion.span
+          variants={itemVariants}
+          className="text-amber-500 text-sm font-mono font-medium uppercase tracking-widest mb-4 block"
+        >
+          Case Studies
+        </motion.span>
+        <motion.h2
+          variants={itemVariants}
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+        >
           Teams Shipping Faster with Kenchi
-        </h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+        </motion.h2>
+        <motion.p variants={itemVariants} className="text-lg text-zinc-500 max-w-2xl mx-auto">
           See how engineering teams are cutting their CI/CD debugging time dramatically
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
 
-      <div className="grid md:grid-cols-3 gap-8">
+      <motion.div
+        className="grid md:grid-cols-3 gap-6"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.2 }}
+        variants={sectionContainerVariants}
+      >
         {caseStudies.map((study) => (
-          <div
+          <motion.div
             key={study.company}
-            className="feature-card group hover:shadow-feature transition-shadow"
+            variants={itemVariants}
+            whileHover={{ y: -6, transition: microSpring }}
+            className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl overflow-hidden hover:border-amber-500/20 transition-all duration-300 group"
           >
             {/* Header */}
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
+            <div className="p-6 border-b border-zinc-800/40">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   {study.logo}
-                  <span className="font-bold text-gray-900 dark:text-gray-100">
-                    {study.company}
-                  </span>
+                  <span className="font-display font-bold text-zinc-100">{study.company}</span>
                 </div>
-                <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-3 py-1 rounded-full">
+                <span className="text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
                   {study.badge}
                 </span>
               </div>
             </div>
 
             {/* Team Avatars */}
-            <div className={`h-48 ${study.image} flex items-center justify-center`}>
+            <div
+              className={`h-44 bg-gradient-to-br ${study.gradient} flex items-center justify-center`}
+            >
               <div className="flex -space-x-4">
                 {study.avatars.map((avatar) => (
                   <div
                     key={avatar.initials}
-                    className={`w-16 h-16 ${avatar.color} rounded-full border-4 border-white dark:border-gray-800 shadow-lg flex items-center justify-center`}
+                    className={`w-16 h-16 ${avatar.color} rounded-full border-4 border-zinc-900 shadow-lg flex items-center justify-center`}
                   >
                     <span className="text-white font-bold text-lg">{avatar.initials}</span>
                   </div>
@@ -114,21 +138,26 @@ const CaseStudies = () => (
 
             {/* Metrics */}
             <div className="p-6">
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-4xl font-bold text-indigo-500">{study.metric}</span>
-                <span className="text-gray-600 dark:text-gray-400">{study.metricLabel}</span>
+              <div className="flex items-baseline gap-2 mb-3">
+                <motion.span
+                  variants={scaleInVariants}
+                  className="text-4xl font-display font-extrabold text-amber-500"
+                >
+                  {study.metric}
+                </motion.span>
+                <span className="text-zinc-500 text-sm">{study.metricLabel}</span>
               </div>
               <a
                 href="/#cta"
-                className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group-hover:border-indigo-300 dark:group-hover:border-indigo-700"
+                className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 border border-zinc-800 rounded-lg text-sm font-medium text-zinc-400 hover:text-amber-400 hover:border-amber-500/30 transition-colors"
               >
                 READ FULL CASE STUDY
                 <ArrowRight className="w-4 h-4" />
               </a>
             </div>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </div>
   </section>
 );

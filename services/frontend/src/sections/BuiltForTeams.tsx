@@ -1,5 +1,6 @@
 import { Server, Activity, Wrench, Code2, HardDrive, TestTube } from "lucide-react";
-import { useScrollFadeIn } from "@/hooks/useScrollFadeIn";
+import { motion } from "motion/react";
+import { sectionContainerVariants, itemVariants, microSpring } from "@/lib/animations";
 
 const teams = [
   {
@@ -40,48 +41,58 @@ const teams = [
   },
 ] as const;
 
-const BuiltForTeams = () => {
-  const { ref, fadeClass } = useScrollFadeIn();
-
-  return (
-    <section
-      id="teams"
-      aria-label="Built for engineering teams"
-      className="py-20 bg-white dark:bg-gray-950"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div
-          ref={ref as React.RefObject<HTMLDivElement>}
-          className={`text-center mb-16 ${fadeClass}`}
+const BuiltForTeams = () => (
+  <section id="teams" aria-label="Built for engineering teams" className="py-24 bg-zinc-900/50">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <motion.div
+        className="text-center mb-16"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={sectionContainerVariants}
+      >
+        <motion.span
+          variants={itemVariants}
+          className="text-amber-500 text-sm font-mono font-medium uppercase tracking-widest mb-4 block"
         >
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            Built for Every Engineering Team
-          </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Whether you run the platform or ship features on it — Kenchi helps your team move faster
-            with confidence.
-          </p>
-        </div>
+          For Every Team
+        </motion.span>
+        <motion.h2
+          variants={itemVariants}
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+        >
+          Built for Every Engineering Team
+        </motion.h2>
+        <motion.p variants={itemVariants} className="text-lg text-zinc-500 max-w-2xl mx-auto">
+          Whether you run the platform or ship features on it — Kenchi helps your team move faster
+          with confidence.
+        </motion.p>
+      </motion.div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {teams.map((team) => (
-            <div
-              key={team.title}
-              className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-8 hover:shadow-lg transition-all duration-300 group"
-            >
-              <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-950 rounded-xl flex items-center justify-center text-indigo-500 mb-6 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-                {team.icon}
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-                {team.title}
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">{team.description}</p>
+      <motion.div
+        className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.15 }}
+        variants={sectionContainerVariants}
+      >
+        {teams.map((team) => (
+          <motion.div
+            key={team.title}
+            variants={itemVariants}
+            whileHover={{ y: -4, transition: microSpring }}
+            className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-8 hover:border-amber-500/20 transition-all duration-300 group"
+          >
+            <div className="w-14 h-14 bg-zinc-800/60 border border-zinc-700/40 rounded-xl flex items-center justify-center text-zinc-400 mb-6 group-hover:text-amber-400 group-hover:border-amber-500/30 transition-all duration-300">
+              {team.icon}
             </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-};
+            <h3 className="text-lg font-display font-bold text-zinc-100 mb-3">{team.title}</h3>
+            <p className="text-zinc-500 text-sm leading-relaxed">{team.description}</p>
+          </motion.div>
+        ))}
+      </motion.div>
+    </div>
+  </section>
+);
 
 export default BuiltForTeams;

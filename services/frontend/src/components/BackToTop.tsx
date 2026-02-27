@@ -37,9 +37,9 @@ export const BackToTop = () => {
       aria-label="Back to top"
       className={cn(
         "fixed bottom-6 right-6 z-40 p-3 rounded-full",
-        "bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg",
+        "bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg",
         "transition-all duration-300",
-        "hover:-translate-y-0.5 hover:shadow-indigo-500/40 hover:shadow-xl",
+        "hover:-translate-y-0.5 hover:shadow-amber-500/40 hover:shadow-xl",
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
       )}
     >

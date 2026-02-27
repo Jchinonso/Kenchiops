@@ -25,6 +25,7 @@ import {
   logAuditEvent,
   AUDIT_ACTIONS,
   TENANT_STATUS,
+  rateLimitByCategory,
 } from "@kenchi/shared";
 
 const router = Router();
@@ -63,6 +64,7 @@ const handleGetOrganizations = async (req: Request, res: Response): Promise<void
       role: org.role,
       isDefault: org.isDefault,
       tenantStatus: org.tenantStatus,
+      tenantType: org.tenantType,
       joinedAt: org.joinedAt.toISOString(),
     })),
   });
@@ -172,7 +174,15 @@ const handleSwitchOrganization = async (req: Request, res: Response): Promise<vo
 
 // ==================== Route Definitions ====================
 
-router.get("/api/v1/organizations", asyncHandler(handleGetOrganizations));
-router.post("/api/v1/organizations/switch", asyncHandler(handleSwitchOrganization));
+router.get(
+  "/api/v1/organizations",
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleGetOrganizations)
+);
+router.post(
+  "/api/v1/organizations/switch",
+  rateLimitByCategory("standard"),
+  asyncHandler(handleSwitchOrganization)
+);
 
 export { router as organizationRoutes };

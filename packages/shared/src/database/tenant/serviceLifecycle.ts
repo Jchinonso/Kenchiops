@@ -9,6 +9,7 @@
  */
 
 import {
+  query,
   transaction,
   createLogger,
   getErrorMessage,
@@ -55,24 +56,40 @@ const ensureTenant = async (
   client: Parameters<Parameters<typeof transaction>[0]>[0],
   orgName: string,
   provider: string,
-  status: TenantStatus
+  status: TenantStatus,
+  tenantType: string = "organization"
 ): Promise<TenantRow> => {
-  const existing = await client.query<TenantRow>(TENANT_QUERIES.FIND_BY_ORG_NAME_AND_PROVIDER, [
-    orgName,
+  // Normalize org_name to lowercase for consistent matching (FLAW-10).
+  const normalizedName = orgName.toLowerCase();
+
+  // Check for a previously deleted tenant with the same name/provider.
+  // The partial unique index (migration 036) excludes deleted rows, so the
+  // UPSERT below would silently INSERT a duplicate. Reactivating preserves
+  // the tenant's audit log, analyses, and provider connections.
+  const deletedResult = await client.query<TenantRow>(TENANT_QUERIES.FIND_DELETED_TENANT, [
+    normalizedName,
     provider,
-    TENANT_STATUS.DELETED,
   ]);
 
-  if (existing.rows.length > 0) {
-    return existing.rows[0];
+  if (deletedResult.rows.length > 0) {
+    const reactivated = await client.query<TenantRow>(TENANT_QUERIES.REACTIVATE_TENANT, [
+      status,
+      tenantType,
+      deletedResult.rows[0].id,
+    ]);
+    return reactivated.rows[0];
   }
 
-  const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
-    orgName,
+  // Race-safe UPSERT for non-deleted tenants. On conflict, updates tenant_type
+  // in case the caller provides a more specific type (e.g., "personal").
+  // Requires migration 036 (partial unique index on LOWER(org_name), provider).
+  const result = await client.query<TenantRow>(TENANT_QUERIES.UPSERT_TENANT, [
+    normalizedName,
     provider,
     status,
+    tenantType,
   ]);
-  return created.rows[0];
+  return result.rows[0];
 };
 
 // ==================== Creation Functions ====================
@@ -203,22 +220,20 @@ export const createFromSlackInstall = async (
 ): Promise<Tenant> => {
   validateSlackInstallInput(slackData);
 
-  const orgName = orgNameHint ?? slackData.slackTeamName;
+  // Normalize to lowercase for consistent matching (FLAW-10)
+  const orgName = (orgNameHint ?? slackData.slackTeamName).toLowerCase();
 
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
-        orgName,
-        "github",
-        TENANT_STATUS.ACTIVE,
-      ]);
+      // Use ensureTenant for dedup safety; provider is "slack" (not "github")
+      const tenantRow = await ensureTenant(client, orgName, "slack", TENANT_STATUS.ACTIVE);
 
-      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.SLACK_INSTALLED, {
+      await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.SLACK_INSTALLED, {
         workspaceId: slackData.slackWorkspaceId,
         teamName: slackData.slackTeamName,
       });
 
-      return created.rows[0];
+      return tenantRow;
     });
 
     // Create the slack provider connection
@@ -260,19 +275,18 @@ export const createFromSlackInstall = async (
 export const createFromGitLabGroup = async (data: CreateTenantFromGitLab): Promise<Tenant> => {
   validateId(data.gitlabGroupPath, "gitlabGroupPath");
 
+  // Normalize to lowercase for consistent matching (FLAW-10)
+  const normalizedPath = data.gitlabGroupPath.toLowerCase();
+
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
-        data.gitlabGroupPath,
-        "gitlab",
-        TENANT_STATUS.ACTIVE,
-      ]);
+      const tenantRow = await ensureTenant(client, normalizedPath, "gitlab", TENANT_STATUS.ACTIVE);
 
-      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.GITLAB_LINKED, {
+      await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.GITLAB_LINKED, {
         gitlabGroupPath: data.gitlabGroupPath,
       });
 
-      return created.rows[0];
+      return tenantRow;
     });
 
     // Create the gitlab provider connection
@@ -309,19 +323,18 @@ export const createFromGitLabGroup = async (data: CreateTenantFromGitLab): Promi
 export const createFromGitHubLogin = async (orgName: string): Promise<Tenant> => {
   validateId(orgName, "orgName");
 
+  // Normalize to lowercase for consistent matching (FLAW-10)
+  const normalizedName = orgName.toLowerCase();
+
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
-        orgName,
-        "github",
-        TENANT_STATUS.ACTIVE,
-      ]);
+      const tenantRow = await ensureTenant(client, normalizedName, "github", TENANT_STATUS.ACTIVE);
 
-      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.GITHUB_LINKED, {
+      await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.GITHUB_LINKED, {
         orgName,
       });
 
-      return created.rows[0];
+      return tenantRow;
     });
 
     logger.info("Tenant created from GitHub login", {
@@ -349,19 +362,23 @@ export const createFromGitHubLogin = async (orgName: string): Promise<Tenant> =>
 export const createFromBitbucketWorkspace = async (workspace: string): Promise<Tenant> => {
   validateId(workspace, "workspace");
 
+  // Normalize to lowercase for consistent matching (FLAW-10)
+  const normalizedWorkspace = workspace.toLowerCase();
+
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
-        workspace,
+      const tenantRow = await ensureTenant(
+        client,
+        normalizedWorkspace,
         "bitbucket",
-        TENANT_STATUS.ACTIVE,
-      ]);
+        TENANT_STATUS.ACTIVE
+      );
 
-      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.BITBUCKET_LINKED, {
+      await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.BITBUCKET_LINKED, {
         workspace,
       });
 
-      return created.rows[0];
+      return tenantRow;
     });
 
     // Create the bitbucket provider connection
@@ -398,19 +415,23 @@ export const createFromBitbucketWorkspace = async (workspace: string): Promise<T
 export const createFromAzureDevOpsAccount = async (org: string): Promise<Tenant> => {
   validateId(org, "org");
 
+  // Normalize to lowercase for consistent matching (FLAW-10)
+  const normalizedOrg = org.toLowerCase();
+
   try {
     const result = await transaction(async (client) => {
-      const created = await client.query<TenantRow>(TENANT_QUERIES.INSERT_TENANT_WITH_PROVIDER, [
-        org,
+      const tenantRow = await ensureTenant(
+        client,
+        normalizedOrg,
         "azure_devops",
-        TENANT_STATUS.ACTIVE,
-      ]);
+        TENANT_STATUS.ACTIVE
+      );
 
-      await insertAuditLog(client, created.rows[0].id, AUDIT_ACTIONS.AZURE_DEVOPS_LINKED, {
+      await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.AZURE_DEVOPS_LINKED, {
         org,
       });
 
-      return created.rows[0];
+      return tenantRow;
     });
 
     // Create the azure_devops provider connection
@@ -431,6 +452,57 @@ export const createFromAzureDevOpsAccount = async (org: string): Promise<Tenant>
   } catch (error) {
     logger.error("Failed to create tenant from Azure DevOps account", {
       org,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+// ==================== Tenant Type Management ====================
+
+/**
+ * Mark a tenant as 'personal' type (GitHub username fallback).
+ * Called after creating a personal tenant via the GitHub login fallback path.
+ *
+ * @param tenantId - Tenant ID to mark as personal
+ */
+export const markTenantAsPersonal = async (tenantId: string): Promise<void> => {
+  validateId(tenantId, "tenantId");
+  await query(TENANT_QUERIES.UPDATE_TENANT_TYPE, ["personal", tenantId]);
+};
+
+// ==================== Org Name Management ====================
+
+/**
+ * Update a tenant's org_name (e.g., when GitHub username changes for personal tenants).
+ * Normalizes to lowercase for consistent matching (FLAW-10, FLAW-13).
+ *
+ * @param tenantId - Tenant ID
+ * @param newOrgName - New org name
+ * @returns Updated tenant or null if not found
+ */
+export const updateTenantOrgName = async (
+  tenantId: string,
+  newOrgName: string
+): Promise<Tenant | null> => {
+  validateId(tenantId, "tenantId");
+
+  try {
+    const normalizedName = newOrgName.toLowerCase();
+    const result = await query<TenantRow>(TENANT_QUERIES.UPDATE_ORG_NAME, [
+      normalizedName,
+      tenantId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    logger.info("Tenant org name updated", { tenantId, newOrgName: newOrgName.toLowerCase() });
+    return rowToTenant(result.rows[0]);
+  } catch (error) {
+    logger.error("Failed to update tenant org name", {
+      tenantId,
       error: getErrorMessage(error),
     });
     throw error;
@@ -611,7 +683,19 @@ export const handleGitHubUninstall = async (installationId: number): Promise<voi
     }
 
     await transaction(async (client) => {
-      await client.query(TENANT_QUERIES.UPDATE_STATUS, [TENANT_STATUS.DELETED, tenantRow.id]);
+      const updated = await client.query(TENANT_QUERIES.UPDATE_STATUS, [
+        TENANT_STATUS.DELETED,
+        tenantRow.id,
+      ]);
+      if (updated.rowCount === 0) {
+        // Tenant was already deleted or removed between the lookup and status update.
+        // Log and continue — the deactivation and session revocation below are idempotent.
+        logger.warn("Tenant already deleted during GitHub uninstall", {
+          installationId,
+          tenantId: tenantRow.id,
+        });
+        return;
+      }
       await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.GITHUB_UNINSTALLED, {
         installationId,
       });
@@ -620,10 +704,28 @@ export const handleGitHubUninstall = async (installationId: number): Promise<voi
     // Deactivate the github_app connection
     await deactivateByTenantAndProvider(tenantRow.id, "github_app");
 
-    logger.info("Handled GitHub App uninstallation", {
-      tenantId: tenantRow.id,
-      installationId,
-    });
+    // Revoke all active sessions so removed users cannot continue using stale JWTs.
+    // Uses dynamic import to avoid circular dependency (database → cache/user).
+    try {
+      const { setTenantStatusFlag } = await import("../../cache/userStatusCache.js");
+      await setTenantStatusFlag(tenantRow.id, "deleted");
+
+      const { revokeAllTenantTokens } = await import("../user/refreshToken.js");
+      const tokensRevoked = await revokeAllTenantTokens(tenantRow.id);
+
+      logger.info("Handled GitHub App uninstallation with session revocation", {
+        tenantId: tenantRow.id,
+        installationId,
+        tokensRevoked,
+      });
+    } catch (revocationError: unknown) {
+      // Non-fatal: tenant is already marked deleted, sessions will expire naturally
+      logger.warn("Session revocation failed during GitHub uninstall (non-fatal)", {
+        tenantId: tenantRow.id,
+        installationId,
+        error: getErrorMessage(revocationError),
+      });
+    }
   } catch (error) {
     logger.error("Failed to handle GitHub uninstall", {
       installationId,

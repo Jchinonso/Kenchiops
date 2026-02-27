@@ -15,7 +15,6 @@ import {
   findById as findTenantById,
   countTenantMembers,
   findOrganizationsByUser,
-  deleteUser,
   hardDeleteTenant,
   findByTenant,
   findSlackConnection,
@@ -23,6 +22,8 @@ import {
   resilientPost,
   getErrorMessage,
   NotFoundError,
+  ValidationError,
+  transaction,
   type ProviderConnection,
   type RequestContext,
 } from "@kenchi/shared";
@@ -312,9 +313,13 @@ export const createAccountDeletionService = (
     const lastMemberTenants = memberCounts
       .filter(({ count }) => count <= 1)
       .map(({ tenantId }) => tenantId);
+    const multiMemberTenants = memberCounts
+      .filter(({ count }) => count > 1)
+      .map(({ tenantId }) => tenantId);
 
-    // Clean up and delete each last-member org BEFORE deleting user
-    // (user deletion cascades user_organizations, which would change member counts)
+    // Clean up external resources for last-member orgs BEFORE deletion.
+    // Best-effort: failures are logged but do not block account deletion.
+    // Must run before the transaction because user deletion cascades user_organizations.
     // for...of: sequential to avoid concurrent cleanup race conditions
     for (const tenantId of lastMemberTenants) {
       const cleanupResult = await cleanupExternalResources(tenantId, gitlabProjectsPort, context);
@@ -327,8 +332,53 @@ export const createAccountDeletionService = (
       });
     }
 
-    // Delete user (cascades user_organizations, ON DELETE SET NULL for selected_tenant_id)
-    await deleteUser(userId);
+    // FLAW-20: Sole-owner check + user deletion inside a single transaction
+    // with FOR UPDATE locks to prevent TOCTOU race. Without this, a concurrent
+    // role transfer could make this user the last owner between the check and delete.
+    await transaction(async (client) => {
+      // Lock and re-check owner counts for multi-member tenants
+      // for...of: early-exit on first sole-owner violation
+      for (const tenantId of multiMemberTenants) {
+        const roleResult = await client.query<{ readonly role: string }>(
+          "SELECT role FROM user_organizations WHERE user_id = $1 AND tenant_id = $2 FOR UPDATE",
+          [userId, tenantId]
+        );
+        const userRole = roleResult.rows[0]?.role;
+
+        if (userRole === "owner") {
+          // FOR UPDATE locks all owner rows to prevent concurrent role demotions
+          // between this check and the user deletion below.
+          const ownerResult = await client.query<{ readonly count: string }>(
+            "SELECT COUNT(*) AS count FROM user_organizations WHERE tenant_id = $1 AND role = 'owner' FOR UPDATE",
+            [tenantId]
+          );
+          const ownerCount = parseInt(ownerResult.rows[0]?.count ?? "0", 10);
+
+          if (ownerCount <= 1) {
+            throw new ValidationError(
+              "Cannot delete account: you are the sole owner of an organization with other members. Transfer ownership first.",
+              {
+                operation: "deleteAccount",
+                metadata: { tenantId },
+              }
+            );
+          }
+        }
+      }
+
+      // Delete user within the same transaction (atomic with owner check).
+      // Cascades: user_organizations deleted, users.selected_tenant_id SET NULL.
+      await client.query("DELETE FROM refresh_tokens WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM oauth_identities WHERE user_id = $1", [userId]);
+      const { rowCount } = await client.query("DELETE FROM users WHERE id = $1", [userId]);
+
+      if (rowCount === 0) {
+        throw new NotFoundError("User not found during deletion", {
+          operation: "deleteAccount",
+          metadata: { userId },
+        });
+      }
+    });
 
     // Hard-delete all last-member tenants (cascades provider_connections, repo_mappings)
     // for...of: sequential to avoid concurrent tenant deletion issues

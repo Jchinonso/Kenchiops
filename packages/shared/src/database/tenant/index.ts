@@ -61,6 +61,8 @@ export {
   softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
+  updateTenantOrgName,
+  markTenantAsPersonal,
 } from "./serviceLifecycle.js";
 
 // Audit operations

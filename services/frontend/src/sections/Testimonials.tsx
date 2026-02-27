@@ -1,4 +1,5 @@
-import { useScrollFadeIn } from "@/hooks/useScrollFadeIn";
+import { motion } from "motion/react";
+import { sectionContainerVariants, itemVariants, microSpring } from "@/lib/animations";
 
 interface Testimonial {
   readonly quote: string;
@@ -14,7 +15,7 @@ const testimonials: readonly Testimonial[] = [
     name: "James K.",
     role: "Staff Engineer, Series B Startup",
     initials: "JK",
-    color: "bg-indigo-500",
+    color: "bg-amber-500",
   },
   {
     quote:
@@ -22,7 +23,7 @@ const testimonials: readonly Testimonial[] = [
     name: "Sarah C.",
     role: "VP Engineering, FastShip",
     initials: "SC",
-    color: "bg-cyan-500",
+    color: "bg-violet-500",
   },
   {
     quote:
@@ -30,60 +31,80 @@ const testimonials: readonly Testimonial[] = [
     name: "Marcus W.",
     role: "Platform Lead, DeployHQ",
     initials: "MW",
-    color: "bg-violet-500",
+    color: "bg-emerald-500",
   },
 ];
 
-const Testimonials = () => {
-  const { ref, fadeClass } = useScrollFadeIn();
-
-  return (
-    <section
-      id="testimonials"
-      aria-label="Customer testimonials"
-      className="py-20 bg-gray-50 dark:bg-gray-900"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div
-          ref={ref as React.RefObject<HTMLDivElement>}
-          className={`text-center mb-16 ${fadeClass}`}
+const Testimonials = () => (
+  <section id="testimonials" aria-label="Customer testimonials" className="py-24 bg-zinc-950">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <motion.div
+        className="text-center mb-16"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={sectionContainerVariants}
+      >
+        <motion.span
+          variants={itemVariants}
+          className="text-amber-500 text-sm font-mono font-medium uppercase tracking-widest mb-4 block"
         >
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            Loved by Engineering Teams
-          </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Hear from teams who stopped wasting hours on CI debugging.
-          </p>
-        </div>
+          Testimonials
+        </motion.span>
+        <motion.h2
+          variants={itemVariants}
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+        >
+          Loved by Engineering Teams
+        </motion.h2>
+        <motion.p variants={itemVariants} className="text-lg text-zinc-500 max-w-2xl mx-auto">
+          Hear from teams who stopped wasting hours on CI debugging.
+        </motion.p>
+      </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {testimonials.map((testimonial) => (
-            <div
-              key={testimonial.name}
-              className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm hover:shadow-lg transition-shadow"
+      <motion.div
+        className="grid md:grid-cols-3 gap-6"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.2 }}
+        variants={sectionContainerVariants}
+      >
+        {testimonials.map((testimonial) => (
+          <motion.div
+            key={testimonial.name}
+            variants={itemVariants}
+            whileHover={{ y: -4, transition: microSpring }}
+            className="relative bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-8 hover:border-amber-500/15 transition-all duration-300"
+          >
+            {/* Decorative quote mark */}
+            <span
+              className="absolute top-5 left-6 text-5xl font-serif text-zinc-800/60 leading-none select-none"
+              aria-hidden="true"
             >
-              <blockquote className="text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
-                &ldquo;{testimonial.quote}&rdquo;
-              </blockquote>
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-10 h-10 ${testimonial.color} rounded-full flex items-center justify-center`}
-                >
-                  <span className="text-white text-sm font-bold">{testimonial.initials}</span>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                    {testimonial.name}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{testimonial.role}</div>
-                </div>
+              &ldquo;
+            </span>
+
+            <blockquote className="relative text-zinc-300 leading-relaxed mb-8 pt-6">
+              {testimonial.quote}
+            </blockquote>
+            <div className="flex items-center gap-3">
+              <motion.div
+                whileHover={{ scale: 1.1 }}
+                transition={microSpring}
+                className={`w-10 h-10 ${testimonial.color} rounded-full flex items-center justify-center`}
+              >
+                <span className="text-white text-sm font-bold">{testimonial.initials}</span>
+              </motion.div>
+              <div>
+                <div className="font-medium text-zinc-200 text-sm">{testimonial.name}</div>
+                <div className="text-xs text-zinc-600">{testimonial.role}</div>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-};
+          </motion.div>
+        ))}
+      </motion.div>
+    </div>
+  </section>
+);
 
 export default Testimonials;

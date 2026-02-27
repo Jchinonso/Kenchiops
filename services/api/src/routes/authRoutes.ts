@@ -33,6 +33,8 @@ import {
   findByTenantAndProvider,
   generateCodeVerifier,
   generateCodeChallenge,
+  encryptValue,
+  decryptValue,
   type OAuthProvider,
   type ProviderType,
   rateLimitByCategory,
@@ -300,7 +302,7 @@ const handleOAuthLogin = async (req: Request, res: Response): Promise<void> => {
     provider,
     instanceUrl,
     redirectAfter,
-    metadata: codeVerifier ? { codeVerifier } : undefined,
+    metadata: codeVerifier ? { codeVerifier: encryptValue(codeVerifier) } : undefined,
   });
 
   const authorizeUrl = buildAuthorizeUrl(
@@ -374,10 +376,13 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
 
   const startTime = Date.now();
   const adapter = getOAuthAdapter(oauthState.provider);
-  const codeVerifier =
+  const rawVerifier =
     typeof oauthState.metadata.codeVerifier === "string"
       ? oauthState.metadata.codeVerifier
       : undefined;
+  // Decrypt PKCE verifier (stored encrypted since FLAW-19 fix; decryptValue
+  // handles plaintext gracefully for pre-existing state tokens during rollout).
+  const codeVerifier = rawVerifier ? (decryptValue(rawVerifier) ?? undefined) : undefined;
   const tokens = await adapter.exchangeCode(codeStr, oauthState.instanceUrl, context, codeVerifier);
   const profile = await adapter.getUserProfile(tokens.accessToken, oauthState.instanceUrl, context);
 

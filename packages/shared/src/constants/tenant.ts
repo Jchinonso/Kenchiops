@@ -37,6 +37,7 @@ export const AUDIT_ACTIONS = {
   DELETED: "deleted",
   PLAN_CHANGED: "plan_changed",
   MEMBER_ROLE_CHANGED: "member_role_changed",
+  ROLE_AUTO_SYNCED: "role_auto_synced",
   MEMBER_REMOVED: "member_removed",
   MEMBER_ADDED: "member_added",
   ORG_SWITCHED: "org_switched",
@@ -98,8 +99,35 @@ export const TENANT_QUERIES = {
      VALUES ($1, $2, $3)
      RETURNING *`,
 
+  /**
+   * Upsert tenant: INSERT or return existing (race-safe with unique index).
+   * On conflict, updates tenant_type if the caller provides a more specific type
+   * (e.g., "personal" overrides default "organization").
+   * Requires migration 036 (partial unique index on LOWER(org_name), provider).
+   */
+  UPSERT_TENANT: `INSERT INTO tenants (org_name, provider, status, tenant_type)
+     VALUES (LOWER($1), $2, $3, $4)
+     ON CONFLICT (LOWER(org_name), provider) WHERE status != 'deleted'
+     DO UPDATE SET
+       tenant_type = EXCLUDED.tenant_type,
+       updated_at = NOW()
+     RETURNING *`,
+
+  /** Find a deleted tenant by org name and provider for reactivation. */
+  FIND_DELETED_TENANT: `SELECT * FROM tenants
+     WHERE LOWER(org_name) = LOWER($1) AND provider = $2 AND status = 'deleted'
+     LIMIT 1`,
+
+  /** Reactivate a deleted tenant with new status and type. */
+  REACTIVATE_TENANT: `UPDATE tenants
+     SET status = $1, tenant_type = $2, updated_at = NOW()
+     WHERE id = $3
+     RETURNING *`,
+
   // Update queries
   UPDATE_STATUS: `UPDATE tenants SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+  UPDATE_ORG_NAME: `UPDATE tenants SET org_name = LOWER($1), updated_at = NOW() WHERE id = $2 RETURNING *`,
+  UPDATE_TENANT_TYPE: `UPDATE tenants SET tenant_type = $1, updated_at = NOW() WHERE id = $2`,
 
   // Statistics queries
   STATS_ANALYSES_TODAY: `SELECT COUNT(*) as count FROM analyses
@@ -118,9 +146,14 @@ export const AUDIT_QUERIES = {
   /**
    * Insert with hash chain for tamper evidence (SOC 2 Type II).
    *
-   * Computes entry_hash = SHA-256(previous_hash + tenant_id + action + metadata + created_at).
+   * Computes entry_hash = SHA-256(previous_hash + tenant_id + action + actor + metadata + timestamp).
    * The previous_hash is fetched from the most recent entry for this tenant.
    * If no previous entry exists, previous_hash defaults to '0' (genesis entry).
+   *
+   * Uses clock_timestamp() instead of NOW() because NOW() returns the same value
+   * for all statements within a single transaction, which would produce identical
+   * hash inputs if two audit entries are inserted in the same transaction.
+   * clock_timestamp() returns wall-clock time per statement, ensuring unique hashes.
    *
    * Falls back gracefully if hash columns don't exist yet (migration pending).
    */
@@ -142,7 +175,7 @@ export const AUDIT_QUERIES = {
     SELECT
       $1, $2, $3, $4,
       chain.prev_hash,
-      encode(sha256(convert_to(chain.prev_hash || $1 || $2 || $4 || NOW()::text, 'UTF8')), 'hex')
+      encode(sha256(convert_to(chain.prev_hash || $1 || $2 || COALESCE($3, '') || $4 || clock_timestamp()::text, 'UTF8')), 'hex')
     FROM chain
   `,
   SELECT_BY_TENANT: `SELECT * FROM tenant_audit_log

@@ -511,11 +511,11 @@ describe("authService", () => {
         tenantId: "tenant-acme",
         role: "member",
       });
-      // New tenant: first user is owner
+      // New tenant: first user gets admin (FLAW-01 fix — elevateToMinimumAdmin)
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-other",
-        role: "owner",
+        role: "admin",
       });
     });
 
@@ -562,7 +562,7 @@ describe("authService", () => {
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-personal",
-        role: "owner",
+        role: "admin",
       });
     });
 
@@ -610,7 +610,7 @@ describe("authService", () => {
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-gitlab",
-        role: "owner",
+        role: "admin",
       });
     });
 
@@ -648,7 +648,7 @@ describe("authService", () => {
 
       expect(result.accessToken).toBe("mock-access-token");
       expect(result.refreshToken).toBe("mock-raw-refresh-token");
-      expect(result.expiresIn).toBe(900); // JWT_CONFIG.ACCESS_TOKEN_EXPIRY_SECONDS
+      expect(result.expiresIn).toBe(300); // JWT_CONFIG.ACCESS_TOKEN_EXPIRY_SECONDS
 
       expect(mockGenerateAccessToken).toHaveBeenCalled();
       expect(mockGenerateRefreshToken).toHaveBeenCalled();
@@ -686,7 +686,7 @@ describe("authService", () => {
 
       const result = await service.generateTokenPair(user, testTokenMeta, testContext);
 
-      expect(result.expiresIn).toBe(900);
+      expect(result.expiresIn).toBe(300);
     });
 
     it("should handle null userAgent and ipAddress in meta", async () => {
@@ -731,7 +731,7 @@ describe("authService", () => {
 
       expect(result.accessToken).toBe("new-access-token");
       expect(result.refreshToken).toBe("new-raw-refresh-token");
-      expect(result.expiresIn).toBe(900);
+      expect(result.expiresIn).toBe(300);
     });
 
     it("should call rotateRefreshTokenAtomically with hashed tokens and meta", async () => {

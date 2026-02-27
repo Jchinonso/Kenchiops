@@ -15,6 +15,12 @@ import {
   validateId,
   parseDbCount,
 } from "../common.js";
+import {
+  setMembershipRevokedFlag,
+  clearMembershipRevokedFlag,
+} from "../../cache/userStatusCache.js";
+import { logAuditEvent } from "../tenant/audit.js";
+import { AUDIT_ACTIONS } from "../../constants/tenant.js";
 import type { UserRole } from "../user/types.js";
 import {
   rowToUserOrganization,
@@ -37,17 +43,32 @@ const logger = createLogger("user-organization");
 
 const QUERIES = {
   FIND_BY_USER: `
-    SELECT uo.*, t.org_name, t.provider, t.status AS tenant_status
+    SELECT uo.*, t.org_name, t.provider, t.status AS tenant_status, t.tenant_type
     FROM user_organizations uo
     JOIN tenants t ON t.id = uo.tenant_id
     WHERE uo.user_id = $1
     ORDER BY uo.is_default DESC, uo.joined_at ASC
   `,
+  /**
+   * Upsert membership with role sync. ON CONFLICT intentionally omits is_default
+   * from the UPDATE: is_default is only meaningful on first insert (when a user
+   * joins their first org). For existing memberships, setDefaultOrganization()
+   * manages the default flag via CLEAR_DEFAULTS + SET_DEFAULT.
+   */
   ADD: `
+    WITH old AS (
+      SELECT role FROM user_organizations WHERE user_id = $1 AND tenant_id = $2
+    )
     INSERT INTO user_organizations (user_id, tenant_id, role, is_default)
     VALUES ($1, $2, $3, $4)
-    ON CONFLICT (user_id, tenant_id) DO NOTHING
-    RETURNING *
+    ON CONFLICT (user_id, tenant_id) DO UPDATE SET
+      role = CASE
+        WHEN user_organizations.role = 'owner' THEN user_organizations.role
+        WHEN EXCLUDED.role = 'owner' THEN user_organizations.role
+        ELSE EXCLUDED.role
+      END,
+      updated_at = NOW()
+    RETURNING *, (SELECT role FROM old) AS previous_role
   `,
   CLEAR_DEFAULTS: `
     UPDATE user_organizations SET is_default = false, updated_at = NOW()
@@ -133,10 +154,16 @@ export const findOrganizationsByUser = async (
 };
 
 /**
- * Add a user to an organization. Idempotent (ON CONFLICT DO NOTHING).
+ * Add a user to an organization or update their role on conflict.
+ *
+ * Uses ON CONFLICT DO UPDATE to sync provider role changes on login.
+ * Safeguards: never auto-demote owners, never auto-promote to owner.
+ * Returns the resulting membership (always returns a row).
+ *
+ * If the role changed, logs an audit event for compliance tracking.
  *
  * @param input - User organization membership data
- * @returns Created membership or null if already exists
+ * @returns Created or updated membership
  */
 export const addUserOrganization = async (
   input: AddUserOrganizationInput
@@ -145,25 +172,53 @@ export const addUserOrganization = async (
   validateId(input.tenantId, "tenantId");
 
   try {
-    const result = await query<UserOrganizationRow>(QUERIES.ADD, [
-      input.userId,
-      input.tenantId,
-      input.role ?? "member",
-      input.isDefault ?? false,
-    ]);
+    const result = await query<UserOrganizationRow & { readonly previous_role: string | null }>(
+      QUERIES.ADD,
+      [input.userId, input.tenantId, input.role ?? "member", input.isDefault ?? false]
+    );
 
     if (result.rows.length === 0) {
-      // Already exists (ON CONFLICT DO NOTHING)
       return null;
     }
 
-    const membership = rowToUserOrganization(result.rows[0]);
+    const row = result.rows[0];
+    const membership = rowToUserOrganization(row);
+    const previousRole = row.previous_role;
 
-    logger.info("User added to organization", {
-      userId: input.userId,
-      tenantId: input.tenantId,
-      role: membership.role,
-    });
+    // Detect role change from auto-sync and log audit event
+    if (previousRole !== null && previousRole !== membership.role) {
+      logger.info("User organization role auto-synced", {
+        userId: input.userId,
+        tenantId: input.tenantId,
+        previousRole,
+        newRole: membership.role,
+      });
+
+      // Best-effort audit log
+      try {
+        await logAuditEvent(input.tenantId, AUDIT_ACTIONS.ROLE_AUTO_SYNCED, {
+          userId: input.userId,
+          previousRole,
+          newRole: membership.role,
+          source: "auto_sync",
+        });
+      } catch {
+        // Non-fatal audit log failure
+      }
+    } else if (previousRole === null) {
+      logger.info("User added to organization", {
+        userId: input.userId,
+        tenantId: input.tenantId,
+        role: membership.role,
+      });
+    }
+
+    // If the user already had a membership (upsert case), clear any
+    // membership revocation flag so they are not blocked by a stale
+    // flag from a prior removal within the TTL window.
+    if (previousRole !== null) {
+      await clearMembershipRevokedFlag(input.userId, input.tenantId);
+    }
 
     return membership;
   } catch (error) {
@@ -349,6 +404,11 @@ export const removeMemberFromTenant = async (
     });
 
     if (removed) {
+      // Set a Redis flag to immediately block the removed user's JWT
+      // for this tenant during the remainder of the token lifetime (~5 min).
+      // Best-effort: fail-open if Redis is unavailable.
+      await setMembershipRevokedFlag(userId, tenantId);
+
       logger.info("Member removed from organization", {
         tenantId,
         userId,

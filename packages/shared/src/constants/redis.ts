@@ -145,6 +145,12 @@ export const CACHE_TTL_SECONDS = {
   EXTENDED: 21600,
   /** Daily cache (24 hours) */
   DAILY: 86400,
+  /**
+   * JWT access token lifetime (must match JWT_CONFIG.ACCESS_TOKEN_EXPIRY_SECONDS).
+   * Used for membership/user/tenant revocation flags that must outlast the JWT.
+   * Set to 5 minutes (300s) to match the reduced JWT expiry (FLAW-06).
+   */
+  JWT_LIFETIME: 300,
 } as const;
 
 // ==================== Key Prefixes ====================
@@ -167,6 +173,8 @@ export const REDIS_KEY_PREFIXES = {
   USER_STATUS: "kenchi:user-status",
   /** Tenant status flags for blocking suspended/deleted organizations */
   TENANT_STATUS: "kenchi:tenant-status",
+  /** Membership revocation flags for blocking removed members during JWT lifetime */
+  MEMBERSHIP_REVOKED: "kenchi:membership-revoked",
   /** Webhook dedup fast-path for replay protection */
   WEBHOOK_DEDUP: "kenchi:webhook-dedup",
 } as const;

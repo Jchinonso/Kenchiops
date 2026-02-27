@@ -44,6 +44,8 @@ export {
   softDeleteTenant,
   hardDeleteTenant,
   handleGitHubUninstall,
+  updateTenantOrgName,
+  markTenantAsPersonal,
   // Reactivation validation
   type ReactivationWarningType,
   type ReactivationWarning,

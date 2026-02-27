@@ -35,8 +35,8 @@ export const StickyCTA = () => {
       aria-hidden={!isVisible}
       className={cn(
         "fixed top-16 left-0 right-0 z-30",
-        "bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600",
-        "py-2.5 px-4 text-center text-sm text-white font-medium",
+        "bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600",
+        "py-2.5 px-4 text-center text-sm text-zinc-950 font-medium",
         "transition-all duration-300",
         isVisible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
       )}
@@ -44,7 +44,7 @@ export const StickyCTA = () => {
       <span className="mr-3">Start analyzing CI failures in minutes</span>
       <Link
         to="/login"
-        className="inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:no-underline"
+        className="inline-flex items-center gap-1 font-bold underline underline-offset-2 hover:no-underline"
         tabIndex={isVisible ? 0 : -1}
       >
         Start free trial

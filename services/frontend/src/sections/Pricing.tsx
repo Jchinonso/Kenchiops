@@ -1,5 +1,12 @@
 import { Check } from "lucide-react";
 import { Link } from "react-router-dom";
+import { motion } from "motion/react";
+import {
+  sectionContainerVariants,
+  itemVariants,
+  scaleInVariants,
+  microSpring,
+} from "@/lib/animations";
 
 interface PricingTier {
   readonly name: string;
@@ -80,84 +87,108 @@ const tiers: readonly PricingTier[] = [
   },
 ];
 
-const Pricing = () => (
-  <section id="pricing" aria-label="Pricing" className="py-20 bg-gray-50 dark:bg-gray-900">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="text-center mb-16">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Simple, Transparent Pricing
-        </h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-          Start free, upgrade when you need more. No surprise bills, no hidden fees.
-        </p>
-      </div>
+const PricingCTA = ({ tier }: { readonly tier: PricingTier }) => {
+  const className = tier.highlighted
+    ? "block w-full text-center px-6 py-3 rounded-xl text-sm font-bold transition-all bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/20 hover:shadow-glow-amber"
+    : "block w-full text-center px-6 py-3 rounded-xl text-sm font-semibold transition-all bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700";
 
-      <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+  return (
+    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} transition={microSpring}>
+      {tier.ctaHref.startsWith("mailto:") ? (
+        <a href={tier.ctaHref} className={className}>
+          {tier.cta}
+        </a>
+      ) : (
+        <Link to={tier.ctaHref} className={className}>
+          {tier.cta}
+        </Link>
+      )}
+    </motion.div>
+  );
+};
+
+const Pricing = () => (
+  <section id="pricing" aria-label="Pricing" className="py-24 bg-zinc-950">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <motion.div
+        className="text-center mb-16"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={sectionContainerVariants}
+      >
+        <motion.span
+          variants={itemVariants}
+          className="text-amber-500 text-sm font-mono font-medium uppercase tracking-widest mb-4 block"
+        >
+          Pricing
+        </motion.span>
+        <motion.h2
+          variants={itemVariants}
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+        >
+          Simple, Transparent Pricing
+        </motion.h2>
+        <motion.p variants={itemVariants} className="text-lg text-zinc-500 max-w-2xl mx-auto">
+          Start free, upgrade when you need more. No surprise bills, no hidden fees.
+        </motion.p>
+      </motion.div>
+
+      <motion.div
+        className="grid lg:grid-cols-4 md:grid-cols-2 gap-6 max-w-6xl mx-auto"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.15 }}
+        variants={sectionContainerVariants}
+      >
         {tiers.map((tier) => (
-          <div
+          <motion.div
             key={tier.name}
-            className={`relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm transition-shadow hover:shadow-lg ${
+            variants={itemVariants}
+            whileHover={{ y: tier.highlighted ? -8 : -4, transition: microSpring }}
+            className={`relative rounded-2xl p-8 transition-all duration-300 ${
               tier.highlighted
-                ? "ring-2 ring-indigo-500 shadow-lg"
-                : "border border-gray-200 dark:border-gray-700"
+                ? "bg-zinc-900/80 border-2 border-amber-500/40 shadow-glow-amber"
+                : "bg-zinc-900/50 border border-zinc-800/60 hover:border-zinc-700"
             }`}
           >
             {tier.highlighted && (
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                <span className="bg-indigo-500 text-white text-xs font-semibold px-4 py-1.5 rounded-full">
+              <motion.div
+                variants={scaleInVariants}
+                className="absolute -top-4 left-1/2 -translate-x-1/2"
+              >
+                <span className="bg-amber-500 text-zinc-950 text-xs font-bold px-4 py-1.5 rounded-full">
                   Most Popular
                 </span>
-              </div>
+              </motion.div>
             )}
 
             <div className="mb-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
-                {tier.name}
-              </h3>
+              <h3 className="text-lg font-display font-bold text-zinc-100 mb-2">{tier.name}</h3>
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-bold text-gray-900 dark:text-gray-100">
+                <span className="text-4xl font-display font-extrabold text-zinc-100">
                   {tier.price}
                 </span>
-                <span className="text-sm text-gray-500 dark:text-gray-400">/ {tier.period}</span>
+                <span className="text-sm text-zinc-600">/ {tier.period}</span>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">{tier.description}</p>
+              <p className="text-sm text-zinc-500 mt-3 leading-relaxed">{tier.description}</p>
             </div>
 
             <ul className="space-y-3 mb-8">
               {tier.features.map((feature) => (
                 <li key={feature} className="flex items-center gap-3">
-                  <Check className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">{feature}</span>
+                  <div className="w-4 h-4 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                    <Check className="w-2.5 h-2.5 text-amber-500" />
+                  </div>
+                  <span className="text-sm text-zinc-400">{feature}</span>
                 </li>
               ))}
             </ul>
 
-            {tier.ctaHref.startsWith("mailto:") ? (
-              <a
-                href={tier.ctaHref}
-                className={`block w-full text-center px-6 py-3 rounded-lg text-sm font-semibold transition-colors ${
-                  tier.highlighted
-                    ? "bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
-                    : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
-                }`}
-              >
-                {tier.cta}
-              </a>
-            ) : (
-              <Link
-                to={tier.ctaHref}
-                className={`block w-full text-center px-6 py-3 rounded-lg text-sm font-semibold transition-colors ${
-                  tier.highlighted
-                    ? "bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
-                    : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
-                }`}
-              >
-                {tier.cta}
-              </Link>
-            )}
-          </div>
+            <PricingCTA tier={tier} />
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </div>
   </section>
 );

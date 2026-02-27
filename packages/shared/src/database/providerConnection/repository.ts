@@ -197,46 +197,41 @@ export const createProviderConnection = async (
 export const updateProviderConnection = async (
   input: UpdateProviderConnectionInput
 ): Promise<ProviderConnection | null> => {
-  // Build dynamic SET clause from provided fields
-  const updateFields = {
-    name: "connectionName" in input,
-    org: "externalOrgId" in input,
-    cfg: "config" in input,
-    whEnc: "webhookSecret" in input,
-    atEnc: "accessToken" in input,
-    expiry: "tokenExpiresAt" in input,
-  };
+  const [webhookSecretEnc, accessTokenEnc] = await Promise.all([
+    "webhookSecret" in input ? encryptNullable(input.tenantId, input.webhookSecret) : null,
+    "accessToken" in input ? encryptNullable(input.tenantId, input.accessToken) : null,
+  ]);
 
-  const setClauses: readonly string[] = [
-    ...(updateFields.name ? ["connection_name = $2"] : []),
-    ...(updateFields.org ? ["external_org_id = $3"] : []),
-    ...(updateFields.cfg ? ["config = $4"] : []),
-    ...(updateFields.whEnc ? ["webhook_secret_enc = $5"] : []),
-    ...(updateFields.atEnc ? ["access_token_enc = $6"] : []),
-    ...(updateFields.expiry ? ["token_expires_at = $7"] : []),
-    "updated_at = NOW()",
+  // Build dynamic SET clause with sequential parameter numbering.
+  // Parameter $1 is always the connection id (WHERE clause).
+  const fieldEntries: ReadonlyArray<{ readonly column: string; readonly value: unknown }> = [
+    ...("connectionName" in input
+      ? [{ column: "connection_name", value: input.connectionName ?? null }]
+      : []),
+    ...("externalOrgId" in input
+      ? [{ column: "external_org_id", value: input.externalOrgId ?? null }]
+      : []),
+    ...("config" in input
+      ? [{ column: "config", value: input.config ? JSON.stringify(input.config) : null }]
+      : []),
+    ...("webhookSecret" in input
+      ? [{ column: "webhook_secret_enc", value: webhookSecretEnc }]
+      : []),
+    ...("accessToken" in input ? [{ column: "access_token_enc", value: accessTokenEnc }] : []),
+    ...("tokenExpiresAt" in input
+      ? [{ column: "token_expires_at", value: input.tokenExpiresAt ?? null }]
+      : []),
   ];
 
-  const updateQuery = [
-    "UPDATE provider_connections SET",
-    setClauses.join(", "),
-    "WHERE id = $1 RETURNING *",
-  ].join(" ");
+  const setClauses = [
+    ...fieldEntries.map((entry, i) => `${entry.column} = $${i + 2}`),
+    "updated_at = NOW()",
+  ].join(", ");
 
-  const [webhookSecretEnc, accessTokenEnc] = await Promise.all([
-    updateFields.whEnc ? encryptNullable(input.tenantId, input.webhookSecret) : null,
-    updateFields.atEnc ? encryptNullable(input.tenantId, input.accessToken) : null,
-  ]);
+  const updateQuery = `UPDATE provider_connections SET ${setClauses} WHERE id = $1 RETURNING *`;
+  const params = [input.id, ...fieldEntries.map((entry) => entry.value)];
 
-  const result = await query<ProviderConnectionRow>(updateQuery, [
-    input.id,
-    input.connectionName ?? null,
-    input.externalOrgId ?? null,
-    input.config ? JSON.stringify(input.config) : null,
-    webhookSecretEnc,
-    accessTokenEnc,
-    input.tokenExpiresAt ?? null,
-  ]);
+  const result = await query<ProviderConnectionRow>(updateQuery, params);
 
   const row = result.rows[0];
   return row ? rowToProviderConnection(row) : null;
