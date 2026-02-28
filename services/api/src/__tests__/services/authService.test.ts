@@ -57,6 +57,7 @@ const mockCheckPlanLimit =
   jest.fn<
     (...args: unknown[]) => Promise<{ allowed: boolean; currentUsage: number; limit: number }>
   >();
+const mockCountTenantMembers = jest.fn<(...args: unknown[]) => Promise<number>>();
 const mockResolveAutoLinkRole = jest.fn<(...args: unknown[]) => string>();
 
 // JWT mocks
@@ -112,6 +113,7 @@ jest.mock("@kenchi/shared", () => {
     findUserOrgRole: (...args: unknown[]) => mockFindUserOrgRole(...args),
     logAuditEvent: (...args: unknown[]) => mockLogAuditEvent(...args),
     checkPlanLimit: (...args: unknown[]) => mockCheckPlanLimit(...args),
+    countTenantMembers: (...args: unknown[]) => mockCountTenantMembers(...args),
     resolveAutoLinkRole: (...args: unknown[]) => mockResolveAutoLinkRole(...args),
     // JWT utilities
     generateAccessToken: (...args: unknown[]) => mockGenerateAccessToken(...args),
@@ -236,6 +238,7 @@ describe("authService", () => {
     mockFindUserOrgRole.mockResolvedValue(null);
     mockFindOrganizationsByUser.mockResolvedValue([]);
     mockCheckPlanLimit.mockResolvedValue({ allowed: true, currentUsage: 0, limit: 10 });
+    mockCountTenantMembers.mockResolvedValue(0);
     mockResolveAutoLinkRole.mockReturnValue("member");
   });
 
@@ -630,6 +633,258 @@ describe("authService", () => {
         "my-access-token",
         "https://github.example.com",
         testContext
+      );
+    });
+  });
+
+  // ==================================================================
+  // processOrgMembership — plan limit enforcement (GAP-3)
+  // ==================================================================
+
+  describe("processOrgMembership plan limit enforcement", () => {
+    // These tests exercise processOrgMembership through autoLinkOrganizations,
+    // since processOrgMembership is an internal function.
+    // The logic under test:
+    //   const shouldCheckLimit = !isNew || (await countTenantMembers(tenant.id)) > 0;
+
+    /**
+     * Helper: sets up mocks for a single-org autoLinkOrganizations call.
+     * The org will either map to a new or existing tenant based on `tenantExists`.
+     */
+    const setupSingleOrgScenario = (options: {
+      readonly tenantExists: boolean;
+      readonly tenantId: string;
+      readonly orgLogin: string;
+    }) => {
+      const tenant = createTestTenant({
+        id: options.tenantId,
+        orgName: options.orgLogin,
+      });
+
+      mockGetUserOrganizations.mockResolvedValue([{ login: options.orgLogin }]);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
+
+      if (options.tenantExists) {
+        mockFindByOrgNameAndProvider.mockResolvedValue(tenant);
+      } else {
+        mockFindByOrgNameAndProvider.mockResolvedValue(null);
+        mockCreateFromGitHubLogin.mockResolvedValue(tenant);
+      }
+    };
+
+    it("should skip plan limit check for new tenant with 0 existing members (first user)", async () => {
+      setupSingleOrgScenario({
+        tenantExists: false,
+        tenantId: "tenant-new",
+        orgLogin: "new-org",
+      });
+      // New tenant, 0 members -> shouldCheckLimit = false
+      mockCountTenantMembers.mockResolvedValue(0);
+      mockFindUserOrgRole.mockResolvedValue(null);
+
+      await service.autoLinkOrganizations(
+        { id: "usr_1", tenantId: null },
+        "github",
+        "access-token",
+        null,
+        "testuser",
+        testContext
+      );
+
+      // countTenantMembers IS called (to evaluate the conditional)
+      expect(mockCountTenantMembers).toHaveBeenCalledWith("tenant-new");
+      // But checkPlanLimit should NOT be called since shouldCheckLimit is false
+      expect(mockCheckPlanLimit).not.toHaveBeenCalled();
+      // Membership should be added (first user always allowed)
+      expect(mockAddUserOrganization).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "usr_1",
+          tenantId: "tenant-new",
+        })
+      );
+    });
+
+    it("should check plan limit for new tenant with 1+ existing members and skip membership when denied", async () => {
+      setupSingleOrgScenario({
+        tenantExists: false,
+        tenantId: "tenant-new-full",
+        orgLogin: "full-org",
+      });
+      // New tenant but 1 member already exists -> shouldCheckLimit = true
+      mockCountTenantMembers.mockResolvedValue(1);
+      mockFindUserOrgRole.mockResolvedValue(null);
+      // Plan limit check denies: team is full
+      mockCheckPlanLimit.mockResolvedValue({
+        allowed: false,
+        currentUsage: 5,
+        limit: 5,
+      });
+
+      await service.autoLinkOrganizations(
+        { id: "usr_2", tenantId: null },
+        "github",
+        "access-token",
+        null,
+        "testuser",
+        testContext
+      );
+
+      // countTenantMembers called to evaluate the conditional
+      expect(mockCountTenantMembers).toHaveBeenCalledWith("tenant-new-full");
+      // checkPlanLimit should be called since shouldCheckLimit is true
+      expect(mockCheckPlanLimit).toHaveBeenCalledWith("tenant-new-full", "max_team_members");
+      // Membership should NOT be added because limit check denied
+      expect(mockAddUserOrganization).not.toHaveBeenCalled();
+    });
+
+    it("should check plan limit for new tenant with 1+ existing members and add membership when allowed", async () => {
+      setupSingleOrgScenario({
+        tenantExists: false,
+        tenantId: "tenant-new-ok",
+        orgLogin: "ok-org",
+      });
+      // New tenant with 1 existing member -> shouldCheckLimit = true
+      mockCountTenantMembers.mockResolvedValue(1);
+      mockFindUserOrgRole.mockResolvedValue(null);
+      // Plan limit check allows
+      mockCheckPlanLimit.mockResolvedValue({
+        allowed: true,
+        currentUsage: 1,
+        limit: 5,
+      });
+
+      await service.autoLinkOrganizations(
+        { id: "usr_3", tenantId: null },
+        "github",
+        "access-token",
+        null,
+        "testuser",
+        testContext
+      );
+
+      expect(mockCountTenantMembers).toHaveBeenCalledWith("tenant-new-ok");
+      expect(mockCheckPlanLimit).toHaveBeenCalledWith("tenant-new-ok", "max_team_members");
+      // Membership added because limit check passed
+      expect(mockAddUserOrganization).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "usr_3",
+          tenantId: "tenant-new-ok",
+        })
+      );
+    });
+
+    it("should always check plan limit for existing tenant (isNew=false)", async () => {
+      setupSingleOrgScenario({
+        tenantExists: true,
+        tenantId: "tenant-existing",
+        orgLogin: "existing-org",
+      });
+      mockFindUserOrgRole.mockResolvedValue(null);
+      // Limit check allows
+      mockCheckPlanLimit.mockResolvedValue({
+        allowed: true,
+        currentUsage: 3,
+        limit: 10,
+      });
+
+      await service.autoLinkOrganizations(
+        { id: "usr_4", tenantId: null },
+        "github",
+        "access-token",
+        null,
+        "testuser",
+        testContext
+      );
+
+      // For existing tenants, shouldCheckLimit = true without checking countTenantMembers
+      // (the !isNew short-circuit evaluates to true immediately)
+      expect(mockCheckPlanLimit).toHaveBeenCalledWith("tenant-existing", "max_team_members");
+      expect(mockAddUserOrganization).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "usr_4",
+          tenantId: "tenant-existing",
+        })
+      );
+    });
+
+    it("should always check plan limit for existing tenant and skip membership when denied", async () => {
+      setupSingleOrgScenario({
+        tenantExists: true,
+        tenantId: "tenant-full",
+        orgLogin: "full-existing-org",
+      });
+      mockFindUserOrgRole.mockResolvedValue(null);
+      // Limit check denies
+      mockCheckPlanLimit.mockResolvedValue({
+        allowed: false,
+        currentUsage: 10,
+        limit: 10,
+      });
+
+      await service.autoLinkOrganizations(
+        { id: "usr_5", tenantId: null },
+        "github",
+        "access-token",
+        null,
+        "testuser",
+        testContext
+      );
+
+      expect(mockCheckPlanLimit).toHaveBeenCalledWith("tenant-full", "max_team_members");
+      // Membership should NOT be added because team is full
+      expect(mockAddUserOrganization).not.toHaveBeenCalled();
+    });
+
+    it("should skip plan limit check when user already has a membership (existing member)", async () => {
+      setupSingleOrgScenario({
+        tenantExists: true,
+        tenantId: "tenant-has-member",
+        orgLogin: "member-org",
+      });
+      // User already has a role in this tenant
+      mockFindUserOrgRole.mockResolvedValue("member");
+
+      await service.autoLinkOrganizations(
+        { id: "usr_6", tenantId: null },
+        "github",
+        "access-token",
+        null,
+        "testuser",
+        testContext
+      );
+
+      // checkPlanLimit should NOT be called because existingMembership is truthy
+      expect(mockCheckPlanLimit).not.toHaveBeenCalled();
+      // But addUserOrganization IS called (upsert/idempotent)
+      expect(mockAddUserOrganization).toHaveBeenCalled();
+    });
+
+    it("should fail-open when checkPlanLimit throws an error", async () => {
+      setupSingleOrgScenario({
+        tenantExists: true,
+        tenantId: "tenant-limit-error",
+        orgLogin: "error-org",
+      });
+      mockFindUserOrgRole.mockResolvedValue(null);
+      // Plan limit check throws (e.g., database error)
+      mockCheckPlanLimit.mockRejectedValue(new Error("Database connection failed"));
+
+      await service.autoLinkOrganizations(
+        { id: "usr_7", tenantId: null },
+        "github",
+        "access-token",
+        null,
+        "testuser",
+        testContext
+      );
+
+      // Should still add membership (fail-open policy)
+      expect(mockAddUserOrganization).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "usr_7",
+          tenantId: "tenant-limit-error",
+        })
       );
     });
   });

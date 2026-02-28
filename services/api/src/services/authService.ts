@@ -52,6 +52,8 @@ import {
   findUserOrgRole,
   // Plan limits
   checkPlanLimit,
+  // Tenant member count
+  countTenantMembers,
   // Provider role mapping
   resolveAutoLinkRole,
   // JWT utilities
@@ -524,8 +526,11 @@ const processOrgMembership = async (
 ): Promise<string> => {
   const { tenant, isNew } = await findOrCreateTenant(provider, org.login);
 
-  // For existing tenants with new memberships, check team size limit
-  if (!isNew) {
+  // Check team size limit before adding new memberships.
+  // For new tenants, skip the check only if this is the very first member
+  // (the tenant creator). For existing tenants, always check.
+  const shouldCheckLimit = !isNew || (await countTenantMembers(tenant.id)) > 0;
+  if (shouldCheckLimit) {
     const existingMembership = await findUserOrgRole(userId, tenant.id);
     if (!existingMembership) {
       try {
