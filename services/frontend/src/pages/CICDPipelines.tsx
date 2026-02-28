@@ -19,6 +19,8 @@ import { Workflow, ExternalLink, Lock, Globe, GitBranch } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
 import { useRepositories, type InstallationRepository } from "@/hooks/useDashboardData";
+import { useSubscriptionUsage } from "@/hooks/useSubscription";
+import { FeatureLocked } from "@/components/FeatureLocked";
 
 // ==================== Sub-components ====================
 
@@ -100,9 +102,24 @@ const RepoCard = ({ repo }: RepoCardProps) => (
 
 export const CICDPipelines = () => {
   const { data: repos, isLoading, error } = useRepositories();
+  const { data: usageData } = useSubscriptionUsage();
+  const isAnyLimitReached = usageData
+    ? Object.values(usageData.usage).some(
+        (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
+      )
+    : false;
 
   const repoList = repos ?? [];
   const hasRepos = Boolean(repoList.length);
+
+  if (isAnyLimitReached && usageData && !isLoading) {
+    return (
+      <FeatureLocked
+        description="You have reached your plan's usage limits. Upgrade to continue viewing pipelines."
+        usage={usageData.usage}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
