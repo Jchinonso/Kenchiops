@@ -160,7 +160,9 @@ export const apiClient = async (
           errorBody.error?.message ??
             "Access denied. You may have been removed from this organization."
         );
-        window.location.assign("/login?error=access_revoked");
+        if (!window.location.pathname.startsWith("/login")) {
+          window.location.assign("/login?error=access_revoked");
+        }
         return response;
       }
     } catch {
@@ -175,9 +177,12 @@ export const apiClient = async (
   const refreshed = await attemptTokenRefresh();
 
   if (!refreshed) {
-    // Force redirect to login on cascading auth failure.
-    // Without this, the user sees a silent error with no guidance.
-    window.location.assign("/login?error=session_expired");
+    // Redirect to login on auth failure — but only if we're not already
+    // on the login page, to avoid an infinite redirect loop when
+    // AuthProvider's refreshUser() calls /auth/me on mount.
+    if (!window.location.pathname.startsWith("/login")) {
+      window.location.assign("/login?error=session_expired");
+    }
     return response;
   }
 
