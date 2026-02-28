@@ -45,6 +45,7 @@ import {
 } from "@/hooks/useDashboardData";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { FeatureLocked } from "@/components/FeatureLocked";
+import { PageLoader } from "@/components/PageLoader";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
@@ -648,7 +649,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   );
 
   if (isUsageLoading) {
-    return null;
+    return <PageLoader />;
   }
 
   if (isAnyLimitReached && usageData) {

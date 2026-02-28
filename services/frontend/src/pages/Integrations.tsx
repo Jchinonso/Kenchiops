@@ -18,6 +18,7 @@ import { MonitoringIntegrations } from "@/components/MonitoringIntegrations";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { FeatureGate } from "@/components/FeatureGate";
 import { FeatureLocked } from "@/components/FeatureLocked";
+import { PageLoader } from "@/components/PageLoader";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -473,7 +474,7 @@ export const Integrations = () => {
   }, [searchParams, setSearchParams, checkUrlParams]);
 
   if (isUsageLoading) {
-    return null;
+    return <PageLoader />;
   }
 
   if (isAnyLimitReached && usageData) {

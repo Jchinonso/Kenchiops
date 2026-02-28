@@ -46,6 +46,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { FeatureLocked } from "@/components/FeatureLocked";
+import { PageLoader } from "@/components/PageLoader";
 
 // ==================== Constants ====================
 
@@ -179,7 +180,7 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
   const analysesTotalPages = Math.ceil(analysesTotal / analysesPageSize);
 
   if (isUsageLoading) {
-    return null;
+    return <PageLoader />;
   }
 
   if (isAnyLimitReached && usageData) {

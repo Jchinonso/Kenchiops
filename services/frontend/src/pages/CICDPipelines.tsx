@@ -21,6 +21,7 @@ import { Link } from "react-router-dom";
 import { useRepositories, type InstallationRepository } from "@/hooks/useDashboardData";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { FeatureLocked } from "@/components/FeatureLocked";
+import { PageLoader } from "@/components/PageLoader";
 
 // ==================== Sub-components ====================
 
@@ -113,7 +114,7 @@ export const CICDPipelines = () => {
   const hasRepos = Boolean(repoList.length);
 
   if (isUsageLoading) {
-    return null;
+    return <PageLoader />;
   }
 
   if (isAnyLimitReached && usageData) {

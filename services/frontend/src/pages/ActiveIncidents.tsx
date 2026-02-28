@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useIncidents, useActiveCountsBySource } from "@/hooks/useIncidentData";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { FeatureLocked } from "@/components/FeatureLocked";
+import { PageLoader } from "@/components/PageLoader";
 import { getIncidentSeverityRank, titleCase } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { TableSkeleton } from "@/components/TableSkeleton";
@@ -414,7 +415,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
   );
 
   if (isUsageLoading) {
-    return null;
+    return <PageLoader />;
   }
 
   if (isAnyLimitReached && usageData) {
