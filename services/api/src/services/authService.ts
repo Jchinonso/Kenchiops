@@ -235,6 +235,37 @@ const autoLinkOrganizationsImpl = async (
 
   const tenantIds = await ensureOrgMemberships(user.id, provider, effectiveOrgs, context);
 
+  // Self-healing: detect orphaned tenants where the tenant exists but the
+  // user_organizations link is missing (e.g. from a prior partial failure).
+  // Re-fetch memberships after ensureOrgMemberships to get the current state.
+  try {
+    const postLinkMemberships = await findOrganizationsByUser(user.id);
+    const linkedTenantIds = new Set(postLinkMemberships.map((membership) => membership.tenantId));
+    const orphanedTenantIds = tenantIds.filter((id) => !linkedTenantIds.has(id));
+
+    for (const orphanedId of orphanedTenantIds) {
+      logger.warn("Repairing orphaned tenant membership", {
+        ...context,
+        userId: user.id,
+        orphanedTenantId: orphanedId,
+        provider,
+      });
+      await addUserOrganization({
+        userId: user.id,
+        tenantId: orphanedId,
+        role: "admin",
+        isDefault: false,
+      });
+    }
+  } catch (repairError: unknown) {
+    logger.warn("Orphaned membership repair failed (non-fatal)", {
+      userId: user.id,
+      provider,
+      error: getErrorMessage(repairError),
+      ...context,
+    });
+  }
+
   // After creating the personal fallback tenant, mark it as 'personal' type.
   // This must happen after ensureOrgMemberships which creates the tenant.
   if (isPersonalFallback && tenantIds.length > 0) {
@@ -564,19 +595,33 @@ const processOrgMembership = async (
   // regular member who signs up first gets unconditional owner access.
   const mappedRole = resolveAutoLinkRole(provider, org.role);
   const memberRole = isNew ? elevateToMinimumAdmin(mappedRole) : mappedRole;
-  await addUserOrganization({
+  const membership = await addUserOrganization({
     userId,
     tenantId: tenant.id,
     role: memberRole,
   });
 
-  logger.info("User organization membership ensured", {
-    ...context,
-    userId,
-    tenantId: tenant.id,
-    provider,
-    orgLogin: org.login,
-  });
+  if (membership === null) {
+    logger.error(
+      "Failed to create user organization membership — addUserOrganization returned null",
+      {
+        ...context,
+        userId,
+        tenantId: tenant.id,
+        provider,
+        orgLogin: org.login,
+        isNew,
+      }
+    );
+  } else {
+    logger.info("User organization membership ensured", {
+      ...context,
+      userId,
+      tenantId: tenant.id,
+      provider,
+      orgLogin: org.login,
+    });
+  }
 
   return tenant.id;
 };
