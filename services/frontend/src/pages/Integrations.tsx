@@ -426,7 +426,7 @@ export const Integrations = () => {
   const githubConnected = tenant?.githubConnected ?? false;
   const tenantId = tenant?.id ?? "";
   const { data: healthData } = useIntegrationHealth(tenantId);
-  const { data: usageData } = useSubscriptionUsage();
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage();
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -471,6 +471,10 @@ export const Integrations = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams, checkUrlParams]);
+
+  if (isUsageLoading) {
+    return null;
+  }
 
   if (isAnyLimitReached && usageData) {
     return (

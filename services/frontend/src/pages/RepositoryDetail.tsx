@@ -133,7 +133,7 @@ interface RepositoryDetailProps {
 }
 
 export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDetailProps) => {
-  const { data: usageData } = useSubscriptionUsage(refreshKey);
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage(refreshKey);
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -178,7 +178,11 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
   const analysesCurrentPage = Math.floor(analysesOffset / analysesPageSize) + 1;
   const analysesTotalPages = Math.ceil(analysesTotal / analysesPageSize);
 
-  if (isAnyLimitReached && usageData && !failuresLoading && !analysesLoading) {
+  if (isUsageLoading) {
+    return null;
+  }
+
+  if (isAnyLimitReached && usageData) {
     return (
       <FeatureLocked
         description="You have reached your plan's usage limits. Upgrade to continue viewing repository details."

@@ -57,7 +57,7 @@ interface ActiveIncidentsProps {
 export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? "";
-  const { data: usageData } = useSubscriptionUsage(refreshKey);
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage(refreshKey);
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -413,7 +413,11 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     </div>
   );
 
-  if (isAnyLimitReached && usageData && !isLoading) {
+  if (isUsageLoading) {
+    return null;
+  }
+
+  if (isAnyLimitReached && usageData) {
     return (
       <FeatureLocked
         description="You have reached your plan's usage limits. Upgrade to continue viewing incidents."

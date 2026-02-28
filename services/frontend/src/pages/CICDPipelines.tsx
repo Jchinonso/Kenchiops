@@ -102,7 +102,7 @@ const RepoCard = ({ repo }: RepoCardProps) => (
 
 export const CICDPipelines = () => {
   const { data: repos, isLoading, error } = useRepositories();
-  const { data: usageData } = useSubscriptionUsage();
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage();
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -112,7 +112,11 @@ export const CICDPipelines = () => {
   const repoList = repos ?? [];
   const hasRepos = Boolean(repoList.length);
 
-  if (isAnyLimitReached && usageData && !isLoading) {
+  if (isUsageLoading) {
+    return null;
+  }
+
+  if (isAnyLimitReached && usageData) {
     return (
       <FeatureLocked
         description="You have reached your plan's usage limits. Upgrade to continue viewing pipelines."

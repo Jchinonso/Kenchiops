@@ -306,7 +306,7 @@ interface CICDAnalysesProps {
 export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? undefined;
-  const { data: usageData } = useSubscriptionUsage(refreshKey);
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage(refreshKey);
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -647,7 +647,11 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
     </div>
   );
 
-  if (isAnyLimitReached && usageData && !isLoading) {
+  if (isUsageLoading) {
+    return null;
+  }
+
+  if (isAnyLimitReached && usageData) {
     return (
       <FeatureLocked
         description="You have reached your plan's usage limits. Upgrade to continue using CI/CD analyses."
