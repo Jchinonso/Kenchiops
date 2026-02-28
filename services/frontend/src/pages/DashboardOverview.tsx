@@ -186,7 +186,7 @@ const buildQuickStats = (
       : "Loading...",
     href: "/dashboard/cicd/analyses",
     icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-    colorClass: "bg-red-500",
+    colorClass: "bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-500/25",
   },
   {
     title: "Analyses",
@@ -196,7 +196,7 @@ const buildQuickStats = (
       : "Loading...",
     href: "/dashboard/cicd/analyses",
     icon: <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-    colorClass: "bg-indigo-500",
+    colorClass: "bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/25",
   },
   {
     title: "Confidence",
@@ -204,7 +204,7 @@ const buildQuickStats = (
     subtitle: avgConfidence.subtitle,
     href: "/dashboard/cicd/analyses",
     icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-    colorClass: "bg-blue-500",
+    colorClass: "bg-gradient-to-br from-blue-500 to-cyan-600 shadow-lg shadow-blue-500/25",
   },
   {
     title: "Repositories",
@@ -214,7 +214,7 @@ const buildQuickStats = (
       : "Loading...",
     href: "/dashboard/cicd/pipelines",
     icon: <FolderGit2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-    colorClass: "bg-green-500",
+    colorClass: "bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-500/25",
   },
   {
     title: "Active Alerts",
@@ -222,7 +222,7 @@ const buildQuickStats = (
     subtitle: triageStats ? "Require attention" : "Loading...",
     href: "/dashboard/incidents/active",
     icon: <Siren className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-    colorClass: "bg-orange-500",
+    colorClass: "bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/25",
     sourceBreakdown: sourceBreakdown ?? undefined,
   },
   {
@@ -231,7 +231,7 @@ const buildQuickStats = (
     subtitle: triageStats ? "Total triaged" : "Loading...",
     href: "/dashboard/incidents/active",
     icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-white" />,
-    colorClass: "bg-teal-500",
+    colorClass: "bg-gradient-to-br from-teal-500 to-cyan-600 shadow-lg shadow-teal-500/25",
   },
 ];
 
@@ -423,12 +423,12 @@ export const DashboardOverview = ({
 
   return (
     <>
-      <div className="mb-6 sm:mb-8 flex items-start justify-between gap-4">
+      <div className="mb-6 sm:mb-8 flex items-start justify-between gap-4 opacity-0 animate-fade-in">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-gray-900 dark:text-gray-100 tracking-tight">
             Welcome back, {firstName}!
           </h1>
-          <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400/80 mt-1">
             Here&apos;s your pipeline and incident health at a glance.
           </p>
         </div>
@@ -436,7 +436,7 @@ export const DashboardOverview = ({
           <button
             type="button"
             onClick={handleExportOverview}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-zinc-700/60 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
           >
             <Download className="w-3.5 h-3.5" />
             Export Dashboard
@@ -487,9 +487,14 @@ export const DashboardOverview = ({
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
-          {quickStats.map((stat) => (
-            <Link key={stat.title} to={stat.href} className="block group">
-              <Card className="py-4 sm:py-5 h-full group-hover:border-indigo-300 dark:group-hover:border-indigo-700 group-hover:shadow-md group-hover:-translate-y-0.5 group-active:scale-[0.98] transition-all">
+          {quickStats.map((stat, statIndex) => (
+            <Link
+              key={stat.title}
+              to={stat.href}
+              className="block group opacity-0 animate-fade-in"
+              style={{ animationDelay: `${statIndex * 60}ms` }}
+            >
+              <Card className="py-4 sm:py-5 h-full group-hover:border-indigo-300 dark:group-hover:border-indigo-700 group-hover:shadow-lg group-hover:-translate-y-1 group-active:scale-[0.98] transition-all duration-300">
                 <CardContent className="px-4 sm:px-6 h-full">
                   <div className="flex items-start justify-between gap-3 h-full">
                     <div className="min-w-0">
@@ -503,7 +508,7 @@ export const DashboardOverview = ({
                         <Skeleton className="h-7 w-12 mt-1" />
                       ) : (
                         <>
-                          <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          <p className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">
                             {stat.value}
                           </p>
                           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
@@ -525,7 +530,7 @@ export const DashboardOverview = ({
                       )}
                     </div>
                     <div
-                      className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 ${stat.colorClass} rounded-xl flex items-center justify-center flex-shrink-0`}
+                      className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 ${stat.colorClass} rounded-full flex items-center justify-center flex-shrink-0`}
                     >
                       {stat.icon}
                     </div>
@@ -574,7 +579,7 @@ export const DashboardOverview = ({
 
       {/* Onboarding — placed before charts so it's visible above the fold */}
       {showOnboarding && completedCount >= 2 && !allStepsComplete ? (
-        <div className="mb-6 sm:mb-8 flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div className="mb-6 sm:mb-8 flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/80 backdrop-blur-sm">
           <Rocket className="w-4 h-4 text-indigo-500 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -583,7 +588,7 @@ export const DashboardOverview = ({
               </span>
               <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-indigo-500 rounded-full transition-all"
+                  className="h-full bg-amber-500 rounded-full transition-all"
                   style={{ width: `${(completedCount / onboardingSteps.length) * 100}%` }}
                 />
               </div>
@@ -659,7 +664,9 @@ export const DashboardOverview = ({
                 >
                   <div className="flex-shrink-0 mt-1">
                     {step.completed ? (
-                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                      <div className="ring-2 ring-green-500/20 rounded-full">
+                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                      </div>
                     ) : (
                       step.icon
                     )}
@@ -687,7 +694,7 @@ export const DashboardOverview = ({
                           "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
                           step.completed
                             ? "text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                            : "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900"
+                            : "bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/20"
                         )}
                       >
                         {step.ctaLabel}
@@ -713,8 +720,20 @@ export const DashboardOverview = ({
       {isNewUser && !showOnboarding && (
         <Card className="mb-6 sm:mb-8">
           <CardContent className="py-12 text-center">
-            <Rocket className="w-10 h-10 text-indigo-400 mx-auto mb-4" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            <div className="relative mx-auto mb-4 w-16 h-16">
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background:
+                    "radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 70%)",
+                  transform: "scale(2)",
+                }}
+              />
+              <div className="relative w-full h-full rounded-full flex items-center justify-center border border-amber-500/20 bg-amber-500/10">
+                <Rocket className="w-7 h-7 text-amber-400" />
+              </div>
+            </div>
+            <h2 className="text-lg font-display font-semibold text-gray-900 dark:text-gray-100 mb-2">
               Welcome to Kenchi
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-4">
@@ -722,7 +741,7 @@ export const DashboardOverview = ({
             </p>
             <Link
               to="/dashboard/integrations"
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-lg transition-all duration-200 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30"
             >
               Connect a CI Provider
             </Link>
@@ -799,9 +818,15 @@ export const DashboardOverview = ({
           </CardContent>
         </Card>
       ) : (
-        <div className={cn("grid gap-4 sm:gap-6 mb-6 sm:mb-8", activityGridCols)}>
+        <div
+          className={cn(
+            "grid gap-4 sm:gap-6 mb-6 sm:mb-8 opacity-0 animate-fade-in",
+            activityGridCols
+          )}
+          style={{ animationDelay: "400ms" }}
+        >
           {failureItems.length > 0 && (
-            <Card>
+            <Card className="border-t-2 border-t-red-500/40">
               <CardHeader className="border-b">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
@@ -818,7 +843,7 @@ export const DashboardOverview = ({
                       <Link
                         key={event.id}
                         to="/dashboard/cicd/analyses"
-                        className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+                        className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
                       >
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <TimeDisplay
@@ -856,16 +881,19 @@ export const DashboardOverview = ({
               <CardFooter className="border-t">
                 <Link
                   to="/dashboard/cicd/analyses"
-                  className="text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                  className="group/link inline-flex items-center gap-1 text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
                 >
-                  View all failures &rarr;
+                  View all failures
+                  <span className="transition-transform duration-200 group-hover/link:translate-x-0.5">
+                    &rarr;
+                  </span>
                 </Link>
               </CardFooter>
             </Card>
           )}
 
           {analysisItems.length > 0 && (
-            <Card>
+            <Card className="border-t-2 border-t-indigo-500/40">
               <CardHeader className="border-b">
                 <div className="flex items-center gap-2">
                   <Search className="w-5 h-5 text-indigo-500" />
@@ -882,7 +910,7 @@ export const DashboardOverview = ({
                       <Link
                         key={analysis.id}
                         to="/dashboard/cicd/analyses"
-                        className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+                        className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
                       >
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <TimeDisplay
@@ -920,16 +948,19 @@ export const DashboardOverview = ({
               <CardFooter className="border-t">
                 <Link
                   to="/dashboard/cicd/analyses"
-                  className="text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                  className="group/link inline-flex items-center gap-1 text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
                 >
-                  View all analyses &rarr;
+                  View all analyses
+                  <span className="transition-transform duration-200 group-hover/link:translate-x-0.5">
+                    &rarr;
+                  </span>
                 </Link>
               </CardFooter>
             </Card>
           )}
 
           {incidentItems.length > 0 && (
-            <Card>
+            <Card className="border-t-2 border-t-orange-500/40">
               <CardHeader className="border-b">
                 <div className="flex items-center gap-2">
                   <Siren className="w-5 h-5 text-orange-500" />
@@ -944,7 +975,7 @@ export const DashboardOverview = ({
                     <Link
                       key={incident.id}
                       to="/dashboard/incidents/active"
-                      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+                      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <TimeDisplay
@@ -974,9 +1005,12 @@ export const DashboardOverview = ({
               <CardFooter className="border-t">
                 <Link
                   to="/dashboard/incidents/active"
-                  className="text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
+                  className="group/link inline-flex items-center gap-1 text-sm text-indigo-500 hover:text-indigo-600 font-medium transition-colors"
                 >
-                  View all incidents &rarr;
+                  View all incidents
+                  <span className="transition-transform duration-200 group-hover/link:translate-x-0.5">
+                    &rarr;
+                  </span>
                 </Link>
               </CardFooter>
             </Card>
