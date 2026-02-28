@@ -173,9 +173,9 @@ export const AUDIT_QUERIES = {
     )
     INSERT INTO tenant_audit_log (tenant_id, action, actor, metadata, previous_hash, entry_hash)
     SELECT
-      $1, $2, $3, $4,
+      $1::varchar, $2::varchar, $3::varchar, $4::jsonb,
       chain.prev_hash,
-      encode(sha256(convert_to(chain.prev_hash || $1 || $2 || COALESCE($3, '') || $4 || clock_timestamp()::text, 'UTF8')), 'hex')
+      encode(sha256(convert_to(chain.prev_hash || $1::text || $2::text || COALESCE($3::text, '') || $4::text || clock_timestamp()::text, 'UTF8')), 'hex')
     FROM chain
   `,
   SELECT_BY_TENANT: `SELECT * FROM tenant_audit_log
