@@ -457,11 +457,14 @@ export const DashboardOverview = ({
             current={usageData.usage.repositories.current}
             limit={usageData.usage.repositories.limit}
           />
-          <UsageWarning
-            label="Team Members"
-            current={usageData.usage.teamMembers.current}
-            limit={usageData.usage.teamMembers.limit}
-          />
+          {/* Only show team member warning when exceeding solo user baseline */}
+          {usageData.usage.teamMembers.current > 1 && (
+            <UsageWarning
+              label="Team Members"
+              current={usageData.usage.teamMembers.current}
+              limit={usageData.usage.teamMembers.limit}
+            />
+          )}
         </div>
       )}
 
