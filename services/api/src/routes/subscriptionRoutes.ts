@@ -21,7 +21,6 @@ import {
   findGitHubAppConnection,
   findOAuthIdentitiesByUser,
   rateLimitByCategory,
-  isWithinLimit,
   type Plan,
   type PlanId,
   type TenantSubscription,
@@ -270,8 +269,10 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
       readonly current: number;
       readonly limit: number;
     }> = [
-      ...(limits.maxRepositories !== null &&
-      !isWithinLimit(currentUsage.repositories, limits.maxRepositories)
+      // Downgrade uses <= (not <) because the user already has these resources.
+      // isWithinLimit uses strict < for pre-creation checks, but here we're
+      // validating existing usage against the target plan — at-limit is acceptable.
+      ...(limits.maxRepositories !== null && currentUsage.repositories > limits.maxRepositories
         ? [
             {
               metric: "repositories",
@@ -281,7 +282,7 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
           ]
         : []),
       ...(limits.maxAnalysesMonthly !== null &&
-      !isWithinLimit(currentUsage.analysesThisMonth, limits.maxAnalysesMonthly)
+      currentUsage.analysesThisMonth > limits.maxAnalysesMonthly
         ? [
             {
               metric: "analysesThisMonth",
@@ -290,8 +291,7 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
             },
           ]
         : []),
-      ...(limits.maxIntegrations !== null &&
-      !isWithinLimit(currentUsage.integrations, limits.maxIntegrations)
+      ...(limits.maxIntegrations !== null && currentUsage.integrations > limits.maxIntegrations
         ? [
             {
               metric: "integrations",
@@ -300,8 +300,7 @@ const handleChangePlan = async (req: Request, res: Response): Promise<void> => {
             },
           ]
         : []),
-      ...(limits.maxTeamMembers !== null &&
-      !isWithinLimit(currentUsage.teamMembers, limits.maxTeamMembers)
+      ...(limits.maxTeamMembers !== null && currentUsage.teamMembers > limits.maxTeamMembers
         ? [
             {
               metric: "teamMembers",

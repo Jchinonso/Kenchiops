@@ -458,6 +458,11 @@ export const DashboardOverview = ({
             limit={usageData.usage.repositories.limit}
           />
           <UsageWarning
+            label="Integrations"
+            current={usageData.usage.integrations.current}
+            limit={usageData.usage.integrations.limit}
+          />
+          <UsageWarning
             label="Team Members"
             current={usageData.usage.teamMembers.current}
             limit={usageData.usage.teamMembers.limit}

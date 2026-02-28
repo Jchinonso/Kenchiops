@@ -181,6 +181,10 @@ const handleAcceptInvitation = async (req: Request, res: Response): Promise<void
     });
   }
 
+  // Re-check team size limit at acceptance time — capacity may have changed
+  // since the invitation was created
+  await enforcePlanLimit(invitation.tenantId, "max_team_members");
+
   // Add user to the organization with the invited role
   await addUserOrganization({
     userId,

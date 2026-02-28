@@ -31,7 +31,7 @@ INSERT INTO plans (
     sso_saml, audit_log, api_access, priority_support
 )
 VALUES
-    ('free',       'Free',       0,     0, 3,    50,   1,    1,
+    ('free',       'Free',       0,     0, 3,    50,   1,    5,
      false, false, false, false, false, false, false),
     ('pro',        'Pro',        4900,  1, NULL, NULL, 5,    10,
      true,  true,  true,  false, false, true,  true),

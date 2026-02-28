@@ -20,15 +20,14 @@
 - Shared package: `packages/shared/src/__tests__/<domain>/` (e.g., `__tests__/security/`, `__tests__/http/`)
 - API service: `services/api/src/__tests__/` (flat) or `services/api/src/__tests__/services/` (nested for services)
 
-## Auth Test Coverage (2026-02-12)
+## Auth & Subscription Test Coverage (updated 2026-02-28)
 
+- `/services/api/src/__tests__/services/authService.test.ts` - 43 tests (all service methods + plan limit enforcement)
+- `/services/api/src/__tests__/invitationRoutes.test.ts` - 13 tests (accept/create with enforcePlanLimit)
+- `/services/api/src/__tests__/subscriptionRoutes.test.ts` - 10 tests (downgrade validation fence-post)
 - `/packages/shared/src/__tests__/security/jwt.test.ts` - 27 tests (all JWT functions)
 - `/packages/shared/src/__tests__/http/authMiddleware.test.ts` - 20 tests (middleware)
-- `/services/api/src/__tests__/services/authService.test.ts` - 37 tests (all service methods)
-- `/services/api/src/adapters/__tests__/gitlabOAuthAdapter.test.ts` - 27 tests (all 3 OAuthPort methods)
-- `/services/api/src/adapters/__tests__/bitbucketOAuthAdapter.test.ts` - 30 tests (all 3 OAuthPort methods)
-- `/services/api/src/adapters/__tests__/azureDevOpsOAuthAdapter.test.ts` - 32 tests (all 3 OAuthPort methods)
-- `/services/api/src/adapters/__tests__/githubOAuthAdapter.test.ts` - 40 tests (all 3 OAuthPort methods)
+- OAuth adapters: gitlab(27), bitbucket(30), azureDevOps(32), github(40)
 
 ## OAuth Adapter Testing Pattern
 
@@ -193,6 +192,18 @@ Common missing `@kenchi/shared` mocks in services/api tests:
 - Verify round-trip: encrypt(old) -> reEncrypt(old->new) -> decrypt(new) = original
 - `updateKeyVersion` callback only called when `errors === 0`
 - Test partial failures: mix of good and bad encrypted values in same batch
+
+## Route Test Pattern (supertest + Express)
+
+- Use `supertest` with `express()` app + error middleware for route-level tests
+- Mock `@kenchi/shared` middleware as passthrough: `requirePermission: () => (req, res, next) => next()`
+- Mock `requireTenantId` inline to read from `req.user?.tenantId` (real impl reads same place)
+- Mock `asyncHandler` to wrap fn in try/catch that calls `next(error)` (enables error middleware)
+- Inject auth via middleware: `Object.assign(req, { user: { userId, tenantId }, context: {...} })`
+- Adapter mocks at module level: `jest.mock("../adapters/fooAdapter.js", () => ({ create: () => ({...}) }))`
+- Adapter mock paths from `__tests__/` use `../adapters/` (not `../../adapters/`)
+- `enforcePlanLimit` throws `AuthorizationError` with `metadata.code: "PLAN_LIMIT_EXCEEDED"` when exceeded
+- `isWithinLimit` uses strict `<` (at-limit = blocked), but downgrade uses `>` (at-limit = allowed)
 
 ## Common Gotchas
 

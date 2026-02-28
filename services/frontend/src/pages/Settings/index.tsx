@@ -48,7 +48,7 @@ const SectionHeader = ({ title }: { readonly title: string }) => (
 );
 
 export const Settings = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { data: tenant, isLoading: tenantLoading } = useTenantInfo();
   const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
   const { data: usageData, isLoading: usageLoading } = useSubscriptionUsage();
@@ -89,16 +89,20 @@ export const Settings = () => {
         body: { confirmation: "DELETE" },
       });
       if (response.ok) {
-        await logout();
-      } else {
-        toast.error("Failed to delete account. Please try again later.");
+        // Skip POST /auth/logout — tokens are cascade-deleted with the user.
+        // Redirect immediately to prevent in-flight 401s from triggering
+        // concurrent refresh attempts and multiple page reloads.
+        sessionStorage.setItem("kenchi_logged_out", "1");
+        window.location.assign("/login");
+        return;
       }
+      toast.error("Failed to delete account. Please try again later.");
     } catch {
       toast.error("Failed to delete account. Please try again later.");
     } finally {
       setDeleteLoading(false);
     }
-  }, [logout]);
+  }, []);
 
   return (
     <motion.div
