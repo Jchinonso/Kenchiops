@@ -28,6 +28,7 @@ import { InvestigationDetail } from "@/pages/InvestigationDetail";
 import { Settings } from "@/pages/Settings";
 import { PlanSelection } from "@/pages/PlanSelection";
 import { Integrations } from "@/pages/Integrations";
+import { PageLoader } from "@/components/PageLoader";
 import { GitLabSetup } from "@/pages/GitLabSetup";
 import { TeamManagement } from "@/pages/TeamManagement";
 import { TenantGuard } from "@/components/TenantGuard";
@@ -489,8 +490,8 @@ const Dashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+        <PageLoader className="min-h-screen" />
       </div>
     );
   }
