@@ -214,17 +214,17 @@ const SidebarLeafItem = ({
             : "px-4 py-2.5 md:justify-center md:px-2 lg:justify-start lg:px-4",
           active
             ? indented
-              ? "border-indigo-400 dark:border-indigo-500 bg-indigo-50/80 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-medium pl-5 lg:pl-5"
-              : "bg-indigo-500/10 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-l-2 border-indigo-500 font-medium"
+              ? "border-indigo-400 bg-indigo-500/10 text-indigo-300 font-medium pl-5 lg:pl-5"
+              : "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-400 font-medium"
             : indented
-              ? "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:pl-5 lg:hover:pl-5"
-              : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
+              ? "border-transparent text-zinc-500 hover:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/40 hover:pl-5 lg:hover:pl-5"
+              : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100"
         )}
       >
         <span className="flex-shrink-0">{icon}</span>
         <span className="hidden md:hidden lg:inline">{label}</span>
         {comingSoon && (
-          <span className="ml-auto text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded hidden md:hidden lg:inline-block">
+          <span className="ml-auto text-[10px] font-medium text-zinc-600 bg-zinc-800/80 border border-zinc-700/50 px-1.5 py-0.5 rounded hidden md:hidden lg:inline-block">
             Soon
           </span>
         )}
@@ -261,8 +261,8 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: Nav
             className={cn(
               "hidden md:flex lg:hidden items-center justify-center w-full px-2 py-2.5 rounded-lg transition-all duration-[250ms] text-sm",
               hasActiveChild
-                ? "text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-950/60"
-                : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
+                ? "text-indigo-300 bg-indigo-500/5"
+                : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100"
             )}
           >
             <span className="flex-shrink-0">{group.icon}</span>
@@ -279,22 +279,22 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: Nav
           className={cn(
             "flex items-center justify-between w-full px-4 py-2.5 rounded-lg transition-all duration-[250ms] text-sm",
             hasActiveChild
-              ? "text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-950/60"
-              : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
+              ? "text-indigo-300 bg-indigo-500/5"
+              : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100"
           )}
         >
           <div className="flex items-center gap-3">
             {group.icon}
             <span className="font-medium">{group.label}</span>
             {group.comingSoon && (
-              <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] font-medium text-zinc-600 bg-zinc-800/80 border border-zinc-700/50 px-1.5 py-0.5 rounded">
                 Soon
               </span>
             )}
           </div>
           <ChevronRight
             className={cn(
-              "w-4 h-4 text-gray-400 transition-transform duration-200",
+              "w-4 h-4 text-zinc-600 transition-transform duration-200",
               isOpen && "rotate-90"
             )}
           />
@@ -373,14 +373,14 @@ export const DashboardSidebar = ({
   return (
     <aside
       className={cn(
-        "fixed md:sticky top-0 left-0 z-50 w-64 md:w-16 lg:w-64 h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-all duration-300",
+        "fixed md:sticky top-0 left-0 z-50 w-64 md:w-16 lg:w-64 h-screen bg-zinc-950 border-r border-zinc-800/60 flex flex-col transition-all duration-300",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}
     >
       {/* Logo */}
-      <div className="p-4 sm:p-6 md:p-3 lg:p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+      <div className="p-4 sm:p-6 md:p-3 lg:p-6 border-b border-zinc-800/60 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-500/20">
+          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-500/30">
             <svg
               className="w-5 h-5 text-white"
               fill="none"
@@ -395,26 +395,34 @@ export const DashboardSidebar = ({
               />
             </svg>
           </div>
-          <span className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 hidden md:hidden lg:inline">
+          <span className="text-lg sm:text-xl font-display font-bold text-zinc-100 hidden md:hidden lg:inline">
             Kenchi
           </span>
         </Link>
         <button
           onClick={onClose}
-          className="md:hidden p-2 text-gray-500 hover:text-gray-700"
+          className="md:hidden p-2 text-zinc-400 hover:text-zinc-200"
           aria-label="Close navigation menu"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
+      {/* Amber glow edge */}
+      <div
+        className="h-px w-full flex-shrink-0"
+        style={{
+          background: "linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.4), transparent)",
+        }}
+      />
+
       {/* Organization Switcher */}
-      <div className="border-b border-gray-100 dark:border-gray-800">
+      <div className="border-b border-zinc-800/60">
         <OrganizationSwitcher />
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 sm:p-4 md:p-2 lg:px-5 lg:py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 sm:p-4 md:p-2 lg:px-4 lg:py-3 space-y-1 overflow-y-auto scrollbar-none">
         {NAV_ENTRIES.map((entry) =>
           isNavGroup(entry) ? (
             <SidebarNavGroup
@@ -437,12 +445,14 @@ export const DashboardSidebar = ({
       </nav>
 
       {/* User Menu (Popover) */}
-      <div className="border-t border-gray-100 dark:border-gray-700 p-3 sm:p-4 md:p-2 lg:p-4">
+      {/* Section divider */}
+      <div className="mx-4 h-px bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent" />
+      <div className="border-t border-zinc-800/60 p-3 sm:p-4 md:p-2 lg:p-4">
         <Popover>
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-3 w-full px-3 py-2.5 md:justify-center md:px-0 lg:justify-start lg:px-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/80 dark:hover:backdrop-blur-sm transition-colors"
+              className="flex items-center gap-3 w-full px-3 py-2.5 md:justify-center md:px-0 lg:justify-start lg:px-3 rounded-lg hover:bg-zinc-800/60 transition-colors"
             >
               {user?.avatarUrl ? (
                 <img
@@ -451,7 +461,7 @@ export const DashboardSidebar = ({
                   className="w-8 h-8 rounded-full flex-shrink-0"
                 />
               ) : (
-                <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center flex-shrink-0 ring-2 ring-indigo-500/20">
                   <span className="text-white font-medium text-xs">
                     {(user?.displayName ?? "U")
                       .split(" ")
@@ -463,19 +473,16 @@ export const DashboardSidebar = ({
                 </div>
               )}
               <div className="min-w-0 flex-1 text-left hidden md:hidden lg:block">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                <p className="text-sm font-medium text-zinc-100 truncate">
                   {user?.displayName ?? "User"}
                 </p>
                 {user?.email && (
-                  <p
-                    className="text-xs text-gray-500 dark:text-gray-400 truncate"
-                    title={user.email}
-                  >
+                  <p className="text-xs text-zinc-500 truncate" title={user.email}>
                     {user.email}
                   </p>
                 )}
               </div>
-              <ChevronsUpDown className="w-4 h-4 text-gray-400 flex-shrink-0 hidden md:hidden lg:block" />
+              <ChevronsUpDown className="w-4 h-4 text-zinc-600 flex-shrink-0 hidden md:hidden lg:block" />
             </button>
           </PopoverTrigger>
           <PopoverContent side="top" align="start" sideOffset={8} className="w-56 p-1.5">
@@ -485,7 +492,7 @@ export const DashboardSidebar = ({
                 onClose();
                 onOpenShortcuts();
               }}
-              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
             >
               <Keyboard className="w-4 h-4" />
               <span>Keyboard Shortcuts</span>
@@ -494,17 +501,17 @@ export const DashboardSidebar = ({
               href="https://github.com/kenchiops/kenchi/issues"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
             >
               <HelpCircle className="w-4 h-4" />
               <span>Help & Support</span>
             </a>
-            <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+            <div className="my-1 border-t border-zinc-800" />
             <button
               type="button"
               onClick={onLogout}
               disabled={isLoggingOut}
-              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50"
+              className="flex items-center gap-3 px-3 py-2 w-full text-sm text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors disabled:opacity-50"
             >
               {isLoggingOut ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

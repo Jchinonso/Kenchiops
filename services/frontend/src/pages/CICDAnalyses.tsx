@@ -647,14 +647,12 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
     </div>
   );
 
-  if (isAnyLimitReached && usageData) {
+  if (isAnyLimitReached && usageData && !isLoading) {
     return (
       <FeatureLocked
         description="You have reached your plan's usage limits. Upgrade to continue using CI/CD analyses."
         usage={usageData.usage}
-      >
-        {pageContent}
-      </FeatureLocked>
+      />
     );
   }
 

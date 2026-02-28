@@ -17,6 +17,8 @@ import { titleCase } from "@/lib/formatters";
 import { MonitoringIntegrations } from "@/components/MonitoringIntegrations";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { FeatureGate } from "@/components/FeatureGate";
+import { FeatureLocked } from "@/components/FeatureLocked";
+import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
@@ -424,6 +426,12 @@ export const Integrations = () => {
   const githubConnected = tenant?.githubConnected ?? false;
   const tenantId = tenant?.id ?? "";
   const { data: healthData } = useIntegrationHealth(tenantId);
+  const { data: usageData } = useSubscriptionUsage();
+  const isAnyLimitReached = usageData
+    ? Object.values(usageData.usage).some(
+        (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
+      )
+    : false;
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     planLimitError,
@@ -463,6 +471,15 @@ export const Integrations = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams, checkUrlParams]);
+
+  if (isAnyLimitReached && usageData) {
+    return (
+      <FeatureLocked
+        description="You have reached your plan's usage limits. Upgrade to continue managing integrations."
+        usage={usageData.usage}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

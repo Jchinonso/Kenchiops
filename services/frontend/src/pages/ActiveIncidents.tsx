@@ -413,14 +413,12 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     </div>
   );
 
-  if (isAnyLimitReached && usageData) {
+  if (isAnyLimitReached && usageData && !isLoading) {
     return (
       <FeatureLocked
         description="You have reached your plan's usage limits. Upgrade to continue viewing incidents."
         usage={usageData.usage}
-      >
-        {pageContent}
-      </FeatureLocked>
+      />
     );
   }
 

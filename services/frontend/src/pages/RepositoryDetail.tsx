@@ -44,6 +44,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { useSubscriptionUsage } from "@/hooks/useSubscription";
+import { FeatureLocked } from "@/components/FeatureLocked";
 
 // ==================== Constants ====================
 
@@ -131,6 +133,13 @@ interface RepositoryDetailProps {
 }
 
 export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDetailProps) => {
+  const { data: usageData } = useSubscriptionUsage(refreshKey);
+  const isAnyLimitReached = usageData
+    ? Object.values(usageData.usage).some(
+        (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
+      )
+    : false;
+
   const [failuresOffset, setFailuresOffset] = useState(0);
   const [analysesOffset, setAnalysesOffset] = useState(0);
   const [failuresPageSize, setFailuresPageSize] = useState(PAGE_SIZE);
@@ -168,6 +177,15 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
   const analysesTotal = analysesData?.total ?? 0;
   const analysesCurrentPage = Math.floor(analysesOffset / analysesPageSize) + 1;
   const analysesTotalPages = Math.ceil(analysesTotal / analysesPageSize);
+
+  if (isAnyLimitReached && usageData && !failuresLoading && !analysesLoading) {
+    return (
+      <FeatureLocked
+        description="You have reached your plan's usage limits. Upgrade to continue viewing repository details."
+        usage={usageData.usage}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
