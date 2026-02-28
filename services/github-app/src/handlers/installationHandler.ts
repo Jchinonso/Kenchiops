@@ -11,6 +11,9 @@ import {
   handleGitHubUninstall,
   findTenantByGitHubInstallation,
   findSlackConnection,
+  findOAuthIdentity,
+  addUserOrganization,
+  switchUserOrganization,
   suspend,
   activate,
   getErrorMessage,
@@ -69,6 +72,35 @@ const handleInstallationCreated = async (
       installationId: installation.id,
       status: tenant.status,
     });
+
+    // Link the sender (user who installed the app) to this tenant.
+    // This handles the case where the user logged in before the app was installed
+    // and got assigned to a personal tenant instead of the org tenant.
+    try {
+      const identity = await findOAuthIdentity("github", String(webhook.sender.id), null);
+      if (identity) {
+        await addUserOrganization({
+          userId: identity.userId,
+          tenantId: tenant.id,
+          role: "admin",
+        });
+        await switchUserOrganization(identity.userId, tenant.id);
+
+        logger.info("Linked installing user to tenant", {
+          userId: identity.userId,
+          tenantId: tenant.id,
+          org: orgName,
+          senderLogin: webhook.sender.login,
+        });
+      }
+    } catch (linkError) {
+      // Non-fatal: tenant was created, user linking is best-effort
+      logger.warn("Failed to link installing user to tenant (non-fatal)", {
+        org: orgName,
+        senderId: webhook.sender.id,
+        error: getErrorMessage(linkError),
+      });
+    }
 
     const statusMessage = tenant.status === "active" ? "activated" : "created";
     return successResult(`Tenant ${statusMessage} for ${orgName}`, tenant.id);
