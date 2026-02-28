@@ -418,9 +418,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
       <FeatureLocked
         description="You have reached your plan's usage limits. Upgrade to continue viewing incidents."
         usage={usageData.usage}
-      >
-        {pageContent}
-      </FeatureLocked>
+      />
     );
   }
 
