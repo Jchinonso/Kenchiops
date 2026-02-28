@@ -20,6 +20,8 @@ import {
 import { Siren, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIncidents, useActiveCountsBySource } from "@/hooks/useIncidentData";
+import { useSubscriptionUsage } from "@/hooks/useSubscription";
+import { FeatureLocked } from "@/components/FeatureLocked";
 import { getIncidentSeverityRank, titleCase } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { TableSkeleton } from "@/components/TableSkeleton";
@@ -55,6 +57,12 @@ interface ActiveIncidentsProps {
 export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? "";
+  const { data: usageData } = useSubscriptionUsage(refreshKey);
+  const isAnyLimitReached = usageData
+    ? Object.values(usageData.usage).some(
+        (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
+      )
+    : false;
   const [searchParams, setSearchParams] = useSearchParams();
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
@@ -218,7 +226,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     );
   }
 
-  return (
+  const pageContent = (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -404,4 +412,17 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
       />
     </div>
   );
+
+  if (isAnyLimitReached && usageData) {
+    return (
+      <FeatureLocked
+        description="You have reached your plan's usage limits. Upgrade to continue viewing incidents."
+        usage={usageData.usage}
+      >
+        {pageContent}
+      </FeatureLocked>
+    );
+  }
+
+  return pageContent;
 };
