@@ -208,14 +208,14 @@ const SidebarLeafItem = ({
         onClick={onClick}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-3 rounded-lg transition-all duration-200 text-sm",
+          "flex items-center gap-3 rounded-lg transition-all duration-[250ms] text-sm",
           indented
             ? "ml-5 pl-4 py-2 border-l-2 md:ml-0 md:pl-0 md:border-l-0 md:justify-center md:px-2 lg:ml-5 lg:pl-4 lg:border-l-2 lg:justify-start lg:px-0"
             : "px-4 py-2.5 md:justify-center md:px-2 lg:justify-start lg:px-4",
           active
             ? indented
               ? "border-indigo-400 dark:border-indigo-500 bg-indigo-50/80 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-medium pl-5 lg:pl-5"
-              : "bg-indigo-500 text-white shadow-md font-medium"
+              : "bg-indigo-500/10 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-l-2 border-indigo-500 font-medium"
             : indented
               ? "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:pl-5 lg:hover:pl-5"
               : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
@@ -259,7 +259,7 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: Nav
             onClick={onItemClick}
             aria-label={group.label}
             className={cn(
-              "hidden md:flex lg:hidden items-center justify-center w-full px-2 py-2.5 rounded-lg transition-all duration-200 text-sm",
+              "hidden md:flex lg:hidden items-center justify-center w-full px-2 py-2.5 rounded-lg transition-all duration-[250ms] text-sm",
               hasActiveChild
                 ? "text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-950/60"
                 : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
@@ -277,7 +277,7 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: Nav
           aria-haspopup="true"
           aria-controls={submenuId}
           className={cn(
-            "flex items-center justify-between w-full px-4 py-2.5 rounded-lg transition-all duration-200 text-sm",
+            "flex items-center justify-between w-full px-4 py-2.5 rounded-lg transition-all duration-[250ms] text-sm",
             hasActiveChild
               ? "text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-950/60"
               : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
@@ -380,7 +380,7 @@ export const DashboardSidebar = ({
       {/* Logo */}
       <div className="p-4 sm:p-6 md:p-3 lg:p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-500/20">
             <svg
               className="w-5 h-5 text-white"
               fill="none"
@@ -442,7 +442,7 @@ export const DashboardSidebar = ({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-3 w-full px-3 py-2.5 md:justify-center md:px-0 lg:justify-start lg:px-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="flex items-center gap-3 w-full px-3 py-2.5 md:justify-center md:px-0 lg:justify-start lg:px-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/80 dark:hover:backdrop-blur-sm transition-colors"
             >
               {user?.avatarUrl ? (
                 <img

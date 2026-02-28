@@ -43,6 +43,8 @@ import {
   useAnalysisCountsByRepo,
   type AnalysisRecord,
 } from "@/hooks/useDashboardData";
+import { useSubscriptionUsage } from "@/hooks/useSubscription";
+import { FeatureLocked } from "@/components/FeatureLocked";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
@@ -304,6 +306,12 @@ interface CICDAnalysesProps {
 export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? undefined;
+  const { data: usageData } = useSubscriptionUsage(refreshKey);
+  const isAnyLimitReached = usageData
+    ? Object.values(usageData.usage).some(
+        (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
+      )
+    : false;
   const [searchParams, setSearchParams] = useSearchParams();
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
@@ -438,7 +446,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
     setExpandedId(null);
   };
 
-  return (
+  const pageContent = (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -638,4 +646,17 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
       />
     </div>
   );
+
+  if (isAnyLimitReached && usageData) {
+    return (
+      <FeatureLocked
+        description="You have reached your plan's usage limits. Upgrade to continue using CI/CD analyses."
+        usage={usageData.usage}
+      >
+        {pageContent}
+      </FeatureLocked>
+    );
+  }
+
+  return pageContent;
 };
