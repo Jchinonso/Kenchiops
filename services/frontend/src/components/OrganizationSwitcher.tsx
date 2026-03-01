@@ -127,7 +127,7 @@ export const OrganizationSwitcher = () => {
           </span>
         </div>
         <a
-          href="https://github.com/settings/connections/applications"
+          href="https://github.com/settings/applications"
           target="_blank"
           rel="noopener noreferrer"
           className="hidden lg:flex items-center gap-1 mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
@@ -184,7 +184,7 @@ export const OrganizationSwitcher = () => {
           </Command>
           <div className="border-t border-zinc-100 dark:border-zinc-800 px-3 py-2">
             <a
-              href="https://github.com/settings/connections/applications"
+              href="https://github.com/settings/applications"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
