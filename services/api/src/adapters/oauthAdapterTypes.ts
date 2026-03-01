@@ -47,6 +47,27 @@ export interface GitHubOrg {
   readonly role?: string;
 }
 
+// ==================== GitHub App Installations ====================
+
+/** Account entry from a GitHub App installation. */
+export interface GitHubInstallationAccount {
+  readonly login: string;
+  readonly type: string; // "Organization" | "User"
+}
+
+/** Single installation entry from GitHub's /user/installations endpoint. */
+export interface GitHubInstallation {
+  readonly id: number;
+  readonly account: GitHubInstallationAccount;
+  readonly app_id: number;
+}
+
+/** Paginated response from GitHub's /user/installations endpoint. */
+export interface GitHubInstallationsResponse {
+  readonly total_count: number;
+  readonly installations: readonly GitHubInstallation[];
+}
+
 // ==================== GitLab Token Exchange ====================
 
 /** Raw response from GitLab's OAuth endpoint. */

@@ -28,6 +28,7 @@ import type {
   GitHubUserProfile,
   GitHubUserEmail,
   GitHubOrg,
+  GitHubInstallationsResponse,
 } from "./oauthAdapterTypes.js";
 
 // ==================== Constants ====================
@@ -410,7 +411,77 @@ const fetchOrgMembershipRole = async (
 };
 
 /**
+ * Fetch GitHub App installations accessible to the authenticated user.
+ * Returns account logins from installations, which includes both orgs AND
+ * personal accounts where the app is installed. This is essential because
+ * /user/orgs only returns organizations, missing personal account installations.
+ *
+ * Best-effort: returns empty array on failure so org discovery still works
+ * via /user/orgs alone.
+ */
+const fetchUserInstallations = async (
+  accessToken: string,
+  instanceUrl: string | null,
+  context: RequestContext
+): Promise<readonly string[]> => {
+  const baseUrl = instanceUrl ?? "https://api.github.com";
+  const url = `${baseUrl}/user/installations`;
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `token ${accessToken}`,
+        Accept: "application/vnd.github+json",
+      },
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    });
+
+    const durationMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      logger.warn("GitHub user installations fetch returned non-OK status", {
+        provider: "github",
+        operation: "fetchUserInstallations",
+        statusCode: response.status,
+        durationMs,
+        ...context,
+      });
+      return [];
+    }
+
+    const data = (await response.json()) as GitHubInstallationsResponse;
+
+    logger.info("GitHub user installations fetched", {
+      provider: "github",
+      operation: "fetchUserInstallations",
+      durationMs,
+      statusCode: response.status,
+      installationCount: data.total_count,
+      ...context,
+    });
+
+    return data.installations.map((installation) => installation.account.login);
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+
+    logger.warn("GitHub user installations fetch failed (best-effort)", {
+      provider: "github",
+      operation: "fetchUserInstallations",
+      durationMs,
+      error: redactSecrets(error instanceof Error ? error.message : String(error)),
+      ...context,
+    });
+    return [];
+  }
+};
+
+/**
  * Fetch the authenticated GitHub user's organization memberships.
+ *
+ * Also fetches /user/installations to discover accounts (orgs + personal)
+ * where the GitHub App is installed. This makes org discovery resilient to
+ * missed webhooks (e.g., webhook URL misconfigured, service down, etc.).
  *
  * When /user/orgs omits the `role` field for any org, falls back to
  * the per-org membership endpoint (GET /user/memberships/orgs/{org})
@@ -426,44 +497,55 @@ const getUserOrganizations = async (
   const startTime = Date.now();
 
   try {
-    const response = await fetch(urls.userOrgs, {
-      headers: {
-        Authorization: `token ${accessToken}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
-    });
+    // Fetch orgs and installations in parallel for resilient discovery
+    const [orgsResponse, installationLogins] = await Promise.all([
+      fetch(urls.userOrgs, {
+        headers: {
+          Authorization: `token ${accessToken}`,
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+      }),
+      fetchUserInstallations(accessToken, instanceUrl, context),
+    ]);
 
     const durationMs = Date.now() - startTime;
 
-    if (!response.ok) {
+    if (!orgsResponse.ok) {
       throw new ExternalServiceError(
         "github",
-        `User orgs fetch failed with status ${String(response.status)}`,
+        `User orgs fetch failed with status ${String(orgsResponse.status)}`,
         {
           metadata: {
             operation: "getUserOrganizations",
-            statusCode: response.status,
+            statusCode: orgsResponse.status,
             durationMs,
           },
-          retryable: isRetryableStatus(response.status),
+          retryable: isRetryableStatus(orgsResponse.status),
         }
       );
     }
 
-    const orgs = (await response.json()) as readonly GitHubOrg[];
+    const orgs = (await orgsResponse.json()) as readonly GitHubOrg[];
 
     logger.info("GitHub user organizations fetched", {
       provider: "github",
       operation: "getUserOrganizations",
       durationMs,
-      statusCode: response.status,
+      statusCode: orgsResponse.status,
       orgCount: orgs.length,
+      installationCount: installationLogins.length,
       ...context,
     });
 
+    // Build result from /user/orgs first
+    const orgLoginSet = new Set(orgs.map((org) => org.login.toLowerCase()));
+
     // Enrich orgs with missing roles via per-org membership endpoint
     const orgsWithMissingRoles = orgs.filter((org) => !org.role);
+    // let: enrichedOrgResults is conditionally built from async role enrichment
+    let enrichedOrgResults: readonly OAuthOrganization[];
+
     if (orgsWithMissingRoles.length > 0) {
       logger.info("Fetching per-org membership roles for orgs missing role field", {
         provider: "github",
@@ -482,13 +564,35 @@ const getUserOrganizations = async (
 
       const roleMap = new Map(enrichedRoles.map((entry) => [entry.login, entry.role]));
 
-      return orgs.map((org) => ({
+      enrichedOrgResults = orgs.map((org) => ({
         login: org.login,
         role: org.role ?? roleMap.get(org.login),
       }));
+    } else {
+      enrichedOrgResults = orgs.map((org) => ({ login: org.login, role: org.role }));
     }
 
-    return orgs.map((org) => ({ login: org.login, role: org.role }));
+    // Merge installation accounts not already in /user/orgs.
+    // This captures personal accounts and orgs where the app is installed
+    // but the user might not have org-level membership visible via /user/orgs.
+    const installationOnlyLogins = installationLogins.filter(
+      (login) => !orgLoginSet.has(login.toLowerCase())
+    );
+
+    if (installationOnlyLogins.length > 0) {
+      logger.info("Discovered additional accounts from GitHub App installations", {
+        provider: "github",
+        operation: "getUserOrganizations",
+        additionalAccounts: installationOnlyLogins,
+        ...context,
+      });
+    }
+
+    const installationOrgs: readonly OAuthOrganization[] = installationOnlyLogins.map((login) => ({
+      login,
+    }));
+
+    return [...enrichedOrgResults, ...installationOrgs];
   } catch (error) {
     if (error instanceof ExternalServiceError) {
       throw error;
