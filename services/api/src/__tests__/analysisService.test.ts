@@ -8,38 +8,82 @@ import type { LLMAnalysisResult, Evidence, Event, RequestContext } from "@kenchi
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockAnalyzeIncident = jest.fn<(...args: any[]) => Promise<any>>();
 
-// Mock dependencies
-jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
-  return {
-    ...actual,
-    LLMClient: jest.fn().mockImplementation(() => ({
-      analyzeIncident: mockAnalyzeIncident,
-    })),
-    createLogger: jest.fn(() => ({
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    })),
-    searchFromEventContext: jest.fn().mockResolvedValue({
-      diffChunks: [],
-      knowledgeDocs: [],
-      queryTokens: 10,
-      cacheHit: false,
-    }),
-    selectModel: jest.fn().mockReturnValue({
-      model: "gpt-4o-mini",
-      reason: "standard_analysis",
-    }),
-    logModelSelection: jest.fn(),
-    createAnalysis: jest.fn().mockResolvedValue({
-      id: "analysis_123",
-      eventId: "evt_test",
-      createdAt: new Date().toISOString(),
-    }),
-  };
-});
+// Mock dependencies -- explicit mock without jest.requireActual to avoid loading
+// database/redis modules via the barrel export (causes open handles and timeouts).
+jest.mock("@kenchi/shared", () => ({
+  // Constants needed by analysisService and analysisEvidence
+  EVENT_TYPES: { CICD_FAILURE: "CICD_FAILURE" },
+  EVENT_SOURCES: { GITHUB_APP: "github-app" },
+  EVENT_SEVERITY: { HIGH: "high" },
+  EVENT_DEFAULTS: { UNKNOWN_COMMIT: "unknown" },
+  SERVICE_NAMES: { API: "api" },
+  PUBSUB_CHANNELS: { DASHBOARD: "dashboard" },
+  DASHBOARD_EVENT_TYPES: { ANALYSIS_COMPLETE: "analysis_complete" },
+  // Constants needed by analysisEvidence
+  LOG_LEVELS: { INFO: "INFO", ERROR: "ERROR" },
+  EVIDENCE_SOURCES: { CI: "ci" },
+  ERROR_SECTION_HEADINGS: new Set(["Failed Tests", "Error Output", "Errors"]),
+  SECTION_SOURCE_OVERRIDES: { Overview: "ci-overview", "Failed Tests": "ci-tests" } as Record<
+    string,
+    string
+  >,
+  EVIDENCE_LOG_TIMING: { TIMESTAMP_OFFSET_MS: 1000 },
+  sanitizeIdPart: (heading: string) => heading.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+  // Utilities needed by analysisService
+  generateEventId: (prefix: string) =>
+    `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  wrapError: (message: string, cause: unknown) =>
+    `${message}: ${cause instanceof Error ? cause.message : String(cause)}`,
+  LLMError: (jest.requireActual("@kenchi/shared") as Record<string, unknown>).LLMError,
+  calculateConfidenceScore: jest.fn().mockReturnValue({
+    finalScore: 0.85,
+    breakdown: { evidenceQuality: 0.9, analysisDepth: 0.8 },
+  }),
+  estimateChunkTokens: jest.fn().mockReturnValue(100),
+  // Mocked dependencies
+  LLMClient: jest.fn().mockImplementation(() => ({
+    analyzeIncident: mockAnalyzeIncident,
+  })),
+  createLogger: jest.fn(() => ({
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+  })),
+  searchFromEventContext: jest.fn().mockResolvedValue({
+    diffChunks: [],
+    knowledgeDocs: [],
+    queryTokens: 10,
+    cacheHit: false,
+  }),
+  selectModel: jest.fn().mockReturnValue({
+    model: "gpt-4o-mini",
+    reason: "standard_analysis",
+    versionId: undefined,
+    modelId: "gpt-4o-mini",
+  }),
+  logModelSelection: jest.fn(),
+  createAnalysis: jest.fn().mockResolvedValue({
+    id: "analysis_123",
+    eventId: "evt_test",
+    createdAt: new Date().toISOString(),
+  }),
+  publish: jest.fn().mockResolvedValue(undefined),
+  enforcePlanLimit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  findEventIdByRepoAndCommit: jest.fn().mockResolvedValue(null),
+}));
+
+// Mock transitive dependencies to prevent real chunking pipeline execution
+jest.mock("../services/analysisChunkingPipeline.js", () => ({
+  CHUNKING_PIPELINE_CONFIG: { TOKEN_THRESHOLD: 999999 },
+  executeChunkingPipeline: jest.fn(),
+  convertAggregatedToEvidence: jest.fn(),
+}));
+
+jest.mock("../services/analysisRAG.js", () => ({
+  retrieveRelevantKnowledge: jest.fn().mockResolvedValue([]),
+}));
 
 // Import after mock setup
 import {

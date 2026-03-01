@@ -32,6 +32,10 @@ import {
   addUserOrganization,
   findUserById,
   findById as findTenantById,
+  findOrganizationsByUser,
+  publish,
+  PUBSUB_CHANNELS,
+  DASHBOARD_EVENT_TYPES,
   type InvitationRole,
 } from "@kenchi/shared";
 
@@ -195,12 +199,27 @@ const handleAcceptInvitation = async (req: Request, res: Response): Promise<void
   // since the invitation was created
   await enforcePlanLimit(invitation.tenantId, "max_team_members");
 
+  // Fetch user's existing orgs BEFORE adding so we can notify all of them via SSE
+  const existingOrgs = await findOrganizationsByUser(userId);
+
   // Add user to the organization with the invited role
   await addUserOrganization({
     userId,
     tenantId: invitation.tenantId,
     role: invitation.role,
   });
+
+  // Notify all of the user's tenants so the frontend org list refreshes in realtime
+  const tenantIdsToNotify = [...existingOrgs.map((org) => org.tenantId), invitation.tenantId];
+  for (const notifyTenantId of tenantIdsToNotify) {
+    try {
+      await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.ORGANIZATION_UPDATED, {
+        tenantId: notifyTenantId,
+      });
+    } catch {
+      // Best-effort notification — don't block invitation acceptance
+    }
+  }
 
   logger.info("Invitation accepted, user added to organization", {
     ...context,

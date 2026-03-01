@@ -86,11 +86,14 @@ const injectTestContext = (req: Request, _res: Response, next: NextFunction): vo
   next();
 };
 
+// Import after mocks are registered (static import, no need for dynamic re-import)
+import { ragCostRoutes } from "../../routes/rag/costRoutes.js";
+
 describe("RAG Cost Routes", () => {
-  // let: app is reassigned in beforeEach for module isolation
+  // let: app is reassigned in beforeEach for test isolation
   let app: Express;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
 
     // Default mock implementations
@@ -122,7 +125,6 @@ describe("RAG Cost Routes", () => {
       estimatedMonthlyCost: 0.15,
     });
 
-    const { ragCostRoutes } = await import("../../routes/rag/costRoutes.js");
     app = express();
     app.use(express.json());
     app.use(injectTestContext);

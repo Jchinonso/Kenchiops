@@ -2,6 +2,7 @@
  * Tenant Guard Route Wrapper
  *
  * Protects dashboard routes based on tenant subscription status:
+ *   - "deleted"    -> renders DeletedPage (with reinstall CTA if no other orgs)
  *   - "suspended"  -> renders a full SuspendedPage, blocking all access
  *   - "past_due"   -> renders a PastDueBanner above children
  *   - all others   -> renders children normally
@@ -10,8 +11,9 @@
  */
 
 import { Link } from "react-router-dom";
-import { AlertTriangle, CreditCard, ShieldX } from "lucide-react";
+import { AlertTriangle, CreditCard, ShieldX, Rocket } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/hooks/useAuth";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +58,11 @@ const SuspendedPage = () => (
   </div>
 );
 
-const DeletedPage = () => (
+interface DeletedPageProps {
+  readonly hasOtherOrgs: boolean;
+}
+
+const DeletedPage = ({ hasOtherOrgs }: DeletedPageProps) => (
   <div className="min-h-[60vh] flex items-center justify-center p-4">
     <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-8 text-center">
       <div className="w-14 h-14 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -64,21 +70,32 @@ const DeletedPage = () => (
       </div>
 
       <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-        Organization Deleted
+        Organization Removed
       </h1>
 
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-        This organization has been deleted. If you belong to other organizations, you can switch to
-        one from your account settings.
+        {hasOtherOrgs
+          ? "The Kenchi GitHub App was uninstalled for this organization. You can switch to another organization or reinstall the app."
+          : "The Kenchi GitHub App was uninstalled for this organization. Reinstall it on a GitHub organization to get started again."}
       </p>
 
       <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
-        <Link
-          to="/dashboard/settings"
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
-        >
-          Switch Organization
-        </Link>
+        {hasOtherOrgs ? (
+          <Link
+            to="/dashboard/settings"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
+          >
+            Switch Organization
+          </Link>
+        ) : (
+          <Link
+            to="/dashboard/onboarding"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
+          >
+            <Rocket className="w-4 h-4" />
+            Reinstall Kenchi
+          </Link>
+        )}
         <a
           href="mailto:support@kenchi.dev"
           className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
@@ -118,6 +135,7 @@ const PastDueBanner = () => (
 
 export const TenantGuard = ({ children }: TenantGuardProps) => {
   const { data: subscription, isLoading } = useSubscription();
+  const { user } = useAuth();
 
   // While loading, render children to avoid layout shift
   if (isLoading || !subscription) {
@@ -127,7 +145,10 @@ export const TenantGuard = ({ children }: TenantGuardProps) => {
   const { status } = subscription.subscription;
 
   if (status === "deleted") {
-    return <DeletedPage />;
+    // Check if the user has other active organizations to switch to
+    const currentTenantId = user?.tenantId;
+    const otherOrgs = (user?.organizations ?? []).filter((org) => org.tenantId !== currentTenantId);
+    return <DeletedPage hasOtherOrgs={otherOrgs.length > 0} />;
   }
 
   if (status === "suspended") {

@@ -20,6 +20,7 @@ import {
   getErrorMessage,
   findGitHubAppConnection,
   findOAuthIdentitiesByUser,
+  findById as findTenantById,
   rateLimitByCategory,
   type Plan,
   type PlanId,
@@ -190,16 +191,37 @@ const handleGetUsage = async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.userId;
   const { context } = req;
 
-  // Fetch subscription, DB usage, free plan, and real repo count in parallel
-  const [subscriptionWithPlan, usage, freePlan, repoCount] = await Promise.all([
+  // Fetch tenant, subscription, DB usage, free plan, and real repo count in parallel
+  const [tenant, subscriptionWithPlan, usage, freePlan, repoCount] = await Promise.all([
+    findTenantById(tenantId),
     getSubscriptionWithPlan(tenantId),
     getTenantUsage(tenantId),
     getPlanById(DEFAULT_PLAN_ID as PlanId),
     countConnectedRepos(tenantId, userId, context),
   ]);
 
+  const isPersonalTenant = tenant?.tenantType === "personal";
+
   // Determine plan limits (fall back to free plan from DB)
   const planId = subscriptionWithPlan?.plan.id ?? (DEFAULT_PLAN_ID as PlanId);
+
+  // Personal tenants have no plan limits — all limits are null (unlimited)
+  if (isPersonalTenant) {
+    logger.info("Usage fetched (personal tenant, unlimited)", { ...context, planId, repoCount });
+    res.status(HTTP_STATUS.OK).json({
+      data: {
+        planId,
+        usage: {
+          repositories: buildUsageLimitDetail(repoCount, null),
+          analysesThisMonth: buildUsageLimitDetail(usage.analysesThisMonth, null),
+          integrations: buildUsageLimitDetail(usage.integrations, null),
+          teamMembers: buildUsageLimitDetail(usage.teamMembers, null),
+        },
+      },
+    });
+    return;
+  }
+
   const limits = subscriptionWithPlan?.plan.limits ??
     freePlan?.limits ?? {
       maxRepositories: 3,

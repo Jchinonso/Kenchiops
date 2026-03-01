@@ -379,11 +379,13 @@ const Dashboard = () => {
   const [onboardingSkipped, setOnboardingSkipped] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Reset onboarding state when tenant changes (org switch)
+  // Reset state when tenant changes (org switch) — including refresh key
+  // so all data hooks re-fetch for the new organization.
   const currentTenantId = user?.tenantId ?? null;
   useEffect(() => {
     setOnboardingSkipped(false);
     setOnboardingDismissed(false);
+    setManualRefreshKey((prev) => prev + 1);
   }, [currentTenantId]);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
