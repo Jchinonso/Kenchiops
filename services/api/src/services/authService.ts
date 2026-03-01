@@ -311,17 +311,23 @@ const autoLinkOrganizationsImpl = async (
     });
   }
 
-  // If user has no selected org, set the first discovered one
+  // Switch to a tenant from the current login provider.
+  // If the user's selected tenant belongs to a different provider (e.g. they
+  // previously logged in with GitHub and now log in with GitLab), switch to the
+  // first tenant from the provider they just authenticated with.
   const { tenantId: currentTenantId } = user;
-  const { length: tenantCount } = tenantIds;
-  const firstId = tenantCount > 0 ? tenantIds[0] : null;
-  if (currentTenantId === null && firstId !== null) {
-    await switchUserOrganization(user.id, firstId);
+  const firstProviderTenantId = tenantIds.length > 0 ? tenantIds[0] : null;
+  const currentTenantBelongsToProvider =
+    currentTenantId !== null && tenantIds.includes(currentTenantId);
 
-    logger.info("User selected organization set", {
+  if (firstProviderTenantId !== null && !currentTenantBelongsToProvider) {
+    await switchUserOrganization(user.id, firstProviderTenantId);
+
+    logger.info("User selected organization switched to login provider", {
       ...context,
       userId: user.id,
-      selectedTenantId: firstId,
+      previousTenantId: currentTenantId,
+      selectedTenantId: firstProviderTenantId,
       provider,
     });
   }

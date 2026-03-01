@@ -76,8 +76,14 @@ export const OrganizationSwitcher = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
-  const organizations = user?.organizations ?? [];
-  const selectedOrg = organizations.find((org) => org.isSelected);
+  const allOrganizations = user?.organizations ?? [];
+  const selectedOrg = allOrganizations.find((org) => org.isSelected);
+
+  // Only show organizations from the same provider as the selected org.
+  // Provider context is set by the login flow (GitHub login → GitHub orgs only).
+  const organizations = selectedOrg
+    ? allOrganizations.filter((org) => org.provider === selectedOrg.provider)
+    : allOrganizations;
   const hasMultipleOrgs = organizations.length > 1;
 
   const handleSelect = useCallback(

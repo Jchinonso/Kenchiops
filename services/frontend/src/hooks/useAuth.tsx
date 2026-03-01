@@ -159,6 +159,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
+  const isAuthenticated = user !== null;
 
   const refreshUser = useCallback(async (): Promise<void> => {
     // After an explicit logout, skip the API call entirely.
@@ -272,6 +273,44 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     refreshUser();
   }, [refreshUser]);
 
+  // Re-discover organizations when the browser tab regains focus.
+  // Handles the case where the user installs a GitHub/GitLab app in another
+  // tab and returns — the webhook may have created a new tenant while the
+  // tab was hidden. Debounced to avoid hammering the API on rapid tab switches.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    // let: timestamp updated on each visibility change to enforce debounce
+    let lastRefreshAt = 0;
+    const DEBOUNCE_MS = 5_000;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastRefreshAt < DEBOUNCE_MS) {
+        return;
+      }
+      lastRefreshAt = now;
+
+      void (async () => {
+        try {
+          await apiClient("/auth/refresh-orgs", { method: "POST" });
+        } catch {
+          // Best-effort — refreshUser below still runs
+        }
+        await refreshUser();
+      })();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isAuthenticated, refreshUser]);
+
   // Idle session timeout — auto-logout after 30 minutes of inactivity.
   useEffect(() => {
     if (user === null) {
@@ -301,8 +340,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       ACTIVITY_EVENTS.forEach((event) => document.removeEventListener(event, resetTimer));
     };
   }, [user, logout]);
-
-  const isAuthenticated = user !== null;
 
   const contextValue = useMemo<AuthContextValue>(
     () => ({

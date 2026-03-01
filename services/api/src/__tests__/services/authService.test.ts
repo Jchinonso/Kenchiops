@@ -466,7 +466,7 @@ describe("authService", () => {
       mockFindUserOrgRole.mockResolvedValue("member");
 
       await service.autoLinkOrganizations(
-        { id: "usr_1", tenantId: "existing-tenant" },
+        { id: "usr_1", tenantId: "tenant-acme" },
         "github",
         "access-token",
         null,
@@ -478,8 +478,34 @@ describe("authService", () => {
       expect(mockGetOAuthAdapter).toHaveBeenCalledWith("github");
       expect(mockFindByOrgNameAndProvider).toHaveBeenCalledWith("acme-corp", "github");
       expect(mockAddUserOrganization).toHaveBeenCalled();
-      // Should NOT switch org since user already has one
+      // Should NOT switch org since current tenant belongs to the same provider
       expect(mockSwitchUserOrganization).not.toHaveBeenCalled();
+    });
+
+    it("should switch tenant when user logs in with a different provider than their current tenant", async () => {
+      const gitlabTenant = createTestTenant({
+        id: "tenant-gl",
+        orgName: "acme",
+        provider: "gitlab",
+      });
+      mockGetUserOrganizations.mockResolvedValue([{ login: "acme" }]);
+      mockFindByOrgNameAndProvider.mockResolvedValue(gitlabTenant);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
+      mockFindUserOrgRole.mockResolvedValue("member");
+
+      // User currently has a GitHub tenant selected, but logs in with GitLab
+      await service.autoLinkOrganizations(
+        { id: "usr_1", tenantId: "tenant-gh-existing" },
+        "gitlab",
+        "access-token",
+        null,
+        "testuser",
+        testContext
+      );
+
+      // Should switch to GitLab tenant since current tenant is from a different provider
+      expect(mockSwitchUserOrganization).toHaveBeenCalledWith("usr_1", "tenant-gl");
     });
 
     it("should create provider-scoped tenant and add membership for each org", async () => {
