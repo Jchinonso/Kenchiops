@@ -249,7 +249,7 @@ const NotificationItem = ({
     <Link to={linkTarget} onClick={handleClick}>
       <div
         className={cn(
-          "px-4 py-3 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group",
+          "px-4 py-3 flex items-start gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors group",
           !read && "bg-indigo-50/50 dark:bg-indigo-950/20"
         )}
       >
@@ -259,14 +259,14 @@ const NotificationItem = ({
             className={cn(
               "text-sm truncate",
               read
-                ? "text-gray-700 dark:text-gray-300"
-                : "text-gray-900 dark:text-gray-100 font-medium"
+                ? "text-zinc-700 dark:text-zinc-300"
+                : "text-zinc-900 dark:text-zinc-100 font-medium"
             )}
           >
             {title}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{description}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{description}</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
             {formatRelativeTime(timestamp)}
           </p>
         </div>
@@ -274,7 +274,7 @@ const NotificationItem = ({
           type="button"
           onClick={handleDismiss}
           aria-label="Dismiss notification"
-          className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="shrink-0 p-0.5 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -303,9 +303,9 @@ const NotificationDropdown = ({
   const hasNotifications = notifications.length > 0;
 
   return (
-    <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 z-50">
-      <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-        <h4 className="font-semibold text-gray-900 dark:text-gray-100">Notifications</h4>
+    <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-100 dark:border-zinc-800 z-50">
+      <div className="px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+        <h4 className="font-semibold text-zinc-900 dark:text-zinc-100">Notifications</h4>
         <button
           type="button"
           disabled={unreadCount < 1}
@@ -314,7 +314,7 @@ const NotificationDropdown = ({
             "text-xs transition-colors",
             unreadCount > 0
               ? "text-indigo-500 hover:text-indigo-600 cursor-pointer"
-              : "text-gray-400 dark:text-gray-500 cursor-not-allowed"
+              : "text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
           )}
         >
           Mark all read
@@ -322,7 +322,7 @@ const NotificationDropdown = ({
       </div>
 
       {hasNotifications ? (
-        <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
+        <div className="max-h-80 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
           {notifications.map((notification) => (
             <NotificationItem
               key={notification.id}
@@ -335,17 +335,17 @@ const NotificationDropdown = ({
         </div>
       ) : (
         <div className="px-4 py-8 text-center">
-          <Bell className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+          <Bell className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mx-auto mb-2" />
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
             No notifications yet
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
             CI/CD failure alerts and analysis results will appear here.
           </p>
         </div>
       )}
 
-      <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
+      <div className="px-4 py-2.5 border-t border-zinc-100 dark:border-zinc-800">
         <Link
           to="/dashboard/settings"
           onClick={onClose}
@@ -498,7 +498,7 @@ const Dashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="min-h-screen bg-stone-50 dark:bg-zinc-950">
         <PageLoader className="min-h-screen" />
       </div>
     );
@@ -567,7 +567,7 @@ const Dashboard = () => {
       : findComingSoonConfig(currentPath);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
+    <div className="min-h-screen bg-stone-50 dark:bg-zinc-950 flex">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-indigo-500 focus:text-white focus:rounded-lg focus:text-sm focus:font-medium"
@@ -589,12 +589,12 @@ const Dashboard = () => {
 
       <main className="flex-1 min-w-0">
         {/* Header */}
-        <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-30">
+        <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-30">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 sm:py-4 gap-4">
             <div className="flex items-center gap-3 flex-1">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="md:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                className="md:hidden p-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                 aria-label="Open navigation menu"
               >
                 <Menu className="w-5 h-5" />
@@ -607,7 +607,7 @@ const Dashboard = () => {
             <div className="flex items-center gap-2 sm:gap-4">
               {/* Last Updated + Refresh */}
               <div className="hidden sm:flex items-center gap-1.5">
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">
                   Updated {lastUpdatedLabel}
                 </span>
                 <Tooltip>
@@ -618,7 +618,7 @@ const Dashboard = () => {
                         setManualRefreshKey((prev) => prev + 1);
                         setLastRefreshAt(new Date());
                       }}
-                      className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded transition-colors"
+                      className="p-1 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 rounded transition-colors"
                       aria-label="Refresh data"
                     >
                       <RefreshCw className="w-3 h-3" />
@@ -633,7 +633,7 @@ const Dashboard = () => {
                 <TooltipTrigger asChild>
                   <button
                     onClick={toggleTheme}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    className="p-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                     aria-label="Toggle theme"
                   >
                     {resolvedTheme === "dark" ? (
@@ -652,7 +652,7 @@ const Dashboard = () => {
                   <TooltipTrigger asChild>
                     <button
                       onClick={toggleNotifications}
-                      className="relative p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                      className="relative p-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                       aria-label={
                         unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"
                       }

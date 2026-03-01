@@ -73,29 +73,29 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
 
     return (
-      <div className="min-h-screen flex bg-gray-50 dark:bg-gray-950">
+      <div className="min-h-screen flex bg-zinc-50 dark:bg-zinc-950">
         {/* Minimal sidebar navigation so user isn't trapped */}
-        <nav className="hidden sm:flex flex-col w-56 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4">
+        <nav className="hidden sm:flex flex-col w-56 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 p-4">
           <div className="flex items-center gap-2 mb-8 px-2">
-            <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Kenchi</span>
+            <span className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Kenchi</span>
           </div>
           <a
             href="/"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
           >
             <Home className="w-4 h-4" />
             Dashboard
           </a>
           <a
             href="/dashboard/cicd/analyses"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors mt-1"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors mt-1"
           >
             <Search className="w-4 h-4" />
             Analyses
           </a>
           <a
             href="/dashboard/settings"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors mt-1"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors mt-1"
           >
             Settings
           </a>
@@ -103,16 +103,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
         {/* Error content */}
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-800 p-8 text-center">
+          <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-8 text-center">
             <div className="w-14 h-14 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-7 h-7 text-red-600 dark:text-red-400" />
             </div>
 
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
               Something went wrong
             </h1>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
               The application encountered an unexpected error. Try reloading the page or navigating
               to a different section using the sidebar.
             </p>
@@ -138,18 +138,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <button
                 type="button"
                 onClick={this.handleGoHome}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg border border-gray-200 dark:border-gray-700 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-sm font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
               >
                 <Home className="w-4 h-4" />
                 Home
               </button>
             </div>
 
-            <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-3">
+            <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4 space-y-3">
               <button
                 type="button"
                 onClick={this.handleCopyDiagnostic}
-                className="inline-flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
               >
                 {this.state.copied ? (
                   <>
@@ -164,7 +164,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 )}
               </button>
 
-              <p className="text-xs text-gray-400 dark:text-gray-500">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
                 Need help?{" "}
                 <a
                   href="https://github.com/kenchiops/kenchi/issues"

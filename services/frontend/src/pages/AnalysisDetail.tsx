@@ -32,7 +32,7 @@ export const AnalysisDetail = ({ analysisId, refreshKey = 0 }: AnalysisDetailPro
       {/* Back link */}
       <Link
         to="/dashboard/cicd/analyses"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Analyses
@@ -44,7 +44,7 @@ export const AnalysisDetail = ({ analysisId, refreshKey = 0 }: AnalysisDetailPro
           <Zap className="w-5 h-5 text-indigo-500" />
         </div>
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
             {isLoading
               ? "Loading analysis..."
               : error
@@ -52,7 +52,7 @@ export const AnalysisDetail = ({ analysisId, refreshKey = 0 }: AnalysisDetailPro
                 : `Analysis for ${repo}`}
           </h1>
           {timestamp && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{timestamp}</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{timestamp}</p>
           )}
         </div>
       </div>
@@ -61,7 +61,7 @@ export const AnalysisDetail = ({ analysisId, refreshKey = 0 }: AnalysisDetailPro
       {isLoading ? (
         <DetailSkeleton />
       ) : error ? (
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-12 text-center">
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 py-12 text-center">
           <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>
           <Link
             to="/dashboard/cicd/analyses"

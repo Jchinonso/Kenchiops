@@ -25,14 +25,14 @@ interface TenantGuardProps {
 
 const SuspendedPage = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-4">
-    <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-800 p-8 text-center">
+    <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-8 text-center">
       <div className="w-14 h-14 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
         <ShieldX className="w-7 h-7 text-red-600 dark:text-red-400" />
       </div>
 
-      <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Account Suspended</h1>
+      <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Account Suspended</h1>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         Your organization's account has been suspended due to a billing issue. Please update your
         payment method to restore access.
       </p>
@@ -47,7 +47,7 @@ const SuspendedPage = () => (
         </Link>
         <a
           href="mailto:support@kenchi.dev"
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
         >
           Contact Support
         </a>
@@ -58,16 +58,16 @@ const SuspendedPage = () => (
 
 const DeletedPage = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-4">
-    <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-800 p-8 text-center">
-      <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-        <ShieldX className="w-7 h-7 text-gray-500 dark:text-gray-400" />
+    <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-8 text-center">
+      <div className="w-14 h-14 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
+        <ShieldX className="w-7 h-7 text-zinc-500 dark:text-zinc-400" />
       </div>
 
-      <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+      <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
         Organization Deleted
       </h1>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         This organization has been deleted. If you belong to other organizations, you can switch to
         one from your account settings.
       </p>
@@ -81,7 +81,7 @@ const DeletedPage = () => (
         </Link>
         <a
           href="mailto:support@kenchi.dev"
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
         >
           Contact Support
         </a>

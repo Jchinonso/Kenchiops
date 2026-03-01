@@ -100,12 +100,12 @@ const PlanCard = ({ plan, isCurrent, isChanging, onSelect }: PlanCardProps) => {
   return (
     <div
       className={cn(
-        "relative bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm transition-shadow hover:shadow-lg flex flex-col",
+        "relative bg-white dark:bg-zinc-800 rounded-2xl p-6 shadow-sm transition-shadow hover:shadow-lg flex flex-col",
         isCurrent
           ? "ring-2 ring-indigo-500 shadow-lg"
           : isHighlighted
             ? "ring-2 ring-indigo-300 dark:ring-indigo-700"
-            : "border border-gray-200 dark:border-gray-700"
+            : "border border-zinc-200 dark:border-zinc-700"
       )}
     >
       {isCurrent && (
@@ -117,14 +117,14 @@ const PlanCard = ({ plan, isCurrent, isChanging, onSelect }: PlanCardProps) => {
       )}
 
       <div className="mb-5">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">
           {plan.displayName}
         </h3>
         <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <span className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
             {formatPrice(plan.priceMonthlyCents)}
           </span>
-          <span className="text-sm text-gray-500 dark:text-gray-400">/ {formatPeriod(plan)}</span>
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">/ {formatPeriod(plan)}</span>
         </div>
       </div>
 
@@ -132,19 +132,19 @@ const PlanCard = ({ plan, isCurrent, isChanging, onSelect }: PlanCardProps) => {
         {features.map((feature) => (
           <li key={feature} className="flex items-center gap-2.5">
             <Check className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-            <span className="text-sm text-gray-700 dark:text-gray-300">{feature}</span>
+            <span className="text-sm text-zinc-700 dark:text-zinc-300">{feature}</span>
           </li>
         ))}
       </ul>
 
       {isCurrent ? (
-        <div className="w-full text-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default">
+        <div className="w-full text-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-default">
           Current Plan
         </div>
       ) : isEnterprise ? (
         <a
           href={ENTERPRISE_MAILTO}
-          className="block w-full text-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors"
+          className="block w-full text-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 transition-colors"
         >
           Contact Sales
         </a>
@@ -156,7 +156,7 @@ const PlanCard = ({ plan, isCurrent, isChanging, onSelect }: PlanCardProps) => {
           className={cn(
             "w-full text-center px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors",
             isChanging
-              ? "bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+              ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-400 cursor-not-allowed"
               : "bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
           )}
         >
@@ -229,15 +229,15 @@ export const PlanSelection = () => {
       <div className="mb-8">
         <Link
           to="/dashboard/settings"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Settings
         </Link>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
           Choose Your Plan
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           Select the plan that best fits your team. Upgrade or downgrade anytime.
         </p>
       </div>
@@ -247,7 +247,7 @@ export const PlanSelection = () => {
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={`skeleton-${index}`}
-              className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700"
+              className="bg-white dark:bg-zinc-800 rounded-2xl p-6 border border-zinc-200 dark:border-zinc-700"
             >
               <Skeleton className="h-6 w-20 mb-3" />
               <Skeleton className="h-8 w-24 mb-4" />
@@ -275,7 +275,7 @@ export const PlanSelection = () => {
           ))}
         </div>
       ) : (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
           Unable to load plans. Please try again later.
         </p>
       )}

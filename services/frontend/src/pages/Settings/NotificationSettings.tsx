@@ -33,12 +33,12 @@ export const NotificationSettings = ({
         <CardDescription>Configure how you receive alerts and updates.</CardDescription>
       </CardHeader>
       <CardContent className="pt-6 space-y-4">
-        <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
           <div>
-            <p id="toast-label" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p id="toast-label" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
               In-App Toast Notifications
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
               Show popup alerts when failures are detected or analyses complete.
             </p>
           </div>
@@ -48,12 +48,12 @@ export const NotificationSettings = ({
             aria-labelledby="toast-label"
           />
         </div>
-        <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
           <div>
-            <p id="browser-label" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p id="browser-label" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
               Browser Notifications
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
               Receive system notifications even when Kenchi is in the background.
             </p>
             {browserEnabled && browserPermissionDenied && (

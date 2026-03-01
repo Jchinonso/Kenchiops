@@ -75,11 +75,11 @@ const ConnectionCard = ({
   actionHref,
   external,
 }: ConnectionCardProps) => (
-  <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+  <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
     <div className="flex items-center gap-3">
       {icon}
       <div>
-        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{name}</p>
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{name}</p>
         <div className="flex items-center gap-1.5 mt-0.5">
           {connected ? (
             <>
@@ -88,8 +88,8 @@ const ConnectionCard = ({
             </>
           ) : (
             <>
-              <XCircle className="w-3.5 h-3.5 text-gray-400" />
-              <span className="text-xs text-gray-500 dark:text-gray-400">Not connected</span>
+              <XCircle className="w-3.5 h-3.5 text-zinc-400" />
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">Not connected</span>
             </>
           )}
         </div>
@@ -101,13 +101,13 @@ const ConnectionCard = ({
           href={actionHref}
           target={actionHref.startsWith("http") ? "_blank" : undefined}
           rel={actionHref.startsWith("http") ? "noopener noreferrer" : undefined}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-600 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
         >
           {actionLabel}
           <ExternalLink className="w-3 h-3" />
         </a>
       ) : (
-        !connected && <span className="text-xs text-gray-400">Coming soon</span>
+        !connected && <span className="text-xs text-zinc-400">Coming soon</span>
       )}
     </div>
   </div>
@@ -182,17 +182,17 @@ const GitLabSecretDialog = ({
 
           {/* Webhook URL */}
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-300 block mb-1.5">
+            <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 block mb-1.5">
               Webhook URL
             </label>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs font-mono bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 truncate select-all">
+              <code className="flex-1 text-xs font-mono bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 truncate select-all">
                 {webhookUrl}
               </code>
               <button
                 type="button"
                 onClick={handleCopyUrl}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
               >
                 {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 {copiedUrl ? "Copied!" : "Copy"}
@@ -202,17 +202,17 @@ const GitLabSecretDialog = ({
 
           {/* Webhook Secret */}
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-300 block mb-1.5">
+            <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 block mb-1.5">
               Webhook Secret
             </label>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs font-mono bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 truncate select-all">
+              <code className="flex-1 text-xs font-mono bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 truncate select-all">
                 {webhookSecret}
               </code>
               <button
                 type="button"
                 onClick={handleCopySecret}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
               >
                 {copiedSecret ? (
                   <Check className="w-3.5 h-3.5" />
@@ -225,24 +225,24 @@ const GitLabSecretDialog = ({
           </div>
 
           {/* Setup Instructions */}
-          <div className="rounded-md bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-3">
-            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <div className="rounded-md bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 p-3">
+            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">
               Setup Instructions
             </p>
             <ol className="space-y-1.5 list-decimal ml-4">
-              <li className="text-xs text-gray-600 dark:text-gray-400">
+              <li className="text-xs text-zinc-600 dark:text-zinc-400">
                 In your GitLab project, go to Settings &rarr; Webhooks
               </li>
-              <li className="text-xs text-gray-600 dark:text-gray-400">
+              <li className="text-xs text-zinc-600 dark:text-zinc-400">
                 Paste the Webhook URL above
               </li>
-              <li className="text-xs text-gray-600 dark:text-gray-400">
+              <li className="text-xs text-zinc-600 dark:text-zinc-400">
                 Enter the Webhook Secret in the "Secret token" field
               </li>
-              <li className="text-xs text-gray-600 dark:text-gray-400">
+              <li className="text-xs text-zinc-600 dark:text-zinc-400">
                 Select "Pipeline events" and "Job events" triggers
               </li>
-              <li className="text-xs text-gray-600 dark:text-gray-400">Click "Add webhook"</li>
+              <li className="text-xs text-zinc-600 dark:text-zinc-400">Click "Add webhook"</li>
             </ol>
           </div>
         </div>
@@ -333,15 +333,15 @@ const GitLabCICard = ({ tenantId, otherProviderConnected }: GitLabCardProps) => 
 
   return (
     <>
-      <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Gitlab className="w-8 h-8 text-orange-500" />
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">GitLab CI/CD</p>
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">GitLab CI/CD</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {isLoadingStatus ? (
-                  <span className="text-xs text-gray-400">Checking...</span>
+                  <span className="text-xs text-zinc-400">Checking...</span>
                 ) : connected ? (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
@@ -349,8 +349,8 @@ const GitLabCICard = ({ tenantId, otherProviderConnected }: GitLabCardProps) => 
                   </>
                 ) : (
                   <>
-                    <XCircle className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Not connected</span>
+                    <XCircle className="w-3.5 h-3.5 text-zinc-400" />
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">Not connected</span>
                   </>
                 )}
               </div>
@@ -368,7 +368,7 @@ const GitLabCICard = ({ tenantId, otherProviderConnected }: GitLabCardProps) => 
                 Disconnect
               </Button>
             ) : otherProviderConnected ? (
-              <span className="text-xs text-gray-400 dark:text-gray-500">GitHub is active</span>
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">GitHub is active</span>
             ) : (
               <Button variant="outline" size="sm" onClick={handleConnect} disabled={isConnecting}>
                 {isConnecting && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -382,24 +382,24 @@ const GitLabCICard = ({ tenantId, otherProviderConnected }: GitLabCardProps) => 
         {connected && connectionStatus?.webhookUrl && (
           <div className="mt-4 space-y-3">
             <div>
-              <label className="text-xs font-medium text-gray-600 dark:text-gray-300 block mb-1.5">
+              <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 block mb-1.5">
                 Webhook URL
               </label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs font-mono bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 truncate select-all">
+                <code className="flex-1 text-xs font-mono bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 truncate select-all">
                   {connectionStatus.webhookUrl}
                 </code>
                 <button
                   type="button"
                   onClick={handleCopyUrl}
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
                 >
                   {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   {copiedUrl ? "Copied!" : "Copy"}
                 </button>
               </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Add this webhook URL to your GitLab project &rarr; Settings &rarr; Webhooks. Select
               "Pipeline events" and "Job events".
             </p>
@@ -489,10 +489,10 @@ export const Integrations = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
           Integrations
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           Connect your CI/CD platforms and monitoring tools to Kenchi.
         </p>
       </div>
@@ -509,7 +509,7 @@ export const Integrations = () => {
         <CardContent className="pt-6 space-y-3">
           <ConnectionCard
             name="GitHub"
-            icon={<Github className="w-8 h-8 text-gray-900 dark:text-gray-100" />}
+            icon={<Github className="w-8 h-8 text-zinc-900 dark:text-zinc-100" />}
             connected={githubConnected}
             actionLabel={githubConnected ? "Manage" : "Install"}
             actionHref={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}

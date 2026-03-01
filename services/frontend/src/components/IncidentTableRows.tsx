@@ -86,12 +86,12 @@ export const SortableTableHead = ({
     <TableHead
       scope="col"
       aria-sort={ariaSortValue}
-      className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+      className="cursor-pointer select-none hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
       onClick={() => onSort(column)}
     >
       <div className="flex items-center gap-1">
         {label}
-        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-gray-400")} />
+        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-zinc-400")} />
       </div>
     </TableHead>
   );
@@ -118,12 +118,12 @@ export const IncidentRow = ({ incident, isExpanded, isDuplicate, onClick }: Inci
     }}
     tabIndex={0}
     aria-expanded={isExpanded}
-    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+    className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
   >
     <TableCell className="w-8">
       <ChevronRight
         aria-hidden="true"
-        className={cn("w-4 h-4 text-gray-400 transition-transform", isExpanded && "rotate-90")}
+        className={cn("w-4 h-4 text-zinc-400 transition-transform", isExpanded && "rotate-90")}
       />
     </TableCell>
     <TableCell>
@@ -133,7 +133,7 @@ export const IncidentRow = ({ incident, isExpanded, isDuplicate, onClick }: Inci
     </TableCell>
     <TableCell className="max-w-xs">
       <div className="flex items-center gap-1.5">
-        <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
+        <p className="text-sm text-zinc-900 dark:text-zinc-100 truncate">
           {truncateText(incident.title, 80)}
         </p>
         {isDuplicate && (
@@ -146,18 +146,18 @@ export const IncidentRow = ({ incident, isExpanded, isDuplicate, onClick }: Inci
         )}
       </div>
       {incident.description && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
           {truncateText(incident.description, 60)}
         </p>
       )}
     </TableCell>
-    <TableCell className="text-sm text-gray-700 dark:text-gray-300">
+    <TableCell className="text-sm text-zinc-700 dark:text-zinc-300">
       {incident.serviceName ?? "--"}
     </TableCell>
-    <TableCell className="text-sm text-gray-700 dark:text-gray-300">
+    <TableCell className="text-sm text-zinc-700 dark:text-zinc-300">
       {incident.environment ?? "--"}
     </TableCell>
-    <TableCell className="text-xs text-gray-600 dark:text-gray-400">
+    <TableCell className="text-xs text-zinc-600 dark:text-zinc-400">
       {getSourceLabel(incident.source)}
     </TableCell>
     <TableCell>
@@ -165,7 +165,7 @@ export const IncidentRow = ({ incident, isExpanded, isDuplicate, onClick }: Inci
         {titleCase(incident.status)}
       </Badge>
     </TableCell>
-    <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
+    <TableCell className="text-zinc-500 dark:text-zinc-400 text-xs">
       <TimeDisplay dateTime={incident.receivedAt} />
     </TableCell>
   </TableRow>
@@ -219,11 +219,11 @@ export const ExpandedIncidentRow = ({
   };
 
   return (
-    <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
-      <TableCell colSpan={8} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0 max-w-0">
+    <TableRow className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
+      <TableCell colSpan={8} className="bg-zinc-50 dark:bg-zinc-800/50 border-b p-0 max-w-0">
         <div className="p-4 space-y-3">
           {isLoading && (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-zinc-500">
               <Loader2 className="w-4 h-4 animate-spin" />
               Loading triage details...
             </div>
@@ -243,19 +243,19 @@ export const ExpandedIncidentRow = ({
                   {summarySource === "ai" ? (
                     <Bot className="w-3.5 h-3.5 text-indigo-500" />
                   ) : (
-                    <ClipboardList className="w-3.5 h-3.5 text-gray-500" />
+                    <ClipboardList className="w-3.5 h-3.5 text-zinc-500" />
                   )}
-                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                     {summarySource === "ai" ? "AI Summary" : "Template Summary"}
                   </h4>
                 </div>
                 {aiSummary?.headline && (
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     {aiSummary.headline}
                   </p>
                 )}
                 {aiSummary?.rootCauseSummary && (
-                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-1">
                     {aiSummary.rootCauseSummary}
                   </p>
                 )}
@@ -264,26 +264,26 @@ export const ExpandedIncidentRow = ({
               {/* Scores */}
               <div className="flex flex-wrap gap-3 text-xs">
                 {severityScore !== undefined && (
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-zinc-600 dark:text-zinc-400">
                     Severity Score:{" "}
-                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">
                       {severityScore}
                     </span>
                     /100
                   </span>
                 )}
                 {confidence !== undefined && (
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-zinc-600 dark:text-zinc-400">
                     Confidence:{" "}
-                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">
                       {Math.round(confidence * 100)}%
                     </span>
                   </span>
                 )}
                 {completeness !== undefined && (
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-zinc-600 dark:text-zinc-400">
                     Completeness:{" "}
-                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">
                       {Math.round(completeness * 100)}%
                     </span>
                   </span>
@@ -292,7 +292,7 @@ export const ExpandedIncidentRow = ({
 
               {/* Routing */}
               {matchedRules && matchedRules.length > 0 && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Routed by: {matchedRules.map((rule) => rule.ruleName).join(", ")}
                 </p>
               )}

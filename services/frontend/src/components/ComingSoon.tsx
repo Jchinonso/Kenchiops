@@ -18,10 +18,10 @@ export const ComingSoon = ({ title, description, icon, ctaLabel, ctaHref }: Comi
     <Badge variant="secondary" className="mb-3 text-xs">
       Coming Soon
     </Badge>
-    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2 text-center">
+    <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2 text-center">
       {title}
     </h2>
-    <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 text-center max-w-md mb-6">
+    <p className="text-sm sm:text-base text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
       {description}
     </p>
     <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -35,7 +35,7 @@ export const ComingSoon = ({ title, description, icon, ctaLabel, ctaHref }: Comi
       )}
       <Link
         to="/dashboard"
-        className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+        className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Overview

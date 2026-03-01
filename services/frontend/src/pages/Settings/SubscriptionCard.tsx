@@ -59,7 +59,7 @@ export const SubscriptionCard = ({
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                   Current Plan
                 </span>
                 <Badge variant="outline" className={cn("text-xs", getPlanBadgeStyle(planId))}>
@@ -98,7 +98,7 @@ export const SubscriptionCard = ({
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">Unable to load usage data.</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">Unable to load usage data.</p>
             )}
           </div>
         )}

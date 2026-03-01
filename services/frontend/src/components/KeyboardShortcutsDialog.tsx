@@ -57,13 +57,13 @@ export const KeyboardShortcutsDialog = ({ open, onOpenChange }: KeyboardShortcut
       <div className="space-y-5 pt-2">
         {SHORTCUT_GROUPS.map((group) => (
           <div key={group.label}>
-            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
               {group.label}
             </h4>
             <div className="space-y-2">
               {group.shortcuts.map((shortcut) => (
                 <div key={shortcut.key} className="flex items-center justify-between py-1">
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">
                     {shortcut.description}
                   </span>
                   <Kbd>{shortcut.key}</Kbd>

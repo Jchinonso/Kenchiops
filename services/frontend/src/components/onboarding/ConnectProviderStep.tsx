@@ -47,7 +47,7 @@ const DataFlowPills = () => {
         >
           <Badge
             variant="outline"
-            className="text-xs gap-1.5 py-1 px-2.5 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
+            className="text-xs gap-1.5 py-1 px-2.5 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700"
           >
             <pill.icon className="w-3 h-3 text-indigo-500" />
             {pill.label}
@@ -67,13 +67,13 @@ export const ConnectProviderStep = ({
   <motion.div variants={containerVariants} initial="hidden" animate="visible">
     <motion.h2
       variants={itemVariants}
-      className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 text-center mb-2"
+      className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 text-center mb-2"
     >
       Connect your tools
     </motion.h2>
     <motion.p
       variants={itemVariants}
-      className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6"
+      className="text-sm text-zinc-500 dark:text-zinc-400 text-center mb-6"
     >
       Choose the integrations you want to set up.
     </motion.p>
@@ -92,19 +92,19 @@ export const ConnectProviderStep = ({
             className={cn(
               "transition-all",
               isGitHub ? "ring-2 ring-indigo-500/30 border-indigo-200 dark:border-indigo-800" : "",
-              "hover:border-gray-300 dark:hover:border-gray-600",
+              "hover:border-zinc-300 dark:hover:border-zinc-600",
               "hover:shadow-lg hover:-translate-y-0.5",
               "group-active:scale-[0.99]"
             )}
           >
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-900 dark:bg-white rounded-xl flex items-center justify-center shrink-0">
-                  <Github className="w-5 h-5 text-white dark:text-gray-900" />
+                <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center shrink-0">
+                  <Github className="w-5 h-5 text-white dark:text-zinc-900" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
                       Install GitHub App
                     </h3>
                     {isGitHub && (
@@ -113,11 +113,11 @@ export const ConnectProviderStep = ({
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Monitor GitHub Actions workflow failures
                   </p>
                 </div>
-                <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors shrink-0" />
+                <ExternalLink className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors shrink-0" />
               </div>
             </CardContent>
           </Card>
@@ -143,7 +143,7 @@ export const ConnectProviderStep = ({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
                       Connect GitLab
                     </h3>
                     {!isGitHub && (
@@ -152,11 +152,11 @@ export const ConnectProviderStep = ({
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Monitor GitLab CI/CD pipeline failures
                   </p>
                 </div>
-                <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors shrink-0" />
+                <ExternalLink className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors shrink-0" />
               </div>
             </CardContent>
           </Card>
@@ -186,21 +186,21 @@ export const ConnectProviderStep = ({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
                       Add Slack Notifications
                     </h3>
                     <Badge
                       variant="outline"
-                      className="text-[10px] text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+                      className="text-[10px] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
                     >
                       Optional
                     </Badge>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Get failure alerts in your team&apos;s Slack channels
                   </p>
                 </div>
-                <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors shrink-0" />
+                <ExternalLink className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors shrink-0" />
               </div>
             </CardContent>
           </Card>
@@ -216,7 +216,7 @@ export const ConnectProviderStep = ({
       <motion.button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
         whileTap={{ scale: 0.97 }}
         transition={microSpring}
       >

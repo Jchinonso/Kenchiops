@@ -108,12 +108,12 @@ const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTable
     <TableHead
       scope="col"
       aria-sort={ariaSortValue}
-      className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+      className="cursor-pointer select-none hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
       onClick={() => onSort(column)}
     >
       <div className="flex items-center gap-1">
         {label}
-        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-gray-400")} />
+        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-zinc-400")} />
       </div>
     </TableHead>
   );
@@ -176,18 +176,18 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
       }}
       tabIndex={0}
       aria-expanded={isExpanded}
-      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+      className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
     >
       <TableCell className="w-8">
         <ChevronRight
           aria-hidden="true"
-          className={cn("w-4 h-4 text-gray-400 transition-transform", isExpanded && "rotate-90")}
+          className={cn("w-4 h-4 text-zinc-400 transition-transform", isExpanded && "rotate-90")}
         />
       </TableCell>
-      <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
+      <TableCell className="text-zinc-500 dark:text-zinc-400 text-xs">
         <TimeDisplay dateTime={analysis.createdAt} />
       </TableCell>
-      <TableCell className="text-gray-700 dark:text-gray-300 font-medium text-xs">
+      <TableCell className="text-zinc-700 dark:text-zinc-300 font-medium text-xs">
         <div className="flex items-center gap-1.5">
           <span>{repo}</span>
           {providerBadge && (
@@ -199,11 +199,11 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
         </div>
       </TableCell>
       <TableCell className="max-w-sm">
-        <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
+        <p className="text-sm text-zinc-900 dark:text-zinc-100 truncate">
           {truncateText(analysis.summary, 100)}
         </p>
         {analysis.identifiedCause && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
             Cause: {truncateText(analysis.identifiedCause, 60)}
           </p>
         )}
@@ -216,7 +216,7 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
           {getConfidenceLabel(analysis.diagnosisConfidence)} ({confidence}%)
         </Badge>
       </TableCell>
-      <TableCell className="text-gray-500 dark:text-gray-400 font-mono text-xs">
+      <TableCell className="text-zinc-500 dark:text-zinc-400 font-mono text-xs">
         {commitUrl ? (
           <a
             href={commitUrl}
@@ -230,7 +230,7 @@ const AnalysisRow = ({ analysis, isExpanded, onClick }: AnalysisRowProps) => {
         ) : shortSha ? (
           <span>{shortSha}</span>
         ) : (
-          <span className="font-sans text-gray-400 dark:text-gray-500">--</span>
+          <span className="font-sans text-zinc-400 dark:text-zinc-500">--</span>
         )}
       </TableCell>
     </TableRow>
@@ -249,34 +249,34 @@ const ExpandedAnalysisRow = ({ analysis, onViewDetails }: ExpandedAnalysisRowPro
   const hasCause = analysis.identifiedCause !== null && analysis.identifiedCause.length > 0;
 
   return (
-    <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
-      <TableCell colSpan={6} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0 max-w-0">
+    <TableRow className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
+      <TableCell colSpan={6} className="bg-zinc-50 dark:bg-zinc-800/50 border-b p-0 max-w-0">
         <div className="p-4 space-y-3">
           {hasCause && (
             <div>
-              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
                 Root Cause
               </h4>
-              <p className="text-sm text-gray-900 dark:text-gray-100 break-words whitespace-pre-wrap">
+              <p className="text-sm text-zinc-900 dark:text-zinc-100 break-words whitespace-pre-wrap">
                 {analysis.identifiedCause}
               </p>
             </div>
           )}
 
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
               Recommended Actions
             </h4>
             {hasActions ? (
               <ol className="list-decimal list-inside space-y-1">
                 {(analysis.recommendedActions ?? []).map((action) => (
-                  <li key={action} className="text-sm text-gray-900 dark:text-gray-100 break-words">
+                  <li key={action} className="text-sm text-zinc-900 dark:text-zinc-100 break-words">
                     {action}
                   </li>
                 ))}
               </ol>
             ) : (
-              <p className="text-sm text-gray-400 dark:text-gray-500">No recommended actions.</p>
+              <p className="text-sm text-zinc-400 dark:text-zinc-500">No recommended actions.</p>
             )}
           </div>
 
@@ -450,10 +450,10 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const pageContent = (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
           CI/CD Analyses
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           AI-powered root cause analysis of your CI/CD failures.
         </p>
       </div>
@@ -473,7 +473,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
               "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
               activeRepoTab === "all"
                 ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
-                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
             )}
           >
             All ({analysisCountsByRepo.reduce((sum, entry) => sum + entry.analysisCount, 0)})
@@ -489,7 +489,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
                 "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
                 activeRepoTab === entry.repository
                   ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
-                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
               )}
             >
               {entry.repository} ({entry.analysisCount})
@@ -526,7 +526,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
                   <button
                     type="button"
                     onClick={() => exportAnalysesToCSV(items)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Export Page
@@ -551,7 +551,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
               <button
                 type="button"
                 onClick={refetch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Retry
@@ -582,7 +582,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
                   <TableCaption className="sr-only">
                     CI/CD analysis results table showing repository, confidence, and commit
                   </TableCaption>
-                  <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
+                  <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
                     <TableRow>
                       <TableHead scope="col" className="w-8" />
                       <SortableTableHead

@@ -96,7 +96,7 @@ const buildOnboardingSteps = (
     ctaLabel: githubConnected || gitlabConnected ? "Manage Integrations" : "Connect Provider",
     href: "/dashboard/integrations",
     icon: githubConnected ? (
-      <Github className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+      <Github className="w-5 h-5 text-zinc-900 dark:text-zinc-100" />
     ) : (
       <Gitlab className="w-5 h-5 text-orange-500" />
     ),
@@ -255,7 +255,7 @@ const getAnalysisProviderLabel = (ciProvider: string | null): string | null =>
 const VISIBILITY_STYLES: Readonly<Record<string, string>> = {
   public: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
   internal: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  private: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+  private: "bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300",
 } as const;
 
 const getVisibilityStyle = (visibility: string): string =>
@@ -284,10 +284,10 @@ const GitLabProjectsSection = ({ projects }: GitLabProjectsSectionProps) => (
             href={project.webUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block p-4 rounded-lg border border-gray-100 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] transition-all group"
+            className="block p-4 rounded-lg border border-zinc-100 dark:border-zinc-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] transition-all group"
           >
             <div className="flex items-start justify-between gap-2 mb-2">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                 {project.name}
               </h3>
               <Badge
@@ -300,16 +300,16 @@ const GitLabProjectsSection = ({ projects }: GitLabProjectsSectionProps) => (
                 {titleCase(project.visibility)}
               </Badge>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-2">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mb-2">
               {project.fullPath}
             </p>
             <div className="flex items-center justify-between gap-2">
               <TimeDisplay
                 dateTime={project.lastActivity}
-                className="text-[10px] text-gray-400 dark:text-gray-500"
+                className="text-[10px] text-zinc-400 dark:text-zinc-500"
               />
               {project.defaultBranch && (
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
+                <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
                   {project.defaultBranch}
                 </span>
               )}
@@ -422,10 +422,10 @@ export const DashboardOverview = ({
     <>
       <div className="mb-6 sm:mb-8 flex items-start justify-between gap-4 opacity-0 animate-fade-in">
         <div>
-          <h1 className="text-xl sm:text-2xl font-display font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
             Welcome back, {firstName}!
           </h1>
-          <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400/80 mt-1">
+          <p className="text-sm sm:text-base text-zinc-500 dark:text-zinc-400/80 mt-1">
             Here&apos;s your pipeline and incident health at a glance.
           </p>
         </div>
@@ -433,7 +433,7 @@ export const DashboardOverview = ({
           <button
             type="button"
             onClick={handleExportOverview}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-zinc-700/60 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700/60 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors flex-shrink-0"
           >
             <Download className="w-3.5 h-3.5" />
             Export Dashboard
@@ -449,7 +449,7 @@ export const DashboardOverview = ({
             <button
               type="button"
               onClick={refetchStats}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Retry
@@ -470,7 +470,7 @@ export const DashboardOverview = ({
                   <div className="flex items-start justify-between gap-3 h-full">
                     <div className="min-w-0">
                       <p
-                        className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1 truncate"
+                        className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 truncate"
                         title={stat.title}
                       >
                         {stat.title}
@@ -479,10 +479,10 @@ export const DashboardOverview = ({
                         <Skeleton className="h-7 w-12 mt-1" />
                       ) : (
                         <>
-                          <p className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">
+                          <p className="text-xl sm:text-2xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
                             {stat.value}
                           </p>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
                             {stat.subtitle}
                           </p>
                           {stat.sourceBreakdown && stat.sourceBreakdown.length > 0 && (
@@ -490,7 +490,7 @@ export const DashboardOverview = ({
                               {stat.sourceBreakdown.map((entry) => (
                                 <span
                                   key={entry.source}
-                                  className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                  className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
                                 >
                                   {titleCase(entry.source)} {entry.activeCount}
                                 </span>
@@ -525,10 +525,10 @@ export const DashboardOverview = ({
                   <Gitlab className="w-5 h-5 text-orange-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
                     Enable GitLab CI Analysis
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">
                     Your GitLab projects are connected. Set up webhooks to start analyzing GitLab
                     CI/CD pipeline failures automatically.
                   </p>
@@ -550,14 +550,14 @@ export const DashboardOverview = ({
 
       {/* Onboarding — placed before charts so it's visible above the fold */}
       {showOnboarding && completedCount >= 2 && !allStepsComplete ? (
-        <div className="mb-6 sm:mb-8 flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/80 backdrop-blur-sm">
+        <div className="mb-6 sm:mb-8 flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 backdrop-blur-sm">
           <Rocket className="w-4 h-4 text-indigo-500 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex-shrink-0">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex-shrink-0">
                 Setup {completedCount}/{onboardingSteps.length}
               </span>
-              <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div className="flex-1 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-amber-500 rounded-full transition-all"
                   style={{ width: `${(completedCount / onboardingSteps.length) * 100}%` }}
@@ -568,7 +568,7 @@ export const DashboardOverview = ({
               .filter((step) => !step.completed)
               .map((step) => (
                 <div key={step.title} className="mt-1.5 flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Next:</span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Next:</span>
                   {step.external ? (
                     <a
                       href={step.href}
@@ -591,7 +591,7 @@ export const DashboardOverview = ({
           </div>
           <button
             onClick={dismissOnboarding}
-            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors flex-shrink-0"
+            className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors flex-shrink-0"
             aria-label="Dismiss setup checklist"
           >
             <X className="w-4 h-4" />
@@ -609,7 +609,7 @@ export const DashboardOverview = ({
               </div>
               <button
                 onClick={dismissOnboarding}
-                className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+                className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors"
                 aria-label="Dismiss setup checklist"
               >
                 <X className="w-4 h-4" />
@@ -630,7 +630,7 @@ export const DashboardOverview = ({
                     "flex items-start gap-4 p-4 rounded-lg border transition-colors",
                     step.completed
                       ? "border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/30"
-                      : "border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700"
+                      : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-200 dark:hover:border-zinc-700"
                   )}
                 >
                   <div className="flex-shrink-0 mt-1">
@@ -648,12 +648,12 @@ export const DashboardOverview = ({
                         "font-medium text-sm mb-1",
                         step.completed
                           ? "text-green-800 dark:text-green-300"
-                          : "text-gray-900 dark:text-gray-100"
+                          : "text-zinc-900 dark:text-zinc-100"
                       )}
                     >
                       {stepIndex + 1}. {step.title}
                     </h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">
                       {step.completed ? step.completedDescription : step.description}
                     </p>
                     {step.external ? (
@@ -664,7 +664,7 @@ export const DashboardOverview = ({
                         className={cn(
                           "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
                           step.completed
-                            ? "text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            ? "text-zinc-600 dark:text-zinc-400 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700"
                             : "bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/20"
                         )}
                       >
@@ -704,10 +704,10 @@ export const DashboardOverview = ({
                 <Rocket className="w-7 h-7 text-amber-400" />
               </div>
             </div>
-            <h2 className="text-lg font-display font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            <h2 className="text-lg font-display font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
               Welcome to Kenchi
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-4">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto mb-4">
               Connect your repositories to start analyzing CI/CD failures automatically.
             </p>
             <Link
@@ -737,7 +737,7 @@ export const DashboardOverview = ({
                   refetchAnalyses();
                 }
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Retry
@@ -779,11 +779,11 @@ export const DashboardOverview = ({
             </CardDescription>
           </CardHeader>
           <CardContent className="py-12 text-center">
-            <Activity className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            <Activity className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
+            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
               No recent activity
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
               Activity from your connected repositories will appear here.
             </p>
           </CardContent>
@@ -807,19 +807,19 @@ export const DashboardOverview = ({
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-700">
                   {failureItems.map((event: EventRecord) => {
                     const sourceLabel = getEventSourceLabel(event.source);
                     return (
                       <Link
                         key={event.id}
                         to="/dashboard/cicd/analyses"
-                        className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
+                        className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
                       >
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <TimeDisplay
                             dateTime={event.timestamp}
-                            className="text-xs text-gray-400 dark:text-gray-400"
+                            className="text-xs text-zinc-400 dark:text-zinc-400"
                           />
                           <div className="flex items-center gap-1.5">
                             {sourceLabel && (
@@ -838,10 +838,10 @@ export const DashboardOverview = ({
                             </Badge>
                           </div>
                         </div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                           {getPayloadString(event.payload, "repository")}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
                           {getPayloadString(event.payload, "checkName")}
                         </p>
                       </Link>
@@ -874,19 +874,19 @@ export const DashboardOverview = ({
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-700">
                   {analysisItems.map((analysis: AnalysisRecord) => {
                     const providerLabel = getAnalysisProviderLabel(analysis.ciProvider);
                     return (
                       <Link
                         key={analysis.id}
                         to="/dashboard/cicd/analyses"
-                        className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
+                        className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
                       >
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <TimeDisplay
                             dateTime={analysis.createdAt}
-                            className="text-xs text-gray-400 dark:text-gray-400"
+                            className="text-xs text-zinc-400 dark:text-zinc-400"
                           />
                           <div className="flex items-center gap-1.5">
                             {providerLabel && (
@@ -905,10 +905,10 @@ export const DashboardOverview = ({
                             </Badge>
                           </div>
                         </div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                           {extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis)}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
                           {truncateText(analysis.summary, 60)}
                         </p>
                       </Link>
@@ -941,17 +941,17 @@ export const DashboardOverview = ({
                 </div>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-700">
                   {incidentItems.map((incident: IncidentAlertRecord) => (
                     <Link
                       key={incident.id}
                       to="/dashboard/incidents/active"
-                      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
+                      className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <TimeDisplay
                           dateTime={incident.receivedAt}
-                          className="text-xs text-gray-400 dark:text-gray-400"
+                          className="text-xs text-zinc-400 dark:text-zinc-400"
                         />
                         <Badge
                           variant="outline"
@@ -963,10 +963,10 @@ export const DashboardOverview = ({
                           {titleCase(incident.severity)}
                         </Badge>
                       </div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                         {truncateText(incident.title, 60)}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
                         {titleCase(incident.source)}
                       </p>
                     </Link>

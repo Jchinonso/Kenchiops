@@ -53,14 +53,14 @@ export const BillingCard = ({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     Payment Status
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{statusLabel}</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{statusLabel}</p>
                   {billingStatus.currentPeriodEnd && (
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
                       Current period ends: <TimeDisplay dateTime={billingStatus.currentPeriodEnd} />
                     </p>
                   )}

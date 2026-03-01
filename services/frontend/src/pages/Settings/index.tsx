@@ -42,7 +42,7 @@ const isBrowserNotificationDenied = (): boolean => {
 
 /** Section header — small uppercase muted label */
 const SectionHeader = ({ title }: { readonly title: string }) => (
-  <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4">
+  <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
     {title}
   </h2>
 );
@@ -145,7 +145,7 @@ export const Settings = () => {
                     </CardHeader>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
                           Members join automatically when they sign in via GitHub, GitLab,
                           Bitbucket, or Azure DevOps and belong to your organization.
                         </p>
@@ -195,7 +195,7 @@ export const Settings = () => {
                     <CardDescription>Your personal workspace is always free.</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-6">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
                       Personal accounts include unlimited access for individual use. To manage
                       teams, billing, and subscriptions, switch to an organization.
                     </p>
@@ -239,7 +239,7 @@ export const Settings = () => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-6">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
                         SSO/SAML configuration will be available here. Connect your identity
                         provider to enable single sign-on for your organization.
                       </p>
@@ -262,7 +262,7 @@ export const Settings = () => {
                     </CardHeader>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
                           Create and manage custom risk rules to tailor analysis to your workflows.
                         </p>
                         <Link
@@ -290,7 +290,7 @@ export const Settings = () => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-6">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
                         Your plan includes priority support. Contact us at{" "}
                         <a
                           href="mailto:support@kenchi.dev"

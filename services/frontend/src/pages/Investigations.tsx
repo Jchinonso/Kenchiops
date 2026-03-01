@@ -63,7 +63,7 @@ const InvestigationTableRow = ({ investigation, onClick }: InvestigationTableRow
 
   return (
     <TableRow
-      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+      className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
       onClick={onClick}
       onKeyDown={(keyEvent) => {
         const { key } = keyEvent;
@@ -87,22 +87,22 @@ const InvestigationTableRow = ({ investigation, onClick }: InvestigationTableRow
       </TableCell>
       <TableCell className="max-w-[300px]">
         <span
-          className="text-sm text-gray-900 dark:text-gray-100"
+          className="text-sm text-zinc-900 dark:text-zinc-100"
           title={investigation.description}
         >
           {truncateText(investigation.description, 80)}
         </span>
       </TableCell>
-      <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+      <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
         {investigation.serviceName ?? "--"}
       </TableCell>
-      <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+      <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
         {confidenceDisplay}
       </TableCell>
-      <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+      <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
         {investigation.durationMs !== null ? formatDuration(investigation.durationMs) : "--"}
       </TableCell>
-      <TableCell className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+      <TableCell className="text-sm text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
         {formatTimestamp(investigation.createdAt)}
       </TableCell>
     </TableRow>
@@ -172,7 +172,7 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
             Investigations
           </h1>
         </div>
@@ -199,10 +199,10 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
             Investigations
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             AI-powered diagnosis of production issues with evidence from monitoring tools and past
             incidents.
           </p>
@@ -247,7 +247,7 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
               <button
                 type="button"
                 onClick={refetch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Retry
@@ -277,7 +277,7 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
                     Investigations table showing status, description, service, confidence, duration,
                     and time
                   </TableCaption>
-                  <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
+                  <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
                     <tr>
                       <TableHead scope="col">Status</TableHead>
                       <TableHead scope="col">Description</TableHead>

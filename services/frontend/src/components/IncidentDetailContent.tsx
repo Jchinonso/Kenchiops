@@ -100,15 +100,15 @@ const getConfidenceLevel = (value: number): ConfidenceLevel => {
 // ==================== Sub-components ====================
 
 const SectionHeading = ({ children }: { readonly children: React.ReactNode }) => (
-  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+  <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
     {children}
   </h3>
 );
 
 const InfoRow = ({ label, value }: { readonly label: string; readonly value: React.ReactNode }) => (
-  <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
-    <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-    <span className="text-xs text-gray-900 dark:text-gray-100 font-medium text-right max-w-[60%] truncate">
+  <div className="flex justify-between py-1.5 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+    <span className="text-xs text-zinc-500 dark:text-zinc-400">{label}</span>
+    <span className="text-xs text-zinc-900 dark:text-zinc-100 font-medium text-right max-w-[60%] truncate">
       {value}
     </span>
   </div>
@@ -119,13 +119,13 @@ const InfoRow = ({ label, value }: { readonly label: string; readonly value: Rea
 export const IncidentDetailSkeleton = () => (
   <div className="flex-1 px-4 space-y-4 animate-pulse">
     <div className="flex gap-2">
-      <div className="h-5 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
-      <div className="h-5 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+      <div className="h-5 w-16 bg-zinc-200 dark:bg-zinc-700 rounded" />
+      <div className="h-5 w-20 bg-zinc-200 dark:bg-zinc-700 rounded" />
     </div>
-    <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded" />
-    <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-    <div className="h-4 w-1/2 bg-gray-200 dark:bg-gray-700 rounded" />
-    <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+    <div className="h-4 w-3/4 bg-zinc-200 dark:bg-zinc-700 rounded" />
+    <div className="h-24 bg-zinc-200 dark:bg-zinc-700 rounded-lg" />
+    <div className="h-4 w-1/2 bg-zinc-200 dark:bg-zinc-700 rounded" />
+    <div className="h-32 bg-zinc-200 dark:bg-zinc-700 rounded-lg" />
   </div>
 );
 
@@ -170,7 +170,7 @@ export const IncidentDetailContent = ({
           </Badge>
         </div>
         {alert.description && (
-          <p className="text-sm text-gray-700 dark:text-gray-300">{alert.description}</p>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">{alert.description}</p>
         )}
         <div className="flex items-center gap-2">
           {canAcknowledge(alert.status) && (
@@ -200,43 +200,43 @@ export const IncidentDetailContent = ({
 
       {/* Summary */}
       {aiSummary && (aiSummary.headline || aiSummary.impactAssessment) && (
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-2">
+        <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-4 space-y-2">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-indigo-400" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Summary</h3>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Summary</h3>
           </div>
           {aiSummary.headline && (
-            <p className="text-sm text-gray-700 dark:text-gray-300">{aiSummary.headline}</p>
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">{aiSummary.headline}</p>
           )}
           {aiSummary.impactAssessment && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">{aiSummary.impactAssessment}</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">{aiSummary.impactAssessment}</p>
           )}
         </div>
       )}
 
       {/* Root Cause */}
       {aiSummary?.rootCauseSummary && (
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-2">
+        <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-4 space-y-2">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-400" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Root Cause</h3>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Root Cause</h3>
           </div>
-          <p className="text-sm text-gray-700 dark:text-gray-300">{aiSummary.rootCauseSummary}</p>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">{aiSummary.rootCauseSummary}</p>
         </div>
       )}
 
       {/* Recommended Actions */}
       {aiSummary?.suggestedActions && aiSummary.suggestedActions.length > 0 && (
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+        <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
             <ListChecks className="w-4 h-4 text-indigo-400" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Recommended Actions
             </h3>
           </div>
           <ol className="space-y-2">
             {aiSummary.suggestedActions.map((item, idx) => (
-              <li key={idx} className="text-sm text-gray-700 dark:text-gray-300">
+              <li key={idx} className="text-sm text-zinc-700 dark:text-zinc-300">
                 {idx + 1}. {item.action}
               </li>
             ))}
@@ -247,7 +247,7 @@ export const IncidentDetailContent = ({
       {/* Alert Info */}
       <div>
         <SectionHeading>Alert Info</SectionHeading>
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+        <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-3">
           <InfoRow label="Source" value={getSourceLabel(alert.source)} />
           <InfoRow label="Service" value={alert.serviceName ?? "--"} />
           <InfoRow label="Environment" value={alert.environment ?? "--"} />
@@ -261,7 +261,7 @@ export const IncidentDetailContent = ({
       {(severityScore !== undefined || severityAssessment) && (
         <div>
           <SectionHeading>Severity Assessment</SectionHeading>
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-2">
+          <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-3 space-y-2">
             {severityScore !== undefined && (
               <InfoRow
                 label="Score"
@@ -277,7 +277,7 @@ export const IncidentDetailContent = ({
             )}
             {severityAssessment?.factors && severityAssessment.factors.length > 0 && (
               <div className="pt-1">
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
                   Factors
                 </p>
                 {severityAssessment.factors.map((factor, idx) => (
@@ -295,15 +295,15 @@ export const IncidentDetailContent = ({
           const pct = Math.round(confidence * 100);
           const level = getConfidenceLevel(confidence);
           return (
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+            <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   Confidence
                 </h3>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500 dark:text-gray-400">Diagnosis</span>
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">Diagnosis</span>
                 <span
                   className={cn(
                     "text-xs font-medium px-2.5 py-0.5 rounded-full border",
@@ -313,7 +313,7 @@ export const IncidentDetailContent = ({
                   {level.label} ({pct}%)
                 </span>
               </div>
-              <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
                 <div
                   className={cn("h-full rounded-full transition-all", level.barColor)}
                   style={{ width: `${pct}%` }}
@@ -327,7 +327,7 @@ export const IncidentDetailContent = ({
       {routing && (
         <div>
           <SectionHeading>Routing Decision</SectionHeading>
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-2">
+          <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-3 space-y-2">
             {routing.suppressed && (
               <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
                 Suppressed{routing.suppressionReason ? `: ${routing.suppressionReason}` : ""}
@@ -335,14 +335,14 @@ export const IncidentDetailContent = ({
             )}
             {routing.matchedRules && routing.matchedRules.length > 0 && (
               <div>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
                   Matched Rules
                 </p>
                 {routing.matchedRules.map((rule, idx) => (
                   <div key={idx} className="flex justify-between py-1 text-xs">
-                    <span className="text-gray-700 dark:text-gray-300">{rule.ruleName}</span>
+                    <span className="text-zinc-700 dark:text-zinc-300">{rule.ruleName}</span>
                     {rule.action && (
-                      <span className="text-gray-500 dark:text-gray-400">{rule.action}</span>
+                      <span className="text-zinc-500 dark:text-zinc-400">{rule.action}</span>
                     )}
                   </div>
                 ))}
@@ -363,13 +363,13 @@ export const IncidentDetailContent = ({
             {correlated.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between py-1.5 px-3 bg-gray-50 dark:bg-gray-800/50 rounded-md"
+                className="flex items-center justify-between py-1.5 px-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-md"
               >
-                <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[70%]">
+                <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate max-w-[70%]">
                   {item.title}
                 </span>
                 {item.similarity !== undefined && (
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 shrink-0 ml-2">
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 shrink-0 ml-2">
                     {Math.round(item.similarity * 100)}% match
                   </span>
                 )}
@@ -387,7 +387,7 @@ export const IncidentDetailContent = ({
             {runbooks.map((book, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between py-1.5 px-3 bg-gray-50 dark:bg-gray-800/50 rounded-md"
+                className="flex items-center justify-between py-1.5 px-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-md"
               >
                 {book.url ? (
                   <a
@@ -399,12 +399,12 @@ export const IncidentDetailContent = ({
                     {book.name}
                   </a>
                 ) : (
-                  <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[70%]">
+                  <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate max-w-[70%]">
                     {book.name}
                   </span>
                 )}
                 {book.relevance !== undefined && (
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 shrink-0 ml-2">
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 shrink-0 ml-2">
                     {Math.round(book.relevance * 100)}%
                   </span>
                 )}
@@ -417,7 +417,7 @@ export const IncidentDetailContent = ({
       {/* No triage data */}
       {!triageResult && (
         <div className="text-center py-6">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
             No triage data available for this incident.
           </p>
         </div>

@@ -14,14 +14,14 @@
     --primary-foreground: 0 0% 100%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
+    --muted: 40 6% 96%;
     --muted-foreground: 240 3.8% 46.1%;
     --accent: 38 92% 50%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
+    --border: 220 9% 91%;
+    --input: 220 9% 91%;
     --ring: 38 92% 50%;
     --radius: 0.625rem;
     --sidebar-background: 0 0% 98%;
@@ -190,21 +190,35 @@ html {
   }
 }
 
-/* Custom scrollbar — dark theme */
+/* Custom scrollbar — theme-aware */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: hsl(var(--border));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* Dark scrollbar override — for always-dark surfaces like sidebar */
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
 

@@ -54,7 +54,7 @@ export const ProfileHero = ({ user, tenant, tenantLoading }: ProfileHeroProps) =
   return (
     <motion.div
       variants={itemVariants}
-      className="relative overflow-hidden rounded-2xl border border-gray-200/60 dark:border-gray-700/40 bg-white dark:bg-gray-900"
+      className="relative overflow-hidden rounded-2xl border border-zinc-200/60 dark:border-zinc-700/40 bg-white dark:bg-zinc-900"
     >
       {/* Gradient background wash */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.07] via-violet-500/[0.04] to-cyan-500/[0.07] dark:from-indigo-500/[0.12] dark:via-violet-500/[0.08] dark:to-cyan-500/[0.1]" />
@@ -78,10 +78,10 @@ export const ProfileHero = ({ user, tenant, tenantLoading }: ProfileHeroProps) =
                 <img
                   src={user.avatarUrl}
                   alt={displayName}
-                  className="w-20 h-20 rounded-full ring-2 ring-white dark:ring-gray-900 object-cover"
+                  className="w-20 h-20 rounded-full ring-2 ring-white dark:ring-zinc-900 object-cover"
                 />
               ) : (
-                <div className="w-20 h-20 rounded-full ring-2 ring-white dark:ring-gray-900 bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+                <div className="w-20 h-20 rounded-full ring-2 ring-white dark:ring-zinc-900 bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
                   <span className="text-white font-bold text-xl">{userInitials}</span>
                 </div>
               )}
@@ -90,11 +90,11 @@ export const ProfileHero = ({ user, tenant, tenantLoading }: ProfileHeroProps) =
 
           {/* User info */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100 truncate">
               {displayName}
             </h1>
             {displayEmail && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
                 {displayEmail}
               </p>
             )}
@@ -116,7 +116,7 @@ export const ProfileHero = ({ user, tenant, tenantLoading }: ProfileHeroProps) =
               })}
             </div>
             {user?.createdAt && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-2">
                 Member since <TimeDisplay dateTime={user.createdAt} />
               </p>
             )}
@@ -131,7 +131,7 @@ export const ProfileHero = ({ user, tenant, tenantLoading }: ProfileHeroProps) =
               </div>
             ) : tenant ? (
               <>
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   {tenant.orgName}
                 </p>
                 <Badge
@@ -140,16 +140,16 @@ export const ProfileHero = ({ user, tenant, tenantLoading }: ProfileHeroProps) =
                     "text-xs mt-1",
                     tenant.status === "active"
                       ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800"
-                      : "bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-200 border-gray-200 dark:border-gray-700"
+                      : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700"
                   )}
                 >
                   {titleCase(tenant.status)}
                 </Badge>
                 <details className="mt-1.5">
-                  <summary className="text-xs text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                  <summary className="text-xs text-zinc-400 dark:text-zinc-500 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
                     Tenant ID
                   </summary>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-mono select-all">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono select-all">
                     {tenant.id}
                   </p>
                 </details>

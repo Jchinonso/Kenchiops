@@ -422,7 +422,7 @@ export const DashboardSidebar = ({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 sm:p-4 md:p-2 lg:px-4 lg:py-3 space-y-1 overflow-y-auto scrollbar-none">
+      <nav className="flex-1 p-3 sm:p-4 md:p-2 lg:px-4 lg:py-3 space-y-1 overflow-y-auto scrollbar-dark">
         {NAV_ENTRIES.map((entry) =>
           isNavGroup(entry) ? (
             <SidebarNavGroup

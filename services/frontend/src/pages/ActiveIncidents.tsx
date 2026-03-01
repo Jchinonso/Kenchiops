@@ -204,7 +204,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
             Active Incidents
           </h1>
         </div>
@@ -230,10 +230,10 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
   const pageContent = (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
           Active Incidents
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           AI-triaged alerts from your monitoring tools with severity classification and routing.
         </p>
       </div>
@@ -253,7 +253,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
               "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
               activeSourceTab === "all"
                 ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
-                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
             )}
           >
             All ({activeCountsBySource.reduce((sum, entry) => sum + entry.activeCount, 0)})
@@ -269,7 +269,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
                 "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
                 activeSourceTab === entry.source
                   ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
-                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
               )}
             >
               {titleCase(entry.source)} ({entry.activeCount})
@@ -314,7 +314,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
               <button
                 type="button"
                 onClick={refetch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Retry
@@ -343,7 +343,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
                   <TableCaption className="sr-only">
                     Active incidents table showing severity, title, service, and triage status
                   </TableCaption>
-                  <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
+                  <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
                     <tr>
                       <TableHead scope="col" className="w-8" />
                       <SortableTableHead

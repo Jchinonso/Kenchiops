@@ -50,9 +50,9 @@ const STATUS_STYLES: Readonly<Record<string, string>> = {
   processed:
     "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800",
   skipped:
-    "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
+    "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
   ignored:
-    "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
+    "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
   failed:
     "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800",
 };
@@ -88,12 +88,12 @@ const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTable
 
   return (
     <TableHead
-      className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+      className="cursor-pointer select-none hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
       onClick={() => onSort(column)}
     >
       <div className="flex items-center gap-1">
         {label}
-        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-gray-400")} />
+        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-zinc-400")} />
       </div>
     </TableHead>
   );
@@ -117,21 +117,21 @@ interface WebhookRowProps {
 const WebhookRow = ({ activity, isExpanded, onClick }: WebhookRowProps) => (
   <TableRow
     onClick={onClick}
-    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+    className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
   >
     <TableCell className="w-8">
       <ChevronRight
-        className={cn("w-4 h-4 text-gray-400 transition-transform", isExpanded && "rotate-90")}
+        className={cn("w-4 h-4 text-zinc-400 transition-transform", isExpanded && "rotate-90")}
       />
     </TableCell>
-    <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
+    <TableCell className="text-zinc-500 dark:text-zinc-400 text-xs">
       <TimeDisplay dateTime={activity.createdAt} />
     </TableCell>
-    <TableCell className="font-mono text-xs text-gray-700 dark:text-gray-300 max-w-[160px] truncate">
+    <TableCell className="font-mono text-xs text-zinc-700 dark:text-zinc-300 max-w-[160px] truncate">
       {activity.deliveryId}
     </TableCell>
-    <TableCell className="text-gray-900 dark:text-gray-100 text-sm">{activity.eventType}</TableCell>
-    <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
+    <TableCell className="text-zinc-900 dark:text-zinc-100 text-sm">{activity.eventType}</TableCell>
+    <TableCell className="text-zinc-500 dark:text-zinc-400 text-xs">
       {titleCase(activity.source)}
     </TableCell>
     <TableCell>
@@ -139,7 +139,7 @@ const WebhookRow = ({ activity, isExpanded, onClick }: WebhookRowProps) => (
         {titleCase(activity.status)}
       </Badge>
     </TableCell>
-    <TableCell className="text-gray-500 dark:text-gray-400 text-xs tabular-nums">
+    <TableCell className="text-zinc-500 dark:text-zinc-400 text-xs tabular-nums">
       {formatDuration(activity.processingTimeMs)}
     </TableCell>
   </TableRow>
@@ -172,18 +172,18 @@ const ExpandedWebhookRow = ({ activity }: ExpandedWebhookRowProps) => {
   ];
 
   return (
-    <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
-      <TableCell colSpan={7} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
+    <TableRow className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
+      <TableCell colSpan={7} className="bg-zinc-50 dark:bg-zinc-800/50 border-b p-0">
         <div className="p-4 space-y-3">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                 Delivery Details
               </h4>
               <button
                 type="button"
                 onClick={handleCopyDeliveryId}
-                className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-500 dark:text-gray-500 dark:hover:text-indigo-400 transition-colors"
+                className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-indigo-500 dark:text-zinc-500 dark:hover:text-indigo-400 transition-colors"
               >
                 {copiedId ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 {copiedId ? "Copied!" : "Copy ID"}
@@ -192,12 +192,12 @@ const ExpandedWebhookRow = ({ activity }: ExpandedWebhookRowProps) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
               {details.map(([label, value]) => (
                 <div key={label} className="flex items-baseline gap-2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 shrink-0">
                     {label}:
                   </span>
                   <span
                     className={cn(
-                      "text-sm text-gray-900 dark:text-gray-100",
+                      "text-sm text-zinc-900 dark:text-zinc-100",
                       label === "Delivery ID" && "font-mono text-xs break-all"
                     )}
                   >
@@ -210,7 +210,7 @@ const ExpandedWebhookRow = ({ activity }: ExpandedWebhookRowProps) => {
 
           {hasError && (
             <div>
-              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
                 Error Message
               </h4>
               <p className="text-sm text-red-600 dark:text-red-400 font-mono whitespace-pre-wrap break-words">
@@ -221,16 +221,16 @@ const ExpandedWebhookRow = ({ activity }: ExpandedWebhookRowProps) => {
 
           {hasMetadata && (
             <div>
-              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
                 Metadata
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
                 {Object.entries(activity.metadata).map(([label, value]) => (
                   <div key={label} className="flex items-baseline gap-2">
-                    <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400 shrink-0">
                       {label}:
                     </span>
-                    <span className="text-sm text-gray-900 dark:text-gray-100">
+                    <span className="text-sm text-zinc-900 dark:text-zinc-100">
                       {typeof value === "string" ? value : JSON.stringify(value)}
                     </span>
                   </div>
@@ -322,17 +322,17 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
     <FeatureGate feature="auditLog">
       <div className="space-y-6">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
             Webhook Activity
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Incoming webhook deliveries from connected services.
           </p>
         </div>
 
         {/* Status filter */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Status:</span>
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">Status:</span>
           {["", "processed", "skipped", "failed", "ignored"].map((value) => (
             <button
               key={value}
@@ -346,7 +346,7 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
                 "px-3 py-1 text-xs font-medium rounded-full border transition-colors",
                 statusFilter === value
                   ? "bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800"
-                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700"
               )}
             >
               {value === "" ? "All" : titleCase(value)}
@@ -375,7 +375,7 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
                 <button
                   type="button"
                   onClick={refetch}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Retry
@@ -398,7 +398,7 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
               <>
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
+                    <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
                       <TableRow>
                         <TableHead scope="col" className="w-8" />
                         <SortableTableHead

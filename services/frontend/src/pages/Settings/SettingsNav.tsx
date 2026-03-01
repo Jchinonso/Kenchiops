@@ -36,8 +36,8 @@ export const SettingsNav = ({ activeSection, isPersonal = false }: SettingsNavPr
                 className={cn(
                   "relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
                   isActive
-                    ? "text-gray-900 dark:text-gray-100 font-medium"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                    ? "text-zinc-900 dark:text-zinc-100 font-medium"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
                 )}
               >
                 <Icon className="w-4 h-4" />
@@ -45,7 +45,7 @@ export const SettingsNav = ({ activeSection, isPersonal = false }: SettingsNavPr
                 {isActive && (
                   <motion.div
                     layoutId="settings-nav-active"
-                    className="absolute inset-0 bg-gray-100 dark:bg-gray-800/80 rounded-lg -z-10"
+                    className="absolute inset-0 bg-zinc-100 dark:bg-zinc-800/80 rounded-lg -z-10"
                     transition={microSpring}
                   />
                 )}
@@ -72,7 +72,7 @@ export const SettingsNav = ({ activeSection, isPersonal = false }: SettingsNavPr
                   "relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
                   isActive
                     ? "text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />

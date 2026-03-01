@@ -42,12 +42,12 @@ export const PaginationControls = ({
   return (
     <nav
       aria-label="Pagination"
-      className="flex items-center justify-between px-4 py-3 border-t dark:border-gray-800"
+      className="flex items-center justify-between px-4 py-3 border-t dark:border-zinc-800"
     >
       <div className="flex items-center gap-3">
         {onPageSizeChange && pageSize !== undefined && (
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500 dark:text-gray-400">Show</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">Show</span>
             <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
               <SelectTrigger className="w-[68px] h-7 text-xs">
                 <SelectValue />
@@ -62,14 +62,14 @@ export const PaginationControls = ({
             </Select>
           </div>
         )}
-        <span className="text-sm text-gray-500 dark:text-gray-400">{rangeLabel}</span>
+        <span className="text-sm text-zinc-500 dark:text-zinc-400">{rangeLabel}</span>
       </div>
       <div className="flex items-center gap-2">
         <button
           onClick={onPrev}
           disabled={!hasPrev}
           aria-label="Go to previous page"
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ChevronLeft className="w-4 h-4" />
           Prev
@@ -78,7 +78,7 @@ export const PaginationControls = ({
           onClick={onNext}
           disabled={!hasNext}
           aria-label="Go to next page"
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Next
           <ChevronRight className="w-4 h-4" />

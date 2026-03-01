@@ -68,14 +68,14 @@ const EvidenceItemCard = ({ item }: EvidenceItemCardProps) => {
       ? "text-green-600 dark:text-green-400"
       : relevancePercent >= 50
         ? "text-amber-600 dark:text-amber-400"
-        : "text-gray-500 dark:text-gray-400";
+        : "text-zinc-500 dark:text-zinc-400";
 
   return (
-    <div className="px-4 py-3 border border-gray-100 dark:border-gray-800 rounded-lg bg-white dark:bg-gray-900/50">
+    <div className="px-4 py-3 border border-zinc-100 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900/50">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.title}</h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+          <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.title}</h4>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 leading-relaxed">
             {item.summary}
           </p>
         </div>
@@ -86,7 +86,7 @@ const EvidenceItemCard = ({ item }: EvidenceItemCardProps) => {
               href={item.metadata.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-400 hover:text-indigo-500 transition-colors"
+              className="text-zinc-400 hover:text-indigo-500 transition-colors"
               onClick={(clickEvent) => clickEvent.stopPropagation()}
             >
               <ExternalLink className="w-3.5 h-3.5" />
@@ -94,7 +94,7 @@ const EvidenceItemCard = ({ item }: EvidenceItemCardProps) => {
           )}
         </div>
       </div>
-      <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+      <div className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
         {formatTimestamp(item.timestamp)}
       </div>
     </div>
@@ -119,12 +119,12 @@ const EvidenceGroupSection = ({ group }: EvidenceGroupSectionProps) => {
       >
         <ChevronRight
           className={cn(
-            "w-4 h-4 text-gray-400 transition-transform duration-200",
+            "w-4 h-4 text-zinc-400 transition-transform duration-200",
             isOpen && "rotate-90"
           )}
         />
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
-        <span className="text-xs text-gray-400 dark:text-gray-500">({itemCount})</span>
+        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">({itemCount})</span>
       </button>
       {isOpen && (
         <div className="ml-6 space-y-2">
@@ -145,7 +145,7 @@ export const InvestigationEvidence = ({ evidence }: InvestigationEvidenceProps) 
 
   if (evidenceCount < 1) {
     return (
-      <p className="text-sm text-gray-500 dark:text-gray-400 italic">No evidence collected yet.</p>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 italic">No evidence collected yet.</p>
     );
   }
 

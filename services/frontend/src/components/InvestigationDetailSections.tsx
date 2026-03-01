@@ -50,9 +50,9 @@ interface StatBadgeProps {
 }
 
 export const StatBadge = ({ label, value, className }: StatBadgeProps) => (
-  <div className="flex flex-col items-center gap-1 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-    <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-    <span className={cn("text-sm font-medium text-gray-900 dark:text-gray-100", className)}>
+  <div className="flex flex-col items-center gap-1 px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg">
+    <span className="text-xs text-zinc-500 dark:text-zinc-400">{label}</span>
+    <span className={cn("text-sm font-medium text-zinc-900 dark:text-zinc-100", className)}>
       {value}
     </span>
   </div>
@@ -66,12 +66,12 @@ interface SuggestedActionsSectionProps {
 
 const SuggestedActionsSection = ({ actions }: SuggestedActionsSectionProps) => (
   <div>
-    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Suggested Actions</h4>
+    <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Suggested Actions</h4>
     <div className="space-y-2">
       {actions.map((action) => (
         <div
           key={`${action.priority}-${action.action}`}
-          className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+          className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg"
         >
           <span
             className={cn(
@@ -82,8 +82,8 @@ const SuggestedActionsSection = ({ actions }: SuggestedActionsSectionProps) => (
             {getPriorityLabel(action.priority)}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{action.action}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{action.reasoning}</p>
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{action.action}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{action.reasoning}</p>
           </div>
         </div>
       ))}
@@ -110,7 +110,7 @@ export const DiagnosisSection = ({ diagnosis }: DiagnosisSectionProps) => {
           <Sparkles className="w-5 h-5 text-indigo-500" />
           <CardTitle>Diagnosis</CardTitle>
           {isFallback && (
-            <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded">
               Fallback
             </span>
           )}
@@ -118,23 +118,23 @@ export const DiagnosisSection = ({ diagnosis }: DiagnosisSectionProps) => {
       </CardHeader>
       <CardContent className="space-y-5">
         <div>
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Summary</h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{summary}</p>
+          <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Summary</h4>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">{summary}</p>
         </div>
 
         <div>
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
             Root Cause Hypothesis
           </h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
             {rootCauseHypothesis}
           </p>
         </div>
 
         <div>
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Confidence</h4>
+          <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Confidence</h4>
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
@@ -191,7 +191,7 @@ export const TimelineSection = ({ events }: TimelineSectionProps) => {
       </CardHeader>
       <CardContent>
         {eventCount < 1 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 italic">
             No timeline events available.
           </p>
         ) : (
@@ -201,19 +201,19 @@ export const TimelineSection = ({ events }: TimelineSectionProps) => {
                 <div className="flex flex-col items-center">
                   <div className="w-2 h-2 rounded-full bg-indigo-500 mt-2" />
                   {index < eventCount - 1 && (
-                    <div className="w-px flex-1 bg-gray-200 dark:bg-gray-700 mt-1" />
+                    <div className="w-px flex-1 bg-zinc-200 dark:bg-zinc-700 mt-1" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1 pb-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500 whitespace-nowrap">
                       {formatTimestamp(event.timestamp)}
                     </span>
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
                       {titleCase(event.type)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5">
                     {event.description}
                   </p>
                 </div>
@@ -253,7 +253,7 @@ export const CorrelationSection = ({ correlation }: CorrelationSectionProps) => 
       <CardContent className="space-y-4">
         {serviceCount > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
               Related Services
             </h4>
             <div className="flex flex-wrap gap-2">
@@ -271,12 +271,12 @@ export const CorrelationSection = ({ correlation }: CorrelationSectionProps) => 
 
         {patternCount > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Patterns</h4>
+            <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Patterns</h4>
             <ul className="space-y-1.5">
               {patterns.map((pattern) => (
                 <li
                   key={pattern}
-                  className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400"
+                  className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400"
                 >
                   <span className="text-indigo-400 mt-1 flex-shrink-0">&#8226;</span>
                   {pattern}
@@ -288,14 +288,14 @@ export const CorrelationSection = ({ correlation }: CorrelationSectionProps) => 
 
         {factorCount > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
               Common Factors
             </h4>
             <ul className="space-y-1.5">
               {commonFactors.map((factor) => (
                 <li
                   key={factor}
-                  className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400"
+                  className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400"
                 >
                   <span className="text-indigo-400 mt-1 flex-shrink-0">&#8226;</span>
                   {factor}
@@ -319,14 +319,14 @@ export const ActiveStatusIndicator = ({ status }: ActiveStatusProps) => (
   <div className="flex flex-col items-center justify-center py-12 space-y-4">
     <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
     <div className="text-center">
-      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
         {status === "queued"
           ? "Investigation queued"
           : status === "gathering"
             ? "Gathering evidence..."
             : "Analyzing findings..."}
       </p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
         This page will update automatically.
       </p>
     </div>
@@ -347,7 +347,7 @@ export const FailedStatusDisplay = ({ investigation, onRetry }: FailedStatusProp
         <div className="flex flex-col items-center text-center space-y-3">
           <XCircle className="w-8 h-8 text-red-500" />
           <div>
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
               Investigation Failed
             </p>
             {errorMessage && (

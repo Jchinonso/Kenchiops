@@ -43,7 +43,7 @@ export const BILLING_BADGE_STYLES: Readonly<Record<string, string>> = {
 };
 
 export const DEFAULT_BADGE_STYLE =
-  "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700";
+  "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700";
 
 // ==================== Delete Confirmation ====================
 

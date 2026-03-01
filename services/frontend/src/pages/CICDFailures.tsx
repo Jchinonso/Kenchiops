@@ -110,12 +110,12 @@ const SortableTableHead = ({ label, column, currentSort, onSort }: SortableTable
     <TableHead
       scope="col"
       aria-sort={ariaSortValue}
-      className="cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+      className="cursor-pointer select-none hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
       onClick={() => onSort(column)}
     >
       <div className="flex items-center gap-1">
         {label}
-        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-gray-400")} />
+        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-zinc-400")} />
       </div>
     </TableHead>
   );
@@ -149,20 +149,20 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
       }}
       tabIndex={0}
       aria-expanded={isExpanded}
-      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+      className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
     >
       <TableCell className="w-8">
         <ChevronRight
           aria-hidden="true"
-          className={cn("w-4 h-4 text-gray-400 transition-transform", isExpanded && "rotate-90")}
+          className={cn("w-4 h-4 text-zinc-400 transition-transform", isExpanded && "rotate-90")}
         />
       </TableCell>
-      <TableCell className="text-gray-500 dark:text-gray-400 text-xs">
+      <TableCell className="text-zinc-500 dark:text-zinc-400 text-xs">
         <TimeDisplay dateTime={event.timestamp} />
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
-          <span className="font-medium text-gray-900 dark:text-gray-100">{repository}</span>
+          <span className="font-medium text-zinc-900 dark:text-zinc-100">{repository}</span>
           {repository !== "--" && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -171,7 +171,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Open ${repository} on GitHub`}
-                  className="text-gray-400 hover:text-indigo-500 transition-colors"
+                  className="text-zinc-400 hover:text-indigo-500 transition-colors"
                   onClick={(linkEvent) => linkEvent.stopPropagation()}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -182,7 +182,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
           )}
         </div>
       </TableCell>
-      <TableCell className="text-gray-700 dark:text-gray-300">{checkName}</TableCell>
+      <TableCell className="text-zinc-700 dark:text-zinc-300">{checkName}</TableCell>
       <TableCell>
         <Badge variant="outline" className={cn("text-xs", getSeverityStyle(event.severity))}>
           {titleCase(event.severity ?? "unknown")}
@@ -191,12 +191,12 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
       <TableCell>
         <Badge
           variant="outline"
-          className="text-xs bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+          className="text-xs bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
         >
           {conclusion}
         </Badge>
       </TableCell>
-      <TableCell className="text-gray-500 dark:text-gray-400 font-mono text-xs">
+      <TableCell className="text-zinc-500 dark:text-zinc-400 font-mono text-xs">
         {shortSha && repository !== "--" ? (
           <a
             href={`https://github.com/${repository}/commit/${headSha}`}
@@ -210,7 +210,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
         ) : shortSha ? (
           <span>{shortSha}</span>
         ) : (
-          <span className="font-sans text-gray-400 dark:text-gray-500">N/A</span>
+          <span className="font-sans text-zinc-400 dark:text-zinc-500">N/A</span>
         )}
       </TableCell>
       <TableCell>
@@ -234,7 +234,7 @@ const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: FailureRowPr
         ) : (
           <Badge
             variant="outline"
-            className="text-xs bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+            className="text-xs bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
           >
             <Clock className="w-3 h-3 mr-1" />
             Pending
@@ -274,32 +274,32 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
   const visibleDetails = allDetails.filter(([, value]) => value !== "--");
 
   return (
-    <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
-      <TableCell colSpan={8} className="bg-gray-50 dark:bg-gray-800/50 border-b p-0">
+    <TableRow className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
+      <TableCell colSpan={8} className="bg-zinc-50 dark:bg-zinc-800/50 border-b p-0">
         <div className="p-4 space-y-3">
           {event.severity && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400">Severity:</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">Severity:</span>
               <Badge variant="outline" className={cn("text-xs", getSeverityStyle(event.severity))}>
                 {titleCase(event.severity)}
               </Badge>
             </div>
           )}
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
               Payload Details
             </h4>
             {visibleDetails.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                 {visibleDetails.map(([label, value]) => (
                   <Fragment key={label}>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-                    <span className="text-sm text-gray-900 dark:text-gray-100">{value}</span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{label}</span>
+                    <span className="text-sm text-zinc-900 dark:text-zinc-100">{value}</span>
                   </Fragment>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 dark:text-gray-500">
+              <p className="text-sm text-zinc-400 dark:text-zinc-500">
                 Limited payload data available for this event.
               </p>
             )}
@@ -311,7 +311,7 @@ const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRowProps) 
                 href={`https://github.com/${repository}/commit/${headSha}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
                 onClick={(linkEvent) => linkEvent.stopPropagation()}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -454,10 +454,10 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
           CI/CD Failures
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           Recent build and check failures from your connected repositories.
         </p>
       </div>
@@ -485,7 +485,7 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
                   <button
                     type="button"
                     onClick={() => exportFailuresToCSV(items)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Export Page
@@ -510,7 +510,7 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
               <button
                 type="button"
                 onClick={refetch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Retry
@@ -545,7 +545,7 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
                   <TableCaption className="sr-only">
                     CI/CD failure events table showing repository, severity, and analysis status
                   </TableCaption>
-                  <TableHeader className="bg-gray-50/80 dark:bg-gray-800/50">
+                  <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
                     <TableRow>
                       <TableHead scope="col" className="w-8" />
                       <SortableTableHead

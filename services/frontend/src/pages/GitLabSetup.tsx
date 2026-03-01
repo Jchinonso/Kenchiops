@@ -74,7 +74,7 @@ const VisibilityBadge = ({ visibility }: { readonly visibility: string }) => {
       className={cn(
         "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full",
         isPrivate
-          ? "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
           : "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
       )}
     >
@@ -90,25 +90,25 @@ const ProjectRow = ({ project, selected, onToggle, disabled }: ProjectRowProps) 
       "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
       selected
         ? "border-orange-300 dark:border-orange-700 bg-orange-50/50 dark:bg-orange-950/20"
-        : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600",
+        : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600",
       disabled && "opacity-60 cursor-not-allowed"
     )}
   >
     <Checkbox checked={selected} onCheckedChange={() => onToggle(project.id)} disabled={disabled} />
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2">
-        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
           {project.fullPath}
         </p>
         <VisibilityBadge visibility={project.visibility} />
       </div>
       {project.defaultBranch && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
           Default: {project.defaultBranch}
         </p>
       )}
     </div>
-    <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+    <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">
       {formatRelativeTime(project.lastActivity)}
     </span>
   </label>
@@ -134,7 +134,7 @@ const SetupResults = ({ results, onRetryFailed, onContinue, isRetrying }: SetupR
         ) : (
           <XCircle className="w-5 h-5 text-amber-500" />
         )}
-        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
           {allSucceeded
             ? `All ${String(successCount)} projects enabled successfully`
             : `${String(successCount)} of ${String(results.length)} projects enabled`}
@@ -349,7 +349,7 @@ export const GitLabSetup = () => {
           {isLoading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 text-orange-500 animate-spin" />
-              <span className="ml-2 text-sm text-gray-500">Loading your projects...</span>
+              <span className="ml-2 text-sm text-zinc-500">Loading your projects...</span>
             </div>
           )}
 
@@ -358,7 +358,7 @@ export const GitLabSetup = () => {
             <div className="text-center py-8">
               <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-zinc-500 mt-1">
                 Make sure you have Maintainer access to your GitLab projects.
               </p>
             </div>
@@ -379,9 +379,9 @@ export const GitLabSetup = () => {
             <>
               {projects.length === 0 ? (
                 <div className="text-center py-8">
-                  <Gitlab className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No projects found with Maintainer access.</p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <Gitlab className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mx-auto mb-2" />
+                  <p className="text-sm text-zinc-500">No projects found with Maintainer access.</p>
+                  <p className="text-xs text-zinc-400 mt-1">
                     You need at least Maintainer-level access to enable CI monitoring.
                   </p>
                   <Button variant="ghost" size="sm" className="mt-4" onClick={handleSkip}>
@@ -393,13 +393,13 @@ export const GitLabSetup = () => {
                   {/* Search + select all */}
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                       <input
                         type="text"
                         placeholder="Search projects..."
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+                        className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
                       />
                     </div>
                     <Button
@@ -426,14 +426,14 @@ export const GitLabSetup = () => {
                   </div>
 
                   {filteredProjects.length === 0 && searchQuery && (
-                    <p className="text-center text-sm text-gray-500 py-4">
+                    <p className="text-center text-sm text-zinc-500 py-4">
                       No projects match &quot;{searchQuery}&quot;
                     </p>
                   )}
 
                   {/* Footer */}
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
-                    <p className="text-xs text-gray-500">
+                  <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    <p className="text-xs text-zinc-500">
                       {selectedIds.size > 0
                         ? `${String(selectedIds.size)} project${selectedIds.size > 1 ? "s" : ""} selected`
                         : "Select projects to enable"}

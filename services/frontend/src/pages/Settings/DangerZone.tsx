@@ -67,20 +67,20 @@ export const DangerZone = ({
         onClick={() => setExpanded((prev) => !prev)}
         aria-expanded={expanded}
         aria-controls="danger-zone-content"
-        className="w-full flex items-center justify-between py-4 px-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800/50 transition-colors group"
+        className="w-full flex items-center justify-between py-4 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:border-red-200 dark:hover:border-red-800/50 transition-colors group"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/50 flex items-center justify-center">
             <AlertTriangle className="w-4 h-4 text-red-500" />
           </div>
           <div className="text-left">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Danger Zone</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Irreversible account actions</p>
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Danger Zone</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">Irreversible account actions</p>
           </div>
         </div>
         <ChevronDown
           className={cn(
-            "w-4 h-4 text-gray-400 transition-transform duration-200",
+            "w-4 h-4 text-zinc-400 transition-transform duration-200",
             expanded && "rotate-180"
           )}
         />
@@ -100,10 +100,10 @@ export const DangerZone = ({
             <div className="mt-3 p-4 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     Delete Account
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Permanently delete your account and all associated data. This cannot be undone.
                   </p>
                 </div>
@@ -111,7 +111,7 @@ export const DangerZone = ({
                   <AlertDialogTrigger asChild>
                     <button
                       type="button"
-                      className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                      className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-zinc-800 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
                     >
                       Delete Account
                     </button>
@@ -120,7 +120,7 @@ export const DangerZone = ({
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                       <AlertDialogDescription asChild>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                        <div className="text-sm text-zinc-500 dark:text-zinc-400">
                           {impactLoading ? (
                             <p>Checking account impact...</p>
                           ) : impactError ? (
@@ -153,7 +153,7 @@ export const DangerZone = ({
                           )}
                           <p>
                             Type{" "}
-                            <strong className="text-gray-900 dark:text-gray-100">DELETE</strong>{" "}
+                            <strong className="text-zinc-900 dark:text-zinc-100">DELETE</strong>{" "}
                             below to confirm.
                           </p>
                         </div>
@@ -176,7 +176,7 @@ export const DangerZone = ({
                         className={cn(
                           isDeleteConfirmed && !deleteLoading
                             ? "bg-red-600 text-white hover:bg-red-700"
-                            : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed pointer-events-none"
+                            : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed pointer-events-none"
                         )}
                       >
                         {deleteLoading ? (
