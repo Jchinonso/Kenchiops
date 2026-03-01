@@ -662,20 +662,64 @@ const handleRefreshOrgs = async (req: Request, res: Response): Promise<void> => 
   // each provider switches the user to its own tenant.
   const originalTenantId = user.tenantId;
 
-  const linkResults = await Promise.allSettled(
-    identities
-      .filter((identity) => identity.accessToken !== null)
-      .map((identity) =>
-        authService.autoLinkOrganizations(
-          user,
-          identity.provider,
-          identity.accessToken as string,
-          identity.instanceUrl,
-          identity.providerUsername ?? "unknown",
-          context
-        )
-      )
+  // Run org discovery for each identity with a valid token
+  const identitiesWithTokens = identities.filter((identity) => identity.accessToken !== null);
+
+  // Step 1: Discover what orgs each provider returns (BEFORE autoLink modifies anything)
+  const discoveryResults = await Promise.allSettled(
+    identitiesWithTokens.map(async (identity) => {
+      const adapter = hasOAuthAdapter(identity.provider)
+        ? getOAuthAdapter(identity.provider)
+        : null;
+      if (!adapter || typeof adapter.getUserOrganizations !== "function") {
+        return { orgs: [] as readonly string[] };
+      }
+      const orgs = await adapter.getUserOrganizations(
+        identity.accessToken as string,
+        identity.instanceUrl,
+        context
+      );
+      return { orgs: orgs.map((org) => org.login) };
+    })
   );
+
+  // Step 2: Run autoLinkOrganizations to actually create/link tenants
+  const linkResults = await Promise.allSettled(
+    identitiesWithTokens.map((identity) =>
+      authService.autoLinkOrganizations(
+        user,
+        identity.provider,
+        identity.accessToken as string,
+        identity.instanceUrl,
+        identity.providerUsername ?? "unknown",
+        context
+      )
+    )
+  );
+
+  // Step 3: Build per-provider diagnostics combining discovery + link results
+  const extractDiscoveredOrgs = (idx: number): readonly string[] => {
+    const result = discoveryResults[idx];
+    return result.status === "fulfilled" ? result.value.orgs : [];
+  };
+  const extractDiscoveryError = (idx: number): string | null => {
+    const result = discoveryResults[idx];
+    return result.status === "rejected" ? getErrorMessage(result.reason) : null;
+  };
+  const extractLinkError = (idx: number): string | null => {
+    const result = linkResults[idx];
+    return result.status === "rejected" ? getErrorMessage(result.reason) : null;
+  };
+
+  const providerDiagnostics = identitiesWithTokens.map((identity, idx) => ({
+    provider: identity.provider,
+    username: identity.providerUsername,
+    hasToken: true,
+    discoveredOrgs: extractDiscoveredOrgs(idx),
+    discoveryError: extractDiscoveryError(idx),
+    linkStatus: linkResults[idx].status,
+    linkError: extractLinkError(idx),
+  }));
 
   // Restore the original selected tenant if it was set before refresh.
   // autoLinkOrganizations switches the user to the login provider's tenant,
@@ -695,6 +739,9 @@ const handleRefreshOrgs = async (req: Request, res: Response): Promise<void> => 
       userId,
       failedCount,
       totalAttempts: linkResults.length,
+      errors: providerDiagnostics
+        .filter((diag) => diag.linkError !== null)
+        .map((diag) => ({ provider: diag.provider, error: diag.linkError })),
       ...context,
     });
   }
@@ -711,6 +758,7 @@ const handleRefreshOrgs = async (req: Request, res: Response): Promise<void> => 
   logger.info("Organization refresh completed", {
     userId,
     orgCount: organizations.length,
+    providerDiagnostics,
     ...context,
   });
 
@@ -740,6 +788,12 @@ const handleRefreshOrgs = async (req: Request, res: Response): Promise<void> => 
         isDefault: org.isDefault,
         tenantType: org.tenantType,
       })),
+      diagnostics: {
+        identitiesCount: identities.length,
+        identitiesWithTokens: identitiesWithTokens.length,
+        providerResults: providerDiagnostics,
+        failedCount,
+      },
     },
   });
 };
