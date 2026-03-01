@@ -411,6 +411,73 @@ const fetchOrgMembershipRole = async (
 };
 
 /**
+ * Fetch the user's org memberships via /user/memberships/orgs.
+ * This endpoint can return orgs that /user/orgs hides when an org
+ * restricts third-party OAuth app access. Best-effort: returns empty
+ * array on failure so org discovery still works via /user/orgs alone.
+ */
+const fetchUserMemberships = async (
+  accessToken: string,
+  instanceUrl: string | null,
+  context: RequestContext
+): Promise<readonly string[]> => {
+  const baseUrl = instanceUrl ?? "https://api.github.com";
+  const url = `${baseUrl}/user/memberships/orgs?state=active&per_page=100`;
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `token ${accessToken}`,
+        Accept: "application/vnd.github+json",
+      },
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    });
+
+    const durationMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      logger.warn("GitHub user memberships fetch returned non-OK status", {
+        provider: "github",
+        operation: "fetchUserMemberships",
+        statusCode: response.status,
+        durationMs,
+        ...context,
+      });
+      return [];
+    }
+
+    const memberships = (await response.json()) as ReadonlyArray<{
+      readonly organization: { readonly login: string };
+      readonly role: string;
+      readonly state: string;
+    }>;
+
+    logger.info("GitHub user memberships fetched", {
+      provider: "github",
+      operation: "fetchUserMemberships",
+      durationMs,
+      statusCode: response.status,
+      membershipCount: memberships.length,
+      ...context,
+    });
+
+    return memberships.map((membership) => membership.organization.login);
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+
+    logger.warn("GitHub user memberships fetch failed (best-effort)", {
+      provider: "github",
+      operation: "fetchUserMemberships",
+      durationMs,
+      error: redactSecrets(error instanceof Error ? error.message : String(error)),
+      ...context,
+    });
+    return [];
+  }
+};
+
+/**
  * Fetch GitHub App installations accessible to the authenticated user.
  * Returns account logins from installations, which includes both orgs AND
  * personal accounts where the app is installed. This is essential because
@@ -497,8 +564,11 @@ const getUserOrganizations = async (
   const startTime = Date.now();
 
   try {
-    // Fetch orgs and installations in parallel for resilient discovery
-    const [orgsResponse, installationLogins] = await Promise.all([
+    // Fetch orgs, memberships, and installations in parallel for resilient discovery.
+    // /user/orgs may hide orgs that restrict third-party OAuth app access;
+    // /user/memberships/orgs can surface those. /user/installations finds
+    // personal accounts and orgs where the GitHub App is installed.
+    const [orgsResponse, membershipLogins, installationLogins] = await Promise.all([
       fetch(urls.userOrgs, {
         headers: {
           Authorization: `token ${accessToken}`,
@@ -506,6 +576,7 @@ const getUserOrganizations = async (
         },
         signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
       }),
+      fetchUserMemberships(accessToken, instanceUrl, context),
       fetchUserInstallations(accessToken, instanceUrl, context),
     ]);
 
@@ -534,11 +605,12 @@ const getUserOrganizations = async (
       durationMs,
       statusCode: orgsResponse.status,
       orgCount: orgs.length,
+      membershipCount: membershipLogins.length,
       installationCount: installationLogins.length,
       ...context,
     });
 
-    // Build result from /user/orgs first
+    // Build result from /user/orgs first, then merge memberships and installations
     const orgLoginSet = new Set(orgs.map((org) => org.login.toLowerCase()));
 
     // Enrich orgs with missing roles via per-org membership endpoint
@@ -572,27 +644,39 @@ const getUserOrganizations = async (
       enrichedOrgResults = orgs.map((org) => ({ login: org.login, role: org.role }));
     }
 
-    // Merge installation accounts not already in /user/orgs.
-    // This captures personal accounts and orgs where the app is installed
-    // but the user might not have org-level membership visible via /user/orgs.
-    const installationOnlyLogins = installationLogins.filter(
+    // Merge memberships and installations not already in /user/orgs.
+    // /user/memberships/orgs surfaces orgs hidden by OAuth app restrictions.
+    // /user/installations captures personal accounts and app-installed orgs.
+    const additionalLogins = [...membershipLogins, ...installationLogins].filter(
       (login) => !orgLoginSet.has(login.toLowerCase())
     );
 
-    if (installationOnlyLogins.length > 0) {
-      logger.info("Discovered additional accounts from GitHub App installations", {
+    // Deduplicate (a login may appear in both memberships and installations)
+    const uniqueAdditionalLogins = [
+      ...new Set(additionalLogins.map((login) => login.toLowerCase())),
+    ];
+    // Preserve original casing from the first occurrence
+    const loginCaseMap = new Map(
+      [...membershipLogins, ...installationLogins].map((login) => [login.toLowerCase(), login])
+    );
+    const deduplicatedLogins = uniqueAdditionalLogins
+      .filter((lower) => !orgLoginSet.has(lower))
+      .map((lower) => loginCaseMap.get(lower) ?? lower);
+
+    if (deduplicatedLogins.length > 0) {
+      logger.info("Discovered additional accounts from memberships/installations", {
         provider: "github",
         operation: "getUserOrganizations",
-        additionalAccounts: installationOnlyLogins,
+        additionalAccounts: deduplicatedLogins,
         ...context,
       });
     }
 
-    const installationOrgs: readonly OAuthOrganization[] = installationOnlyLogins.map((login) => ({
+    const additionalOrgs: readonly OAuthOrganization[] = deduplicatedLogins.map((login) => ({
       login,
     }));
 
-    return [...enrichedOrgResults, ...installationOrgs];
+    return [...enrichedOrgResults, ...additionalOrgs];
   } catch (error) {
     if (error instanceof ExternalServiceError) {
       throw error;

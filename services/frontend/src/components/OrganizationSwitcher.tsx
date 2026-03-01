@@ -18,7 +18,15 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { Github, Gitlab, Check, ChevronsUpDown, Building2, Loader2 } from "lucide-react";
+import {
+  Github,
+  Gitlab,
+  Check,
+  ChevronsUpDown,
+  Building2,
+  Loader2,
+  ExternalLink,
+} from "lucide-react";
 
 // ==================== Sub-components ====================
 
@@ -105,7 +113,7 @@ export const OrganizationSwitcher = () => {
   const displayName = selectedOrg?.orgName ?? organizations[0]?.orgName ?? "Organization";
   const displayProvider = selectedOrg?.provider ?? organizations[0]?.provider ?? "";
 
-  // Single org: just display, no dropdown
+  // Single org: just display, no dropdown — with link to grant more orgs
   if (!hasMultipleOrgs) {
     return (
       <div className="px-4 py-3 md:px-2 md:py-2 lg:px-4 lg:py-3">
@@ -118,6 +126,15 @@ export const OrganizationSwitcher = () => {
             {displayName}
           </span>
         </div>
+        <a
+          href="https://github.com/settings/connections/applications"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hidden lg:flex items-center gap-1 mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
+        >
+          Missing an org?
+          <ExternalLink className="w-2.5 h-2.5" />
+        </a>
       </div>
     );
   }
@@ -165,6 +182,17 @@ export const OrganizationSwitcher = () => {
               </CommandGroup>
             </CommandList>
           </Command>
+          <div className="border-t border-zinc-100 dark:border-zinc-800 px-3 py-2">
+            <a
+              href="https://github.com/settings/connections/applications"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
+            >
+              Missing an organization?
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          </div>
         </PopoverContent>
       </Popover>
     </div>
