@@ -11,10 +11,8 @@ import {
   useAnalyses,
   useFailures,
   useTenantInfo,
-  useGitLabProjects,
   type AnalysisRecord,
   type EventRecord,
-  type GitLabProject,
 } from "@/hooks/useDashboardData";
 import {
   useTriageStats,
@@ -250,77 +248,6 @@ const ANALYSIS_PROVIDER_LABELS: Readonly<Record<string, string>> = {
 const getAnalysisProviderLabel = (ciProvider: string | null): string | null =>
   ciProvider ? (ANALYSIS_PROVIDER_LABELS[ciProvider] ?? null) : null;
 
-// ==================== GitLab Projects Sub-Component ====================
-
-const VISIBILITY_STYLES: Readonly<Record<string, string>> = {
-  public: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
-  internal: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  private: "bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300",
-} as const;
-
-const getVisibilityStyle = (visibility: string): string =>
-  VISIBILITY_STYLES[visibility] ?? VISIBILITY_STYLES.private;
-
-interface GitLabProjectsSectionProps {
-  readonly projects: readonly GitLabProject[];
-}
-
-const GitLabProjectsSection = ({ projects }: GitLabProjectsSectionProps) => (
-  <Card className="mb-6 sm:mb-8">
-    <CardHeader className="border-b">
-      <div className="flex items-center gap-2">
-        <Gitlab className="w-5 h-5 text-orange-500" />
-        <CardTitle>
-          <h2>GitLab Projects ({projects.length})</h2>
-        </CardTitle>
-      </div>
-      <CardDescription>Projects from your connected GitLab account.</CardDescription>
-    </CardHeader>
-    <CardContent className="pt-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {projects.map((project) => (
-          <a
-            key={project.id}
-            href={project.webUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block p-4 rounded-lg border border-zinc-100 dark:border-zinc-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] transition-all group"
-          >
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                {project.name}
-              </h3>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-[10px] px-1.5 py-0 flex-shrink-0",
-                  getVisibilityStyle(project.visibility)
-                )}
-              >
-                {titleCase(project.visibility)}
-              </Badge>
-            </div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mb-2">
-              {project.fullPath}
-            </p>
-            <div className="flex items-center justify-between gap-2">
-              <TimeDisplay
-                dateTime={project.lastActivity}
-                className="text-[10px] text-zinc-400 dark:text-zinc-500"
-              />
-              {project.defaultBranch && (
-                <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
-                  {project.defaultBranch}
-                </span>
-              )}
-            </div>
-          </a>
-        ))}
-      </div>
-    </CardContent>
-  </Card>
-);
-
 // ==================== Component ====================
 
 interface DashboardOverviewProps {
@@ -355,7 +282,6 @@ export const DashboardOverview = ({
     refetch: refetchFailures,
   } = useFailures({ limit: 5, offset: 0, refreshKey });
   const { data: tenant } = useTenantInfo(refreshKey);
-  const { data: gitlabProjects, isLoading: gitlabProjectsLoading } = useGitLabProjects(refreshKey);
   const tenantId = tenant?.id ?? "";
   const { data: triageStats } = useTriageStats(tenantId, refreshKey);
   const { data: activeCountsBySource } = useActiveCountsBySource(tenantId, refreshKey);
@@ -512,41 +438,6 @@ export const DashboardOverview = ({
           ))}
         </div>
       )}
-
-      {/* GitLab section — projects + CI setup prompt */}
-      {!gitlabProjectsLoading && gitlabProjects !== null && gitlabProjects.length > 0 && (
-        <>
-          <GitLabProjectsSection projects={gitlabProjects} />
-          {/* Show CI setup prompt when GitLab is connected but no GitLab CI data exists */}
-          <Card className="mb-6 sm:mb-8 border-orange-200 dark:border-orange-900">
-            <CardContent className="py-6">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Gitlab className="w-5 h-5 text-orange-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
-                    Enable GitLab CI Analysis
-                  </h3>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">
-                    Your GitLab projects are connected. Set up webhooks to start analyzing GitLab
-                    CI/CD pipeline failures automatically.
-                  </p>
-                  <Link
-                    to="/dashboard/setup/gitlab"
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
-                  >
-                    <Gitlab className="w-4 h-4" />
-                    Configure GitLab Webhooks
-                  </Link>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {/* GitLab connect prompt — only show on integrations page, not on dashboard overview */}
 
       {/* Onboarding — placed before charts so it's visible above the fold */}
       {showOnboarding && completedCount >= 2 && !allStepsComplete ? (

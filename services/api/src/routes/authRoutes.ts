@@ -25,6 +25,7 @@ import {
   findUserById,
   findOAuthIdentitiesByUser,
   findOrganizationsByUser,
+  switchUserOrganization,
   setAuthCookies,
   clearAuthCookies,
   extractRefreshToken,
@@ -633,6 +634,11 @@ const handleRefreshOrgs = async (req: Request, res: Response): Promise<void> => 
 
   // Auto-link orgs for each identity that has a valid access token.
   // autoLinkOrganizations internally skips non-org-capable providers.
+  // Save the user's current tenant so we can restore it after — running
+  // autoLink for multiple providers in parallel can cause a race where
+  // each provider switches the user to its own tenant.
+  const originalTenantId = user.tenantId;
+
   const linkResults = await Promise.allSettled(
     identities
       .filter((identity) => identity.accessToken !== null)
@@ -647,6 +653,17 @@ const handleRefreshOrgs = async (req: Request, res: Response): Promise<void> => 
         )
       )
   );
+
+  // Restore the original selected tenant if it was set before refresh.
+  // autoLinkOrganizations switches the user to the login provider's tenant,
+  // but during a background refresh we want to preserve the user's current context.
+  if (originalTenantId !== null) {
+    try {
+      await switchUserOrganization(userId, originalTenantId);
+    } catch {
+      // Best-effort restore — the tenant may have been deleted
+    }
+  }
 
   const failedCount = linkResults.filter((result) => result.status === "rejected").length;
 
