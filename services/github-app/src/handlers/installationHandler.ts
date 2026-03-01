@@ -152,6 +152,9 @@ const handleInstallationDeleted = async (
   });
 
   try {
+    // Look up tenant BEFORE deletion so we can notify via SSE
+    const tenant = await findTenantByGitHubInstallation(installation.id);
+
     await handleGitHubUninstall(installation.id);
 
     logger.info("Tenant marked as deleted for GitHub uninstallation", {
@@ -159,7 +162,19 @@ const handleInstallationDeleted = async (
       org: orgName,
     });
 
-    return successResult(`Tenant deleted for ${orgName}`);
+    // Notify the deleted tenant's frontend so the org switcher / TenantGuard refreshes
+    if (tenant) {
+      try {
+        await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.ORGANIZATION_UPDATED, {
+          tenantId: tenant.id,
+          removedOrgName: orgName,
+        });
+      } catch {
+        // Best-effort notification — don't block uninstall handling
+      }
+    }
+
+    return successResult(`Tenant deleted for ${orgName}`, tenant?.id);
   } catch (error) {
     logger.error("Failed to delete tenant for GitHub uninstallation", {
       installationId: installation.id,
