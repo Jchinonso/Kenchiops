@@ -49,6 +49,12 @@ const QUERIES = {
       base_url, config, webhook_secret_enc, access_token_enc, token_expires_at
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ON CONFLICT (tenant_id, provider, connection_name)
+    DO UPDATE SET
+      external_org_id = EXCLUDED.external_org_id,
+      config = EXCLUDED.config,
+      is_active = true,
+      updated_at = NOW()
     RETURNING *
   `,
   FIND_ACTIVE_BY_PROVIDER: `
