@@ -1,1 +1,1 @@
-npm run type-check && npm run check:duplication && npm run check:standards && npm run format:check && npx jest --bail --passWithNoTests --findRelatedTests $(git diff --cached --name-only --diff-filter=ACMR | grep '\.ts$' | tr '\n' ' ') && npx lint-staged
+npm run type-check && npm run check:duplication && npm run check:standards && npm run format:check && npx jest --bail --passWithNoTests --findRelatedTests $(git diff --cached --name-only --diff-filter=ACMR | grep '\.tsx\?$' | tr '\n' ' ') && npx lint-staged
