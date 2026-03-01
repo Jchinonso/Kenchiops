@@ -372,7 +372,11 @@ const Dashboard = () => {
   } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
   const tenantDepsKey = `${sseRefreshKey}-${user?.tenantId ?? ""}`;
-  const { data: tenant, isLoading: tenantLoading } = useTenantInfo(tenantDepsKey);
+  const {
+    data: tenant,
+    isLoading: tenantLoading,
+    error: tenantError,
+  } = useTenantInfo(tenantDepsKey);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -530,14 +534,15 @@ const Dashboard = () => {
     setNotificationsOpen((prev) => !prev);
   };
 
-  // Detect new users who haven't connected any CI provider yet
+  // Detect new users who haven't connected any CI provider yet.
+  // Also redirect to onboarding when tenant info fails to load (e.g., 502)
+  // so fresh accounts see onboarding instead of broken error cards.
   const needsOnboarding =
     !tenantLoading &&
-    tenant !== null &&
-    !tenant.githubConnected &&
-    !tenant.gitlabConnected &&
     !onboardingSkipped &&
-    !localStorage.getItem(onboardingKey);
+    !localStorage.getItem(onboardingKey) &&
+    (tenantError !== null ||
+      (tenant !== null && !tenant.githubConnected && !tenant.gitlabConnected));
 
   const handleSkipOnboarding = () => {
     localStorage.setItem(onboardingKey, "1");

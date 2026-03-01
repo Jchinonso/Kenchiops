@@ -579,7 +579,7 @@ describe("githubOAuthAdapter", () => {
       await githubOAuthAdapter.getUserOrganizations("my-token", null, testContext);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        OAUTH_PROVIDER_URLS.github.userOrgs,
+        `${OAUTH_PROVIDER_URLS.github.userOrgs}?per_page=100`,
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: "token my-token",
@@ -595,7 +595,7 @@ describe("githubOAuthAdapter", () => {
       await githubOAuthAdapter.getUserOrganizations("token", instanceUrl, testContext);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        SELF_HOSTED_URL_PATTERNS.github.userOrgs(instanceUrl),
+        `${SELF_HOSTED_URL_PATTERNS.github.userOrgs(instanceUrl)}?per_page=100`,
         expect.any(Object)
       );
     });

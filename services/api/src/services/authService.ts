@@ -198,17 +198,22 @@ const autoLinkOrganizationsImpl = async (
   const adapter = getOAuthAdapter(provider);
   const orgs = await adapter.getUserOrganizations(accessToken, instanceUrl, context);
 
-  // For GitHub: if no orgs found, use the username as a personal account fallback.
-  const { length: orgCount } = orgs;
-  const isPersonalFallback = orgCount === 0 && provider === "github";
-  const effectiveOrgs = isPersonalFallback ? [{ login: providerUsername }] : orgs;
+  // For GitHub: always include the user's personal account alongside organizations.
+  // This ensures the personal account is available in the org switcher even when
+  // the user has organization memberships. Personal account is also important as
+  // a fallback when GitHub's API hides orgs due to third-party access restrictions.
+  const hasPersonalInOrgs =
+    provider === "github" &&
+    orgs.some((org) => org.login.toLowerCase() === providerUsername.toLowerCase());
+  const includePersonalAccount = provider === "github" && !hasPersonalInOrgs;
+  const effectiveOrgs = includePersonalAccount ? [...orgs, { login: providerUsername }] : orgs;
 
-  // FLAW-13: If the user already has a personal tenant with a stale name,
-  // update it to the current username instead of creating a new one.
   // Fetch existing memberships once — reused for reconciliation threshold below.
   const existingMemberships = await findOrganizationsByUser(user.id);
 
-  if (isPersonalFallback) {
+  // FLAW-13: If the user already has a personal tenant with a stale name,
+  // update it to the current username instead of creating a new one.
+  if (provider === "github") {
     const existingPersonal = existingMemberships.find(
       (membership) => membership.provider === "github" && membership.tenantType === "personal"
     );
@@ -266,11 +271,13 @@ const autoLinkOrganizationsImpl = async (
     });
   }
 
-  // After creating the personal fallback tenant, mark it as 'personal' type.
-  // This must happen after ensureOrgMemberships which creates the tenant.
-  if (isPersonalFallback && tenantIds.length > 0) {
+  // Mark the personal account's tenant as 'personal' type.
+  // The personal account is always the last item in effectiveOrgs when included,
+  // so its tenant ID is the last in the tenantIds array.
+  if (includePersonalAccount && tenantIds.length > 0) {
+    const personalTenantId = tenantIds[tenantIds.length - 1];
     try {
-      await markTenantAsPersonal(tenantIds[0]);
+      await markTenantAsPersonal(personalTenantId);
     } catch (markError: unknown) {
       logger.warn("Failed to mark personal tenant type (non-fatal)", {
         userId: user.id,

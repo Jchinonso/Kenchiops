@@ -325,12 +325,15 @@ export const DashboardOverview = ({
   const completedCount = onboardingSteps.filter((step) => step.completed).length;
   const allStepsComplete = completedCount === onboardingSteps.length;
 
-  // Zero-data state: brand new user with no data from any provider
-  const isNewUser =
-    !statsLoading &&
+  // Zero-data state: brand new user with no data from any provider.
+  // Also treat as new user when stats fail to load AND tenant has no connections —
+  // shows the clean welcome state instead of error cards for fresh accounts.
+  const noConnections = tenant !== null && !tenant.githubConnected && !tenant.gitlabConnected;
+  const hasZeroStats =
     stats !== null &&
     stats.totalAnalyses + stats.totalFailures + stats.connectedRepos + stats.gitlabProjectCount ===
       0;
+  const isNewUser = !statsLoading && (hasZeroStats || (statsError !== null && noConnections));
 
   const handleExportOverview = () => {
     const rows = [["Metric", "Value"], ...quickStats.map((stat) => [stat.title, stat.value])];
@@ -367,8 +370,8 @@ export const DashboardOverview = ({
         )}
       </div>
 
-      {/* Quick Stats Grid */}
-      {statsError ? (
+      {/* Quick Stats Grid — suppress error card for new users (show zero-data state below instead) */}
+      {statsError && !isNewUser ? (
         <Card className="mb-6 sm:mb-8">
           <CardContent className="py-8 text-center space-y-3">
             <p className="text-sm text-red-600 dark:text-red-400">{statsError}</p>
@@ -611,8 +614,8 @@ export const DashboardOverview = ({
         </Card>
       )}
 
-      {/* Recent Activity — placed above charts for immediate visibility */}
-      {(failuresError || analysesError) && !activityLoading ? (
+      {/* Recent Activity — suppress error card for new users */}
+      {(failuresError || analysesError) && !activityLoading && !isNewUser ? (
         <Card className="mb-6 sm:mb-8">
           <CardContent className="py-8 text-center space-y-3">
             <p className="text-sm text-red-600 dark:text-red-400">

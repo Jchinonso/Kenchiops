@@ -576,6 +576,13 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
   // after logout would make the user appear still authenticated.
   res.setHeader("Cache-Control", "no-store");
 
+  // GitHub OAuth app settings URL where users can grant org access.
+  // The client ID is public information (visible in the OAuth authorize URL).
+  const githubClientId = config.GITHUB_OAUTH_CLIENT_ID;
+  const githubOrgAccessUrl = githubClientId
+    ? `https://github.com/settings/connections/applications/${githubClientId}`
+    : null;
+
   res.status(HTTP_STATUS.OK).json({
     data: {
       user: {
@@ -600,6 +607,7 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
         isDefault: org.isDefault,
         tenantType: org.tenantType,
       })),
+      githubOrgAccessUrl,
     },
   });
 };

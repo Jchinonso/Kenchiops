@@ -68,6 +68,8 @@ export interface AuthUser {
   readonly providers?: readonly AuthUserProvider[];
   readonly createdAt?: string;
   readonly organizations: readonly AuthOrganization[];
+  /** URL to GitHub settings where users can grant org access to the OAuth app. */
+  readonly githubOrgAccessUrl?: string | null;
 }
 
 interface AuthContextValue {
@@ -118,6 +120,7 @@ interface AuthMeResponse {
       readonly provider: string;
       readonly tenantType?: string;
     }>;
+    readonly githubOrgAccessUrl?: string | null;
   };
 }
 
@@ -126,7 +129,7 @@ interface AuthMeResponse {
  * computing `isSelected` by comparing each org's tenantId to the user's tenantId.
  */
 const mapAuthMeToUser = (response: AuthMeResponse): AuthUser => {
-  const { user: rawUser, organizations: rawOrgs } = response.data;
+  const { user: rawUser, organizations: rawOrgs, githubOrgAccessUrl } = response.data;
   const organizations: readonly AuthOrganization[] = (rawOrgs ?? []).map((org) => ({
     id: org.id,
     tenantId: org.tenantId,
@@ -152,6 +155,7 @@ const mapAuthMeToUser = (response: AuthMeResponse): AuthUser => {
     providers: rawUser.providers,
     createdAt: rawUser.createdAt,
     organizations,
+    githubOrgAccessUrl,
   };
 };
 
