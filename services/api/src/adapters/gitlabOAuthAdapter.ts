@@ -105,24 +105,24 @@ const exchangeCode = async (
   const startTime = Date.now();
 
   try {
-    const tokenBody: Record<string, string> = {
+    const tokenParams = new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
       code,
       grant_type: "authorization_code",
       redirect_uri: callbackUrl,
-    };
+    });
     if (codeVerifier) {
-      tokenBody.code_verifier = codeVerifier;
+      tokenParams.set("code_verifier", codeVerifier);
     }
 
     const response = await fetch(urls.tokenEndpoint, {
       method: "POST",
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: JSON.stringify(tokenBody),
+      body: tokenParams.toString(),
       signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
     });
 

@@ -604,6 +604,107 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
 };
 
 /**
+ * POST /auth/refresh-orgs
+ * Re-discover organizations by calling the OAuth provider APIs for each
+ * of the user's linked identities. This handles the case where a GitHub App
+ * installation webhook couldn't link the user directly (e.g., identity lookup
+ * failed at webhook time). The frontend calls this on SSE organization_updated
+ * events so the org switcher picks up newly installed orgs.
+ */
+const handleRefreshOrgs = async (req: Request, res: Response): Promise<void> => {
+  const { context } = req;
+
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleRefreshOrgs",
+    });
+  }
+
+  const { userId } = req.user;
+  const identities = await findOAuthIdentitiesByUser(userId);
+  const user = await findUserById(userId);
+
+  if (!user) {
+    throw new NotFoundError("User not found", {
+      operation: "handleRefreshOrgs",
+      metadata: { userId },
+    });
+  }
+
+  // Auto-link orgs for each identity that has a valid access token.
+  // autoLinkOrganizations internally skips non-org-capable providers.
+  const linkResults = await Promise.allSettled(
+    identities
+      .filter((identity) => identity.accessToken !== null)
+      .map((identity) =>
+        authService.autoLinkOrganizations(
+          user,
+          identity.provider,
+          identity.accessToken as string,
+          identity.instanceUrl,
+          identity.providerUsername ?? "unknown",
+          context
+        )
+      )
+  );
+
+  const failedCount = linkResults.filter((result) => result.status === "rejected").length;
+
+  if (failedCount > 0) {
+    logger.warn("Some org auto-link attempts failed during refresh", {
+      userId,
+      failedCount,
+      totalAttempts: linkResults.length,
+      ...context,
+    });
+  }
+
+  // Re-fetch user + orgs + fresh identities after linking to get updated state
+  const [freshUser, freshIdentities, organizations] = await Promise.all([
+    findUserById(userId),
+    findOAuthIdentitiesByUser(userId),
+    findOrganizationsByUser(userId),
+  ]);
+
+  const resolvedUser = freshUser ?? user;
+
+  logger.info("Organization refresh completed", {
+    userId,
+    orgCount: organizations.length,
+    ...context,
+  });
+
+  res.setHeader("Cache-Control", "no-store");
+
+  res.status(HTTP_STATUS.OK).json({
+    data: {
+      user: {
+        id: resolvedUser.id,
+        email: resolvedUser.email,
+        displayName: resolvedUser.displayName,
+        avatarUrl: resolvedUser.avatarUrl,
+        tenantId: resolvedUser.tenantId,
+        role: resolvedUser.role,
+        providers: freshIdentities.map((identity) => ({
+          provider: identity.provider,
+          username: identity.providerUsername,
+        })),
+        createdAt: resolvedUser.createdAt.toISOString(),
+      },
+      organizations: organizations.map((org) => ({
+        id: org.id,
+        tenantId: org.tenantId,
+        orgName: org.orgName,
+        provider: org.provider,
+        role: org.role,
+        isDefault: org.isDefault,
+        tenantType: org.tenantType,
+      })),
+    },
+  });
+};
+
+/**
  * GET /auth/me/deletion-impact
  * Returns the impact of deleting the current user's account.
  * Tells the frontend whether the user is the last tenant member
@@ -704,6 +805,11 @@ router.post(
   rateLimitByCategory("standard"),
   sensitiveEndpointLimiter.middleware(),
   asyncHandler(handleLogout)
+);
+router.post(
+  "/auth/refresh-orgs",
+  rateLimitByCategory("expensive"),
+  asyncHandler(handleRefreshOrgs)
 );
 router.get(
   "/auth/me/deletion-impact",

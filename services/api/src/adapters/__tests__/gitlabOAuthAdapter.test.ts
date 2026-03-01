@@ -132,15 +132,15 @@ describe("gitlabOAuthAdapter", () => {
           method: "POST",
           headers: {
             Accept: "application/json",
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
           },
-          body: JSON.stringify({
+          body: new URLSearchParams({
             client_id: "test-gitlab-client-id",
             client_secret: "test-gitlab-client-secret",
             code: "test-code",
             grant_type: "authorization_code",
             redirect_uri: "http://localhost:3001/auth/gitlab/callback",
-          }),
+          }).toString(),
         })
       );
     });

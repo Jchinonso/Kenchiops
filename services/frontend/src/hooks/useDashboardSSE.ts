@@ -20,6 +20,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
 import { useAuth } from "@/hooks/useAuth";
+import { apiClient } from "@/lib/apiClient";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const SSE_ENDPOINT = `${API_URL}/api/v1/dashboard/events/stream`;
@@ -343,9 +344,17 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleOrganizationUpdated = () => {
-      // Re-fetch user data so the org switcher updates in realtime
-      // (e.g., when a new GitHub App installation adds an org).
-      void refreshUser();
+      // Trigger org re-discovery via OAuth API, then refresh user state.
+      // This handles cases where the webhook couldn't link the user directly
+      // (e.g., identity lookup failed at webhook time).
+      void (async () => {
+        try {
+          await apiClient("/auth/refresh-orgs", { method: "POST" });
+        } catch {
+          // Best-effort — refreshUser below still runs
+        }
+        await refreshUser();
+      })();
     };
 
     eventSource.addEventListener("new_failure", handleNewFailure);
