@@ -29,6 +29,7 @@ const mockLogAuditEvent = jest.fn<(...args: unknown[]) => Promise<void>>();
 const mockEnforcePlanLimit = jest.fn<(...args: unknown[]) => Promise<void>>();
 const mockAddUserOrganization = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockFindUserById = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFindById = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
 // ==================== Module Mock ====================
 
@@ -68,6 +69,7 @@ jest.mock("@kenchi/shared", () => {
     enforcePlanLimit: (...args: unknown[]) => mockEnforcePlanLimit(...args),
     addUserOrganization: (...args: unknown[]) => mockAddUserOrganization(...args),
     findUserById: (...args: unknown[]) => mockFindUserById(...args),
+    findById: (...args: unknown[]) => mockFindById(...args),
     // requireTenantId reads from req.user.tenantId — keep real implementation
     requireTenantId: (req: Request) => {
       const tenantId = (req as unknown as { user?: { tenantId?: string } }).user?.tenantId;
@@ -180,6 +182,8 @@ describe("Invitation Routes", () => {
     jest.clearAllMocks();
     mockEnforcePlanLimit.mockResolvedValue(undefined);
     mockLogAuditEvent.mockResolvedValue(undefined);
+    // Default: tenant exists and is an organization (not personal)
+    mockFindById.mockResolvedValue({ id: "tenant-abc", tenantType: "organization" });
     app = await setupApp();
   });
 

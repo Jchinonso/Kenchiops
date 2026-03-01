@@ -492,6 +492,12 @@ describe("authService", () => {
       mockAddUserOrganization.mockResolvedValue(undefined);
       mockSwitchUserOrganization.mockResolvedValue(null);
       mockFindUserOrgRole.mockResolvedValue(null);
+      // First call (pre-link) returns [], second call (post-link orphan check)
+      // returns both memberships so they don't appear orphaned
+      mockFindOrganizationsByUser.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        { tenantId: "tenant-acme", provider: "github" },
+        { tenantId: "tenant-other", provider: "github" },
+      ]);
 
       await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
@@ -664,6 +670,11 @@ describe("authService", () => {
       mockGetUserOrganizations.mockResolvedValue([{ login: options.orgLogin }]);
       mockAddUserOrganization.mockResolvedValue(undefined);
       mockSwitchUserOrganization.mockResolvedValue(null);
+      // First call (pre-link) returns [], second call (post-link orphan check)
+      // returns the membership so it doesn't appear orphaned
+      mockFindOrganizationsByUser
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ tenantId: options.tenantId, provider: "github" }]);
 
       if (options.tenantExists) {
         mockFindByOrgNameAndProvider.mockResolvedValue(tenant);
