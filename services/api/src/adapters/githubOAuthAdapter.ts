@@ -569,10 +569,10 @@ const getUserOrganizations = async (
     // /user/memberships/orgs can surface those. /user/installations finds
     // personal accounts and orgs where the GitHub App is installed.
     const [orgsResponse, membershipLogins, installationLogins] = await Promise.all([
-      fetch(urls.userOrgs, {
+      fetch(`${urls.userOrgs}?per_page=100`, {
         headers: {
           Authorization: `token ${accessToken}`,
-          Accept: "application/json",
+          Accept: "application/vnd.github+json",
         },
         signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
       }),

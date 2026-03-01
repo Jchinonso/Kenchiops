@@ -511,18 +511,25 @@ describe("authService", () => {
     it("should create provider-scoped tenant and add membership for each org", async () => {
       const tenant1 = createTestTenant({ id: "tenant-acme", orgName: "acme-corp" });
       const tenant2 = createTestTenant({ id: "tenant-other", orgName: "other-org" });
+      const personalTenant = createTestTenant({ id: "tenant-personal", orgName: "testuser" });
 
       mockGetUserOrganizations.mockResolvedValue([{ login: "acme-corp" }, { login: "other-org" }]);
-      mockFindByOrgNameAndProvider.mockResolvedValueOnce(tenant1).mockResolvedValueOnce(null);
-      mockCreateFromGitHubLogin.mockResolvedValue(tenant2);
+      mockFindByOrgNameAndProvider
+        .mockResolvedValueOnce(tenant1)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null); // personal account lookup
+      mockCreateFromGitHubLogin
+        .mockResolvedValueOnce(tenant2)
+        .mockResolvedValueOnce(personalTenant); // personal account creation
       mockAddUserOrganization.mockResolvedValue(undefined);
       mockSwitchUserOrganization.mockResolvedValue(null);
       mockFindUserOrgRole.mockResolvedValue(null);
       // First call (pre-link) returns [], second call (post-link orphan check)
-      // returns both memberships so they don't appear orphaned
+      // returns all memberships so they don't appear orphaned
       mockFindOrganizationsByUser.mockResolvedValueOnce([]).mockResolvedValueOnce([
         { tenantId: "tenant-acme", provider: "github" },
         { tenantId: "tenant-other", provider: "github" },
+        { tenantId: "tenant-personal", provider: "github" },
       ]);
 
       await service.autoLinkOrganizations(
@@ -538,8 +545,8 @@ describe("authService", () => {
       expect(mockFindByOrgNameAndProvider).toHaveBeenCalledWith("acme-corp", "github");
       // Second org not found, created new
       expect(mockCreateFromGitHubLogin).toHaveBeenCalledWith("other-org");
-      // Both orgs got membership added
-      expect(mockAddUserOrganization).toHaveBeenCalledTimes(2);
+      // All orgs + personal account got membership added
+      expect(mockAddUserOrganization).toHaveBeenCalledTimes(3);
       // Existing tenant: resolveAutoLinkRole called for role assignment
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
@@ -550,6 +557,12 @@ describe("authService", () => {
       expect(mockAddUserOrganization).toHaveBeenCalledWith({
         userId: "usr_1",
         tenantId: "tenant-other",
+        role: "admin",
+      });
+      // Personal account always included for GitHub
+      expect(mockAddUserOrganization).toHaveBeenCalledWith({
+        userId: "usr_1",
+        tenantId: "tenant-personal",
         role: "admin",
       });
     });

@@ -87,6 +87,10 @@ export const OrganizationSwitcher = () => {
   const allOrganizations = user?.organizations ?? [];
   const selectedOrg = allOrganizations.find((org) => org.isSelected);
 
+  // Use the specific OAuth app settings URL (where users can grant org access),
+  // falling back to the generic GitHub applications page.
+  const orgAccessUrl = user?.githubOrgAccessUrl ?? "https://github.com/settings/applications";
+
   // Only show organizations from the same provider as the selected org.
   // Provider context is set by the login flow (GitHub login → GitHub orgs only).
   const organizations = selectedOrg
@@ -127,7 +131,7 @@ export const OrganizationSwitcher = () => {
           </span>
         </div>
         <a
-          href="https://github.com/settings/applications"
+          href={orgAccessUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="hidden lg:flex items-center gap-1 mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
@@ -184,7 +188,7 @@ export const OrganizationSwitcher = () => {
           </Command>
           <div className="border-t border-zinc-100 dark:border-zinc-800 px-3 py-2">
             <a
-              href="https://github.com/settings/applications"
+              href={orgAccessUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
