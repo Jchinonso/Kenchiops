@@ -48,11 +48,13 @@ interface AuthUserProvider {
 
 export interface AuthOrganization {
   readonly id: string;
+  readonly tenantId: string;
   readonly orgName: string;
   readonly provider: string;
   readonly role: string;
   readonly isDefault: boolean;
   readonly isSelected: boolean;
+  readonly tenantType: string;
 }
 
 export interface AuthUser {
@@ -62,6 +64,7 @@ export interface AuthUser {
   readonly avatarUrl: string | null;
   readonly role: string;
   readonly tenantId: string | null;
+  readonly tenantType: string;
   readonly providers?: readonly AuthUserProvider[];
   readonly createdAt?: string;
   readonly organizations: readonly AuthOrganization[];
@@ -75,7 +78,9 @@ interface AuthContextValue {
   readonly login: (provider: string, instanceUrl?: string) => void;
   readonly logout: () => Promise<void>;
   readonly refreshUser: () => Promise<void>;
-  readonly switchOrganization: (orgId: string) => Promise<void>;
+  readonly switchOrganization: (
+    orgId: string
+  ) => Promise<{ readonly hasProviderConnection: boolean }>;
 }
 
 interface AuthProviderProps {
@@ -111,6 +116,7 @@ interface AuthMeResponse {
       readonly isDefault: boolean;
       readonly orgName: string;
       readonly provider: string;
+      readonly tenantType?: string;
     }>;
   };
 }
@@ -123,12 +129,17 @@ const mapAuthMeToUser = (response: AuthMeResponse): AuthUser => {
   const { user: rawUser, organizations: rawOrgs } = response.data;
   const organizations: readonly AuthOrganization[] = (rawOrgs ?? []).map((org) => ({
     id: org.id,
+    tenantId: org.tenantId,
     orgName: org.orgName,
     provider: org.provider,
     role: org.role,
     isDefault: org.isDefault,
     isSelected: org.tenantId === rawUser.tenantId,
+    tenantType: org.tenantType ?? "organization",
   }));
+
+  const selectedOrg = organizations.find((org) => org.isSelected);
+  const tenantType = selectedOrg?.tenantType ?? "organization";
 
   return {
     id: rawUser.id,
@@ -137,6 +148,7 @@ const mapAuthMeToUser = (response: AuthMeResponse): AuthUser => {
     avatarUrl: rawUser.avatarUrl,
     role: rawUser.role,
     tenantId: rawUser.tenantId,
+    tenantType,
     providers: rawUser.providers,
     createdAt: rawUser.createdAt,
     organizations,
@@ -202,7 +214,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const switchOrganization = useCallback(
-    async (orgId: string): Promise<void> => {
+    async (orgId: string): Promise<{ readonly hasProviderConnection: boolean }> => {
       setIsSwitchingOrg(true);
       try {
         const response = await apiClient("/api/v1/organizations/switch", {
@@ -212,23 +224,48 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
         if (!response.ok) {
           toast.error("Failed to switch organization. Please try again.");
-          return;
+          return { hasProviderConnection: false };
         }
 
+        const body = (await response.json()) as {
+          readonly data?: {
+            readonly role?: string;
+            readonly hasProviderConnection?: boolean;
+          };
+        };
+        const newRole = body.data?.role;
+        const hasProviderConnection = body.data?.hasProviderConnection ?? false;
+
         // Clear tenant-scoped localStorage to prevent cross-tenant data leaks.
-        // All kenchi_ prefixed keys are cleared (filters, cached selections, etc.).
         Object.keys(localStorage)
           .filter((key) => key.startsWith("kenchi_"))
           .forEach((key) => localStorage.removeItem(key));
 
-        // The backend sets a new JWT cookie scoped to the switched org.
-        // Reload user data so the UI (and all hooks depending on user/tenantId) refreshes.
-        await refreshUser();
+        // Update user state locally — the backend already set the new JWT cookie.
+        // Avoids an extra /auth/me round-trip.
+        setUser((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          const selectedOrg = prev.organizations.find((org) => org.tenantId === orgId);
+          return {
+            ...prev,
+            tenantId: orgId,
+            tenantType: selectedOrg?.tenantType ?? "organization",
+            role: newRole ?? prev.role,
+            organizations: prev.organizations.map((org) => ({
+              ...org,
+              isSelected: org.tenantId === orgId,
+            })),
+          };
+        });
+
+        return { hasProviderConnection };
       } finally {
         setIsSwitchingOrg(false);
       }
     },
-    [refreshUser]
+    []
   );
 
   useEffect(() => {

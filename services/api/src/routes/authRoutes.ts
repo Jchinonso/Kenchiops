@@ -597,6 +597,7 @@ const handleGetCurrentUser = async (req: Request, res: Response): Promise<void> 
         provider: org.provider,
         role: org.role,
         isDefault: org.isDefault,
+        tenantType: org.tenantType,
       })),
     },
   });

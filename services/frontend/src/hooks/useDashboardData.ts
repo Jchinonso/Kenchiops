@@ -72,8 +72,8 @@ interface PaginatedResult<T> {
 
 // ==================== Typed Hooks ====================
 
-export const useTenantInfo = (refreshKey: number = 0): UseFetchResult<TenantInfo> =>
-  useFetch<TenantInfo>("/api/v1/dashboard/tenant", `${refreshKey}`);
+export const useTenantInfo = (depsKey: number | string = 0): UseFetchResult<TenantInfo> =>
+  useFetch<TenantInfo>("/api/v1/dashboard/tenant", `${depsKey}`);
 
 export const useDashboardStats = (
   refreshKey: number = 0,

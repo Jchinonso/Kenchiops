@@ -13,8 +13,10 @@ import {
   getErrorMessage,
   parseDbCount,
   NotFoundError,
+  ValidationError,
 } from "../common.js";
 import { AuthorizationError, invariant } from "../../core/errors.js";
+import { findById as findTenantById } from "../tenant/serviceLookup.js";
 import {
   PLAN_QUERIES,
   SUBSCRIPTION_QUERIES,
@@ -154,6 +156,15 @@ export const ensureSubscription = async (tenantId: string): Promise<TenantSubscr
  */
 export const changePlan = async (input: ChangePlanInput): Promise<TenantSubscription> => {
   validateChangePlanInput(input);
+
+  // Personal tenants are locked to the free plan
+  const tenant = await findTenantById(input.tenantId);
+  if (tenant?.tenantType === "personal") {
+    throw new ValidationError("Personal accounts cannot change plans", {
+      operation: "changePlan",
+      metadata: { tenantId: input.tenantId },
+    });
+  }
 
   // Verify the target plan exists
   const targetPlan = await getPlanById(input.newPlanId);

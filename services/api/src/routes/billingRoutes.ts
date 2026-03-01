@@ -19,6 +19,7 @@ import {
   createBillingService,
   processStripeWebhook,
   config,
+  findById as findTenantById,
   type BillingInterval,
   type BillingStatus,
 } from "@kenchi/shared";
@@ -54,6 +55,15 @@ const handleCreateCheckout = async (req: Request, res: Response): Promise<void> 
   if (!userId) {
     throw new ValidationError("User identity required", {
       operation: "handleCreateCheckout",
+    });
+  }
+
+  // Personal tenants are locked to the free plan — no billing
+  const tenant = await findTenantById(tenantId);
+  if (tenant?.tenantType === "personal") {
+    throw new ValidationError("Personal accounts do not support paid plans", {
+      operation: "handleCreateCheckout",
+      metadata: { tenantId },
     });
   }
 
@@ -102,6 +112,15 @@ const handleCreateCheckout = async (req: Request, res: Response): Promise<void> 
 const handleCreatePortal = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const { context } = req;
+
+  // Personal tenants are locked to the free plan — no billing portal
+  const tenant = await findTenantById(tenantId);
+  if (tenant?.tenantType === "personal") {
+    throw new ValidationError("Personal accounts do not support billing management", {
+      operation: "handleCreatePortal",
+      metadata: { tenantId },
+    });
+  }
 
   const result = await billingService.createPortal(
     {

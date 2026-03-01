@@ -26,6 +26,7 @@ import {
   AUDIT_ACTIONS,
   TENANT_STATUS,
   rateLimitByCategory,
+  findByTenant,
 } from "@kenchi/shared";
 
 const router = Router();
@@ -147,6 +148,10 @@ const handleSwitchOrganization = async (req: Request, res: Response): Promise<vo
     ...context,
   });
 
+  // Check whether the target org has provider connections (GitHub/GitLab app installed)
+  const connections = await findByTenant(organizationId);
+  const hasProviderConnection = connections.length > 0;
+
   // Best-effort audit log
   try {
     await logAuditEvent(
@@ -168,6 +173,7 @@ const handleSwitchOrganization = async (req: Request, res: Response): Promise<vo
       orgName: targetOrg.orgName,
       provider: targetOrg.provider,
       role: orgRole ?? targetOrg.role,
+      hasProviderConnection,
     },
   });
 };

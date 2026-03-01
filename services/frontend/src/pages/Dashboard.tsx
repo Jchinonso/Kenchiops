@@ -371,12 +371,20 @@ const Dashboard = () => {
     dismissNotification,
   } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
-  const { data: tenant, isLoading: tenantLoading } = useTenantInfo(sseRefreshKey);
+  const tenantDepsKey = `${sseRefreshKey}-${user?.tenantId ?? ""}`;
+  const { data: tenant, isLoading: tenantLoading } = useTenantInfo(tenantDepsKey);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [onboardingSkipped, setOnboardingSkipped] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // Reset onboarding state when tenant changes (org switch)
+  const currentTenantId = user?.tenantId ?? null;
+  useEffect(() => {
+    setOnboardingSkipped(false);
+    setOnboardingDismissed(false);
+  }, [currentTenantId]);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date>(new Date());

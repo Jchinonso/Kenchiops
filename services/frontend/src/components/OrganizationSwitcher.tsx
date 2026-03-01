@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth, type AuthOrganization } from "@/hooks/useAuth";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
@@ -51,7 +52,7 @@ const OrgItem = ({ org, onSelect, disabled }: OrgItemProps) => (
     value={org.orgName}
     onSelect={() => {
       if (!org.isSelected) {
-        onSelect(org.id);
+        onSelect(org.tenantId);
       }
     }}
     disabled={disabled}
@@ -59,6 +60,11 @@ const OrgItem = ({ org, onSelect, disabled }: OrgItemProps) => (
   >
     <ProviderIcon provider={org.provider} className="text-muted-foreground shrink-0" />
     <span className="flex-1 truncate">{org.orgName}</span>
+    {org.tenantType === "personal" && (
+      <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide shrink-0">
+        Personal
+      </span>
+    )}
     {org.isSelected && <Check className="w-4 h-4 text-indigo-500 shrink-0" />}
   </CommandItem>
 );
@@ -67,6 +73,7 @@ const OrgItem = ({ org, onSelect, disabled }: OrgItemProps) => (
 
 export const OrganizationSwitcher = () => {
   const { user, isSwitchingOrg, switchOrganization } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const organizations = user?.organizations ?? [];
@@ -76,9 +83,12 @@ export const OrganizationSwitcher = () => {
   const handleSelect = useCallback(
     async (orgId: string) => {
       setOpen(false);
-      await switchOrganization(orgId);
+      const { hasProviderConnection } = await switchOrganization(orgId);
+      // Navigate to onboarding when no provider installed, overview otherwise.
+      // Sub-route data is stale after tenant switch, so always leave the current route.
+      navigate(hasProviderConnection ? "/dashboard" : "/dashboard/onboarding");
     },
-    [switchOrganization]
+    [switchOrganization, navigate]
   );
 
   // Guard: no organizations at all (shouldn't happen, but defensive)
