@@ -112,6 +112,7 @@ describe("LLMClient", () => {
       expect(result.processingTime).toBeGreaterThan(0);
     });
 
+    // Timeout: retry involves real delay (~2s exponential backoff)
     it("should retry on rate limit error (429)", async () => {
       const rateLimitError = {
         status: 429,
@@ -143,7 +144,7 @@ describe("LLMClient", () => {
 
       expect(result).toBeDefined();
       expect(mockCreate).toHaveBeenCalledTimes(2); // Initial call + 1 retry
-    });
+    }, 15000);
 
     it("should throw error on authentication failure (401)", async () => {
       const authError = {
@@ -158,6 +159,7 @@ describe("LLMClient", () => {
       );
     });
 
+    // Timeout: parse retries involve real delays (~6s total: 2s + 4s exponential backoff)
     it("should handle malformed JSON response", async () => {
       const mockResponse = {
         choices: [
@@ -175,7 +177,7 @@ describe("LLMClient", () => {
       await expect(client.analyzeIncident(mockEvent, mockEvidence)).rejects.toThrow(
         "Failed to parse LLM response"
       );
-    });
+    }, 20000);
 
     it("should detect dangerous keywords in recommendations", async () => {
       const mockResponse = {

@@ -302,6 +302,18 @@ export const checkPlanLimit = async (
   tenantId: string,
   limitKey: PlanLimitKey
 ): Promise<PlanLimitCheckResult> => {
+  // Personal tenants have no plan limits — always allowed
+  const tenant = await findTenantById(tenantId);
+  if (tenant?.tenantType === "personal") {
+    return {
+      allowed: true,
+      currentUsage: 0,
+      limit: null,
+      limitKey,
+      planId: DEFAULT_PLAN_ID as PlanId,
+    };
+  }
+
   // Ensure subscription exists (creates free plan row if missing)
   const subscription = await ensureSubscription(tenantId);
   const plan = await getPlanById(subscription.planId);

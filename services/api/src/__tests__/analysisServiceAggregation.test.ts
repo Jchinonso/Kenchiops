@@ -21,35 +21,76 @@ const mockPublish = jest.fn();
 
 // ==================== Mocks ====================
 
-jest.mock("@kenchi/shared", () => {
-  const actual = jest.requireActual("@kenchi/shared") as Record<string, unknown>;
-  return {
-    ...actual,
-    LLMClient: jest.fn().mockImplementation(() => ({
-      analyzeIncident: (...args: unknown[]) => mockAnalyzeIncident(...args),
-    })),
-    createLogger: jest.fn(() => ({
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    })),
-    searchFromEventContext: jest.fn().mockResolvedValue({
-      diffChunks: [],
-      knowledgeDocs: [],
-      queryTokens: 10,
-      cacheHit: false,
-    }),
-    selectModel: jest.fn().mockReturnValue({
-      model: "gpt-4o-mini",
-      reason: "standard_analysis",
-    }),
-    logModelSelection: jest.fn(),
-    createAnalysis: (...args: unknown[]) => mockCreateAnalysis(...args),
-    publish: (...args: unknown[]) => mockPublish(...args),
-    enforcePlanLimit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-  };
-});
+jest.mock("@kenchi/shared", () => ({
+  // Constants needed by analysisService and analysisEvidence
+  EVENT_TYPES: { CICD_FAILURE: "CICD_FAILURE" },
+  EVENT_SOURCES: { GITHUB_APP: "github-app" },
+  EVENT_SEVERITY: { HIGH: "high" },
+  EVENT_DEFAULTS: { UNKNOWN_COMMIT: "unknown" },
+  SERVICE_NAMES: { API: "api" },
+  PUBSUB_CHANNELS: { DASHBOARD: "dashboard" },
+  DASHBOARD_EVENT_TYPES: { ANALYSIS_COMPLETE: "analysis_complete" },
+  // Constants needed by analysisEvidence
+  LOG_LEVELS: { INFO: "INFO", ERROR: "ERROR" },
+  EVIDENCE_SOURCES: { CI: "ci" },
+  ERROR_SECTION_HEADINGS: new Set(["Failed Tests", "Error Output", "Errors"]),
+  SECTION_SOURCE_OVERRIDES: { Overview: "ci-overview", "Failed Tests": "ci-tests" } as Record<
+    string,
+    string
+  >,
+  EVIDENCE_LOG_TIMING: { TIMESTAMP_OFFSET_MS: 1000 },
+  sanitizeIdPart: (heading: string) => heading.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+  // Utilities needed by analysisService
+  generateEventId: (prefix: string) =>
+    `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  wrapError: (message: string, cause: unknown) =>
+    `${message}: ${cause instanceof Error ? cause.message : String(cause)}`,
+  LLMError: (jest.requireActual("@kenchi/shared") as Record<string, unknown>).LLMError,
+  calculateConfidenceScore: jest.fn().mockReturnValue({
+    finalScore: 0.85,
+    breakdown: { evidenceQuality: 0.9, analysisDepth: 0.8 },
+  }),
+  estimateChunkTokens: jest.fn().mockReturnValue(100),
+  // Mocked dependencies
+  LLMClient: jest.fn().mockImplementation(() => ({
+    analyzeIncident: (...args: unknown[]) => mockAnalyzeIncident(...args),
+  })),
+  createLogger: jest.fn(() => ({
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+  })),
+  searchFromEventContext: jest.fn().mockResolvedValue({
+    diffChunks: [],
+    knowledgeDocs: [],
+    queryTokens: 10,
+    cacheHit: false,
+  }),
+  selectModel: jest.fn().mockReturnValue({
+    model: "gpt-4o-mini",
+    reason: "standard_analysis",
+    versionId: undefined,
+    modelId: "gpt-4o-mini",
+  }),
+  logModelSelection: jest.fn(),
+  createAnalysis: (...args: unknown[]) => mockCreateAnalysis(...args),
+  publish: (...args: unknown[]) => mockPublish(...args),
+  enforcePlanLimit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  findEventIdByRepoAndCommit: jest.fn().mockResolvedValue(null),
+}));
+
+// Mock transitive dependencies to prevent real chunking pipeline execution
+jest.mock("../services/analysisChunkingPipeline.js", () => ({
+  CHUNKING_PIPELINE_CONFIG: { TOKEN_THRESHOLD: 999999 },
+  executeChunkingPipeline: jest.fn(),
+  convertAggregatedToEvidence: jest.fn(),
+}));
+
+jest.mock("../services/analysisRAG.js", () => ({
+  retrieveRelevantKnowledge: jest.fn().mockResolvedValue([]),
+}));
 
 // Import after mock setup
 import { performAnalysis } from "../services/analysisService.js";

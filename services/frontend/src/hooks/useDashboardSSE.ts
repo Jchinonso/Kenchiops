@@ -148,7 +148,7 @@ interface UseDashboardSSEResult {
  * @returns markAllRead — marks all notifications as read
  */
 export const useDashboardSSE = (): UseDashboardSSEResult => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const storageKey = buildNotificationStorageKey(user?.tenantId);
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -342,19 +342,27 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
     };
 
+    const handleOrganizationUpdated = () => {
+      // Re-fetch user data so the org switcher updates in realtime
+      // (e.g., when a new GitHub App installation adds an org).
+      void refreshUser();
+    };
+
     eventSource.addEventListener("new_failure", handleNewFailure);
     eventSource.addEventListener("analysis_complete", handleAnalysisComplete);
     eventSource.addEventListener("new_incident", handleNewIncident);
     eventSource.addEventListener("incident_triaged", handleIncidentTriaged);
+    eventSource.addEventListener("organization_updated", handleOrganizationUpdated);
 
     return () => {
       eventSource.removeEventListener("new_failure", handleNewFailure);
       eventSource.removeEventListener("analysis_complete", handleAnalysisComplete);
       eventSource.removeEventListener("new_incident", handleNewIncident);
       eventSource.removeEventListener("incident_triaged", handleIncidentTriaged);
+      eventSource.removeEventListener("organization_updated", handleOrganizationUpdated);
       eventSource.close();
     };
-  }, [storageKey]);
+  }, [storageKey, refreshUser]);
 
   return { refreshKey, notifications, markAllRead, markAsRead, dismissNotification };
 };

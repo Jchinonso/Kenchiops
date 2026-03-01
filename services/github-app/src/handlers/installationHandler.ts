@@ -14,6 +14,10 @@ import {
   findOAuthIdentity,
   addUserOrganization,
   switchUserOrganization,
+  findOrganizationsByUser,
+  publish,
+  PUBSUB_CHANNELS,
+  DASHBOARD_EVENT_TYPES,
   suspend,
   activate,
   getErrorMessage,
@@ -79,6 +83,9 @@ const handleInstallationCreated = async (
     try {
       const identity = await findOAuthIdentity("github", String(webhook.sender.id), null);
       if (identity) {
+        // Fetch existing orgs BEFORE linking so we can notify them via SSE
+        const existingOrgs = await findOrganizationsByUser(identity.userId);
+
         await addUserOrganization({
           userId: identity.userId,
           tenantId: tenant.id,
@@ -92,6 +99,20 @@ const handleInstallationCreated = async (
           org: orgName,
           senderLogin: webhook.sender.login,
         });
+
+        // Notify all of the user's existing tenants so the frontend refreshes
+        // the org list in realtime (SSE is tenant-scoped).
+        const tenantIdsToNotify = [...existingOrgs.map((org) => org.tenantId), tenant.id];
+        for (const notifyTenantId of tenantIdsToNotify) {
+          try {
+            await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.ORGANIZATION_UPDATED, {
+              tenantId: notifyTenantId,
+              newOrgName: orgName,
+            });
+          } catch {
+            // Best-effort notification — don't block installation
+          }
+        }
       }
     } catch (linkError) {
       // Non-fatal: tenant was created, user linking is best-effort
