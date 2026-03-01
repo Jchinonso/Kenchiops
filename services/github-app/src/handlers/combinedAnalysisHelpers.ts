@@ -79,11 +79,34 @@ const convertRecommendedActions = (
 // ==================== Test Failure Processing ====================
 
 /**
+ * Jest internal files that the LLM may extract from stack traces.
+ * These are not real test files and should be treated as missing.
+ */
+const JEST_INTERNAL_PATTERNS = [
+  "BufferedConsole",
+  "jest-runtime",
+  "jest-jasmine",
+  "jest-circus",
+  "jest-environment",
+  "jest-runner",
+  "node_modules/jest",
+  "node_modules/@jest",
+] as const;
+
+const isJestInternal = (file: string): boolean =>
+  JEST_INTERNAL_PATTERNS.some((pattern) => file.includes(pattern));
+
+/**
  * Attempt to infer a file path from a test failure's error text or test name.
  * Uses shared pattern to find references like `path/to/file.ts:123`.
+ * Also clears out Jest internal file paths that the LLM incorrectly extracted.
  */
 const inferFileFromError = (testFailure: TestFailureInfo): TestFailureInfo => {
-  if (testFailure.file) {
+  // Clear Jest internals so file inference runs instead
+  const effectiveFile =
+    testFailure.file && !isJestInternal(testFailure.file) ? testFailure.file : undefined;
+
+  if (effectiveFile) {
     return testFailure;
   }
 
@@ -105,7 +128,10 @@ const inferFileFromError = (testFailure: TestFailureInfo): TestFailureInfo => {
     return { ...testFailure, file: inferredFile, line: inferredLine };
   }
 
-  return testFailure;
+  // If original file was a Jest internal and inference failed, clear it
+  return effectiveFile === undefined && testFailure.file
+    ? { ...testFailure, file: undefined }
+    : testFailure;
 };
 
 /**
