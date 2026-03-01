@@ -730,6 +730,81 @@ const handleRefreshOrgs = async (req: Request, res: Response): Promise<void> => 
 };
 
 /**
+ * GET /auth/debug-orgs
+ * Diagnostic endpoint that shows exactly what each GitHub API endpoint returns
+ * vs what's stored in the database. Used to debug org discovery issues.
+ */
+const handleDebugOrgs = async (req: Request, res: Response): Promise<void> => {
+  const { context } = req;
+
+  if (!req.user) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleDebugOrgs",
+    });
+  }
+
+  const { userId } = req.user;
+  const identities = await findOAuthIdentitiesByUser(userId);
+  const dbOrganizations = await findOrganizationsByUser(userId);
+
+  // Call GitHub APIs for each linked identity to show raw results
+  const diagnostics = await Promise.all(
+    identities
+      .filter((identity) => identity.accessToken !== null)
+      .map(async (identity) => {
+        const adapter = hasOAuthAdapter(identity.provider)
+          ? getOAuthAdapter(identity.provider)
+          : null;
+
+        // let: conditionally assigned based on adapter availability
+        let providerOrgs: ReadonlyArray<{ readonly login: string; readonly role?: string }> = [];
+        // let: conditionally assigned based on fetch result
+        let fetchError: string | null = null;
+
+        if (adapter) {
+          try {
+            providerOrgs = await adapter.getUserOrganizations(
+              identity.accessToken as string,
+              identity.instanceUrl,
+              context
+            );
+          } catch (orgError: unknown) {
+            fetchError = orgError instanceof Error ? orgError.message : String(orgError);
+          }
+        }
+
+        return {
+          provider: identity.provider,
+          username: identity.providerUsername,
+          instanceUrl: identity.instanceUrl,
+          hasToken: identity.accessToken !== null,
+          tokenScopes: identity.scopes,
+          providerOrgs: providerOrgs.map((org) => ({
+            login: org.login,
+            role: org.role ?? null,
+          })),
+          fetchError,
+        };
+      })
+  );
+
+  res.status(HTTP_STATUS.OK).json({
+    data: {
+      userId,
+      dbOrganizations: dbOrganizations.map((org) => ({
+        id: org.id,
+        tenantId: org.tenantId,
+        orgName: org.orgName,
+        provider: org.provider,
+        role: org.role,
+        tenantType: org.tenantType,
+      })),
+      providerDiagnostics: diagnostics,
+    },
+  });
+};
+
+/**
  * GET /auth/me/deletion-impact
  * Returns the impact of deleting the current user's account.
  * Tells the frontend whether the user is the last tenant member
@@ -836,6 +911,7 @@ router.post(
   rateLimitByCategory("expensive"),
   asyncHandler(handleRefreshOrgs)
 );
+router.get("/auth/debug-orgs", rateLimitByCategory("readonly"), asyncHandler(handleDebugOrgs));
 router.get(
   "/auth/me/deletion-impact",
   rateLimitByCategory("readonly"),
