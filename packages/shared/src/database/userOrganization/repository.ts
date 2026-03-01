@@ -46,7 +46,7 @@ const QUERIES = {
     SELECT uo.*, t.org_name, t.provider, t.status AS tenant_status, t.tenant_type
     FROM user_organizations uo
     JOIN tenants t ON t.id = uo.tenant_id
-    WHERE uo.user_id = $1
+    WHERE uo.user_id = $1 AND t.status != 'deleted'
     ORDER BY uo.is_default DESC, uo.joined_at ASC
   `,
   /**
