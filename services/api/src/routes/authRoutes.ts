@@ -437,6 +437,21 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   // Re-fetch user to pick up org linking (autoLinkOrganizations may have updated selected_tenant_id)
   const freshUser = (await findUserById(user.id)) ?? user;
 
+  // Log the post-login organization state for diagnostics
+  const postLoginOrgs = await findOrganizationsByUser(freshUser.id);
+  logger.info("Post-login organization state", {
+    userId: freshUser.id,
+    provider: oauthState.provider,
+    orgCount: postLoginOrgs.length,
+    orgs: postLoginOrgs.map((org) => ({
+      orgName: org.orgName,
+      provider: org.provider,
+      tenantStatus: org.tenantStatus,
+    })),
+    selectedTenantId: freshUser.tenantId,
+    ...context,
+  });
+
   const tokenPair = await authService.generateTokenPair(freshUser, extractTokenMeta(req), context);
   const durationMs = Date.now() - startTime;
 

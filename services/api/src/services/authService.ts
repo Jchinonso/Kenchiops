@@ -198,6 +198,15 @@ const autoLinkOrganizationsImpl = async (
   const adapter = getOAuthAdapter(provider);
   const orgs = await adapter.getUserOrganizations(accessToken, instanceUrl, context);
 
+  logger.info("Provider org discovery results", {
+    userId: user.id,
+    provider,
+    providerUsername,
+    discoveredOrgCount: orgs.length,
+    discoveredOrgs: orgs.map((org) => org.login),
+    ...context,
+  });
+
   // For GitHub: always include the user's personal account alongside organizations.
   // This ensures the personal account is available in the org switcher even when
   // the user has organization memberships. Personal account is also important as
@@ -239,6 +248,15 @@ const autoLinkOrganizationsImpl = async (
   }
 
   const tenantIds = await ensureOrgMemberships(user.id, provider, effectiveOrgs, context);
+
+  logger.info("Org memberships ensured", {
+    userId: user.id,
+    provider,
+    effectiveOrgCount: effectiveOrgs.length,
+    effectiveOrgs: effectiveOrgs.map((org) => org.login),
+    tenantIdCount: tenantIds.length,
+    ...context,
+  });
 
   // Self-healing: detect orphaned tenants where the tenant exists but the
   // user_organizations link is missing (e.g. from a prior partial failure).
