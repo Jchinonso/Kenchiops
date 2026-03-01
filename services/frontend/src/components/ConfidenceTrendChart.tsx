@@ -94,7 +94,7 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
             <div
               role="group"
               aria-label="Time bucket"
-              className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs flex-shrink-0"
+              className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-xs flex-shrink-0"
             >
               {BUCKET_OPTIONS.map((opt) => (
                 <button
@@ -104,7 +104,7 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
                   className={`px-3 py-1.5 transition-colors ${
                     bucket === opt.value
                       ? "bg-indigo-500 text-white"
-                      : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                   }`}
                 >
                   {opt.label}
@@ -115,7 +115,7 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
             <div
               role="group"
               aria-label="Date range"
-              className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs flex-shrink-0"
+              className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-xs flex-shrink-0"
             >
               {RANGE_OPTIONS.map((opt) => (
                 <button
@@ -125,7 +125,7 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
                   className={`px-3 py-1.5 transition-colors ${
                     rangeDays === opt.value
                       ? "bg-indigo-500 text-white"
-                      : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                   }`}
                 >
                   {opt.label}
@@ -145,14 +145,14 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
           <Skeleton className="h-56 w-full" />
         ) : !hasData ? (
           <div className="h-56 flex items-center justify-center">
-            <p className="text-sm text-gray-400 dark:text-gray-500">No data for this period</p>
+            <p className="text-sm text-zinc-400 dark:text-zinc-500">No data for this period</p>
           </div>
         ) : (
           <div className="relative">
             {hasMinimalData && (
               <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-                <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center">
                     Your first analyses are in. Check back soon to see trends forming.
                   </p>
                 </div>

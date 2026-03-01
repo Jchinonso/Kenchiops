@@ -83,7 +83,7 @@ export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetai
             <button
               type="button"
               onClick={handleCopyLink}
-              className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 transition-colors mt-1 self-start"
+              className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors mt-1 self-start"
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
               {copied ? "Copied!" : "Copy link"}

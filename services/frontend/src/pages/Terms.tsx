@@ -9,20 +9,20 @@ const Terms = () => (
     <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <Link
         to="/"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 mb-10 transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 mb-10 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
         Back to home
       </Link>
 
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Terms of Service</h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-10">
+      <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Terms of Service</h1>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-10">
         Last updated: February 17, 2026
       </p>
 
-      <div className="prose prose-gray dark:prose-invert max-w-none space-y-6 text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
+      <div className="prose prose-gray dark:prose-invert max-w-none space-y-6 text-zinc-700 dark:text-zinc-300 text-sm leading-relaxed">
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
             1. Acceptance of Terms
           </h2>
           <p>
@@ -32,7 +32,7 @@ const Terms = () => (
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
             2. Description of Service
           </h2>
           <p>
@@ -43,7 +43,7 @@ const Terms = () => (
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
             3. User Accounts
           </h2>
           <p>
@@ -54,7 +54,7 @@ const Terms = () => (
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
             4. Acceptable Use
           </h2>
           <p>
@@ -65,7 +65,7 @@ const Terms = () => (
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
             5. Intellectual Property
           </h2>
           <p>
@@ -76,7 +76,7 @@ const Terms = () => (
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
             6. Limitation of Liability
           </h2>
           <p>
@@ -87,7 +87,7 @@ const Terms = () => (
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
             7. Changes to Terms
           </h2>
           <p>
@@ -98,7 +98,7 @@ const Terms = () => (
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
             8. Contact
           </h2>
           <p>

@@ -9,7 +9,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "motion/react";
-import { Users, Shield, Scale, Headphones } from "lucide-react";
+import { Users, Shield, Scale, Headphones, UserCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenantInfo } from "@/hooks/useDashboardData";
 import { useTheme } from "@/hooks/useTheme";
@@ -42,7 +42,7 @@ const isBrowserNotificationDenied = (): boolean => {
 
 /** Section header — small uppercase muted label */
 const SectionHeader = ({ title }: { readonly title: string }) => (
-  <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4">
+  <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
     {title}
   </h2>
 );
@@ -63,6 +63,7 @@ export const Settings = () => {
   const planDisplayName = useMemo(() => subscription?.plan.displayName ?? "Free", [subscription]);
   const isSubLoading = subscriptionLoading || usageLoading;
 
+  const isPersonal = user?.tenantType === "personal";
   const activeSection = useActiveSection(SECTION_IDS);
 
   // Handle Stripe Checkout redirect URL params
@@ -122,61 +123,87 @@ export const Settings = () => {
 
       {/* Settings Body: Sidebar + Content */}
       <div className="mt-8 lg:grid lg:grid-cols-[200px_1fr] lg:gap-8">
-        <SettingsNav activeSection={activeSection} />
+        <SettingsNav activeSection={activeSection} isPersonal={isPersonal} />
 
         <div className="space-y-10">
-          {/* Account */}
-          <section id="account">
-            <SectionHeader title="Account" />
-            <div className="space-y-4">
-              {/* Team Management */}
+          {/* Account — hidden for personal tenants */}
+          {!isPersonal && (
+            <section id="account">
+              <SectionHeader title="Account" />
+              <div className="space-y-4">
+                {/* Team Management */}
+                <motion.div variants={itemVariants}>
+                  <Card>
+                    <CardHeader className="border-b">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-5 h-5 text-indigo-500" />
+                        <CardTitle>Team Management</CardTitle>
+                      </div>
+                      <CardDescription>
+                        View and manage organization members and roles.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                          Members join automatically when they sign in via GitHub, GitLab,
+                          Bitbucket, or Azure DevOps and belong to your organization.
+                        </p>
+                        <Link
+                          to="/dashboard/settings/team"
+                          className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors whitespace-nowrap ml-4"
+                        >
+                          Manage Team
+                        </Link>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Subscription */}
+                <SubscriptionCard
+                  planId={planId}
+                  planDisplayName={planDisplayName}
+                  usageData={usageData ?? null}
+                  isLoading={isSubLoading}
+                />
+
+                {/* Billing */}
+                {billingStatus?.hasStripeCustomer && (
+                  <BillingCard
+                    billingStatus={billingStatus}
+                    isLoading={billingLoading}
+                    portalLoading={portalLoading}
+                    onOpenPortal={openPortal}
+                  />
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Personal Account notice — shown only for personal tenants */}
+          {isPersonal && (
+            <section id="personal-plan">
+              <SectionHeader title="Plan" />
               <motion.div variants={itemVariants}>
                 <Card>
                   <CardHeader className="border-b">
                     <div className="flex items-center gap-2">
-                      <Users className="w-5 h-5 text-indigo-500" />
-                      <CardTitle>Team Management</CardTitle>
+                      <UserCircle className="w-5 h-5 text-indigo-500" />
+                      <CardTitle>Personal Account</CardTitle>
                     </div>
-                    <CardDescription>
-                      View and manage organization members and roles.
-                    </CardDescription>
+                    <CardDescription>Your personal workspace is always free.</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Members join automatically when they sign in via GitHub, GitLab, Bitbucket,
-                        or Azure DevOps and belong to your organization.
-                      </p>
-                      <Link
-                        to="/dashboard/settings/team"
-                        className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors whitespace-nowrap ml-4"
-                      >
-                        Manage Team
-                      </Link>
-                    </div>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                      Personal accounts include unlimited access for individual use. To manage
+                      teams, billing, and subscriptions, switch to an organization.
+                    </p>
                   </CardContent>
                 </Card>
               </motion.div>
-
-              {/* Subscription */}
-              <SubscriptionCard
-                planId={planId}
-                planDisplayName={planDisplayName}
-                usageData={usageData ?? null}
-                isLoading={isSubLoading}
-              />
-
-              {/* Billing */}
-              {billingStatus?.hasStripeCustomer && (
-                <BillingCard
-                  billingStatus={billingStatus}
-                  isLoading={billingLoading}
-                  portalLoading={portalLoading}
-                  onOpenPortal={openPortal}
-                />
-              )}
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Preferences */}
           <section id="preferences">
@@ -212,7 +239,7 @@ export const Settings = () => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-6">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
                         SSO/SAML configuration will be available here. Connect your identity
                         provider to enable single sign-on for your organization.
                       </p>
@@ -235,7 +262,7 @@ export const Settings = () => {
                     </CardHeader>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
                           Create and manage custom risk rules to tailor analysis to your workflows.
                         </p>
                         <Link
@@ -263,7 +290,7 @@ export const Settings = () => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-6">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
                         Your plan includes priority support. Contact us at{" "}
                         <a
                           href="mailto:support@kenchi.dev"

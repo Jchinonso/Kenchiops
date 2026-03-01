@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth, type AuthOrganization } from "@/hooks/useAuth";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
@@ -51,7 +52,7 @@ const OrgItem = ({ org, onSelect, disabled }: OrgItemProps) => (
     value={org.orgName}
     onSelect={() => {
       if (!org.isSelected) {
-        onSelect(org.id);
+        onSelect(org.tenantId);
       }
     }}
     disabled={disabled}
@@ -59,6 +60,11 @@ const OrgItem = ({ org, onSelect, disabled }: OrgItemProps) => (
   >
     <ProviderIcon provider={org.provider} className="text-muted-foreground shrink-0" />
     <span className="flex-1 truncate">{org.orgName}</span>
+    {org.tenantType === "personal" && (
+      <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide shrink-0">
+        Personal
+      </span>
+    )}
     {org.isSelected && <Check className="w-4 h-4 text-indigo-500 shrink-0" />}
   </CommandItem>
 );
@@ -67,6 +73,7 @@ const OrgItem = ({ org, onSelect, disabled }: OrgItemProps) => (
 
 export const OrganizationSwitcher = () => {
   const { user, isSwitchingOrg, switchOrganization } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const organizations = user?.organizations ?? [];
@@ -76,9 +83,12 @@ export const OrganizationSwitcher = () => {
   const handleSelect = useCallback(
     async (orgId: string) => {
       setOpen(false);
-      await switchOrganization(orgId);
+      const { hasProviderConnection } = await switchOrganization(orgId);
+      // Navigate to onboarding when no provider installed, overview otherwise.
+      // Sub-route data is stale after tenant switch, so always leave the current route.
+      navigate(hasProviderConnection ? "/dashboard" : "/dashboard/onboarding");
     },
-    [switchOrganization]
+    [switchOrganization, navigate]
   );
 
   // Guard: no organizations at all (shouldn't happen, but defensive)
@@ -96,9 +106,9 @@ export const OrganizationSwitcher = () => {
         <div className="flex items-center gap-2 md:justify-center lg:justify-start">
           <ProviderIcon
             provider={displayProvider}
-            className="text-gray-500 dark:text-gray-400 shrink-0"
+            className="text-zinc-500 dark:text-zinc-400 shrink-0"
           />
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate hidden md:hidden lg:inline">
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate hidden md:hidden lg:inline">
             {displayName}
           </span>
         </div>
@@ -116,9 +126,9 @@ export const OrganizationSwitcher = () => {
             aria-label="Switch organization"
             className={cn(
               "flex items-center gap-2 w-full rounded-lg px-3 py-2 md:justify-center md:px-2 lg:justify-start lg:px-3",
-              "text-sm font-medium text-gray-700 dark:text-gray-300",
-              "hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
-              "border border-gray-200 dark:border-gray-700"
+              "text-sm font-medium text-zinc-700 dark:text-zinc-300",
+              "hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors",
+              "border border-zinc-200 dark:border-zinc-700"
             )}
             disabled={isSwitchingOrg}
           >
@@ -130,7 +140,7 @@ export const OrganizationSwitcher = () => {
             <span className="flex-1 text-left truncate hidden md:hidden lg:inline">
               {isSwitchingOrg ? "Switching..." : displayName}
             </span>
-            <ChevronsUpDown className="w-3.5 h-3.5 text-gray-400 shrink-0 hidden md:hidden lg:block" />
+            <ChevronsUpDown className="w-3.5 h-3.5 text-zinc-400 shrink-0 hidden md:hidden lg:block" />
           </button>
         </PopoverTrigger>
         <PopoverContent side="bottom" align="start" sideOffset={4} className="w-56 p-0">

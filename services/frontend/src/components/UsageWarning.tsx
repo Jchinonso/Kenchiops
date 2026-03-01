@@ -135,8 +135,8 @@ export const UsageWarning = ({
     <div className="flex items-center gap-3">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">{label}</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
             {current} / {limit}
           </span>
         </div>

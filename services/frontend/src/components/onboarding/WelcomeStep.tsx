@@ -28,18 +28,18 @@ export const WelcomeStep = ({ firstName, onNext }: WelcomeStepProps) => (
     {/* Greeting */}
     <motion.h1
       variants={itemVariants}
-      className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-3"
+      className="text-3xl sm:text-4xl font-bold text-zinc-900 dark:text-zinc-100 mb-3"
     >
       Hey, {firstName}!
     </motion.h1>
 
     <motion.p
       variants={itemVariants}
-      className="text-base sm:text-lg text-gray-500 dark:text-gray-400 mb-10 max-w-md mx-auto leading-relaxed"
+      className="text-base sm:text-lg text-zinc-500 dark:text-zinc-400 mb-10 max-w-md mx-auto leading-relaxed"
     >
       Let&apos;s get your CI/CD failures analyzed automatically.
       <br />
-      <span className="text-gray-400 dark:text-gray-500">Setup takes under 2 minutes.</span>
+      <span className="text-zinc-400 dark:text-zinc-500">Setup takes under 2 minutes.</span>
     </motion.p>
 
     <motion.div variants={itemVariants}>

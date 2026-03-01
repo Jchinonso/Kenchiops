@@ -31,6 +31,7 @@ import {
   enforcePlanLimit,
   addUserOrganization,
   findUserById,
+  findById as findTenantById,
   type InvitationRole,
 } from "@kenchi/shared";
 
@@ -78,6 +79,15 @@ const handleCreateInvitation = async (req: Request, res: Response): Promise<void
   }
 
   const invitationRole = (role ?? "member") as InvitationRole;
+
+  // Personal tenants are single-user — no team invitations
+  const tenant = await findTenantById(tenantId);
+  if (tenant?.tenantType === "personal") {
+    throw new ValidationError("Personal accounts cannot invite team members", {
+      operation: "handleCreateInvitation",
+      metadata: { tenantId },
+    });
+  }
 
   // Enforce plan limit on team members before creating invitation
   await enforcePlanLimit(tenantId, "max_team_members");

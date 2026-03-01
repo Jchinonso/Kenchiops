@@ -14,8 +14,8 @@ const FOOTER_LINKS = [
 ] as const;
 
 export const DashboardFooter = () => (
-  <footer className="border-t border-gray-200 dark:border-gray-800 mt-8 px-4 sm:px-6 lg:px-8 py-4">
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-400 dark:text-gray-500">
+  <footer className="border-t border-zinc-200 dark:border-zinc-800 mt-8 px-4 sm:px-6 lg:px-8 py-4">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-zinc-400 dark:text-zinc-500">
       <div className="flex items-center gap-4">
         {FOOTER_LINKS.map((link) => (
           <a
@@ -23,7 +23,7 @@ export const DashboardFooter = () => (
             href={link.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            className="inline-flex items-center gap-1 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
           >
             {link.label}
             <ExternalLink className="w-3 h-3" />

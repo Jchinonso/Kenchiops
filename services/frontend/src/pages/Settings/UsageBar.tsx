@@ -21,11 +21,11 @@ export const UsageBar = ({ label, usage }: UsageBarProps) => {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{label}</span>
+        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{label}</span>
         <span
           className={cn(
             "text-xs font-medium",
-            exceeded ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"
+            exceeded ? "text-red-600 dark:text-red-400" : "text-zinc-500 dark:text-zinc-400"
           )}
         >
           {usage.current} / {displayLimit}

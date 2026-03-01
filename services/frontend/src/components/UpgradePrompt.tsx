@@ -70,20 +70,20 @@ export const UpgradePrompt = ({
           </div>
           <DialogDescription className="pt-2">
             You&apos;ve reached the {limitLabel} limit on the{" "}
-            <span className="font-medium text-gray-700 dark:text-gray-300">{currentPlan}</span>{" "}
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">{currentPlan}</span>{" "}
             plan.
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Usage</span>
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Usage</span>
             <span
               className={cn(
                 "text-sm font-semibold",
                 currentUsage >= limit
                   ? "text-red-600 dark:text-red-400"
-                  : "text-gray-600 dark:text-gray-400"
+                  : "text-zinc-600 dark:text-zinc-400"
               )}
             >
               {currentUsage} / {limit} used
@@ -102,7 +102,7 @@ export const UpgradePrompt = ({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
           >
             Dismiss
           </button>

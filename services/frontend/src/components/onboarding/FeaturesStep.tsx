@@ -15,14 +15,14 @@ interface FeaturesStepProps {
 
 /** Mini terminal mockup for AI Analysis feature */
 const AnalysisMockup = () => (
-  <div className="rounded-md bg-gray-900 dark:bg-gray-950 p-2.5 text-[10px] font-mono space-y-1">
+  <div className="rounded-md bg-zinc-900 dark:bg-zinc-950 p-2.5 text-[10px] font-mono space-y-1">
     <div className="flex items-center gap-1.5 mb-2">
       <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
       <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
       <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
     </div>
     <p className="text-red-400">ERROR: Build failed at step 3/7</p>
-    <p className="text-gray-500">Analyzing root cause...</p>
+    <p className="text-zinc-500">Analyzing root cause...</p>
     <p className="text-green-400">✓ Dependency conflict: react@19 + next@14</p>
   </div>
 );
@@ -69,13 +69,13 @@ export const FeaturesStep = ({ onNext, onBack }: FeaturesStepProps) => (
   <motion.div variants={containerVariants} initial="hidden" animate="visible">
     <motion.h2
       variants={itemVariants}
-      className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 text-center mb-2"
+      className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 text-center mb-2"
     >
       What you&apos;ll get
     </motion.h2>
     <motion.p
       variants={itemVariants}
-      className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6"
+      className="text-sm text-zinc-500 dark:text-zinc-400 text-center mb-6"
     >
       Kenchi starts working the moment you connect.
     </motion.p>
@@ -109,7 +109,7 @@ export const FeaturesStep = ({ onNext, onBack }: FeaturesStepProps) => (
       <motion.button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
         whileTap={{ scale: 0.97 }}
         transition={microSpring}
       >

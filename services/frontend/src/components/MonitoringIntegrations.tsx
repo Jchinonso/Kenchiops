@@ -64,7 +64,7 @@ const computeHealthStatus = (health: SourceHealthInfo | undefined): HealthStatus
 };
 
 const healthDotColor = (status: HealthStatus): string =>
-  status === "connected" ? "bg-green-500" : status === "stale" ? "bg-yellow-500" : "bg-gray-400";
+  status === "connected" ? "bg-green-500" : status === "stale" ? "bg-yellow-500" : "bg-zinc-400";
 
 const healthLabel = (status: HealthStatus): string =>
   status === "connected" ? "Connected" : status === "stale" ? "Stale" : "No events";
@@ -74,7 +74,7 @@ const healthTextColor = (status: HealthStatus): string =>
     ? "text-green-600 dark:text-green-400"
     : status === "stale"
       ? "text-yellow-600 dark:text-yellow-400"
-      : "text-gray-500 dark:text-gray-400";
+      : "text-zinc-500 dark:text-zinc-400";
 
 const formatRelativeTime = (isoString: string): string => {
   const diffMs = Date.now() - new Date(isoString).getTime();
@@ -243,8 +243,8 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
       className={cn(
         "rounded-lg border p-4",
         provider.active
-          ? "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50"
-          : "border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30"
+          ? "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50"
+          : "border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30"
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -254,7 +254,7 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
               "flex items-center justify-center w-10 h-10 rounded-lg",
               provider.active
                 ? "bg-indigo-50 dark:bg-indigo-900/30"
-                : "bg-gray-100 dark:bg-gray-800"
+                : "bg-zinc-100 dark:bg-zinc-800"
             )}
           >
             <Icon
@@ -262,7 +262,7 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
                 "w-5 h-5",
                 provider.active
                   ? "text-indigo-600 dark:text-indigo-400"
-                  : "text-gray-400 dark:text-gray-500"
+                  : "text-zinc-400 dark:text-zinc-500"
               )}
             />
           </div>
@@ -271,13 +271,13 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
               className={cn(
                 "font-medium text-sm",
                 provider.active
-                  ? "text-gray-900 dark:text-gray-100"
-                  : "text-gray-500 dark:text-gray-400"
+                  ? "text-zinc-900 dark:text-zinc-100"
+                  : "text-zinc-500 dark:text-zinc-400"
               )}
             >
               {provider.name}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
               {provider.description}
             </p>
           </div>
@@ -296,7 +296,7 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
               );
             })()}
             {health && health.eventCount > 0 && (
-              <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500">
+              <div className="flex items-center gap-2 text-[10px] text-zinc-400 dark:text-zinc-500">
                 <span>{health.eventCount} events</span>
                 {health.lastReceived && <span>Last {formatRelativeTime(health.lastReceived)}</span>}
               </div>
@@ -313,11 +313,11 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
         <div className="mt-4 space-y-3">
           {/* Webhook URL */}
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-300 block mb-1.5">
+            <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 block mb-1.5">
               Webhook URL
             </label>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs font-mono bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 truncate select-all">
+              <code className="flex-1 text-xs font-mono bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 truncate select-all">
                 {webhookUrl}
               </code>
               <button
@@ -327,7 +327,7 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
                   "shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border transition-colors",
                   copied
                     ? "border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
-                    : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    : "border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700"
                 )}
               >
                 {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -339,14 +339,14 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
           {/* Required Headers */}
           {provider.requiredHeaders && provider.requiredHeaders.length > 0 && (
             <div>
-              <label className="text-xs font-medium text-gray-600 dark:text-gray-300 block mb-1.5">
+              <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 block mb-1.5">
                 Required Headers
               </label>
               <div className="flex flex-wrap gap-1.5">
                 {provider.requiredHeaders.map((header) => (
                   <code
                     key={header}
-                    className="text-xs font-mono bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700"
+                    className="text-xs font-mono bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-700"
                   >
                     {header}
                   </code>
@@ -366,7 +366,7 @@ const ProviderCard = ({ provider, health, tenantId }: ProviderCardProps) => {
                 {provider.setupSteps.map((step) => (
                   <li
                     key={step}
-                    className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed"
+                    className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed"
                   >
                     {step}
                   </li>

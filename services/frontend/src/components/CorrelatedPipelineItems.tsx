@@ -32,16 +32,16 @@ interface CorrelationItemProps {
 const CorrelationItem = ({ item, to, icon }: CorrelationItemProps) => (
   <Link
     to={to}
-    className="flex items-center gap-2.5 py-2 px-3 bg-gray-50 dark:bg-gray-800/50 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors group"
+    className="flex items-center gap-2.5 py-2 px-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors group"
   >
-    <span className="shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-indigo-500 transition-colors">
+    <span className="shrink-0 text-zinc-400 dark:text-zinc-500 group-hover:text-indigo-500 transition-colors">
       {icon}
     </span>
     <div className="min-w-0 flex-1">
-      <p className="text-xs text-gray-700 dark:text-gray-300 truncate">
+      <p className="text-xs text-zinc-700 dark:text-zinc-300 truncate">
         {truncateText(item.title, 80)}
       </p>
-      <span className="text-[10px] text-gray-400 dark:text-gray-500">
+      <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
         <TimeDisplay dateTime={item.createdAt} />
       </span>
     </div>
@@ -74,12 +74,12 @@ export const CorrelatedPipelineItems = ({
     return (
       <div>
         <div className="flex items-center gap-1.5 mb-2">
-          <GitCommit className="w-3.5 h-3.5 text-gray-400" />
-          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <GitCommit className="w-3.5 h-3.5 text-zinc-400" />
+          <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
             Cross-Pipeline
           </h4>
         </div>
-        <div className="flex items-center gap-2 py-3 text-xs text-gray-400">
+        <div className="flex items-center gap-2 py-3 text-xs text-zinc-400">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           Checking for related items...
         </div>
@@ -90,8 +90,8 @@ export const CorrelatedPipelineItems = ({
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
-        <GitCommit className="w-3.5 h-3.5 text-gray-400" />
-        <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        <GitCommit className="w-3.5 h-3.5 text-zinc-400" />
+        <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
           Cross-Pipeline
         </h4>
       </div>

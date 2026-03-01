@@ -100,10 +100,10 @@ interface SectionCardProps {
 }
 
 export const SectionCard = ({ icon, title, children }: SectionCardProps) => (
-  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+  <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+    <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
       {icon}
-      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
     </div>
     <div className="px-4 py-3">{children}</div>
   </div>
@@ -121,12 +121,12 @@ export const ConfidenceBar = ({ label, value }: ConfidenceBarProps) => {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-600 dark:text-gray-400">{label}</span>
+        <span className="text-xs text-zinc-600 dark:text-zinc-400">{label}</span>
         <Badge variant="outline" className={cn("text-xs", getConfidenceStyle(value))}>
           {getConfidenceLabel(value)} ({percentage}%)
         </Badge>
       </div>
-      <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800">
+      <div className="h-2 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
         <div
           className={cn(
             "h-2 rounded-full transition-all",
@@ -175,14 +175,14 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
     <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
       {/* Summary */}
       <SectionCard icon={<Zap className="h-4 w-4 text-indigo-500" />} title="Summary">
-        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+        <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
           {analysis.summary}
         </p>
       </SectionCard>
 
       {/* Root Cause */}
       <SectionCard icon={<AlertTriangle className="h-4 w-4 text-amber-500" />} title="Root Cause">
-        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+        <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
           {analysis.identifiedCause ?? "No root cause identified"}
         </p>
       </SectionCard>
@@ -206,12 +206,12 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
           <ol className="list-decimal list-inside space-y-2">
             {richActions.map((action) => {
               const priorityKey = String(action.priority ?? "medium").toLowerCase();
-              const style = priorityStyles[priorityKey] ?? "text-gray-600 dark:text-gray-400";
+              const style = priorityStyles[priorityKey] ?? "text-zinc-600 dark:text-zinc-400";
               const label = `${priorityKey.charAt(0).toUpperCase()}${priorityKey.slice(1)}`;
               return (
                 <li
                   key={action.description}
-                  className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+                  className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed"
                 >
                   <Badge variant="outline" className={cn("text-[10px] mr-2 py-0", style)}>
                     {label}
@@ -233,7 +233,7 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
               {analysis.recommendedActions.map((action) => (
                 <li
                   key={action}
-                  className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+                  className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed"
                 >
                   {action}
                 </li>
@@ -260,14 +260,14 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
                     variant="outline"
                     className={cn(
                       "text-[10px] py-0",
-                      depChangeBadgeStyles[dep.type] ?? "bg-gray-100 text-gray-700"
+                      depChangeBadgeStyles[dep.type] ?? "bg-zinc-100 text-zinc-700"
                     )}
                   >
                     {depChangeLabels[dep.type] ?? dep.type}
                   </Badge>
-                  <span className="font-mono text-gray-800 dark:text-gray-200">{dep.name}</span>
+                  <span className="font-mono text-zinc-800 dark:text-zinc-200">{dep.name}</span>
                 </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
                   {dep.oldVersion && dep.newVersion
                     ? `${dep.oldVersion} → ${dep.newVersion}`
                     : (dep.newVersion ?? dep.oldVersion ?? "")}
@@ -287,13 +287,13 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
           <ul className="space-y-2">
             {buildChanges.map((change) => (
               <li key={change.file} className="text-sm">
-                <span className="font-mono text-gray-800 dark:text-gray-200">{change.file}</span>
+                <span className="font-mono text-zinc-800 dark:text-zinc-200">{change.file}</span>
                 {change.changeType && (
                   <Badge variant="outline" className="text-[10px] ml-2 py-0">
                     {change.changeType}
                   </Badge>
                 )}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{change.summary}</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{change.summary}</p>
               </li>
             ))}
           </ul>
@@ -309,10 +309,10 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             {confidenceSignalEntries.map(([key, value]) => (
               <div key={key} className="contents">
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 truncate">
                   {key}
                 </span>
-                <span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">
+                <span className="text-xs text-zinc-700 dark:text-zinc-300 font-mono truncate">
                   {value}
                 </span>
               </div>
@@ -323,9 +323,9 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
 
       {/* Linked Event */}
       {analysis.eventId && (
-        <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3">
-          <FileText className="h-4 w-4 text-gray-400 shrink-0" />
-          <span className="text-xs text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3">
+          <FileText className="h-4 w-4 text-zinc-400 shrink-0" />
+          <span className="text-xs text-zinc-600 dark:text-zinc-400">
             Linked to failure event:{" "}
             {showLinkedEventLink ? (
               <Link
@@ -335,7 +335,7 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
                 {analysis.eventId}
               </Link>
             ) : (
-              <span className="font-mono text-gray-800 dark:text-gray-200">{analysis.eventId}</span>
+              <span className="font-mono text-zinc-800 dark:text-zinc-200">{analysis.eventId}</span>
             )}
           </span>
         </div>
@@ -343,21 +343,21 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
 
       {/* Raw Analysis JSON */}
       <Collapsible open={rawOpen} onOpenChange={setRawOpen}>
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-          <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <Code className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+          <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+            <Code className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Raw Analysis Data
             </span>
             {rawOpen ? (
-              <ChevronDown className="ml-auto h-4 w-4 text-gray-400" />
+              <ChevronDown className="ml-auto h-4 w-4 text-zinc-400" />
             ) : (
-              <ChevronRight className="ml-auto h-4 w-4 text-gray-400" />
+              <ChevronRight className="ml-auto h-4 w-4 text-zinc-400" />
             )}
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3">
-              <pre className="overflow-x-auto rounded-md bg-gray-50 dark:bg-gray-800 p-3 text-xs font-mono text-gray-700 dark:text-gray-300 max-h-96 overflow-y-auto">
+            <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 py-3">
+              <pre className="overflow-x-auto rounded-md bg-zinc-50 dark:bg-zinc-800 p-3 text-xs font-mono text-zinc-700 dark:text-zinc-300 max-h-96 overflow-y-auto">
                 {JSON.stringify(analysis.fullAnalysis, null, 2)}
               </pre>
             </div>

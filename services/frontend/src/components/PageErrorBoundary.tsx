@@ -62,10 +62,10 @@ export class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErr
             <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
               This page encountered an error
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
               Something went wrong rendering this section. You can try again or navigate to a
               different page using the sidebar.
             </p>
@@ -87,7 +87,7 @@ export class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErr
             <button
               type="button"
               onClick={this.handleReload}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg border border-gray-200 dark:border-gray-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-sm font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
             >
               Reload Page
             </button>

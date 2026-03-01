@@ -39,7 +39,7 @@ export const SEVERITY_STYLES: Readonly<Record<string, string>> = {
   low: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-800",
   info: "bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-200 border-sky-200 dark:border-sky-800",
   default:
-    "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700",
+    "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700",
 } as const;
 
 export const getSeverityStyle = (severity: string | null): string =>
@@ -140,11 +140,11 @@ export const flattenSignalEntries = (
 
 export const INCIDENT_STATUS_STYLES: Readonly<Record<string, string>> = {
   received:
-    "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700",
+    "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700",
   processing:
     "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-800",
   deduped:
-    "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700",
+    "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700",
   triaged:
     "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-200 border-indigo-200 dark:border-indigo-800",
   escalated:
@@ -154,9 +154,9 @@ export const INCIDENT_STATUS_STYLES: Readonly<Record<string, string>> = {
   resolved:
     "bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-200 border-green-200 dark:border-green-800",
   closed:
-    "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700",
+    "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700",
   default:
-    "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700",
+    "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700",
 } as const;
 
 export const getIncidentStatusStyle = (status: string): string =>
@@ -191,7 +191,7 @@ export const getIncidentSeverityRank = (severity: string): number => SEVERITY_RA
 
 export const INVESTIGATION_STATUS_STYLES: Readonly<Record<string, string>> = {
   queued:
-    "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700",
+    "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700",
   gathering:
     "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-800",
   analyzing:
@@ -201,7 +201,7 @@ export const INVESTIGATION_STATUS_STYLES: Readonly<Record<string, string>> = {
   failed:
     "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-200 border-red-200 dark:border-red-800",
   default:
-    "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700",
+    "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700",
 } as const;
 
 export const getInvestigationStatusStyle = (status: string): string =>

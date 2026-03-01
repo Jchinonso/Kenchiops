@@ -46,6 +46,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { FeatureLocked } from "@/components/FeatureLocked";
+import { PageLoader } from "@/components/PageLoader";
 
 // ==================== Constants ====================
 
@@ -75,12 +76,12 @@ const FailureItem = ({ event }: FailureItemProps) => {
   return (
     <Link
       to="/dashboard/cicd/analyses"
-      className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+      className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 -mx-6 px-6 transition-colors"
     >
       <div className="flex items-center justify-between gap-2 mb-1">
         <TimeDisplay
           dateTime={event.timestamp}
-          className="text-xs text-gray-400 dark:text-gray-400"
+          className="text-xs text-zinc-400 dark:text-zinc-400"
         />
         <Badge
           variant="outline"
@@ -89,8 +90,8 @@ const FailureItem = ({ event }: FailureItemProps) => {
           {titleCase(event.severity ?? "unknown")}
         </Badge>
       </div>
-      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{checkName}</p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{conclusion}</p>
+      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{checkName}</p>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{conclusion}</p>
     </Link>
   );
 };
@@ -102,12 +103,12 @@ interface AnalysisItemProps {
 const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
   <Link
     to={`/dashboard/cicd/analyses/${analysis.id}`}
-    className="block py-3 first:pt-2 last:pb-1 hover:bg-gray-50 dark:hover:bg-gray-800 -mx-6 px-6 transition-colors"
+    className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 -mx-6 px-6 transition-colors"
   >
     <div className="flex items-center justify-between gap-2 mb-1">
       <TimeDisplay
         dateTime={analysis.createdAt}
-        className="text-xs text-gray-400 dark:text-gray-400"
+        className="text-xs text-zinc-400 dark:text-zinc-400"
       />
       <Badge
         variant="outline"
@@ -116,10 +117,10 @@ const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
         {getConfidenceLabel(analysis.diagnosisConfidence)}
       </Badge>
     </div>
-    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
       {truncateText(analysis.summary, 80)}
     </p>
-    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
       {analysis.identifiedCause ? truncateText(analysis.identifiedCause, 60) : "--"}
     </p>
   </Link>
@@ -133,7 +134,7 @@ interface RepositoryDetailProps {
 }
 
 export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDetailProps) => {
-  const { data: usageData } = useSubscriptionUsage(refreshKey);
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage(refreshKey);
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -178,7 +179,11 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
   const analysesCurrentPage = Math.floor(analysesOffset / analysesPageSize) + 1;
   const analysesTotalPages = Math.ceil(analysesTotal / analysesPageSize);
 
-  if (isAnyLimitReached && usageData && !failuresLoading && !analysesLoading) {
+  if (isUsageLoading) {
+    return <PageLoader />;
+  }
+
+  if (isAnyLimitReached && usageData) {
     return (
       <FeatureLocked
         description="You have reached your plan's usage limits. Upgrade to continue viewing repository details."
@@ -193,7 +198,7 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
       <div>
         <Link
           to="/dashboard/cicd/pipelines"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 mb-3 transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 mb-3 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Pipelines
@@ -201,7 +206,7 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
         <div className="flex items-center gap-3">
           <GitBranch className="w-6 h-6 text-indigo-500" />
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
               {repoFullName}
             </h1>
             <Tooltip>
@@ -228,11 +233,11 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
           <CardContent className="px-4 sm:px-6">
             <div className="flex items-start justify-between">
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">Failures</p>
+                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1">Failures</p>
                 {failuresLoading ? (
                   <Skeleton className="h-7 w-10 mt-1" />
                 ) : (
-                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  <p className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
                     {failuresTotal}
                   </p>
                 )}
@@ -247,11 +252,11 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
           <CardContent className="px-4 sm:px-6">
             <div className="flex items-start justify-between">
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">Analyses</p>
+                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1">Analyses</p>
                 {analysesLoading ? (
                   <Skeleton className="h-7 w-10 mt-1" />
                 ) : (
-                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  <p className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
                     {analysesTotal}
                   </p>
                 )}
@@ -266,13 +271,13 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
           <CardContent className="px-4 sm:px-6">
             <div className="flex items-start justify-between">
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1">
                   Avg Confidence
                 </p>
                 {analysesLoading ? (
                   <Skeleton className="h-7 w-10 mt-1" />
                 ) : (
-                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  <p className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
                     {formatAvgConfidence(analysisItems)}
                   </p>
                 )}
@@ -323,7 +328,7 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
                 </EmptyHeader>
               </Empty>
             ) : (
-              <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {failureItems.map((event) => (
                   <FailureItem key={event.id} event={event} />
                 ))}
@@ -379,7 +384,7 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
                 </EmptyHeader>
               </Empty>
             ) : (
-              <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {analysisItems.map((analysis) => (
                   <AnalysisItem key={analysis.id} analysis={analysis} />
                 ))}

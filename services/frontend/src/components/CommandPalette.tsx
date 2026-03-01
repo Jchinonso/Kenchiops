@@ -121,7 +121,7 @@ export const CommandPalette = ({
               {item.icon}
               <span>{item.label}</span>
               {item.comingSoon && (
-                <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">
+                <span className="ml-auto text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-full">
                   Soon
                 </span>
               )}

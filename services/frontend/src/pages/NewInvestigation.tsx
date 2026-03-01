@@ -40,7 +40,7 @@ const SYMPTOM_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label: s
 ] as const;
 
 const INPUT_CLASS =
-  "w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500 dark:text-gray-100";
+  "w-full px-3 py-2 text-sm bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder:text-zinc-400 dark:placeholder:text-zinc-500 dark:text-zinc-100";
 
 // ==================== Types ====================
 
@@ -99,15 +99,15 @@ export const NewInvestigation = () => {
       <div>
         <Link
           to="/dashboard/incidents/investigations"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Investigations
         </Link>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
           New Investigation
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           Describe the problem and Kenchi will gather evidence from your monitoring tools, past
           incidents, and CI analyses to diagnose the issue.
         </p>
@@ -129,7 +129,7 @@ export const NewInvestigation = () => {
             <div className="space-y-1.5">
               <label
                 htmlFor="investigation-description"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
                 Description <span className="text-red-500">*</span>
               </label>
@@ -149,7 +149,7 @@ export const NewInvestigation = () => {
             <div className="space-y-1.5">
               <label
                 htmlFor="investigation-service"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
                 Service Name
               </label>
@@ -170,7 +170,7 @@ export const NewInvestigation = () => {
               <div className="space-y-1.5">
                 <label
                   htmlFor="investigation-environment"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                 >
                   Environment
                 </label>
@@ -197,7 +197,7 @@ export const NewInvestigation = () => {
               <div className="space-y-1.5">
                 <label
                   htmlFor="investigation-symptom"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                 >
                   Symptom
                 </label>
@@ -223,7 +223,7 @@ export const NewInvestigation = () => {
             <div className="space-y-1.5">
               <label
                 htmlFor="investigation-endpoint"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
                 Endpoint
               </label>
@@ -250,7 +250,7 @@ export const NewInvestigation = () => {
             <div className="flex items-center justify-end gap-3 pt-2">
               <Link
                 to="/dashboard/incidents/investigations"
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
               >
                 Cancel
               </Link>

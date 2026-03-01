@@ -1,1 +1,1 @@
-npm run type-check && npm run check:duplication && npm run check:standards && npm run format:check && npx lint-staged
+npm run type-check && npm run check:duplication && npm run check:standards && npm run format:check && npm test && npx lint-staged

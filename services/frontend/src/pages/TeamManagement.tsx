@@ -97,7 +97,7 @@ const ROLE_BADGE_STYLES: Readonly<Record<string, string>> = {
   member:
     "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800",
   viewer:
-    "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
+    "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
 };
 
 const getRoleBadgeStyle = (role: string): string =>
@@ -166,14 +166,14 @@ const MemberRow = ({
         <div className="flex items-center gap-3">
           <MemberAvatar member={member} />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
               {member.displayName}
               {isSelf && (
-                <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">(you)</span>
+                <span className="ml-1.5 text-xs text-zinc-400 dark:text-zinc-500">(you)</span>
               )}
             </p>
             {member.email && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{member.email}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{member.email}</p>
             )}
           </div>
         </div>
@@ -194,7 +194,7 @@ const MemberRow = ({
         </Badge>
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        <span className="text-sm text-gray-500 dark:text-gray-400">
+        <span className="text-sm text-zinc-500 dark:text-zinc-400">
           <TimeDisplay dateTime={member.joinedAt} />
         </span>
       </TableCell>
@@ -204,7 +204,7 @@ const MemberRow = ({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                 aria-label={`Actions for ${member.displayName}`}
               >
                 <MoreHorizontal className="w-4 h-4" />
@@ -267,14 +267,14 @@ const PendingInvitationRow = ({
     <TableRow>
       <TableCell>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
-            <Mail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          <div className="w-8 h-8 bg-zinc-200 dark:bg-zinc-700 rounded-full flex items-center justify-center flex-shrink-0">
+            <Mail className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
               {invitation.email}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Invited <TimeDisplay dateTime={invitation.createdAt} />
             </p>
           </div>
@@ -286,7 +286,7 @@ const PendingInvitationRow = ({
         </Badge>
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
           <Clock className="w-3.5 h-3.5" />
           {isExpired ? (
             <span className="text-red-500 dark:text-red-400">Expired</span>
@@ -303,7 +303,7 @@ const PendingInvitationRow = ({
             type="button"
             disabled={isRevoking}
             onClick={() => onRevoke(invitation)}
-            className="p-1.5 rounded-md text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+            className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
             aria-label={`Revoke invitation for ${invitation.email}`}
           >
             <X className="w-4 h-4" />
@@ -340,9 +340,9 @@ const TeamUsageGauge = ({ current, limit }: TeamUsageGaugeProps) => {
       : "[&>[data-slot=progress-indicator]]:bg-indigo-500";
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Team Members</span>
+        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Team Members</span>
         <span
           className={cn(
             "text-sm font-semibold",
@@ -350,7 +350,7 @@ const TeamUsageGauge = ({ current, limit }: TeamUsageGaugeProps) => {
               ? "text-red-600 dark:text-red-400"
               : nearLimit
                 ? "text-amber-600 dark:text-amber-400"
-                : "text-gray-600 dark:text-gray-400"
+                : "text-zinc-600 dark:text-zinc-400"
           )}
         >
           {current} / {limit}
@@ -540,13 +540,15 @@ export const TeamManagement = () => {
       <div>
         <Link
           to="/dashboard/settings"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors mb-3"
+          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors mb-3"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Settings
         </Link>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Team</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
+          Team
+        </h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           {isLoading
             ? "Loading team members..."
             : `${memberCount} member${memberCount !== 1 ? "s" : ""} in your organization`}
@@ -614,8 +616,8 @@ export const TeamManagement = () => {
             </Table>
           ) : (
             <div className="p-6 text-center">
-              <Users className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              <Users className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mx-auto mb-2" />
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 No members found
               </p>
             </div>
@@ -736,7 +738,7 @@ export const TeamManagement = () => {
             <AlertDialogTitle>Revoke Invitation</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to revoke the invitation for{" "}
-              <strong className="text-gray-900 dark:text-gray-100">{revokeTarget?.email}</strong>?
+              <strong className="text-zinc-900 dark:text-zinc-100">{revokeTarget?.email}</strong>?
               They will no longer be able to join the organization with this invitation.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -751,7 +753,7 @@ export const TeamManagement = () => {
               className={cn(
                 !isRevokingInvitation
                   ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed pointer-events-none"
+                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed pointer-events-none"
               )}
             >
               {isRevokingInvitation ? "Revoking..." : "Revoke Invitation"}
@@ -774,7 +776,7 @@ export const TeamManagement = () => {
             <AlertDialogTitle>Change Role</AlertDialogTitle>
             <AlertDialogDescription>
               Change the role for{" "}
-              <strong className="text-gray-900 dark:text-gray-100">
+              <strong className="text-zinc-900 dark:text-zinc-100">
                 {roleDialogTarget?.displayName}
               </strong>
               . This will update their permissions within the organization.
@@ -805,7 +807,7 @@ export const TeamManagement = () => {
               className={cn(
                 selectedRole && selectedRole !== roleDialogTarget?.role && !isChangingRole
                   ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                  : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed pointer-events-none"
+                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed pointer-events-none"
               )}
             >
               {isChangingRole ? "Updating..." : "Update Role"}
@@ -828,7 +830,7 @@ export const TeamManagement = () => {
             <AlertDialogTitle>Remove Member</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to remove{" "}
-              <strong className="text-gray-900 dark:text-gray-100">
+              <strong className="text-zinc-900 dark:text-zinc-100">
                 {removeDialogTarget?.displayName}
               </strong>{" "}
               from the organization? They will lose access to all organization resources.
@@ -845,7 +847,7 @@ export const TeamManagement = () => {
               className={cn(
                 !isRemoving
                   ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed pointer-events-none"
+                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed pointer-events-none"
               )}
             >
               {isRemoving ? "Removing..." : "Remove Member"}

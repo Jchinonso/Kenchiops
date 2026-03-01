@@ -8,7 +8,7 @@ interface TableSkeletonProps {
 export const TableSkeleton = ({ rows = 5, columns = 5 }: TableSkeletonProps) => (
   <div className="p-4 space-y-3">
     {/* Header skeleton */}
-    <div className="flex items-center gap-4 pb-2 border-b border-gray-100 dark:border-gray-800">
+    <div className="flex items-center gap-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
       {Array.from({ length: columns }, (_, idx) => (
         <Skeleton key={`hdr-${idx}`} className="h-4 flex-1 max-w-[120px]" />
       ))}
