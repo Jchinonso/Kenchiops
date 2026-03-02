@@ -18,7 +18,6 @@ import {
   DASHBOARD_PAGINATION,
   ANALYSIS_DEFAULTS,
   rateLimitByCategory,
-  requireFeature,
 } from "@kenchi/shared";
 import { createGitHubInstallationAdapter } from "../adapters/githubInstallationAdapter.js";
 import { createGitLabProjectsAdapter } from "../adapters/gitlabProjectsAdapter.js";
@@ -348,7 +347,6 @@ router.get(
 router.get(
   "/api/v1/dashboard/webhook-activity",
   rateLimitByCategory("readonly"),
-  requireFeature("auditLog"),
   asyncHandler(handleGetWebhookActivity)
 );
 

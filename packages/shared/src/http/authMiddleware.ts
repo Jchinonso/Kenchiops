@@ -308,6 +308,7 @@ export const authMiddleware = async (
             next(
               new AuthorizationError("Organization is suspended or deactivated", {
                 operation: "authMiddleware",
+                metadata: { reason: "access_revoked" },
               })
             );
             return;
@@ -381,6 +382,7 @@ export const authMiddleware = async (
         next(
           new AuthorizationError("Organization is suspended or deactivated", {
             operation: "authMiddleware",
+            metadata: { reason: "access_revoked" },
           })
         );
         return;
@@ -400,6 +402,7 @@ export const authMiddleware = async (
         next(
           new AuthorizationError("Your membership in this organization has been revoked", {
             operation: "authMiddleware",
+            metadata: { reason: "access_revoked" },
           })
         );
         return;

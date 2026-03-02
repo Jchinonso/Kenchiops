@@ -150,6 +150,14 @@ After writing code:
    - No `process.env` — use shared config?
    - Parameterized queries only (no SQL string interpolation)?
    - Health/readiness endpoints for new services?
+   - Works for personal accounts AND organization accounts?
+   - Works for "member" role (minimal permissions, JWT fallback)?
+   - Works for internal service calls (HMAC auth, role: "service")?
+   - All DB queries scoped by tenant_id?
+   - Read-only endpoints don't have write-level permission gates?
+   - AuthorizationErrors carry metadata to distinguish fatal vs non-fatal?
+   - Feature gates don't block essential read-only data?
+   - Background jobs have tenant-scoped RequestContext?
 
 ### Phase 4: Delegate to Other Agents
 
@@ -165,6 +173,120 @@ After your implementation is verified:
 2. **If the change is significant** — Launch the `kenchi-refactor-analyst` agent to audit your code for CLAUDE.md compliance, code smells, and performance issues.
 
 3. **Do NOT auto-commit** — Only commit when the user explicitly asks. If they do, delegate to `git-commit-staged`.
+
+## Edge Case & Multi-Tenant Hardening (Mandatory)
+
+Every feature and bug fix MUST be verified against these scenarios before it ships. Past production bugs came from ignoring these edge cases. These rules apply across the ENTIRE stack — middleware, services, repositories, background jobs, internal service calls, AND frontend.
+
+### Account Type Awareness
+
+- **Personal accounts vs Organization accounts** — Kenchi has both `tenant_type: "personal"` and `tenant_type: "organization"`. Every feature that touches tenants, billing, permissions, or roles MUST handle both types correctly.
+- Personal accounts are locked to the free plan, have no billing portal, and the user is auto-elevated to "admin" role on first login via `elevateToMinimumAdmin`.
+- Organization accounts may have multiple members with different roles (owner, admin, member, viewer).
+- Before adding `requirePermission()` or `requireRole()` middleware to ANY endpoint, verify that the required permission is available to ALL user types that need the endpoint. Read-only endpoints (status, info) should rarely require write-level permissions.
+
+### Role & Permission Verification (Backend)
+
+```typescript
+// ❌ WRONG — read-only endpoint with write permission gate
+router.get("/api/v1/billing/status", requirePermission("billing"), handler);
+
+// ✅ CORRECT — read-only endpoint accessible to all authenticated users
+router.get("/api/v1/billing/status", asyncHandler(handleGetBillingStatus));
+
+// ✅ CORRECT — write endpoint with appropriate permission gate
+router.post("/api/v1/billing/checkout", requirePermission("billing"), handler);
+```
+
+- Check `ROLE_PERMISSIONS` map in `authorizationMiddleware.ts` before adding any permission gate
+- "member" role only has `analyses.read` and `analyses.write` — it does NOT have "billing", "settings", or "admin" permissions
+- If a personal account user's org role lookup fails, JWT falls back to "member" — so ALL endpoints that personal accounts need must work for "member" role
+- Services must NEVER assume `req.user.role` is "admin" or "owner" — always check the actual role
+
+### Auth Middleware & Token Lifecycle (Backend)
+
+- `authMiddleware` supports three auth strategies: HMAC (internal service), API key, JWT. Each has different implications for `req.user` shape.
+- **HMAC internal auth**: sets `req.user = { tenantId, role: "service" }` — no userId. Services receiving internal calls must handle `role: "service"` and the absence of `userId`.
+- **API key auth**: sets full `req.user` from the API key record. Still subject to tenant status checks.
+- **JWT auth**: sets full `req.user` from token payload. Subject to user status, tenant status, AND membership revocation checks.
+- `generateTokenPair` and `refreshTokensImpl` resolve role via `findUserOrgRole(userId, tenantId)` — if it returns null, falls back to `user.role` from the users table (usually "member"). Code that runs after auth must handle this fallback gracefully.
+
+### Error Code Discrimination (Backend)
+
+- NEVER use the same error code for semantically different errors without distinguishing metadata.
+- `AuthorizationError` with `metadata: { reason: "access_revoked" }` (membership revoked, tenant blocked) is FATAL — triggers login redirect on the frontend.
+- `AuthorizationError` from `requirePermission()` (insufficient role) is NON-FATAL — shows inline error, no redirect.
+- When throwing `AuthorizationError` from auth middleware for access revocation, ALWAYS include `metadata: { reason: "access_revoked" }`.
+- When adding ANY new error response from backend middleware or services, explicitly decide whether it's fatal or non-fatal and include appropriate metadata.
+
+```typescript
+// ❌ WRONG — fatal and non-fatal auth errors look identical
+throw new AuthorizationError("Access denied", { operation: "authMiddleware" });
+
+// ✅ CORRECT — fatal auth errors carry distinguishing metadata
+throw new AuthorizationError("Organization is suspended", {
+  operation: "authMiddleware",
+  metadata: { reason: "access_revoked" },
+});
+```
+
+### Multi-Tenant Data Access (Backend)
+
+- ALL database queries MUST filter by `tenant_id`. Never query data without tenant scoping.
+- Services must use `requireTenantId(req)` to extract and validate the tenant — never read `req.user.tenantId` directly without validation.
+- Background jobs and workers must carry `tenantId` in their `RequestContext`. A job processing data for tenant A must NEVER accidentally read/write tenant B's data.
+- Internal service-to-service calls (HMAC) must propagate `tenant_id` via request body, `x-kenchi-tenant-id` header, or query parameter. The receiving service validates this in `tryInternalAuth`.
+
+```typescript
+// ❌ WRONG — query without tenant scoping
+const analyses = await db.query("SELECT * FROM analyses WHERE id = $1", [id]);
+
+// ✅ CORRECT — always scope by tenant
+const analyses = await db.query("SELECT * FROM analyses WHERE id = $1 AND tenant_id = $2", [
+  id,
+  tenantId,
+]);
+```
+
+### Service-to-Service Calls (Backend)
+
+- Internal HMAC-authenticated calls must include `tenant_id` so the receiving service can enforce tenant isolation.
+- `resilientClient` propagates tenant context via `x-kenchi-tenant-id` header and request body.
+- If a service endpoint receives an internal call without `tenant_id`, it should log a debug warning (not crash) — but the calling service should always include it.
+
+### Background Jobs & Workers (Backend)
+
+- Every job must create a `RequestContext` with the correct `tenantId` — never use a hardcoded or global tenant.
+- Jobs that iterate over multiple tenants must create a fresh context per tenant, not reuse a single context.
+- Tenant status (blocked/suspended) should be checked before processing a job for that tenant.
+
+### Feature Gating (Backend + Frontend)
+
+- **Backend**: `requireFeature()` middleware blocks the entire request with a 403 — use it only for endpoints that are genuinely premium actions (write operations, advanced features). Read-only dashboard data endpoints should generally NOT be feature-gated.
+- **Frontend**: `<FeatureGate>` renders nothing when feature is disabled — wrapping an entire page in it makes the page disappear silently. Use it for _sections_ within a page, not the page itself.
+- When gating a feature, ask: "What happens for a free-plan personal account?" If they can't use a basic page, the gate is too aggressive.
+
+### Frontend Error Handling
+
+- Frontend `apiClient` distinguishes between error scenarios using metadata, NOT just error codes.
+- A 403 from `requirePermission("billing")` (role too low) must NOT redirect to login — it should show an inline error or upgrade prompt.
+- A 403 with `metadata.reason === "access_revoked"` (tenant blocked, membership revoked) SHOULD redirect to login.
+- When adding new backend error responses, always consider how the frontend `apiClient` will interpret them — trace the full path from backend throw to frontend handling.
+
+### Verification Checklist (for every change)
+
+- [ ] Works for personal accounts (tenant_type: "personal", auto-admin role, free plan)
+- [ ] Works for organization members (role: "member", minimal permissions)
+- [ ] Works for organization admins/owners (full permissions)
+- [ ] Works for internal service-to-service calls (HMAC auth, role: "service")
+- [ ] Works for API key authentication
+- [ ] All database queries include tenant_id scoping
+- [ ] Background jobs carry correct tenantId in RequestContext
+- [ ] Read-only endpoints don't require write-level permissions
+- [ ] Error responses carry distinguishing metadata (fatal vs non-fatal)
+- [ ] Feature gates don't block essential read-only endpoints
+- [ ] Frontend doesn't redirect to login for non-fatal permission denials
+- [ ] Internal service calls propagate tenant_id
 
 ## Anti-Patterns to Avoid
 
@@ -185,6 +307,16 @@ After your implementation is verified:
 - Renaming unused variables to `_var` instead of deleting them
 - Re-exporting types you didn't add
 - Unbounded `Promise.all()` for batch external API calls (use `pMap` with concurrency limit)
+- Gating read-only endpoints with `requirePermission()` for write-level permissions
+- Using same error code without metadata to distinguish fatal vs non-fatal auth errors
+- Wrapping entire pages in `<FeatureGate>` (gate sections, not pages)
+- Adding `requireFeature()` to read-only dashboard data endpoints
+- Database queries missing `tenant_id` WHERE clause (tenant data leakage)
+- Assuming `req.user.role` is always "admin" or "owner" — member role is the default fallback
+- Internal service calls without `tenant_id` propagation
+- Background jobs without tenant-scoped `RequestContext`
+- Services that don't handle `role: "service"` from HMAC internal auth
+- Checking tenant status after processing (check BEFORE doing work)
 
 ## Decision Framework
 
@@ -216,6 +348,16 @@ Before considering your work done:
 - [ ] No secrets/PII in logs
 - [ ] No `process.env` — use shared config
 - [ ] Parameterized queries only (no SQL string interpolation)
+- [ ] Verified for personal accounts (tenant_type: "personal", free plan, auto-admin)
+- [ ] Verified for organization members (role: "member", minimal permissions)
+- [ ] Verified for internal service calls (HMAC auth, role: "service", no userId)
+- [ ] All DB queries include tenant_id scoping
+- [ ] Background jobs carry tenant-scoped RequestContext
+- [ ] Read-only endpoints don't require write-level permission gates
+- [ ] Error responses carry metadata to distinguish fatal vs non-fatal auth errors
+- [ ] Feature gates don't block essential read-only data endpoints
+- [ ] Frontend error handling won't redirect to login for non-fatal 403s
+- [ ] Internal service calls propagate tenant_id
 - [ ] Tests delegated to test-engineer (if applicable)
 - [ ] Code review delegated to kenchi-refactor-analyst (if significant change)
 - [ ] Changes ready for commit (only when user requests)
