@@ -124,7 +124,7 @@ export const ConnectProviderStep = ({
         </motion.div>
       ) : (
         <motion.div variants={itemVariants}>
-          <a href="/auth/gitlab/login" className="block group">
+          <a href="/dashboard/setup/gitlab" className="block group">
             <Card
               className={cn(
                 "transition-all",

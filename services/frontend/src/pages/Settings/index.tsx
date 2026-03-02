@@ -9,7 +9,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "motion/react";
-import { Users, Shield, Scale, Headphones, UserCircle } from "lucide-react";
+import { Users, UserCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenantInfo } from "@/hooks/useDashboardData";
 import { useTheme } from "@/hooks/useTheme";
@@ -22,7 +22,6 @@ import { apiClient } from "@/lib/apiClient";
 import { containerVariants, itemVariants } from "@/lib/animations";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { FeatureGate } from "@/components/FeatureGate";
 import { ProfileHero } from "./ProfileHero";
 import { SettingsNav } from "./SettingsNav";
 import { ThemeSelector } from "./ThemeSelector";
@@ -224,90 +223,7 @@ export const Settings = () => {
             </div>
           </section>
 
-          {/* Security & Access */}
-          <section id="security">
-            <SectionHeader title="Security & Access" />
-            <div className="space-y-4">
-              <FeatureGate feature="ssoSaml">
-                <motion.div variants={itemVariants}>
-                  <Card>
-                    <CardHeader className="border-b">
-                      <div className="flex items-center gap-2">
-                        <Shield className="w-5 h-5 text-indigo-500" />
-                        <CardTitle>SSO / SAML</CardTitle>
-                      </div>
-                      <CardDescription>
-                        Configure single sign-on with your identity provider.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        SSO/SAML configuration will be available here. Connect your identity
-                        provider to enable single sign-on for your organization.
-                      </p>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </FeatureGate>
-
-              <FeatureGate feature="customRules">
-                <motion.div variants={itemVariants}>
-                  <Card>
-                    <CardHeader className="border-b">
-                      <div className="flex items-center gap-2">
-                        <Scale className="w-5 h-5 text-indigo-500" />
-                        <CardTitle>Custom Rules</CardTitle>
-                      </div>
-                      <CardDescription>
-                        Configure custom risk assessment rules for your CI pipelines.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                          Create and manage custom risk rules to tailor analysis to your workflows.
-                        </p>
-                        <Link
-                          to="/dashboard/risk-rules"
-                          className="text-xs font-medium text-indigo-500 hover:text-indigo-600 transition-colors whitespace-nowrap ml-4"
-                        >
-                          Manage Rules
-                        </Link>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </FeatureGate>
-
-              <FeatureGate feature="prioritySupport">
-                <motion.div variants={itemVariants}>
-                  <Card>
-                    <CardHeader className="border-b">
-                      <div className="flex items-center gap-2">
-                        <Headphones className="w-5 h-5 text-indigo-500" />
-                        <CardTitle>Priority Support</CardTitle>
-                      </div>
-                      <CardDescription>
-                        Get priority support with faster response times.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Your plan includes priority support. Contact us at{" "}
-                        <a
-                          href="mailto:support@kenchi.dev"
-                          className="text-indigo-500 hover:text-indigo-600 transition-colors"
-                        >
-                          support@kenchi.dev
-                        </a>{" "}
-                        for expedited assistance.
-                      </p>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </FeatureGate>
-            </div>
-          </section>
+          {/* Security & Access — hidden until SSO/SAML, Custom Rules, and Priority Support are implemented */}
 
           {/* Danger Zone */}
           <section id="danger">

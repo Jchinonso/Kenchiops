@@ -427,8 +427,6 @@ export const Integrations = () => {
   const { user } = useAuth();
   const loginProvider = user?.organizations.find((org) => org.isSelected)?.provider ?? "github";
   const isGitHub = loginProvider === "github";
-  const isPersonal = user?.tenantType === "personal";
-
   const { data: tenant } = useTenantInfo();
   const githubConnected = tenant?.githubConnected ?? false;
   const tenantId = tenant?.id ?? "";
@@ -525,26 +523,21 @@ export const Integrations = () => {
           ) : (
             <GitLabCICard tenantId={tenantId} otherProviderConnected={false} />
           )}
-          {!isPersonal && (
-            <FeatureGate feature="slackIntegration">
-              <ConnectionCard
-                name="Slack"
-                icon={<MessageSquare className="w-8 h-8 text-purple-600" />}
-                connected={false}
-                actionLabel="Connect"
-                actionHref="/dashboard/integrations"
-              />
-            </FeatureGate>
-          )}
+          <FeatureGate feature="slackIntegration">
+            <ConnectionCard
+              name="Slack"
+              icon={<MessageSquare className="w-8 h-8 text-purple-600" />}
+              connected={false}
+              actionLabel="Connect"
+              actionHref="/dashboard/integrations"
+            />
+          </FeatureGate>
         </CardContent>
       </Card>
 
-      {/* Monitoring Integrations (paid feature) — hidden for personal accounts */}
-      {!isPersonal && (
-        <FeatureGate feature="apiAccess">
-          <MonitoringIntegrations integrationHealth={integrationHealthMap} tenantId={tenantId} />
-        </FeatureGate>
-      )}
+      <FeatureGate feature="apiAccess">
+        <MonitoringIntegrations integrationHealth={integrationHealthMap} tenantId={tenantId} />
+      </FeatureGate>
 
       {planLimitError && (
         <UpgradePrompt

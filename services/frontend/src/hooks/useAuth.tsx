@@ -234,11 +234,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
         const body = (await response.json()) as {
           readonly data?: {
-            readonly role?: string;
             readonly hasProviderConnection?: boolean;
           };
         };
-        const newRole = body.data?.role;
         const hasProviderConnection = body.data?.hasProviderConnection ?? false;
 
         // Clear tenant-scoped localStorage to prevent cross-tenant data leaks.
@@ -246,31 +244,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           .filter((key) => key.startsWith("kenchi_"))
           .forEach((key) => localStorage.removeItem(key));
 
-        // Update user state locally — the backend already set the new JWT cookie.
-        // Avoids an extra /auth/me round-trip.
-        setUser((prev) => {
-          if (!prev) {
-            return prev;
-          }
-          const selectedOrg = prev.organizations.find((org) => org.tenantId === orgId);
-          return {
-            ...prev,
-            tenantId: orgId,
-            tenantType: selectedOrg?.tenantType ?? "organization",
-            role: newRole ?? prev.role,
-            organizations: prev.organizations.map((org) => ({
-              ...org,
-              isSelected: org.tenantId === orgId,
-            })),
-          };
-        });
+        // Refresh user from /auth/me to confirm the new JWT cookie is active.
+        // Without this, the caller navigates to /dashboard and fires API requests
+        // before the browser has fully applied the new Set-Cookie header, causing
+        // transient 401 errors that require a page refresh.
+        await refreshUser();
 
         return { hasProviderConnection };
       } finally {
         setIsSwitchingOrg(false);
       }
     },
-    []
+    [refreshUser]
   );
 
   useEffect(() => {

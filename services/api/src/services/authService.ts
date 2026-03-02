@@ -289,19 +289,25 @@ const autoLinkOrganizationsImpl = async (
     });
   }
 
-  // Mark the personal account's tenant as 'personal' type.
-  // The personal account is always the last item in effectiveOrgs when included,
-  // so its tenant ID is the last in the tenantIds array.
-  if (includePersonalAccount && tenantIds.length > 0) {
-    const personalTenantId = tenantIds[tenantIds.length - 1];
-    try {
-      await markTenantAsPersonal(personalTenantId);
-    } catch (markError: unknown) {
-      logger.warn("Failed to mark personal tenant type (non-fatal)", {
-        userId: user.id,
-        error: getErrorMessage(markError),
-        ...context,
-      });
+  // Self-healing: always mark the personal account's tenant as 'personal' type.
+  // This runs on every login (not just when a new personal tenant is created) to
+  // fix existing tenants that were created as 'organization' before this fix.
+  {
+    const personalOrgIndex = effectiveOrgs.findIndex(
+      (org) => org.login.toLowerCase() === providerUsername.toLowerCase()
+    );
+    if (personalOrgIndex !== -1 && personalOrgIndex < tenantIds.length) {
+      const personalTenantId = tenantIds[personalOrgIndex];
+      try {
+        await markTenantAsPersonal(personalTenantId);
+      } catch (markError: unknown) {
+        logger.warn("Failed to mark personal tenant type (non-fatal)", {
+          userId: user.id,
+          personalTenantId,
+          error: getErrorMessage(markError),
+          ...context,
+        });
+      }
     }
   }
 

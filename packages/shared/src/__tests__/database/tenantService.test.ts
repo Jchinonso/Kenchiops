@@ -366,25 +366,28 @@ describe("Tenant Service", () => {
   });
 
   describe("handleGitHubUninstall", () => {
-    it("should handle GitHub App uninstallation", async () => {
+    it("should deactivate provider connection without deleting tenant", async () => {
       // Mock findTenantByGitHubInstallation to return a tenant row
       mockFindTenantByGitHubInstallation.mockResolvedValue(mockTenantRow);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockClientQuery = jest
         .fn<(...args: any[]) => Promise<any>>()
-        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
-        .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+        .mockResolvedValue({ rows: [], rowCount: 0 });
       const mockClient = { query: mockClientQuery };
 
       mockTransaction.mockImplementation(async (fn) => fn(mockClient));
 
       await tenantService.handleGitHubUninstall(12345);
 
-      expect(mockClientQuery).toHaveBeenCalledWith(expect.stringContaining("UPDATE tenants"), [
-        "deleted",
-        "tenant-123",
-      ]);
+      // Should deactivate provider connection, not delete tenant
+      expect(mockDeactivateByTenantAndProvider).toHaveBeenCalledWith("tenant-123", "github_app");
+
+      // Should NOT set tenant status to deleted
+      const statusUpdateCalls = mockClientQuery.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0].includes("UPDATE tenants SET status")
+      );
+      expect(statusUpdateCalls).toHaveLength(0);
     });
 
     it("should log warning when tenant not found", async () => {
