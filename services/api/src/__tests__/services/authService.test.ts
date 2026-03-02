@@ -614,8 +614,17 @@ describe("authService", () => {
       });
     });
 
-    it("should NOT use personal account fallback for GitLab (only GitHub)", async () => {
+    it("should use personal account fallback for GitLab when user has zero orgs", async () => {
+      const personalTenant = createTestTenant({
+        id: "tenant-personal-gl",
+        orgName: "myuser",
+        provider: "gitlab",
+      });
       mockGetUserOrganizations.mockResolvedValue([]);
+      mockFindByOrgNameAndProvider.mockResolvedValue(null);
+      mockCreateFromGitLabGroup.mockResolvedValue(personalTenant);
+      mockAddUserOrganization.mockResolvedValue(undefined);
+      mockSwitchUserOrganization.mockResolvedValue(null);
 
       await service.autoLinkOrganizations(
         { id: "usr_1", tenantId: null },
@@ -626,9 +635,14 @@ describe("authService", () => {
         testContext
       );
 
-      // No fallback for GitLab — zero orgs means nothing to link
-      expect(mockFindByOrgNameAndProvider).not.toHaveBeenCalled();
-      expect(mockSwitchUserOrganization).not.toHaveBeenCalled();
+      // Personal account fallback now works for all providers
+      expect(mockFindByOrgNameAndProvider).toHaveBeenCalledWith("myuser", "gitlab");
+      expect(mockCreateFromGitLabGroup).toHaveBeenCalledWith({ gitlabGroupPath: "myuser" });
+      expect(mockAddUserOrganization).toHaveBeenCalledWith({
+        userId: "usr_1",
+        tenantId: "tenant-personal-gl",
+        role: "admin",
+      });
     });
 
     it("should work for gitlab provider using createFromGitLabGroup", async () => {

@@ -207,14 +207,14 @@ const autoLinkOrganizationsImpl = async (
     ...context,
   });
 
-  // For GitHub: always include the user's personal account alongside organizations.
+  // Always include the user's personal account alongside organizations.
   // This ensures the personal account is available in the org switcher even when
   // the user has organization memberships. Personal account is also important as
-  // a fallback when GitHub's API hides orgs due to third-party access restrictions.
-  const hasPersonalInOrgs =
-    provider === "github" &&
-    orgs.some((org) => org.login.toLowerCase() === providerUsername.toLowerCase());
-  const includePersonalAccount = provider === "github" && !hasPersonalInOrgs;
+  // a fallback when the provider API hides orgs due to access restrictions.
+  const hasPersonalInOrgs = orgs.some(
+    (org) => org.login.toLowerCase() === providerUsername.toLowerCase()
+  );
+  const includePersonalAccount = !hasPersonalInOrgs;
   const effectiveOrgs = includePersonalAccount ? [...orgs, { login: providerUsername }] : orgs;
 
   // Fetch existing memberships once — reused for reconciliation threshold below.
@@ -222,9 +222,9 @@ const autoLinkOrganizationsImpl = async (
 
   // FLAW-13: If the user already has a personal tenant with a stale name,
   // update it to the current username instead of creating a new one.
-  if (provider === "github") {
+  {
     const existingPersonal = existingMemberships.find(
-      (membership) => membership.provider === "github" && membership.tenantType === "personal"
+      (membership) => membership.provider === provider && membership.tenantType === "personal"
     );
 
     if (existingPersonal && existingPersonal.orgName !== providerUsername.toLowerCase()) {

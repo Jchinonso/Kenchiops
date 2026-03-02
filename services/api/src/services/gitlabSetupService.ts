@@ -42,8 +42,8 @@ const GITLAB_CI_PROVIDER = "gitlab_ci" as const;
 const generateWebhookSecret = (): string =>
   crypto.randomBytes(WEBHOOK_SECRET_BYTES).toString("hex");
 
-/** Compute the GitLab webhook URL from config. */
-const getGitLabWebhookUrl = (): string => `${config.OAUTH_CALLBACK_BASE_URL}/webhooks/gitlab`;
+/** Compute the GitLab webhook URL from config. Uses the public-facing URL so GitLab can reach it. */
+const getGitLabWebhookUrl = (): string => `${config.GITHUB_APP_URL}/webhooks/gitlab`;
 
 // ==================== Service Interface ====================
 
