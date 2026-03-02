@@ -682,50 +682,23 @@ export const handleGitHubUninstall = async (installationId: number): Promise<voi
       return;
     }
 
+    // Only deactivate the github_app provider connection — do NOT delete the tenant.
+    // The tenant exists because of OAuth login (org membership), not because of the
+    // GitHub App. Uninstalling the app only removes repo access and CI monitoring.
+    // Users can still log in and use the org; they just need to reinstall the app
+    // to regain repo access.
+    await deactivateByTenantAndProvider(tenantRow.id, "github_app");
+
     await transaction(async (client) => {
-      const updated = await client.query(TENANT_QUERIES.UPDATE_STATUS, [
-        TENANT_STATUS.DELETED,
-        tenantRow.id,
-      ]);
-      if (updated.rowCount === 0) {
-        // Tenant was already deleted or removed between the lookup and status update.
-        // Log and continue — the deactivation and session revocation below are idempotent.
-        logger.warn("Tenant already deleted during GitHub uninstall", {
-          installationId,
-          tenantId: tenantRow.id,
-        });
-        return;
-      }
       await insertAuditLog(client, tenantRow.id, AUDIT_ACTIONS.GITHUB_UNINSTALLED, {
         installationId,
       });
     });
 
-    // Deactivate the github_app connection
-    await deactivateByTenantAndProvider(tenantRow.id, "github_app");
-
-    // Revoke all active sessions so removed users cannot continue using stale JWTs.
-    // Uses dynamic import to avoid circular dependency (database → cache/user).
-    try {
-      const { setTenantStatusFlag } = await import("../../cache/userStatusCache.js");
-      await setTenantStatusFlag(tenantRow.id, "deleted");
-
-      const { revokeAllTenantTokens } = await import("../user/refreshToken.js");
-      const tokensRevoked = await revokeAllTenantTokens(tenantRow.id);
-
-      logger.info("Handled GitHub App uninstallation with session revocation", {
-        tenantId: tenantRow.id,
-        installationId,
-        tokensRevoked,
-      });
-    } catch (revocationError: unknown) {
-      // Non-fatal: tenant is already marked deleted, sessions will expire naturally
-      logger.warn("Session revocation failed during GitHub uninstall (non-fatal)", {
-        tenantId: tenantRow.id,
-        installationId,
-        error: getErrorMessage(revocationError),
-      });
-    }
+    logger.info("Handled GitHub App uninstallation — provider connection deactivated", {
+      tenantId: tenantRow.id,
+      installationId,
+    });
   } catch (error) {
     logger.error("Failed to handle GitHub uninstall", {
       installationId,
