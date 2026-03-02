@@ -134,11 +134,12 @@ export const apiClient = async (
         readonly error?: {
           readonly code?: string;
           readonly message?: string;
-          readonly metadata?: { readonly code?: string };
+          readonly metadata?: { readonly code?: string; readonly reason?: string };
         };
       };
       const errorCode = errorBody.error?.code;
       const metadataCode = errorBody.error?.metadata?.code;
+      const metadataReason = errorBody.error?.metadata?.reason;
 
       if (errorCode === "PLAN_LIMIT_EXCEEDED" || metadataCode === "PLAN_LIMIT_EXCEEDED") {
         toast.error(
@@ -153,9 +154,11 @@ export const apiClient = async (
         );
       } else if (errorCode === "DOWNGRADE_BLOCKED" || metadataCode === "DOWNGRADE_BLOCKED") {
         toast.error(errorBody.error?.message ?? "Current usage exceeds the target plan's limits.");
-      } else if (errorCode === "AUTHORIZATION_ERROR") {
+      } else if (errorCode === "AUTHORIZATION_ERROR" && metadataReason === "access_revoked") {
         // Membership revoked or tenant blocked — force re-authentication.
-        // The backend sets this when isMembershipRevoked() or isTenantBlocked() is true.
+        // Only redirects when the auth middleware explicitly marks the error
+        // with reason: "access_revoked". Generic permission denials (e.g.,
+        // requirePermission("billing") for a member role) must NOT redirect.
         toast.error(
           errorBody.error?.message ??
             "Access denied. You may have been removed from this organization."

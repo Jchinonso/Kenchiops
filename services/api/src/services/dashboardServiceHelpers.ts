@@ -11,9 +11,9 @@ import {
   createLogger,
   NotFoundError,
   findById as findTenantById,
-  findOAuthIdentitiesByUser,
   findGitHubAppConnection,
   findSlackConnection,
+  findGitLabConnection,
   getAnalysisById,
   getAnalysesByTenant,
   countAnalysesByTenant,
@@ -66,15 +66,13 @@ const getTenantInfoFn = async (
     throw new NotFoundError("Tenant not found", { metadata: { tenantId } });
   }
 
-  const [ghConn, slackConn, identities] = await Promise.all([
+  const [ghConn, slackConn, gitlabConn] = await Promise.all([
     findGitHubAppConnection(tenantId),
     findSlackConnection(tenantId),
-    userId ? findOAuthIdentitiesByUser(userId) : Promise.resolve([]),
+    findGitLabConnection(tenantId),
   ]);
 
-  const gitlabConnected = identities.some(
-    (identity) => identity.provider === "gitlab" && identity.accessToken !== null
-  );
+  const gitlabConnected = gitlabConn !== null;
   logger.info("Tenant info retrieved", { gitlabConnected, ...context });
 
   return {
@@ -101,15 +99,11 @@ const getDashboardStatsFn = async (
   }
 
   const resolveGitLabProjects = async (): Promise<readonly GitLabProject[]> => {
-    if (!userId) {
+    const gitlabConn = await findGitLabConnection(tenantId);
+    if (!gitlabConn?.accessToken) {
       return [];
     }
-    const identities = await findOAuthIdentitiesByUser(userId);
-    const gitlabIdentity = identities.find((identity) => identity.provider === "gitlab");
-    if (!gitlabIdentity?.accessToken) {
-      return [];
-    }
-    return gitlabPort.getProjects(gitlabIdentity.accessToken, gitlabIdentity.instanceUrl, context);
+    return gitlabPort.getProjects(gitlabConn.accessToken, gitlabConn.baseUrl, context);
   };
 
   const ghConn = await findGitHubAppConnection(tenantId);
@@ -407,16 +401,15 @@ const getCorrelationsFn = async (
 };
 
 const getGitLabProjectsFn = async (
-  userId: string,
+  tenantId: string,
   gitlabPort: GitLabProjectsPort,
   context: RequestContext
 ): Promise<readonly GitLabProject[]> => {
-  const identities = await findOAuthIdentitiesByUser(userId);
-  const gitlabIdentity = identities.find((identity) => identity.provider === "gitlab");
-  if (!gitlabIdentity?.accessToken) {
+  const gitlabConn = await findGitLabConnection(tenantId);
+  if (!gitlabConn?.accessToken) {
     return [];
   }
-  return gitlabPort.getProjects(gitlabIdentity.accessToken, gitlabIdentity.instanceUrl, context);
+  return gitlabPort.getProjects(gitlabConn.accessToken, gitlabConn.baseUrl, context);
 };
 
 export {

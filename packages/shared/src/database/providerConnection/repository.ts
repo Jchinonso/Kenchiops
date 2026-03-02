@@ -300,10 +300,12 @@ export const findSlackConnection = async (tenantId: string): Promise<ProviderCon
   findByTenantAndProvider(tenantId, "slack");
 
 /**
- * Find the GitLab platform connection for a tenant.
+ * Find the GitLab CI connection for a tenant.
+ * Uses "gitlab_ci" provider which holds the access token and webhook config
+ * created during project setup (distinct from the "gitlab" OAuth link record).
  */
 export const findGitLabConnection = async (tenantId: string): Promise<ProviderConnection | null> =>
-  findByTenantAndProvider(tenantId, "gitlab");
+  findByTenantAndProvider(tenantId, "gitlab_ci");
 
 /**
  * Find a tenant by GitHub App installation ID.

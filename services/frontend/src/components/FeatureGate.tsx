@@ -124,8 +124,8 @@ export const FeatureGate = ({ feature, fallback, children }: FeatureGateProps) =
     return null;
   }
 
-  // No subscription data — default to showing children (fail open for display)
-  if (!subscription) {
+  // No subscription data or missing plan — default to showing children (fail open for display)
+  if (!subscription?.plan) {
     return <>{children}</>;
   }
 

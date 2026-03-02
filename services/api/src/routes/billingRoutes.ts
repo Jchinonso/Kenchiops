@@ -238,7 +238,6 @@ router.post(
 router.get(
   "/api/v1/billing/status",
   rateLimitByCategory("readonly"),
-  requirePermission("billing"),
   asyncHandler(handleGetBillingStatus)
 );
 
