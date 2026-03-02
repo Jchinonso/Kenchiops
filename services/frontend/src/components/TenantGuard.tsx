@@ -137,8 +137,8 @@ export const TenantGuard = ({ children }: TenantGuardProps) => {
   const { data: subscription, isLoading } = useSubscription();
   const { user } = useAuth();
 
-  // While loading, render children to avoid layout shift
-  if (isLoading || !subscription) {
+  // While loading or no subscription data, render children to avoid layout shift
+  if (isLoading || !subscription?.subscription) {
     return <>{children}</>;
   }
 

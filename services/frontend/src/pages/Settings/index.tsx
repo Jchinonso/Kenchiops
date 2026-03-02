@@ -59,11 +59,13 @@ export const Settings = () => {
   const { openPortal, isLoading: portalLoading } = useBillingPortal();
   const { impact, isLoading: impactLoading, error: impactError, fetchImpact } = useDeletionImpact();
 
-  const planId = useMemo(() => subscription?.plan.id ?? "free", [subscription]);
-  const planDisplayName = useMemo(() => subscription?.plan.displayName ?? "Free", [subscription]);
+  const planId = useMemo(() => subscription?.plan?.id ?? "free", [subscription]);
+  const planDisplayName = useMemo(() => subscription?.plan?.displayName ?? "Free", [subscription]);
   const isSubLoading = subscriptionLoading || usageLoading;
 
   const isPersonal = user?.tenantType === "personal";
+  const loginProvider = user?.organizations.find((org) => org.isSelected)?.provider ?? "github";
+  const providerDisplayName = loginProvider === "github" ? "GitHub" : "GitLab";
   const activeSection = useActiveSection(SECTION_IDS);
 
   // Handle Stripe Checkout redirect URL params
@@ -146,8 +148,8 @@ export const Settings = () => {
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                          Members join automatically when they sign in via GitHub, GitLab,
-                          Bitbucket, or Azure DevOps and belong to your organization.
+                          Members join automatically when they sign in via {providerDisplayName} and
+                          belong to your organization.
                         </p>
                         <Link
                           to="/dashboard/settings/team"

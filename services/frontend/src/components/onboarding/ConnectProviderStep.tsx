@@ -79,89 +79,86 @@ export const ConnectProviderStep = ({
     </motion.p>
 
     <div className="space-y-3">
-      {/* GitHub */}
-      <motion.div variants={itemVariants}>
-        <a
-          href={`https://github.com/apps/${githubAppSlug}/installations/new`}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Install GitHub App (opens in new tab)"
-          className="block group"
-        >
-          <Card
-            className={cn(
-              "transition-all",
-              isGitHub ? "ring-2 ring-indigo-500/30 border-indigo-200 dark:border-indigo-800" : "",
-              "hover:border-zinc-300 dark:hover:border-zinc-600",
-              "hover:shadow-lg hover:-translate-y-0.5",
-              "group-active:scale-[0.99]"
-            )}
+      {/* CI/CD Provider — show only the user's login provider */}
+      {isGitHub ? (
+        <motion.div variants={itemVariants}>
+          <a
+            href={`https://github.com/apps/${githubAppSlug}/installations/new`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Install GitHub App (opens in new tab)"
+            className="block group"
           >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center shrink-0">
-                  <Github className="w-5 h-5 text-white dark:text-zinc-900" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
-                      Install GitHub App
-                    </h3>
-                    {isGitHub && (
+            <Card
+              className={cn(
+                "transition-all",
+                "ring-2 ring-indigo-500/30 border-indigo-200 dark:border-indigo-800",
+                "hover:border-zinc-300 dark:hover:border-zinc-600",
+                "hover:shadow-lg hover:-translate-y-0.5",
+                "group-active:scale-[0.99]"
+              )}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center shrink-0">
+                    <Github className="w-5 h-5 text-white dark:text-zinc-900" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
+                        Install GitHub App
+                      </h3>
                       <Badge className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-0">
                         Recommended
                       </Badge>
-                    )}
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Monitor GitHub Actions workflow failures
+                    </p>
                   </div>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Monitor GitHub Actions workflow failures
-                  </p>
+                  <ExternalLink className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors shrink-0" />
                 </div>
-                <ExternalLink className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors shrink-0" />
-              </div>
-            </CardContent>
-          </Card>
-        </a>
-      </motion.div>
-
-      {/* GitLab */}
-      <motion.div variants={itemVariants}>
-        <a href="/auth/gitlab/login" className="block group">
-          <Card
-            className={cn(
-              "transition-all",
-              !isGitHub ? "ring-2 ring-orange-500/30 border-orange-200 dark:border-orange-800" : "",
-              "hover:border-orange-300 dark:hover:border-orange-700",
-              "hover:shadow-lg hover:-translate-y-0.5",
-              "group-active:scale-[0.99]"
-            )}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center shrink-0">
-                  <Gitlab className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
-                      Connect GitLab
-                    </h3>
-                    {!isGitHub && (
+              </CardContent>
+            </Card>
+          </a>
+        </motion.div>
+      ) : (
+        <motion.div variants={itemVariants}>
+          <a href="/auth/gitlab/login" className="block group">
+            <Card
+              className={cn(
+                "transition-all",
+                "ring-2 ring-orange-500/30 border-orange-200 dark:border-orange-800",
+                "hover:border-orange-300 dark:hover:border-orange-700",
+                "hover:shadow-lg hover:-translate-y-0.5",
+                "group-active:scale-[0.99]"
+              )}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center shrink-0">
+                    <Gitlab className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
+                        Connect GitLab
+                      </h3>
                       <Badge className="text-[10px] bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300 border-0">
                         Recommended
                       </Badge>
-                    )}
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Monitor GitLab CI/CD pipeline failures
+                    </p>
                   </div>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Monitor GitLab CI/CD pipeline failures
-                  </p>
+                  <ExternalLink className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors shrink-0" />
                 </div>
-                <ExternalLink className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors shrink-0" />
-              </div>
-            </CardContent>
-          </Card>
-        </a>
-      </motion.div>
+              </CardContent>
+            </Card>
+          </a>
+        </motion.div>
+      )}
 
       {/* Slack */}
       <motion.div variants={itemVariants}>

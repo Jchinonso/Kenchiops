@@ -63,6 +63,7 @@ import {
   Siren,
   ShieldCheck,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { FeatureGate } from "@/components/FeatureGate";
 import { ConfidenceChart } from "@/components/ConfidenceChart";
 import { ConfidenceTrendChart } from "@/components/ConfidenceTrendChart";
@@ -85,40 +86,47 @@ const buildOnboardingSteps = (
   githubConnected: boolean,
   gitlabConnected: boolean,
   slackConnected: boolean,
-  hasAnalyses: boolean
-): readonly OnboardingStep[] => [
-  {
-    title: "Connect a CI Provider",
-    description: "Connect GitHub or GitLab to start monitoring your CI/CD pipelines.",
-    completedDescription: `${githubConnected ? "GitHub" : "GitLab"} connected and receiving webhooks.`,
-    ctaLabel: githubConnected || gitlabConnected ? "Manage Integrations" : "Connect Provider",
-    href: "/dashboard/integrations",
-    icon: githubConnected ? (
-      <Github className="w-5 h-5 text-zinc-900 dark:text-zinc-100" />
-    ) : (
-      <Gitlab className="w-5 h-5 text-orange-500" />
-    ),
-    completed: githubConnected || gitlabConnected,
-  },
-  {
-    title: "Connect Slack (optional)",
-    description: "Get failure alerts and analysis results delivered to your team's Slack channels.",
-    completedDescription: "Slack is connected and receiving notifications.",
-    ctaLabel: slackConnected ? "Manage Slack" : "Add to Slack",
-    href: "/dashboard/settings",
-    icon: <MessageSquare className="w-5 h-5 text-purple-600" />,
-    completed: slackConnected,
-  },
-  {
-    title: "Your First Analysis",
-    description: "Once connected, Kenchi automatically analyzes CI failures on every push.",
-    completedDescription: "Kenchi has analyzed CI failures from your repos.",
-    ctaLabel: "View Analyses",
-    href: "/dashboard/cicd/analyses",
-    icon: <Zap className="w-5 h-5 text-amber-500" />,
-    completed: hasAnalyses,
-  },
-];
+  hasAnalyses: boolean,
+  isGitHub: boolean
+): readonly OnboardingStep[] => {
+  const providerName = isGitHub ? "GitHub" : "GitLab";
+  const providerConnected = isGitHub ? githubConnected : gitlabConnected;
+
+  return [
+    {
+      title: `Connect ${providerName}`,
+      description: `Connect ${providerName} to start monitoring your CI/CD pipelines.`,
+      completedDescription: `${providerName} connected and receiving webhooks.`,
+      ctaLabel: providerConnected ? "Manage Integrations" : "Connect Provider",
+      href: "/dashboard/integrations",
+      icon: isGitHub ? (
+        <Github className="w-5 h-5 text-zinc-900 dark:text-zinc-100" />
+      ) : (
+        <Gitlab className="w-5 h-5 text-orange-500" />
+      ),
+      completed: providerConnected,
+    },
+    {
+      title: "Connect Slack (optional)",
+      description:
+        "Get failure alerts and analysis results delivered to your team's Slack channels.",
+      completedDescription: "Slack is connected and receiving notifications.",
+      ctaLabel: slackConnected ? "Manage Slack" : "Add to Slack",
+      href: "/dashboard/settings",
+      icon: <MessageSquare className="w-5 h-5 text-purple-600" />,
+      completed: slackConnected,
+    },
+    {
+      title: "Your First Analysis",
+      description: "Once connected, Kenchi automatically analyzes CI failures on every push.",
+      completedDescription: "Kenchi has analyzed CI failures from your repos.",
+      ctaLabel: "View Analyses",
+      href: "/dashboard/cicd/analyses",
+      icon: <Zap className="w-5 h-5 text-amber-500" />,
+      completed: hasAnalyses,
+    },
+  ];
+};
 
 interface QuickStat {
   readonly title: string;
@@ -263,6 +271,10 @@ export const DashboardOverview = ({
   dismissOnboarding,
   refreshKey = 0,
 }: DashboardOverviewProps) => {
+  const { user } = useAuth();
+  const loginProvider = user?.organizations.find((org) => org.isSelected)?.provider ?? "github";
+  const isGitHub = loginProvider === "github";
+
   const {
     data: stats,
     isLoading: statsLoading,
@@ -320,7 +332,8 @@ export const DashboardOverview = ({
     tenant?.githubConnected ?? false,
     tenant?.gitlabConnected ?? false,
     tenant?.slackConnected ?? false,
-    (stats?.totalAnalyses ?? 0) > 0
+    (stats?.totalAnalyses ?? 0) > 0,
+    isGitHub
   );
   const completedCount = onboardingSteps.filter((step) => step.completed).length;
   const allStepsComplete = completedCount === onboardingSteps.length;

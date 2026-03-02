@@ -122,7 +122,7 @@ interface DashboardService {
     context: RequestContext
   ) => Promise<CorrelationResult>;
   readonly getGitLabProjects: (
-    userId: string,
+    tenantId: string,
     context: RequestContext
   ) => Promise<readonly GitLabProject[]>;
 }
@@ -166,6 +166,9 @@ export const createDashboardService = (
   getAnalysisCountsByRepo: getAnalysisCountsByRepoFn,
   getCorrelations: getCorrelationsFn,
 
-  getGitLabProjects: (userId: string, context: RequestContext): Promise<readonly GitLabProject[]> =>
-    getGitLabProjectsFn(userId, gitlabProjectsPort, context),
+  getGitLabProjects: (
+    tenantId: string,
+    context: RequestContext
+  ): Promise<readonly GitLabProject[]> =>
+    getGitLabProjectsFn(tenantId, gitlabProjectsPort, context),
 });

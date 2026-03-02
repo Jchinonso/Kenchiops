@@ -11,7 +11,6 @@ import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
   requireTenantId,
-  AuthorizationError,
   ValidationError,
   HTTP_STATUS,
   PARSE_INT_RADIX,
@@ -256,16 +255,9 @@ const handleGetAnalysisCountsByRepo = async (req: Request, res: Response): Promi
 };
 
 const handleGetGitLabProjects = async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user?.userId;
-
-  if (!userId) {
-    throw new AuthorizationError("Authentication required", {
-      operation: "getGitLabProjects",
-    });
-  }
-
+  const tenantId = requireTenantId(req);
   const { context } = req;
-  const projects = await dashboardService.getGitLabProjects(userId, context);
+  const projects = await dashboardService.getGitLabProjects(tenantId, context);
   res.status(HTTP_STATUS.OK).json({ data: projects });
 };
 

@@ -715,7 +715,7 @@ const Dashboard = () => {
               ) : isOnboarding || (isOverview && needsOnboarding) ? (
                 <Onboarding
                   displayName={displayName}
-                  provider={user?.providers?.[0]?.provider ?? "github"}
+                  provider={user?.organizations.find((org) => org.isSelected)?.provider ?? "github"}
                   onSkip={handleSkipOnboarding}
                 />
               ) : (

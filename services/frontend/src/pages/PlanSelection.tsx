@@ -189,7 +189,7 @@ export const PlanSelection = () => {
   } = useChangePlan();
   const { createCheckout, isLoading: isCheckoutLoading } = useCreateCheckout();
 
-  const currentPlanId = useMemo(() => subscription?.plan.id ?? "free", [subscription]);
+  const currentPlanId = useMemo(() => subscription?.plan?.id ?? "free", [subscription]);
   const hasBilling = billingStatus?.hasStripeCustomer ?? false;
 
   const handleSelectPlan = useCallback(

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useTenantInfo } from "@/hooks/useDashboardData";
+import { useAuth } from "@/hooks/useAuth";
 import { useFetch, parseErrorBody } from "@/hooks/useFetch";
 import { useIntegrationHealth } from "@/hooks/useIncidentData";
 import { usePlanLimitError } from "@/hooks/usePlanLimitError";
@@ -423,6 +424,10 @@ const GitLabCICard = ({ tenantId, otherProviderConnected }: GitLabCardProps) => 
 // ==================== Main Component ====================
 
 export const Integrations = () => {
+  const { user } = useAuth();
+  const loginProvider = user?.organizations.find((org) => org.isSelected)?.provider ?? "github";
+  const isGitHub = loginProvider === "github";
+
   const { data: tenant } = useTenantInfo();
   const githubConnected = tenant?.githubConnected ?? false;
   const tenantId = tenant?.id ?? "";
@@ -507,15 +512,18 @@ export const Integrations = () => {
           <CardDescription>Connect your deployment and CI/CD platforms.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6 space-y-3">
-          <ConnectionCard
-            name="GitHub"
-            icon={<Github className="w-8 h-8 text-zinc-900 dark:text-zinc-100" />}
-            connected={githubConnected}
-            actionLabel={githubConnected ? "Manage" : "Install"}
-            actionHref={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
-            external
-          />
-          <GitLabCICard tenantId={tenantId} otherProviderConnected={githubConnected} />
+          {isGitHub ? (
+            <ConnectionCard
+              name="GitHub"
+              icon={<Github className="w-8 h-8 text-zinc-900 dark:text-zinc-100" />}
+              connected={githubConnected}
+              actionLabel={githubConnected ? "Manage" : "Install"}
+              actionHref={`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`}
+              external
+            />
+          ) : (
+            <GitLabCICard tenantId={tenantId} otherProviderConnected={false} />
+          )}
           <FeatureGate feature="slackIntegration">
             <ConnectionCard
               name="Slack"
