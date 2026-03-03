@@ -19,6 +19,7 @@ import type { OAuthTokenResponse, OAuthProviderProfile, RequestContext } from "@
 export interface OAuthOrganization {
   readonly login: string;
   readonly role?: string;
+  readonly installationId?: number;
 }
 
 /**
