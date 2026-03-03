@@ -157,9 +157,10 @@ router.post(
         error: getErrorMessage(error),
       });
 
+      // SECURITY (VULN-507): Return generic message, not internal error details
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         status: "error",
-        error: getErrorMessage(error),
+        error: "Failed to post comment to GitHub",
       });
     }
   })
@@ -244,9 +245,10 @@ router.post(
         error: getErrorMessage(error),
       });
 
+      // SECURITY (VULN-507): Return generic message, not internal error details
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         status: "error",
-        error: getErrorMessage(error),
+        error: "Failed to create check run with annotations",
       });
     }
   })
@@ -289,8 +291,9 @@ router.get(
         error: getErrorMessage(error),
       });
 
+      // SECURITY (VULN-507): Return generic message, not internal error details
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        error: getErrorMessage(error),
+        error: "Failed to fetch repositories for installation",
       });
     }
   })

@@ -18,6 +18,7 @@ import {
   ValidationError,
   NotFoundError,
   API_PAGINATION_DEFAULTS,
+  rateLimitByCategory,
   type CreateCustomRiskRuleInput,
   type UpdateCustomRiskRuleInput,
   type RiskRulesQueryOptions,
@@ -316,12 +317,19 @@ const handleQueryRiskAssessments = async (req: Request, res: Response): Promise<
 
 // ==================== Route Definitions ====================
 
+// SECURITY (VULN-510): Rate limit all risk rules endpoints
 /** GET /api/risk-rules - List custom risk rules for a tenant */
-router.get("/api/risk-rules", requireFeature("customRules"), asyncHandler(handleListRiskRules));
+router.get(
+  "/api/risk-rules",
+  rateLimitByCategory("readonly"),
+  requireFeature("customRules"),
+  asyncHandler(handleListRiskRules)
+);
 
 /** GET /api/risk-rules/:ruleId - Get a specific risk rule by ID */
 router.get(
   "/api/risk-rules/:ruleId",
+  rateLimitByCategory("readonly"),
   requireFeature("customRules"),
   asyncHandler(handleGetRiskRuleById)
 );
@@ -329,6 +337,7 @@ router.get(
 /** POST /api/risk-rules - Create a new custom risk rule */
 router.post(
   "/api/risk-rules",
+  rateLimitByCategory("standard"),
   requireFeature("customRules"),
   validate({
     body: {
@@ -342,6 +351,7 @@ router.post(
 /** PATCH /api/risk-rules/:ruleId - Update an existing risk rule */
 router.patch(
   "/api/risk-rules/:ruleId",
+  rateLimitByCategory("standard"),
   requireFeature("customRules"),
   asyncHandler(handleUpdateRiskRule)
 );
@@ -349,6 +359,7 @@ router.patch(
 /** DELETE /api/risk-rules/:ruleId - Delete a risk rule */
 router.delete(
   "/api/risk-rules/:ruleId",
+  rateLimitByCategory("standard"),
   requireFeature("customRules"),
   asyncHandler(handleDeleteRiskRule)
 );
@@ -356,6 +367,7 @@ router.delete(
 /** GET /api/risk-assessments - Query risk assessment audit trail */
 router.get(
   "/api/risk-assessments",
+  rateLimitByCategory("readonly"),
   requireFeature("customRules"),
   asyncHandler(handleQueryRiskAssessments)
 );

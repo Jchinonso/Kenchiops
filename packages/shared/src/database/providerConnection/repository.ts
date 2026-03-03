@@ -210,6 +210,7 @@ export const updateProviderConnection = async (
 
   // Build dynamic SET clause with sequential parameter numbering.
   // Parameter $1 is always the connection id (WHERE clause).
+  // SECURITY: tenant_id is the last parameter to enforce tenant isolation at the SQL level.
   const fieldEntries: ReadonlyArray<{ readonly column: string; readonly value: unknown }> = [
     ...("connectionName" in input
       ? [{ column: "connection_name", value: input.connectionName ?? null }]
@@ -234,8 +235,9 @@ export const updateProviderConnection = async (
     "updated_at = NOW()",
   ].join(", ");
 
-  const updateQuery = `UPDATE provider_connections SET ${setClauses} WHERE id = $1 RETURNING *`;
-  const params = [input.id, ...fieldEntries.map((entry) => entry.value)];
+  const tenantParamIndex = fieldEntries.length + 2;
+  const updateQuery = `UPDATE provider_connections SET ${setClauses} WHERE id = $1 AND tenant_id = $${tenantParamIndex} RETURNING *`;
+  const params = [input.id, ...fieldEntries.map((entry) => entry.value), input.tenantId];
 
   const result = await query<ProviderConnectionRow>(updateQuery, params);
 

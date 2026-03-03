@@ -279,7 +279,6 @@ export const expireTrials = async (): Promise<readonly string[]> => {
     if (expiredTenantIds.length > 0) {
       logger.info("Expired trial subscriptions", {
         count: expiredTenantIds.length,
-        tenantIds: expiredTenantIds,
       });
     }
 

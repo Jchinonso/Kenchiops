@@ -17,6 +17,7 @@ import type { Request, Response, NextFunction } from "express";
  * - X-Content-Type-Options: nosniff
  * - X-Frame-Options: DENY
  * - X-XSS-Protection: 0 (disable legacy XSS filter)
+ * - Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
  * - Strict-Transport-Security (production only): max-age=31536000; includeSubDomains
  *
  * @param isProduction - Whether the service is running in production mode
@@ -30,6 +31,9 @@ export const createSecurityHeaders =
     res.setHeader("X-Frame-Options", "DENY");
     // Disable legacy XSS filter -- modern browsers handle this natively
     res.setHeader("X-XSS-Protection", "0");
+    // CSP: API-only services should not serve any active content.
+    // default-src 'none' blocks all resource loading; frame-ancestors 'none' prevents embedding.
+    res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
 
     // HSTS: enforce HTTPS for 1 year in production (prevents first-request MitM)
     if (isProduction) {

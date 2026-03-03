@@ -41,7 +41,7 @@ const QUERIES = {
   UPDATE_LAST_USED: `
     UPDATE api_keys
     SET last_used_at = NOW(), updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $2
   `,
 } as const;
 
@@ -116,10 +116,11 @@ export const authenticateApiKey = async (plaintext: string): Promise<ApiKey | nu
     }
 
     // Fire-and-forget update last_used_at (non-critical)
+    // SECURITY: WHERE includes tenant_id for defense-in-depth tenant isolation.
     const updateStart = Date.now();
     (async () => {
       try {
-        await query(QUERIES.UPDATE_LAST_USED, [apiKey.id]);
+        await query(QUERIES.UPDATE_LAST_USED, [apiKey.id, apiKey.tenantId]);
       } catch (updateError) {
         logger.warn("Failed to update API key last_used_at", {
           apiKeyId: apiKey.id,

@@ -103,10 +103,10 @@ const handleCreateInvitation = async (req: Request, res: Response): Promise<void
     invitedBy: actorUserId ?? "unknown",
   });
 
+  // SECURITY (VULN-508): Do not log email (PII). invitationId is sufficient for tracing.
   logger.info("Invitation created", {
     ...context,
     invitationId: invitation.id,
-    invitedEmail: email,
     role: invitationRole,
   });
 

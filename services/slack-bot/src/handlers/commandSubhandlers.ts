@@ -611,9 +611,9 @@ export const handleAnalysis: SubcommandHandler = async (ctx): Promise<void> => {
       response_type: "ephemeral",
     });
   } catch (error) {
+    // SECURITY (VULN-513): Do not log stack traces -- getErrorMessage is sufficient
     logger.error("Error processing analysis command", {
       error: getErrorMessage(error),
-      stack: error instanceof Error ? error.stack : undefined,
     });
 
     const errorBlocks = formatErrorMessage(

@@ -285,6 +285,12 @@ describe("providerConnection/repository", () => {
       expect(sql).toContain("external_org_id = $3");
       expect(sql).toContain("updated_at = NOW()");
       expect(sql).toContain("WHERE id = $1");
+      // SECURITY: tenant_id must be in WHERE clause for tenant isolation
+      expect(sql).toContain("AND tenant_id = $4");
+
+      // Verify tenant_id is the last parameter
+      const params = mockQuery.mock.calls[0][1] as unknown[];
+      expect(params[params.length - 1]).toBe("tenant-abc");
     });
 
     it("should return null when no row is found for the given ID", async () => {
