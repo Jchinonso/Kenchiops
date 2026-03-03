@@ -319,7 +319,8 @@ export const createRateLimitMiddleware = (
         await rateLimiter.middleware()(req, res, next);
       } catch (error) {
         if (error instanceof RateLimitError || error instanceof AuthorizationError) {
-          throw error;
+          next(error);
+          return;
         }
         // Unexpected error - log as warning (fail-open but visible)
         logger.warn("Rate limit middleware error (failing open)", {

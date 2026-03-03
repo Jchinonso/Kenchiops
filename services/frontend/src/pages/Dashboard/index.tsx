@@ -59,7 +59,7 @@ const Dashboard = () => {
     dismissNotification,
   } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
-  const tenantDepsKey = `${sseRefreshKey}-${user?.tenantId ?? ""}`;
+  const tenantDepsKey = `${sseRefreshKey}-${user?.tenantId ?? ""}-${currentPath}`;
   const {
     data: tenant,
     isLoading: tenantLoading,
@@ -200,10 +200,7 @@ const Dashboard = () => {
       return <ComingSoon {...comingSoonConfig} />;
     }
 
-    if (
-      currentPath === "/dashboard/onboarding" ||
-      (currentPath === "/dashboard" && needsOnboarding)
-    ) {
+    if (currentPath === "/dashboard/onboarding" || needsOnboarding) {
       return (
         <Onboarding
           displayName={displayName}

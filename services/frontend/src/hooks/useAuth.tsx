@@ -288,11 +288,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       void (async () => {
         try {
-          await apiClient("/auth/refresh-orgs", { method: "POST" });
+          await apiClient("/auth/refresh-orgs", { method: "POST", backgroundRetry: true });
         } catch {
           // Best-effort — refreshUser below still runs
         }
-        await refreshUser();
+        try {
+          await refreshUser();
+        } catch {
+          // Best-effort — stale user state is acceptable; next navigation refreshes
+        }
       })();
     };
 

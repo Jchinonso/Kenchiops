@@ -363,7 +363,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       // can block even the token-refresh request (429 → forced logout).
       void (async () => {
         try {
-          await apiClient("/auth/refresh-orgs", { method: "POST" });
+          await apiClient("/auth/refresh-orgs", { method: "POST", backgroundRetry: true });
         } catch {
           // Best-effort
         }

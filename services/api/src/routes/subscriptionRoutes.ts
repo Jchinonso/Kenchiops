@@ -125,6 +125,45 @@ const handleGetSubscription = async (req: Request, res: Response): Promise<void>
   const tenantId = requireTenantId(req);
   const { context } = req;
 
+  // Personal accounts are not on a billing plan — return all features unlocked.
+  // Plans and subscriptions only apply to organization tenants.
+  const tenant = await findTenantById(tenantId);
+  if (tenant?.tenantType === "personal") {
+    logger.info("Subscription fetched (personal account)", { ...context });
+    res.status(HTTP_STATUS.OK).json({
+      data: {
+        plan: {
+          id: "personal",
+          displayName: "Personal",
+          priceMonthlyCents: 0,
+          sortOrder: 0,
+          limits: {
+            maxRepositories: null,
+            maxAnalysesMonthly: null,
+            maxIntegrations: null,
+            maxTeamMembers: 1,
+          },
+          features: {
+            slackIntegration: true,
+            customRules: true,
+            teamAnalytics: false,
+            ssoSaml: false,
+            auditLog: false,
+            apiAccess: true,
+            prioritySupport: false,
+          },
+        },
+        subscription: {
+          planId: "personal",
+          status: "active",
+          trialEndsAt: null,
+          changedAt: null,
+        },
+      },
+    });
+    return;
+  }
+
   const subscriptionWithPlan = await getSubscriptionWithPlan(tenantId);
 
   if (subscriptionWithPlan) {

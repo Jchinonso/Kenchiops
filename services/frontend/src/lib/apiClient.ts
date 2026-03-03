@@ -92,6 +92,8 @@ interface ApiClientOptions {
   readonly method?: string;
   readonly body?: unknown;
   readonly headers?: Readonly<Record<string, string>>;
+  /** When true, a 401 that cannot be refreshed returns the response instead of redirecting to /login. */
+  readonly backgroundRetry?: boolean;
 }
 
 const buildHeaders = (
@@ -124,7 +126,7 @@ export const apiClient = async (
   path: string,
   options: ApiClientOptions = {}
 ): Promise<Response> => {
-  const { method = "GET", body, headers = {} } = options;
+  const { method = "GET", body, headers = {}, backgroundRetry = false } = options;
   const requestHeaders = buildHeaders(headers);
   const init = buildInit(method, requestHeaders, body);
 
@@ -185,6 +187,12 @@ export const apiClient = async (
   const refreshed = await attemptTokenRefresh();
 
   if (!refreshed) {
+    // Background calls (SSE handler, visibility handler) should never force a logout.
+    // Return the 401 response and let the caller handle it gracefully.
+    if (backgroundRetry) {
+      return response;
+    }
+
     // Redirect to login on auth failure — but only if we're not already
     // on the login page, to avoid an infinite redirect loop when
     // AuthProvider's refreshUser() calls /auth/me on mount.

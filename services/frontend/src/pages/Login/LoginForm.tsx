@@ -1,38 +1,24 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, Lock, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { cn } from "@/lib/utils";
 import { containerVariants, itemVariants } from "@/lib/animations";
-import { HostingTabs } from "./HostingTabs";
 import { ProviderButton } from "./ProviderButton";
 import { KenchiLogo } from "./KenchiLogo";
 import type { GitProvider } from "./constants";
 
 interface LoginFormProps {
-  readonly activeTab: "saas" | "selfhosted";
-  readonly onTabChange: (tab: "saas" | "selfhosted") => void;
   readonly providers: readonly GitProvider[];
   readonly loadingProvider: string | null;
   readonly authChecking: boolean;
   readonly oauthErrorMessage: string | null;
-  readonly instanceUrl: string;
-  readonly onInstanceUrlChange: (value: string) => void;
-  readonly urlError: string | null;
-  readonly onSelfHostedSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   readonly onProviderClick: (providerId: string) => void;
 }
 
 export const LoginForm = ({
-  activeTab,
-  onTabChange,
   providers,
   loadingProvider,
   authChecking,
   oauthErrorMessage,
-  instanceUrl,
-  onInstanceUrlChange,
-  urlError,
-  onSelfHostedSubmit,
   onProviderClick,
 }: LoginFormProps) => (
   <main className="w-full lg:w-[55%] flex items-center justify-center p-6 sm:p-12 bg-white dark:bg-zinc-950 relative overflow-hidden">
@@ -101,119 +87,67 @@ export const LoginForm = ({
           )}
         </AnimatePresence>
 
-        {/* Tabs */}
-        <HostingTabs activeTab={activeTab} onTabChange={onTabChange} />
-
-        {/* Tab Panel */}
-        <div id={`tabpanel-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
-          {/* Self-hosted URL input */}
-          <AnimatePresence>
-            {activeTab === "selfhosted" && (
-              <motion.form
-                onSubmit={onSelfHostedSubmit}
-                noValidate
-                className="mb-5"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <label
-                  htmlFor="instance-url"
-                  className="block text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-1.5"
-                >
-                  Instance URL
-                </label>
-                <input
-                  id="instance-url"
-                  name="instanceUrl"
-                  type="url"
-                  required
-                  autoComplete="url"
-                  value={instanceUrl}
-                  onChange={(event) => onInstanceUrlChange(event.target.value)}
-                  placeholder="https://git.yourcompany.com"
-                  aria-invalid={urlError ? "true" : undefined}
-                  aria-describedby={urlError ? "instance-url-error" : undefined}
-                  className={cn(
-                    "w-full px-4 py-3 bg-zinc-100/60 dark:bg-zinc-900/60 border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500/50 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 transition-all",
-                    urlError ? "border-red-500/60" : "border-zinc-300 dark:border-zinc-800"
-                  )}
-                />
-                {urlError && (
-                  <p
-                    id="instance-url-error"
-                    className="mt-1.5 text-sm text-red-500 dark:text-red-400"
-                    role="alert"
-                  >
-                    {urlError}
-                  </p>
-                )}
-              </motion.form>
-            )}
-          </AnimatePresence>
-
-          {authChecking ? (
-            <div className="py-12 flex flex-col items-center gap-3">
-              <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-              <p className="text-sm text-zinc-500">Checking authentication...</p>
-            </div>
-          ) : (
-            <motion.div variants={containerVariants} initial="hidden" animate="visible">
-              {/* Primary Provider */}
-              <motion.div className="space-y-2.5" variants={itemVariants}>
-                {providers
-                  .filter((entry) => entry.primary)
-                  .map((provider) => (
-                    <ProviderButton
-                      key={provider.name}
-                      provider={provider}
-                      variant="primary"
-                      isLoading={loadingProvider === provider.id}
-                      disabled={loadingProvider !== null}
-                      onClick={() => onProviderClick(provider.id)}
-                    />
-                  ))}
-              </motion.div>
-
-              {/* Security reassurance */}
-              <motion.p
-                className="mt-3 flex items-center justify-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-600"
-                variants={itemVariants}
-              >
-                <Lock className="w-3 h-3" aria-hidden="true" />
-                Secure OAuth — we never see your password
-              </motion.p>
-
-              {/* Divider */}
-              <motion.div className="relative my-5" variants={itemVariants}>
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-zinc-200 dark:border-zinc-800" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-white/80 dark:bg-zinc-900/60 px-3 font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
-                    or continue with
-                  </span>
-                </div>
-              </motion.div>
-
-              {/* Secondary Providers */}
-              <motion.div className="space-y-2.5" variants={itemVariants}>
-                {providers
-                  .filter((entry) => !entry.primary)
-                  .map((provider) => (
-                    <ProviderButton
-                      key={provider.name}
-                      provider={provider}
-                      variant="secondary"
-                      isLoading={loadingProvider === provider.id}
-                      disabled={loadingProvider !== null}
-                      onClick={() => onProviderClick(provider.id)}
-                    />
-                  ))}
-              </motion.div>
+        {authChecking ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+            <p className="text-sm text-zinc-500">Checking authentication...</p>
+          </div>
+        ) : (
+          <motion.div variants={containerVariants} initial="hidden" animate="visible">
+            {/* Primary Provider */}
+            <motion.div className="space-y-2.5" variants={itemVariants}>
+              {providers
+                .filter((entry) => entry.primary)
+                .map((provider) => (
+                  <ProviderButton
+                    key={provider.name}
+                    provider={provider}
+                    variant="primary"
+                    isLoading={loadingProvider === provider.id}
+                    disabled={loadingProvider !== null}
+                    onClick={() => onProviderClick(provider.id)}
+                  />
+                ))}
             </motion.div>
-          )}
-        </div>
+
+            {/* Security reassurance */}
+            <motion.p
+              className="mt-3 flex items-center justify-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-600"
+              variants={itemVariants}
+            >
+              <Lock className="w-3 h-3" aria-hidden="true" />
+              Secure OAuth — we never see your password
+            </motion.p>
+
+            {/* Divider */}
+            <motion.div className="relative my-5" variants={itemVariants}>
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-zinc-200 dark:border-zinc-800" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-white/80 dark:bg-zinc-900/60 px-3 font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
+                  or continue with
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Secondary Providers */}
+            <motion.div className="space-y-2.5" variants={itemVariants}>
+              {providers
+                .filter((entry) => !entry.primary)
+                .map((provider) => (
+                  <ProviderButton
+                    key={provider.name}
+                    provider={provider}
+                    variant="secondary"
+                    isLoading={loadingProvider === provider.id}
+                    disabled={loadingProvider !== null}
+                    onClick={() => onProviderClick(provider.id)}
+                  />
+                ))}
+            </motion.div>
+          </motion.div>
+        )}
       </motion.div>
 
       {/* Help Link */}

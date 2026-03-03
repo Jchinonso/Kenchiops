@@ -36,9 +36,11 @@ interface ProfileHeroProps {
   readonly tenantLoading: boolean;
 }
 
-const PROVIDER_ICONS: Readonly<Record<string, typeof Github>> = {
-  github: Github,
-  gitlab: Gitlab,
+const PROVIDER_CONFIG: Readonly<
+  Record<string, { readonly icon: typeof Github; readonly className: string }>
+> = {
+  github: { icon: Github, className: "text-zinc-800 dark:text-zinc-200" },
+  gitlab: { icon: Gitlab, className: "text-orange-500" },
 };
 
 export const ProfileHero = ({ user, tenant, tenantLoading }: ProfileHeroProps) => {
@@ -106,10 +108,12 @@ export const ProfileHero = ({ user, tenant, tenantLoading }: ProfileHeroProps) =
                 {titleCase(user?.role ?? "member")}
               </Badge>
               {user?.providers?.map((providerInfo) => {
-                const ProviderIcon = PROVIDER_ICONS[providerInfo.provider] ?? Github;
+                const providerCfg = PROVIDER_CONFIG[providerInfo.provider];
+                const ProviderIcon = providerCfg?.icon ?? Github;
+                const iconClassName = providerCfg?.className ?? "";
                 return (
                   <Badge key={providerInfo.provider} variant="outline" className="text-xs gap-1">
-                    <ProviderIcon className="w-3 h-3" />
+                    <ProviderIcon className={cn("w-3.5 h-3.5", iconClassName)} />
                     {providerInfo.username ?? titleCase(providerInfo.provider)}
                   </Badge>
                 );
