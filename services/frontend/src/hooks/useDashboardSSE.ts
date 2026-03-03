@@ -356,8 +356,11 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
         installedTenantId?: string;
         uninstalledTenantId?: string;
       }>(event);
-      setRefreshKey((prev) => prev + 1);
 
+      // Defer setRefreshKey until AFTER auth operations complete.
+      // Firing it immediately causes ~10 simultaneous dashboard re-fetches
+      // that, combined with refresh-orgs, burst past the rate limiter and
+      // can block even the token-refresh request (429 → forced logout).
       void (async () => {
         try {
           await apiClient("/auth/refresh-orgs", { method: "POST" });
@@ -376,8 +379,15 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
           // Refresh user state to pick up org list changes (install or uninstall).
           // For uninstalls, refreshUser re-reads /auth/me which reflects the
           // updated org list and selected tenant from the server.
-          await refreshUser();
+          try {
+            await refreshUser();
+          } catch {
+            // Best-effort — stale user state is acceptable; next navigation refreshes
+          }
         }
+
+        // Trigger dashboard data re-fetch AFTER auth state is settled.
+        setRefreshKey((prev) => prev + 1);
       })();
     };
 
