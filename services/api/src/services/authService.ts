@@ -56,6 +56,9 @@ import {
   countTenantMembers,
   // Provider role mapping
   resolveAutoLinkRole,
+  // Provider connections
+  findGitHubAppConnection,
+  createProviderConnection,
   // JWT utilities
   generateAccessToken,
   generateRefreshToken,
@@ -340,6 +343,20 @@ const autoLinkOrganizationsImpl = async (
       userId: user.id,
       ...context,
     });
+  }
+
+  // Sync GitHub App provider connections for installations discovered at login.
+  // This catches installations missed by webhooks (service down, URL misconfigured, etc.).
+  if (provider === "github") {
+    try {
+      await syncGitHubAppConnections(effectiveOrgs, tenantIds, context);
+    } catch (syncError: unknown) {
+      logger.warn("GitHub App connection sync failed (non-fatal)", {
+        userId: user.id,
+        error: getErrorMessage(syncError),
+        ...context,
+      });
+    }
   }
 
   // Switch to a tenant from the current login provider.
@@ -661,6 +678,48 @@ const processOrgMembership = async (
   }
 
   return tenant.id;
+};
+
+/**
+ * Sync GitHub App provider connections at login time.
+ *
+ * For each discovered org that has a GitHub App installation (installationId present),
+ * checks if the corresponding tenant already has a github_app provider connection.
+ * If not, creates one. This catches installations that were missed by webhooks
+ * (e.g., webhook URL misconfigured, service down during install).
+ */
+const syncGitHubAppConnections = async (
+  orgs: ReadonlyArray<{ readonly login: string; readonly installationId?: number }>,
+  tenantIds: readonly string[],
+  context: RequestContext
+): Promise<void> => {
+  // for...of: sequential to avoid race conditions on concurrent provider connection creation
+  for (const [index, org] of orgs.entries()) {
+    if (!org.installationId || index >= tenantIds.length) {
+      continue;
+    }
+
+    const tenantId = tenantIds[index];
+    const existing = await findGitHubAppConnection(tenantId);
+    if (existing) {
+      continue;
+    }
+
+    await createProviderConnection({
+      tenantId,
+      provider: "github_app",
+      connectionName: org.login,
+      externalOrgId: String(org.installationId),
+      config: { orgLogin: org.login, syncedAtLogin: true },
+    });
+
+    logger.info("GitHub App connection synced at login", {
+      ...context,
+      syncedTenantId: tenantId,
+      installationId: org.installationId,
+      orgLogin: org.login,
+    });
+  }
 };
 
 /**

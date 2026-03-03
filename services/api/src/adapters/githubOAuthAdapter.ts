@@ -490,7 +490,7 @@ const fetchUserInstallations = async (
   accessToken: string,
   instanceUrl: string | null,
   context: RequestContext
-): Promise<readonly string[]> => {
+): Promise<ReadonlyArray<{ readonly login: string; readonly installationId: number }>> => {
   const baseUrl = instanceUrl ?? "https://api.github.com";
   const url = `${baseUrl}/user/installations`;
   const startTime = Date.now();
@@ -528,7 +528,10 @@ const fetchUserInstallations = async (
       ...context,
     });
 
-    return data.installations.map((installation) => installation.account.login);
+    return data.installations.map((installation) => ({
+      login: installation.account.login,
+      installationId: installation.id,
+    }));
   } catch (error) {
     const durationMs = Date.now() - startTime;
 
@@ -568,7 +571,7 @@ const getUserOrganizations = async (
     // /user/orgs may hide orgs that restrict third-party OAuth app access;
     // /user/memberships/orgs can surface those. /user/installations finds
     // personal accounts and orgs where the GitHub App is installed.
-    const [orgsResponse, membershipLogins, installationLogins] = await Promise.all([
+    const [orgsResponse, membershipLogins, installationData] = await Promise.all([
       fetch(`${urls.userOrgs}?per_page=100`, {
         headers: {
           Authorization: `token ${accessToken}`,
@@ -606,17 +609,22 @@ const getUserOrganizations = async (
       statusCode: orgsResponse.status,
       orgCount: orgs.length,
       membershipCount: membershipLogins.length,
-      installationCount: installationLogins.length,
+      installationCount: installationData.length,
       ...context,
     });
 
     // Build result from /user/orgs first, then merge memberships and installations
     const orgLoginSet = new Set(orgs.map((org) => org.login.toLowerCase()));
 
+    // Map lowercase login -> installationId for enriching orgs with installation data
+    const installationIdMap = new Map(
+      installationData.map((entry) => [entry.login.toLowerCase(), entry.installationId])
+    );
+
     // Enrich orgs with missing roles via per-org membership endpoint
     const orgsWithMissingRoles = orgs.filter((org) => !org.role);
     // let: enrichedOrgResults is conditionally built from async role enrichment
-    let enrichedOrgResults: readonly OAuthOrganization[];
+    let enrichedOrgResults: readonly OAuthOrganization[]; // let: conditionally assigned from async branch
 
     if (orgsWithMissingRoles.length > 0) {
       logger.info("Fetching per-org membership roles for orgs missing role field", {
@@ -639,21 +647,27 @@ const getUserOrganizations = async (
       enrichedOrgResults = orgs.map((org) => ({
         login: org.login,
         role: org.role ?? roleMap.get(org.login),
+        installationId: installationIdMap.get(org.login.toLowerCase()),
       }));
     } else {
-      enrichedOrgResults = orgs.map((org) => ({ login: org.login, role: org.role }));
+      enrichedOrgResults = orgs.map((org) => ({
+        login: org.login,
+        role: org.role,
+        installationId: installationIdMap.get(org.login.toLowerCase()),
+      }));
     }
 
     // Merge memberships and installations not already in /user/orgs.
     // /user/memberships/orgs surfaces orgs hidden by OAuth app restrictions.
     // /user/installations captures personal accounts and app-installed orgs.
-    const additionalLogins = [...membershipLogins, ...installationLogins].filter(
+    const installationLogins = installationData.map((entry) => entry.login);
+    const allAdditionalLogins = [...membershipLogins, ...installationLogins].filter(
       (login) => !orgLoginSet.has(login.toLowerCase())
     );
 
     // Deduplicate (a login may appear in both memberships and installations)
     const uniqueAdditionalLogins = [
-      ...new Set(additionalLogins.map((login) => login.toLowerCase())),
+      ...new Set(allAdditionalLogins.map((login) => login.toLowerCase())),
     ];
     // Preserve original casing from the first occurrence
     const loginCaseMap = new Map(
@@ -674,6 +688,7 @@ const getUserOrganizations = async (
 
     const additionalOrgs: readonly OAuthOrganization[] = deduplicatedLogins.map((login) => ({
       login,
+      installationId: installationIdMap.get(login.toLowerCase()),
     }));
 
     return [...enrichedOrgResults, ...additionalOrgs];
