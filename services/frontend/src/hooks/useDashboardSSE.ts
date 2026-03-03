@@ -149,7 +149,7 @@ interface UseDashboardSSEResult {
  * @returns markAllRead — marks all notifications as read
  */
 export const useDashboardSSE = (): UseDashboardSSEResult => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, switchOrganization } = useAuth();
   const storageKey = buildNotificationStorageKey(user?.tenantId);
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -159,6 +159,8 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   const { toastEnabled, browserEnabled } = useNotificationPreferences();
   const toastEnabledRef = useRef(toastEnabled);
   const browserEnabledRef = useRef(browserEnabled);
+  const switchOrgRef = useRef(switchOrganization);
+  const currentTenantIdRef = useRef(user?.tenantId);
 
   // Reload notifications when tenant changes (org switch)
   useEffect(() => {
@@ -171,6 +173,12 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   useEffect(() => {
     Object.assign(browserEnabledRef, { current: browserEnabled });
   }, [browserEnabled]);
+  useEffect(() => {
+    Object.assign(switchOrgRef, { current: switchOrganization });
+  }, [switchOrganization]);
+  useEffect(() => {
+    Object.assign(currentTenantIdRef, { current: user?.tenantId });
+  }, [user?.tenantId]);
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => {
@@ -343,17 +351,33 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
     };
 
-    const handleOrganizationUpdated = () => {
-      // Trigger org re-discovery via OAuth API, then refresh user state.
-      // This handles cases where the webhook couldn't link the user directly
-      // (e.g., identity lookup failed at webhook time).
+    const handleOrganizationUpdated = (event: MessageEvent) => {
+      const data = parseEventData<{
+        installedTenantId?: string;
+        uninstalledTenantId?: string;
+      }>(event);
+      setRefreshKey((prev) => prev + 1);
+
       void (async () => {
         try {
           await apiClient("/auth/refresh-orgs", { method: "POST" });
         } catch {
-          // Best-effort — refreshUser below still runs
+          // Best-effort
         }
-        await refreshUser();
+
+        // Auto-switch to the installed org if it differs from the current tenant.
+        if (data?.installedTenantId && data.installedTenantId !== currentTenantIdRef.current) {
+          try {
+            await switchOrgRef.current(data.installedTenantId);
+          } catch {
+            // Best-effort — user can manually switch via org selector
+          }
+        } else {
+          // Refresh user state to pick up org list changes (install or uninstall).
+          // For uninstalls, refreshUser re-reads /auth/me which reflects the
+          // updated org list and selected tenant from the server.
+          await refreshUser();
+        }
       })();
     };
 
