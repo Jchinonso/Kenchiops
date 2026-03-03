@@ -66,10 +66,11 @@ const getTenantInfoFn = async (
     throw new NotFoundError("Tenant not found", { metadata: { tenantId } });
   }
 
-  const [ghConn, slackConn, gitlabConn] = await Promise.all([
+  const [ghConn, slackConn, gitlabConn, analysisCount] = await Promise.all([
     findGitHubAppConnection(tenantId),
     findSlackConnection(tenantId),
     findGitLabConnection(tenantId),
+    countAnalysesByTenant(tenantId),
   ]);
 
   const gitlabConnected = gitlabConn !== null;
@@ -82,6 +83,7 @@ const getTenantInfoFn = async (
     gitlabConnected,
     slackConnected: slackConn !== null,
     status: tenant.status,
+    hasData: analysisCount > 0,
   };
 };
 

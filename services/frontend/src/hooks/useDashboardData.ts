@@ -16,6 +16,7 @@ interface TenantInfo {
   readonly gitlabConnected: boolean;
   readonly slackConnected: boolean;
   readonly status: string;
+  readonly hasData: boolean;
 }
 
 interface DashboardStats {

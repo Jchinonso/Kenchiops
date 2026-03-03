@@ -144,7 +144,10 @@ const Dashboard = () => {
   const displayEmail = user?.email ?? "";
   const firstName = user?.displayName?.split(" ")[0] ?? "there";
   const onboardingKey = `kenchi_onboarding_${user?.id}`;
-  const showOnboarding = !onboardingDismissed && !localStorage.getItem(onboardingKey);
+  // Hide setup checklist if tenant already has analyses (previously set up, maybe app was uninstalled)
+  const tenantHasData = tenant?.hasData ?? false;
+  const showOnboarding =
+    !onboardingDismissed && !localStorage.getItem(onboardingKey) && !tenantHasData;
   const dismissOnboarding = () => {
     localStorage.setItem(onboardingKey, "1");
     setOnboardingDismissed(true);
@@ -161,9 +164,11 @@ const Dashboard = () => {
   // Detect new users who haven't connected any CI provider yet.
   // Also redirect to onboarding when tenant info fails to load (e.g., 502)
   // so fresh accounts see onboarding instead of broken error cards.
+  // Skip onboarding entirely if the tenant already has data (previously set up).
   const needsOnboarding =
     !tenantLoading &&
     !onboardingSkipped &&
+    !tenantHasData &&
     !localStorage.getItem(onboardingKey) &&
     (tenantError !== null ||
       (tenant !== null && !tenant.githubConnected && !tenant.gitlabConnected));
