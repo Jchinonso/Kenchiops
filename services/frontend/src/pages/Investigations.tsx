@@ -38,12 +38,8 @@ import {
 import { cn } from "@/lib/utils";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
-import {
-  FilterBar,
-  loadSavedFilters,
-  saveFilters,
-  type FilterValues,
-} from "@/components/FilterBar";
+import { FilterBar } from "@/components/FilterBar";
+import { loadSavedFilters, saveFilters, type FilterValues } from "@/components/FilterBarUtils";
 
 // ==================== Constants ====================
 
@@ -132,11 +128,14 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
     };
   });
 
-  const handleFilterChange = useCallback((next: FilterValues) => {
-    setFilters(next);
-    setOffset(0);
-    saveFilters("investigations", next, tenantId || undefined);
-  }, []);
+  const handleFilterChange = useCallback(
+    (next: FilterValues) => {
+      setFilters(next);
+      setOffset(0);
+      saveFilters("investigations", next, tenantId || undefined);
+    },
+    [tenantId]
+  );
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);

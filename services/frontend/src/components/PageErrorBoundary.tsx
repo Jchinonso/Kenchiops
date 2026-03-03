@@ -38,6 +38,7 @@ export class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErr
   // componentDidCatch is intentionally a no-op here. The root-level ErrorBoundary
   // already logs to console as the last-resort boundary. This page-level boundary
   // only provides a recovery UI — duplicate logging would be noise.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   componentDidCatch(_error: Error, _errorInfo: ErrorInfo): void {
     // Logged by root ErrorBoundary
   }

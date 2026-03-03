@@ -275,9 +275,17 @@ export const useAnalysisStatusByEvents = (
     Object.assign(eventIdsRef, { current: eventIds });
   }, [eventIds]);
 
-  useEffect(() => {
+  // Reset state when eventIds becomes empty (render-time state adjustment)
+  const [prevEventIdsKey, setPrevEventIdsKey] = useState(eventIdsKey);
+  if (eventIdsKey !== prevEventIdsKey) {
+    setPrevEventIdsKey(eventIdsKey);
     if (eventIdsKey === "") {
       setState({ data: null, isLoading: false, error: null });
+    }
+  }
+
+  useEffect(() => {
+    if (eventIdsKey === "") {
       return;
     }
 

@@ -18,13 +18,11 @@ const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 export const useScrollFadeIn = (threshold = 0.15): ScrollFadeInResult => {
   const ref = useRef<HTMLElement | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(() => window.matchMedia(REDUCED_MOTION_QUERY).matches);
 
   useEffect(() => {
-    const prefersReducedMotion = window.matchMedia(REDUCED_MOTION_QUERY).matches;
-
-    if (prefersReducedMotion) {
-      setIsVisible(true);
+    // Already visible (prefers-reduced-motion or previously triggered)
+    if (isVisible) {
       return;
     }
 
@@ -45,7 +43,7 @@ export const useScrollFadeIn = (threshold = 0.15): ScrollFadeInResult => {
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, [threshold]);
+  }, [threshold, isVisible]);
 
   const fadeClass = isVisible
     ? "opacity-100 translate-y-0 transition-all duration-700 ease-out"

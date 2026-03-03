@@ -46,14 +46,13 @@ interface InvestigationDetailProps {
 
 // ==================== Helpers ====================
 
+const STATUS_ICONS: Readonly<Record<string, React.ReactNode>> = {
+  completed: <CheckCircle2 className="w-4 h-4" />,
+  failed: <XCircle className="w-4 h-4" />,
+};
+
 const getStatusIcon = (status: string): React.ReactNode =>
-  status === "completed" ? (
-    <CheckCircle2 className="w-4 h-4" />
-  ) : status === "failed" ? (
-    <XCircle className="w-4 h-4" />
-  ) : (
-    <Clock className="w-4 h-4" />
-  );
+  STATUS_ICONS[status] ?? <Clock className="w-4 h-4" />;
 
 const isActiveInvestigation = (status: string): boolean =>
   status === "queued" || status === "gathering" || status === "analyzing";

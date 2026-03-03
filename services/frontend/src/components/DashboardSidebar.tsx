@@ -6,7 +6,7 @@
  * for Overview, Analytics, Integrations, and Settings.
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -346,7 +346,10 @@ export const DashboardSidebar = ({
   );
 
   // Auto-expand only the active group when navigating (accordion behavior)
-  useEffect(() => {
+  // Uses render-time state adjustment to avoid setState-in-effect
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     const matchingGroup = NAV_ENTRIES.find(
       (entry): entry is NavGroup =>
         isNavGroup(entry) &&
@@ -356,7 +359,7 @@ export const DashboardSidebar = ({
     if (matchingGroup) {
       setOpenGroups(new Set([matchingGroup.label]));
     }
-  }, [pathname]);
+  }
 
   const toggleGroup = (label: string) => {
     setOpenGroups((prev) => {

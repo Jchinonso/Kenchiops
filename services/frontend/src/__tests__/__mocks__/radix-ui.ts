@@ -48,8 +48,6 @@ vi.mock("@/components/ui/switch", () => ({
 vi.mock("@radix-ui/react-select", () => {
   const SelectRoot = ({
     children,
-    value: _value,
-    onValueChange: _onValueChange,
   }: {
     children: React.ReactNode;
     value?: string;
@@ -105,13 +103,8 @@ vi.mock("@radix-ui/react-dialog", () => {
 
 // ==================== AlertDialog (used by Settings delete) ====================
 vi.mock("@radix-ui/react-alert-dialog", () => {
-  const AlertDialogRoot = ({
-    children,
-    open: _open,
-  }: {
-    children: React.ReactNode;
-    open?: boolean;
-  }) => React.createElement("div", { "data-testid": "alert-dialog" }, children);
+  const AlertDialogRoot = ({ children }: { children: React.ReactNode; open?: boolean }) =>
+    React.createElement("div", { "data-testid": "alert-dialog" }, children);
 
   return {
     Root: AlertDialogRoot,

@@ -5,7 +5,7 @@
  * Toggles the `dark` class on document.documentElement for Tailwind dark mode.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 // ==================== Types ====================
 
@@ -35,9 +35,6 @@ const readStoredPreference = (): ThemePreference => {
   return stored && VALID_PREFERENCES.has(stored) ? (stored as ThemePreference) : "dark";
 };
 
-const resolveTheme = (preference: ThemePreference): ResolvedTheme =>
-  preference === "system" ? getSystemPreference() : preference;
-
 const applyTheme = (resolved: ResolvedTheme): void => {
   const { classList } = document.documentElement;
   if (resolved === "dark") {
@@ -51,19 +48,23 @@ const applyTheme = (resolved: ResolvedTheme): void => {
 
 export const useTheme = (): UseThemeResult => {
   const [preference, setPreference] = useState<ThemePreference>(readStoredPreference);
-  const [resolved, setResolved] = useState<ResolvedTheme>(() => resolveTheme(preference));
+  // Track system preference changes for "system" mode
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemPreference);
+
+  const resolved = useMemo<ResolvedTheme>(
+    () => (preference === "system" ? systemTheme : preference),
+    [preference, systemTheme]
+  );
 
   const setTheme = useCallback((next: ThemePreference) => {
     localStorage.setItem(STORAGE_KEY, next);
     setPreference(next);
   }, []);
 
-  // Apply theme whenever preference changes
+  // Apply theme class to DOM whenever resolved changes
   useEffect(() => {
-    const nextResolved = resolveTheme(preference);
-    setResolved(nextResolved);
-    applyTheme(nextResolved);
-  }, [preference]);
+    applyTheme(resolved);
+  }, [resolved]);
 
   // Listen for system preference changes when in "system" mode
   useEffect(() => {
@@ -73,9 +74,7 @@ export const useTheme = (): UseThemeResult => {
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
-      const nextResolved = getSystemPreference();
-      setResolved(nextResolved);
-      applyTheme(nextResolved);
+      setSystemTheme(getSystemPreference());
     };
 
     mediaQuery.addEventListener("change", handleChange);

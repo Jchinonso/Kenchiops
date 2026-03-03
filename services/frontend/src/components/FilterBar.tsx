@@ -23,16 +23,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 
-// ==================== Types ====================
-
-interface FilterValues {
-  readonly repository: string;
-  readonly severity: string;
-  readonly minConfidence: string;
-  readonly timeRange: string;
-  readonly source?: string;
-  readonly status?: string;
-}
+import { type FilterValues, EMPTY_FILTERS } from "./FilterBarUtils";
 
 interface FilterBarProps {
   readonly filters: FilterValues;
@@ -45,8 +36,6 @@ interface FilterBarProps {
 // ==================== Constants ====================
 
 const DEBOUNCE_MS = 300;
-
-const FILTER_STORAGE_PREFIX = "kenchi_filters_";
 
 const SEVERITY_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label: string }> = [
   { value: "", label: "All Severities" },
@@ -112,82 +101,15 @@ const INVESTIGATION_STATUS_OPTIONS: ReadonlyArray<{
   { value: "failed", label: "Failed" },
 ];
 
-/** Duration lookup for time range presets (in milliseconds) */
-const TIME_RANGE_DURATIONS: Readonly<Record<string, number>> = {
-  "24h": 24 * 60 * 60 * 1000,
-  "7d": 7 * 24 * 60 * 60 * 1000,
-  "30d": 30 * 24 * 60 * 60 * 1000,
-  "90d": 90 * 24 * 60 * 60 * 1000,
-};
-
 const INPUT_CLASS = cn(
   "px-3 py-2 text-sm bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg",
   "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent",
   "placeholder:text-zinc-400 dark:placeholder:text-zinc-500 dark:text-zinc-100"
 );
 
-const EMPTY_FILTERS: FilterValues = {
-  repository: "",
-  severity: "",
-  minConfidence: "",
-  timeRange: "",
-  source: "",
-  status: "",
-};
-
 /** Helper to set a ref value without triggering the object-mutation lint rule */
 const setRef = <T,>(ref: React.MutableRefObject<T>, value: T): void => {
   Object.assign(ref, { current: value });
-};
-
-// ==================== Persistence Helpers ====================
-
-/**
- * Build a tenant-scoped localStorage key for filter persistence.
- * When tenantId is provided, keys are isolated per tenant to prevent cross-tenant leaks.
- */
-const buildFilterStorageKey = (pageKey: string, tenantId?: string): string =>
-  tenantId
-    ? `${FILTER_STORAGE_PREFIX}${tenantId}_${pageKey}`
-    : `${FILTER_STORAGE_PREFIX}${pageKey}`;
-
-/**
- * Loads saved filter state from localStorage for a given page key.
- * Returns null if no saved state exists or parsing fails.
- */
-export const loadSavedFilters = (
-  pageKey: string,
-  tenantId?: string
-): Partial<FilterValues> | null => {
-  try {
-    const stored = localStorage.getItem(buildFilterStorageKey(pageKey, tenantId));
-    return stored ? (JSON.parse(stored) as Partial<FilterValues>) : null;
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Saves filter state to localStorage for a given page key.
- * Silently fails if localStorage is unavailable or full.
- */
-export const saveFilters = (pageKey: string, filters: FilterValues, tenantId?: string): void => {
-  try {
-    localStorage.setItem(buildFilterStorageKey(pageKey, tenantId), JSON.stringify(filters));
-  } catch {
-    // localStorage quota exceeded or unavailable — non-fatal
-  }
-};
-
-// ==================== Time Range Helper ====================
-
-/**
- * Converts a time-range preset string to an ISO timestamp for the `since` query param.
- * Returns undefined for empty/unknown values (meaning "all time").
- */
-export const timeRangeToSince = (timeRange: string): string | undefined => {
-  const ms = TIME_RANGE_DURATIONS[timeRange];
-  return ms !== undefined ? new Date(Date.now() - ms).toISOString() : undefined;
 };
 
 // ==================== Component ====================
@@ -200,16 +122,20 @@ export const FilterBar = ({
   hideRepository,
 }: FilterBarProps) => {
   const [localRepo, setLocalRepo] = useState(filters.repository);
+  const [prevRepoFilter, setPrevRepoFilter] = useState(filters.repository);
+
+  if (filters.repository !== prevRepoFilter) {
+    setPrevRepoFilter(filters.repository);
+    setLocalRepo(filters.repository);
+  }
+
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Use a ref to always access the latest filters inside the debounced callback,
   // preventing stale closure issues when dropdown changes race with debounced repo input.
   const filtersRef = useRef(filters);
-  setRef(filtersRef, filters);
-
-  // Sync local state when external filters change (e.g., from searchQuery prop)
   useEffect(() => {
-    setLocalRepo(filters.repository);
-  }, [filters.repository]);
+    setRef(filtersRef, filters);
+  }, [filters]);
 
   // Cleanup timer on unmount
   useEffect(
@@ -429,30 +355,3 @@ export const FilterBar = ({
     </div>
   );
 };
-
-/**
- * Parses the confidence filter string into min/max values.
- * Format: "min:0.5,max:0.8" or "min:0.8" or "max:0.5"
- */
-export const parseConfidenceFilter = (
-  value: string
-): { readonly min: number | null; readonly max: number | null } => {
-  if (!value) {
-    return { min: null, max: null };
-  }
-
-  const parts = value.split(",");
-
-  const extractValue = (prefix: string): number | null => {
-    const match = parts.find((part) => part.startsWith(`${prefix}:`));
-    if (!match) {
-      return null;
-    }
-    const parsed = parseFloat(match.split(":")[1]);
-    return Number.isNaN(parsed) ? null : parsed;
-  };
-
-  return { min: extractValue("min"), max: extractValue("max") };
-};
-
-export type { FilterValues };

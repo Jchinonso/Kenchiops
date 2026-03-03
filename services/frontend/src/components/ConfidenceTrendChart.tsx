@@ -5,7 +5,7 @@
  * bucketed by day or week using recharts + shadcn ChartContainer.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   ChartContainer,
@@ -57,12 +57,20 @@ interface ConfidenceTrendChartProps {
 
 export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartProps) => {
   const [bucket, setBucket] = useState<"day" | "week">("day");
-  const [rangeDays, setRangeDays] = useState(30);
+  const [rangeConfig, setRangeConfig] = useState(() => ({
+    rangeDays: 30,
+    since: new Date(Date.now() - 30 * MS_PER_DAY).toISOString(),
+  }));
 
-  const since = useMemo(
-    () => new Date(Date.now() - rangeDays * MS_PER_DAY).toISOString(),
-    [rangeDays]
-  );
+  const { rangeDays } = rangeConfig;
+  const { since } = rangeConfig;
+
+  const handleRangeDaysChange = useCallback((days: number) => {
+    setRangeConfig({
+      rangeDays: days,
+      since: new Date(Date.now() - days * MS_PER_DAY).toISOString(),
+    });
+  }, []);
 
   const { data, isLoading } = useConfidenceTrend(bucket, since, refreshKey);
 
@@ -120,7 +128,7 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
               {RANGE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => setRangeDays(opt.value)}
+                  onClick={() => handleRangeDaysChange(opt.value)}
                   aria-pressed={rangeDays === opt.value}
                   className={`px-3 py-1.5 transition-colors ${
                     rangeDays === opt.value

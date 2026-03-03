@@ -5,7 +5,7 @@
  * Opened when clicking an analysis row in CICDAnalyses.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Link2, Check } from "lucide-react";
 import {
   Sheet,
@@ -33,9 +33,12 @@ export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetai
   const { data: analysis, isLoading, error } = useAnalysisDetail(analysisId);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
+  // Reset copied state when analysisId changes (render-time state adjustment)
+  const [prevAnalysisId, setPrevAnalysisId] = useState(analysisId);
+  if (analysisId !== prevAnalysisId) {
+    setPrevAnalysisId(analysisId);
     setCopied(false);
-  }, [analysisId]);
+  }
 
   const handleCopyLink = useCallback(async () => {
     if (!analysisId) {

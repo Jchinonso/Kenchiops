@@ -235,7 +235,7 @@ export const CICDPipelines = () => {
           </div>
           <CardDescription>
             {hasItems
-              ? `${itemCount} ${isGitHub ? "repositor" : "project"}${itemCount > 1 ? (isGitHub ? "ies" : "s") : isGitHub ? "y" : ""} connected`
+              ? `${itemCount} ${isGitHub ? (itemCount === 1 ? "repository" : "repositories") : itemCount === 1 ? "project" : "projects"} connected`
               : `No ${isGitHub ? "repositories" : "projects"} connected yet`}
           </CardDescription>
         </CardHeader>
