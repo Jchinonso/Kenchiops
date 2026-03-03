@@ -11,6 +11,8 @@ export interface TenantInfo {
   readonly gitlabConnected: boolean;
   readonly slackConnected: boolean;
   readonly status: string;
+  /** True when the tenant has at least one analysis (i.e., has been actively used before). */
+  readonly hasData: boolean;
 }
 
 export interface DashboardStats {
