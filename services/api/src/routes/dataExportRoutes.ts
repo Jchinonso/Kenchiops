@@ -19,6 +19,7 @@ import {
   AUDIT_ACTIONS,
   logAuditEvent,
   getErrorMessage,
+  rateLimitByCategory,
   createExportJob,
   getExportJob,
   listExportJobs,
@@ -118,8 +119,10 @@ const handleListExports = async (req: Request, res: Response): Promise<void> => 
 
 // ==================== Route Definitions ====================
 
+// SECURITY (VULN-511): Rate limit all data export endpoints
 router.post(
   "/api/v1/tenant/export",
+  rateLimitByCategory("expensive"),
   requirePermission("settings"),
   requireFeature("apiAccess"),
   asyncHandler(handleCreateExport)
@@ -127,6 +130,7 @@ router.post(
 
 router.get(
   "/api/v1/tenant/export/:exportId",
+  rateLimitByCategory("readonly"),
   requirePermission("settings"),
   requireFeature("apiAccess"),
   asyncHandler(handleGetExport)
@@ -134,6 +138,7 @@ router.get(
 
 router.get(
   "/api/v1/tenant/exports",
+  rateLimitByCategory("readonly"),
   requirePermission("settings"),
   requireFeature("apiAccess"),
   asyncHandler(handleListExports)

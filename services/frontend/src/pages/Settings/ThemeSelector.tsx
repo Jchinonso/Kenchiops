@@ -28,9 +28,32 @@ const THEME_LABELS: Readonly<Record<ThemeMode, string>> = {
   system: "System",
 };
 
+interface ThemePreviewStyles {
+  readonly container: string;
+  readonly sidebar: string;
+  readonly content: string;
+}
+
+const THEME_PREVIEW_STYLES: Readonly<Record<ThemeMode, ThemePreviewStyles>> = {
+  dark: {
+    container: "bg-zinc-900 border-zinc-700",
+    sidebar: "bg-zinc-800",
+    content: "bg-zinc-700",
+  },
+  system: {
+    container: "bg-gradient-to-r from-white to-gray-900 border-zinc-300 dark:border-zinc-600",
+    sidebar: "bg-zinc-200",
+    content: "bg-zinc-300",
+  },
+  light: {
+    container: "bg-white border-zinc-200",
+    sidebar: "bg-zinc-100",
+    content: "bg-zinc-200",
+  },
+};
+
 const ThemePreview = ({ mode, active, onClick }: ThemePreviewProps) => {
-  const isDark = mode === "dark";
-  const isSystem = mode === "system";
+  const styles = THEME_PREVIEW_STYLES[mode];
 
   return (
     <motion.button
@@ -49,43 +72,16 @@ const ThemePreview = ({ mode, active, onClick }: ThemePreviewProps) => {
     >
       {/* Mini UI preview */}
       <div
-        className={cn(
-          "w-full aspect-[4/3] rounded-lg overflow-hidden border",
-          isDark
-            ? "bg-zinc-900 border-zinc-700"
-            : isSystem
-              ? "bg-gradient-to-r from-white to-gray-900 border-zinc-300 dark:border-zinc-600"
-              : "bg-white border-zinc-200"
-        )}
+        className={cn("w-full aspect-[4/3] rounded-lg overflow-hidden border", styles.container)}
       >
         <div className="flex h-full p-1.5 gap-1">
           {/* Sidebar */}
-          <div
-            className={cn(
-              "w-1/4 rounded-sm",
-              isDark ? "bg-zinc-800" : isSystem ? "bg-zinc-200" : "bg-zinc-100"
-            )}
-          />
+          <div className={cn("w-1/4 rounded-sm", styles.sidebar)} />
           {/* Content area */}
           <div className="flex-1 flex flex-col gap-1">
-            <div
-              className={cn(
-                "h-1.5 w-3/4 rounded-sm",
-                isDark ? "bg-zinc-700" : isSystem ? "bg-zinc-300" : "bg-zinc-200"
-              )}
-            />
-            <div
-              className={cn(
-                "h-1.5 w-1/2 rounded-sm",
-                isDark ? "bg-zinc-700" : isSystem ? "bg-zinc-300" : "bg-zinc-200"
-              )}
-            />
-            <div
-              className={cn(
-                "flex-1 rounded-sm opacity-50",
-                isDark ? "bg-zinc-700" : isSystem ? "bg-zinc-300" : "bg-zinc-200"
-              )}
-            />
+            <div className={cn("h-1.5 w-3/4 rounded-sm", styles.content)} />
+            <div className={cn("h-1.5 w-1/2 rounded-sm", styles.content)} />
+            <div className={cn("flex-1 rounded-sm opacity-50", styles.content)} />
           </div>
         </div>
       </div>

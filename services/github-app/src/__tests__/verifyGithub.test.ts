@@ -185,14 +185,17 @@ describe("verifyGitHubWebhook", () => {
   });
 
   describe("without webhook secret configured", () => {
-    it("should skip verification and call next() when no secret configured", () => {
+    it("should reject with 401 when no secret configured (VULN-502 fail-closed)", () => {
       (appConfig.github as { webhookSecret: string }).webhookSecret = "";
       mockRequest.headers = {};
 
       verifyGitHubWebhook(mockRequest as Request, mockResponse as Response, mockNext);
 
-      expect(mockNext).toHaveBeenCalled();
-      expect(statusMock).not.toHaveBeenCalled();
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(statusMock).toHaveBeenCalledWith(401);
+      expect(jsonMock).toHaveBeenCalledWith({
+        error: "Webhook verification not configured",
+      });
     });
   });
 });

@@ -20,14 +20,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { FilterBar } from "@/components/FilterBar";
 import {
-  FilterBar,
   parseConfidenceFilter,
   loadSavedFilters,
   saveFilters,
   timeRangeToSince,
   type FilterValues,
-} from "@/components/FilterBar";
+} from "@/components/FilterBarUtils";
 
 // Mock the Radix UI Select component to avoid dual-React issues in monorepo
 vi.mock("@/components/ui/select", () => ({

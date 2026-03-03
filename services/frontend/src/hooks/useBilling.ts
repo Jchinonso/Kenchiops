@@ -105,6 +105,19 @@ export const useBillingPortal = (): MutationState & {
       const json: { readonly data: PortalResultDTO } = await response.json();
       setState({ isLoading: false, error: null });
 
+      // Defense-in-depth: validate the portal URL uses HTTPS before navigating.
+      // The URL comes from our API but we verify protocol to prevent open redirect.
+      try {
+        const { protocol } = new URL(json.data.url);
+        if (protocol !== "https:") {
+          setState({ isLoading: false, error: "Invalid portal URL" });
+          return;
+        }
+      } catch {
+        setState({ isLoading: false, error: "Invalid portal URL" });
+        return;
+      }
+
       // Redirect to Stripe Customer Portal
       window.location.href = json.data.url;
     } catch (caught) {

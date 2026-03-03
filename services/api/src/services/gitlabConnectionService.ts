@@ -177,7 +177,7 @@ export const createGitLabConnectionService = (): GitLabConnectionService => {
         });
       }
 
-      await deactivateConnection(connection.id);
+      await deactivateConnection(connection.id, tenantId);
 
       logger.info("GitLab CI disconnected", {
         connectionId: connection.id,

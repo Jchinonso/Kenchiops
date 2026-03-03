@@ -9,6 +9,7 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, type AuthOrganization } from "@/hooks/useAuth";
+import { isSafeUrl } from "@/lib/urlSafety";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Command,
@@ -89,7 +90,12 @@ export const OrganizationSwitcher = () => {
 
   // Use the specific OAuth app settings URL (where users can grant org access),
   // falling back to the generic GitHub applications page.
-  const orgAccessUrl = user?.githubOrgAccessUrl ?? "https://github.com/settings/applications";
+  // Defense-in-depth: validate protocol to prevent XSS via stored data injection.
+  const rawOrgAccessUrl = user?.githubOrgAccessUrl;
+  const orgAccessUrl =
+    rawOrgAccessUrl && isSafeUrl(rawOrgAccessUrl)
+      ? rawOrgAccessUrl
+      : "https://github.com/settings/applications";
 
   // Only show organizations from the same provider as the selected org.
   // Provider context is set by the login flow (GitHub login → GitHub orgs only).

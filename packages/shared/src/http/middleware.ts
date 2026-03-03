@@ -10,12 +10,56 @@ import { ERROR_CODES, HTTP_STATUS, DEFAULT_ERROR_MESSAGES } from "../constants/i
 const logger = createLogger("http-middleware");
 
 /**
+ * Metadata keys that are safe to include in client-facing error responses.
+ * Any metadata key NOT in this set is stripped before sending to the client
+ * to prevent accidental information disclosure of internal state.
+ *
+ * Add keys here only after confirming they contain no sensitive data
+ * (no tenantIds, user IDs, SQL details, internal paths, or secrets).
+ */
+const SAFE_METADATA_KEYS: ReadonlySet<string> = new Set([
+  // Validation context
+  "errors",
+  "field",
+  "fields",
+  // Authorization context
+  "requiredRoles",
+  "requiredPermissions",
+  "missingPermissions",
+  "reason",
+  // Feature gating context
+  "code",
+  "currentPlan",
+  "requiredFeatures",
+  "missingFeatures",
+]);
+
+/**
+ * Filter error metadata to only include keys that are safe for client responses.
+ * Returns undefined if no safe keys are present (avoids empty `metadata: {}` in response).
+ */
+const filterSafeMetadata = (
+  metadata: Readonly<Record<string, unknown>> | undefined
+): Readonly<Record<string, unknown>> | undefined => {
+  if (!metadata) {
+    return undefined;
+  }
+
+  const safeEntries = Object.entries(metadata).filter(([key]) => SAFE_METADATA_KEYS.has(key));
+
+  return safeEntries.length > 0 ? Object.fromEntries(safeEntries) : undefined;
+};
+
+/**
  * Error handling middleware for Express.
  *
  * Per error logging boundary rules:
  * - AppErrors are already logged at the appropriate boundary (adapter/service)
  * - This middleware only logs unexpected (non-operational) errors
  * - All errors are formatted into a consistent JSON response
+ *
+ * SECURITY: Metadata is filtered through SAFE_METADATA_KEYS to prevent
+ * accidental information disclosure of internal state to API clients.
  */
 export const errorHandler = (
   error: unknown,
@@ -24,11 +68,13 @@ export const errorHandler = (
   _next: NextFunction
 ): void => {
   if (isAppError(error)) {
+    const safeMetadata = filterSafeMetadata(error.metadata);
+
     res.status(error.statusCode).json({
       error: {
         code: error.code,
         message: error.message,
-        ...(error.metadata && { metadata: error.metadata }),
+        ...(safeMetadata && { metadata: safeMetadata }),
       },
     });
     return;

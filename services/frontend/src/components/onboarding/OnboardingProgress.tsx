@@ -11,13 +11,9 @@ const STEP_LABELS = ["Welcome", "Connect", "Features", "Ready"] as const;
 
 interface OnboardingProgressProps {
   readonly currentStep: number;
-  readonly totalSteps: number;
 }
 
-export const OnboardingProgress = ({
-  currentStep,
-  totalSteps: _totalSteps,
-}: OnboardingProgressProps) => (
+export const OnboardingProgress = ({ currentStep }: OnboardingProgressProps) => (
   <div
     className="flex items-center justify-center gap-0 mb-10"
     role="progressbar"

@@ -8,6 +8,7 @@
 import { useState, useMemo } from "react";
 import { ChevronRight, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isSafeUrl } from "@/lib/urlSafety";
 import { getEvidenceSourceLabel, formatTimestamp } from "@/lib/formatters";
 import type { InvestigationEvidenceItem } from "@/hooks/useInvestigationData";
 
@@ -24,16 +25,6 @@ interface EvidenceGroup {
 }
 
 // ==================== Helpers ====================
-
-/** Validate that a URL uses a safe protocol (http/https only). Blocks javascript: URIs. */
-const isSafeUrl = (url: string): boolean => {
-  try {
-    const { protocol } = new URL(url);
-    return protocol === "https:" || protocol === "http:";
-  } catch {
-    return false;
-  }
-};
 
 const groupEvidenceBySources = (
   evidence: readonly InvestigationEvidenceItem[]

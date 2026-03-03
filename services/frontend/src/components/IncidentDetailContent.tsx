@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Zap, AlertTriangle, BarChart3, ListChecks, CheckCircle2, XCircle } from "lucide-react";
 import type { AlertWithTriageResult } from "@/hooks/useIncidentData";
 import { cn } from "@/lib/utils";
+import { isSafeUrl } from "@/lib/urlSafety";
 import {
   getSeverityStyle,
   getIncidentStatusStyle,
@@ -57,8 +58,6 @@ interface MatchedRunbook {
   readonly url?: string;
   readonly relevance?: number;
 }
-
-// ==================== Helpers ====================
 
 const canAcknowledge = (status: string): boolean =>
   status === "received" || status === "triaged" || status === "escalated";
@@ -389,7 +388,7 @@ export const IncidentDetailContent = ({
                 key={idx}
                 className="flex items-center justify-between py-1.5 px-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-md"
               >
-                {book.url ? (
+                {book.url && isSafeUrl(book.url) ? (
                   <a
                     href={book.url}
                     target="_blank"

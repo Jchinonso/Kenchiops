@@ -44,10 +44,14 @@ const verifySignature = (payload: string, signature: string, secret: string): bo
 export const verifyGitHubWebhook = (req: Request, res: Response, next: NextFunction): void => {
   const secret = appConfig.github.webhookSecret;
 
-  // Skip verification if no secret configured (development mode)
+  // SECURITY (VULN-502): Fail-closed -- reject all webhooks if secret is missing.
+  // The secret is now a required startup config field; this guard is defense-in-depth.
   if (!secret) {
-    logger.warn("GitHub webhook secret not configured - skipping verification");
-    next();
+    logger.error("Webhook secret not configured, denying inbound webhook", {
+      provider: "github",
+      operation: "verifyGitHubWebhook",
+    });
+    res.status(401).json({ error: "Webhook verification not configured" });
     return;
   }
 

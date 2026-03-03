@@ -400,7 +400,7 @@ export const createIntegrationService = (
           )
         : false;
 
-    await deactivateConnection(connectionId);
+    await deactivateConnection(connectionId, tenantId);
 
     disconnectLogger.info("Integration connection deactivated", {
       provider: connection.provider,

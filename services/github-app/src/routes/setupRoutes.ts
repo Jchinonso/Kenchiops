@@ -23,13 +23,29 @@ const router = Router();
 const logger = createLogger("github-app");
 
 /**
+ * Escape HTML special characters to prevent XSS (VULN-503).
+ * All user-controlled or external data must be escaped before embedding in HTML.
+ */
+const escapeHtml = (unsafe: string): string =>
+  unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+/**
  * Build success HTML page
  */
 const buildSuccessHtml = (
   orgName: string,
   workspaceName: string | null,
   isLinked: boolean
-): string => `
+): string => {
+  // SECURITY (VULN-503): Escape all externally-sourced values before interpolation
+  const safeOrgName = escapeHtml(orgName);
+  const safeWorkspaceName = workspaceName ? escapeHtml(workspaceName) : null;
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -75,12 +91,12 @@ const buildSuccessHtml = (
 
     <div class="status-item">
       <span>&#x2705;</span>
-      <span><strong>GitHub:</strong> ${orgName}</span>
+      <span><strong>GitHub:</strong> ${safeOrgName}</span>
     </div>
 
     <div class="status-item">
       <span>${isLinked ? "&#x2705;" : "&#x23F3;"}</span>
-      <span><strong>Slack:</strong> ${isLinked ? workspaceName : "Pending connection"}</span>
+      <span><strong>Slack:</strong> ${isLinked ? safeWorkspaceName : "Pending connection"}</span>
     </div>
 
     ${
@@ -93,6 +109,7 @@ const buildSuccessHtml = (
 </body>
 </html>
 `;
+};
 
 /**
  * GET /github/setup

@@ -75,9 +75,17 @@ export const SeverityDistributionChart = ({
   // Timeout the skeleton so it doesn't spin forever when no data arrives
   const [timedOut, setTimedOut] = useState(false);
 
-  useEffect(() => {
+  // Reset timedOut when loading finishes (render-time state adjustment)
+  const [prevIsLoading, setPrevIsLoading] = useState(isLoading);
+  if (isLoading !== prevIsLoading) {
+    setPrevIsLoading(isLoading);
     if (!isLoading) {
       setTimedOut(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!isLoading) {
       return;
     }
 

@@ -1,7 +1,11 @@
 /**
  * Webhook Routes
  *
- * Handles incoming webhooks from various sources.
+ * SECURITY (VULN-501): This generic webhook endpoint has been disabled.
+ * It previously accepted ANY payload from ANY sender with zero authentication,
+ * no signature verification, and no replay protection. Specific webhook
+ * endpoints (GitHub, GitLab, Stripe, Slack) each have their own dedicated
+ * routes with proper signature verification.
  *
  * @module routes/webhookRoutes
  */
@@ -13,10 +17,8 @@ import {
   HTTP_STATUS,
   SERVICE_NAMES,
   API_ROUTES,
-  API_RESPONSE_STATUS,
-  API_MESSAGES,
+  rateLimitByCategory,
 } from "@kenchi/shared";
-import type { WebhookPayload } from "../types/apiTypes.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
@@ -24,29 +26,29 @@ const logger = createLogger(SERVICE_NAMES.API);
 // ==================== Route Handlers ====================
 
 /**
- * Handles generic webhook requests.
+ * Generic webhook endpoint -- disabled (VULN-501).
+ * Returns 501 Not Implemented. Source-specific webhook endpoints
+ * (GitHub, GitLab, Stripe, Slack) have their own routes with
+ * proper signature verification.
  */
 const handleWebhook = async (req: Request, res: Response): Promise<void> => {
-  const startTime = Date.now();
-  const { source } = req.params as { source: string };
-  const payload = req.body as WebhookPayload;
+  const { source } = req.params as { readonly source: string };
 
-  logger.info("Webhook processed", {
+  logger.warn("Rejected unimplemented generic webhook", {
     source,
-    payloadKeys: Object.keys(payload),
-    durationMs: Date.now() - startTime,
   });
 
-  res.status(HTTP_STATUS.OK).json({
-    status: API_RESPONSE_STATUS.RECEIVED,
-    source,
-    message: API_MESSAGES.WEBHOOK_PROCESSING_PENDING,
+  res.status(HTTP_STATUS.NOT_FOUND).json({
+    error: {
+      code: "NOT_SUPPORTED",
+      message: "Generic webhook ingestion is not supported. Use source-specific webhook endpoints.",
+    },
   });
 };
 
 // ==================== Route Definitions ====================
 
-/** POST /webhook/:source - Generic webhook endpoint */
-router.post(API_ROUTES.WEBHOOK, asyncHandler(handleWebhook));
+/** POST /webhook/:source - Disabled generic webhook endpoint (VULN-501) */
+router.post(API_ROUTES.WEBHOOK, rateLimitByCategory("standard"), asyncHandler(handleWebhook));
 
 export { router as webhookRoutes };

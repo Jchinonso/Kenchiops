@@ -191,9 +191,11 @@ export const useInvestigationDetail = (
       );
     }
 
+    // Capture ref value for cleanup to avoid stale ref access
+    const currentIntervalId = intervalRef.current;
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      if (currentIntervalId) {
+        clearInterval(currentIntervalId);
       }
     };
   }, [currentStatus, refetchFn]);

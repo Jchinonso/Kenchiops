@@ -18,6 +18,14 @@ const OAUTH_STATE_PREFIX = "oauth:state:";
 const DEFAULT_TTL_SECONDS = 600; // 10 minutes
 
 /**
+ * Maximum entries in the in-memory fallback store.
+ * Prevents unbounded memory growth if an attacker initiates many OAuth flows
+ * while Redis is unavailable. 1000 is generous for legitimate use — a single
+ * user can only reasonably have 1-2 concurrent OAuth flows.
+ */
+const MAX_MEMORY_STORE_ENTRIES = 1000;
+
+/**
  * Checks if the Redis client is connected and ready for operations.
  * Returns the client if ready, null otherwise.
  */
@@ -44,6 +52,26 @@ const getReadyRedisClient = (): ReturnType<typeof getRedisClient> | null => {
 export const createOAuthStateStore = (): OAuthStateStore => {
   const memoryStore = new Map<string, OAuthStoredState>();
 
+  /**
+   * Evict expired entries from the in-memory store.
+   * Called before inserting a new entry to bound memory usage.
+   * Map iteration order is insertion order, so oldest entries are first.
+   */
+  const evictExpiredEntries = (): void => {
+    const now = Date.now();
+    const expiryMs = DEFAULT_TTL_SECONDS * 1000;
+
+    for (const [key, value] of memoryStore) {
+      if (now - value.createdAt > expiryMs) {
+        memoryStore.delete(key);
+      } else {
+        // Entries are in insertion order — once we hit a non-expired entry,
+        // all subsequent entries are newer and also non-expired
+        break;
+      }
+    }
+  };
+
   return {
     set: async (token: string, data: OAuthStoredState): Promise<void> => {
       const redis = getReadyRedisClient();
@@ -64,6 +92,19 @@ export const createOAuthStateStore = (): OAuthStateStore => {
           });
         }
       }
+
+      // SECURITY: Evict expired entries first, then enforce size limit
+      // to prevent unbounded memory growth from unauthenticated OAuth initiations.
+      evictExpiredEntries();
+
+      if (memoryStore.size >= MAX_MEMORY_STORE_ENTRIES) {
+        logger.warn("OAuth memory store full, rejecting new state token", {
+          storeSize: memoryStore.size,
+          maxSize: MAX_MEMORY_STORE_ENTRIES,
+        });
+        return;
+      }
+
       memoryStore.set(token, data);
     },
 

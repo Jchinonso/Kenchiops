@@ -38,6 +38,7 @@ export class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErr
   // componentDidCatch is intentionally a no-op here. The root-level ErrorBoundary
   // already logs to console as the last-resort boundary. This page-level boundary
   // only provides a recovery UI — duplicate logging would be noise.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   componentDidCatch(_error: Error, _errorInfo: ErrorInfo): void {
     // Logged by root ErrorBoundary
   }
@@ -72,7 +73,9 @@ export class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErr
           </div>
           {this.state.error && (
             <pre className="text-left text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 rounded-lg p-3 max-w-lg mx-auto overflow-auto max-h-32 whitespace-pre-wrap break-words">
-              {this.state.error.message}
+              {this.state.error.message.length > 300
+                ? `${this.state.error.message.slice(0, 300)}...`
+                : this.state.error.message}
             </pre>
           )}
           <div className="flex items-center gap-3 justify-center">

@@ -134,6 +134,9 @@ const createApp = (): express.Express => {
   // Public paths skip HMAC verification (health probes, webhook with its own signature, etc.)
   // SECURITY: /metrics is NOT public — it exposes tenant_id labels.
   // Prometheus scrapers must use internal HMAC auth to access metrics.
+  // SECURITY (VULN-506): /api/github/installations removed from publicPaths.
+  // It was previously public, allowing unauthenticated repo enumeration.
+  // It now requires internal HMAC auth like other service-to-service endpoints.
   app.use(
     createInternalAuthMiddleware({
       publicPaths: [
@@ -141,7 +144,6 @@ const createApp = (): express.Express => {
         "/live",
         "/ready",
         "/api/github/webhook",
-        "/api/github/installations",
         "/github/setup",
         "/api/feedback",
         "/webhooks/github",

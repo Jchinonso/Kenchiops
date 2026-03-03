@@ -184,7 +184,7 @@ describe("OAuth Routes", () => {
       config.SLACK_CLIENT_ID = originalClientId;
     });
 
-    it("should use default redirect URI when not configured", async () => {
+    it("should return 500 when SLACK_REDIRECT_URI not configured (VULN-504)", async () => {
       const { config } = jest.requireMock("@kenchi/shared") as {
         config: { SLACK_REDIRECT_URI?: string };
       };
@@ -193,8 +193,9 @@ describe("OAuth Routes", () => {
 
       const response = await request(app).get("/slack/install");
 
-      expect(response.status).toBe(302);
-      expect(response.headers.location).toContain("redirect_uri=http");
+      // VULN-504: No Host header fallback — redirect URI must be explicitly configured
+      expect(response.status).toBe(500);
+      expect(response.body.error).toContain("Slack OAuth redirect URI not configured");
 
       config.SLACK_REDIRECT_URI = originalRedirectUri;
     });
@@ -588,18 +589,27 @@ describe("OAuth Routes", () => {
     });
   });
 
-  describe("GET /slack/oauth/status", () => {
-    it("should return OAuth configuration status", async () => {
+  // VULN-505: /slack/oauth/status now only returns { configured: boolean }
+  // to avoid exposing which specific credentials are present or absent.
+  describe("GET /slack/oauth/status (VULN-505 hardened)", () => {
+    it("should return configured=true when all credentials present", async () => {
       const response = await request(app).get("/slack/oauth/status");
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty("configured", true);
-      expect(response.body).toHaveProperty("hasClientId", true);
-      expect(response.body).toHaveProperty("hasClientSecret", true);
-      expect(response.body).toHaveProperty("hasRedirectUri", true);
+      expect(response.body).toEqual({ configured: true });
     });
 
-    it("should indicate missing client ID", async () => {
+    it("should not expose individual credential presence", async () => {
+      const response = await request(app).get("/slack/oauth/status");
+
+      // VULN-505: These properties must NOT be in the response
+      expect(response.body).not.toHaveProperty("hasClientId");
+      expect(response.body).not.toHaveProperty("hasClientSecret");
+      expect(response.body).not.toHaveProperty("hasRedirectUri");
+      expect(response.body).not.toHaveProperty("multiTenantMode");
+    });
+
+    it("should return configured=false when client ID missing", async () => {
       const { config } = jest.requireMock("@kenchi/shared") as {
         config: { SLACK_CLIENT_ID?: string };
       };
@@ -608,13 +618,12 @@ describe("OAuth Routes", () => {
 
       const response = await request(app).get("/slack/oauth/status");
 
-      expect(response.body.hasClientId).toBe(false);
-      expect(response.body.configured).toBe(false);
+      expect(response.body).toEqual({ configured: false });
 
       config.SLACK_CLIENT_ID = originalClientId;
     });
 
-    it("should indicate missing client secret", async () => {
+    it("should return configured=false when client secret missing", async () => {
       const { config } = jest.requireMock("@kenchi/shared") as {
         config: { SLACK_CLIENT_SECRET?: string };
       };
@@ -623,25 +632,12 @@ describe("OAuth Routes", () => {
 
       const response = await request(app).get("/slack/oauth/status");
 
-      expect(response.body.hasClientSecret).toBe(false);
-      expect(response.body.configured).toBe(false);
+      expect(response.body).toEqual({ configured: false });
 
       config.SLACK_CLIENT_SECRET = originalSecret;
     });
 
-    it("should show redirect URI status", async () => {
-      const response = await request(app).get("/slack/oauth/status");
-
-      expect(response.body.hasRedirectUri).toBe(true);
-    });
-
-    it("should include multi-tenant mode status", async () => {
-      const response = await request(app).get("/slack/oauth/status");
-
-      expect(response.body).toHaveProperty("multiTenantMode");
-    });
-
-    it("should handle missing redirect URI gracefully", async () => {
+    it("should return configured=false when redirect URI missing", async () => {
       const { config } = jest.requireMock("@kenchi/shared") as {
         config: { SLACK_REDIRECT_URI?: string };
       };
@@ -650,7 +646,7 @@ describe("OAuth Routes", () => {
 
       const response = await request(app).get("/slack/oauth/status");
 
-      expect(response.body.hasRedirectUri).toBe(false);
+      expect(response.body).toEqual({ configured: false });
 
       config.SLACK_REDIRECT_URI = originalRedirectUri;
     });

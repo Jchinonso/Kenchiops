@@ -72,8 +72,18 @@ router.get(
       tenantId: typeof tenantId === "string" ? tenantId : undefined,
     });
 
-    const redirectUri =
-      config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
+    // SECURITY (VULN-504): Never derive redirect URI from the Host header.
+    // The Host header is attacker-controlled and would allow OAuth token theft
+    // by redirecting the callback to a malicious domain.
+    const redirectUri = config.SLACK_REDIRECT_URI;
+    if (!redirectUri) {
+      logger.error("SLACK_REDIRECT_URI not configured");
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        error: "Slack OAuth redirect URI not configured. Set SLACK_REDIRECT_URI.",
+      });
+      return;
+    }
+
     const authUrl = new URL("https://slack.com/oauth/v2/authorize");
     authUrl.searchParams.set("client_id", clientId);
     authUrl.searchParams.set("scope", SLACK_OAUTH_SCOPES_STRING);
@@ -82,7 +92,6 @@ router.get(
 
     logger.info("Initiating Slack OAuth flow", {
       tenantId: tenantId ?? "(new installation)",
-      redirectUri,
     });
 
     res.redirect(authUrl.toString());
@@ -114,8 +123,14 @@ router.get("/slack/oauth/callback", async (req: Request, res: Response) => {
       return;
     }
 
-    const redirectUri =
-      config.SLACK_REDIRECT_URI ?? `${req.protocol}://${req.get("host")}/slack/oauth/callback`;
+    // SECURITY (VULN-504): Use configured redirect URI only, never Host header.
+    const redirectUri = config.SLACK_REDIRECT_URI;
+    if (!redirectUri) {
+      res
+        .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+        .json({ error: "OAuth redirect URI not configured" });
+      return;
+    }
     const tokenUrl = new URL("https://slack.com/api/oauth.v2.access");
     tokenUrl.searchParams.set("client_id", clientId);
     tokenUrl.searchParams.set("client_secret", clientSecret);
@@ -171,13 +186,15 @@ router.get("/slack/oauth/callback", async (req: Request, res: Response) => {
  * GET /slack/oauth/status
  * Health check for OAuth configuration.
  */
+// SECURITY (VULN-505): Only return a boolean configured status.
+// Never expose which specific credentials are present or absent.
 router.get("/slack/oauth/status", (_req: Request, res: Response) => {
   res.json({
-    configured: !!(config.SLACK_CLIENT_ID && config.SLACK_CLIENT_SECRET),
-    multiTenantMode: config.MULTI_TENANT_MODE ?? false,
-    hasClientId: !!config.SLACK_CLIENT_ID,
-    hasClientSecret: !!config.SLACK_CLIENT_SECRET,
-    hasRedirectUri: !!config.SLACK_REDIRECT_URI,
+    configured: !!(
+      config.SLACK_CLIENT_ID &&
+      config.SLACK_CLIENT_SECRET &&
+      config.SLACK_REDIRECT_URI
+    ),
   });
 });
 

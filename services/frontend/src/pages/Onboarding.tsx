@@ -66,7 +66,7 @@ export const Onboarding = ({ displayName, provider, onSkip }: OnboardingProps) =
   return (
     <OnboardingBackground>
       {/* Progress indicator */}
-      <OnboardingProgress currentStep={wizard.currentStep} totalSteps={wizard.totalSteps} />
+      <OnboardingProgress currentStep={wizard.currentStep} />
 
       {/* Animated step transitions */}
       <AnimatePresence mode="wait" custom={wizard.direction}>

@@ -16,6 +16,7 @@ import {
   KNOWLEDGE_DOC_TYPES,
   ValidationError,
   getEffectiveTenantId,
+  rateLimitByCategory,
   type KnowledgeDocType,
   ingestKnowledgeDoc,
   searchAll,
@@ -273,8 +274,10 @@ const handleSync = async (req: Request, res: Response): Promise<void> => {
 // ==================== Route Definitions ====================
 
 /** POST /api/rag/ingest - Ingest a knowledge document */
+// SECURITY (VULN-509): Rate limit all RAG endpoints to prevent DoS and cost abuse
 router.post(
   API_ROUTES.RAG_INGEST,
+  rateLimitByCategory("expensive"),
   validate({
     body: {
       docType: validateDocType,
@@ -288,6 +291,7 @@ router.post(
 /** POST /api/rag/search - Search for documents */
 router.post(
   API_ROUTES.RAG_SEARCH,
+  rateLimitByCategory("standard"),
   validate({
     body: {
       query: validateRequiredString,
@@ -297,9 +301,9 @@ router.post(
 );
 
 /** GET /api/rag/stats - Get RAG statistics */
-router.get(API_ROUTES.RAG_STATS, asyncHandler(handleStats));
+router.get(API_ROUTES.RAG_STATS, rateLimitByCategory("readonly"), asyncHandler(handleStats));
 
 /** POST /api/rag/sync - Sync external sources */
-router.post(API_ROUTES.RAG_SYNC, asyncHandler(handleSync));
+router.post(API_ROUTES.RAG_SYNC, rateLimitByCategory("expensive"), asyncHandler(handleSync));
 
 export { router as ragCoreRoutes };

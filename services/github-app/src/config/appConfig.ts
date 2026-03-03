@@ -50,6 +50,13 @@ const REQUIRED_GITHUB_CONFIG = [
     value: () => config.GITHUB_APP_PRIVATE_KEY,
     message: "GITHUB_APP_PRIVATE_KEY is required",
   },
+  {
+    key: "GITHUB_WEBHOOK_SECRET",
+    value: () => config.GITHUB_WEBHOOK_SECRET,
+    message:
+      "GITHUB_WEBHOOK_SECRET is required. Webhook signature verification cannot be skipped. " +
+      "Generate a secret with: openssl rand -hex 32",
+  },
 ] as const;
 
 /**

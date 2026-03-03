@@ -149,6 +149,9 @@ export const generateUrlSignature = async (
 /**
  * Verify HMAC-SHA256 signature for URL parameters.
  *
+ * Uses timing-safe comparison to prevent timing attacks where an attacker
+ * measures response time differences to reconstruct the signature byte-by-byte.
+ *
  * @param params - Parameters that were signed
  * @param signature - Signature to verify
  * @param secret - Secret key used for signing
@@ -159,8 +162,20 @@ export const verifyUrlSignature = async (
   signature: string,
   secret: string
 ): Promise<boolean> => {
+  const { timingSafeEqual } = await import("crypto");
   const expectedSignature = await generateUrlSignature(params, secret);
-  return signature === expectedSignature;
+
+  // Encode both signatures as Buffers for timing-safe comparison.
+  // If lengths differ, the signature is invalid — return false without
+  // leaking timing information about the expected length.
+  const sigBuffer = Buffer.from(signature, "utf-8");
+  const expectedBuffer = Buffer.from(expectedSignature, "utf-8");
+
+  if (sigBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(sigBuffer, expectedBuffer);
 };
 
 /**

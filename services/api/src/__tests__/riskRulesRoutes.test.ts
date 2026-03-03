@@ -49,6 +49,10 @@ jest.mock("@kenchi/shared", () => {
         }
       },
     requireFeature: () => (_req: Request, _res: Response, next: NextFunction) => next(),
+    // VULN-510: rateLimitByCategory added to riskRulesRoutes — mock as passthrough
+    rateLimitByCategory: jest.fn(
+      () => (_req: Request, _res: Response, next: NextFunction) => next()
+    ),
   };
 });
 

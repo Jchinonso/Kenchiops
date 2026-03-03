@@ -2,24 +2,16 @@
  * Incident Table Row Components
  *
  * Sub-components for the Active Incidents table:
- * - SortableTableHead: clickable column header with sort icons
  * - IncidentRow: table row for an individual incident
  * - ExpandedIncidentRow: lazy-loaded triage details when a row is expanded
+ *
+ * Re-exports SortableTableHead and SortConfig from the shared component
+ * for backward-compatible imports.
  */
 
-import { TableHead, TableRow, TableCell } from "@/components/ui/table";
+import { TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  ChevronRight,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  CheckCircle2,
-  XCircle,
-  Bot,
-  ClipboardList,
-  Loader2,
-} from "lucide-react";
+import { ChevronRight, CheckCircle2, XCircle, Bot, ClipboardList, Loader2 } from "lucide-react";
 import {
   useIncidentDetail,
   useAcknowledgeIncident,
@@ -36,12 +28,8 @@ import {
 } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
 
-// ==================== Types ====================
-
-export interface SortConfig {
-  readonly column: string;
-  readonly direction: "asc" | "desc" | null;
-}
+// Re-export shared sort primitives so existing imports don't break
+export { SortableTableHead, type SortConfig } from "@/components/SortableTableHead";
 
 /** Statuses that allow acknowledging */
 const canAcknowledge = (status: string): boolean =>
@@ -50,52 +38,6 @@ const canAcknowledge = (status: string): boolean =>
 /** Statuses that allow resolving */
 const canResolve = (status: string): boolean =>
   status !== "resolved" && status !== "closed" && status !== "deduped";
-
-// ==================== SortableTableHead ====================
-
-interface SortableTableHeadProps {
-  readonly label: string;
-  readonly column: string;
-  readonly currentSort: SortConfig;
-  readonly onSort: (column: string) => void;
-}
-
-export const SortableTableHead = ({
-  label,
-  column,
-  currentSort,
-  onSort,
-}: SortableTableHeadProps) => {
-  const { column: sortColumn, direction: sortDirection } = currentSort;
-  const isActive = sortColumn === column && sortDirection !== null;
-  const Icon =
-    isActive && sortDirection === "asc"
-      ? ArrowUp
-      : isActive && sortDirection === "desc"
-        ? ArrowDown
-        : ArrowUpDown;
-
-  const ariaSortValue: "ascending" | "descending" | "none" =
-    isActive && sortDirection === "asc"
-      ? "ascending"
-      : isActive && sortDirection === "desc"
-        ? "descending"
-        : "none";
-
-  return (
-    <TableHead
-      scope="col"
-      aria-sort={ariaSortValue}
-      className="cursor-pointer select-none hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-      onClick={() => onSort(column)}
-    >
-      <div className="flex items-center gap-1">
-        {label}
-        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-indigo-500" : "text-zinc-400")} />
-      </div>
-    </TableHead>
-  );
-};
 
 // ==================== IncidentRow ====================
 
@@ -109,10 +51,9 @@ interface IncidentRowProps {
 export const IncidentRow = ({ incident, isExpanded, isDuplicate, onClick }: IncidentRowProps) => (
   <TableRow
     onClick={onClick}
-    onKeyDown={(keyEvent) => {
-      const { key } = keyEvent;
-      if (key === "Enter" || key === " ") {
-        keyEvent.preventDefault();
+    onKeyDown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
         onClick();
       }
     }}

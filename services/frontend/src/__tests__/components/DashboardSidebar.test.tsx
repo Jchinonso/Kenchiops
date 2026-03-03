@@ -26,7 +26,6 @@ vi.mock("@/components/ui/collapsible", () => ({
   Collapsible: ({
     children,
     open,
-    onOpenChange: _onOpenChange,
   }: {
     children: React.ReactNode;
     open: boolean;

@@ -316,14 +316,15 @@ describe("API Routes", () => {
       expect(mockCreateCheckRunWithAnnotations).not.toHaveBeenCalled();
     });
 
-    it("should handle GitHub API errors", async () => {
+    it("should handle GitHub API errors with generic message (VULN-507)", async () => {
       mockPostPRComment.mockRejectedValue(new Error("GitHub API error"));
 
       const response = await request(app).post("/api/github/comment").send(validBody);
 
       expect(response.status).toBe(500);
       expect(response.body.status).toBe("error");
-      expect(response.body.error).toContain("GitHub API error");
+      // VULN-507: generic message returned, not internal error details
+      expect(response.body.error).toBe("Failed to post comment to GitHub");
     });
 
     it("should include annotation count in response", async () => {
@@ -440,13 +441,15 @@ describe("API Routes", () => {
       expect(response.body.error).toContain("Invalid repository format");
     });
 
-    it("should handle GitHub API errors", async () => {
+    it("should handle GitHub API errors with generic message (VULN-507)", async () => {
       mockCreateCheckRunWithAnnotations.mockRejectedValue(new Error("API error"));
 
       const response = await request(app).post("/api/github/annotations").send(validBody);
 
       expect(response.status).toBe(500);
       expect(response.body.status).toBe("error");
+      // VULN-507: generic message returned, not internal error details
+      expect(response.body.error).toBe("Failed to create check run with annotations");
     });
 
     it("should convert annotation levels to GitHub format", async () => {
@@ -518,13 +521,14 @@ describe("API Routes", () => {
       expect(response.status).toBe(400);
     });
 
-    it("should handle GitHub API errors", async () => {
+    it("should handle GitHub API errors with generic message (VULN-507)", async () => {
       mockGetInstallationRepositories.mockRejectedValue(new Error("GitHub API error"));
 
       const response = await request(app).get("/api/github/installations/12345/repositories");
 
       expect(response.status).toBe(500);
-      expect(response.body.error).toContain("GitHub API error");
+      // VULN-507: generic message returned, not internal error details
+      expect(response.body.error).toBe("Failed to fetch repositories for installation");
     });
 
     it("should handle empty repository list", async () => {

@@ -21,6 +21,9 @@ vi.mock("@/hooks/useDashboardData", () => ({
 
 vi.mock("@/components/FilterBar", () => ({
   FilterBar: () => <div data-testid="filter-bar">FilterBar</div>,
+}));
+
+vi.mock("@/components/FilterBarUtils", () => ({
   timeRangeToSince: () => undefined,
   loadSavedFilters: () => null,
   saveFilters: vi.fn(),

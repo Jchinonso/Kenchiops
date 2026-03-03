@@ -24,30 +24,20 @@ import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { FeatureLocked } from "@/components/FeatureLocked";
 import { PageLoader } from "@/components/PageLoader";
 import { getIncidentSeverityRank, titleCase } from "@/lib/formatters";
-import { cn } from "@/lib/utils";
+import { cn, buildSearchParams } from "@/lib/utils";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
-import {
-  FilterBar,
-  loadSavedFilters,
-  saveFilters,
-  type FilterValues,
-} from "@/components/FilterBar";
-import {
-  SortableTableHead,
-  IncidentRow,
-  ExpandedIncidentRow,
-  type SortConfig,
-} from "@/components/IncidentTableRows";
+import { FilterBar } from "@/components/FilterBar";
+import { loadSavedFilters, saveFilters, type FilterValues } from "@/components/FilterBarUtils";
+import { SortableTableHead } from "@/components/SortableTableHead";
+import { cycleSortDirection, type SortConfig } from "@/components/SortableTableHeadUtils";
+import { IncidentRow, ExpandedIncidentRow } from "@/components/IncidentTableRows";
 import { IncidentDetailPanel } from "@/pages/IncidentDetailPanel";
 import { findDuplicateIds } from "@/lib/duplicateDetection";
 
 // ==================== Constants ====================
 
 const PAGE_SIZE = 20;
-
-const cycleSortDirection = (current: "asc" | "desc" | null): "asc" | "desc" | null =>
-  current === null ? "asc" : current === "asc" ? "desc" : null;
 
 // ==================== Main Component ====================
 
@@ -93,20 +83,17 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
       setExpandedId(null);
       const nextSource = source === "all" ? "" : source;
       setFilters((prev) => ({ ...prev, source: nextSource }));
-      const params = new URLSearchParams();
-      if (filters.severity) {
-        params.set("severity", filters.severity);
-      }
-      if (filters.status) {
-        params.set("status", filters.status);
-      }
-      if (nextSource) {
-        params.set("source", nextSource);
-      }
-      setSearchParams(params, { replace: true });
+      setSearchParams(
+        buildSearchParams({
+          severity: filters.severity,
+          status: filters.status,
+          source: nextSource,
+        }),
+        { replace: true }
+      );
       saveFilters("incidents", { ...filters, source: nextSource }, tenantId || undefined);
     },
-    [filters, setSearchParams]
+    [filters, setSearchParams, tenantId]
   );
 
   const handleFilterChange = useCallback(
@@ -115,19 +102,12 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
       setOffset(0);
       setExpandedId(null);
       saveFilters("incidents", next, tenantId || undefined);
-      const params = new URLSearchParams();
-      if (next.severity) {
-        params.set("severity", next.severity);
-      }
-      if (next.status) {
-        params.set("status", next.status);
-      }
-      if (next.source) {
-        params.set("source", next.source);
-      }
-      setSearchParams(params, { replace: true });
+      setSearchParams(
+        buildSearchParams({ severity: next.severity, status: next.status, source: next.source }),
+        { replace: true }
+      );
     },
-    [setSearchParams]
+    [setSearchParams, tenantId]
   );
 
   const handlePageSizeChange = (size: number) => {
@@ -166,18 +146,20 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
 
     const multiplier = direction === "asc" ? 1 : -1;
     return [...items].sort((left, right) => {
-      if (column === "receivedAt") {
-        return (
-          multiplier * (new Date(left.receivedAt).getTime() - new Date(right.receivedAt).getTime())
-        );
+      switch (column) {
+        case "receivedAt":
+          return (
+            multiplier *
+            (new Date(left.receivedAt).getTime() - new Date(right.receivedAt).getTime())
+          );
+        case "severity":
+          return (
+            multiplier *
+            (getIncidentSeverityRank(left.severity) - getIncidentSeverityRank(right.severity))
+          );
+        default:
+          return 0;
       }
-      if (column === "severity") {
-        return (
-          multiplier *
-          (getIncidentSeverityRank(left.severity) - getIncidentSeverityRank(right.severity))
-        );
-      }
-      return 0;
     });
   }, [items, sort]);
 
@@ -198,6 +180,115 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
   const goPrev = () => {
     setOffset((prev) => Math.max(0, prev - pageSize));
     setExpandedId(null);
+  };
+
+  const renderCardContent = (): React.ReactNode => {
+    if (isLoading) {
+      return <TableSkeleton />;
+    }
+
+    if (error) {
+      return (
+        <div className="p-8 text-center space-y-3">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry
+          </button>
+        </div>
+      );
+    }
+
+    if (!hasItems) {
+      return (
+        <Empty className="py-12 border-0">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Siren className="w-6 h-6" />
+            </EmptyMedia>
+            <EmptyTitle>
+              {hasActiveFilters ? "No matching incidents" : "No incidents yet"}
+            </EmptyTitle>
+            <EmptyDescription>
+              {hasActiveFilters
+                ? "Try adjusting your filters to find what you're looking for."
+                : "When alerts arrive from PagerDuty or other monitoring tools, they will be triaged and shown here."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      );
+    }
+
+    return (
+      <>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableCaption className="sr-only">
+              Active incidents table showing severity, title, service, and triage status
+            </TableCaption>
+            <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
+              <tr>
+                <TableHead scope="col" className="w-8" />
+                <SortableTableHead
+                  label="Severity"
+                  column="severity"
+                  currentSort={sort}
+                  onSort={handleSort}
+                />
+                <TableHead scope="col">Title</TableHead>
+                <TableHead scope="col">Service</TableHead>
+                <TableHead scope="col">Environment</TableHead>
+                <TableHead scope="col">Source</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <SortableTableHead
+                  label="Time"
+                  column="receivedAt"
+                  currentSort={sort}
+                  onSort={handleSort}
+                />
+              </tr>
+            </TableHeader>
+            <TableBody>
+              {sortedItems.map((incident) => (
+                <Fragment key={incident.id}>
+                  <IncidentRow
+                    incident={incident}
+                    isExpanded={expandedId === incident.id}
+                    isDuplicate={duplicateIds.has(incident.id)}
+                    onClick={() =>
+                      setExpandedId((prev) => (prev === incident.id ? null : incident.id))
+                    }
+                  />
+                  {expandedId === incident.id && (
+                    <ExpandedIncidentRow
+                      incidentId={incident.id}
+                      onViewDetails={() => setSelectedIncidentId(incident.id)}
+                      onRefresh={refetch}
+                    />
+                  )}
+                </Fragment>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+          onPrev={goPrev}
+          onNext={goNext}
+          totalItems={total}
+          pageSize={pageSize}
+          onPageSizeChange={handlePageSizeChange}
+        />
+      </>
+    );
   };
 
   if (!tenantId) {
@@ -227,7 +318,20 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     );
   }
 
-  const pageContent = (
+  if (isUsageLoading) {
+    return <PageLoader />;
+  }
+
+  if (isAnyLimitReached && usageData) {
+    return (
+      <FeatureLocked
+        description="You have reached your plan's usage limits. Upgrade to continue viewing incidents."
+        usage={usageData.usage}
+      />
+    );
+  }
+
+  return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
@@ -305,104 +409,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
               : "No incidents recorded yet"}
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <TableSkeleton />
-          ) : error ? (
-            <div className="p-8 text-center space-y-3">
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              <button
-                type="button"
-                onClick={refetch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Retry
-              </button>
-            </div>
-          ) : !hasItems ? (
-            <Empty className="py-12 border-0">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Siren className="w-6 h-6" />
-                </EmptyMedia>
-                <EmptyTitle>
-                  {hasActiveFilters ? "No matching incidents" : "No incidents yet"}
-                </EmptyTitle>
-                <EmptyDescription>
-                  {hasActiveFilters
-                    ? "Try adjusting your filters to find what you're looking for."
-                    : "When alerts arrive from PagerDuty or other monitoring tools, they will be triaged and shown here."}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableCaption className="sr-only">
-                    Active incidents table showing severity, title, service, and triage status
-                  </TableCaption>
-                  <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
-                    <tr>
-                      <TableHead scope="col" className="w-8" />
-                      <SortableTableHead
-                        label="Severity"
-                        column="severity"
-                        currentSort={sort}
-                        onSort={handleSort}
-                      />
-                      <TableHead scope="col">Title</TableHead>
-                      <TableHead scope="col">Service</TableHead>
-                      <TableHead scope="col">Environment</TableHead>
-                      <TableHead scope="col">Source</TableHead>
-                      <TableHead scope="col">Status</TableHead>
-                      <SortableTableHead
-                        label="Time"
-                        column="receivedAt"
-                        currentSort={sort}
-                        onSort={handleSort}
-                      />
-                    </tr>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedItems.map((incident) => (
-                      <Fragment key={incident.id}>
-                        <IncidentRow
-                          incident={incident}
-                          isExpanded={expandedId === incident.id}
-                          isDuplicate={duplicateIds.has(incident.id)}
-                          onClick={() =>
-                            setExpandedId((prev) => (prev === incident.id ? null : incident.id))
-                          }
-                        />
-                        {expandedId === incident.id && (
-                          <ExpandedIncidentRow
-                            incidentId={incident.id}
-                            onViewDetails={() => setSelectedIncidentId(incident.id)}
-                            onRefresh={refetch}
-                          />
-                        )}
-                      </Fragment>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <PaginationControls
-                currentPage={currentPage}
-                totalPages={totalPages}
-                hasPrev={hasPrev}
-                hasNext={hasNext}
-                onPrev={goPrev}
-                onNext={goNext}
-                totalItems={total}
-                pageSize={pageSize}
-                onPageSizeChange={handlePageSizeChange}
-              />
-            </>
-          )}
-        </CardContent>
+        <CardContent className="p-0">{renderCardContent()}</CardContent>
       </Card>
 
       <IncidentDetailPanel
@@ -413,19 +420,4 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
       />
     </div>
   );
-
-  if (isUsageLoading) {
-    return <PageLoader />;
-  }
-
-  if (isAnyLimitReached && usageData) {
-    return (
-      <FeatureLocked
-        description="You have reached your plan's usage limits. Upgrade to continue viewing incidents."
-        usage={usageData.usage}
-      />
-    );
-  }
-
-  return pageContent;
 };

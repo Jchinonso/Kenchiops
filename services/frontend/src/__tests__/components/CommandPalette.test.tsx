@@ -22,7 +22,6 @@ vi.mock("@/components/ui/command", () => {
   const CommandDialog = ({
     children,
     open,
-    onOpenChange: _onOpenChange,
   }: {
     children: React.ReactNode;
     open?: boolean;
