@@ -408,11 +408,17 @@ const GitLabCICard = ({ tenantId, otherProviderConnected }: GitLabCardProps) => 
         )}
       </div>
 
-      {/* Secret dialog (shown once after connecting) */}
+      {/* Secret dialog (shown once after connecting).
+          Clear connectResult on close to remove the webhook secret from React state. */}
       {connectResult && (
         <GitLabSecretDialog
           open={secretDialogOpen}
-          onOpenChange={setSecretDialogOpen}
+          onOpenChange={(open) => {
+            setSecretDialogOpen(open);
+            if (!open) {
+              setConnectResult(null);
+            }
+          }}
           webhookUrl={connectResult.webhookUrl}
           webhookSecret={connectResult.webhookSecret}
         />

@@ -43,13 +43,13 @@ const QUERIES = {
   UPDATE_STATUS: `
     UPDATE team_invitations
     SET status = $1, updated_at = NOW()
-    WHERE id = $2
+    WHERE id = $2 AND tenant_id = $3
     RETURNING *
   `,
   ACCEPT: `
     UPDATE team_invitations
     SET status = 'accepted', accepted_by = $1, updated_at = NOW()
-    WHERE id = $2 AND status = 'pending' AND expires_at > NOW()
+    WHERE id = $2 AND tenant_id = $3 AND status = 'pending' AND expires_at > NOW()
     RETURNING *
   `,
   EXPIRE_STALE: `
@@ -169,14 +169,20 @@ export const findPendingInvitationsByEmail = async (
 /**
  * Accept an invitation. Updates status and records the accepting user.
  * Only works on pending, non-expired invitations.
+ * SECURITY: Requires tenantId to enforce tenant isolation at the SQL level.
  * Returns null if the invitation cannot be accepted.
  */
 export const acceptInvitation = async (
   invitationId: string,
-  acceptedByUserId: string
+  acceptedByUserId: string,
+  tenantId: string
 ): Promise<Invitation | null> => {
   try {
-    const result = await query<InvitationRow>(QUERIES.ACCEPT, [acceptedByUserId, invitationId]);
+    const result = await query<InvitationRow>(QUERIES.ACCEPT, [
+      acceptedByUserId,
+      invitationId,
+      tenantId,
+    ]);
 
     if (result.rows.length === 0) {
       return null;
@@ -200,10 +206,18 @@ export const acceptInvitation = async (
 
 /**
  * Decline an invitation. Updates status to 'declined'.
+ * SECURITY: Requires tenantId to enforce tenant isolation at the SQL level.
  */
-export const declineInvitation = async (invitationId: string): Promise<Invitation | null> => {
+export const declineInvitation = async (
+  invitationId: string,
+  tenantId: string
+): Promise<Invitation | null> => {
   try {
-    const result = await query<InvitationRow>(QUERIES.UPDATE_STATUS, ["declined", invitationId]);
+    const result = await query<InvitationRow>(QUERIES.UPDATE_STATUS, [
+      "declined",
+      invitationId,
+      tenantId,
+    ]);
     return result.rows.length > 0 ? rowToInvitation(result.rows[0]) : null;
   } catch (error) {
     logger.error("Failed to decline invitation", {
@@ -216,10 +230,18 @@ export const declineInvitation = async (invitationId: string): Promise<Invitatio
 
 /**
  * Revoke an invitation (admin action). Updates status to 'revoked'.
+ * SECURITY: Requires tenantId to enforce tenant isolation at the SQL level.
  */
-export const revokeInvitation = async (invitationId: string): Promise<Invitation | null> => {
+export const revokeInvitation = async (
+  invitationId: string,
+  tenantId: string
+): Promise<Invitation | null> => {
   try {
-    const result = await query<InvitationRow>(QUERIES.UPDATE_STATUS, ["revoked", invitationId]);
+    const result = await query<InvitationRow>(QUERIES.UPDATE_STATUS, [
+      "revoked",
+      invitationId,
+      tenantId,
+    ]);
 
     if (result.rows.length > 0) {
       const invitation = rowToInvitation(result.rows[0]);

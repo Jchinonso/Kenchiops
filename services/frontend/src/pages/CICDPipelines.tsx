@@ -26,6 +26,7 @@ import {
 } from "@/hooks/useDashboardData";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
+import { isSafeUrl } from "@/lib/urlSafety";
 import { FeatureLocked } from "@/components/FeatureLocked";
 import { PageLoader } from "@/components/PageLoader";
 
@@ -123,20 +124,22 @@ const GitLabProjectCard = ({ project }: GitLabProjectCardProps) => (
               {project.name}
             </span>
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={project.webUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-400 hover:text-orange-500 transition-colors flex-shrink-0"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </TooltipTrigger>
-            <TooltipContent>Open on GitLab</TooltipContent>
-          </Tooltip>
+          {isSafeUrl(project.webUrl) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={project.webUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-zinc-400 hover:text-orange-500 transition-colors flex-shrink-0"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>Open on GitLab</TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3 truncate">{project.fullPath}</p>

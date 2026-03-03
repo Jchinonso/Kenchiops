@@ -213,7 +213,9 @@ const ExpandedWebhookRow = ({ activity }: ExpandedWebhookRowProps) => {
                 Error Message
               </h4>
               <p className="text-sm text-red-600 dark:text-red-400 font-mono whitespace-pre-wrap break-words">
-                {activity.errorMessage}
+                {(activity.errorMessage ?? "").length > 500
+                  ? `${(activity.errorMessage ?? "").slice(0, 500)}...`
+                  : activity.errorMessage}
               </p>
             </div>
           )}

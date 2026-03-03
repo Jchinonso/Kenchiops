@@ -315,6 +315,7 @@ describe("providerConnection/repository", () => {
       const queryArgs = mockQuery.mock.calls[0][1] as unknown[];
       expect(queryArgs[0]).toBe("enc(my-new-token)"); // encrypted token
       expect(queryArgs[1]).toBe("conn-1"); // connection ID
+      expect(queryArgs[2]).toBe("tenant-abc"); // tenant ID for SQL WHERE clause
     });
 
     it("should return null when connection is not found", async () => {
@@ -393,14 +394,14 @@ describe("providerConnection/repository", () => {
       const row = createMockRow({ is_active: false });
       mockQuery.mockResolvedValueOnce({ rows: [row] });
 
-      const result = await repo.deactivateConnection("conn-1");
+      const result = await repo.deactivateConnection("conn-1", "tenant-abc");
       expect(result).not.toBeNull();
     });
 
     it("should return null when connection does not exist", async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
-      const result = await repo.deactivateConnection("missing");
+      const result = await repo.deactivateConnection("missing", "tenant-abc");
       expect(result).toBeNull();
     });
   });

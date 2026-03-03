@@ -65,7 +65,7 @@ const QUERIES = {
   DEACTIVATE: `
     UPDATE provider_connections
     SET is_active = false, updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND tenant_id = $2
     RETURNING *
   `,
   DEACTIVATE_BY_TENANT_AND_PROVIDER: `
@@ -77,7 +77,7 @@ const QUERIES = {
   UPDATE_ACCESS_TOKEN: `
     UPDATE provider_connections
     SET access_token_enc = $1, updated_at = NOW()
-    WHERE id = $2
+    WHERE id = $2 AND tenant_id = $3
     RETURNING *
   `,
   FIND_TENANT_BY_EXTERNAL_ORG: `
@@ -245,9 +245,13 @@ export const updateProviderConnection = async (
 
 /**
  * Soft-delete a connection by setting is_active to false.
+ * SECURITY: Requires tenantId to enforce tenant isolation at the SQL level.
  */
-export const deactivateConnection = async (id: string): Promise<ProviderConnection | null> => {
-  const result = await query<ProviderConnectionRow>(QUERIES.DEACTIVATE, [id]);
+export const deactivateConnection = async (
+  id: string,
+  tenantId: string
+): Promise<ProviderConnection | null> => {
+  const result = await query<ProviderConnectionRow>(QUERIES.DEACTIVATE, [id, tenantId]);
   const row = result.rows[0];
   return row ? rowToProviderConnection(row) : null;
 };
@@ -269,6 +273,7 @@ export const deactivateByTenantAndProvider = async (
 
 /**
  * Update the encrypted access token for a connection.
+ * SECURITY: WHERE clause includes tenant_id to enforce tenant isolation at the SQL level.
  */
 export const updateConnectionToken = async (
   connectionId: string,
@@ -279,6 +284,7 @@ export const updateConnectionToken = async (
   const result = await query<ProviderConnectionRow>(QUERIES.UPDATE_ACCESS_TOKEN, [
     encrypted,
     connectionId,
+    tenantId,
   ]);
   const row = result.rows[0];
   return row ? rowToProviderConnection(row) : null;

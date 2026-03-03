@@ -106,15 +106,28 @@ describe("HTTP Middleware", () => {
       });
     });
 
-    it("should include metadata when present", () => {
+    it("should include only safe metadata keys in response", () => {
       const error = new ValidationError("Invalid input", {
-        metadata: { field: "name", value: "x" },
+        metadata: { field: "name", value: "x", tenantId: "secret-tenant" },
       });
 
       errorHandler(error, req, res, next);
 
       const jsonCall = (res.json as jest.Mock).mock.calls[0][0] as ErrorResponseJson;
-      expect(jsonCall.error.metadata).toEqual({ field: "name", value: "x" });
+      // Only allowlisted keys should pass through — "value" and "tenantId" are stripped
+      expect(jsonCall.error.metadata).toEqual({ field: "name" });
+    });
+
+    it("should omit metadata entirely when no safe keys are present", () => {
+      const error = new ValidationError("Invalid input", {
+        metadata: { internalPath: "/secret/path", tenantId: "t-123" },
+      });
+
+      errorHandler(error, req, res, next);
+
+      const jsonCall = (res.json as jest.Mock).mock.calls[0][0] as ErrorResponseJson;
+      // No safe keys present — metadata should be omitted entirely
+      expect(jsonCall.error.metadata).toBeUndefined();
     });
 
     it("should not include metadata when not present", () => {

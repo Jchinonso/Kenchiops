@@ -188,7 +188,9 @@ const handleAcceptInvitation = async (req: Request, res: Response): Promise<void
   }
 
   // Accept the invitation in DB
-  const accepted = await acceptInvitation(invitation.id, userId);
+  // SECURITY: tenantId from the looked-up invitation is passed to the SQL WHERE clause
+  // to enforce tenant isolation at the data layer.
+  const accepted = await acceptInvitation(invitation.id, userId, invitation.tenantId);
   if (!accepted) {
     throw new ValidationError("Could not accept invitation. It may have expired or been revoked.", {
       operation: "handleAcceptInvitation",
@@ -266,7 +268,9 @@ const handleDeclineInvitation = async (req: Request, res: Response): Promise<voi
     });
   }
 
-  await declineInvitation(invitation.id);
+  // SECURITY: tenantId from the looked-up invitation is passed to the SQL WHERE clause
+  // to enforce tenant isolation at the data layer.
+  await declineInvitation(invitation.id, invitation.tenantId);
 
   res.status(HTTP_STATUS.OK).json({
     data: { invitationId: invitation.id, status: "declined" },
@@ -289,18 +293,13 @@ const handleRevokeInvitation = async (req: Request, res: Response): Promise<void
     });
   }
 
-  const invitation = await revokeInvitation(invitationId);
+  // SECURITY: tenantId is passed to the SQL WHERE clause to enforce tenant isolation
+  // at the data layer, preventing cross-tenant invitation revocation (VULN-101).
+  const invitation = await revokeInvitation(invitationId, tenantId);
 
   if (!invitation) {
     throw new NotFoundError("Invitation not found", {
       metadata: { invitationId },
-    });
-  }
-
-  // Verify this invitation belongs to the current tenant
-  if (invitation.tenantId !== tenantId) {
-    throw new AuthorizationError("Cannot revoke invitations from another organization", {
-      operation: "handleRevokeInvitation",
     });
   }
 

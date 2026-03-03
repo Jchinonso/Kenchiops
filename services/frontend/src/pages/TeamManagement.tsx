@@ -486,14 +486,21 @@ export const TeamManagement = () => {
   }, []);
 
   const handleConfirmInvite = useCallback(async () => {
-    if (!inviteEmail.trim()) {
+    const trimmedEmail = inviteEmail.trim();
+    if (!trimmedEmail) {
       return;
     }
 
-    const result = await createInvitation(inviteEmail.trim(), inviteRole);
+    // Basic email format validation (defense-in-depth; server also validates)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+
+    const result = await createInvitation(trimmedEmail, inviteRole);
 
     if (result) {
-      toast.success(`Invitation sent to ${inviteEmail.trim()}`);
+      toast.success(`Invitation sent to ${trimmedEmail}`);
       setRefreshKey((prev) => prev + 1);
       handleCloseInviteDialog();
     } else {

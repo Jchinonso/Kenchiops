@@ -202,6 +202,18 @@ export const PlanSelection = () => {
       if (isPaidUpgrade) {
         const checkout = await createCheckout(planId, "month");
         if (checkout?.url) {
+          // Defense-in-depth: validate the checkout URL uses HTTPS before navigating.
+          // The URL comes from our API but we verify protocol to prevent open redirect.
+          try {
+            const { protocol } = new URL(checkout.url);
+            if (protocol !== "https:") {
+              toast.error("Invalid checkout URL. Please try again.");
+              return;
+            }
+          } catch {
+            toast.error("Invalid checkout URL. Please try again.");
+            return;
+          }
           window.location.assign(checkout.url);
           return;
         }

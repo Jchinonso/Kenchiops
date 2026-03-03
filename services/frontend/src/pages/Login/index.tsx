@@ -15,10 +15,12 @@ const Login = () => {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
 
-  // OAuth error forwarded from AuthCallback via ?error= query param
+  // OAuth error forwarded from AuthCallback via ?error= query param.
+  // Only display messages from the known ERROR_MESSAGES map to prevent
+  // reflected content injection (social engineering via crafted URLs).
   const oauthError = searchParams.get("error");
   const oauthErrorMessage = oauthError
-    ? (ERROR_MESSAGES[oauthError] ?? `Authentication failed: ${oauthError}`)
+    ? (ERROR_MESSAGES[oauthError] ?? "Authentication failed. Please try again.")
     : null;
 
   // Redirect authenticated users to dashboard
@@ -38,8 +40,10 @@ const Login = () => {
     }
     try {
       const parsed = new URL(instanceUrl);
-      if (!parsed.protocol) {
-        setUrlError("Please enter a valid URL (e.g., https://git.yourcompany.com)");
+      // Defense-in-depth: only allow HTTPS to prevent SSRF via internal
+      // HTTP endpoints and to ensure cookies are never sent over plaintext.
+      if (parsed.protocol !== "https:") {
+        setUrlError("Instance URL must use HTTPS (e.g., https://git.yourcompany.com)");
         return false;
       }
       setUrlError(null);

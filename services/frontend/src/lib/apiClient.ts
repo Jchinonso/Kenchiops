@@ -16,6 +16,10 @@ const API_URL = import.meta.env.VITE_API_URL ?? "";
 /** Default request timeout in milliseconds (30 seconds). */
 const REQUEST_TIMEOUT_MS = 30_000;
 
+/** Truncate error messages to prevent internal details from leaking to the UI via toast. */
+const truncateForToast = (message: string): string =>
+  message.length > 200 ? `${message.slice(0, 200)}...` : message;
+
 // Browser Fetch API reference — frontend uses native browser fetch,
 // not @kenchi/shared httpClient (which is Node.js server-only)
 const browserRequest = globalThis.fetch.bind(globalThis);
@@ -141,27 +145,28 @@ export const apiClient = async (
       const metadataCode = errorBody.error?.metadata?.code;
       const metadataReason = errorBody.error?.metadata?.reason;
 
+      // Truncate API error messages before displaying in toast to prevent
+      // internal details (stack traces, SQL, hostnames) from leaking to UI.
+      const safeMessage = errorBody.error?.message
+        ? truncateForToast(errorBody.error.message)
+        : null;
+
       if (errorCode === "PLAN_LIMIT_EXCEEDED" || metadataCode === "PLAN_LIMIT_EXCEEDED") {
-        toast.error(
-          errorBody.error?.message ?? "You've reached your plan limit. Upgrade to continue."
-        );
+        toast.error(safeMessage ?? "You've reached your plan limit. Upgrade to continue.");
       } else if (
         errorCode === "FEATURE_NOT_AVAILABLE" ||
         metadataCode === "FEATURE_NOT_AVAILABLE"
       ) {
-        toast.error(
-          errorBody.error?.message ?? "This feature is not available on your current plan."
-        );
+        toast.error(safeMessage ?? "This feature is not available on your current plan.");
       } else if (errorCode === "DOWNGRADE_BLOCKED" || metadataCode === "DOWNGRADE_BLOCKED") {
-        toast.error(errorBody.error?.message ?? "Current usage exceeds the target plan's limits.");
+        toast.error(safeMessage ?? "Current usage exceeds the target plan's limits.");
       } else if (errorCode === "AUTHORIZATION_ERROR" && metadataReason === "access_revoked") {
         // Membership revoked or tenant blocked — force re-authentication.
         // Only redirects when the auth middleware explicitly marks the error
         // with reason: "access_revoked". Generic permission denials (e.g.,
         // requirePermission("billing") for a member role) must NOT redirect.
         toast.error(
-          errorBody.error?.message ??
-            "Access denied. You may have been removed from this organization."
+          safeMessage ?? "Access denied. You may have been removed from this organization."
         );
         if (!window.location.pathname.startsWith("/login")) {
           window.location.assign("/login?error=access_revoked");
