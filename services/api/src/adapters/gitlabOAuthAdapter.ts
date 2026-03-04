@@ -379,6 +379,106 @@ const getUserOrganizations = async (
   }
 };
 
+// ==================== Token Refresh ====================
+
+/**
+ * Refresh an expired GitLab OAuth access token.
+ * Works for both cloud and self-hosted instances.
+ *
+ * Exported as a standalone function (not part of OAuthPort) because
+ * token refresh is an operational concern used by the token refresh
+ * service, not part of the user-login OAuth flow.
+ */
+export const refreshGitLabToken = async (
+  currentRefreshToken: string,
+  instanceUrl: string | null,
+  context: RequestContext
+): Promise<OAuthTokenResponse> => {
+  const { clientId, clientSecret } = ensureClientCredentials();
+  const urls = getUrls(instanceUrl);
+  const startTime = Date.now();
+
+  try {
+    const body = new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: currentRefreshToken,
+      grant_type: "refresh_token",
+    });
+
+    const response = await fetch(urls.tokenEndpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+      signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
+    });
+
+    const durationMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      throw new ExternalServiceError(
+        "gitlab",
+        `GitLab token refresh failed with status ${String(response.status)}`,
+        {
+          metadata: { operation: "refreshToken", statusCode: response.status, durationMs },
+          retryable: isRetryableStatus(response.status),
+        }
+      );
+    }
+
+    const data = (await response.json()) as GitLabTokenResponse;
+
+    if (data.error) {
+      throw new ExternalServiceError(
+        "gitlab",
+        `GitLab token refresh error: ${data.error_description ?? data.error}`,
+        {
+          metadata: { operation: "refreshToken", errorCode: data.error, durationMs },
+          retryable: false,
+        }
+      );
+    }
+
+    logger.info("GitLab token refresh completed", {
+      provider: "gitlab",
+      operation: "refreshToken",
+      durationMs,
+      statusCode: response.status,
+      ...context,
+    });
+
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresIn: data.expires_in,
+      scope: data.scope,
+      tokenType: data.token_type,
+    };
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw error;
+    }
+
+    const durationMs = Date.now() - startTime;
+
+    logger.error("GitLab token refresh failed", {
+      provider: "gitlab",
+      operation: "refreshToken",
+      durationMs,
+      error: redactSecrets(error instanceof Error ? error.message : String(error)),
+      ...context,
+    });
+
+    throw new ExternalServiceError("gitlab", "Failed to refresh GitLab token", {
+      metadata: { operation: "refreshToken", durationMs },
+      retryable: true,
+    });
+  }
+};
+
 // ==================== Export ====================
 
 /** GitLab OAuth adapter implementing the provider-agnostic OAuthPort. */
