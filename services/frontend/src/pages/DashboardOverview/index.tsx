@@ -5,12 +5,7 @@
  * on the main dashboard overview page (/dashboard).
  */
 
-import {
-  useDashboardStats,
-  useAnalyses,
-  useFailures,
-  useTenantInfo,
-} from "@/hooks/useDashboardData";
+import { useDashboardStats, useAnalyses, useFailures } from "@/hooks/useDashboardData";
 import {
   useTriageStats,
   useActiveCountsBySource,
@@ -124,6 +119,7 @@ export const DashboardOverview = ({
   showOnboarding,
   dismissOnboarding,
   refreshKey = 0,
+  tenant: tenantProp = null,
 }: DashboardOverviewProps) => {
   const { user } = useAuth();
   const loginProvider = user?.organizations.find((org) => org.isSelected)?.provider ?? "github";
@@ -147,7 +143,8 @@ export const DashboardOverview = ({
     error: failuresError,
     refetch: refetchFailures,
   } = useFailures({ limit: 5, offset: 0, refreshKey });
-  const { data: tenant } = useTenantInfo(refreshKey);
+  // Use tenant from parent (Dashboard shell) when available to avoid duplicate API call
+  const tenant = tenantProp;
   const tenantId = tenant?.id ?? "";
   const { data: triageStats } = useTriageStats(tenantId, refreshKey);
   const { data: activeCountsBySource } = useActiveCountsBySource(tenantId, refreshKey);

@@ -36,3 +36,9 @@ If prettier's `--check` fails, fix with `npx prettier --write <file>` before re-
 - Scopes seen: `llm`, `queue`, `shared`, `database`, `safety`, `github-app`, `api`, `slack`
 - Body uses bullet lists with `-` prefix for multi-item changes
 - Arrow notation (`->`) preferred over unicode arrows in commit bodies (commit-msg hook may interfere with special chars)
+
+## ESLint Rules to Watch
+
+- **`id-denylist`**: Single-letter identifiers like `e` are banned. Use descriptive names like `clickEvent`, `keyEvent` instead.
+- **Intentional eslint-disable comments**: Do NOT remove eslint-disable comments for `no-console` (ErrorBoundary), `no-new` (Notification), or `@typescript-eslint/no-non-null-assertion` (main.tsx root element) -- these are legitimate exceptions that lint-staged will reject without the disables.
+- **`@typescript-eslint/no-shadow`**: Inner callback params must not shadow outer function params (e.g., `event` inside `onClick` when component receives `event` prop).

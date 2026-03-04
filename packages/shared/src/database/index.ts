@@ -474,6 +474,10 @@ export {
   findGitLabConnection,
   findTenantByGitHubInstallation,
   findTenantBySlackWorkspace,
+  // GitLab token refresh
+  type GitLabRefreshResult,
+  type GitLabTokenRefreshFn,
+  refreshGitLabTokenIfNeeded,
 } from "./providerConnection/index.js";
 
 // Subscription module (Plan tiers and tenant subscriptions)

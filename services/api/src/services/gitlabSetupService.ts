@@ -14,6 +14,7 @@ import {
   ValidationError,
   getErrorMessage,
   config,
+  encryptForTenant,
   mapWithConcurrency,
   findOAuthIdentitiesByUser,
   findByTenantAndProvider,
@@ -182,8 +183,9 @@ export const createGitLabSetupService = (
           webhookId: result.webhookId,
         }));
 
-        // Always refresh access token from the user's current OAuth identity
-        // in case they re-authenticated with GitLab since the connection was created
+        // Always refresh access token and refresh token from the user's current
+        // OAuth identity in case they re-authenticated with GitLab since the
+        // connection was created
         await updateProviderConnection({
           id: existingConnection.id,
           tenantId,
@@ -192,6 +194,9 @@ export const createGitLabSetupService = (
           config: {
             ...existingConfig,
             projectWebhooks: [...existingProjectWebhooks, ...newProjectWebhooks],
+            ...(gitlabIdentity.refreshToken
+              ? { refreshToken: await encryptForTenant(tenantId, gitlabIdentity.refreshToken) }
+              : {}),
           },
         });
 
@@ -211,6 +216,9 @@ export const createGitLabSetupService = (
               projectId: result.projectId,
               webhookId: result.webhookId,
             })),
+            ...(gitlabIdentity.refreshToken
+              ? { refreshToken: await encryptForTenant(tenantId, gitlabIdentity.refreshToken) }
+              : {}),
           },
         });
 

@@ -190,7 +190,9 @@ const tryInternalAuth = (req: Request): boolean => {
  * Matches path prefixes from the PUBLIC_ROUTES array.
  */
 const isPublicRoute = (path: string): boolean =>
-  PUBLIC_ROUTES.some((prefix) => path.startsWith(prefix));
+  PUBLIC_ROUTES.some((prefix) =>
+    prefix.endsWith("/") ? path === prefix.slice(0, -1) || path.startsWith(prefix) : path === prefix
+  );
 
 // Token extraction moved to security/cookies.ts (extractAccessToken)
 // which checks Authorization Bearer header first, then falls back to cookie.

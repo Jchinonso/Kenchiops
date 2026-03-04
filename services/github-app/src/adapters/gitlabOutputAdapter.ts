@@ -15,11 +15,13 @@ import {
   isRedisHealthy,
   enqueueConsolidatedNotification,
   findActiveByProvider,
+  refreshGitLabTokenIfNeeded,
   type CIOutputPort,
   type AggregatedFailures,
   type ConsolidatedPostResult,
   type RequestContext,
 } from "@kenchi/shared";
+import { refreshGitLabToken } from "./gitlabTokenRefresh.js";
 import { buildGitLabMRComment } from "../services/formatters/gitlabFormatter.js";
 import { buildConsolidatedSlackPayload } from "../services/formatters/slackPayloadFormatter.js";
 
@@ -50,8 +52,16 @@ const resolveGitLabConnection = async (
     return null;
   }
 
+  // Proactively refresh token if expiring soon (pass connection to avoid redundant DB lookup)
+  const freshToken = await refreshGitLabTokenIfNeeded(
+    connection.tenantId,
+    refreshGitLabToken,
+    context,
+    connection
+  );
+
   return {
-    accessToken: connection.accessToken,
+    accessToken: freshToken ?? connection.accessToken,
     baseUrl: connection.baseUrl ?? GITLAB_DEFAULT_BASE_URL,
   };
 };

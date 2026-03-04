@@ -13,6 +13,7 @@ import {
   createLogger,
   NotFoundError,
   ValidationError,
+  encryptForTenant,
   findOAuthIdentitiesByUser,
   findByTenantAndProvider,
   createProviderConnection,
@@ -106,7 +107,7 @@ export const createGitLabConnectionService = (): GitLabConnectionService => {
       // 3. Generate webhook secret
       const webhookSecret = generateWebhookSecret();
 
-      // 4. Create provider connection
+      // 4. Create provider connection (include encrypted refresh token for auto-refresh)
       const connection = await createProviderConnection({
         tenantId,
         provider: GITLAB_CI_PROVIDER,
@@ -116,6 +117,11 @@ export const createGitLabConnectionService = (): GitLabConnectionService => {
         webhookSecret,
         accessToken: gitlabIdentity.accessToken,
         tokenExpiresAt: gitlabIdentity.tokenExpiresAt,
+        config: {
+          ...(gitlabIdentity.refreshToken
+            ? { refreshToken: await encryptForTenant(tenantId, gitlabIdentity.refreshToken) }
+            : {}),
+        },
       });
 
       const webhookUrl = getGitLabWebhookUrl();

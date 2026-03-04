@@ -154,7 +154,8 @@ export const rateLimitByCategory = (
       next();
     } catch (error) {
       if (error instanceof RateLimitError) {
-        throw error;
+        next(error);
+        return;
       }
       // Fail open on unexpected errors — do not block traffic
       logger.warn("Category quota middleware error, failing open", {

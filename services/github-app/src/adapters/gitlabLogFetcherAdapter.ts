@@ -18,10 +18,12 @@ import {
   findActiveByProvider,
   withCircuitBreaker,
   buildTenantCircuitKey,
+  refreshGitLabTokenIfNeeded,
   type CILogFetcherPort,
   type FetchedBuildLogs,
   type RequestContext,
 } from "@kenchi/shared";
+import { refreshGitLabToken } from "./gitlabTokenRefresh.js";
 import type {
   ResolvedGitLabConnection,
   GitLabPipelineSummary,
@@ -59,8 +61,16 @@ const resolveAccessToken = async (context: RequestContext): Promise<ResolvedGitL
     );
   }
 
+  // Proactively refresh token if expiring soon (pass connection to avoid redundant DB lookup)
+  const freshToken = await refreshGitLabTokenIfNeeded(
+    connection.tenantId,
+    refreshGitLabToken,
+    context,
+    connection
+  );
+
   return {
-    accessToken: connection.accessToken,
+    accessToken: freshToken ?? connection.accessToken,
     baseUrl: connection.baseUrl ?? GITLAB_DEFAULT_BASE_URL,
   };
 };

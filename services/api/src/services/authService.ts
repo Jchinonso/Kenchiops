@@ -58,7 +58,10 @@ import {
   resolveAutoLinkRole,
   // Provider connections
   findGitHubAppConnection,
+  findGitLabConnection,
   createProviderConnection,
+  updateProviderConnection,
+  encryptForTenant,
   // JWT utilities
   generateAccessToken,
   generateRefreshToken,
@@ -104,6 +107,52 @@ const ROLE_HIERARCHY: Readonly<Record<string, number>> = {
 const elevateToMinimumAdmin = (role: string): string =>
   (ROLE_HIERARCHY[role] ?? 0) >= (ROLE_HIERARCHY.admin ?? 2) ? role : "admin";
 
+// ==================== GitLab Refresh Token Sync ====================
+
+/**
+ * Sync the fresh GitLab refresh token from login into the gitlab_ci
+ * provider connection's config. GitLab may rotate refresh tokens on
+ * each use, so we always update with the latest value from login.
+ *
+ * Never throws — login must not fail if this fails.
+ */
+const syncGitLabRefreshToken = async (
+  tenantId: string,
+  refreshToken: string,
+  context: RequestContext
+): Promise<void> => {
+  try {
+    const connection = await findGitLabConnection(tenantId);
+    if (!connection) {
+      return;
+    }
+
+    const encryptedRefresh = await encryptForTenant(tenantId, refreshToken);
+
+    await updateProviderConnection({
+      id: connection.id,
+      tenantId,
+      config: {
+        ...connection.config,
+        refreshToken: encryptedRefresh,
+      },
+    });
+
+    logger.info("GitLab refresh token synced to provider connection", {
+      provider: "gitlab",
+      connectionId: connection.id,
+      ...context,
+    });
+  } catch (error) {
+    // Non-fatal: login must succeed even if sync fails
+    logger.warn("Failed to sync GitLab refresh token (non-fatal)", {
+      provider: "gitlab",
+      error: getErrorMessage(error),
+      ...context,
+    });
+  }
+};
+
 // ==================== Extracted Service Methods ====================
 
 /**
@@ -139,6 +188,11 @@ const findOrCreateUserImpl = async (
 
     await updateLastLogin(user.id);
 
+    // Best-effort: sync refresh token into gitlab_ci connection for auto-refresh
+    if (provider === "gitlab" && tokens.refreshToken && user.tenantId) {
+      await syncGitLabRefreshToken(user.tenantId, tokens.refreshToken, context);
+    }
+
     logger.info("Existing user logged in via OAuth", {
       userId: user.id,
       provider,
@@ -169,6 +223,11 @@ const findOrCreateUserImpl = async (
   await upsertOAuthIdentity(buildUpsertInput(user.id, provider, profile, tokens, instanceUrl));
 
   await updateLastLogin(user.id);
+
+  // Best-effort: sync refresh token into gitlab_ci connection for auto-refresh
+  if (provider === "gitlab" && tokens.refreshToken && user.tenantId) {
+    await syncGitLabRefreshToken(user.tenantId, tokens.refreshToken, context);
+  }
 
   logger.info(isNew ? "New user created via OAuth" : "Existing user linked via email", {
     userId: user.id,

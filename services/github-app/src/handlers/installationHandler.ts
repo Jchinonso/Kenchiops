@@ -108,6 +108,7 @@ const handleInstallationCreated = async (
             await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.ORGANIZATION_UPDATED, {
               tenantId: notifyTenantId,
               newOrgName: orgName,
+              installedTenantId: tenant.id,
             });
           } catch {
             // Best-effort notification — don't block installation
@@ -162,15 +163,29 @@ const handleInstallationDeleted = async (
       org: orgName,
     });
 
-    // Notify the deleted tenant's frontend so the org switcher / TenantGuard refreshes
+    // Notify all of the uninstalling user's tenants so the frontend refreshes
+    // regardless of which tenant the user's JWT currently carries.
     if (tenant) {
       try {
-        await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.ORGANIZATION_UPDATED, {
-          tenantId: tenant.id,
-          removedOrgName: orgName,
-        });
+        const identity = await findOAuthIdentity("github", String(webhook.sender.id), null);
+        const userTenantIds = identity
+          ? (await findOrganizationsByUser(identity.userId)).map((org) => org.tenantId)
+          : [];
+        const tenantIdsToNotify = [...new Set([tenant.id, ...userTenantIds])];
+
+        for (const notifyTenantId of tenantIdsToNotify) {
+          try {
+            await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.ORGANIZATION_UPDATED, {
+              tenantId: notifyTenantId,
+              removedOrgName: orgName,
+              uninstalledTenantId: tenant.id,
+            });
+          } catch {
+            // Best-effort notification — don't block uninstall handling
+          }
+        }
       } catch {
-        // Best-effort notification — don't block uninstall handling
+        // Best-effort user lookup — don't block uninstall handling
       }
     }
 

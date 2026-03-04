@@ -7,6 +7,8 @@
  * @module database/providerConnection/types
  */
 
+import type { RequestContext } from "../../core/types.js";
+
 // ==================== Enum Types ====================
 
 /** CI/CD source integrations — analyze pipeline failures. */
@@ -96,3 +98,22 @@ export interface UpdateProviderConnectionInput {
   readonly accessToken?: string | null;
   readonly tokenExpiresAt?: Date | null;
 }
+
+// ==================== GitLab Token Refresh Types ====================
+
+/** Result returned by the injected GitLab token refresh adapter function. */
+export interface GitLabRefreshResult {
+  readonly accessToken: string;
+  readonly refreshToken: string | null;
+  readonly expiresIn: number | null;
+}
+
+/**
+ * Function that performs the actual GitLab OAuth token refresh HTTP call.
+ * Injected by each service so vendor HTTP logic stays in the adapter layer.
+ */
+export type GitLabTokenRefreshFn = (
+  refreshToken: string,
+  instanceUrl: string | null,
+  context: RequestContext
+) => Promise<GitLabRefreshResult>;

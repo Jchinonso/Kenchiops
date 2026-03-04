@@ -37,7 +37,9 @@ import {
   type EventRecord,
   type WebhookActivityRecord,
   type ConfidenceTrendPoint,
+  refreshGitLabTokenIfNeeded,
 } from "@kenchi/shared";
+import { refreshGitLabToken } from "../adapters/gitlabOAuthAdapter.js";
 import type {
   GitHubInstallationPort,
   InstallationRepository,
@@ -105,7 +107,18 @@ const getDashboardStatsFn = async (
     if (!gitlabConn?.accessToken) {
       return [];
     }
-    return gitlabPort.getProjects(gitlabConn.accessToken, gitlabConn.baseUrl, context);
+    // Proactively refresh token if expiring soon (pass connection to avoid redundant DB lookup)
+    const freshToken = await refreshGitLabTokenIfNeeded(
+      tenantId,
+      refreshGitLabToken,
+      context,
+      gitlabConn
+    );
+    return gitlabPort.getProjects(
+      freshToken ?? gitlabConn.accessToken,
+      gitlabConn.baseUrl,
+      context
+    );
   };
 
   const ghConn = await findGitHubAppConnection(tenantId);
@@ -411,7 +424,14 @@ const getGitLabProjectsFn = async (
   if (!gitlabConn?.accessToken) {
     return [];
   }
-  return gitlabPort.getProjects(gitlabConn.accessToken, gitlabConn.baseUrl, context);
+  // Proactively refresh token if expiring soon (pass connection to avoid redundant DB lookup)
+  const freshToken = await refreshGitLabTokenIfNeeded(
+    tenantId,
+    refreshGitLabToken,
+    context,
+    gitlabConn
+  );
+  return gitlabPort.getProjects(freshToken ?? gitlabConn.accessToken, gitlabConn.baseUrl, context);
 };
 
 export {

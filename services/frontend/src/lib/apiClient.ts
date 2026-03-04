@@ -92,6 +92,8 @@ interface ApiClientOptions {
   readonly method?: string;
   readonly body?: unknown;
   readonly headers?: Readonly<Record<string, string>>;
+  /** When true, a 401 that cannot be refreshed returns the response instead of redirecting to /login. */
+  readonly backgroundRetry?: boolean;
 }
 
 const buildHeaders = (
@@ -111,6 +113,16 @@ const buildInit = (
   ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 });
 
+// ==================== In-Flight GET Deduplication ====================
+
+/**
+ * Prevents duplicate concurrent GET requests to the same URL.
+ * When multiple hooks request the same endpoint simultaneously (e.g. on
+ * dashboard mount), only one fetch is issued and all callers share the
+ * same Response (via clone). Non-GET requests are never deduplicated.
+ */
+const inflightGets = new Map<string, Promise<Response>>();
+
 // ==================== API Client ====================
 
 /**
@@ -119,16 +131,39 @@ const buildInit = (
  * Relies on httpOnly cookies for authentication (sent automatically
  * via credentials: "include"). Handles 401 with token refresh
  * and redirects to /login on auth failure.
+ *
+ * GET requests are deduplicated: concurrent calls to the same path
+ * share a single in-flight request, reducing API call volume.
  */
 export const apiClient = async (
   path: string,
   options: ApiClientOptions = {}
 ): Promise<Response> => {
-  const { method = "GET", body, headers = {} } = options;
+  const { method = "GET", body, headers = {}, backgroundRetry = false } = options;
+  const isGet = method.toUpperCase() === "GET";
+
+  // Deduplicate concurrent GET requests to the same path.
+  // All callers receive a clone of the same Response.
+  if (isGet) {
+    const existing = inflightGets.get(path);
+    if (existing) {
+      const shared = await existing;
+      return shared.clone();
+    }
+  }
+
   const requestHeaders = buildHeaders(headers);
   const init = buildInit(method, requestHeaders, body);
 
-  const response = await httpRequest(`${API_URL}${path}`, init);
+  const fetchPromise = httpRequest(`${API_URL}${path}`, init);
+
+  if (isGet) {
+    inflightGets.set(path, fetchPromise);
+    // Clear the dedup entry once the request settles
+    void fetchPromise.finally(() => inflightGets.delete(path));
+  }
+
+  const response = await fetchPromise;
 
   // Surface plan-limit, feature-gate, and downgrade-blocked errors to the user via toast
   if (response.status === 403 || response.status === 409) {
@@ -185,6 +220,12 @@ export const apiClient = async (
   const refreshed = await attemptTokenRefresh();
 
   if (!refreshed) {
+    // Background calls (SSE handler, visibility handler) should never force a logout.
+    // Return the 401 response and let the caller handle it gracefully.
+    if (backgroundRetry) {
+      return response;
+    }
+
     // Redirect to login on auth failure — but only if we're not already
     // on the login page, to avoid an infinite redirect loop when
     // AuthProvider's refreshUser() calls /auth/me on mount.

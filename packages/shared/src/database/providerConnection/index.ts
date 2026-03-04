@@ -14,6 +14,8 @@ export type {
   ProviderConnection,
   CreateProviderConnectionInput,
   UpdateProviderConnectionInput,
+  GitLabRefreshResult,
+  GitLabTokenRefreshFn,
 } from "./types.js";
 
 // Helpers
@@ -38,3 +40,6 @@ export {
   findTenantByGitHubInstallation,
   findTenantBySlackWorkspace,
 } from "./repository.js";
+
+// GitLab token refresh
+export { refreshGitLabTokenIfNeeded } from "./gitlabRefresh.js";

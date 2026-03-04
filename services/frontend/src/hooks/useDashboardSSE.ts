@@ -40,6 +40,9 @@ export interface DashboardNotification {
   readonly source?: string;
 }
 
+/** Debounce window for batching rapid SSE events into a single refreshKey bump. */
+const REFRESH_DEBOUNCE_MS = 2_000;
+
 /** Configuration for notification storage */
 const NOTIFICATION_CONFIG = {
   maxItems: 50,
@@ -149,16 +152,42 @@ interface UseDashboardSSEResult {
  * @returns markAllRead — marks all notifications as read
  */
 export const useDashboardSSE = (): UseDashboardSSEResult => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, switchOrganization } = useAuth();
   const storageKey = buildNotificationStorageKey(user?.tenantId);
 
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Debounce refreshKey increments so rapid SSE events (e.g. multiple
+  // check runs finishing together) trigger only a single re-fetch wave.
+  // Uses a pending-flag state + effect to avoid direct ref mutation.
+  const [refreshPending, setRefreshPending] = useState(false);
+
+  useEffect(() => {
+    if (!refreshPending) {
+      return;
+    }
+    const timerId = setTimeout(() => {
+      setRefreshPending(false);
+      setRefreshKey((prev) => prev + 1);
+    }, REFRESH_DEBOUNCE_MS);
+    return () => clearTimeout(timerId);
+  }, [refreshPending]);
+
+  const debouncedRefresh = useCallback(() => {
+    // Re-setting to false then true restarts the debounce timer
+    setRefreshPending(false);
+    // Use queueMicrotask so the false→true transition is two distinct renders
+    queueMicrotask(() => setRefreshPending(true));
+  }, []);
+
   const [notifications, setNotifications] = useState<readonly DashboardNotification[]>(() =>
     loadNotifications(storageKey)
   );
   const { toastEnabled, browserEnabled } = useNotificationPreferences();
   const toastEnabledRef = useRef(toastEnabled);
   const browserEnabledRef = useRef(browserEnabled);
+  const switchOrgRef = useRef(switchOrganization);
+  const currentTenantIdRef = useRef(user?.tenantId);
 
   // Reload notifications when tenant changes (org switch)
   useEffect(() => {
@@ -171,6 +200,12 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   useEffect(() => {
     Object.assign(browserEnabledRef, { current: browserEnabled });
   }, [browserEnabled]);
+  useEffect(() => {
+    Object.assign(switchOrgRef, { current: switchOrganization });
+  }, [switchOrganization]);
+  useEffect(() => {
+    Object.assign(currentTenantIdRef, { current: user?.tenantId });
+  }, [user?.tenantId]);
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => {
@@ -227,7 +262,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleNewFailure = (event: MessageEvent) => {
-      setRefreshKey((prev) => prev + 1);
+      debouncedRefresh();
 
       const data = parseEventData<NewFailurePayload>(event);
       if (data) {
@@ -255,7 +290,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleAnalysisComplete = (event: MessageEvent) => {
-      setRefreshKey((prev) => prev + 1);
+      debouncedRefresh();
 
       const data = parseEventData<AnalysisCompletePayload>(event);
       if (data) {
@@ -287,7 +322,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleNewIncident = (event: MessageEvent) => {
-      setRefreshKey((prev) => prev + 1);
+      debouncedRefresh();
 
       const data = parseEventData<NewIncidentPayload>(event);
       if (data) {
@@ -317,7 +352,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleIncidentTriaged = (event: MessageEvent) => {
-      setRefreshKey((prev) => prev + 1);
+      debouncedRefresh();
 
       const data = parseEventData<IncidentTriagedPayload>(event);
       if (data) {
@@ -343,17 +378,43 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
     };
 
-    const handleOrganizationUpdated = () => {
-      // Trigger org re-discovery via OAuth API, then refresh user state.
-      // This handles cases where the webhook couldn't link the user directly
-      // (e.g., identity lookup failed at webhook time).
+    const handleOrganizationUpdated = (event: MessageEvent) => {
+      const data = parseEventData<{
+        installedTenantId?: string;
+        uninstalledTenantId?: string;
+      }>(event);
+
+      // Defer setRefreshKey until AFTER auth operations complete.
+      // Firing it immediately causes ~10 simultaneous dashboard re-fetches
+      // that, combined with refresh-orgs, burst past the rate limiter and
+      // can block even the token-refresh request (429 → forced logout).
       void (async () => {
         try {
-          await apiClient("/auth/refresh-orgs", { method: "POST" });
+          await apiClient("/auth/refresh-orgs", { method: "POST", backgroundRetry: true });
         } catch {
-          // Best-effort — refreshUser below still runs
+          // Best-effort
         }
-        await refreshUser();
+
+        // Auto-switch to the installed org if it differs from the current tenant.
+        if (data?.installedTenantId && data.installedTenantId !== currentTenantIdRef.current) {
+          try {
+            await switchOrgRef.current(data.installedTenantId);
+          } catch {
+            // Best-effort — user can manually switch via org selector
+          }
+        } else {
+          // Refresh user state to pick up org list changes (install or uninstall).
+          // For uninstalls, refreshUser re-reads /auth/me which reflects the
+          // updated org list and selected tenant from the server.
+          try {
+            await refreshUser();
+          } catch {
+            // Best-effort — stale user state is acceptable; next navigation refreshes
+          }
+        }
+
+        // Trigger dashboard data re-fetch AFTER auth state is settled.
+        debouncedRefresh();
       })();
     };
 
@@ -371,7 +432,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       eventSource.removeEventListener("organization_updated", handleOrganizationUpdated);
       eventSource.close();
     };
-  }, [storageKey, refreshUser]);
+  }, [storageKey, refreshUser, debouncedRefresh]);
 
   return { refreshKey, notifications, markAllRead, markAsRead, dismissNotification };
 };

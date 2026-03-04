@@ -2,7 +2,7 @@
  * Shared types for DashboardOverview sub-components.
  */
 
-import type { AnalysisRecord, EventRecord } from "@/hooks/useDashboardData";
+import type { AnalysisRecord, EventRecord, TenantInfo } from "@/hooks/useDashboardData";
 import type { ActiveCountBySource, IncidentAlertRecord } from "@/hooks/useIncidentData";
 
 export interface OnboardingStep {
@@ -85,4 +85,6 @@ export interface DashboardOverviewProps {
   readonly showOnboarding: boolean;
   readonly dismissOnboarding: () => void;
   readonly refreshKey?: number;
+  /** Pre-fetched tenant info from the Dashboard shell — avoids a duplicate API call. */
+  readonly tenant?: TenantInfo | null;
 }

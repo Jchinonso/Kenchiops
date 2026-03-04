@@ -59,7 +59,7 @@ const Dashboard = () => {
     dismissNotification,
   } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
-  const tenantDepsKey = `${sseRefreshKey}-${user?.tenantId ?? ""}`;
+  const tenantDepsKey = `${sseRefreshKey}-${user?.tenantId ?? ""}-${currentPath}`;
   const {
     data: tenant,
     isLoading: tenantLoading,
@@ -161,15 +161,13 @@ const Dashboard = () => {
   };
   const toggleNotifications = () => setNotificationsOpen((prev) => !prev);
 
-  // Detect new users who haven't connected any CI provider yet.
-  // Also redirect to onboarding when tenant info fails to load (e.g., 502)
-  // so fresh accounts see onboarding instead of broken error cards.
-  // Skip onboarding entirely if the tenant already has data (previously set up).
+  // Show onboarding wizard whenever no CI provider is connected.
+  // localStorage is NOT checked here — onboarding re-appears on every login
+  // until the user actually connects a provider. The "Skip" button only
+  // dismisses for the current session (via onboardingSkipped state).
   const needsOnboarding =
     !tenantLoading &&
     !onboardingSkipped &&
-    !tenantHasData &&
-    !localStorage.getItem(onboardingKey) &&
     (tenantError !== null ||
       (tenant !== null && !tenant.githubConnected && !tenant.gitlabConnected));
 
@@ -202,10 +200,7 @@ const Dashboard = () => {
       return <ComingSoon {...comingSoonConfig} />;
     }
 
-    if (
-      currentPath === "/dashboard/onboarding" ||
-      (currentPath === "/dashboard" && needsOnboarding)
-    ) {
+    if (currentPath === "/dashboard/onboarding" || needsOnboarding) {
       return (
         <Onboarding
           displayName={displayName}
@@ -221,6 +216,7 @@ const Dashboard = () => {
         showOnboarding={showOnboarding}
         dismissOnboarding={dismissOnboarding}
         refreshKey={refreshKey}
+        tenant={tenant}
       />
     );
   };
