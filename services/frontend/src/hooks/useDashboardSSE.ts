@@ -40,6 +40,9 @@ export interface DashboardNotification {
   readonly source?: string;
 }
 
+/** Debounce window for batching rapid SSE events into a single refreshKey bump. */
+const REFRESH_DEBOUNCE_MS = 2_000;
+
 /** Configuration for notification storage */
 const NOTIFICATION_CONFIG = {
   maxItems: 50,
@@ -153,6 +156,30 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   const storageKey = buildNotificationStorageKey(user?.tenantId);
 
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Debounce refreshKey increments so rapid SSE events (e.g. multiple
+  // check runs finishing together) trigger only a single re-fetch wave.
+  // Uses a pending-flag state + effect to avoid direct ref mutation.
+  const [refreshPending, setRefreshPending] = useState(false);
+
+  useEffect(() => {
+    if (!refreshPending) {
+      return;
+    }
+    const timerId = setTimeout(() => {
+      setRefreshPending(false);
+      setRefreshKey((prev) => prev + 1);
+    }, REFRESH_DEBOUNCE_MS);
+    return () => clearTimeout(timerId);
+  }, [refreshPending]);
+
+  const debouncedRefresh = useCallback(() => {
+    // Re-setting to false then true restarts the debounce timer
+    setRefreshPending(false);
+    // Use queueMicrotask so the false→true transition is two distinct renders
+    queueMicrotask(() => setRefreshPending(true));
+  }, []);
+
   const [notifications, setNotifications] = useState<readonly DashboardNotification[]>(() =>
     loadNotifications(storageKey)
   );
@@ -235,7 +262,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleNewFailure = (event: MessageEvent) => {
-      setRefreshKey((prev) => prev + 1);
+      debouncedRefresh();
 
       const data = parseEventData<NewFailurePayload>(event);
       if (data) {
@@ -263,7 +290,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleAnalysisComplete = (event: MessageEvent) => {
-      setRefreshKey((prev) => prev + 1);
+      debouncedRefresh();
 
       const data = parseEventData<AnalysisCompletePayload>(event);
       if (data) {
@@ -295,7 +322,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleNewIncident = (event: MessageEvent) => {
-      setRefreshKey((prev) => prev + 1);
+      debouncedRefresh();
 
       const data = parseEventData<NewIncidentPayload>(event);
       if (data) {
@@ -325,7 +352,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const handleIncidentTriaged = (event: MessageEvent) => {
-      setRefreshKey((prev) => prev + 1);
+      debouncedRefresh();
 
       const data = parseEventData<IncidentTriagedPayload>(event);
       if (data) {
@@ -387,7 +414,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
         }
 
         // Trigger dashboard data re-fetch AFTER auth state is settled.
-        setRefreshKey((prev) => prev + 1);
+        debouncedRefresh();
       })();
     };
 
@@ -405,7 +432,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       eventSource.removeEventListener("organization_updated", handleOrganizationUpdated);
       eventSource.close();
     };
-  }, [storageKey, refreshUser]);
+  }, [storageKey, refreshUser, debouncedRefresh]);
 
   return { refreshKey, notifications, markAllRead, markAsRead, dismissNotification };
 };

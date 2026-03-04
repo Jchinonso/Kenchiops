@@ -216,6 +216,7 @@ const Dashboard = () => {
         showOnboarding={showOnboarding}
         dismissOnboarding={dismissOnboarding}
         refreshKey={refreshKey}
+        tenant={tenant}
       />
     );
   };

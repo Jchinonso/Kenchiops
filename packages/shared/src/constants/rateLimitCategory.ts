@@ -25,7 +25,7 @@ export const RATE_LIMIT_CATEGORIES = {
  * Applied as an overall tenant-level budget across all endpoints.
  */
 export const PLAN_RATE_LIMITS = {
-  free: { maxPerMinute: 60 },
+  free: { maxPerMinute: 200 },
   pro: { maxPerMinute: 300 },
   team: { maxPerMinute: 500 },
   enterprise: { maxPerMinute: 2000 },
