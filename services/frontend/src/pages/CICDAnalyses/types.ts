@@ -11,6 +11,4 @@ export interface ExpandedAnalysisRowProps {
   readonly onViewDetails: () => void;
 }
 
-export interface CICDAnalysesProps {
-  // No props currently needed — data fetching is handled by TanStack Query
-}
+export type CICDAnalysesProps = Record<string, never>;

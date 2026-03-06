@@ -28,8 +28,11 @@ import {
   useRevokeInvitation,
   type InvitationDTO,
 } from "@/hooks/useInvitations";
-import { Users, ArrowLeft, UserPlus, Mail } from "lucide-react";
-import { ASSIGNABLE_ROLES, ROLE_WEIGHT } from "./constants";
+import { Users, ArrowLeft, UserPlus, Mail, ShieldCheck, UserMinus, X } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileDataCard } from "@/components/MobileDataCard";
+import { TimeDisplay } from "@/components/TimeDisplay";
+import { ASSIGNABLE_ROLES, ROLE_WEIGHT, getRoleBadgeStyle } from "./constants";
 import { MemberRow } from "./MemberRow";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { PendingInvitationRow } from "./PendingInvitationRow";
@@ -40,6 +43,7 @@ import { RoleChangeDialog } from "./RoleChangeDialog";
 import { RemoveMemberDialog } from "./RemoveMemberDialog";
 
 export const TeamManagement = () => {
+  const isMobile = useIsMobile();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const { data: members, isLoading, error } = useTeamMembers();
@@ -247,31 +251,97 @@ export const TeamManagement = () => {
               <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
             </div>
           ) : members && members.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead className="hidden sm:table-cell">Provider</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="hidden md:table-cell">Joined</TableHead>
-                  <TableHead className="text-right w-12">
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {members.map((member) => (
-                  <MemberRow
-                    key={member.userId}
-                    member={member}
-                    currentUserId={user?.id}
-                    currentUserRole={currentUserRole}
-                    onChangeRole={handleOpenRoleDialog}
-                    onRemove={handleOpenRemoveDialog}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+            isMobile ? (
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800 p-3 space-y-3">
+                {members.map((member) => {
+                  const isSelf = member.userId === user?.id;
+                  const canManage = !isSelf && hasPermission("team.manage");
+                  const canModify =
+                    canManage &&
+                    (ROLE_WEIGHT[currentUserRole] ?? 0) >= (ROLE_WEIGHT[member.role] ?? 0);
+
+                  return (
+                    <MobileDataCard
+                      key={member.userId}
+                      title={`${member.displayName}${isSelf ? " (you)" : ""}`}
+                      subtitle={member.email ?? undefined}
+                      badges={[
+                        {
+                          label: titleCase(member.role),
+                          className: getRoleBadgeStyle(member.role),
+                        },
+                      ]}
+                      fields={[
+                        ...(member.providers.length > 0
+                          ? [
+                              {
+                                label: "Provider",
+                                value: member.providers
+                                  .map(
+                                    (providerInfo) => providerInfo.username ?? titleCase(providerInfo.provider)
+                                  )
+                                  .join(", "),
+                              },
+                            ]
+                          : []),
+                        {
+                          label: "Joined",
+                          value: <TimeDisplay dateTime={member.joinedAt} />,
+                        },
+                      ]}
+                      actions={
+                        canModify ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRoleDialog(member)}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              Change Role
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRemoveDialog(member)}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                            >
+                              <UserMinus className="w-3.5 h-3.5" />
+                              Remove
+                            </button>
+                          </>
+                        ) : undefined
+                      }
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead className="hidden sm:table-cell">Provider</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="hidden md:table-cell">Joined</TableHead>
+                    <TableHead className="text-right w-12">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.map((member) => (
+                    <MemberRow
+                      key={member.userId}
+                      member={member}
+                      currentUserId={user?.id}
+                      currentUserRole={currentUserRole}
+                      onChangeRole={handleOpenRoleDialog}
+                      onRemove={handleOpenRemoveDialog}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            )
           ) : (
             <div className="p-6 text-center">
               <Users className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mx-auto mb-2" />
@@ -297,29 +367,79 @@ export const TeamManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="hidden md:table-cell">Expires</TableHead>
-                  <TableHead className="text-right w-12">
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingInvitations.map((invitation) => (
-                  <PendingInvitationRow
-                    key={invitation.id}
-                    invitation={invitation}
-                    canRevoke={canRevoke}
-                    isRevoking={isRevokingInvitation}
-                    onRevoke={handleOpenRevokeDialog}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+            {isMobile ? (
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800 p-3 space-y-3">
+                {pendingInvitations.map((invitation) => {
+                  const isExpired = new Date(invitation.expiresAt) < new Date();
+
+                  return (
+                    <MobileDataCard
+                      key={invitation.id}
+                      title={invitation.email}
+                      badges={[
+                        {
+                          label: titleCase(invitation.role),
+                          className: getRoleBadgeStyle(invitation.role),
+                        },
+                        {
+                          label: isExpired ? "Expired" : "Pending",
+                          className: isExpired
+                            ? "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
+                            : "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+                        },
+                      ]}
+                      fields={[
+                        {
+                          label: "Invited",
+                          value: <TimeDisplay dateTime={invitation.createdAt} />,
+                        },
+                        {
+                          label: isExpired ? "Expired" : "Expires",
+                          value: <TimeDisplay dateTime={invitation.expiresAt} />,
+                        },
+                      ]}
+                      actions={
+                        canRevoke ? (
+                          <button
+                            type="button"
+                            disabled={isRevokingInvitation}
+                            onClick={() => handleOpenRevokeDialog(invitation)}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-50"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Revoke
+                          </button>
+                        ) : undefined
+                      }
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="hidden md:table-cell">Expires</TableHead>
+                    <TableHead className="text-right w-12">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingInvitations.map((invitation) => (
+                    <PendingInvitationRow
+                      key={invitation.id}
+                      invitation={invitation}
+                      canRevoke={canRevoke}
+                      isRevoking={isRevokingInvitation}
+                      onRevoke={handleOpenRevokeDialog}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       )}

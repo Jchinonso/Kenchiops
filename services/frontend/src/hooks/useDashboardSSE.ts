@@ -557,7 +557,9 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
         clearTimeout(invalidationTimerRef.current);
         invalidationTimerRef.current = null;
       }
-      pendingKeysRef.current.clear();
+      // Copy ref to local var — ref.current may change by cleanup time
+      const pendingKeys = pendingKeysRef.current;
+      pendingKeys.clear();
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (heartbeatTimer) clearTimeout(heartbeatTimer);
       if (eventSource) eventSource.close();

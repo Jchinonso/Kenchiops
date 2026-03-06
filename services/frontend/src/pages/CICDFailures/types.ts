@@ -16,6 +16,4 @@ export interface ExpandedFailureRowProps {
   readonly analysisStatus?: AnalysisStatusEntry | null;
 }
 
-export interface CICDFailuresProps {
-  // No props currently needed — data fetching is handled by TanStack Query
-}
+export type CICDFailuresProps = Record<string, never>;

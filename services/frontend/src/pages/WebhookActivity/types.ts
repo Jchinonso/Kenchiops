@@ -14,6 +14,4 @@ export interface ExpandedWebhookRowProps {
   readonly activity: WebhookActivityRecord;
 }
 
-export interface WebhookActivityProps {
-  // No props currently needed — data fetching is handled by TanStack Query
-}
+export type WebhookActivityProps = Record<string, never>;

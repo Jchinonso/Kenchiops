@@ -101,11 +101,13 @@ const Dashboard = () => {
 
   // Track SSE events for "last updated" label.
   // When a new notification arrives, the data was just invalidated by the SSE
-  // handler, so we update the timestamp.
+  // handler, so we update the timestamp. setState is intentional here —
+  // we're synchronizing UI state with an external event count.
   const prevNotificationCountRef = useRef(notifications.length);
   useEffect(() => {
     if (notifications.length !== prevNotificationCountRef.current) {
       prevNotificationCountRef.current = notifications.length;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing timestamp with external SSE event count
       setLastRefreshAt(new Date());
     }
   }, [notifications.length]);
