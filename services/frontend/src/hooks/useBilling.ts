@@ -3,16 +3,15 @@
  *
  * Custom hooks for Stripe billing integration: checkout sessions,
  * customer portal, and billing status.
+ * Uses TanStack Query for server state management.
  */
 
-import { useState, useCallback } from "react";
-import { apiClient } from "@/lib/apiClient";
-import {
-  useFetch,
-  parseErrorBody,
-  type UseFetchResult,
-  type MutationState,
-} from "@/hooks/useFetch";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchQuery, fetchMutation, fetchMutationRaw, ApiError } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
+import { parseErrorBody } from "@/lib/fetchQuery";
+import type { UseFetchResult } from "@/hooks/useQueryCompat";
+import { toFetchResult } from "@/hooks/useQueryCompat";
 
 // ==================== DTO Types ====================
 
@@ -35,96 +34,107 @@ interface PortalResultDTO {
 
 // ==================== Query Hook ====================
 
-export const useBillingStatus = (refreshKey: number = 0): UseFetchResult<BillingStatusDTO> =>
-  useFetch<BillingStatusDTO>("/api/v1/billing/status", `${refreshKey}`);
+export const useBillingStatus = (): UseFetchResult<BillingStatusDTO> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.billing.status(),
+      queryFn: () => fetchQuery<BillingStatusDTO>("/api/v1/billing/status"),
+    })
+  );
 
 // ==================== Mutation Hooks ====================
 
-export const useCreateCheckout = (): MutationState & {
-  readonly createCheckout: (
+interface CreateCheckoutInput {
+  readonly planId: string;
+  readonly interval: "month" | "year";
+}
+
+export const useCreateCheckout = () => {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (input: CreateCheckoutInput): Promise<CheckoutResultDTO> => {
+      const successUrl = `${window.location.origin}/dashboard/settings?billing=success`;
+      const cancelUrl = `${window.location.origin}/dashboard/settings?billing=canceled`;
+
+      return fetchMutation<CheckoutResultDTO>("/api/v1/billing/checkout", {
+        method: "POST",
+        body: {
+          planId: input.planId,
+          interval: input.interval,
+          successUrl,
+          cancelUrl,
+        },
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.billing.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscription.all });
+    },
+  });
+
+  // Preserve the consumer-facing API: { createCheckout, isLoading, error }
+  const createCheckout = async (
     planId: string,
     interval: "month" | "year"
-  ) => Promise<CheckoutResultDTO | null>;
-} => {
-  const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
+  ): Promise<CheckoutResultDTO | null> => {
+    try {
+      return await mutation.mutateAsync({ planId, interval });
+    } catch {
+      return null;
+    }
+  };
 
-  const createCheckout = useCallback(
-    async (planId: string, interval: "month" | "year"): Promise<CheckoutResultDTO | null> => {
-      setState({ isLoading: true, error: null });
-      try {
-        const successUrl = `${window.location.origin}/dashboard/settings?billing=success`;
-        const cancelUrl = `${window.location.origin}/dashboard/settings?billing=canceled`;
-
-        const response = await apiClient("/api/v1/billing/checkout", {
-          method: "POST",
-          body: { planId, interval, successUrl, cancelUrl },
-        });
-
-        if (!response.ok) {
-          const message = await parseErrorBody(response, `Checkout failed (${response.status})`);
-          setState({ isLoading: false, error: message });
-          return null;
-        }
-
-        const json: { readonly data: CheckoutResultDTO } = await response.json();
-        setState({ isLoading: false, error: null });
-        return json.data;
-      } catch (caught) {
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ isLoading: false, error: message });
-        return null;
-      }
-    },
-    []
-  );
-
-  return { ...state, createCheckout };
+  return {
+    createCheckout,
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+  };
 };
 
-export const useBillingPortal = (): MutationState & {
-  readonly openPortal: () => Promise<void>;
-} => {
-  const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
-
-  const openPortal = useCallback(async (): Promise<void> => {
-    setState({ isLoading: true, error: null });
-    try {
+export const useBillingPortal = () => {
+  const mutation = useMutation({
+    mutationFn: async (): Promise<string> => {
       const returnUrl = `${window.location.origin}/dashboard/settings`;
-
-      const response = await apiClient("/api/v1/billing/portal", {
+      const response = await fetchMutationRaw("/api/v1/billing/portal", {
         method: "POST",
         body: { returnUrl },
       });
 
       if (!response.ok) {
         const message = await parseErrorBody(response, `Portal failed (${response.status})`);
-        setState({ isLoading: false, error: message });
-        return;
+        throw new ApiError(message, response.status);
       }
 
       const json: { readonly data: PortalResultDTO } = await response.json();
-      setState({ isLoading: false, error: null });
+      return json.data.url;
+    },
+  });
+
+  const openPortal = async (): Promise<void> => {
+    try {
+      const url = await mutation.mutateAsync();
 
       // Defense-in-depth: validate the portal URL uses HTTPS before navigating.
       // The URL comes from our API but we verify protocol to prevent open redirect.
       try {
-        const { protocol } = new URL(json.data.url);
+        const { protocol } = new URL(url);
         if (protocol !== "https:") {
-          setState({ isLoading: false, error: "Invalid portal URL" });
           return;
         }
       } catch {
-        setState({ isLoading: false, error: "Invalid portal URL" });
         return;
       }
 
       // Redirect to Stripe Customer Portal
-      window.location.href = json.data.url;
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Unknown error";
-      setState({ isLoading: false, error: message });
+      window.location.href = url;
+    } catch {
+      // Error is captured in mutation.error
     }
-  }, []);
+  };
 
-  return { ...state, openPortal };
+  return {
+    openPortal,
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+  };
 };

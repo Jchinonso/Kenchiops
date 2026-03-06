@@ -17,5 +17,5 @@ export interface ExpandedFailureRowProps {
 }
 
 export interface CICDFailuresProps {
-  readonly refreshKey?: number;
+  // No props currently needed — data fetching is handled by TanStack Query
 }

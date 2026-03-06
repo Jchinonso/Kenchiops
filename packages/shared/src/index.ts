@@ -718,6 +718,11 @@ export {
   createSimpleSignatureVerifier,
 } from "./rateLimit/index.js";
 export {
+  // Failover store (Redis with in-memory fallback, decoupled from Express)
+  FailoverRateLimitStore,
+  createFailoverStore,
+} from "./rateLimit/index.js";
+export {
   // Rate limit constants
   BURST_DETECTION_DEFAULTS,
   BOT_PATTERNS,
@@ -765,6 +770,7 @@ export {
   getCircuitBreakerStatus,
   type ResilientRequestOptions,
   type ResilientResponse,
+  type ResilientResponseType,
 } from "./http/index.js";
 export {
   signInternalRequest,
@@ -788,6 +794,9 @@ export {
   type CircuitBreakerConfig,
   type CircuitBreakerStatus,
 } from "./http/index.js";
+
+// Singleflight request coalescing
+export { coalesce } from "./http/index.js";
 
 // Formatting utilities
 export {

@@ -2,24 +2,26 @@
  * Investigation Data Hooks
  *
  * Custom hooks for fetching investigation data from the API.
- * Uses shared useFetch hook with polling for active investigations.
+ * Uses TanStack Query for server state management with automatic
+ * polling for active investigations via refetchInterval.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { apiClient } from "@/lib/apiClient";
-import {
-  useFetch,
-  sanitizeErrorMessage,
-  parseErrorBody,
-  type UseFetchResult,
-  type MutationState,
-} from "@/hooks/useFetch";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { fetchQuery, fetchMutation } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
+import { toFetchResult, type UseFetchResult, type MutationState } from "@/hooks/useQueryCompat";
 
 // Inlined from @kenchi/shared — frontend Docker build context does not include shared package
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Polling config for active investigations. SSE push handles real-time
+ * updates, so this is a safety-net fallback in case the SSE connection
+ * is temporarily lost. The long interval avoids the previous 3s x 200
+ * burst pattern that generated up to 200 requests per investigation.
+ */
 const investigationPollingConfig = {
-  intervalMs: 3000,
-  maxPollCount: 200,
+  fallbackIntervalMs: 30_000,
 } as const;
 
 // ==================== Types ====================
@@ -106,22 +108,24 @@ interface StartInvestigationResult {
   readonly status: string;
 }
 
-// ==================== Helpers ====================
-
-/** Helper to set a ref value without triggering the object-mutation lint rule */
-const setRef = <T>(ref: React.MutableRefObject<T>, value: T): void => {
-  Object.assign(ref, { current: value });
-};
-
 // ==================== Validation ====================
 
 /** Validates that an ID is a UUID to prevent path traversal via crafted IDs */
 const isValidUuid = (value: string): boolean => uuidPattern.test(value);
 
-// ==================== Polling Constants ====================
+// ==================== Polling Helpers ====================
 
 const isActiveStatus = (status: string): boolean =>
-  status === "queued" || status === "gathering" || status === "analyzing";
+  status === "queued" ||
+  status === "gathering" ||
+  status === "parsing" ||
+  status === "correlating" ||
+  status === "analyzing" ||
+  status === "diagnosing";
+
+// Primary updates come from SSE (investigation_status_changed event) which
+// invalidates the TanStack Query cache. The refetchInterval below is only
+// a fallback safety net for when the SSE connection is unavailable.
 
 // ==================== URL Builders ====================
 
@@ -129,9 +133,7 @@ const buildInvestigationsUrl = (limit: number, offset: number, status?: string):
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   params.set("offset", String(offset));
-  if (status) {
-    params.set("status", status);
-  }
+  if (status) params.set("status", status);
   return `/api/v1/investigations?${params.toString()}`;
 };
 
@@ -141,66 +143,38 @@ export const useInvestigations = (
   tenantId: string,
   limit: number = 20,
   offset: number = 0,
-  refreshKey: number = 0,
   status?: string
 ): UseFetchResult<PaginatedInvestigations> =>
-  useFetch<PaginatedInvestigations>(
-    tenantId ? buildInvestigationsUrl(limit, offset, status) : "",
-    `${tenantId}:${limit}:${offset}:${refreshKey}:${status ?? ""}`
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.investigations.list({ limit, offset, status }),
+      queryFn: () =>
+        fetchQuery<PaginatedInvestigations>(buildInvestigationsUrl(limit, offset, status)),
+      enabled: !!tenantId,
+      placeholderData: keepPreviousData,
+    })
   );
 
-export const useInvestigationDetail = (
-  id: string | null,
-  refreshKey: number = 0
-): UseFetchResult<InvestigationRecord> => {
-  // Validate ID format to prevent path traversal (e.g., "../../admin/users")
+export const useInvestigationDetail = (id: string | null): UseFetchResult<InvestigationRecord> => {
   const safeId = id && isValidUuid(id) ? id : null;
 
-  const result = useFetch<InvestigationRecord>(
-    safeId ? `/api/v1/investigations/${safeId}` : "",
-    `${safeId ?? ""}:${refreshKey}`
+  return toFetchResult(
+    useQuery({
+      queryKey: queryKeys.investigations.detail(safeId ?? ""),
+      queryFn: () => fetchQuery<InvestigationRecord>(`/api/v1/investigations/${safeId}`),
+      enabled: safeId !== null,
+      // SSE push (investigation_status_changed) handles real-time cache
+      // invalidation. This fallback interval keeps the UI eventually
+      // consistent if the SSE connection drops temporarily.
+      refetchInterval: (query) => {
+        const currentStatus = query.state.data?.status;
+        if (!currentStatus || !isActiveStatus(currentStatus)) {
+          return false;
+        }
+        return investigationPollingConfig.fallbackIntervalMs;
+      },
+    })
   );
-
-  // Extract stable refetch reference for polling effect deps
-  const refetchFn = result.refetch;
-
-  // Auto-poll when investigation is in an active state, with bounded retries
-  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-  const pollCountRef = useRef(0);
-  const currentStatus = result.data?.status;
-
-  useEffect(() => {
-    // Reset poll count when status changes
-    setRef(pollCountRef, 0);
-
-    if (currentStatus && isActiveStatus(currentStatus)) {
-      setRef(
-        intervalRef,
-        setInterval(() => {
-          const nextCount = pollCountRef.current + 1;
-          setRef(pollCountRef, nextCount);
-          if (nextCount >= investigationPollingConfig.maxPollCount) {
-            // Stop polling after max attempts to prevent indefinite load
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-            }
-            return;
-          }
-          refetchFn();
-        }, investigationPollingConfig.intervalMs)
-      );
-    }
-
-    // Capture ref value for cleanup to avoid stale ref access
-    const currentIntervalId = intervalRef.current;
-    return () => {
-      if (currentIntervalId) {
-        clearInterval(currentIntervalId);
-      }
-    };
-  }, [currentStatus, refetchFn]);
-
-  return result;
 };
 
 // ==================== Mutation Hooks ====================
@@ -208,38 +182,31 @@ export const useInvestigationDetail = (
 export const useStartInvestigation = (): MutationState & {
   readonly submit: (input: StartInvestigationInput) => Promise<StartInvestigationResult | null>;
 } => {
-  const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
-
-  const submit = useCallback(
-    async (input: StartInvestigationInput): Promise<StartInvestigationResult | null> => {
-      setState({ isLoading: true, error: null });
-      try {
-        const response = await apiClient("/api/v1/investigations", {
-          method: "POST",
-          body: {
-            ...input,
-            initiatedFrom: "frontend",
-          },
-        });
-        if (!response.ok) {
-          const message = await parseErrorBody(
-            response,
-            `Failed to start investigation (${response.status})`
-          );
-          setState({ isLoading: false, error: message });
-          return null;
-        }
-        const json: { readonly data: StartInvestigationResult } = await response.json();
-        setState({ isLoading: false, error: null });
-        return json.data;
-      } catch (caught) {
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ isLoading: false, error: sanitizeErrorMessage(message) });
-        return null;
-      }
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (input: StartInvestigationInput) =>
+      fetchMutation<StartInvestigationResult>("/api/v1/investigations", {
+        method: "POST",
+        body: { ...input, initiatedFrom: "frontend" },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.investigations.all });
     },
-    []
-  );
+  });
 
-  return { ...state, submit };
+  const submit = async (
+    input: StartInvestigationInput
+  ): Promise<StartInvestigationResult | null> => {
+    try {
+      return await mutation.mutateAsync(input);
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+    submit,
+  };
 };

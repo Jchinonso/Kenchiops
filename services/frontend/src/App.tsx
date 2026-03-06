@@ -18,6 +18,8 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Dashboard from "./pages/Dashboard";
 import AuthCallback from "./pages/AuthCallback";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { MotionConfig } from "motion/react";
 import { AuthProvider } from "./hooks/useAuth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -25,6 +27,7 @@ import ThemeInitializer from "./components/ThemeInitializer";
 import { StickyCTA } from "./components/StickyCTA";
 import { BackToTop } from "./components/BackToTop";
 import { SocialProofToast } from "./components/SocialProofToast";
+import { queryClient } from "./lib/queryClient";
 
 const HomePage = () => (
   <div className="bg-zinc-950 min-h-screen">
@@ -61,33 +64,36 @@ const App = () => (
     <MotionConfig reducedMotion="user">
       <Router>
         <AuthProvider>
-          <ThemeInitializer />
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/oauth/callback" element={<AuthCallback />} />
-            {/* Backward-compatible redirects for old URLs */}
-            <Route
-              path="/dashboard/failures"
-              element={<Navigate to="/dashboard/cicd/analyses" replace />}
-            />
-            <Route
-              path="/dashboard/analyses"
-              element={<Navigate to="/dashboard/cicd/analyses" replace />}
-            />
-            <Route
-              path="/dashboard/repos"
-              element={<Navigate to="/dashboard/cicd/pipelines" replace />}
-            />
-            <Route
-              path="/dashboard/patterns"
-              element={<Navigate to="/dashboard/analytics" replace />}
-            />
-            {/* Dashboard shell handles all sub-routes */}
-            <Route path="/dashboard/*" element={<Dashboard />} />
-          </Routes>
+          <QueryClientProvider client={queryClient}>
+            <ThemeInitializer />
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/oauth/callback" element={<AuthCallback />} />
+              {/* Backward-compatible redirects for old URLs */}
+              <Route
+                path="/dashboard/failures"
+                element={<Navigate to="/dashboard/cicd/analyses" replace />}
+              />
+              <Route
+                path="/dashboard/analyses"
+                element={<Navigate to="/dashboard/cicd/analyses" replace />}
+              />
+              <Route
+                path="/dashboard/repos"
+                element={<Navigate to="/dashboard/cicd/pipelines" replace />}
+              />
+              <Route
+                path="/dashboard/patterns"
+                element={<Navigate to="/dashboard/analytics" replace />}
+              />
+              {/* Dashboard shell handles all sub-routes */}
+              <Route path="/dashboard/*" element={<Dashboard />} />
+            </Routes>
+            {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+          </QueryClientProvider>
         </AuthProvider>
       </Router>
     </MotionConfig>

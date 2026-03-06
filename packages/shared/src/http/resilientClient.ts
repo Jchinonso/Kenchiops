@@ -23,6 +23,7 @@ import type {
   ResilientCircuitState,
   ResilientRequestOptions,
   ResilientResponse,
+  ResilientResponseType,
   RetryContext,
 } from "./types.js";
 import { signInternalRequest, resolveSigningSecret } from "./internalAuth.js";
@@ -239,13 +240,22 @@ const executeAttempt = async (
   const timeoutId = setTimeout(() => controller.abort(), context.timeout);
 
   try {
-    const serializedBody = context.body ? JSON.stringify(context.body) : undefined;
+    // rawBody takes precedence — already serialized (e.g. form-encoded).
+    // Otherwise, JSON-serialize the body object.
+    const serializedBody =
+      context.rawBody ?? (context.body ? JSON.stringify(context.body) : undefined);
     const authHeaders = buildInternalAuthHeaders(context, serializedBody);
+    const contentTypeHeader: Record<string, string> =
+      context.rawBody !== undefined
+        ? {} // Caller controls Content-Type for raw bodies
+        : serializedBody !== undefined
+          ? { "Content-Type": "application/json" }
+          : {};
 
     const response = await fetch(context.url, {
       method: context.method,
       headers: {
-        ...(serializedBody !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...contentTypeHeader,
         ...context.headers,
         ...authHeaders,
       },
@@ -307,14 +317,23 @@ const handleExhaustedRetries = (context: RetryContext, lastError: Error | undefi
 /**
  * Handles successful response - parses JSON and returns.
  */
+const parseResponseBody = async <T>(
+  response: Response,
+  responseType: ResilientResponseType = "json"
+): Promise<T> => {
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (responseType === "text" ? await response.text() : await response.json()) as T;
+};
+
 const handleSuccess = async <T>(
   context: RetryContext,
   response: Response,
   attempt: number
 ): Promise<ResilientResponse<T>> => {
   recordSuccess(context.serviceKey);
-  // 204 No Content has no body — skip JSON parse to avoid SyntaxError
-  const data = (response.status === 204 ? undefined : await response.json()) as T;
+  const data = await parseResponseBody<T>(response, context.responseType);
   const durationMs = Date.now() - context.startTime;
 
   logger.debug("Request succeeded", {
@@ -403,6 +422,8 @@ export const resilientFetch = async <T>(
     headers = {},
     skipCircuitBreaker = false,
     internalAuth = false,
+    rawBody,
+    responseType,
   } = options;
 
   const serviceKey = getServiceKey(url);
@@ -427,6 +448,8 @@ export const resilientFetch = async <T>(
     serviceKey,
     startTime: Date.now(),
     internalAuth,
+    rawBody,
+    responseType,
   };
 
   return attemptWithRetry<T>(context, 1, undefined, 0);

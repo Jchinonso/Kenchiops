@@ -141,7 +141,7 @@ describe("AnalysisDetail", () => {
         error: null,
       });
       renderAnalysisDetail("custom-id-456");
-      expect(mockUseAnalysisDetail).toHaveBeenCalledWith("custom-id-456", 0);
+      expect(mockUseAnalysisDetail).toHaveBeenCalledWith("custom-id-456");
     });
   });
 });

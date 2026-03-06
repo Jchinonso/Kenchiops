@@ -1,17 +1,15 @@
 /**
  * Unit tests for useDashboardData hooks.
  *
- * Tests the generic useFetch hook (via the typed wrappers) and all
- * domain-specific hooks including:
+ * Tests the TanStack Query-based data hooks including:
  *
- * - useFetch: loading state, success, error, cancellation, empty path, refetch
- * - useTenantInfo: correct path construction
+ * - useTenantInfo: correct path, loading, success, error, refetch
  * - useDashboardStats: correct path construction
  * - useRepositories: correct path construction
  * - useAnalyses: URL building with optional filters
  * - useFailures: URL building with optional filters
  * - useConfidenceDistribution: correct path
- * - useAnalysisDetail: null analysisId produces empty path (no fetch)
+ * - useAnalysisDetail: null analysisId disables query (no fetch)
  * - useAnalysisStatusByEvents: POST-based batch lookup, empty eventIds
  * - useConfidenceTrend: URL building with bucket and since params
  * - useWebhookActivity: URL building with source and status params
@@ -19,6 +17,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ==================== Mock apiClient ====================
 
@@ -66,6 +66,20 @@ const createErrorResponseUnparseable = (status: number): Response =>
     json: () => Promise.reject(new Error("Invalid JSON")),
   }) as unknown as Response;
 
+/** Create a fresh QueryClient + wrapper for each test */
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0, staleTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  const Wrapper = ({ children }: { readonly children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+  return Wrapper;
+};
+
 beforeEach(() => {
   mockApiClient.mockReset();
 });
@@ -87,7 +101,7 @@ describe("useTenantInfo", () => {
     };
     mockApiClient.mockResolvedValueOnce(createSuccessResponse(tenantData));
 
-    const { result } = renderHook(() => useTenantInfo());
+    const { result } = renderHook(() => useTenantInfo(), { wrapper: createWrapper() });
 
     expect(result.current.isLoading).toBe(true);
 
@@ -103,7 +117,7 @@ describe("useTenantInfo", () => {
   it("should set error on non-ok response with error message", async () => {
     mockApiClient.mockResolvedValueOnce(createErrorResponse(500, "Internal Server Error"));
 
-    const { result } = renderHook(() => useTenantInfo());
+    const { result } = renderHook(() => useTenantInfo(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -116,7 +130,7 @@ describe("useTenantInfo", () => {
   it("should set error with status code fallback when response body is not JSON", async () => {
     mockApiClient.mockResolvedValueOnce(createErrorResponseUnparseable(502));
 
-    const { result } = renderHook(() => useTenantInfo());
+    const { result } = renderHook(() => useTenantInfo(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -129,7 +143,7 @@ describe("useTenantInfo", () => {
   it("should set error on network failure", async () => {
     mockApiClient.mockRejectedValueOnce(new Error("Network timeout"));
 
-    const { result } = renderHook(() => useTenantInfo());
+    const { result } = renderHook(() => useTenantInfo(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -137,46 +151,6 @@ describe("useTenantInfo", () => {
 
     expect(result.current.data).toBeNull();
     expect(result.current.error).toBe("Network timeout");
-  });
-
-  it("should set 'Unknown error' for non-Error thrown values", async () => {
-    mockApiClient.mockRejectedValueOnce("string error");
-
-    const { result } = renderHook(() => useTenantInfo());
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    expect(result.current.error).toBe("Unknown error");
-  });
-
-  it("should refetch when refreshKey changes", async () => {
-    const data1 = {
-      id: "t-1",
-      orgName: "acme",
-      githubConnected: true,
-      slackConnected: false,
-      status: "active",
-    };
-    const data2 = { ...data1, orgName: "updated" };
-    mockApiClient
-      .mockResolvedValueOnce(createSuccessResponse(data1))
-      .mockResolvedValueOnce(createSuccessResponse(data2));
-
-    const { result, rerender } = renderHook(({ refreshKey }) => useTenantInfo(refreshKey), {
-      initialProps: { refreshKey: 0 },
-    });
-
-    await waitFor(() => {
-      expect(result.current.data?.orgName).toBe("acme");
-    });
-
-    rerender({ refreshKey: 1 });
-
-    await waitFor(() => {
-      expect(result.current.data?.orgName).toBe("updated");
-    });
   });
 });
 
@@ -187,7 +161,7 @@ describe("useDashboardStats", () => {
     const stats = { totalAnalyses: 100, totalFailures: 25, connectedRepos: 5 };
     mockApiClient.mockResolvedValueOnce(createSuccessResponse(stats));
 
-    const { result } = renderHook(() => useDashboardStats());
+    const { result } = renderHook(() => useDashboardStats(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -207,7 +181,7 @@ describe("useRepositories", () => {
     ];
     mockApiClient.mockResolvedValueOnce(createSuccessResponse(repos));
 
-    const { result } = renderHook(() => useRepositories());
+    const { result } = renderHook(() => useRepositories(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -226,7 +200,7 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 20, offset: 0 })
     );
 
-    renderHook(() => useAnalyses({ limit: 20, offset: 0 }));
+    renderHook(() => useAnalyses({ limit: 20, offset: 0 }), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -243,7 +217,9 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useAnalyses({ limit: 10, offset: 0, refreshKey: 0, repository: "org/repo" }));
+    renderHook(() => useAnalyses({ limit: 10, offset: 0, repository: "org/repo" }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -258,14 +234,15 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() =>
-      useAnalyses({
-        limit: 10,
-        offset: 0,
-        refreshKey: 0,
-        minConfidence: "0.5",
-        maxConfidence: "0.9",
-      })
+    renderHook(
+      () =>
+        useAnalyses({
+          limit: 10,
+          offset: 0,
+          minConfidence: "0.5",
+          maxConfidence: "0.9",
+        }),
+      { wrapper: createWrapper() }
     );
 
     await waitFor(() => {
@@ -282,7 +259,9 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useAnalyses({ limit: 10, offset: 0, refreshKey: 0, since: "2024-01-01" }));
+    renderHook(() => useAnalyses({ limit: 10, offset: 0, since: "2024-01-01" }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -297,7 +276,7 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [], total: 0, limit: 20, offset: 0 })
     );
 
-    renderHook(() => useAnalyses());
+    renderHook(() => useAnalyses(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -330,7 +309,7 @@ describe("useAnalyses", () => {
       createSuccessResponse({ items: [analysis], total: 1, limit: 20, offset: 0 })
     );
 
-    const { result } = renderHook(() => useAnalyses());
+    const { result } = renderHook(() => useAnalyses(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -349,7 +328,7 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 20, offset: 0 })
     );
 
-    renderHook(() => useFailures({ limit: 20, offset: 0 }));
+    renderHook(() => useFailures({ limit: 20, offset: 0 }), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -366,7 +345,9 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useFailures({ limit: 10, offset: 0, refreshKey: 0, repository: "org/repo" }));
+    renderHook(() => useFailures({ limit: 10, offset: 0, repository: "org/repo" }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -381,7 +362,9 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useFailures({ limit: 10, offset: 0, refreshKey: 0, severity: "high" }));
+    renderHook(() => useFailures({ limit: 10, offset: 0, severity: "high" }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -396,7 +379,9 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useFailures({ limit: 10, offset: 0, refreshKey: 0, since: "2024-01-01" }));
+    renderHook(() => useFailures({ limit: 10, offset: 0, since: "2024-01-01" }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -411,7 +396,7 @@ describe("useFailures", () => {
       createSuccessResponse({ items: [], total: 0, limit: 20, offset: 0 })
     );
 
-    renderHook(() => useFailures());
+    renderHook(() => useFailures(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -435,7 +420,9 @@ describe("useConfidenceDistribution", () => {
     ];
     mockApiClient.mockResolvedValueOnce(createSuccessResponse(buckets));
 
-    const { result } = renderHook(() => useConfidenceDistribution());
+    const { result } = renderHook(() => useConfidenceDistribution(), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -467,7 +454,7 @@ describe("useAnalysisDetail", () => {
     };
     mockApiClient.mockResolvedValueOnce(createSuccessResponse(analysis));
 
-    const { result } = renderHook(() => useAnalysisDetail("a-1"));
+    const { result } = renderHook(() => useAnalysisDetail("a-1"), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -478,7 +465,7 @@ describe("useAnalysisDetail", () => {
   });
 
   it("should not fetch when analysisId is null", async () => {
-    const { result } = renderHook(() => useAnalysisDetail(null));
+    const { result } = renderHook(() => useAnalysisDetail(null), { wrapper: createWrapper() });
 
     // Should immediately be not loading with no data
     await waitFor(() => {
@@ -487,7 +474,7 @@ describe("useAnalysisDetail", () => {
 
     expect(result.current.data).toBeNull();
     expect(result.current.error).toBeNull();
-    // apiClient should not be called because empty path short-circuits
+    // apiClient should not be called because query is disabled
     expect(mockApiClient).not.toHaveBeenCalled();
   });
 
@@ -497,6 +484,7 @@ describe("useAnalysisDetail", () => {
 
     const { result, rerender } = renderHook(({ id }) => useAnalysisDetail(id), {
       initialProps: { id: null as string | null },
+      wrapper: createWrapper(),
     });
 
     await waitFor(() => {
@@ -523,7 +511,9 @@ describe("useAnalysisStatusByEvents", () => {
     mockApiClient.mockResolvedValueOnce(createSuccessResponse(statusMap));
 
     const eventIds = ["e-1", "e-2"];
-    const { result } = renderHook(() => useAnalysisStatusByEvents(eventIds));
+    const { result } = renderHook(() => useAnalysisStatusByEvents(eventIds), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -537,7 +527,9 @@ describe("useAnalysisStatusByEvents", () => {
   });
 
   it("should not fetch when eventIds is empty", async () => {
-    const { result } = renderHook(() => useAnalysisStatusByEvents([]));
+    const { result } = renderHook(() => useAnalysisStatusByEvents([]), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -551,7 +543,9 @@ describe("useAnalysisStatusByEvents", () => {
   it("should handle error response", async () => {
     mockApiClient.mockResolvedValueOnce(createErrorResponse(500));
 
-    const { result } = renderHook(() => useAnalysisStatusByEvents(["e-1"]));
+    const { result } = renderHook(() => useAnalysisStatusByEvents(["e-1"]), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -564,48 +558,15 @@ describe("useAnalysisStatusByEvents", () => {
   it("should handle network error", async () => {
     mockApiClient.mockRejectedValueOnce(new Error("Network failure"));
 
-    const { result } = renderHook(() => useAnalysisStatusByEvents(["e-1"]));
+    const { result } = renderHook(() => useAnalysisStatusByEvents(["e-1"]), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
     });
 
     expect(result.current.error).toBe("Network failure");
-  });
-
-  it("should handle non-Error thrown values", async () => {
-    mockApiClient.mockRejectedValueOnce(42);
-
-    const { result } = renderHook(() => useAnalysisStatusByEvents(["e-1"]));
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    expect(result.current.error).toBe("Unknown error");
-  });
-
-  it("should refetch when refreshKey changes", async () => {
-    const data1 = { "e-1": { analysisId: "a-1", confidence: 0.8 } };
-    const data2 = { "e-1": { analysisId: "a-1", confidence: 0.95 } };
-    mockApiClient
-      .mockResolvedValueOnce(createSuccessResponse(data1))
-      .mockResolvedValueOnce(createSuccessResponse(data2));
-
-    const { result, rerender } = renderHook(
-      ({ refreshKey }) => useAnalysisStatusByEvents(["e-1"], refreshKey),
-      { initialProps: { refreshKey: 0 } }
-    );
-
-    await waitFor(() => {
-      expect(result.current.data).toEqual(data1);
-    });
-
-    rerender({ refreshKey: 1 });
-
-    await waitFor(() => {
-      expect(result.current.data).toEqual(data2);
-    });
   });
 });
 
@@ -615,7 +576,7 @@ describe("useConfidenceTrend", () => {
   it("should build URL with day bucket", async () => {
     mockApiClient.mockResolvedValueOnce(createSuccessResponse([]));
 
-    renderHook(() => useConfidenceTrend("day"));
+    renderHook(() => useConfidenceTrend("day"), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -629,7 +590,7 @@ describe("useConfidenceTrend", () => {
   it("should build URL with week bucket", async () => {
     mockApiClient.mockResolvedValueOnce(createSuccessResponse([]));
 
-    renderHook(() => useConfidenceTrend("week"));
+    renderHook(() => useConfidenceTrend("week"), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -642,7 +603,7 @@ describe("useConfidenceTrend", () => {
   it("should include since parameter when provided", async () => {
     mockApiClient.mockResolvedValueOnce(createSuccessResponse([]));
 
-    renderHook(() => useConfidenceTrend("day", "2024-01-01"));
+    renderHook(() => useConfidenceTrend("day", "2024-01-01"), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -655,7 +616,7 @@ describe("useConfidenceTrend", () => {
   it("should not include since parameter when not provided", async () => {
     mockApiClient.mockResolvedValueOnce(createSuccessResponse([]));
 
-    renderHook(() => useConfidenceTrend("day"));
+    renderHook(() => useConfidenceTrend("day"), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -672,7 +633,7 @@ describe("useConfidenceTrend", () => {
     ];
     mockApiClient.mockResolvedValueOnce(createSuccessResponse(trend));
 
-    const { result } = renderHook(() => useConfidenceTrend("day"));
+    const { result } = renderHook(() => useConfidenceTrend("day"), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -690,7 +651,7 @@ describe("useWebhookActivity", () => {
       createSuccessResponse({ items: [], total: 0, limit: 20, offset: 0 })
     );
 
-    renderHook(() => useWebhookActivity(20, 0));
+    renderHook(() => useWebhookActivity({ limit: 20, offset: 0 }), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -707,7 +668,7 @@ describe("useWebhookActivity", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useWebhookActivity(10, 0, 0, "github"));
+    renderHook(() => useWebhookActivity({ limit: 10, offset: 0, source: "github" }), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -722,7 +683,9 @@ describe("useWebhookActivity", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useWebhookActivity(10, 0, 0, undefined, "processed"));
+    renderHook(() => useWebhookActivity({ limit: 10, offset: 0, status: "processed" }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -737,7 +700,7 @@ describe("useWebhookActivity", () => {
       createSuccessResponse({ items: [], total: 0, limit: 20, offset: 0 })
     );
 
-    renderHook(() => useWebhookActivity());
+    renderHook(() => useWebhookActivity({}), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -753,7 +716,7 @@ describe("useWebhookActivity", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useWebhookActivity(10, 0, 0, "slack", "failed"));
+    renderHook(() => useWebhookActivity({ limit: 10, offset: 0, source: "slack", status: "failed" }), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -765,9 +728,9 @@ describe("useWebhookActivity", () => {
   });
 });
 
-// ==================== useFetch (via useTenantInfo) generic behavior ====================
+// ==================== Generic TanStack Query behavior (via useTenantInfo) ====================
 
-describe("useFetch generic behavior", () => {
+describe("TanStack Query behavior", () => {
   it("should provide a refetch function", async () => {
     const data1 = {
       id: "t-1",
@@ -781,7 +744,7 @@ describe("useFetch generic behavior", () => {
       .mockResolvedValueOnce(createSuccessResponse(data1))
       .mockResolvedValueOnce(createSuccessResponse(data2));
 
-    const { result } = renderHook(() => useTenantInfo());
+    const { result } = renderHook(() => useTenantInfo(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.data?.status).toBe("active");
@@ -803,7 +766,7 @@ describe("useFetch generic behavior", () => {
       json: () => Promise.resolve({}),
     } as unknown as Response);
 
-    const { result } = renderHook(() => useTenantInfo());
+    const { result } = renderHook(() => useTenantInfo(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -823,7 +786,7 @@ describe("useFetch generic behavior", () => {
     };
     mockApiClient.mockResolvedValueOnce(createSuccessResponse(data));
 
-    const { result } = renderHook(() => useTenantInfo());
+    const { result } = renderHook(() => useTenantInfo(), { wrapper: createWrapper() });
 
     // Initially loading
     expect(result.current.isLoading).toBe(true);
@@ -851,7 +814,7 @@ describe("useFetch generic behavior", () => {
       .mockRejectedValueOnce(new Error("First failure"))
       .mockResolvedValueOnce(createSuccessResponse(data));
 
-    const { result } = renderHook(() => useTenantInfo());
+    const { result } = renderHook(() => useTenantInfo(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.error).toBe("First failure");

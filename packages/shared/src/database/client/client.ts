@@ -105,6 +105,7 @@ export const initDatabase = (config: DatabaseConfig): void => {
     idleTimeoutMillis: config.idleTimeoutMs ?? DATABASE_POOL_DEFAULTS.IDLE_TIMEOUT_MS,
     connectionTimeoutMillis:
       config.connectionTimeoutMs ?? DATABASE_POOL_DEFAULTS.CONNECTION_TIMEOUT_MS,
+    statement_timeout: config.statementTimeoutMs ?? DATABASE_POOL_DEFAULTS.STATEMENT_TIMEOUT_MS,
   });
 
   registerPoolEventHandlers(pool);

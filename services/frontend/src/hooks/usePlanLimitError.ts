@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { parseStructuredError } from "@/hooks/useFetch";
+import { parseStructuredError } from "@/lib/fetchQuery";
 
 // ==================== Types ====================
 

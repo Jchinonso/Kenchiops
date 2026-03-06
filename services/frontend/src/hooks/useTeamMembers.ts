@@ -2,18 +2,13 @@
  * Team Members Hooks
  *
  * Custom hooks for fetching team member data and performing mutations
- * (role changes, member removal). Uses shared useFetch hook for GET
- * requests and apiClient for mutations.
+ * (role changes, member removal). Uses TanStack Query for GET requests
+ * and useMutation with cache invalidation for writes.
  */
 
-import { useState, useCallback } from "react";
-import { apiClient } from "@/lib/apiClient";
-import {
-  useFetch,
-  parseErrorBody,
-  type UseFetchResult,
-  type MutationState,
-} from "@/hooks/useFetch";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchQuery, fetchMutation, fetchMutationVoid } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
 
 // ==================== DTO Types ====================
 
@@ -32,74 +27,78 @@ export interface TeamMemberDTO {
 
 // ==================== Query Hook ====================
 
-export const useTeamMembers = (refreshKey: number = 0): UseFetchResult<readonly TeamMemberDTO[]> =>
-  useFetch<readonly TeamMemberDTO[]>("/api/v1/team/members", `${refreshKey}`);
+export const useTeamMembers = () => {
+  const query = useQuery({
+    queryKey: queryKeys.team.members(),
+    queryFn: () => fetchQuery<readonly TeamMemberDTO[]>("/api/v1/team/members"),
+  });
+
+  return {
+    data: query.data ?? null,
+    isLoading: query.isPending,
+    error: query.error?.message ?? null,
+  };
+};
 
 // ==================== Mutation Hooks ====================
 
-export const useChangeRole = (): MutationState & {
-  readonly changeRole: (userId: string, role: string) => Promise<TeamMemberDTO | null>;
-} => {
-  const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
+interface ChangeRoleInput {
+  readonly userId: string;
+  readonly role: string;
+}
 
-  const changeRole = useCallback(
-    async (userId: string, role: string): Promise<TeamMemberDTO | null> => {
-      setState({ isLoading: true, error: null });
-      try {
-        const response = await apiClient(`/api/v1/team/members/${userId}/role`, {
-          method: "PATCH",
-          body: { role },
-        });
-        if (!response.ok) {
-          const message = await parseErrorBody(
-            response,
-            `Failed to change role (${response.status})`
-          );
-          setState({ isLoading: false, error: message });
-          return null;
-        }
-        const json: { readonly data: TeamMemberDTO } = await response.json();
-        setState({ isLoading: false, error: null });
-        return json.data;
-      } catch (caught) {
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ isLoading: false, error: message });
-        return null;
-      }
+export const useChangeRole = () => {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (input: ChangeRoleInput): Promise<TeamMemberDTO> =>
+      fetchMutation<TeamMemberDTO>(`/api/v1/team/members/${input.userId}/role`, {
+        method: "PATCH",
+        body: { role: input.role },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.team.members() });
     },
-    []
-  );
+  });
 
-  return { ...state, changeRole };
+  const changeRole = async (userId: string, role: string): Promise<TeamMemberDTO | null> => {
+    try {
+      return await mutation.mutateAsync({ userId, role });
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    changeRole,
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+  };
 };
 
-export const useRemoveMember = (): MutationState & {
-  readonly removeMember: (userId: string) => Promise<boolean>;
-} => {
-  const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
+export const useRemoveMember = () => {
+  const queryClient = useQueryClient();
 
-  const removeMember = useCallback(async (userId: string): Promise<boolean> => {
-    setState({ isLoading: true, error: null });
+  const mutation = useMutation({
+    mutationFn: (userId: string): Promise<void> =>
+      fetchMutationVoid(`/api/v1/team/members/${userId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.team.members() });
+    },
+  });
+
+  const removeMember = async (userId: string): Promise<boolean> => {
     try {
-      const response = await apiClient(`/api/v1/team/members/${userId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const message = await parseErrorBody(
-          response,
-          `Failed to remove member (${response.status})`
-        );
-        setState({ isLoading: false, error: message });
-        return false;
-      }
-      setState({ isLoading: false, error: null });
+      await mutation.mutateAsync(userId);
       return true;
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Unknown error";
-      setState({ isLoading: false, error: message });
+    } catch {
       return false;
     }
-  }, []);
+  };
 
-  return { ...state, removeMember };
+  return {
+    removeMember,
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+  };
 };

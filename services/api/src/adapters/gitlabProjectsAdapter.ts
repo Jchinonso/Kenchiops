@@ -11,6 +11,8 @@
 
 import {
   createLogger,
+  getErrorMessage,
+  ExternalServiceError,
   resilientGet,
   resilientPost,
   resilientDelete,
@@ -74,22 +76,44 @@ const getProjects = async (
 ): Promise<readonly GitLabProject[]> => {
   const resolvedBaseUrl = resolveBaseUrl(baseUrl);
   const url = `${resolvedBaseUrl}/api/v4/projects?membership=true&min_access_level=30&per_page=100&order_by=last_activity_at&sort=desc`;
+  const startTime = Date.now();
 
-  const response = await resilientGet<readonly GitLabApiProject[]>(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    timeout: GITLAB_TIMEOUT_MS,
-  });
+  try {
+    const response = await resilientGet<readonly GitLabApiProject[]>(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: GITLAB_TIMEOUT_MS,
+    });
 
-  logger.info("GitLab projects fetched", {
-    provider: "gitlab",
-    operation: "getProjects",
-    durationMs: response.duration,
-    statusCode: response.status,
-    projectCount: response.data.length,
-    ...context,
-  });
+    logger.info("GitLab projects fetched", {
+      provider: "gitlab",
+      operation: "getProjects",
+      durationMs: response.duration,
+      statusCode: response.status,
+      projectCount: response.data.length,
+      ...context,
+    });
 
-  return response.data.map(mapApiProject);
+    return response.data.map(mapApiProject);
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw error;
+    }
+
+    const durationMs = Date.now() - startTime;
+    logger.error("GitLab projects fetch failed", {
+      provider: "gitlab",
+      operation: "getProjects",
+      durationMs,
+      error: getErrorMessage(error),
+      ...context,
+    });
+
+    throw new ExternalServiceError(
+      "gitlab",
+      `Failed to fetch projects: ${getErrorMessage(error)}`,
+      { retryable: true }
+    );
+  }
 };
 
 const createProjectWebhook = async (
@@ -102,38 +126,61 @@ const createProjectWebhook = async (
 ): Promise<GitLabWebhookResult> => {
   const resolvedBaseUrl = resolveBaseUrl(baseUrl);
   const url = `${resolvedBaseUrl}/api/v4/projects/${String(projectId)}/hooks`;
+  const startTime = Date.now();
 
-  const response = await resilientPost<GitLabApiWebhook>(
-    url,
-    {
-      url: webhookUrl,
-      token: webhookSecret,
-      job_events: true,
-      pipeline_events: true,
-      push_events: false,
-      enable_ssl_verification: true,
-    },
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      timeout: GITLAB_TIMEOUT_MS,
+  try {
+    const response = await resilientPost<GitLabApiWebhook>(
+      url,
+      {
+        url: webhookUrl,
+        token: webhookSecret,
+        job_events: true,
+        pipeline_events: true,
+        push_events: false,
+        enable_ssl_verification: true,
+      },
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: GITLAB_TIMEOUT_MS,
+      }
+    );
+
+    logger.info("GitLab webhook created", {
+      provider: "gitlab",
+      operation: "createProjectWebhook",
+      durationMs: response.duration,
+      statusCode: response.status,
+      projectId,
+      webhookId: response.data.id,
+      ...context,
+    });
+
+    return {
+      id: response.data.id,
+      projectId: response.data.project_id,
+      url: response.data.url,
+    };
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw error;
     }
-  );
 
-  logger.info("GitLab webhook created", {
-    provider: "gitlab",
-    operation: "createProjectWebhook",
-    durationMs: response.duration,
-    statusCode: response.status,
-    projectId,
-    webhookId: response.data.id,
-    ...context,
-  });
+    const durationMs = Date.now() - startTime;
+    logger.error("GitLab webhook creation failed", {
+      provider: "gitlab",
+      operation: "createProjectWebhook",
+      durationMs,
+      projectId,
+      error: getErrorMessage(error),
+      ...context,
+    });
 
-  return {
-    id: response.data.id,
-    projectId: response.data.project_id,
-    url: response.data.url,
-  };
+    throw new ExternalServiceError(
+      "gitlab",
+      `Failed to create webhook: ${getErrorMessage(error)}`,
+      { retryable: true }
+    );
+  }
 };
 
 const deleteProjectWebhook = async (
@@ -145,21 +192,45 @@ const deleteProjectWebhook = async (
 ): Promise<void> => {
   const resolvedBaseUrl = resolveBaseUrl(baseUrl);
   const url = `${resolvedBaseUrl}/api/v4/projects/${String(projectId)}/hooks/${String(webhookId)}`;
+  const startTime = Date.now();
 
-  const response = await resilientDelete<unknown>(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    timeout: GITLAB_TIMEOUT_MS,
-  });
+  try {
+    const response = await resilientDelete<unknown>(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: GITLAB_TIMEOUT_MS,
+    });
 
-  logger.info("GitLab webhook deleted", {
-    provider: "gitlab",
-    operation: "deleteProjectWebhook",
-    durationMs: response.duration,
-    statusCode: response.status,
-    projectId,
-    webhookId,
-    ...context,
-  });
+    logger.info("GitLab webhook deleted", {
+      provider: "gitlab",
+      operation: "deleteProjectWebhook",
+      durationMs: response.duration,
+      statusCode: response.status,
+      projectId,
+      webhookId,
+      ...context,
+    });
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw error;
+    }
+
+    const durationMs = Date.now() - startTime;
+    logger.error("GitLab webhook deletion failed", {
+      provider: "gitlab",
+      operation: "deleteProjectWebhook",
+      durationMs,
+      projectId,
+      webhookId,
+      error: getErrorMessage(error),
+      ...context,
+    });
+
+    throw new ExternalServiceError(
+      "gitlab",
+      `Failed to delete webhook: ${getErrorMessage(error)}`,
+      { retryable: true }
+    );
+  }
 };
 
 // ==================== Export ====================

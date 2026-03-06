@@ -14,6 +14,7 @@ import {
   VALID_NODE_ENVS,
   PARSE_INT_RADIX,
   LLM_CONCURRENCY_DEFAULTS,
+  DATABASE_POOL_DEFAULTS,
 } from "../constants/index.js";
 import type { Config, NodeEnvironment, LLMProvider } from "./types.js";
 
@@ -153,6 +154,7 @@ export const config: Config = {
   // Database
   DATABASE_URL: requireEnv("DATABASE_URL"),
   VECTOR_DB_URL: requireEnv("VECTOR_DB_URL"),
+  DB_POOL_SIZE: optionalInt("DB_POOL_SIZE", DATABASE_POOL_DEFAULTS.MAX_CONNECTIONS),
 
   // General
   NODE_ENV: validateNodeEnv(),

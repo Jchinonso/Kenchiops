@@ -2,12 +2,10 @@
  * Unit tests for useDashboardSSE hook.
  *
  * Tests:
- * - Initial state: refreshKey=0, empty notifications
+ * - Initial state: empty notifications
  * - Loads notifications from sessionStorage on mount
  * - EventSource connects to the correct SSE endpoint
- * - new_failure event increments refreshKey
  * - new_failure event adds notification to the list
- * - analysis_complete event increments refreshKey
  * - analysis_complete event adds notification to the list
  * - markAllRead marks all notifications as read
  * - markAsRead marks a single notification as read
@@ -19,12 +17,15 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Mock sonner
 vi.mock("sonner", () => ({
   toast: {
     error: vi.fn(),
     success: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -42,7 +43,14 @@ vi.mock("@/hooks/useAuth", () => ({
     user: { tenantId: "test-tenant" },
     isAuthenticated: true,
     isLoading: false,
+    refreshUser: vi.fn(),
+    switchOrganization: vi.fn(),
   }),
+}));
+
+// Mock apiClient
+vi.mock("@/lib/apiClient", () => ({
+  apiClient: vi.fn(),
 }));
 
 // ==================== EventSource Mock ====================
@@ -88,6 +96,20 @@ class MockEventSource {
 
 const originalEventSource = globalThis.EventSource;
 
+/** Create a fresh QueryClient + wrapper for each test */
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  const Wrapper = ({ children }: { readonly children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+  return Wrapper;
+};
+
 beforeEach(() => {
   MockEventSource.instances = [];
   (globalThis as Record<string, unknown>).EventSource = MockEventSource;
@@ -108,10 +130,9 @@ const importHook = async () => {
 };
 
 describe("useDashboardSSE", () => {
-  it("starts with refreshKey=0 and empty notifications", async () => {
+  it("starts with empty notifications", async () => {
     const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
-    expect(result.current.refreshKey).toBe(0);
+    const { result } = renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
     expect(result.current.notifications).toEqual([]);
   });
 
@@ -129,34 +150,22 @@ describe("useDashboardSSE", () => {
     sessionStorage.setItem("kenchi_notifications_test-tenant", JSON.stringify(stored));
 
     const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
+    const { result } = renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
     expect(result.current.notifications).toHaveLength(1);
     expect(result.current.notifications[0].title).toBe("Test");
   });
 
   it("connects EventSource to the correct endpoint", async () => {
     const { useDashboardSSE } = await importHook();
-    renderHook(() => useDashboardSSE());
+    renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
     expect(MockEventSource.instances).toHaveLength(1);
     expect(MockEventSource.instances[0].url).toContain("/api/v1/dashboard/events/stream");
     expect(MockEventSource.instances[0].withCredentials).toBe(true);
   });
 
-  it("increments refreshKey on new_failure event", async () => {
-    const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
-    const es = MockEventSource.instances[0];
-
-    act(() => {
-      es.emit("new_failure", { type: "new_failure", repository: "org/repo" });
-    });
-
-    expect(result.current.refreshKey).toBe(1);
-  });
-
   it("adds a failure notification on new_failure event", async () => {
     const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
+    const { result } = renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
     const es = MockEventSource.instances[0];
 
     act(() => {
@@ -171,26 +180,9 @@ describe("useDashboardSSE", () => {
     expect(notification.read).toBe(false);
   });
 
-  it("increments refreshKey on analysis_complete event", async () => {
-    const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
-    const es = MockEventSource.instances[0];
-
-    act(() => {
-      es.emit("analysis_complete", {
-        type: "analysis_complete",
-        repository: "org/repo",
-        analysisId: "a1",
-        confidence: 0.85,
-      });
-    });
-
-    expect(result.current.refreshKey).toBe(1);
-  });
-
   it("adds an analysis notification on analysis_complete event", async () => {
     const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
+    const { result } = renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
     const es = MockEventSource.instances[0];
 
     act(() => {
@@ -212,7 +204,7 @@ describe("useDashboardSSE", () => {
 
   it("markAllRead marks all notifications as read", async () => {
     const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
+    const { result } = renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
     const es = MockEventSource.instances[0];
 
     act(() => {
@@ -251,7 +243,7 @@ describe("useDashboardSSE", () => {
     sessionStorage.setItem("kenchi_notifications_test-tenant", JSON.stringify(stored));
 
     const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
+    const { result } = renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
 
     act(() => {
       result.current.markAsRead("n1");
@@ -283,7 +275,7 @@ describe("useDashboardSSE", () => {
     sessionStorage.setItem("kenchi_notifications_test-tenant", JSON.stringify(stored));
 
     const { useDashboardSSE } = await importHook();
-    const { result } = renderHook(() => useDashboardSSE());
+    const { result } = renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
 
     act(() => {
       result.current.dismissNotification("n1");
@@ -295,7 +287,7 @@ describe("useDashboardSSE", () => {
 
   it("closes EventSource on unmount", async () => {
     const { useDashboardSSE } = await importHook();
-    const { unmount } = renderHook(() => useDashboardSSE());
+    const { unmount } = renderHook(() => useDashboardSSE(), { wrapper: createWrapper() });
     const es = MockEventSource.instances[0];
 
     unmount();

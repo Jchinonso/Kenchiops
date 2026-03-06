@@ -16,6 +16,9 @@ import {
   createLogger,
   ExternalServiceError,
   ValidationError,
+  resilientGet,
+  resilientPost,
+  resilientDelete,
   redactSecrets,
   type RequestContext,
 } from "@kenchi/shared";
@@ -61,9 +64,6 @@ const ensureClientCredentials = (): {
   return { clientId, clientSecret };
 };
 
-const isRetryableStatus = (status: number | undefined): boolean =>
-  status === undefined || status >= 500 || status === 429;
-
 // ==================== Port Implementation ====================
 
 const exchangeCode = async (
@@ -72,84 +72,57 @@ const exchangeCode = async (
   context: RequestContext
 ): Promise<IntegrationTokenResponse> => {
   const { clientId, clientSecret } = ensureClientCredentials();
-  const startTime = Date.now();
 
-  try {
-    const body = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      redirect_uri: redirectUri,
-    });
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    redirect_uri: redirectUri,
+  });
 
-    const response = await fetch(INTEGRATION_OAUTH_TOKEN_URLS.vercel, {
-      method: "POST",
+  const response = await resilientPost<VercelTokenResponse>(
+    INTEGRATION_OAUTH_TOKEN_URLS.vercel,
+    undefined,
+    {
+      rawBody: body.toString(),
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-      signal: AbortSignal.timeout(VERCEL_TIMEOUT_MS),
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        PROVIDER,
-        `Vercel token exchange failed with status ${String(response.status)}`,
-        {
-          metadata: { operation: "exchangeCode", statusCode: response.status, durationMs },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
+      timeout: VERCEL_TIMEOUT_MS,
+      maxRetries: 2,
     }
+  );
 
-    const data = (await response.json()) as VercelTokenResponse;
+  const data = response.data;
 
-    if (data.error) {
-      throw new ExternalServiceError(
-        PROVIDER,
-        `Vercel token exchange error: ${data.error_description ?? data.error}`,
-        {
-          metadata: { operation: "exchangeCode", errorCode: data.error, durationMs },
-          retryable: false,
-        }
-      );
-    }
-
-    logger.info("Vercel token exchange completed", {
-      provider: PROVIDER,
-      operation: "exchangeCode",
-      durationMs,
-      statusCode: response.status,
-      ...context,
-    });
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? null,
-      expiresIn: data.expires_in ?? null,
-      teamId: data.team_id ?? null,
-      teamName: null,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Vercel token exchange failed", {
-      provider: PROVIDER,
-      operation: "exchangeCode",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError(PROVIDER, "Failed to exchange Vercel authorization code", {
-      metadata: { operation: "exchangeCode", durationMs },
-      retryable: true,
-    });
+  if (data.error) {
+    throw new ExternalServiceError(
+      PROVIDER,
+      `Vercel token exchange error: ${data.error_description ?? data.error}`,
+      {
+        metadata: {
+          operation: "exchangeCode",
+          errorCode: data.error,
+          durationMs: response.duration,
+        },
+        retryable: false,
+      }
+    );
   }
+
+  logger.info("Vercel token exchange completed", {
+    provider: PROVIDER,
+    operation: "exchangeCode",
+    durationMs: response.duration,
+    statusCode: response.status,
+    ...context,
+  });
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token ?? null,
+    expiresIn: data.expires_in ?? null,
+    teamId: data.team_id ?? null,
+    teamName: null,
+  };
 };
 
 const listProjects = async (
@@ -157,67 +130,31 @@ const listProjects = async (
   teamId: string | null,
   context: RequestContext
 ): Promise<readonly IntegrationProject[]> => {
-  const startTime = Date.now();
   const url = new URL(INTEGRATION_API_URLS.vercel.projects);
   if (teamId) {
     url.searchParams.set("teamId", teamId);
   }
 
-  try {
-    const response = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      signal: AbortSignal.timeout(VERCEL_TIMEOUT_MS),
-    });
+  const response = await resilientGet<VercelProjectsResponse>(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: VERCEL_TIMEOUT_MS,
+    maxRetries: 2,
+  });
 
-    const durationMs = Date.now() - startTime;
+  logger.info("Vercel projects listed", {
+    provider: PROVIDER,
+    operation: "listProjects",
+    durationMs: response.duration,
+    statusCode: response.status,
+    projectCount: response.data.projects.length,
+    ...context,
+  });
 
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        PROVIDER,
-        `Vercel list projects failed with status ${String(response.status)}`,
-        {
-          metadata: { operation: "listProjects", statusCode: response.status, durationMs },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
-    }
-
-    const data = (await response.json()) as VercelProjectsResponse;
-
-    logger.info("Vercel projects listed", {
-      provider: PROVIDER,
-      operation: "listProjects",
-      durationMs,
-      statusCode: response.status,
-      projectCount: data.projects.length,
-      ...context,
-    });
-
-    return data.projects.map((proj) => ({
-      id: proj.id,
-      name: proj.name,
-      url: null,
-    }));
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Vercel list projects failed", {
-      provider: PROVIDER,
-      operation: "listProjects",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError(PROVIDER, "Failed to list Vercel projects", {
-      metadata: { operation: "listProjects", durationMs },
-      retryable: true,
-    });
-  }
+  return response.data.projects.map((proj) => ({
+    id: proj.id,
+    name: proj.name,
+    url: null,
+  }));
 };
 
 const createWebhook = async (
@@ -227,72 +164,38 @@ const createWebhook = async (
   teamId: string | null,
   context: RequestContext
 ): Promise<CreatedWebhook> => {
-  const startTime = Date.now();
   const url = new URL(INTEGRATION_API_URLS.vercel.webhooks);
   if (teamId) {
     url.searchParams.set("teamId", teamId);
   }
 
-  try {
-    const response = await fetch(url.toString(), {
-      method: "POST",
+  const response = await resilientPost<VercelWebhookResponse>(
+    url.toString(),
+    {
+      url: webhookUrl,
+      events: ["deployment.error", "deployment.ready"],
+      secret,
+    },
+    {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        url: webhookUrl,
-        events: ["deployment.error", "deployment.ready"],
-        secret,
-      }),
-      signal: AbortSignal.timeout(VERCEL_TIMEOUT_MS),
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        PROVIDER,
-        `Vercel create webhook failed with status ${String(response.status)}`,
-        {
-          metadata: { operation: "createWebhook", statusCode: response.status, durationMs },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
+      timeout: VERCEL_TIMEOUT_MS,
+      maxRetries: 2,
     }
+  );
 
-    const data = (await response.json()) as VercelWebhookResponse;
+  logger.info("Vercel webhook created", {
+    provider: PROVIDER,
+    operation: "createWebhook",
+    durationMs: response.duration,
+    statusCode: response.status,
+    webhookId: response.data.id,
+    ...context,
+  });
 
-    logger.info("Vercel webhook created", {
-      provider: PROVIDER,
-      operation: "createWebhook",
-      durationMs,
-      statusCode: response.status,
-      webhookId: data.id,
-      ...context,
-    });
-
-    return { webhookId: data.id, url: data.url };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Vercel create webhook failed", {
-      provider: PROVIDER,
-      operation: "createWebhook",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError(PROVIDER, "Failed to create Vercel webhook", {
-      metadata: { operation: "createWebhook", durationMs },
-      retryable: true,
-    });
-  }
+  return { webhookId: response.data.id, url: response.data.url };
 };
 
 const deleteWebhook = async (
@@ -301,59 +204,38 @@ const deleteWebhook = async (
   teamId: string | null,
   context: RequestContext
 ): Promise<void> => {
-  const startTime = Date.now();
   const url = new URL(`${INTEGRATION_API_URLS.vercel.webhooks}/${webhookId}`);
   if (teamId) {
     url.searchParams.set("teamId", teamId);
   }
 
   try {
-    const response = await fetch(url.toString(), {
-      method: "DELETE",
+    const response = await resilientDelete<unknown>(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
-      signal: AbortSignal.timeout(VERCEL_TIMEOUT_MS),
+      timeout: VERCEL_TIMEOUT_MS,
+      maxRetries: 2,
     });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok && response.status !== 404) {
-      throw new ExternalServiceError(
-        PROVIDER,
-        `Vercel delete webhook failed with status ${String(response.status)}`,
-        {
-          metadata: { operation: "deleteWebhook", statusCode: response.status, durationMs },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
-    }
 
     logger.info("Vercel webhook deleted", {
       provider: PROVIDER,
       operation: "deleteWebhook",
-      durationMs,
+      durationMs: response.duration,
       statusCode: response.status,
       webhookId,
       ...context,
     });
   } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
+    // 404 is treated as success (webhook already gone)
+    if (error instanceof ExternalServiceError && error.message.includes("HTTP 404")) {
+      logger.info("Vercel webhook already deleted (404)", {
+        provider: PROVIDER,
+        operation: "deleteWebhook",
+        webhookId,
+        ...context,
+      });
+      return;
     }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Vercel delete webhook failed", {
-      provider: PROVIDER,
-      operation: "deleteWebhook",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError(PROVIDER, "Failed to delete Vercel webhook", {
-      metadata: { operation: "deleteWebhook", durationMs },
-      retryable: true,
-    });
+    throw error;
   }
 };
 
@@ -362,84 +244,57 @@ const refreshToken = async (
   context: RequestContext
 ): Promise<IntegrationTokenResponse> => {
   const { clientId, clientSecret } = ensureClientCredentials();
-  const startTime = Date.now();
 
-  try {
-    const body = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: currentRefreshToken,
-      grant_type: "refresh_token",
-    });
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: currentRefreshToken,
+    grant_type: "refresh_token",
+  });
 
-    const response = await fetch(INTEGRATION_OAUTH_TOKEN_URLS.vercel, {
-      method: "POST",
+  const response = await resilientPost<VercelTokenResponse>(
+    INTEGRATION_OAUTH_TOKEN_URLS.vercel,
+    undefined,
+    {
+      rawBody: body.toString(),
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-      signal: AbortSignal.timeout(VERCEL_TIMEOUT_MS),
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        PROVIDER,
-        `Vercel token refresh failed with status ${String(response.status)}`,
-        {
-          metadata: { operation: "refreshToken", statusCode: response.status, durationMs },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
+      timeout: VERCEL_TIMEOUT_MS,
+      maxRetries: 2,
     }
+  );
 
-    const data = (await response.json()) as VercelTokenResponse;
+  const data = response.data;
 
-    if (data.error) {
-      throw new ExternalServiceError(
-        PROVIDER,
-        `Vercel token refresh error: ${data.error_description ?? data.error}`,
-        {
-          metadata: { operation: "refreshToken", errorCode: data.error, durationMs },
-          retryable: false,
-        }
-      );
-    }
-
-    logger.info("Vercel token refresh completed", {
-      provider: PROVIDER,
-      operation: "refreshToken",
-      durationMs,
-      statusCode: response.status,
-      ...context,
-    });
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? null,
-      expiresIn: data.expires_in ?? null,
-      teamId: data.team_id ?? null,
-      teamName: null,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Vercel token refresh failed", {
-      provider: PROVIDER,
-      operation: "refreshToken",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError(PROVIDER, "Failed to refresh Vercel token", {
-      metadata: { operation: "refreshToken", durationMs },
-      retryable: true,
-    });
+  if (data.error) {
+    throw new ExternalServiceError(
+      PROVIDER,
+      `Vercel token refresh error: ${data.error_description ?? data.error}`,
+      {
+        metadata: {
+          operation: "refreshToken",
+          errorCode: data.error,
+          durationMs: response.duration,
+        },
+        retryable: false,
+      }
+    );
   }
+
+  logger.info("Vercel token refresh completed", {
+    provider: PROVIDER,
+    operation: "refreshToken",
+    durationMs: response.duration,
+    statusCode: response.status,
+    ...context,
+  });
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token ?? null,
+    expiresIn: data.expires_in ?? null,
+    teamId: data.team_id ?? null,
+    teamName: null,
+  };
 };
 
 // ==================== Export ====================

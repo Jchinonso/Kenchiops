@@ -31,7 +31,7 @@ import type { WebhookActivityProps } from "./types";
 
 // ==================== Main Component ====================
 
-export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
+export const WebhookActivity = (_props: WebhookActivityProps = {}) => {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -53,13 +53,11 @@ export const WebhookActivity = ({ refreshKey = 0 }: WebhookActivityProps) => {
     });
   };
 
-  const { data, isLoading, error, refetch } = useWebhookActivity(
-    pageSize,
+  const { data, isLoading, error, refetch } = useWebhookActivity({
+    limit: pageSize,
     offset,
-    refreshKey,
-    undefined,
-    statusFilter || undefined
-  );
+    status: statusFilter || undefined,
+  });
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
   const total = data?.total ?? 0;

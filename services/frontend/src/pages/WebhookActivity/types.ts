@@ -15,5 +15,5 @@ export interface ExpandedWebhookRowProps {
 }
 
 export interface WebhookActivityProps {
-  readonly refreshKey?: number;
+  // No props currently needed — data fetching is handled by TanStack Query
 }

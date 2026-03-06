@@ -64,6 +64,7 @@ jest.mock("@kenchi/shared", () => {
         Promise.resolve(fn(req, res, next)).catch(next);
       }
     ),
+    resilientFetch: jest.fn(),
   };
 });
 
@@ -78,13 +79,16 @@ jest.mock("crypto", () => {
   };
 });
 
-// Mock global fetch
-const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
-global.fetch = mockFetch;
-
 // Import after mocks
 import { oauthRoutes } from "../routes/oauthRoutes.js";
-import { findByOrgName, linkSlackWorkspace, createFromSlackInstall } from "@kenchi/shared";
+import {
+  findByOrgName,
+  linkSlackWorkspace,
+  createFromSlackInstall,
+  resilientFetch,
+} from "@kenchi/shared";
+
+const mockResilientFetch = resilientFetch as jest.MockedFunction<typeof resilientFetch>;
 
 const mockFindByGitHubOrg = findByOrgName as jest.MockedFunction<typeof findByOrgName>;
 const mockLinkSlackWorkspace = linkSlackWorkspace as jest.MockedFunction<typeof linkSlackWorkspace>;
@@ -110,6 +114,14 @@ const createMockSlackResponse = (overrides = {}) => ({
   ...overrides,
 });
 
+// Helper to wrap data in resilientFetch response shape
+const createResilientResponse = <T>(data: T) => ({
+  data,
+  status: 200,
+  retryCount: 0,
+  duration: 100,
+});
+
 describe("OAuth Routes", () => {
   let app: Express;
 
@@ -122,9 +134,7 @@ describe("OAuth Routes", () => {
     app.use(oauthRoutes);
 
     // Reset mock implementations
-    mockFetch.mockResolvedValue({
-      json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
-    } as unknown as Response);
+    mockResilientFetch.mockResolvedValue(createResilientResponse(createMockSlackResponse()));
 
     mockFindByGitHubOrg.mockResolvedValue(null);
     mockLinkSlackWorkspace.mockResolvedValue(createMockTenant());
@@ -250,9 +260,11 @@ describe("OAuth Routes", () => {
 
       expect(response.status).toBe(200);
       expect(response.text).toContain("Test Team");
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockResilientFetch).toHaveBeenCalledWith(
         expect.stringContaining("https://slack.com/api/oauth.v2.access"),
-        { method: "POST" }
+        "POST",
+        undefined,
+        { timeout: 10_000, maxRetries: 2 }
       );
     });
 
@@ -314,9 +326,7 @@ describe("OAuth Routes", () => {
     });
 
     it("should show success message for active tenant", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
-      } as unknown as Response);
+      mockResilientFetch.mockResolvedValue(createResilientResponse(createMockSlackResponse()));
 
       mockFindByGitHubOrg.mockResolvedValue(
         createMockTenant({
@@ -372,12 +382,12 @@ describe("OAuth Routes", () => {
     });
 
     it("should handle token exchange failure", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+      mockResilientFetch.mockResolvedValue(
+        createResilientResponse({
           ok: false,
           error: "invalid_code",
-        }),
-      } as unknown as Response);
+        })
+      );
 
       const response = await request(app).get(
         `/slack/oauth/callback?code=invalid-code&state=${state}`
@@ -389,7 +399,7 @@ describe("OAuth Routes", () => {
     });
 
     it("should handle network errors during token exchange", async () => {
-      mockFetch.mockRejectedValue(new Error("Network error"));
+      mockResilientFetch.mockRejectedValue(new Error("Network error"));
 
       const response = await request(app).get(
         `/slack/oauth/callback?code=test-code&state=${state}`
@@ -441,9 +451,7 @@ describe("OAuth Routes", () => {
     });
 
     it("should handle malformed Slack API response", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
-      } as unknown as Response);
+      mockResilientFetch.mockResolvedValue(createResilientResponse({}));
 
       const response = await request(app).get(
         `/slack/oauth/callback?code=test-code&state=${state}`
@@ -453,9 +461,7 @@ describe("OAuth Routes", () => {
     });
 
     it("should handle invalid JSON in Slack response", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockRejectedValue(new Error("Invalid JSON")),
-      } as unknown as Response);
+      mockResilientFetch.mockRejectedValue(new Error("Invalid JSON"));
 
       const response = await request(app).get(
         `/slack/oauth/callback?code=test-code&state=${state}`
@@ -467,22 +473,25 @@ describe("OAuth Routes", () => {
     it("should include all OAuth scopes in token request", async () => {
       await request(app).get(`/slack/oauth/callback?code=test-code&state=${state}`);
 
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("code=test-code"), {
-        method: "POST",
-      });
+      expect(mockResilientFetch).toHaveBeenCalledWith(
+        expect.stringContaining("code=test-code"),
+        "POST",
+        undefined,
+        { timeout: 10_000, maxRetries: 2 }
+      );
     });
 
     it("should handle special characters in team name", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue(
+      mockResilientFetch.mockResolvedValue(
+        createResilientResponse(
           createMockSlackResponse({
             team: {
               id: "T123456",
               name: "Team & Co. <script>",
             },
           })
-        ),
-      } as unknown as Response);
+        )
+      );
       mockFindByGitHubOrg.mockResolvedValue(createMockTenant());
 
       const response = await request(app).get(
@@ -532,16 +541,16 @@ describe("OAuth Routes", () => {
     });
 
     it("should handle unicode characters in team name", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue(
+      mockResilientFetch.mockResolvedValue(
+        createResilientResponse(
           createMockSlackResponse({
             team: {
               id: "T123456",
               name: "チーム 🚀",
             },
           })
-        ),
-      } as unknown as Response);
+        )
+      );
 
       const response = await request(app).get(
         `/slack/oauth/callback?code=test-code&state=${state}`
@@ -551,9 +560,7 @@ describe("OAuth Routes", () => {
     });
 
     it("should handle suspended tenant status", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
-      } as unknown as Response);
+      mockResilientFetch.mockResolvedValue(createResilientResponse(createMockSlackResponse()));
       mockFindByGitHubOrg.mockResolvedValue(createMockTenant({ status: "suspended" as const }));
       mockLinkSlackWorkspace.mockResolvedValue(
         createMockTenant({
@@ -570,9 +577,7 @@ describe("OAuth Routes", () => {
     });
 
     it("should handle deleted tenant status", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
-      } as unknown as Response);
+      mockResilientFetch.mockResolvedValue(createResilientResponse(createMockSlackResponse()));
       mockFindByGitHubOrg.mockResolvedValue(createMockTenant({ status: "deleted" as const }));
       mockLinkSlackWorkspace.mockResolvedValue(
         createMockTenant({
@@ -750,16 +755,16 @@ describe("OAuth Routes", () => {
     });
 
     it("should handle HTML entities in team name", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue(
+      mockResilientFetch.mockResolvedValue(
+        createResilientResponse(
           createMockSlackResponse({
             team: {
               id: "T123456",
               name: "<script>alert('xss')</script>",
             },
           })
-        ),
-      } as unknown as Response);
+        )
+      );
       mockFindByGitHubOrg.mockResolvedValue(createMockTenant());
 
       const response = await request(app).get(
@@ -787,9 +792,7 @@ describe("OAuth Routes", () => {
     });
 
     it("should not include GitHub App link for existing tenants", async () => {
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
-      } as unknown as Response);
+      mockResilientFetch.mockResolvedValue(createResilientResponse(createMockSlackResponse()));
 
       mockFindByGitHubOrg.mockResolvedValue(
         createMockTenant({
@@ -827,9 +830,7 @@ describe("OAuth Routes", () => {
       const state = "random-state-token";
       const longCode = "a".repeat(1000);
 
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue(createMockSlackResponse()),
-      } as unknown as Response);
+      mockResilientFetch.mockResolvedValue(createResilientResponse(createMockSlackResponse()));
       mockFindByGitHubOrg.mockResolvedValue(createMockTenant());
 
       const response = await request(app).get(
@@ -854,9 +855,7 @@ describe("OAuth Routes", () => {
       await request(app).get("/slack/install");
       const state = "random-state-token";
 
-      mockFetch.mockImplementation(
-        () => new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 100))
-      );
+      mockResilientFetch.mockRejectedValue(new Error("Timeout"));
 
       const response = await request(app).get(
         `/slack/oauth/callback?code=test-code&state=${state}`
@@ -869,8 +868,8 @@ describe("OAuth Routes", () => {
       await request(app).get("/slack/install");
       const state = "random-state-token";
 
-      mockFetch.mockResolvedValue({
-        json: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+      mockResilientFetch.mockResolvedValue(
+        createResilientResponse({
           ok: true,
           access_token: "xoxb-test-token",
           token_type: "bot",
@@ -881,8 +880,8 @@ describe("OAuth Routes", () => {
           authed_user: {
             id: "U789012",
           },
-        }),
-      } as unknown as Response);
+        })
+      );
 
       mockFindByGitHubOrg.mockResolvedValue(createMockTenant());
 

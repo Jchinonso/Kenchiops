@@ -14,6 +14,8 @@ export const DATABASE_POOL_DEFAULTS = {
   IDLE_TIMEOUT_MS: 30_000,
   /** How long to wait for a connection before timing out (ms) */
   CONNECTION_TIMEOUT_MS: 5_000,
+  /** Kill queries that run longer than this (ms). Prevents connection pool exhaustion. */
+  STATEMENT_TIMEOUT_MS: 30_000,
 } as const;
 
 /**

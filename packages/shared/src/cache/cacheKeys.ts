@@ -55,9 +55,13 @@ const buildKey = (namespace: CacheNamespace, ...parts: readonly string[]): strin
  * GitHub cache key builders.
  */
 export const githubCacheKeys = {
-  /** Installation repositories list. */
+  /** Installation repositories list (github-app service — RepositoryInfo shape). */
   installationRepos: (installationId: number): string =>
     buildKey(CACHE_NAMESPACE.GITHUB, "repos", String(installationId)),
+
+  /** Installation repositories list (api service — InstallationRepository shape). */
+  installationReposApi: (installationId: number): string =>
+    buildKey(CACHE_NAMESPACE.GITHUB, "repos-api", String(installationId)),
 
   /** Repository details. */
   repository: (owner: string, repo: string): string =>

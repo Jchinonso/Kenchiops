@@ -53,10 +53,10 @@ import type { CICDAnalysesProps } from "./types";
 
 // ==================== Main Component ====================
 
-export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
+export const CICDAnalyses = (_props: CICDAnalysesProps = {}) => {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? undefined;
-  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage(refreshKey);
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage();
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -78,7 +78,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
     };
   });
 
-  const { data: analysisCountsByRepo } = useAnalysisCountsByRepo(refreshKey);
+  const { data: analysisCountsByRepo } = useAnalysisCountsByRepo();
   const hasRepoTabs = (analysisCountsByRepo?.length ?? 0) > 1;
   const [activeRepoTab, setActiveRepoTab] = useState<string>("all");
 
@@ -142,7 +142,6 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const { data, isLoading, error, refetch } = useAnalyses({
     limit: pageSize,
     offset,
-    refreshKey,
     repository: filters.repository || undefined,
     minConfidence: confidenceRange.min !== null ? String(confidenceRange.min) : undefined,
     maxConfidence: confidenceRange.max !== null ? String(confidenceRange.max) : undefined,

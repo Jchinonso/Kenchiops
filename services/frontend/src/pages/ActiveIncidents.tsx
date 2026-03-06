@@ -41,14 +41,10 @@ const PAGE_SIZE = 20;
 
 // ==================== Main Component ====================
 
-interface ActiveIncidentsProps {
-  readonly refreshKey?: number;
-}
-
-export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
+export const ActiveIncidents = () => {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? "";
-  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage(refreshKey);
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage();
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -72,7 +68,7 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     };
   });
 
-  const { data: activeCountsBySource } = useActiveCountsBySource(tenantId, refreshKey);
+  const { data: activeCountsBySource } = useActiveCountsBySource(tenantId);
   const hasSourceTabs = (activeCountsBySource?.length ?? 0) > 1;
   const [activeSourceTab, setActiveSourceTab] = useState<string>("all");
 
@@ -129,7 +125,6 @@ export const ActiveIncidents = ({ refreshKey = 0 }: ActiveIncidentsProps) => {
     tenantId,
     limit: pageSize,
     offset,
-    refreshKey,
     severity: filters.severity || undefined,
     status: filters.status || undefined,
     source: filters.source || undefined,

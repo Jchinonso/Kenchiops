@@ -18,6 +18,7 @@ export interface DatabaseConfig {
   readonly maxConnections?: number;
   readonly idleTimeoutMs?: number;
   readonly connectionTimeoutMs?: number;
+  readonly statementTimeoutMs?: number;
 }
 
 // ==================== Result Types ====================

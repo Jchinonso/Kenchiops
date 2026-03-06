@@ -107,11 +107,7 @@ const InvestigationTableRow = ({ investigation, onClick }: InvestigationTableRow
 
 // ==================== Main Component ====================
 
-interface InvestigationsProps {
-  readonly refreshKey?: number;
-}
-
-export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
+export const Investigations = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const tenantId = user?.tenantId ?? "";
@@ -146,7 +142,6 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
     tenantId,
     pageSize,
     offset,
-    refreshKey,
     filters.status || undefined
   );
 

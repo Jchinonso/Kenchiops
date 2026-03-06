@@ -24,6 +24,7 @@ import {
   getErrorMessage,
   publish,
   PUBSUB_CHANNELS,
+  DASHBOARD_EVENT_TYPES,
   type RequestContext,
   type QueueMessage,
 } from "@kenchi/shared";
@@ -46,6 +47,31 @@ import {
 } from "./investigationWorkerHelpers.js";
 
 const logger = createLogger("investigation-worker");
+
+// ==================== Helpers ====================
+
+/** Publish investigation status change to dashboard SSE (fire-and-forget). */
+const publishInvestigationStatus = (
+  tenantId: string,
+  investigationId: string,
+  status: string
+): void => {
+  void (async () => {
+    try {
+      await publish(PUBSUB_CHANNELS.DASHBOARD, DASHBOARD_EVENT_TYPES.INVESTIGATION_STATUS_CHANGED, {
+        tenantId,
+        investigationId,
+        status,
+      });
+    } catch (publishError) {
+      logger.warn("Failed to publish investigation status event", {
+        investigationId,
+        status,
+        error: getErrorMessage(publishError),
+      });
+    }
+  })();
+};
 
 // ==================== Pipeline Phases ====================
 
@@ -276,20 +302,7 @@ const handleQueueMessage = async (
 
     incrementInvestigationCounter(state, "totalProcessed");
 
-    // Publish SSE event (fire-and-forget — don't fail if publish fails)
-    void (async () => {
-      try {
-        await publish(PUBSUB_CHANNELS.INVESTIGATION, "investigation_completed", {
-          investigationId,
-          status: "completed",
-        });
-      } catch (publishError) {
-        logger.warn("Failed to publish investigation completed event", {
-          investigationId,
-          error: getErrorMessage(publishError),
-        });
-      }
-    })();
+    publishInvestigationStatus(tenantId, investigationId, "completed");
 
     const durationMs = Date.now() - startTime;
 
@@ -307,6 +320,8 @@ const handleQueueMessage = async (
 
     await updateInvestigationError(investigationId, errorMessage, tenantId);
     incrementInvestigationCounter(state, "totalErrors");
+
+    publishInvestigationStatus(tenantId, investigationId, "error");
 
     logger.error("Investigation failed", {
       investigationId,

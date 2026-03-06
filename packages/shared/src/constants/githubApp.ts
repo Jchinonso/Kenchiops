@@ -261,6 +261,8 @@ export const GITHUB_PAGINATION = {
   DEFAULT_PER_PAGE: 100,
   /** Maximum annotations per API call (GitHub limit) */
   MAX_ANNOTATIONS_PER_CALL: 50,
+  /** Maximum pages to fetch during recursive repo pagination (100 repos/page = 1000 repos cap) */
+  MAX_REPO_PAGES: 10,
 } as const;
 
 /**

@@ -16,13 +16,12 @@ import { DetailSkeleton, DetailContent } from "@/components/AnalysisDetailConten
 
 interface AnalysisDetailProps {
   readonly analysisId: string;
-  readonly refreshKey?: number;
 }
 
 // ==================== Component ====================
 
-export const AnalysisDetail = ({ analysisId, refreshKey = 0 }: AnalysisDetailProps) => {
-  const { data: analysis, isLoading, error } = useAnalysisDetail(analysisId, refreshKey);
+export const AnalysisDetail = ({ analysisId }: AnalysisDetailProps) => {
+  const { data: analysis, isLoading, error } = useAnalysisDetail(analysisId);
 
   const repo = analysis ? extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis) : null;
   const timestamp = analysis ? formatTimestamp(analysis.createdAt) : null;

@@ -113,7 +113,6 @@ const authenticatedAuth = {
 };
 
 const defaultSSE = {
-  refreshKey: 0,
   notifications: [],
   markAllRead: vi.fn(),
   markAsRead: vi.fn(),

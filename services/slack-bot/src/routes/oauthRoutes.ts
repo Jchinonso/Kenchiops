@@ -21,6 +21,7 @@ import {
   SLACK_OAUTH_SCOPES_STRING,
   getErrorMessage,
   asyncHandler,
+  resilientFetch,
 } from "@kenchi/shared";
 import {
   oauthStateStore,
@@ -137,8 +138,13 @@ router.get("/slack/oauth/callback", async (req: Request, res: Response) => {
     tokenUrl.searchParams.set("code", validation.code);
     tokenUrl.searchParams.set("redirect_uri", redirectUri);
 
-    const tokenResponse = await fetch(tokenUrl.toString(), { method: "POST" });
-    const tokenData = (await tokenResponse.json()) as SlackOAuthResponse;
+    const tokenResponse = await resilientFetch<SlackOAuthResponse>(
+      tokenUrl.toString(),
+      "POST",
+      undefined,
+      { timeout: 10_000, maxRetries: 2 }
+    );
+    const tokenData = tokenResponse.data;
 
     if (!tokenData.ok) {
       logger.error("Failed to exchange OAuth code", { error: tokenData.error });

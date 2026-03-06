@@ -24,7 +24,7 @@ import {
   ANALYSES_PREFIX,
 } from "./constants";
 
-type RouteResolver = (pathname: string, refreshKey: number) => React.ReactNode;
+type RouteResolver = (pathname: string) => React.ReactNode;
 
 // ==================== Coming Soon ====================
 
@@ -44,51 +44,48 @@ const INCIDENT_ROUTES: ReadonlyArray<readonly [string, RouteResolver]> = [
   ["/dashboard/incidents/investigations/new", () => <NewInvestigation />],
   [
     INVESTIGATIONS_PREFIX,
-    (pathname, refreshKey) => {
+    (pathname) => {
       const investigationId = decodeURIComponent(pathname.slice(INVESTIGATIONS_PREFIX.length));
-      return <InvestigationDetail investigationId={investigationId} refreshKey={refreshKey} />;
+      return <InvestigationDetail investigationId={investigationId} />;
     },
   ],
-  [
-    "/dashboard/incidents/investigations",
-    (_, refreshKey) => <Investigations refreshKey={refreshKey} />,
-  ],
-  ["/dashboard/incidents/active", (_, refreshKey) => <ActiveIncidents refreshKey={refreshKey} />],
+  ["/dashboard/incidents/investigations", () => <Investigations />],
+  ["/dashboard/incidents/active", () => <ActiveIncidents />],
 ];
 
-export const renderIncidentPage = (pathname: string, refreshKey: number): React.ReactNode => {
+export const renderIncidentPage = (pathname: string): React.ReactNode => {
   // Exact base path → active incidents
   if (pathname === "/dashboard/incidents") {
-    return <ActiveIncidents refreshKey={refreshKey} />;
+    return <ActiveIncidents />;
   }
   const match = INCIDENT_ROUTES.find(([prefix]) => pathname.startsWith(prefix));
-  return match ? match[1](pathname, refreshKey) : null;
+  return match ? match[1](pathname) : null;
 };
 
 // ==================== CI/CD Routes ====================
 
 const CICD_ROUTES: ReadonlyArray<readonly [string, RouteResolver]> = [
-  ["/dashboard/cicd/failures", (_, refreshKey) => <CICDAnalyses refreshKey={refreshKey} />],
+  ["/dashboard/cicd/failures", () => <CICDAnalyses />],
   [
     ANALYSES_PREFIX,
-    (pathname, refreshKey) => {
+    (pathname) => {
       const analysisId = decodeURIComponent(pathname.slice(ANALYSES_PREFIX.length));
-      return <AnalysisDetail analysisId={analysisId} refreshKey={refreshKey} />;
+      return <AnalysisDetail analysisId={analysisId} />;
     },
   ],
-  ["/dashboard/cicd/analyses", (_, refreshKey) => <CICDAnalyses refreshKey={refreshKey} />],
+  ["/dashboard/cicd/analyses", () => <CICDAnalyses />],
   [
     PIPELINES_PREFIX,
-    (pathname, refreshKey) => {
+    (pathname) => {
       const repoFullName = decodeURIComponent(pathname.slice(PIPELINES_PREFIX.length));
-      return <RepositoryDetail repoFullName={repoFullName} refreshKey={refreshKey} />;
+      return <RepositoryDetail repoFullName={repoFullName} />;
     },
   ],
   ["/dashboard/cicd/pipelines", () => <CICDPipelines />],
-  ["/dashboard/cicd/webhooks", (_, refreshKey) => <WebhookActivity refreshKey={refreshKey} />],
+  ["/dashboard/cicd/webhooks", () => <WebhookActivity />],
 ];
 
-export const renderCICDPage = (pathname: string, refreshKey: number): React.ReactNode => {
+export const renderCICDPage = (pathname: string): React.ReactNode => {
   const match = CICD_ROUTES.find(([prefix]) => pathname.startsWith(prefix));
-  return match ? match[1](pathname, refreshKey) : <CICDAnalyses refreshKey={refreshKey} />;
+  return match ? match[1](pathname) : <CICDAnalyses />;
 };

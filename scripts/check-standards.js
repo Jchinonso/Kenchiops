@@ -75,7 +75,7 @@ function getStagedFiles() {
 function checkFile(filePath) {
   const violations = [];
   const isTest = filePath.includes("__tests__") || filePath.includes(".test.") || filePath.includes(".spec.");
-  const isScript = filePath.includes("/scripts/");
+  const isScript = filePath.includes("/scripts/") || filePath.startsWith("scripts/");
   const isConfig = filePath.includes("/config/") || filePath.includes("/config.ts") || filePath.includes("/core/config");
 
   try {

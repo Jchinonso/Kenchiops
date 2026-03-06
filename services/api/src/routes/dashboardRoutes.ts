@@ -17,6 +17,7 @@ import {
   DASHBOARD_PAGINATION,
   ANALYSIS_DEFAULTS,
   rateLimitByCategory,
+  coalesce,
 } from "@kenchi/shared";
 import { createGitHubInstallationAdapter } from "../adapters/githubInstallationAdapter.js";
 import { createGitLabProjectsAdapter } from "../adapters/gitlabProjectsAdapter.js";
@@ -69,7 +70,9 @@ const parseNumericParam = (value: unknown): number | null => {
 const handleGetTenantInfo = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const { context } = req;
-  const result = await dashboardService.getTenantInfo(tenantId, req.user?.userId, context);
+  const result = await coalesce(`dashboard:tenant:${tenantId}`, () =>
+    dashboardService.getTenantInfo(tenantId, req.user?.userId, context)
+  );
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
@@ -77,11 +80,9 @@ const handleGetDashboardStats = async (req: Request, res: Response): Promise<voi
   const tenantId = requireTenantId(req);
   const { context } = req;
   const source = parseStringParam(req.query.source);
-  const result = await dashboardService.getDashboardStats(
-    tenantId,
-    req.user?.userId,
-    source,
-    context
+  const coalesceSuffix = source !== null ? `:${source}` : "";
+  const result = await coalesce(`dashboard:stats:${tenantId}${coalesceSuffix}`, () =>
+    dashboardService.getDashboardStats(tenantId, req.user?.userId, source, context)
   );
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
@@ -89,7 +90,9 @@ const handleGetDashboardStats = async (req: Request, res: Response): Promise<voi
 const handleGetRepositories = async (req: Request, res: Response): Promise<void> => {
   const tenantId = requireTenantId(req);
   const { context } = req;
-  const result = await dashboardService.getRepositories(tenantId, context);
+  const result = await coalesce(`dashboard:repositories:${tenantId}`, () =>
+    dashboardService.getRepositories(tenantId, context)
+  );
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
 
@@ -273,6 +276,16 @@ const handleGetCorrelations = async (req: Request, res: Response): Promise<void>
   const result = await dashboardService.getCorrelations(tenantId, commitSha, context);
   res.status(HTTP_STATUS.OK).json({ data: result });
 };
+
+// ==================== Cache-Control for Dashboard GETs ====================
+
+/** Browser may cache private dashboard responses for 30s, reducing re-fetches on back/forward. */
+router.use((req, res, next) => {
+  if (req.method === "GET") {
+    res.setHeader("Cache-Control", "private, max-age=30");
+  }
+  next();
+});
 
 // ==================== Route Definitions ====================
 

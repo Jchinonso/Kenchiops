@@ -130,11 +130,10 @@ const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
 
 interface RepositoryDetailProps {
   readonly repoFullName: string;
-  readonly refreshKey?: number;
 }
 
-export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDetailProps) => {
-  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage(refreshKey);
+export const RepositoryDetail = ({ repoFullName }: RepositoryDetailProps) => {
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage();
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -159,13 +158,11 @@ export const RepositoryDetail = ({ repoFullName, refreshKey = 0 }: RepositoryDet
   const { data: failuresData, isLoading: failuresLoading } = useFailures({
     limit: failuresPageSize,
     offset: failuresOffset,
-    refreshKey,
     repository: repoFullName,
   });
   const { data: analysesData, isLoading: analysesLoading } = useAnalyses({
     limit: analysesPageSize,
     offset: analysesOffset,
-    refreshKey,
     repository: repoFullName,
   });
 

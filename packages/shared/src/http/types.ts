@@ -14,6 +14,7 @@ export type CircuitState = "closed" | "open" | "half-open";
 
 /** Circuit breaker state tracking. */
 export interface CircuitStateRecord {
+  /* mutable: circuit breaker state machine requires in-place transitions */
   state: CircuitState;
   failures: number;
   lastFailure: number;
@@ -46,6 +47,9 @@ export interface CircuitBreakerStatus {
 /** HTTP methods supported by the resilient client. */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+/** Response type for resilient client — controls body parsing in handleSuccess. */
+export type ResilientResponseType = "json" | "text";
+
 /** Configuration options for resilient HTTP requests. */
 export interface ResilientRequestOptions {
   /** Request timeout in milliseconds. */
@@ -62,6 +66,14 @@ export interface ResilientRequestOptions {
   readonly skipCircuitBreaker?: boolean;
   /** When true, signs the request with INTERNAL_SERVICE_SECRET (HMAC-SHA256). */
   readonly internalAuth?: boolean;
+  /**
+   * Pre-serialized request body string (bypasses JSON.stringify).
+   * Use for form-encoded bodies: `rawBody: params.toString()`.
+   * When set, `body` parameter is ignored and no Content-Type is auto-added.
+   */
+  readonly rawBody?: string;
+  /** How to parse the response body. Defaults to "json". */
+  readonly responseType?: ResilientResponseType;
 }
 
 /** Response from resilient HTTP client. */
@@ -74,6 +86,7 @@ export interface ResilientResponse<T> {
 
 /** Internal circuit state tracking for resilient client. */
 export interface ResilientCircuitState {
+  /* mutable: circuit breaker state machine requires in-place transitions */
   failures: number;
   lastFailure: number;
   isOpen: boolean;
@@ -93,6 +106,10 @@ export interface RetryContext {
   readonly startTime: number;
   /** When true, signs the request with INTERNAL_SERVICE_SECRET (HMAC-SHA256). */
   readonly internalAuth?: boolean;
+  /** Pre-serialized body string — bypasses JSON.stringify. */
+  readonly rawBody?: string;
+  /** How to parse the response body. Defaults to "json". */
+  readonly responseType?: ResilientResponseType;
 }
 
 // ==================== Validation Types ====================

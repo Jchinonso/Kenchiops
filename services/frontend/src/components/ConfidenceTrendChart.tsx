@@ -47,15 +47,9 @@ const formatDate = (dateStr: string): string => {
 
 const formatPercent = (value: number): string => `${Math.round(value * 100)}%`;
 
-// ==================== Props ====================
-
-interface ConfidenceTrendChartProps {
-  readonly refreshKey?: number;
-}
-
 // ==================== Component ====================
 
-export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartProps) => {
+export const ConfidenceTrendChart = () => {
   const [bucket, setBucket] = useState<"day" | "week">("day");
   const [rangeConfig, setRangeConfig] = useState(() => ({
     rangeDays: 30,
@@ -72,7 +66,7 @@ export const ConfidenceTrendChart = ({ refreshKey = 0 }: ConfidenceTrendChartPro
     });
   }, []);
 
-  const { data, isLoading } = useConfidenceTrend(bucket, since, refreshKey);
+  const { data, isLoading } = useConfidenceTrend(bucket, since);
 
   const chartData = useMemo(
     () =>

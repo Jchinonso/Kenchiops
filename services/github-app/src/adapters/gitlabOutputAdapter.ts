@@ -82,6 +82,7 @@ const postMRNote = async (
 ): Promise<boolean> => {
   const encodedPath = encodeURIComponent(projectPath);
   const url = `${baseUrl}/api/v4/projects/${encodedPath}/merge_requests/${mrIid}/notes`;
+  const startTime = Date.now();
 
   try {
     const response = await resilientPost<unknown>(
@@ -107,6 +108,7 @@ const postMRNote = async (
     logger.error("Failed to post MR note", {
       provider: "gitlab",
       operation: "postMRNote",
+      durationMs: Date.now() - startTime,
       mrIid,
       projectPath,
       error: getErrorMessage(error),

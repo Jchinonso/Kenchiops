@@ -156,9 +156,10 @@ const configureServerTimeouts = (server: import("http").Server): void => {
  */
 const startServer = async (): Promise<void> => {
   // Initialize database
+  // config.DB_POOL_SIZE allows operators to override per-service defaults via env var
   initDatabase({
     connectionString: appConfig.databaseUrl,
-    maxConnections: TRIAGE_DB_MAX_CONNECTIONS,
+    maxConnections: config.DB_POOL_SIZE ?? TRIAGE_DB_MAX_CONNECTIONS,
   });
   logger.info("Database initialized for incident triage");
 

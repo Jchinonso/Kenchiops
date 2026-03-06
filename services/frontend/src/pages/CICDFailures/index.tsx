@@ -50,7 +50,7 @@ import type { CICDFailuresProps } from "./types";
 
 // ==================== Main Component ====================
 
-export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
+export const CICDFailures = (_props: CICDFailuresProps = {}) => {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? undefined;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -99,7 +99,6 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
   const { data, isLoading, error, refetch } = useFailures({
     limit: pageSize,
     offset,
-    refreshKey,
     repository: filters.repository || undefined,
     severity: filters.severity || undefined,
     since,
@@ -135,7 +134,7 @@ export const CICDFailures = ({ refreshKey = 0 }: CICDFailuresProps) => {
   }, [items, sort]);
 
   const eventIds = useMemo(() => items.map((item) => item.id), [items]);
-  const { data: analysisStatus } = useAnalysisStatusByEvents(eventIds, refreshKey);
+  const { data: analysisStatus } = useAnalysisStatusByEvents(eventIds);
   const hasItems = Boolean(items.length);
   const hasActiveFilters = Boolean(filters.repository || filters.severity || filters.timeRange);
   const currentPage = Math.floor(offset / pageSize) + 1;

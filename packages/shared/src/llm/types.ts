@@ -9,6 +9,7 @@
 
 import type { Event, Evidence, LLMAnalysisResult } from "../core/types.js";
 import type { EmbeddingTierName } from "../constants/index.js";
+import type { RAGSearchResult } from "../rag/types.js";
 
 // ==================== Analysis Provider ====================
 
@@ -23,12 +24,14 @@ export interface LLMAnalysisProvider {
    * @param event - The incident event to analyze
    * @param evidence - Collected evidence about the incident
    * @param tenantId - Optional tenant ID for per-tenant circuit breaker isolation
+   * @param ragContext - Optional RAG search results with historical context
    * @returns Structured analysis result
    */
   readonly analyzeIncident: (
     event: Event,
     evidence: Evidence,
-    tenantId?: string
+    tenantId?: string,
+    ragContext?: RAGSearchResult
   ) => Promise<LLMAnalysisResult>;
 
   /**

@@ -42,16 +42,15 @@ import { RemoveMemberDialog } from "./RemoveMemberDialog";
 export const TeamManagement = () => {
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
-  const [refreshKey, setRefreshKey] = useState(0);
-  const { data: members, isLoading, error } = useTeamMembers(refreshKey);
+  const { data: members, isLoading, error } = useTeamMembers();
   const { changeRole, isLoading: isChangingRole, error: changeRoleError } = useChangeRole();
   const { removeMember, isLoading: isRemoving, error: removeError } = useRemoveMember();
-  const { data: usage } = useSubscriptionUsage(refreshKey);
+  const { data: usage } = useSubscriptionUsage();
 
   // Invitation hooks
   const canInvite = hasPermission("members.invite");
   const canRevoke = hasPermission("members.remove");
-  const { data: invitations } = useInvitations(refreshKey, canInvite);
+  const { data: invitations } = useInvitations(canInvite);
   const {
     createInvitation,
     isLoading: isCreatingInvitation,
@@ -97,7 +96,6 @@ export const TeamManagement = () => {
 
     if (result) {
       toast.success(`${roleDialogTarget.displayName}'s role changed to ${titleCase(selectedRole)}`);
-      setRefreshKey((prev) => prev + 1);
       handleCloseRoleDialog();
     } else {
       toast.error(changeRoleError ?? "Failed to change role");
@@ -121,7 +119,6 @@ export const TeamManagement = () => {
 
     if (success) {
       toast.success(`${removeDialogTarget.displayName} has been removed from the organization`);
-      setRefreshKey((prev) => prev + 1);
       handleCloseRemoveDialog();
     } else {
       toast.error(removeError ?? "Failed to remove member");
@@ -157,7 +154,6 @@ export const TeamManagement = () => {
 
     if (result) {
       toast.success(`Invitation sent to ${trimmedEmail}`);
-      setRefreshKey((prev) => prev + 1);
       handleCloseInviteDialog();
     } else {
       toast.error(createError ?? "Failed to send invitation");
@@ -182,7 +178,6 @@ export const TeamManagement = () => {
 
     if (success) {
       toast.success(`Invitation to ${revokeTarget.email} has been revoked`);
-      setRefreshKey((prev) => prev + 1);
       handleCloseRevokeDialog();
     } else {
       toast.error(revokeError ?? "Failed to revoke invitation");

@@ -102,7 +102,7 @@ export const setupSlackHandlers = (app: SlackApp): void => {
         : undefined;
     const teamId = boltContext?.teamId ?? payloadTeam ?? "unknown";
 
-    const sourceRateResult = checkWebhookSourceRateLimit(String(teamId), "slack");
+    const sourceRateResult = await checkWebhookSourceRateLimit(String(teamId), "slack");
     if (!sourceRateResult.allowed) {
       logger.warn("Slack event source rate limit exceeded", {
         provider: "slack",

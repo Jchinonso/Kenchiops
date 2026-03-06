@@ -231,7 +231,7 @@ describe("Slack Bot Service Index", () => {
         TOO_LARGE: "File too large",
         INGESTION_FAILED: "Failed to process file",
       },
-      checkWebhookSourceRateLimit: jest.fn(() => ({ allowed: true, remaining: 59 })),
+      checkWebhookSourceRateLimit: jest.fn(() => Promise.resolve({ allowed: true, remaining: 59 })),
     }));
 
     // Mock config/appConfig

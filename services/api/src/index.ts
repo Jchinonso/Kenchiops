@@ -9,6 +9,7 @@
  */
 
 import express from "express";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import {
@@ -518,6 +519,19 @@ const createApp = (): express.Express => {
     })
   );
 
+  // Response compression — exclude SSE streams (they handle their own framing)
+  app.use(
+    compression({
+      threshold: 1024,
+      filter: (req, res) => {
+        if (req.headers.accept === "text/event-stream") {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+    })
+  );
+
   // Parse cookies for auth token extraction
   app.use(cookieParser());
 
@@ -598,9 +612,10 @@ const startServer = async (): Promise<void> => {
   validateAuthConfig();
 
   // Initialize database for RAG operations
+  // config.DB_POOL_SIZE allows operators to override per-service defaults via env var
   initDatabase({
     connectionString: appConfig.databaseUrl,
-    maxConnections: API_DB_MAX_CONNECTIONS,
+    maxConnections: config.DB_POOL_SIZE ?? API_DB_MAX_CONNECTIONS,
   });
   logger.info("Database initialized for RAG operations");
 

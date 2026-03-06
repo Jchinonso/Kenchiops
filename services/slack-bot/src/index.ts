@@ -63,9 +63,10 @@ const createSlackApp = (appConfig: ReturnType<typeof loadAppConfig>): SlackApp =
  */
 const initializeDatabase = (): void => {
   try {
+    // config.DB_POOL_SIZE allows operators to override per-service defaults via env var
     initDatabase({
       connectionString: config.DATABASE_URL,
-      maxConnections: SLACK_BOT_DB_CONFIG.MAX_CONNECTIONS,
+      maxConnections: config.DB_POOL_SIZE ?? SLACK_BOT_DB_CONFIG.MAX_CONNECTIONS,
       idleTimeoutMs: SLACK_BOT_DB_CONFIG.IDLE_TIMEOUT_MS,
     });
     logger.info("Database connection initialized for multi-tenant support");

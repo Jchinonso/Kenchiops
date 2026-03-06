@@ -28,6 +28,7 @@ jest.mock("@kenchi/shared", () => ({
     error.name = "ExternalServiceError";
     return error;
   }),
+  resilientGet: jest.fn(),
   ingestKnowledgeDoc: jest.fn(),
   SLACK_ACTION_IDS: {
     DOC_TITLE: "doc_title_input",
@@ -107,14 +108,23 @@ jest.mock("../handlers/documentModalBuilder.js", () => ({
   })),
 }));
 
-// Mock global fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch as unknown as typeof fetch;
+// Import resilientGet after mocks to get the mocked version
+import { resilientGet } from "@kenchi/shared";
+
+const mockResilientGet = resilientGet as jest.MockedFunction<typeof resilientGet>;
+
+// Helper to wrap data in resilientGet response shape
+const createResilientResponse = <T>(data: T) => ({
+  data,
+  status: 200,
+  retryCount: 0,
+  duration: 100,
+});
 
 describe("Document Ingestion Handler", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFetch.mockReset();
+    mockResilientGet.mockReset();
   });
 
   // Create mock command
@@ -469,10 +479,9 @@ describe("Document Ingestion Handler", () => {
         chunksCreated: 5,
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: () => Promise.resolve("# Troubleshooting Guide\n\nThis is the content."),
-      });
+      mockResilientGet.mockResolvedValue(
+        createResilientResponse("# Troubleshooting Guide\n\nThis is the content.")
+      );
 
       const message = createMockMessage({
         text: "@kenchi add",
@@ -489,7 +498,7 @@ describe("Document Ingestion Handler", () => {
 
       await handleFileUploadIngestion(message, "xoxb-token", mockSay);
 
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockResilientGet).toHaveBeenCalledWith(
         "https://files.slack.com/files-pri/...",
         expect.objectContaining({
           headers: { Authorization: "Bearer xoxb-token" },
@@ -510,10 +519,7 @@ describe("Document Ingestion Handler", () => {
         chunksCreated: 2,
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: () => Promise.resolve("Runbook content"),
-      });
+      mockResilientGet.mockResolvedValue(createResilientResponse("Runbook content"));
 
       const testCases = [
         { filename: "runbook-deploy.md", expectedType: "runbook" },
@@ -523,10 +529,7 @@ describe("Document Ingestion Handler", () => {
 
       for (const { filename, expectedType } of testCases) {
         jest.clearAllMocks();
-        mockFetch.mockResolvedValue({
-          ok: true,
-          text: () => Promise.resolve("Content"),
-        });
+        mockResilientGet.mockResolvedValue(createResilientResponse("Content"));
 
         const message = createMockMessage({
           text: "@kenchi add",
@@ -556,10 +559,7 @@ describe("Document Ingestion Handler", () => {
         chunksCreated: 1,
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: () => Promise.resolve("Content"),
-      });
+      mockResilientGet.mockResolvedValue(createResilientResponse("Content"));
 
       const message = createMockMessage({
         text: "@kenchi add",
@@ -594,10 +594,7 @@ describe("Document Ingestion Handler", () => {
         chunksCreated: 2,
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: () => Promise.resolve("Content"),
-      });
+      mockResilientGet.mockResolvedValue(createResilientResponse("Content"));
 
       const message = createMockMessage({
         text: "@kenchi add",
@@ -624,10 +621,7 @@ describe("Document Ingestion Handler", () => {
         .mockResolvedValueOnce({ parentId: "doc-1", chunksCreated: 1 })
         .mockRejectedValueOnce(new Error("Ingestion failed"));
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: () => Promise.resolve("Content"),
-      });
+      mockResilientGet.mockResolvedValue(createResilientResponse("Content"));
 
       const message = createMockMessage({
         text: "@kenchi add",
@@ -647,10 +641,7 @@ describe("Document Ingestion Handler", () => {
       const { isDocIngestionRequest } = jest.requireMock("@kenchi/shared") as any;
       isDocIngestionRequest.mockReturnValue(true);
 
-      mockFetch.mockResolvedValue({
-        ok: false,
-        statusText: "Not Found",
-      });
+      mockResilientGet.mockRejectedValue(new Error("HTTP 404: Not Found"));
 
       const message = createMockMessage({
         text: "@kenchi add",
@@ -675,10 +666,7 @@ describe("Document Ingestion Handler", () => {
         chunksCreated: 1,
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: () => Promise.resolve("Content"),
-      });
+      mockResilientGet.mockResolvedValue(createResilientResponse("Content"));
 
       const message = createMockMessage({
         text: "@kenchi add",
@@ -805,10 +793,7 @@ describe("Document Ingestion Handler", () => {
         chunksCreated: 1,
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: () => Promise.resolve("Content"),
-      });
+      mockResilientGet.mockResolvedValue(createResilientResponse("Content"));
 
       const message: MessageWithFiles = {
         text: "@kenchi add",
@@ -845,10 +830,7 @@ describe("Document Ingestion Handler", () => {
         chunksCreated: 1,
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: () => Promise.resolve("Content"),
-      });
+      mockResilientGet.mockResolvedValue(createResilientResponse("Content"));
 
       const message: MessageWithFiles = {
         text: "@kenchi add",

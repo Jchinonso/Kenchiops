@@ -33,6 +33,8 @@ export const DASHBOARD_EVENT_TYPES = {
   NEW_INCIDENT: "new_incident",
   /** Incident triage pipeline completed */
   INCIDENT_TRIAGED: "incident_triaged",
+  /** Investigation status changed (phase transition, completion, or error) */
+  INVESTIGATION_STATUS_CHANGED: "investigation_status_changed",
   /** User's organization list changed (new install, removal, etc.) */
   ORGANIZATION_UPDATED: "organization_updated",
   /** SSE keepalive heartbeat */

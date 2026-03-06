@@ -15,6 +15,9 @@ import {
   ExternalServiceError,
   getErrorMessage,
   GITHUB_PAGINATION,
+  cacheGetOrSet,
+  CACHE_TTL,
+  githubCacheKeys,
   type RequestContext,
 } from "@kenchi/shared";
 import type {
@@ -52,6 +55,9 @@ export const createGitHubInstallationAdapter = (): GitHubInstallationPort => {
         privateKey: parsePrivateKey(config.GITHUB_APP_PRIVATE_KEY),
         installationId,
       },
+      request: {
+        timeout: 30_000, // 30s — prevents hung connections from blocking workers
+      },
     });
 
     octokitCache.set(installationId, octokit);
@@ -63,51 +69,79 @@ export const createGitHubInstallationAdapter = (): GitHubInstallationPort => {
       installationId: number,
       context: RequestContext
     ): Promise<readonly InstallationRepository[]> => {
-      const startTime = Date.now();
+      // Distinct cache key from the github-app service: this adapter caches
+      // InstallationRepository (isPrivate), while github-app caches RepositoryInfo (private).
+      const cacheKey = githubCacheKeys.installationReposApi(installationId);
 
-      try {
-        const octokit = getOctokit(installationId);
-        const { data } = await octokit.rest.apps.listReposAccessibleToInstallation({
-          per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
-        });
+      return cacheGetOrSet(
+        cacheKey,
+        async () => {
+          const startTime = Date.now();
 
-        const durationMs = Date.now() - startTime;
+          try {
+            const octokit = getOctokit(installationId);
+            const allRepos: InstallationRepository[] = [];
+            // let: page counter for paginated API traversal
+            let page = 1; // let: incremented in pagination loop
 
-        logger.info("GitHub API call completed", {
-          provider: "github",
-          operation: "listInstallationRepos",
-          durationMs,
-          statusCode: 200,
-          repoCount: data.repositories.length,
-          ...context,
-        });
+            while (page <= GITHUB_PAGINATION.MAX_REPO_PAGES) {
+              const { data } = await octokit.rest.apps.listReposAccessibleToInstallation({
+                per_page: GITHUB_PAGINATION.DEFAULT_PER_PAGE,
+                page,
+              });
 
-        return Object.freeze(
-          data.repositories.map((repo) => ({
-            id: repo.id,
-            name: repo.name,
-            fullName: repo.full_name,
-            isPrivate: repo.private,
-            defaultBranch: repo.default_branch ?? "main",
-          }))
-        );
-      } catch (error) {
-        const durationMs = Date.now() - startTime;
+              const mapped = data.repositories.map((repo) => ({
+                id: repo.id,
+                name: repo.name,
+                fullName: repo.full_name,
+                isPrivate: repo.private,
+                defaultBranch: repo.default_branch ?? "main",
+              }));
 
-        logger.error("GitHub API call failed", {
-          provider: "github",
-          operation: "listInstallationRepos",
-          durationMs,
-          installationId,
-          error: getErrorMessage(error),
-          ...context,
-        });
+              allRepos.push(...mapped);
 
-        throw new ExternalServiceError("github", "Failed to list installation repositories", {
-          retryable: true,
-          metadata: { installationId, operation: "listInstallationRepos" },
-        });
-      }
+              if (
+                mapped.length < GITHUB_PAGINATION.DEFAULT_PER_PAGE ||
+                allRepos.length >= data.total_count
+              ) {
+                break;
+              }
+              page += 1;
+            }
+
+            const durationMs = Date.now() - startTime;
+
+            logger.info("GitHub API call completed", {
+              provider: "github",
+              operation: "listInstallationRepos",
+              durationMs,
+              statusCode: 200,
+              repoCount: allRepos.length,
+              pages: page,
+              ...context,
+            });
+
+            return Object.freeze(allRepos);
+          } catch (error) {
+            const durationMs = Date.now() - startTime;
+
+            logger.error("GitHub API call failed", {
+              provider: "github",
+              operation: "listInstallationRepos",
+              durationMs,
+              installationId,
+              error: getErrorMessage(error),
+              ...context,
+            });
+
+            throw new ExternalServiceError("github", "Failed to list installation repositories", {
+              retryable: true,
+              metadata: { installationId, operation: "listInstallationRepos" },
+            });
+          }
+        },
+        { ttlSeconds: CACHE_TTL.MEDIUM }
+      );
     },
   };
 };

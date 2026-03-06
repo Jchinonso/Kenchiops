@@ -18,7 +18,8 @@ import {
   createLogger,
   ExternalServiceError,
   ValidationError,
-  redactSecrets,
+  resilientGet,
+  resilientPost,
   type OAuthTokenResponse,
   type OAuthProviderProfile,
   type RequestContext,
@@ -81,13 +82,6 @@ const rejectSelfHosted = (instanceUrl: string | null): void => {
 };
 
 /**
- * Classifies whether a fetch error is retryable based on status code.
- * Network errors (no status) are treated as retryable.
- */
-const isRetryableStatus = (status: number | undefined): boolean =>
-  status === undefined || status >= 500 || status === 429;
-
-/**
  * Fetch the user profile from Azure DevOps.
  * Returns the raw vendor profile, used internally by both
  * getUserProfile and getUserOrganizations.
@@ -95,46 +89,27 @@ const isRetryableStatus = (status: number | undefined): boolean =>
 const fetchProfile = async (
   accessToken: string,
   context: RequestContext
-): Promise<{ readonly profile: AzureDevOpsUserProfile; readonly durationMs: number }> => {
-  const startTime = Date.now();
+): Promise<AzureDevOpsUserProfile> => {
   const profileUrl = `${OAUTH_PROVIDER_URLS.azure_devops.userProfile}?api-version=6.0`;
 
-  const response = await fetch(profileUrl, {
+  const response = await resilientGet<AzureDevOpsUserProfile>(profileUrl, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
     },
-    signal: AbortSignal.timeout(AZURE_DEVOPS_TIMEOUT_MS),
+    timeout: AZURE_DEVOPS_TIMEOUT_MS,
+    maxRetries: 2,
   });
-
-  const durationMs = Date.now() - startTime;
-
-  if (!response.ok) {
-    throw new ExternalServiceError(
-      "azure_devops",
-      `User profile fetch failed with status ${String(response.status)}`,
-      {
-        metadata: {
-          operation: "fetchProfile",
-          statusCode: response.status,
-          durationMs,
-        },
-        retryable: isRetryableStatus(response.status),
-      }
-    );
-  }
-
-  const profile = (await response.json()) as AzureDevOpsUserProfile;
 
   logger.info("Azure DevOps user profile fetched", {
     provider: "azure_devops",
     operation: "fetchProfile",
-    durationMs,
+    durationMs: response.duration,
     statusCode: response.status,
     ...context,
   });
 
-  return { profile, durationMs };
+  return response.data;
 };
 
 // ==================== OAuth Port Implementation ====================
@@ -152,94 +127,61 @@ const exchangeCode = async (
   rejectSelfHosted(instanceUrl);
   const { clientId: _clientId, clientSecret } = ensureClientCredentials();
   const callbackUrl = `${config.OAUTH_CALLBACK_BASE_URL}/auth/azure_devops/callback`;
-  const startTime = Date.now();
 
-  try {
-    const response = await fetch(OAUTH_PROVIDER_URLS.azure_devops.token, {
-      method: "POST",
+  const params = new URLSearchParams({
+    client_assertion_type: AZURE_DEVOPS_ASSERTION_TYPE,
+    client_assertion: clientSecret,
+    grant_type: AZURE_DEVOPS_GRANT_TYPE,
+    assertion: code,
+    redirect_uri: callbackUrl,
+  });
+
+  const response = await resilientPost<AzureDevOpsTokenResponse>(
+    OAUTH_PROVIDER_URLS.azure_devops.token,
+    undefined,
+    {
+      rawBody: params.toString(),
       headers: {
         Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({
-        client_assertion_type: AZURE_DEVOPS_ASSERTION_TYPE,
-        client_assertion: clientSecret,
-        grant_type: AZURE_DEVOPS_GRANT_TYPE,
-        assertion: code,
-        redirect_uri: callbackUrl,
-      }).toString(),
-      signal: AbortSignal.timeout(AZURE_DEVOPS_TIMEOUT_MS),
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "azure_devops",
-        `Azure DevOps exchange failed with status ${String(response.status)}`,
-        {
-          metadata: {
-            operation: "exchangeCode",
-            statusCode: response.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
+      timeout: AZURE_DEVOPS_TIMEOUT_MS,
+      maxRetries: 2,
     }
+  );
 
-    const data = (await response.json()) as AzureDevOpsTokenResponse;
+  const data = response.data;
 
-    if (data.error) {
-      throw new ExternalServiceError(
-        "azure_devops",
-        `Azure DevOps exchange error: ${data.error_description ?? data.error}`,
-        {
-          metadata: {
-            operation: "exchangeCode",
-            errorCode: data.error,
-            durationMs,
-          },
-          retryable: false,
-        }
-      );
-    }
-
-    logger.info("Azure DevOps code exchange completed", {
-      provider: "azure_devops",
-      operation: "exchangeCode",
-      durationMs,
-      statusCode: response.status,
-      ...context,
-    });
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresIn: data.expires_in,
-      scope: OAUTH_PROVIDER_URLS.azure_devops.scopes.join(" "),
-      tokenType: data.token_type,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError || error instanceof ValidationError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Azure DevOps code exchange failed", {
-      provider: "azure_devops",
-      operation: "exchangeCode",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("azure_devops", "Failed to exchange authorization code", {
-      metadata: { operation: "exchangeCode", durationMs },
-      retryable: true,
-    });
+  if (data.error) {
+    throw new ExternalServiceError(
+      "azure_devops",
+      `Azure DevOps exchange error: ${data.error_description ?? data.error}`,
+      {
+        metadata: {
+          operation: "exchangeCode",
+          errorCode: data.error,
+          durationMs: response.duration,
+        },
+        retryable: false,
+      }
+    );
   }
+
+  logger.info("Azure DevOps code exchange completed", {
+    provider: "azure_devops",
+    operation: "exchangeCode",
+    durationMs: response.duration,
+    statusCode: response.status,
+    ...context,
+  });
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresIn: data.expires_in,
+    scope: OAUTH_PROVIDER_URLS.azure_devops.scopes.join(" "),
+    tokenType: data.token_type,
+  };
 };
 
 /**
@@ -252,45 +194,19 @@ const getUserProfile = async (
   context: RequestContext
 ): Promise<OAuthProviderProfile> => {
   rejectSelfHosted(instanceUrl);
-  const startTime = Date.now();
 
-  try {
-    const { profile } = await fetchProfile(accessToken, context);
+  const profile = await fetchProfile(accessToken, context);
 
-    return {
-      providerUserId: profile.id,
-      username: profile.publicAlias,
-      email: profile.emailAddress,
-      // Azure DevOps emails come from Azure AD/Microsoft accounts (verified)
-      emailVerified: profile.emailAddress !== null,
-      displayName: profile.displayName ?? profile.publicAlias,
-      avatarUrl: null,
-      rawProfile: profile as unknown as Record<string, unknown>,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError || error instanceof ValidationError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Azure DevOps user profile fetch failed", {
-      provider: "azure_devops",
-      operation: "getUserProfile",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError(
-      "azure_devops",
-      "Failed to fetch user profile from Azure DevOps",
-      {
-        metadata: { operation: "getUserProfile", durationMs },
-        retryable: true,
-      }
-    );
-  }
+  return {
+    providerUserId: profile.id,
+    username: profile.publicAlias,
+    email: profile.emailAddress,
+    // Azure DevOps emails come from Azure AD/Microsoft accounts (verified)
+    emailVerified: profile.emailAddress !== null,
+    displayName: profile.displayName ?? profile.publicAlias,
+    avatarUrl: null,
+    rawProfile: profile as unknown as Record<string, unknown>,
+  };
 };
 
 /**
@@ -303,74 +219,30 @@ const getUserOrganizations = async (
   context: RequestContext
 ): Promise<readonly OAuthOrganization[]> => {
   rejectSelfHosted(instanceUrl);
-  const startTime = Date.now();
 
-  try {
-    const { profile } = await fetchProfile(accessToken, context);
+  const profile = await fetchProfile(accessToken, context);
 
-    const accountsUrl = `${OAUTH_PROVIDER_URLS.azure_devops.userAccounts}?memberId=${profile.id}&api-version=6.0`;
+  const accountsUrl = `${OAUTH_PROVIDER_URLS.azure_devops.userAccounts}?memberId=${profile.id}&api-version=6.0`;
 
-    const response = await fetch(accountsUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(AZURE_DEVOPS_TIMEOUT_MS),
-    });
+  const response = await resilientGet<AzureDevOpsAccountsResponse>(accountsUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+    timeout: AZURE_DEVOPS_TIMEOUT_MS,
+    maxRetries: 2,
+  });
 
-    const durationMs = Date.now() - startTime;
+  logger.info("Azure DevOps user accounts fetched", {
+    provider: "azure_devops",
+    operation: "getUserOrganizations",
+    durationMs: response.duration,
+    statusCode: response.status,
+    orgCount: response.data.value.length,
+    ...context,
+  });
 
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "azure_devops",
-        `User accounts fetch failed with status ${String(response.status)}`,
-        {
-          metadata: {
-            operation: "getUserOrganizations",
-            statusCode: response.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
-    }
-
-    const accounts = (await response.json()) as AzureDevOpsAccountsResponse;
-
-    logger.info("Azure DevOps user accounts fetched", {
-      provider: "azure_devops",
-      operation: "getUserOrganizations",
-      durationMs,
-      statusCode: response.status,
-      orgCount: accounts.value.length,
-      ...context,
-    });
-
-    return accounts.value.map((account) => ({ login: account.accountName }));
-  } catch (error) {
-    if (error instanceof ExternalServiceError || error instanceof ValidationError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Azure DevOps user accounts fetch failed", {
-      provider: "azure_devops",
-      operation: "getUserOrganizations",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError(
-      "azure_devops",
-      "Failed to fetch user accounts from Azure DevOps",
-      {
-        metadata: { operation: "getUserOrganizations", durationMs },
-        retryable: true,
-      }
-    );
-  }
+  return response.data.value.map((account) => ({ login: account.accountName }));
 };
 
 // ==================== Export ====================

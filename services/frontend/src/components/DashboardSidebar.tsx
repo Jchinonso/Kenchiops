@@ -6,12 +6,16 @@
  * for Overview, Analytics, Integrations, and Settings.
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
+import { useAuth } from "@/hooks/useAuth";
+import { fetchQuery } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -180,6 +184,127 @@ const NAV_ENTRIES: readonly NavEntry[] = [
   },
 ];
 
+// ==================== Prefetch Logic ====================
+
+const PREFETCH_STALE_TIME = 30_000;
+
+/**
+ * Returns a stable callback that prefetches data for a given route on hover.
+ * Uses the same query keys and fetch functions as the consuming page hooks
+ * so TanStack Query deduplicates correctly.
+ */
+const usePrefetchRoute = (): ((href: string) => void) => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? "";
+
+  return useCallback(
+    (href: string) => {
+      switch (href) {
+        case "/dashboard": {
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.dashboard.stats(),
+            queryFn: () => fetchQuery("/api/v1/dashboard/stats"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.dashboard.confidence.distribution(),
+            queryFn: () =>
+              fetchQuery("/api/v1/dashboard/stats/confidence-distribution"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.dashboard.analyses.list({
+              limit: 5,
+              offset: 0,
+            }),
+            queryFn: () =>
+              fetchQuery("/api/v1/dashboard/analyses?limit=5&offset=0"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.dashboard.failures.list({
+              limit: 5,
+              offset: 0,
+            }),
+            queryFn: () =>
+              fetchQuery("/api/v1/dashboard/failures?limit=5&offset=0"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          break;
+        }
+
+        case "/dashboard/cicd/analyses": {
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.dashboard.analyses.list({
+              limit: 20,
+              offset: 0,
+            }),
+            queryFn: () =>
+              fetchQuery("/api/v1/dashboard/analyses?limit=20&offset=0"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.dashboard.analyses.countsByRepo(),
+            queryFn: () =>
+              fetchQuery("/api/v1/dashboard/stats/analyses-by-repo"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          break;
+        }
+
+        case "/dashboard/cicd/webhooks": {
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.dashboard.webhookActivity({
+              limit: 20,
+              offset: 0,
+            }),
+            queryFn: () =>
+              fetchQuery(
+                "/api/v1/dashboard/webhook-activity?limit=20&offset=0"
+              ),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          break;
+        }
+
+        case "/dashboard/incidents/active": {
+          if (!tenantId) break;
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.incidents.list({
+              tenantId,
+              limit: 20,
+              offset: 0,
+            }),
+            queryFn: () =>
+              fetchQuery("/api/v1/incidents?limit=20&offset=0"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          break;
+        }
+
+        case "/dashboard/incidents/investigations": {
+          if (!tenantId) break;
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.investigations.list({
+              limit: 20,
+              offset: 0,
+            }),
+            queryFn: () =>
+              fetchQuery("/api/v1/investigations?limit=20&offset=0"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          break;
+        }
+
+        default:
+          break;
+      }
+    },
+    [queryClient, tenantId]
+  );
+};
+
 // ==================== Sub-components ====================
 
 interface LeafItemProps {
@@ -190,6 +315,7 @@ interface LeafItemProps {
   readonly indented?: boolean;
   readonly comingSoon?: boolean;
   readonly onClick?: () => void;
+  readonly onPrefetch?: () => void;
 }
 
 const SidebarLeafItem = ({
@@ -200,12 +326,14 @@ const SidebarLeafItem = ({
   indented,
   comingSoon,
   onClick,
+  onPrefetch,
 }: LeafItemProps) => (
   <Tooltip>
     <TooltipTrigger asChild>
       <Link
         to={href}
         onClick={onClick}
+        onPointerEnter={onPrefetch}
         aria-current={active ? "page" : undefined}
         className={cn(
           "flex items-center gap-3 rounded-lg transition-all duration-[250ms] text-sm",
@@ -242,9 +370,10 @@ interface NavGroupProps {
   readonly isOpen: boolean;
   readonly onToggle: () => void;
   readonly onItemClick?: () => void;
+  readonly onPrefetch?: (href: string) => void;
 }
 
-const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: NavGroupProps) => {
+const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick, onPrefetch }: NavGroupProps) => {
   const hasActiveChild = group.children.some((child) => pathname.startsWith(child.href));
   const submenuId = `submenu-${group.label.toLowerCase().replace(/\//g, "-")}`;
   const firstChildHref = group.children[0]?.href ?? group.basePath;
@@ -308,6 +437,11 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick }: Nav
                 active={pathname.startsWith(child.href)}
                 indented
                 onClick={onItemClick}
+                onPrefetch={
+                  !child.comingSoon && onPrefetch
+                    ? () => onPrefetch(child.href)
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -360,6 +494,8 @@ export const DashboardSidebar = ({
       setOpenGroups(new Set([matchingGroup.label]));
     }
   }
+
+  const prefetchRoute = usePrefetchRoute();
 
   const toggleGroup = (label: string) => {
     setOpenGroups((prev) => {
@@ -435,6 +571,7 @@ export const DashboardSidebar = ({
               isOpen={openGroups.has(entry.label)}
               onToggle={() => toggleGroup(entry.label)}
               onItemClick={onClose}
+              onPrefetch={!entry.comingSoon ? prefetchRoute : undefined}
             />
           ) : (
             <SidebarLeafItem
@@ -442,6 +579,11 @@ export const DashboardSidebar = ({
               {...entry}
               active={isLeafActive(entry, pathname)}
               onClick={onClose}
+              onPrefetch={
+                !entry.comingSoon
+                  ? () => prefetchRoute(entry.href)
+                  : undefined
+              }
             />
           )
         )}

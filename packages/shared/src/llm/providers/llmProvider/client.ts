@@ -138,12 +138,15 @@ export class LLMClient implements LLMAnalysisProvider {
    *
    * @param event - The incident event to analyze
    * @param evidence - Collected evidence about the incident
+   * @param tenantId - Optional tenant ID for per-tenant circuit breaker isolation
+   * @param ragContext - Optional RAG search results with historical context
    * @returns Structured analysis result with confidence score
    */
   async analyzeIncident(
     event: Event,
     evidence: Evidence,
-    tenantId?: string
+    tenantId?: string,
+    ragContext?: import("../../../rag/types.js").RAGSearchResult
   ): Promise<LLMAnalysisResult> {
     const startTime = Date.now();
 
@@ -151,7 +154,7 @@ export class LLMClient implements LLMAnalysisProvider {
       const originalLogCount = evidence.logs?.length ?? 0;
       const truncatedEvidence = manageTokenBudget(event, evidence, LLM_CONSTANTS.MAX_PROMPT_TOKENS);
       const truncatedLogCount = truncatedEvidence.logs?.length ?? 0;
-      const prompt = buildAnalysisPrompt(event, truncatedEvidence);
+      const prompt = buildAnalysisPrompt(event, truncatedEvidence, ragContext);
 
       // Critical diagnostic: shows if truncation is causing test failure loss
       logger.info("LLM prompt prepared", {
@@ -162,6 +165,8 @@ export class LLMClient implements LLMAnalysisProvider {
         promptLength: prompt.length,
         estimatedTokens: Math.ceil(prompt.length / 4),
         maxTokens: LLM_CONSTANTS.MAX_PROMPT_TOKENS,
+        ragKnowledgeDocs: ragContext?.knowledgeDocs.length ?? 0,
+        ragDiffChunks: ragContext?.diffChunks.length ?? 0,
       });
 
       // Retry on both API errors and parse failures (truncated/malformed responses)

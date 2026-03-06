@@ -53,10 +53,10 @@ const createEvent = (overrides = {}) => ({
   ...overrides,
 });
 
-const renderFailures = (refreshKey = 0) =>
+const renderFailures = () =>
   render(
     <MemoryRouter>
-      <CICDFailures refreshKey={refreshKey} />
+      <CICDFailures />
     </MemoryRouter>
   );
 

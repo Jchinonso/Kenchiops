@@ -5,6 +5,7 @@
  * (High, Medium, Low) using recharts + shadcn ChartContainer.
  */
 
+import { useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from "recharts";
 import {
   ChartContainer,
@@ -39,25 +40,21 @@ const LEVEL_LABELS: Readonly<Record<string, string>> = {
 
 const ALL_LEVELS = ["high", "medium", "low"] as const;
 
-// ==================== Props ====================
-
-interface ConfidenceChartProps {
-  readonly refreshKey?: number;
-}
-
 // ==================== Component ====================
 
-export const ConfidenceChart = ({ refreshKey = 0 }: ConfidenceChartProps) => {
-  const { data, isLoading } = useConfidenceDistribution(refreshKey);
+export const ConfidenceChart = () => {
+  const { data, isLoading } = useConfidenceDistribution();
 
-  const apiMap = new Map((data ?? []).map((bucket) => [bucket.level, bucket.count]));
-  const chartData = ALL_LEVELS.map((level) => ({
-    level: LEVEL_LABELS[level] ?? level,
-    count: apiMap.get(level) ?? 0,
-    fill: LEVEL_COLORS[level] ?? "#6b7280",
-  }));
-
-  const totalAnalyses = chartData.reduce((runningTotal, bucket) => runningTotal + bucket.count, 0);
+  const { chartData, totalAnalyses } = useMemo(() => {
+    const apiMap = new Map((data ?? []).map((bucket) => [bucket.level, bucket.count]));
+    const items = ALL_LEVELS.map((level) => ({
+      level: LEVEL_LABELS[level] ?? level,
+      count: apiMap.get(level) ?? 0,
+      fill: LEVEL_COLORS[level] ?? "#6b7280",
+    }));
+    const total = items.reduce((runningTotal, bucket) => runningTotal + bucket.count, 0);
+    return { chartData: items, totalAnalyses: total };
+  }, [data]);
 
   return (
     <Card className="mb-6 sm:mb-8">

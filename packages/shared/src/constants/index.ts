@@ -638,6 +638,7 @@ export {
   GITLAB_TOKEN_HEADER,
   GITLAB_HOMEPAGE_PATH_PATTERN,
   GITLAB_FAILURE_STATUSES,
+  GITLAB_MAX_FAILED_JOBS,
 } from "./gitlab.js";
 
 // Datadog constants

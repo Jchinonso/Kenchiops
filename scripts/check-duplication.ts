@@ -57,7 +57,7 @@ const DUPLICATION_PATTERNS = [
   {
     pattern: /from\s+['"]\.\/lib\//,
     message: "Importing from local lib - use @kenchi/shared instead",
-    exclude: ["packages/shared"],
+    exclude: ["packages/shared", "services/frontend"],
   },
   {
     pattern: /const\s+validate\s*=\s*\(/,

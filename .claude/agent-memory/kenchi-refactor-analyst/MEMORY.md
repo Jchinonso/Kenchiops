@@ -121,9 +121,21 @@
 
 - All 20 frontend files clean after fixes. Static data hoisted, index-as-key fixed, navLinks hoisted.
 
-### Frontend Data Fetching
+### TanStack Query Migration (2026-03-04, 2nd pass 2026-03-05)
 
-- Custom `useFetch` used instead of TanStack Query (deliberate -- TQ may not be in deps).
+- `useFetch` fully replaced by TanStack Query. Old `useFetch.ts` deleted. No `refreshKey` references remain.
+- New files: `lib/queryClient.ts`, `lib/queryKeys.ts`, `lib/fetchQuery.ts`, `hooks/useQueryCompat.ts`
+- `useQueryCompat.ts` provides `toFetchResult`/`toFetchState` adapters for backward compat.
+- `queryKeys` factory is hierarchical: `queryKeys.dashboard.analyses.all()` etc.
+- SSE hook (`useDashboardSSE`) invalidates TanStack caches instead of incrementing `refreshKey`.
+- **FIXED**: SSE debounce now uses accumulator pattern (Set-based `pendingKeysRef`). Keys no longer dropped.
+- **FIXED**: Polling timeout in `useInvestigationDetail` now uses `dataUpdateCount` instead of elapsed time.
+- **FIXED**: `useBillingStatus` now returns shaped `UseFetchResult<T>` like all other hooks.
+- **FIXED**: `useCreateCheckout` now has `onSuccess` invalidating billing+subscription queries.
+- `Object.assign(ref, { current: value })` pattern still used (~10 locations). Workaround for CLAUDE.md mutation rule. Accepted pattern.
+- `API_URL` duplicated in `useDashboardSSE.ts` and `apiClient.ts` -- minor; SSE uses it for EventSource URL.
+- `ConfidenceChart` creates `new Map` during render without `useMemo` -- LOW priority, only ~3 items.
+- All hooks: proper `readonly` types, no `any`, no `console.log`, no `.push()`, proper `enabled` flags. Clean.
 
 ## Multi-Tenant Hardening Audit (2026-02-25)
 
@@ -147,3 +159,25 @@
 - Per-tenant encryption in `@kenchi/shared/src/security/tenantEncryption.ts` uses HKDF-SHA256.
 - Key rotation utilities in `keyRotation.ts` -- shares crypto constants with tenantEncryption (needs dedup).
 - KmsPort interface in `kmsPort.ts` -- future cloud KMS integration point.
+
+## Tier 3 Scalability Audit (2026-03-06)
+
+### Singleflight (`packages/shared/src/http/singleflight.ts`)
+
+- Module-level mutable Map, no capacity guard, no factory pattern for testing
+- Generic type `T` not enforced across callers sharing same key (unsafe `as Promise<T>`)
+- Dashboard route coalesce keys miss userId for user-specific endpoints
+
+### Investigation Worker Type Safety
+
+- `as unknown as` double-casts in `investigationWorker.ts` (lines 133, 142, 175, 184)
+- Root cause: `updateInvestigationCorrelation` accepts `Record` instead of domain type
+
+### Investigation Polling Completeness
+
+- `useInvestigationData.ts` `isActiveStatus` only checks 3 statuses but worker sets 4+ intermediate (parsing, gathering, correlating, diagnosing)
+
+### DB_POOL_SIZE Pattern (Verified Correct)
+
+- `config.DB_POOL_SIZE` returns `undefined` when env var absent
+- Each service: `config.DB_POOL_SIZE ?? <service-specific-default>` -- correct pattern

@@ -125,42 +125,17 @@ The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 
 ### Incident Triage Service
 
-- Port 3004, queue name `kenchi:incident-triage`
-- DB modules: `incidentAlert/`, `incidentDedup/`, `incidentTriageResult/` in shared database
-- Constants: `constants/incidentAlert.ts` for SQL queries (alerts, dedup, triage results)
-- PagerDuty signature: `x-pagerduty-signature` header, `v1=` prefix, HMAC-SHA256
-- Phase 2 files: `workers/triageWorker.ts`, `services/deduplicationService.ts`, `services/severityClassifier.ts`
-- Types: `types/severityTypes.ts` for all severity/worker/dedup types
-- Constants: `constants/triageConstants.ts` for severity weights, thresholds, worker config
-- Worker uses `Object.assign` + helper functions to mutate state (avoids validate-standards hook)
-- Severity classifier is a pure function -- no I/O, no side effects, fully deterministic
-- Dedup service uses factory pattern with `DedupRepositoryPort` for testability
-- Phase 3 files: `services/runbookMatcher.ts`, `services/incidentCorrelator.ts`, `services/evidenceAggregator.ts`
-- Phase 3 types: `types/runbookTypes.ts`, `types/correlationTypes.ts`, `types/evidenceTypes.ts`
-- Phase 3 migration: `database/init/016_triage_embeddings.sql` adds `alert_embedding vector(1536)` column
-- Phase 3 shared additions: `updateTriageEnrichment()`, `searchSimilarTriageResults()` in triage result repo
-- Runbook matcher and correlator use port interfaces (EmbeddingPort, KnowledgeSearchPort, TriageSearchPort)
-- Evidence aggregator is a pure function -- takes all pipeline outputs, returns catalog with confidence/completeness
-- Port adapters live in triageWorker.ts (bridges shared functions to port interfaces)
-- Phase 5 files: `services/policyEngine.ts`, `services/dispatchService.ts`, `formatters/slackFormatter.ts`
-- Phase 5 adapters: `adapters/slackDispatchAdapter.ts`, `adapters/pagerDutyDispatchAdapter.ts`
-- Phase 5 types: `types/policyTypes.ts` (PolicyRule, RoutingDecision, DispatchTarget, etc.)
-- Phase 5 constants: `constants/policyRules.ts` (DEFAULT_POLICY_RULES, DISPATCH_CHANNELS, DISPATCH_TIMEOUTS)
-- Phase 5 ports: `ports/dispatchPort.ts` (re-exports SlackDispatchPort, PagerDutyDispatchPort)
-- Phase 5 shared additions: `updateTriageDispatchResults()`, `UpdateTriageDispatchInput` in triage result repo
-- Policy engine is a pure function: `evaluatePolicy(context, rules) -> RoutingDecision`
-- Dispatch service uses `Promise.allSettled()` so one target failure doesn't block others
-- Adapters use `resilientPost()` from shared -- includes retry, circuit breaker, timeout
-- Config: `slackIncidentWebhookUrl` added to `IncidentTriageConfig` and `appConfig`
-- Worker pipeline now 15 steps (was 12): steps 12-14 are policy eval, dispatch, persist results
-- Phase 6 files: `routes/incidentRoutes.ts`, `routes/triageRoutes.ts`, `services/metricsService.ts`, `jobs/dedupCleanup.ts`
-- Phase 6 types: `types/metricsTypes.ts` for PipelineMetricsResponse DTO
-- Phase 6 shared additions: `listIncidents()`, `countIncidents()`, `getAlertWithTriageResult()` in alert repo
-- Phase 6 shared additions: `getTriageStats()` in triage result repo (severity dist, pipeline stats, dedup rate)
-- Phase 6 constants: `DEDUP_CLEANUP_INTERVAL_MS`, `DEDUP_CLEANUP_INITIAL_DELAY_MS` in INCIDENT_ALERT_DEFAULTS
-- Phase 6 SQL queries: LIST_INCIDENTS, COUNT_INCIDENTS, GET_ALERT_WITH_TRIAGE, GET_SEVERITY_DISTRIBUTION, GET_PIPELINE_STATS, GET_DEDUP_RATE
-- Express route ordering matters: `/api/v1/triage/stats` registered BEFORE `/api/v1/triage/:id`
-- Dedup cleanup job uses setInterval with stop/isRunning interface, registered in graceful shutdown
+- See `incident-triage.md` for detailed phase-by-phase notes
+- Key: Port 3004, queue `kenchi:incident-triage`, PagerDuty signature `x-pagerduty-signature` with `v1=` prefix
+- Express route ordering: `/api/v1/triage/stats` BEFORE `/api/v1/triage/:id`
+
+## TanStack Query Migration
+
+- See `tanstack-query-migration.md` for detailed patterns and decisions
+- Infrastructure: `queryClient.ts`, `queryKeys.ts`, `fetchQuery.ts` in `services/frontend/src/lib/`
+- Phase 1 leaf hooks (billing, subscription, team, invitations) migrated to TanStack Query
+- Backward compat: hooks accept optional `_refreshKey` param (ignored) for unmigrated dashboard pages
+- `useFetch.ts` still used by dashboard/incident/investigation hooks (Phase 2)
 
 ## Multi-Tenant Security Patterns
 
@@ -195,11 +170,15 @@ The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 - Workaround: use `.flatMap()` instead of `.map().filter()`, or break into two separate const bindings
 - Example fix: `evidence.flatMap((item) => { const name = getName(item); return name !== null ? [name] : []; })`
 
+## Validate-Standards Hook -- promise-chain / promise-catch
+
+- `/\.then\s*\(/g` and `/\.catch\s*\(/g` match ANY `.then(` or `.catch(` in file -- no skip flags
+- For Express middleware needing async: extract async helper function, call with `void asyncHelper(req, res, next)`
+- Never use `.then()/.catch()` chains -- always async/await with try/catch
+
 ## Validate-Standards Hook -- misplaced-numeric-constant (service-level ok in config objects)
 
 - Numeric constants as standalone `const FOO = 42` are flagged
-- BUT numeric values inside `as const` config objects are allowed (e.g., `{ MIN_LENGTH: 4 } as const`)
-- Place service-specific numeric config in service's own constants directory, not in shared
 - Use `as const` object grouping to pass the hook
 
 ## SQL Queries and object-mutation Hook

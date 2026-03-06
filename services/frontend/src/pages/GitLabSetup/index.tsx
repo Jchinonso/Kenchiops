@@ -9,7 +9,9 @@
 import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { useFetch, parseErrorBody } from "@/hooks/useFetch";
+import { useQuery } from "@tanstack/react-query";
+import { fetchQuery, parseErrorBody } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
 import { apiClient } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -20,11 +22,13 @@ import type { GitLabProject, ProjectSetupResult, SetupResponse } from "./types";
 
 export const GitLabSetup = () => {
   const navigate = useNavigate();
-  const {
-    data: projects,
-    isLoading,
-    error,
-  } = useFetch<readonly GitLabProject[]>("/integrations/gitlab/available-projects");
+  const query = useQuery({
+    queryKey: queryKeys.integrations.gitlab.availableProjects(),
+    queryFn: () => fetchQuery<readonly GitLabProject[]>("/integrations/gitlab/available-projects"),
+  });
+  const projects = query.data ?? null;
+  const isLoading = query.isPending;
+  const error = query.error?.message ?? null;
 
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -36,12 +40,12 @@ export const GitLabSetup = () => {
     if (!projects) {
       return [];
     }
-    const query = searchQuery.toLowerCase();
-    return query
+    const lowerSearch = searchQuery.toLowerCase();
+    return lowerSearch
       ? projects.filter(
           (project) =>
-            project.fullPath.toLowerCase().includes(query) ||
-            project.name.toLowerCase().includes(query)
+            project.fullPath.toLowerCase().includes(lowerSearch) ||
+            project.name.toLowerCase().includes(lowerSearch)
         )
       : [...projects];
   }, [projects, searchQuery]);

@@ -18,6 +18,10 @@ import {
   checkForHallucinations,
   recordHallucinationDetection,
   type SafetyRequestContext,
+  // RAG search
+  searchFromEventContext,
+  type RAGSearchResult,
+  type EventQueryContext,
 } from "@kenchi/shared";
 import type { PullRequestWebhook, CheckRunWebhook } from "../types/githubTypes.js";
 
@@ -110,11 +114,54 @@ export const createMinimalEvidence = (eventId: string): Evidence => ({
   logs: [],
 });
 
+// ==================== RAG Context ====================
+
+/**
+ * Builds an EventQueryContext from an Event for RAG search.
+ * Extracts relevant fields to find similar past failures.
+ */
+const buildEventQueryContext = (event: Event): EventQueryContext => ({
+  eventType: event.type,
+  repository: (event.payload.repository as string) ?? "",
+  errorMessage: event.title,
+  failureSummary: (event.payload.output as { summary?: string })?.summary ?? undefined,
+});
+
+/**
+ * Fetches RAG context for an event (fail-safe).
+ * Returns undefined if RAG search fails — analysis should never be blocked by RAG.
+ */
+const fetchRAGContext = async (
+  event: Event,
+  tenantId?: string
+): Promise<RAGSearchResult | undefined> => {
+  try {
+    const eventContext = buildEventQueryContext(event);
+    const ragContext = await searchFromEventContext(eventContext, tenantId);
+
+    logger.info("RAG context retrieved", {
+      eventId: event.id,
+      knowledgeDocs: ragContext.knowledgeDocs.length,
+      diffChunks: ragContext.diffChunks.length,
+      cacheHit: ragContext.cacheHit,
+      queryTokens: ragContext.queryTokens,
+    });
+
+    return ragContext;
+  } catch (ragError) {
+    logger.warn("RAG search failed, proceeding without historical context", {
+      eventId: event.id,
+      error: getErrorMessage(ragError),
+    });
+    return undefined;
+  }
+};
+
 // ==================== Analysis ====================
 
 /**
  * Perform LLM analysis on an event.
- * Includes hallucination detection for safety.
+ * Includes RAG context retrieval and hallucination detection for safety.
  */
 export const performAnalysis = async (event: Event, tenantId?: string): Promise<AnalysisResult> => {
   // Build safety context for audit logging early
@@ -132,7 +179,10 @@ export const performAnalysis = async (event: Event, tenantId?: string): Promise<
   });
 
   try {
-    const analysis = await llmClient.analyzeIncident(event, evidence, tenantId);
+    // Fetch RAG context (fail-safe — never blocks analysis)
+    const ragContext = await fetchRAGContext(event, tenantId);
+
+    const analysis = await llmClient.analyzeIncident(event, evidence, tenantId, ragContext);
     const confidence = calculateConfidenceScore(analysis, evidence);
 
     // Check for hallucinations in the analysis using summary and reasoning
@@ -167,6 +217,8 @@ export const performAnalysis = async (event: Event, tenantId?: string): Promise<
       confidence: confidence.finalScore,
       gating: confidence.gatingDecision,
       hallucinationRisk: hallucinationCheck.riskScore,
+      ragContextUsed: ragContext !== undefined,
+      ragKnowledgeDocs: ragContext?.knowledgeDocs.length ?? 0,
     });
 
     return { analysis, confidence, event };

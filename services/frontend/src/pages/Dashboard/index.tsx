@@ -5,8 +5,9 @@
  * Renders the appropriate sub-page based on the current path.
  */
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useLocation, useNavigate, Navigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardSSE } from "@/hooks/useDashboardSSE";
 import { useTenantInfo } from "@/hooks/useDashboardData";
@@ -51,20 +52,19 @@ const STATIC_ROUTES: Readonly<Record<string, React.ReactNode>> = {
 const Dashboard = () => {
   const { pathname: currentPath } = useLocation();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const queryClient = useQueryClient();
   const {
-    refreshKey: sseRefreshKey,
     notifications,
     markAllRead,
     markAsRead,
     dismissNotification,
   } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
-  const tenantDepsKey = `${sseRefreshKey}-${user?.tenantId ?? ""}-${currentPath}`;
   const {
     data: tenant,
     isLoading: tenantLoading,
     error: tenantError,
-  } = useTenantInfo(tenantDepsKey);
+  } = useTenantInfo();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -73,10 +73,9 @@ const Dashboard = () => {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date>(new Date());
-  const [manualRefreshKey, setManualRefreshKey] = useState(0);
 
-  // Reset state when tenant changes (org switch) — including refresh key
-  // so all data hooks re-fetch for the new organization.
+  // Reset state when tenant changes (org switch).
+  // queryClient.clear() drops all cached data so hooks re-fetch for the new org.
   // Uses state-based previous-value tracking during render to avoid both
   // ref-during-render errors and cascading effect setState calls.
   // See: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
@@ -86,13 +85,12 @@ const Dashboard = () => {
     setPrevTenantId(currentTenantId);
     setOnboardingSkipped(false);
     setOnboardingDismissed(false);
-    setManualRefreshKey((prev) => prev + 1);
+    queryClient.clear();
   }
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.read).length,
     [notifications]
   );
-  const refreshKey = sseRefreshKey + manualRefreshKey;
   const notificationsRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -101,14 +99,16 @@ const Dashboard = () => {
     [resolvedTheme, setTheme]
   );
 
-  // Track SSE refresh events for "last updated" label.
-  // Uses render-time previous-value tracking (same pattern as tenant change
-  // above) to avoid calling setState inside an effect.
-  const [prevSseRefreshKey, setPrevSseRefreshKey] = useState(sseRefreshKey);
-  if (prevSseRefreshKey !== sseRefreshKey) {
-    setPrevSseRefreshKey(sseRefreshKey);
-    setLastRefreshAt(new Date());
-  }
+  // Track SSE events for "last updated" label.
+  // When a new notification arrives, the data was just invalidated by the SSE
+  // handler, so we update the timestamp.
+  const prevNotificationCountRef = useRef(notifications.length);
+  useEffect(() => {
+    if (notifications.length !== prevNotificationCountRef.current) {
+      prevNotificationCountRef.current = notifications.length;
+      setLastRefreshAt(new Date());
+    }
+  }, [notifications.length]);
 
   const lastUpdatedLabel = useMemo(
     () => formatRelativeTime(lastRefreshAt.toISOString()),
@@ -178,7 +178,7 @@ const Dashboard = () => {
   };
 
   const handleRefresh = () => {
-    setManualRefreshKey((prev) => prev + 1);
+    void queryClient.invalidateQueries();
     setLastRefreshAt(new Date());
   };
 
@@ -189,10 +189,10 @@ const Dashboard = () => {
     }
 
     if (isCICDRoute(currentPath)) {
-      return renderCICDPage(currentPath, refreshKey);
+      return renderCICDPage(currentPath);
     }
     if (isIncidentRoute(currentPath)) {
-      return renderIncidentPage(currentPath, refreshKey);
+      return renderIncidentPage(currentPath);
     }
 
     const comingSoonConfig = findComingSoonConfig(currentPath);
@@ -215,7 +215,6 @@ const Dashboard = () => {
         firstName={firstName}
         showOnboarding={showOnboarding}
         dismissOnboarding={dismissOnboarding}
-        refreshKey={refreshKey}
         tenant={tenant}
       />
     );
