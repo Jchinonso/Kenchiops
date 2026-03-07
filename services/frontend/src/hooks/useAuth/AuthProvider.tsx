@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import type { AuthProviderProps } from "./types";
+import type { AuthProviderProps, AuthContextValue } from "./types";
 import { AuthContext } from "./AuthContext";
 import { useAuthActions } from "./useAuthActions";
 import { useIdleTimeout } from "./useIdleTimeout";

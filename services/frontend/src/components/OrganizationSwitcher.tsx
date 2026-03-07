@@ -132,7 +132,7 @@ export const OrganizationSwitcher = () => {
             provider={displayProvider}
             className="text-zinc-500 dark:text-zinc-400 shrink-0"
           />
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate hidden md:hidden lg:inline">
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate hidden md:hidden lg:inline group-data-[open=true]:inline">
             {displayName}
           </span>
         </div>
@@ -140,7 +140,7 @@ export const OrganizationSwitcher = () => {
           href={orgAccessUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="hidden lg:flex items-center gap-1 mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
+          className="hidden lg:flex group-data-[open=true]:flex items-center gap-1 mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
         >
           Missing an org?
           <ExternalLink className="w-2.5 h-2.5" />
@@ -170,10 +170,10 @@ export const OrganizationSwitcher = () => {
             ) : (
               <ProviderIcon provider={displayProvider} className="shrink-0" />
             )}
-            <span className="flex-1 text-left truncate hidden md:hidden lg:inline">
+            <span className="flex-1 text-left truncate hidden md:hidden lg:inline group-data-[open=true]:inline">
               {isSwitchingOrg ? "Switching..." : displayName}
             </span>
-            <ChevronsUpDown className="w-3.5 h-3.5 text-zinc-400 shrink-0 hidden md:hidden lg:block" />
+            <ChevronsUpDown className="w-3.5 h-3.5 text-zinc-400 shrink-0 hidden md:hidden lg:block group-data-[open=true]:block" />
           </button>
         </PopoverTrigger>
         <PopoverContent side="bottom" align="start" sideOffset={4} className="w-56 p-0">
