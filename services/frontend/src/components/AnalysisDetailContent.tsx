@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getConfidenceLabel, getConfidenceStyle, flattenSignalEntries } from "@/lib/formatters";
 import type { AnalysisRecord } from "@/hooks/useDashboardData";
+import { FeedbackSection } from "@/components/FeedbackSection";
 
 // ==================== Types for fullAnalysis enriched data ====================
 
@@ -340,6 +341,9 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
           </span>
         </div>
       )}
+
+      {/* Feedback */}
+      <FeedbackSection analysisId={analysis.id} />
 
       {/* Raw Analysis JSON */}
       <Collapsible open={rawOpen} onOpenChange={setRawOpen}>

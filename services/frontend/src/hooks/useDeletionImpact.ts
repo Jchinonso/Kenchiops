@@ -6,6 +6,7 @@
  * Uses TanStack Query with enabled: false for manual triggering.
  */
 
+import { useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchQuery } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
@@ -32,12 +33,17 @@ export const useDeletionImpact = () => {
     enabled: false,
   });
 
-  return {
-    impact: query.data ?? null,
-    isLoading: query.isFetching,
-    error: query.error?.message ?? null,
-    fetchImpact: async (): Promise<void> => {
-      await query.refetch();
-    },
-  };
+  const fetchImpact = useCallback(async (): Promise<void> => {
+    await query.refetch();
+  }, [query]);
+
+  return useMemo(
+    () => ({
+      impact: query.data ?? null,
+      isLoading: query.isFetching,
+      error: query.error?.message ?? null,
+      fetchImpact,
+    }),
+    [query.data, query.isFetching, query.error, fetchImpact]
+  );
 };

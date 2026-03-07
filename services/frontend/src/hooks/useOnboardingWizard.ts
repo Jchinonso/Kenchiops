@@ -3,7 +3,7 @@
  * Manages current step, navigation direction (for animation), and step controls.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 
 const TOTAL_STEPS = 4;
 
@@ -31,13 +31,16 @@ export const useOnboardingWizard = (): WizardControls => {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   }, []);
 
-  return {
-    currentStep,
-    direction,
-    totalSteps: TOTAL_STEPS,
-    isFirstStep: currentStep === 0,
-    isLastStep: currentStep === TOTAL_STEPS - 1,
-    goNext,
-    goBack,
-  };
+  return useMemo(
+    () => ({
+      currentStep,
+      direction,
+      totalSteps: TOTAL_STEPS,
+      isFirstStep: currentStep === 0,
+      isLastStep: currentStep === TOTAL_STEPS - 1,
+      goNext,
+      goBack,
+    }),
+    [currentStep, direction, goNext, goBack]
+  );
 };

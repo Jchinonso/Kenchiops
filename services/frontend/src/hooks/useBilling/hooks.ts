@@ -6,6 +6,7 @@
  * Uses TanStack Query for server state management.
  */
 
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   fetchQuery,
@@ -15,31 +16,13 @@ import {
   parseErrorBody,
 } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
-import { toFetchResult, type UseFetchResult } from "@/hooks/useQueryCompat";
-
-// ==================== DTO Types ====================
-
-export interface BillingStatusDTO {
-  readonly hasStripeCustomer: boolean;
-  readonly stripeCustomerId: string | null;
-  readonly currentPeriodEnd: string | null;
-  readonly planId: string;
-  readonly status: string;
-}
-
-interface CheckoutResultDTO {
-  readonly sessionId: string;
-  readonly url: string;
-}
-
-interface PortalResultDTO {
-  readonly url: string;
-}
+import { useToFetchResult, type UseFetchResult } from "@/hooks/useQueryCompat";
+import type { BillingStatusDTO, CheckoutResultDTO, PortalResultDTO } from "./types";
 
 // ==================== Query Hook ====================
 
 export const useBillingStatus = (): UseFetchResult<BillingStatusDTO> =>
-  toFetchResult(
+  useToFetchResult(
     useQuery({
       queryKey: queryKeys.billing.status(),
       queryFn: () => fetchQuery<BillingStatusDTO>("/api/v1/billing/status"),
@@ -76,17 +59,16 @@ export const useCreateCheckout = () => {
     },
   });
 
-  // Preserve the consumer-facing API: { createCheckout, isLoading, error }
-  const createCheckout = async (
-    planId: string,
-    interval: "month" | "year"
-  ): Promise<CheckoutResultDTO | null> => {
-    try {
-      return await mutation.mutateAsync({ planId, interval });
-    } catch {
-      return null;
-    }
-  };
+  const createCheckout = useCallback(
+    async (planId: string, interval: "month" | "year"): Promise<CheckoutResultDTO | null> => {
+      try {
+        return await mutation.mutateAsync({ planId, interval });
+      } catch {
+        return null;
+      }
+    },
+    [mutation]
+  );
 
   return {
     createCheckout,
@@ -114,7 +96,7 @@ export const useBillingPortal = () => {
     },
   });
 
-  const openPortal = async (): Promise<void> => {
+  const openPortal = useCallback(async (): Promise<void> => {
     try {
       const url = await mutation.mutateAsync();
 
@@ -134,7 +116,7 @@ export const useBillingPortal = () => {
     } catch {
       // Error is captured in mutation.error
     }
-  };
+  }, [mutation]);
 
   return {
     openPortal,

@@ -5,32 +5,9 @@
  * URL redirect params and manages UpgradePrompt dialog state.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { parseStructuredError } from "@/lib/fetchQuery";
-
-// ==================== Types ====================
-
-interface PlanLimitState {
-  readonly limitKey: string;
-  readonly currentUsage: number;
-  readonly limit: number;
-  readonly currentPlan: string;
-}
-
-export interface UsePlanLimitErrorResult {
-  /** Current plan limit error state, or null if no error. */
-  readonly planLimitError: PlanLimitState | null;
-  /** Whether the UpgradePrompt dialog should be open. */
-  readonly isOpen: boolean;
-  /** Check an API response for a plan limit error. Returns true if limit was hit. */
-  readonly checkResponse: (response: Response) => Promise<boolean>;
-  /** Check URL search params for plan limit redirect. Returns true if limit was hit. */
-  readonly checkUrlParams: (params: URLSearchParams) => boolean;
-  /** Dismiss the UpgradePrompt dialog. */
-  readonly dismiss: () => void;
-}
-
-// ==================== Hook ====================
+import type { PlanLimitState, UsePlanLimitErrorResult } from "./types";
 
 export const usePlanLimitError = (): UsePlanLimitErrorResult => {
   const [state, setState] = useState<PlanLimitState | null>(null);
@@ -73,11 +50,14 @@ export const usePlanLimitError = (): UsePlanLimitErrorResult => {
 
   const dismiss = useCallback(() => setState(null), []);
 
-  return {
-    planLimitError: state,
-    isOpen: state !== null,
-    checkResponse,
-    checkUrlParams,
-    dismiss,
-  };
+  return useMemo(
+    () => ({
+      planLimitError: state,
+      isOpen: state !== null,
+      checkResponse,
+      checkUrlParams,
+      dismiss,
+    }),
+    [state, checkResponse, checkUrlParams, dismiss]
+  );
 };

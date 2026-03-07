@@ -22,6 +22,8 @@ export const FEEDBACK_DEFAULTS = {
   MIN_WINDOW_MINUTES: 1,
   /** Default value for zero metrics. */
   DEFAULT_ZERO_VALUE: 0,
+  /** Maximum length for correction text in feedback submissions. */
+  MAX_CORRECTION_LENGTH: 2000,
 } as const;
 
 // ==================== SQL Queries ====================

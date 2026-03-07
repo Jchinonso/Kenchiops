@@ -29,6 +29,7 @@ import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { CommandPalette } from "@/components/CommandPalette";
 import { DashboardFooter } from "@/components/DashboardFooter";
 import { formatRelativeTime } from "@/lib/formatters";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 import {
   findComingSoonConfig,
@@ -55,6 +56,7 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { notifications, markAllRead, markAsRead, dismissNotification } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
+  const isMobile = useIsMobile();
   const { data: tenant, isLoading: tenantLoading, error: tenantError } = useTenantInfo();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -219,7 +221,11 @@ const Dashboard = () => {
         Skip to main content
       </a>
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={closeSidebar} />
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden animate-in fade-in-0 duration-300"
+          onClick={closeSidebar}
+          aria-hidden="true"
+        />
       )}
 
       <DashboardSidebar
@@ -231,7 +237,10 @@ const Dashboard = () => {
         onOpenShortcuts={openShortcuts}
       />
 
-      <main className="flex-1 min-w-0">
+      <main
+        className="flex-1 min-w-0"
+        {...(sidebarOpen && isMobile ? { inert: true, "aria-hidden": true } : {})}
+      >
         <DashboardHeader
           lastUpdatedLabel={lastUpdatedLabel}
           onRefresh={handleRefresh}

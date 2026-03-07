@@ -238,6 +238,7 @@ export {
   getRAGFeedbackMetrics,
   getRAGFeedbackByDoc,
   createOrUpdateAnalysisFeedback,
+  getFeedbackByUserAndAnalysis,
   createQAFeedback,
   createOrUpdateQAFeedback,
   getQAFeedbackByQueryAndUser,

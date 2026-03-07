@@ -344,9 +344,9 @@ const SidebarLeafItem = ({
         )}
       >
         <span className="flex-shrink-0">{icon}</span>
-        <span className="hidden md:hidden lg:inline">{label}</span>
+        <span className="hidden md:hidden lg:inline group-data-[open=true]:inline">{label}</span>
         {comingSoon && (
-          <span className="ml-auto text-[10px] font-medium text-zinc-500 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/50 px-1.5 py-0.5 rounded hidden md:hidden lg:inline-block">
+          <span className="ml-auto text-[10px] font-medium text-zinc-500 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/50 px-1.5 py-0.5 rounded hidden md:hidden lg:inline-block group-data-[open=true]:inline-block">
             Soon
           </span>
         )}
@@ -510,8 +510,9 @@ export const DashboardSidebar = ({
 
   return (
     <aside
+      data-open={isOpen}
       className={cn(
-        "fixed md:sticky top-0 left-0 z-50 w-64 md:w-16 lg:w-64 h-screen bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800/60 flex flex-col transition-all duration-300",
+        "group fixed md:sticky top-0 left-0 z-50 w-64 md:w-16 lg:w-64 h-screen bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800/60 flex flex-col transition-all duration-300",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}
     >
@@ -533,7 +534,7 @@ export const DashboardSidebar = ({
               />
             </svg>
           </div>
-          <span className="text-lg sm:text-xl font-display font-bold text-zinc-900 dark:text-zinc-100 hidden md:hidden lg:inline">
+          <span className="text-lg sm:text-xl font-display font-bold text-zinc-900 dark:text-zinc-100 hidden md:hidden lg:inline group-data-[open=true]:inline">
             Kenchi
           </span>
         </Link>
@@ -612,7 +613,7 @@ export const DashboardSidebar = ({
                   </span>
                 </div>
               )}
-              <div className="min-w-0 flex-1 text-left hidden md:hidden lg:block">
+              <div className="min-w-0 flex-1 text-left hidden md:hidden lg:block group-data-[open=true]:block">
                 <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                   {user?.displayName ?? "User"}
                 </p>
@@ -622,7 +623,7 @@ export const DashboardSidebar = ({
                   </p>
                 )}
               </div>
-              <ChevronsUpDown className="w-4 h-4 text-zinc-400 dark:text-zinc-600 flex-shrink-0 hidden md:hidden lg:block" />
+              <ChevronsUpDown className="w-4 h-4 text-zinc-400 dark:text-zinc-600 flex-shrink-0 hidden md:hidden lg:block group-data-[open=true]:block" />
             </button>
           </PopoverTrigger>
           <PopoverContent side="top" align="start" sideOffset={8} className="w-56 p-1.5">
