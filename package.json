@@ -44,6 +44,9 @@
       "prettier --write"
     ]
   },
+  "dependencies": {
+    "compression": "^1.8.1"
+  },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
     "@types/compression": "^1.8.1",
@@ -54,7 +57,6 @@
     "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
-    "compression": "^1.8.1",
     "eslint": "^8.56.0",
     "eslint-plugin-import": "^2.32.0",
     "husky": "^9.1.7",

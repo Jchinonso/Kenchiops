@@ -4,8 +4,8 @@
 
 ### Frontend Architecture
 
-- **Framework:** React 18 + React Router v6 + Tailwind CSS + shadcn/ui
-- **State:** Custom `useFetch` hook (no TanStack Query yet), `useState`/`useEffect` based
+- **Framework:** React 19 + React Router v7 + Tailwind CSS + shadcn/ui
+- **State:** TanStack Query for server state, `useState`/`useEffect` for local UI
 - **Auth:** `useAuth` hook wraps cookie-based JWT flow, `AuthProvider` context
 - **Real-time:** `useDashboardSSE` hook uses native `EventSource`, increments `refreshKey` for refetch
 - **Data hooks:** `services/frontend/src/hooks/useDashboardData.ts` has typed hooks for all dashboard endpoints
@@ -15,7 +15,7 @@
 ### Backend API Structure
 
 - **Routes:** `services/api/src/routes/` -- registered in `index.ts` via `registerRoutes(app)`
-- **Route files:** analysisRoutes, authRoutes, dashboardRoutes, eventRoutes, fineTuningRoutes, healthRoutes, integrationRoutes, riskRulesRoutes, sseRoutes, webhookRoutes, rag/
+- **Route files:** analysisRoutes, apiKeyRoutes, authRoutes, billingRoutes, dashboardRoutes, dataExportRoutes, eventRoutes, fineTuningDatasetRoutes, fineTuningJobRoutes, fineTuningModelRoutes, fineTuningRoutes, healthRoutes, integrationRoutes, invitationRoutes, organizationRoutes, riskRulesRoutes, sseRoutes, subscriptionRoutes, teamRoutes, webhookRoutes, rag/
 - **Dashboard:** 5 endpoints under `/api/v1/dashboard/` (tenant, stats, repositories, analyses, failures)
 - **SSE:** `sseRoutes.ts` -- Redis pub/sub filtered by tenantId
 - **Auth:** `authRoutes.ts` -- OAuth login/callback/refresh/logout/me
@@ -94,3 +94,16 @@
 - `docs/MULTI_TENANT_AUTH_DESIGN_REVIEW.md` -- auth/org design flaws, edge cases, migration paths (created 2026-02-26)
 - 40+ docs in `docs/` directory covering features, plans, implementation guides
 - PRICING_TIERS.md is superseded by SUBSCRIPTION_PLANS.md for enforcement details
+
+## README Update (2026-03-07)
+
+- README.md was heavily outdated: missing incident-triage service, frontend, monitoring stack, billing
+- Added all 5 services (api, github-app, slack-bot, incident-triage, frontend)
+- Added full Docker stack (prometheus, grafana, alertmanager)
+- Updated tech stack: React 19, React Router v7, TanStack Query, Vitest, Stripe, motion
+- Updated env vars table to include LLM provider config, JWT_SECRET, ENCRYPTION_KEY, OAuth vars
+- Referenced .env.example instead of duplicating full list
+- Incident triage adapters: PagerDuty, Datadog, Grafana, Prometheus, Vercel, Netlify
+- shared/src modules confirmed: actions, aggregation, billing, cache, concurrency, constants, core, database, finetuning, formatting, health, http, integrations, llm, observability, ports, queue, rag, rateLimit, safety, security, shutdown
+- Frontend pages: Dashboard overview, CICDAnalyses, CICDFailures, CICDPipelines, ActiveIncidents, Investigations, WebhookActivity, Settings, Integrations, TeamManagement, Onboarding, Login
+- RAG module has ~35 files covering ingestion, search, drift detection, multi-hop, cost controls, evaluation

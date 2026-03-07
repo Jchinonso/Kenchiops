@@ -209,8 +209,7 @@ const usePrefetchRoute = (): ((href: string) => void) => {
           });
           void queryClient.prefetchQuery({
             queryKey: queryKeys.dashboard.confidence.distribution(),
-            queryFn: () =>
-              fetchQuery("/api/v1/dashboard/stats/confidence-distribution"),
+            queryFn: () => fetchQuery("/api/v1/dashboard/stats/confidence-distribution"),
             staleTime: PREFETCH_STALE_TIME,
           });
           void queryClient.prefetchQuery({
@@ -218,8 +217,7 @@ const usePrefetchRoute = (): ((href: string) => void) => {
               limit: 5,
               offset: 0,
             }),
-            queryFn: () =>
-              fetchQuery("/api/v1/dashboard/analyses?limit=5&offset=0"),
+            queryFn: () => fetchQuery("/api/v1/dashboard/analyses?limit=5&offset=0"),
             staleTime: PREFETCH_STALE_TIME,
           });
           void queryClient.prefetchQuery({
@@ -227,8 +225,7 @@ const usePrefetchRoute = (): ((href: string) => void) => {
               limit: 5,
               offset: 0,
             }),
-            queryFn: () =>
-              fetchQuery("/api/v1/dashboard/failures?limit=5&offset=0"),
+            queryFn: () => fetchQuery("/api/v1/dashboard/failures?limit=5&offset=0"),
             staleTime: PREFETCH_STALE_TIME,
           });
           break;
@@ -240,14 +237,12 @@ const usePrefetchRoute = (): ((href: string) => void) => {
               limit: 20,
               offset: 0,
             }),
-            queryFn: () =>
-              fetchQuery("/api/v1/dashboard/analyses?limit=20&offset=0"),
+            queryFn: () => fetchQuery("/api/v1/dashboard/analyses?limit=20&offset=0"),
             staleTime: PREFETCH_STALE_TIME,
           });
           void queryClient.prefetchQuery({
             queryKey: queryKeys.dashboard.analyses.countsByRepo(),
-            queryFn: () =>
-              fetchQuery("/api/v1/dashboard/stats/analyses-by-repo"),
+            queryFn: () => fetchQuery("/api/v1/dashboard/stats/analyses-by-repo"),
             staleTime: PREFETCH_STALE_TIME,
           });
           break;
@@ -259,39 +254,38 @@ const usePrefetchRoute = (): ((href: string) => void) => {
               limit: 20,
               offset: 0,
             }),
-            queryFn: () =>
-              fetchQuery(
-                "/api/v1/dashboard/webhook-activity?limit=20&offset=0"
-              ),
+            queryFn: () => fetchQuery("/api/v1/dashboard/webhook-activity?limit=20&offset=0"),
             staleTime: PREFETCH_STALE_TIME,
           });
           break;
         }
 
         case "/dashboard/incidents/active": {
-          if (!tenantId) {break;}
+          if (!tenantId) {
+            break;
+          }
           void queryClient.prefetchQuery({
             queryKey: queryKeys.incidents.list({
               tenantId,
               limit: 20,
               offset: 0,
             }),
-            queryFn: () =>
-              fetchQuery("/api/v1/incidents?limit=20&offset=0"),
+            queryFn: () => fetchQuery("/api/v1/incidents?limit=20&offset=0"),
             staleTime: PREFETCH_STALE_TIME,
           });
           break;
         }
 
         case "/dashboard/incidents/investigations": {
-          if (!tenantId) {break;}
+          if (!tenantId) {
+            break;
+          }
           void queryClient.prefetchQuery({
             queryKey: queryKeys.investigations.list({
               limit: 20,
               offset: 0,
             }),
-            queryFn: () =>
-              fetchQuery("/api/v1/investigations?limit=20&offset=0"),
+            queryFn: () => fetchQuery("/api/v1/investigations?limit=20&offset=0"),
             staleTime: PREFETCH_STALE_TIME,
           });
           break;
@@ -373,7 +367,14 @@ interface NavGroupProps {
   readonly onPrefetch?: (href: string) => void;
 }
 
-const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick, onPrefetch }: NavGroupProps) => {
+const SidebarNavGroup = ({
+  group,
+  pathname,
+  isOpen,
+  onToggle,
+  onItemClick,
+  onPrefetch,
+}: NavGroupProps) => {
   const hasActiveChild = group.children.some((child) => pathname.startsWith(child.href));
   const submenuId = `submenu-${group.label.toLowerCase().replace(/\//g, "-")}`;
   const firstChildHref = group.children[0]?.href ?? group.basePath;
@@ -438,9 +439,7 @@ const SidebarNavGroup = ({ group, pathname, isOpen, onToggle, onItemClick, onPre
                 indented
                 onClick={onItemClick}
                 onPrefetch={
-                  !child.comingSoon && onPrefetch
-                    ? () => onPrefetch(child.href)
-                    : undefined
+                  !child.comingSoon && onPrefetch ? () => onPrefetch(child.href) : undefined
                 }
               />
             ))}
@@ -579,11 +578,7 @@ export const DashboardSidebar = ({
               {...entry}
               active={isLeafActive(entry, pathname)}
               onClick={onClose}
-              onPrefetch={
-                !entry.comingSoon
-                  ? () => prefetchRoute(entry.href)
-                  : undefined
-              }
+              onPrefetch={!entry.comingSoon ? () => prefetchRoute(entry.href) : undefined}
             />
           )
         )}

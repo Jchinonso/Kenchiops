@@ -23,135 +23,27 @@ import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
 import { useAuth } from "@/hooks/useAuth";
 import { apiClient, API_URL } from "@/lib/apiClient";
 import { queryKeys } from "@/lib/queryKeys";
+import type {
+  DashboardNotification,
+  UseDashboardSSEResult,
+  NewFailurePayload,
+  AnalysisCompletePayload,
+  NewIncidentPayload,
+  IncidentTriagedPayload,
+  InvestigationStatusChangedPayload,
+} from "./types";
+import {
+  NOTIFICATION_CONFIG,
+  buildNotificationStorageKey,
+  loadNotifications,
+  saveNotifications,
+} from "./notifications";
+import { parseEventData, formatConfidence, truncateSSE, showBrowserNotification } from "./helpers";
 
 const SSE_ENDPOINT = `${API_URL}/api/v1/dashboard/events/stream`;
 
-// ==================== Notification Types ====================
-
-export interface DashboardNotification {
-  readonly id: string;
-  readonly type: "failure" | "analysis_complete" | "new_incident" | "incident_triaged";
-  readonly title: string;
-  readonly description: string;
-  readonly timestamp: string;
-  readonly read: boolean;
-  readonly analysisId?: string;
-  readonly repository?: string;
-  readonly severity?: string;
-  readonly source?: string;
-}
-
 /** Debounce window for batching rapid SSE events into a single query invalidation. */
 const REFRESH_DEBOUNCE_MS = 2_000;
-
-/** Configuration for notification storage */
-const NOTIFICATION_CONFIG = {
-  maxItems: 50,
-  sessionStorageKeyPrefix: "kenchi_notifications",
-} as const;
-
-/** Build a tenant-scoped sessionStorage key */
-const buildNotificationStorageKey = (tenantId?: string | null): string =>
-  tenantId
-    ? `${NOTIFICATION_CONFIG.sessionStorageKeyPrefix}_${tenantId}`
-    : NOTIFICATION_CONFIG.sessionStorageKeyPrefix;
-
-// ==================== SSE Payload Types ====================
-
-interface NewFailurePayload {
-  readonly type: string;
-  readonly repository?: string;
-  readonly checkName?: string;
-  readonly commitSha?: string;
-}
-
-interface AnalysisCompletePayload {
-  readonly type: string;
-  readonly repository?: string;
-  readonly analysisId?: string;
-  readonly confidence?: number;
-}
-
-interface NewIncidentPayload {
-  readonly type: string;
-  readonly source?: string;
-  readonly title?: string;
-  readonly severity?: string;
-  readonly serviceName?: string;
-}
-
-interface IncidentTriagedPayload {
-  readonly type: string;
-  readonly alertId?: string;
-  readonly severity?: string;
-  readonly title?: string;
-  readonly aiSummary?: string;
-}
-
-interface InvestigationStatusChangedPayload {
-  readonly type: string;
-  readonly investigationId?: string;
-  readonly status?: string;
-}
-
-// ==================== Session Storage Helpers ====================
-
-const loadNotifications = (storageKey: string): readonly DashboardNotification[] => {
-  try {
-    const stored = sessionStorage.getItem(storageKey);
-    return stored ? (JSON.parse(stored) as readonly DashboardNotification[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveNotifications = (
-  storageKey: string,
-  notifications: readonly DashboardNotification[]
-): void => {
-  try {
-    sessionStorage.setItem(storageKey, JSON.stringify(notifications));
-  } catch {
-    // sessionStorage quota exceeded or unavailable — non-fatal
-  }
-};
-
-// ==================== Helpers ====================
-
-const parseEventData = <T>(event: MessageEvent): T | null => {
-  try {
-    return JSON.parse(event.data as string) as T;
-  } catch {
-    return null;
-  }
-};
-
-const formatConfidence = (confidence: number): string => `${Math.round(confidence * 100)}%`;
-
-/** Truncate SSE-sourced strings to prevent UI overflow from unexpectedly large payloads. */
-const truncateSSE = (value: string, maxLength = 200): string =>
-  value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
-
-/** Show a browser notification if the Notification API is available and permission is granted */
-const showBrowserNotification = (title: string, body: string): void => {
-  if (typeof Notification === "undefined") {
-    return;
-  }
-  if (Notification.permission !== "granted") {
-    return;
-  }
-  // eslint-disable-next-line no-new -- Notification constructor fires side effect by design
-  new Notification(title, { body });
-};
-
-// ==================== Hook ====================
-
-interface UseDashboardSSEResult {
-  readonly notifications: readonly DashboardNotification[];
-  readonly markAllRead: () => void;
-  readonly markAsRead: (id: string) => void;
-  readonly dismissNotification: (id: string) => void;
-}
 
 /**
  * Subscribe to real-time dashboard events via SSE.
@@ -271,7 +163,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     const INITIAL_BACKOFF_MS = 1_000;
     const MAX_BACKOFF_MS = 30_000;
     const HEARTBEAT_TIMEOUT_MS = 45_000;
-    const JITTER_FACTOR = 0.6; // ±30% of current delay
+    const JITTER_FACTOR = 0.6; // +-30% of current delay
 
     // let: mutable reconnection state managed across connect/disconnect cycles
     let backoffMs = INITIAL_BACKOFF_MS; // let: reset on successful connection
@@ -444,8 +336,8 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
         try {
           await apiClient("/auth/refresh-orgs", { method: "POST", backgroundRetry: true });
         } catch (error) {
-          // Best-effort — org list refresh will happen on next navigation
-          void error; // best-effort — org list refresh will happen on next navigation
+          // Best-effort -- org list refresh will happen on next navigation
+          void error;
         }
 
         // Auto-switch to the installed org if it differs from the current tenant.
@@ -453,24 +345,20 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
           try {
             await switchOrgRef.current(data.installedTenantId);
           } catch (error) {
-            // Best-effort — user can manually switch via org selector
-            void error; // best-effort — user can manually switch via org selector
+            // Best-effort -- user can manually switch via org selector
+            void error;
           }
         } else {
           // Refresh user state to pick up org list changes (install or uninstall).
-          // For uninstalls, refreshUser re-reads /auth/me which reflects the
-          // updated org list and selected tenant from the server.
           try {
             await refreshUserRef.current();
           } catch (error) {
-            // Best-effort — stale user state is acceptable; next navigation refreshes
-            void error; // best-effort — stale user state is acceptable; next navigation refreshes
+            // Best-effort -- stale user state is acceptable; next navigation refreshes
+            void error;
           }
         }
 
         // Invalidate all dashboard and related queries AFTER auth state is settled.
-        // Use immediate invalidation (not debounced) since the auth refresh above
-        // already introduces sufficient delay.
         void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
         void queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all });
         void queryClient.invalidateQueries({ queryKey: queryKeys.subscription.all });
@@ -486,7 +374,6 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
       heartbeatTimer = setTimeout(() => {
         // No events received for 45s -- connection likely dropped silently.
-        // Close and trigger reconnection via scheduleReconnect.
         if (eventSource) {
           eventSource.close();
           eventSource = null;
@@ -569,7 +456,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
         clearTimeout(invalidationTimerRef.current);
         invalidationTimerRef.current = null;
       }
-      // Copy ref to local var — ref.current may change by cleanup time
+      // Copy ref to local var -- ref.current may change by cleanup time
       const pendingKeys = pendingKeysRef.current;
       pendingKeys.clear();
       if (reconnectTimer) {

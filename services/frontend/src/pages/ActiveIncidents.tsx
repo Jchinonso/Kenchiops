@@ -115,9 +115,7 @@ const MobileExpandedIncident = ({
       )}
 
       {error && (
-        <p className="text-sm text-red-600 dark:text-red-400">
-          Failed to load details: {error}
-        </p>
+        <p className="text-sm text-red-600 dark:text-red-400">Failed to load details: {error}</p>
       )}
 
       {triageResult && (

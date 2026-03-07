@@ -278,7 +278,8 @@ export const TeamManagement = () => {
                                 label: "Provider",
                                 value: member.providers
                                   .map(
-                                    (providerInfo) => providerInfo.username ?? titleCase(providerInfo.provider)
+                                    (providerInfo) =>
+                                      providerInfo.username ?? titleCase(providerInfo.provider)
                                   )
                                   .join(", "),
                               },
