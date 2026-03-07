@@ -475,7 +475,9 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     // -- Reconnection helpers --
 
     const resetHeartbeat = (): void => {
-      if (heartbeatTimer) {clearTimeout(heartbeatTimer);}
+      if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer);
+      }
       heartbeatTimer = setTimeout(() => {
         // No events received for 45s -- connection likely dropped silently.
         // Close and trigger reconnection via scheduleReconnect.
@@ -488,7 +490,9 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
 
     const scheduleReconnect = (): void => {
-      if (disposed) {return;}
+      if (disposed) {
+        return;
+      }
       // Jitter: +-30% of current delay to desynchronize reconnection across tabs
       const jitter = (Math.random() - 0.5) * JITTER_FACTOR * backoffMs;
       const delay = Math.max(0, backoffMs + jitter);
@@ -509,7 +513,9 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     // -- Connection lifecycle --
 
     const connect = (): void => {
-      if (disposed) {return;}
+      if (disposed) {
+        return;
+      }
 
       const source = new EventSource(SSE_ENDPOINT, { withCredentials: true });
       eventSource = source;
@@ -520,13 +526,19 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       });
 
       source.addEventListener("error", () => {
-        if (disposed) {return;}
+        if (disposed) {
+          return;
+        }
         // Guard: if eventSource was already nulled (heartbeat timeout handled it),
         // skip to prevent double reconnection.
-        if (eventSource !== source) {return;}
+        if (eventSource !== source) {
+          return;
+        }
         source.close();
         eventSource = null;
-        if (heartbeatTimer) {clearTimeout(heartbeatTimer);}
+        if (heartbeatTimer) {
+          clearTimeout(heartbeatTimer);
+        }
         scheduleReconnect();
       });
 
@@ -554,9 +566,15 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       // Copy ref to local var — ref.current may change by cleanup time
       const pendingKeys = pendingKeysRef.current;
       pendingKeys.clear();
-      if (reconnectTimer) {clearTimeout(reconnectTimer);}
-      if (heartbeatTimer) {clearTimeout(heartbeatTimer);}
-      if (eventSource) {eventSource.close();}
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer);
+      }
+      if (eventSource) {
+        eventSource.close();
+      }
     };
   }, [storageKey, debouncedInvalidate, queryClient]);
 

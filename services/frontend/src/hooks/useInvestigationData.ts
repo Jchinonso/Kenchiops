@@ -133,7 +133,9 @@ const buildInvestigationsUrl = (limit: number, offset: number, status?: string):
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   params.set("offset", String(offset));
-  if (status) {params.set("status", status);}
+  if (status) {
+    params.set("status", status);
+  }
   return `/api/v1/investigations?${params.toString()}`;
 };
 
