@@ -668,7 +668,9 @@ describe("useWebhookActivity", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useWebhookActivity({ limit: 10, offset: 0, source: "github" }), { wrapper: createWrapper() });
+    renderHook(() => useWebhookActivity({ limit: 10, offset: 0, source: "github" }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();
@@ -716,7 +718,10 @@ describe("useWebhookActivity", () => {
       createSuccessResponse({ items: [], total: 0, limit: 10, offset: 0 })
     );
 
-    renderHook(() => useWebhookActivity({ limit: 10, offset: 0, source: "slack", status: "failed" }), { wrapper: createWrapper() });
+    renderHook(
+      () => useWebhookActivity({ limit: 10, offset: 0, source: "slack", status: "failed" }),
+      { wrapper: createWrapper() }
+    );
 
     await waitFor(() => {
       expect(mockApiClient).toHaveBeenCalled();

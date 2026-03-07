@@ -32,12 +32,24 @@ interface MobileFilterDrawerProps {
 const countActiveFilters = (filters: FilterValues): number => {
   // let: incrementally counting truthy filter values
   let count = 0;
-  if (filters.repository) {count += 1;}
-  if (filters.severity) {count += 1;}
-  if (filters.minConfidence) {count += 1;}
-  if (filters.timeRange) {count += 1;}
-  if (filters.source) {count += 1;}
-  if (filters.status) {count += 1;}
+  if (filters.repository) {
+    count += 1;
+  }
+  if (filters.severity) {
+    count += 1;
+  }
+  if (filters.minConfidence) {
+    count += 1;
+  }
+  if (filters.timeRange) {
+    count += 1;
+  }
+  if (filters.source) {
+    count += 1;
+  }
+  if (filters.status) {
+    count += 1;
+  }
   return count;
 };
 

@@ -213,7 +213,11 @@ export const Investigations = () => {
         </Link>
       </div>
 
-      <MobileFilterDrawer variant="investigations" filters={filters} onFilterChange={handleFilterChange} />
+      <MobileFilterDrawer
+        variant="investigations"
+        filters={filters}
+        onFilterChange={handleFilterChange}
+      />
 
       <div aria-live="polite" className="sr-only">
         {isLoading

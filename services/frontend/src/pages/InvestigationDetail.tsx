@@ -70,9 +70,7 @@ const BackLink = () => (
 
 // ==================== Main Component ====================
 
-export const InvestigationDetail = ({
-  investigationId,
-}: InvestigationDetailProps) => {
+export const InvestigationDetail = ({ investigationId }: InvestigationDetailProps) => {
   const navigate = useNavigate();
   const {
     data: investigation,

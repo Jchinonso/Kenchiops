@@ -111,7 +111,11 @@ export const WebhookActivity = () => {
                 <MobileDataCard
                   key={activity.id}
                   title={activity.eventType}
-                  subtitle={activity.deliveryId.length > 20 ? `${activity.deliveryId.slice(0, 20)}...` : activity.deliveryId}
+                  subtitle={
+                    activity.deliveryId.length > 20
+                      ? `${activity.deliveryId.slice(0, 20)}...`
+                      : activity.deliveryId
+                  }
                   timestamp={activity.createdAt}
                   badges={[
                     {

@@ -1,125 +1,159 @@
-# Kenchi - AI-Driven DevOps Assistant
+# Kenchi
 
-[![CI](https://github.com/kenchiops/Kenchiops/actions/workflows/ci.yml/badge.svg)](https://github.com/kenchiops/Kenchiops/actions/workflows/ci.yml)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/typescript-5.3+-blue)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-
-An AI-powered DevOps assistant that automatically analyzes CI/CD failures, identifies root causes, and provides actionable insights via Slack and GitHub. Built with a safety-first architecture where the LLM is treated as an untrusted helper.
+An AI-powered DevOps assistant that analyzes CI/CD failures, triages production incidents, and surfaces actionable insights through a web dashboard, Slack, and GitHub. Built as a TypeScript monorepo with a safety-first architecture where the LLM is treated as an untrusted helper -- all AI suggestions are validated by deterministic code before any action is taken.
 
 ## Key Features
 
-- **Automatic CI Failure Analysis** - Analyzes build failures, test failures, and deployment issues using GPT-4
-- **Multi-Language Support** - Works with any programming language (TypeScript, Python, Go, Rust, Java, Ruby, etc.)
-- **Rich Slack Notifications** - Interactive messages with approval buttons, confidence scores, and recommended actions
-- **GitHub PR Comments** - Detailed analysis posted directly on pull requests with error locations and fixes
-- **Failure Aggregation** - Consolidates multiple related failures before analysis to reduce noise
-- **Redis Caching** - Intelligent caching of GitHub data and analysis results to minimize API calls
-- **Multi-Tenant Architecture** - Single deployment serves multiple GitHub installations and Slack workspaces
-- **Safety-First Design** - Confidence scoring, action gating, and human-in-the-loop approvals
+- **CI/CD Failure Analysis** -- Automatically analyzes build, test, and deployment failures using a multi-stage chunking pipeline with LLM-powered root cause identification
+- **Incident Triage** -- Ingests alerts from PagerDuty, Datadog, Grafana, and Prometheus; classifies severity, correlates related incidents, and matches runbooks
+- **Web Dashboard** -- React-based dashboard with real-time SSE updates, CI/CD analytics, failure history, webhook activity, and team management
+- **GitHub Integration** -- Posts analysis comments on pull requests with error locations, confidence scores, and recommended fixes
+- **Slack Notifications** -- Rich Block Kit messages with interactive approval buttons, confidence indicators, and threaded status updates
+- **Multi-Tenant Architecture** -- Supports multiple GitHub organizations and Slack workspaces from a single deployment with tenant-scoped data isolation
+- **RAG Knowledge Base** -- Retrieval-augmented generation using pgvector for similarity search across past incidents, runbooks, and resolution patterns
+- **CI Provider Integrations** -- OAuth connections to Vercel and Netlify for deployment status and build log access
+- **Safety-First Design** -- Confidence scoring, action gating, and human-in-the-loop approvals before any automated action
 
-## Architecture Overview
+## Architecture
 
 ```
-                              GitHub Webhooks
-                                     |
-                                     v
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   GitHub App    │     │    Slack Bot    │     │   API Service   │
-│   (Port 3002)   │     │   (Port 3001)   │     │   (Port 3000)   │
-└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    │     @kenchi/shared      │
-                    │  (Core utilities, AI,   │
-                    │   caching, formatting)  │
-                    └────────────┬────────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                  │
-        ┌─────┴─────┐     ┌─────┴─────┐     ┌─────┴─────┐
-        │   Redis   │     │ PostgreSQL │     │  OpenAI   │
-        │  (Cache,  │     │  (Tenants, │     │  (GPT-4   │
-        │  Queues)  │     │  Mappings) │     │  Analysis)│
-        └───────────┘     └───────────┘     └───────────┘
+                       GitHub/GitLab       Monitoring         Users
+                       Webhooks            Alerts
+                           |                   |                |
+                           v                   v                v
+  +--------------------+  +------------------+  +--------------+  +------------+
+  |   GitHub App       |  | Incident Triage  |  |  API Service |  |  Frontend  |
+  |   (Port 3002)      |  | (Port 3004)      |  |  (Port 3000) |  |  (Port 80) |
+  +--------+-----------+  +--------+---------+  +------+-------+  +------+-----+
+           |                       |                    |                 |
+           +-----------+-----------+--------------------+                 |
+                       |                                                  |
+                       v                                                  |
+              +--------+--------+                                         |
+              | @kenchi/shared   |                                         |
+              | (Core utilities, |                                         |
+              |  LLM, RAG, DB)   |                                        |
+              +--------+--------+                                         |
+                       |                                                  |
+         +-------------+-------------+                                    |
+         |             |             |                                    |
+    +----+----+  +-----+-----+  +---+---+                                |
+    | Postgres |  |   Redis   |  |  LLM  |                               |
+    | pgvector |  |  (Cache,  |  | (via  |                               |
+    |          |  |  Pub/Sub) |  | OpenAI/|                               |
+    +----------+  +-----------+  | OpenRouter)                            |
+                                 +--------+                               |
+                                                                          |
+  +---+--------+  +-----------+  +-----------+                            |
+  | Prometheus |  | Grafana   |  | Alert-    |                            |
+  | (Metrics)  |  | (Dashboards) | manager   |                            |
+  +------------+  +-----------+  +-----------+                            |
+                                                                          |
+  +-----------+                                                           |
+  | Slack Bot |  <--- Socket Mode connection to Slack                     |
+  | (Port 3001)|                                                          |
+  +-----------+                                                           |
 ```
 
 ## Project Structure
 
 ```
 kenchi/
-├── packages/
-│   └── shared/                 # Shared library used by all services
-│       └── src/
-│           ├── core/           # Config, logging, errors, types
-│           ├── cache/          # Redis caching (GitHub, tenant, analysis)
-│           ├── queue/          # Redis message queues and pub/sub
-│           ├── aggregation/    # CI failure aggregation and consolidation
-│           ├── openaiClient/   # OpenAI integration with validation
-│           ├── safety/         # Confidence scoring, action gating
-│           ├── database/       # PostgreSQL tenant management
-│           ├── http/           # Middleware, rate limiting, validation
-│           ├── formatting/     # Slack/GitHub message formatting
-│           ├── actions/        # Action execution queue
-│           ├── integrations/   # GitHub client, prompt building
-│           ├── security/       # Secret redaction
-│           └── constants/      # All application constants
-│
-├── services/
-│   ├── api/                    # Central API service (Port 3000)
-│   │   └── src/
-│   │       ├── routes/         # Health, webhook, event, analysis routes
-│   │       └── services/       # Analysis orchestration
-│   │
-│   ├── slack-bot/              # Slack integration (Port 3001)
-│   │   └── src/
-│   │       ├── handlers/       # Commands, mentions, actions, modals
-│   │       ├── formatters/     # CI failure message formatting
-│   │       ├── routes/         # OAuth, HTTP endpoints
-│   │       └── services/       # Notifications, tenant client
-│   │
-│   └── github-app/             # GitHub App (Port 3002)
-│       └── src/
-│           ├── handlers/       # Check run, PR, installation handlers
-│           ├── formatters/     # PR comments, Slack payloads
-│           ├── services/       # Context gathering, aggregation
-│           └── routes/         # Webhooks, API, setup
-│
-├── docs/                       # Documentation
-├── database/                   # SQL migrations
-└── docker-compose.yml          # Container orchestration
++-- packages/
+|   +-- shared/                    # Shared library (@kenchi/shared)
+|       +-- src/
+|           +-- core/              # Config, logger, errors, types
+|           +-- database/          # Repositories, migrations, domain types
+|           +-- llm/               # LLM client, providers, token management
+|           +-- rag/               # RAG pipeline, embeddings, search, ingestion
+|           +-- finetuning/        # Fine-tuning dataset builder, model versioning
+|           +-- billing/           # Stripe integration, plan enforcement
+|           +-- cache/             # Redis caching (GitHub, tenant, analysis)
+|           +-- queue/             # Redis message queues and pub/sub
+|           +-- aggregation/       # CI failure aggregation and consolidation
+|           +-- safety/            # Confidence scoring, action gating
+|           +-- http/              # Middleware, httpClient, retry, timeout
+|           +-- observability/     # Prometheus metrics, alerting, usage tracking
+|           +-- rateLimit/         # Rate limiting middleware (plan-aware)
+|           +-- security/          # Secret redaction, webhook signature verification
+|           +-- formatting/        # Slack/GitHub message formatting
+|           +-- constants/         # All application constants
+|           +-- health/            # Health/readiness check utilities
+|           +-- shutdown/          # Graceful shutdown handlers
+|           +-- actions/           # Action proposal execution queue
+|           +-- integrations/      # GitHub client, prompt building
+|           +-- ports/             # Port interfaces for adapters
+|           +-- concurrency/       # pMap, bounded concurrency utilities
+|           +-- index.ts           # Barrel exports
+|
++-- services/
+|   +-- api/                       # Central API service (Port 3000)
+|   |   +-- src/
+|   |       +-- routes/            # HTTP handlers (auth, dashboard, webhooks, etc.)
+|   |       +-- services/          # Business logic (analysis, auth, integrations)
+|   |       +-- ports/             # Port interface definitions
+|   |       +-- adapters/          # External service adapters
+|   |
+|   +-- github-app/                # GitHub App webhook processor (Port 3002)
+|   |   +-- src/
+|   |       +-- handlers/          # Check run, PR, installation event handlers
+|   |       +-- services/          # Context gathering, aggregation
+|   |       +-- adapters/          # GitHub API adapters
+|   |       +-- routes/            # Webhook endpoints
+|   |
+|   +-- slack-bot/                 # Slack Bot integration (Port 3001)
+|   |   +-- src/
+|   |       +-- handlers/          # Commands, mentions, actions, modals
+|   |       +-- formatters/        # CI failure message formatting
+|   |       +-- services/          # Notifications, tenant client
+|   |       +-- routes/            # OAuth, HTTP endpoints
+|   |
+|   +-- incident-triage/           # Incident triage pipeline (Port 3004)
+|   |   +-- src/
+|   |       +-- adapters/          # PagerDuty, Datadog, Grafana, Prometheus, etc.
+|   |       +-- services/          # Severity classifier, dedup, correlation, dispatch
+|   |       +-- workers/           # Triage and investigation background workers
+|   |       +-- routes/            # Alert webhook and investigation endpoints
+|   |       +-- prompts/           # LLM prompt templates for triage
+|   |
+|   +-- frontend/                  # Web dashboard (React SPA, Port 3003/80)
+|       +-- src/
+|           +-- pages/             # Dashboard, CI/CD views, Settings, Integrations
+|           +-- components/        # Shared UI components (shadcn/ui)
+|           +-- hooks/             # Custom React hooks (SSE, auth, data fetching)
+|           +-- lib/               # Utilities (cn, formatters, API client)
+|
++-- infra/                         # Monitoring infrastructure configs
+|   +-- prometheus/                # Prometheus config, recording rules, alerts
+|   +-- grafana/                   # Grafana provisioning and dashboards
+|   +-- alertmanager/              # Alertmanager configuration
+|
++-- docs/                          # Project documentation
++-- database/                      # Database initialization scripts
++-- docker-compose.yml             # Full stack orchestration
++-- Dockerfile                     # Multi-stage production build
 ```
 
-## How It Works
+## Tech Stack
 
-### CI Failure Analysis Flow
-
-1. **Webhook Received** - GitHub sends check_run webhook when CI fails
-2. **Context Gathering** - Fetches logs, annotations, PR diff, commit info in parallel
-3. **Failure Aggregation** - Waits briefly (debounce) to consolidate related failures
-4. **AI Analysis** - GPT-4 analyzes the failure with structured output
-5. **Confidence Scoring** - Deterministic validation of AI suggestions
-6. **Notification** - Posts rich message to Slack and GitHub PR comment
-7. **Action Approval** - User can approve/reject suggested actions via buttons
-8. **Execution** - Approved actions executed asynchronously
-
-### Safety Architecture
-
-The LLM is treated as an **untrusted helper**:
-
-- LLM provides **suggestions only** - never executes commands directly
-- All outputs are **validated** by deterministic code before action
-- **Confidence scoring** gates which actions require human approval
-- **Action classification** blocks dangerous operations entirely
-
-| Confidence | Risk Level | Behavior                           |
-| ---------- | ---------- | ---------------------------------- |
-| 0.85+      | Low/Medium | Auto-approve safe actions          |
-| 0.70-0.85  | Medium     | Require approval for risky actions |
-| 0.50-0.70  | High       | Require approval for all actions   |
-| < 0.50     | Critical   | Block all actions, require review  |
+| Category          | Technology                                               |
+| ----------------- | -------------------------------------------------------- |
+| Language          | TypeScript 5.3+, ES Modules                              |
+| Runtime           | Node.js 20+                                              |
+| Backend Framework | Express.js                                               |
+| Frontend          | React 19, React Router v7, Tailwind CSS, shadcn/ui       |
+| State Management  | TanStack Query, native EventSource (SSE)                 |
+| Database          | PostgreSQL 16 with pgvector                              |
+| Cache / Queues    | Redis 7                                                  |
+| LLM               | OpenAI SDK (supports OpenRouter for model routing)       |
+| Slack             | Slack Bolt Framework (Socket Mode)                       |
+| GitHub            | Octokit                                                  |
+| Monitoring        | Prometheus, Grafana, Alertmanager                        |
+| Billing           | Stripe                                                   |
+| Build             | npm workspaces, TypeScript project references            |
+| Testing           | Jest (backend), Vitest (frontend), React Testing Library |
+| Linting           | ESLint, Prettier, Husky + lint-staged                    |
+| Containerization  | Docker, Docker Compose                                   |
 
 ## Getting Started
 
@@ -127,13 +161,13 @@ The LLM is treated as an **untrusted helper**:
 
 - Docker and Docker Compose
 - Node.js 20+ (for local development)
-- OpenAI API key
-- GitHub App credentials
-- Slack App credentials
+- A GitHub App with webhook secret and private key
+- A Slack App with bot token and signing secret
+- An LLM API key (OpenAI or OpenRouter)
 
 ### Quick Start with Docker
 
-1. **Clone and configure**:
+1. Clone and configure:
 
    ```bash
    git clone https://github.com/kenchiops/Kenchiops.git
@@ -141,35 +175,24 @@ The LLM is treated as an **untrusted helper**:
    cp .env.example .env
    ```
 
-2. **Set environment variables** in `.env`:
+2. Edit `.env` with your credentials (see [Environment Variables](#environment-variables) below).
 
-   ```env
-   # Required
-   OPENAI_API_KEY=sk-...
-   GITHUB_APP_ID=123456
-   GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----..."
-   GITHUB_WEBHOOK_SECRET=your-webhook-secret
-   SLACK_BOT_TOKEN=xoxb-...
-   SLACK_SIGNING_SECRET=...
-   SLACK_APP_TOKEN=xapp-...
-
-   # Optional (defaults provided)
-   DATABASE_URL=postgres://kenchi:kenchi@postgres:5432/kenchi
-   REDIS_URL=redis://redis:6379
-   ```
-
-3. **Start services**:
+3. Start the full stack:
 
    ```bash
    docker compose up -d
    ```
 
-4. **Verify health**:
+4. Verify services are healthy:
+
    ```bash
-   curl http://localhost:3000/health  # API
-   curl http://localhost:3001/health  # Slack Bot
-   curl http://localhost:3002/health  # GitHub App
+   curl http://localhost:3000/health    # API
+   curl http://localhost:3001/health    # Slack Bot
+   curl http://localhost:3002/health    # GitHub App
+   curl http://localhost:3004/health    # Incident Triage
    ```
+
+5. Open the dashboard at `http://localhost:3003`.
 
 ### Local Development
 
@@ -177,161 +200,172 @@ The LLM is treated as an **untrusted helper**:
 # Install dependencies
 npm install
 
-# Build shared package (required first)
+# Build the shared package (required before running any service)
 npm run build:shared
 
 # Start individual services with hot reload
-npm run dev:api
-npm run dev:slack-bot
-npm run dev:github-app
+npm run dev:api          # API on port 3000
+npm run dev:slack-bot    # Slack Bot on port 3001
+npm run dev:github-app   # GitHub App on port 3002
+npm run dev:frontend     # Frontend on port 5173 (Vite)
+```
+
+Note: PostgreSQL and Redis must be running locally or via Docker. You can start only the infrastructure:
+
+```bash
+docker compose up -d postgres redis
 ```
 
 ## Services
 
 ### API Service (Port 3000)
 
-Central orchestration service for AI analysis.
+Central orchestration service. Handles authentication, analysis orchestration, dashboard data, team management, billing, and integrations.
 
-| Endpoint           | Method | Description                 |
-| ------------------ | ------ | --------------------------- |
-| `/health`          | GET    | Health check                |
-| `/api/analyze`     | POST   | Trigger CI failure analysis |
-| `/webhook/:source` | POST   | Webhook ingestion           |
-| `/events`          | POST   | Event processing            |
+Key route groups: auth (OAuth login/callback), dashboard (stats, repositories, analyses, failures), webhooks, CI/CD analysis, RAG document management, fine-tuning, risk rules, SSE (real-time events), integrations (Vercel/Netlify OAuth), subscriptions, organizations, teams, invitations, API keys, billing (Stripe), and data export.
 
-### Slack Bot Service (Port 3001)
+### GitHub App (Port 3002)
 
-Slack integration using Socket Mode (WebSocket).
+Processes GitHub webhooks for CI/CD events. Detects check run failures, gathers enriched context (logs, annotations, PR diffs, commit history), triggers AI analysis, and posts results as PR comments.
 
-**Features**:
+### Slack Bot (Port 3001)
 
-- `/kenchi` slash command
-- Interactive approval buttons
-- App Home configuration
-- Repository selection modal
-- CI failure notifications
+Slack integration using Socket Mode (persistent WebSocket). Handles `/kenchi` slash commands, interactive approval buttons, app home configuration, repository selection modals, and CI failure notifications with rich Block Kit formatting.
 
-### GitHub App Service (Port 3002)
+### Incident Triage (Port 3004)
 
-GitHub webhook processing and PR integration.
+Ingests alerts from monitoring tools (PagerDuty, Datadog, Grafana, Prometheus, Vercel, Netlify) via webhooks. Runs a triage pipeline: severity classification, incident deduplication and correlation, evidence aggregation, runbook matching, AI-powered summarization, and dispatch to Slack or PagerDuty.
 
-**Features**:
+### Frontend (Port 3003 in Docker, Port 5173 in dev)
 
-- Check run failure detection
-- PR comment posting with analysis
-- Check annotations creation
-- Webhook signature verification
-- Rate-limited GitHub API access
+React single-page application. Features include: dashboard overview with real-time stats, CI/CD analysis detail views, failure history, webhook activity monitoring, active incidents, on-demand investigations, repository details, team management, settings (profile, notifications, billing, subscriptions), integrations (Vercel, Netlify, GitLab CI), and onboarding flows. Uses Server-Sent Events for live updates.
 
-## Configuration
+## Environment Variables
 
-### Environment Variables
+Copy `.env.example` for the full list. Key variables:
 
-| Variable                 | Required | Description                          |
-| ------------------------ | -------- | ------------------------------------ |
-| `OPENAI_API_KEY`         | Yes      | OpenAI API key for GPT-4             |
-| `GITHUB_APP_ID`          | Yes      | GitHub App ID                        |
-| `GITHUB_APP_PRIVATE_KEY` | Yes      | GitHub App private key (PEM format)  |
-| `GITHUB_WEBHOOK_SECRET`  | Yes      | GitHub webhook secret                |
-| `SLACK_BOT_TOKEN`        | Yes      | Slack bot token (xoxb-...)           |
-| `SLACK_SIGNING_SECRET`   | Yes      | Slack signing secret                 |
-| `SLACK_APP_TOKEN`        | Yes      | Slack app-level token (xapp-...)     |
-| `DATABASE_URL`           | No       | PostgreSQL connection string         |
-| `REDIS_URL`              | No       | Redis connection string              |
-| `NODE_ENV`               | No       | Environment (development/production) |
+| Variable                     | Required | Description                                                |
+| ---------------------------- | -------- | ---------------------------------------------------------- |
+| `OPENAI_API_KEY`             | Yes      | OpenAI API key (or set `LLM_API_KEY` for OpenRouter)       |
+| `GITHUB_APP_ID`              | Yes      | GitHub App ID                                              |
+| `GITHUB_APP_PRIVATE_KEY`     | Yes      | GitHub App private key (PEM format)                        |
+| `GITHUB_WEBHOOK_SECRET`      | Yes      | GitHub webhook signing secret                              |
+| `GITHUB_OAUTH_CLIENT_ID`     | Yes      | GitHub OAuth client ID (for user login)                    |
+| `GITHUB_OAUTH_CLIENT_SECRET` | Yes      | GitHub OAuth client secret                                 |
+| `SLACK_BOT_TOKEN`            | Yes      | Slack bot token (`xoxb-...`)                               |
+| `SLACK_SIGNING_SECRET`       | Yes      | Slack app signing secret                                   |
+| `SLACK_APP_LEVEL_TOKEN`      | Yes      | Slack app-level token (`xapp-...`) for Socket Mode         |
+| `JWT_SECRET`                 | Yes      | JWT signing secret (min 32 chars)                          |
+| `DATABASE_URL`               | No       | PostgreSQL connection string (defaults provided in Docker) |
+| `REDIS_URL`                  | No       | Redis connection string (defaults provided in Docker)      |
+| `ENCRYPTION_KEY`             | Prod     | 32-byte hex key for AES-256-GCM token encryption           |
+| `LLM_PROVIDER`               | No       | `openai` (default) or `openrouter`                         |
+| `LLM_MODEL`                  | No       | Model ID override (e.g., `google/gemini-2.5-flash`)        |
+| `FRONTEND_URL`               | No       | Frontend origin for CORS and redirects                     |
 
-### Redis Caching
-
-Redis is used for:
-
-- **Caching** - GitHub API responses, tenant data, analysis results
-- **Message Queues** - CI analysis, Slack notifications, action execution
-- **Aggregation** - Consolidating failures before analysis
-
-Default TTLs:
-
-- GitHub repositories: 1 hour
-- Pull requests: 30 minutes
-- Analysis results: 24 hours
-- Tenant configs: 2 hours
+Optional provider OAuth credentials for GitLab, Bitbucket, and Azure DevOps are documented in `.env.example`.
 
 ## Development
 
 ### Scripts
 
 ```bash
-npm run build           # Build all packages
-npm run build:shared    # Build shared package only
-npm run test            # Run tests
-npm run test:coverage   # Run tests with coverage
-npm run lint            # Check code quality
-npm run lint:fix        # Auto-fix lint issues
-npm run format          # Format code with Prettier
-npm run type-check      # TypeScript type checking
-npm run check:duplication  # Check for code duplication
+npm run build             # Build all packages and services
+npm run build:shared      # Build shared package only
+npm run type-check        # TypeScript type checking (all packages)
+npm run lint              # ESLint
+npm run lint:fix          # ESLint with auto-fix
+npm run format            # Prettier formatting
+npm run test              # Run all tests (Jest)
+npm run test:watch        # Watch mode
+npm run test:coverage     # Coverage report
+npm run check:duplication # Check for code duplication
+npm run validate          # Validate environment variables
 ```
 
-### Code Quality Standards
-
-- **Functional patterns** - No imperative loops, use map/filter/reduce
-- **Typed errors** - All errors use typed classes from `@kenchi/shared`
-- **Immutability** - Prefer `const`, avoid mutations
-- **Lookup tables** - Replace switch statements with handler maps
-- **Zero duplication** - All shared code in `@kenchi/shared`
-
-### Testing
+### Docker Commands
 
 ```bash
-npm test                    # Run all tests
-npm run test:watch          # Watch mode
-npm run test:coverage       # Coverage report
-npm test -- --testPathPattern="slack-bot"  # Specific service
+docker compose up -d                  # Start all services
+docker compose down                   # Stop all services
+docker compose logs -f github-app     # Tail logs for a service
+docker compose restart api            # Restart a single service
+docker compose up -d --build          # Rebuild and start
+docker compose ps                     # Check service status
 ```
 
-## Docker
+### Docker Services
 
-### Services
+| Service           | Port | Description                     |
+| ----------------- | ---- | ------------------------------- |
+| `api`             | 3000 | API service                     |
+| `slack-bot`       | 3001 | Slack bot                       |
+| `github-app`      | 3002 | GitHub App                      |
+| `frontend`        | 3003 | Web dashboard (nginx)           |
+| `incident-triage` | 3004 | Incident triage                 |
+| `postgres`        | 5433 | PostgreSQL 16 with pgvector     |
+| `redis`           | --   | Redis 7 (internal network only) |
+| `prometheus`      | 9090 | Metrics collection              |
+| `grafana`         | 3005 | Monitoring dashboards           |
+| `alertmanager`    | 9093 | Alert routing                   |
 
-| Service      | Port | Description              |
-| ------------ | ---- | ------------------------ |
-| `api`        | 3000 | API service              |
-| `slack-bot`  | 3001 | Slack bot                |
-| `github-app` | 3002 | GitHub App               |
-| `postgres`   | 5433 | PostgreSQL with pgvector |
-| `redis`      | 6379 | Redis cache and queues   |
+### Code Quality
 
-### Commands
+The project enforces strict architectural patterns. Key conventions:
 
-```bash
-docker compose up -d                    # Start all
-docker compose down                     # Stop all
-docker compose logs -f github-app      # View logs
-docker compose restart github-app      # Restart service
-docker compose up -d --build           # Rebuild and start
-docker compose ps                       # Check status
-```
+- Services use factory functions with closures (not classes)
+- Services depend on port interfaces, never on adapters directly
+- Repositories return domain objects, never raw database rows
+- All external calls require timeouts, structured logs, and error classification
+- Typed errors only (`ValidationError`, `NotFoundError`, etc.) -- no bare `throw new Error()`
+- `RequestContext` propagates through all layers (handler, service, adapter)
+- Webhook signatures are verified before any processing
 
-## Multi-Tenant Architecture
+See [`.claude/CLAUDE.md`](./.claude/CLAUDE.md) for the complete coding standards.
 
-Kenchi supports multiple GitHub installations and Slack workspaces:
+## How It Works
 
-1. **GitHub App Installation** - Creates tenant record (status: pending)
-2. **Slack OAuth** - Links Slack workspace to tenant (status: active)
-3. **Repository Mapping** - Configure which repos notify which Slack channels
-4. **Request Handling** - Each webhook includes installation_id for tenant lookup
+### CI Failure Analysis Flow
+
+1. GitHub sends a `check_run` webhook when CI fails
+2. The GitHub App gathers context: logs, annotations, PR diff, commit history (in parallel)
+3. Failures are aggregated with a debounce window to consolidate related failures
+4. The analysis pipeline chunks large logs, extracts key signals per chunk, then runs a final LLM analysis
+5. Deterministic confidence scoring validates the AI output
+6. Results are posted to the PR as a GitHub comment and sent as a Slack notification
+7. Users can approve or reject suggested actions via interactive Slack buttons
+
+### Incident Triage Flow
+
+1. Monitoring tools (PagerDuty, Datadog, etc.) send alert webhooks to the triage service
+2. Alerts are normalized, deduplicated, and correlated with existing incidents
+3. Severity is classified, evidence is aggregated, and runbooks are matched
+4. An AI summarizer generates a triage report with recommended next steps
+5. Results are dispatched to Slack channels or PagerDuty for response coordination
+
+### Safety Architecture
+
+The LLM is treated as an untrusted helper. It provides analysis and suggestions but never executes actions directly.
+
+| Confidence  | Behavior                                 |
+| ----------- | ---------------------------------------- |
+| 0.85+       | Auto-approve safe, low-impact actions    |
+| 0.70 - 0.85 | Require human approval for risky actions |
+| 0.50 - 0.70 | Require approval for all actions         |
+| Below 0.50  | Block all actions, require manual review |
+
+All actions are validated by deterministic safety checks. Dangerous operations (data deletion, force pushes) are always blocked regardless of confidence.
 
 ## Documentation
 
-- [QUICKSTART.md](./QUICKSTART.md) - Step-by-step setup guide
-- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System architecture
-- [CODE_ORGANIZATION.md](./docs/CODE_ORGANIZATION.md) - Code guidelines
-- [DOCKER.md](./DOCKER.md) - Docker deployment guide
-- [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
+- [QUICKSTART.md](./QUICKSTART.md) -- Step-by-step setup guide
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) -- System architecture
+- [docs/SYSTEM_ARCHITECTURE.md](./docs/SYSTEM_ARCHITECTURE.md) -- Detailed component design
+- [docs/DATA_MODELS.md](./docs/DATA_MODELS.md) -- Data schemas (Event, Evidence, Analysis)
+- [DOCKER.md](./DOCKER.md) -- Docker deployment guide
+- [CONTRIBUTING.md](./CONTRIBUTING.md) -- Contribution guidelines
+- [.claude/CLAUDE.md](./.claude/CLAUDE.md) -- Coding standards and conventions
 
 ## License
 
 MIT
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
