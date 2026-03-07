@@ -6,6 +6,7 @@
  */
 
 import { useMemo } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from "recharts";
 import {
   ChartContainer,
@@ -38,23 +39,31 @@ const LEVEL_LABELS: Readonly<Record<string, string>> = {
   low: "Low (<50%)",
 } as const;
 
+const LEVEL_LABELS_SHORT: Readonly<Record<string, string>> = {
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+} as const;
+
 const ALL_LEVELS = ["high", "medium", "low"] as const;
 
 // ==================== Component ====================
 
 export const ConfidenceChart = () => {
   const { data, isLoading } = useConfidenceDistribution();
+  const isMobile = useIsMobile();
+  const labels = isMobile ? LEVEL_LABELS_SHORT : LEVEL_LABELS;
 
   const { chartData, totalAnalyses } = useMemo(() => {
     const apiMap = new Map((data ?? []).map((bucket) => [bucket.level, bucket.count]));
     const items = ALL_LEVELS.map((level) => ({
-      level: LEVEL_LABELS[level] ?? level,
+      level: labels[level] ?? level,
       count: apiMap.get(level) ?? 0,
       fill: LEVEL_COLORS[level] ?? "#6b7280",
     }));
     const total = items.reduce((runningTotal, bucket) => runningTotal + bucket.count, 0);
     return { chartData: items, totalAnalyses: total };
-  }, [data]);
+  }, [data, labels]);
 
   return (
     <Card className="mb-6 sm:mb-8">
@@ -91,8 +100,8 @@ export const ConfidenceChart = () => {
               <YAxis
                 dataKey="level"
                 type="category"
-                width={120}
-                tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+                width={isMobile ? 70 : 120}
+                tick={{ fontSize: isMobile ? 11 : 12, fill: "hsl(var(--foreground))" }}
               />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Bar dataKey="count" radius={[0, 4, 4, 0]}>
