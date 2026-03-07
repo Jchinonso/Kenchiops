@@ -269,7 +269,7 @@ const usePrefetchRoute = (): ((href: string) => void) => {
         }
 
         case "/dashboard/incidents/active": {
-          if (!tenantId) break;
+          if (!tenantId) {break;}
           void queryClient.prefetchQuery({
             queryKey: queryKeys.incidents.list({
               tenantId,
@@ -284,7 +284,7 @@ const usePrefetchRoute = (): ((href: string) => void) => {
         }
 
         case "/dashboard/incidents/investigations": {
-          if (!tenantId) break;
+          if (!tenantId) {break;}
           void queryClient.prefetchQuery({
             queryKey: queryKeys.investigations.list({
               limit: 20,

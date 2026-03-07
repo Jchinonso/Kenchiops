@@ -277,7 +277,7 @@ export const CICDAnalyses = () => {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="font-mono hover:text-indigo-500 underline decoration-dotted underline-offset-2"
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(event) => event.stopPropagation()}
                               >
                                 {commitSha.slice(0, 7)}
                               </a>
@@ -328,8 +328,8 @@ export const CICDAnalyses = () => {
                         <button
                           type="button"
                           className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium min-h-[44px] flex items-center"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                          onClick={(event) => {
+                            event.stopPropagation();
                             setSelectedAnalysisId(analysis.id);
                           }}
                         >
@@ -502,7 +502,7 @@ export const CICDAnalyses = () => {
 
       <Card>
         <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-5 h-5 text-indigo-500" />
               <CardTitle>Analysis Results</CardTitle>
@@ -513,7 +513,7 @@ export const CICDAnalyses = () => {
                   <button
                     type="button"
                     onClick={() => exportAnalysesToCSV(items)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors self-start sm:self-auto"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Export Page

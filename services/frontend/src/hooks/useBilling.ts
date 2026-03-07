@@ -7,11 +7,9 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchQuery, fetchMutation, fetchMutationRaw, ApiError } from "@/lib/fetchQuery";
+import { fetchQuery, fetchMutation, fetchMutationRaw, ApiError, parseErrorBody } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
-import { parseErrorBody } from "@/lib/fetchQuery";
-import type { UseFetchResult } from "@/hooks/useQueryCompat";
-import { toFetchResult } from "@/hooks/useQueryCompat";
+import { toFetchResult, type UseFetchResult } from "@/hooks/useQueryCompat";
 
 // ==================== DTO Types ====================
 

@@ -107,7 +107,6 @@ const Dashboard = () => {
   useEffect(() => {
     if (notifications.length !== prevNotificationCountRef.current) {
       prevNotificationCountRef.current = notifications.length;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing timestamp with external SSE event count
       setLastRefreshAt(new Date());
     }
   }, [notifications.length]);

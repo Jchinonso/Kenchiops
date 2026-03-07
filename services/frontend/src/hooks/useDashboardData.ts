@@ -12,8 +12,7 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { fetchQuery, fetchQueryPost } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
-import type { FetchState, UseFetchResult } from "@/hooks/useQueryCompat";
-import { toFetchResult, toFetchState } from "@/hooks/useQueryCompat";
+import { toFetchResult, toFetchState, type FetchState, type UseFetchResult } from "@/hooks/useQueryCompat";
 
 // ==================== Types ====================
 
@@ -95,11 +94,11 @@ const buildAnalysesUrl = (options: BuildAnalysesUrlOptions): string => {
   const params = new URLSearchParams();
   params.set("limit", String(options.limit));
   params.set("offset", String(options.offset));
-  if (options.repository) params.set("repository", options.repository);
-  if (options.minConfidence) params.set("minConfidence", options.minConfidence);
-  if (options.maxConfidence) params.set("maxConfidence", options.maxConfidence);
-  if (options.since) params.set("since", options.since);
-  if (options.source) params.set("source", options.source);
+  if (options.repository) {params.set("repository", options.repository);}
+  if (options.minConfidence) {params.set("minConfidence", options.minConfidence);}
+  if (options.maxConfidence) {params.set("maxConfidence", options.maxConfidence);}
+  if (options.since) {params.set("since", options.since);}
+  if (options.source) {params.set("source", options.source);}
   return `/api/v1/dashboard/analyses?${params.toString()}`;
 };
 
@@ -116,17 +115,17 @@ const buildFailuresUrl = (options: BuildFailuresUrlOptions): string => {
   const params = new URLSearchParams();
   params.set("limit", String(options.limit));
   params.set("offset", String(options.offset));
-  if (options.repository) params.set("repository", options.repository);
-  if (options.severity) params.set("severity", options.severity);
-  if (options.since) params.set("since", options.since);
-  if (options.source) params.set("source", options.source);
+  if (options.repository) {params.set("repository", options.repository);}
+  if (options.severity) {params.set("severity", options.severity);}
+  if (options.since) {params.set("since", options.since);}
+  if (options.source) {params.set("source", options.source);}
   return `/api/v1/dashboard/failures?${params.toString()}`;
 };
 
 const buildConfidenceTrendUrl = (bucket: "day" | "week", since?: string): string => {
   const params = new URLSearchParams();
   params.set("bucket", bucket);
-  if (since) params.set("since", since);
+  if (since) {params.set("since", since);}
   return `/api/v1/dashboard/stats/confidence-trend?${params.toString()}`;
 };
 
@@ -139,8 +138,8 @@ const buildWebhookActivityUrl = (
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   params.set("offset", String(offset));
-  if (source) params.set("source", source);
-  if (status) params.set("status", status);
+  if (source) {params.set("source", source);}
+  if (status) {params.set("status", status);}
   return `/api/v1/dashboard/webhook-activity?${params.toString()}`;
 };
 

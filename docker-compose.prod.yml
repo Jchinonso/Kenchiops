@@ -13,6 +13,14 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: kenchi-postgres
+    command: >-
+      bash -c "
+        docker-entrypoint.sh postgres &
+        PG_PID=$$!;
+        until pg_isready -U kenchi -d kenchi -q; do sleep 1; done;
+        sync-password.sh;
+        wait $$PG_PID
+      "
     environment:
       - POSTGRES_USER=kenchi
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -20,6 +28,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d:ro
+      - ./database/sync-password.sh:/usr/local/bin/sync-password.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U kenchi -d kenchi"]
       interval: 10s

@@ -20,14 +20,6 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// ==================== Mock apiClient ====================
-
-const mockApiClient = vi.fn();
-
-vi.mock("@/lib/apiClient", () => ({
-  apiClient: (...args: unknown[]) => mockApiClient(...args),
-}));
-
 // ==================== Imports ====================
 
 import {
@@ -42,6 +34,14 @@ import {
   useConfidenceTrend,
   useWebhookActivity,
 } from "@/hooks/useDashboardData";
+
+// ==================== Mock apiClient ====================
+
+const mockApiClient = vi.fn();
+
+vi.mock("@/lib/apiClient", () => ({
+  apiClient: (...args: unknown[]) => mockApiClient(...args),
+}));
 
 // ==================== Setup ====================
 

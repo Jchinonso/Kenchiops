@@ -32,11 +32,11 @@ import { TimeDisplay } from "@/components/TimeDisplay";
 export { SortableTableHead, type SortConfig } from "@/components/SortableTableHead";
 
 /** Statuses that allow acknowledging */
-const canAcknowledge = (status: string): boolean =>
+export const canAcknowledge = (status: string): boolean =>
   status === "received" || status === "triaged" || status === "escalated";
 
 /** Statuses that allow resolving */
-const canResolve = (status: string): boolean =>
+export const canResolve = (status: string): boolean =>
   status !== "resolved" && status !== "closed" && status !== "deduped";
 
 // ==================== IncidentRow ====================

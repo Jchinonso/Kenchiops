@@ -257,7 +257,7 @@ export const CICDFailures = () => {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="font-mono hover:text-indigo-500 underline decoration-dotted underline-offset-2"
-                                  onClick={(e) => e.stopPropagation()}
+                                  onClick={(event) => event.stopPropagation()}
                                 >
                                   {headSha.slice(0, 7)}
                                 </a>
@@ -302,7 +302,7 @@ export const CICDFailures = () => {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md"
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(event) => event.stopPropagation()}
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                               View on GitHub
@@ -312,7 +312,7 @@ export const CICDFailures = () => {
                             <Link
                               to={`/dashboard/cicd/analyses/${status.analysisId}`}
                               className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-md"
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(event) => event.stopPropagation()}
                             >
                               <Search className="w-3.5 h-3.5" />
                               View Analysis
@@ -431,7 +431,7 @@ export const CICDFailures = () => {
 
       <Card>
         <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-red-500" />
               <CardTitle>Failure Events</CardTitle>
@@ -442,7 +442,7 @@ export const CICDFailures = () => {
                   <button
                     type="button"
                     onClick={() => exportFailuresToCSV(items)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors self-start sm:self-auto"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Export Page
