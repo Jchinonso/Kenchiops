@@ -15,10 +15,12 @@ import {
   createLogger,
   ExternalServiceError,
   ValidationError,
-  redactSecrets,
+  resilientPost,
   type GitLabRefreshResult,
   type RequestContext,
 } from "@kenchi/shared";
+
+import type { GitLabTokenResponse } from "./types.js";
 
 // ==================== Constants ====================
 
@@ -55,21 +57,6 @@ const getTokenEndpoint = (instanceUrl: string | null): string =>
     ? SELF_HOSTED_URL_PATTERNS.gitlab.token(instanceUrl)
     : OAUTH_PROVIDER_URLS.gitlab.token;
 
-/** Classifies whether a fetch error is retryable based on status code. */
-const isRetryableStatus = (status: number | undefined): boolean =>
-  status === undefined || status >= 500 || status === 429;
-
-// ==================== Token Refresh ====================
-
-interface GitLabTokenResponse {
-  readonly access_token: string;
-  readonly refresh_token: string | null;
-  readonly expires_in: number | null;
-  readonly token_type: string;
-  readonly error?: string;
-  readonly error_description?: string;
-}
-
 /**
  * Refresh an expired GitLab OAuth access token.
  * Works for both cloud and self-hosted instances.
@@ -83,83 +70,52 @@ export const refreshGitLabToken = async (
 ): Promise<GitLabRefreshResult> => {
   const { clientId, clientSecret } = ensureClientCredentials();
   const tokenEndpoint = getTokenEndpoint(instanceUrl);
-  const startTime = Date.now();
 
-  try {
-    const body = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: currentRefreshToken,
-      grant_type: "refresh_token",
-    });
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: currentRefreshToken,
+    grant_type: "refresh_token",
+  });
 
-    const response = await fetch(tokenEndpoint, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: body.toString(),
-      signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
-    });
+  const response = await resilientPost<GitLabTokenResponse>(tokenEndpoint, undefined, {
+    rawBody: body.toString(),
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    timeout: GITLAB_TIMEOUT_MS,
+    maxRetries: 2,
+  });
 
-    const durationMs = Date.now() - startTime;
+  const data = response.data;
 
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `GitLab token refresh failed with status ${String(response.status)}`,
-        {
-          metadata: { operation: "refreshToken", statusCode: response.status, durationMs },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
-    }
-
-    const data = (await response.json()) as GitLabTokenResponse;
-
-    if (data.error) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `GitLab token refresh error: ${data.error_description ?? data.error}`,
-        {
-          metadata: { operation: "refreshToken", errorCode: data.error, durationMs },
-          retryable: false,
-        }
-      );
-    }
-
-    logger.info("GitLab token refresh completed", {
-      provider: "gitlab",
-      operation: "refreshToken",
-      durationMs,
-      statusCode: response.status,
-      ...context,
-    });
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresIn: data.expires_in,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("GitLab token refresh failed", {
-      provider: "gitlab",
-      operation: "refreshToken",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("gitlab", "Failed to refresh GitLab token", {
-      metadata: { operation: "refreshToken", durationMs },
-      retryable: true,
-    });
+  if (data.error) {
+    throw new ExternalServiceError(
+      "gitlab",
+      `GitLab token refresh error: ${data.error_description ?? data.error}`,
+      {
+        metadata: {
+          operation: "refreshToken",
+          errorCode: data.error,
+          durationMs: response.duration,
+        },
+        retryable: false,
+      }
+    );
   }
+
+  logger.info("GitLab token refresh completed", {
+    provider: "gitlab",
+    operation: "refreshToken",
+    durationMs: response.duration,
+    statusCode: response.status,
+    ...context,
+  });
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresIn: data.expires_in,
+  };
 };

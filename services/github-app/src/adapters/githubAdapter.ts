@@ -19,7 +19,11 @@ import {
   wrapError,
   withCircuitBreaker,
   buildTenantCircuitKey,
+  mapWithConcurrency,
   GITHUB_PAGINATION,
+  cacheGetOrSet,
+  CACHE_TTL,
+  githubCacheKeys,
 } from "@kenchi/shared";
 import { appConfig } from "../config/appConfig.js";
 import type {
@@ -56,6 +60,9 @@ export const getOctokit = async (installationId: number): Promise<Octokit> => {
       privateKey: appConfig.github.privateKey,
       installationId,
     },
+    request: {
+      timeout: 30_000, // 30s — prevents hung connections from blocking workers
+    },
   });
 
   // Cache the instance
@@ -78,6 +85,7 @@ const batchArray = <T>(array: T[], batchSize: number): T[][] => {
 
 /**
  * Recursively fetch all repositories using pagination.
+ * Capped at GITHUB_PAGINATION.MAX_REPO_PAGES pages to prevent unbounded memory usage.
  */
 const fetchRepositoriesPage = async (
   octokit: Awaited<ReturnType<typeof getOctokit>>,
@@ -85,6 +93,14 @@ const fetchRepositoriesPage = async (
   perPage: number,
   accumulated: readonly RepositoryInfo[]
 ): Promise<readonly RepositoryInfo[]> => {
+  if (page > GITHUB_PAGINATION.MAX_REPO_PAGES) {
+    logger.warn("Repository pagination capped", {
+      maxPages: GITHUB_PAGINATION.MAX_REPO_PAGES,
+      accumulatedCount: accumulated.length,
+    });
+    return accumulated;
+  }
+
   const { data } = await octokit.rest.apps.listReposAccessibleToInstallation({
     per_page: perPage,
     page,
@@ -116,34 +132,52 @@ const fetchRepositoriesPage = async (
  */
 export const getInstallationRepositories = async (
   installationId: number
-): Promise<RepositoryInfo[]> => {
-  const circuitKey = buildTenantCircuitKey("github", String(installationId));
+): Promise<readonly RepositoryInfo[]> => {
+  const cacheKey = githubCacheKeys.installationRepos(installationId);
 
-  try {
-    const repositories = await withCircuitBreaker(circuitKey, async () => {
-      const octokit = await getOctokit(installationId);
+  return cacheGetOrSet(
+    cacheKey,
+    async () => {
+      const circuitKey = buildTenantCircuitKey("github", String(installationId));
+      const startTime = Date.now();
 
-      // Use recursive pagination with default page size
-      return fetchRepositoriesPage(octokit, 1, GITHUB_PAGINATION.DEFAULT_PER_PAGE, []);
-    });
+      try {
+        const repositories = await withCircuitBreaker(circuitKey, async () => {
+          const octokit = await getOctokit(installationId);
 
-    logger.info("Fetched installation repositories", {
-      installationId,
-      repositoryCount: repositories.length,
-    });
+          // Use recursive pagination with default page size
+          return fetchRepositoriesPage(octokit, 1, GITHUB_PAGINATION.DEFAULT_PER_PAGE, []);
+        });
 
-    return [...repositories];
-  } catch (error) {
-    logger.error("Failed to fetch installation repositories", {
-      installationId,
-      error: getErrorMessage(error),
-    });
+        const durationMs = Date.now() - startTime;
+        logger.info("GitHub API call completed", {
+          provider: "github",
+          operation: "listInstallationRepos",
+          durationMs,
+          statusCode: 200,
+          installationId,
+          repositoryCount: repositories.length,
+        });
 
-    throw new ExternalServiceError("GitHub", wrapError("Failed to fetch repositories", error), {
-      operation: "fetchRepositories",
-      metadata: { installationId },
-    });
-  }
+        return repositories;
+      } catch (error) {
+        const durationMs = Date.now() - startTime;
+        logger.error("GitHub API call failed", {
+          provider: "github",
+          operation: "listInstallationRepos",
+          durationMs,
+          installationId,
+          error: getErrorMessage(error),
+        });
+
+        throw new ExternalServiceError("GitHub", wrapError("Failed to fetch repositories", error), {
+          operation: "listInstallationRepos",
+          metadata: { installationId },
+        });
+      }
+    },
+    { ttlSeconds: CACHE_TTL.MEDIUM }
+  );
 };
 
 // ==================== Check Run Functions ====================
@@ -186,10 +220,11 @@ export const createCheckRunWithAnnotations = async (
         },
       });
 
-      // Update with remaining batches (if any)
+      // Update with remaining batches (if any), bounded to avoid secondary rate limits
       const remainingBatches = annotationBatches.slice(1);
-      await Promise.all(
-        remainingBatches.map((batch) =>
+      await mapWithConcurrency(
+        remainingBatches,
+        async (batch) =>
           octokit.rest.checks.update({
             owner,
             repo,
@@ -199,8 +234,8 @@ export const createCheckRunWithAnnotations = async (
               summary,
               annotations: batch,
             },
-          })
-        )
+          }),
+        5
       );
 
       logger.info("Created check run with annotations", {

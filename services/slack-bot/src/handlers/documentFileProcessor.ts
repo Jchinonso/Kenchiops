@@ -8,7 +8,7 @@
 import {
   createLogger,
   getErrorMessage,
-  ExternalServiceError,
+  resilientGet,
   ingestKnowledgeDoc,
   KNOWLEDGE_DOC_TYPES,
   DOC_INGESTION_CONFIG,
@@ -87,17 +87,14 @@ export const inferDocTypeFromFilename = (filename: string): KnowledgeDocType => 
  * @throws ExternalServiceError if download fails
  */
 export const downloadFileContent = async (fileUrl: string, botToken: string): Promise<string> => {
-  const response = await fetch(fileUrl, {
-    headers: {
-      Authorization: `Bearer ${botToken}`,
-    },
+  const response = await resilientGet<string>(fileUrl, {
+    timeout: 30_000,
+    maxRetries: 2,
+    responseType: "text",
+    headers: { Authorization: `Bearer ${botToken}` },
   });
 
-  if (!response.ok) {
-    throw new ExternalServiceError("slack", `Failed to download file: ${response.statusText}`);
-  }
-
-  return response.text();
+  return response.data;
 };
 
 // ==================== Error Handling ====================

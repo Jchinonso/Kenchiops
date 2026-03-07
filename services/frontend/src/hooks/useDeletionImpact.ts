@@ -3,10 +3,12 @@
  *
  * Lazy-loaded: only fetches when fetchImpact() is called
  * (triggered when the delete dialog opens).
+ * Uses TanStack Query with enabled: false for manual triggering.
  */
 
-import { useState, useCallback } from "react";
-import { apiClient } from "@/lib/apiClient";
+import { useQuery } from "@tanstack/react-query";
+import { fetchQuery } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface AffectedResources {
   readonly providerConnections: number;
@@ -23,35 +25,19 @@ export interface DeletionImpact {
   readonly affectedResources: AffectedResources;
 }
 
-interface UseDeletionImpactResult {
-  readonly impact: DeletionImpact | null;
-  readonly isLoading: boolean;
-  readonly error: string | null;
-  readonly fetchImpact: () => Promise<void>;
-}
+export const useDeletionImpact = () => {
+  const query = useQuery({
+    queryKey: queryKeys.account.deletionImpact(),
+    queryFn: () => fetchQuery<DeletionImpact>("/auth/me/deletion-impact"),
+    enabled: false,
+  });
 
-export const useDeletionImpact = (): UseDeletionImpactResult => {
-  const [impact, setImpact] = useState<DeletionImpact | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchImpact = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await apiClient("/auth/me/deletion-impact");
-      if (response.ok) {
-        const json = (await response.json()) as { readonly data: DeletionImpact };
-        setImpact(json.data);
-      } else {
-        setError("Failed to check deletion impact");
-      }
-    } catch {
-      setError("Failed to check deletion impact");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  return { impact, isLoading, error, fetchImpact };
+  return {
+    impact: query.data ?? null,
+    isLoading: query.isFetching,
+    error: query.error?.message ?? null,
+    fetchImpact: async (): Promise<void> => {
+      await query.refetch();
+    },
+  };
 };

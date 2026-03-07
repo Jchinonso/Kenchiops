@@ -172,6 +172,9 @@ export {
   type SecurityContext,
 } from "./middleware.js";
 
+// Failover Store (Redis with in-memory fallback, decoupled from Express)
+export { FailoverRateLimitStore, createFailoverStore } from "./failoverStore.js";
+
 const logger = createLogger("rate-limiter");
 
 // ==================== Middleware Helper Functions ====================
@@ -185,7 +188,7 @@ const incrementWithTimeout = async (
   key: string,
   windowMs: number
 ): Promise<RateLimitInfo> => {
-  let timeoutHandle: NodeJS.Timeout | null = null;
+  let timeoutHandle: NodeJS.Timeout | null = null; // let: cleared in finally
 
   try {
     const timeoutPromise = new Promise<never>((_, reject) => {

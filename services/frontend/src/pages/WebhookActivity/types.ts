@@ -14,6 +14,4 @@ export interface ExpandedWebhookRowProps {
   readonly activity: WebhookActivityRecord;
 }
 
-export interface WebhookActivityProps {
-  readonly refreshKey?: number;
-}
+export type WebhookActivityProps = Record<string, never>;

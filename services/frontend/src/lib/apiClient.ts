@@ -11,7 +11,7 @@
 
 import { toast } from "sonner";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "";
+export const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 /** Default request timeout in milliseconds (30 seconds). */
 const REQUEST_TIMEOUT_MS = 30_000;

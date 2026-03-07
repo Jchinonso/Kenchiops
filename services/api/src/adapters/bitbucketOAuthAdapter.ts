@@ -15,7 +15,8 @@ import {
   createLogger,
   ExternalServiceError,
   ValidationError,
-  redactSecrets,
+  resilientGet,
+  resilientPost,
   type OAuthTokenResponse,
   type OAuthProviderProfile,
   type RequestContext,
@@ -87,13 +88,6 @@ const resolveEmail = (emails: BitbucketEmailsResponse): string | null => {
 const stripBraces = (uuid: string): string => uuid.replace(/[{}]/g, "");
 
 /**
- * Classifies whether a fetch error is retryable based on status code.
- * Network errors (no status) are treated as retryable.
- */
-const isRetryableStatus = (status: number | undefined): boolean =>
-  status === undefined || status >= 500 || status === 429;
-
-/**
  * Builds the Basic auth header value for Bitbucket credential exchange.
  */
 const buildBasicAuthHeader = (clientId: string, clientSecret: string): string => {
@@ -114,97 +108,60 @@ const exchangeCode = async (
   codeVerifier?: string
 ): Promise<OAuthTokenResponse> => {
   const { clientId, clientSecret } = ensureClientCredentials();
-  const startTime = Date.now();
 
-  try {
-    const formParams: Record<string, string> = {
-      grant_type: "authorization_code",
-      code,
-    };
-    if (codeVerifier) {
-      formParams.code_verifier = codeVerifier;
-    }
+  const formParams: Readonly<Record<string, string>> = {
+    grant_type: "authorization_code",
+    code,
+    ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
+  };
 
-    const response = await fetch(OAUTH_PROVIDER_URLS.bitbucket.token, {
-      method: "POST",
+  const response = await resilientPost<BitbucketTokenResponse>(
+    OAUTH_PROVIDER_URLS.bitbucket.token,
+    undefined,
+    {
+      rawBody: new URLSearchParams(formParams).toString(),
       headers: {
         Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: buildBasicAuthHeader(clientId, clientSecret),
       },
-      body: new URLSearchParams(formParams).toString(),
-      signal: AbortSignal.timeout(BITBUCKET_TIMEOUT_MS),
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "bitbucket",
-        `Bitbucket exchange failed with status ${String(response.status)}`,
-        {
-          metadata: {
-            operation: "exchangeCode",
-            statusCode: response.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
+      timeout: BITBUCKET_TIMEOUT_MS,
+      maxRetries: 2,
     }
+  );
 
-    const data = (await response.json()) as BitbucketTokenResponse;
+  const data = response.data;
 
-    if (data.error) {
-      throw new ExternalServiceError(
-        "bitbucket",
-        `Bitbucket exchange error: ${data.error_description ?? data.error}`,
-        {
-          metadata: {
-            operation: "exchangeCode",
-            errorCode: data.error,
-            durationMs,
-          },
-          retryable: false,
-        }
-      );
-    }
-
-    logger.info("Bitbucket code exchange completed", {
-      provider: "bitbucket",
-      operation: "exchangeCode",
-      durationMs,
-      statusCode: response.status,
-      ...context,
-    });
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresIn: data.expires_in,
-      scope: data.scopes,
-      tokenType: data.token_type,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Bitbucket code exchange failed", {
-      provider: "bitbucket",
-      operation: "exchangeCode",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("bitbucket", "Failed to exchange authorization code", {
-      metadata: { operation: "exchangeCode", durationMs },
-      retryable: true,
-    });
+  if (data.error) {
+    throw new ExternalServiceError(
+      "bitbucket",
+      `Bitbucket exchange error: ${data.error_description ?? data.error}`,
+      {
+        metadata: {
+          operation: "exchangeCode",
+          errorCode: data.error,
+          durationMs: response.duration,
+        },
+        retryable: false,
+      }
+    );
   }
+
+  logger.info("Bitbucket code exchange completed", {
+    provider: "bitbucket",
+    operation: "exchangeCode",
+    durationMs: response.duration,
+    statusCode: response.status,
+    ...context,
+  });
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresIn: data.expires_in,
+    scope: data.scopes,
+    tokenType: data.token_type,
+  };
 };
 
 /**
@@ -216,100 +173,44 @@ const getUserProfile = async (
   _instanceUrl: string | null,
   context: RequestContext
 ): Promise<OAuthProviderProfile> => {
-  const startTime = Date.now();
-
-  const authHeaders: Record<string, string> = {
+  const authHeaders: Readonly<Record<string, string>> = {
     Authorization: `Bearer ${accessToken}`,
     Accept: "application/json",
   };
 
-  try {
-    const [profileResponse, emailsResponse] = await Promise.all([
-      fetch(OAUTH_PROVIDER_URLS.bitbucket.userProfile, {
-        headers: authHeaders,
-        signal: AbortSignal.timeout(BITBUCKET_TIMEOUT_MS),
-      }),
-      fetch(OAUTH_PROVIDER_URLS.bitbucket.userEmails, {
-        headers: authHeaders,
-        signal: AbortSignal.timeout(BITBUCKET_TIMEOUT_MS),
-      }),
-    ]);
+  const requestOptions = {
+    headers: authHeaders,
+    timeout: BITBUCKET_TIMEOUT_MS,
+    maxRetries: 2,
+  };
 
-    const durationMs = Date.now() - startTime;
+  const [profileResponse, emailsResponse] = await Promise.all([
+    resilientGet<BitbucketUserProfile>(OAUTH_PROVIDER_URLS.bitbucket.userProfile, requestOptions),
+    resilientGet<BitbucketEmailsResponse>(OAUTH_PROVIDER_URLS.bitbucket.userEmails, requestOptions),
+  ]);
 
-    if (!profileResponse.ok) {
-      throw new ExternalServiceError(
-        "bitbucket",
-        `User profile fetch failed with status ${String(profileResponse.status)}`,
-        {
-          metadata: {
-            operation: "getUserProfile",
-            statusCode: profileResponse.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(profileResponse.status),
-        }
-      );
-    }
+  const profile = profileResponse.data;
+  const emails = emailsResponse.data;
+  const email = resolveEmail(emails);
 
-    if (!emailsResponse.ok) {
-      throw new ExternalServiceError(
-        "bitbucket",
-        `User emails fetch failed with status ${String(emailsResponse.status)}`,
-        {
-          metadata: {
-            operation: "getUserProfile",
-            statusCode: emailsResponse.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(emailsResponse.status),
-        }
-      );
-    }
+  logger.info("Bitbucket user profile fetched", {
+    provider: "bitbucket",
+    operation: "getUserProfile",
+    durationMs: profileResponse.duration,
+    statusCode: profileResponse.status,
+    ...context,
+  });
 
-    const profile = (await profileResponse.json()) as BitbucketUserProfile;
-    const emails = (await emailsResponse.json()) as BitbucketEmailsResponse;
-
-    const email = resolveEmail(emails);
-
-    logger.info("Bitbucket user profile fetched", {
-      provider: "bitbucket",
-      operation: "getUserProfile",
-      durationMs,
-      statusCode: profileResponse.status,
-      ...context,
-    });
-
-    return {
-      providerUserId: stripBraces(profile.uuid),
-      username: profile.username,
-      email,
-      // Bitbucket resolveEmail only returns confirmed emails (or null)
-      emailVerified: email !== null,
-      displayName: profile.display_name ?? profile.username,
-      avatarUrl: profile.links.avatar.href,
-      rawProfile: profile as unknown as Record<string, unknown>,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Bitbucket user profile fetch failed", {
-      provider: "bitbucket",
-      operation: "getUserProfile",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("bitbucket", "Failed to fetch user profile from Bitbucket", {
-      metadata: { operation: "getUserProfile", durationMs },
-      retryable: true,
-    });
-  }
+  return {
+    providerUserId: stripBraces(profile.uuid),
+    username: profile.username,
+    email,
+    // Bitbucket resolveEmail only returns confirmed emails (or null)
+    emailVerified: email !== null,
+    displayName: profile.display_name ?? profile.username,
+    avatarUrl: profile.links.avatar.href,
+    rawProfile: profile as unknown as Record<string, unknown>,
+  };
 };
 
 /**
@@ -332,71 +233,31 @@ const getUserOrganizations = async (
     return [];
   }
 
-  const startTime = Date.now();
+  // Use permissions/workspaces endpoint to get both workspace and role in one call
+  const permissionsUrl = "https://api.bitbucket.org/2.0/user/permissions/workspaces";
 
-  try {
-    // Use permissions/workspaces endpoint to get both workspace and role in one call
-    const permissionsUrl = "https://api.bitbucket.org/2.0/user/permissions/workspaces";
-    const response = await fetch(permissionsUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(BITBUCKET_TIMEOUT_MS),
-    });
+  const response = await resilientGet<BitbucketWorkspacePermissionsResponse>(permissionsUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+    timeout: BITBUCKET_TIMEOUT_MS,
+    maxRetries: 2,
+  });
 
-    const durationMs = Date.now() - startTime;
+  logger.info("Bitbucket user workspace permissions fetched", {
+    provider: "bitbucket",
+    operation: "getUserOrganizations",
+    durationMs: response.duration,
+    statusCode: response.status,
+    orgCount: response.data.values.length,
+    ...context,
+  });
 
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "bitbucket",
-        `User workspace permissions fetch failed with status ${String(response.status)}`,
-        {
-          metadata: {
-            operation: "getUserOrganizations",
-            statusCode: response.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
-    }
-
-    const permissions = (await response.json()) as BitbucketWorkspacePermissionsResponse;
-
-    logger.info("Bitbucket user workspace permissions fetched", {
-      provider: "bitbucket",
-      operation: "getUserOrganizations",
-      durationMs,
-      statusCode: response.status,
-      orgCount: permissions.values.length,
-      ...context,
-    });
-
-    return permissions.values.map((entry) => ({
-      login: entry.workspace.slug,
-      role: entry.permission,
-    }));
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("Bitbucket user workspaces fetch failed", {
-      provider: "bitbucket",
-      operation: "getUserOrganizations",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("bitbucket", "Failed to fetch user workspaces from Bitbucket", {
-      metadata: { operation: "getUserOrganizations", durationMs },
-      retryable: true,
-    });
-  }
+  return response.data.values.map((entry) => ({
+    login: entry.workspace.slug,
+    role: entry.permission,
+  }));
 };
 
 // ==================== Export ====================

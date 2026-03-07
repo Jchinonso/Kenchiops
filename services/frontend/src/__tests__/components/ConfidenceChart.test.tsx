@@ -117,9 +117,9 @@ describe("ConfidenceChart", () => {
     ).toBeInTheDocument();
   });
 
-  it("passes refreshKey to the hook", () => {
+  it("calls the hook without arguments", () => {
     mockUseConfidenceDistribution.mockReturnValue({ data: [], isLoading: false });
-    render(<ConfidenceChart refreshKey={42} />);
-    expect(mockUseConfidenceDistribution).toHaveBeenCalledWith(42);
+    render(<ConfidenceChart />);
+    expect(mockUseConfidenceDistribution).toHaveBeenCalled();
   });
 });

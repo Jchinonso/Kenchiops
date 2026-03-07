@@ -5,7 +5,9 @@
 
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
-import { useFetch, parseErrorBody } from "@/hooks/useFetch";
+import { useQuery } from "@tanstack/react-query";
+import { fetchQuery, parseErrorBody } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
 import { apiClient } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Gitlab, CheckCircle2, XCircle, Copy, Check, Loader2 } from "lucide-react";
@@ -13,11 +15,14 @@ import { GitLabSecretDialog } from "./GitLabSecretDialog";
 import type { GitLabConnectionStatus, GitLabConnectResponse, GitLabCardProps } from "./types";
 
 export const GitLabCICard = ({ tenantId, otherProviderConnected }: GitLabCardProps) => {
-  const {
-    data: connectionStatus,
-    isLoading: isLoadingStatus,
-    refetch: refetchStatus,
-  } = useFetch<GitLabConnectionStatus>(tenantId ? "/integrations/gitlab/connection" : "");
+  const connectionQuery = useQuery({
+    queryKey: queryKeys.integrations.gitlab.connection(),
+    queryFn: () => fetchQuery<GitLabConnectionStatus>("/integrations/gitlab/connection"),
+    enabled: !!tenantId,
+  });
+  const connectionStatus = connectionQuery.data ?? null;
+  const isLoadingStatus = connectionQuery.isPending && !!tenantId;
+  const refetchStatus = connectionQuery.refetch;
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);

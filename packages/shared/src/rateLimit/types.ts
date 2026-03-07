@@ -303,6 +303,21 @@ export interface RateLimitStore {
   resetAll(): Promise<void>;
 }
 
+/**
+ * Internal mutable state for failover tracking.
+ * Mutation justified: this is a state machine that transitions between
+ * Redis-active and in-memory-fallback modes. Properties are mutated
+ * in-place by transition functions (markFailed, markRestored, etc.)
+ * to avoid allocating new objects on every rate limit check.
+ */
+export interface FailoverState {
+  /* mutable: state machine requires in-place transitions */
+  useRedis: boolean;
+  redisFailedAt: number;
+  redisRetryDelay: number;
+  isRetrying: boolean;
+}
+
 /** Socket with optional TLS cipher method */
 export interface TLSSocket {
   getCipher?: () => { readonly name?: string };

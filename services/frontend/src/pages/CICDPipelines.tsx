@@ -26,7 +26,7 @@ import {
 } from "@/hooks/useDashboardData";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
-import { isSafeUrl } from "@/lib/urlSafety";
+import { isSafeUrl, buildSafeGitHubUrl } from "@/lib/urlSafety";
 import { FeatureLocked } from "@/components/FeatureLocked";
 import { PageLoader } from "@/components/PageLoader";
 
@@ -58,20 +58,25 @@ const RepoCard = ({ repo }: RepoCardProps) => (
               {repo.name}
             </span>
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={`https://github.com/${repo.fullName}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-400 hover:text-indigo-500 transition-colors flex-shrink-0"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </TooltipTrigger>
-            <TooltipContent>Open on GitHub</TooltipContent>
-          </Tooltip>
+          {(() => {
+            const repoUrl = buildSafeGitHubUrl(repo.fullName);
+            return repoUrl ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    href={repoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-zinc-400 hover:text-indigo-500 transition-colors flex-shrink-0"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent>Open on GitHub</TooltipContent>
+              </Tooltip>
+            ) : null;
+          })()}
         </div>
 
         <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3 truncate">{repo.fullName}</p>

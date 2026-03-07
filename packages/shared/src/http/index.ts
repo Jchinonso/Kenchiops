@@ -9,6 +9,7 @@ export type {
   HttpMethod,
   ResilientRequestOptions,
   ResilientResponse,
+  ResilientResponseType,
   Validator,
   ValidationSchema,
   ValidationSource,
@@ -103,3 +104,6 @@ export {
 } from "./rateLimitByCategory.js";
 
 export type { RateLimitCategory, RateLimitPlanId } from "./rateLimitByCategoryTypes.js";
+
+// Singleflight request coalescing
+export { coalesce } from "./singleflight.js";

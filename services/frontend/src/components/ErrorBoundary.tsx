@@ -53,11 +53,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   private handleCopyDiagnostic = (): void => {
     const errorMessage = this.state.error?.message ?? "Unknown error";
+    // Strip query params from the URL to avoid leaking tokens or session data
+    const safeUrl = `${window.location.origin}${window.location.pathname}`;
+    const truncatedError =
+      errorMessage.length > 300 ? `${errorMessage.slice(0, 300)}...` : errorMessage;
     const diagnostic = [
       `Kenchi Error Report`,
       `Time: ${new Date().toISOString()}`,
-      `URL: ${window.location.href}`,
-      `Error: ${errorMessage}`,
+      `URL: ${safeUrl}`,
+      `Error: ${truncatedError}`,
       `UA: ${navigator.userAgent}`,
     ].join("\n");
 

@@ -84,7 +84,6 @@ export interface DashboardOverviewProps {
   readonly firstName: string;
   readonly showOnboarding: boolean;
   readonly dismissOnboarding: () => void;
-  readonly refreshKey?: number;
   /** Pre-fetched tenant info from the Dashboard shell — avoids a duplicate API call. */
   readonly tenant?: TenantInfo | null;
 }

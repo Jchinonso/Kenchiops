@@ -2,18 +2,13 @@
  * Invitation Hooks
  *
  * Custom hooks for fetching pending invitations and performing mutations
- * (create, revoke). Uses shared useFetch hook for GET requests and
- * apiClient for mutations. Follows patterns from useTeamMembers.ts.
+ * (create, revoke). Uses TanStack Query for GET requests and useMutation
+ * with cache invalidation for writes.
  */
 
-import { useState, useCallback } from "react";
-import { apiClient } from "@/lib/apiClient";
-import {
-  useFetch,
-  parseErrorBody,
-  type UseFetchResult,
-  type MutationState,
-} from "@/hooks/useFetch";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchQuery, fetchMutation, fetchMutationVoid } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
 
 // ==================== DTO Types ====================
 
@@ -28,81 +23,79 @@ export interface InvitationDTO {
 
 // ==================== Query Hook ====================
 
-export const useInvitations = (
-  refreshKey: number = 0,
-  enabled: boolean = true
-): UseFetchResult<readonly InvitationDTO[]> =>
-  useFetch<readonly InvitationDTO[]>(enabled ? "/api/v1/invitations" : "", `${refreshKey}`);
+export const useInvitations = (enabled: boolean = true) => {
+  const query = useQuery({
+    queryKey: queryKeys.team.invitations(),
+    queryFn: () => fetchQuery<readonly InvitationDTO[]>("/api/v1/invitations"),
+    enabled,
+  });
+
+  return {
+    data: query.data ?? null,
+    isLoading: query.isPending,
+    error: query.error?.message ?? null,
+  };
+};
 
 // ==================== Mutation Hooks ====================
 
-export const useCreateInvitation = (): MutationState & {
-  readonly createInvitation: (email: string, role: string) => Promise<InvitationDTO | null>;
-} => {
-  const [state, setState] = useState<MutationState>({
-    isLoading: false,
-    error: null,
+interface CreateInvitationInput {
+  readonly email: string;
+  readonly role: string;
+}
+
+export const useCreateInvitation = () => {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (input: CreateInvitationInput): Promise<InvitationDTO> =>
+      fetchMutation<InvitationDTO>("/api/v1/invitations", {
+        method: "POST",
+        body: { email: input.email, role: input.role },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.team.invitations() });
+    },
   });
 
-  const createInvitation = useCallback(
-    async (email: string, role: string): Promise<InvitationDTO | null> => {
-      setState({ isLoading: true, error: null });
-      try {
-        const response = await apiClient("/api/v1/invitations", {
-          method: "POST",
-          body: { email, role },
-        });
-        if (!response.ok) {
-          const message = await parseErrorBody(
-            response,
-            `Failed to create invitation (${response.status})`
-          );
-          setState({ isLoading: false, error: message });
-          return null;
-        }
-        const json: { readonly data: InvitationDTO } = await response.json();
-        setState({ isLoading: false, error: null });
-        return json.data;
-      } catch (caught) {
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ isLoading: false, error: message });
-        return null;
-      }
-    },
-    []
-  );
+  const createInvitation = async (email: string, role: string): Promise<InvitationDTO | null> => {
+    try {
+      return await mutation.mutateAsync({ email, role });
+    } catch {
+      return null;
+    }
+  };
 
-  return { ...state, createInvitation };
+  return {
+    createInvitation,
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+  };
 };
 
-export const useRevokeInvitation = (): MutationState & {
-  readonly revokeInvitation: (invitationId: string) => Promise<boolean>;
-} => {
-  const [state, setState] = useState<MutationState>({
-    isLoading: false,
-    error: null,
+export const useRevokeInvitation = () => {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (invitationId: string): Promise<void> =>
+      fetchMutationVoid(`/api/v1/invitations/${invitationId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.team.invitations() });
+    },
   });
 
-  const revokeInvitation = useCallback(async (invitationId: string): Promise<boolean> => {
-    setState({ isLoading: true, error: null });
+  const revokeInvitation = async (invitationId: string): Promise<boolean> => {
     try {
-      const response = await apiClient(`/api/v1/invitations/${invitationId}`, { method: "DELETE" });
-      if (!response.ok) {
-        const message = await parseErrorBody(
-          response,
-          `Failed to revoke invitation (${response.status})`
-        );
-        setState({ isLoading: false, error: message });
-        return false;
-      }
-      setState({ isLoading: false, error: null });
+      await mutation.mutateAsync(invitationId);
       return true;
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Unknown error";
-      setState({ isLoading: false, error: message });
+    } catch {
       return false;
     }
-  }, []);
+  };
 
-  return { ...state, revokeInvitation };
+  return {
+    revokeInvitation,
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+  };
 };

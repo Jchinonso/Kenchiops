@@ -16,6 +16,8 @@ import {
   createLogger,
   ExternalServiceError,
   ValidationError,
+  resilientGet,
+  resilientPost,
   redactSecrets,
   type OAuthTokenResponse,
   type OAuthProviderProfile,
@@ -81,13 +83,6 @@ const getUrls = (
         userGroups: OAUTH_PROVIDER_URLS.gitlab.userGroups,
       };
 
-/**
- * Classifies whether a fetch error is retryable based on status code.
- * Network errors (no status) are treated as retryable.
- */
-const isRetryableStatus = (status: number | undefined): boolean =>
-  status === undefined || status >= 500 || status === 429;
-
 // ==================== OAuth Port Implementation ====================
 
 /**
@@ -102,99 +97,60 @@ const exchangeCode = async (
   const { clientId, clientSecret } = ensureClientCredentials();
   const urls = getUrls(instanceUrl);
   const callbackUrl = `${config.OAUTH_CALLBACK_BASE_URL}/auth/gitlab/callback`;
-  const startTime = Date.now();
 
-  try {
-    const tokenParams = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: callbackUrl,
-    });
-    if (codeVerifier) {
-      tokenParams.set("code_verifier", codeVerifier);
-    }
-
-    const response = await fetch(urls.tokenEndpoint, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: tokenParams.toString(),
-      signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `GitLab exchange failed with status ${String(response.status)}`,
-        {
-          metadata: {
-            operation: "exchangeCode",
-            statusCode: response.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
-    }
-
-    const data = (await response.json()) as GitLabTokenResponse;
-
-    if (data.error) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `GitLab exchange error: ${data.error_description ?? data.error}`,
-        {
-          metadata: {
-            operation: "exchangeCode",
-            errorCode: data.error,
-            durationMs,
-          },
-          retryable: false,
-        }
-      );
-    }
-
-    logger.info("GitLab code exchange completed", {
-      provider: "gitlab",
-      operation: "exchangeCode",
-      durationMs,
-      statusCode: response.status,
-      ...context,
-    });
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresIn: data.expires_in,
-      scope: data.scope,
-      tokenType: data.token_type,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("GitLab code exchange failed", {
-      provider: "gitlab",
-      operation: "exchangeCode",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("gitlab", "Failed to exchange authorization code", {
-      metadata: { operation: "exchangeCode", durationMs },
-      retryable: true,
-    });
+  const tokenParams = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    grant_type: "authorization_code",
+    redirect_uri: callbackUrl,
+  });
+  if (codeVerifier) {
+    tokenParams.set("code_verifier", codeVerifier);
   }
+
+  const response = await resilientPost<GitLabTokenResponse>(urls.tokenEndpoint, undefined, {
+    rawBody: tokenParams.toString(),
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    timeout: GITLAB_TIMEOUT_MS,
+    maxRetries: 2,
+  });
+
+  const data = response.data;
+
+  if (data.error) {
+    throw new ExternalServiceError(
+      "gitlab",
+      `GitLab exchange error: ${data.error_description ?? data.error}`,
+      {
+        metadata: {
+          operation: "exchangeCode",
+          errorCode: data.error,
+          durationMs: response.duration,
+        },
+        retryable: false,
+      }
+    );
+  }
+
+  logger.info("GitLab code exchange completed", {
+    provider: "gitlab",
+    operation: "exchangeCode",
+    durationMs: response.duration,
+    statusCode: response.status,
+    ...context,
+  });
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresIn: data.expires_in,
+    scope: data.scope,
+    tokenType: data.token_type,
+  };
 };
 
 /**
@@ -207,76 +163,38 @@ const getUserProfile = async (
   context: RequestContext
 ): Promise<OAuthProviderProfile> => {
   const urls = getUrls(instanceUrl);
-  const startTime = Date.now();
 
-  try {
-    const profileResponse = await fetch(urls.userProfile, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
-    });
+  const response = await resilientGet<GitLabUserProfile>(urls.userProfile, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+    timeout: GITLAB_TIMEOUT_MS,
+    maxRetries: 2,
+  });
 
-    const durationMs = Date.now() - startTime;
+  const profile = response.data;
 
-    if (!profileResponse.ok) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `User profile fetch failed with status ${String(profileResponse.status)}`,
-        {
-          metadata: {
-            operation: "getUserProfile",
-            statusCode: profileResponse.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(profileResponse.status),
-        }
-      );
-    }
+  logger.info("GitLab user profile fetched", {
+    provider: "gitlab",
+    operation: "getUserProfile",
+    durationMs: response.duration,
+    statusCode: response.status,
+    ...context,
+  });
 
-    const profile = (await profileResponse.json()) as GitLabUserProfile;
-
-    logger.info("GitLab user profile fetched", {
-      provider: "gitlab",
-      operation: "getUserProfile",
-      durationMs,
-      statusCode: profileResponse.status,
-      ...context,
-    });
-
-    return {
-      providerUserId: String(profile.id),
-      username: profile.username,
-      email: profile.email,
-      // GitLab's confirmed_at field indicates whether the email was verified.
-      // Self-hosted GitLab instances can disable email confirmation, so
-      // presence of email alone is NOT proof of verification.
-      emailVerified: profile.confirmed_at !== null && profile.confirmed_at !== undefined,
-      displayName: profile.name ?? profile.username,
-      avatarUrl: profile.avatar_url,
-      rawProfile: profile as unknown as Record<string, unknown>,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("GitLab user profile fetch failed", {
-      provider: "gitlab",
-      operation: "getUserProfile",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("gitlab", "Failed to fetch user profile from GitLab", {
-      metadata: { operation: "getUserProfile", durationMs },
-      retryable: true,
-    });
-  }
+  return {
+    providerUserId: String(profile.id),
+    username: profile.username,
+    email: profile.email,
+    // GitLab's confirmed_at field indicates whether the email was verified.
+    // Self-hosted GitLab instances can disable email confirmation, so
+    // presence of email alone is NOT proof of verification.
+    emailVerified: profile.confirmed_at !== null && profile.confirmed_at !== undefined,
+    displayName: profile.name ?? profile.username,
+    avatarUrl: profile.avatar_url,
+    rawProfile: profile as unknown as Record<string, unknown>,
+  };
 };
 
 /**
@@ -289,94 +207,63 @@ const getUserOrganizations = async (
   context: RequestContext
 ): Promise<readonly OAuthOrganization[]> => {
   const urls = getUrls(instanceUrl);
-  const startTime = Date.now();
 
-  try {
-    const response = await fetch(`${urls.userGroups}?min_access_level=10`, {
+  const response = await resilientGet<readonly GitLabGroup[]>(
+    `${urls.userGroups}?min_access_level=10`,
+    {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `User groups fetch failed with status ${String(response.status)}`,
-        {
-          metadata: {
-            operation: "getUserOrganizations",
-            statusCode: response.status,
-            durationMs,
-          },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
+      timeout: GITLAB_TIMEOUT_MS,
+      maxRetries: 2,
     }
+  );
 
-    const groups = (await response.json()) as readonly GitLabGroup[];
+  const groups = response.data;
 
-    logger.info("GitLab user groups fetched", {
-      provider: "gitlab",
-      operation: "getUserOrganizations",
-      durationMs,
-      statusCode: response.status,
-      orgCount: groups.length,
-      ...context,
-    });
+  logger.info("GitLab user groups fetched", {
+    provider: "gitlab",
+    operation: "getUserOrganizations",
+    durationMs: response.duration,
+    statusCode: response.status,
+    orgCount: groups.length,
+    ...context,
+  });
 
-    // Determine which groups the user has Maintainer+ access to (access_level >= 40).
-    // The groups list endpoint does not include per-user access_level, so we make a
-    // parallel call with min_access_level=40 and use set membership for role assignment.
-    const adminGroupPaths = new Set<string>();
-    try {
-      const adminResponse = await fetch(`${urls.userGroups}?min_access_level=40`, {
+  // Determine which groups the user has Maintainer+ access to (access_level >= 40).
+  // The groups list endpoint does not include per-user access_level, so we make a
+  // separate call with min_access_level=40 and use set membership for role assignment.
+  // let: adminGroupPaths depends on try/catch control flow
+  let adminGroupPaths: ReadonlySet<string> = new Set<string>(); // let: assigned in try/catch
+  try {
+    const adminResponse = await resilientGet<readonly GitLabGroup[]>(
+      `${urls.userGroups}?min_access_level=40`,
+      {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
         },
-        signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
-      });
-      if (adminResponse.ok) {
-        const adminGroups = (await adminResponse.json()) as readonly GitLabGroup[];
-        adminGroups.forEach((group) => adminGroupPaths.add(group.path));
+        timeout: GITLAB_TIMEOUT_MS,
+        maxRetries: 1,
+        skipCircuitBreaker: true,
       }
-    } catch {
-      // Best-effort: if the admin-level call fails, all groups default to no role
-      logger.warn("GitLab admin groups fetch failed (non-fatal), defaulting roles", {
-        provider: "gitlab",
-        operation: "getUserOrganizations",
-        ...context,
-      });
-    }
-
-    return groups.map((group) => ({
-      login: group.path,
-      role: adminGroupPaths.has(group.path) ? "maintainer" : "developer",
-    }));
+    );
+    adminGroupPaths = new Set(adminResponse.data.map((group) => group.path));
   } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("GitLab user groups fetch failed", {
+    // Best-effort: if the admin-level call fails, all groups default to no role
+    logger.warn("GitLab admin groups fetch failed (non-fatal), defaulting roles", {
       provider: "gitlab",
       operation: "getUserOrganizations",
-      durationMs,
       error: redactSecrets(error instanceof Error ? error.message : String(error)),
       ...context,
     });
-
-    throw new ExternalServiceError("gitlab", "Failed to fetch user groups from GitLab", {
-      metadata: { operation: "getUserOrganizations", durationMs },
-      retryable: true,
-    });
   }
+
+  return groups.map((group) => ({
+    login: group.path,
+    role: adminGroupPaths.has(group.path) ? "maintainer" : "developer",
+  }));
 };
 
 // ==================== Token Refresh ====================
@@ -396,87 +283,56 @@ export const refreshGitLabToken = async (
 ): Promise<OAuthTokenResponse> => {
   const { clientId, clientSecret } = ensureClientCredentials();
   const urls = getUrls(instanceUrl);
-  const startTime = Date.now();
 
-  try {
-    const body = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: currentRefreshToken,
-      grant_type: "refresh_token",
-    });
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: currentRefreshToken,
+    grant_type: "refresh_token",
+  });
 
-    const response = await fetch(urls.tokenEndpoint, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: body.toString(),
-      signal: AbortSignal.timeout(GITLAB_TIMEOUT_MS),
-    });
+  const response = await resilientPost<GitLabTokenResponse>(urls.tokenEndpoint, undefined, {
+    rawBody: body.toString(),
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    timeout: GITLAB_TIMEOUT_MS,
+    maxRetries: 2,
+  });
 
-    const durationMs = Date.now() - startTime;
+  const data = response.data;
 
-    if (!response.ok) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `GitLab token refresh failed with status ${String(response.status)}`,
-        {
-          metadata: { operation: "refreshToken", statusCode: response.status, durationMs },
-          retryable: isRetryableStatus(response.status),
-        }
-      );
-    }
-
-    const data = (await response.json()) as GitLabTokenResponse;
-
-    if (data.error) {
-      throw new ExternalServiceError(
-        "gitlab",
-        `GitLab token refresh error: ${data.error_description ?? data.error}`,
-        {
-          metadata: { operation: "refreshToken", errorCode: data.error, durationMs },
-          retryable: false,
-        }
-      );
-    }
-
-    logger.info("GitLab token refresh completed", {
-      provider: "gitlab",
-      operation: "refreshToken",
-      durationMs,
-      statusCode: response.status,
-      ...context,
-    });
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresIn: data.expires_in,
-      scope: data.scope,
-      tokenType: data.token_type,
-    };
-  } catch (error) {
-    if (error instanceof ExternalServiceError) {
-      throw error;
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.error("GitLab token refresh failed", {
-      provider: "gitlab",
-      operation: "refreshToken",
-      durationMs,
-      error: redactSecrets(error instanceof Error ? error.message : String(error)),
-      ...context,
-    });
-
-    throw new ExternalServiceError("gitlab", "Failed to refresh GitLab token", {
-      metadata: { operation: "refreshToken", durationMs },
-      retryable: true,
-    });
+  if (data.error) {
+    throw new ExternalServiceError(
+      "gitlab",
+      `GitLab token refresh error: ${data.error_description ?? data.error}`,
+      {
+        metadata: {
+          operation: "refreshToken",
+          errorCode: data.error,
+          durationMs: response.duration,
+        },
+        retryable: false,
+      }
+    );
   }
+
+  logger.info("GitLab token refresh completed", {
+    provider: "gitlab",
+    operation: "refreshToken",
+    durationMs: response.duration,
+    statusCode: response.status,
+    ...context,
+  });
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresIn: data.expires_in,
+    scope: data.scope,
+    tokenType: data.token_type,
+  };
 };
 
 // ==================== Export ====================

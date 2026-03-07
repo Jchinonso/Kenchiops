@@ -118,7 +118,6 @@ export const DashboardOverview = ({
   firstName,
   showOnboarding,
   dismissOnboarding,
-  refreshKey = 0,
   tenant: tenantProp = null,
 }: DashboardOverviewProps) => {
   const { user } = useAuth();
@@ -130,30 +129,29 @@ export const DashboardOverview = ({
     isLoading: statsLoading,
     error: statsError,
     refetch: refetchStats,
-  } = useDashboardStats(refreshKey);
+  } = useDashboardStats();
   const {
     data: recentAnalyses,
     isLoading: analysesLoading,
     error: analysesError,
     refetch: refetchAnalyses,
-  } = useAnalyses({ limit: 5, offset: 0, refreshKey });
+  } = useAnalyses({ limit: 5, offset: 0 });
   const {
     data: recentFailures,
     isLoading: failuresLoading,
     error: failuresError,
     refetch: refetchFailures,
-  } = useFailures({ limit: 5, offset: 0, refreshKey });
+  } = useFailures({ limit: 5, offset: 0 });
   // Use tenant from parent (Dashboard shell) when available to avoid duplicate API call
   const tenant = tenantProp;
   const tenantId = tenant?.id ?? "";
-  const { data: triageStats } = useTriageStats(tenantId, refreshKey);
-  const { data: activeCountsBySource } = useActiveCountsBySource(tenantId, refreshKey);
-  const { data: severityBySource } = useSeverityDistributionBySource(tenantId, refreshKey);
+  const { data: triageStats } = useTriageStats(tenantId);
+  const { data: activeCountsBySource } = useActiveCountsBySource(tenantId);
+  const { data: severityBySource } = useSeverityDistributionBySource(tenantId);
   const { data: balancedIncidents, isLoading: incidentsLoading } = useBalancedRecentIncidents(
     tenantId,
     2,
-    6,
-    refreshKey
+    6
   );
 
   const failureItems = recentFailures?.items ?? [];
@@ -249,8 +247,8 @@ export const DashboardOverview = ({
       />
 
       <FeatureGate feature="teamAnalytics">
-        <ConfidenceTrendChart refreshKey={refreshKey} />
-        <ConfidenceChart refreshKey={refreshKey} />
+        <ConfidenceTrendChart />
+        <ConfidenceChart />
         <SeverityDistributionChart
           distribution={triageStats?.severityDistribution ?? null}
           distributionBySource={severityBySource ?? null}

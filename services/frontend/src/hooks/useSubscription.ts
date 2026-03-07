@@ -2,17 +2,12 @@
  * Subscription Data Hooks
  *
  * Custom hooks for fetching subscription plan data, usage, and plan changes.
- * Uses shared useFetch hook for GET requests and manual apiClient for mutations.
+ * Uses TanStack Query for GET requests and useMutation for writes.
  */
 
-import { useState, useCallback } from "react";
-import { apiClient } from "@/lib/apiClient";
-import {
-  useFetch,
-  parseErrorBody,
-  type UseFetchResult,
-  type MutationState,
-} from "@/hooks/useFetch";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchQuery, fetchMutationRaw, ApiError, parseErrorBody } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
 import { usePlanLimitError } from "@/hooks/usePlanLimitError";
 
 // ==================== DTO Types ====================
@@ -81,16 +76,45 @@ interface ChangePlanResultDTO {
 
 // ==================== Query Hooks ====================
 
-export const useSubscription = (refreshKey: number = 0): UseFetchResult<SubscriptionDTO> =>
-  useFetch<SubscriptionDTO>("/api/v1/subscription", `${refreshKey}`);
+export const useSubscription = () => {
+  const query = useQuery({
+    queryKey: queryKeys.subscription.info(),
+    queryFn: () => fetchQuery<SubscriptionDTO>("/api/v1/subscription"),
+  });
 
-export const useSubscriptionUsage = (
-  refreshKey: number = 0
-): UseFetchResult<SubscriptionUsageDTO> =>
-  useFetch<SubscriptionUsageDTO>("/api/v1/subscription/usage", `${refreshKey}`);
+  return {
+    data: query.data ?? null,
+    isLoading: query.isPending,
+    error: query.error?.message ?? null,
+    refetch: query.refetch,
+  };
+};
 
-export const usePlans = (refreshKey: number = 0): UseFetchResult<readonly PlanDTO[]> =>
-  useFetch<readonly PlanDTO[]>("/api/v1/subscription/plans", `${refreshKey}`);
+export const useSubscriptionUsage = () => {
+  const query = useQuery({
+    queryKey: queryKeys.subscription.usage(),
+    queryFn: () => fetchQuery<SubscriptionUsageDTO>("/api/v1/subscription/usage"),
+  });
+
+  return {
+    data: query.data ?? null,
+    isLoading: query.isPending,
+    error: query.error?.message ?? null,
+  };
+};
+
+export const usePlans = () => {
+  const query = useQuery({
+    queryKey: queryKeys.subscription.plans(),
+    queryFn: () => fetchQuery<readonly PlanDTO[]>("/api/v1/subscription/plans"),
+  });
+
+  return {
+    data: query.data ?? null,
+    isLoading: query.isPending,
+    error: query.error?.message ?? null,
+  };
+};
 
 // ==================== Mutation Hook ====================
 
@@ -101,13 +125,15 @@ interface PlanLimitInfo {
   readonly currentPlan: string;
 }
 
-export const useChangePlan = (): MutationState & {
+export const useChangePlan = (): {
   readonly changePlan: (planId: string) => Promise<ChangePlanResultDTO | null>;
+  readonly isLoading: boolean;
+  readonly error: string | null;
   readonly planLimitError: PlanLimitInfo | null;
   readonly isLimitDialogOpen: boolean;
   readonly dismissLimitDialog: () => void;
 } => {
-  const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
+  const queryClient = useQueryClient();
   const {
     planLimitError,
     isOpen: isLimitDialogOpen,
@@ -115,39 +141,53 @@ export const useChangePlan = (): MutationState & {
     dismiss: dismissLimitDialog,
   } = usePlanLimitError();
 
-  const changePlan = useCallback(
-    async (planId: string): Promise<ChangePlanResultDTO | null> => {
-      setState({ isLoading: true, error: null });
-      try {
-        const response = await apiClient("/api/v1/subscription/plan", {
-          method: "PUT",
-          body: { planId },
-        });
-        if (!response.ok) {
-          // Detect plan limit error before parsing generic message
-          const isLimitError = await checkResponse(response);
-          if (isLimitError) {
-            setState({ isLoading: false, error: null });
-            return null;
-          }
-          const message = await parseErrorBody(
-            response,
-            `Failed to change plan (${response.status})`
-          );
-          setState({ isLoading: false, error: message });
+  const mutation = useMutation({
+    mutationFn: async (planId: string): Promise<ChangePlanResultDTO | null> => {
+      const response = await fetchMutationRaw("/api/v1/subscription/plan", {
+        method: "PUT",
+        body: { planId },
+      });
+
+      if (!response.ok) {
+        // Detect plan limit error before parsing generic message
+        const isLimitError = await checkResponse(response);
+        if (isLimitError) {
+          // Return null to signal plan limit — not an exception, handled via dialog
           return null;
         }
-        const json: { readonly data: ChangePlanResultDTO } = await response.json();
-        setState({ isLoading: false, error: null });
-        return json.data;
-      } catch (caught) {
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ isLoading: false, error: message });
-        return null;
+
+        const message = await parseErrorBody(
+          response,
+          `Failed to change plan (${response.status})`
+        );
+        throw new ApiError(message, response.status);
+      }
+
+      const json: { readonly data: ChangePlanResultDTO } = await response.json();
+      return json.data;
+    },
+    onSuccess: (result) => {
+      if (result) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.subscription.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.billing.all });
       }
     },
-    [checkResponse]
-  );
+  });
 
-  return { ...state, changePlan, planLimitError, isLimitDialogOpen, dismissLimitDialog };
+  const changePlan = async (planId: string): Promise<ChangePlanResultDTO | null> => {
+    try {
+      return await mutation.mutateAsync(planId);
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    changePlan,
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+    planLimitError,
+    isLimitDialogOpen,
+    dismissLimitDialog,
+  };
 };

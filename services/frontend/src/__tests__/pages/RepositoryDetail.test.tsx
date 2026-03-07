@@ -53,10 +53,10 @@ const createAnalysis = (overrides = {}) => ({
   ...overrides,
 });
 
-const renderRepoDetail = (repoFullName = "org/repo", refreshKey = 0) =>
+const renderRepoDetail = (repoFullName = "org/repo") =>
   render(
     <MemoryRouter>
-      <RepositoryDetail repoFullName={repoFullName} refreshKey={refreshKey} />
+      <RepositoryDetail repoFullName={repoFullName} />
     </MemoryRouter>
   );
 

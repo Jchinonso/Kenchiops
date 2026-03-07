@@ -36,9 +36,11 @@ import {
   truncateText,
 } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
-import { FilterBar } from "@/components/FilterBar";
+import { MobileDataCard } from "@/components/MobileDataCard";
+import { MobileFilterDrawer } from "@/components/MobileFilterDrawer";
 import { loadSavedFilters, saveFilters, type FilterValues } from "@/components/FilterBarUtils";
 
 // ==================== Constants ====================
@@ -107,11 +109,8 @@ const InvestigationTableRow = ({ investigation, onClick }: InvestigationTableRow
 
 // ==================== Main Component ====================
 
-interface InvestigationsProps {
-  readonly refreshKey?: number;
-}
-
-export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
+export const Investigations = () => {
+  const isMobile = useIsMobile();
   const { user } = useAuth();
   const navigate = useNavigate();
   const tenantId = user?.tenantId ?? "";
@@ -146,7 +145,6 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
     tenantId,
     pageSize,
     offset,
-    refreshKey,
     filters.status || undefined
   );
 
@@ -196,7 +194,7 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-display font-bold text-zinc-900 dark:text-zinc-100">
             Investigations
@@ -208,14 +206,14 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
         </div>
         <Link
           to="/dashboard/incidents/investigations/new"
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors self-start sm:self-auto flex-shrink-0"
         >
           <Plus className="w-4 h-4" />
           New Investigation
         </Link>
       </div>
 
-      <FilterBar variant="investigations" filters={filters} onFilterChange={handleFilterChange} />
+      <MobileFilterDrawer variant="investigations" filters={filters} onFilterChange={handleFilterChange} />
 
       <div aria-live="polite" className="sr-only">
         {isLoading
@@ -268,6 +266,57 @@ export const Investigations = ({ refreshKey = 0 }: InvestigationsProps) => {
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
+          ) : isMobile ? (
+            <>
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800 p-3 space-y-3">
+                {items.map((investigation) => {
+                  const confidence = investigation.diagnosis?.confidence;
+                  const confidenceDisplay =
+                    confidence !== undefined && confidence !== null
+                      ? `${Math.round(confidence * 100)}%`
+                      : "--";
+
+                  return (
+                    <MobileDataCard
+                      key={investigation.id}
+                      title={truncateText(investigation.description, 60)}
+                      subtitle={investigation.serviceName ?? undefined}
+                      timestamp={investigation.createdAt}
+                      badges={[
+                        {
+                          label: titleCase(investigation.status),
+                          className: getInvestigationStatusStyle(investigation.status),
+                        },
+                      ]}
+                      fields={[
+                        { label: "Confidence", value: confidenceDisplay },
+                        {
+                          label: "Duration",
+                          value:
+                            investigation.durationMs !== null
+                              ? formatDuration(investigation.durationMs)
+                              : "--",
+                        },
+                      ]}
+                      onClick={() =>
+                        navigate(`/dashboard/incidents/investigations/${investigation.id}`)
+                      }
+                    />
+                  );
+                })}
+              </div>
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                hasPrev={hasPrev}
+                hasNext={hasNext}
+                onPrev={goPrev}
+                onNext={goNext}
+                totalItems={total}
+                pageSize={pageSize}
+                onPageSizeChange={handlePageSizeChange}
+              />
+            </>
           ) : (
             <>
               <div className="overflow-x-auto">

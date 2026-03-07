@@ -30,10 +30,10 @@ const createWebhookRecord = (overrides = {}) => ({
   ...overrides,
 });
 
-const renderWebhookActivity = (refreshKey = 0) =>
+const renderWebhookActivity = () =>
   render(
     <MemoryRouter>
-      <WebhookActivity refreshKey={refreshKey} />
+      <WebhookActivity />
     </MemoryRouter>
   );
 

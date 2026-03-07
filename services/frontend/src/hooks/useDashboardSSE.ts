@@ -2,8 +2,8 @@
  * Dashboard SSE Hook
  *
  * Connects to the SSE endpoint for real-time dashboard updates.
- * Returns a refreshKey that increments on each event, triggering
- * data refetches in consuming hooks.
+ * Invalidates specific TanStack Query keys on each event so cached
+ * data is automatically refetched by consuming hooks.
  *
  * Fires toast notifications via sonner for user awareness:
  * - Error toast for new CI failures
@@ -17,12 +17,13 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
 import { useAuth } from "@/hooks/useAuth";
-import { apiClient } from "@/lib/apiClient";
+import { apiClient, API_URL } from "@/lib/apiClient";
+import { queryKeys } from "@/lib/queryKeys";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "";
 const SSE_ENDPOINT = `${API_URL}/api/v1/dashboard/events/stream`;
 
 // ==================== Notification Types ====================
@@ -40,7 +41,7 @@ export interface DashboardNotification {
   readonly source?: string;
 }
 
-/** Debounce window for batching rapid SSE events into a single refreshKey bump. */
+/** Debounce window for batching rapid SSE events into a single query invalidation. */
 const REFRESH_DEBOUNCE_MS = 2_000;
 
 /** Configuration for notification storage */
@@ -87,6 +88,12 @@ interface IncidentTriagedPayload {
   readonly aiSummary?: string;
 }
 
+interface InvestigationStatusChangedPayload {
+  readonly type: string;
+  readonly investigationId?: string;
+  readonly status?: string;
+}
+
 // ==================== Session Storage Helpers ====================
 
 const loadNotifications = (storageKey: string): readonly DashboardNotification[] => {
@@ -121,6 +128,10 @@ const parseEventData = <T>(event: MessageEvent): T | null => {
 
 const formatConfidence = (confidence: number): string => `${Math.round(confidence * 100)}%`;
 
+/** Truncate SSE-sourced strings to prevent UI overflow from unexpectedly large payloads. */
+const truncateSSE = (value: string, maxLength = 200): string =>
+  value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+
 /** Show a browser notification if the Notification API is available and permission is granted */
 const showBrowserNotification = (title: string, body: string): void => {
   if (typeof Notification === "undefined") {
@@ -136,7 +147,6 @@ const showBrowserNotification = (title: string, body: string): void => {
 // ==================== Hook ====================
 
 interface UseDashboardSSEResult {
-  readonly refreshKey: number;
   readonly notifications: readonly DashboardNotification[];
   readonly markAllRead: () => void;
   readonly markAsRead: (id: string) => void;
@@ -146,39 +156,49 @@ interface UseDashboardSSEResult {
 /**
  * Subscribe to real-time dashboard events via SSE.
  *
- * @returns refreshKey — increments on each SSE event, use as a dependency
- *   in data hooks to trigger refetches
+ * Invalidates relevant TanStack Query keys on each event so consuming
+ * hooks automatically refetch stale data.
+ *
  * @returns notifications — accumulated notification history from SSE events
  * @returns markAllRead — marks all notifications as read
  */
 export const useDashboardSSE = (): UseDashboardSSEResult => {
   const { user, refreshUser, switchOrganization } = useAuth();
+  const queryClient = useQueryClient();
   const storageKey = buildNotificationStorageKey(user?.tenantId);
 
-  const [refreshKey, setRefreshKey] = useState(0);
+  // Debounce query invalidation so rapid SSE events (e.g. multiple
+  // check runs finishing together) trigger only a single invalidation wave.
+  // Keys are accumulated across calls within the debounce window so that
+  // back-to-back events (e.g. new_failure then analysis_complete) don't
+  // drop the first event's keys when the timer resets.
+  const invalidationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingKeysRef = useRef<Map<string, readonly unknown[]>>(new Map());
 
-  // Debounce refreshKey increments so rapid SSE events (e.g. multiple
-  // check runs finishing together) trigger only a single re-fetch wave.
-  // Uses a pending-flag state + effect to avoid direct ref mutation.
-  const [refreshPending, setRefreshPending] = useState(false);
+  const debouncedInvalidate = useCallback(
+    (keys: ReadonlyArray<readonly unknown[]>) => {
+      // Accumulate keys in a Map keyed by serialized form for dedup,
+      // storing the original key to avoid a JSON.parse roundtrip.
+      keys.forEach((key) => {
+        pendingKeysRef.current.set(JSON.stringify(key), key);
+      });
 
-  useEffect(() => {
-    if (!refreshPending) {
-      return;
-    }
-    const timerId = setTimeout(() => {
-      setRefreshPending(false);
-      setRefreshKey((prev) => prev + 1);
-    }, REFRESH_DEBOUNCE_MS);
-    return () => clearTimeout(timerId);
-  }, [refreshPending]);
+      if (invalidationTimerRef.current) {
+        clearTimeout(invalidationTimerRef.current);
+      }
 
-  const debouncedRefresh = useCallback(() => {
-    // Re-setting to false then true restarts the debounce timer
-    setRefreshPending(false);
-    // Use queueMicrotask so the false→true transition is two distinct renders
-    queueMicrotask(() => setRefreshPending(true));
-  }, []);
+      const timerId = setTimeout(() => {
+        const keysToInvalidate = [...pendingKeysRef.current.values()];
+        pendingKeysRef.current.clear();
+        keysToInvalidate.forEach((queryKey) => {
+          void queryClient.invalidateQueries({ queryKey });
+        });
+        invalidationTimerRef.current = null;
+      }, REFRESH_DEBOUNCE_MS);
+      invalidationTimerRef.current = timerId;
+    },
+    [queryClient]
+  );
 
   const [notifications, setNotifications] = useState<readonly DashboardNotification[]>(() =>
     loadNotifications(storageKey)
@@ -186,6 +206,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   const { toastEnabled, browserEnabled } = useNotificationPreferences();
   const toastEnabledRef = useRef(toastEnabled);
   const browserEnabledRef = useRef(browserEnabled);
+  const refreshUserRef = useRef(refreshUser);
   const switchOrgRef = useRef(switchOrganization);
   const currentTenantIdRef = useRef(user?.tenantId);
 
@@ -195,16 +216,19 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   }, [storageKey]);
 
   useEffect(() => {
-    Object.assign(toastEnabledRef, { current: toastEnabled });
+    toastEnabledRef.current = toastEnabled;
   }, [toastEnabled]);
   useEffect(() => {
-    Object.assign(browserEnabledRef, { current: browserEnabled });
+    browserEnabledRef.current = browserEnabled;
   }, [browserEnabled]);
   useEffect(() => {
-    Object.assign(switchOrgRef, { current: switchOrganization });
+    refreshUserRef.current = refreshUser;
+  }, [refreshUser]);
+  useEffect(() => {
+    switchOrgRef.current = switchOrganization;
   }, [switchOrganization]);
   useEffect(() => {
-    Object.assign(currentTenantIdRef, { current: user?.tenantId });
+    currentTenantIdRef.current = user?.tenantId;
   }, [user?.tenantId]);
 
   const markAllRead = useCallback(() => {
@@ -244,14 +268,19 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
   );
 
   useEffect(() => {
-    const eventSource = new EventSource(SSE_ENDPOINT, {
-      withCredentials: true,
-    });
+    const INITIAL_BACKOFF_MS = 1_000;
+    const MAX_BACKOFF_MS = 30_000;
+    const HEARTBEAT_TIMEOUT_MS = 45_000;
+    const JITTER_FACTOR = 0.6; // ±30% of current delay
 
-    // EventSource auto-reconnects on error; listener for debugging only
-    eventSource.addEventListener("error", () => {
-      // Browser will auto-reconnect; no action needed
-    });
+    // let: mutable reconnection state managed across connect/disconnect cycles
+    let backoffMs = INITIAL_BACKOFF_MS; // let: reset on successful connection
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null; // let: cleared on cleanup
+    let heartbeatTimer: ReturnType<typeof setTimeout> | null = null; // let: reset on each event
+    let eventSource: EventSource | null = null; // let: recreated on reconnect
+    let disposed = false; // let: set true on cleanup to prevent reconnection after unmount
+
+    // -- Notification helper (stable across reconnects) --
 
     const addNotification = (notification: DashboardNotification): void => {
       setNotifications((prev) => {
@@ -261,13 +290,19 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       });
     };
 
-    const handleNewFailure = (event: MessageEvent) => {
-      debouncedRefresh();
+    // -- Event handlers (stable across reconnects) --
+
+    const handleNewFailure = (event: MessageEvent): void => {
+      debouncedInvalidate([
+        queryKeys.dashboard.failures.all(),
+        queryKeys.dashboard.stats(),
+        queryKeys.incidents.all,
+      ]);
 
       const data = parseEventData<NewFailurePayload>(event);
       if (data) {
-        const repo = data.repository ?? "Unknown repository";
-        const checkName = data.checkName ? ` (${data.checkName})` : "";
+        const repo = truncateSSE(data.repository ?? "Unknown repository", 100);
+        const checkName = data.checkName ? ` (${truncateSSE(data.checkName, 80)})` : "";
         const failureTitle = `CI failure in ${repo}${checkName}`;
         const failureBody = "Kenchi is analyzing the failure...";
         if (toastEnabledRef.current) {
@@ -281,7 +316,9 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
           id: crypto.randomUUID(),
           type: "failure",
           title: `CI failure in ${repo}`,
-          description: data.checkName ? `Check "${data.checkName}" failed` : "A CI/CD check failed",
+          description: data.checkName
+            ? `Check "${truncateSSE(data.checkName, 80)}" failed`
+            : "A CI/CD check failed",
           timestamp: new Date().toISOString(),
           read: false,
           repository: data.repository,
@@ -289,12 +326,16 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
     };
 
-    const handleAnalysisComplete = (event: MessageEvent) => {
-      debouncedRefresh();
+    const handleAnalysisComplete = (event: MessageEvent): void => {
+      debouncedInvalidate([
+        queryKeys.dashboard.analyses.all(),
+        queryKeys.dashboard.stats(),
+        queryKeys.dashboard.confidence.all(),
+      ]);
 
       const data = parseEventData<AnalysisCompletePayload>(event);
       if (data) {
-        const repo = data.repository ?? "Unknown repository";
+        const repo = truncateSSE(data.repository ?? "Unknown repository", 100);
         const confidence = data.confidence
           ? ` \u2014 ${formatConfidence(data.confidence)} confidence`
           : "";
@@ -321,14 +362,14 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
     };
 
-    const handleNewIncident = (event: MessageEvent) => {
-      debouncedRefresh();
+    const handleNewIncident = (event: MessageEvent): void => {
+      debouncedInvalidate([queryKeys.incidents.all]);
 
       const data = parseEventData<NewIncidentPayload>(event);
       if (data) {
-        const source = data.source ?? "unknown";
-        const severity = data.severity ?? "unknown";
-        const title = data.title ?? "New incident alert";
+        const source = truncateSSE(data.source ?? "unknown", 50);
+        const severity = truncateSSE(data.severity ?? "unknown", 30);
+        const title = truncateSSE(data.title ?? "New incident alert");
         const incidentTitle = `${severity.toUpperCase()} alert from ${source}`;
         const incidentBody = title;
         if (toastEnabledRef.current) {
@@ -351,13 +392,13 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
     };
 
-    const handleIncidentTriaged = (event: MessageEvent) => {
-      debouncedRefresh();
+    const handleIncidentTriaged = (event: MessageEvent): void => {
+      debouncedInvalidate([queryKeys.incidents.all]);
 
       const data = parseEventData<IncidentTriagedPayload>(event);
       if (data) {
-        const title = data.title ?? "Incident";
-        const headline = data.aiSummary ?? "Triage complete";
+        const title = truncateSSE(data.title ?? "Incident");
+        const headline = truncateSSE(data.aiSummary ?? "Triage complete");
         const triagedTitle = `Triage complete: ${title}`;
         if (toastEnabledRef.current) {
           toast.info(triagedTitle, { description: headline });
@@ -378,61 +419,170 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
       }
     };
 
-    const handleOrganizationUpdated = (event: MessageEvent) => {
+    const handleInvestigationStatusChanged = (event: MessageEvent): void => {
+      const data = parseEventData<InvestigationStatusChangedPayload>(event);
+
+      // Invalidate the investigation list and, if available, the specific detail query.
+      const keysToInvalidate: ReadonlyArray<readonly unknown[]> = data?.investigationId
+        ? [queryKeys.investigations.all, queryKeys.investigations.detail(data.investigationId)]
+        : [queryKeys.investigations.all];
+
+      debouncedInvalidate(keysToInvalidate);
+    };
+
+    const handleOrganizationUpdated = (event: MessageEvent): void => {
       const data = parseEventData<{
         installedTenantId?: string;
         uninstalledTenantId?: string;
       }>(event);
 
-      // Defer setRefreshKey until AFTER auth operations complete.
-      // Firing it immediately causes ~10 simultaneous dashboard re-fetches
+      // Defer query invalidation until AFTER auth operations complete.
+      // Firing it immediately causes simultaneous dashboard re-fetches
       // that, combined with refresh-orgs, burst past the rate limiter and
-      // can block even the token-refresh request (429 → forced logout).
+      // can block even the token-refresh request (429 -> forced logout).
       void (async () => {
         try {
           await apiClient("/auth/refresh-orgs", { method: "POST", backgroundRetry: true });
-        } catch {
-          // Best-effort
+        } catch (error) {
+          // Best-effort — org list refresh will happen on next navigation
+          void error; // best-effort — org list refresh will happen on next navigation
         }
 
         // Auto-switch to the installed org if it differs from the current tenant.
         if (data?.installedTenantId && data.installedTenantId !== currentTenantIdRef.current) {
           try {
             await switchOrgRef.current(data.installedTenantId);
-          } catch {
+          } catch (error) {
             // Best-effort — user can manually switch via org selector
+            void error; // best-effort — user can manually switch via org selector
           }
         } else {
           // Refresh user state to pick up org list changes (install or uninstall).
           // For uninstalls, refreshUser re-reads /auth/me which reflects the
           // updated org list and selected tenant from the server.
           try {
-            await refreshUser();
-          } catch {
+            await refreshUserRef.current();
+          } catch (error) {
             // Best-effort — stale user state is acceptable; next navigation refreshes
+            void error; // best-effort — stale user state is acceptable; next navigation refreshes
           }
         }
 
-        // Trigger dashboard data re-fetch AFTER auth state is settled.
-        debouncedRefresh();
+        // Invalidate all dashboard and related queries AFTER auth state is settled.
+        // Use immediate invalidation (not debounced) since the auth refresh above
+        // already introduces sufficient delay.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.subscription.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.team.all });
       })();
     };
 
-    eventSource.addEventListener("new_failure", handleNewFailure);
-    eventSource.addEventListener("analysis_complete", handleAnalysisComplete);
-    eventSource.addEventListener("new_incident", handleNewIncident);
-    eventSource.addEventListener("incident_triaged", handleIncidentTriaged);
-    eventSource.addEventListener("organization_updated", handleOrganizationUpdated);
+    // -- Reconnection helpers --
+
+    const resetHeartbeat = (): void => {
+      if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer);
+      }
+      heartbeatTimer = setTimeout(() => {
+        // No events received for 45s -- connection likely dropped silently.
+        // Close and trigger reconnection via scheduleReconnect.
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        scheduleReconnect();
+      }, HEARTBEAT_TIMEOUT_MS);
+    };
+
+    const scheduleReconnect = (): void => {
+      if (disposed) {
+        return;
+      }
+      // Jitter: +-30% of current delay to desynchronize reconnection across tabs
+      const jitter = (Math.random() - 0.5) * JITTER_FACTOR * backoffMs;
+      const delay = Math.max(0, backoffMs + jitter);
+      reconnectTimer = setTimeout(() => {
+        backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+        connect();
+      }, delay);
+    };
+
+    /** Wraps an event handler to reset the heartbeat timer on each received event. */
+    const withHeartbeat =
+      (handler: (event: MessageEvent) => void): ((event: MessageEvent) => void) =>
+      (event: MessageEvent) => {
+        resetHeartbeat();
+        handler(event);
+      };
+
+    // -- Connection lifecycle --
+
+    const connect = (): void => {
+      if (disposed) {
+        return;
+      }
+
+      const source = new EventSource(SSE_ENDPOINT, { withCredentials: true });
+      eventSource = source;
+
+      source.addEventListener("open", () => {
+        backoffMs = INITIAL_BACKOFF_MS; // Reset backoff on successful connection
+        resetHeartbeat();
+      });
+
+      source.addEventListener("error", () => {
+        if (disposed) {
+          return;
+        }
+        // Guard: if eventSource was already nulled (heartbeat timeout handled it),
+        // skip to prevent double reconnection.
+        if (eventSource !== source) {
+          return;
+        }
+        source.close();
+        eventSource = null;
+        if (heartbeatTimer) {
+          clearTimeout(heartbeatTimer);
+        }
+        scheduleReconnect();
+      });
+
+      // Attach event handlers wrapped with heartbeat reset
+      source.addEventListener("new_failure", withHeartbeat(handleNewFailure));
+      source.addEventListener("analysis_complete", withHeartbeat(handleAnalysisComplete));
+      source.addEventListener("new_incident", withHeartbeat(handleNewIncident));
+      source.addEventListener("incident_triaged", withHeartbeat(handleIncidentTriaged));
+      source.addEventListener(
+        "investigation_status_changed",
+        withHeartbeat(handleInvestigationStatusChanged)
+      );
+      source.addEventListener("organization_updated", withHeartbeat(handleOrganizationUpdated));
+    };
+
+    connect();
 
     return () => {
-      eventSource.removeEventListener("new_failure", handleNewFailure);
-      eventSource.removeEventListener("analysis_complete", handleAnalysisComplete);
-      eventSource.removeEventListener("new_incident", handleNewIncident);
-      eventSource.removeEventListener("incident_triaged", handleIncidentTriaged);
-      eventSource.removeEventListener("organization_updated", handleOrganizationUpdated);
-      eventSource.close();
+      disposed = true;
+      // Clear invalidation timer first to prevent firing during cleanup
+      if (invalidationTimerRef.current) {
+        clearTimeout(invalidationTimerRef.current);
+        invalidationTimerRef.current = null;
+      }
+      // Copy ref to local var — ref.current may change by cleanup time
+      const pendingKeys = pendingKeysRef.current;
+      pendingKeys.clear();
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer);
+      }
+      if (eventSource) {
+        eventSource.close();
+      }
     };
-  }, [storageKey, refreshUser, debouncedRefresh]);
+  }, [storageKey, debouncedInvalidate, queryClient]);
 
-  return { refreshKey, notifications, markAllRead, markAsRead, dismissNotification };
+  return { notifications, markAllRead, markAsRead, dismissNotification };
 };

@@ -926,6 +926,7 @@ export interface Config {
   // Database Configuration
   readonly DATABASE_URL: string;
   readonly VECTOR_DB_URL: string;
+  readonly DB_POOL_SIZE?: number;
 
   // General Configuration
   readonly NODE_ENV: NodeEnvironment;
@@ -1099,6 +1100,7 @@ export interface PendingWaiter {
   readonly resolve: () => void;
   readonly reject: (error: Error) => void;
   readonly timeoutId: NodeJS.Timeout;
+  /* mutable: toggled by semaphore acquire/release lifecycle */
   resolved: boolean;
 }
 

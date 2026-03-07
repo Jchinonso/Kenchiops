@@ -19,6 +19,7 @@ import {
   withCircuitBreaker,
   buildTenantCircuitKey,
   refreshGitLabTokenIfNeeded,
+  GITLAB_MAX_FAILED_JOBS,
   type CILogFetcherPort,
   type FetchedBuildLogs,
   type RequestContext,
@@ -86,8 +87,7 @@ const encodeProjectPath = (owner: string, repo: string): string =>
 
 /**
  * Fetch a single job's log trace from GitLab.
- * The trace endpoint returns plain text, so we cannot use resilientGet (JSON-only).
- * Uses bare fetch with AbortSignal.timeout for the text response.
+ * Uses resilientGet with responseType: "text" for automatic retry and circuit breaker.
  */
 const fetchJobTrace = async (
   baseUrl: string,
@@ -96,58 +96,34 @@ const fetchJobTrace = async (
   accessToken: string,
   context: RequestContext
 ): Promise<string> => {
-  const startTime = Date.now();
   const url = `${baseUrl}/api/v4/projects/${encodedPath}/jobs/${jobId}/trace`;
 
   try {
-    const response = await fetch(url, {
+    const response = await resilientGet<string>(url, {
       headers: { "PRIVATE-TOKEN": accessToken },
-      signal: AbortSignal.timeout(GITLAB_TRACE_TIMEOUT_MS),
+      timeout: GITLAB_TRACE_TIMEOUT_MS,
+      responseType: "text",
     });
-
-    const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      logger.error("GitLab job trace fetch failed", {
-        provider: "gitlab",
-        operation: "fetchJobTrace",
-        durationMs,
-        statusCode: response.status,
-        jobId,
-        ...context,
-      });
-      throw new ExternalServiceError(
-        "gitlab",
-        `Job trace fetch failed with status ${response.status}`,
-        {
-          retryable: response.status >= 500 || response.status === 429,
-        }
-      );
-    }
-
-    const rawText = await response.text();
 
     logger.info("GitLab job trace fetched", {
       provider: "gitlab",
       operation: "fetchJobTrace",
-      durationMs,
+      durationMs: response.duration,
       statusCode: response.status,
       jobId,
-      logLength: rawText.length,
+      logLength: response.data.length,
       ...context,
     });
 
-    return cleanGitLabLog(rawText);
+    return cleanGitLabLog(response.data);
   } catch (error) {
     if (error instanceof ExternalServiceError) {
       throw error;
     }
 
-    const durationMs = Date.now() - startTime;
     logger.error("GitLab job trace fetch failed", {
       provider: "gitlab",
       operation: "fetchJobTrace",
-      durationMs,
       jobId,
       error: getErrorMessage(error),
       ...context,
@@ -281,13 +257,10 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
     _installationId: number,
     context: RequestContext
   ): Promise<FetchedBuildLogs> => {
-    const circuitKey = buildTenantCircuitKey("gitlab", context.tenantId);
     const { accessToken, baseUrl } = await resolveAccessToken(context);
     const encodedPath = encodeProjectPath(owner, repo);
     const startTime = Date.now();
-    const logs = await withCircuitBreaker(circuitKey, async () =>
-      fetchJobTrace(baseUrl, encodedPath, buildId, accessToken, context)
-    );
+    const logs = await fetchJobTrace(baseUrl, encodedPath, buildId, accessToken, context);
     const durationMs = Date.now() - startTime;
 
     return { buildId, buildName: `job-${buildId}`, logs, durationMs };
@@ -321,11 +294,11 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
     }
 
     const pipelineId = String(pipeline.id);
-    const failedJobs = await withCircuitBreaker(circuitKey, async () =>
+    const allFailedJobs = await withCircuitBreaker(circuitKey, async () =>
       fetchFailedJobs(baseUrl, encodedPath, pipelineId, accessToken, context)
     );
 
-    if (failedJobs.length === 0) {
+    if (allFailedJobs.length === 0) {
       logger.info("No failed jobs in GitLab pipeline", {
         provider: "gitlab",
         operation: "fetchAllFailedLogs",
@@ -336,11 +309,33 @@ export const createGitLabLogFetcherAdapter = (): CILogFetcherPort => ({
       return [];
     }
 
+    // Cap the number of failed jobs to prevent unbounded trace fetches
+    const failedJobs =
+      allFailedJobs.length > GITLAB_MAX_FAILED_JOBS
+        ? allFailedJobs.slice(0, GITLAB_MAX_FAILED_JOBS)
+        : allFailedJobs;
+
+    if (allFailedJobs.length > GITLAB_MAX_FAILED_JOBS) {
+      logger.warn("Failed jobs exceed cap, processing only first batch", {
+        provider: "gitlab",
+        operation: "fetchAllFailedLogs",
+        pipelineId,
+        totalFailedJobs: allFailedJobs.length,
+        cappedAt: GITLAB_MAX_FAILED_JOBS,
+        commitSha: commitSha.substring(0, 7),
+        ...context,
+      });
+    }
+
     const results = await mapWithConcurrency(
       failedJobs,
       async (job): Promise<FetchedBuildLogs> => {
-        const logs = await withCircuitBreaker(circuitKey, async () =>
-          fetchJobTrace(baseUrl, encodedPath, String(job.id), accessToken, context)
+        const logs = await fetchJobTrace(
+          baseUrl,
+          encodedPath,
+          String(job.id),
+          accessToken,
+          context
         );
         return {
           buildId: String(job.id),

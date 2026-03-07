@@ -24,7 +24,7 @@ jest.mock("@kenchi/shared", () => ({
   rateLimitByCategory: jest.fn(
     () => (_req: unknown, _res: unknown, next: unknown) => (next as () => void)()
   ),
-  checkWebhookSourceRateLimit: jest.fn(() => ({ allowed: true, remaining: 59 })),
+  checkWebhookSourceRateLimit: jest.fn(() => Promise.resolve({ allowed: true, remaining: 59 })),
   isWebhookDuplicate: jest.fn(() => Promise.resolve(false)),
   markWebhookProcessed: jest.fn(() => Promise.resolve()),
   RateLimitError: class RateLimitError extends Error {

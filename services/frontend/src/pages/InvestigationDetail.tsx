@@ -41,7 +41,6 @@ import {
 
 interface InvestigationDetailProps {
   readonly investigationId: string;
-  readonly refreshKey?: number;
 }
 
 // ==================== Helpers ====================
@@ -73,7 +72,6 @@ const BackLink = () => (
 
 export const InvestigationDetail = ({
   investigationId,
-  refreshKey = 0,
 }: InvestigationDetailProps) => {
   const navigate = useNavigate();
   const {
@@ -81,7 +79,7 @@ export const InvestigationDetail = ({
     isLoading,
     error,
     refetch,
-  } = useInvestigationDetail(investigationId, refreshKey);
+  } = useInvestigationDetail(investigationId);
 
   const handleRetry = () => {
     navigate("/dashboard/incidents/investigations/new");

@@ -6,7 +6,8 @@
  * 2. rateLimitByPlan() - per-tenant plan-based limits (free/pro/team/enterprise)
  *
  * Both use tenant ID as the rate limit key for per-tenant isolation.
- * Falls back to in-memory counters to avoid Redis coupling complexity.
+ * Uses Redis-backed FailoverRateLimitStore for distributed rate limiting
+ * with automatic in-memory fallback when Redis is unavailable.
  * Fails open (allows through) if an unexpected error occurs during rate check.
  *
  * @module http/rateLimitByCategory
@@ -23,85 +24,159 @@ import {
   WEBHOOK_SOURCE_RATE_LIMIT_PREFIX,
   WEBHOOK_SOURCE_RATE_LIMIT,
 } from "../constants/rateLimitCategory.js";
+import { createFailoverStore } from "../rateLimit/failoverStore.js";
 import type { RateLimitCategory, RateLimitPlanId } from "./rateLimitByCategoryTypes.js";
 
 const logger = createLogger("rate-limit-category");
 
-// ==================== In-Memory Sliding Window Counter ====================
+// ==================== Failover Stores (Redis + in-memory fallback) ====================
 
-interface WindowEntry {
-  readonly resetTime: number;
-  count: number;
-}
+/** Store for per-category rate limiting (max based on highest category limit) */
+const categoryStore = createFailoverStore(
+  CATEGORY_RATE_LIMIT_PREFIX,
+  RATE_LIMIT_CATEGORIES.readonly.maxPerMinute
+);
 
-/**
- * Simple in-memory sliding window store.
- * Uses deterministic cleanup on access to bound memory.
- */
-const createWindowStore = (): {
-  readonly check: (
-    key: string,
-    windowMs: number,
-    max: number
-  ) => {
-    readonly allowed: boolean;
-    readonly remaining: number;
-    readonly resetMs: number;
-  };
-} => {
-  const store = new Map<string, WindowEntry>();
-  // let: counter for deterministic cleanup every N checks
-  let accessCount = 0; // let: incremented each check for periodic cleanup
+/** Store for per-plan rate limiting (max based on highest plan limit) */
+const planStore = createFailoverStore(
+  PLAN_RATE_LIMIT_PREFIX,
+  PLAN_RATE_LIMITS.enterprise.maxPerMinute
+);
 
-  const cleanup = (now: number): void => {
-    const keysToDelete: readonly string[] = [...store.keys()].filter((entryKey) => {
-      const entry = store.get(entryKey);
-      return entry !== undefined && entry.resetTime < now;
-    });
-    keysToDelete.forEach((entryKey) => store.delete(entryKey));
-  };
-
-  return {
-    check: (key: string, windowMs: number, max: number) => {
-      const now = Date.now();
-      accessCount = (accessCount + 1) % 10_000;
-
-      // Cleanup every 100 accesses or if store is large
-      if (accessCount % 100 === 0 || store.size > 50_000) {
-        cleanup(now);
-      }
-
-      const existing = store.get(key);
-      const hasValidWindow = existing !== undefined && now <= existing.resetTime;
-
-      if (hasValidWindow && existing !== undefined) {
-        existing.count++;
-        const allowed = existing.count <= max;
-        const remaining = Math.max(0, max - existing.count);
-        return { allowed, remaining, resetMs: existing.resetTime };
-      }
-
-      // New window
-      const resetTime = Math.min(now + windowMs, Number.MAX_SAFE_INTEGER);
-      store.set(key, { resetTime, count: 1 });
-      return { allowed: true, remaining: max - 1, resetMs: resetTime };
-    },
-  };
-};
-
-const categoryStore = createWindowStore();
-const planStore = createWindowStore();
-const webhookSourceStore = createWindowStore();
+/** Store for per-webhook-source rate limiting */
+const webhookStore = createFailoverStore(
+  WEBHOOK_SOURCE_RATE_LIMIT_PREFIX,
+  WEBHOOK_SOURCE_RATE_LIMIT.maxPerMinute
+);
 
 // ==================== Key Extraction ====================
 
 /**
  * Extracts the tenant ID for per-tenant rate limiting.
- * Checks req.user.tenantId (JWT auth) then req.context.tenantId.
+ * Checks req.user.tenantId (JWT auth) and req.context.tenantId.
  * Returns null for unauthenticated traffic (bypasses tenant rate limits).
  */
 const extractTenantId = (req: Request): string | null =>
   req.user?.tenantId ?? req.context?.tenantId ?? null;
+
+// ==================== Async Rate Limit Helpers ====================
+
+/**
+ * Performs the category rate limit check and calls next() appropriately.
+ * Extracted as an async helper so the Express middleware can invoke it
+ * without Promise chain patterns.
+ */
+const applyCategoryLimit = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  category: RateLimitCategory,
+  maxPerMinute: number,
+  windowMs: number
+): Promise<void> => {
+  const tenantId = extractTenantId(req);
+  if (!tenantId) {
+    next();
+    return;
+  }
+
+  const key = `${category}:${tenantId}`;
+
+  try {
+    const info = await categoryStore.increment(key, windowMs);
+
+    res.setHeader("X-RateLimit-Limit", maxPerMinute);
+    res.setHeader("X-RateLimit-Remaining", Math.max(0, maxPerMinute - info.current));
+    res.setHeader("X-RateLimit-Reset", Math.ceil(info.resetTime / 1000));
+
+    if (info.current > maxPerMinute) {
+      const retryAfterMs = Math.max(0, info.resetTime - Date.now());
+      logger.warn("Tenant exceeded category quota", {
+        category,
+        tenantId,
+      });
+      next(
+        new RateLimitError(
+          `Rate limit exceeded for ${category} endpoints. Please try again later.`,
+          retryAfterMs
+        )
+      );
+      return;
+    }
+
+    next();
+  } catch (error: unknown) {
+    if (error instanceof RateLimitError) {
+      next(error);
+      return;
+    }
+    // Fail open on unexpected errors — do not block traffic
+    logger.warn("Category quota middleware error, failing open", {
+      category,
+    });
+    next();
+  }
+};
+
+/**
+ * Performs the plan rate limit check and calls next() appropriately.
+ */
+const applyPlanLimit = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  windowMs: number
+): Promise<void> => {
+  const tenantId = extractTenantId(req);
+  if (!tenantId) {
+    next();
+    return;
+  }
+
+  const rawPlanId = (req as Request & { readonly planId?: string }).planId;
+  const planId: RateLimitPlanId =
+    rawPlanId !== undefined && rawPlanId in PLAN_RATE_LIMITS
+      ? (rawPlanId as RateLimitPlanId)
+      : "free";
+  const planConfig = PLAN_RATE_LIMITS[planId];
+  const { maxPerMinute } = planConfig;
+
+  const key = tenantId;
+
+  try {
+    const info = await planStore.increment(key, windowMs);
+
+    res.setHeader("X-RateLimit-Plan-Limit", maxPerMinute);
+    res.setHeader("X-RateLimit-Plan-Remaining", Math.max(0, maxPerMinute - info.current));
+
+    if (info.current > maxPerMinute) {
+      const retryAfterMs = Math.max(0, info.resetTime - Date.now());
+      logger.warn("Tenant exceeded plan quota", {
+        planId,
+        tenantId,
+      });
+      next(
+        new RateLimitError(
+          "Plan rate limit exceeded. Upgrade your plan for higher limits.",
+          retryAfterMs
+        )
+      );
+      return;
+    }
+
+    next();
+  } catch (error: unknown) {
+    if (error instanceof RateLimitError) {
+      next(error);
+      return;
+    }
+    // Fail open on unexpected errors
+    logger.warn("Plan quota middleware error, failing open", {
+      tenantId,
+    });
+    next();
+  }
+};
 
 // ==================== Middleware Factories ====================
 
@@ -126,43 +201,7 @@ export const rateLimitByCategory = (
   const { maxPerMinute, windowMs } = RATE_LIMIT_CATEGORIES[category];
 
   return (req: Request, res: Response, next: NextFunction): void => {
-    try {
-      const tenantId = extractTenantId(req);
-      if (!tenantId) {
-        return next();
-      }
-
-      const key = `${CATEGORY_RATE_LIMIT_PREFIX}${category}:${tenantId}`;
-      const result = categoryStore.check(key, windowMs, maxPerMinute);
-
-      res.setHeader("X-RateLimit-Limit", maxPerMinute);
-      res.setHeader("X-RateLimit-Remaining", result.remaining);
-      res.setHeader("X-RateLimit-Reset", Math.ceil(result.resetMs / 1000));
-
-      if (!result.allowed) {
-        const retryAfterMs = Math.max(0, result.resetMs - Date.now());
-        logger.warn("Tenant exceeded category quota", {
-          category,
-          tenantId,
-        });
-        throw new RateLimitError(
-          `Rate limit exceeded for ${category} endpoints. Please try again later.`,
-          retryAfterMs
-        );
-      }
-
-      next();
-    } catch (error) {
-      if (error instanceof RateLimitError) {
-        next(error);
-        return;
-      }
-      // Fail open on unexpected errors — do not block traffic
-      logger.warn("Category quota middleware error, failing open", {
-        category,
-      });
-      next();
-    }
+    void applyCategoryLimit(req, res, next, category, maxPerMinute, windowMs);
   };
 };
 
@@ -170,7 +209,7 @@ export const rateLimitByCategory = (
  * Creates Express middleware that rate-limits by the tenant's subscription plan.
  *
  * Plan limits (per minute):
- * - free: 60
+ * - free: 200
  * - pro: 300
  * - team: 500
  * - enterprise: 2000
@@ -185,47 +224,7 @@ export const rateLimitByPlan = (): ((req: Request, res: Response, next: NextFunc
   const windowMs = 60_000;
 
   return (req: Request, res: Response, next: NextFunction): void => {
-    try {
-      const tenantId = extractTenantId(req);
-      if (!tenantId) {
-        return next();
-      }
-
-      // Determine plan - use attached plan info or default to free
-      const planId: RateLimitPlanId =
-        (req as Request & { readonly planId?: RateLimitPlanId }).planId ?? "free";
-      const planConfig = PLAN_RATE_LIMITS[planId] ?? PLAN_RATE_LIMITS.free;
-      const { maxPerMinute } = planConfig;
-
-      const key = `${PLAN_RATE_LIMIT_PREFIX}${tenantId}`;
-      const result = planStore.check(key, windowMs, maxPerMinute);
-
-      res.setHeader("X-RateLimit-Plan-Limit", maxPerMinute);
-      res.setHeader("X-RateLimit-Plan-Remaining", result.remaining);
-
-      if (!result.allowed) {
-        const retryAfterMs = Math.max(0, result.resetMs - Date.now());
-        logger.warn("Tenant exceeded plan quota", {
-          planId,
-          tenantId,
-        });
-        throw new RateLimitError(
-          "Plan rate limit exceeded. Upgrade your plan for higher limits.",
-          retryAfterMs
-        );
-      }
-
-      next();
-    } catch (error) {
-      if (error instanceof RateLimitError) {
-        throw error;
-      }
-      // Fail open on unexpected errors
-      logger.warn("Plan quota middleware error, failing open", {
-        tenantId: extractTenantId(req),
-      });
-      next();
-    }
+    void applyPlanLimit(req, res, next, windowMs);
   };
 };
 
@@ -238,12 +237,22 @@ export const rateLimitByPlan = (): ((req: Request, res: Response, next: NextFunc
  * @param source - The webhook provider (e.g., "github", "slack")
  * @returns Object with `allowed` flag and `remaining` count
  */
-export const checkWebhookSourceRateLimit = (
+export const checkWebhookSourceRateLimit = async (
   sourceId: string,
   source: string
-): { readonly allowed: boolean; readonly remaining: number } => {
+): Promise<{ readonly allowed: boolean; readonly remaining: number }> => {
   const { maxPerMinute, windowMs } = WEBHOOK_SOURCE_RATE_LIMIT;
-  const key = `${WEBHOOK_SOURCE_RATE_LIMIT_PREFIX}${source}:${sourceId}`;
-  const result = webhookSourceStore.check(key, windowMs, maxPerMinute);
-  return { allowed: result.allowed, remaining: result.remaining };
+  const key = `${source}:${sourceId}`;
+
+  try {
+    const info = await webhookStore.increment(key, windowMs);
+    return { allowed: info.current <= maxPerMinute, remaining: info.remaining };
+  } catch (error: unknown) {
+    // Fail open on unexpected errors — do not block webhook traffic
+    logger.warn("Webhook source rate limit check failed, failing open", {
+      source,
+      sourceId,
+    });
+    return { allowed: true, remaining: maxPerMinute };
+  }
 };

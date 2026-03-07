@@ -24,3 +24,10 @@ export const GITLAB_HOMEPAGE_PATH_PATTERN = /^https?:\/\/[^/]+\/(.+)$/;
  * GitLab job statuses that represent failures worth analyzing.
  */
 export const GITLAB_FAILURE_STATUSES: ReadonlySet<string> = new Set(["failed"]);
+
+/**
+ * Maximum number of failed jobs to fetch per pipeline.
+ * Caps the trace-fetching fan-out to prevent unbounded API calls
+ * on pipelines with many failed jobs (e.g., monorepo matrix builds).
+ */
+export const GITLAB_MAX_FAILED_JOBS = 50 as const;

@@ -2,17 +2,19 @@
  * Incident Data Hooks
  *
  * Custom hooks for fetching incident triage data from the API.
- * Uses shared useFetch hook.
+ * Uses TanStack Query for server state management.
+ *
+ * Each hook returns the legacy UseFetchResult<T> shape for backward
+ * compatibility. Cache freshness is managed by TanStack Query and
+ * SSE-driven invalidation.
  */
 
-import { useState, useCallback } from "react";
-import { apiClient } from "@/lib/apiClient";
-import {
-  useFetch,
-  parseErrorBody,
-  type UseFetchResult,
-  type MutationState,
-} from "@/hooks/useFetch";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { fetchQuery, fetchMutation } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
+import { toFetchResult, type UseFetchResult, type MutationState } from "@/hooks/useQueryCompat";
+
+// ==================== Types ====================
 
 export interface IncidentAlertRecord {
   readonly id: string;
@@ -108,34 +110,40 @@ export interface UseIncidentsOptions {
   readonly tenantId: string;
   readonly limit?: number;
   readonly offset?: number;
-  readonly refreshKey?: number;
   readonly severity?: string;
   readonly status?: string;
   readonly source?: string;
 }
 
 export const useIncidents = (options: UseIncidentsOptions): UseFetchResult<PaginatedIncidents> => {
-  const { tenantId, limit = 20, offset = 0, refreshKey = 0, severity, status, source } = options;
-
-  return useFetch<PaginatedIncidents>(
-    tenantId ? buildIncidentsUrl(limit, offset, severity, status, source) : "",
-    `${tenantId}:${limit}:${offset}:${refreshKey}:${severity ?? ""}:${status ?? ""}:${source ?? ""}`
+  const { tenantId, limit = 20, offset = 0, severity, status, source } = options;
+  return toFetchResult(
+    useQuery({
+      queryKey: queryKeys.incidents.list({ tenantId, limit, offset, severity, status, source }),
+      queryFn: () =>
+        fetchQuery<PaginatedIncidents>(buildIncidentsUrl(limit, offset, severity, status, source)),
+      enabled: !!tenantId,
+      placeholderData: keepPreviousData,
+    })
   );
 };
 
-export const useIncidentDetail = (
-  id: string | null,
-  refreshKey: number = 0
-): UseFetchResult<AlertWithTriageResult> =>
-  useFetch<AlertWithTriageResult>(id ? `/api/v1/incidents/${id}` : "", `${id ?? ""}:${refreshKey}`);
+export const useIncidentDetail = (id: string | null): UseFetchResult<AlertWithTriageResult> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.incidents.detail(id ?? ""),
+      queryFn: () => fetchQuery<AlertWithTriageResult>(`/api/v1/incidents/${id}`),
+      enabled: id !== null,
+    })
+  );
 
-export const useTriageStats = (
-  tenantId: string,
-  refreshKey: number = 0
-): UseFetchResult<PipelineMetricsResponse> =>
-  useFetch<PipelineMetricsResponse>(
-    tenantId ? `/api/v1/triage/stats` : "",
-    `${tenantId}:${refreshKey}`
+export const useTriageStats = (tenantId: string): UseFetchResult<PipelineMetricsResponse> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.incidents.triageStats(),
+      queryFn: () => fetchQuery<PipelineMetricsResponse>("/api/v1/triage/stats"),
+      enabled: !!tenantId,
+    })
   );
 
 export interface SourceStatsEntry {
@@ -145,12 +153,14 @@ export interface SourceStatsEntry {
 }
 
 export const useIntegrationHealth = (
-  tenantId: string,
-  refreshKey: number = 0
+  tenantId: string
 ): UseFetchResult<readonly SourceStatsEntry[]> =>
-  useFetch<readonly SourceStatsEntry[]>(
-    tenantId ? `/api/v1/incidents/stats/by-source` : "",
-    `${tenantId}:${refreshKey}`
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.incidents.integrationHealth(),
+      queryFn: () => fetchQuery<readonly SourceStatsEntry[]>("/api/v1/incidents/stats/by-source"),
+      enabled: !!tenantId,
+    })
   );
 
 // ==================== Per-Source Stats Types ====================
@@ -168,42 +178,44 @@ export interface SeverityBySourceEntry {
 
 // ==================== Per-Source Hooks ====================
 
-/**
- * Fetches active (non-resolved/closed/deduped) alert counts grouped by source.
- */
 export const useActiveCountsBySource = (
-  tenantId: string,
-  refreshKey: number = 0
+  tenantId: string
 ): UseFetchResult<readonly ActiveCountBySource[]> =>
-  useFetch<readonly ActiveCountBySource[]>(
-    tenantId ? `/api/v1/incidents/stats/active-by-source` : "",
-    `${tenantId}:${refreshKey}`
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.incidents.activeBySource(),
+      queryFn: () =>
+        fetchQuery<readonly ActiveCountBySource[]>("/api/v1/incidents/stats/active-by-source"),
+      enabled: !!tenantId,
+    })
   );
 
-/**
- * Fetches a balanced selection of recent incidents across sources.
- */
 export const useBalancedRecentIncidents = (
   tenantId: string,
   perSource: number = 2,
-  maxTotal: number = 6,
-  refreshKey: number = 0
+  maxTotal: number = 6
 ): UseFetchResult<readonly IncidentAlertRecord[]> =>
-  useFetch<readonly IncidentAlertRecord[]>(
-    tenantId ? `/api/v1/incidents/recent/balanced?perSource=${perSource}&maxTotal=${maxTotal}` : "",
-    `${tenantId}:${perSource}:${maxTotal}:${refreshKey}`
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.incidents.balancedRecent(perSource, maxTotal),
+      queryFn: () =>
+        fetchQuery<readonly IncidentAlertRecord[]>(
+          `/api/v1/incidents/recent/balanced?perSource=${perSource}&maxTotal=${maxTotal}`
+        ),
+      enabled: !!tenantId,
+    })
   );
 
-/**
- * Fetches severity distribution grouped by alert source.
- */
 export const useSeverityDistributionBySource = (
-  tenantId: string,
-  refreshKey: number = 0
+  tenantId: string
 ): UseFetchResult<readonly SeverityBySourceEntry[]> =>
-  useFetch<readonly SeverityBySourceEntry[]>(
-    tenantId ? `/api/v1/triage/stats/severity-by-source` : "",
-    `${tenantId}:${refreshKey}`
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.incidents.severityBySource(),
+      queryFn: () =>
+        fetchQuery<readonly SeverityBySourceEntry[]>("/api/v1/triage/stats/severity-by-source"),
+      enabled: !!tenantId,
+    })
   );
 
 // ==================== Mutation Hooks ====================
@@ -211,56 +223,57 @@ export const useSeverityDistributionBySource = (
 export const useAcknowledgeIncident = (): MutationState & {
   readonly acknowledge: (id: string) => Promise<IncidentAlertRecord | null>;
 } => {
-  const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (id: string) =>
+      fetchMutation<IncidentAlertRecord>(`/api/v1/incidents/${id}/acknowledge`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all });
+    },
+  });
 
-  const acknowledge = useCallback(async (id: string): Promise<IncidentAlertRecord | null> => {
-    setState({ isLoading: true, error: null });
+  const acknowledge = async (id: string): Promise<IncidentAlertRecord | null> => {
     try {
-      const response = await apiClient(`/api/v1/incidents/${id}/acknowledge`, { method: "POST" });
-      if (!response.ok) {
-        const message = await parseErrorBody(
-          response,
-          `Failed to acknowledge (${response.status})`
-        );
-        setState({ isLoading: false, error: message });
-        return null;
-      }
-      const json: { readonly data: IncidentAlertRecord } = await response.json();
-      setState({ isLoading: false, error: null });
-      return json.data;
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Unknown error";
-      setState({ isLoading: false, error: message });
+      return await mutation.mutateAsync(id);
+    } catch {
       return null;
     }
-  }, []);
+  };
 
-  return { ...state, acknowledge };
+  return {
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+    acknowledge,
+  };
 };
 
 export const useResolveIncident = (): MutationState & {
   readonly resolve: (id: string) => Promise<IncidentAlertRecord | null>;
 } => {
-  const [state, setState] = useState<MutationState>({ isLoading: false, error: null });
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (id: string) =>
+      fetchMutation<IncidentAlertRecord>(`/api/v1/incidents/${id}/resolve`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all });
+    },
+  });
 
-  const resolve = useCallback(async (id: string): Promise<IncidentAlertRecord | null> => {
-    setState({ isLoading: true, error: null });
+  const resolve = async (id: string): Promise<IncidentAlertRecord | null> => {
     try {
-      const response = await apiClient(`/api/v1/incidents/${id}/resolve`, { method: "POST" });
-      if (!response.ok) {
-        const message = await parseErrorBody(response, `Failed to resolve (${response.status})`);
-        setState({ isLoading: false, error: message });
-        return null;
-      }
-      const json: { readonly data: IncidentAlertRecord } = await response.json();
-      setState({ isLoading: false, error: null });
-      return json.data;
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Unknown error";
-      setState({ isLoading: false, error: message });
+      return await mutation.mutateAsync(id);
+    } catch {
       return null;
     }
-  }, []);
+  };
 
-  return { ...state, resolve };
+  return {
+    isLoading: mutation.isPending,
+    error: mutation.error?.message ?? null,
+    resolve,
+  };
 };

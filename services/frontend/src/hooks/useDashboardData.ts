@@ -2,12 +2,24 @@
  * Dashboard Data Hooks
  *
  * Custom hooks for fetching CI/CD dashboard data from the API.
- * Uses shared useFetch hook with useState/useEffect.
+ * Uses TanStack Query for server state management.
+ *
+ * Each hook returns the legacy UseFetchResult<T> shape for backward
+ * compatibility with existing page consumers. Cache freshness is managed
+ * by TanStack Query and SSE-driven invalidation.
  */
 
-import { useState, useEffect, useMemo, useRef } from "react";
-import { apiClient } from "@/lib/apiClient";
-import { useFetch, type FetchState, type UseFetchResult } from "@/hooks/useFetch";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { fetchQuery, fetchQueryPost } from "@/lib/fetchQuery";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  toFetchResult,
+  toFetchState,
+  type FetchState,
+  type UseFetchResult,
+} from "@/hooks/useQueryCompat";
+
+// ==================== Types ====================
 
 interface TenantInfo {
   readonly id: string;
@@ -71,25 +83,7 @@ interface PaginatedResult<T> {
   readonly offset: number;
 }
 
-// ==================== Typed Hooks ====================
-
-export const useTenantInfo = (depsKey: number | string = 0): UseFetchResult<TenantInfo> =>
-  useFetch<TenantInfo>("/api/v1/dashboard/tenant", `${depsKey}`);
-
-export const useDashboardStats = (
-  refreshKey: number = 0,
-  source?: string
-): UseFetchResult<DashboardStats> => {
-  const url = source
-    ? `/api/v1/dashboard/stats?source=${encodeURIComponent(source)}`
-    : "/api/v1/dashboard/stats";
-  return useFetch<DashboardStats>(url, `${refreshKey}-${source ?? ""}`);
-};
-
-export const useRepositories = (
-  refreshKey: number = 0
-): UseFetchResult<readonly InstallationRepository[]> =>
-  useFetch<readonly InstallationRepository[]>("/api/v1/dashboard/repositories", `${refreshKey}`);
+// ==================== URL Builders ====================
 
 interface BuildAnalysesUrlOptions {
   readonly limit: number;
@@ -151,195 +145,6 @@ const buildFailuresUrl = (options: BuildFailuresUrlOptions): string => {
   return `/api/v1/dashboard/failures?${params.toString()}`;
 };
 
-interface UseAnalysesOptions {
-  readonly limit?: number;
-  readonly offset?: number;
-  readonly refreshKey?: number;
-  readonly repository?: string;
-  readonly minConfidence?: string;
-  readonly maxConfidence?: string;
-  readonly since?: string;
-  readonly source?: string;
-}
-
-export const useAnalyses = (
-  options: UseAnalysesOptions = {}
-): UseFetchResult<PaginatedResult<AnalysisRecord>> => {
-  const {
-    limit = 20,
-    offset = 0,
-    refreshKey = 0,
-    repository,
-    minConfidence,
-    maxConfidence,
-    since,
-    source,
-  } = options;
-
-  return useFetch<PaginatedResult<AnalysisRecord>>(
-    buildAnalysesUrl({ limit, offset, repository, minConfidence, maxConfidence, since, source }),
-    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${minConfidence ?? ""}:${maxConfidence ?? ""}:${since ?? ""}:${source ?? ""}`
-  );
-};
-
-interface UseFailuresOptions {
-  readonly limit?: number;
-  readonly offset?: number;
-  readonly refreshKey?: number;
-  readonly repository?: string;
-  readonly severity?: string;
-  readonly since?: string;
-  readonly source?: string;
-}
-
-export const useFailures = (
-  options: UseFailuresOptions = {}
-): UseFetchResult<PaginatedResult<EventRecord>> => {
-  const { limit = 20, offset = 0, refreshKey = 0, repository, severity, since, source } = options;
-
-  return useFetch<PaginatedResult<EventRecord>>(
-    buildFailuresUrl({ limit, offset, repository, severity, since, source }),
-    `${limit}:${offset}:${refreshKey}:${repository ?? ""}:${severity ?? ""}:${since ?? ""}:${source ?? ""}`
-  );
-};
-
-// ==================== Confidence Distribution ====================
-
-interface ConfidenceBucket {
-  readonly level: string;
-  readonly count: number;
-}
-
-export const useConfidenceDistribution = (
-  refreshKey: number = 0
-): UseFetchResult<readonly ConfidenceBucket[]> =>
-  useFetch<readonly ConfidenceBucket[]>(
-    "/api/v1/dashboard/stats/confidence-distribution",
-    `${refreshKey}`
-  );
-
-// ==================== Analysis Detail ====================
-
-export const useAnalysisDetail = (
-  analysisId: string | null,
-  refreshKey: number = 0
-): UseFetchResult<AnalysisRecord> =>
-  useFetch<AnalysisRecord>(
-    analysisId ? `/api/v1/dashboard/analyses/${analysisId}` : "",
-    `${analysisId ?? ""}:${refreshKey}`
-  );
-
-// ==================== Analysis Counts by Repo ====================
-
-interface AnalysisCountByRepo {
-  readonly repository: string;
-  readonly analysisCount: number;
-}
-
-export const useAnalysisCountsByRepo = (
-  refreshKey: number = 0
-): UseFetchResult<readonly AnalysisCountByRepo[]> =>
-  useFetch<readonly AnalysisCountByRepo[]>(
-    "/api/v1/dashboard/stats/analyses-by-repo",
-    `${refreshKey}`
-  );
-
-// ==================== Batch Lookup Hook ====================
-
-interface AnalysisStatusEntry {
-  readonly analysisId: string;
-  readonly confidence: number;
-}
-
-type AnalysisStatusMap = Readonly<Record<string, AnalysisStatusEntry | null>>;
-
-/**
- * POST-based batch lookup for analysis status by event IDs.
- * Returns a map of eventId to analysis info (or null if not analyzed).
- * Uses useMemo to stabilize the dependency array key.
- */
-export const useAnalysisStatusByEvents = (
-  eventIds: readonly string[],
-  refreshKey: number = 0
-): FetchState<AnalysisStatusMap> => {
-  const [state, setState] = useState<FetchState<AnalysisStatusMap>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  // Stabilize the event IDs key to avoid re-rendering on every render
-  const eventIdsKey = useMemo(() => eventIds.join(","), [eventIds]);
-  // Keep a ref to the latest eventIds for use in the async callback
-  const eventIdsRef = useRef(eventIds);
-  useEffect(() => {
-    Object.assign(eventIdsRef, { current: eventIds });
-  }, [eventIds]);
-
-  // Reset state when eventIds becomes empty (render-time state adjustment)
-  const [prevEventIdsKey, setPrevEventIdsKey] = useState(eventIdsKey);
-  if (eventIdsKey !== prevEventIdsKey) {
-    setPrevEventIdsKey(eventIdsKey);
-    if (eventIdsKey === "") {
-      setState({ data: null, isLoading: false, error: null });
-    }
-  }
-
-  useEffect(() => {
-    if (eventIdsKey === "") {
-      return;
-    }
-
-    // let: mutable flag for async cleanup coordination
-    let cancelled = false; // let: tracks if effect was cleaned up during async fetch
-
-    const fetchData = async (): Promise<void> => {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-      try {
-        const response = await apiClient("/api/v1/dashboard/analyses/by-events", {
-          method: "POST",
-          body: { eventIds: eventIdsRef.current },
-        });
-
-        if (cancelled) {
-          return;
-        }
-
-        if (!response.ok) {
-          setState({ data: null, isLoading: false, error: `Request failed (${response.status})` });
-          return;
-        }
-
-        const json: { readonly data: AnalysisStatusMap } = await response.json();
-        setState({ data: json.data, isLoading: false, error: null });
-      } catch (caught) {
-        if (cancelled) {
-          return;
-        }
-        const message = caught instanceof Error ? caught.message : "Unknown error";
-        setState({ data: null, isLoading: false, error: message });
-      }
-    };
-
-    void fetchData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [eventIdsKey, refreshKey]);
-
-  return state;
-};
-
-// ==================== Confidence Trend ====================
-
-interface ConfidenceTrendPoint {
-  readonly date: string;
-  readonly avgConfidence: number;
-  readonly count: number;
-}
-
 const buildConfidenceTrendUrl = (bucket: "day" | "week", since?: string): string => {
   const params = new URLSearchParams();
   params.set("bucket", bucket);
@@ -348,31 +153,6 @@ const buildConfidenceTrendUrl = (bucket: "day" | "week", since?: string): string
   }
   return `/api/v1/dashboard/stats/confidence-trend?${params.toString()}`;
 };
-
-export const useConfidenceTrend = (
-  bucket: "day" | "week" = "day",
-  since?: string,
-  refreshKey: number = 0
-): UseFetchResult<readonly ConfidenceTrendPoint[]> =>
-  useFetch<readonly ConfidenceTrendPoint[]>(
-    buildConfidenceTrendUrl(bucket, since),
-    `${bucket}:${since ?? ""}:${refreshKey}`
-  );
-
-// ==================== Webhook Activity ====================
-
-interface WebhookActivityRecord {
-  readonly id: string;
-  readonly tenantId: string | null;
-  readonly deliveryId: string;
-  readonly eventType: string;
-  readonly source: string;
-  readonly status: string;
-  readonly processingTimeMs: number | null;
-  readonly errorMessage: string | null;
-  readonly metadata: Readonly<Record<string, unknown>>;
-  readonly createdAt: string;
-}
 
 const buildWebhookActivityUrl = (
   limit: number,
@@ -392,19 +172,243 @@ const buildWebhookActivityUrl = (
   return `/api/v1/dashboard/webhook-activity?${params.toString()}`;
 };
 
-export const useWebhookActivity = (
-  limit: number = 20,
-  offset: number = 0,
-  refreshKey: number = 0,
-  source?: string,
-  status?: string
-): UseFetchResult<PaginatedResult<WebhookActivityRecord>> =>
-  useFetch<PaginatedResult<WebhookActivityRecord>>(
-    buildWebhookActivityUrl(limit, offset, source, status),
-    `${limit}:${offset}:${refreshKey}:${source ?? ""}:${status ?? ""}`
+// ==================== Typed Hooks ====================
+
+export const useTenantInfo = (): UseFetchResult<TenantInfo> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.tenant(),
+      queryFn: () => fetchQuery<TenantInfo>("/api/v1/dashboard/tenant"),
+    })
   );
 
-// ==================== Correlation Types ====================
+export const useDashboardStats = (source?: string): UseFetchResult<DashboardStats> => {
+  const url = source
+    ? `/api/v1/dashboard/stats?source=${encodeURIComponent(source)}`
+    : "/api/v1/dashboard/stats";
+  return toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.stats(source),
+      queryFn: () => fetchQuery<DashboardStats>(url),
+    })
+  );
+};
+
+export const useRepositories = (): UseFetchResult<readonly InstallationRepository[]> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.repositories(),
+      queryFn: () =>
+        fetchQuery<readonly InstallationRepository[]>("/api/v1/dashboard/repositories"),
+    })
+  );
+
+interface UseAnalysesOptions {
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly repository?: string;
+  readonly minConfidence?: string;
+  readonly maxConfidence?: string;
+  readonly since?: string;
+  readonly source?: string;
+}
+
+export const useAnalyses = (
+  options: UseAnalysesOptions = {}
+): UseFetchResult<PaginatedResult<AnalysisRecord>> => {
+  const {
+    limit = 20,
+    offset = 0,
+    repository,
+    minConfidence,
+    maxConfidence,
+    since,
+    source,
+  } = options;
+  return toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.analyses.list({
+        limit,
+        offset,
+        repository,
+        minConfidence,
+        maxConfidence,
+        since,
+        source,
+      }),
+      queryFn: () =>
+        fetchQuery<PaginatedResult<AnalysisRecord>>(
+          buildAnalysesUrl({
+            limit,
+            offset,
+            repository,
+            minConfidence,
+            maxConfidence,
+            since,
+            source,
+          })
+        ),
+      placeholderData: keepPreviousData,
+    })
+  );
+};
+
+interface UseFailuresOptions {
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly repository?: string;
+  readonly severity?: string;
+  readonly since?: string;
+  readonly source?: string;
+}
+
+export const useFailures = (
+  options: UseFailuresOptions = {}
+): UseFetchResult<PaginatedResult<EventRecord>> => {
+  const { limit = 20, offset = 0, repository, severity, since, source } = options;
+  return toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.failures.list({
+        limit,
+        offset,
+        repository,
+        severity,
+        since,
+        source,
+      }),
+      queryFn: () =>
+        fetchQuery<PaginatedResult<EventRecord>>(
+          buildFailuresUrl({ limit, offset, repository, severity, since, source })
+        ),
+      placeholderData: keepPreviousData,
+    })
+  );
+};
+
+// ==================== Confidence Distribution ====================
+
+interface ConfidenceBucket {
+  readonly level: string;
+  readonly count: number;
+}
+
+export const useConfidenceDistribution = (): UseFetchResult<readonly ConfidenceBucket[]> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.confidence.distribution(),
+      queryFn: () =>
+        fetchQuery<readonly ConfidenceBucket[]>("/api/v1/dashboard/stats/confidence-distribution"),
+    })
+  );
+
+// ==================== Analysis Detail ====================
+
+export const useAnalysisDetail = (analysisId: string | null): UseFetchResult<AnalysisRecord> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.analyses.detail(analysisId ?? ""),
+      queryFn: () => fetchQuery<AnalysisRecord>(`/api/v1/dashboard/analyses/${analysisId}`),
+      enabled: analysisId !== null,
+    })
+  );
+
+// ==================== Analysis Counts by Repo ====================
+
+interface AnalysisCountByRepo {
+  readonly repository: string;
+  readonly analysisCount: number;
+}
+
+export const useAnalysisCountsByRepo = (): UseFetchResult<readonly AnalysisCountByRepo[]> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.analyses.countsByRepo(),
+      queryFn: () =>
+        fetchQuery<readonly AnalysisCountByRepo[]>("/api/v1/dashboard/stats/analyses-by-repo"),
+    })
+  );
+
+// ==================== Batch Lookup Hook ====================
+
+interface AnalysisStatusEntry {
+  readonly analysisId: string;
+  readonly confidence: number;
+}
+
+type AnalysisStatusMap = Readonly<Record<string, AnalysisStatusEntry | null>>;
+
+export const useAnalysisStatusByEvents = (
+  eventIds: readonly string[]
+): FetchState<AnalysisStatusMap> =>
+  toFetchState(
+    useQuery({
+      queryKey: queryKeys.dashboard.analyses.byEvents(eventIds),
+      queryFn: () =>
+        fetchQueryPost<AnalysisStatusMap>("/api/v1/dashboard/analyses/by-events", { eventIds }),
+      enabled: eventIds.length > 0,
+    }),
+    eventIds.length > 0
+  );
+
+// ==================== Confidence Trend ====================
+
+interface ConfidenceTrendPoint {
+  readonly date: string;
+  readonly avgConfidence: number;
+  readonly count: number;
+}
+
+export const useConfidenceTrend = (
+  bucket: "day" | "week" = "day",
+  since?: string
+): UseFetchResult<readonly ConfidenceTrendPoint[]> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.confidence.trend(bucket, since),
+      queryFn: () =>
+        fetchQuery<readonly ConfidenceTrendPoint[]>(buildConfidenceTrendUrl(bucket, since)),
+    })
+  );
+
+// ==================== Webhook Activity ====================
+
+interface WebhookActivityRecord {
+  readonly id: string;
+  readonly tenantId: string | null;
+  readonly deliveryId: string;
+  readonly eventType: string;
+  readonly source: string;
+  readonly status: string;
+  readonly processingTimeMs: number | null;
+  readonly errorMessage: string | null;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly createdAt: string;
+}
+
+interface UseWebhookActivityOptions {
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly source?: string;
+  readonly status?: string;
+}
+
+export const useWebhookActivity = (
+  options: UseWebhookActivityOptions = {}
+): UseFetchResult<PaginatedResult<WebhookActivityRecord>> => {
+  const { limit = 20, offset = 0, source, status } = options;
+  return toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.webhookActivity({ limit, offset, source, status }),
+      queryFn: () =>
+        fetchQuery<PaginatedResult<WebhookActivityRecord>>(
+          buildWebhookActivityUrl(limit, offset, source, status)
+        ),
+      placeholderData: keepPreviousData,
+    })
+  );
+};
+
+// ==================== Correlation ====================
 
 interface CorrelationSummary {
   readonly id: string;
@@ -418,13 +422,13 @@ interface CorrelationResult {
   readonly incidents: readonly CorrelationSummary[];
 }
 
-export const useCorrelation = (
-  commitSha: string | null,
-  refreshKey: number = 0
-): UseFetchResult<CorrelationResult> =>
-  useFetch<CorrelationResult>(
-    commitSha ? `/api/v1/dashboard/correlations/${commitSha}` : "",
-    `${commitSha ?? ""}:${refreshKey}`
+export const useCorrelation = (commitSha: string | null): UseFetchResult<CorrelationResult> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.correlation(commitSha ?? ""),
+      queryFn: () => fetchQuery<CorrelationResult>(`/api/v1/dashboard/correlations/${commitSha}`),
+      enabled: commitSha !== null,
+    })
   );
 
 // ==================== GitLab Projects ====================
@@ -439,10 +443,13 @@ interface GitLabProject {
   readonly lastActivity: string;
 }
 
-export const useGitLabProjects = (
-  refreshKey: number = 0
-): UseFetchResult<readonly GitLabProject[]> =>
-  useFetch<readonly GitLabProject[]>("/api/v1/dashboard/gitlab/projects", `${refreshKey}`);
+export const useGitLabProjects = (): UseFetchResult<readonly GitLabProject[]> =>
+  toFetchResult(
+    useQuery({
+      queryKey: queryKeys.dashboard.gitlabProjects(),
+      queryFn: () => fetchQuery<readonly GitLabProject[]>("/api/v1/dashboard/gitlab/projects"),
+    })
+  );
 
 // Re-export types for use in page components
 export type {
@@ -454,6 +461,7 @@ export type {
   PaginatedResult,
   UseAnalysesOptions,
   UseFailuresOptions,
+  UseWebhookActivityOptions,
   AnalysisStatusEntry,
   AnalysisStatusMap,
   ConfidenceTrendPoint,

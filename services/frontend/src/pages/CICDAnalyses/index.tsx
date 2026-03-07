@@ -30,11 +30,19 @@ import { useAnalyses, useAnalysisCountsByRepo } from "@/hooks/useDashboardData";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { FeatureLocked } from "@/components/FeatureLocked";
 import { PageLoader } from "@/components/PageLoader";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn, buildSearchParams } from "@/lib/utils";
+import {
+  getConfidenceLabel,
+  getConfidenceStyle,
+  truncateText,
+  extractRepoFromKey,
+} from "@/lib/formatters";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
-import { FilterBar } from "@/components/FilterBar";
+import { MobileFilterDrawer } from "@/components/MobileFilterDrawer";
+import { MobileDataCard } from "@/components/MobileDataCard";
 import {
   parseConfidenceFilter,
   timeRangeToSince,
@@ -48,15 +56,15 @@ import { SortableTableHead } from "@/components/SortableTableHead";
 import { cycleSortDirection, type SortConfig } from "@/components/SortableTableHeadUtils";
 import { AnalysisRow } from "./AnalysisRow";
 import { ExpandedAnalysisRow } from "./ExpandedAnalysisRow";
-import { PAGE_SIZE } from "./constants";
-import type { CICDAnalysesProps } from "./types";
-
+import { PAGE_SIZE, PROVIDER_BADGE_CONFIG } from "./constants";
+import { buildCommitUrl } from "./helpers";
 // ==================== Main Component ====================
 
-export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
+export const CICDAnalyses = () => {
+  const isMobile = useIsMobile();
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? undefined;
-  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage(refreshKey);
+  const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage();
   const isAnyLimitReached = usageData
     ? Object.values(usageData.usage).some(
         (usage) => usage.limited && usage.limit !== null && usage.current >= usage.limit
@@ -78,7 +86,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
     };
   });
 
-  const { data: analysisCountsByRepo } = useAnalysisCountsByRepo(refreshKey);
+  const { data: analysisCountsByRepo } = useAnalysisCountsByRepo();
   const hasRepoTabs = (analysisCountsByRepo?.length ?? 0) > 1;
   const [activeRepoTab, setActiveRepoTab] = useState<string>("all");
 
@@ -142,7 +150,6 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
   const { data, isLoading, error, refetch } = useAnalyses({
     limit: pageSize,
     offset,
-    refreshKey,
     repository: filters.repository || undefined,
     minConfidence: confidenceRange.min !== null ? String(confidenceRange.min) : undefined,
     maxConfidence: confidenceRange.max !== null ? String(confidenceRange.max) : undefined,
@@ -227,6 +234,126 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
+      );
+    }
+
+    if (isMobile) {
+      return (
+        <>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800 p-3 space-y-3">
+            {sortedItems.map((analysis) => {
+              const repo = extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis);
+              const confidence = Math.round(analysis.diagnosisConfidence * 100);
+              const commitSha = analysis.headSha ?? null;
+              const commitUrl =
+                commitSha && repo !== "--"
+                  ? buildCommitUrl(repo, commitSha, analysis.ciProvider)
+                  : null;
+              const providerBadge = analysis.ciProvider
+                ? (PROVIDER_BADGE_CONFIG[analysis.ciProvider] ?? null)
+                : null;
+              const isExpanded = expandedId === analysis.id;
+
+              return (
+                <MobileDataCard
+                  key={analysis.id}
+                  title={truncateText(analysis.summary, 80)}
+                  subtitle={`${repo}${providerBadge ? ` · ${providerBadge.label}` : ""}`}
+                  timestamp={analysis.createdAt}
+                  badges={[
+                    {
+                      label: `${getConfidenceLabel(analysis.diagnosisConfidence)} (${confidence}%)`,
+                      className: getConfidenceStyle(analysis.diagnosisConfidence),
+                    },
+                  ]}
+                  fields={[
+                    ...(commitSha
+                      ? [
+                          {
+                            label: "Commit",
+                            value: commitUrl ? (
+                              <a
+                                href={commitUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono hover:text-indigo-500 underline decoration-dotted underline-offset-2"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {commitSha.slice(0, 7)}
+                              </a>
+                            ) : (
+                              <span className="font-mono">{commitSha.slice(0, 7)}</span>
+                            ),
+                          },
+                        ]
+                      : []),
+                    ...(analysis.identifiedCause
+                      ? [{ label: "Cause", value: truncateText(analysis.identifiedCause, 60) }]
+                      : []),
+                  ]}
+                  onClick={() =>
+                    setExpandedId((prev) => (prev === analysis.id ? null : analysis.id))
+                  }
+                  isExpanded={isExpanded}
+                  expandedContent={
+                    isExpanded ? (
+                      <div className="space-y-3">
+                        {analysis.identifiedCause && (
+                          <div>
+                            <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                              Root Cause
+                            </h4>
+                            <p className="text-sm text-zinc-900 dark:text-zinc-100 break-words whitespace-pre-wrap">
+                              {analysis.identifiedCause}
+                            </p>
+                          </div>
+                        )}
+                        {analysis.recommendedActions && analysis.recommendedActions.length > 0 && (
+                          <div>
+                            <h4 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                              Recommended Actions
+                            </h4>
+                            <ol className="list-decimal list-inside space-y-1">
+                              {analysis.recommendedActions.map((action) => (
+                                <li
+                                  key={action}
+                                  className="text-sm text-zinc-900 dark:text-zinc-100 break-words"
+                                >
+                                  {action}
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium min-h-[44px] flex items-center"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedAnalysisId(analysis.id);
+                          }}
+                        >
+                          View Full Details &rarr;
+                        </button>
+                      </div>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            hasPrev={hasPrev}
+            hasNext={hasNext}
+            onPrev={goPrev}
+            onNext={goNext}
+            totalItems={total}
+            pageSize={pageSize}
+            onPageSizeChange={handlePageSizeChange}
+          />
+        </>
       );
     }
 
@@ -330,7 +457,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
             aria-selected={activeRepoTab === "all"}
             onClick={() => handleRepoTabChange("all")}
             className={cn(
-              "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
+              "px-3 py-1.5 min-h-[36px] text-xs font-medium rounded-full border transition-colors",
               activeRepoTab === "all"
                 ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
                 : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
@@ -346,7 +473,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
               aria-selected={activeRepoTab === entry.repository}
               onClick={() => handleRepoTabChange(entry.repository)}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-full border transition-colors",
+                "px-3 py-1.5 min-h-[36px] text-xs font-medium rounded-full border transition-colors",
                 activeRepoTab === entry.repository
                   ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
                   : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
@@ -358,7 +485,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
         </div>
       )}
 
-      <FilterBar
+      <MobileFilterDrawer
         variant="analyses"
         filters={filters}
         onFilterChange={handleFilterChange}
@@ -375,7 +502,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
 
       <Card>
         <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-5 h-5 text-indigo-500" />
               <CardTitle>Analysis Results</CardTitle>
@@ -386,7 +513,7 @@ export const CICDAnalyses = ({ refreshKey = 0 }: CICDAnalysesProps) => {
                   <button
                     type="button"
                     onClick={() => exportAnalysesToCSV(items)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors self-start sm:self-auto"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Export Page

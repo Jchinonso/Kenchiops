@@ -273,7 +273,8 @@ router.get(
     }
 
     try {
-      const repositories: RepositoryInfo[] = await getInstallationRepositories(installationId);
+      const repositories: readonly RepositoryInfo[] =
+        await getInstallationRepositories(installationId);
 
       logger.info("Fetched repositories for installation", {
         installationId,

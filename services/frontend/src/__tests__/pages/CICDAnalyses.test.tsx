@@ -53,10 +53,10 @@ const createAnalysis = (overrides = {}) => ({
   ...overrides,
 });
 
-const renderAnalyses = (refreshKey = 0) =>
+const renderAnalyses = () =>
   render(
     <MemoryRouter>
-      <CICDAnalyses refreshKey={refreshKey} />
+      <CICDAnalyses />
     </MemoryRouter>
   );
 

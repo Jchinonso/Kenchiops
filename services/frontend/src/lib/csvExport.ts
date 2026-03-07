@@ -30,9 +30,16 @@ interface FailureExportRecord {
 
 // ==================== Core Helpers ====================
 
+/** Characters that trigger formula interpretation in spreadsheet applications (DDE injection). */
+const FORMULA_TRIGGER_CHARS = new Set(["=", "+", "-", "@", "\t", "\r"]);
+
 const escapeCSVField = (field: string): string => {
-  const needsQuoting = field.includes(",") || field.includes('"') || field.includes("\n");
-  return needsQuoting ? `"${field.replace(/"/g, '""')}"` : field;
+  // Defense-in-depth: prefix formula-triggering characters with a single quote
+  // to prevent DDE/formula injection when opened in Excel/LibreOffice.
+  const sanitized = field.length > 0 && FORMULA_TRIGGER_CHARS.has(field[0]) ? `'${field}` : field;
+  const needsQuoting =
+    sanitized.includes(",") || sanitized.includes('"') || sanitized.includes("\n");
+  return needsQuoting ? `"${sanitized.replace(/"/g, '""')}"` : sanitized;
 };
 
 const generateCSV = (headers: readonly string[], rows: ReadonlyArray<readonly string[]>): string =>

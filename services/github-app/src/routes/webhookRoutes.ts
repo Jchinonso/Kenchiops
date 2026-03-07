@@ -474,7 +474,7 @@ const handleGitHubWebhook = asyncHandler(async (req: Request, res: Response) => 
   const installationId = String(
     (req.body as { readonly installation?: { readonly id?: number } }).installation?.id ?? "unknown"
   );
-  const sourceRateResult = checkWebhookSourceRateLimit(installationId, "github");
+  const sourceRateResult = await checkWebhookSourceRateLimit(installationId, "github");
   if (!sourceRateResult.allowed) {
     logger.warn("Webhook source rate limit exceeded", {
       provider: "github",

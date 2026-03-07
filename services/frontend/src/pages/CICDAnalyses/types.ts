@@ -11,6 +11,4 @@ export interface ExpandedAnalysisRowProps {
   readonly onViewDetails: () => void;
 }
 
-export interface CICDAnalysesProps {
-  readonly refreshKey?: number;
-}
+export type CICDAnalysesProps = Record<string, never>;

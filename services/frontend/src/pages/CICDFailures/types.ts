@@ -16,6 +16,4 @@ export interface ExpandedFailureRowProps {
   readonly analysisStatus?: AnalysisStatusEntry | null;
 }
 
-export interface CICDFailuresProps {
-  readonly refreshKey?: number;
-}
+export type CICDFailuresProps = Record<string, never>;
