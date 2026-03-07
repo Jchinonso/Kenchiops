@@ -85,9 +85,13 @@ const resolveEmail = (
   emails: readonly GitHubUserEmail[]
 ): { readonly email: string | null; readonly verified: boolean } => {
   const primaryVerified = emails.find((entry) => entry.primary && entry.verified);
-  if (primaryVerified) return { email: primaryVerified.email, verified: true };
+  if (primaryVerified) {
+    return { email: primaryVerified.email, verified: true };
+  }
   const anyVerified = emails.find((entry) => entry.verified);
-  if (anyVerified) return { email: anyVerified.email, verified: true };
+  if (anyVerified) {
+    return { email: anyVerified.email, verified: true };
+  }
   return { email: profile.email ?? null, verified: false };
 };
 
@@ -117,7 +121,7 @@ const exchangeCode = async (
     maxRetries: 2,
   });
 
-  const data = response.data;
+  const { data } = response;
   if (data.error) {
     throw new ExternalServiceError(
       "github",

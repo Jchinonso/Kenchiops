@@ -116,9 +116,19 @@ export const buildQuickStats = (
   },
 ];
 
+/** Characters that trigger formula interpretation in spreadsheet applications (DDE injection). */
+const FORMULA_TRIGGER_CHARS = new Set(["=", "+", "-", "@", "\t", "\r"]);
+
+const escapeCSVField = (field: string): string => {
+  const sanitized = field.length > 0 && FORMULA_TRIGGER_CHARS.has(field[0]) ? `'${field}` : field;
+  const needsQuoting =
+    sanitized.includes(",") || sanitized.includes('"') || sanitized.includes("\n");
+  return needsQuoting ? `"${sanitized.replace(/"/g, '""')}"` : sanitized;
+};
+
 export const handleExportOverview = (quickStats: readonly QuickStat[]): void => {
   const rows = [["Metric", "Value"], ...quickStats.map((stat) => [stat.title, stat.value])];
-  const csv = rows.map((row) => row.join(",")).join("\n");
+  const csv = rows.map((row) => row.map(escapeCSVField).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const anchor = Object.assign(document.createElement("a"), {

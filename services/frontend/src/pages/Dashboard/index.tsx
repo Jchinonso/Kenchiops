@@ -5,7 +5,7 @@
  * Renders the appropriate sub-page based on the current path.
  */
 
-import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate, Navigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -53,18 +53,9 @@ const Dashboard = () => {
   const { pathname: currentPath } = useLocation();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const queryClient = useQueryClient();
-  const {
-    notifications,
-    markAllRead,
-    markAsRead,
-    dismissNotification,
-  } = useDashboardSSE();
+  const { notifications, markAllRead, markAsRead, dismissNotification } = useDashboardSSE();
   const { resolved: resolvedTheme, setTheme } = useTheme();
-  const {
-    data: tenant,
-    isLoading: tenantLoading,
-    error: tenantError,
-  } = useTenantInfo();
+  const { data: tenant, isLoading: tenantLoading, error: tenantError } = useTenantInfo();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -100,16 +91,14 @@ const Dashboard = () => {
   );
 
   // Track SSE events for "last updated" label.
-  // When a new notification arrives, the data was just invalidated by the SSE
-  // handler, so we update the timestamp. setState is intentional here —
-  // we're synchronizing UI state with an external event count.
-  const prevNotificationCountRef = useRef(notifications.length);
-  useEffect(() => {
-    if (notifications.length !== prevNotificationCountRef.current) {
-      prevNotificationCountRef.current = notifications.length;
-      setLastRefreshAt(new Date());
-    }
-  }, [notifications.length]);
+  // When a new notification arrives, update the timestamp using the
+  // "state adjusted during render" pattern to avoid setState-in-effect.
+  // See: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [prevNotificationCount, setPrevNotificationCount] = useState(notifications.length);
+  if (notifications.length !== prevNotificationCount) {
+    setPrevNotificationCount(notifications.length);
+    setLastRefreshAt(new Date());
+  }
 
   const lastUpdatedLabel = useMemo(
     () => formatRelativeTime(lastRefreshAt.toISOString()),

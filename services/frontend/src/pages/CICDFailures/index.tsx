@@ -37,6 +37,7 @@ import {
   formatTimestamp,
 } from "@/lib/formatters";
 import { buildSearchParams } from "@/lib/utils";
+import { buildSafeGitHubUrl } from "@/lib/urlSafety";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -245,32 +246,31 @@ export const CICDFailures = () => {
                           },
                         ]),
                   ]}
-                  fields={
-                    headSha !== "--"
-                      ? [
-                          {
-                            label: "Commit",
-                            value:
-                              repository !== "--" ? (
-                                <a
-                                  href={`https://github.com/${repository}/commit/${headSha}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-mono hover:text-indigo-500 underline decoration-dotted underline-offset-2"
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  {headSha.slice(0, 7)}
-                                </a>
-                              ) : (
-                                <span className="font-mono">{headSha.slice(0, 7)}</span>
-                              ),
-                          },
-                        ]
-                      : undefined
-                  }
-                  onClick={() =>
-                    setExpandedId((prev) => (prev === event.id ? null : event.id))
-                  }
+                  fields={(() => {
+                    if (headSha === "--") {
+                      return undefined;
+                    }
+                    const mobileCommitUrl = buildSafeGitHubUrl(repository, `/commit/${headSha}`);
+                    return [
+                      {
+                        label: "Commit",
+                        value: mobileCommitUrl ? (
+                          <a
+                            href={mobileCommitUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono hover:text-indigo-500 underline decoration-dotted underline-offset-2"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {headSha.slice(0, 7)}
+                          </a>
+                        ) : (
+                          <span className="font-mono">{headSha.slice(0, 7)}</span>
+                        ),
+                      },
+                    ];
+                  })()}
+                  onClick={() => setExpandedId((prev) => (prev === event.id ? null : event.id))}
                   isExpanded={isExpanded}
                   expandedContent={
                     isExpanded ? (
@@ -281,7 +281,10 @@ export const CICDFailures = () => {
                             ["Check Name", checkName],
                             ["Branch", getPayloadString(event.payload, "branch")],
                             ["Conclusion", conclusion],
-                            ["Detected At", event.timestamp ? formatTimestamp(event.timestamp) : "--"],
+                            [
+                              "Detected At",
+                              event.timestamp ? formatTimestamp(event.timestamp) : "--",
+                            ],
                           ]
                             .filter(([, value]) => value !== "--")
                             .map(([label, value]) => (
@@ -296,18 +299,24 @@ export const CICDFailures = () => {
                             ))}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          {repository !== "--" && headSha !== "--" && (
-                            <a
-                              href={`https://github.com/${repository}/commit/${headSha}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              View on GitHub
-                            </a>
-                          )}
+                          {(() => {
+                            const expandedCommitUrl = buildSafeGitHubUrl(
+                              repository,
+                              `/commit/${headSha}`
+                            );
+                            return expandedCommitUrl && headSha !== "--" ? (
+                              <a
+                                href={expandedCommitUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                View on GitHub
+                              </a>
+                            ) : null;
+                          })()}
                           {status && (
                             <Link
                               to={`/dashboard/cicd/analyses/${status.analysisId}`}
@@ -419,7 +428,11 @@ export const CICDFailures = () => {
         </p>
       </div>
 
-      <MobileFilterDrawer variant="failures" filters={filters} onFilterChange={handleFilterChange} />
+      <MobileFilterDrawer
+        variant="failures"
+        filters={filters}
+        onFilterChange={handleFilterChange}
+      />
 
       <div aria-live="polite" className="sr-only">
         {isLoading

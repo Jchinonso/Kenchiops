@@ -4,6 +4,7 @@ import { TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildSafeGitHubUrl } from "@/lib/urlSafety";
 import { formatTimestamp, getSeverityStyle, getPayloadString, titleCase } from "@/lib/formatters";
 import type { ExpandedFailureRowProps } from "./types";
 
@@ -14,7 +15,11 @@ export const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRow
   const branch = getPayloadString(event.payload, "branch");
   const headSha = getPayloadString(event.payload, "headSha");
   const conclusion = getPayloadString(event.payload, "conclusion");
-  const hasGitHubLink = repository !== "--" && headSha !== "--";
+  // Defense-in-depth: validate repository path to prevent URL path traversal
+  const commitUrl =
+    repository !== "--" && headSha !== "--"
+      ? buildSafeGitHubUrl(repository, `/commit/${headSha}`)
+      : null;
 
   const allDetails: ReadonlyArray<readonly [string, string]> = [
     ["Repository", repository],
@@ -61,9 +66,9 @@ export const ExpandedFailureRow = ({ event, analysisStatus }: ExpandedFailureRow
           </div>
 
           <div className="flex items-center gap-3">
-            {hasGitHubLink && (
+            {commitUrl && (
               <a
-                href={`https://github.com/${repository}/commit/${headSha}`}
+                href={commitUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"

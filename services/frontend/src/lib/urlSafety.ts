@@ -22,3 +22,33 @@ export const isSafeUrl = (url: string): boolean => {
     return false;
   }
 };
+
+/**
+ * Validate that a string is a safe GitHub "owner/repo" path segment.
+ * Prevents path traversal (../) and special characters that could redirect
+ * users to attacker-controlled domains when used in GitHub URLs.
+ *
+ * Valid: "octocat/Hello-World", "my-org/my.repo", "user123/repo_name"
+ * Invalid: "../../evil.com", "../foo", "owner/repo/../../evil"
+ */
+export const isSafeRepoPath = (repoPath: string): boolean => {
+  // Must match "owner/repo" — alphanumeric, hyphens, underscores, dots only
+  // No path traversal, no leading slashes, no encoded characters
+  if (!repoPath || repoPath.includes("..") || repoPath.includes("%")) {
+    return false;
+  }
+  // Allow: letters, digits, hyphens, underscores, dots, and exactly one slash
+  return /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(repoPath);
+};
+
+/**
+ * Build a safe GitHub URL for a repository path (owner/repo).
+ * Returns null if the repository path fails validation.
+ */
+export const buildSafeGitHubUrl = (repoPath: string, suffix?: string): string | null => {
+  if (!isSafeRepoPath(repoPath)) {
+    return null;
+  }
+  const base = `https://github.com/${repoPath}`;
+  return suffix ? `${base}${suffix}` : base;
+};

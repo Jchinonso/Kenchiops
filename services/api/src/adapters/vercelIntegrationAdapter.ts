@@ -19,7 +19,6 @@ import {
   resilientGet,
   resilientPost,
   resilientDelete,
-  redactSecrets,
   type RequestContext,
 } from "@kenchi/shared";
 
@@ -91,7 +90,7 @@ const exchangeCode = async (
     }
   );
 
-  const data = response.data;
+  const { data } = response;
 
   if (data.error) {
     throw new ExternalServiceError(
@@ -263,7 +262,7 @@ const refreshToken = async (
     }
   );
 
-  const data = response.data;
+  const { data } = response;
 
   if (data.error) {
     throw new ExternalServiceError(

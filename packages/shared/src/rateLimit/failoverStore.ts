@@ -20,8 +20,12 @@ import { createLogger } from "../core/logger.js";
 import { HTTP_RESILIENCE_DEFAULTS } from "../constants/index.js";
 import { getRedisClient } from "../queue/redisClient.js";
 import { RedisRateLimitStore, InMemoryRateLimitStore } from "./stores.js";
-import { REDIS_RETRY_CONFIG } from "./types.js";
-import type { FailoverState, RateLimitStore, RateLimitInfo } from "./types.js";
+import {
+  REDIS_RETRY_CONFIG,
+  type FailoverState,
+  type RateLimitStore,
+  type RateLimitInfo,
+} from "./types.js";
 
 const logger = createLogger("failover-store");
 

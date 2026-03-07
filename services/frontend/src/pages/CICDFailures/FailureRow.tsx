@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { ChevronRight, ExternalLink, Search, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildSafeGitHubUrl } from "@/lib/urlSafety";
 import {
   getConfidenceLabel,
   getConfidenceStyle,
@@ -27,14 +28,16 @@ const CommitDisplay = ({
   }
 
   const shortSha = sha.slice(0, 7);
+  // Defense-in-depth: validate repository path to prevent URL path traversal
+  const commitUrl = repository !== "--" ? buildSafeGitHubUrl(repository, `/commit/${sha}`) : null;
 
-  if (repository === "--") {
+  if (!commitUrl) {
     return <span>{shortSha}</span>;
   }
 
   return (
     <a
-      href={`https://github.com/${repository}/commit/${sha}`}
+      href={commitUrl}
       target="_blank"
       rel="noopener noreferrer"
       className="hover:text-indigo-500 underline decoration-dotted underline-offset-2 transition-colors"
@@ -76,23 +79,26 @@ export const FailureRow = ({ event, analysisStatus, isExpanded, onClick }: Failu
       <TableCell>
         <div className="flex items-center gap-2">
           <span className="font-medium text-zinc-900 dark:text-zinc-100">{repository}</span>
-          {repository !== "--" && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <a
-                  href={`https://github.com/${repository}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Open ${repository} on GitHub`}
-                  className="text-zinc-400 hover:text-indigo-500 transition-colors"
-                  onClick={(clickEvent) => clickEvent.stopPropagation()}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </TooltipTrigger>
-              <TooltipContent>Open on GitHub</TooltipContent>
-            </Tooltip>
-          )}
+          {(() => {
+            const repoUrl = buildSafeGitHubUrl(repository);
+            return repoUrl ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    href={repoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open ${repository} on GitHub`}
+                    className="text-zinc-400 hover:text-indigo-500 transition-colors"
+                    onClick={(clickEvent) => clickEvent.stopPropagation()}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent>Open on GitHub</TooltipContent>
+              </Tooltip>
+            ) : null;
+          })()}
         </div>
       </TableCell>
       <TableCell className="text-zinc-700 dark:text-zinc-300">{checkName}</TableCell>

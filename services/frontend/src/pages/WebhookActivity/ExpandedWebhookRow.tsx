@@ -82,17 +82,29 @@ export const ExpandedWebhookRow = ({ activity }: ExpandedWebhookRowProps) => {
                 Metadata
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
-                {Object.entries(activity.metadata).map(([label, value]) => (
-                  <div key={label} className="flex items-baseline gap-2">
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400 shrink-0">
-                      {label}:
-                    </span>
-                    <span className="text-sm text-zinc-900 dark:text-zinc-100">
-                      {typeof value === "string" ? value : JSON.stringify(value)}
-                    </span>
-                  </div>
-                ))}
+                {Object.entries(activity.metadata)
+                  .slice(0, 50)
+                  .map(([label, value]) => {
+                    const displayValue = typeof value === "string" ? value : JSON.stringify(value);
+                    const truncated =
+                      displayValue.length > 500 ? `${displayValue.slice(0, 500)}...` : displayValue;
+                    return (
+                      <div key={label} className="flex items-baseline gap-2">
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400 shrink-0">
+                          {label.length > 100 ? `${label.slice(0, 100)}...` : label}:
+                        </span>
+                        <span className="text-sm text-zinc-900 dark:text-zinc-100 break-all">
+                          {truncated}
+                        </span>
+                      </div>
+                    );
+                  })}
               </div>
+              {Object.keys(activity.metadata).length > 50 && (
+                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
+                  Showing first 50 of {Object.keys(activity.metadata).length} metadata entries.
+                </p>
+              )}
             </div>
           )}
         </div>

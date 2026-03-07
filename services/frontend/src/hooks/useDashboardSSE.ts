@@ -128,6 +128,10 @@ const parseEventData = <T>(event: MessageEvent): T | null => {
 
 const formatConfidence = (confidence: number): string => `${Math.round(confidence * 100)}%`;
 
+/** Truncate SSE-sourced strings to prevent UI overflow from unexpectedly large payloads. */
+const truncateSSE = (value: string, maxLength = 200): string =>
+  value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+
 /** Show a browser notification if the Notification API is available and permission is granted */
 const showBrowserNotification = (title: string, body: string): void => {
   if (typeof Notification === "undefined") {
@@ -297,8 +301,8 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
 
       const data = parseEventData<NewFailurePayload>(event);
       if (data) {
-        const repo = data.repository ?? "Unknown repository";
-        const checkName = data.checkName ? ` (${data.checkName})` : "";
+        const repo = truncateSSE(data.repository ?? "Unknown repository", 100);
+        const checkName = data.checkName ? ` (${truncateSSE(data.checkName, 80)})` : "";
         const failureTitle = `CI failure in ${repo}${checkName}`;
         const failureBody = "Kenchi is analyzing the failure...";
         if (toastEnabledRef.current) {
@@ -312,7 +316,9 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
           id: crypto.randomUUID(),
           type: "failure",
           title: `CI failure in ${repo}`,
-          description: data.checkName ? `Check "${data.checkName}" failed` : "A CI/CD check failed",
+          description: data.checkName
+            ? `Check "${truncateSSE(data.checkName, 80)}" failed`
+            : "A CI/CD check failed",
           timestamp: new Date().toISOString(),
           read: false,
           repository: data.repository,
@@ -329,7 +335,7 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
 
       const data = parseEventData<AnalysisCompletePayload>(event);
       if (data) {
-        const repo = data.repository ?? "Unknown repository";
+        const repo = truncateSSE(data.repository ?? "Unknown repository", 100);
         const confidence = data.confidence
           ? ` \u2014 ${formatConfidence(data.confidence)} confidence`
           : "";
@@ -361,9 +367,9 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
 
       const data = parseEventData<NewIncidentPayload>(event);
       if (data) {
-        const source = data.source ?? "unknown";
-        const severity = data.severity ?? "unknown";
-        const title = data.title ?? "New incident alert";
+        const source = truncateSSE(data.source ?? "unknown", 50);
+        const severity = truncateSSE(data.severity ?? "unknown", 30);
+        const title = truncateSSE(data.title ?? "New incident alert");
         const incidentTitle = `${severity.toUpperCase()} alert from ${source}`;
         const incidentBody = title;
         if (toastEnabledRef.current) {
@@ -391,8 +397,8 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
 
       const data = parseEventData<IncidentTriagedPayload>(event);
       if (data) {
-        const title = data.title ?? "Incident";
-        const headline = data.aiSummary ?? "Triage complete";
+        const title = truncateSSE(data.title ?? "Incident");
+        const headline = truncateSSE(data.aiSummary ?? "Triage complete");
         const triagedTitle = `Triage complete: ${title}`;
         if (toastEnabledRef.current) {
           toast.info(triagedTitle, { description: headline });
