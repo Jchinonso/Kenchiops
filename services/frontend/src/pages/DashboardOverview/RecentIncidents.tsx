@@ -24,7 +24,7 @@ export const RecentIncidents = ({ items }: RecentIncidentsProps) => (
           <Link
             key={incident.id}
             to="/dashboard/incidents/active"
-            className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 -mx-6 px-6 transition-colors duration-200"
+            className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 -mx-4 px-4 sm:-mx-6 sm:px-6 transition-colors duration-200"
           >
             <div className="flex items-center justify-between gap-2 mb-1">
               <TimeDisplay

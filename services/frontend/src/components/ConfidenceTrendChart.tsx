@@ -84,14 +84,14 @@ export const ConfidenceTrendChart = () => {
   return (
     <Card className="mb-6 sm:mb-8">
       <CardHeader className="border-b">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex items-center gap-2 flex-shrink-0">
             <TrendingUp className="w-5 h-5 text-indigo-500" />
             <CardTitle>
               <h2>Confidence Trend</h2>
             </CardTitle>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto min-w-0">
+          <div className="flex items-center gap-2">
             {/* Bucket toggle */}
             <div
               role="group"
