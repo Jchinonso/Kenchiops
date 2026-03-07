@@ -23,6 +23,7 @@ import { dataExportRoutes } from "./dataExportRoutes.js";
 import { invitationRoutes } from "./invitationRoutes.js";
 import { apiKeyRoutes } from "./apiKeyRoutes.js";
 import { billingRoutes } from "./billingRoutes.js";
+import { feedbackRoutes } from "./feedbackRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -81,4 +82,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Billing routes (Stripe checkout, portal, webhooks, status)
   app.use(billingRoutes);
+
+  // Analysis feedback routes (thumbs up/down, lesson ingestion trigger)
+  app.use(feedbackRoutes);
 };

@@ -65,6 +65,7 @@ export const queryKeys = {
       all: () => ["dashboard", "analyses"] as const,
       list: (filters: AnalysesFilters) => ["dashboard", "analyses", "list", filters] as const,
       detail: (id: string) => ["dashboard", "analyses", "detail", id] as const,
+      feedback: (id: string) => ["dashboard", "analyses", "feedback", id] as const,
       byEvents: (eventIds: readonly string[]) =>
         ["dashboard", "analyses", "byEvents", eventIds] as const,
       countsByRepo: () => ["dashboard", "analyses", "countsByRepo"] as const,
