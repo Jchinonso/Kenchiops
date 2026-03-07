@@ -6,20 +6,11 @@
  * with cache invalidation for writes.
  */
 
+import { useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchQuery, fetchMutation, fetchMutationVoid } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
-
-// ==================== DTO Types ====================
-
-export interface InvitationDTO {
-  readonly id: string;
-  readonly email: string;
-  readonly role: string;
-  readonly status: string;
-  readonly expiresAt: string;
-  readonly createdAt: string;
-}
+import type { InvitationDTO } from "./types";
 
 // ==================== Query Hook ====================
 
@@ -30,11 +21,14 @@ export const useInvitations = (enabled: boolean = true) => {
     enabled,
   });
 
-  return {
-    data: query.data ?? null,
-    isLoading: query.isPending,
-    error: query.error?.message ?? null,
-  };
+  return useMemo(
+    () => ({
+      data: query.data ?? null,
+      isLoading: query.isPending,
+      error: query.error?.message ?? null,
+    }),
+    [query.data, query.isPending, query.error]
+  );
 };
 
 // ==================== Mutation Hooks ====================
@@ -58,13 +52,16 @@ export const useCreateInvitation = () => {
     },
   });
 
-  const createInvitation = async (email: string, role: string): Promise<InvitationDTO | null> => {
-    try {
-      return await mutation.mutateAsync({ email, role });
-    } catch {
-      return null;
-    }
-  };
+  const createInvitation = useCallback(
+    async (email: string, role: string): Promise<InvitationDTO | null> => {
+      try {
+        return await mutation.mutateAsync({ email, role });
+      } catch {
+        return null;
+      }
+    },
+    [mutation]
+  );
 
   return {
     createInvitation,
@@ -84,14 +81,17 @@ export const useRevokeInvitation = () => {
     },
   });
 
-  const revokeInvitation = async (invitationId: string): Promise<boolean> => {
-    try {
-      await mutation.mutateAsync(invitationId);
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  const revokeInvitation = useCallback(
+    async (invitationId: string): Promise<boolean> => {
+      try {
+        await mutation.mutateAsync(invitationId);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [mutation]
+  );
 
   return {
     revokeInvitation,

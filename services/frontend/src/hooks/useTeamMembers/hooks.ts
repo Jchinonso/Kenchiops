@@ -6,24 +6,11 @@
  * and useMutation with cache invalidation for writes.
  */
 
+import { useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchQuery, fetchMutation, fetchMutationVoid } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
-
-// ==================== DTO Types ====================
-
-export interface TeamMemberDTO {
-  readonly userId: string;
-  readonly displayName: string;
-  readonly email: string | null;
-  readonly avatarUrl: string | null;
-  readonly role: string;
-  readonly joinedAt: string;
-  readonly providers: ReadonlyArray<{
-    readonly provider: string;
-    readonly username: string | null;
-  }>;
-}
+import type { TeamMemberDTO } from "./types";
 
 // ==================== Query Hook ====================
 
@@ -33,11 +20,14 @@ export const useTeamMembers = () => {
     queryFn: () => fetchQuery<readonly TeamMemberDTO[]>("/api/v1/team/members"),
   });
 
-  return {
-    data: query.data ?? null,
-    isLoading: query.isPending,
-    error: query.error?.message ?? null,
-  };
+  return useMemo(
+    () => ({
+      data: query.data ?? null,
+      isLoading: query.isPending,
+      error: query.error?.message ?? null,
+    }),
+    [query.data, query.isPending, query.error]
+  );
 };
 
 // ==================== Mutation Hooks ====================
@@ -61,13 +51,16 @@ export const useChangeRole = () => {
     },
   });
 
-  const changeRole = async (userId: string, role: string): Promise<TeamMemberDTO | null> => {
-    try {
-      return await mutation.mutateAsync({ userId, role });
-    } catch {
-      return null;
-    }
-  };
+  const changeRole = useCallback(
+    async (userId: string, role: string): Promise<TeamMemberDTO | null> => {
+      try {
+        return await mutation.mutateAsync({ userId, role });
+      } catch {
+        return null;
+      }
+    },
+    [mutation]
+  );
 
   return {
     changeRole,
@@ -87,14 +80,17 @@ export const useRemoveMember = () => {
     },
   });
 
-  const removeMember = async (userId: string): Promise<boolean> => {
-    try {
-      await mutation.mutateAsync(userId);
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  const removeMember = useCallback(
+    async (userId: string): Promise<boolean> => {
+      try {
+        await mutation.mutateAsync(userId);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [mutation]
+  );
 
   return {
     removeMember,

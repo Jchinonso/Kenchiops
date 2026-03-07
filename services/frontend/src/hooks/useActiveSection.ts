@@ -3,13 +3,18 @@
  * Used by the Settings page sidebar navigation to highlight the active section.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 export const useActiveSection = (sectionIds: readonly string[]): string => {
   const [active, setActive] = useState(sectionIds[0] ?? "");
 
+  // Stabilize the sectionIds reference so callers passing inline arrays
+  // don't re-trigger IntersectionObserver creation every render.
+  const serialized = JSON.stringify(sectionIds);
+  const stableIds = useMemo(() => JSON.parse(serialized) as readonly string[], [serialized]);
+
   useEffect(() => {
-    const observers = sectionIds.flatMap((id) => {
+    const observers = stableIds.flatMap((id) => {
       const element = document.getElementById(id);
       if (!element) {
         return [];
@@ -31,7 +36,7 @@ export const useActiveSection = (sectionIds: readonly string[]): string => {
     return () => {
       observers.forEach(({ observer }) => observer.disconnect());
     };
-  }, [sectionIds]);
+  }, [stableIds]);
 
   return active;
 };

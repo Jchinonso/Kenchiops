@@ -21,6 +21,6 @@ export const showBrowserNotification = (title: string, body: string): void => {
   if (Notification.permission !== "granted") {
     return;
   }
-  // eslint-disable-next-line no-new -- Notification constructor fires side effect by design
+  // eslint-disable-next-line no-new
   new Notification(title, { body });
 };

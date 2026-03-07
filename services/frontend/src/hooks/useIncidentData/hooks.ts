@@ -9,115 +9,28 @@
  * SSE-driven invalidation.
  */
 
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { fetchQuery, fetchMutation } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
-import { toFetchResult, type UseFetchResult, type MutationState } from "@/hooks/useQueryCompat";
+import { useToFetchResult, type UseFetchResult, type MutationState } from "@/hooks/useQueryCompat";
+import { buildIncidentsUrl } from "./urlBuilders";
+import type {
+  IncidentAlertRecord,
+  AlertWithTriageResult,
+  PaginatedIncidents,
+  PipelineMetricsResponse,
+  UseIncidentsOptions,
+  SourceStatsEntry,
+  ActiveCountBySource,
+  SeverityBySourceEntry,
+} from "./types";
 
-// ==================== Types ====================
-
-export interface IncidentAlertRecord {
-  readonly id: string;
-  readonly tenantId: string | null;
-  readonly source: string;
-  readonly sourceAlertId: string;
-  readonly deliveryId: string;
-  readonly fingerprint: string | null;
-  readonly title: string;
-  readonly description: string | null;
-  readonly severity: string;
-  readonly status: string;
-  readonly serviceName: string | null;
-  readonly environment: string | null;
-  readonly metrics: Readonly<Record<string, unknown>>;
-  readonly labels: Readonly<Record<string, string>>;
-  readonly sourcePayload: Readonly<Record<string, unknown>>;
-  readonly receivedAt: string;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-}
-
-export interface AlertWithTriageResult {
-  readonly alert: IncidentAlertRecord;
-  readonly triageResult: Readonly<Record<string, unknown>> | null;
-}
-
-export interface PaginatedIncidents {
-  readonly items: readonly IncidentAlertRecord[];
-  readonly total: number;
-  readonly limit: number;
-  readonly offset: number;
-}
-
-export interface SeverityDistributionEntry {
-  readonly severityLabel: string;
-  readonly count: number;
-}
-
-export interface PipelineMetricsResponse {
-  readonly severityDistribution: readonly SeverityDistributionEntry[];
-  readonly pipeline: {
-    readonly totalTriaged: number;
-    readonly avgDurationMs: number | null;
-    readonly p50DurationMs: number | null;
-    readonly p95DurationMs: number | null;
-  };
-  readonly summarySource: {
-    readonly aiCount: number;
-    readonly fallbackCount: number;
-    readonly aiRate: number | null;
-  };
-  readonly dispatch: {
-    readonly dispatchedCount: number;
-    readonly routedCount: number;
-    readonly dispatchRate: number | null;
-  };
-  readonly dedup: {
-    readonly totalAlerts: number;
-    readonly dedupedCount: number;
-    readonly dedupRate: number | null;
-    readonly activeAlerts: number;
-  };
-}
-
-// ==================== URL Builders ====================
-
-const buildIncidentsUrl = (
-  limit: number,
-  offset: number,
-  severity?: string,
-  status?: string,
-  source?: string
-): string => {
-  const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
-  if (severity) {
-    params.set("severity", severity);
-  }
-  if (status) {
-    params.set("status", status);
-  }
-  if (source) {
-    params.set("source", source);
-  }
-  return `/api/v1/incidents?${params.toString()}`;
-};
-
-// ==================== Typed Hooks ====================
-
-export interface UseIncidentsOptions {
-  readonly tenantId: string;
-  readonly limit?: number;
-  readonly offset?: number;
-  readonly severity?: string;
-  readonly status?: string;
-  readonly source?: string;
-}
+// ==================== Query Hooks ====================
 
 export const useIncidents = (options: UseIncidentsOptions): UseFetchResult<PaginatedIncidents> => {
   const { tenantId, limit = 20, offset = 0, severity, status, source } = options;
-  return toFetchResult(
+  return useToFetchResult(
     useQuery({
       queryKey: queryKeys.incidents.list({ tenantId, limit, offset, severity, status, source }),
       queryFn: () =>
@@ -129,7 +42,7 @@ export const useIncidents = (options: UseIncidentsOptions): UseFetchResult<Pagin
 };
 
 export const useIncidentDetail = (id: string | null): UseFetchResult<AlertWithTriageResult> =>
-  toFetchResult(
+  useToFetchResult(
     useQuery({
       queryKey: queryKeys.incidents.detail(id ?? ""),
       queryFn: () => fetchQuery<AlertWithTriageResult>(`/api/v1/incidents/${id}`),
@@ -138,55 +51,39 @@ export const useIncidentDetail = (id: string | null): UseFetchResult<AlertWithTr
   );
 
 export const useTriageStats = (tenantId: string): UseFetchResult<PipelineMetricsResponse> =>
-  toFetchResult(
+  useToFetchResult(
     useQuery({
       queryKey: queryKeys.incidents.triageStats(),
       queryFn: () => fetchQuery<PipelineMetricsResponse>("/api/v1/triage/stats"),
       enabled: !!tenantId,
+      placeholderData: keepPreviousData,
     })
   );
-
-export interface SourceStatsEntry {
-  readonly source: string;
-  readonly eventCount: number;
-  readonly lastReceived: string | null;
-}
 
 export const useIntegrationHealth = (
   tenantId: string
 ): UseFetchResult<readonly SourceStatsEntry[]> =>
-  toFetchResult(
+  useToFetchResult(
     useQuery({
       queryKey: queryKeys.incidents.integrationHealth(),
       queryFn: () => fetchQuery<readonly SourceStatsEntry[]>("/api/v1/incidents/stats/by-source"),
       enabled: !!tenantId,
+      placeholderData: keepPreviousData,
     })
   );
-
-// ==================== Per-Source Stats Types ====================
-
-export interface ActiveCountBySource {
-  readonly source: string;
-  readonly activeCount: number;
-}
-
-export interface SeverityBySourceEntry {
-  readonly source: string;
-  readonly severityLabel: string;
-  readonly count: number;
-}
 
 // ==================== Per-Source Hooks ====================
 
 export const useActiveCountsBySource = (
   tenantId: string
 ): UseFetchResult<readonly ActiveCountBySource[]> =>
-  toFetchResult(
+  useToFetchResult(
     useQuery({
       queryKey: queryKeys.incidents.activeBySource(),
       queryFn: () =>
         fetchQuery<readonly ActiveCountBySource[]>("/api/v1/incidents/stats/active-by-source"),
       enabled: !!tenantId,
+      placeholderData: keepPreviousData,
     })
   );
 
@@ -195,7 +92,7 @@ export const useBalancedRecentIncidents = (
   perSource: number = 2,
   maxTotal: number = 6
 ): UseFetchResult<readonly IncidentAlertRecord[]> =>
-  toFetchResult(
+  useToFetchResult(
     useQuery({
       queryKey: queryKeys.incidents.balancedRecent(perSource, maxTotal),
       queryFn: () =>
@@ -209,12 +106,13 @@ export const useBalancedRecentIncidents = (
 export const useSeverityDistributionBySource = (
   tenantId: string
 ): UseFetchResult<readonly SeverityBySourceEntry[]> =>
-  toFetchResult(
+  useToFetchResult(
     useQuery({
       queryKey: queryKeys.incidents.severityBySource(),
       queryFn: () =>
         fetchQuery<readonly SeverityBySourceEntry[]>("/api/v1/triage/stats/severity-by-source"),
       enabled: !!tenantId,
+      placeholderData: keepPreviousData,
     })
   );
 
@@ -234,13 +132,16 @@ export const useAcknowledgeIncident = (): MutationState & {
     },
   });
 
-  const acknowledge = async (id: string): Promise<IncidentAlertRecord | null> => {
-    try {
-      return await mutation.mutateAsync(id);
-    } catch {
-      return null;
-    }
-  };
+  const acknowledge = useCallback(
+    async (id: string): Promise<IncidentAlertRecord | null> => {
+      try {
+        return await mutation.mutateAsync(id);
+      } catch {
+        return null;
+      }
+    },
+    [mutation]
+  );
 
   return {
     isLoading: mutation.isPending,
@@ -263,13 +164,16 @@ export const useResolveIncident = (): MutationState & {
     },
   });
 
-  const resolve = async (id: string): Promise<IncidentAlertRecord | null> => {
-    try {
-      return await mutation.mutateAsync(id);
-    } catch {
-      return null;
-    }
-  };
+  const resolve = useCallback(
+    async (id: string): Promise<IncidentAlertRecord | null> => {
+      try {
+        return await mutation.mutateAsync(id);
+      } catch {
+        return null;
+      }
+    },
+    [mutation]
+  );
 
   return {
     isLoading: mutation.isPending,

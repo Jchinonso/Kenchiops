@@ -16,7 +16,7 @@
  * Cookies are sent automatically for same-origin requests (cookie-based auth).
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
@@ -471,5 +471,8 @@ export const useDashboardSSE = (): UseDashboardSSEResult => {
     };
   }, [storageKey, debouncedInvalidate, queryClient]);
 
-  return { notifications, markAllRead, markAsRead, dismissNotification };
+  return useMemo(
+    () => ({ notifications, markAllRead, markAsRead, dismissNotification }),
+    [notifications, markAllRead, markAsRead, dismissNotification]
+  );
 };

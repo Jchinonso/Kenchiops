@@ -8,13 +8,12 @@
  * The browser sends them automatically via `credentials: "include"`.
  */
 
-import { createContext, useContext, useEffect, useMemo } from "react";
-import type { AuthContextValue, AuthProviderProps } from "./types";
+import { useEffect, useMemo } from "react";
+import type { AuthProviderProps } from "./types";
+import { AuthContext } from "./AuthContext";
 import { useAuthActions } from "./useAuthActions";
 import { useIdleTimeout } from "./useIdleTimeout";
 import { useTabVisibility } from "./useTabVisibility";
-
-const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const {
@@ -63,16 +62,4 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   );
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
-};
-
-// ==================== Consumer Hook ====================
-
-export const useAuth = (): AuthContextValue => {
-  const context = useContext(AuthContext);
-
-  if (context === null) {
-    throw new TypeError("useAuth must be used within an AuthProvider");
-  }
-
-  return context;
 };

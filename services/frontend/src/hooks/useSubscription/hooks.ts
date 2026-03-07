@@ -5,74 +5,21 @@
  * Uses TanStack Query for GET requests and useMutation for writes.
  */
 
+import { useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchQuery, fetchMutationRaw, ApiError, parseErrorBody } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
 import { usePlanLimitError } from "@/hooks/usePlanLimitError";
+import type {
+  SubscriptionDTO,
+  SubscriptionUsageDTO,
+  PlanDTO,
+  ChangePlanResultDTO,
+  PlanLimitInfo,
+} from "./types";
 
-// ==================== DTO Types ====================
-
-interface PlanLimitsDTO {
-  readonly maxRepositories: number | null;
-  readonly maxAnalysesMonthly: number | null;
-  readonly maxIntegrations: number | null;
-  readonly maxTeamMembers: number | null;
-}
-
-interface PlanFeaturesDTO {
-  readonly slackIntegration: boolean;
-  readonly customRules: boolean;
-  readonly teamAnalytics: boolean;
-  readonly ssoSaml: boolean;
-  readonly auditLog: boolean;
-  readonly apiAccess: boolean;
-  readonly prioritySupport: boolean;
-}
-
-export interface PlanDTO {
-  readonly id: string;
-  readonly displayName: string;
-  readonly priceMonthlyCents: number | null;
-  readonly limits: PlanLimitsDTO;
-  readonly features: PlanFeaturesDTO;
-}
-
-interface SubscriptionInfoDTO {
-  readonly planId: string;
-  readonly status: string;
-  readonly trialEndsAt: string | null;
-  readonly changedAt: string | null;
-}
-
-export interface SubscriptionDTO {
-  readonly plan: PlanDTO;
-  readonly subscription: SubscriptionInfoDTO;
-}
-
-export interface UsageLimitDTO {
-  readonly current: number;
-  readonly limit: number | null;
-  readonly limited: boolean;
-}
-
-export interface SubscriptionUsageDTO {
-  readonly planId: string;
-  readonly usage: {
-    readonly repositories: UsageLimitDTO;
-    readonly analysesThisMonth: UsageLimitDTO;
-    readonly integrations: UsageLimitDTO;
-    readonly teamMembers: UsageLimitDTO;
-  };
-}
-
-interface ChangePlanResultDTO {
-  readonly subscription: {
-    readonly planId: string;
-    readonly status: string;
-    readonly changedAt: string;
-  };
-  readonly previousPlanId: string;
-}
+/** Plans are static catalog data — rarely change mid-session. */
+const PLANS_STALE_TIME = 30 * 60 * 1000;
 
 // ==================== Query Hooks ====================
 
@@ -82,12 +29,15 @@ export const useSubscription = () => {
     queryFn: () => fetchQuery<SubscriptionDTO>("/api/v1/subscription"),
   });
 
-  return {
-    data: query.data ?? null,
-    isLoading: query.isPending,
-    error: query.error?.message ?? null,
-    refetch: query.refetch,
-  };
+  return useMemo(
+    () => ({
+      data: query.data ?? null,
+      isLoading: query.isPending,
+      error: query.error?.message ?? null,
+      refetch: query.refetch,
+    }),
+    [query.data, query.isPending, query.error, query.refetch]
+  );
 };
 
 export const useSubscriptionUsage = () => {
@@ -96,34 +46,34 @@ export const useSubscriptionUsage = () => {
     queryFn: () => fetchQuery<SubscriptionUsageDTO>("/api/v1/subscription/usage"),
   });
 
-  return {
-    data: query.data ?? null,
-    isLoading: query.isPending,
-    error: query.error?.message ?? null,
-  };
+  return useMemo(
+    () => ({
+      data: query.data ?? null,
+      isLoading: query.isPending,
+      error: query.error?.message ?? null,
+    }),
+    [query.data, query.isPending, query.error]
+  );
 };
 
 export const usePlans = () => {
   const query = useQuery({
     queryKey: queryKeys.subscription.plans(),
     queryFn: () => fetchQuery<readonly PlanDTO[]>("/api/v1/subscription/plans"),
+    staleTime: PLANS_STALE_TIME,
   });
 
-  return {
-    data: query.data ?? null,
-    isLoading: query.isPending,
-    error: query.error?.message ?? null,
-  };
+  return useMemo(
+    () => ({
+      data: query.data ?? null,
+      isLoading: query.isPending,
+      error: query.error?.message ?? null,
+    }),
+    [query.data, query.isPending, query.error]
+  );
 };
 
 // ==================== Mutation Hook ====================
-
-interface PlanLimitInfo {
-  readonly limitKey: string;
-  readonly currentUsage: number;
-  readonly limit: number;
-  readonly currentPlan: string;
-}
 
 export const useChangePlan = (): {
   readonly changePlan: (planId: string) => Promise<ChangePlanResultDTO | null>;
@@ -174,13 +124,16 @@ export const useChangePlan = (): {
     },
   });
 
-  const changePlan = async (planId: string): Promise<ChangePlanResultDTO | null> => {
-    try {
-      return await mutation.mutateAsync(planId);
-    } catch {
-      return null;
-    }
-  };
+  const changePlan = useCallback(
+    async (planId: string): Promise<ChangePlanResultDTO | null> => {
+      try {
+        return await mutation.mutateAsync(planId);
+      } catch {
+        return null;
+      }
+    },
+    [mutation]
+  );
 
   return {
     changePlan,

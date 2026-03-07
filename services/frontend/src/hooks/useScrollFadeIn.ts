@@ -6,7 +6,7 @@
  * Respects prefers-reduced-motion by showing elements immediately.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 
 interface ScrollFadeInResult {
   readonly ref: React.RefObject<HTMLElement | null>;
@@ -45,9 +45,13 @@ export const useScrollFadeIn = (threshold = 0.15): ScrollFadeInResult => {
     return () => observer.disconnect();
   }, [threshold, isVisible]);
 
-  const fadeClass = isVisible
-    ? "opacity-100 translate-y-0 transition-all duration-700 ease-out"
-    : "opacity-0 translate-y-3";
+  const fadeClass = useMemo(
+    () =>
+      isVisible
+        ? "opacity-100 translate-y-0 transition-all duration-700 ease-out"
+        : "opacity-0 translate-y-3",
+    [isVisible]
+  );
 
-  return { ref, isVisible, fadeClass };
+  return useMemo(() => ({ ref, isVisible, fadeClass }), [isVisible, fadeClass]);
 };
