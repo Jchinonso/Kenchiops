@@ -260,7 +260,7 @@ export const CICDFailures = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-mono hover:text-indigo-500 underline decoration-dotted underline-offset-2"
-                            onClick={(event) => event.stopPropagation()}
+                            onClick={(clickEvent) => clickEvent.stopPropagation()}
                           >
                             {headSha.slice(0, 7)}
                           </a>
@@ -310,7 +310,7 @@ export const CICDFailures = () => {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md"
-                                onClick={(event) => event.stopPropagation()}
+                                onClick={(clickEvent) => clickEvent.stopPropagation()}
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                                 View on GitHub
@@ -321,7 +321,7 @@ export const CICDFailures = () => {
                             <Link
                               to={`/dashboard/cicd/analyses/${status.analysisId}`}
                               className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-md"
-                              onClick={(event) => event.stopPropagation()}
+                              onClick={(clickEvent) => clickEvent.stopPropagation()}
                             >
                               <Search className="w-3.5 h-3.5" />
                               View Analysis
