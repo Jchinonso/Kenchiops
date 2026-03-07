@@ -17,12 +17,14 @@ import {
   HTTP_STATUS,
   createLogger,
   ValidationError,
+  NotFoundError,
   rateLimitByCategory,
   SERVICE_NAMES,
   FEEDBACK_DEFAULTS,
   createOrUpdateAnalysisFeedback,
   getFeedbackByAnalysis,
   getFeedbackByUserAndAnalysis,
+  getAnalysisById,
   type FeedbackType,
 } from "@kenchi/shared";
 import { tryIngestLesson } from "../services/feedbackLessonService.js";
@@ -48,6 +50,10 @@ const validateFeedbackType = (value: unknown): boolean | string => {
   const requiredResult = validators.required(value);
   if (requiredResult !== true) {
     return requiredResult;
+  }
+  const stringResult = validators.string(value);
+  if (stringResult !== true) {
+    return stringResult;
   }
   return (
     VALID_FEEDBACK_TYPES.has(value as string) ||
@@ -100,6 +106,14 @@ const handleSubmitFeedback = async (req: Request, res: Response): Promise<void> 
     readonly correction?: string;
   };
 
+  // Verify the analysis belongs to this tenant before writing feedback
+  const analysis = await getAnalysisById(analysisId, tenantId);
+  if (!analysis) {
+    throw new NotFoundError("Analysis not found", {
+      metadata: { analysisId },
+    });
+  }
+
   const { feedback, wasUpdated } = await createOrUpdateAnalysisFeedback({
     analysisId,
     feedbackType,
@@ -108,12 +122,11 @@ const handleSubmitFeedback = async (req: Request, res: Response): Promise<void> 
     correction,
   });
 
-  // Trigger lesson ingestion for "correct" feedback (fire-and-forget)
-  // let: conditionally set when feedbackType is "correct"
-  let lessonIngested = false;
-  if (feedbackType === "correct") {
-    lessonIngested = await tryIngestLesson(analysisId, tenantId, userId, req.context);
-  }
+  // Trigger lesson ingestion for "correct" feedback
+  const lessonIngested =
+    feedbackType === "correct"
+      ? await tryIngestLesson(analysisId, tenantId, userId, req.context)
+      : false;
 
   logger.info("Analysis feedback submitted", {
     analysisId,
@@ -121,6 +134,7 @@ const handleSubmitFeedback = async (req: Request, res: Response): Promise<void> 
     wasUpdated,
     lessonIngested,
     durationMs: Date.now() - startTime,
+    ...req.context,
   });
 
   res.status(HTTP_STATUS.OK).json({

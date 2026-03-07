@@ -8,7 +8,7 @@ export interface FeedbackSubmission {
 export interface FeedbackResponse {
   readonly feedback: {
     readonly id: string;
-    readonly feedbackType: string;
+    readonly feedbackType: "correct" | "incorrect" | "flaky" | "needs_more_context";
     readonly createdAt: string;
   };
   readonly wasUpdated: boolean;
