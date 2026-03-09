@@ -435,10 +435,27 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   }
 
   // Re-fetch user to pick up org linking (autoLinkOrganizations may have updated selected_tenant_id)
-  const freshUser = (await findUserById(user.id)) ?? user;
+  // let: freshUser may be reassigned if we auto-switch to a provider-matching tenant
+  let freshUser = (await findUserById(user.id)) ?? user; // let: updated below if tenant switch needed
 
-  // Log the post-login organization state for diagnostics
+  // Auto-select a tenant matching the login provider so the dashboard shows
+  // the correct connection status. Without this, a user who last logged in via
+  // GitLab would stay on the GitLab tenant when they next login via GitHub,
+  // causing the dashboard to wrongly prompt for GitHub App installation.
   const postLoginOrgs = await findOrganizationsByUser(freshUser.id);
+  const currentOrgProvider = postLoginOrgs.find(
+    (org) => org.tenantId === freshUser.tenantId
+  )?.provider;
+
+  if (currentOrgProvider !== oauthState.provider) {
+    const matchingOrg = postLoginOrgs.find(
+      (org) => org.provider === oauthState.provider && org.tenantStatus === "active"
+    );
+    if (matchingOrg) {
+      await switchUserOrganization(freshUser.id, matchingOrg.tenantId);
+      freshUser = (await findUserById(freshUser.id)) ?? freshUser;
+    }
+  }
   logger.info("Post-login organization state", {
     userId: freshUser.id,
     provider: oauthState.provider,

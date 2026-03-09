@@ -116,9 +116,9 @@ const elevateToMinimumAdmin = (role: string): string =>
  *
  * Never throws — login must not fail if this fails.
  */
-const syncGitLabRefreshToken = async (
+const syncGitLabTokens = async (
   tenantId: string,
-  refreshToken: string,
+  tokens: OAuthTokenResponse,
   context: RequestContext
 ): Promise<void> => {
   try {
@@ -127,25 +127,31 @@ const syncGitLabRefreshToken = async (
       return;
     }
 
-    const encryptedRefresh = await encryptForTenant(tenantId, refreshToken);
+    const encryptedRefresh = tokens.refreshToken
+      ? await encryptForTenant(tenantId, tokens.refreshToken)
+      : null;
+
+    const tokenExpiresAt = tokens.expiresIn ? new Date(Date.now() + tokens.expiresIn * 1000) : null;
 
     await updateProviderConnection({
       id: connection.id,
       tenantId,
+      accessToken: tokens.accessToken,
+      tokenExpiresAt,
       config: {
         ...connection.config,
-        refreshToken: encryptedRefresh,
+        ...(encryptedRefresh ? { refreshToken: encryptedRefresh } : {}),
       },
     });
 
-    logger.info("GitLab refresh token synced to provider connection", {
+    logger.info("GitLab tokens synced to provider connection", {
       provider: "gitlab",
       connectionId: connection.id,
       ...context,
     });
   } catch (error) {
     // Non-fatal: login must succeed even if sync fails
-    logger.warn("Failed to sync GitLab refresh token (non-fatal)", {
+    logger.warn("Failed to sync GitLab tokens (non-fatal)", {
       provider: "gitlab",
       error: getErrorMessage(error),
       ...context,
@@ -188,9 +194,9 @@ const findOrCreateUserImpl = async (
 
     await updateLastLogin(user.id);
 
-    // Best-effort: sync refresh token into gitlab_ci connection for auto-refresh
-    if (provider === "gitlab" && tokens.refreshToken && user.tenantId) {
-      await syncGitLabRefreshToken(user.tenantId, tokens.refreshToken, context);
+    // Best-effort: sync access + refresh tokens into gitlab_ci connection
+    if (provider === "gitlab" && user.tenantId) {
+      await syncGitLabTokens(user.tenantId, tokens, context);
     }
 
     logger.info("Existing user logged in via OAuth", {
@@ -224,9 +230,9 @@ const findOrCreateUserImpl = async (
 
   await updateLastLogin(user.id);
 
-  // Best-effort: sync refresh token into gitlab_ci connection for auto-refresh
-  if (provider === "gitlab" && tokens.refreshToken && user.tenantId) {
-    await syncGitLabRefreshToken(user.tenantId, tokens.refreshToken, context);
+  // Best-effort: sync access + refresh tokens into gitlab_ci connection
+  if (provider === "gitlab" && user.tenantId) {
+    await syncGitLabTokens(user.tenantId, tokens, context);
   }
 
   logger.info(isNew ? "New user created via OAuth" : "Existing user linked via email", {
