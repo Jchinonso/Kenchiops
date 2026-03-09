@@ -10,6 +10,7 @@
 
 import type { Event, Evidence } from "../core/types.js";
 import type { RAGSearchResult } from "../rag/types.js";
+import { ARTIFACT_TYPES } from "../constants/index.js";
 
 // Import for internal use
 import { formatEvent, formatEvidence, buildTestFrameworkHint } from "./promptEvidenceFormatters.js";
@@ -348,6 +349,19 @@ export const buildAnalysisPrompt = (
       ? `\n\n${formatRAGContext(ragContext)}`
       : "";
 
+  // Count test_failure artifacts in evidence for explicit extraction enforcement.
+  // When the chunking pipeline prepends [test_failure] markers, use the exact count
+  // in the final instruction to prevent the LLM from summarizing or skipping failures.
+  const testFailureMarker = `[${ARTIFACT_TYPES.TEST_FAILURE}]`;
+  const testFailureCount = evidence.logs
+    ? evidence.logs.filter((log) => log.message.includes(testFailureMarker)).length
+    : 0;
+
+  const testFailureInstruction =
+    testFailureCount > 0
+      ? `\n\nCRITICAL OUTPUT REQUIREMENT: The evidence contains exactly ${testFailureCount} test_failure artifacts. Your test_failures array MUST contain exactly ${testFailureCount} entries — one for each [test_failure] artifact in the evidence. Do NOT omit, summarize, or group any test failures. If a test_failure artifact has no file path, set "file" to null.`
+      : "";
+
   return `${systemPrompt}
 
 ${taskSection}
@@ -370,5 +384,5 @@ ${evidenceSection}${ragSection}
 
 ---
 
-  Analyze the incident and provide your structured JSON response.`;
+  Analyze the incident and provide your structured JSON response.${testFailureInstruction}`;
 };
