@@ -94,6 +94,8 @@ export {
 export {
   type KnowledgeDocRecord,
   type CreateKnowledgeDocInput,
+  type KnowledgeDocListOptions,
+  type KnowledgeDocListResult,
   createKnowledgeDoc,
   createKnowledgeDocsBatch,
   searchSimilarKnowledgeDocs,
@@ -104,6 +106,8 @@ export {
   getDocsNeedingReembedding,
   getKnowledgeDocsByType,
   getKnowledgeDocCountsByType,
+  getKnowledgeDocCountsByTypeForTenant,
+  getKnowledgeDocsByTenant,
   getKnowledgeDocById,
   incrementKnowledgeDocHitCount,
   batchIncrementKnowledgeDocHitCounts,

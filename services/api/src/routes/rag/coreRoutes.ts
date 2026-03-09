@@ -21,11 +21,13 @@ import {
   ingestKnowledgeDoc,
   searchAll,
   syncDueSources,
-  getKnowledgeDocCountsByType,
+  getKnowledgeDocCountsByTypeForTenant,
+  getKnowledgeDocsByTenant,
   getTenantRAGStats,
   type IngestKnowledgeDocInput,
   type SyncAllResult,
   type RAGTenantStats,
+  type KnowledgeDocRecord,
 } from "@kenchi/shared";
 import type {
   IngestRequestBody,
@@ -33,6 +35,7 @@ import type {
   SyncRequestBody,
   DiffChunkResponse,
   KnowledgeDocResponse,
+  KnowledgeDocListItemResponse,
   TenantStatsResponse,
   IngestResponse,
   SearchResponse,
@@ -72,6 +75,31 @@ const validateRequiredString = (fieldValue: unknown): boolean | string => {
   return validators.string(fieldValue);
 };
 
+/** SECURITY (VULN-707): Maximum content length for ingestion to prevent DoS and cost abuse */
+const INGEST_MAX_CONTENT_LENGTH = 100_000;
+
+/** Validation rule: required string with max length for content */
+const validateContent = (fieldValue: unknown): boolean | string => {
+  const stringResult = validateRequiredString(fieldValue);
+  if (stringResult !== true) {
+    return stringResult;
+  }
+  return typeof fieldValue === "string" && fieldValue.length <= INGEST_MAX_CONTENT_LENGTH
+    ? true
+    : `Content must not exceed ${INGEST_MAX_CONTENT_LENGTH} characters`;
+};
+
+// ==================== Pagination Config ====================
+
+const DOCUMENTS_PAGINATION = {
+  DEFAULT_LIMIT: 50,
+  MAX_LIMIT: 100,
+  DEFAULT_OFFSET: 0,
+  /** SECURITY (VULN-702): Cap offset to prevent sequential scan DoS */
+  MAX_OFFSET: 10_000,
+  CONTENT_PREVIEW_LENGTH: 200,
+} as const;
+
 // ==================== Response Mappers ====================
 
 /** Maps a diff chunk search result to response format */
@@ -92,6 +120,21 @@ const mapKnowledgeDocToResponse = (
   title: searchResult.item.title,
   content: searchResult.item.content,
   similarity: searchResult.similarity,
+});
+
+/** Maps a knowledge doc record to a list item response DTO */
+const mapDocToListItem = (doc: KnowledgeDocRecord): KnowledgeDocListItemResponse => ({
+  id: doc.id,
+  docType: doc.docType,
+  title: doc.title,
+  content:
+    doc.content.length > DOCUMENTS_PAGINATION.CONTENT_PREVIEW_LENGTH
+      ? `${doc.content.slice(0, DOCUMENTS_PAGINATION.CONTENT_PREVIEW_LENGTH)}...`
+      : doc.content,
+  repository: doc.repository,
+  sourceUrl: doc.sourceUrl,
+  createdAt: doc.createdAt.toISOString(),
+  updatedAt: doc.updatedAt.toISOString(),
 });
 
 /** Maps tenant RAG stats to response format */
@@ -231,18 +274,68 @@ const handleSearch = async (req: Request, res: Response): Promise<void> => {
 
 /**
  * Handles RAG statistics requests.
+ * SECURITY (VULN-701): Uses tenant-scoped doc counts, not global counts,
+ * to prevent cross-tenant information disclosure.
  */
 const handleStats = async (req: Request, res: Response): Promise<void> => {
   const { tenantId } = req.context;
 
   const [docCounts, tenantStats] = await Promise.all([
-    getKnowledgeDocCountsByType(),
+    getKnowledgeDocCountsByTypeForTenant(tenantId),
     getTenantRAGStats(tenantId),
   ]);
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
     data: buildStatsResponse(docCounts, tenantStats),
+  });
+};
+
+/**
+ * Handles knowledge document listing requests.
+ * Scoped to the authenticated tenant.
+ */
+const handleListDocuments = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = getEffectiveTenantId(req);
+  if (!tenantId) {
+    throw new ValidationError("tenantId is required");
+  }
+
+  const docType = typeof req.query.docType === "string" ? req.query.docType : undefined;
+  if (docType !== undefined && !isValidDocType(docType)) {
+    throw new ValidationError("Invalid document type filter");
+  }
+
+  const rawLimit =
+    typeof req.query.limit === "string"
+      ? parseInt(req.query.limit, 10)
+      : DOCUMENTS_PAGINATION.DEFAULT_LIMIT;
+  const rawOffset =
+    typeof req.query.offset === "string"
+      ? parseInt(req.query.offset, 10)
+      : DOCUMENTS_PAGINATION.DEFAULT_OFFSET;
+
+  const limit = Math.min(
+    Math.max(1, Number.isNaN(rawLimit) ? DOCUMENTS_PAGINATION.DEFAULT_LIMIT : rawLimit),
+    DOCUMENTS_PAGINATION.MAX_LIMIT
+  );
+  const offset = Math.min(
+    Math.max(0, Number.isNaN(rawOffset) ? DOCUMENTS_PAGINATION.DEFAULT_OFFSET : rawOffset),
+    DOCUMENTS_PAGINATION.MAX_OFFSET
+  );
+
+  const result = await getKnowledgeDocsByTenant(tenantId, {
+    docType: docType as KnowledgeDocType | undefined,
+    limit,
+    offset,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: {
+      items: result.items.map(mapDocToListItem),
+      total: result.total,
+    },
   });
 };
 
@@ -282,7 +375,7 @@ router.post(
     body: {
       docType: validateDocType,
       title: validateRequiredString,
-      content: validateRequiredString,
+      content: validateContent,
     },
   }),
   asyncHandler(handleIngest)
@@ -302,6 +395,13 @@ router.post(
 
 /** GET /api/rag/stats - Get RAG statistics */
 router.get(API_ROUTES.RAG_STATS, rateLimitByCategory("readonly"), asyncHandler(handleStats));
+
+/** GET /api/rag/documents - List knowledge documents for the authenticated tenant */
+router.get(
+  API_ROUTES.RAG_DOCUMENTS,
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleListDocuments)
+);
 
 /** POST /api/rag/sync - Sync external sources */
 router.post(API_ROUTES.RAG_SYNC, rateLimitByCategory("expensive"), asyncHandler(handleSync));

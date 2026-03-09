@@ -10,8 +10,9 @@ import express, { type Express, type Request, type Response, type NextFunction }
 const mockIngestKnowledgeDoc = jest.fn();
 const mockSearchAll = jest.fn();
 const mockSyncDueSources = jest.fn();
-const mockGetKnowledgeDocCountsByType = jest.fn();
+const mockGetKnowledgeDocCountsByTypeForTenant = jest.fn();
 const mockGetTenantRAGStats = jest.fn();
+const mockGetKnowledgeDocsByTenant = jest.fn();
 
 // Mock dependencies — pull error classes from actual to avoid duplication checker flags
 jest.mock("@kenchi/shared", () => {
@@ -34,6 +35,7 @@ jest.mock("@kenchi/shared", () => {
       RAG_INGEST: "/ingest",
       RAG_SEARCH: "/search",
       RAG_STATS: "/stats",
+      RAG_DOCUMENTS: "/documents",
       RAG_SYNC: "/sync",
     },
     KNOWLEDGE_DOC_TYPES: {
@@ -48,8 +50,9 @@ jest.mock("@kenchi/shared", () => {
     ingestKnowledgeDoc: mockIngestKnowledgeDoc,
     searchAll: mockSearchAll,
     syncDueSources: mockSyncDueSources,
-    getKnowledgeDocCountsByType: mockGetKnowledgeDocCountsByType,
+    getKnowledgeDocCountsByTypeForTenant: mockGetKnowledgeDocCountsByTypeForTenant,
     getTenantRAGStats: mockGetTenantRAGStats,
+    getKnowledgeDocsByTenant: mockGetKnowledgeDocsByTenant,
     asyncHandler:
       (fn: (req: unknown, res: unknown, next: unknown) => Promise<unknown>) =>
       async (req: unknown, res: unknown, next: unknown) => {
@@ -131,10 +134,15 @@ describe("RAG Core Routes", () => {
       cacheHit: false,
     });
 
-    mockGetKnowledgeDocCountsByType.mockResolvedValue({
+    mockGetKnowledgeDocCountsByTypeForTenant.mockResolvedValue({
       troubleshooting: 10,
       runbook: 5,
       documentation: 20,
+    });
+
+    mockGetKnowledgeDocsByTenant.mockResolvedValue({
+      items: [],
+      total: 0,
     });
 
     mockGetTenantRAGStats.mockResolvedValue({
@@ -307,7 +315,7 @@ describe("RAG Core Routes", () => {
     });
 
     it("should calculate total documents correctly", async () => {
-      mockGetKnowledgeDocCountsByType.mockResolvedValue({
+      mockGetKnowledgeDocCountsByTypeForTenant.mockResolvedValue({
         troubleshooting: 100,
         runbook: 50,
         documentation: 200,

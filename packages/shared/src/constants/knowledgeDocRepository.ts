@@ -99,4 +99,45 @@ export const KNOWLEDGE_DOC_QUERIES = {
     FROM knowledge_documents
     GROUP BY doc_type
   `,
+
+  COUNT_BY_DOC_TYPE_FOR_TENANT: `
+    SELECT doc_type, COUNT(*) as count
+    FROM knowledge_documents
+    WHERE tenant_id = $1
+    GROUP BY doc_type
+  `,
+
+  /** SECURITY (VULN-704): Exclude embedding column to avoid transferring ~12KB per row */
+  GET_BY_TENANT: `
+    SELECT id, repository, parent_id, doc_type, title, content, source_url, file_path,
+           chunk_index, embedding_model, embedding_version, tenant_id, metadata,
+           created_at, updated_at
+    FROM knowledge_documents
+    WHERE tenant_id = $1
+    ORDER BY created_at DESC
+    LIMIT $2 OFFSET $3
+  `,
+
+  /** SECURITY (VULN-704): Exclude embedding column to avoid transferring ~12KB per row */
+  GET_BY_TENANT_AND_DOC_TYPE: `
+    SELECT id, repository, parent_id, doc_type, title, content, source_url, file_path,
+           chunk_index, embedding_model, embedding_version, tenant_id, metadata,
+           created_at, updated_at
+    FROM knowledge_documents
+    WHERE tenant_id = $1 AND doc_type = $2
+    ORDER BY created_at DESC
+    LIMIT $3 OFFSET $4
+  `,
+
+  COUNT_BY_TENANT: `
+    SELECT COUNT(*) as count
+    FROM knowledge_documents
+    WHERE tenant_id = $1
+  `,
+
+  COUNT_BY_TENANT_AND_DOC_TYPE: `
+    SELECT COUNT(*) as count
+    FROM knowledge_documents
+    WHERE tenant_id = $1 AND doc_type = $2
+  `,
 } as const;

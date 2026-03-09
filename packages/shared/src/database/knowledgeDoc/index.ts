@@ -12,6 +12,8 @@ export type {
   CreateKnowledgeDocInput,
   KnowledgeDocRow,
   KnowledgeDocSimilarityRow,
+  KnowledgeDocListOptions,
+  KnowledgeDocListResult,
 } from "./types.js";
 
 // Row mappers
@@ -29,6 +31,8 @@ export {
   getDocsNeedingReembedding,
   getKnowledgeDocsByType,
   getKnowledgeDocCountsByType,
+  getKnowledgeDocCountsByTypeForTenant,
+  getKnowledgeDocsByTenant,
 } from "./repository.js";
 
 // Hit tracking operations

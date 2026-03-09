@@ -55,6 +55,23 @@ export interface CreateKnowledgeDocInput {
   readonly metadata?: Record<string, unknown>;
 }
 
+/**
+ * Options for listing knowledge documents by tenant.
+ */
+export interface KnowledgeDocListOptions {
+  readonly docType?: KnowledgeDocType;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+/**
+ * Paginated result for knowledge document listing.
+ */
+export interface KnowledgeDocListResult {
+  readonly items: readonly KnowledgeDocRecord[];
+  readonly total: number;
+}
+
 // ==================== Database Row Types ====================
 
 /**

@@ -53,6 +53,12 @@ interface WebhookActivityFilters {
   readonly status?: string;
 }
 
+interface KnowledgeBaseFilters {
+  readonly docType?: string;
+  readonly limit: number;
+  readonly offset: number;
+}
+
 // ==================== Key Factory ====================
 
 export const queryKeys = {
@@ -118,6 +124,11 @@ export const queryKeys = {
   },
   account: {
     deletionImpact: () => ["account", "deletionImpact"] as const,
+  },
+  knowledgeBase: {
+    all: ["knowledgeBase"] as const,
+    stats: () => ["knowledgeBase", "stats"] as const,
+    documents: (filters: KnowledgeBaseFilters) => ["knowledgeBase", "documents", filters] as const,
   },
   integrations: {
     all: ["integrations"] as const,

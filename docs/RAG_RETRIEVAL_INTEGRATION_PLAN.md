@@ -1,8 +1,8 @@
 # RAG Retrieval Integration — Implementation Plan
 
 **Date:** 2026-03-04  
-**Last Updated:** 2026-03-06  
-**Status:** Phase 1 Complete ✅ | Phase 2 Planned
+**Last Updated:** 2026-03-09  
+**Status:** Phase 1 Complete ✅ | Phase 2 Planned | Phase 3 Planned
 
 ---
 
@@ -15,6 +15,24 @@ See [RAG_LEARNING_PIPELINE_AUDIT.md](./RAG_LEARNING_PIPELINE_AUDIT.md) for the f
 ---
 
 ## Phase 1: Connect RAG Retrieval to Analysis ✅
+
+### Automated Ingestion Channels (Phase 1 Background)
+
+While Phase 2 introduces manual feedback loops, KenchiOps is designed not to force developers to write resolution post-mortems. Instead, 90% of the vector database is populated automatically by watching natural developer signals.
+
+Here is how KenchiOps constantly monitors CI failures and PR changes to invisibly extract fixes:
+
+1. **Linked Commit Ingestion (The Waiting Game):**
+   - When a CI check fails on a PR, KenchiOps tracks the failure (`PR #123 has a broken test`).
+   - The developer pushes new commits, and the CI eventually passes (or the PR merges).
+   - KenchiOps notices the green signal, queries its memory, and automatically fetches the diff of the exact commits that turned the PR green.
+   - It links the original error log to the solution diff and saves it as a Knowledge Document.
+2. **PR Fix Comment Ingestion:**
+   - AI scans developer comments on PRs. If a developer explicitly describes how they solved an issue ("Fixed the timeout by bumping the jest interval"), the system extracts the explanation and saves it.
+3. **Slack Resolution Ingestion:**
+   - KenchiOps monitors threads in incident/alert channels (e.g., `#dev-alerts`). If a conversation concludes with a resolution ("Restarted the pod, we are good"), it summarizes the thread and extracts the fix.
+
+By the time the Retrieval Architecture (below) kicks in, the vector database is already populated with these automated insights.
 
 ### Architecture
 
@@ -137,6 +155,72 @@ User views analysis on frontend
    - Mock `searchFromEventContext` to return sample knowledge docs
    - Assert `buildAnalysisPrompt` receives RAG context
    - Assert RAG search failure doesn't block analysis
+
+---
+
+## Phase 3: Interactive Chat Interface (Planned)
+
+### Problem
+
+While Phase 2 provides a structured way to capture feedback and manual resolutions, it is still a static, one-way consumption model for the user. When an automated analysis is "80% right," a user may need to ask follow-up questions, debug a specific variable, or search the knowledge base conversationally. Currently, conversational LLM capabilities (`/kenchi`) exist only in Slack.
+
+### Planned Changes
+
+| Feature                   | Description                                                                                                        | Files                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| **Kenchi Copilot Drawer** | A slide-out chat interface on the frontend dashboard.                                                              | `services/frontend/src/components/` |
+| **Contextual Chat Route** | Streaming API endpoint (`POST /api/chat/completions`) that maintains the context of the currently viewed incident. | `services/api/src/routes/`          |
+| **Conversational RAG**    | Connect the `searchFromEventContext` infrastructure to the chat endpoint to allow users to query past resolutions. | `packages/shared/src/rag/`          |
+| **Token Management**      | Rolling window token management to prevent long chat threads from exceeding context limits and budgets.            | `packages/shared/src/llm/`          |
+
+### Design Decisions
+
+- **Phase 3 over Phase 2**: Chat interfaces introduce significant complexity (streaming, state management, token budgets, prompt injection risks). It is intentionally separated from the core feedback loop of Phase 2 to ensure reliable, high-quality data ingestion is prioritized first.
+- **Context-Awareness**: The chat interface will automatically inject the currently viewed analysis, evidence (logs, diffs), and selected RAG documents into the system prompt, so the user doesn't have to copy-paste anything.
+- **Real-Time Streaming UI (SSE vs WebSockets)**: To the user, the chat feels 100% real-time (token-by-token generation). Under the hood, this will be implemented using **Server-Sent Events (SSE)** instead of WebSockets. KenchiOps deliberately avoids WebSockets because LLM chat is a "request -> streaming response" model rather than a bi-directional data hose. SSE is natively supported over standard HTTP/1.1 and HTTP/2, perfectly handles the one-way token stream from the OpenAI/Gemini/Anthropic APIs, and is vastly simpler to scale across load balancers than persistent WebSocket connections.
+
+### Context-Aware Workflows
+
+The Copilot Drawer acts as a Contextual Assistant. It automatically reads the current page state and injects relevant data into the prompt without the user needing to copy-paste.
+
+#### 1. CI/CD Failures
+
+**Scenario:** User is viewing a failed GitHub Actions run page.
+
+- **Injected Context:** Commit hash, PR number, exact error logs, parsed test failures, and related RAG knowledge docs.
+- **Example Queries:**
+  - _"Is this a new failure on this branch or a known flaky test?"_
+  - _"Can you write a bash script to reproduce this specific test locally?"_
+  - _"The RAG context mentions PR #412 fixed this before. What exactly did they change in their `jest.config.js`?"_
+
+#### 2. Incident Triage
+
+**Scenario:** User is viewing a P1 incident page (e.g., Datadog high CPU alert).
+
+- **Injected Context:** Webhook payload, affected service (`api-server`), timeframes, recent PRs deployed to that service, and relevant runbooks.
+- **Example Queries:**
+  - _"Were there any PRs merged to `api-server` in the last 30 minutes?"_
+  - _"What is the standard runbook procedure for high CPU on this service?"_
+  - _"Can you generate the `kubectl` command I need to check the exact CPU usage per pod?"_
+
+#### 3. Deployments (Confidence Scoring)
+
+**Scenario:** User is viewing a deployment pre-check screen with a "Proceed with Caution" score.
+
+- **Injected Context:** Commits bundled in the release, pending security warnings, dependency changes, and historical success rates.
+- **Example Queries:**
+  - _"Which specific commit added the new npm dependency that triggered the warning?"_
+  - _"What is the exact rollback command if this deployment fails?"_
+  - _"Are there any active incidents on the `payment-service` that I should know about before I hit deploy?"_
+
+#### 4. Knowledge Base Querying
+
+**Scenario:** User is on the Knowledge Base Browser dashboard.
+
+- **Injected Context:** Unrestricted access to the `/rag/search.ts` endpoint for conversational semantic searching.
+- **Example Queries:**
+  - _"How did we fix the Redis connection timeout issue last month?"_
+  - _"Show me all the past PRs where we had to update the Dockerfile for Apple Silicon compatibility."_
 
 2. **`formatRAGContext` unit test** (`packages/shared/src/integrations/__tests__/ragPromptFormat.test.ts`)
    - Test knowledge doc formatting with similarity scores

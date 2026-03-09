@@ -207,6 +207,8 @@ export {
   type CreateDiffChunkInput,
   type KnowledgeDocRecord,
   type CreateKnowledgeDocInput,
+  type KnowledgeDocListOptions,
+  type KnowledgeDocListResult,
   type VectorSearchResult,
   type VectorSearchFilters,
   // Diff chunk repository
@@ -229,6 +231,8 @@ export {
   getDocsNeedingReembedding,
   getKnowledgeDocsByType,
   getKnowledgeDocCountsByType,
+  getKnowledgeDocCountsByTypeForTenant,
+  getKnowledgeDocsByTenant,
 } from "./database/index.js";
 export {
   // Feedback repository

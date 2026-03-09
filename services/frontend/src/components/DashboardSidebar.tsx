@@ -35,6 +35,7 @@ import {
   ShieldAlert,
   ArrowUpCircle,
   BarChart3,
+  BookOpen,
   Puzzle,
   Settings,
   ChevronRight,
@@ -171,6 +172,11 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     label: "Analytics",
     href: "/dashboard/analytics",
     comingSoon: true,
+  },
+  {
+    icon: <BookOpen className="w-5 h-5" />,
+    label: "Knowledge Base",
+    href: "/dashboard/knowledge-base",
   },
   {
     icon: <Puzzle className="w-5 h-5" />,
