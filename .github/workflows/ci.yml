@@ -288,18 +288,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure SSH
-        env:
-          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Configure SSH known hosts
+        run: ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Deploy to VPS
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+          ssh -o StrictHostKeyChecking=no \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             "cd /opt/kenchi && DEPLOY_SHA=${{ github.sha }} bash deploy/server-deploy.sh"
 
@@ -309,6 +308,3 @@ jobs:
           echo "::error::Deploy failed for SHA ${{ github.sha }}. Auto-rollback may have been triggered on the VPS."
           echo "Check VPS logs: ssh root@${{ secrets.VPS_HOST }} 'cat /opt/kenchi/.deploy-history | tail -5'"
 
-      - name: Cleanup SSH key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key
