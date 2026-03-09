@@ -5,7 +5,7 @@
  * of knowledge documents for the current tenant.
  */
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -31,8 +31,9 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BookOpen, RefreshCw, Database, FileText, ExternalLink } from "lucide-react";
-import { formatTimestamp, titleCase, truncateText } from "@/lib/formatters";
+import { formatTimestamp, formatSnakeCase, truncateText } from "@/lib/formatters";
 import { isSafeUrl } from "@/lib/urlSafety";
 import {
   useKnowledgeBaseStats,
@@ -52,15 +53,6 @@ const PAGINATION_CONFIG = {
 
 const ALL_TYPES_VALUE = "__all__";
 
-// ==================== Helpers ====================
-
-/** Formats a snake_case doc type into a display label. */
-const formatDocType = (docType: string): string =>
-  docType
-    .split("_")
-    .map((word) => titleCase(word))
-    .join(" ");
-
 // ==================== Sub-components ====================
 
 interface StatsHeaderProps {
@@ -71,7 +63,7 @@ interface StatsHeaderProps {
 const StatsHeader = ({ totalDocuments, documentsByType }: StatsHeaderProps) => {
   const topTypes = useMemo(() => {
     const entries = Object.entries(documentsByType);
-    return entries.sort(([, countA], [, countB]) => countB - countA).slice(0, 6);
+    return [...entries].sort(([, countA], [, countB]) => countB - countA).slice(0, 6);
   }, [documentsByType]);
 
   return (
@@ -84,7 +76,7 @@ const StatsHeader = ({ totalDocuments, documentsByType }: StatsHeaderProps) => {
       </div>
       {topTypes.map(([docType, count]) => (
         <Badge key={docType} variant="outline" className="text-xs text-zinc-600 dark:text-zinc-400">
-          {formatDocType(docType)}: {count}
+          {formatSnakeCase(docType)}: {count}
         </Badge>
       ))}
     </div>
@@ -99,7 +91,10 @@ const DocTableRow = ({ doc }: DocTableRowProps) => (
   <TableRow>
     <TableCell className="max-w-[300px]">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-zinc-900 dark:text-zinc-100" title={doc.title}>
+        <span
+          className="text-sm text-zinc-900 dark:text-zinc-100"
+          title={truncateText(doc.title, 100)}
+        >
           {truncateText(doc.title, 60)}
         </span>
         {/* SECURITY (VULN-703): Validate URL protocol before rendering as link */}
@@ -108,24 +103,25 @@ const DocTableRow = ({ doc }: DocTableRowProps) => (
             href={doc.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={`Open source for ${truncateText(doc.title, 30)} in new tab`}
             className="text-zinc-400 hover:text-indigo-500 transition-colors flex-shrink-0"
             onClick={(event) => event.stopPropagation()}
           >
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
           </a>
         )}
       </div>
     </TableCell>
     <TableCell>
       <Badge variant="secondary" className="text-xs">
-        {formatDocType(doc.docType)}
+        {formatSnakeCase(doc.docType)}
       </Badge>
     </TableCell>
     <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
       {doc.repository ?? "--"}
     </TableCell>
     <TableCell className="text-sm text-zinc-500 dark:text-zinc-400 max-w-[200px]">
-      <span title={doc.content}>{truncateText(doc.content, 50)}</span>
+      <span title={truncateText(doc.content, 100)}>{truncateText(doc.content, 50)}</span>
     </TableCell>
     <TableCell className="text-sm text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
       {formatTimestamp(doc.createdAt)}
@@ -138,7 +134,7 @@ const DocTableRow = ({ doc }: DocTableRowProps) => (
 export const KnowledgeBase = () => {
   const isMobile = useIsMobile();
   const [offset, setOffset] = useState(0);
-  const [pageSize, setPageSize] = useState(PAGINATION_CONFIG.DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<number>(PAGINATION_CONFIG.DEFAULT_PAGE_SIZE);
   const [selectedDocType, setSelectedDocType] = useState<string>(ALL_TYPES_VALUE);
 
   const docTypeFilter = selectedDocType === ALL_TYPES_VALUE ? undefined : selectedDocType;
@@ -151,8 +147,19 @@ export const KnowledgeBase = () => {
     refetch,
   } = useKnowledgeDocuments(pageSize, offset, docTypeFilter);
 
-  const items = useMemo(() => docsData?.items ?? [], [docsData?.items]);
+  const items = docsData?.items ?? [];
   const total = docsData?.total ?? 0;
+
+  // Reset offset when filtered results are fewer than current position
+  useEffect(() => {
+    if (total > 0 && offset >= total) {
+      setOffset(0);
+    }
+  }, [total, offset]);
+
+  useEffect(() => {
+    document.title = "Knowledge Base | Kenchi";
+  }, []);
 
   const hasItems = items.length > 0;
   const currentPage = Math.floor(offset / pageSize) + 1;
@@ -164,28 +171,28 @@ export const KnowledgeBase = () => {
     if (!stats?.documentsByType) {
       return [];
     }
-    return Object.entries(stats.documentsByType)
+    return [...Object.entries(stats.documentsByType)]
       .sort(([, countA], [, countB]) => countB - countA)
       .map(([docType]) => docType);
   }, [stats?.documentsByType]);
 
-  const handleDocTypeChange = useCallback((value: string) => {
+  const handleDocTypeChange = (value: string) => {
     setSelectedDocType(value);
     setOffset(0);
-  }, []);
+  };
 
-  const handlePageSizeChange = useCallback((size: number) => {
+  const handlePageSizeChange = (size: number) => {
     setPageSize(size);
     setOffset(0);
-  }, []);
+  };
 
-  const goNext = useCallback(() => {
+  const goNext = () => {
     setOffset((prev) => prev + pageSize);
-  }, [pageSize]);
+  };
 
-  const goPrev = useCallback(() => {
+  const goPrev = () => {
     setOffset((prev) => Math.max(0, prev - pageSize));
-  }, [pageSize]);
+  };
 
   return (
     <div className="space-y-6">
@@ -199,24 +206,35 @@ export const KnowledgeBase = () => {
       </div>
 
       {/* Stats Header */}
-      {!statsLoading && stats && (
+      {statsLoading ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Skeleton className="h-8 w-40 rounded-lg" />
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-6 w-20 rounded-full" />
+        </div>
+      ) : stats ? (
         <StatsHeader
           totalDocuments={stats.totalDocuments}
           documentsByType={stats.documentsByType}
         />
-      )}
+      ) : null}
 
       {/* Filter */}
       <div className="flex items-center gap-3">
-        <Select value={selectedDocType} onValueChange={handleDocTypeChange}>
-          <SelectTrigger className="w-[200px]" size="sm">
+        <Select
+          value={selectedDocType}
+          onValueChange={handleDocTypeChange}
+          disabled={docTypeOptions.length === 0}
+        >
+          <SelectTrigger className="w-[200px]" size="sm" aria-label="Filter by document type">
             <SelectValue placeholder="All document types" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL_TYPES_VALUE}>All document types</SelectItem>
             {docTypeOptions.map((docType) => (
               <SelectItem key={docType} value={docType}>
-                {formatDocType(docType)}
+                {formatSnakeCase(docType)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -232,7 +250,7 @@ export const KnowledgeBase = () => {
           </div>
           <CardDescription>
             {total > 0
-              ? `${total} document${total > 1 ? "s" : ""}${docTypeFilter ? ` of type "${formatDocType(docTypeFilter)}"` : ""}`
+              ? `${total} document${total > 1 ? "s" : ""}${docTypeFilter ? ` of type "${formatSnakeCase(docTypeFilter)}"` : ""}`
               : "No documents found"}
           </CardDescription>
         </CardHeader>
@@ -243,11 +261,13 @@ export const KnowledgeBase = () => {
             <div className="p-8 text-center space-y-3">
               {/* SECURITY (VULN-706): Truncate error to prevent verbose info disclosure */}
               <p className="text-sm text-red-600 dark:text-red-400">
-                {truncateText(typeof docsError === "string" ? docsError : "An error occurred", 200)}
+                {truncateText(docsError ?? "An error occurred", 200)}
               </p>
               <button
                 type="button"
-                onClick={refetch}
+                onClick={() => {
+                  refetch();
+                }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -272,34 +292,40 @@ export const KnowledgeBase = () => {
             </Empty>
           ) : isMobile ? (
             <>
-              <div className="divide-y divide-zinc-100 dark:divide-zinc-800 p-3 space-y-3">
-                {items.map((doc) => (
-                  <MobileDataCard
-                    key={doc.id}
-                    title={truncateText(doc.title, 60)}
-                    subtitle={doc.repository ?? undefined}
-                    timestamp={doc.createdAt}
-                    badges={[
-                      {
-                        label: formatDocType(doc.docType),
-                        className:
-                          "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700",
-                      },
-                    ]}
-                    fields={[
-                      {
-                        label: "Preview",
-                        value: truncateText(doc.content, 80),
-                      },
-                    ]}
-                    onClick={
-                      doc.sourceUrl && isSafeUrl(doc.sourceUrl)
-                        ? () => window.open(doc.sourceUrl as string, "_blank", "noopener")
-                        : undefined
-                    }
-                  />
-                ))}
-              </div>
+              <ul
+                role="list"
+                aria-label="Knowledge base documents"
+                className="divide-y divide-zinc-100 dark:divide-zinc-800 p-3 space-y-3"
+              >
+                {items.map((doc) => {
+                  const safeUrl = doc.sourceUrl && isSafeUrl(doc.sourceUrl) ? doc.sourceUrl : null;
+                  return (
+                    <li key={doc.id}>
+                      <MobileDataCard
+                        title={truncateText(doc.title, 60)}
+                        subtitle={doc.repository ?? undefined}
+                        timestamp={doc.createdAt}
+                        badges={[
+                          {
+                            label: formatSnakeCase(doc.docType),
+                            className:
+                              "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700",
+                          },
+                        ]}
+                        fields={[
+                          {
+                            label: "Preview",
+                            value: truncateText(doc.content, 80),
+                          },
+                        ]}
+                        onClick={
+                          safeUrl ? () => window.open(safeUrl, "_blank", "noopener") : undefined
+                        }
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
               <PaginationControls
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -321,13 +347,13 @@ export const KnowledgeBase = () => {
                     created date
                   </TableCaption>
                   <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
-                    <tr>
+                    <TableRow>
                       <TableHead scope="col">Title</TableHead>
                       <TableHead scope="col">Type</TableHead>
                       <TableHead scope="col">Repository</TableHead>
                       <TableHead scope="col">Preview</TableHead>
                       <TableHead scope="col">Created</TableHead>
-                    </tr>
+                    </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.map((doc) => (

@@ -17,6 +17,7 @@ import {
   ValidationError,
   getEffectiveTenantId,
   rateLimitByCategory,
+  requirePermission,
   type KnowledgeDocType,
   ingestKnowledgeDoc,
   searchAll,
@@ -87,6 +88,139 @@ const validateContent = (fieldValue: unknown): boolean | string => {
   return typeof fieldValue === "string" && fieldValue.length <= INGEST_MAX_CONTENT_LENGTH
     ? true
     : `Content must not exceed ${INGEST_MAX_CONTENT_LENGTH} characters`;
+};
+
+/** SECURITY (VULN-H01): Validation for optional ingest fields */
+const OPTIONAL_URL_MAX_LENGTH = 2048;
+const OPTIONAL_STRING_MAX_LENGTH = 500;
+const INGEST_MAX_TITLE_LENGTH = 500;
+
+const validateOptionalUrl = (fieldValue: unknown): boolean | string => {
+  if (fieldValue === undefined || fieldValue === null || fieldValue === "") {
+    return true;
+  }
+  if (typeof fieldValue !== "string") {
+    return "Must be a string";
+  }
+  if (fieldValue.length > OPTIONAL_URL_MAX_LENGTH) {
+    return `URL must not exceed ${OPTIONAL_URL_MAX_LENGTH} characters`;
+  }
+  try {
+    const { protocol } = new URL(fieldValue);
+    return protocol === "https:" || protocol === "http:"
+      ? true
+      : "URL must use https or http protocol";
+  } catch {
+    return "Invalid URL format";
+  }
+};
+
+const validateOptionalString = (fieldValue: unknown): boolean | string => {
+  if (fieldValue === undefined || fieldValue === null || fieldValue === "") {
+    return true;
+  }
+  if (typeof fieldValue !== "string") {
+    return "Must be a string";
+  }
+  return fieldValue.length <= OPTIONAL_STRING_MAX_LENGTH
+    ? true
+    : `Must not exceed ${OPTIONAL_STRING_MAX_LENGTH} characters`;
+};
+
+const validateOptionalRepository = (fieldValue: unknown): boolean | string => {
+  const stringResult = validateOptionalString(fieldValue);
+  if (stringResult !== true) {
+    return stringResult;
+  }
+  if (typeof fieldValue === "string" && fieldValue.length > 0) {
+    if (fieldValue.includes("..") || fieldValue.includes("%")) {
+      return "Repository must not contain path traversal sequences";
+    }
+    if (!/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(fieldValue)) {
+      return "Repository must be in owner/repo format";
+    }
+  }
+  return true;
+};
+
+const validateOptionalFilePath = (fieldValue: unknown): boolean | string => {
+  const stringResult = validateOptionalString(fieldValue);
+  if (stringResult !== true) {
+    return stringResult;
+  }
+  if (typeof fieldValue === "string" && fieldValue.length > 0) {
+    if (fieldValue.includes("..")) {
+      return "File path must not contain path traversal sequences";
+    }
+  }
+  return true;
+};
+
+const validateTitle = (fieldValue: unknown): boolean | string => {
+  const stringResult = validateRequiredString(fieldValue);
+  if (stringResult !== true) {
+    return stringResult;
+  }
+  return typeof fieldValue === "string" && fieldValue.length <= INGEST_MAX_TITLE_LENGTH
+    ? true
+    : `Title must not exceed ${INGEST_MAX_TITLE_LENGTH} characters`;
+};
+
+/** SECURITY (VULN-M02): Metadata validation to prevent prototype pollution and DoS */
+const FORBIDDEN_METADATA_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+const METADATA_MAX_SIZE = 10_000;
+const METADATA_MAX_KEYS = 50;
+
+const validateMetadata = (fieldValue: unknown): boolean | string => {
+  if (fieldValue === undefined || fieldValue === null) {
+    return true;
+  }
+  if (typeof fieldValue !== "object" || Array.isArray(fieldValue)) {
+    return "Metadata must be a plain object";
+  }
+  const keys = Object.keys(fieldValue as Record<string, unknown>);
+  if (keys.length > METADATA_MAX_KEYS) {
+    return `Metadata must not exceed ${METADATA_MAX_KEYS} keys`;
+  }
+  if (keys.some((key) => FORBIDDEN_METADATA_KEYS.has(key))) {
+    return "Metadata contains forbidden keys";
+  }
+  try {
+    const serialized = JSON.stringify(fieldValue);
+    if (serialized.length > METADATA_MAX_SIZE) {
+      return `Metadata must not exceed ${METADATA_MAX_SIZE} characters when serialized`;
+    }
+  } catch {
+    return "Metadata must be JSON-serializable";
+  }
+  return true;
+};
+
+/** SECURITY (VULN-H03): Validators for sync route parameters */
+const validateOptionalPositiveInt =
+  (max: number) =>
+  (fieldValue: unknown): boolean | string => {
+    if (fieldValue === undefined || fieldValue === null) {
+      return true;
+    }
+    if (typeof fieldValue !== "number" || !Number.isInteger(fieldValue)) {
+      return "Must be an integer";
+    }
+    return fieldValue >= 1 && fieldValue <= max ? true : `Must be between 1 and ${max}`;
+  };
+
+const validateOptionalCredibility = (fieldValue: unknown): boolean | string => {
+  if (fieldValue === undefined || fieldValue === null) {
+    return true;
+  }
+  if (typeof fieldValue !== "number") {
+    return "Must be a number";
+  }
+  return fieldValue >= 0 && fieldValue <= 1 ? true : "Must be between 0 and 1";
 };
 
 // ==================== Pagination Config ====================
@@ -374,8 +508,12 @@ router.post(
   validate({
     body: {
       docType: validateDocType,
-      title: validateRequiredString,
+      title: validateTitle,
       content: validateContent,
+      sourceUrl: validateOptionalUrl,
+      repository: validateOptionalRepository,
+      filePath: validateOptionalFilePath,
+      metadata: validateMetadata,
     },
   }),
   asyncHandler(handleIngest)
@@ -404,6 +542,18 @@ router.get(
 );
 
 /** POST /api/rag/sync - Sync external sources */
-router.post(API_ROUTES.RAG_SYNC, rateLimitByCategory("expensive"), asyncHandler(handleSync));
+router.post(
+  API_ROUTES.RAG_SYNC,
+  requirePermission("settings"),
+  rateLimitByCategory("expensive"),
+  validate({
+    body: {
+      limit: validateOptionalPositiveInt(50),
+      maxDocsPerSource: validateOptionalPositiveInt(100),
+      minCredibility: validateOptionalCredibility,
+    },
+  }),
+  asyncHandler(handleSync)
+);
 
 export { router as ragCoreRoutes };

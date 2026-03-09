@@ -6,11 +6,6 @@
  * @module hooks/useKnowledgeBase
  */
 
-export type {
-  KnowledgeDocDTO,
-  KnowledgeDocListResponse,
-  KnowledgeBaseStats,
-  KnowledgeBaseTenantStats,
-} from "./types";
+export type { KnowledgeDocDTO, KnowledgeDocListResponse, KnowledgeBaseStats } from "./types";
 
 export { useKnowledgeBaseStats, useKnowledgeDocuments } from "./hooks";

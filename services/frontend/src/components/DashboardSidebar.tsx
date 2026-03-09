@@ -297,6 +297,23 @@ const usePrefetchRoute = (): ((href: string) => void) => {
           break;
         }
 
+        case "/dashboard/knowledge-base": {
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.knowledgeBase.stats(),
+            queryFn: () => fetchQuery("/api/rag/stats"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.knowledgeBase.documents({
+              limit: 20,
+              offset: 0,
+            }),
+            queryFn: () => fetchQuery("/api/rag/documents?limit=20&offset=0"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          break;
+        }
+
         default:
           break;
       }

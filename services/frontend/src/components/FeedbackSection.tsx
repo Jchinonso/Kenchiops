@@ -6,7 +6,7 @@
  * When marked "Not helpful", shows a correction textarea for resolution notes.
  */
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -42,14 +42,16 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
   const currentType = existingFeedback?.feedbackType ?? null;
   const isDisabled = isFetching || isSubmitting;
 
-  // When existing feedback has a correction, pre-fill it on first open
-  const [correctionPrefilled, setCorrectionPrefilled] = useState(false);
-  if (existingFeedback?.correction && !correctionPrefilled && !showCorrection) {
-    setCorrection(existingFeedback.correction);
-    setCorrectionPrefilled(true);
+  // When existing feedback changes, pre-fill the correction on first open
+  const [prevFeedbackId, setPrevFeedbackId] = useState<string | null>(null);
+  if (existingFeedback?.id !== prevFeedbackId) {
+    setPrevFeedbackId(existingFeedback?.id ?? null);
+    if (existingFeedback?.correction && !showCorrection) {
+      setCorrection(existingFeedback.correction);
+    }
   }
 
-  const handleHelpful = useCallback(async () => {
+  const handleHelpful = async () => {
     setShowCorrection(false);
     const result = await submitFeedback({ feedbackType: "correct" });
     if (result) {
@@ -60,9 +62,9 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
     } else {
       toast.error("Failed to submit feedback");
     }
-  }, [submitFeedback]);
+  };
 
-  const handleNotHelpful = useCallback(() => {
+  const handleNotHelpful = () => {
     if (currentType === "incorrect" && !showCorrection) {
       // Already marked incorrect, toggle correction textarea open to edit
       setShowCorrection(true);
@@ -70,9 +72,9 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
     }
     // Toggle the correction panel
     setShowCorrection((prev) => !prev);
-  }, [currentType, showCorrection]);
+  };
 
-  const handleSubmitCorrection = useCallback(async () => {
+  const handleSubmitCorrection = async () => {
     const submission: FeedbackSubmission = {
       feedbackType: "incorrect",
       ...(correction.trim().length > 0 ? { correction: correction.trim() } : {}),
@@ -84,11 +86,9 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
     } else {
       toast.error("Failed to submit feedback");
     }
-  }, [correction, submitFeedback]);
+  };
 
-  const handleCancelCorrection = useCallback(() => {
-    setShowCorrection(false);
-  }, []);
+  const handleCancelCorrection = () => setShowCorrection(false);
 
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 space-y-3">
@@ -97,16 +97,21 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
           Was this analysis helpful?
         </span>
         <div className="flex items-center gap-2">
-          {isSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
+          {isSubmitting && (
+            <Loader2
+              className="h-3.5 w-3.5 animate-spin text-zinc-400"
+              aria-label="Submitting feedback"
+            />
+          )}
 
-          {/* Phase 2: Simplified thumbs up/down. "flaky" and "needs_more_context"
-              types are supported by the API but will be exposed in a later phase. */}
+          {/* Simplified to thumbs up/down. Additional feedback types ("flaky",
+              "needs_more_context") are supported by the API and will be exposed
+              when the full feedback taxonomy UI is implemented. */}
           <button
             type="button"
             disabled={isDisabled}
-            onClick={() => {
-              handleHelpful();
-            }}
+            aria-pressed={currentType === "correct"}
+            onClick={handleHelpful}
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors disabled:opacity-50",
               currentType === "correct"
@@ -121,6 +126,7 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
           <button
             type="button"
             disabled={isDisabled}
+            aria-pressed={currentType === "incorrect"}
             onClick={handleNotHelpful}
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors disabled:opacity-50",
@@ -139,6 +145,7 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
         <div className="space-y-2 pt-1">
           <Textarea
             placeholder="What was incorrect about this analysis?"
+            aria-label="Describe what was incorrect about this analysis"
             value={correction}
             onChange={(event) =>
               setCorrection(event.target.value.slice(0, CORRECTION_CONFIG.MAX_LENGTH))
@@ -163,9 +170,7 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  handleSubmitCorrection();
-                }}
+                onClick={handleSubmitCorrection}
                 disabled={isSubmitting}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-md transition-colors disabled:opacity-50"
               >

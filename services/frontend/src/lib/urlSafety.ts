@@ -49,6 +49,14 @@ export const buildSafeGitHubUrl = (repoPath: string, suffix?: string): string | 
   if (!isSafeRepoPath(repoPath)) {
     return null;
   }
+  if (suffix !== undefined) {
+    if (suffix.includes("..") || suffix.includes("%")) {
+      return null;
+    }
+    if (!/^\/[a-zA-Z0-9/_.\-@]+$/.test(suffix)) {
+      return null;
+    }
+  }
   const base = `https://github.com/${repoPath}`;
   return suffix ? `${base}${suffix}` : base;
 };
