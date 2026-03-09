@@ -1010,6 +1010,9 @@ export interface Config {
   readonly STRIPE_WEBHOOK_SECRET?: string;
   /** Stripe publishable key for frontend (pk_xxx) */
   readonly STRIPE_PUBLISHABLE_KEY?: string;
+
+  // Deploy metadata
+  readonly DEPLOY_HASH?: string;
 }
 
 // ==================== Signed URL Types ====================
@@ -1135,6 +1138,7 @@ export interface ServiceHealth {
   readonly timestamp: string;
   readonly uptime: number;
   readonly environment: string;
+  readonly deployHash?: string;
   readonly components: readonly ComponentHealth[];
   readonly memory: MemoryHealth;
 }

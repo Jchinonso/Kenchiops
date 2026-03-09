@@ -87,13 +87,23 @@ fi
 
 # ==================== Summary ====================
 
-echo "[6/6] Setup complete!"
+echo "[6/6] Creating secrets directory..."
+mkdir -p /etc/kenchi
+chmod 0700 /etc/kenchi
+echo "  Created /etc/kenchi (mode 0700)"
+
+echo ""
+echo "=== Setup Complete ==="
 echo ""
 echo "=== Next Steps ==="
-echo "1. Clone the repo:  cd /opt/kenchi && git clone <repo-url> ."
-echo "2. Copy env template: cp deploy/.env.production.template .env"
-echo "3. Edit env vars:   nano .env  (fill in all secrets)"
-echo "4. First deploy:    docker compose -f docker-compose.prod.yml up --build -d"
+echo "1. Clone the repo:     cd /opt/kenchi && git clone <repo-url> ."
+echo "2. Create secrets file: cp deploy/.env.production.template /etc/kenchi/.env.production"
+echo "3. Edit secrets:        nano /etc/kenchi/.env.production  (fill in all values)"
+echo "4. Lock secrets:        chmod 0600 /etc/kenchi/.env.production && chattr +i /etc/kenchi/.env.production"
+echo "5. First deploy:        cd /opt/kenchi && bash deploy/server-deploy.sh"
+echo ""
+echo "IMPORTANT: Secrets live at /etc/kenchi/.env.production (NOT in /opt/kenchi/)."
+echo "To edit secrets later:  chattr -i /etc/kenchi/.env.production && nano /etc/kenchi/.env.production && chattr +i /etc/kenchi/.env.production"
 echo ""
 echo "Caddy runs inside Docker (auto HTTPS via Let's Encrypt)."
 echo "CI/CD will auto-deploy on push to main via GitHub Actions."

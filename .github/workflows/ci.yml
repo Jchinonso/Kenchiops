@@ -117,6 +117,9 @@ jobs:
       - name: Check build artifacts
         run: npm run check-build
 
+      - name: Validate production dependencies
+        run: npm run check:prod-deps
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         if: success()
@@ -209,9 +212,34 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: kenchi:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke test — verify services start without import errors
+        run: |
+          for SERVICE in api slack-bot github-app incident-triage; do
+            echo "Testing $SERVICE..."
+            # Run the service for 3 seconds and check for module-not-found errors
+            OUTPUT=$(docker run --rm -e SERVICE=$SERVICE -e NODE_ENV=test \
+              -e OPENAI_API_KEY=test -e GITHUB_APP_ID=test \
+              -e GITHUB_APP_PRIVATE_KEY=test -e GITHUB_INSTALLATION_ID=12345 \
+              -e GITHUB_WEBHOOK_SECRET=test -e SLACK_BOT_TOKEN=test \
+              -e SLACK_SIGNING_SECRET=test -e SLACK_APP_LEVEL_TOKEN=test \
+              -e DATABASE_URL=postgres://test:test@localhost:5432/test \
+              -e VECTOR_DB_URL=postgres://test:test@localhost:5432/test \
+              kenchi:${{ github.sha }} \
+              timeout 5 node services/$SERVICE/dist/index.js 2>&1 || true)
+
+            if echo "$OUTPUT" | grep -q "ERR_MODULE_NOT_FOUND\|Cannot find module\|Cannot find package"; then
+              echo "FAIL: $SERVICE has missing module imports:"
+              echo "$OUTPUT" | grep -E "ERR_MODULE_NOT_FOUND|Cannot find module|Cannot find package"
+              exit 1
+            fi
+            echo "  $SERVICE: OK (no missing modules)"
+          done
+          echo "All services passed smoke test!"
 
   # Summary job that other workflows can depend on
   ci-success:
@@ -254,7 +282,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ci-success]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment: production
     steps:
       - name: Checkout
@@ -269,52 +297,15 @@ jobs:
 
       - name: Deploy to VPS
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'DEPLOY_SCRIPT'
-            set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "cd /opt/kenchi && DEPLOY_SHA=${{ github.sha }} bash deploy/server-deploy.sh"
 
-            APP_DIR="/opt/kenchi"
-            cd "$APP_DIR"
-
-            echo "==> Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
-
-            # Use prod compose if available, otherwise default
-            COMPOSE_FILE="docker-compose.yml"
-            if [ -f "docker-compose.prod.yml" ]; then
-              COMPOSE_FILE="docker-compose.prod.yml"
-            fi
-            echo "==> Using compose file: $COMPOSE_FILE"
-
-            echo "==> Building and deploying containers..."
-            docker compose -f "$COMPOSE_FILE" up --build -d
-
-            echo "==> Running database migrations..."
-            for migration in database/init/*.sql; do
-              echo "  Applying: $(basename "$migration")"
-              docker compose -f "$COMPOSE_FILE" exec -T postgres \
-                psql -U kenchi -d kenchi -f "/docker-entrypoint-initdb.d/$(basename "$migration")" 2>&1 | \
-                grep -v "already exists" | grep -v "NOTICE" || true
-            done
-
-            echo "==> Waiting for services to start..."
-            sleep 10
-
-            echo "==> Health check..."
-            for i in 1 2 3 4 5; do
-              if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
-                echo "Health check passed!"
-                docker compose -f "$COMPOSE_FILE" ps
-                exit 0
-              fi
-              echo "Attempt $i/5 - waiting..."
-              sleep 5
-            done
-
-            echo "Health check failed after 5 attempts"
-            docker compose -f "$COMPOSE_FILE" logs --tail=50
-            exit 1
-          DEPLOY_SCRIPT
+      - name: Deploy failed — notify
+        if: failure()
+        run: |
+          echo "::error::Deploy failed for SHA ${{ github.sha }}. Auto-rollback may have been triggered on the VPS."
+          echo "Check VPS logs: ssh root@${{ secrets.VPS_HOST }} 'cat /opt/kenchi/.deploy-history | tail -5'"
 
       - name: Cleanup SSH key
         if: always()

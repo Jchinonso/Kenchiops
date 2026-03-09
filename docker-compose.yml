@@ -1,3 +1,11 @@
+# Development Docker Compose for Kenchi
+#
+# Uses .env in the repo root for secrets (dev values).
+# For production, use docker-compose.prod.yml which reads
+# from /etc/kenchi/.env.production on the VPS.
+#
+# Usage: docker compose up -d
+
 services:
   postgres:
     image: pgvector/pgvector:pg16

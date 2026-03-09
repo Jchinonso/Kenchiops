@@ -33,6 +33,7 @@
     "check-build": "tsx scripts/check-build.ts",
     "check:duplication": "tsx scripts/check-duplication.ts",
     "check:standards": "node scripts/check-standards.js",
+    "check:prod-deps": "tsx scripts/validate-prod-deps.ts",
     "prepare": "husky"
   },
   "lint-staged": {
