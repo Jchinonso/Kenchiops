@@ -4,6 +4,7 @@ build
 *.tsbuildinfo
 coverage
 .env
+.env.*
 .env.local
 .git
 .gitignore

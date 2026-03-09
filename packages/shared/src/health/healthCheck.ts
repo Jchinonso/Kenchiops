@@ -11,6 +11,7 @@ import { isDatabaseHealthy } from "../database/client/index.js";
 import { isRedisHealthy } from "../queue/redisClient.js";
 import { getCircuitStatus, SERVICE_KEYS } from "../http/circuitBreaker.js";
 import { createLogger } from "../core/logger.js";
+import { config } from "../core/config.js";
 import { getErrorMessage } from "../core/errors.js";
 import { HEALTH_STATUS, MEMORY_THRESHOLDS } from "../constants/index.js";
 import type {
@@ -260,6 +261,7 @@ export const performHealthCheck = async (
   const status = aggregateStatus(components);
 
   const totalLatency = Date.now() - startTime;
+  const deployHash = config.DEPLOY_HASH || undefined;
 
   logger.debug("Health check completed", {
     status,
@@ -274,6 +276,7 @@ export const performHealthCheck = async (
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: healthConfig.environment,
+    ...(deployHash ? { deployHash } : {}),
     components,
     memory: getMemoryHealth(),
   };

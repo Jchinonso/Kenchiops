@@ -234,4 +234,7 @@ export const config: Config = {
   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
+
+  // Deploy metadata
+  DEPLOY_HASH: process.env.DEPLOY_HASH,
 } as const;

@@ -6,6 +6,9 @@
 # - Production URLs for OAuth and frontend
 # - Memory limits to prevent OOM on 4GB VPS
 # - Caddy container for HTTPS termination
+# - Secrets read from /etc/kenchi/.env.production (NOT repo .env)
+# - Healthchecks use /ready (checks DB + Redis connectivity)
+# - Log rotation to prevent disk exhaustion
 #
 # Usage: docker compose -f docker-compose.prod.yml up --build -d
 
@@ -34,6 +37,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     deploy:
       resources:
@@ -51,6 +60,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     deploy:
       resources:
@@ -71,16 +86,23 @@ services:
       - REDIS_URL=redis://redis:6379
       - FRONTEND_URL=https://kenchiops.app
       - OAUTH_CALLBACK_BASE_URL=https://kenchiops.app
+      - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
     env_file:
-      - .env
+      - /etc/kenchi/.env.production
     dns:
       - 8.8.8.8
       - 8.8.4.4
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -105,16 +127,23 @@ services:
       - MULTI_TENANT_MODE=true
       - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
       - REDIS_URL=redis://redis:6379
+      - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
     env_file:
-      - .env
+      - /etc/kenchi/.env.production
     dns:
       - 8.8.8.8
       - 8.8.4.4
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -142,17 +171,24 @@ services:
       - API_URL=http://api:3000
       - SLACK_BOT_URL=http://slack-bot:3001
       - GITHUB_APP_URL=https://kenchiops.app
+      - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
     env_file:
-      - .env
+      - /etc/kenchi/.env.production
     dns:
       - 8.8.8.8
       - 8.8.4.4
       - 1.1.1.1
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -176,16 +212,23 @@ services:
       - PORT=3004
       - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
       - REDIS_URL=redis://redis:6379
+      - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
     env_file:
-      - .env
+      - /etc/kenchi/.env.production
     dns:
       - 8.8.8.8
       - 8.8.4.4
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -205,9 +248,20 @@ services:
         VITE_PUBLIC_URL: https://kenchiops.app
         VITE_GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-kenchi-devops}
     container_name: kenchi-frontend
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       api:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     deploy:
       resources:
@@ -224,6 +278,11 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     depends_on:
       - frontend

@@ -60,9 +60,9 @@ ENV NODE_ENV=production
 # Expose port (default 3000, can be overridden)
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+# Health check — uses /ready to verify DB + Redis connectivity
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:${PORT:-3000}/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start the service
 CMD ["sh", "-c", "cd services/${SERVICE} && node dist/index.js"]
