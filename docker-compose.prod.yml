@@ -249,7 +249,7 @@ services:
         VITE_GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-kenchi-devops}
     container_name: kenchi-frontend
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80/"]
       interval: 30s
       timeout: 5s
       retries: 3
