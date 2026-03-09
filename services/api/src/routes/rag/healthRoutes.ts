@@ -7,6 +7,7 @@
 import { Router, type Request, type Response } from "express";
 import {
   asyncHandler,
+  requireTenantId,
   HTTP_STATUS,
   createLogger,
   SERVICE_NAMES,
@@ -89,9 +90,10 @@ const handleMetricsSnapshot = async (_req: Request, res: Response): Promise<void
  */
 const handleEvaluationMetrics = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
+  const tenantId = requireTenantId(req);
   const windowMinutes = parseWindowMinutes(req.query.windowMinutes);
 
-  const metrics = await getRAGEvaluationMetrics(windowMinutes);
+  const metrics = await getRAGEvaluationMetrics(tenantId, windowMinutes);
 
   logger.info("RAG evaluation metrics retrieved", {
     windowMinutes,

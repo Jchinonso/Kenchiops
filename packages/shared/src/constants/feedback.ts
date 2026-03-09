@@ -83,11 +83,13 @@ export const FEEDBACK_QUERIES = {
     FROM analysis_feedback
     WHERE rag_relevance IS NOT NULL
       AND created_at >= NOW() - INTERVAL '1 minute' * $1
+      AND analysis_id IN (SELECT id FROM analyses WHERE tenant_id = $2)
   `,
 
   GET_RAG_FEEDBACK_BY_DOC: `
     SELECT * FROM analysis_feedback
     WHERE knowledge_doc_id = $1
+      AND analysis_id IN (SELECT id FROM analyses WHERE tenant_id = $3)
     ORDER BY created_at DESC
     LIMIT $2
   `,
@@ -99,10 +101,42 @@ export const FEEDBACK_QUERIES = {
     LIMIT 1
   `,
 
+  UPSERT_ANALYSIS_FEEDBACK: `
+    WITH existing AS (
+      SELECT af.id FROM analysis_feedback af
+      WHERE af.analysis_id = $2 AND af.user_id = $5
+        AND af.analysis_id IN (SELECT id FROM analyses WHERE tenant_id = $8)
+      LIMIT 1
+    ),
+    updated AS (
+      UPDATE analysis_feedback
+      SET feedback_type = $3, correction = $4
+      WHERE id = (SELECT id FROM existing)
+      RETURNING *, TRUE as was_updated
+    ),
+    inserted AS (
+      INSERT INTO analysis_feedback (id, analysis_id, feedback_type, correction, user_id, slack_channel, slack_message_ts)
+      SELECT $1, $2, $3, $4, $5, $6, $7
+      WHERE NOT EXISTS (SELECT 1 FROM existing)
+      RETURNING *, FALSE as was_updated
+    )
+    SELECT * FROM updated
+    UNION ALL
+    SELECT * FROM inserted
+  `,
+
   UPDATE_FEEDBACK_TYPE: `
     UPDATE analysis_feedback
-    SET feedback_type = $1, updated_at = NOW()
+    SET feedback_type = $1, correction = $4
     WHERE id = $2 AND analysis_id IN (SELECT id FROM analyses WHERE tenant_id = $3)
     RETURNING *
+  `,
+
+  CHECK_LESSON_EXISTS: `
+    SELECT 1 FROM knowledge_documents
+    WHERE doc_type = 'analysis_lesson'
+      AND source_url = $1
+      AND tenant_id = $2
+    LIMIT 1
   `,
 } as const;

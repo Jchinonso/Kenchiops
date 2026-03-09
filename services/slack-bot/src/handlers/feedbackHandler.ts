@@ -15,7 +15,7 @@ import {
   extractAnalysisContext,
   recordRAGFeedback,
   UI_EMOJI,
-  type FeedbackType,
+  type AnalysisFeedbackType,
   type RAGRelevance,
 } from "@kenchi/shared";
 import { getAnalysisContext, deleteAnalysisContext } from "../services/analysisContextStore.js";
@@ -54,7 +54,7 @@ const resolveTenantId = async (workspaceId: string): Promise<string> => {
  */
 const persistAnalysisFeedback = async (
   analysisId: string,
-  feedbackType: FeedbackType,
+  feedbackType: AnalysisFeedbackType,
   userId: string,
   tenantId: string
 ): Promise<boolean> => {

@@ -55,6 +55,8 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
         <div className="flex items-center gap-2">
           {isSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
 
+          {/* Phase 2: Simplified thumbs up/down. "flaky" and "needs_more_context"
+              types are supported by the API but will be exposed in a later phase. */}
           <button
             type="button"
             disabled={isDisabled}

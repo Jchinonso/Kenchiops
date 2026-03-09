@@ -489,7 +489,7 @@ describe("runRAGTestCase", () => {
 
 describe("getRAGEvaluationMetrics", () => {
   it("should return default metrics when no data available", async () => {
-    const metrics = await getRAGEvaluationMetrics();
+    const metrics = await getRAGEvaluationMetrics("test-tenant");
 
     expect(metrics.totalFeedback).toBe(0);
     expect(metrics.helpfulCount).toBe(0);
@@ -501,14 +501,14 @@ describe("getRAGEvaluationMetrics", () => {
   });
 
   it("should return recallAtK object with default values", async () => {
-    const metrics = await getRAGEvaluationMetrics();
+    const metrics = await getRAGEvaluationMetrics("test-tenant");
 
     expect(metrics.recallAtK).toEqual({ 1: 0, 3: 0, 5: 0 });
   });
 
   it("should include timestamp in metrics", async () => {
     const beforeTimestamp = new Date().toISOString();
-    const metrics = await getRAGEvaluationMetrics();
+    const metrics = await getRAGEvaluationMetrics("test-tenant");
     const afterTimestamp = new Date().toISOString();
 
     expect(metrics.timestamp).toBeDefined();
@@ -525,7 +525,7 @@ describe("getRAGEvaluationMetrics", () => {
 
   it("should use default 60 minutes when no parameter provided", async () => {
     // This tests the default parameter
-    const metrics = await getRAGEvaluationMetrics();
+    const metrics = await getRAGEvaluationMetrics("test-tenant");
     expect(metrics).toBeDefined();
   });
 });

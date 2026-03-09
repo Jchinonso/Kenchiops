@@ -17,7 +17,7 @@ import {
   UI_EMOJI,
   AppError,
   rateLimitByCategory,
-  type FeedbackType,
+  type AnalysisFeedbackType,
 } from "@kenchi/shared";
 
 const router = Router();
@@ -26,10 +26,10 @@ const feedbackLogger = createLogger("github-app");
 /**
  * Feedback type mapping from URL parameter to database type.
  */
-const FEEDBACK_TYPE_MAP: Record<string, FeedbackType> = {
+const FEEDBACK_TYPE_MAP: Readonly<Record<string, AnalysisFeedbackType>> = {
   correct: "correct",
   incorrect: "incorrect",
-} as const;
+};
 
 /**
  * Get the feedback signing secret from config.

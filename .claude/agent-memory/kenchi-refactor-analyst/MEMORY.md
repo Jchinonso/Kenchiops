@@ -181,3 +181,25 @@
 
 - `config.DB_POOL_SIZE` returns `undefined` when env var absent
 - Each service: `config.DB_POOL_SIZE ?? <service-specific-default>` -- correct pattern
+
+## RAG Phase 2 Feedback Loop Audit (2026-03-07, updated after fixes)
+
+### Files: feedbackRoutes.ts, feedbackLessonService.ts, hooks/useAnalysisFeedback/, FeedbackSection.tsx, AnalysisDetailContent.tsx, feedback types/constants, 2 test files
+
+**Previous issues now fixed:** Empty catch commented, GET handlers have logging, `checkRunId` named constant, `encodeURIComponent` added, `ANALYSIS_FEEDBACK_TYPES` constant added, `updated_at` removed, `...context` spread in logger calls.
+
+**Remaining HIGH (4):**
+
+1. `CreateAnalysisFeedbackInput.feedbackType` typed as broad `FeedbackType` instead of narrow `AnalysisFeedbackType` (types.ts:62)
+2. `encodeURIComponent(analysisId)` in hooks.ts:31 when `analysisId` can be null (guarded by `enabled` but closure still created)
+3. Duplicate `getAnalysisById` call -- route handler AND `tryIngestLesson` both query same analysis
+4. Missing `readonly` on return type properties of `createOrUpdateAnalysisFeedback` (repository.ts:323)
+
+**Remaining MEDIUM (4):**
+
+1. Frontend types duplicate `AnalysisFeedbackType` union inline instead of importing from `@kenchi/shared`
+2. Hardcoded feedback types in validation error message (feedbackRoutes.ts:57)
+3. Route handler calls repository directly -- no service layer for feedback CRUD
+4. FeedbackSection onClick handlers don't `void` the async call (fire-and-forget promise)
+
+**Quality Positives:** All types use `readonly`. TanStack Query hooks correct (enabled, invalidation, useMemo). No console.log, no any, no process.env, no .push(). Rate limiting on all endpoints. Barrel exports correct. Test files well-structured with factory functions. `req.context` now propagated in logs. feedbackLessonService properly separated.

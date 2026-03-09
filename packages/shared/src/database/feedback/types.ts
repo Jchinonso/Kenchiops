@@ -25,6 +25,22 @@ export type FeedbackType =
   | "qa_not_helpful";
 
 /**
+ * Subset of FeedbackType values allowed for direct analysis feedback (user-facing).
+ */
+export type AnalysisFeedbackType = "correct" | "incorrect" | "flaky" | "needs_more_context";
+
+/**
+ * Allowed analysis feedback type values as a readonly tuple.
+ * Use for runtime validation and Set construction.
+ */
+export const ANALYSIS_FEEDBACK_TYPES = [
+  "correct",
+  "incorrect",
+  "flaky",
+  "needs_more_context",
+] as const satisfies readonly AnalysisFeedbackType[];
+
+/**
  * Input for creating RAG feedback.
  */
 export interface CreateRAGFeedbackInput {
@@ -43,7 +59,7 @@ export interface CreateRAGFeedbackInput {
  */
 export interface CreateAnalysisFeedbackInput {
   readonly analysisId: string;
-  readonly feedbackType: FeedbackType;
+  readonly feedbackType: AnalysisFeedbackType;
   readonly userId: string;
   readonly tenantId: string;
   readonly correction?: string;
@@ -97,6 +113,13 @@ export interface RAGFeedbackMetrics {
 }
 
 // ==================== Database Row Types ====================
+
+/**
+ * Database row for feedback upsert (includes was_updated flag from CTE).
+ */
+export interface FeedbackUpsertRow extends FeedbackRow {
+  readonly was_updated: boolean;
+}
 
 /**
  * Database row for feedback.
