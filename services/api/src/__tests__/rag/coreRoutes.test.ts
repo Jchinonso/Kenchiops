@@ -71,6 +71,7 @@ jest.mock("@kenchi/shared", () => {
       req?.body?.tenantId ?? req?.query?.tenantId ?? "default",
     // VULN-509: rateLimitByCategory added to coreRoutes — mock as passthrough middleware
     rateLimitByCategory: jest.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+    requirePermission: jest.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
     ValidationError: actual.ValidationError,
   };
 });
