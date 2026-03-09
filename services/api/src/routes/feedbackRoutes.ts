@@ -17,13 +17,17 @@ import {
   HTTP_STATUS,
   createLogger,
   ValidationError,
+  NotFoundError,
   rateLimitByCategory,
   SERVICE_NAMES,
   FEEDBACK_DEFAULTS,
+  ANALYSIS_FEEDBACK_TYPES,
   createOrUpdateAnalysisFeedback,
   getFeedbackByAnalysis,
   getFeedbackByUserAndAnalysis,
-  type FeedbackType,
+  getAnalysisById,
+  type AnalysisFeedbackType,
+  type FeedbackRecord,
 } from "@kenchi/shared";
 import { tryIngestLesson } from "../services/feedbackLessonService.js";
 
@@ -32,12 +36,29 @@ const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Constants ====================
 
-const VALID_FEEDBACK_TYPES: ReadonlySet<string> = new Set([
-  "correct",
-  "incorrect",
-  "flaky",
-  "needs_more_context",
-]);
+const VALID_FEEDBACK_TYPES: ReadonlySet<string> = new Set(ANALYSIS_FEEDBACK_TYPES);
+
+/** Maximum length for route param analysisId to prevent log/storage inflation. */
+const MAX_ANALYSIS_ID_LENGTH = 100;
+
+// ==================== DTO Mapping ====================
+
+interface FeedbackDTO {
+  readonly id: string;
+  readonly feedbackType: string;
+  readonly correction: string | null;
+  readonly userId: string;
+  readonly createdAt: Date;
+}
+
+/** Maps internal FeedbackRecord to public DTO, stripping internal fields. */
+const mapFeedbackToDTO = (record: FeedbackRecord): FeedbackDTO => ({
+  id: record.id,
+  feedbackType: record.feedbackType,
+  correction: record.correction,
+  userId: record.userId,
+  createdAt: record.createdAt,
+});
 
 // ==================== Validators ====================
 
@@ -49,9 +70,13 @@ const validateFeedbackType = (value: unknown): boolean | string => {
   if (requiredResult !== true) {
     return requiredResult;
   }
+  const stringResult = validators.string(value);
+  if (stringResult !== true) {
+    return stringResult;
+  }
   return (
     VALID_FEEDBACK_TYPES.has(value as string) ||
-    "Must be one of: correct, incorrect, flaky, needs_more_context"
+    `Must be one of: ${ANALYSIS_FEEDBACK_TYPES.join(", ")}`
   );
 };
 
@@ -81,8 +106,8 @@ const handleSubmitFeedback = async (req: Request, res: Response): Promise<void> 
   const { analysisId } = req.params;
   const userId = req.user?.userId;
 
-  if (!analysisId) {
-    throw new ValidationError("Analysis ID is required", {
+  if (!analysisId || analysisId.length > MAX_ANALYSIS_ID_LENGTH) {
+    throw new ValidationError("Analysis ID is required and must not exceed 100 characters", {
       operation: "submitFeedback",
       metadata: { field: "analysisId" },
     });
@@ -96,9 +121,17 @@ const handleSubmitFeedback = async (req: Request, res: Response): Promise<void> 
   }
 
   const { feedbackType, correction } = req.body as {
-    readonly feedbackType: FeedbackType;
+    readonly feedbackType: AnalysisFeedbackType;
     readonly correction?: string;
   };
+
+  // Verify the analysis belongs to this tenant before writing feedback
+  const analysis = await getAnalysisById(analysisId, tenantId);
+  if (!analysis) {
+    throw new NotFoundError("Analysis not found", {
+      metadata: { analysisId },
+    });
+  }
 
   const { feedback, wasUpdated } = await createOrUpdateAnalysisFeedback({
     analysisId,
@@ -108,12 +141,11 @@ const handleSubmitFeedback = async (req: Request, res: Response): Promise<void> 
     correction,
   });
 
-  // Trigger lesson ingestion for "correct" feedback (fire-and-forget)
-  // let: conditionally set when feedbackType is "correct"
-  let lessonIngested = false;
-  if (feedbackType === "correct") {
-    lessonIngested = await tryIngestLesson(analysisId, tenantId, userId, req.context);
-  }
+  // Trigger lesson ingestion for "correct" feedback
+  const lessonIngested =
+    feedbackType === "correct"
+      ? await tryIngestLesson(analysis, tenantId, userId, req.context)
+      : false;
 
   logger.info("Analysis feedback submitted", {
     analysisId,
@@ -121,10 +153,11 @@ const handleSubmitFeedback = async (req: Request, res: Response): Promise<void> 
     wasUpdated,
     lessonIngested,
     durationMs: Date.now() - startTime,
+    ...req.context,
   });
 
   res.status(HTTP_STATUS.OK).json({
-    data: { feedback, wasUpdated, lessonIngested },
+    data: { feedback: mapFeedbackToDTO(feedback), wasUpdated, lessonIngested },
   });
 };
 
@@ -136,8 +169,8 @@ const handleGetMyFeedback = async (req: Request, res: Response): Promise<void> =
   const { analysisId } = req.params;
   const userId = req.user?.userId;
 
-  if (!analysisId) {
-    throw new ValidationError("Analysis ID is required", {
+  if (!analysisId || analysisId.length > MAX_ANALYSIS_ID_LENGTH) {
+    throw new ValidationError("Analysis ID is required and must not exceed 100 characters", {
       operation: "getMyFeedback",
       metadata: { field: "analysisId" },
     });
@@ -151,7 +184,14 @@ const handleGetMyFeedback = async (req: Request, res: Response): Promise<void> =
   }
 
   const feedback = await getFeedbackByUserAndAnalysis(analysisId, userId, tenantId);
-  res.status(HTTP_STATUS.OK).json({ data: feedback });
+
+  logger.info("User feedback retrieved", {
+    analysisId,
+    hasFeedback: feedback !== null,
+    ...req.context,
+  });
+
+  res.status(HTTP_STATUS.OK).json({ data: feedback ? mapFeedbackToDTO(feedback) : null });
 };
 
 /**
@@ -161,15 +201,18 @@ const handleGetAllFeedback = async (req: Request, res: Response): Promise<void> 
   const tenantId = requireTenantId(req);
   const { analysisId } = req.params;
 
-  if (!analysisId) {
-    throw new ValidationError("Analysis ID is required", {
+  if (!analysisId || analysisId.length > MAX_ANALYSIS_ID_LENGTH) {
+    throw new ValidationError("Analysis ID is required and must not exceed 100 characters", {
       operation: "getAllFeedback",
       metadata: { field: "analysisId" },
     });
   }
 
   const feedback = await getFeedbackByAnalysis(analysisId, tenantId);
-  res.status(HTTP_STATUS.OK).json({ data: feedback });
+
+  logger.info("All feedback retrieved", { analysisId, count: feedback.length, ...req.context });
+
+  res.status(HTTP_STATUS.OK).json({ data: feedback.map(mapFeedbackToDTO) });
 };
 
 // ==================== Route Definitions ====================

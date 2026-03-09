@@ -13,8 +13,10 @@
  * Parses a PostgreSQL vector string to number array.
  * Format: "[0.1,0.2,0.3,...]"
  */
-export const parseEmbeddingVector = (vectorString: string | null): readonly number[] | null => {
-  if (vectorString === null) {
+export const parseEmbeddingVector = (
+  vectorString: string | null | undefined
+): readonly number[] | null => {
+  if (vectorString === null || vectorString === undefined) {
     return null;
   }
 

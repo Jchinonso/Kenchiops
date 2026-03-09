@@ -28,7 +28,9 @@ export const useMyFeedback = (
   const query = useQuery({
     queryKey: queryKeys.dashboard.analyses.feedback(analysisId ?? ""),
     queryFn: () =>
-      fetchQuery<ExistingFeedback | null>(`/api/v1/analyses/${analysisId}/feedback/mine`),
+      fetchQuery<ExistingFeedback | null>(
+        `/api/v1/analyses/${encodeURIComponent(analysisId ?? "")}/feedback/mine`
+      ),
     enabled: analysisId !== null,
   });
 
@@ -56,10 +58,13 @@ export const useSubmitFeedback = (
 
   const mutation = useMutation({
     mutationFn: (input: FeedbackSubmission): Promise<FeedbackResponse> =>
-      fetchMutation<FeedbackResponse>(`/api/v1/analyses/${analysisId}/feedback`, {
-        method: "POST",
-        body: input,
-      }),
+      fetchMutation<FeedbackResponse>(
+        `/api/v1/analyses/${encodeURIComponent(analysisId)}/feedback`,
+        {
+          method: "POST",
+          body: input,
+        }
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.dashboard.analyses.feedback(analysisId),
@@ -72,6 +77,7 @@ export const useSubmitFeedback = (
       try {
         return await mutation.mutateAsync(input);
       } catch {
+        // Error surfaced to caller as null; toast handles user-facing message
         return null;
       }
     },

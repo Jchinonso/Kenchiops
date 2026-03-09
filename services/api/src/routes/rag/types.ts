@@ -122,6 +122,24 @@ export interface KnowledgeDocSearchResult {
   readonly similarity: number;
 }
 
+/** Response shape for a knowledge document in the listing endpoint */
+export interface KnowledgeDocListItemResponse {
+  readonly id: string;
+  readonly docType: string;
+  readonly title: string;
+  readonly content: string;
+  readonly repository: string | null;
+  readonly sourceUrl: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Response shape for knowledge documents listing */
+export interface KnowledgeDocListResponse {
+  readonly items: readonly KnowledgeDocListItemResponse[];
+  readonly total: number;
+}
+
 // ==================== Health Routes Types ====================
 
 /** Response shape for cleanup operation */

@@ -93,7 +93,7 @@ const tiers: readonly PricingTier[] = [
 const PricingCTA = ({ tier }: { readonly tier: PricingTier }) => {
   const className = tier.highlighted
     ? "block w-full text-center px-6 py-3 rounded-xl text-sm font-bold transition-all bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/20 hover:shadow-glow-amber"
-    : "block w-full text-center px-6 py-3 rounded-xl text-sm font-semibold transition-all bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700";
+    : "block w-full text-center px-6 py-3 rounded-xl text-sm font-semibold transition-all bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700";
 
   return (
     <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} transition={microSpring}>
@@ -111,7 +111,7 @@ const PricingCTA = ({ tier }: { readonly tier: PricingTier }) => {
 };
 
 const Pricing = () => (
-  <section id="pricing" aria-label="Pricing" className="py-24 bg-zinc-950">
+  <section id="pricing" aria-label="Pricing" className="py-24 bg-white dark:bg-zinc-950">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <motion.div
         className="text-center mb-16"
@@ -128,7 +128,7 @@ const Pricing = () => (
         </motion.span>
         <motion.h2
           variants={itemVariants}
-          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-900 dark:text-zinc-100 mb-5"
         >
           Simple, Transparent Pricing
         </motion.h2>
@@ -151,8 +151,8 @@ const Pricing = () => (
             whileHover={{ y: tier.highlighted ? -8 : -4, transition: microSpring }}
             className={`relative rounded-2xl p-8 transition-all duration-300 ${
               tier.highlighted
-                ? "bg-zinc-900/80 border-2 border-amber-500/40 shadow-glow-amber"
-                : "bg-zinc-900/50 border border-zinc-800/60 hover:border-zinc-700"
+                ? "bg-zinc-100/80 dark:bg-zinc-900/80 border-2 border-amber-500/40 shadow-glow-amber"
+                : "bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-zinc-300 dark:hover:border-zinc-700"
             }`}
           >
             {tier.highlighted && (
@@ -167,12 +167,14 @@ const Pricing = () => (
             )}
 
             <div className="mb-6">
-              <h3 className="text-lg font-display font-bold text-zinc-100 mb-2">{tier.name}</h3>
+              <h3 className="text-lg font-display font-bold text-zinc-900 dark:text-zinc-100 mb-2">
+                {tier.name}
+              </h3>
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-display font-extrabold text-zinc-100">
+                <span className="text-4xl font-display font-extrabold text-zinc-900 dark:text-zinc-100">
                   {tier.price}
                 </span>
-                <span className="text-sm text-zinc-600">/ {tier.period}</span>
+                <span className="text-sm text-zinc-400 dark:text-zinc-600">/ {tier.period}</span>
               </div>
               <p className="text-sm text-zinc-500 mt-3 leading-relaxed">{tier.description}</p>
             </div>
@@ -183,7 +185,7 @@ const Pricing = () => (
                   <div className="w-4 h-4 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
                     <Check className="w-2.5 h-2.5 text-amber-500" />
                   </div>
-                  <span className="text-sm text-zinc-400">{feature}</span>
+                  <span className="text-sm text-zinc-600 dark:text-zinc-400">{feature}</span>
                 </li>
               ))}
             </ul>

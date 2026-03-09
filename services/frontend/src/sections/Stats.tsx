@@ -40,7 +40,11 @@ const stats: readonly StatItem[] = [
 ];
 
 const Stats = () => (
-  <section id="stats" aria-label="Platform statistics" className="relative py-24 bg-zinc-950">
+  <section
+    id="stats"
+    aria-label="Platform statistics"
+    className="relative py-24 bg-white dark:bg-zinc-950"
+  >
     {/* Subtle horizontal line accents */}
     <div className="absolute inset-x-0 top-0 section-divider" />
     <div className="absolute inset-x-0 bottom-0 section-divider" />
@@ -62,7 +66,7 @@ const Stats = () => (
         </motion.span>
         <motion.h2
           variants={itemVariants}
-          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100"
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-900 dark:text-zinc-100"
         >
           How Kenchi Transforms Your CI/CD Workflow
         </motion.h2>
@@ -85,15 +89,19 @@ const Stats = () => (
           >
             <motion.div
               variants={scaleInVariants}
-              className="inline-flex items-center justify-center w-14 h-14 bg-zinc-900 border border-zinc-800 rounded-xl text-amber-500 mb-5 group-hover:border-amber-500/30 group-hover:shadow-glow-amber transition-all duration-300"
+              className="inline-flex items-center justify-center w-14 h-14 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-amber-500 mb-5 group-hover:border-amber-500/30 group-hover:shadow-glow-amber transition-all duration-300"
             >
               {stat.icon}
             </motion.div>
-            <div className="text-4xl sm:text-5xl font-display font-extrabold text-zinc-100 mb-2 tracking-tight">
+            <div className="text-4xl sm:text-5xl font-display font-extrabold text-zinc-900 dark:text-zinc-100 mb-2 tracking-tight">
               {stat.value}
             </div>
-            <div className="text-zinc-300 font-medium text-sm mb-1">{stat.label}</div>
-            {stat.sublabel && <div className="text-xs text-zinc-600">{stat.sublabel}</div>}
+            <div className="text-zinc-700 dark:text-zinc-300 font-medium text-sm mb-1">
+              {stat.label}
+            </div>
+            {stat.sublabel && (
+              <div className="text-xs text-zinc-400 dark:text-zinc-600">{stat.sublabel}</div>
+            )}
           </motion.div>
         ))}
       </motion.div>

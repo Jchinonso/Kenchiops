@@ -43,7 +43,11 @@ const comingSoon = [
 ] as const;
 
 const Integrations = () => (
-  <section id="integrations" aria-label="Integrations" className="py-24 bg-zinc-900/50">
+  <section
+    id="integrations"
+    aria-label="Integrations"
+    className="py-24 bg-zinc-100/50 dark:bg-zinc-900/50"
+  >
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <motion.div
         className="text-center mb-16"
@@ -60,7 +64,7 @@ const Integrations = () => (
         </motion.span>
         <motion.h2
           variants={itemVariants}
-          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-900 dark:text-zinc-100 mb-5"
         >
           Works Where You Work
         </motion.h2>
@@ -82,7 +86,7 @@ const Integrations = () => (
             key={integration.name}
             variants={itemVariants}
             whileHover={{ y: -4, scale: 1.02, transition: microSpring }}
-            className="relative flex flex-col items-center gap-4 p-8 bg-zinc-900/60 border border-zinc-800/60 rounded-2xl hover:border-amber-500/20 transition-all duration-300 group"
+            className="relative flex flex-col items-center gap-4 p-8 bg-white/60 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl hover:border-amber-500/20 transition-all duration-300 group"
           >
             {"badge" in integration && (
               <span className="absolute -top-2.5 right-4 text-[10px] font-mono font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
@@ -94,7 +98,9 @@ const Integrations = () => (
             >
               {integration.icon}
             </div>
-            <span className="text-lg font-display font-bold text-zinc-100">{integration.name}</span>
+            <span className="text-lg font-display font-bold text-zinc-900 dark:text-zinc-100">
+              {integration.name}
+            </span>
             <span className="text-sm text-zinc-500 text-center leading-relaxed">
               {integration.description}
             </span>
@@ -112,7 +118,7 @@ const Integrations = () => (
       >
         <motion.div
           variants={itemVariants}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900/80 border border-zinc-800 rounded-full mb-6"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-full mb-6"
         >
           <Clock className="w-4 h-4 text-zinc-500" />
           <span className="text-sm font-medium text-zinc-500">Coming Soon</span>
@@ -130,7 +136,7 @@ const Integrations = () => (
                 stiffness: 200,
                 damping: 25,
               }}
-              className="px-4 py-2 bg-zinc-900/40 border border-zinc-800/40 rounded-lg text-sm font-medium text-zinc-600"
+              className="px-4 py-2 bg-zinc-100/40 dark:bg-zinc-900/40 border border-zinc-200/40 dark:border-zinc-800/40 rounded-lg text-sm font-medium text-zinc-400 dark:text-zinc-600"
             >
               {item.name}
             </motion.span>

@@ -28,6 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { CommandPalette } from "@/components/CommandPalette";
 import { DashboardFooter } from "@/components/DashboardFooter";
+import { KnowledgeBase } from "@/pages/KnowledgeBase";
 import { formatRelativeTime } from "@/lib/formatters";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -48,6 +49,7 @@ const STATIC_ROUTES: Readonly<Record<string, React.ReactNode>> = {
   "/dashboard/integrations": <Integrations />,
   "/dashboard/settings/plan": <PlanSelection />,
   "/dashboard/settings": <Settings />,
+  "/dashboard/knowledge-base": <KnowledgeBase />,
 };
 
 const Dashboard = () => {

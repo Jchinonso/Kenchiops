@@ -28,6 +28,8 @@ import type {
   CreateKnowledgeDocInput,
   KnowledgeDocRow,
   KnowledgeDocSimilarityRow,
+  KnowledgeDocListOptions,
+  KnowledgeDocListResult,
 } from "./types.js";
 import {
   mapRowToKnowledgeDoc,
@@ -437,6 +439,96 @@ export const getKnowledgeDocCountsByType = async (): Promise<Record<KnowledgeDoc
     return counts as Record<KnowledgeDocType, number>;
   } catch (error) {
     logger.error("Failed to get knowledge doc counts by type", {
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Gets count of knowledge documents by document type, scoped to a specific tenant.
+ *
+ * @param tenantId - Tenant ID to scope the query
+ * @returns Record of document type to count for that tenant
+ * @throws Error if database operation fails
+ */
+export const getKnowledgeDocCountsByTypeForTenant = async (
+  tenantId: string
+): Promise<Record<KnowledgeDocType, number>> => {
+  validateNonEmptyString(tenantId, "tenantId");
+
+  try {
+    const result = await query<{ doc_type: string; count: string }>(
+      KNOWLEDGE_DOC_QUERIES.COUNT_BY_DOC_TYPE_FOR_TENANT,
+      [tenantId]
+    );
+
+    const counts = result.rows.reduce<Record<string, number>>(
+      (accumulator, row) => ({
+        ...accumulator,
+        [row.doc_type]: parseInt(row.count, PARSE_INT_RADIX),
+      }),
+      {}
+    );
+
+    return counts as Record<KnowledgeDocType, number>;
+  } catch (error) {
+    logger.error("Failed to get knowledge doc counts by type for tenant", {
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Gets knowledge documents for a tenant with optional doc type filter and pagination.
+ *
+ * @param tenantId - Tenant ID to scope the query
+ * @param options - Pagination and filter options
+ * @returns Paginated list of knowledge documents and total count
+ * @throws Error if database operation fails
+ */
+export const getKnowledgeDocsByTenant = async (
+  tenantId: string,
+  options: KnowledgeDocListOptions
+): Promise<KnowledgeDocListResult> => {
+  validateNonEmptyString(tenantId, "tenantId");
+
+  try {
+    const { docType, limit, offset } = options;
+
+    const [docsResult, countResult] = await Promise.all([
+      docType
+        ? query<KnowledgeDocRow>(KNOWLEDGE_DOC_QUERIES.GET_BY_TENANT_AND_DOC_TYPE, [
+            tenantId,
+            docType,
+            limit,
+            offset,
+          ])
+        : query<KnowledgeDocRow>(KNOWLEDGE_DOC_QUERIES.GET_BY_TENANT, [tenantId, limit, offset]),
+      docType
+        ? query<{ count: string }>(KNOWLEDGE_DOC_QUERIES.COUNT_BY_TENANT_AND_DOC_TYPE, [
+            tenantId,
+            docType,
+          ])
+        : query<{ count: string }>(KNOWLEDGE_DOC_QUERIES.COUNT_BY_TENANT, [tenantId]),
+    ]);
+
+    const items = Object.freeze(docsResult.rows.map(mapRowToKnowledgeDoc));
+    const total = parseInt(countResult.rows[0]?.count ?? "0", PARSE_INT_RADIX);
+
+    logger.debug("Fetched knowledge docs for tenant", {
+      tenantId,
+      docType,
+      resultCount: items.length,
+      total,
+    });
+
+    return { items, total };
+  } catch (error) {
+    logger.error("Failed to get knowledge docs by tenant", {
+      tenantId,
       error: getErrorMessage(error),
     });
     throw error;

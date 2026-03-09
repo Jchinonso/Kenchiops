@@ -162,9 +162,19 @@ export interface ApiErrorResponse {
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
+const SAFE_ERROR_METADATA_KEYS: ReadonlySet<string> = new Set([
+  "code",
+  "reason",
+  "limit",
+  "currentUsage",
+  "planId",
+  "feature",
+]);
+
 /**
  * Parse a structured error from an API response, preserving code and metadata.
  * Uses response.clone() so the caller can still read the original response.
+ * Metadata keys are filtered to an allowlist to prevent leaking internal details.
  */
 export const parseStructuredError = async (
   response: Response
@@ -172,7 +182,22 @@ export const parseStructuredError = async (
   try {
     const body: unknown = await response.clone().json();
     const parsed = body as { readonly error?: ApiErrorResponse } | null;
-    return parsed?.error ?? null;
+    if (!parsed?.error) {
+      return null;
+    }
+    const rawMetadata = parsed.error.metadata;
+    const filteredMetadata = rawMetadata
+      ? Object.fromEntries(
+          Object.entries(rawMetadata).filter(([key]) => SAFE_ERROR_METADATA_KEYS.has(key))
+        )
+      : undefined;
+    return {
+      code: parsed.error.code,
+      message: sanitizeErrorMessage(parsed.error.message),
+      ...(filteredMetadata && Object.keys(filteredMetadata).length > 0
+        ? { metadata: filteredMetadata }
+        : {}),
+    };
   } catch {
     return null;
   }

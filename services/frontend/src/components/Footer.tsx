@@ -23,7 +23,7 @@ const Footer = () => (
   <footer
     role="contentinfo"
     aria-label="Site footer"
-    className="bg-zinc-950 text-zinc-400 border-t border-zinc-800/40"
+    className="bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-t border-zinc-200/40 dark:border-zinc-800/40"
   >
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -45,7 +45,9 @@ const Footer = () => (
                 />
               </svg>
             </div>
-            <span className="text-xl font-display font-bold text-zinc-100">Kenchi</span>
+            <span className="text-xl font-display font-bold text-zinc-900 dark:text-zinc-100">
+              Kenchi
+            </span>
           </div>
           <p className="text-sm text-zinc-500 mb-6 leading-relaxed">
             AI-powered CI/CD failure analysis for engineering teams.
@@ -56,7 +58,7 @@ const Footer = () => (
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Kenchi on GitHub"
-              className="text-zinc-600 hover:text-amber-500 transition-colors"
+              className="text-zinc-400 dark:text-zinc-600 hover:text-amber-500 transition-colors"
             >
               <Github className="w-5 h-5" aria-hidden="true" />
             </a>
@@ -65,7 +67,7 @@ const Footer = () => (
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Kenchi on X (Twitter)"
-              className="text-zinc-600 hover:text-amber-500 transition-colors"
+              className="text-zinc-400 dark:text-zinc-600 hover:text-amber-500 transition-colors"
             >
               <Twitter className="w-5 h-5" aria-hidden="true" />
             </a>
@@ -74,7 +76,7 @@ const Footer = () => (
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Kenchi on LinkedIn"
-              className="text-zinc-600 hover:text-amber-500 transition-colors"
+              className="text-zinc-400 dark:text-zinc-600 hover:text-amber-500 transition-colors"
             >
               <Linkedin className="w-5 h-5" aria-hidden="true" />
             </a>
@@ -88,7 +90,7 @@ const Footer = () => (
         >
           {Object.entries(footerLinks).map(([category, links]) => (
             <div key={category}>
-              <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-widest mb-4 font-display">
+              <h3 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-widest mb-4 font-display">
                 {category}
               </h3>
               <ul className="space-y-3">
@@ -118,18 +120,20 @@ const Footer = () => (
       </div>
 
       {/* Bottom Bar */}
-      <div className="mt-16 pt-8 border-t border-zinc-800/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p className="text-sm text-zinc-600">Copyright &copy; 2026 Kenchi. All rights reserved.</p>
+      <div className="mt-16 pt-8 border-t border-zinc-200/40 dark:border-zinc-800/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p className="text-sm text-zinc-400 dark:text-zinc-600">
+          Copyright &copy; 2026 Kenchi. All rights reserved.
+        </p>
         <div className="flex items-center gap-6">
           <Link
             to="/privacy"
-            className="text-sm text-zinc-600 hover:text-amber-400 transition-colors"
+            className="text-sm text-zinc-400 dark:text-zinc-600 hover:text-amber-400 transition-colors"
           >
             Privacy Policy
           </Link>
           <Link
             to="/terms"
-            className="text-sm text-zinc-600 hover:text-amber-400 transition-colors"
+            className="text-sm text-zinc-400 dark:text-zinc-600 hover:text-amber-400 transition-colors"
           >
             Terms of Service
           </Link>

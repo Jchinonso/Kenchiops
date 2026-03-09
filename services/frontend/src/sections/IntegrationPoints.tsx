@@ -34,7 +34,11 @@ const points = [
 ] as const;
 
 const IntegrationPoints = () => (
-  <section id="how-it-works" aria-label="How Kenchi works" className="py-24 bg-zinc-900/50">
+  <section
+    id="how-it-works"
+    aria-label="How Kenchi works"
+    className="py-24 bg-zinc-100/50 dark:bg-zinc-900/50"
+  >
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <motion.div
         className="text-center mb-16"
@@ -51,7 +55,7 @@ const IntegrationPoints = () => (
         </motion.span>
         <motion.h2
           variants={itemVariants}
-          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-900 dark:text-zinc-100 mb-5"
         >
           From Failure to Fix in Minutes
         </motion.h2>
@@ -71,7 +75,7 @@ const IntegrationPoints = () => (
           <motion.div
             key={point.number}
             variants={itemVariants}
-            className="relative bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-8 hover:border-amber-500/20 transition-all duration-300 group"
+            className="relative bg-white/60 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-8 hover:border-amber-500/20 transition-all duration-300 group"
           >
             {/* Number */}
             <motion.div
@@ -82,12 +86,14 @@ const IntegrationPoints = () => (
             </motion.div>
 
             {/* Icon */}
-            <div className="w-14 h-14 bg-zinc-800/60 border border-zinc-700/40 rounded-xl flex items-center justify-center text-zinc-400 mb-6 group-hover:text-amber-400 group-hover:border-amber-500/30 transition-all duration-300">
+            <div className="w-14 h-14 bg-zinc-200/60 dark:bg-zinc-800/60 border border-zinc-300/40 dark:border-zinc-700/40 rounded-xl flex items-center justify-center text-zinc-600 dark:text-zinc-400 mb-6 group-hover:text-amber-400 group-hover:border-amber-500/30 transition-all duration-300">
               {point.icon}
             </div>
 
             {/* Content */}
-            <h3 className="text-lg font-display font-bold text-zinc-100 mb-3">{point.title}</h3>
+            <h3 className="text-lg font-display font-bold text-zinc-900 dark:text-zinc-100 mb-3">
+              {point.title}
+            </h3>
             <p className="text-zinc-500 text-sm leading-relaxed">{point.description}</p>
           </motion.div>
         ))}

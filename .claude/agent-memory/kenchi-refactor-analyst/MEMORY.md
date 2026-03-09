@@ -181,3 +181,46 @@
 
 - `config.DB_POOL_SIZE` returns `undefined` when env var absent
 - Each service: `config.DB_POOL_SIZE ?? <service-specific-default>` -- correct pattern
+
+## RAG Phase 2 Feedback Loop Audit (2026-03-07, updated after fixes)
+
+### Files: feedbackRoutes.ts, feedbackLessonService.ts, hooks/useAnalysisFeedback/, FeedbackSection.tsx, AnalysisDetailContent.tsx, feedback types/constants, 2 test files
+
+**Remaining HIGH (4):**
+
+1. `CreateAnalysisFeedbackInput.feedbackType` typed as broad `FeedbackType` instead of narrow `AnalysisFeedbackType`
+2. `encodeURIComponent(analysisId)` in hooks.ts:31 when `analysisId` can be null
+3. Duplicate `getAnalysisById` call -- route handler AND `tryIngestLesson`
+4. Missing `readonly` on return type properties of `createOrUpdateAnalysisFeedback`
+
+**Remaining MEDIUM (4):**
+
+1. Frontend types duplicate `AnalysisFeedbackType` union inline
+2. Hardcoded feedback types in validation error message
+3. Route handler calls repository directly -- no service layer
+4. FeedbackSection onClick handlers don't `void` the async call
+
+## RAG Phase 2 Knowledge Base Audit (2026-03-09)
+
+### Files: coreRoutes.ts (new handler), knowledgeDoc/repository.ts (new functions), KnowledgeBase.tsx, hooks/useKnowledgeBase/, DashboardSidebar.tsx, Dashboard/index.tsx, rag/types.ts, queryKeys.ts
+
+**HIGH (3):**
+
+1. `...context` missing from ALL logger calls in coreRoutes.ts (3 log statements)
+2. `getKnowledgeDocCountsByType()` has NO tenant_id filter -- tenant isolation leak in stats endpoint
+3. `.push()` array mutation in `createKnowledgeDocsBatch` (repository.ts:136)
+
+**MEDIUM (8):**
+
+1. Inconsistent `{ success, data }` envelope on all 5 RAG route responses (should be `{ data }`)
+2. `validateRequiredString` still duplicated 6x across route files
+3. `docType as KnowledgeDocType` cast instead of using type guard narrowing
+4. `doc.sourceUrl as string` type assertion in KnowledgeBase.tsx:295
+5. `metadata` field typed as mutable `Record<string, unknown>` (needs `Readonly<>`)
+6. `handleStats` issues redundant query alongside `getTenantRAGStats`
+7. `.sort()` mutating method in StatsHeader component (use `.toSorted()`)
+8. FeedbackSection render-time setState pattern fragile
+
+**Quality Positives:** All types in types.ts, readonly on all interfaces, parameterized SQL, proper DTO mapping at boundary, TanStack Query hooks correct, mobile responsive, good empty/error states, proper barrel exports.
+
+**Quality Positives:** All types use `readonly`. TanStack Query hooks correct (enabled, invalidation, useMemo). No console.log, no any, no process.env, no .push(). Rate limiting on all endpoints. Barrel exports correct. Test files well-structured with factory functions. `req.context` now propagated in logs. feedbackLessonService properly separated.

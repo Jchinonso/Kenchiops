@@ -70,6 +70,12 @@ export const titleCase = (text: string): string =>
 export const truncateText = (text: string, maxLength: number): string =>
   text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 
+export const formatSnakeCase = (text: string): string =>
+  text
+    .split("_")
+    .map((word) => titleCase(word))
+    .join(" ");
+
 export const extractRepoFromKey = (
   key: string | null,
   fullAnalysis?: Readonly<Record<string, unknown>>

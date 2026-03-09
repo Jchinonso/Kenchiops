@@ -24,6 +24,7 @@ import type {
   FeedbackRecord,
   RAGFeedbackMetrics,
   FeedbackRow,
+  FeedbackUpsertRow,
   MetricsRow,
 } from "./types.js";
 import {
@@ -168,13 +169,16 @@ export const getFeedbackByAnalysis = async (
  * @throws Error if database operation fails
  */
 export const getRAGFeedbackMetrics = async (
+  tenantId: string,
   windowMinutes: number = FEEDBACK_DEFAULTS.DEFAULT_METRICS_WINDOW_MINUTES
 ): Promise<RAGFeedbackMetrics> => {
+  validateNonEmptyString(tenantId, "tenantId");
   validateMinimumNumber(windowMinutes, "windowMinutes", FEEDBACK_DEFAULTS.MIN_WINDOW_MINUTES);
 
   try {
     const result = await query<MetricsRow>(FEEDBACK_QUERIES.GET_RAG_FEEDBACK_METRICS, [
       windowMinutes,
+      tenantId,
     ]);
 
     const row = result.rows[0];
@@ -215,15 +219,18 @@ export const getRAGFeedbackMetrics = async (
  */
 export const getRAGFeedbackByDoc = async (
   knowledgeDocId: string,
+  tenantId: string,
   limit: number = FEEDBACK_DEFAULTS.DEFAULT_QUERY_LIMIT
 ): Promise<readonly FeedbackRecord[]> => {
   validateNonEmptyString(knowledgeDocId, "knowledgeDocId");
+  validateNonEmptyString(tenantId, "tenantId");
   validateMinimumNumber(limit, "limit", FEEDBACK_DEFAULTS.MIN_QUERY_LIMIT);
 
   try {
     const result = await query<FeedbackRow>(FEEDBACK_QUERIES.GET_RAG_FEEDBACK_BY_DOC, [
       knowledgeDocId,
       limit,
+      tenantId,
     ]);
     return Object.freeze(result.rows.map(mapRowToFeedback));
   } catch (error) {
@@ -273,11 +280,13 @@ export const getFeedbackByUserAndAnalysis = async (
 };
 
 /**
- * Updates the feedback type for an existing feedback record.
+ * Updates the feedback type and correction for an existing feedback record.
  * Used when a user changes their vote.
  *
  * @param feedbackId - Feedback record ID
  * @param feedbackType - New feedback type
+ * @param tenantId - Tenant ID for authorization
+ * @param correction - Updated correction text (null clears previous correction)
  * @returns Updated feedback record
  * @throws ValidationError if feedbackId is empty
  * @throws Error if database operation fails
@@ -285,7 +294,8 @@ export const getFeedbackByUserAndAnalysis = async (
 export const updateFeedbackType = async (
   feedbackId: string,
   feedbackType: FeedbackType,
-  tenantId: string
+  tenantId: string,
+  correction: string | null = null
 ): Promise<FeedbackRecord> => {
   validateNonEmptyString(feedbackId, "feedbackId");
   validateNonEmptyString(tenantId, "tenantId");
@@ -295,6 +305,7 @@ export const updateFeedbackType = async (
       feedbackType,
       feedbackId,
       tenantId,
+      correction,
     ]);
 
     logger.info("Updated feedback type", { feedbackId, feedbackType });
@@ -310,8 +321,9 @@ export const updateFeedbackType = async (
 };
 
 /**
- * Creates or updates analysis feedback with deduplication.
- * If user already voted, updates their vote instead of creating duplicate.
+ * Creates or updates analysis feedback atomically with deduplication.
+ * Uses a CTE-based upsert to prevent TOCTOU race conditions under
+ * concurrent requests for the same user/analysis.
  *
  * @param input - Analysis feedback data
  * @returns Object with feedback record and whether it was updated vs created
@@ -320,37 +332,64 @@ export const updateFeedbackType = async (
  */
 export const createOrUpdateAnalysisFeedback = async (
   input: CreateAnalysisFeedbackInput
-): Promise<{ feedback: FeedbackRecord; wasUpdated: boolean }> => {
+): Promise<{ readonly feedback: FeedbackRecord; readonly wasUpdated: boolean }> => {
   validateAnalysisFeedbackInput(input);
 
+  const id = generateEventId();
+
   try {
-    const existingFeedback = await getFeedbackByUserAndAnalysis(
+    const result = await query<FeedbackUpsertRow>(FEEDBACK_QUERIES.UPSERT_ANALYSIS_FEEDBACK, [
+      id,
       input.analysisId,
+      input.feedbackType,
+      input.correction ?? null,
       input.userId,
-      input.tenantId
-    );
+      input.slackChannel ?? null,
+      input.slackMessageTs ?? null,
+      input.tenantId,
+    ]);
 
-    if (existingFeedback !== null) {
-      const updatedFeedback = await updateFeedbackType(
-        existingFeedback.id,
-        input.feedbackType,
-        input.tenantId
-      );
-      logger.info("Updated existing feedback", {
-        feedbackId: existingFeedback.id,
-        analysisId: input.analysisId,
-        oldType: existingFeedback.feedbackType,
-        newType: input.feedbackType,
-      });
-      return { feedback: updatedFeedback, wasUpdated: true };
-    }
+    const row = result.rows[0];
+    const wasUpdated = row.was_updated;
 
-    const newFeedback = await createAnalysisFeedback(input);
-    return { feedback: newFeedback, wasUpdated: false };
+    logger.info(wasUpdated ? "Updated existing feedback" : "Created new feedback", {
+      feedbackId: row.id,
+      analysisId: input.analysisId,
+      feedbackType: input.feedbackType,
+    });
+
+    return { feedback: mapRowToFeedback(row), wasUpdated };
   } catch (error) {
     logger.error("Failed to create or update analysis feedback", {
       analysisId: input.analysisId,
       userId: input.userId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * Checks if a lesson has already been ingested for a given sourceUrl and tenant.
+ * Used for idempotency — prevents duplicate lessons from feedback toggling.
+ *
+ * @param sourceUrl - The source URL of the lesson (commit URL)
+ * @param tenantId - Tenant ID
+ * @returns True if a lesson already exists
+ */
+export const checkLessonExists = async (sourceUrl: string, tenantId: string): Promise<boolean> => {
+  validateNonEmptyString(sourceUrl, "sourceUrl");
+  validateNonEmptyString(tenantId, "tenantId");
+
+  try {
+    const result = await query<{ readonly "?column?": number }>(
+      FEEDBACK_QUERIES.CHECK_LESSON_EXISTS,
+      [sourceUrl, tenantId]
+    );
+    return result.rows.length > 0;
+  } catch (error) {
+    logger.error("Failed to check lesson existence", {
+      sourceUrl,
       error: getErrorMessage(error),
     });
     throw error;
@@ -446,7 +485,7 @@ export const createQAFeedback = async (input: CreateQAFeedbackInput): Promise<Fe
  */
 export const createOrUpdateQAFeedback = async (
   input: CreateQAFeedbackInput
-): Promise<{ feedback: FeedbackRecord; wasUpdated: boolean }> => {
+): Promise<{ readonly feedback: FeedbackRecord; readonly wasUpdated: boolean }> => {
   validateQAFeedbackInput(input);
 
   try {

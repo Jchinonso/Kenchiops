@@ -202,12 +202,13 @@ export const runRAGTestCase = async (
  * @returns Aggregated metrics
  */
 export const getRAGEvaluationMetrics = async (
+  tenantId: string,
   windowMinutes: number = 60
 ): Promise<RAGEvaluationMetrics> => {
-  logger.info("Calculating RAG evaluation metrics", { windowMinutes });
+  logger.info("Calculating RAG evaluation metrics", { tenantId, windowMinutes });
 
   try {
-    const dbMetrics = await dbGetRAGFeedbackMetrics(windowMinutes);
+    const dbMetrics = await dbGetRAGFeedbackMetrics(tenantId, windowMinutes);
 
     return {
       totalFeedback: dbMetrics.totalFeedback,

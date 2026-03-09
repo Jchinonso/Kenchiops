@@ -42,7 +42,11 @@ const teams = [
 ] as const;
 
 const BuiltForTeams = () => (
-  <section id="teams" aria-label="Built for engineering teams" className="py-24 bg-zinc-900/50">
+  <section
+    id="teams"
+    aria-label="Built for engineering teams"
+    className="py-24 bg-zinc-100/50 dark:bg-zinc-900/50"
+  >
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <motion.div
         className="text-center mb-16"
@@ -59,7 +63,7 @@ const BuiltForTeams = () => (
         </motion.span>
         <motion.h2
           variants={itemVariants}
-          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-900 dark:text-zinc-100 mb-5"
         >
           Built for Every Engineering Team
         </motion.h2>
@@ -81,12 +85,14 @@ const BuiltForTeams = () => (
             key={team.title}
             variants={itemVariants}
             whileHover={{ y: -4, transition: microSpring }}
-            className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-8 hover:border-amber-500/20 transition-all duration-300 group"
+            className="bg-white/60 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-8 hover:border-amber-500/20 transition-all duration-300 group"
           >
-            <div className="w-14 h-14 bg-zinc-800/60 border border-zinc-700/40 rounded-xl flex items-center justify-center text-zinc-400 mb-6 group-hover:text-amber-400 group-hover:border-amber-500/30 transition-all duration-300">
+            <div className="w-14 h-14 bg-zinc-200/60 dark:bg-zinc-800/60 border border-zinc-300/40 dark:border-zinc-700/40 rounded-xl flex items-center justify-center text-zinc-600 dark:text-zinc-400 mb-6 group-hover:text-amber-400 group-hover:border-amber-500/30 transition-all duration-300">
               {team.icon}
             </div>
-            <h3 className="text-lg font-display font-bold text-zinc-100 mb-3">{team.title}</h3>
+            <h3 className="text-lg font-display font-bold text-zinc-900 dark:text-zinc-100 mb-3">
+              {team.title}
+            </h3>
             <p className="text-zinc-500 text-sm leading-relaxed">{team.description}</p>
           </motion.div>
         ))}

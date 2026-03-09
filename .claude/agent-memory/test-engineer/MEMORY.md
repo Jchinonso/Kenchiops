@@ -71,12 +71,17 @@
 ### Frontend Mock Patterns
 
 - Mock Radix UI Select: `vi.mock("@/components/ui/select", () => ({ Select: ..., SelectTrigger: ..., ... }))` renders native elements
-- Mock `sonner` toast: `vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))`
+- Mock `sonner` toast: `vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))` -- inline fns, no top-level refs
+- Mock `lucide-react`: use `vi.mock("lucide-react", async () => { const React = await import("react"); return {...} })` with `React.createElement`
+- Mock hooks: `vi.mock("@/hooks/useMyHook", () => ({ useMyHook: vi.fn() }))` then `vi.mocked(useMyHook)` after import
 - Mock `globalThis.fetch` for apiClient tests
 - Mock `navigator.clipboard`: use `Object.defineProperty(navigator, "clipboard", { value: ..., writable: true, configurable: true })`
 - Mock DOM for CSV download: mock `document.createElement`, `URL.createObjectURL`, etc.
 - `userEvent.type` + `vi.useFakeTimers` causes hangs -- use `fireEvent.change` for debounce tests
 - Multiple elements with same text in mocked Select -- use `getAllByText(...).length >= 1`
+- **CRITICAL**: vi.mock factory cannot reference top-level `const` variables (hoisting). Use inline values or `async () => import("react")`
+- **CRITICAL**: Must run `npm run pretest` before Vitest to copy hoisted packages to local node_modules
+- Tailwind class assertions: inactive buttons have `hover:text-green-700` -- use `bg-green-50` (active-only) not `text-green-700` as discriminator
 
 ### Frontend Test Coverage (2026-02-17)
 

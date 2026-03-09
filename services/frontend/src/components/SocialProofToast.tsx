@@ -95,16 +95,17 @@ export const SocialProofToast = () => {
       aria-atomic="true"
       className={cn(
         "fixed bottom-6 left-6 z-40 max-w-xs",
-        "bg-zinc-900 rounded-xl shadow-2xl",
-        "border border-zinc-800",
+        "bg-white dark:bg-zinc-900 rounded-xl shadow-lg dark:shadow-2xl",
+        "border border-zinc-200 dark:border-zinc-800",
         "px-4 py-3 flex items-start gap-3",
         "transition-all duration-500",
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
       )}
     >
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-zinc-400">
-          <span className="font-semibold text-zinc-200">{message.company}</span> {message.action}
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{message.company}</span>{" "}
+          {message.action}
           {message.time && (
             <>
               {" "}
@@ -116,7 +117,7 @@ export const SocialProofToast = () => {
       <button
         onClick={handleDismiss}
         aria-label="Dismiss notification"
-        className="flex-shrink-0 p-0.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+        className="flex-shrink-0 p-0.5 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors rounded"
       >
         <X className="w-3.5 h-3.5" aria-hidden="true" />
       </button>

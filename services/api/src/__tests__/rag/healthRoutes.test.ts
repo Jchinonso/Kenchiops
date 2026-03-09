@@ -11,6 +11,7 @@ const mockCheckRAGHealth = jest.fn();
 const mockGetRAGMetricsSnapshot = jest.fn();
 const mockGetRAGEvaluationMetrics = jest.fn();
 const mockCleanupExpired = jest.fn();
+const mockRequireTenantId = jest.fn().mockReturnValue("test-tenant");
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -38,6 +39,7 @@ jest.mock("@kenchi/shared", () => ({
   getRAGMetricsSnapshot: mockGetRAGMetricsSnapshot,
   getRAGEvaluationMetrics: mockGetRAGEvaluationMetrics,
   cleanupExpired: mockCleanupExpired,
+  requireTenantId: mockRequireTenantId,
   asyncHandler:
     (fn: (req: unknown, res: unknown, next: unknown) => Promise<unknown>) =>
     async (req: unknown, res: unknown, next: unknown) => {
@@ -212,13 +214,13 @@ describe("RAG Health Routes", () => {
     it("should use default window when not specified", async () => {
       await request(app).get("/evaluation");
 
-      expect(mockGetRAGEvaluationMetrics).toHaveBeenCalledWith(60);
+      expect(mockGetRAGEvaluationMetrics).toHaveBeenCalledWith("test-tenant", 60);
     });
 
     it("should respect custom window parameter", async () => {
       await request(app).get("/evaluation?windowMinutes=120");
 
-      expect(mockGetRAGEvaluationMetrics).toHaveBeenCalledWith(120);
+      expect(mockGetRAGEvaluationMetrics).toHaveBeenCalledWith("test-tenant", 120);
     });
 
     it("should include latency percentiles", async () => {

@@ -11,8 +11,8 @@
 import {
   createLogger,
   getErrorMessage,
-  getAnalysisById,
   ingestAnalysisLesson,
+  checkLessonExists,
   SERVICE_NAMES,
   type AnalyzedFailure,
   type CodeAnnotation,
@@ -23,6 +23,9 @@ import {
 } from "@kenchi/shared";
 
 const logger = createLogger(SERVICE_NAMES.API);
+
+/** Synthetic check run ID for feedback-ingested lessons (no real check run). */
+const SYNTHETIC_CHECK_RUN_ID = 0;
 
 // ==================== Helpers ====================
 
@@ -99,7 +102,7 @@ const extractRecommendedActions = (
 const buildSyntheticFailure = (analysis: AnalysisRecord): AnalyzedFailure => {
   const { fullAnalysis } = analysis;
   return {
-    checkRunId: 0,
+    checkRunId: SYNTHETIC_CHECK_RUN_ID,
     checkName: typeof fullAnalysis.checkName === "string" ? fullAnalysis.checkName : "CI Check",
     conclusion: "failure",
     confidence: analysis.diagnosisConfidence,
@@ -116,30 +119,36 @@ const buildSyntheticFailure = (analysis: AnalysisRecord): AnalyzedFailure => {
 // ==================== Public API ====================
 
 /**
- * Attempts lesson ingestion for a helpful analysis (fire-and-forget).
+ * Attempts lesson ingestion for a helpful analysis.
  * Returns true if ingestion succeeded, false otherwise. Never throws.
  */
 export const tryIngestLesson = async (
-  analysisId: string,
+  analysis: AnalysisRecord,
   tenantId: string,
   userId: string,
   context: RequestContext
 ): Promise<boolean> => {
   try {
-    const analysis = await getAnalysisById(analysisId, tenantId);
-    if (!analysis) {
-      logger.warn("Analysis not found for lesson ingestion", { ...context, analysisId });
-      return false;
-    }
-
     const parsed = parseAggregationKey(analysis.aggregationKey);
     if (!parsed) {
       logger.warn("Cannot ingest lesson: missing or invalid aggregationKey", {
-        analysisId,
+        analysisId: analysis.id,
         aggregationKey: analysis.aggregationKey,
         ...context,
       });
       return false;
+    }
+
+    // Idempotency: skip if a lesson for this commit already exists
+    const sourceUrl = `https://github.com/${parsed.repository}/commit/${parsed.commitSha}`;
+    const alreadyIngested = await checkLessonExists(sourceUrl, tenantId);
+    if (alreadyIngested) {
+      logger.info("Lesson already exists for this analysis, skipping", {
+        analysisId: analysis.id,
+        sourceUrl,
+        ...context,
+      });
+      return true;
     }
 
     const syntheticFailure = buildSyntheticFailure(analysis);
@@ -155,7 +164,7 @@ export const tryIngestLesson = async (
     const result = await ingestAnalysisLesson(lessonContext);
 
     logger.info("Analysis lesson ingested from feedback", {
-      analysisId,
+      analysisId: analysis.id,
       repository: parsed.repository,
       lessonsCreated: result.lessonsCreated,
       success: result.success,
@@ -165,7 +174,7 @@ export const tryIngestLesson = async (
     return result.success;
   } catch (error) {
     logger.warn("Lesson ingestion failed (non-blocking)", {
-      analysisId,
+      analysisId: analysis.id,
       error: getErrorMessage(error),
       ...context,
     });

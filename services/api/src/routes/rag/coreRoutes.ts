@@ -17,15 +17,18 @@ import {
   ValidationError,
   getEffectiveTenantId,
   rateLimitByCategory,
+  requirePermission,
   type KnowledgeDocType,
   ingestKnowledgeDoc,
   searchAll,
   syncDueSources,
-  getKnowledgeDocCountsByType,
+  getKnowledgeDocCountsByTypeForTenant,
+  getKnowledgeDocsByTenant,
   getTenantRAGStats,
   type IngestKnowledgeDocInput,
   type SyncAllResult,
   type RAGTenantStats,
+  type KnowledgeDocRecord,
 } from "@kenchi/shared";
 import type {
   IngestRequestBody,
@@ -33,6 +36,7 @@ import type {
   SyncRequestBody,
   DiffChunkResponse,
   KnowledgeDocResponse,
+  KnowledgeDocListItemResponse,
   TenantStatsResponse,
   IngestResponse,
   SearchResponse,
@@ -72,6 +76,164 @@ const validateRequiredString = (fieldValue: unknown): boolean | string => {
   return validators.string(fieldValue);
 };
 
+/** SECURITY (VULN-707): Maximum content length for ingestion to prevent DoS and cost abuse */
+const INGEST_MAX_CONTENT_LENGTH = 100_000;
+
+/** Validation rule: required string with max length for content */
+const validateContent = (fieldValue: unknown): boolean | string => {
+  const stringResult = validateRequiredString(fieldValue);
+  if (stringResult !== true) {
+    return stringResult;
+  }
+  return typeof fieldValue === "string" && fieldValue.length <= INGEST_MAX_CONTENT_LENGTH
+    ? true
+    : `Content must not exceed ${INGEST_MAX_CONTENT_LENGTH} characters`;
+};
+
+/** SECURITY (VULN-H01): Validation for optional ingest fields */
+const OPTIONAL_URL_MAX_LENGTH = 2048;
+const OPTIONAL_STRING_MAX_LENGTH = 500;
+const INGEST_MAX_TITLE_LENGTH = 500;
+
+const validateOptionalUrl = (fieldValue: unknown): boolean | string => {
+  if (fieldValue === undefined || fieldValue === null || fieldValue === "") {
+    return true;
+  }
+  if (typeof fieldValue !== "string") {
+    return "Must be a string";
+  }
+  if (fieldValue.length > OPTIONAL_URL_MAX_LENGTH) {
+    return `URL must not exceed ${OPTIONAL_URL_MAX_LENGTH} characters`;
+  }
+  try {
+    const { protocol } = new URL(fieldValue);
+    return protocol === "https:" || protocol === "http:"
+      ? true
+      : "URL must use https or http protocol";
+  } catch {
+    return "Invalid URL format";
+  }
+};
+
+const validateOptionalString = (fieldValue: unknown): boolean | string => {
+  if (fieldValue === undefined || fieldValue === null || fieldValue === "") {
+    return true;
+  }
+  if (typeof fieldValue !== "string") {
+    return "Must be a string";
+  }
+  return fieldValue.length <= OPTIONAL_STRING_MAX_LENGTH
+    ? true
+    : `Must not exceed ${OPTIONAL_STRING_MAX_LENGTH} characters`;
+};
+
+const validateOptionalRepository = (fieldValue: unknown): boolean | string => {
+  const stringResult = validateOptionalString(fieldValue);
+  if (stringResult !== true) {
+    return stringResult;
+  }
+  if (typeof fieldValue === "string" && fieldValue.length > 0) {
+    if (fieldValue.includes("..") || fieldValue.includes("%")) {
+      return "Repository must not contain path traversal sequences";
+    }
+    if (!/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(fieldValue)) {
+      return "Repository must be in owner/repo format";
+    }
+  }
+  return true;
+};
+
+const validateOptionalFilePath = (fieldValue: unknown): boolean | string => {
+  const stringResult = validateOptionalString(fieldValue);
+  if (stringResult !== true) {
+    return stringResult;
+  }
+  if (typeof fieldValue === "string" && fieldValue.length > 0) {
+    if (fieldValue.includes("..")) {
+      return "File path must not contain path traversal sequences";
+    }
+  }
+  return true;
+};
+
+const validateTitle = (fieldValue: unknown): boolean | string => {
+  const stringResult = validateRequiredString(fieldValue);
+  if (stringResult !== true) {
+    return stringResult;
+  }
+  return typeof fieldValue === "string" && fieldValue.length <= INGEST_MAX_TITLE_LENGTH
+    ? true
+    : `Title must not exceed ${INGEST_MAX_TITLE_LENGTH} characters`;
+};
+
+/** SECURITY (VULN-M02): Metadata validation to prevent prototype pollution and DoS */
+const FORBIDDEN_METADATA_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+const METADATA_MAX_SIZE = 10_000;
+const METADATA_MAX_KEYS = 50;
+
+const validateMetadata = (fieldValue: unknown): boolean | string => {
+  if (fieldValue === undefined || fieldValue === null) {
+    return true;
+  }
+  if (typeof fieldValue !== "object" || Array.isArray(fieldValue)) {
+    return "Metadata must be a plain object";
+  }
+  const keys = Object.keys(fieldValue as Record<string, unknown>);
+  if (keys.length > METADATA_MAX_KEYS) {
+    return `Metadata must not exceed ${METADATA_MAX_KEYS} keys`;
+  }
+  if (keys.some((key) => FORBIDDEN_METADATA_KEYS.has(key))) {
+    return "Metadata contains forbidden keys";
+  }
+  try {
+    const serialized = JSON.stringify(fieldValue);
+    if (serialized.length > METADATA_MAX_SIZE) {
+      return `Metadata must not exceed ${METADATA_MAX_SIZE} characters when serialized`;
+    }
+  } catch {
+    return "Metadata must be JSON-serializable";
+  }
+  return true;
+};
+
+/** SECURITY (VULN-H03): Validators for sync route parameters */
+const validateOptionalPositiveInt =
+  (max: number) =>
+  (fieldValue: unknown): boolean | string => {
+    if (fieldValue === undefined || fieldValue === null) {
+      return true;
+    }
+    if (typeof fieldValue !== "number" || !Number.isInteger(fieldValue)) {
+      return "Must be an integer";
+    }
+    return fieldValue >= 1 && fieldValue <= max ? true : `Must be between 1 and ${max}`;
+  };
+
+const validateOptionalCredibility = (fieldValue: unknown): boolean | string => {
+  if (fieldValue === undefined || fieldValue === null) {
+    return true;
+  }
+  if (typeof fieldValue !== "number") {
+    return "Must be a number";
+  }
+  return fieldValue >= 0 && fieldValue <= 1 ? true : "Must be between 0 and 1";
+};
+
+// ==================== Pagination Config ====================
+
+const DOCUMENTS_PAGINATION = {
+  DEFAULT_LIMIT: 50,
+  MAX_LIMIT: 100,
+  DEFAULT_OFFSET: 0,
+  /** SECURITY (VULN-702): Cap offset to prevent sequential scan DoS */
+  MAX_OFFSET: 10_000,
+  CONTENT_PREVIEW_LENGTH: 200,
+} as const;
+
 // ==================== Response Mappers ====================
 
 /** Maps a diff chunk search result to response format */
@@ -92,6 +254,21 @@ const mapKnowledgeDocToResponse = (
   title: searchResult.item.title,
   content: searchResult.item.content,
   similarity: searchResult.similarity,
+});
+
+/** Maps a knowledge doc record to a list item response DTO */
+const mapDocToListItem = (doc: KnowledgeDocRecord): KnowledgeDocListItemResponse => ({
+  id: doc.id,
+  docType: doc.docType,
+  title: doc.title,
+  content:
+    doc.content.length > DOCUMENTS_PAGINATION.CONTENT_PREVIEW_LENGTH
+      ? `${doc.content.slice(0, DOCUMENTS_PAGINATION.CONTENT_PREVIEW_LENGTH)}...`
+      : doc.content,
+  repository: doc.repository,
+  sourceUrl: doc.sourceUrl,
+  createdAt: doc.createdAt.toISOString(),
+  updatedAt: doc.updatedAt.toISOString(),
 });
 
 /** Maps tenant RAG stats to response format */
@@ -231,18 +408,68 @@ const handleSearch = async (req: Request, res: Response): Promise<void> => {
 
 /**
  * Handles RAG statistics requests.
+ * SECURITY (VULN-701): Uses tenant-scoped doc counts, not global counts,
+ * to prevent cross-tenant information disclosure.
  */
 const handleStats = async (req: Request, res: Response): Promise<void> => {
   const { tenantId } = req.context;
 
   const [docCounts, tenantStats] = await Promise.all([
-    getKnowledgeDocCountsByType(),
+    getKnowledgeDocCountsByTypeForTenant(tenantId),
     getTenantRAGStats(tenantId),
   ]);
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
     data: buildStatsResponse(docCounts, tenantStats),
+  });
+};
+
+/**
+ * Handles knowledge document listing requests.
+ * Scoped to the authenticated tenant.
+ */
+const handleListDocuments = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = getEffectiveTenantId(req);
+  if (!tenantId) {
+    throw new ValidationError("tenantId is required");
+  }
+
+  const docType = typeof req.query.docType === "string" ? req.query.docType : undefined;
+  if (docType !== undefined && !isValidDocType(docType)) {
+    throw new ValidationError("Invalid document type filter");
+  }
+
+  const rawLimit =
+    typeof req.query.limit === "string"
+      ? parseInt(req.query.limit, 10)
+      : DOCUMENTS_PAGINATION.DEFAULT_LIMIT;
+  const rawOffset =
+    typeof req.query.offset === "string"
+      ? parseInt(req.query.offset, 10)
+      : DOCUMENTS_PAGINATION.DEFAULT_OFFSET;
+
+  const limit = Math.min(
+    Math.max(1, Number.isNaN(rawLimit) ? DOCUMENTS_PAGINATION.DEFAULT_LIMIT : rawLimit),
+    DOCUMENTS_PAGINATION.MAX_LIMIT
+  );
+  const offset = Math.min(
+    Math.max(0, Number.isNaN(rawOffset) ? DOCUMENTS_PAGINATION.DEFAULT_OFFSET : rawOffset),
+    DOCUMENTS_PAGINATION.MAX_OFFSET
+  );
+
+  const result = await getKnowledgeDocsByTenant(tenantId, {
+    docType: docType as KnowledgeDocType | undefined,
+    limit,
+    offset,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: {
+      items: result.items.map(mapDocToListItem),
+      total: result.total,
+    },
   });
 };
 
@@ -281,8 +508,12 @@ router.post(
   validate({
     body: {
       docType: validateDocType,
-      title: validateRequiredString,
-      content: validateRequiredString,
+      title: validateTitle,
+      content: validateContent,
+      sourceUrl: validateOptionalUrl,
+      repository: validateOptionalRepository,
+      filePath: validateOptionalFilePath,
+      metadata: validateMetadata,
     },
   }),
   asyncHandler(handleIngest)
@@ -303,7 +534,26 @@ router.post(
 /** GET /api/rag/stats - Get RAG statistics */
 router.get(API_ROUTES.RAG_STATS, rateLimitByCategory("readonly"), asyncHandler(handleStats));
 
+/** GET /api/rag/documents - List knowledge documents for the authenticated tenant */
+router.get(
+  API_ROUTES.RAG_DOCUMENTS,
+  rateLimitByCategory("readonly"),
+  asyncHandler(handleListDocuments)
+);
+
 /** POST /api/rag/sync - Sync external sources */
-router.post(API_ROUTES.RAG_SYNC, rateLimitByCategory("expensive"), asyncHandler(handleSync));
+router.post(
+  API_ROUTES.RAG_SYNC,
+  requirePermission("settings"),
+  rateLimitByCategory("expensive"),
+  validate({
+    body: {
+      limit: validateOptionalPositiveInt(50),
+      maxDocsPerSource: validateOptionalPositiveInt(100),
+      minCredibility: validateOptionalCredibility,
+    },
+  }),
+  asyncHandler(handleSync)
+);
 
 export { router as ragCoreRoutes };

@@ -226,13 +226,20 @@ export const convertAggregatedToEvidence = (
 
   const testFailureCount = artifactCounts[ARTIFACT_TYPES.TEST_FAILURE] ?? 0;
 
-  // Convert artifacts to log entries
+  // Convert artifacts to log entries.
+  // Number test failures sequentially (e.g., "TEST_FAILURE #1 of 14") so the
+  // final LLM can't miss any when populating the test_failures array.
+  // let: counter incremented per test_failure artifact
+  let testFailureIndex = 0; // let: sequential counter for test_failure numbering
   const logs: LogEntry[] = aggregated.artifacts.map((artifact, index) => {
-    // Use structured format for test_failure artifacts
-    const message =
-      artifact.type === ARTIFACT_TYPES.TEST_FAILURE
-        ? formatTestFailureMessage(artifact)
-        : `[${artifact.type}] ${artifact.errorMessage}\n\nSnippet:\n${artifact.snippet}`;
+    // Use structured format for test_failure artifacts with explicit numbering
+    const isTestFailure = artifact.type === ARTIFACT_TYPES.TEST_FAILURE;
+    if (isTestFailure) {
+      testFailureIndex += 1;
+    }
+    const message = isTestFailure
+      ? `TEST_FAILURE #${testFailureIndex} of ${testFailureCount}:\n${formatTestFailureMessage(artifact)}`
+      : `[${artifact.type}] ${artifact.errorMessage}\n\nSnippet:\n${artifact.snippet}`;
 
     return {
       id: `artifact_${index}`,

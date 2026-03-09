@@ -23,6 +23,8 @@ export const API_ROUTES = {
   RAG_SEARCH: "/api/rag/search",
   /** RAG statistics endpoint */
   RAG_STATS: "/api/rag/stats",
+  /** RAG knowledge documents listing endpoint */
+  RAG_DOCUMENTS: "/api/rag/documents",
   /** RAG external source sync endpoint */
   RAG_SYNC: "/api/rag/sync",
   /** RAG tenant data purge endpoint (Express format) */

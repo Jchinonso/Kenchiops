@@ -9,17 +9,22 @@
 // Types
 export type {
   FeedbackType,
+  AnalysisFeedbackType,
   CreateRAGFeedbackInput,
   CreateAnalysisFeedbackInput,
   CreateQAFeedbackInput,
   FeedbackRecord,
   RAGFeedbackMetrics,
   FeedbackRow,
+  FeedbackUpsertRow,
   MetricsRow,
   RAGFeedbackValidationRule,
   AnalysisFeedbackValidationRule,
   QAFeedbackValidationRule,
 } from "./types.js";
+
+// Constants
+export { ANALYSIS_FEEDBACK_TYPES } from "./types.js";
 
 // Helpers (includes validation and mappers)
 export {
@@ -42,6 +47,7 @@ export {
   getFeedbackByUserAndAnalysis,
   updateFeedbackType,
   createOrUpdateAnalysisFeedback,
+  checkLessonExists,
   getQAFeedbackByQueryAndUser,
   createQAFeedback,
   createOrUpdateQAFeedback,

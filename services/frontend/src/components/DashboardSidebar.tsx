@@ -35,6 +35,7 @@ import {
   ShieldAlert,
   ArrowUpCircle,
   BarChart3,
+  BookOpen,
   Puzzle,
   Settings,
   ChevronRight,
@@ -173,6 +174,11 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     comingSoon: true,
   },
   {
+    icon: <BookOpen className="w-5 h-5" />,
+    label: "Knowledge Base",
+    href: "/dashboard/knowledge-base",
+  },
+  {
     icon: <Puzzle className="w-5 h-5" />,
     label: "Integrations",
     href: "/dashboard/integrations",
@@ -286,6 +292,23 @@ const usePrefetchRoute = (): ((href: string) => void) => {
               offset: 0,
             }),
             queryFn: () => fetchQuery("/api/v1/investigations?limit=20&offset=0"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          break;
+        }
+
+        case "/dashboard/knowledge-base": {
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.knowledgeBase.stats(),
+            queryFn: () => fetchQuery("/api/rag/stats"),
+            staleTime: PREFETCH_STALE_TIME,
+          });
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.knowledgeBase.documents({
+              limit: 20,
+              offset: 0,
+            }),
+            queryFn: () => fetchQuery("/api/rag/documents?limit=20&offset=0"),
             staleTime: PREFETCH_STALE_TIME,
           });
           break;

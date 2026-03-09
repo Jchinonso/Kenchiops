@@ -240,6 +240,13 @@ export const apiClient = async (
   return httpRequest(`${API_URL}${path}`, retryInit);
 };
 
+const VALID_LOGIN_PROVIDERS: ReadonlySet<string> = new Set([
+  "github",
+  "gitlab",
+  "bitbucket",
+  "azure-devops",
+]);
+
 /**
  * Build the full login URL for an OAuth provider.
  *
@@ -250,6 +257,9 @@ export const apiClient = async (
  * as the base so the browser navigates through the nginx proxy.
  */
 export const getLoginUrl = (provider: string, instanceUrl?: string): string => {
+  if (!VALID_LOGIN_PROVIDERS.has(provider)) {
+    throw new Error(`Unknown login provider: ${provider}`);
+  }
   const base = API_URL || window.location.origin;
   const url = new URL(`${base}/auth/${provider}/login`);
 
