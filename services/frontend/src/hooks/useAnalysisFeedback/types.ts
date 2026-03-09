@@ -1,4 +1,5 @@
-import type { AnalysisFeedbackType } from "@kenchi/shared";
+// Mirrors AnalysisFeedbackType from @kenchi/shared (frontend builds standalone in Docker)
+type AnalysisFeedbackType = "correct" | "incorrect" | "flaky" | "needs_more_context";
 
 // ==================== Request/Response Types ====================
 
