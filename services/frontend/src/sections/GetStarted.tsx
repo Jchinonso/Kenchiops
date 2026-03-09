@@ -34,7 +34,7 @@ const GetStarted = () => (
   <section
     id="get-started"
     aria-label="Get started in 3 steps"
-    className="py-24 bg-zinc-950 relative"
+    className="py-24 bg-white dark:bg-zinc-950 relative"
   >
     <div className="absolute inset-x-0 top-0 section-divider" />
 
@@ -54,7 +54,7 @@ const GetStarted = () => (
         </motion.span>
         <motion.h2
           variants={itemVariants}
-          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-900 dark:text-zinc-100 mb-5"
         >
           Up and Running in Minutes
         </motion.h2>
@@ -74,12 +74,12 @@ const GetStarted = () => (
           <motion.div key={step.number} variants={itemVariants} className="relative text-center">
             {/* Connector line */}
             {index < steps.length - 1 && (
-              <div className="hidden md:block absolute top-10 left-[60%] w-[80%] h-px bg-gradient-to-r from-zinc-800 to-transparent" />
+              <div className="hidden md:block absolute top-10 left-[60%] w-[80%] h-px bg-gradient-to-r from-zinc-200 dark:from-zinc-800 to-transparent" />
             )}
 
             <motion.div
               variants={scaleInVariants}
-              className="relative inline-flex items-center justify-center w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl text-amber-500 mb-6 mx-auto"
+              className="relative inline-flex items-center justify-center w-20 h-20 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-amber-500 mb-6 mx-auto"
             >
               {step.icon}
               <span className="absolute -top-2 -right-2 w-7 h-7 bg-amber-500 text-zinc-950 text-sm font-bold rounded-full flex items-center justify-center">
@@ -87,7 +87,9 @@ const GetStarted = () => (
               </span>
             </motion.div>
 
-            <h3 className="text-xl font-display font-bold text-zinc-100 mb-3">{step.title}</h3>
+            <h3 className="text-xl font-display font-bold text-zinc-900 dark:text-zinc-100 mb-3">
+              {step.title}
+            </h3>
             <p className="text-zinc-500 leading-relaxed">{step.description}</p>
           </motion.div>
         ))}

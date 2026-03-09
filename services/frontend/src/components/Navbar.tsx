@@ -102,7 +102,7 @@ const Navbar = () => {
   }, []);
 
   const navClasses = scrolled
-    ? "sticky top-0 z-50 transition-all duration-300 bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-800/60"
+    ? "sticky top-0 z-50 transition-all duration-300 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-200/60 dark:border-zinc-800/60"
     : "sticky top-0 z-50 transition-all duration-300 bg-transparent border-b border-transparent";
 
   return (
@@ -126,7 +126,7 @@ const Navbar = () => {
                 />
               </svg>
             </div>
-            <span className="text-xl font-display font-bold text-zinc-100 tracking-tight">
+            <span className="text-xl font-display font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               Kenchi
             </span>
           </Link>
@@ -144,7 +144,7 @@ const Navbar = () => {
                 >
                   {link.dropdown ? (
                     <button
-                      className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                      className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition-colors"
                       aria-haspopup="menu"
                       aria-expanded={expanded}
                       aria-controls={`dropdown-${link.name.toLowerCase()}`}
@@ -155,7 +155,7 @@ const Navbar = () => {
                   ) : (
                     <a
                       href={link.href}
-                      className="px-3 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                      className="px-3 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition-colors"
                     >
                       {link.name}
                     </a>
@@ -168,7 +168,7 @@ const Navbar = () => {
                         <motion.div
                           id={`dropdown-${link.name.toLowerCase()}`}
                           role="menu"
-                          className="absolute top-full left-0 mt-1 w-56 bg-zinc-900 rounded-xl border border-zinc-800 py-2 shadow-2xl"
+                          className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 py-2 shadow-lg dark:shadow-2xl"
                           initial={{ opacity: 0, y: -8, scale: 0.96 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: -8, scale: 0.96 }}
@@ -179,7 +179,7 @@ const Navbar = () => {
                               key={item.name}
                               href={item.href}
                               role="menuitem"
-                              className="block px-4 py-2.5 text-sm text-zinc-400 hover:bg-zinc-800/60 hover:text-amber-400 transition-colors"
+                              className="block px-4 py-2.5 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 hover:text-amber-400 transition-colors"
                             >
                               {item.name}
                             </a>
@@ -197,7 +197,7 @@ const Navbar = () => {
           <div className="hidden lg:flex items-center gap-3">
             <button
               onClick={cycleTheme}
-              className="p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors"
+              className="p-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 rounded-lg transition-colors"
               aria-label={`Theme: ${themeLabel}. Click to change.`}
               title={`Theme: ${themeLabel}`}
             >
@@ -208,13 +208,13 @@ const Navbar = () => {
               <>
                 <Link
                   to="/dashboard"
-                  className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 border border-zinc-700 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition-colors"
                 >
                   DASHBOARD
                 </Link>
                 <Link
                   to="/dashboard"
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition-colors"
                 >
                   <div className="w-7 h-7 bg-amber-500 rounded-full flex items-center justify-center">
                     <span className="text-zinc-950 text-xs font-bold">
@@ -236,7 +236,7 @@ const Navbar = () => {
                 ) : (
                   <a
                     href="/#cta"
-                    className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 border border-zinc-700 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition-colors"
                   >
                     BOOK A DEMO
                   </a>
@@ -255,7 +255,7 @@ const Navbar = () => {
 
           {/* Mobile Menu Button */}
           <button
-            className="lg:hidden p-2 text-zinc-400 hover:text-zinc-100"
+            className="lg:hidden p-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
@@ -269,7 +269,7 @@ const Navbar = () => {
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
-            className="lg:hidden bg-zinc-950 border-t border-zinc-800 overflow-hidden"
+            className="lg:hidden bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 overflow-hidden"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -288,7 +288,7 @@ const Navbar = () => {
                           key={item.name}
                           href={item.href}
                           onClick={() => setMobileMenuOpen(false)}
-                          className="block px-3 py-2 pl-6 text-base font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 rounded-lg"
+                          className="block px-3 py-2 pl-6 text-base font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 rounded-lg"
                         >
                           {item.name}
                         </a>
@@ -298,17 +298,17 @@ const Navbar = () => {
                     <a
                       href={link.href}
                       onClick={() => setMobileMenuOpen(false)}
-                      className="block px-3 py-2 text-base font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 rounded-lg"
+                      className="block px-3 py-2 text-base font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 rounded-lg"
                     >
                       {link.name}
                     </a>
                   )}
                 </div>
               ))}
-              <div className="pt-4 space-y-2 border-t border-zinc-800">
+              <div className="pt-4 space-y-2 border-t border-zinc-200 dark:border-zinc-800">
                 <button
                   onClick={cycleTheme}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-800/50 rounded-lg"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 rounded-lg"
                 >
                   {themeIcon}
                   <span>Theme: {themeLabel}</span>
@@ -329,7 +329,7 @@ const Navbar = () => {
                           {user?.displayName?.charAt(0)?.toUpperCase() ?? "U"}
                         </span>
                       </div>
-                      <span className="text-sm text-zinc-400 truncate">
+                      <span className="text-sm text-zinc-600 dark:text-zinc-400 truncate">
                         {user?.displayName ?? "User"}
                       </span>
                     </div>
@@ -339,7 +339,7 @@ const Navbar = () => {
                     <a
                       href="/#cta"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="block w-full px-4 py-2.5 text-sm font-medium text-zinc-400 border border-zinc-700 rounded-lg text-center"
+                      className="block w-full px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-700 rounded-lg text-center"
                     >
                       BOOK A DEMO
                     </a>

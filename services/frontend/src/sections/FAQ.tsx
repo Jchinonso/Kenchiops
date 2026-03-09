@@ -69,7 +69,11 @@ const faqSchema = JSON.stringify({
 });
 
 const FAQ = () => (
-  <section id="faq" aria-label="Frequently asked questions" className="py-24 bg-zinc-900/50">
+  <section
+    id="faq"
+    aria-label="Frequently asked questions"
+    className="py-24 bg-zinc-100/50 dark:bg-zinc-900/50"
+  >
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqSchema }} />
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
       <motion.div
@@ -87,7 +91,7 @@ const FAQ = () => (
         </motion.span>
         <motion.h2
           variants={itemVariants}
-          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-900 dark:text-zinc-100 mb-5"
         >
           Frequently Asked Questions
         </motion.h2>
@@ -105,8 +109,12 @@ const FAQ = () => (
         <motion.div variants={itemVariants}>
           <Accordion type="single" collapsible className="w-full">
             {faqs.map((faq) => (
-              <AccordionItem key={faq.question} value={faq.question} className="border-zinc-800/60">
-                <AccordionTrigger className="text-left text-zinc-200 hover:text-amber-400 transition-colors font-display">
+              <AccordionItem
+                key={faq.question}
+                value={faq.question}
+                className="border-zinc-200/60 dark:border-zinc-800/60"
+              >
+                <AccordionTrigger className="text-left text-zinc-800 dark:text-zinc-200 hover:text-amber-400 transition-colors font-display">
                   {faq.question}
                 </AccordionTrigger>
                 <AccordionContent className="text-zinc-500 leading-relaxed">

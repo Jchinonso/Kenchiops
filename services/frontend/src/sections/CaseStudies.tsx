@@ -67,7 +67,11 @@ const caseStudies = [
 ] as const;
 
 const CaseStudies = () => (
-  <section id="case-studies" aria-label="Customer case studies" className="py-24 bg-zinc-950">
+  <section
+    id="case-studies"
+    aria-label="Customer case studies"
+    className="py-24 bg-white dark:bg-zinc-950"
+  >
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <motion.div
         className="text-center mb-16"
@@ -84,7 +88,7 @@ const CaseStudies = () => (
         </motion.span>
         <motion.h2
           variants={itemVariants}
-          className="text-3xl sm:text-4xl font-display font-bold text-zinc-100 mb-5"
+          className="text-3xl sm:text-4xl font-display font-bold text-zinc-900 dark:text-zinc-100 mb-5"
         >
           Teams Shipping Faster with Kenchi
         </motion.h2>
@@ -105,14 +109,16 @@ const CaseStudies = () => (
             key={study.company}
             variants={itemVariants}
             whileHover={{ y: -6, transition: microSpring }}
-            className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl overflow-hidden hover:border-amber-500/20 transition-all duration-300 group"
+            className="bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden hover:border-amber-500/20 transition-all duration-300 group"
           >
             {/* Header */}
-            <div className="p-6 border-b border-zinc-800/40">
+            <div className="p-6 border-b border-zinc-200/40 dark:border-zinc-800/40">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   {study.logo}
-                  <span className="font-display font-bold text-zinc-100">{study.company}</span>
+                  <span className="font-display font-bold text-zinc-900 dark:text-zinc-100">
+                    {study.company}
+                  </span>
                 </div>
                 <span className="text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
                   {study.badge}
@@ -128,7 +134,7 @@ const CaseStudies = () => (
                 {study.avatars.map((avatar) => (
                   <div
                     key={avatar.initials}
-                    className={`w-16 h-16 ${avatar.color} rounded-full border-4 border-zinc-900 shadow-lg flex items-center justify-center`}
+                    className={`w-16 h-16 ${avatar.color} rounded-full border-4 border-white dark:border-zinc-900 shadow-lg flex items-center justify-center`}
                   >
                     <span className="text-white font-bold text-lg">{avatar.initials}</span>
                   </div>
@@ -149,7 +155,7 @@ const CaseStudies = () => (
               </div>
               <a
                 href="/#cta"
-                className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 border border-zinc-800 rounded-lg text-sm font-medium text-zinc-400 hover:text-amber-400 hover:border-amber-500/30 transition-colors"
+                className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-amber-400 hover:border-amber-500/30 transition-colors"
               >
                 READ FULL CASE STUDY
                 <ArrowRight className="w-4 h-4" />

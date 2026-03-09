@@ -19,7 +19,11 @@ const TRUSTED_BY = [
 ] as const;
 
 const Hero = () => (
-  <section id="hero" aria-label="Hero" className="relative overflow-hidden bg-zinc-950">
+  <section
+    id="hero"
+    aria-label="Hero"
+    className="relative overflow-hidden bg-white dark:bg-zinc-950"
+  >
     {/* Radial gradient glow from top */}
     <div className="absolute inset-0 bg-hero-gradient" />
 
@@ -44,16 +48,18 @@ const Hero = () => (
         {/* Badge */}
         <motion.div
           variants={heroVariants}
-          className="inline-flex items-center gap-2.5 px-4 py-2 bg-zinc-900/80 border border-zinc-800 rounded-full mb-10"
+          className="inline-flex items-center gap-2.5 px-4 py-2 bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-full mb-10"
         >
           <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" aria-hidden="true" />
-          <span className="text-sm font-medium text-zinc-400">AI-Powered CI/CD Intelligence</span>
+          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            AI-Powered CI/CD Intelligence
+          </span>
         </motion.div>
 
         {/* Headline */}
         <motion.h1
           variants={heroVariants}
-          className="font-display text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight text-zinc-100 mb-8 leading-[0.95]"
+          className="font-display text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100 mb-8 leading-[0.95]"
         >
           Fix CI/CD failures
           <br />
@@ -98,14 +104,17 @@ const Hero = () => (
           >
             <a
               href="/#cta"
-              className="flex items-center gap-2 px-8 py-4 bg-transparent hover:bg-zinc-800/50 text-zinc-300 hover:text-zinc-100 font-semibold rounded-xl border border-zinc-700 hover:border-zinc-600 transition-all duration-200"
+              className="flex items-center gap-2 px-8 py-4 bg-transparent hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 font-semibold rounded-xl border border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600 transition-all duration-200"
             >
               BOOK A DEMO
               <ArrowRight className="w-4 h-4" />
             </a>
           </motion.div>
         </motion.div>
-        <motion.p variants={itemVariants} className="text-sm text-zinc-600 sm:hidden mb-14">
+        <motion.p
+          variants={itemVariants}
+          className="text-sm text-zinc-400 dark:text-zinc-600 sm:hidden mb-14"
+        >
           No credit card required
         </motion.p>
         <div className="hidden sm:block mb-14" />
@@ -120,8 +129,11 @@ const Hero = () => (
         </motion.div>
 
         {/* Trusted By */}
-        <motion.div variants={heroVariants} className="pt-10 border-t border-zinc-800/60">
-          <p className="text-xs font-medium text-zinc-600 uppercase tracking-widest mb-8">
+        <motion.div
+          variants={heroVariants}
+          className="pt-10 border-t border-zinc-200/60 dark:border-zinc-800/60"
+        >
+          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-600 uppercase tracking-widest mb-8">
             Trusted by engineering teams everywhere
           </p>
           <motion.div
@@ -134,7 +146,7 @@ const Hero = () => (
               <motion.span
                 key={name}
                 variants={itemVariants}
-                className="text-zinc-700 font-display font-bold text-lg tracking-tight uppercase select-none hover:text-zinc-500 transition-colors"
+                className="text-zinc-300 dark:text-zinc-700 font-display font-bold text-lg tracking-tight uppercase select-none hover:text-zinc-500 transition-colors"
               >
                 {name}
               </motion.span>
