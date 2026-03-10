@@ -19,7 +19,7 @@ COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE="/etc/kenchi/.env.production"
 ROLLBACK_FILE="${APP_DIR}/.rollback-sha"
 DEPLOY_HISTORY="${APP_DIR}/.deploy-history"
-HEALTH_TIMEOUT=120  # seconds
+HEALTH_TIMEOUT=180  # seconds
 HEALTH_INTERVAL=5   # seconds between checks
 
 cd "$APP_DIR"
