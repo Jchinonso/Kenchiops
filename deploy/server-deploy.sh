@@ -3,7 +3,7 @@
 # Kenchi Server Deploy Script
 #
 # Runs ON the production VPS. Called by CI or manually.
-# Implements: pre-flight → backup → pull → build → verify → rollback on failure.
+# Implements: pre-flight → backup → pull → build → deploy → rollback on failure.
 #
 # Usage (on VPS):
 #   cd /opt/kenchi && bash deploy/server-deploy.sh
@@ -19,8 +19,6 @@ COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE="/etc/kenchi/.env.production"
 ROLLBACK_FILE="${APP_DIR}/.rollback-sha"
 DEPLOY_HISTORY="${APP_DIR}/.deploy-history"
-HEALTH_TIMEOUT=180  # seconds
-HEALTH_INTERVAL=5   # seconds between checks
 
 cd "$APP_DIR"
 
@@ -31,20 +29,17 @@ err() { log "ERROR: $*" >&2; }
 
 log "=== Kenchi Deploy: Pre-flight ==="
 
-# Verify secrets file exists and is readable
 if [ ! -f "$ENV_FILE" ]; then
   err "Production secrets not found at $ENV_FILE"
   err "Create it from deploy/.env.production.template"
   exit 1
 fi
 
-# Verify Docker is running
 if ! docker info >/dev/null 2>&1; then
   err "Docker daemon is not running"
   exit 1
 fi
 
-# Verify disk space (need at least 2GB free)
 FREE_KB=$(df /opt --output=avail | tail -1 | tr -d ' ')
 FREE_GB=$((FREE_KB / 1024 / 1024))
 if [ "$FREE_GB" -lt 2 ]; then
@@ -63,17 +58,6 @@ CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 echo "$CURRENT_SHA" > "$ROLLBACK_FILE"
 log "Current SHA: $CURRENT_SHA (saved to $ROLLBACK_FILE)"
 
-# Tag current images as :previous for fast rollback
-SERVICES="api slack-bot github-app incident-triage frontend"
-for svc in $SERVICES; do
-  IMAGE=$(docker compose -f "$COMPOSE_FILE" images "$svc" --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | head -1 || true)
-  if [ -n "$IMAGE" ] && [ "$IMAGE" != ":" ]; then
-    REPO=$(echo "$IMAGE" | cut -d: -f1)
-    docker tag "$IMAGE" "${REPO}:previous" 2>/dev/null || true
-    log "Tagged $IMAGE → ${REPO}:previous"
-  fi
-done
-
 # ==================== 3. Pull Latest Code ====================
 
 log "=== Kenchi Deploy: Pull ==="
@@ -85,35 +69,53 @@ log "Deploying SHA: $DEPLOY_SHA"
 
 git reset --hard "$DEPLOY_SHA"
 
-# Export DEPLOY_HASH so docker-compose.prod.yml passes it to all containers
 export DEPLOY_HASH="$DEPLOY_SHA"
 
-# ==================== 4. Build & Deploy (Atomic) ====================
+# ==================== 4. Build ====================
 
 log "=== Kenchi Deploy: Build ==="
 
-# Build all images first (don't swap containers until all images are ready)
 docker compose -f "$COMPOSE_FILE" build
 
-log "=== Kenchi Deploy: Swap ==="
+# ==================== 5. Deploy & Wait for Healthy ====================
 
-# Swap all containers at once
-docker compose -f "$COMPOSE_FILE" up -d
+log "=== Kenchi Deploy: Deploy ==="
 
-# ==================== 5. Run Migrations ====================
+# --wait blocks until all containers with healthchecks report healthy (or timeout)
+if docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180; then
+  log "All containers healthy"
+else
+  err "Containers failed to become healthy"
+
+  # Show what's unhealthy
+  docker compose -f "$COMPOSE_FILE" ps
+  docker compose -f "$COMPOSE_FILE" logs --tail=20 2>&1 | tail -40
+
+  # ==================== Auto-Rollback ====================
+
+  log "=== Auto-Rollback to $CURRENT_SHA ==="
+  echo "$(date -Iseconds) | $DEPLOY_SHA | FAILED | rolling back to $CURRENT_SHA" >> "$DEPLOY_HISTORY"
+
+  git reset --hard "$CURRENT_SHA"
+  export DEPLOY_HASH="$CURRENT_SHA"
+
+  docker compose -f "$COMPOSE_FILE" build
+  docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180 || true
+
+  if docker compose -f "$COMPOSE_FILE" ps | grep -q "unhealthy\|Exit"; then
+    err "CRITICAL: Rollback also failed. Manual intervention required."
+    echo "$(date -Iseconds) | $CURRENT_SHA | ROLLBACK_FAILED | MANUAL INTERVENTION NEEDED" >> "$DEPLOY_HISTORY"
+  else
+    log "Rollback successful — running $CURRENT_SHA"
+    echo "$(date -Iseconds) | $CURRENT_SHA | ROLLBACK_OK | restored" >> "$DEPLOY_HISTORY"
+  fi
+
+  exit 1
+fi
+
+# ==================== 6. Run Migrations ====================
 
 log "=== Kenchi Deploy: Migrations ==="
-
-# Wait for postgres to be ready
-WAITED=0
-until docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U kenchi -d kenchi -q 2>/dev/null; do
-  sleep 2
-  WAITED=$((WAITED + 2))
-  if [ "$WAITED" -ge 30 ]; then
-    err "Postgres not ready after 30s"
-    break
-  fi
-done
 
 for migration in database/init/*.sql; do
   BASENAME=$(basename "$migration")
@@ -123,76 +125,12 @@ for migration in database/init/*.sql; do
     grep -v "already exists" | grep -v "NOTICE" || true
 done
 
-# ==================== 6. Health Verification ====================
+# ==================== 7. Success ====================
 
-log "=== Kenchi Deploy: Health Check (${HEALTH_TIMEOUT}s timeout) ==="
+log "=== Deploy SUCCESS ==="
+docker compose -f "$COMPOSE_FILE" ps
+echo "$(date -Iseconds) | $DEPLOY_SHA | SUCCESS | deployed by $(whoami)" >> "$DEPLOY_HISTORY"
 
-ELAPSED=0
-HEALTHY=false
+docker image prune -f >/dev/null 2>&1 || true
 
-while [ "$ELAPSED" -lt "$HEALTH_TIMEOUT" ]; do
-  sleep "$HEALTH_INTERVAL"
-  ELAPSED=$((ELAPSED + HEALTH_INTERVAL))
-
-  # Check if API responds to /ready (readiness = DB + Redis connectivity)
-  # API port 3000 is bound to 127.0.0.1 on the host for health checks
-  if curl -sf http://localhost:3000/ready >/dev/null 2>&1; then
-    # Verify all containers with healthchecks are healthy
-    # Filter out containers without healthchecks (empty Health field, like caddy)
-    UNHEALTHY=$(docker compose -f "$COMPOSE_FILE" ps --format '{{.Name}}|{{.Health}}' 2>/dev/null | grep -v "|healthy" | grep -v "|N/A" | grep -v "|$" || true)
-    if [ -z "$UNHEALTHY" ]; then
-      HEALTHY=true
-      break
-    fi
-    log "Waiting... (${ELAPSED}s) — unhealthy: $UNHEALTHY"
-  else
-    log "Waiting... (${ELAPSED}s) — API not responding"
-  fi
-done
-
-if [ "$HEALTHY" = true ]; then
-  log "=== Deploy SUCCESS ==="
-  docker compose -f "$COMPOSE_FILE" ps
-  echo "$(date -Iseconds) | $DEPLOY_SHA | SUCCESS | deployed by $(whoami)" >> "$DEPLOY_HISTORY"
-
-  # Clean up old images to free disk space
-  docker image prune -f >/dev/null 2>&1 || true
-
-  log "Deploy complete: $DEPLOY_SHA"
-  exit 0
-fi
-
-# ==================== 7. Auto-Rollback ====================
-
-err "=== Deploy FAILED — Health check timed out ==="
-err "Logs from failing services:"
-docker compose -f "$COMPOSE_FILE" logs --tail=30 2>&1 | tail -60
-
-log "=== Auto-Rollback to $CURRENT_SHA ==="
-
-echo "$(date -Iseconds) | $DEPLOY_SHA | FAILED | rolling back to $CURRENT_SHA" >> "$DEPLOY_HISTORY"
-
-# Restore previous code
-git reset --hard "$CURRENT_SHA"
-
-# Export DEPLOY_HASH for the rollback containers
-export DEPLOY_HASH="$CURRENT_SHA"
-
-# Rebuild from previous code
-docker compose -f "$COMPOSE_FILE" build
-docker compose -f "$COMPOSE_FILE" up -d
-
-# Wait for rollback to stabilize
-sleep 45
-
-# Verify rollback readiness (matches deploy verification)
-if curl -sf http://localhost:3000/ready >/dev/null 2>&1; then
-  log "Rollback successful — running $CURRENT_SHA"
-  echo "$(date -Iseconds) | $CURRENT_SHA | ROLLBACK_OK | restored" >> "$DEPLOY_HISTORY"
-else
-  err "CRITICAL: Rollback also failed. Manual intervention required."
-  err "Check: docker compose -f $COMPOSE_FILE logs --tail=50"
-  echo "$(date -Iseconds) | $CURRENT_SHA | ROLLBACK_FAILED | MANUAL INTERVENTION NEEDED" >> "$DEPLOY_HISTORY"
-fi
-
-exit 1
+log "Deploy complete: $DEPLOY_SHA"
