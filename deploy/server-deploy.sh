@@ -135,9 +135,11 @@ while [ "$ELAPSED" -lt "$HEALTH_TIMEOUT" ]; do
   ELAPSED=$((ELAPSED + HEALTH_INTERVAL))
 
   # Check if API responds to /ready (readiness = DB + Redis connectivity)
-  if curl -sf http://localhost:3000/ready >/dev/null 2>&1; then
-    # Verify all containers are healthy
-    UNHEALTHY=$(docker compose -f "$COMPOSE_FILE" ps --format '{{.Name}} {{.Health}}' 2>/dev/null | grep -v "healthy" | grep -v "N/A" || true)
+  # API port is not exposed to host — exec into container to check
+  if docker compose -f "$COMPOSE_FILE" exec -T api node -e "require('http').get('http://localhost:3000/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" 2>/dev/null; then
+    # Verify all containers with healthchecks are healthy
+    # Filter out containers without healthchecks (empty Health field, like caddy)
+    UNHEALTHY=$(docker compose -f "$COMPOSE_FILE" ps --format '{{.Name}}|{{.Health}}' 2>/dev/null | grep -v "|healthy" | grep -v "|N/A" | grep -v "|$" || true)
     if [ -z "$UNHEALTHY" ]; then
       HEALTHY=true
       break
@@ -149,13 +151,6 @@ while [ "$ELAPSED" -lt "$HEALTH_TIMEOUT" ]; do
 done
 
 if [ "$HEALTHY" = true ]; then
-  # Verify all services report the same deploy hash
-  HASH_SHORT="${DEPLOY_SHA:0:12}"
-  API_HASH=$(curl -sf http://localhost:3000/health 2>/dev/null | grep -o '"deployHash":"[^"]*"' | cut -d'"' -f4 || echo "")
-  if [ -n "$API_HASH" ] && [ "${API_HASH:0:12}" != "$HASH_SHORT" ]; then
-    log "WARNING: API reports deployHash=$API_HASH, expected $DEPLOY_SHA"
-  fi
-
   log "=== Deploy SUCCESS ==="
   docker compose -f "$COMPOSE_FILE" ps
   echo "$(date -Iseconds) | $DEPLOY_SHA | SUCCESS | deployed by $(whoami)" >> "$DEPLOY_HISTORY"
@@ -188,10 +183,10 @@ docker compose -f "$COMPOSE_FILE" build
 docker compose -f "$COMPOSE_FILE" up -d
 
 # Wait for rollback to stabilize
-sleep 15
+sleep 45
 
 # Verify rollback readiness (matches deploy verification)
-if curl -sf http://localhost:3000/ready >/dev/null 2>&1; then
+if docker compose -f "$COMPOSE_FILE" exec -T api node -e "require('http').get('http://localhost:3000/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" 2>/dev/null; then
   log "Rollback successful — running $CURRENT_SHA"
   echo "$(date -Iseconds) | $CURRENT_SHA | ROLLBACK_OK | restored" >> "$DEPLOY_HISTORY"
 else
