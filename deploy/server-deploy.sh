@@ -135,8 +135,8 @@ while [ "$ELAPSED" -lt "$HEALTH_TIMEOUT" ]; do
   ELAPSED=$((ELAPSED + HEALTH_INTERVAL))
 
   # Check if API responds to /ready (readiness = DB + Redis connectivity)
-  # API port is not exposed to host — exec into container to check
-  if docker compose -f "$COMPOSE_FILE" exec -T api node -e "require('http').get('http://localhost:3000/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" 2>/dev/null; then
+  # API port 3000 is bound to 127.0.0.1 on the host for health checks
+  if curl -sf http://localhost:3000/ready >/dev/null 2>&1; then
     # Verify all containers with healthchecks are healthy
     # Filter out containers without healthchecks (empty Health field, like caddy)
     UNHEALTHY=$(docker compose -f "$COMPOSE_FILE" ps --format '{{.Name}}|{{.Health}}' 2>/dev/null | grep -v "|healthy" | grep -v "|N/A" | grep -v "|$" || true)
@@ -186,7 +186,7 @@ docker compose -f "$COMPOSE_FILE" up -d
 sleep 45
 
 # Verify rollback readiness (matches deploy verification)
-if docker compose -f "$COMPOSE_FILE" exec -T api node -e "require('http').get('http://localhost:3000/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" 2>/dev/null; then
+if curl -sf http://localhost:3000/ready >/dev/null 2>&1; then
   log "Rollback successful — running $CURRENT_SHA"
   echo "$(date -Iseconds) | $CURRENT_SHA | ROLLBACK_OK | restored" >> "$DEPLOY_HISTORY"
 else
