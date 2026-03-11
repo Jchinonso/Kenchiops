@@ -11,6 +11,11 @@ kenchiops.app {
 		reverse_proxy github-app:3002
 	}
 
+	# GitLab webhook delivery → github-app service
+	handle /webhooks/gitlab {
+		reverse_proxy github-app:3002
+	}
+
 	# GitHub App post-install setup redirect
 	reverse_proxy /github/setup* github-app:3002
 

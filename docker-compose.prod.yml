@@ -86,6 +86,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - FRONTEND_URL=https://kenchiops.app
       - OAUTH_CALLBACK_BASE_URL=https://kenchiops.app
+      - GITHUB_APP_URL=https://kenchiops.app
       - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
     env_file:
       - /etc/kenchi/.env.production
