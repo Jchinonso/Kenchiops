@@ -9,7 +9,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchQuery, parseErrorBody } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiClient } from "@/lib/apiClient";
@@ -22,6 +22,7 @@ import type { GitLabProject, ProjectSetupResult, SetupResponse } from "./types";
 
 export const GitLabSetup = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: queryKeys.integrations.gitlab.availableProjects(),
     queryFn: () => fetchQuery<readonly GitLabProject[]>("/integrations/gitlab/available-projects"),
@@ -111,6 +112,8 @@ export const GitLabSetup = () => {
         toast.success(
           `Enabled CI monitoring for ${String(successCount)} project${successCount > 1 ? "s" : ""}`
         );
+        // Invalidate tenant-info so the dashboard picks up gitlabConnected: true
+        void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.tenant() });
       }
     } catch {
       toast.error("Failed to set up webhooks. Please try again.");

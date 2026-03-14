@@ -11,6 +11,7 @@ import type { DashboardNotification } from "@/hooks/useDashboardSSE";
 interface DashboardHeaderProps {
   readonly lastUpdatedLabel: string;
   readonly onRefresh: () => void;
+  readonly isRefreshing: boolean;
   readonly resolvedTheme: string;
   readonly onToggleTheme: () => void;
   readonly unreadCount: number;
@@ -28,6 +29,7 @@ interface DashboardHeaderProps {
 export const DashboardHeader = ({
   lastUpdatedLabel,
   onRefresh,
+  isRefreshing,
   resolvedTheme,
   onToggleTheme,
   unreadCount,
@@ -58,22 +60,23 @@ export const DashboardHeader = ({
 
       <div className="flex items-center gap-2 sm:gap-4">
         {/* Last Updated + Refresh */}
-        <div className="hidden sm:flex items-center gap-1.5">
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">
-            Updated {lastUpdatedLabel}
+        <div className="flex items-center gap-1.5">
+          <span className="hidden sm:inline text-xs text-zinc-400 dark:text-zinc-500">
+            {isRefreshing ? "Refreshing..." : `Updated ${lastUpdatedLabel}`}
           </span>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={onRefresh}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 rounded transition-colors"
-                aria-label="Refresh data"
+                disabled={isRefreshing}
+                className="p-1.5 sm:p-2 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+                aria-label={isRefreshing ? "Refreshing data..." : "Refresh data"}
               >
-                <RefreshCw className="w-3 h-3" />
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
               </button>
             </TooltipTrigger>
-            <TooltipContent>Refresh</TooltipContent>
+            <TooltipContent>{isRefreshing ? "Refreshing..." : "Refresh data (r)"}</TooltipContent>
           </Tooltip>
         </div>
 

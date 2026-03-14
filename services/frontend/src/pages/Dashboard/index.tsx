@@ -7,7 +7,7 @@
 
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate, Navigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardSSE } from "@/hooks/useDashboardSSE";
 import { useTenantInfo } from "@/hooks/useDashboardData";
@@ -68,6 +68,9 @@ const Dashboard = () => {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date>(new Date());
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  const fetchingCount = useIsFetching();
+  const isRefreshing = manualRefreshing && fetchingCount > 0;
 
   // Reset state when tenant changes (org switch).
   // queryClient.clear() drops all cached data so hooks re-fetch for the new org.
@@ -113,6 +116,14 @@ const Dashboard = () => {
   const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
   const toggleCommand = useCallback(() => setCommandOpen((prev) => !prev), []);
 
+  const handleRefresh = useCallback(() => {
+    setManualRefreshing(true);
+    void queryClient.invalidateQueries().finally(() => {
+      setManualRefreshing(false);
+    });
+    setLastRefreshAt(new Date());
+  }, [queryClient]);
+
   useDashboardKeyboardShortcuts({
     toggleTheme,
     navigate,
@@ -120,6 +131,7 @@ const Dashboard = () => {
     onCloseNotifications: closeNotifications,
     onOpenShortcuts: openShortcuts,
     onToggleCommand: toggleCommand,
+    onRefresh: handleRefresh,
   });
 
   if (isLoading) {
@@ -169,11 +181,6 @@ const Dashboard = () => {
     localStorage.setItem(onboardingKey, "1");
     setOnboardingSkipped(true);
     setOnboardingDismissed(true);
-  };
-
-  const handleRefresh = () => {
-    void queryClient.invalidateQueries();
-    setLastRefreshAt(new Date());
   };
 
   const resolvePageContent = (): React.ReactNode => {
@@ -246,6 +253,7 @@ const Dashboard = () => {
         <DashboardHeader
           lastUpdatedLabel={lastUpdatedLabel}
           onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
           resolvedTheme={resolvedTheme}
           onToggleTheme={toggleTheme}
           unreadCount={unreadCount}

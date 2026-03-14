@@ -26,6 +26,7 @@ const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { key: "?", description: "Show keyboard shortcuts" },
       { key: "Esc", description: "Close dialogs and menus" },
       { key: "t", description: "Toggle light / dark theme" },
+      { key: "r", description: "Refresh dashboard data" },
     ],
   },
   {
