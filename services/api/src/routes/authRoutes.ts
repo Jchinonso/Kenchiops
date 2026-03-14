@@ -456,16 +456,19 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
       freshUser = (await findUserById(freshUser.id)) ?? freshUser;
     }
   }
+
   logger.info("Post-login organization state", {
     userId: freshUser.id,
     provider: oauthState.provider,
     orgCount: postLoginOrgs.length,
+    currentOrgProvider: currentOrgProvider ?? "none",
     orgs: postLoginOrgs.map((org) => ({
       orgName: org.orgName,
       provider: org.provider,
       tenantStatus: org.tenantStatus,
     })),
     selectedTenantId: freshUser.tenantId,
+    switchedProvider: currentOrgProvider !== oauthState.provider,
     ...context,
   });
 
@@ -500,7 +503,10 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     }
 
     const existingConnection = await findByTenantAndProvider(freshUser.tenantId, platformType);
-    return existingConnection ? null : `/dashboard/setup/${oauthState.provider}`;
+    // Redirect to onboarding (not /dashboard/setup/<provider>) because only
+    // /dashboard/setup/gitlab has a dedicated page — the generic onboarding
+    // handles all providers correctly.
+    return existingConnection ? null : "/dashboard/onboarding";
   };
 
   const providerSetupRedirect = await resolveProviderSetupRedirect();

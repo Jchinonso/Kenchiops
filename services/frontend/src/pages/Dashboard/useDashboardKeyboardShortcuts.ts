@@ -29,6 +29,7 @@ interface UseDashboardKeyboardShortcutsParams {
   readonly onCloseNotifications: () => void;
   readonly onOpenShortcuts: () => void;
   readonly onToggleCommand: () => void;
+  readonly onRefresh: () => void;
 }
 
 export const useDashboardKeyboardShortcuts = ({
@@ -38,6 +39,7 @@ export const useDashboardKeyboardShortcuts = ({
   onCloseNotifications,
   onOpenShortcuts,
   onToggleCommand,
+  onRefresh,
 }: UseDashboardKeyboardShortcutsParams): void => {
   const pendingGotoRef = useRef(false);
   const gotoTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -99,6 +101,10 @@ export const useDashboardKeyboardShortcuts = ({
           }
           break;
         }
+        case "r":
+          event.preventDefault();
+          onRefresh();
+          break;
         case "t":
           event.preventDefault();
           toggleTheme();
@@ -126,5 +132,6 @@ export const useDashboardKeyboardShortcuts = ({
     onCloseNotifications,
     onOpenShortcuts,
     onToggleCommand,
+    onRefresh,
   ]);
 };

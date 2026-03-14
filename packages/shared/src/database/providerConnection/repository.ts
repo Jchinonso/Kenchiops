@@ -52,7 +52,11 @@ const QUERIES = {
     ON CONFLICT (tenant_id, provider, connection_name)
     DO UPDATE SET
       external_org_id = EXCLUDED.external_org_id,
+      base_url = EXCLUDED.base_url,
       config = EXCLUDED.config,
+      webhook_secret_enc = EXCLUDED.webhook_secret_enc,
+      access_token_enc = EXCLUDED.access_token_enc,
+      token_expires_at = EXCLUDED.token_expires_at,
       is_active = true,
       updated_at = NOW()
     RETURNING *
