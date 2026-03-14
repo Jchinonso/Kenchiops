@@ -279,10 +279,15 @@ const handleGetCorrelations = async (req: Request, res: Response): Promise<void>
 
 // ==================== Cache-Control for Dashboard GETs ====================
 
-/** Browser may cache private dashboard responses for 30s, reducing re-fetches on back/forward. */
+/**
+ * Disable browser caching for dashboard API responses.
+ * Tenant identity lives in the JWT cookie, not the URL, so the browser
+ * cannot distinguish responses belonging to different tenants. Caching
+ * by URL causes stale cross-tenant data after provider switches.
+ */
 router.use((req, res, next) => {
   if (req.method === "GET") {
-    res.setHeader("Cache-Control", "private, max-age=30");
+    res.setHeader("Cache-Control", "no-store");
   }
   next();
 });
