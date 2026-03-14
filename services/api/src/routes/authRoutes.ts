@@ -442,18 +442,65 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   // the correct connection status. Without this, a user who last logged in via
   // GitLab would stay on the GitLab tenant when they next login via GitHub,
   // causing the dashboard to wrongly prompt for GitHub App installation.
+  //
+  // Also handles the case where autoLink picked a tenant that has no active
+  // platform connection (e.g., GitHub App uninstalled). In that case, prefer
+  // a sibling tenant from the same provider that DOES have an active connection.
   const postLoginOrgs = await findOrganizationsByUser(freshUser.id);
   const currentOrgProvider = postLoginOrgs.find(
     (org) => org.tenantId === freshUser.tenantId
   )?.provider;
 
-  if (currentOrgProvider !== oauthState.provider) {
-    const matchingOrg = postLoginOrgs.find(
+  const PROVIDER_PLATFORM_TYPE: Readonly<Record<string, ProviderType>> = {
+    github: "github_app",
+    gitlab: "gitlab_ci",
+    bitbucket: "bitbucket",
+    azure_devops: "azure_devops",
+  };
+
+  // Check if the current tenant has an active platform connection for the login provider.
+  // Even if the provider matches, the specific tenant may lack an active connection
+  // (e.g., GitHub App was uninstalled for that org but installed on another).
+  const platformType = PROVIDER_PLATFORM_TYPE[oauthState.provider];
+  const currentConnection =
+    platformType && freshUser.tenantId
+      ? await findByTenantAndProvider(freshUser.tenantId, platformType)
+      : null;
+  const needsSwitch = currentOrgProvider !== oauthState.provider || currentConnection === null;
+
+  if (needsSwitch) {
+    // Find a tenant from the login provider that has an active platform connection.
+    const providerOrgs = postLoginOrgs.filter(
       (org) => org.provider === oauthState.provider && org.tenantStatus === "active"
     );
-    if (matchingOrg) {
-      await switchUserOrganization(freshUser.id, matchingOrg.tenantId);
+
+    // Check each candidate for an active platform connection, prefer connected ones.
+    // let: bestOrg is iteratively narrowed from connected candidates
+    let bestOrg = providerOrgs[0] ?? null; // let: fallback updated below if a connected tenant is found
+    if (platformType && providerOrgs.length > 1) {
+      for (const org of providerOrgs) {
+        const conn = await findByTenantAndProvider(org.tenantId, platformType);
+        if (conn !== null) {
+          bestOrg = org;
+          break;
+        }
+      }
+    }
+
+    if (bestOrg && bestOrg.tenantId !== freshUser.tenantId) {
+      await switchUserOrganization(freshUser.id, bestOrg.tenantId);
       freshUser = (await findUserById(freshUser.id)) ?? freshUser;
+
+      logger.info("Post-login tenant switch", {
+        userId: freshUser.id,
+        provider: oauthState.provider,
+        previousTenantId: currentOrgProvider,
+        selectedTenantId: bestOrg.tenantId,
+        selectedOrgName: bestOrg.orgName,
+        reason:
+          currentOrgProvider !== oauthState.provider ? "provider_mismatch" : "no_active_connection",
+        ...context,
+      });
     }
   }
 
@@ -469,6 +516,7 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
     })),
     selectedTenantId: freshUser.tenantId,
     switchedProvider: currentOrgProvider !== oauthState.provider,
+    hasActiveConnection: currentConnection !== null,
     ...context,
   });
 
@@ -484,28 +532,14 @@ const handleOAuthCallback = async (req: Request, res: Response): Promise<void> =
   // Redirect with only non-sensitive params (no tokens in URL)
   const callbackUrl = new URL(`${frontendUrl}/oauth/callback`);
 
-  // Redirect to onboarding setup if no platform connection exists for the user's provider
-  const PROVIDER_PLATFORM_TYPE: Readonly<Record<string, ProviderType>> = {
-    github: "github_app",
-    gitlab: "gitlab",
-    bitbucket: "bitbucket",
-    azure_devops: "azure_devops",
-  };
-
+  // Redirect to onboarding if no active platform connection exists for the login provider.
+  // Reuses PROVIDER_PLATFORM_TYPE defined above for consistency.
   const resolveProviderSetupRedirect = async (): Promise<string | null> => {
-    if (!freshUser.tenantId) {
-      return null;
-    }
-
-    const platformType = PROVIDER_PLATFORM_TYPE[oauthState.provider];
-    if (!platformType) {
+    if (!freshUser.tenantId || !platformType) {
       return null;
     }
 
     const existingConnection = await findByTenantAndProvider(freshUser.tenantId, platformType);
-    // Redirect to onboarding (not /dashboard/setup/<provider>) because only
-    // /dashboard/setup/gitlab has a dedicated page — the generic onboarding
-    // handles all providers correctly.
     return existingConnection ? null : "/dashboard/onboarding";
   };
 
