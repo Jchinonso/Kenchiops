@@ -7,14 +7,8 @@
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  useFailures,
-  useAnalyses,
-  type EventRecord,
-  type AnalysisRecord,
-} from "@/hooks/useDashboardData";
+import { useFailures, useAnalyses } from "@/hooks/useDashboardData";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Empty,
@@ -23,17 +17,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { cn } from "@/lib/utils";
-import {
-  truncateText,
-  getConfidenceLabel,
-  getConfidenceStyle,
-  getSeverityStyle,
-  getPayloadString,
-  titleCase,
-} from "@/lib/formatters";
-import { TimeDisplay } from "@/components/TimeDisplay";
-import { PaginationControls } from "@/components/PaginationControls";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
   ArrowLeft,
   ExternalLink,
@@ -43,88 +27,14 @@ import {
   Zap,
   TrendingUp,
 } from "lucide-react";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { PaginationControls } from "@/components/PaginationControls";
 import { useSubscriptionUsage } from "@/hooks/useSubscription";
 import { FeatureLocked } from "@/components/FeatureLocked";
 import { PageLoader } from "@/components/PageLoader";
-
-// ==================== Constants ====================
-
-const PAGE_SIZE = 10;
-
-const PERCENTAGE_MULTIPLIER = 100;
-
-const formatAvgConfidence = (analyses: readonly AnalysisRecord[]): string => {
-  const { length: count } = analyses;
-  if (count === 0) {
-    return "--";
-  }
-  const sum = analyses.reduce((acc, a) => acc + a.diagnosisConfidence, 0);
-  return `${Math.round((sum / count) * PERCENTAGE_MULTIPLIER)}%`;
-};
-
-// ==================== Sub-components ====================
-
-interface FailureItemProps {
-  readonly event: EventRecord;
-}
-
-const FailureItem = ({ event }: FailureItemProps) => {
-  const checkName = getPayloadString(event.payload, "checkName");
-  const conclusion = getPayloadString(event.payload, "conclusion");
-
-  return (
-    <Link
-      to="/dashboard/cicd/analyses"
-      className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 -mx-6 px-6 transition-colors"
-    >
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <TimeDisplay
-          dateTime={event.timestamp}
-          className="text-xs text-zinc-400 dark:text-zinc-400"
-        />
-        <Badge
-          variant="outline"
-          className={cn("text-[10px] px-1.5 py-0", getSeverityStyle(event.severity))}
-        >
-          {titleCase(event.severity ?? "unknown")}
-        </Badge>
-      </div>
-      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{checkName}</p>
-      <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{conclusion}</p>
-    </Link>
-  );
-};
-
-interface AnalysisItemProps {
-  readonly analysis: AnalysisRecord;
-}
-
-const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
-  <Link
-    to={`/dashboard/cicd/analyses/${analysis.id}`}
-    className="block py-3 first:pt-2 last:pb-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 -mx-6 px-6 transition-colors"
-  >
-    <div className="flex items-center justify-between gap-2 mb-1">
-      <TimeDisplay
-        dateTime={analysis.createdAt}
-        className="text-xs text-zinc-400 dark:text-zinc-400"
-      />
-      <Badge
-        variant="outline"
-        className={cn("text-[10px] px-1.5 py-0", getConfidenceStyle(analysis.diagnosisConfidence))}
-      >
-        {getConfidenceLabel(analysis.diagnosisConfidence)}
-      </Badge>
-    </div>
-    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-      {truncateText(analysis.summary, 80)}
-    </p>
-    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-      {analysis.identifiedCause ? truncateText(analysis.identifiedCause, 60) : "--"}
-    </p>
-  </Link>
-);
+import { FailureItem } from "./FailureItem";
+import { AnalysisItem } from "./AnalysisItem";
+import { formatAvgConfidence } from "./helpers";
+import { PAGE_SIZE } from "./constants";
 
 // ==================== Main Component ====================
 

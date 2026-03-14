@@ -11,6 +11,7 @@ import { ArrowLeft, Zap } from "lucide-react";
 import { useAnalysisDetail } from "@/hooks/useDashboardData";
 import { extractRepoFromKey, formatTimestamp } from "@/lib/formatters";
 import { DetailSkeleton, DetailContent } from "@/components/AnalysisDetailContent";
+import { ANALYSES_LIST_PATH } from "./constants";
 
 // ==================== Props ====================
 
@@ -18,7 +19,7 @@ interface AnalysisDetailProps {
   readonly analysisId: string;
 }
 
-// ==================== Component ====================
+// ==================== Main Component ====================
 
 export const AnalysisDetail = ({ analysisId }: AnalysisDetailProps) => {
   const { data: analysis, isLoading, error } = useAnalysisDetail(analysisId);
@@ -30,7 +31,7 @@ export const AnalysisDetail = ({ analysisId }: AnalysisDetailProps) => {
     <div className="space-y-6">
       {/* Back link */}
       <Link
-        to="/dashboard/cicd/analyses"
+        to={ANALYSES_LIST_PATH}
         className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -63,7 +64,7 @@ export const AnalysisDetail = ({ analysisId }: AnalysisDetailProps) => {
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 py-12 text-center">
           <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>
           <Link
-            to="/dashboard/cicd/analyses"
+            to={ANALYSES_LIST_PATH}
             className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
           >
             Return to Analyses

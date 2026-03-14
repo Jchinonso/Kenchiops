@@ -5,17 +5,9 @@
  * of knowledge documents for the current tenant.
  */
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableCaption,
-} from "@/components/ui/table";
+import { Table, TableHeader, TableHead, TableRow, TableCaption } from "@/components/ui/table";
 import {
   Select,
   SelectTrigger,
@@ -30,104 +22,19 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BookOpen, RefreshCw, Database, FileText, ExternalLink } from "lucide-react";
-import { formatTimestamp, formatSnakeCase, truncateText } from "@/lib/formatters";
+import { BookOpen, RefreshCw, FileText } from "lucide-react";
+import { formatSnakeCase, truncateText } from "@/lib/formatters";
 import { isSafeUrl } from "@/lib/urlSafety";
-import {
-  useKnowledgeBaseStats,
-  useKnowledgeDocuments,
-  type KnowledgeDocDTO,
-} from "@/hooks/useKnowledgeBase";
+import { useKnowledgeBaseStats, useKnowledgeDocuments } from "@/hooks/useKnowledgeBase";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileDataCard } from "@/components/MobileDataCard";
-
-// ==================== Constants ====================
-
-const PAGINATION_CONFIG = {
-  DEFAULT_PAGE_SIZE: 20,
-} as const;
-
-const ALL_TYPES_VALUE = "__all__";
-
-// ==================== Sub-components ====================
-
-interface StatsHeaderProps {
-  readonly totalDocuments: number;
-  readonly documentsByType: Record<string, number>;
-}
-
-const StatsHeader = ({ totalDocuments, documentsByType }: StatsHeaderProps) => {
-  const topTypes = useMemo(() => {
-    const entries = Object.entries(documentsByType);
-    return [...entries].sort(([, countA], [, countB]) => countB - countA).slice(0, 6);
-  }, [documentsByType]);
-
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950 rounded-lg border border-indigo-200 dark:border-indigo-800">
-        <Database className="w-4 h-4 text-indigo-500" />
-        <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
-          {totalDocuments} document{totalDocuments !== 1 ? "s" : ""}
-        </span>
-      </div>
-      {topTypes.map(([docType, count]) => (
-        <Badge key={docType} variant="outline" className="text-xs text-zinc-600 dark:text-zinc-400">
-          {formatSnakeCase(docType)}: {count}
-        </Badge>
-      ))}
-    </div>
-  );
-};
-
-interface DocTableRowProps {
-  readonly doc: KnowledgeDocDTO;
-}
-
-const DocTableRow = ({ doc }: DocTableRowProps) => (
-  <TableRow>
-    <TableCell className="max-w-[300px]">
-      <div className="flex items-center gap-2">
-        <span
-          className="text-sm text-zinc-900 dark:text-zinc-100"
-          title={truncateText(doc.title, 100)}
-        >
-          {truncateText(doc.title, 60)}
-        </span>
-        {/* SECURITY (VULN-703): Validate URL protocol before rendering as link */}
-        {doc.sourceUrl && isSafeUrl(doc.sourceUrl) && (
-          <a
-            href={doc.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Open source for ${truncateText(doc.title, 30)} in new tab`}
-            className="text-zinc-400 hover:text-indigo-500 transition-colors flex-shrink-0"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-          </a>
-        )}
-      </div>
-    </TableCell>
-    <TableCell>
-      <Badge variant="secondary" className="text-xs">
-        {formatSnakeCase(doc.docType)}
-      </Badge>
-    </TableCell>
-    <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
-      {doc.repository ?? "--"}
-    </TableCell>
-    <TableCell className="text-sm text-zinc-500 dark:text-zinc-400 max-w-[200px]">
-      <span title={truncateText(doc.content, 100)}>{truncateText(doc.content, 50)}</span>
-    </TableCell>
-    <TableCell className="text-sm text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-      {formatTimestamp(doc.createdAt)}
-    </TableCell>
-  </TableRow>
-);
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { StatsHeader } from "./StatsHeader";
+import { DocTableRow } from "./DocTableRow";
+import { PAGINATION_CONFIG, ALL_TYPES_VALUE } from "./constants";
 
 // ==================== Main Component ====================
 
@@ -150,16 +57,16 @@ export const KnowledgeBase = () => {
   const items = docsData?.items ?? [];
   const total = docsData?.total ?? 0;
 
-  // Reset offset when filtered results are fewer than current position
-  useEffect(() => {
+  // Reset offset when filtered results are fewer than current position (render-time state adjustment)
+  const [prevTotal, setPrevTotal] = useState(total);
+  if (total !== prevTotal) {
+    setPrevTotal(total);
     if (total > 0 && offset >= total) {
       setOffset(0);
     }
-  }, [total, offset]);
+  }
 
-  useEffect(() => {
-    document.title = "Knowledge Base | Kenchi";
-  }, []);
+  usePageTitle("Knowledge Base | Kenchi");
 
   const hasItems = items.length > 0;
   const currentPage = Math.floor(offset / pageSize) + 1;
@@ -167,14 +74,15 @@ export const KnowledgeBase = () => {
   const hasPrev = offset > 0;
   const hasNext = offset + pageSize < total;
 
+  const documentsByType = stats?.documentsByType;
   const docTypeOptions = useMemo(() => {
-    if (!stats?.documentsByType) {
+    if (!documentsByType) {
       return [];
     }
-    return [...Object.entries(stats.documentsByType)]
+    return [...Object.entries(documentsByType)]
       .sort(([, countA], [, countB]) => countB - countA)
       .map(([docType]) => docType);
-  }, [stats?.documentsByType]);
+  }, [documentsByType]);
 
   const handleDocTypeChange = (value: string) => {
     setSelectedDocType(value);
@@ -355,11 +263,11 @@ export const KnowledgeBase = () => {
                       <TableHead scope="col">Created</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <tbody>
                     {items.map((doc) => (
                       <DocTableRow key={doc.id} doc={doc} />
                     ))}
-                  </TableBody>
+                  </tbody>
                 </Table>
               </div>
 

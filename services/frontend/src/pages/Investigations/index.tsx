@@ -2,22 +2,14 @@
  * Investigations List Page
  *
  * Lists investigations with status, description, service, confidence, and duration.
- * Follows the same Card > Table pattern as ActiveIncidents.tsx.
+ * Follows the same Card > Table pattern as ActiveIncidents.
  * Rows navigate to the investigation detail page.
  */
 
 import { useState, useMemo, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableCaption,
-} from "@/components/ui/table";
+import { Table, TableHeader, TableHead, TableCaption } from "@/components/ui/table";
 import {
   Empty,
   EmptyHeader,
@@ -27,85 +19,21 @@ import {
 } from "@/components/ui/empty";
 import { Search, RefreshCw, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useInvestigations, type InvestigationRecord } from "@/hooks/useInvestigationData";
+import { useInvestigations } from "@/hooks/useInvestigationData";
 import {
   getInvestigationStatusStyle,
   formatDuration,
-  formatTimestamp,
   titleCase,
   truncateText,
 } from "@/lib/formatters";
-import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { MobileDataCard } from "@/components/MobileDataCard";
 import { MobileFilterDrawer } from "@/components/MobileFilterDrawer";
 import { loadSavedFilters, saveFilters, type FilterValues } from "@/components/FilterBarUtils";
-
-// ==================== Constants ====================
-
-const PAGE_SIZE = 20;
-
-// ==================== Sub-components ====================
-
-interface InvestigationTableRowProps {
-  readonly investigation: InvestigationRecord;
-  readonly onClick: () => void;
-}
-
-const InvestigationTableRow = ({ investigation, onClick }: InvestigationTableRowProps) => {
-  const confidence = investigation.diagnosis?.confidence;
-  const confidenceDisplay =
-    confidence !== undefined && confidence !== null ? `${Math.round(confidence * 100)}%` : "--";
-
-  return (
-    <TableRow
-      className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
-      onClick={onClick}
-      onKeyDown={(keyEvent) => {
-        const { key } = keyEvent;
-        if (key === "Enter" || key === " ") {
-          keyEvent.preventDefault();
-          onClick();
-        }
-      }}
-      tabIndex={0}
-      role="link"
-    >
-      <TableCell>
-        <span
-          className={cn(
-            "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border",
-            getInvestigationStatusStyle(investigation.status)
-          )}
-        >
-          {titleCase(investigation.status)}
-        </span>
-      </TableCell>
-      <TableCell className="max-w-[300px]">
-        <span
-          className="text-sm text-zinc-900 dark:text-zinc-100"
-          title={investigation.description}
-        >
-          {truncateText(investigation.description, 80)}
-        </span>
-      </TableCell>
-      <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
-        {investigation.serviceName ?? "--"}
-      </TableCell>
-      <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
-        {confidenceDisplay}
-      </TableCell>
-      <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
-        {investigation.durationMs !== null ? formatDuration(investigation.durationMs) : "--"}
-      </TableCell>
-      <TableCell className="text-sm text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-        {formatTimestamp(investigation.createdAt)}
-      </TableCell>
-    </TableRow>
-  );
-};
+import { InvestigationTableRow } from "./InvestigationTableRow";
+import { PAGE_SIZE } from "./constants";
 
 // ==================== Main Component ====================
 
@@ -339,7 +267,7 @@ export const Investigations = () => {
                       <TableHead scope="col">Time</TableHead>
                     </tr>
                   </TableHeader>
-                  <TableBody>
+                  <tbody>
                     {items.map((investigation) => (
                       <InvestigationTableRow
                         key={investigation.id}
@@ -349,7 +277,7 @@ export const Investigations = () => {
                         }
                       />
                     ))}
-                  </TableBody>
+                  </tbody>
                 </Table>
               </div>
 

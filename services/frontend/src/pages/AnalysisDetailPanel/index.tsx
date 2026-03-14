@@ -5,8 +5,7 @@
  * Opened when clicking an analysis row in CICDAnalyses.
  */
 
-import { useState, useCallback, useMemo } from "react";
-import { Link2, Check } from "lucide-react";
+import { useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -18,6 +17,8 @@ import { formatTimestamp, extractRepoFromKey } from "@/lib/formatters";
 import { useAnalysisDetail } from "@/hooks/useDashboardData";
 import { DetailSkeleton, DetailContent } from "@/components/AnalysisDetailContent";
 import { CorrelatedPipelineItems } from "@/components/CorrelatedPipelineItems";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { buildAnalysisUrl, extractCommitShaFromKey } from "./helpers";
 
 // ==================== Props ====================
 
@@ -31,35 +32,14 @@ interface AnalysisDetailPanelProps {
 
 export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetailPanelProps) => {
   const { data: analysis, isLoading, error } = useAnalysisDetail(analysisId);
-  const [copied, setCopied] = useState(false);
-
-  // Reset copied state when analysisId changes (render-time state adjustment)
-  const [prevAnalysisId, setPrevAnalysisId] = useState(analysisId);
-  if (analysisId !== prevAnalysisId) {
-    setPrevAnalysisId(analysisId);
-    setCopied(false);
-  }
-
-  const handleCopyLink = useCallback(async () => {
-    if (!analysisId) {
-      return;
-    }
-    const url = `${window.location.origin}/dashboard/cicd/analyses/${analysisId}`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [analysisId]);
 
   const repo = analysis ? extractRepoFromKey(analysis.aggregationKey, analysis.fullAnalysis) : null;
 
-  const commitSha = useMemo(() => {
-    const key = analysis?.aggregationKey;
-    if (!key) {
-      return null;
-    }
-    const colonIndex = key.lastIndexOf(":");
-    return colonIndex >= 0 ? key.slice(colonIndex + 1) : null;
-  }, [analysis?.aggregationKey]);
+  const aggregationKey = analysis?.aggregationKey;
+  const commitSha = useMemo(
+    () => (aggregationKey ? extractCommitShaFromKey(aggregationKey) : null),
+    [aggregationKey]
+  );
 
   const timestamp = analysis ? formatTimestamp(analysis.createdAt) : null;
 
@@ -82,16 +62,7 @@ export const AnalysisDetailPanel = ({ analysisId, open, onClose }: AnalysisDetai
                 ? `${repo} \u00b7 ${timestamp}`
                 : "Loading analysis details..."}
           </SheetDescription>
-          {analysisId && (
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors mt-1 self-start"
-            >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
-              {copied ? "Copied!" : "Copy link"}
-            </button>
-          )}
+          {analysisId && <CopyLinkButton url={buildAnalysisUrl(analysisId)} />}
         </SheetHeader>
 
         {isLoading ? (
