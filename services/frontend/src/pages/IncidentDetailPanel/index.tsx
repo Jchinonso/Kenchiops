@@ -5,7 +5,7 @@
  * Opened from the Active Incidents table when "View Full Details" is clicked.
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -13,7 +13,6 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { Link2, Check } from "lucide-react";
 import {
   useIncidentDetail,
   useAcknowledgeIncident,
@@ -22,6 +21,8 @@ import {
 import { getSourceLabel, formatTimestamp } from "@/lib/formatters";
 import { IncidentDetailContent, IncidentDetailSkeleton } from "@/components/IncidentDetailContent";
 import { CorrelatedPipelineItems } from "@/components/CorrelatedPipelineItems";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { buildIncidentUrl, extractCommitSha } from "./helpers";
 
 // ==================== Props ====================
 
@@ -43,24 +44,6 @@ export const IncidentDetailPanel = ({
   const { data, isLoading, error, refetch: refetchDetail } = useIncidentDetail(incidentId);
   const { acknowledge, isLoading: ackLoading } = useAcknowledgeIncident();
   const { resolve, isLoading: resolveLoading } = useResolveIncident();
-  const [copied, setCopied] = useState(false);
-
-  // Reset copied state when incidentId changes (render-time state adjustment)
-  const [prevIncidentId, setPrevIncidentId] = useState(incidentId);
-  if (incidentId !== prevIncidentId) {
-    setPrevIncidentId(incidentId);
-    setCopied(false);
-  }
-
-  const handleCopyLink = useCallback(async () => {
-    if (!incidentId) {
-      return;
-    }
-    const url = `${window.location.origin}/dashboard/incidents/active?id=${incidentId}`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [incidentId]);
 
   const handleAcknowledge = useCallback(async () => {
     if (!incidentId) {
@@ -84,8 +67,7 @@ export const IncidentDetailPanel = ({
     if (!data) {
       return null;
     }
-    const labels = data.alert.labels as Readonly<Record<string, string>>;
-    return labels.vercel_commit_sha ?? labels.netlify_commit_sha ?? null;
+    return extractCommitSha(data.alert.labels as Readonly<Record<string, string>>);
   }, [data]);
 
   const title = data?.alert.title ?? "Incident Detail";
@@ -108,16 +90,7 @@ export const IncidentDetailPanel = ({
         <SheetHeader>
           <SheetTitle className="pr-8 line-clamp-2">{title}</SheetTitle>
           <SheetDescription>{subtitle}</SheetDescription>
-          {incidentId && (
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors mt-1 self-start"
-            >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
-              {copied ? "Copied!" : "Copy link"}
-            </button>
-          )}
+          {incidentId && <CopyLinkButton url={buildIncidentUrl(incidentId)} />}
         </SheetHeader>
 
         {isLoading ? (

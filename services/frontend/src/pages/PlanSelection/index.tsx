@@ -8,171 +8,16 @@
 import { useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { Check, ArrowLeft, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { usePlans, useSubscription, useChangePlan, type PlanDTO } from "@/hooks/useSubscription";
+import { ArrowLeft } from "lucide-react";
+import { usePlans, useSubscription, useChangePlan } from "@/hooks/useSubscription";
 import { useCreateCheckout, useBillingStatus } from "@/hooks/useBilling";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { PlanCard } from "./PlanCard";
 
 // ==================== Constants ====================
 
-const PLAN_FEATURES: Readonly<Record<string, readonly string[]>> = {
-  free: [
-    "Up to 3 repositories",
-    "50 analyses per month",
-    "1 integration",
-    "GitHub PR comments",
-    "Community support",
-  ],
-  pro: [
-    "Everything in Free",
-    "Unlimited repositories",
-    "Unlimited analyses",
-    "Up to 5 integrations",
-    "Up to 10 team members",
-    "Slack integration",
-    "Custom analysis rules",
-    "Priority support",
-  ],
-  team: [
-    "Everything in Pro",
-    "Up to 50 team members",
-    "Unlimited integrations",
-    "Audit log",
-    "Advanced team analytics",
-    "API access",
-  ],
-  enterprise: [
-    "Everything in Team",
-    "Unlimited team members",
-    "SSO / SAML authentication",
-    "Dedicated support engineer",
-    "Self-hosted deployment option",
-    "Custom integrations",
-  ],
-};
-
-const ENTERPRISE_MAILTO = "mailto:sales@kenchi.dev?subject=Enterprise%20Pricing";
-
-const formatPrice = (priceCents: number | null): string => {
-  if (priceCents === null) {
-    return "Custom";
-  }
-  if (priceCents === 0) {
-    return "$0";
-  }
-  return `$${Math.floor(priceCents / 100)}`;
-};
-
-const formatPeriod = (plan: PlanDTO): string => {
-  if (plan.priceMonthlyCents === null) {
-    return "contact us";
-  }
-  if (plan.priceMonthlyCents === 0) {
-    return "forever";
-  }
-  const seats = plan.limits.maxTeamMembers;
-  return seats !== null ? `per month / ${seats} seats` : "per month";
-};
-
-// ==================== Sub-components ====================
-
-interface PlanCardProps {
-  readonly plan: PlanDTO;
-  readonly isCurrent: boolean;
-  readonly isChanging: boolean;
-  readonly onSelect: (planId: string) => void;
-}
-
-const PlanCard = ({ plan, isCurrent, isChanging, onSelect }: PlanCardProps) => {
-  const features = PLAN_FEATURES[plan.id] ?? [];
-  const isEnterprise = plan.id === "enterprise";
-  const isHighlighted = plan.id === "pro";
-
-  const handleSelect = useCallback(() => {
-    if (!isCurrent && !isEnterprise && !isChanging) {
-      onSelect(plan.id);
-    }
-  }, [isCurrent, isEnterprise, isChanging, onSelect, plan.id]);
-
-  return (
-    <div
-      className={cn(
-        "relative bg-white dark:bg-zinc-800 rounded-2xl p-6 shadow-sm transition-shadow hover:shadow-lg flex flex-col",
-        isCurrent
-          ? "ring-2 ring-indigo-500 shadow-lg"
-          : isHighlighted
-            ? "ring-2 ring-indigo-300 dark:ring-indigo-700"
-            : "border border-zinc-200 dark:border-zinc-700"
-      )}
-    >
-      {isCurrent && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge className="bg-indigo-500 text-white text-xs font-semibold px-3 py-0.5">
-            Current Plan
-          </Badge>
-        </div>
-      )}
-
-      <div className="mb-5">
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-          {plan.displayName}
-        </h3>
-        <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
-            {formatPrice(plan.priceMonthlyCents)}
-          </span>
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">/ {formatPeriod(plan)}</span>
-        </div>
-      </div>
-
-      <ul className="space-y-2.5 mb-6 flex-1">
-        {features.map((feature) => (
-          <li key={feature} className="flex items-center gap-2.5">
-            <Check className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">{feature}</span>
-          </li>
-        ))}
-      </ul>
-
-      {isCurrent ? (
-        <div className="w-full text-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-default">
-          Current Plan
-        </div>
-      ) : isEnterprise ? (
-        <a
-          href={ENTERPRISE_MAILTO}
-          className="block w-full text-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 transition-colors"
-        >
-          Contact Sales
-        </a>
-      ) : (
-        <button
-          type="button"
-          onClick={handleSelect}
-          disabled={isChanging}
-          className={cn(
-            "w-full text-center px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors",
-            isChanging
-              ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-400 cursor-not-allowed"
-              : "bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
-          )}
-        >
-          {isChanging ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Changing...
-            </span>
-          ) : (
-            "Select Plan"
-          )}
-        </button>
-      )}
-    </div>
-  );
-};
+const SKELETON_KEYS = ["skel-0", "skel-1", "skel-2", "skel-3"] as const;
 
 // ==================== Main Component ====================
 
@@ -256,9 +101,9 @@ export const PlanSelection = () => {
 
       {isLoading ? (
         <div className="grid lg:grid-cols-4 md:grid-cols-2 grid-cols-1 gap-6">
-          {Array.from({ length: 4 }).map((_, index) => (
+          {SKELETON_KEYS.map((key) => (
             <div
-              key={`skeleton-${index}`}
+              key={key}
               className="bg-white dark:bg-zinc-800 rounded-2xl p-6 border border-zinc-200 dark:border-zinc-700"
             >
               <Skeleton className="h-6 w-20 mb-3" />

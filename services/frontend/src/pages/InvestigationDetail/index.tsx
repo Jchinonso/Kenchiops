@@ -6,18 +6,9 @@
  * Auto-polls when investigation is in an active state.
  */
 
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import {
-  ArrowLeft,
-  Loader2,
-  RefreshCw,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Layers,
-} from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInvestigationDetail } from "@/hooks/useInvestigationData";
 import { InvestigationEvidence } from "@/components/InvestigationEvidence";
@@ -36,37 +27,13 @@ import {
   formatTimestamp,
   titleCase,
 } from "@/lib/formatters";
+import { getStatusIcon, isActiveInvestigation, BackLink } from "./helpers";
 
 // ==================== Types ====================
 
 interface InvestigationDetailProps {
   readonly investigationId: string;
 }
-
-// ==================== Helpers ====================
-
-const STATUS_ICONS: Readonly<Record<string, React.ReactNode>> = {
-  completed: <CheckCircle2 className="w-4 h-4" />,
-  failed: <XCircle className="w-4 h-4" />,
-};
-
-const getStatusIcon = (status: string): React.ReactNode =>
-  STATUS_ICONS[status] ?? <Clock className="w-4 h-4" />;
-
-const isActiveInvestigation = (status: string): boolean =>
-  status === "queued" || status === "gathering" || status === "analyzing";
-
-// ==================== Back Link ====================
-
-const BackLink = () => (
-  <Link
-    to="/dashboard/incidents/investigations"
-    className="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-  >
-    <ArrowLeft className="w-4 h-4" />
-    Back to Investigations
-  </Link>
-);
 
 // ==================== Main Component ====================
 
