@@ -15,25 +15,7 @@
 
 import { useMemo } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-
-// ==================== Legacy Types ====================
-
-export interface FetchState<T> {
-  readonly data: T | null;
-  readonly isLoading: boolean;
-  readonly error: string | null;
-}
-
-export interface UseFetchResult<T> extends FetchState<T> {
-  readonly refetch: () => void;
-}
-
-export interface MutationState {
-  readonly isLoading: boolean;
-  readonly error: string | null;
-}
-
-// ==================== Adapters ====================
+import type { FetchState, UseFetchResult } from "./types";
 
 /** Adapt a TanStack UseQueryResult into the legacy UseFetchResult<T> shape. */
 export const useToFetchResult = <T>(query: UseQueryResult<T, Error>): UseFetchResult<T> => {

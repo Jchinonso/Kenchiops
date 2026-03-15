@@ -7,14 +7,8 @@
  */
 
 import { useEffect, useRef, useState, useMemo } from "react";
-
-interface ScrollFadeInResult {
-  readonly ref: React.RefObject<HTMLElement | null>;
-  readonly isVisible: boolean;
-  readonly fadeClass: string;
-}
-
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+import { REDUCED_MOTION_QUERY } from "./constants";
+import type { ScrollFadeInResult } from "./types";
 
 export const useScrollFadeIn = (threshold = 0.15): ScrollFadeInResult => {
   const ref = useRef<HTMLElement | null>(null);

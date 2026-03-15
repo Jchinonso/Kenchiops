@@ -1,6 +1,5 @@
 import * as React from "react";
-
-const MOBILE_BREAKPOINT = 768;
+import { MOBILE_BREAKPOINT } from "./constants";
 
 export const useIsMobile = (): boolean => {
   const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < MOBILE_BREAKPOINT);

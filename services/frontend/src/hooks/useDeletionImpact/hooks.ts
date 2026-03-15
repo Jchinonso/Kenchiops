@@ -10,21 +10,7 @@ import { useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchQuery } from "@/lib/fetchQuery";
 import { queryKeys } from "@/lib/queryKeys";
-
-interface AffectedResources {
-  readonly providerConnections: number;
-  readonly gitlabWebhooks: number;
-  readonly hasSlackIntegration: boolean;
-}
-
-export interface DeletionImpact {
-  readonly isLastMember: boolean;
-  readonly tenantId: string | null;
-  readonly tenantName: string | null;
-  readonly memberCount: number;
-  readonly willDeleteTenant: boolean;
-  readonly affectedResources: AffectedResources;
-}
+import type { DeletionImpact } from "./types";
 
 export const useDeletionImpact = () => {
   const query = useQuery({

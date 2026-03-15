@@ -4,18 +4,8 @@
  */
 
 import { useState, useCallback, useMemo } from "react";
-
-const TOTAL_STEPS = 4;
-
-interface WizardControls {
-  readonly currentStep: number;
-  readonly direction: 1 | -1;
-  readonly totalSteps: number;
-  readonly isFirstStep: boolean;
-  readonly isLastStep: boolean;
-  readonly goNext: () => void;
-  readonly goBack: () => void;
-}
+import { TOTAL_STEPS } from "./constants";
+import type { WizardControls } from "./types";
 
 export const useOnboardingWizard = (): WizardControls => {
   const [currentStep, setCurrentStep] = useState(0);
