@@ -3,15 +3,7 @@ import { ConnectProviderStep } from "@/components/onboarding/ConnectProviderStep
 import { FeaturesStep } from "@/components/onboarding/FeaturesStep";
 import { ReadyStep } from "@/components/onboarding/ReadyStep";
 import { GITHUB_APP_SLUG } from "./constants";
-
-interface StepRendererProps {
-  readonly currentStep: number;
-  readonly firstName: string;
-  readonly isGitHub: boolean;
-  readonly onNext: () => void;
-  readonly onBack: () => void;
-  readonly onComplete: () => void;
-}
+import type { StepRendererProps } from "./types";
 
 export const StepRenderer = ({
   currentStep,

@@ -8,31 +8,13 @@ import { Check, Sun } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { itemVariants, microSpring } from "@/lib/animations";
-
-type ThemeMode = "light" | "dark" | "system";
-
-interface ThemeSelectorProps {
-  readonly preference: ThemeMode;
-  readonly onSetTheme: (theme: ThemeMode) => void;
-}
-
-interface ThemePreviewProps {
-  readonly mode: ThemeMode;
-  readonly active: boolean;
-  readonly onClick: () => void;
-}
+import type { ThemeMode, ThemeSelectorProps, ThemePreviewProps, ThemePreviewStyles } from "./types";
 
 const THEME_LABELS: Readonly<Record<ThemeMode, string>> = {
   light: "Light",
   dark: "Dark",
   system: "System",
 };
-
-interface ThemePreviewStyles {
-  readonly container: string;
-  readonly sidebar: string;
-  readonly content: string;
-}
 
 const THEME_PREVIEW_STYLES: Readonly<Record<ThemeMode, ThemePreviewStyles>> = {
   dark: {

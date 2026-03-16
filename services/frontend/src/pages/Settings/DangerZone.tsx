@@ -20,17 +20,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { itemVariants } from "@/lib/animations";
-import type { DeletionImpact } from "@/hooks/useDeletionImpact";
 import { DELETE_CONFIRMATION } from "./constants";
-
-interface DangerZoneProps {
-  readonly impact: DeletionImpact | null;
-  readonly impactLoading: boolean;
-  readonly impactError: string | null;
-  readonly fetchImpact: () => Promise<void>;
-  readonly onDeleteAccount: () => Promise<void>;
-  readonly deleteLoading: boolean;
-}
+import type { DangerZoneProps } from "./types";
 
 export const DangerZone = ({
   impact,

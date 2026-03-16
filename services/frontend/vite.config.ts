@@ -49,6 +49,7 @@ export default defineConfig({
             "@testing-library/react",
             "@testing-library/jest-dom",
             "@testing-library/user-event",
+            "@tanstack/react-query",
             "react-dom",
             "react-dom/client",
             "react-dom/test-utils",

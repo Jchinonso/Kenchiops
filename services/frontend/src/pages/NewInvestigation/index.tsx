@@ -18,16 +18,7 @@ import {
 import { ArrowLeft, Loader2, Search, AlertCircle } from "lucide-react";
 import { useStartInvestigation } from "@/hooks/useInvestigationData";
 import { ENVIRONMENT_OPTIONS, SYMPTOM_OPTIONS, INPUT_CLASS } from "./constants";
-
-// ==================== Types ====================
-
-interface FormState {
-  readonly description: string;
-  readonly serviceName: string;
-  readonly environment: string;
-  readonly symptom: string;
-  readonly endpoint: string;
-}
+import type { FormState } from "./types";
 
 // ==================== Main Component ====================
 

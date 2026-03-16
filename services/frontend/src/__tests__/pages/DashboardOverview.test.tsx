@@ -17,6 +17,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { DashboardOverview } from "@/pages/DashboardOverview";
 
@@ -26,11 +27,37 @@ const mockUseAnalyses = vi.fn();
 const mockUseFailures = vi.fn();
 const mockUseTenantInfo = vi.fn();
 
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: {
+      tenantId: "tenant-1",
+      organizations: [{ isSelected: true, provider: "github" }],
+    },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
 vi.mock("@/hooks/useDashboardData", () => ({
   useDashboardStats: (...args: unknown[]) => mockUseDashboardStats(...args),
   useAnalyses: (...args: unknown[]) => mockUseAnalyses(...args),
   useFailures: (...args: unknown[]) => mockUseFailures(...args),
   useTenantInfo: (...args: unknown[]) => mockUseTenantInfo(...args),
+}));
+
+vi.mock("@/hooks/useIncidentData", () => ({
+  useTriageStats: () => ({ data: null, isLoading: false }),
+  useActiveCountsBySource: () => ({ data: null, isLoading: false }),
+  useBalancedRecentIncidents: () => ({ data: null, isLoading: false }),
+  useSeverityDistributionBySource: () => ({ data: null, isLoading: false }),
+}));
+
+vi.mock("@/components/SeverityDistributionChart", () => ({
+  SeverityDistributionChart: () => <div data-testid="severity-chart">Severity</div>,
+}));
+
+vi.mock("@/components/FeatureGate", () => ({
+  FeatureGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 // Mock chart components
@@ -45,7 +72,7 @@ vi.mock("@/components/TimeDisplay", () => ({
 }));
 
 const defaultStats = {
-  data: { totalFailures: 5, totalAnalyses: 3, connectedRepos: 2 },
+  data: { totalFailures: 5, totalAnalyses: 3, connectedRepos: 2, gitlabProjectCount: 0 },
   isLoading: false,
   error: null,
   refetch: vi.fn(),
@@ -66,12 +93,16 @@ const defaultFailures = {
 };
 
 const defaultTenant = {
-  data: { githubConnected: true, slackConnected: false },
+  data: { githubConnected: true, slackConnected: false, gitlabConnected: false, hasData: true },
   isLoading: false,
 };
 
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
 const Wrapper = ({ children }: { readonly children: React.ReactNode }) => (
-  <MemoryRouter>{children}</MemoryRouter>
+  <QueryClientProvider client={queryClient}>
+    <MemoryRouter>{children}</MemoryRouter>
+  </QueryClientProvider>
 );
 
 describe("DashboardOverview", () => {
@@ -98,7 +129,9 @@ describe("DashboardOverview", () => {
         <DashboardOverview firstName="Alice" showOnboarding={false} dismissOnboarding={vi.fn()} />
       </Wrapper>
     );
-    expect(screen.getByText("Here's your CI/CD pipeline health at a glance.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Here's your pipeline and incident health at a glance.")
+    ).toBeInTheDocument();
   });
 
   it("renders quick stat cards", () => {
@@ -179,7 +212,7 @@ describe("DashboardOverview", () => {
       </Wrapper>
     );
     expect(screen.getByText("Recent Failures")).toBeInTheDocument();
-    expect(screen.getByText("View all failures →")).toBeInTheDocument();
+    expect(screen.getByText("View all failures")).toBeInTheDocument();
   });
 
   it("shows recent analyses when available", () => {
@@ -205,18 +238,23 @@ describe("DashboardOverview", () => {
       </Wrapper>
     );
     expect(screen.getByText("Recent Analyses")).toBeInTheDocument();
-    expect(screen.getByText("View all analyses →")).toBeInTheDocument();
+    expect(screen.getByText("View all analyses")).toBeInTheDocument();
   });
 
   it("shows onboarding checklist when showOnboarding is true", () => {
     // Ensure completedCount < 2 so the full card is shown (not the compact banner)
     mockUseTenantInfo.mockReturnValue({
-      data: { githubConnected: false, slackConnected: false },
+      data: {
+        githubConnected: false,
+        slackConnected: false,
+        gitlabConnected: false,
+        hasData: false,
+      },
       isLoading: false,
     });
     mockUseDashboardStats.mockReturnValue({
       ...defaultStats,
-      data: { totalFailures: 0, totalAnalyses: 0, connectedRepos: 0 },
+      data: { totalFailures: 0, totalAnalyses: 0, connectedRepos: 0, gitlabProjectCount: 0 },
     });
     render(
       <Wrapper>
@@ -224,7 +262,8 @@ describe("DashboardOverview", () => {
       </Wrapper>
     );
     expect(screen.getByText("Get Set Up")).toBeInTheDocument();
-    expect(screen.getByText(/Install Kenchi GitHub App/)).toBeInTheDocument();
+    const connectTexts = screen.getAllByText(/Connect GitHub/);
+    expect(connectTexts.length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows Export Dashboard button when stats are loaded", () => {
@@ -249,7 +288,7 @@ describe("DashboardOverview", () => {
   it("shows new user welcome state", () => {
     mockUseDashboardStats.mockReturnValue({
       ...defaultStats,
-      data: { totalFailures: 0, totalAnalyses: 0, connectedRepos: 0 },
+      data: { totalFailures: 0, totalAnalyses: 0, connectedRepos: 0, gitlabProjectCount: 0 },
     });
     render(
       <Wrapper>
@@ -257,6 +296,6 @@ describe("DashboardOverview", () => {
       </Wrapper>
     );
     expect(screen.getByText("Welcome to Kenchi")).toBeInTheDocument();
-    expect(screen.getByText("Connect GitHub")).toBeInTheDocument();
+    expect(screen.getByText("Connect a CI Provider")).toBeInTheDocument();
   });
 });

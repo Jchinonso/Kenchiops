@@ -24,8 +24,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { MobileDataCard } from "@/components/MobileDataCard";
-import { SortableTableHead } from "@/components/SortableTableHead";
-import { cycleSortDirection, type SortConfig } from "@/components/SortableTableHeadUtils";
+import {
+  SortableTableHead,
+  cycleSortDirection,
+  type SortConfig,
+} from "@/components/SortableTableHead";
 import { PAGE_SIZE, getStatusStyle } from "./constants";
 import { formatDuration } from "./helpers";
 import { WebhookRow } from "./WebhookRow";

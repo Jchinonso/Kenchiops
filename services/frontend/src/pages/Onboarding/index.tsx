@@ -17,12 +17,7 @@ import { pageVariants, pageTransition } from "@/lib/animations";
 import { OnboardingBackground } from "@/components/onboarding/OnboardingBackground";
 import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
 import { StepRenderer } from "./StepRenderer";
-
-interface OnboardingProps {
-  readonly displayName: string;
-  readonly provider: string;
-  readonly onSkip: () => void;
-}
+import type { OnboardingProps } from "./types";
 
 export const Onboarding = ({ displayName, provider, onSkip }: OnboardingProps) => {
   const wizard = useOnboardingWizard();

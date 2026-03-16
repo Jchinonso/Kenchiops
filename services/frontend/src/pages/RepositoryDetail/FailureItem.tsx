@@ -1,13 +1,9 @@
 import { Link } from "react-router-dom";
-import type { EventRecord } from "@/hooks/useDashboardData";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getSeverityStyle, getPayloadString, titleCase } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
-
-interface FailureItemProps {
-  readonly event: EventRecord;
-}
+import type { FailureItemProps } from "./types";
 
 export const FailureItem = ({ event }: FailureItemProps) => {
   const checkName = getPayloadString(event.payload, "checkName");

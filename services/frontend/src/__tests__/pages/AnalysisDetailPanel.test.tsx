@@ -24,6 +24,10 @@ vi.mock("@/components/AnalysisDetailContent", () => ({
   ),
 }));
 
+vi.mock("@/components/CorrelatedPipelineItems", () => ({
+  CorrelatedPipelineItems: () => <div data-testid="correlated-items">Correlated</div>,
+}));
+
 // Mock Radix Sheet to render children without portal
 vi.mock("@/components/ui/sheet", () => ({
   Sheet: ({ children, open }: { children: React.ReactNode; open: boolean }) =>

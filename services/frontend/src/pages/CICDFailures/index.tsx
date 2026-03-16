@@ -48,10 +48,13 @@ import {
   loadSavedFilters,
   saveFilters,
   type FilterValues,
-} from "@/components/FilterBarUtils";
+} from "@/components/FilterBar";
 import { exportFailuresToCSV } from "@/lib/csvExport";
-import { SortableTableHead } from "@/components/SortableTableHead";
-import { cycleSortDirection, type SortConfig } from "@/components/SortableTableHeadUtils";
+import {
+  SortableTableHead,
+  cycleSortDirection,
+  type SortConfig,
+} from "@/components/SortableTableHead";
 import { PAGE_SIZE } from "./constants";
 import { getSeverityRank } from "./helpers";
 import { FailureRow } from "./FailureRow";

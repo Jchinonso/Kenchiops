@@ -37,8 +37,12 @@ describe("Integrations", () => {
 
   it("should render active integration descriptions", () => {
     render(<Integrations />);
-    expect(screen.getByText("PR comments, check runs, CI failure detection")).toBeInTheDocument();
-    expect(screen.getByText("Real-time alerts and failure notifications")).toBeInTheDocument();
+    expect(
+      screen.getByText("PR comments, check runs, and GitHub Enterprise support")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Alerts, slash commands, and incident investigation")
+    ).toBeInTheDocument();
     expect(screen.getByText("Multi-model AI backbone for analysis")).toBeInTheDocument();
   });
 
@@ -49,7 +53,7 @@ describe("Integrations", () => {
 
   it("should render all coming-soon integration names", () => {
     render(<Integrations />);
-    const comingSoon = ["GitLab", "Bitbucket", "Teams", "Discord", "Datadog", "PagerDuty"];
+    const comingSoon = ["Bitbucket", "Teams", "Discord", "Datadog", "PagerDuty"];
     comingSoon.forEach((name) => {
       expect(screen.getByText(name)).toBeInTheDocument();
     });

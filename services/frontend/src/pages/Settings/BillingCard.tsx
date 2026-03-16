@@ -12,16 +12,7 @@ import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
 import { itemVariants } from "@/lib/animations";
 import { BILLING_STATUS_LABELS, BILLING_BADGE_STYLES, DEFAULT_BADGE_STYLE } from "./constants";
-
-interface BillingCardProps {
-  readonly billingStatus: {
-    readonly status: string;
-    readonly currentPeriodEnd: string | null;
-  };
-  readonly isLoading: boolean;
-  readonly portalLoading: boolean;
-  readonly onOpenPortal: () => Promise<void>;
-}
+import type { BillingCardProps } from "./types";
 
 export const BillingCard = ({
   billingStatus,

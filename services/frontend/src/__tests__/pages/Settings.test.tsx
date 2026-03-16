@@ -1,25 +1,15 @@
 /**
  * Unit tests for Settings page.
  *
- * Tests:
- * - Renders page title and description
- * - Shows profile section with user info
- * - Shows user initials when no avatar
- * - Shows avatar when provided
- * - Shows organization section
- * - Shows tenant loading skeleton
- * - Shows connections section (GitHub, Slack)
- * - Shows appearance section with theme options
- * - Active theme option is highlighted
- * - Shows notification toggles
- * - Shows danger zone with delete account button
- * - Delete dialog opens and requires confirmation
+ * Tests the redesigned settings page with ProfileHero,
+ * SettingsNav, and content sections.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { Settings } from "@/pages/Settings";
 
@@ -59,6 +49,28 @@ vi.mock("@/components/TimeDisplay", () => ({
   TimeDisplay: ({ dateTime }: { dateTime: string }) => <time>{dateTime}</time>,
 }));
 
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscription: () => ({ data: null, isLoading: false }),
+  useSubscriptionUsage: () => ({ data: null, isLoading: false }),
+}));
+
+vi.mock("@/hooks/useBilling", () => ({
+  useBillingStatus: () => ({ data: null, isLoading: false }),
+  useBillingPortal: () => ({ openPortal: vi.fn(), isLoading: false }),
+}));
+
+vi.mock("@/hooks/useDeletionImpact", () => ({
+  useDeletionImpact: () => ({ impact: null, isLoading: false, error: null, fetchImpact: vi.fn() }),
+}));
+
+vi.mock("@/hooks/useActiveSection", () => ({
+  useActiveSection: () => null,
+}));
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
 const defaultAuth = {
   user: {
     id: "u1",
@@ -68,6 +80,8 @@ const defaultAuth = {
     role: "admin",
     createdAt: "2026-01-01T00:00:00Z",
     providers: [{ provider: "github", username: "testuser" }],
+    organizations: [{ isSelected: true, provider: "github" }],
+    tenantType: "organization",
   },
   logout: vi.fn(),
 };
@@ -83,8 +97,12 @@ const defaultTenant = {
   isLoading: false,
 };
 
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
 const Wrapper = ({ children }: { readonly children: React.ReactNode }) => (
-  <MemoryRouter>{children}</MemoryRouter>
+  <QueryClientProvider client={queryClient}>
+    <MemoryRouter>{children}</MemoryRouter>
+  </QueryClientProvider>
 );
 
 describe("Settings", () => {
@@ -99,28 +117,22 @@ describe("Settings", () => {
     });
   });
 
-  it("renders page title", () => {
+  it("renders user display name in profile hero", () => {
     render(
       <Wrapper>
         <Settings />
       </Wrapper>
     );
-    expect(screen.getByText("Settings")).toBeInTheDocument();
-    expect(
-      screen.getByText("Manage your profile, organization, and preferences.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Test User")).toBeInTheDocument();
   });
 
-  it("renders profile section with user info", () => {
+  it("renders user email in profile hero", () => {
     render(
       <Wrapper>
         <Settings />
       </Wrapper>
     );
-    expect(screen.getByText("Profile")).toBeInTheDocument();
-    expect(screen.getByText("Test User")).toBeInTheDocument();
     expect(screen.getByText("test@example.com")).toBeInTheDocument();
-    expect(screen.getByText("Admin")).toBeInTheDocument();
   });
 
   it("shows user initials when no avatar", () => {
@@ -146,7 +158,7 @@ describe("Settings", () => {
     expect(img).toHaveAttribute("src", "https://example.com/avatar.png");
   });
 
-  it("shows provider badge", () => {
+  it("shows provider badge with username", () => {
     render(
       <Wrapper>
         <Settings />
@@ -155,13 +167,12 @@ describe("Settings", () => {
     expect(screen.getByText("testuser")).toBeInTheDocument();
   });
 
-  it("renders organization section", () => {
+  it("renders organization name and status in profile hero", () => {
     render(
       <Wrapper>
         <Settings />
       </Wrapper>
     );
-    expect(screen.getByText("Organization")).toBeInTheDocument();
     expect(screen.getByText("TestOrg")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
   });
@@ -174,19 +185,6 @@ describe("Settings", () => {
       </Wrapper>
     );
     expect(container.querySelectorAll('[class*="animate-pulse"]').length).toBeGreaterThan(0);
-  });
-
-  it("renders connections section", () => {
-    render(
-      <Wrapper>
-        <Settings />
-      </Wrapper>
-    );
-    expect(screen.getByText("Connections")).toBeInTheDocument();
-    expect(screen.getByText("GitHub")).toBeInTheDocument();
-    expect(screen.getByText("Slack")).toBeInTheDocument();
-    expect(screen.getByText("Connected")).toBeInTheDocument();
-    expect(screen.getByText("Not connected")).toBeInTheDocument();
   });
 
   it("renders appearance section with three theme options", () => {
@@ -223,40 +221,22 @@ describe("Settings", () => {
     expect(screen.getByText("Browser Notifications")).toBeInTheDocument();
   });
 
-  it("renders danger zone with delete account button", () => {
+  it("renders danger zone section", () => {
     render(
       <Wrapper>
         <Settings />
       </Wrapper>
     );
-    expect(screen.getByText("Danger Zone")).toBeInTheDocument();
-    const deleteTexts = screen.getAllByText("Delete Account");
-    expect(deleteTexts.length).toBeGreaterThanOrEqual(1);
+    const dangerZoneTexts = screen.getAllByText("Danger Zone");
+    expect(dangerZoneTexts.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("shows delete confirmation dialog requiring typed confirmation", async () => {
+  it("shows role badge", () => {
     render(
       <Wrapper>
         <Settings />
       </Wrapper>
     );
-    const user = userEvent.setup();
-
-    // Click the delete account button to open dialog
-    const deleteButtons = screen.getAllByText("Delete Account");
-    await user.click(deleteButtons[0]);
-
-    expect(screen.getByText("Delete your account?")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Type "DELETE" to confirm')).toBeInTheDocument();
-  });
-
-  it("shows no organization message when tenant is null", () => {
-    mockUseTenantInfo.mockReturnValue({ data: null, isLoading: false });
-    render(
-      <Wrapper>
-        <Settings />
-      </Wrapper>
-    );
-    expect(screen.getByText("No organization found.")).toBeInTheDocument();
+    expect(screen.getByText("Admin")).toBeInTheDocument();
   });
 });

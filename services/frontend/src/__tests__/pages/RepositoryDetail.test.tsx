@@ -19,6 +19,18 @@ vi.mock("@/hooks/useDashboardData", () => ({
   useAnalyses: (...args: unknown[]) => mockUseAnalyses(...args),
 }));
 
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscriptionUsage: () => ({ data: null, isLoading: false }),
+}));
+
+vi.mock("@/components/FeatureLocked", () => ({
+  FeatureLocked: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("@/components/PageLoader", () => ({
+  PageLoader: () => <div data-testid="page-loader" />,
+}));
+
 const createEvent = (overrides = {}) => ({
   id: "event-1",
   type: "CICD_FAILURE",

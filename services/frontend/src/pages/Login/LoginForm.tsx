@@ -4,15 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { containerVariants, itemVariants } from "@/lib/animations";
 import { ProviderButton } from "./ProviderButton";
 import { KenchiLogo } from "./KenchiLogo";
-import type { GitProvider } from "./constants";
-
-interface LoginFormProps {
-  readonly providers: readonly GitProvider[];
-  readonly loadingProvider: string | null;
-  readonly authChecking: boolean;
-  readonly oauthErrorMessage: string | null;
-  readonly onProviderClick: (providerId: string) => void;
-}
+import type { LoginFormProps } from "./types";
 
 export const LoginForm = ({
   providers,

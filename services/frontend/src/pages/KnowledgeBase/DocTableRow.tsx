@@ -3,11 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExternalLink } from "lucide-react";
 import { formatTimestamp, formatSnakeCase, truncateText } from "@/lib/formatters";
 import { isSafeUrl } from "@/lib/urlSafety";
-import type { KnowledgeDocDTO } from "@/hooks/useKnowledgeBase";
-
-interface DocTableRowProps {
-  readonly doc: KnowledgeDocDTO;
-}
+import type { DocTableRowProps } from "./types";
 
 export const DocTableRow = ({ doc }: DocTableRowProps) => (
   <TableRow>

@@ -12,6 +12,11 @@ import "@testing-library/jest-dom/vitest";
 // in the monorepo (pre-compiled against React 18 at root level).
 import "./__tests__/__mocks__/radix-ui";
 
+// Global mock for motion/react — the motion library relies on React
+// context that is not available in the jsdom test environment, causing
+// "Cannot read properties of null (reading 'useContext')" errors.
+import "./__tests__/__mocks__/motion-react";
+
 // ==================== Browser API Mocks ====================
 
 /**

@@ -1,5 +1,4 @@
 import { TableRow, TableCell } from "@/components/ui/table";
-import type { InvestigationRecord } from "@/hooks/useInvestigationData";
 import {
   getInvestigationStatusStyle,
   formatDuration,
@@ -8,11 +7,7 @@ import {
   truncateText,
 } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-
-interface InvestigationTableRowProps {
-  readonly investigation: InvestigationRecord;
-  readonly onClick: () => void;
-}
+import type { InvestigationTableRowProps } from "./types";
 
 export const InvestigationTableRow = ({ investigation, onClick }: InvestigationTableRowProps) => {
   const confidence = investigation.diagnosis?.confidence;

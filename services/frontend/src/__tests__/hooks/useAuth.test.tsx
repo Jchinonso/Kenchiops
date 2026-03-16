@@ -42,6 +42,20 @@ const mockUser = {
   tenantId: "tenant-1",
 };
 
+/**
+ * The /auth/me endpoint returns { data: { user, organizations, githubOrgAccessUrl } }.
+ * mapAuthMeToUser destructures response.data.user, so we must nest accordingly.
+ */
+const createAuthMeResponse = (user: Record<string, unknown>) =>
+  ({
+    ok: true,
+    status: 200,
+    json: () =>
+      Promise.resolve({
+        data: { user, organizations: [], githubOrgAccessUrl: null },
+      }),
+  }) as unknown as Response;
+
 const createSuccessResponse = (data: unknown) =>
   ({
     ok: true,
@@ -124,7 +138,7 @@ describe("AuthProvider", () => {
 
   describe("successful authentication", () => {
     it("should set user when /auth/me succeeds", async () => {
-      mockApiClient.mockResolvedValueOnce(createSuccessResponse(mockUser));
+      mockApiClient.mockResolvedValueOnce(createAuthMeResponse(mockUser));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -133,11 +147,11 @@ describe("AuthProvider", () => {
       });
 
       expect(result.current.isAuthenticated).toBe(true);
-      expect(result.current.user).toEqual(mockUser);
+      expect(result.current.user).toMatchObject(mockUser);
     });
 
     it("should call /auth/me on mount", async () => {
-      mockApiClient.mockResolvedValueOnce(createSuccessResponse(mockUser));
+      mockApiClient.mockResolvedValueOnce(createAuthMeResponse(mockUser));
 
       renderHook(() => useAuth(), { wrapper });
 
@@ -147,7 +161,7 @@ describe("AuthProvider", () => {
     });
 
     it("should set isAuthenticated to true when user is present", async () => {
-      mockApiClient.mockResolvedValueOnce(createSuccessResponse(mockUser));
+      mockApiClient.mockResolvedValueOnce(createAuthMeResponse(mockUser));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -162,7 +176,7 @@ describe("AuthProvider", () => {
         providers: [{ provider: "github", username: "testuser" }],
         createdAt: "2024-01-01T00:00:00Z",
       };
-      mockApiClient.mockResolvedValueOnce(createSuccessResponse(fullUser));
+      mockApiClient.mockResolvedValueOnce(createAuthMeResponse(fullUser));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -281,7 +295,7 @@ describe("AuthProvider", () => {
   describe("logout", () => {
     it("should call logout API, clear user, set session flag, and redirect", async () => {
       mockApiClient
-        .mockResolvedValueOnce(createSuccessResponse(mockUser)) // /auth/me
+        .mockResolvedValueOnce(createAuthMeResponse(mockUser)) // /auth/me
         .mockResolvedValueOnce(createSuccessResponse({})); // /auth/logout
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -301,7 +315,7 @@ describe("AuthProvider", () => {
 
     it("should call /auth/logout with POST method", async () => {
       mockApiClient
-        .mockResolvedValueOnce(createSuccessResponse(mockUser))
+        .mockResolvedValueOnce(createAuthMeResponse(mockUser))
         .mockResolvedValueOnce(createSuccessResponse({}));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -319,7 +333,7 @@ describe("AuthProvider", () => {
 
     it("should redirect even when logout API fails", async () => {
       mockApiClient
-        .mockResolvedValueOnce(createSuccessResponse(mockUser))
+        .mockResolvedValueOnce(createAuthMeResponse(mockUser))
         .mockRejectedValueOnce(new Error("Network error"));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -361,8 +375,8 @@ describe("AuthProvider", () => {
     it("should fetch user again when refreshUser is called", async () => {
       const updatedUser = { ...mockUser, displayName: "Updated User" };
       mockApiClient
-        .mockResolvedValueOnce(createSuccessResponse(mockUser))
-        .mockResolvedValueOnce(createSuccessResponse(updatedUser));
+        .mockResolvedValueOnce(createAuthMeResponse(mockUser))
+        .mockResolvedValueOnce(createAuthMeResponse(updatedUser));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -379,7 +393,7 @@ describe("AuthProvider", () => {
 
     it("should handle refreshUser returning non-ok response", async () => {
       mockApiClient
-        .mockResolvedValueOnce(createSuccessResponse(mockUser))
+        .mockResolvedValueOnce(createAuthMeResponse(mockUser))
         .mockResolvedValueOnce(createErrorResponse(401));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -398,7 +412,7 @@ describe("AuthProvider", () => {
 
     it("should handle refreshUser throwing error", async () => {
       mockApiClient
-        .mockResolvedValueOnce(createSuccessResponse(mockUser))
+        .mockResolvedValueOnce(createAuthMeResponse(mockUser))
         .mockRejectedValueOnce(new Error("Network failure"));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -418,7 +432,7 @@ describe("AuthProvider", () => {
 
   describe("context value stability", () => {
     it("should provide isAuthenticated derived from user state", async () => {
-      mockApiClient.mockResolvedValueOnce(createSuccessResponse(mockUser));
+      mockApiClient.mockResolvedValueOnce(createAuthMeResponse(mockUser));
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 

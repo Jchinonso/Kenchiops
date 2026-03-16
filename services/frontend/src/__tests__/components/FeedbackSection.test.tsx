@@ -44,7 +44,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-
 // ==================== Imports (after mocks, resolved by Vitest hoisting) ====================
 
 import { FeedbackSection } from "@/components/FeedbackSection";
@@ -100,9 +99,11 @@ const getButtonByText = (text: string): HTMLButtonElement => {
   return el;
 };
 
-/** Default return value for useMyFeedback when no feedback exists */
+/** Default return value for useMyFeedback when no feedback exists.
+ * Use `id: null` so the component's prevFeedbackId check (null !== null = false)
+ * doesn't trigger an infinite re-render in React 19. */
 const noFeedback = () => ({
-  data: null,
+  data: { id: null, feedbackType: null, correction: null, userId: null, createdAt: null },
   isLoading: false,
   error: null,
 });
@@ -195,7 +196,7 @@ describe("FeedbackSection", () => {
   describe("disabled state", () => {
     it("should disable both buttons when feedback is being fetched", () => {
       mockUseMyFeedback.mockReturnValue({
-        data: null,
+        data: { id: null, feedbackType: null, correction: null, userId: null, createdAt: null },
         isLoading: true,
         error: null,
       });

@@ -28,12 +28,7 @@ import {
   titleCase,
 } from "@/lib/formatters";
 import { getStatusIcon, isActiveInvestigation, BackLink } from "./helpers";
-
-// ==================== Types ====================
-
-interface InvestigationDetailProps {
-  readonly investigationId: string;
-}
+import type { InvestigationDetailProps } from "./types";
 
 // ==================== Main Component ====================
 

@@ -3,12 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Workflow, ExternalLink, Lock, Globe, GitBranch } from "lucide-react";
-import type { InstallationRepository } from "@/hooks/useDashboardData";
 import { buildSafeGitHubUrl } from "@/lib/urlSafety";
-
-interface RepoCardProps {
-  readonly repo: InstallationRepository;
-}
+import type { RepoCardProps } from "./types";
 
 export const RepoCard = ({ repo }: RepoCardProps) => (
   <Link

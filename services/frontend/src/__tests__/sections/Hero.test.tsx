@@ -37,7 +37,9 @@ describe("Hero", () => {
 
   it("should render the gradient text within headline", () => {
     renderHero();
-    expect(screen.getByText("before they slow you down")).toBeInTheDocument();
+    // Gradient text is split across two spans
+    expect(screen.getByText("before they slow")).toBeInTheDocument();
+    expect(screen.getByText(/you down/)).toBeInTheDocument();
   });
 
   it("should render the subheadline", () => {
@@ -61,9 +63,9 @@ describe("Hero", () => {
     expect(demo).toHaveAttribute("href", "/#cta");
   });
 
-  it("should render the NO CC REQUIRED badge inside the CTA", () => {
+  it("should render the NO CC badge inside the CTA", () => {
     renderHero();
-    expect(screen.getByText("NO CC REQUIRED")).toBeInTheDocument();
+    expect(screen.getByText("NO CC")).toBeInTheDocument();
   });
 
   it("should render trusted-by section with company names", () => {

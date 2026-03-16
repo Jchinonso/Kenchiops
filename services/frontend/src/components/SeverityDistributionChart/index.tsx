@@ -1,0 +1,1 @@
+export { SeverityDistributionChart } from "./SeverityDistributionChart";

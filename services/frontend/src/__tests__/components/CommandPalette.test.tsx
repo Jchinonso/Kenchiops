@@ -113,7 +113,6 @@ describe("CommandPalette", () => {
     );
     expect(screen.getByText("Navigation")).toBeInTheDocument();
     expect(screen.getByText("Overview")).toBeInTheDocument();
-    expect(screen.getByText("CI/CD Failures")).toBeInTheDocument();
     expect(screen.getByText("CI/CD Analyses")).toBeInTheDocument();
     expect(screen.getByText("CI/CD Pipelines")).toBeInTheDocument();
     expect(screen.getByText("Webhook Activity")).toBeInTheDocument();

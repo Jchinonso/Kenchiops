@@ -467,11 +467,8 @@ describe("useAnalysisDetail", () => {
   it("should not fetch when analysisId is null", async () => {
     const { result } = renderHook(() => useAnalysisDetail(null), { wrapper: createWrapper() });
 
-    // Should immediately be not loading with no data
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
+    // Disabled queries in TanStack Query v5 report isPending: true (no data yet).
+    // The key assertion is that no API call is made.
     expect(result.current.data).toBeNull();
     expect(result.current.error).toBeNull();
     // apiClient should not be called because query is disabled
@@ -487,9 +484,8 @@ describe("useAnalysisDetail", () => {
       wrapper: createWrapper(),
     });
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
+    // Disabled queries in TanStack Query v5 stay isPending: true.
+    // The key assertion is that no API call was made while disabled.
     expect(mockApiClient).not.toHaveBeenCalled();
 
     rerender({ id: "a-2" });

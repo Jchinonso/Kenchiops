@@ -13,8 +13,32 @@ import { CICDPipelines } from "@/pages/CICDPipelines";
 
 const mockUseRepositories = vi.fn();
 
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: {
+      tenantId: "tenant-1",
+      organizations: [{ isSelected: true, provider: "github" }],
+    },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
 vi.mock("@/hooks/useDashboardData", () => ({
   useRepositories: () => mockUseRepositories(),
+  useGitLabProjects: () => ({ data: null, isLoading: false, error: null }),
+}));
+
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscriptionUsage: () => ({ data: null, isLoading: false }),
+}));
+
+vi.mock("@/components/FeatureLocked", () => ({
+  FeatureLocked: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("@/components/PageLoader", () => ({
+  PageLoader: () => <div data-testid="page-loader" />,
 }));
 
 const renderPipelines = () =>
