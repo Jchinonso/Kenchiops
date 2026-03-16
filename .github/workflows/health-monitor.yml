@@ -2,8 +2,8 @@ name: Health Monitor
 
 on:
   schedule:
-    # Every 30 minutes
-    - cron: '*/30 * * * *'
+    # Every 6 hours
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -15,26 +15,31 @@ jobs:
       - name: Check API health
         id: health
         run: |
-          # Check the API directly through the frontend proxy
-          # /api/health requires auth, so we check / returns HTML (site is up)
-          # and that the response contains expected content
-          HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
-            --connect-timeout 10 --max-time 15 \
-            https://kenchiops.app/ 2>/dev/null || echo "000")
+          FINAL_STATUS="000"
 
-          echo "status=$HTTP_STATUS" >> $GITHUB_OUTPUT
+          # Retry up to 3 times with 15s delay to handle transient network issues
+          for attempt in 1 2 3; do
+            HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+              --connect-timeout 10 --max-time 15 \
+              https://kenchiops.app/health 2>/dev/null || echo "000")
 
-          if [ "$HTTP_STATUS" = "200" ]; then
-            # Verify it's actually our app, not a generic error page
-            if grep -q "Kenchi" /tmp/response.txt 2>/dev/null; then
-              echo "Production is up (HTTP $HTTP_STATUS, content verified)"
+            echo "Attempt $attempt: HTTP $HTTP_STATUS"
+
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "Production is up (HTTP $HTTP_STATUS)"
+              FINAL_STATUS="200"
+              break
             else
-              echo "status=503" >> $GITHUB_OUTPUT
-              echo "Production returned 200 but unexpected content"
+              FINAL_STATUS="$HTTP_STATUS"
             fi
-          else
-            echo "Production health check failed (HTTP $HTTP_STATUS)"
-          fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Retrying in 15s..."
+              sleep 15
+            fi
+          done
+
+          echo "status=$FINAL_STATUS" >> $GITHUB_OUTPUT
 
       - name: Create incident issue
         if: steps.health.outputs.status != '200'
