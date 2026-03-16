@@ -42,11 +42,16 @@ const logger = createLogger("gitlab-webhook");
 /**
  * Generate a deterministic delivery ID for GitLab webhooks.
  * GitLab does not send a delivery ID header, so we derive one
- * from the build_id to enable replay protection.
+ * from build_id + build_status. Including status is critical because
+ * GitLab sends separate webhooks for each status transition (created,
+ * running, failed) with the same build_id.
  */
 const buildDeliveryId = (payload: unknown): string => {
-  const buildId = (payload as { build_id?: number })?.build_id;
-  return buildId ? `gitlab-${buildId}` : `gitlab-${Date.now()}`;
+  const { build_id: buildId, build_status: buildStatus } = payload as {
+    build_id?: number;
+    build_status?: string;
+  };
+  return buildId ? `gitlab-${buildId}-${buildStatus ?? "unknown"}` : `gitlab-${Date.now()}`;
 };
 
 /**
