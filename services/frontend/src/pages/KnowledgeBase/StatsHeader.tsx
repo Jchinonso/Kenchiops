@@ -2,11 +2,7 @@ import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Database } from "lucide-react";
 import { formatSnakeCase } from "@/lib/formatters";
-
-interface StatsHeaderProps {
-  readonly totalDocuments: number;
-  readonly documentsByType: Record<string, number>;
-}
+import type { StatsHeaderProps } from "./types";
 
 export const StatsHeader = ({ totalDocuments, documentsByType }: StatsHeaderProps) => {
   const topTypes = useMemo(() => {

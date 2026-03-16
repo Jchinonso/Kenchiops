@@ -8,6 +8,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 import {
@@ -16,6 +17,11 @@ import {
   DetailSkeleton,
   DetailContent,
 } from "@/components/AnalysisDetailContent";
+
+// Mock FeedbackSection to avoid render-loop from useMyFeedback in React 19
+vi.mock("@/components/FeedbackSection", () => ({
+  FeedbackSection: () => <div data-testid="feedback-section">Feedback</div>,
+}));
 
 // Mock Collapsible at the shadcn wrapper level using React context
 vi.mock("@/components/ui/collapsible", () => {
@@ -86,8 +92,12 @@ const mockAnalysis = {
   severity: "high" as const,
 };
 
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
 const Wrapper = ({ children }: { readonly children: React.ReactNode }) => (
-  <MemoryRouter>{children}</MemoryRouter>
+  <QueryClientProvider client={queryClient}>
+    <MemoryRouter>{children}</MemoryRouter>
+  </QueryClientProvider>
 );
 
 describe("SectionCard", () => {
@@ -235,7 +245,7 @@ describe("DetailContent", () => {
       </Wrapper>
     );
     const link = screen.getByRole("link", { name: "event-123" });
-    expect(link).toHaveAttribute("href", "/dashboard/cicd/failures");
+    expect(link).toHaveAttribute("href", "/dashboard/cicd/analyses");
   });
 
   it("hides event section when no eventId", () => {

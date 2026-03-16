@@ -13,23 +13,7 @@ import { cn } from "@/lib/utils";
 import { itemVariants } from "@/lib/animations";
 import { UsageBar } from "./UsageBar";
 import { getPlanBadgeStyle } from "./constants";
-import type { UsageLimitDTO } from "@/hooks/useSubscription";
-
-interface UsageData {
-  readonly usage: {
-    readonly repositories: UsageLimitDTO;
-    readonly analysesThisMonth: UsageLimitDTO;
-    readonly integrations: UsageLimitDTO;
-    readonly teamMembers: UsageLimitDTO;
-  };
-}
-
-interface SubscriptionCardProps {
-  readonly planId: string;
-  readonly planDisplayName: string;
-  readonly usageData: UsageData | null;
-  readonly isLoading: boolean;
-}
+import type { SubscriptionCardProps } from "./types";
 
 export const SubscriptionCard = ({
   planId,

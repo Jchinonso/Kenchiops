@@ -1,7 +1,4 @@
-interface PolicySectionProps {
-  readonly title: string;
-  readonly body: string;
-}
+import type { PolicySectionProps } from "./types";
 
 export const PolicySection = ({ title, body }: PolicySectionProps) => (
   <section>

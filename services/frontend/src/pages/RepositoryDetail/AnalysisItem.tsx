@@ -1,13 +1,9 @@
 import { Link } from "react-router-dom";
-import type { AnalysisRecord } from "@/hooks/useDashboardData";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { truncateText, getConfidenceLabel, getConfidenceStyle } from "@/lib/formatters";
 import { TimeDisplay } from "@/components/TimeDisplay";
-
-interface AnalysisItemProps {
-  readonly analysis: AnalysisRecord;
-}
+import type { AnalysisItemProps } from "./types";
 
 export const AnalysisItem = ({ analysis }: AnalysisItemProps) => (
   <Link

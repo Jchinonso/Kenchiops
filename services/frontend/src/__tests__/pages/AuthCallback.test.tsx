@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 
 import AuthCallback from "@/pages/AuthCallback";
@@ -37,16 +37,10 @@ describe("AuthCallback", () => {
     mockNavigate.mockClear();
   });
 
-  it("should render the signing in message", () => {
-    renderAuthCallback();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Signing you in..." })
-    ).toBeInTheDocument();
-  });
-
-  it("should render the loading spinner", () => {
-    renderAuthCallback();
-    expect(screen.getByText("Please wait while we complete authentication.")).toBeInTheDocument();
+  it("should render the page loader", () => {
+    // AuthCallback now uses PageLoader — verify the spinning loader renders
+    const { container } = renderAuthCallback();
+    expect(container.querySelector('[class*="animate-spin"]')).toBeInTheDocument();
   });
 
   it("should navigate to /dashboard when no params are provided", () => {

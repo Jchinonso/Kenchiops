@@ -3,15 +3,7 @@ import { Loader2, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { microSpring } from "@/lib/animations";
-import type { GitProvider } from "./constants";
-
-interface ProviderButtonProps {
-  readonly provider: GitProvider;
-  readonly variant: "primary" | "secondary";
-  readonly isLoading: boolean;
-  readonly disabled: boolean;
-  readonly onClick: () => void;
-}
+import type { ProviderButtonProps } from "./types";
 
 const PRIMARY_CLASSES =
   "bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold shadow-lg shadow-amber-500/20 hover:shadow-glow-amber-lg";

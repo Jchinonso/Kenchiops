@@ -49,11 +49,14 @@ import {
   loadSavedFilters,
   saveFilters,
   type FilterValues,
-} from "@/components/FilterBarUtils";
+} from "@/components/FilterBar";
 import { AnalysisDetailPanel } from "@/pages/AnalysisDetailPanel";
 import { exportAnalysesToCSV } from "@/lib/csvExport";
-import { SortableTableHead } from "@/components/SortableTableHead";
-import { cycleSortDirection, type SortConfig } from "@/components/SortableTableHeadUtils";
+import {
+  SortableTableHead,
+  cycleSortDirection,
+  type SortConfig,
+} from "@/components/SortableTableHead";
 import { AnalysisRow } from "./AnalysisRow";
 import { ExpandedAnalysisRow } from "./ExpandedAnalysisRow";
 import { PAGE_SIZE, PROVIDER_BADGE_CONFIG } from "./constants";

@@ -18,8 +18,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { DashboardSidebar } from "@/components/DashboardSidebar";
+
+// Mock useAuth
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { tenantId: "tenant-1" },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
 
 // Mock Radix UI components used by DashboardSidebar
 vi.mock("@/components/ui/collapsible", () => ({
@@ -72,11 +82,15 @@ const defaultProps = {
   onOpenShortcuts: vi.fn(),
 };
 
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
 const renderSidebar = (props: Partial<typeof defaultProps> = {}, path: string = "/dashboard") =>
   render(
-    <MemoryRouter initialEntries={[path]}>
-      <DashboardSidebar {...defaultProps} {...props} />
-    </MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <DashboardSidebar {...defaultProps} {...props} />
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 
 describe("DashboardSidebar", () => {
@@ -119,10 +133,9 @@ describe("DashboardSidebar", () => {
       expect(cicdLabels.length).toBeGreaterThanOrEqual(1);
     });
 
-    it("should render CI/CD child items (Failures, Analyses, Pipelines, Webhooks)", () => {
-      renderSidebar({}, "/dashboard/cicd/failures");
+    it("should render CI/CD child items (Analyses, Pipelines, Webhooks)", () => {
+      renderSidebar({}, "/dashboard/cicd/analyses");
 
-      expect(screen.getByText("Failures")).toBeInTheDocument();
       expect(screen.getByText("Analyses")).toBeInTheDocument();
       expect(screen.getByText("Pipelines")).toBeInTheDocument();
       expect(screen.getByText("Webhooks")).toBeInTheDocument();

@@ -14,6 +14,17 @@ import { CICDFailures } from "@/pages/CICDFailures";
 const mockUseFailures = vi.fn();
 const mockUseAnalysisStatusByEvents = vi.fn();
 
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: {
+      tenantId: "tenant-1",
+      organizations: [{ isSelected: true, provider: "github" }],
+    },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
 vi.mock("@/hooks/useDashboardData", () => ({
   useFailures: (...args: unknown[]) => mockUseFailures(...args),
   useAnalysisStatusByEvents: (...args: unknown[]) => mockUseAnalysisStatusByEvents(...args),
@@ -21,9 +32,6 @@ vi.mock("@/hooks/useDashboardData", () => ({
 
 vi.mock("@/components/FilterBar", () => ({
   FilterBar: () => <div data-testid="filter-bar">FilterBar</div>,
-}));
-
-vi.mock("@/components/FilterBarUtils", () => ({
   timeRangeToSince: () => undefined,
   loadSavedFilters: () => null,
   saveFilters: vi.fn(),

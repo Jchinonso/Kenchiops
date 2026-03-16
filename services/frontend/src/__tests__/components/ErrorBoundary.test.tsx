@@ -121,7 +121,7 @@ describe("ErrorBoundary", () => {
 
       expect(screen.getByText("Kenchi")).toBeInTheDocument();
       expect(screen.getByText("Dashboard")).toBeInTheDocument();
-      expect(screen.getByText("Failures")).toBeInTheDocument();
+      expect(screen.getByText("Analyses")).toBeInTheDocument();
       expect(screen.getByText("Settings")).toBeInTheDocument();
     });
 
@@ -135,8 +135,8 @@ describe("ErrorBoundary", () => {
       const dashboardLink = screen.getByText("Dashboard").closest("a");
       expect(dashboardLink).toHaveAttribute("href", "/");
 
-      const failuresLink = screen.getByText("Failures").closest("a");
-      expect(failuresLink).toHaveAttribute("href", "/dashboard/cicd/failures");
+      const analysesLink = screen.getByText("Analyses").closest("a");
+      expect(analysesLink).toHaveAttribute("href", "/dashboard/cicd/analyses");
     });
 
     it("should display the 'Copy diagnostic info' button", () => {

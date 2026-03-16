@@ -1,17 +1,10 @@
 import { useCallback } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { PlanDTO } from "@/hooks/useSubscription";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice, formatPeriod } from "./helpers";
 import { PLAN_FEATURES, ENTERPRISE_MAILTO } from "./constants";
-
-interface PlanCardProps {
-  readonly plan: PlanDTO;
-  readonly isCurrent: boolean;
-  readonly isChanging: boolean;
-  readonly onSelect: (planId: string) => void;
-}
+import type { PlanCardProps } from "./types";
 
 export const PlanCard = ({ plan, isCurrent, isChanging, onSelect }: PlanCardProps) => {
   const features = PLAN_FEATURES[plan.id] ?? [];

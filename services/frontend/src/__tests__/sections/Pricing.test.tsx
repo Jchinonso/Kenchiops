@@ -35,10 +35,11 @@ describe("Pricing", () => {
     expect(screen.getByText(/Start free, upgrade when you need more/i)).toBeInTheDocument();
   });
 
-  it("should render all three tier names", () => {
+  it("should render all four tier names", () => {
     renderPricing();
     expect(screen.getByRole("heading", { level: 3, name: "Free" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "Pro" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Team" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "Enterprise" })).toBeInTheDocument();
   });
 
@@ -46,6 +47,7 @@ describe("Pricing", () => {
     renderPricing();
     expect(screen.getByText("$0")).toBeInTheDocument();
     expect(screen.getByText("$49")).toBeInTheDocument();
+    expect(screen.getByText("$149")).toBeInTheDocument();
     expect(screen.getByText("Custom")).toBeInTheDocument();
   });
 
@@ -53,6 +55,7 @@ describe("Pricing", () => {
     renderPricing();
     expect(screen.getByText("/ forever")).toBeInTheDocument();
     expect(screen.getByText("/ per month / 10 seats")).toBeInTheDocument();
+    expect(screen.getByText("/ per month / 25 seats")).toBeInTheDocument();
     expect(screen.getByText("/ contact us")).toBeInTheDocument();
   });
 
@@ -64,7 +67,8 @@ describe("Pricing", () => {
   it("should render CTA buttons for each tier", () => {
     renderPricing();
     expect(screen.getByRole("link", { name: "Get Started Free" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Start 14-Day Trial" })).toBeInTheDocument();
+    const trialLinks = screen.getAllByRole("link", { name: "Start 14-Day Trial" });
+    expect(trialLinks.length).toBe(2); // Pro and Team
     expect(screen.getByRole("link", { name: "Contact Sales" })).toBeInTheDocument();
   });
 
@@ -74,10 +78,10 @@ describe("Pricing", () => {
       "href",
       "/login"
     );
-    expect(screen.getByRole("link", { name: "Start 14-Day Trial" })).toHaveAttribute(
-      "href",
-      "/login"
-    );
+    const trialLinks = screen.getAllByRole("link", { name: "Start 14-Day Trial" });
+    trialLinks.forEach((link) => {
+      expect(link).toHaveAttribute("href", "/login");
+    });
   });
 
   it("should link Enterprise CTA to mailto", () => {

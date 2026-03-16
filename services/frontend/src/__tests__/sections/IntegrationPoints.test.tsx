@@ -17,12 +17,14 @@ describe("IntegrationPoints", () => {
 
   it("should render the section heading", () => {
     render(<IntegrationPoints />);
-    expect(screen.getByRole("heading", { level: 2, name: "How Kenchi Works" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "From Failure to Fix in Minutes" })
+    ).toBeInTheDocument();
   });
 
   it("should render the section subtitle", () => {
     render(<IntegrationPoints />);
-    expect(screen.getByText("From failure to fix in minutes, not hours")).toBeInTheDocument();
+    expect(screen.getByText(/Not hours — minutes/)).toBeInTheDocument();
   });
 
   it("should render all four step numbers", () => {

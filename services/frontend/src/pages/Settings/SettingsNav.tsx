@@ -7,14 +7,10 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./constants";
 import { microSpring } from "@/lib/animations";
+import type { SettingsNavProps } from "./types";
 
 /** Nav item IDs hidden for personal tenants (no team or billing). */
 const PERSONAL_HIDDEN_IDS: ReadonlySet<string> = new Set(["account"]);
-
-interface SettingsNavProps {
-  readonly activeSection: string;
-  readonly isPersonal?: boolean;
-}
 
 export const SettingsNav = ({ activeSection, isPersonal = false }: SettingsNavProps) => {
   const visibleItems = isPersonal

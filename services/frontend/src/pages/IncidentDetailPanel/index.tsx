@@ -23,15 +23,7 @@ import { IncidentDetailContent, IncidentDetailSkeleton } from "@/components/Inci
 import { CorrelatedPipelineItems } from "@/components/CorrelatedPipelineItems";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { buildIncidentUrl, extractCommitSha } from "./helpers";
-
-// ==================== Props ====================
-
-interface IncidentDetailPanelProps {
-  readonly incidentId: string | null;
-  readonly open: boolean;
-  readonly onClose: () => void;
-  readonly onRefresh: () => void;
-}
+import type { IncidentDetailPanelProps } from "./types";
 
 // ==================== Main Component ====================
 

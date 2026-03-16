@@ -12,12 +12,7 @@ import { useAnalysisDetail } from "@/hooks/useDashboardData";
 import { extractRepoFromKey, formatTimestamp } from "@/lib/formatters";
 import { DetailSkeleton, DetailContent } from "@/components/AnalysisDetailContent";
 import { ANALYSES_LIST_PATH } from "./constants";
-
-// ==================== Props ====================
-
-interface AnalysisDetailProps {
-  readonly analysisId: string;
-}
+import type { AnalysisDetailProps } from "./types";
 
 // ==================== Main Component ====================
 

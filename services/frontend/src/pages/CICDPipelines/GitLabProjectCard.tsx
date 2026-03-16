@@ -3,12 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Workflow, ExternalLink, Lock, Globe, GitBranch } from "lucide-react";
-import type { GitLabProject } from "@/hooks/useDashboardData";
 import { isSafeUrl } from "@/lib/urlSafety";
-
-interface GitLabProjectCardProps {
-  readonly project: GitLabProject;
-}
+import type { GitLabProjectCardProps } from "./types";
 
 export const GitLabProjectCard = ({ project }: GitLabProjectCardProps) => (
   <Link

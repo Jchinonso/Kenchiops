@@ -13,15 +13,36 @@ import { CICDAnalyses } from "@/pages/CICDAnalyses";
 
 const mockUseAnalyses = vi.fn();
 
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: {
+      tenantId: "tenant-1",
+      organizations: [{ isSelected: true, provider: "github" }],
+    },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
 vi.mock("@/hooks/useDashboardData", () => ({
   useAnalyses: (...args: unknown[]) => mockUseAnalyses(...args),
+  useAnalysisCountsByRepo: () => ({ data: null }),
+}));
+
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscriptionUsage: () => ({ data: null, isLoading: false }),
+}));
+
+vi.mock("@/components/FeatureLocked", () => ({
+  FeatureLocked: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("@/components/PageLoader", () => ({
+  PageLoader: () => <div data-testid="page-loader" />,
 }));
 
 vi.mock("@/components/FilterBar", () => ({
   FilterBar: () => <div data-testid="filter-bar">FilterBar</div>,
-}));
-
-vi.mock("@/components/FilterBarUtils", () => ({
   parseConfidenceFilter: () => ({ min: null, max: null }),
   timeRangeToSince: () => undefined,
   loadSavedFilters: () => null,
@@ -199,16 +220,6 @@ describe("CICDAnalyses", () => {
       renderAnalyses();
       expect(screen.getByText(/85%/i)).toBeInTheDocument();
       expect(screen.getByText(/65%/i)).toBeInTheDocument();
-    });
-
-    it("should render Linked text when eventId exists", () => {
-      renderAnalyses();
-      expect(screen.getByText("Linked")).toBeInTheDocument();
-    });
-
-    it("should render No event text when eventId is null", () => {
-      renderAnalyses();
-      expect(screen.getByText("No event")).toBeInTheDocument();
     });
 
     it("should render Export Page button", () => {

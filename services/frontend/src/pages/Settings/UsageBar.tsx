@@ -2,14 +2,9 @@
  * Usage bar showing current/limit with progress indicator.
  */
 
-import type { UsageLimitDTO } from "@/hooks/useSubscription";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-
-interface UsageBarProps {
-  readonly label: string;
-  readonly usage: UsageLimitDTO;
-}
+import type { UsageBarProps } from "./types";
 
 export const UsageBar = ({ label, usage }: UsageBarProps) => {
   const percent = usage.limited

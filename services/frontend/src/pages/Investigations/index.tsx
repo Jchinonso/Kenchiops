@@ -31,7 +31,7 @@ import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { MobileDataCard } from "@/components/MobileDataCard";
 import { MobileFilterDrawer } from "@/components/MobileFilterDrawer";
-import { loadSavedFilters, saveFilters, type FilterValues } from "@/components/FilterBarUtils";
+import { loadSavedFilters, saveFilters, type FilterValues } from "@/components/FilterBar";
 import { InvestigationTableRow } from "./InvestigationTableRow";
 import { PAGE_SIZE } from "./constants";
 

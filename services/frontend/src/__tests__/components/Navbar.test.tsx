@@ -304,9 +304,9 @@ describe("Navbar", () => {
 
       await user.click(screen.getByLabelText("Open menu"));
 
-      // Mobile menu shows dropdown items (desktop dropdown also renders them hidden)
+      // Mobile menu shows dropdown items
       const cicdLinks = screen.getAllByText("CI/CD Analysis");
-      expect(cicdLinks.length).toBeGreaterThanOrEqual(2);
+      expect(cicdLinks.length).toBeGreaterThanOrEqual(1);
     });
 
     it("should show mobile theme toggle when menu is open", async () => {

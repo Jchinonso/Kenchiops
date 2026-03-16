@@ -35,12 +35,9 @@ import { FailureItem } from "./FailureItem";
 import { AnalysisItem } from "./AnalysisItem";
 import { formatAvgConfidence } from "./helpers";
 import { PAGE_SIZE } from "./constants";
+import type { RepositoryDetailProps } from "./types";
 
 // ==================== Main Component ====================
-
-interface RepositoryDetailProps {
-  readonly repoFullName: string;
-}
 
 export const RepositoryDetail = ({ repoFullName }: RepositoryDetailProps) => {
   const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage();

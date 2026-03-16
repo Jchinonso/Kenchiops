@@ -11,30 +11,7 @@ import { TimeDisplay } from "@/components/TimeDisplay";
 import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/formatters";
 import { itemVariants } from "@/lib/animations";
-
-interface UserInfo {
-  readonly displayName?: string;
-  readonly email?: string | null;
-  readonly avatarUrl?: string | null;
-  readonly role?: string;
-  readonly createdAt?: string;
-  readonly providers?: ReadonlyArray<{
-    readonly provider: string;
-    readonly username?: string | null;
-  }>;
-}
-
-interface TenantInfo {
-  readonly id: string;
-  readonly orgName: string;
-  readonly status: string;
-}
-
-interface ProfileHeroProps {
-  readonly user: UserInfo | null;
-  readonly tenant: TenantInfo | null;
-  readonly tenantLoading: boolean;
-}
+import type { ProfileHeroProps } from "./types";
 
 const PROVIDER_CONFIG: Readonly<
   Record<string, { readonly icon: typeof Github; readonly className: string }>

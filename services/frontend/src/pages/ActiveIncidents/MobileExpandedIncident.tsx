@@ -5,12 +5,7 @@ import {
   useResolveIncident,
 } from "@/hooks/useIncidentData";
 import { canAcknowledge, canResolve } from "@/components/IncidentTableRows";
-
-interface MobileExpandedIncidentProps {
-  readonly incidentId: string;
-  readonly onViewDetails: () => void;
-  readonly onRefresh: () => void;
-}
+import type { MobileExpandedIncidentProps } from "./types";
 
 /**
  * Mobile-compatible version of ExpandedIncidentRow.

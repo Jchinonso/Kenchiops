@@ -16,15 +16,13 @@ import { WebhookActivity } from "@/pages/WebhookActivity";
 import { RepositoryDetail } from "@/pages/RepositoryDetail";
 import { AnalysisDetail } from "@/pages/AnalysisDetail";
 
-import type { ComingSoonConfig } from "./types";
+import type { ComingSoonConfig, RouteResolver } from "./types";
 import {
   COMING_SOON_PAGES,
   INVESTIGATIONS_PREFIX,
   PIPELINES_PREFIX,
   ANALYSES_PREFIX,
 } from "./constants";
-
-type RouteResolver = (pathname: string) => React.ReactNode;
 
 // ==================== Coming Soon ====================
 

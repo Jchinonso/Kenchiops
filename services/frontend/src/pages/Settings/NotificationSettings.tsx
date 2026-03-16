@@ -7,14 +7,7 @@ import { Bell } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { itemVariants } from "@/lib/animations";
-
-interface NotificationSettingsProps {
-  readonly toastEnabled: boolean;
-  readonly browserEnabled: boolean;
-  readonly browserPermissionDenied: boolean;
-  readonly onToastChange: (enabled: boolean) => void;
-  readonly onBrowserChange: (enabled: boolean) => void;
-}
+import type { NotificationSettingsProps } from "./types";
 
 export const NotificationSettings = ({
   toastEnabled,

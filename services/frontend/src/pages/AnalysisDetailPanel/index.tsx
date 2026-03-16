@@ -19,14 +19,7 @@ import { DetailSkeleton, DetailContent } from "@/components/AnalysisDetailConten
 import { CorrelatedPipelineItems } from "@/components/CorrelatedPipelineItems";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { buildAnalysisUrl, extractCommitShaFromKey } from "./helpers";
-
-// ==================== Props ====================
-
-interface AnalysisDetailPanelProps {
-  readonly analysisId: string | null;
-  readonly open: boolean;
-  readonly onClose: () => void;
-}
+import type { AnalysisDetailPanelProps } from "./types";
 
 // ==================== Main Component ====================
 

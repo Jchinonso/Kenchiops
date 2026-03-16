@@ -51,6 +51,7 @@ vi.mock("@/hooks/useAuth", () => ({
 // Mock apiClient
 vi.mock("@/lib/apiClient", () => ({
   apiClient: vi.fn(),
+  API_URL: "",
 }));
 
 // ==================== EventSource Mock ====================
