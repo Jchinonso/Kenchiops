@@ -95,6 +95,21 @@
 - 40+ docs in `docs/` directory covering features, plans, implementation guides
 - PRICING_TIERS.md is superseded by SUBSCRIPTION_PLANS.md for enforcement details
 
+## Scaling Doc (2026-03-10)
+
+- Created `docs/SCALING.md` -- comprehensive scaling & performance guide
+- Key production constants verified from source:
+  - DB pool: 10 connections per service (API, Slack Bot, GitHub App, Incident Triage)
+  - Extraction concurrency: 15 (in `EXTRACTION_DEFAULTS.CONCURRENCY`)
+  - Small log threshold: 30K tokens (in `CHUNKING_DEFAULTS.SMALL_LOG_THRESHOLD`)
+  - SSE limits: 10 per tenant, 200 global (in `sseRoutes.ts`)
+  - Fair queue: 2 jobs/tenant/batch, 5 tenants/round (in `FAIR_QUEUE_DEFAULTS`)
+  - Tenant quotas by plan: free=1 concurrent, pro=3, team=5 (in `TENANT_QUOTA_BY_PLAN`)
+- Worker uses `SELECT ... FOR UPDATE SKIP LOCKED` on `analysis_jobs` table (not Redis queue)
+- SSE connection tracking is in-memory Map (`tenantConnectionCounts`) -- would need Redis for multi-instance
+- Resilient client: 90s timeout, 3x retry, circuit breaker (`packages/shared/src/http/resilientClient.ts`)
+- Deploy script: `deploy/server-deploy.sh` with auto-rollback on health check failure
+
 ## README Update (2026-03-07)
 
 - README.md was heavily outdated: missing incident-triage service, frontend, monitoring stack, billing
