@@ -12,7 +12,7 @@ services:
     container_name: kenchi-postgres
     environment:
       - POSTGRES_USER=kenchi
-      - POSTGRES_PASSWORD=kenchi_dev_password
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kenchi_dev_password}
       - POSTGRES_DB=kenchi
     ports:
       - "5433:5432"
@@ -50,7 +50,7 @@ services:
       - NODE_ENV=production
       - NODE_OPTIONS=--max-old-space-size=256
       - PORT=3000
-      - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD:-kenchi_dev_password}@postgres:5432/kenchi
       - REDIS_URL=redis://redis:6379
       - FRONTEND_URL=http://localhost:3003
       - OAUTH_CALLBACK_BASE_URL=http://localhost:3003
@@ -84,7 +84,7 @@ services:
       - NODE_OPTIONS=--max-old-space-size=256
       - PORT=3001
       - MULTI_TENANT_MODE=true
-      - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD:-kenchi_dev_password}@postgres:5432/kenchi
       - REDIS_URL=redis://redis:6379
     env_file:
       - .env
@@ -116,7 +116,7 @@ services:
       - NODE_OPTIONS=--max-old-space-size=256
       - PORT=3002
       - MULTI_TENANT_MODE=true
-      - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD:-kenchi_dev_password}@postgres:5432/kenchi
       - REDIS_URL=redis://redis:6379
       - API_URL=http://api:3000
       - SLACK_BOT_URL=http://slack-bot:3001
@@ -151,7 +151,7 @@ services:
       - NODE_ENV=production
       - NODE_OPTIONS=--max-old-space-size=256
       - PORT=3004
-      - DATABASE_URL=postgres://kenchi:kenchi_dev_password@postgres:5432/kenchi
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD:-kenchi_dev_password}@postgres:5432/kenchi
       - REDIS_URL=redis://redis:6379
     env_file:
       - .env
