@@ -60,8 +60,8 @@ const cleanupExpiredClients = (): void => {
   }
 };
 
-// Clean up expired clients periodically
-setInterval(cleanupExpiredClients, SLACK_CLIENT_CACHE.CLEANUP_INTERVAL_MS);
+// Clean up expired clients periodically — .unref() prevents this timer from keeping the process alive in tests
+setInterval(cleanupExpiredClients, SLACK_CLIENT_CACHE.CLEANUP_INTERVAL_MS).unref();
 
 /**
  * Create a new Slack WebClient with appropriate configuration

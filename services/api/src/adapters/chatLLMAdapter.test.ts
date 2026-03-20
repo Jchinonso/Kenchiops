@@ -97,6 +97,11 @@ const collectDeltas = async (
 describe("createChatLLMAdapter", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe("createStreamingCompletion", () => {

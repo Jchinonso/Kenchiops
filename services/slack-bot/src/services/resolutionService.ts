@@ -63,8 +63,8 @@ const cleanupOldThreads = (): void => {
   }
 };
 
-// Start periodic cleanup
-setInterval(cleanupOldThreads, RESOLUTION_SERVICE_CONFIG.CLEANUP_INTERVAL_MS);
+// Start periodic cleanup — .unref() prevents this timer from keeping the process alive in tests
+setInterval(cleanupOldThreads, RESOLUTION_SERVICE_CONFIG.CLEANUP_INTERVAL_MS).unref();
 
 // ==================== Thread Message Fetching ====================
 

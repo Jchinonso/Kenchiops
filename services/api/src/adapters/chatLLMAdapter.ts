@@ -48,14 +48,20 @@ export const createChatLLMAdapter = (): ChatLLMPort => ({
       });
 
       // Hard timeout on initial connection via Promise.race
+      // let: timeoutId must be cleared after race resolves to prevent leaked handle
+      let timeoutId: ReturnType<typeof setTimeout> | null = null; // let: cleared after Promise.race
       const timeoutPromise = new Promise<never>((_resolve, reject) => {
-        const id = setTimeout(() => {
-          clearTimeout(id);
+        timeoutId = setTimeout(() => {
           reject(new Error("Chat LLM stream connection timed out"));
         }, STREAM_CONNECT_TIMEOUT_MS);
       });
 
       const stream = await Promise.race([streamPromise, timeoutPromise]);
+
+      // Clear timeout to prevent leaked timer handle
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
 
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta;
