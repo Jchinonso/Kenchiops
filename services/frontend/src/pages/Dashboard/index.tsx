@@ -31,6 +31,7 @@ import { DashboardFooter } from "@/components/DashboardFooter";
 import { KnowledgeBase } from "@/pages/KnowledgeBase";
 import { formatRelativeTime } from "@/lib/formatters";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { CopilotButton, CopilotDrawer } from "@/components/CopilotDrawer";
 
 import {
   findComingSoonConfig,
@@ -67,6 +68,7 @@ const Dashboard = () => {
   const [loggingOut, setLoggingOut] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date>(new Date());
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const fetchingCount = useIsFetching();
@@ -286,6 +288,8 @@ const Dashboard = () => {
         onToggleTheme={toggleTheme}
         onOpenShortcuts={openShortcuts}
       />
+      <CopilotButton onClick={() => setCopilotOpen(true)} />
+      <CopilotDrawer open={copilotOpen} onOpenChange={setCopilotOpen} />
     </div>
   );
 };

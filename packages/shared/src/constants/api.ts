@@ -211,6 +211,42 @@ export const DASHBOARD_PAGINATION = {
   MIN_COMMIT_SHA_LENGTH: 7,
 } as const;
 
+// ==================== Chat Constants ====================
+
+/**
+ * Chat Copilot Drawer configuration defaults.
+ */
+export const CHAT_DEFAULTS = {
+  /** Maximum user message length to prevent abuse */
+  MAX_MESSAGE_LENGTH: 10_000,
+  /** Default limit for conversation listing */
+  DEFAULT_CONVERSATIONS_LIMIT: 50,
+  /** Default limit for message listing */
+  DEFAULT_MESSAGES_LIMIT: 100,
+  /** Maximum allowed limit for any chat pagination */
+  MAX_LIMIT: 200,
+  /** Maximum historical messages to include in LLM context window */
+  MAX_HISTORY_MESSAGES: 20,
+  /** Maximum length for auto-generated conversation title */
+  MAX_TITLE_LENGTH: 80,
+  /** Maximum total tokens for conversation context before trimming */
+  MAX_CONTEXT_TOKENS: 24_000,
+  /** Minimum messages to keep even when trimming (system + last exchange) */
+  MIN_MESSAGES_TO_KEEP: 4,
+  /** Approximate characters per token for estimation */
+  CHARS_PER_TOKEN: 4,
+  /** Maximum number of messages to trim per cycle to avoid deleting everything */
+  MAX_TRIM_BATCH: 10,
+  /** Maximum content length for entity details injected into chat prompt */
+  MAX_CONTEXT_DETAILS_LENGTH: 2000,
+  /** Maximum RAG results to include in chat context */
+  MAX_RAG_RESULTS: 5,
+  /** Maximum content length for a single RAG doc in formatted output */
+  MAX_RAG_DOC_CONTENT: 500,
+  /** Similarity percentage multiplier for display formatting */
+  RAG_PERCENTAGE_MULTIPLIER: 100,
+} as const;
+
 // ==================== GitHub API Constants ====================
 
 /**

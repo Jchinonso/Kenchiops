@@ -434,6 +434,7 @@ export {
   shouldSkipRateLimit,
   API_PAGINATION_DEFAULTS,
   DASHBOARD_PAGINATION,
+  CHAT_DEFAULTS,
   GITHUB_API_CONFIG,
 } from "./api.js";
 

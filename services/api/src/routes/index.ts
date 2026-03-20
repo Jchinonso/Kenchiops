@@ -24,6 +24,7 @@ import { invitationRoutes } from "./invitationRoutes.js";
 import { apiKeyRoutes } from "./apiKeyRoutes.js";
 import { billingRoutes } from "./billingRoutes.js";
 import { feedbackRoutes } from "./feedbackRoutes.js";
+import { chatRoutes } from "./chatRoutes.js";
 
 /**
  * Register all routes on the Express app
@@ -85,4 +86,7 @@ export const registerRoutes = (app: Express): void => {
 
   // Analysis feedback routes (thumbs up/down, lesson ingestion trigger)
   app.use(feedbackRoutes);
+
+  // Chat routes (Copilot Drawer — streaming completions, conversations, messages)
+  app.use(chatRoutes);
 };
