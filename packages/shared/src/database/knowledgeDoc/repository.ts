@@ -482,6 +482,29 @@ export const getKnowledgeDocCountsByTypeForTenant = async (
 };
 
 /**
+ * Deletes a single knowledge document by ID, scoped by tenant.
+ *
+ * @param id - Knowledge document ID
+ * @param tenantId - Tenant ID for isolation
+ * @returns True if a document was deleted, false if not found
+ * @throws ValidationError if id or tenantId is empty
+ * @throws Error if database operation fails
+ */
+export const deleteKnowledgeDocById = async (id: string, tenantId: string): Promise<boolean> => {
+  validateNonEmptyString(id, "id");
+  validateNonEmptyString(tenantId, "tenantId");
+
+  const result = await query(KNOWLEDGE_DOC_QUERIES.DELETE_BY_ID, [id, tenantId]);
+  const deleted = result.rowCount > 0;
+
+  if (deleted) {
+    logger.info("Deleted knowledge document", { id, tenantId });
+  }
+
+  return deleted;
+};
+
+/**
  * Gets knowledge documents for a tenant with optional doc type filter and pagination.
  *
  * @param tenantId - Tenant ID to scope the query

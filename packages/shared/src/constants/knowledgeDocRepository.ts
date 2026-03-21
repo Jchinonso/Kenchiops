@@ -140,4 +140,9 @@ export const KNOWLEDGE_DOC_QUERIES = {
     FROM knowledge_documents
     WHERE tenant_id = $1 AND doc_type = $2
   `,
+
+  DELETE_BY_ID: `
+    DELETE FROM knowledge_documents
+    WHERE id = $1 AND tenant_id = $2
+  `,
 } as const;
