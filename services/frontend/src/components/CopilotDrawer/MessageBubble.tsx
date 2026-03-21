@@ -72,7 +72,7 @@ const renderMarkdown = (content: string): React.ReactNode => {
       return (
         <pre
           key={blockKey}
-          className="my-2 overflow-x-auto rounded-md bg-zinc-200 p-3 text-xs font-mono dark:bg-zinc-800"
+          className="my-2 max-w-full overflow-x-auto rounded-md bg-zinc-200 p-3 text-xs font-mono dark:bg-zinc-800"
         >
           <code>{code}</code>
         </pre>
@@ -111,10 +111,10 @@ export const MessageBubble = ({ role, content, isStreaming }: MessageBubbleProps
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+          "min-w-0 rounded-2xl px-4 py-2.5 text-sm leading-relaxed overflow-hidden",
           isUser
-            ? "bg-primary text-primary-foreground rounded-br-md"
-            : "bg-muted text-foreground rounded-bl-md"
+            ? "max-w-[85%] bg-primary text-primary-foreground rounded-br-md"
+            : "max-w-full bg-muted text-foreground rounded-bl-md"
         )}
       >
         {showCursor ? (
@@ -125,7 +125,9 @@ export const MessageBubble = ({ role, content, isStreaming }: MessageBubbleProps
           </span>
         ) : (
           <>
-            <span className="whitespace-pre-wrap break-words">{renderedContent}</span>
+            <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+              {renderedContent}
+            </div>
             {showPulse && (
               <span className="ml-0.5 inline-block size-1.5 animate-pulse rounded-full bg-current align-middle" />
             )}
