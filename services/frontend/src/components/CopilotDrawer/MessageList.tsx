@@ -7,30 +7,55 @@
 
 import { useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare } from "lucide-react";
+import { Sparkles, Zap, Search, Bug } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
 import type { CopilotMessage } from "@/hooks/useCopilotChat";
 
 interface MessageListProps {
   readonly messages: readonly CopilotMessage[];
   readonly isStreaming: boolean;
+  readonly onSuggestionClick?: (text: string) => void;
 }
 
-const EmptyState = () => (
-  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-    <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-      <MessageSquare className="size-6 text-muted-foreground" />
+const SUGGESTIONS = [
+  { icon: Bug, text: "Why did this CI build fail?" },
+  { icon: Search, text: "How did we fix this issue before?" },
+  { icon: Zap, text: "What should I try to resolve this?" },
+] as const;
+
+interface EmptyStateProps {
+  readonly onSuggestionClick?: (text: string) => void;
+}
+
+const EmptyState = ({ onSuggestionClick }: EmptyStateProps) => (
+  <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
+    <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
+      <Sparkles className="size-6 text-primary" />
     </div>
-    <div className="space-y-1">
-      <p className="text-sm font-medium text-foreground">Kenchi Copilot</p>
-      <p className="text-xs text-muted-foreground">
-        Ask me anything about your CI/CD failures, incidents, or codebase.
+    <div className="space-y-1.5">
+      <p className="text-sm font-semibold text-foreground">Kenchi Copilot</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Your AI assistant for CI/CD failures, incidents, and past resolutions. Ask a question or try
+        one of these:
       </p>
+    </div>
+    <div className="flex w-full flex-col gap-2">
+      {SUGGESTIONS.map(({ icon: Icon, text }) => (
+        <button
+          key={text}
+          type="button"
+          onClick={() => onSuggestionClick?.(text)}
+          className="flex items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
+        >
+          <Icon className="size-3.5 shrink-0" />
+          <span>{text}</span>
+        </button>
+      ))}
     </div>
   </div>
 );
 
-export const MessageList = ({ messages, isStreaming }: MessageListProps) => {
+export const MessageList = ({ messages, isStreaming, onSuggestionClick }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { length: messageCount } = messages;
 
@@ -53,7 +78,7 @@ export const MessageList = ({ messages, isStreaming }: MessageListProps) => {
   if (messageCount === 0) {
     return (
       <div className="flex-1 overflow-hidden">
-        <EmptyState />
+        <EmptyState onSuggestionClick={onSuggestionClick} />
       </div>
     );
   }

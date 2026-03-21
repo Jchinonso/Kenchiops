@@ -172,7 +172,7 @@ export const useCopilotChat = (): UseCopilotChatResult => {
             body: JSON.stringify({
               message: trimmed,
               pageContext,
-              conversationId,
+              ...(conversationId !== null && { conversationId }),
             }),
             signal: controller.signal,
           });

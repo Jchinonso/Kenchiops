@@ -123,8 +123,12 @@ const validateChatCompletionBody = (
     );
   }
 
-  // Validate conversationId (optional)
-  if (conversationId !== undefined && typeof conversationId !== "string") {
+  // Validate conversationId (optional — treat null same as undefined)
+  if (
+    conversationId !== undefined &&
+    conversationId !== null &&
+    typeof conversationId !== "string"
+  ) {
     throw new ValidationError("conversationId must be a string", {
       operation: "validateChatCompletionBody",
     });
@@ -159,7 +163,7 @@ const validateChatCompletionBody = (
   };
 
   return {
-    conversationId: conversationId as string | undefined,
+    conversationId: (conversationId ?? undefined) as string | undefined,
     userMessage: message as string,
     pageContext: validatedPageContext,
     tenantId,

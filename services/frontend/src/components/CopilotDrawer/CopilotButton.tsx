@@ -3,11 +3,10 @@
  *
  * Floating action button to open the Copilot Drawer.
  * Fixed to the bottom-right of the dashboard viewport.
+ * Includes a text label so users know what it does.
  */
 
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { MessageSquare } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 interface CopilotButtonProps {
   readonly onClick: () => void;
@@ -15,18 +14,14 @@ interface CopilotButtonProps {
 
 export const CopilotButton = ({ onClick }: CopilotButtonProps) => (
   <div className="fixed bottom-6 right-6 z-40">
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          size="icon-lg"
-          onClick={onClick}
-          aria-label="Open Kenchi Copilot"
-          className="rounded-full shadow-lg"
-        >
-          <MessageSquare className="size-5" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="left">Kenchi Copilot</TooltipContent>
-    </Tooltip>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Open Kenchi Copilot"
+      className="group flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-primary-foreground shadow-lg transition-all hover:scale-105 hover:shadow-xl active:scale-100"
+    >
+      <Sparkles className="size-4" />
+      <span className="text-sm font-medium">Ask Copilot</span>
+    </button>
   </div>
 );
