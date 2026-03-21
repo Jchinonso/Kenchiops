@@ -22,6 +22,7 @@ const createKnowledgeDoc = (overrides: Partial<KnowledgeDocRecord> = {}): Knowle
   embeddingModel: "text-embedding-3-small",
   embeddingVersion: "1",
   tenantId: "tenant-1",
+  metadata: {},
   createdAt: new Date("2026-01-15"),
   updatedAt: new Date("2026-01-15"),
   ...overrides,
@@ -42,7 +43,9 @@ const createDiffChunk = (overrides: Partial<DiffChunk> = {}): DiffChunk => ({
   embeddingModel: "text-embedding-3-small",
   embeddingVersion: "1",
   tenantId: "tenant-1",
+  metadata: null,
   createdAt: new Date("2026-01-15"),
+  updatedAt: null,
   ...overrides,
 });
 
