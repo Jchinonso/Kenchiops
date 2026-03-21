@@ -48,7 +48,6 @@ const createRedisClient = (options: RedisOptions = {}): Redis => {
     maxRetriesPerRequest: opts.maxRetries,
     enableOfflineQueue: opts.enableOfflineQueue,
     connectTimeout: opts.connectTimeout,
-    lazyConnect: true,
     retryStrategy: (times) => {
       if (times > opts.maxRetries) {
         logger.error("Redis max retries exceeded", { attempts: times });
