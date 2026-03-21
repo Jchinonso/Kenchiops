@@ -106,6 +106,54 @@ export const useAddDocument = (): MutationState & {
   );
 };
 
+// ==================== Purge All Documents Mutation ====================
+
+/**
+ * Mutation hook for purging ALL knowledge documents for the current tenant.
+ * Uses DELETE /api/rag/tenant/:tenantId. Requires settings permission.
+ */
+export const usePurgeAllDocuments = (
+  tenantId: string | null
+): {
+  readonly purgeAll: () => Promise<boolean>;
+  readonly isPurging: boolean;
+} => {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      if (!tenantId) {
+        return Promise.reject(new Error("No tenant ID"));
+      }
+      return fetchMutationVoid(`/api/rag/tenant/${encodeURIComponent(tenantId)}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.knowledgeBase.all,
+      });
+    },
+  });
+
+  const purgeAll = useCallback(async (): Promise<boolean> => {
+    try {
+      await mutation.mutateAsync();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [mutation]);
+
+  return useMemo(
+    () => ({
+      purgeAll,
+      isPurging: mutation.isPending,
+    }),
+    [purgeAll, mutation.isPending]
+  );
+};
+
 // ==================== Delete Document Mutation ====================
 
 /**
