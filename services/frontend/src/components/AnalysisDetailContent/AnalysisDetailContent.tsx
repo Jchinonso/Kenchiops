@@ -169,14 +169,17 @@ export const DetailContent = ({ analysis, showLinkedEventLink = false }: DetailC
             title="Recommended Actions"
           >
             <ol className="list-decimal list-inside space-y-2">
-              {analysis.recommendedActions.map((action) => (
-                <li
-                  key={action}
-                  className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed"
-                >
-                  {action}
-                </li>
-              ))}
+              {analysis.recommendedActions.map((action, idx) => {
+                const text = typeof action === "string" ? action : JSON.stringify(action);
+                return (
+                  <li
+                    key={text.slice(0, 80) + String(idx)}
+                    className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed"
+                  >
+                    {text}
+                  </li>
+                );
+              })}
             </ol>
           </SectionCard>
         )

@@ -134,7 +134,11 @@ export const CopilotDrawer = ({ open, onOpenChange }: CopilotDrawerProps) => {
             )}
 
             {/* Messages */}
-            <MessageList messages={messages} isStreaming={isStreaming} />
+            <MessageList
+              messages={messages}
+              isStreaming={isStreaming}
+              onSuggestionClick={sendMessage}
+            />
 
             {/* RAG Sources */}
             <RAGSourceList sources={ragSources} />

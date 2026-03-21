@@ -1,12 +1,25 @@
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { ExternalLink, Trash2 } from "lucide-react";
 import { formatTimestamp, formatSnakeCase, truncateText } from "@/lib/formatters";
 import { isSafeUrl } from "@/lib/urlSafety";
 import type { DocTableRowProps } from "./types";
 
-export const DocTableRow = ({ doc }: DocTableRowProps) => (
-  <TableRow>
+export const DocTableRow = ({ doc, onClick, onDelete, isDeleting }: DocTableRowProps) => (
+  <TableRow
+    className="group cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+    onClick={onClick}
+    role="button"
+    tabIndex={0}
+    onKeyDown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        onClick();
+      }
+    }}
+  >
     <TableCell className="max-w-[300px]">
       <div className="flex items-center gap-2">
         <span
@@ -42,7 +55,27 @@ export const DocTableRow = ({ doc }: DocTableRowProps) => (
       <span title={truncateText(doc.content, 100)}>{truncateText(doc.content, 50)}</span>
     </TableCell>
     <TableCell className="text-sm text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-      {formatTimestamp(doc.createdAt)}
+      <div className="flex items-center gap-2">
+        {formatTimestamp(doc.createdAt)}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+              disabled={isDeleting}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete(doc.id);
+              }}
+              aria-label="Delete document"
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Delete document</TooltipContent>
+        </Tooltip>
+      </div>
     </TableCell>
   </TableRow>
 );

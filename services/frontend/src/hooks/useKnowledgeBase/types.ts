@@ -23,6 +23,22 @@ export interface KnowledgeDocListResponse {
   readonly total: number;
 }
 
+// ==================== Mutation Types ====================
+
+export interface AddDocumentInput {
+  readonly docType: string;
+  readonly title: string;
+  readonly content: string;
+  readonly repository?: string;
+  readonly sourceUrl?: string;
+}
+
+export interface AddDocumentResponse {
+  readonly id: string;
+  readonly docType: string;
+  readonly title: string;
+}
+
 // ==================== Stats Types ====================
 
 export interface KnowledgeBaseTenantStats {

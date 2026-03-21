@@ -5,7 +5,7 @@
  * of knowledge documents for the current tenant.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableHead, TableRow, TableCaption } from "@/components/ui/table";
 import {
@@ -23,10 +23,28 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BookOpen, RefreshCw, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { BookOpen, RefreshCw, FileText, Plus } from "lucide-react";
 import { formatSnakeCase, truncateText } from "@/lib/formatters";
 import { isSafeUrl } from "@/lib/urlSafety";
-import { useKnowledgeBaseStats, useKnowledgeDocuments } from "@/hooks/useKnowledgeBase";
+import {
+  useKnowledgeBaseStats,
+  useKnowledgeDocuments,
+  useDeleteDocument,
+  type KnowledgeDocDTO,
+} from "@/hooks/useKnowledgeBase";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -34,6 +52,8 @@ import { MobileDataCard } from "@/components/MobileDataCard";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { StatsHeader } from "./StatsHeader";
 import { DocTableRow } from "./DocTableRow";
+import { DocDetailDrawer } from "./DocDetailDrawer";
+import { AddDocumentDialog } from "./AddDocumentDialog";
 import { PAGINATION_CONFIG, ALL_TYPES_VALUE } from "./constants";
 
 // ==================== Main Component ====================
@@ -43,10 +63,15 @@ export const KnowledgeBase = () => {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<number>(PAGINATION_CONFIG.DEFAULT_PAGE_SIZE);
   const [selectedDocType, setSelectedDocType] = useState<string>(ALL_TYPES_VALUE);
+  const [selectedDoc, setSelectedDoc] = useState<KnowledgeDocDTO | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const docTypeFilter = selectedDocType === ALL_TYPES_VALUE ? undefined : selectedDocType;
 
   const { data: stats, isLoading: statsLoading } = useKnowledgeBaseStats();
+  const { deleteDocument, isDeleting } = useDeleteDocument();
   const {
     data: docsData,
     isLoading: docsLoading,
@@ -57,14 +82,12 @@ export const KnowledgeBase = () => {
   const items = docsData?.items ?? [];
   const total = docsData?.total ?? 0;
 
-  // Reset offset when filtered results are fewer than current position (render-time state adjustment)
-  const [prevTotal, setPrevTotal] = useState(total);
-  if (total !== prevTotal) {
-    setPrevTotal(total);
+  // Reset offset when filtered results are fewer than current position
+  useEffect(() => {
     if (total > 0 && offset >= total) {
       setOffset(0);
     }
-  }
+  }, [total, offset]);
 
   usePageTitle("Knowledge Base | Kenchi");
 
@@ -102,6 +125,35 @@ export const KnowledgeBase = () => {
     setOffset((prev) => Math.max(0, prev - pageSize));
   };
 
+  const handleDocClick = useCallback((doc: KnowledgeDocDTO) => {
+    setSelectedDoc(doc);
+    setDrawerOpen(true);
+  }, []);
+
+  const handleDrawerOpenChange = useCallback((open: boolean) => {
+    setDrawerOpen(open);
+    if (!open) {
+      setSelectedDoc(null);
+    }
+  }, []);
+
+  const handleRowDelete = useCallback((id: string) => {
+    setDeleteTargetId(id);
+  }, []);
+
+  const confirmRowDelete = useCallback(async () => {
+    if (!deleteTargetId) {
+      return;
+    }
+    const success = await deleteDocument(deleteTargetId);
+    if (success) {
+      toast.success("Document deleted");
+      setDeleteTargetId(null);
+    } else {
+      toast.error("Failed to delete document");
+    }
+  }, [deleteTargetId, deleteDocument]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -128,7 +180,7 @@ export const KnowledgeBase = () => {
         />
       ) : null}
 
-      {/* Filter */}
+      {/* Filter + Add Button */}
       <div className="flex items-center gap-3">
         <Select
           value={selectedDocType}
@@ -147,6 +199,11 @@ export const KnowledgeBase = () => {
             ))}
           </SelectContent>
         </Select>
+
+        <Button size="sm" onClick={() => setAddDialogOpen(true)}>
+          <Plus className="w-4 h-4" />
+          Add Document
+        </Button>
       </div>
 
       {/* Documents Table */}
@@ -227,7 +284,9 @@ export const KnowledgeBase = () => {
                           },
                         ]}
                         onClick={
-                          safeUrl ? () => window.open(safeUrl, "_blank", "noopener") : undefined
+                          safeUrl
+                            ? () => window.open(safeUrl, "_blank", "noopener")
+                            : () => handleDocClick(doc)
                         }
                       />
                     </li>
@@ -265,7 +324,13 @@ export const KnowledgeBase = () => {
                   </TableHeader>
                   <tbody>
                     {items.map((doc) => (
-                      <DocTableRow key={doc.id} doc={doc} />
+                      <DocTableRow
+                        key={doc.id}
+                        doc={doc}
+                        onClick={() => handleDocClick(doc)}
+                        onDelete={handleRowDelete}
+                        isDeleting={isDeleting}
+                      />
                     ))}
                   </tbody>
                 </Table>
@@ -286,6 +351,48 @@ export const KnowledgeBase = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Document Detail Drawer */}
+      <DocDetailDrawer doc={selectedDoc} open={drawerOpen} onOpenChange={handleDrawerOpenChange} />
+
+      {/* Add Document Dialog */}
+      <AddDocumentDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
+
+      {/* Delete Confirmation Dialog (from table row) */}
+      <AlertDialog
+        open={deleteTargetId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTargetId(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this document? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmRowDelete();
+              }}
+              className={cn(
+                !isDeleting
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed pointer-events-none"
+              )}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

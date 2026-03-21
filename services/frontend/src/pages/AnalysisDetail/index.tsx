@@ -44,7 +44,7 @@ export const AnalysisDetail = ({ analysisId }: AnalysisDetailProps) => {
               ? "Loading analysis..."
               : error
                 ? "Analysis Not Found"
-                : `Analysis for ${repo}`}
+                : `Analysis for ${repo ?? "unknown"}`}
           </h1>
           {timestamp && (
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{timestamp}</p>

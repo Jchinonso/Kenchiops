@@ -6,7 +6,7 @@
  * When marked "Not helpful", shows a correction textarea for resolution notes.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -31,14 +31,12 @@ export const FeedbackSection = ({ analysisId }: FeedbackSectionProps) => {
   const currentType = existingFeedback?.feedbackType ?? null;
   const isDisabled = isFetching || isSubmitting;
 
-  // When existing feedback changes, pre-fill the correction on first open
-  const [prevFeedbackId, setPrevFeedbackId] = useState<string | null>(null);
-  if (existingFeedback?.id !== prevFeedbackId) {
-    setPrevFeedbackId(existingFeedback?.id ?? null);
-    if (existingFeedback?.correction && !showCorrection) {
+  // Pre-fill correction text when existing feedback loads
+  useEffect(() => {
+    if (existingFeedback?.correction) {
       setCorrection(existingFeedback.correction);
     }
-  }
+  }, [existingFeedback?.id, existingFeedback?.correction]);
 
   const handleHelpful = async () => {
     setShowCorrection(false);

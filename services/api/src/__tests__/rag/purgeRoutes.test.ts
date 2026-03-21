@@ -10,6 +10,7 @@ import express, { type Express, type Request, type Response, type NextFunction }
 const mockPurgeTenantRAGData = jest.fn();
 const mockPurgePRDiffChunks = jest.fn();
 const mockPurgeKnowledgeDocChunks = jest.fn();
+const mockDeleteKnowledgeDocById = jest.fn();
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -29,10 +30,12 @@ jest.mock("@kenchi/shared", () => ({
     RAG_PURGE_TENANT: "/tenant/:tenantId",
     RAG_PURGE_PR: "/pr/:repository/:prNumber",
     RAG_PURGE_DOC: "/doc/:parentId",
+    RAG_DELETE_DOC_SINGLE: "/doc/single/:id",
   },
   purgeTenantRAGData: mockPurgeTenantRAGData,
   purgePRDiffChunks: mockPurgePRDiffChunks,
   purgeKnowledgeDocChunks: mockPurgeKnowledgeDocChunks,
+  deleteKnowledgeDocById: mockDeleteKnowledgeDocById,
   asyncHandler:
     (fn: (req: unknown, res: unknown, next: unknown) => Promise<unknown>) =>
     async (req: unknown, res: unknown, next: unknown) => {

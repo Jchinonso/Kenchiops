@@ -18,6 +18,7 @@ import {
   purgeTenantRAGData,
   purgePRDiffChunks,
   purgeKnowledgeDocChunks,
+  deleteKnowledgeDocById,
 } from "@kenchi/shared";
 import type { TenantPurgeResponse, PRPurgeResponse, DocPurgeResponse } from "./types.js";
 
@@ -162,6 +163,37 @@ const handlePurgeDoc = async (req: Request, res: Response): Promise<void> => {
   });
 };
 
+/**
+ * Handles single knowledge document deletion by ID.
+ */
+const handleDeleteDocSingle = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const tenantId = requireTenantId(req);
+
+  if (!id) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: "id is required",
+    });
+    return;
+  }
+
+  const deleted = await deleteKnowledgeDocById(id, tenantId);
+
+  if (!deleted) {
+    res.status(HTTP_STATUS.NOT_FOUND).json({
+      error: { code: "NOT_FOUND", message: "Document not found" },
+    });
+    return;
+  }
+
+  logger.info("Knowledge document deleted", { id, tenantId });
+
+  res.status(HTTP_STATUS.OK).json({
+    data: { deleted: true },
+  });
+};
+
 // ==================== Route Definitions ====================
 
 /** DELETE /api/rag/tenant/:tenantId - Purge all tenant RAG data (expensive) */
@@ -180,6 +212,13 @@ router.delete(
   requirePermission("settings"),
   requireTenantMatch(),
   asyncHandler(handlePurgePR)
+);
+
+/** DELETE /api/rag/doc/single/:id - Delete a single knowledge document (standard) */
+router.delete(
+  API_ROUTES.RAG_DELETE_DOC_SINGLE,
+  rateLimitByCategory("standard"),
+  asyncHandler(handleDeleteDocSingle)
 );
 
 /** DELETE /api/rag/doc/:parentId - Purge a knowledge document (expensive) */

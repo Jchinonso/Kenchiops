@@ -33,6 +33,8 @@ export const API_ROUTES = {
   RAG_PURGE_PR: "/api/rag/pr/:repository/:prNumber",
   /** RAG knowledge doc purge endpoint (Express format) */
   RAG_PURGE_DOC: "/api/rag/doc/:parentId",
+  /** RAG single knowledge doc delete endpoint (Express format) */
+  RAG_DELETE_DOC_SINGLE: "/api/rag/doc/single/:id",
   /** RAG cost statistics endpoint */
   RAG_COST_STATS: "/api/rag/cost-stats",
   /** RAG tenant tier configuration endpoint (Express format) */
