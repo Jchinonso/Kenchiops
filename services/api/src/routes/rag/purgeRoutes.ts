@@ -19,6 +19,9 @@ import {
   purgePRDiffChunks,
   purgeKnowledgeDocChunks,
   deleteKnowledgeDocById,
+  deleteKnowledgeDocsByIds,
+  ValidationError,
+  DASHBOARD_PAGINATION,
 } from "@kenchi/shared";
 import type { TenantPurgeResponse, PRPurgeResponse, DocPurgeResponse } from "./types.js";
 
@@ -194,6 +197,48 @@ const handleDeleteDocSingle = async (req: Request, res: Response): Promise<void>
   });
 };
 
+/**
+ * Handles bulk deletion of knowledge documents by IDs.
+ */
+const handleBulkDeleteDocs = async (req: Request, res: Response): Promise<void> => {
+  const tenantId = requireTenantId(req);
+  const { ids } = req.body as { readonly ids?: unknown };
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new ValidationError("ids must be a non-empty array of strings", {
+      operation: "bulkDeleteDocs",
+    });
+  }
+
+  if (ids.length > DASHBOARD_PAGINATION.MAX_BATCH_SIZE) {
+    throw new ValidationError(
+      `ids array exceeds maximum of ${DASHBOARD_PAGINATION.MAX_BATCH_SIZE} items`,
+      { operation: "bulkDeleteDocs", metadata: { count: ids.length } }
+    );
+  }
+
+  const invalidEntries = ids.filter(
+    (id: unknown) => typeof id !== "string" || id.trim().length === 0
+  );
+  if (invalidEntries.length > 0) {
+    throw new ValidationError("ids must contain only non-empty strings", {
+      operation: "bulkDeleteDocs",
+    });
+  }
+
+  const deletedCount = await deleteKnowledgeDocsByIds(ids as readonly string[], tenantId);
+
+  logger.info("Bulk deleted knowledge documents", {
+    tenantId,
+    requestedCount: ids.length,
+    deletedCount,
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    data: { deletedCount },
+  });
+};
+
 // ==================== Route Definitions ====================
 
 /** DELETE /api/rag/tenant/:tenantId - Purge all tenant RAG data (expensive) */
@@ -212,6 +257,13 @@ router.delete(
   requirePermission("settings"),
   requireTenantMatch(),
   asyncHandler(handlePurgePR)
+);
+
+/** POST /api/rag/doc/bulk-delete - Bulk delete knowledge documents by IDs (standard) */
+router.post(
+  API_ROUTES.RAG_BULK_DELETE_DOCS,
+  rateLimitByCategory("standard"),
+  asyncHandler(handleBulkDeleteDocs)
 );
 
 /** DELETE /api/rag/doc/single/:id - Delete a single knowledge document (standard) */

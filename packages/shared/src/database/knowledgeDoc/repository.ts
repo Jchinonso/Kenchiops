@@ -505,6 +505,45 @@ export const deleteKnowledgeDocById = async (id: string, tenantId: string): Prom
 };
 
 /**
+ * Deletes multiple knowledge documents by IDs, scoped by tenant.
+ *
+ * @param ids - Array of knowledge document IDs to delete
+ * @param tenantId - Tenant ID for isolation
+ * @returns Number of deleted documents
+ * @throws ValidationError if ids contain empty strings or tenantId is empty
+ * @throws Error if database operation fails
+ */
+export const deleteKnowledgeDocsByIds = async (
+  ids: readonly string[],
+  tenantId: string
+): Promise<number> => {
+  if (ids.length === 0) {
+    return 0;
+  }
+
+  validateNonEmptyString(tenantId, "tenantId");
+
+  try {
+    const result = await query(KNOWLEDGE_DOC_QUERIES.DELETE_BY_IDS, [[...ids], tenantId]);
+
+    logger.info("Bulk deleted knowledge documents", {
+      tenantId,
+      requestedCount: ids.length,
+      deletedCount: result.rowCount,
+    });
+
+    return result.rowCount;
+  } catch (error) {
+    logger.error("Failed to bulk delete knowledge documents", {
+      tenantId,
+      idCount: ids.length,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Gets knowledge documents for a tenant with optional doc type filter and pagination.
  *
  * @param tenantId - Tenant ID to scope the query

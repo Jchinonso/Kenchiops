@@ -102,6 +102,7 @@ export {
   getKnowledgeDocsWithoutEmbeddings,
   updateKnowledgeDocEmbedding,
   deleteKnowledgeDocById,
+  deleteKnowledgeDocsByIds,
   deleteKnowledgeDocsByParent,
   deleteKnowledgeDocsByTenant,
   getDocsNeedingReembedding,

@@ -32,6 +32,7 @@ import {
   useKnowledgeBaseStats,
   useKnowledgeDocuments,
   useDeleteDocument,
+  useBulkDeleteDocuments,
   usePurgeAllDocuments,
   type KnowledgeDocDTO,
 } from "@/hooks/useKnowledgeBase";
@@ -63,12 +64,12 @@ export const KnowledgeBase = () => {
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const docTypeFilter = selectedDocType === ALL_TYPES_VALUE ? undefined : selectedDocType;
 
   const { data: stats, isLoading: statsLoading } = useKnowledgeBaseStats();
   const { deleteDocument, isDeleting } = useDeleteDocument();
+  const { bulkDelete, isBulkDeleting } = useBulkDeleteDocuments();
   const { purgeAll, isPurging } = usePurgeAllDocuments(user?.tenantId ?? null);
   const {
     data: docsData,
@@ -179,27 +180,20 @@ export const KnowledgeBase = () => {
     if (selectedIds.size === 0) {
       return;
     }
-    setIsBulkDeleting(true);
     const idsToDelete = [...selectedIds];
-    // let: accumulator for sequential async deletion results
-    let successCount = 0;
-    for (const id of idsToDelete) {
-      const success = await deleteDocument(id);
-      if (success) {
-        successCount += 1;
-      }
-    }
-    setIsBulkDeleting(false);
+    const deletedCount = await bulkDelete(idsToDelete);
     setBulkDeleteConfirmOpen(false);
     setSelectedIds(new Set());
-    if (successCount === idsToDelete.length) {
-      toast.success(`Deleted ${successCount} document${successCount > 1 ? "s" : ""}`);
-    } else if (successCount > 0) {
-      toast.warning(`Deleted ${successCount} of ${idsToDelete.length} documents. Some failed.`);
+    if (deletedCount === idsToDelete.length) {
+      toast.success(`Deleted ${deletedCount} document${deletedCount > 1 ? "s" : ""}`);
+    } else if (deletedCount > 0) {
+      toast.warning(
+        `Deleted ${deletedCount} of ${idsToDelete.length} documents. Some were not found.`
+      );
     } else {
       toast.error("Failed to delete documents");
     }
-  }, [selectedIds, deleteDocument]);
+  }, [selectedIds, bulkDelete]);
 
   const handlePurgeAll = useCallback(async () => {
     const success = await purgeAll();

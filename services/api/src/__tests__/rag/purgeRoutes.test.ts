@@ -11,6 +11,7 @@ const mockPurgeTenantRAGData = jest.fn();
 const mockPurgePRDiffChunks = jest.fn();
 const mockPurgeKnowledgeDocChunks = jest.fn();
 const mockDeleteKnowledgeDocById = jest.fn();
+const mockDeleteKnowledgeDocsByIds = jest.fn();
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -31,11 +32,24 @@ jest.mock("@kenchi/shared", () => ({
     RAG_PURGE_PR: "/pr/:repository/:prNumber",
     RAG_PURGE_DOC: "/doc/:parentId",
     RAG_DELETE_DOC_SINGLE: "/doc/single/:id",
+    RAG_BULK_DELETE_DOCS: "/doc/bulk-delete",
   },
   purgeTenantRAGData: mockPurgeTenantRAGData,
   purgePRDiffChunks: mockPurgePRDiffChunks,
   purgeKnowledgeDocChunks: mockPurgeKnowledgeDocChunks,
   deleteKnowledgeDocById: mockDeleteKnowledgeDocById,
+  deleteKnowledgeDocsByIds: mockDeleteKnowledgeDocsByIds,
+  // eslint-disable-next-line @typescript-eslint/no-extraneous-class -- mock error for test validation
+  ValidationError: Object.assign(
+    class extends Error {
+      constructor(m: string) {
+        super(m);
+        this.name = "ValidationError";
+      }
+    },
+    { __mock: true }
+  ),
+  DASHBOARD_PAGINATION: { MAX_BATCH_SIZE: 100 },
   asyncHandler:
     (fn: (req: unknown, res: unknown, next: unknown) => Promise<unknown>) =>
     async (req: unknown, res: unknown, next: unknown) => {
@@ -100,6 +114,8 @@ describe("RAG Purge Routes", () => {
       deletedCount: 5,
       errors: [],
     });
+
+    mockDeleteKnowledgeDocsByIds.mockResolvedValue(3);
 
     const { ragPurgeRoutes } = await import("../../routes/rag/purgeRoutes.js");
     app = express();
@@ -257,6 +273,54 @@ describe("RAG Purge Routes", () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.data.errors).toHaveLength(2);
+    });
+  });
+
+  describe("POST /doc/bulk-delete", () => {
+    it("should bulk delete documents by IDs", async () => {
+      mockDeleteKnowledgeDocsByIds.mockResolvedValue(3);
+
+      const response = await request(app)
+        .post("/doc/bulk-delete")
+        .send({ ids: ["id-1", "id-2", "id-3"] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.deletedCount).toBe(3);
+      expect(mockDeleteKnowledgeDocsByIds).toHaveBeenCalledWith(
+        ["id-1", "id-2", "id-3"],
+        "default-tenant"
+      );
+    });
+
+    it("should return 500 for empty ids array", async () => {
+      const response = await request(app).post("/doc/bulk-delete").send({ ids: [] });
+
+      expect(response.status).toBe(500);
+    });
+
+    it("should return 500 for missing ids field", async () => {
+      const response = await request(app).post("/doc/bulk-delete").send({});
+
+      expect(response.status).toBe(500);
+    });
+
+    it("should return 500 for non-string ids", async () => {
+      const response = await request(app)
+        .post("/doc/bulk-delete")
+        .send({ ids: [123, 456] });
+
+      expect(response.status).toBe(500);
+    });
+
+    it("should handle partial deletes", async () => {
+      mockDeleteKnowledgeDocsByIds.mockResolvedValue(1);
+
+      const response = await request(app)
+        .post("/doc/bulk-delete")
+        .send({ ids: ["id-1", "id-missing"] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.deletedCount).toBe(1);
     });
   });
 
