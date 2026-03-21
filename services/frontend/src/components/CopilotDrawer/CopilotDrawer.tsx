@@ -68,8 +68,8 @@ export const CopilotDrawer = ({ open, onOpenChange }: CopilotDrawerProps) => {
         side="right"
         className="flex w-[440px] max-w-full flex-col gap-0 p-0 sm:max-w-[440px]"
       >
-        {/* Header */}
-        <SheetHeader className="flex-row items-center justify-between border-b px-4 py-3">
+        {/* Header — pr-10 leaves room for the built-in Sheet close button (absolute top-4 right-4) */}
+        <SheetHeader className="flex-row items-center justify-between border-b px-4 py-3 pr-10">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />
             <SheetTitle className="text-base">Kenchi Copilot</SheetTitle>
